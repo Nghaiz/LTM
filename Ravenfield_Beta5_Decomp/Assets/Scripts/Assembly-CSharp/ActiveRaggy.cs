@@ -263,7 +263,7 @@ public class ActiveRaggy : MonoBehaviour
 		Rigidbody[] array3 = rigidbodies;
 		foreach (Rigidbody rigidbody in array3)
 		{
-			rigidbody.velocity = velocity;
+			rigidbody.linearVelocity = velocity;
 		}
 		state = State.Ragdoll;
 	}
@@ -299,7 +299,7 @@ public class ActiveRaggy : MonoBehaviour
 
 	public Vector3 Velocity()
 	{
-		return rigidbodies[0].velocity;
+		return rigidbodies[0].linearVelocity;
 	}
 
 	public Rigidbody MainRigidbody()
