@@ -117,3 +117,14 @@ InitTestScene*.unity*
 **/[Mm]emoryCaptures/
 **/[Rr]ecordings/
 **/.vscode/
+**/.idea/
+**/UnityPackageManager/
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local editor backups
+*~
+*.bak
