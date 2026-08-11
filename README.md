@@ -1,7 +1,14 @@
 # Ironfront Reborn
 
 [![CI](https://github.com/Sagitoaz/LTM/actions/workflows/ci.yml/badge.svg)](https://github.com/Sagitoaz/LTM/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/Sagitoaz/LTM/actions/workflows/codeql.yml/badge.svg)](https://github.com/Sagitoaz/LTM/actions/workflows/codeql.yml)
+
+<!--
+  No CodeQL badge on purpose: codeql.yml skips itself while this repository is private
+  (code scanning there needs paid GitHub Advanced Security), so the badge would render as
+  "no status" and read like something is broken. Add it back on the day the repository is
+  made public and the job actually runs. See docs/branch-protection.md.
+-->
+
 
 A multiplayer FPS networking stack written from scratch on raw TCP and UDP sockets — no
 Mirror, no Photon, no Netcode for GameObjects, no KCP, no gRPC. The netcode *is* the project;
@@ -150,9 +157,9 @@ the project. It has an ID: R5.
 | Workflow | Job | Blocking? | What it checks |
 |---|---|---|---|
 | `ci.yml` | `build-test` (ubuntu + windows) | **yes** | restore, build with warnings-as-errors, `dotnet test`, spec drift |
-| `ci.yml` | `style` | no — advisory | `dotnet format`, commit-scope conventions |
+| `ci.yml` | `style` | no — advisory | `dotnet format`, commit-scope conventions, vulnerable NuGet packages |
 | `ci.yml` | `unity-libs` | no | publishes the Unity plugin DLLs as a downloadable artifact |
-| `codeql.yml` | `analyze` | no | security analysis, weekly and on PR |
+| `codeql.yml` | `analyze` | **dormant** | Skips while the repository is private — code scanning there needs paid GitHub Advanced Security. Starts by itself if the repository is made public; see [`docs/branch-protection.md`](docs/branch-protection.md) |
 
 The matrix is not decoration: this code indexes byte buffers, parses lengths taken off the
 wire, and opens sockets. Path handling, line endings and dual-stack socket behaviour all
