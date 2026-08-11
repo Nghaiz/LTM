@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Ownership: SHARED. Changes require a PR with 2 approvals
+    (plans/00-shared/conventions.md section 7).
+
+    netstandard2.1 is mandatory: tools/build-libs.ps1 copies
+    bin/Release/netstandard2.1/*.dll into Ironfront_Reborn/Assets/Plugins, and
+    Unity 6000.3 consumes the library from there. This project must NEVER
+    reference UnityEngine — see architecture.md section 5.1.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <RootNamespace>Ironfront.Net.Protocol</RootNamespace>
+    <AssemblyName>Ironfront.Net.Protocol</AssemblyName>
+    <Description>Single source of truth for the Ironfront Reborn wire protocol (GSP over UDP, MSP over TCP).</Description>
+  </PropertyGroup>
+
+</Project>

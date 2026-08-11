@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    OWNER: Dev D (Master Server and Services). Nobody else may edit this project
+    (plans/00-shared/conventions.md section 7).
+
+    Scaffolded empty by the M0 foundation pass. Dev D fills it in per
+    plans/dev-d-master-server/plan.md: TcpListenerHost, MspFraming, AuthService,
+    LobbyService, MatchmakingService, SQLite data layer.
+
+    net8.0 (not netstandard2.1) because this is a standalone console process that Unity
+    never loads.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Ironfront.MasterServer</RootNamespace>
+    <AssemblyName>Ironfront.MasterServer</AssemblyName>
+    <Description>TCP master server: auth, lobby, room registry, matchmaking, chat.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ironfront.Net.Protocol\Ironfront.Net.Protocol.csproj" />
+  </ItemGroup>
+
+</Project>

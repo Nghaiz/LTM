@@ -1,0 +1,53 @@
+name: CI
+
+# OWNER: Dev D (plans/00-shared/conventions.md section 7).
+# The referee: push, and you immediately know whether you broke someone else's build
+# without having to ask them.
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # Pinned to 8.0.x to match the LTS the team develops against. If you bump this,
+      # bump LangVersion in Directory.Build.props in the same PR, or CI will accept
+      # syntax that other developers' SDKs reject.
+
+      - name: Restore
+        run: dotnet restore Ironfront.sln
+
+      - name: Build
+        run: dotnet build Ironfront.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test Ironfront.sln --configuration Release --no-build --logger "console;verbosity=normal"
+
+      - name: Check ProtocolConstants matches the spec
+        run: dotnet run --project tools/SpecChecker --configuration Release --no-build
+
+  # Unity compilation needs a licensed Editor on the runner, which the free tier does not
+  # provide. Dev A runs `pwsh tools/ci.ps1` locally with UNITY_PATH set instead. Enable
+  # this job once a self-hosted runner with Unity 6000.3.21f1 exists.
+  #
+  # unity-compile:
+  #   runs-on: [self-hosted, unity]
+  #   timeout-minutes: 30
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - run: pwsh tools/ci.ps1 -Configuration Release

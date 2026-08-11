@@ -129,3 +129,30 @@ Desktop.ini
 *~
 *.bak
 /.claude
+
+# ---------------------------------------------------------------------------
+# Hand-authored .NET solution (added by the M0 foundation pass)
+#
+# The Unity block above ignores *.csproj and *.sln because Unity regenerates its
+# own on every Editor open. Our backend projects are hand-written source and MUST
+# be committed, so they are re-included by name. Add a line here whenever a new
+# project joins the solution, or CI will fail with "project not found" on a
+# machine that has never seen your working tree.
+# ---------------------------------------------------------------------------
+!Ironfront.sln
+!Ironfront.Net.Protocol/Ironfront.Net.Protocol.csproj
+!Ironfront.Net.Protocol.Tests/Ironfront.Net.Protocol.Tests.csproj
+!Ironfront.Net.Transport/Ironfront.Net.Transport.csproj
+!Ironfront.Net.Replication/Ironfront.Net.Replication.csproj
+!Ironfront.MasterServer/Ironfront.MasterServer.csproj
+!Ironfront.Tools.LoadTest/Ironfront.Tools.LoadTest.csproj
+!tools/SpecChecker/SpecChecker.csproj
+
+# .NET build output. conventions.md section 1.4 forbids committing bin/ and obj/;
+# obj/ is already covered by **/[Oo]bj/ above, bin/ was not.
+**/[Bb]in/
+
+# Never commit real secrets — .env.example carries the variable names, no values.
+.env
+.env.*
+!.env.example

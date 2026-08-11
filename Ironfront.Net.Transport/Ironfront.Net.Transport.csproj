@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    OWNER: Dev B (Transport Layer). Nobody else may edit this project
+    (plans/00-shared/conventions.md section 7).
+
+    Scaffolded empty by the M0 foundation pass so the solution builds and CI has
+    something to compile from day one. Dev B fills it in per
+    plans/dev-b-transport/plan.md.
+
+    netstandard2.1 and NO UnityEngine reference — if a file here ever needs
+    "using UnityEngine", that is a design error (architecture.md section 5.1).
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <RootNamespace>Ironfront.Net.Transport</RootNamespace>
+    <AssemblyName>Ironfront.Net.Transport</AssemblyName>
+    <Description>Hand-written UDP reliability layer: sequencing, acks, channels, fragmentation, congestion control.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ironfront.Net.Protocol\Ironfront.Net.Protocol.csproj" />
+  </ItemGroup>
+
+</Project>

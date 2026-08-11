@@ -1,0 +1,26 @@
+<Project>
+
+  <!--
+    Shared MSBuild settings for every Ironfront .NET project.
+
+    LangVersion is pinned to 12.0 (the maximum the .NET 8 SDK supports) because
+    tools/ci.yml pins dotnet-version to '8.0.x'. Without the pin, a developer on a
+    newer SDK could commit C# 13+ syntax that compiles locally and fails in CI.
+
+    NOTE: the Unity project shields itself from this file via an empty
+    Ironfront_Reborn/Directory.Build.props — MSBuild stops walking up at the first
+    match, so Unity's generated Assembly-CSharp.csproj never inherits
+    TreatWarningsAsErrors. Do not delete that file.
+  -->
+
+  <PropertyGroup>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <Deterministic>true</Deterministic>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    OWNER: shared (it enforces the shared protocol contract), maintained with tools/ by
+    Dev D. Invoked by CI as a "dotnet run" against tools/SpecChecker; see
+    .github/workflows/ci.yml and tools/ci.ps1 for the exact command line.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Ironfront.Tools.SpecChecker</RootNamespace>
+    <AssemblyName>SpecChecker</AssemblyName>
+    <Description>Fails the build when ProtocolConstants.cs drifts from protocol-spec.md.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Ironfront.Net.Protocol\Ironfront.Net.Protocol.csproj" />
+  </ItemGroup>
+
+</Project>
