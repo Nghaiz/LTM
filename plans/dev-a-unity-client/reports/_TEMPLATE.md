@@ -1,93 +1,95 @@
-# Report — Phase NN: <tên phase>
+# Report — Phase NN: <phase name>
 
-- **Người viết:** Dev A (Unity Client)
-- **Ngày:** YYYY-MM-DD
-- **Tuần:** N / 14
+- **Author:** Dev A (Unity Client)
+- **Date:** YYYY-MM-DD
+- **Week:** N / 14
 - **Phase:** [phases/phase-NN-xxx.md](../phases/phase-NN-xxx.md)
-- **Trạng thái:** ☐ Xong đúng hạn · ☐ Xong trễ · ☐ Xong một phần · ☐ Chưa xong
+- **Status:** ☐ Done on time · ☐ Done late · ☐ Partially done · ☐ Not done
 
 ---
 
-## 1. Tóm tắt một đoạn
+## 1. One-paragraph summary
 
-<3–5 câu: đã làm gì, kết quả ra sao, có chặn ai không>
+<3–5 sentences: what was done, how it turned out, whether it blocks anyone>
 
 ---
 
-## 2. Đối chiếu tiêu chí nghiệm thu
+## 2. Acceptance criteria review
 
-Copy nguyên bảng tiêu chí từ file phase, đánh dấu trung thực.
+Copy the criteria table verbatim from the phase file and mark it honestly.
 
-| # | Tiêu chí | Đạt | Bằng chứng |
+| # | Criterion | Met | Evidence |
 |---|---|---|---|
-| 1 | ... | ☐/☑ | <lệnh đã chạy + output, hoặc đường dẫn ảnh/video> |
+| 1 | ... | ☐/☑ | <the command run + its output, or a path to an image/video> |
 
-> **Trung thực bắt buộc.** Test đỏ thì ghi đỏ kèm output. Bỏ qua mục nào thì ghi rõ bỏ mục nào
-> và vì sao. Report tô hồng làm hỏng cả nhóm ở tuần tích hợp.
-
----
-
-## 3. Đã làm
-
-### 3.1. File tạo mới
-| File | LOC | Mục đích |
-|---|---|---|
-
-### 3.2. File sửa
-| File | Sửa gì | Vì sao |
-|---|---|---|
-
-### 3.3. Commit chính
-```
-<git log --oneline của phase này>
-```
+> **Honesty is mandatory.** If a test is red, record it as red with its output. If you skipped
+> something, say exactly what and why. A rose-tinted report hurts the whole team during integration
+> week.
 
 ---
 
-## 4. Quyết định kỹ thuật đã đưa ra
+## 3. What was done
 
-Mỗi quyết định ghi: **vấn đề → phương án đã chọn → phương án đã loại → lý do**.
+### 3.1. New files
+| File | LOC | Purpose |
+|---|---|---|
 
-| # | Vấn đề | Chọn | Loại | Lý do |
+### 3.2. Modified files
+| File | What changed | Why |
+|---|---|---|
+
+### 3.3. Main commits
+```
+<git log --oneline for this phase>
+```
+
+---
+
+## 4. Technical decisions made
+
+For each decision record: **the problem → the option chosen → the options rejected → why**.
+
+| # | Problem | Chosen | Rejected | Reason |
 |---|---|---|---|---|
 
 ---
 
-## 5. Thứ đã thử và THẤT BẠI
+## 5. Things tried that FAILED
 
-> Phần này quý hơn phần thành công. Ghi để người sau (và chính bạn 2 tháng nữa) không lặp lại.
+> This section is more valuable than the successes. Record it so whoever comes next (including you,
+> two months from now) doesn't repeat it.
 
-| Đã thử | Vì sao không được | Dấu hiệu nhận biết |
+| Tried | Why it didn't work | How to recognize it |
 |---|---|---|
 
 ---
 
-## 6. Đo đạc
+## 6. Measurements
 
-| Chỉ số | Giá trị | Ngưỡng mục tiêu | Đạt |
+| Metric | Value | Target threshold | Met |
 |---|---|---|---|
-| FPS client (48 actor) | | ≥ 60 | |
-| Thời gian xử lý snapshot | | < 2ms | |
-| GC alloc mỗi frame | | 0 B trong hot path | |
+| Client FPS (48 actors) | | ≥ 60 | |
+| Snapshot processing time | | < 2 ms | |
+| GC alloc per frame | | 0 B in the hot path | |
 
 ---
 
-## 7. Đang kẹt / cần người khác
+## 7. Blocked / needs someone else
 
-| Kẹt gì | Cần ai | Đã báo chưa | Ảnh hưởng tiến độ |
+| What's blocking | Who's needed | Reported yet | Schedule impact |
 |---|---|---|---|
 
 ---
 
-## 8. Nợ kỹ thuật đã tạo ra
+## 8. Technical debt created
 
-| Nợ | Vì sao chấp nhận | Khi nào trả |
+| Debt | Why it was accepted | When it's paid |
 |---|---|---|
 
 ---
 
-## 9. Phase sau
+## 9. Next phase
 
-- Việc đầu tiên sẽ làm:
-- Rủi ro nhìn thấy trước:
-- Có cần điều chỉnh scope không:
+- First thing I'll do:
+- Risks I can see coming:
+- Does the scope need adjusting:

@@ -1,49 +1,50 @@
-# Kế hoạch — Dev D · Master Server & Services
+# Plan — Dev D · Master Server & Services
 
-> Đọc trước: [`../00-shared/protocol-spec.md`](../00-shared/protocol-spec.md) (thuộc lòng phần B) ·
-> [`../00-shared/architecture.md`](../00-shared/architecture.md) ·
+> Read first: [`../00-shared/protocol-spec.md`](../00-shared/protocol-spec.md) (know Part B by
+> heart) · [`../00-shared/architecture.md`](../00-shared/architecture.md) ·
 > [`../00-shared/conventions.md`](../00-shared/conventions.md)
 
 ---
 
-## 1. Vai trò
+## 1. Role
 
-Bạn viết **master server TCP thuần bằng .NET, không dùng Unity, không dùng ASP.NET Core, không
-dùng WebSocket**. Chỉ `System.Net.Sockets.TcpListener` và `Socket`.
+You write **a pure TCP master server in .NET, with no Unity, no ASP.NET Core, and no WebSocket**.
+Just `System.Net.Sockets.TcpListener` and `Socket`.
 
-Đây là **nửa còn lại của đồ án môn Lập trình mạng**: nếu B chứng minh hiểu UDP, bạn chứng minh
-hiểu TCP — đặc biệt là bài toán **framing trên byte stream**, thứ mà 90% người mới làm sai.
+This is **the other half of a Network Programming capstone**: if B proves an understanding of UDP,
+you prove an understanding of TCP — particularly the **framing-over-a-byte-stream** problem that 90%
+of newcomers get wrong.
 
-Bạn cũng sở hữu **hạ tầng và công cụ đo** cho cả nhóm: CI, script build, VPS, load test harness.
-Ba người kia phụ thuộc vào những thứ này.
+You also own the **infrastructure and measurement tooling** for the whole team: CI, build scripts,
+the VPS, the load-test harness. The other three depend on all of it.
 
-**Bạn KHÔNG làm:** UDP (B), logic game (A, C), gameplay Unity.
+**What you do NOT do:** UDP (B), game logic (A, C), Unity gameplay.
 
 ---
 
-## 2. Vùng sở hữu
+## 2. Ownership
 
-| Đường dẫn | Quyền |
+| Path | Rights |
 |---|---|
-| `Ironfront.MasterServer/**` | **Sở hữu toàn quyền** |
-| `Ironfront.MasterServer.Tests/**` | Sở hữu |
-| `Ironfront.MasterClient/**` | Sở hữu (thư viện A và C dùng) |
-| `Ironfront.Tools.LoadTest/**` | Sở hữu |
-| `tools/**` (CI, build script) | Sở hữu |
-| `.github/workflows/**` | Sở hữu |
-| `Ironfront.Net.Protocol/**` | PR + 2 approve (chung) |
+| `Ironfront.MasterServer/**` | **Full ownership** |
+| `Ironfront.MasterServer.Tests/**` | Owner |
+| `Ironfront.MasterClient/**` | Owner (the library A and C use) |
+| `Ironfront.Tools.LoadTest/**` | Owner |
+| `tools/**` (CI, build scripts) | Owner |
+| `.github/workflows/**` | Owner |
+| `Ironfront.Net.Protocol/**` | PR + 2 approvals (shared) |
 
-**Không mở Unity Editor.**
+**Don't open the Unity Editor.**
 
 ---
 
-## 3. Kiến trúc
+## 3. Architecture
 
 ```mermaid
 flowchart TB
     subgraph MS["Ironfront.MasterServer (.NET 8 console)"]
         Lis[TcpListenerHost<br/>accept loop]
-        Fr[MspFraming<br/>length-prefix, buffer tích lũy]
+        Fr[MspFraming<br/>length prefix, accumulating buffer]
         Disp[MessageDispatcher]
         Auth[AuthService<br/>register, login, session]
         Lob[LobbyService<br/>room registry, state push]
@@ -53,8 +54,8 @@ flowchart TB
         Chat[ChatService]
         DB[(SQLite)]
     end
-    C[Client Unity]
-    G[Game Server Unity headless]
+    C[Unity client]
+    G[Unity headless game server]
 
     C -->|TCP| Lis --> Fr --> Disp
     G -->|TCP| Lis
@@ -67,27 +68,27 @@ flowchart TB
 
 ---
 
-## 4. Vì sao TCP ở đây là lựa chọn đúng
+## 4. Why TCP is the right choice here
 
-Đây là luận điểm bạn phải bảo vệ được. Ghi vào báo cáo.
+This is an argument you must be able to defend. Put it in the report.
 
-| Đặc điểm dữ liệu lobby | Hệ quả |
+| Property of lobby data | Consequence |
 |---|---|
-| Tần suất rất thấp (vài message/phút/client) | Overhead TCP không đáng kể |
-| Mất gói **không** chấp nhận được (mất `LOGIN_RES` = người dùng treo màn hình) | Cần tin cậy — TCP cho sẵn |
-| Kích thước không đều (`ROOM_LIST_RES` có thể vài KB) | TCP tự lo fragmentation |
-| Không nhạy cảm với độ trễ (chậm 100ms không ai thấy) | Head-of-line blocking vô hại |
-| Cần thứ tự (login trước, join sau) | TCP cho sẵn |
+| Very low frequency (a few messages per minute per client) | TCP overhead is negligible |
+| Packet loss is **not** acceptable (losing a `LOGIN_RES` leaves the user staring at a frozen screen) | Reliability is required — TCP provides it |
+| Irregular sizes (`ROOM_LIST_RES` can be several KB) | TCP handles fragmentation itself |
+| Latency-insensitive (100 ms slower and nobody notices) | Head-of-line blocking is harmless |
+| Ordering is needed (login first, then join) | TCP provides it |
 
-**Tự viết reliability trên UDP cho phần này sẽ là làm lại thứ TCP đã làm tốt.** Đây chính là lý
-do kiến trúc chia hai protocol — và là điểm mạnh khi bảo vệ: bạn chọn công cụ theo bài toán, chứ
-không phải "dùng UDP cho ngầu".
+**Hand-writing reliability over UDP for this part would be reimplementing what TCP already does
+well.** That's precisely why the architecture splits across two protocols — and it's a strength at
+the defense: you chose the tool to fit the problem rather than "using UDP because it's cooler".
 
 ---
 
-## 5. API công khai — `Ironfront.MasterClient`, chốt tuần 1
+## 5. Public API — `Ironfront.MasterClient`, frozen in week 1
 
-A và C tiêu thụ. Đóng băng sớm.
+A and C consume it. Freeze it early.
 
 ```csharp
 namespace Ironfront.MasterClient;
@@ -117,114 +118,114 @@ public struct JoinResult
     public int    ErrorCode;
     public string GameServerIp;
     public int    GameServerPort;
-    public byte[] JoinTicket;      // 64 byte, chuyển thẳng cho ITransportClient.Connect
+    public byte[] JoinTicket;      // 64 bytes, passed straight to ITransportClient.Connect
 }
 ```
 
-> **Điểm phải chốt với A ở tuần 1 (quan trọng):** mọi `event` và mọi callback của `Task` được
-> gọi trên **thread nào**? Unity chỉ cho gọi API của nó từ main thread.
+> **Something to settle with A in week 1 (important):** which **thread** are all the `event`s and
+> `Task` continuations invoked on? Unity only allows its API to be called from the main thread.
 >
-> **Quyết định: `IMasterClient` cung cấp `Poll()`** — nó tích lũy event vào hàng đợi nội bộ, A
-> gọi `Poll()` mỗi frame để phát event trên main thread. `Task` trả về được hoàn tất cũng trong
-> `Poll()`. Cách này loại bỏ hoàn toàn lớp bug threading, đổi lại độ trễ tối đa 1 frame — không
-> đáng kể cho lobby.
+> **Decision: `IMasterClient` exposes `Poll()`** — it accumulates events in an internal queue, and A
+> calls `Poll()` every frame to raise them on the main thread. Returned `Task`s also complete inside
+> `Poll()`. This eliminates the entire threading bug class, at the cost of at most one frame of
+> latency — irrelevant for a lobby.
 
 ```csharp
 public interface IMasterClient
 {
-    /// <summary>Gọi mỗi frame từ main thread. Mọi event và Task continuation phát ra ở đây.</summary>
+    /// <summary>Call every frame from the main thread. All events and Task continuations fire here.</summary>
     void Poll();
 }
 ```
 
 ---
 
-## 6. Lộ trình 5 phase
+## 6. The 5-phase roadmap
 
-| Phase | Tuần | Mốc | Kết quả |
+| Phase | Weeks | Milestone | Outcome |
 |---|---|---|---|
-| [phase-00](phases/phase-00-nen-mong.md) | 1–2 | M0 | Ôn TCP · **`MspFraming`** (bài toán trung tâm) · accept loop · CI · script build |
-| [phase-01](phases/phase-01-auth-lobby.md) | 3–6 | M1 | Auth + SQLite · session · room registry · `IMasterClient` · **`LoadTest` harness** |
-| [phase-02](phases/phase-02-matchmaking.md) | 7–10 | M2 | Matchmaking · joinTicket HMAC · game server registry + heartbeat · chat |
-| [phase-03](phases/phase-03-van-hanh.md) | 11–13 | M3 | Triển khai VPS · monitoring · load test 16 client · độ bền |
-| [phase-04](phases/phase-04-bao-cao.md) | 14 | M4 | Báo cáo TCP · tài liệu vận hành |
+| [phase-00](phases/phase-00-foundation.md) | 1–2 | M0 | TCP refresher · **`MspFraming`** (the central problem) · accept loop · CI · build scripts |
+| [phase-01](phases/phase-01-auth-lobby.md) | 3–6 | M1 | Auth + SQLite · sessions · room registry · `IMasterClient` · **the `LoadTest` harness** |
+| [phase-02](phases/phase-02-matchmaking.md) | 7–10 | M2 | Matchmaking · HMAC joinTickets · game server registry + heartbeat · chat |
+| [phase-03](phases/phase-03-operations.md) | 11–13 | M3 | VPS deployment · monitoring · a 16-client load test · durability |
+| [phase-04](phases/phase-04-report.md) | 14 | M4 | The TCP report · operations documentation |
 
 ---
 
-## 7. Ước lượng
+## 7. Estimate
 
-| Hạng mục | Người-tuần |
+| Item | Person-weeks |
 |---|---|
 | TCP framing + connection manager | 1.5 |
-| Auth + account + SQLite | 2.0 |
+| Auth + accounts + SQLite | 2.0 |
 | Lobby + room registry + state push | 2.5 |
-| Matchmaking + join ticket | 2.0 |
+| Matchmaking + join tickets | 2.0 |
 | Game server registry + heartbeat | 1.5 |
 | Chat | 1.0 |
-| Load test harness + monitoring | 2.0 |
-| **Tổng** | **12.5 / 14** |
+| Load-test harness + monitoring | 2.0 |
+| **Total** | **12.5 / 14** |
 
-Bạn có **1.5 tuần dư** — người duy nhất trong nhóm có buffer đáng kể. Dùng nó để:
-1. Hỗ trợ B khi tầng transport gặp bug khó (bạn là backup của B)
-2. Duy trì CI cho cả nhóm
-3. Chạy load test sớm cho C
+You have **1.5 weeks spare** — the only person on the team with meaningful buffer. Use it to:
+1. Help B when the transport layer hits a hard bug (you're B's backup)
+2. Keep CI healthy for the whole team
+3. Run load tests early for C
 
 ---
 
-## 8. Rủi ro riêng
+## 8. Your own risks
 
-| # | Rủi ro | Chặn |
+| # | Risk | Mitigation |
 |---|---|---|
-| D1 | **TCP framing sai** — message dính nhau hoặc bị cắt đôi | Đây là bài toán số 1 của TCP. Test bắt buộc: gửi 3 message trong 1 `Send()`, và gửi 1 message qua 5 lần `Send()` |
-| D2 | Callback không ở main thread → Unity ném exception | `Poll()` model, chốt ở § 5 |
-| D3 | Lưu mật khẩu sai cách | bcrypt/argon2 phía server, hash phía client trước khi gửi. Không bao giờ lưu plaintext |
-| D4 | SQL injection | Dùng parameterized query. Không nối chuỗi SQL. Không có ngoại lệ |
-| D5 | Race condition khi 2 người join phòng cuối cùng cùng lúc | Khóa (`lock`) quanh thao tác room. Master server một thread cho logic, giống B-AD-1 |
-| D6 | Bạn là người cuối cùng ai cũng cần (CI, VPS, load test) | Làm CI và load test **sớm** (phase 00, 01), không để tới M3 |
-| D7 | Kết nối TCP nửa chết (half-open) không phát hiện được | Heartbeat 15s + timeout. TCP keepalive của OS quá chậm (2 giờ mặc định) |
+| D1 | **Wrong TCP framing** — messages glued together or cut in half | This is TCP's number-one problem. Mandatory tests: send 3 messages in one `Send()`, and send 1 message across 5 `Send()` calls |
+| D2 | Callbacks off the main thread → Unity throws | The `Poll()` model, settled in § 5 |
+| D3 | Storing passwords incorrectly | bcrypt/argon2 server-side, hashed client-side before sending. Never store plaintext |
+| D4 | SQL injection | Use parameterized queries. Never concatenate SQL. No exceptions |
+| D5 | A race when 2 people join the last slot simultaneously | A `lock` around room operations. The master server is single-threaded for logic, like B-AD-1 |
+| D6 | You're the last dependency everyone needs (CI, VPS, load test) | Do CI and the load test **early** (phases 00, 01), don't leave them to M3 |
+| D7 | Half-open TCP connections going undetected | A 15 s heartbeat + timeout. The OS's TCP keepalive is far too slow (2 hours by default) |
 
 ---
 
-## 9. Quyết định kiến trúc riêng
+## 9. Your own architectural decisions
 
-| # | Quyết định | Lý do | Đánh đổi |
+| # | Decision | Reason | Trade-off |
 |---|---|---|---|
-| D-AD-1 | Một thread cho logic, thread pool chỉ cho I/O | Loại bỏ race condition trong room/session state. Vài chục client là quá đủ | Không scale tới hàng nghìn. Không cần |
-| D-AD-2 | SQLite, không PostgreSQL/MySQL | Không cần cài đặt, một file, đủ cho quy mô này | Không chịu được ghi đồng thời cao. Không cần |
-| D-AD-3 | Body message dạng JSON, không binary | Tần suất thấp nên overhead không đáng kể; dễ debug bằng log và Wireshark; dễ mở rộng | Tốn băng thông hơn — không quan trọng ở đây |
-| D-AD-4 | joinTicket HMAC stateless, không hỏi lại master | Game server verify được độc lập, không thêm round-trip, không phụ thuộc master còn sống | Không thu hồi được ticket trước hạn. Hạn 60s nên chấp nhận |
-| D-AD-5 | Không dùng ASP.NET Core / SignalR / gRPC | Yêu cầu dự án: TCP thuần. Cũng là mục tiêu học thuật | Phải tự viết framing, dispatch, serialization |
-| D-AD-6 | Không TLS ở M1–M2, thêm ở M3 | Tránh phức tạp sớm; nhưng có truyền mật khẩu nên bắt buộc phải có trước khi lên VPS công khai | |
+| D-AD-1 | One thread for logic, the thread pool only for I/O | Eliminates races in room/session state. A few dozen clients is trivially handled | Doesn't scale to thousands. Not needed |
+| D-AD-2 | SQLite, not PostgreSQL/MySQL | No installation, one file, sufficient at this scale | Poor under high concurrent writes. Not needed |
+| D-AD-3 | JSON message bodies, not binary | Frequency is low so the overhead doesn't matter; easy to debug in logs and Wireshark; easy to extend | More bandwidth — irrelevant here |
+| D-AD-4 | Stateless HMAC joinTickets, no callback to the master | The game server verifies independently, with no extra round-trip and no dependency on the master being alive | Tickets can't be revoked early. The 60 s expiry makes that acceptable |
+| D-AD-5 | No ASP.NET Core / SignalR / gRPC | Project requirement: raw TCP. Also the academic goal | We have to write framing, dispatch and serialization ourselves |
+| D-AD-6 | No TLS at M1–M2, added at M3 | Avoids early complexity; but passwords are transmitted, so it's mandatory before going onto a public VPS | |
 
 ---
 
-## 10. Bạn sở hữu hạ tầng cho cả nhóm
+## 10. You own the infrastructure for the whole team
 
-Ba thứ này ba người kia phụ thuộc. Làm sớm, đừng để họ chờ.
+The other three depend on these three things. Do them early; don't make people wait.
 
-### 10.1. CI — hạn tuần 2
+### 10.1. CI — due week 2
 
-`tools/ci.ps1` và `.github/workflows/ci.yml`, chạy dưới 5 phút:
-1. `dotnet build` cả 5 project → 0 warning (đã bật `TreatWarningsAsErrors`)
-2. `dotnet test` toàn bộ → 0 fail
-3. Kiểm tra `ProtocolConstants.cs` khớp `protocol-spec.md`
-4. Unity batch-mode compile check (nếu runner có Unity; nếu không, chạy trên máy A)
+`tools/ci.ps1` and `.github/workflows/ci.yml`, running in under 5 minutes:
+1. `dotnet build` all 5 projects → 0 warnings (`TreatWarningsAsErrors` is on)
+2. `dotnet test` across the board → 0 failures
+3. Verify `ProtocolConstants.cs` matches `protocol-spec.md`
+4. Unity batch-mode compile check (if the runner has Unity; otherwise run it on A's machine)
 
-### 10.2. Script build — hạn tuần 2
+### 10.2. Build scripts — due week 2
 
-| Script | Làm gì |
+| Script | What it does |
 |---|---|
-| `tools/build-libs.ps1` | Build 3 .NET lib, copy DLL + phụ thuộc vào `Assets/Plugins/` |
-| `tools/build-client.ps1` | Unity build client |
-| `tools/build-server.ps1` | Unity build headless server |
-| `tools/run-integration.ps1` | Khởi động 1 server + N client, chạy smoke test |
+| `tools/build-libs.ps1` | Builds the 3 .NET libraries and copies the DLLs + dependencies into `Assets/Plugins/` |
+| `tools/build-client.ps1` | Unity client build |
+| `tools/build-server.ps1` | Unity headless server build |
+| `tools/run-integration.ps1` | Starts 1 server + N clients and runs a smoke test |
 
-`build-libs.ps1` là thứ B và C cần nhất — nó đưa code của họ vào Unity cho A dùng.
+`build-libs.ps1` is what B and C need most — it's what gets their code into Unity for A to use.
 
-### 10.3. Load test harness — hạn tuần 6
+### 10.3. Load-test harness — due week 6
 
-`Ironfront.Tools.LoadTest`: client giả lập, không cần Unity, dùng thẳng
-`Ironfront.Net.Transport` + `Ironfront.Net.Replication`.
+`Ironfront.Tools.LoadTest`: a simulated client with no Unity dependency, using
+`Ironfront.Net.Transport` + `Ironfront.Net.Replication` directly.
 
 ```
 dotnet run --project Ironfront.Tools.LoadTest -- \
@@ -232,25 +233,25 @@ dotnet run --project Ironfront.Tools.LoadTest -- \
     --behavior random-walk --report loadtest-report.json
 ```
 
-Giá trị: C không thể test 16 người thật mỗi lần; công cụ này cho phép test bất cứ lúc nào.
-B dùng nó cho soak test qua đêm. **Đây có thể là đóng góp giá trị nhất của bạn cho nhóm.**
+The value: C can't round up 16 real players every time; this tool makes that testable on demand. B
+uses it for the overnight soak test. **This may be your most valuable contribution to the team.**
 
 ---
 
-## 11. Bảo mật — danh sách bắt buộc
+## 11. Security — the mandatory checklist
 
-| Mối nguy | Chặn | Phase |
+| Threat | Defense | Phase |
 |---|---|---|
-| Mật khẩu plaintext trên đường truyền | Client hash SHA256(pass+user) trước khi gửi | 01 |
-| Mật khẩu plaintext trong DB | Server hash lại bằng bcrypt (cost 11) | 01 |
-| SQL injection | Parameterized query, không ngoại lệ | 01 |
-| Brute force login | Rate limit 5 lần/phút/IP, khóa tài khoản 15 phút sau 10 lần sai | 01 |
-| Session hijack | Session token 32 byte ngẫu nhiên mã hóa, hạn 24h, gắn với IP | 01 |
-| Giả mạo game server | `GS_REGISTER` yêu cầu `serverSecret` từ biến môi trường | 02 |
-| joinTicket giả | HMAC-SHA256, so sánh `FixedTimeEquals` | 02 |
-| joinTicket dùng lại | Hạn 60 giây + gắn với 1 serverId | 02 |
-| Message quá lớn làm cạn RAM | Giới hạn `length` ≤ 64 KB, vượt thì đóng kết nối | 00 |
-| Slowloris (kết nối rồi im lặng) | Timeout 30 giây nếu chưa login | 00 |
-| Quá nhiều kết nối từ 1 IP | Giới hạn 5 kết nối/IP | 00 |
-| Nghe lén trên Internet | TLS trước khi lên VPS công khai | 03 |
-| Secret trong git | `.env` gitignore, `.env.example` chỉ có tên biến | 00 |
+| Plaintext passwords in transit | The client hashes SHA256(pass+user) before sending | 01 |
+| Plaintext passwords in the DB | The server re-hashes with bcrypt (cost 11) | 01 |
+| SQL injection | Parameterized queries, no exceptions | 01 |
+| Login brute force | Rate limit 5/minute/IP, lock the account for 15 minutes after 10 failures | 01 |
+| Session hijacking | A cryptographically random 32-byte session token, 24 h expiry, bound to the IP | 01 |
+| Game server impersonation | `GS_REGISTER` requires a `serverSecret` from an environment variable | 02 |
+| Forged joinTickets | HMAC-SHA256, compared with `FixedTimeEquals` | 02 |
+| Replayed joinTickets | A 60-second expiry + binding to a single serverId | 02 |
+| Oversized messages exhausting RAM | Cap `length` at ≤ 64 KB, close the connection above that | 00 |
+| Slowloris (connect then go silent) | A 30-second timeout before login | 00 |
+| Too many connections from one IP | A limit of 5 connections/IP | 00 |
+| Eavesdropping on the Internet | TLS before going onto a public VPS | 03 |
+| Secrets in git | `.env` in gitignore, `.env.example` with variable names only | 00 |

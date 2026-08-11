@@ -1,45 +1,45 @@
-# Report — Phase NN: <tên phase>
+# Report — Phase NN: <phase name>
 
-- **Người viết:** Dev D (Master Server & Services)
-- **Ngày:** YYYY-MM-DD
-- **Tuần:** N / 14
+- **Author:** Dev D (Master Server & Services)
+- **Date:** YYYY-MM-DD
+- **Week:** N / 14
 - **Phase:** [phases/phase-NN-xxx.md](../phases/phase-NN-xxx.md)
-- **Trạng thái:** ☐ Xong đúng hạn · ☐ Xong trễ · ☐ Xong một phần · ☐ Chưa xong
+- **Status:** ☐ Done on time · ☐ Done late · ☐ Partially done · ☐ Not done
 
 ---
 
-## 1. Tóm tắt một đoạn
+## 1. One-paragraph summary
 
 ---
 
-## 2. Đối chiếu tiêu chí nghiệm thu
+## 2. Acceptance criteria review
 
-| # | Tiêu chí | Đạt | Bằng chứng |
+| # | Criterion | Met | Evidence |
 |---|---|---|---|
 
 ---
 
-## 3. Hạ tầng cho cả nhóm — trạng thái
+## 3. Team infrastructure — status
 
-> Bạn sở hữu CI, script build, load test. Ba người kia phụ thuộc. Báo cáo trung thực.
+> You own CI, the build scripts and the load test. The other three depend on them. Report honestly.
 
-| Hạng mục | Hạn | Trạng thái | Ai đang bị chặn vì nó |
+| Item | Due | Status | Who is blocked by it |
 |---|---|---|---|
-| `tools/ci.ps1` | Tuần 2 | | |
-| `tools/build-libs.ps1` | Tuần 2 | | |
-| `tools/build-server.ps1` | Tuần 2 | | |
-| `Ironfront.Tools.LoadTest` | Tuần 6 | | |
-| VPS | Tuần 11 | | |
+| `tools/ci.ps1` | Week 2 | | |
+| `tools/build-libs.ps1` | Week 2 | | |
+| `tools/build-server.ps1` | Week 2 | | |
+| `Ironfront.Tools.LoadTest` | Week 6 | | |
+| VPS | Week 11 | | |
 
 ---
 
-## 4. Kết quả test
+## 4. Test results
 
 ```
-<output dotnet test>
+<dotnet test output>
 ```
 
-| Nhóm | Test | Pass | Fail |
+| Group | Tests | Pass | Fail |
 |---|---|---|---|
 | MSP framing | | | |
 | Auth | | | |
@@ -49,55 +49,55 @@
 
 ---
 
-## 5. Danh sách bảo mật — đối chiếu `plan.md § 11`
+## 5. Security checklist — against `plan.md § 11`
 
-| Mối nguy | Đã chặn | Cách kiểm chứng |
+| Threat | Mitigated | How it was verified |
 |---|---|---|
-| Mật khẩu plaintext trên đường truyền | ☐ | |
-| Mật khẩu plaintext trong DB | ☐ | |
+| Plaintext passwords in transit | ☐ | |
+| Plaintext passwords in the DB | ☐ | |
 | SQL injection | ☐ | |
-| Brute force login | ☐ | |
-| Session hijack | ☐ | |
-| Message quá lớn | ☐ | |
+| Login brute force | ☐ | |
+| Session hijacking | ☐ | |
+| Oversized messages | ☐ | |
 | Slowloris | ☐ | |
-| Secret trong git | ☐ | |
+| Secrets in git | ☐ | |
 
 ---
 
-## 6. Đo đạc
+## 6. Measurements
 
-| Chỉ số | Ngưỡng | Đo được |
+| Metric | Threshold | Measured |
 |---|---|---|
-| Số kết nối TCP đồng thời | ≥ 32 | |
-| Độ trễ LOGIN_REQ → LOGIN_RES | < 100ms | |
-| Độ trễ ROOM_LIST (50 phòng) | < 200ms | |
-| RAM master server, 16 client | < 100 MB | |
-| CPU master server, 16 client | < 5% | |
+| Simultaneous TCP connections | ≥ 32 | |
+| LOGIN_REQ → LOGIN_RES latency | < 100 ms | |
+| ROOM_LIST latency (50 rooms) | < 200 ms | |
+| Master server RAM, 16 clients | < 100 MB | |
+| Master server CPU, 16 clients | < 5% | |
 
 ---
 
-## 7. Quyết định kỹ thuật
+## 7. Technical decisions
 
-| # | Vấn đề | Chọn | Loại | Lý do |
+| # | Problem | Chosen | Rejected | Reason |
 |---|---|---|---|---|
 
 ---
 
-## 8. Thứ đã thử và THẤT BẠI
+## 8. Things tried that FAILED
 
-| Đã thử | Vì sao không được | Dấu hiệu |
+| Tried | Why it didn't work | Signs |
 |---|---|---|
 
 ---
 
-## 9. Đang kẹt / cần người khác
+## 9. Blocked / needs someone else
 
-| Kẹt gì | Cần ai | Đã báo chưa |
+| What's blocking | Who's needed | Reported yet |
 |---|---|---|
 
 ---
 
-## 10. Phase sau
+## 10. Next phase
 
-- Việc đầu tiên:
-- Rủi ro nhìn thấy trước:
+- First task:
+- Risks I can see coming:

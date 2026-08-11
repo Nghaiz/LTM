@@ -1,89 +1,92 @@
-# Dev C — Phase 00: Đóng băng protocol, trọng tài, và `MovementSimulation`
+# Dev C — Phase 00: Freezing the protocol, the referee role, and `MovementSimulation`
 
-**Tuần 1–2** · Mốc **M0** · Ước lượng **2.5 người-tuần**
+**Weeks 1–2** · Milestone **M0** · Estimate **2.5 person-weeks**
 
-> Mục tiêu một câu: **chốt hợp đồng chung của cả nhóm, dựng bộ test làm trọng tài, và bắt đầu
-> mổ `Actor.cs`.**
+> Goal in one sentence: **settle the team's shared contract, build the test suite that acts as
+> referee, and start operating on `Actor.cs`.**
 
-> **Đã tái cấu trúc.** Phase này khác kế hoạch gốc ở hai điểm:
-> - **Mất** việc cài đặt `BitWriter`/`BitReader`/`Quantize` → chuyển cho Dev B. Bạn giữ vai
->   **kiểm định** (conformance test).
-> - **Nhận** việc trích `MovementSimulation` khỏi `Actor.cs` → từ Dev A. Bắt đầu từ phase này.
+> **Restructured.** This phase differs from the original plan in two ways:
+> - **Lost** the implementation of `BitWriter`/`BitReader`/`Quantize` → moved to Dev B. You keep the
+>   **verification** role (conformance tests).
+> - **Gained** the extraction of `MovementSimulation` from `Actor.cs` → from Dev A. Starting this
+>   phase.
 
 ---
 
-## 1. Mục tiêu
+## 1. Objectives
 
-| # | Mục tiêu | Vì sao |
+| # | Objective | Why |
 |---|---|---|
-| 1 | Chủ trì đóng băng `protocol-spec.md` cuối tuần 1 | Bạn là người cài đặt nên bạn chủ trì. Chặn rủi ro R5 |
-| 2 | `ProtocolConstants.cs` — SSOT hằng số | Cả 4 project tham chiếu |
-| 3 | **Bộ test conformance** — trọng tài kiểm định code của B | Bạn kiểm định, B cài đặt |
-| 4 | `InputSerializer` | Của bạn, dùng `BitWriter` của B |
-| 5 | **Đọc hiểu `Actor.cs` + bắt đầu trích `MovementSimulation`** | Việc mới, rủi ro C7 + C8 |
-| 6 | Gửi A danh sách 6 hàm cần expose | Chặn sớm, đừng để tới tuần 7 |
+| 1 | Chair the freeze of `protocol-spec.md` by the end of week 1 | You implement most of it, so you chair it. Mitigates risk R5 |
+| 2 | `ProtocolConstants.cs` — the SSOT for constants | Referenced by all 4 projects |
+| 3 | **The conformance test suite** — the referee verifying B's code | You verify, B implements |
+| 4 | `InputSerializer` | Yours, built on B's `BitWriter` |
+| 5 | **Read and understand `Actor.cs` + start extracting `MovementSimulation`** | New work, risks C7 + C8 |
+| 6 | Send A the list of 6 methods to expose | Block it early; don't leave it until week 7 |
 
 ---
 
-## 2. Task chi tiết
+## 2. Detailed tasks
 
-### Task 1 — Chủ trì đóng băng protocol (2 ngày, cùng cả nhóm)
+### Task 1 — Chair the protocol freeze (2 days, with the whole team)
 
-Bạn **chủ trì** vì bạn là người cài đặt phần lớn spec.
+You **chair** it because you implement most of the spec.
 
-1. Cả 4 đọc `protocol-spec.md`, mỗi người ghi danh sách nghi vấn
-2. Họp 90 phút, giải quyết từng nghi vấn
-3. Bạn cập nhật spec, tạo `ProtocolConstants.cs`
-4. PR, 3 người còn lại approve
-5. **Đóng băng.** Sau đó theo quy trình ở [`conventions.md § 2`](../../00-shared/conventions.md)
+1. All 4 read `protocol-spec.md`, each writing down their open questions
+2. A 90-minute meeting resolving each question
+3. You update the spec and create `ProtocolConstants.cs`
+4. PR, approved by the other 3
+5. **Freeze.** After that, follow the process in
+   [`conventions.md § 2`](../../00-shared/conventions.md)
 
-Câu hỏi phải chốt, đừng để mơ hồ:
-- [ ] Little-endian cho GSP — cả 4 hiểu giống nhau chưa?
-- [ ] `POS_MIN`/`POS_MAX` = ±2048 có bao đủ map không? **Cần A đo bounding box**
-- [ ] `MAX_ACTORS = 64` đủ chưa? (16 người + 32 bot = 48, dư 16)
-- [ ] Bot dùng chung không gian `actorId` với người chơi? *(Nên: có, đơn giản hơn)*
-- [ ] Actor chết thì `actorId` tái dùng ngay? *(Nên: không, quarantine 5 giây — tránh client
-      nhầm actor mới là actor cũ khi gói cũ còn trên đường)*
-- [ ] `changeMask` 8 bit đủ cho tương lai? (dùng 7, còn 1 dự phòng)
+Questions that must be settled, with nothing left vague:
+- [ ] Little-endian for GSP — does everyone understand it the same way?
+- [ ] Do `POS_MIN`/`POS_MAX` = ±2048 cover the map? **Needs A to measure the bounding box**
+- [ ] Is `MAX_ACTORS = 64` enough? (16 players + 32 bots = 48, with 16 spare)
+- [ ] Do bots share the `actorId` space with players? *(Recommended: yes, it's simpler)*
+- [ ] Is an `actorId` reused immediately when an actor dies? *(Recommended: no, quarantine for 5
+      seconds — otherwise a client can mistake a new actor for the old one while stale packets are
+      still in flight)*
+- [ ] Is an 8-bit `changeMask` enough for the future? (7 used, 1 spare)
 
-**Thêm một mục mới cần chốt sau tái cấu trúc:**
-- [ ] Ranh giới `Ironfront.Net.Replication/Serialization/` (B sở hữu) và phần còn lại (bạn sở
-      hữu). Xác nhận với B rằng B **không** đụng `SnapshotBuilder`, bạn **không** đụng `BitWriter`
+**One new item to settle after the restructure:**
+- [ ] The boundary between `Ironfront.Net.Replication/Serialization/` (B owns) and everything else
+      (you own). Confirm with B that B **doesn't** touch `SnapshotBuilder` and you **don't** touch
+      `BitWriter`
 
-### Task 2 — `ProtocolConstants.cs` (nửa ngày)
+### Task 2 — `ProtocolConstants.cs` (half a day)
 
-Copy nguyên từ [`protocol-spec.md § 1`](../../00-shared/protocol-spec.md#1-hằng-số-toàn-cục)
-và § 4.4. Thêm `MsgType`, `StateFlag`, `ChangeMask` (nội dung chi tiết giữ nguyên như spec).
+Copy it verbatim from [`protocol-spec.md § 1`](../../00-shared/protocol-spec.md#1-global-constants)
+and § 4.4. Add `MsgType`, `StateFlag` and `ChangeMask` (contents exactly as in the spec).
 
-**Thêm một test tự kiểm tra spec:** đọc file `protocol-spec.md`, trích giá trị trong bảng, so
-với hằng số trong code. Ai sửa spec mà quên sửa code (hoặc ngược lại) → CI đỏ. Đây chính là
-loại drift gây rủi ro R5.
+**Add a test that self-checks the spec:** read `protocol-spec.md`, extract the values from the
+tables, and compare against the constants in code. Anyone who edits the spec and forgets the code
+(or vice versa) → red CI. That drift is exactly what risk R5 is about.
 
-### Task 3 — Bộ test conformance (3 ngày) — VAI TRỌNG TÀI
+### Task 3 — The conformance test suite (3 days) — THE REFEREE ROLE
 
-Đây là vai bạn giữ lại sau khi serializer chuyển cho B. **Quan trọng hơn trước**, vì giờ bạn
-kiểm định code của người khác chứ không phải của chính mình.
+This is the role you keep after the serializer moved to B. It's **more important than before**,
+because you're now verifying someone else's code rather than your own.
 
-**Nguyên tắc bất di bất dịch: dữ liệu hex cứng viết tay theo spec.** Không sinh bằng code của
-B, không sinh bằng code của bạn. Nếu sinh bằng code thì test chỉ chứng minh code nhất quán với
-chính nó.
+**An inviolable rule: hand-written hex data taken from the spec.** Not generated by B's code, not
+generated by yours. Generated data would only prove the code is consistent with itself.
 
 ```csharp
 // Ironfront.Net.Replication.Tests/Conformance/QuantizeConformanceTests.cs
-// Kiểm định Quantize CỦA DEV B khớp protocol-spec § 4.4
+// Verifies that DEV B's Quantize matches protocol-spec § 4.4
 
 [Theory]
 [InlineData(0f,      0)]
 [InlineData(100f,    1600)]
 [InlineData(-2048f, -32768)]
 [InlineData(2048f,   32767)]
-public void PackPos_PhaiKhopGiaTriTrongSpec(float input, short expected)
+public void PackPos_MustMatchTheValuesInTheSpec(float input, short expected)
     => Assert.Equal(expected, Quantize.PackPos(input));
 
 [Fact]
-public void PackPos_RoundTrip_SaiSoDuoiNguong()
+public void PackPos_RoundTrip_ErrorBelowThreshold()
 {
-    for (float v = -2048f; v <= 2048f; v += 0.37f)   // bước lẻ, tránh rơi vào mức chẵn
+    for (float v = -2048f; v <= 2048f; v += 0.37f)   // an odd step, to avoid landing on exact levels
     {
         float back = Quantize.UnpackPos(Quantize.PackPos(v));
         Assert.True(Math.Abs(back - v) < 0.07f, $"v={v} back={back}");
@@ -91,42 +94,42 @@ public void PackPos_RoundTrip_SaiSoDuoiNguong()
 }
 
 [Fact]
-public void Yaw_RoundTrip_SaiSoDuoi001Do()
+public void Yaw_RoundTrip_ErrorBelow001Degrees()
 {
     for (float deg = 0f; deg < 360f; deg += 0.13f)
         Assert.True(Math.Abs(Quantize.UnpackYaw(Quantize.PackYaw(deg)) - deg) < 0.01f);
 }
 
-// Kiểm định BitWriter CỦA DEV B ghi đúng thứ tự bit
+// Verifies that DEV B's BitWriter writes bits in the right order
 [Fact]
-public void BitWriter_GhiLSBTruoc_KhopHexCung()
+public void BitWriter_WritesLsbFirst_MatchesHardCodedHex()
 {
     Span<byte> buf = stackalloc byte[4];
     var w = new BitWriter(buf);
-    w.WriteBits(0b101, 3);      // 3 bit thấp
-    w.WriteBits(0b11, 2);       // 2 bit tiếp
+    w.WriteBits(0b101, 3);      // the 3 low bits
+    w.WriteBits(0b11, 2);       // the next 2
     w.AlignToByte();
-    Assert.Equal(0b00011101, buf[0]);   // LSB-first: 101 rồi 11 → 11101
+    Assert.Equal(0b00011101, buf[0]);   // LSB-first: 101 then 11 → 11101
 }
 ```
 
-**Số test tối thiểu phase này: 25.**
+**Minimum tests for this phase: 25.**
 
-| Nhóm | Số | Kiểm định code của ai |
+| Group | Count | Whose code it verifies |
 |---|---|---|
-| `Quantize` — giá trị cụ thể theo spec, round-trip, biên | 8 | **Dev B** |
-| `BitWriter`/`BitReader` — round-trip, thứ tự bit, biên, tràn buffer | 6 | **Dev B** |
-| `InputSerializer` — hex cứng, redundancy, gói cụt, frameCount độc | 6 | Bạn |
-| `ProtocolConstants` — đối chiếu spec, enum không trùng | 5 | Chung |
+| `Quantize` — specific spec values, round-trips, boundaries | 8 | **Dev B** |
+| `BitWriter`/`BitReader` — round-trips, bit order, boundaries, buffer overrun | 6 | **Dev B** |
+| `InputSerializer` — hard-coded hex, redundancy, truncated packets, malicious frameCount | 6 | You |
+| `ProtocolConstants` — cross-checked against the spec, no duplicate enum values | 5 | Shared |
 
-> **Chuẩn bị tâm lý:** test của bạn sẽ đỏ trên code B vừa viết. Đó là **tính năng**, không phải
-> xung đột. Khi đỏ, hai người cùng mở spec § 4.4 và xem **ai lệch spec** — không phải xem ai sai.
-> Đây là lý do tách người cài đặt và người kiểm định.
+> **Prepare yourself mentally:** your tests will go red against code B just wrote. That's a
+> **feature**, not a conflict. When it happens, the two of you open spec § 4.4 and see **who diverged
+> from the spec** — not who is at fault. This is exactly why implementer and verifier are separate.
 
-### Task 4 — `InputSerializer` (1.5 ngày)
+### Task 4 — `InputSerializer` (1.5 days)
 
-Của bạn, nhưng dùng `BitWriter` của B. Theo
-[`protocol-spec.md § 4.2`](../../00-shared/protocol-spec.md#42-c_input-0x20--chi-tiết-byte).
+Yours, but built on B's `BitWriter`. Per
+[`protocol-spec.md § 4.2`](../../00-shared/protocol-spec.md#42-c_input-0x20--byte-layout).
 
 ```csharp
 public static bool TryRead(ReadOnlySpan<byte> src, Span<InputFrameRaw> dst, out int count)
@@ -136,50 +139,52 @@ public static bool TryRead(ReadOnlySpan<byte> src, Span<InputFrameRaw> dst, out 
     if (r.ReadByte() != MsgType.C_INPUT) return false;
     uint startTick = r.ReadUInt32();
     byte n = r.ReadByte();
-    if (n == 0 || n > 8 || n > dst.Length) return false;     // chống gói độc
-    if (src.Length < 6 + n * 8) return false;                // gói cụt
+    if (n == 0 || n > 8 || n > dst.Length) return false;     // guard against malicious packets
+    if (src.Length < 6 + n * 8) return false;                // truncated packet
     // ...
 }
 ```
 
-> **Cạm bẫy — validate mọi độ dài đọc từ mạng.** `n` đến từ client, có thể là 255 do client bị
-> hack. `stackalloc InputFrameRaw[255]` mỗi gói sẽ làm tràn stack server. **Quy tắc không có
-> ngoại lệ:** mọi giá trị độ dài từ mạng phải được kiểm tra trước khi cấp phát bất cứ thứ gì.
+> **Trap — validate every length read from the network.** `n` comes from the client and could be 255
+> if the client is hacked. `stackalloc InputFrameRaw[255]` per packet would blow the server's stack.
+> **A rule with no exceptions:** every length value from the network must be checked before
+> allocating anything.
 
-### Task 5 — Đọc `Actor.cs` và bắt đầu trích `MovementSimulation` (4 ngày) — VIỆC MỚI
+### Task 5 — Read `Actor.cs` and start extracting `MovementSimulation` (4 days) — NEW WORK
 
-Đây là việc bạn nhận từ Dev A. Rủi ro C7 (phá gameplay) và C8 (chi phí học Unity bị đánh giá
-thấp) đều nằm ở đây.
+This is the work you took from Dev A. Both risk C7 (breaking gameplay) and C8 (underestimating the
+cost of learning Unity) live here.
 
-#### 5.1. Đọc trước, đừng viết (2 ngày)
+#### 5.1. Read first, don't write (2 days)
 
-Bạn là người duy nhất trong 3 backend dev phải hiểu Unity gameplay. Đừng bỏ qua bước này.
+You're the only one of the 3 backend devs who has to understand Unity gameplay. Don't skip this.
 
-| File | LOC | Đọc gì |
+| File | LOC | What to read |
 |---|---|---|
-| [`ActorController.cs`](../../../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ActorController.cs) | 60 | Đọc hết. Thuộc lòng danh sách abstract method |
-| [`Actor.cs`](../../../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs) | 1188 | **Trọng tâm.** `Update()`, `FixedUpdate()`, mọi chỗ đụng `hipRigidbody`, phần ragdoll drive |
-| [`FpsActorController.cs`](../../../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/FpsActorController.cs) | 752 | Cách input biến thành ý định di chuyển |
+| [`ActorController.cs`](../../../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ActorController.cs) | 60 | All of it. Memorize the abstract method list |
+| [`Actor.cs`](../../../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs) | 1188 | **The focus.** `Update()`, `FixedUpdate()`, everywhere `hipRigidbody` is touched, the ragdoll drive |
+| [`FpsActorController.cs`](../../../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/FpsActorController.cs) | 752 | How input becomes movement intent |
 
-**Nhờ Dev A giải thích, đừng tự đoán.** A đã đọc những file này ở phase-00 của họ và có
-`docs/codebase-map.md`. Một buổi 60 phút với A tiết kiệm cho bạn nhiều ngày.
+**Ask Dev A to explain it; don't guess.** A already read these files in their own phase-00 and has
+`docs/codebase-map.md`. A 60-minute session with A saves you days.
 
-**Deliverable:** một trang ghi chú trả lời 4 câu:
-1. Chuyển động của nhân vật do `Rigidbody` hay `CharacterController` hay lực lên ragdoll quyết định?
-2. Hằng số tốc độ đi/chạy/ngồi nằm ở đâu?
-3. Trọng lực và nhảy được xử lý thế nào?
-4. Phần nào của chuyển động là **cứng** (phải deterministic, vào `MovementSimulation`) và phần
-   nào là **trang trí** (ragdoll sway, IK, animation — để lại `Actor.cs`)?
+**Deliverable:** a one-page note answering 4 questions:
+1. Is character movement driven by a `Rigidbody`, a `CharacterController`, or forces applied to the
+   ragdoll?
+2. Where do the walk/run/crouch speed constants live?
+3. How are gravity and jumping handled?
+4. Which parts of movement are **hard** (must be deterministic, and belong in `MovementSimulation`)
+   and which are **decorative** (ragdoll sway, IK, animation — left in `Actor.cs`)?
 
-#### 5.2. Viết `MovementSimulation` chạy SONG SONG (2 ngày)
+#### 5.2. Write `MovementSimulation` to run IN PARALLEL (2 days)
 
 ```csharp
-// Assets/Scripts/Net/Shared/MovementSimulation.cs — BẠN SỞ HỮU
-// Chạy trên CẢ client (prediction của A) VÀ server (authoritative của bạn).
-// KHÔNG được có bất kỳ nhánh if (IsClient) / if (IsServer) nào bên trong.
+// Assets/Scripts/Net/Shared/MovementSimulation.cs — YOU OWN THIS
+// Runs on BOTH the client (A's prediction) AND the server (your authoritative sim).
+// It must contain NO if (IsClient) / if (IsServer) branches whatsoever.
 public static class MovementSimulation
 {
-    public const float WALK_SPEED    = 4.5f;      // ← lấy giá trị THẬT từ Actor.cs, đừng đoán
+    public const float WALK_SPEED    = 4.5f;      // ← take the REAL values from Actor.cs, don't guess
     public const float SPRINT_SPEED  = 7.0f;
     public const float CROUCH_SPEED  = 2.0f;
     public const float GRAVITY       = -19.6f;
@@ -207,35 +212,36 @@ public static class MovementSimulation
 }
 ```
 
-> ### Chiến lược an toàn bắt buộc (chặn rủi ro C7)
+> ### The mandatory safety strategy (mitigating risk C7)
 >
-> **KHÔNG xóa code cũ trong `Actor.cs`.** Bạn đang mổ 1188 dòng code người khác viết.
+> **Do NOT delete the old code in `Actor.cs`.** You're operating on 1188 lines someone else wrote.
 >
-> 1. Thêm `MovementSimulation` chạy **song song** với code gốc
-> 2. Mỗi frame, log vị trí mà **cả hai** tính ra
-> 3. Chơi thử single-player 1–2 ngày, so hai chuỗi log
-> 4. Chỉ khi khớp (sai lệch < 0.01m) mới chuyển sang dùng `MovementSimulation` thật
-> 5. Code cũ để nguyên, chỉ tắt bằng cờ — để rollback được trong 5 giây
+> 1. Add `MovementSimulation` running **in parallel** with the original code
+> 2. Every frame, log the position **both** produce
+> 3. Play single-player for 1–2 days and compare the two log streams
+> 4. Only switch to the real `MovementSimulation` once they match (divergence < 0.01 m)
+> 5. Leave the old code in place, disabled behind a flag — so you can roll back in 5 seconds
 
 ```csharp
-// Trong Actor.FixedUpdate(), giai đoạn so sánh
+// In Actor.FixedUpdate(), during the comparison stage
 #if IRONFRONT_MOVEMENT_COMPARE
-    Vector3 legacyPos = transform.position;         // sau khi code gốc chạy
-    Vector3 newPos    = SimulateWithNewSystem();    // chạy shadow, không áp
+    Vector3 legacyPos = transform.position;         // after the original code has run
+    Vector3 newPos    = SimulateWithNewSystem();    // run as a shadow, not applied
     if (Vector3.Distance(legacyPos, newPos) > 0.01f)
-        Debug.LogWarning($"MOVEMENT LỆCH tick={Time.frameCount} d={Vector3.Distance(legacyPos,newPos):F4}");
+        Debug.LogWarning($"MOVEMENT DIVERGED tick={Time.frameCount} d={Vector3.Distance(legacyPos,newPos):F4}");
 #endif
 ```
 
-**Phase này chỉ cần xong bước 1–2.** Bước 3–5 kéo sang phase-01. Hạn giao bản hoàn chỉnh cho
-Dev A là **đầu tuần 7** — bạn có 4 tuần đệm, dùng nó.
+**This phase only needs steps 1–2 finished.** Steps 3–5 carry into phase-01. The deadline for
+handing the finished version to Dev A is the **start of week 7** — you have 4 weeks of slack; use
+them.
 
-### Task 6 — Gửi yêu cầu cho Dev A (nửa ngày, làm NGAY tuần 1)
+### Task 6 — Send your requests to Dev A (half a day, do it in week 1)
 
 ```markdown
-Gửi A — C cần, hạn cuối tuần 2:
+To A — C needs these by the end of week 2:
 
-1. Expose 6 hàm trên Actor.cs (C sẽ dùng trong MovementSimulation và snapshot):
+1. Expose 6 methods on Actor.cs (C will use them in MovementSimulation and the snapshot):
    public Vector3  NetVelocity { get; set; }
    public bool     IsGrounded  { get; }
    public void     CharacterMove(Vector3 delta);
@@ -243,52 +249,52 @@ Gửi A — C cần, hạn cuối tuần 2:
    public void     ApplyStateFlags(byte flags);
    public Hitbox[] GetHitboxes();
 
-2. Build headless chạy được (C cần để test server tick loop)
+2. A working headless build (C needs it to test the server tick loop)
 
-3. Bounding box thực tế của map lớn nhất (xác nhận POS_MIN/MAX = ±2048 đủ)
+3. The actual bounding box of the largest map (to confirm POS_MIN/MAX = ±2048 is enough)
 
-4. Một buổi 60 phút giải thích phần chuyển động trong Actor.cs
-   (C nhận việc trích MovementSimulation, cần hiểu code gốc)
+4. A 60-minute session explaining the movement code in Actor.cs
+   (C has taken on the MovementSimulation extraction and needs to understand the original)
 
-C KHÔNG còn cần A trích MovementSimulation nữa — C tự làm.
+C NO LONGER needs A to extract MovementSimulation — C is doing it.
 ```
 
 ---
 
-## 3. Tiêu chí nghiệm thu
+## 3. Acceptance criteria
 
-| # | Tiêu chí | Cách kiểm chứng |
+| # | Criterion | How to verify |
 |---|---|---|
-| 1 | `protocol-spec.md` đóng băng, có 4 approve | Git log |
-| 2 | `ProtocolConstants.cs` khớp spec, có test tự kiểm tra | `dotnet test` |
-| 3 | ≥25 test conformance xanh | `dotnet test` |
-| 4 | Test hex cứng cho `Quantize` và `BitWriter` **kiểm định code của B** | Xem output |
-| 5 | `PackPos` round-trip sai số < 0.07m toàn dải | Test |
-| 6 | `InputSerializer` từ chối gói cụt và `frameCount` độc | Test |
-| 7 | **Ghi chú 4 câu về chuyển động trong `Actor.cs`** | File `docs/movement-analysis.md` |
-| 8 | **`MovementSimulation` chạy shadow, có log so sánh** | Chơi thử, xem log warning |
-| 9 | Đã gửi yêu cầu 4 mục cho A | Ảnh chụp tin nhắn |
-| 10 | Đã họp 60 phút với A về `Actor.cs` | |
+| 1 | `protocol-spec.md` is frozen with 4 approvals | Git log |
+| 2 | `ProtocolConstants.cs` matches the spec, with a self-checking test | `dotnet test` |
+| 3 | ≥25 conformance tests green | `dotnet test` |
+| 4 | Hard-coded hex tests for `Quantize` and `BitWriter` **verifying B's code** | Read the output |
+| 5 | `PackPos` round-trip error < 0.07 m across the full range | Test |
+| 6 | `InputSerializer` rejects truncated packets and malicious `frameCount`s | Test |
+| 7 | **The 4-question note on movement in `Actor.cs`** | The file `docs/movement-analysis.md` |
+| 8 | **`MovementSimulation` runs as a shadow with comparison logging** | Playtest and read the warnings |
+| 9 | The 4-item request has been sent to A | Screenshot of the message |
+| 10 | The 60-minute session with A about `Actor.cs` happened | |
 
 ---
 
-## 4. Rủi ro
+## 4. Risks
 
-| Rủi ro | Dấu hiệu | Xử lý |
+| Risk | Sign | Handling |
 |---|---|---|
-| Nhóm không đồng thuận protocol trong tuần 1 | Họp kéo dài, nhiều mục để mở | **Bạn ra quyết định**, ghi rõ lý do. Sai còn hơn treo. Đổi sau qua PR |
-| **C8: chi phí học `Actor.cs` bị đánh giá thấp** | Hết 2 ngày vẫn chưa trả lời được 4 câu ở Task 5.1 | Kéo A vào ngồi cùng. Đây là việc A đã làm rồi, đừng tự vật lộn |
-| **C7: `MovementSimulation` lệch code gốc** | Log warning "MOVEMENT LỆCH" liên tục | Đó là lý do có giai đoạn shadow. Đừng chuyển sang dùng thật khi còn lệch |
-| B chưa xong `BitWriter` → bạn không viết được conformance test | | Viết test trước theo spec, để đỏ. Test đỏ chờ implementation là bình thường và đúng thứ tự |
-| Map lớn hơn ±2048m | `PackPos` clamp, actor kẹt ở biên | Kiểm chứng ngay tuần 1 với A. Nếu lớn hơn: tăng `POS_RANGE` (giảm độ chính xác) hoặc dùng 24 bit |
+| The team can't agree on the protocol within week 1 | The meeting drags on with many items left open | **You decide**, and record the reason. Being wrong beats being stalled. Change it later via PR |
+| **C8: the cost of learning `Actor.cs` is underestimated** | 2 days gone and you still can't answer the 4 questions in Task 5.1 | Pull A in to sit with you. A has already done this work; don't struggle alone |
+| **C7: `MovementSimulation` diverges from the original** | A steady stream of "MOVEMENT DIVERGED" warnings | That's exactly why there's a shadow phase. Don't switch over while it's still diverging |
+| B hasn't finished `BitWriter` → you can't write conformance tests | | Write the tests from the spec first and let them be red. Red tests waiting on an implementation are normal and in the right order |
+| The map is larger than ±2048 m | `PackPos` clamps and actors get stuck at the edge | Verify this with A in week 1. If it's larger: raise `POS_RANGE` (losing precision) or move to 24 bits |
 
 ---
 
-## 5. Bàn giao cuối phase
+## 5. End-of-phase handoff
 
-| Cho ai | Thứ gì |
+| To whom | What |
 |---|---|
-| Dev A | `ISnapshotReader` chữ ký + `FakeSnapshotReader`, `ActorStateRaw`, `InputSerializer` |
-| Dev B | Bộ test conformance (B chạy nó để biết code mình có khớp spec không) |
-| Cả 4 | `ProtocolConstants.cs` |
-| Dev A | Xác nhận đã nhận 6 hàm expose, đã họp về `Actor.cs` |
+| Dev A | The `ISnapshotReader` signature + `FakeSnapshotReader`, `ActorStateRaw`, `InputSerializer` |
+| Dev B | The conformance test suite (B runs it to check whether their code matches the spec) |
+| All 4 | `ProtocolConstants.cs` |
+| Dev A | Confirmation that the 6 exposed methods arrived and the `Actor.cs` session happened |

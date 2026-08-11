@@ -1,24 +1,24 @@
-# Bản đồ phụ thuộc — ai chặn ai, làm song song tới đâu
+# Dependency map — who blocks whom, and how far parallel work can go
 
-Trả lời một câu hỏi: **4 người có làm song song, bất đồng bộ được không?**
+This answers one question: **can the 4 people work in parallel, asynchronously?**
 
-**Đáp án: Tuần 1–2 bắt buộc đồng bộ. Tuần 3–14 song song gần như hoàn toàn**, với 3 điểm hẹn
-tích hợp.
+**Answer: weeks 1–2 must be synchronous. Weeks 3–14 are almost fully parallel**, with 3
+integration checkpoints.
 
 ---
 
-## 1. Đồ thị phụ thuộc
+## 1. Dependency graph
 
 ```mermaid
 flowchart LR
-    subgraph W12["TUẦN 1-2 — bắt buộc đồng bộ"]
-        P["Protocol spec đóng băng<br/>họp 90 phút, cả 4 người"]
-        BS["B: LoopbackTransport<br/>+ API đóng băng"]
+    subgraph W12["WEEKS 1-2 — must be synchronous"]
+        P["Protocol spec frozen<br/>90-minute meeting, all 4"]
+        BS["B: LoopbackTransport<br/>+ frozen API"]
         DS["D: build-libs.ps1 + CI"]
-        AS["A: build headless<br/>+ 3 stub"]
+        AS["A: headless build<br/>+ 3 stubs"]
         CS["C: ProtocolConstants<br/>+ conformance test"]
     end
-    subgraph W314["TUẦN 3-14 — song song, bất đồng bộ"]
+    subgraph W314["WEEKS 3-14 — parallel, asynchronous"]
         A2["Dev A: client"]
         B2["Dev B: transport"]
         C2["Dev C: replication"]
@@ -31,75 +31,76 @@ flowchart LR
     CS --> A2 & B2
     BS --> B2
     DS --> D2
-    A2 -.->|"chỉ tại điểm hẹn<br/>W6 · W10 · W13"| C2
+    A2 -.->|"only at checkpoints<br/>W6 · W10 · W13"| C2
 ```
 
 ---
 
-## 2. Bốn điểm đồng bộ — tất cả nằm ở tuần 1–2
+## 2. Four sync points — all in weeks 1–2
 
-| # | Ai chờ ai | Deadline | Công sức của người bị chờ | Nếu trễ |
+| # | Who waits on whom | Deadline | Effort for the person being waited on | If late |
 |---|---|---|---|---|
-| 1 | **Cả 4 chờ protocol spec** | Hết tuần 1 | Họp 90 phút | Đồng bộ **có chủ đích**. Không né được, và không nên né |
-| 2 | A, B, C chờ **D**: `build-libs.ps1` + CI | Hết tuần 2 | ~1 ngày | D phải ưu tiên trên mọi thứ khác |
-| 3 | A, C chờ **B**: `LoopbackTransport` + API đóng băng | Hết tuần 2 | ~1.5 ngày | API đóng băng chỉ nửa ngày; loopback in-memory ~1 ngày |
-| 4 | C chờ **A**: build headless chạy được | Hết tuần 2 | ~1 ngày | C không test được server tick loop nếu thiếu |
+| 1 | **All 4 wait on the protocol spec** | End of week 1 | 90-minute meeting | This sync is **deliberate**. It can't be avoided, and shouldn't be |
+| 2 | A, B, C wait on **D**: `build-libs.ps1` + CI | End of week 2 | ~1 day | D must prioritize this above everything else |
+| 3 | A, C wait on **B**: `LoopbackTransport` + frozen API | End of week 2 | ~1.5 days | Freezing the API is only half a day; the in-memory loopback is ~1 day |
+| 4 | C waits on **A**: a working headless build | End of week 2 | ~1 day | Without it C can't test the server tick loop |
 
-Sau tuần 2, mỗi người có đủ stub/loopback để chạy độc lập tới cuối dự án.
+After week 2, everyone has enough stubs/loopback to run independently through the end of the project.
 
 ---
 
-## 3. Sau tái cấu trúc: ai phụ thuộc ai
+## 3. After the restructure: who depends on whom
 
-| Vai | Bị chặn bởi (sau tuần 2) | Chặn lại ai | Phải mở Unity |
+| Role | Blocked by (after week 2) | Blocks | Must open Unity |
 |---|---|---|---|
-| **Dev A** — Unity Client | **Không ai** (3 stub) | Dev C (headless build, tuần 2) | Có |
-| **Dev B** — Transport | **Không ai** | A, C (transport, tuần 2) | Không |
-| **Dev C** — Replication (bạn) | A (headless build, tuần 2)<br/>B (transport, tuần 2) | Dev A (snapshot reader, tuần 2) | Có |
-| **Dev D** — Master server | **Không ai** | Cả 3 (CI + build script, tuần 2) | Không |
+| **Dev A** — Unity Client | **Nobody** (3 stubs) | Dev C (headless build, week 2) | Yes |
+| **Dev B** — Transport | **Nobody** | A, C (transport, week 2) | No |
+| **Dev C** — Replication (you) | A (headless build, week 2)<br/>B (transport, week 2) | Dev A (snapshot reader, week 2) | Yes |
+| **Dev D** — Master server | **Nobody** | All 3 (CI + build script, week 2) | No |
 
-**Điểm quan trọng cần đính chính:** Dev A **không bị backend chặn**. Ngược lại, A là **nút thắt
-tích hợp** vì A sở hữu duy nhất Unity project. Đó là lý do phase-00 của A ghi rõ: *"Ưu tiên mở
-API cho B/C sớm hơn là hoàn thiện tính năng của mình."*
+**Important correction:** Dev A is **not blocked by the backend**. The opposite is true — A is the
+**integration bottleneck**, because A is the sole owner of the Unity project. That's why A's
+phase-00 states explicitly: *"Prioritize opening up APIs for B/C over finishing your own features."*
 
 ---
 
-## 4. Blocker đã bị xóa bởi tái cấu trúc
+## 4. Blockers removed by the restructure
 
-| Blocker cũ | Tuần | Đã xử lý thế nào |
+| Old blocker | Week | How it was handled |
 |---|---|---|
-| C chờ A trích `MovementSimulation` khỏi `Actor.cs` | **Tuần 7** | **Chuyển hẳn cho C.** Đây là blocker tệ nhất trong kế hoạch cũ — nằm giữa dự án, ở đúng mảnh khó nhất |
-| B gánh "hỗ trợ tích hợp" 1.5 tuần không dự đoán được | 6–13 | Chuyển quyền sở hữu integration harness cho C |
-| C phải chờ B để test serializer | 3–4 | Không còn — B viết serializer, C viết test conformance. Hai chiều độc lập |
+| C waiting on A to extract `MovementSimulation` out of `Actor.cs` | **Week 7** | **Moved entirely to C.** This was the worst blocker in the old plan — mid-project, and on exactly the hardest piece |
+| B carrying 1.5 weeks of unpredictable "integration support" | 6–13 | Ownership of the integration harness moved to C |
+| C waiting on B to test the serializer | 3–4 | Gone — B writes the serializer, C writes the conformance test. The two directions are independent |
 
 ---
 
-## 5. Làm bất đồng bộ về thời gian — điều kiện
+## 5. Working asynchronously in time — the conditions
 
-Được, với ba điều kiện:
+Yes, under three conditions:
 
-1. **Giao diện đóng băng sớm** — mỗi người code theo *interface* của người khác, không theo
-   *implementation*. Đã có trong kế hoạch mỗi người.
-2. **CI là trọng tài** — push lên là biết ngay có phá của ai không, không cần hỏi nhau.
-3. **Ba điểm hẹn bắt buộc có mặt đủ 4 người**:
+1. **Freeze interfaces early** — everyone codes against other people's *interfaces*, not their
+   *implementations*. Already covered in each person's plan.
+2. **CI is the referee** — push and you immediately know whether you broke someone else's build,
+   without having to ask.
+3. **Three checkpoints where all 4 must be present**:
 
-| Điểm hẹn | Tuần | Thời lượng | Nội dung |
+| Checkpoint | Week | Duration | Content |
 |---|---|---|---|
-| Họp protocol | 1 | 90 phút | Đóng băng `protocol-spec.md` |
-| **M1** | 6 | Nửa ngày | Tích hợp thật: 2 client thấy nhau |
-| **M2** | 10 | Nửa ngày | Tích hợp: bắn nhau, lag compensation |
-| **M3** | 13 | Nửa ngày | Tích hợp: trận đấu đủ, 16 người |
+| Protocol meeting | 1 | 90 minutes | Freeze `protocol-spec.md` |
+| **M1** | 6 | Half a day | Real integration: 2 clients see each other |
+| **M2** | 10 | Half a day | Integration: shooting, lag compensation |
+| **M3** | 13 | Half a day | Integration: full match, 16 players |
 
-Ngoài 4 buổi đó, làm lúc nào cũng được.
+Outside those 4 sessions, work whenever you like.
 
 ---
 
-## 6. Nếu một người trễ — ai bị ảnh hưởng
+## 6. If someone is late — who is affected
 
-| Người trễ | Ai bị ảnh hưởng | Đường lui |
+| Who is late | Who is affected | Fallback |
 |---|---|---|
-| **Dev A** trễ headless build | C không test được tick loop | C dùng Unity Editor Play Mode thay vì build headless. Chậm hơn nhưng chạy được |
-| **Dev B** trễ transport | A và C không tích hợp được | Cả hai tiếp tục với stub/loopback. Chỉ trễ mốc M1, không trễ tiến độ cá nhân |
-| **Dev C** trễ snapshot | A không có dữ liệu thật | A dùng `FakeSnapshotReader` tự sinh dữ liệu theo spec |
-| **Dev D** trễ master server | A không làm được UI lobby | A dùng `FakeMasterClient`; game server chạy chế độ standalone, client nhập IP thủ công |
-| **Dev D** trễ CI/build script | **Cả 3 người bị chặn** | Đây là lý do nó có deadline tuần 2 và ưu tiên cao nhất của D |
+| **Dev A** late on the headless build | C can't test the tick loop | C uses Unity Editor Play Mode instead of the headless build. Slower, but it works |
+| **Dev B** late on transport | A and C can't integrate | Both continue with stubs/loopback. Only milestone M1 slips, not individual progress |
+| **Dev C** late on snapshots | A has no real data | A uses `FakeSnapshotReader`, generating data from the spec |
+| **Dev D** late on the master server | A can't build the lobby UI | A uses `FakeMasterClient`; the game server runs standalone and the client enters the IP manually |
+| **Dev D** late on CI/build script | **All 3 others are blocked** | This is why it has a week-2 deadline and is D's highest priority |

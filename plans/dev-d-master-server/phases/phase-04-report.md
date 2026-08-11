@@ -1,92 +1,95 @@
-# Dev D — Phase 04: Báo cáo và bàn giao
+# Dev D — Phase 04: Report and handover
 
-**Tuần 14** · Mốc **M4** · Ước lượng **1.0 người-tuần**
+**Week 14** · Milestone **M4** · Estimate **1.0 person-week**
 
 ---
 
-## 1. Task
+## 1. Tasks
 
-### Task 1 — Thí nghiệm TCP cho báo cáo (2 ngày)
+### Task 1 — The TCP experiments for the report (2 days)
 
-Phần bạn bổ sung cho báo cáo là **nửa TCP** của luận điểm chung. B chứng minh UDP; bạn chứng
-minh vì sao TCP đúng cho lobby.
+Your contribution to the report is the **TCP half** of the shared argument. B proves UDP; you prove
+why TCP is right for the lobby.
 
-#### Thí nghiệm 1 — Bài toán framing
+#### Experiment 1 — The framing problem
 
-Định lượng nó, đừng chỉ mô tả.
+Quantify it; don't just describe it.
 
-| Kịch bản | Số lần `Send()` của client | Số lần `Receive()` của server | Số message |
+| Scenario | Client `Send()` calls | Server `Receive()` calls | Messages |
 |---|---|---|---|
-| 3 message nhỏ gửi liên tiếp, Nagle bật | 3 | | 3 |
-| 3 message nhỏ gửi liên tiếp, Nagle tắt | 3 | | 3 |
-| 1 message 100 KB | 1 | | 1 |
-| 1000 message nhỏ trong 1 giây | 1000 | | 1000 |
+| 3 small messages sent back to back, Nagle on | 3 | | 3 |
+| 3 small messages sent back to back, Nagle off | 3 | | 3 |
+| 1 message of 100 KB | 1 | | 1 |
+| 1000 small messages in one second | 1000 | | 1000 |
 
-**Kết luận cần rút ra:** `Send()` và `Receive()` không tương ứng 1-1. Cột thứ 3 sẽ khác cột thứ
-2 ở mọi dòng. Đây là bằng chứng số cho việc bắt buộc phải có framing.
+**The conclusion to draw:** `Send()` and `Receive()` don't correspond one-to-one. Column 3 will
+differ from column 2 on every row. That's the numerical evidence that framing is mandatory.
 
-#### Thí nghiệm 2 — Nagle và độ trễ
+#### Experiment 2 — Nagle and latency
 
-| Cấu hình | Độ trễ request-response p50 | p99 |
+| Configuration | Request-response latency p50 | p99 |
 |---|---|---|
-| `NoDelay = false` (Nagle bật, mặc định) | | |
+| `NoDelay = false` (Nagle on, the default) | | |
 | `NoDelay = true` | | |
 
-**Kết luận mong đợi:** Nagle thêm tới 200ms cho message nhỏ (do delayed ACK ở phía kia). Với
-lobby cần phản hồi nhanh, phải tắt. Với truyền file lớn, nên bật. Đây là ví dụ cụ thể cho việc
-"hiểu TCP" không dừng ở `Send`/`Receive`.
+**Expected conclusion:** Nagle adds up to 200 ms for small messages (thanks to delayed ACKs on the
+other side). A lobby that needs quick replies must disable it; a large file transfer should keep it.
+It's a concrete example that "understanding TCP" goes beyond `Send`/`Receive`.
 
-#### Thí nghiệm 3 — TCP vs UDP cho cùng bài toán lobby
+#### Experiment 3 — TCP vs UDP for the same lobby problem
 
-Cài một phiên bản lobby chạy trên transport UDP của B (chỉ để đo, không dùng thật).
+Implement a version of the lobby over B's UDP transport (purely for measurement, never shipped).
 
-| Chỉ số | TCP | UDP + reliability tự viết |
+| Metric | TCP | UDP + hand-written reliability |
 |---|---|---|
-| Dòng code phải viết | | |
-| Độ trễ login p50 (LAN) | | |
-| Độ trễ login p50 (VPS, 3% loss) | | |
-| Số test cần để tự tin | | |
+| Lines of code required | | |
+| Login latency p50 (LAN) | | |
+| Login latency p50 (VPS, 3% loss) | | |
+| Tests needed for confidence | | |
 
-**Kết luận:** với dữ liệu lobby, UDP + tự viết reliability cho kết quả **tương đương** nhưng tốn
-nhiều công hơn hẳn. Chọn TCP ở đây không phải lười — đó là dùng đúng công cụ.
+**The conclusion:** for lobby data, UDP plus hand-written reliability produces an **equivalent**
+result at considerably more effort. Choosing TCP here isn't laziness — it's using the right tool.
 
-Đây là luận điểm mạnh: nó cho thấy nhóm **chọn** protocol theo bài toán chứ không theo cảm tính.
+This is a strong argument: it shows the team **chose** each protocol to fit the problem rather than
+by instinct.
 
-#### Thí nghiệm 4 — `MspFrameReader` tự viết vs `System.IO.Pipelines`
+#### Experiment 4 — The hand-written `MspFrameReader` vs `System.IO.Pipelines`
 
-> Chính sách nhóm: **tự viết trước vì đó là bài học, rồi so sánh với thư viện chuẩn.**
-> Xem [conventions.md § 3.4](../../00-shared/conventions.md).
+> Team policy: **write it yourself first because that's the lesson, then compare against the standard
+> library.** See [conventions.md § 3.4](../../00-shared/conventions.md).
 >
-> `System.IO.Pipelines` giải **chính xác** bài toán bạn bỏ 3 ngày tự viết ở phase-00: buffer
-> tích lũy, tìm ranh giới message, dồn buffer, tránh cấp phát. Production code sẽ dùng nó.
-> Bạn tự viết vì cả mục đích của phase-00 là **hiểu** bài toán framing — và đó cũng là chương
-> báo cáo hay nhất của bạn.
+> `System.IO.Pipelines` solves **exactly** the problem you spent 3 days hand-writing in phase-00:
+> accumulating buffers, finding message boundaries, compacting, avoiding allocations. Production code
+> would use it. You wrote it yourself because the entire point of phase-00 was to **understand** the
+> framing problem — and that's also your best report chapter.
 
-Cài một phiên bản `MspFrameReader` dùng `PipeReader`, chạy cùng kịch bản:
+Implement a `MspFrameReader` variant on top of `PipeReader` and run the same scenarios:
 
-| Cài đặt | Throughput (msg/s) | ns/message | Alloc/message | Dòng code |
+| Implementation | Throughput (msg/s) | ns/message | Alloc/message | Lines of code |
 |---|---|---|---|---|
-| `MspFrameReader` tự viết | | | | ~60 |
+| The hand-written `MspFrameReader` | | | | ~60 |
 | `System.IO.Pipelines` | | | | ~25 |
 
-Kịch bản đo (mỗi cái 100.000 message):
-- Message nhỏ (50 byte) gửi liên tiếp
-- Message lớn (32 KB) bị cắt làm nhiều `Receive`
-- Trộn: 3 message dính nhau + 1 message cắt đôi
+Measurement scenarios (100,000 messages each):
+- Small messages (50 bytes) sent back to back
+- Large messages (32 KB) split across multiple `Receive`s
+- Mixed: 3 glued messages + 1 split in half
 
-**Luận điểm cần rút ra:**
+**The conclusion to draw:**
 
-`Pipelines` nhanh hơn và ít code hơn — nó quản lý buffer thành chuỗi segment thay vì một mảng
-liên tục, nên không phải `Array.Resize` hay dồn buffer khi message lớn. Nhưng nó có learning
-curve cao (`ReadOnlySequence<byte>`, `SequenceReader<T>`, `AdvanceTo` với hai con trỏ
-examined/consumed) và che giấu đúng thứ mà đồ án cần thể hiện là hiểu.
+`Pipelines` is faster and shorter — it manages buffers as a chain of segments instead of one
+contiguous array, so it never has to `Array.Resize` or compact for large messages. But it has a steep
+learning curve (`ReadOnlySequence<byte>`, `SequenceReader<T>`, `AdvanceTo` with separate
+examined/consumed pointers) and it hides exactly the thing the capstone is meant to demonstrate you
+understand.
 
-Kết luận cho báo cáo: **hiểu bài toán trước, dùng thư viện sau.** Người viết `Pipelines` cũng
-phải giải đúng 4 trường hợp bạn giải ở phase-00 — chỉ là họ giải một lần cho tất cả mọi người.
+The conclusion for the report: **understand the problem first, use the library second.** Whoever
+wrote `Pipelines` had to solve the same 4 cases you solved in phase-00 — they just solved them once
+for everybody.
 
-#### Thí nghiệm 5 — Khả năng chịu tải master server
+#### Experiment 5 — Master server capacity
 
-| Số kết nối TCP đồng thời | RAM | CPU | Độ trễ login p99 |
+| Simultaneous TCP connections | RAM | CPU | Login latency p99 |
 |---|---|---|---|
 | 16 | | | |
 | 50 | | | |
@@ -94,149 +97,149 @@ phải giải đúng 4 trường hợp bạn giải ở phase-00 — chỉ là h
 | 500 | | | |
 | 1000 | | | |
 
-Master server nhẹ hơn game server rất nhiều — nhiều khả năng chịu được hàng trăm kết nối. Con số
-này trả lời câu hỏi "hệ thống scale tới đâu?".
+The master server is far lighter than the game server — it will most likely handle hundreds of
+connections. This number answers the "how far does the system scale?" question.
 
-### Task 2 — Viết chương báo cáo (2 ngày)
+### Task 2 — Write your report chapter (2 days)
 
 ```
-Chương Z: Master server — dịch vụ lobby trên TCP
+Chapter Z: The master server — lobby services over TCP
 
-Z.1  Vai trò và ranh giới
-     Z.1.1  Vì sao tách master server khỏi game server
-     Z.1.2  Phân vai TCP/UDP theo đặc điểm dữ liệu (bảng)
+Z.1  Role and boundaries
+     Z.1.1  Why the master server is separate from the game server
+     Z.1.2  Assigning TCP/UDP by data characteristics (table)
 
-Z.2  Bài toán framing trên byte stream
-     Z.2.1  TCP đảm bảo gì và không đảm bảo gì
-     Z.2.2  Thí nghiệm minh họa (thí nghiệm 1)
-     Z.2.3  Length-prefix và buffer tích lũy
-     Z.2.4  Bốn trường hợp phải xử lý đúng
-     Z.2.5  Chống message độc hại
+Z.2  The byte-stream framing problem
+     Z.2.1  What TCP guarantees and what it doesn't
+     Z.2.2  The demonstrating experiment (experiment 1)
+     Z.2.3  Length prefixes and accumulating buffers
+     Z.2.4  The four cases that must be handled correctly
+     Z.2.5  Defending against malicious messages
 
-Z.3  Kiến trúc server
-     Z.3.1  I/O bất đồng bộ + một thread logic: vì sao không cần lock
-     Z.3.2  Vòng đời kết nối, phát hiện half-open
-     Z.3.3  Nagle và độ trễ (thí nghiệm 2)
+Z.3  Server architecture
+     Z.3.1  Async I/O + a single logic thread: why no locks are needed
+     Z.3.2  Connection lifecycle and half-open detection
+     Z.3.3  Nagle and latency (experiment 2)
 
-Z.4  Xác thực và quản lý phiên
-     Z.4.1  Hash hai lớp (client SHA256 → server bcrypt) và giới hạn của nó
-     Z.4.2  Chống brute force và user enumeration
-     Z.4.3  Session token bằng CSPRNG
+Z.4  Authentication and session management
+     Z.4.1  Two-layer hashing (client SHA256 → server bcrypt) and its limits
+     Z.4.2  Brute-force and user-enumeration defenses
+     Z.4.3  CSPRNG session tokens
 
-Z.5  Cầu nối TCP ↔ UDP: joinTicket
-     Z.5.1  Bài toán: game server làm sao tin client
-     Z.5.2  Ba phương án và lý do chọn HMAC stateless
-     Z.5.3  Chống timing attack
+Z.5  The TCP ↔ UDP bridge: joinTickets
+     Z.5.1  The problem: how does the game server trust a client
+     Z.5.2  Three approaches and why stateless HMAC won
+     Z.5.3  Timing-attack defenses
 
-Z.6  Lobby và matchmaking
-     Z.6.1  Room registry, đẩy trạng thái chủ động
-     Z.6.2  Game server registry và heartbeat
-     Z.6.3  Xử lý game server chết giữa trận
+Z.6  Lobby and matchmaking
+     Z.6.1  The room registry and proactive state pushes
+     Z.6.2  The game server registry and heartbeats
+     Z.6.3  Handling a game server dying mid-match
 
-Z.7  Bảo mật
-     Z.7.1  TLS: vì sao vẫn cần framing
-     Z.7.2  Danh sách mối nguy và biện pháp (bảng)
-     Z.7.3  Những gì chưa làm
+Z.7  Security
+     Z.7.1  TLS: why framing is still required
+     Z.7.2  The threat list and countermeasures (table)
+     Z.7.3  What was left out
 
-Z.8  Vận hành và kết quả
-     Z.8.1  Triển khai VPS, monitoring
-     Z.8.2  So sánh với System.IO.Pipelines (thí nghiệm 4)
-     Z.8.3  Load test (thí nghiệm 5)
-     Z.8.4  Độ bền: biểu đồ 72 giờ
-     Z.8.5  So sánh TCP vs UDP cho lobby (thí nghiệm 3)
+Z.8  Operations and results
+     Z.8.1  VPS deployment, monitoring
+     Z.8.2  Comparison against System.IO.Pipelines (experiment 4)
+     Z.8.3  Load testing (experiment 5)
+     Z.8.4  Durability: the 72-hour chart
+     Z.8.5  TCP vs UDP for the lobby (experiment 3)
 ```
 
-### Task 3 — Tài liệu vận hành (1 ngày)
+### Task 3 — Operations documentation (1 day)
 
-`docs/operations.md` — người khác phải vận hành được mà không hỏi bạn:
+`docs/operations.md` — someone else must be able to operate the system without asking you:
 
 ```markdown
-# Vận hành Ironfront
+# Operating Ironfront
 
-## Khởi động
+## Starting up
 sudo systemctl start ironfront-master
 sudo systemctl start ironfront-gameserver@1
 
-## Xem trạng thái
+## Checking status
 sudo systemctl status ironfront-master
-nc localhost 27001                        # chỉ số JSON
+nc localhost 27001                        # JSON metrics
 tail -f /var/log/ironfront/master.log | jq
 
-## Tạo tài khoản
+## Creating an account
 dotnet Ironfront.MasterServer.dll --create-account <user> <pass> <displayName>
 
-## Sao lưu / khôi phục
+## Backup / restore
 bash tools/backup.sh
 sudo systemctl stop ironfront-master
 cp backups/db-2026-xx-xx.db ironfront.db
 sudo systemctl start ironfront-master
 
-## Sự cố thường gặp
-| Triệu chứng | Nguyên nhân | Xử lý |
+## Common incidents
+| Symptom | Cause | Fix |
 |---|---|---|
-| Client không login được | Master chết / firewall / TLS cert hết hạn | systemctl status; ufw status; kiểm tra hạn cert |
-| "Không có server nào rảnh" (3000) | Game server chưa đăng ký hoặc chết | Xem registry ở endpoint chỉ số |
-| Vào trận thất bại ngẫu nhiên | Lệch đồng hồ → joinTicket hết hạn | timedatectl trên cả 2 máy |
-| RAM master tăng dần | Rò rỉ session hoặc room | So chỉ số connections.current với accounts.onlineNow |
-| Đĩa đầy | Log level Debug | Đổi IRONFRONT_LOG_LEVEL=Info, xoay log |
+| Clients can't log in | Master down / firewall / expired TLS cert | systemctl status; ufw status; check the cert expiry |
+| "No server available" (3000) | No game server registered, or it died | Check the registry via the metrics endpoint |
+| Random join failures | Clock skew → expired joinTickets | timedatectl on both machines |
+| Master RAM climbing | Session or room leak | Compare connections.current against accounts.onlineNow |
+| Disk full | Log level set to Debug | Set IRONFRONT_LOG_LEVEL=Info, rotate the logs |
 ```
 
-### Task 4 — Bàn giao hạ tầng (1 ngày)
+### Task 4 — Infrastructure handover (1 day)
 
-Bạn sở hữu CI, script, VPS. Đảm bảo 3 người kia dùng được nếu bạn vắng:
-- Ai có quyền SSH vào VPS (ít nhất 2 người)
-- `IRONFRONT_SHARED_SECRET` lưu ở đâu (không phải chỉ trong đầu bạn)
-- Cách chạy load test
-- Cách deploy phiên bản mới
+You own CI, the scripts and the VPS. Make sure the other three can use them if you're away:
+- Who has SSH access to the VPS (at least 2 people)
+- Where `IRONFRONT_SHARED_SECRET` is stored (not only in your head)
+- How to run a load test
+- How to deploy a new version
 
 ---
 
-## 2. Tiêu chí nghiệm thu (M4)
+## 2. Acceptance criteria (M4)
 
-| # | Tiêu chí |
+| # | Criterion |
 |---|---|
-| 1 | 5 thí nghiệm có đủ dữ liệu |
-| 2 | Chương báo cáo hoàn chỉnh |
-| 3 | `docs/operations.md` viết xong, có người khác thử làm theo được |
-| 4 | Biểu đồ độ bền 72 giờ |
-| 5 | Ít nhất 2 người có quyền truy cập VPS |
-| 6 | Tổng test ≥ 60 xanh |
-| 7 | Danh sách bảo mật ở `plan.md § 11` đã đối chiếu hết |
+| 1 | All 5 experiments have complete data |
+| 2 | The report chapter is complete |
+| 3 | `docs/operations.md` is written and someone else has successfully followed it |
+| 4 | The 72-hour durability chart |
+| 5 | At least 2 people have VPS access |
+| 6 | ≥ 60 tests total, all green |
+| 7 | The security checklist in `plan.md § 11` has been fully reviewed |
 
 ---
 
-## 3. Câu hỏi phản biện — chuẩn bị trước
+## 3. Challenge questions — prepare in advance
 
-| Câu hỏi | Trả lời ngắn |
+| Question | Short answer |
 |---|---|
-| "Sao không dùng HTTP/REST cho lobby?" | HTTP là request-response, không đẩy được `ROOM_STATE_PUSH` chủ động — phải polling, tốn và trễ. TCP thường trực cho phép server đẩy ngay. Ngoài ra yêu cầu dự án là TCP thuần |
-| "Sao không dùng WebSocket?" | WebSocket chạy trên TCP, thêm framing + handshake HTTP, tồn tại để xuyên proxy trình duyệt — ràng buộc mà client desktop không có. Nó cho ta đúng thứ TCP đã có, kèm overhead |
-| "Framing của em khác HTTP chunked encoding thế nào?" | Cùng ý tưởng (báo độ dài trước dữ liệu). HTTP dùng chuỗi hex + CRLF (dễ đọc, tốn hơn); em dùng u32 nhị phân (4 byte cố định, parse nhanh hơn) |
-| "Một thread logic có phải nút cổ chai không?" | Thí nghiệm 4 cho thấy chịu được N kết nối. Với 16 người mục tiêu thì dư rất nhiều. Đổi lại là không có race condition — em cho rằng đánh đổi đúng ở quy mô này |
-| "Nếu master server chết thì sao?" | Người đang chơi không bị ảnh hưởng (joinTicket stateless, game server không cần master). Người mới không login được. systemd tự restart trong 5 giây |
-| "Client hash mật khẩu có thực sự an toàn hơn?" | Chỉ bảo vệ mật khẩu **gốc** (người dùng hay tái sử dụng). Kẻ nghe lén bắt được hash vẫn đăng nhập được — hash trở thành mật khẩu. Nó bổ sung cho TLS, không thay thế. Em nêu rõ đây là hạn chế |
-| "Sao dùng SQLite mà không phải PostgreSQL?" | Quy mô: vài chục tài khoản, ghi rất thưa. SQLite không cần cài đặt, một file, backup đơn giản. Nếu lên hàng nghìn người dùng đồng thời thì phải đổi — nhưng đó là tối ưu sớm ở đây |
+| "Why not use HTTP/REST for the lobby?" | HTTP is request-response and can't proactively push `ROOM_STATE_PUSH` — you'd have to poll, which is wasteful and laggy. A persistent TCP connection lets the server push immediately. The project also requires raw TCP |
+| "Why not WebSocket?" | WebSocket runs over TCP, adding framing plus an HTTP handshake; it exists to get through browser proxies — a constraint a desktop client doesn't have. It gives us what TCP already provides, with overhead attached |
+| "How is your framing different from HTTP chunked encoding?" | Same idea (announce the length before the data). HTTP uses a hex string + CRLF (human-readable, more expensive); I use a binary u32 (a fixed 4 bytes, faster to parse) |
+| "Isn't a single logic thread a bottleneck?" | Experiment 4 shows it handles N connections. For the 16-player target that's a huge margin. In exchange there are no race conditions — I consider that the right trade-off at this scale |
+| "What happens if the master server dies?" | Players already in a match are unaffected (joinTickets are stateless and the game server doesn't need the master). New players can't log in. systemd restarts it within 5 seconds |
+| "Is client-side password hashing really safer?" | It only protects the **original** password (which users tend to reuse). An eavesdropper who captures the hash can still log in — the hash becomes the password. It complements TLS rather than replacing it. I state this as a limitation |
+| "Why SQLite rather than PostgreSQL?" | Scale: a few dozen accounts and very infrequent writes. SQLite needs no installation, is one file, and backs up trivially. At thousands of concurrent users you'd have to switch — but that's premature optimization here |
 
 ---
 
-## 4. Hạn chế đã biết — mẫu
+## 4. Known limitations — a template
 
 ```markdown
-### Có chủ đích
-- Session lưu trong bộ nhớ: restart master = mọi người login lại
-- joinTicket không thu hồi được trước hạn 60 giây
-- Không có phân quyền admin / hệ thống ban trong game
-- Không lưu lịch sử chat
-- Matchmaking đơn giản, không xét kỹ năng (không có dữ liệu MMR)
+### Deliberate
+- Sessions kept in memory: restarting the master logs everyone out
+- joinTickets can't be revoked before their 60-second expiry
+- No admin roles or in-game ban system
+- No chat history stored
+- Simple matchmaking with no skill consideration (there's no MMR data)
 
-### Giới hạn kỹ thuật
-- Một thread logic: ngưỡng ~N kết nối (thí nghiệm 5)
-- SQLite: không chịu được ghi đồng thời cao
-- Không có failover: master chết thì không ai login được (dù người đang chơi vẫn chơi tiếp)
-- Message tối đa 64 KB
+### Technical limits
+- A single logic thread: the ceiling is ~N connections (experiment 5)
+- SQLite: can't handle high concurrent writes
+- No failover: if the master dies, nobody can log in (though players already in a match continue)
+- 64 KB maximum message size
 
-### Chưa kiểm chứng
-- Chưa test IPv6
-- Chưa test với hơn 1000 tài khoản trong DB
-- Chưa test hành vi khi đĩa đầy
+### Untested
+- IPv6 untested
+- Untested with more than 1000 accounts in the DB
+- Behavior when the disk fills is untested
 ```

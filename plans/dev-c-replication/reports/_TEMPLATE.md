@@ -1,96 +1,96 @@
-# Report — Phase NN: <tên phase>
+# Report — Phase NN: <phase name>
 
-- **Người viết:** Dev C (Replication & Simulation)
-- **Ngày:** YYYY-MM-DD
-- **Tuần:** N / 14
+- **Author:** Dev C (Replication & Simulation)
+- **Date:** YYYY-MM-DD
+- **Week:** N / 14
 - **Phase:** [phases/phase-NN-xxx.md](../phases/phase-NN-xxx.md)
-- **Trạng thái:** ☐ Xong đúng hạn · ☐ Xong trễ · ☐ Xong một phần · ☐ Chưa xong
+- **Status:** ☐ Done on time · ☐ Done late · ☐ Partially done · ☐ Not done
 
 ---
 
-## 1. Tóm tắt một đoạn
+## 1. One-paragraph summary
 
 ---
 
-## 2. Đối chiếu tiêu chí nghiệm thu
+## 2. Acceptance criteria review
 
-| # | Tiêu chí | Đạt | Bằng chứng |
+| # | Criterion | Met | Evidence |
 |---|---|---|---|
 
 ---
 
-## 3. Ngân sách băng thông — đo thực tế
+## 3. Bandwidth budget — measured
 
-Đối chiếu với `plan.md § 10`.
+Compared against `plan.md § 10`.
 
-| Thành phần | Ngân sách | Đo được | Vượt? |
+| Component | Budget | Measured | Over? |
 |---|---|---|---|
-| Snapshot / client | 4.8 KB/s | | |
-| Event / client | 1.5 KB/s | | |
-| **Tổng xuống / client** | **8 KB/s** | | |
-| Lên / client (input) | 0.87 KB/s | | |
-| Tổng server (16 client) | 109 KB/s | | |
+| Snapshots / client | 4.8 KB/s | | |
+| Events / client | 1.5 KB/s | | |
+| **Total down / client** | **8 KB/s** | | |
+| Up / client (input) | 0.87 KB/s | | |
+| Server total (16 clients) | 109 KB/s | | |
 
-Điều kiện đo: <số actor, số người, map, có bot không>
+Measurement conditions: <actor count, player count, map, bots or not>
 
-Nếu vượt, đã xử lý bằng cách nào (theo thứ tự ở `plan.md § 10`):
+If over budget, how it was handled (in the order given in `plan.md § 10`):
 
 ---
 
-## 4. Ngân sách CPU server
+## 4. Server CPU budget
 
-| Chỉ số | Ngưỡng | Đo được |
+| Metric | Threshold | Measured |
 |---|---|---|
-| Thời gian mỗi tick (avg) | < 20ms | |
-| Thời gian mỗi tick (p99) | < 33ms | |
-| Trong đó: áp input | | |
-| Trong đó: Unity sim (physics + AI) | | |
-| Trong đó: sinh snapshot | | |
-| Trong đó: interest management | | |
-| Trong đó: hitbox history | | |
+| Time per tick (avg) | < 20 ms | |
+| Time per tick (p99) | < 33 ms | |
+| Of which: applying input | | |
+| Of which: Unity sim (physics + AI) | | |
+| Of which: building snapshots | | |
+| Of which: interest management | | |
+| Of which: hitbox history | | |
 | Alloc/tick | 0 B | |
 
 ---
 
-## 5. Kết quả test
+## 5. Test results
 
 ```
-<output dotnet test>
+<dotnet test output>
 ```
 
-| Nhóm | Test | Pass | Fail |
+| Group | Tests | Pass | Fail |
 |---|---|---|---|
 | Bit packing | | | |
 | Quantization | | | |
-| Conformance (trọng tài protocol) | | | |
+| Conformance (protocol referee) | | | |
 | Delta encoding | | | |
 | Interest management | | | |
 | Lag compensation | | | |
 
 ---
 
-## 6. Quyết định kỹ thuật
+## 6. Technical decisions
 
-| # | Vấn đề | Chọn | Loại | Lý do |
+| # | Problem | Chosen | Rejected | Reason |
 |---|---|---|---|---|
 
 ---
 
-## 7. Thứ đã thử và THẤT BẠI
+## 7. Things tried that FAILED
 
-| Đã thử | Vì sao không được | Dấu hiệu |
+| Tried | Why it didn't work | Signs |
 |---|---|---|
 
 ---
 
-## 8. Đang kẹt / cần người khác
+## 8. Blocked / needs someone else
 
-| Kẹt gì | Cần ai | Đã báo chưa |
+| What's blocking | Who's needed | Reported yet |
 |---|---|---|
 
 ---
 
-## 9. Phase sau
+## 9. Next phase
 
-- Việc đầu tiên:
-- Rủi ro nhìn thấy trước:
+- First task:
+- Risks I can see coming:

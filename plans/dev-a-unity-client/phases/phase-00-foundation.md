@@ -1,60 +1,61 @@
-# Dev A — Phase 00: Nền móng client
+# Dev A — Phase 00: Client foundation
 
-**Tuần 1–2** · Mốc **M0** · Ước lượng **2.0 người-tuần**
+**Weeks 1–2** · Milestone **M0** · Estimate **2.0 person-weeks**
 
-> Mục tiêu một câu: **mở seam netcode và làm cho game build được ở chế độ headless**, chưa cần
-> một byte mạng nào.
+> Goal in one sentence: **open the netcode seam and get the game building in headless mode**, with
+> not a single byte of networking yet.
 
-Phase này không tạo ra tính năng nào người chơi thấy được. Nhưng nếu nó làm sai, cả 13 tuần còn
-lại sẽ trả giá. Đây là phase quan trọng nhất của bạn.
+This phase produces nothing a player can see. But if it's done wrong, the remaining 13 weeks pay for
+it. It's your most important phase.
 
 ---
 
-## 1. Mục tiêu
+## 1. Objectives
 
-| # | Mục tiêu | Vì sao cần |
+| # | Objective | Why it's needed |
 |---|---|---|
-| 1 | Hiểu 8 file then chốt tới mức vẽ được sơ đồ luồng | Không hiểu thì refactor sẽ phá gameplay |
-| 2 | Tách `Input.*` ra sau interface `IInputSource` | Bắt buộc để `NetworkActorController` tồn tại |
-| 3 | Tạo `NetContext` phân biệt client/server | Bắt buộc để cùng codebase build ra 2 thứ |
-| 4 | Build headless chạy được, không crash | Nếu không làm được, cả AD-2 sụp đổ → rủi ro chặn dự án |
-| 5 | Guard 21 singleton | Headless không có UI, mọi `IngameUi.instance` sẽ null |
-| 6 | Stub 3 interface của B, C, D | Để bạn không phải chờ ai |
+| 1 | Understand the 8 critical files well enough to draw the flow diagram | Refactoring without understanding will break gameplay |
+| 2 | Extract `Input.*` behind an `IInputSource` interface | Required for `NetworkActorController` to exist at all |
+| 3 | Create `NetContext` to distinguish client from server | Required for one codebase to build two things |
+| 4 | A headless build that runs without crashing | If this fails, AD-2 collapses → a project-blocking risk |
+| 5 | Guard the 21 singletons | Headless has no UI, so every `IngameUi.instance` will be null |
+| 6 | Stub the 3 interfaces from B, C and D | So you never have to wait on anyone |
 
 ---
 
-## 2. Task chi tiết
+## 2. Detailed tasks
 
-### Task 1 — Đọc hiểu codebase (2 ngày)
+### Task 1 — Read and understand the codebase (2 days)
 
-Không code. Đọc và ghi chú.
+No coding. Read and take notes.
 
-Thứ tự đọc:
-1. `ActorController.cs` (60 dòng) — đọc hết, thuộc lòng danh sách abstract method
-2. `Actor.cs` (1,188 dòng) — tập trung `Update()`, `FixedUpdate()`, phần ragdoll, phần damage
-3. `FpsActorController.cs` (752 dòng) — mọi `Input.*`, xem bảng dưới
-4. `Weapon.cs` (561 dòng) — `Fire()`, `SpawnProjectile()`, phần spread
-5. `ActorManager.cs` — `Register`, `Drop`, `Explode`, danh sách spawn point
+Reading order:
+1. `ActorController.cs` (60 lines) — read it all, memorize the abstract method list
+2. `Actor.cs` (1,188 lines) — focus on `Update()`, `FixedUpdate()`, the ragdoll part, the damage part
+3. `FpsActorController.cs` (752 lines) — every `Input.*`, see the table below
+4. `Weapon.cs` (561 lines) — `Fire()`, `SpawnProjectile()`, the spread logic
+5. `ActorManager.cs` — `Register`, `Drop`, `Explode`, the spawn point list
 6. `GameManager.cs` — `StartGame()`, `OnLevelLoaded()`
-7. `AiActorController.cs` — **chỉ đọc lướt**, hiểu nó tiêu thụ gì, không cần hiểu hết 2,153 dòng
-8. `Hitbox.cs`, `Hurtable.cs` — luồng sát thương
+7. `AiActorController.cs` — **skim only**; understand what it consumes, you don't need all 2,153 lines
+8. `Hitbox.cs`, `Hurtable.cs` — the damage flow
 
-**Deliverable:** một file `docs/codebase-map.md` (bạn tự viết) có:
-- Sơ đồ mermaid luồng: input → controller → actor → weapon → hitbox → damage
-- Bảng liệt kê mọi trạng thái của `Actor` cần được replicate
-- Danh sách mọi chỗ `Actor` gọi vào singleton
+**Deliverable:** a `docs/codebase-map.md` file (which you write) containing:
+- A mermaid flow diagram: input → controller → actor → weapon → hitbox → damage
+- A table listing every `Actor` state that needs replicating
+- A list of every place `Actor` calls into a singleton
 
-### Task 2 — Kiểm chứng A* headless + bake graph cache (nửa ngày)
+### Task 2 — Verify A* headless + bake the graph cache (half a day)
 
-> **Rủi ro A6 đã được hạ cấp từ Cao xuống Thấp** sau khi khảo sát code. Bằng chứng:
-> A* dùng `new Thread()` + `IsBackground = true` (thread .NET thuần), và worker thread
-> **không chạm Unity API** (`Voxelize.cs` 2191 dòng, grep `Physics.*|GameObject.*|Transform.*`
-> ra 0 kết quả). Đó là điều kiện then chốt cho headless. Chi tiết:
+> **Risk A6 has been downgraded from High to Low** after a code survey. Evidence: A* uses
+> `new Thread()` + `IsBackground = true` (plain .NET threads), and the worker threads **never touch
+> the Unity API** (`Voxelize.cs`, 2191 lines; grepping `Physics.*|GameObject.*|Transform.*` returns
+> 0 hits). That's the key condition for headless. Details:
 > [algorithm-decisions.md § AD-9](../../00-shared/algorithm-decisions.md).
 >
-> Task này giờ là **xác nhận + tối ưu boot time**, không phải "kiểm tra dự án có sống không".
+> This task is now **confirmation + boot-time optimization**, not "check whether the project is
+> viable".
 
-**Việc thực sự phải làm — kiểm tra graph cache.**
+**The thing that actually has to be done — check the graph cache.**
 
 [`AstarPath.cs:1000`](../../../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/AstarPath.cs#L1000):
 ```csharp
@@ -62,45 +63,45 @@ if (scanOnStartup && (!astarData.cacheStartup || astarData.file_cachedStartup ==
     Scan();
 ```
 
-| Trường hợp | Hành vi headless | Việc phải làm |
+| Case | Headless behavior | What to do |
 |---|---|---|
-| Scene **có** graph cache | Deserialize, boot tức thì | Không cần gì |
-| Scene **không có** cache | Tự voxelize map lúc boot, mất 10–60 giây. **Vẫn chạy** | Trong Editor: chọn `AstarPath` → bật `Cache startup` → `Scan` → `Save to file`. ~15 phút |
+| Scene **has** a graph cache | Deserialize, boots instantly | Nothing |
+| Scene has **no** cache | Voxelizes the map at boot, 10–60 seconds. **Still runs** | In the Editor: select `AstarPath` → enable `Cache startup` → `Scan` → `Save to file`. ~15 minutes |
 
-Bake cache là việc nên làm dù thế nào: nó cắt 10–60 giây khỏi mỗi lần khởi động server, mà bạn
-sẽ khởi động server hàng trăm lần trong 14 tuần.
+Baking the cache is worth doing regardless: it cuts 10–60 seconds off every server start, and you'll
+start the server hundreds of times over 14 weeks.
 
 ```powershell
-# Build headless
-# File > Build Settings > Dedicated Server (hoặc Server Build) > Build
-# Rồi chạy:
+# Headless build
+# File > Build Settings > Dedicated Server (or Server Build) > Build
+# Then run:
 .\Build\Server\Ironfront_Reborn.exe -batchmode -nographics -logFile server.log
 ```
 
-Kiểm tra trong `server.log`:
-- [ ] `AstarPath` khởi tạo không lỗi
-- [ ] Bot spawn được và có path (thêm log tạm trong `AiActorController`)
-- [ ] Không có exception lặp lại mỗi frame
-- [ ] **Thời gian từ lúc chạy tới lúc `AstarPath` sẵn sàng** — nếu > 5 giây thì chưa có graph
-      cache, đi bake theo bảng ở trên
+Check in `server.log`:
+- [ ] `AstarPath` initializes without errors
+- [ ] Bots spawn and get paths (add a temporary log in `AiActorController`)
+- [ ] No exception repeating every frame
+- [ ] **Time from launch to `AstarPath` being ready** — if it's > 5 seconds there's no graph cache;
+      go bake one per the table above
 
-**Nếu vỡ (khả năng thấp sau khi đã khảo sát):** báo cả nhóm ngay trong ngày.
-Phương án B: chạy `-batchmode` nhưng **có** graphics (bỏ `-nographics`), tốn RAM hơn nhưng vẫn
-chạy được trên VPS.
-Phương án C (chỉ khi B cũng vỡ): chuyển sang `com.unity.ai.navigation` 2.0.14 đã có sẵn trong
-manifest. Đây là quyết định của cả nhóm, tốn 1–2 tuần, và theo
-[AD-9](../../00-shared/algorithm-decisions.md) thì **không** làm bot thông minh hơn — chỉ đổi
-cách đóng gói cùng một thuật toán Recast.
+**If it breaks (unlikely after the survey):** tell the whole team the same day.
+Plan B: run `-batchmode` but **with** graphics (drop `-nographics`); it costs more RAM but still
+runs on a VPS.
+Plan C (only if B also fails): switch to `com.unity.ai.navigation` 2.0.14, which is already in the
+manifest. That's a team decision, costs 1–2 weeks, and per
+[AD-9](../../00-shared/algorithm-decisions.md) does **not** make bots any smarter — it just
+repackages the same Recast algorithm.
 
-### Task 3 — `IInputSource`: tách input khỏi controller (4 ngày)
+### Task 3 — `IInputSource`: split input out of the controller (4 days)
 
-Đây là task lớn nhất phase này. 59 điểm gọi `Input.*` toàn codebase, trong đó ~40 nằm ở
-`FpsActorController.cs`.
+This is the biggest task of the phase. There are 59 `Input.*` call sites across the codebase, ~40 of
+them in `FpsActorController.cs`.
 
-**Nguyên tắc: không đổi hành vi, chỉ đổi nơi dữ liệu đến từ.** Sau task này game single-player
-phải chạy y hệt trước.
+**Principle: don't change behavior, only change where the data comes from.** After this task,
+single-player must play exactly as before.
 
-#### 3.1. Định nghĩa interface
+#### 3.1. Define the interface
 
 ```csharp
 // Assets/Scripts/Net/Shared/IInputSource.cs
@@ -108,12 +109,12 @@ public interface IInputSource
 {
     float   MoveX      { get; }   // -1..1
     float   MoveZ      { get; }   // -1..1
-    float   Yaw        { get; }   // độ, tuyệt đối
-    float   Pitch      { get; }   // độ, -90..90
+    float   Yaw        { get; }   // degrees, absolute
+    float   Pitch      { get; }   // degrees, -90..90
     float   Lean       { get; }   // -1..1
-    ushort  Buttons    { get; }   // bitfield, xem protocol-spec § 4.2
+    ushort  Buttons    { get; }   // bitfield, see protocol-spec § 4.2
 
-    // Tiện ích, cài mặc định bằng default interface method
+    // Conveniences, implemented via default interface methods
     bool Fire        => (Buttons & (1 << 0))  != 0;
     bool Aiming      => (Buttons & (1 << 1))  != 0;
     bool Reload      => (Buttons & (1 << 2))  != 0;
@@ -126,15 +127,15 @@ public interface IInputSource
 }
 ```
 
-> **Quan trọng:** bitfield phải khớp **chính xác** bảng ở
-> [`protocol-spec.md § 4.2`](../../00-shared/protocol-spec.md#42-c_input-0x20--chi-tiết-byte).
-> Đừng định nghĩa lại thứ tự bit. Lấy hằng số từ `Ironfront.Net.Protocol`.
+> **Important:** the bitfield must match the table in
+> [`protocol-spec.md § 4.2`](../../00-shared/protocol-spec.md#42-c_input-0x20--byte-layout)
+> **exactly**. Don't redefine the bit order. Take the constants from `Ironfront.Net.Protocol`.
 
-#### 3.2. Ba implementation
+#### 3.2. Three implementations
 
 ```csharp
 // Assets/Scripts/Net/Client/LocalInputSource.cs
-// Đọc bàn phím + chuột. Đây là nơi DUY NHẤT còn gọi Input.* cho gameplay
+// Reads keyboard + mouse. This is the ONLY place that still calls Input.* for gameplay
 public sealed class LocalInputSource : IInputSource
 {
     private float _yaw, _pitch;
@@ -170,7 +171,7 @@ public sealed class LocalInputSource : IInputSource
 }
 
 // Assets/Scripts/Net/Shared/NetInputSource.cs
-// Nhận input từ mạng (remote player) hoặc từ buffer (replay khi reconciliation)
+// Takes input from the network (remote player) or from a buffer (replay during reconciliation)
 public sealed class NetInputSource : IInputSource
 {
     private NetInputFrame _frame;
@@ -185,7 +186,7 @@ public sealed class NetInputSource : IInputSource
 }
 
 // Assets/Scripts/Net/Shared/NullInputSource.cs
-// Không làm gì. Dùng cho actor đã chết hoặc bị disable input
+// Does nothing. Used for dead actors or actors with input disabled
 public sealed class NullInputSource : IInputSource
 {
     public static readonly NullInputSource Instance = new();
@@ -195,33 +196,33 @@ public sealed class NullInputSource : IInputSource
 }
 ```
 
-#### 3.3. Bảng ánh xạ — sửa từng dòng ở `FpsActorController.cs`
+#### 3.3. Mapping table — edit line by line in `FpsActorController.cs`
 
-| Dòng gốc | Code cũ | Thay bằng |
+| Original line | Old code | Replace with |
 |---|---|---|
 | 130 | `(Input.GetButton("Fire1") \|\| Input.GetMouseButton(0)) && !LoadoutUi.IsOpen()` | `_input.Fire` |
 | 139 | `(Input.GetButton("Fire2") \|\| ...)` | `_input.Aiming` |
 | 144 | `Input.GetButton("Reload") && ...` | `_input.Reload` |
 | 164 | `tpCamera.forward * Input.GetAxis("Vertical") + ...` | `FacingFromYawPitch() * _input.MoveZ + Right() * _input.MoveX` |
 | 188 | `new Vector2(Input.GetAxis("Horizontal"), Input.GetAxis("Vertical"))` | `new Vector2(_input.MoveX, _input.MoveZ)` |
-| 202 | `Input.GetAxis("Mouse X/Y")` | Chuyển vào `LocalInputSource.Sample()` |
+| 202 | `Input.GetAxis("Mouse X/Y")` | Move into `LocalInputSource.Sample()` |
 | 378 | `Input.GetAxis("Lean")` | `_input.Lean` |
 | 675 | `Input.GetButton("Crouch")` | `_input.Crouch` |
 | 715 | `... && Input.GetButton("Sprint") && ...` | `... && _input.Sprint && ...` |
 
-**Giữ nguyên, KHÔNG chuyển sang `IInputSource`** (đây là input UI/debug, không phải gameplay,
-không cần replicate):
-- Dòng 468 `Input.GetButtonDown("Loadout")` — mở UI loadout
-- Dòng 479, 483 `KeyCode.K`, `KeyCode.O` — debug key
-- Dòng 487 `Input.GetButtonDown("Slowmotion")` — cheat/debug
-- Dòng 523–571 `KeyCode.Alpha1..5`, `F1..F8` — chọn vũ khí + camera debug. **Ngoại lệ:** chọn
-  vũ khí phải chuyển sang bit 11–14 của `Buttons` vì nó ảnh hưởng gameplay
-- Dòng 579–583 `mouseScrollDelta` — chuyển vũ khí, cũng phải vào `Buttons`
+**Leave alone, do NOT move to `IInputSource`** (these are UI/debug inputs, not gameplay, and need no
+replication):
+- Line 468 `Input.GetButtonDown("Loadout")` — opens the loadout UI
+- Lines 479, 483 `KeyCode.K`, `KeyCode.O` — debug keys
+- Line 487 `Input.GetButtonDown("Slowmotion")` — cheat/debug
+- Lines 523–571 `KeyCode.Alpha1..5`, `F1..F8` — weapon selection + debug cameras. **Exception:**
+  weapon selection must move to bits 11–14 of `Buttons` because it affects gameplay
+- Lines 579–583 `mouseScrollDelta` — weapon switching, also has to go into `Buttons`
 
-**Ánh xạ vào `IInputSource` phải bọc trong `#if !UNITY_SERVER`** ở phần đọc `Input.*` — server
-không có bàn phím.
+**The `Input.*` reads feeding `IInputSource` must be wrapped in `#if !UNITY_SERVER`** — the server
+has no keyboard.
 
-#### 3.4. Sửa `FpsActorController` để nhận `IInputSource`
+#### 3.4. Change `FpsActorController` to accept an `IInputSource`
 
 ```csharp
 public class FpsActorController : ActorController
@@ -232,7 +233,7 @@ public class FpsActorController : ActorController
 
     private void Awake()
     {
-        // mặc định: local, để single-player vẫn chạy khi chưa có mạng
+        // default: local, so single-player still runs before networking exists
         _input ??= new LocalInputSource();
     }
 
@@ -243,7 +244,7 @@ public class FpsActorController : ActorController
 }
 ```
 
-### Task 4 — `NetContext` (nửa ngày)
+### Task 4 — `NetContext` (half a day)
 
 ```csharp
 // Assets/Scripts/Net/Shared/NetContext.cs
@@ -256,97 +257,98 @@ public static class NetContext
     public static bool IsClient     => CurrentRole == Role.Client;
     public static bool IsStandalone => CurrentRole == Role.Standalone;
 
-    /// <summary>Gọi từ NetServerBootstrap.Awake(), TRƯỚC mọi Awake khác.</summary>
+    /// <summary>Called from NetServerBootstrap.Awake(), BEFORE every other Awake.</summary>
     public static void SetRole(Role role)
     {
         if (CurrentRole != Role.Standalone && CurrentRole != role)
-            throw new InvalidOperationException($"Đã set role {CurrentRole}, không đổi được sang {role}");
+            throw new InvalidOperationException($"Role {CurrentRole} is already set; cannot change to {role}");
         CurrentRole = role;
     }
 
-    /// <summary>Tick server hiện tại. Client dùng tick ước lượng từ snapshot.</summary>
+    /// <summary>The current server tick. Clients use a tick estimated from snapshots.</summary>
     public static uint CurrentTick { get; internal set; }
 }
 ```
 
-**Thứ tự khởi tạo:** dùng `Script Execution Order` trong Project Settings, đặt
-`NetServerBootstrap` và `NetClientBootstrap` ở mức `-1000` để chúng chạy `Awake()` trước mọi
-script khác.
+**Initialization order:** use `Script Execution Order` in Project Settings and set
+`NetServerBootstrap` and `NetClientBootstrap` to `-1000` so their `Awake()` runs before every other
+script.
 
-### Task 5 — Guard 21 singleton (2 ngày)
+### Task 5 — Guard the 21 singletons (2 days)
 
-Chạy headless sẽ ném `NullReferenceException` ở mọi chỗ chạm UI singleton. Danh sách đầy đủ:
+Running headless will throw `NullReferenceException` everywhere a UI singleton is touched. The full
+list:
 
-| Singleton | Có ở server? | Cách guard |
+| Singleton | Present on the server? | How to guard |
 |---|---|---|
-| `ActorManager.instance` | ✅ Có | Không cần |
-| `GameManager.instance` | ✅ Có | Không cần |
-| `PathfindingManager.instance` | ✅ Có | Không cần |
-| `CoverManager.instance` | ✅ Có | Không cần |
-| `LevelBounds.instance` | ✅ Có | Không cần |
-| `DistanceField.instance` | ✅ Có | Không cần |
+| `ActorManager.instance` | ✅ Yes | Not needed |
+| `GameManager.instance` | ✅ Yes | Not needed |
+| `PathfindingManager.instance` | ✅ Yes | Not needed |
+| `CoverManager.instance` | ✅ Yes | Not needed |
+| `LevelBounds.instance` | ✅ Yes | Not needed |
+| `DistanceField.instance` | ✅ Yes | Not needed |
 | `FpsActorController.instance` | ❌ Client | `if (NetContext.IsClient)` |
-| `PlayerFpParent.instance` | ❌ Client | như trên |
+| `PlayerFpParent.instance` | ❌ Client | As above |
 | `IngameUi.instance` | ❌ Client | `#if !UNITY_SERVER` |
 | `IngameMenuUi.instance` | ❌ Client | `#if !UNITY_SERVER` |
 | `LoadoutUi.instance` | ❌ Client | `#if !UNITY_SERVER` |
 | `ScoreUi.instance` | ❌ Client | `#if !UNITY_SERVER` |
 | `MinimapUi.instance` | ❌ Client | `#if !UNITY_SERVER` |
 | `MinimapCamera.instance` | ❌ Client | `#if !UNITY_SERVER` |
-| `OptionsUi.instance` | ❌ Client | `#if !UNITY_SERVER` + giá trị mặc định ở server |
+| `OptionsUi.instance` | ❌ Client | `#if !UNITY_SERVER` + default values on the server |
 | `SceneryCamera.instance` | ❌ Client | `#if !UNITY_SERVER` |
 | `DecalManager.instance` | ❌ Client | `#if !UNITY_SERVER` |
 | `ReflectionProber.instance` | ❌ Client | `#if !UNITY_SERVER` |
 | `DetailObjectQuality.instance` | ❌ Client | `#if !UNITY_SERVER` |
-| `TimeOfDay.instance` | ⚠️ Cả hai | Server cần giá trị (ảnh hưởng AI tầm nhìn) nhưng không render |
-| `LevelBounds.instance` | ✅ Có | Không cần |
+| `TimeOfDay.instance` | ⚠️ Both | The server needs the value (it affects AI vision) but doesn't render |
+| `LevelBounds.instance` | ✅ Yes | Not needed |
 
-**Cạm bẫy `OptionsUi`:** nó được gọi từ `FpsActorController` dòng 196–199 (helicopter invert) và
-nhiều nơi khác. Trên server phải trả về một `Options` mặc định thay vì null:
+**The `OptionsUi` trap:** it's called from `FpsActorController` lines 196–199 (helicopter invert) and
+several other places. On the server it must return a default `Options` instead of null:
 
 ```csharp
 public static Options GetOptions()
 {
 #if UNITY_SERVER
-    return Options.ServerDefault;   // static readonly, không đọc PlayerPrefs
+    return Options.ServerDefault;   // static readonly, doesn't read PlayerPrefs
 #else
     return instance != null ? instance.options : Options.Default;
 #endif
 }
 ```
 
-### Task 6 — Stub 3 interface (1 ngày)
+### Task 6 — Stub the 3 interfaces (1 day)
 
-Viết implementation giả để bạn code tiếp mà không chờ B, C, D.
+Write fake implementations so you can keep coding without waiting on B, C or D.
 
 ```csharp
 // Assets/Scripts/Net/Client/Stubs/FakeTransportClient.cs
-// Trả snapshot giả: 3 actor chạy vòng tròn quanh gốc tọa độ
+// Returns fake snapshots: 3 actors running in a circle around the origin
 public sealed class FakeTransportClient : ITransportClient
 {
     public ConnectionState State => ConnectionState.Connected;
     public float SmoothedRttMs => 80f;
     public event Action<ReadOnlyMemory<byte>> OnMessage;
-    // ... sinh snapshot giả mỗi 50ms
+    // ... generate a fake snapshot every 50ms
 }
 ```
 
-Cả 3 stub đặt trong `Assets/Scripts/Net/Client/Stubs/`, có `#if UNITY_EDITOR || IRONFRONT_STUB`
-để không lọt vào build thật.
+All 3 stubs live in `Assets/Scripts/Net/Client/Stubs/`, wrapped in
+`#if UNITY_EDITOR || IRONFRONT_STUB` so they never reach a real build.
 
-### Task 7 — Build profile (1 ngày)
+### Task 7 — Build profiles (1 day)
 
-Tạo 2 build target:
+Create 2 build targets:
 
-| Target | Define symbols | Cấu hình |
+| Target | Define symbols | Configuration |
 |---|---|---|
-| Client | `IRONFRONT_CLIENT` | Bình thường |
-| Server | `UNITY_SERVER`, `IRONFRONT_SERVER` | Dedicated Server platform, không audio, không graphics API |
+| Client | `IRONFRONT_CLIENT` | Normal |
+| Server | `UNITY_SERVER`, `IRONFRONT_SERVER` | Dedicated Server platform, no audio, no graphics API |
 
-Script build tự động `tools/build-client.ps1` và `tools/build-server.ps1` (bạn viết bản đầu, D
-sẽ tích hợp vào CI).
+Automated build scripts `tools/build-client.ps1` and `tools/build-server.ps1` (you write the first
+version; D integrates them into CI).
 
-Cấu hình server bắt buộc:
+Required server configuration:
 ```csharp
 // NetServerBootstrap.Awake()
 Application.targetFrameRate = 30;
@@ -357,49 +359,49 @@ AudioListener.pause         = true;
 
 ---
 
-## 3. Tiêu chí nghiệm thu
+## 3. Acceptance criteria
 
-| # | Tiêu chí | Cách kiểm chứng |
+| # | Criterion | How to verify |
 |---|---|---|
-| 1 | `docs/codebase-map.md` tồn tại, có sơ đồ luồng | Người khác đọc và hiểu được |
-| 2 | Build headless chạy 10 phút không crash | `.\server.exe -batchmode -nographics -logFile s.log`, grep `Exception` trong log = 0 |
-| 3 | Bot spawn và di chuyển được trên headless | Log vị trí bot mỗi 5 giây, thấy vị trí thay đổi |
-| 4 | A* Pathfinding hoạt động headless | Log `Seeker.StartPath` trả về path có > 1 node |
-| 5 | **Single-player vẫn chơi được y hệt trước refactor** | Chơi thử 5 phút: chạy, bắn, ngồi, lean, đổi vũ khí, lên xe, chết, hồi sinh |
-| 6 | Mọi `Input.*` gameplay đã qua `IInputSource` | `grep -rn "Input\." Assets/Scripts/Assembly-CSharp/` chỉ còn UI/debug |
-| 7 | 3 stub chạy được, client hiện 3 actor giả chuyển động | Ảnh chụp màn hình |
-| 8 | `NetContext.SetRole` hoạt động, gọi 2 lần khác role thì ném exception | Unity Play Mode test |
+| 1 | `docs/codebase-map.md` exists and has the flow diagram | Someone else reads it and understands it |
+| 2 | The headless build runs for 10 minutes without crashing | `.\server.exe -batchmode -nographics -logFile s.log`, grepping `Exception` in the log returns 0 |
+| 3 | Bots spawn and move on headless | Log bot positions every 5 seconds and see them change |
+| 4 | A* Pathfinding works headless | Log that `Seeker.StartPath` returns a path with > 1 node |
+| 5 | **Single-player still plays exactly as before the refactor** | Play for 5 minutes: run, shoot, crouch, lean, switch weapons, enter a vehicle, die, respawn |
+| 6 | Every gameplay `Input.*` now goes through `IInputSource` | `grep -rn "Input\." Assets/Scripts/Assembly-CSharp/` leaves only UI/debug hits |
+| 7 | The 3 stubs run and the client shows 3 fake actors moving | Screenshot |
+| 8 | `NetContext.SetRole` works, and calling it twice with different roles throws | Unity Play Mode test |
 
 ---
 
-## 4. Rủi ro của phase này
+## 4. Risks in this phase
 
-| Rủi ro | Dấu hiệu sớm | Xử lý |
+| Risk | Early warning sign | Handling |
 |---|---|---|
-| A* không chạy headless (A6) | Exception `AstarPath` trong log tuần 1 | Bỏ `-nographics`. Nếu vẫn vỡ: báo nhóm, cân nhắc thay bằng `com.unity.ai.navigation` (đã có trong manifest) — tốn thêm 1 tuần |
-| Refactor input phá gameplay (A3) | Chơi thử thấy nhân vật không lean được, hoặc sprint không hoạt động | Refactor từng nhóm nhỏ, commit riêng, chơi thử sau mỗi nhóm. Đừng làm hết 40 chỗ rồi mới test |
-| Thứ tự `Awake()` không xác định | `NetContext.CurrentRole` vẫn là `Standalone` khi script khác đọc | Script Execution Order = -1000. Kiểm chứng bằng log timestamp |
-| Guard singleton sót chỗ | Exception xuất hiện sau vài phút chạy headless | Chạy headless 10 phút liên tục ở tiêu chí 2, không phải 30 giây |
+| A* doesn't run headless (A6) | An `AstarPath` exception in the week-1 log | Drop `-nographics`. If it still breaks: tell the team, consider switching to `com.unity.ai.navigation` (already in the manifest) — costs another week |
+| The input refactor breaks gameplay (A3) | Playtesting shows the character can't lean, or sprint stops working | Refactor in small groups, commit each separately, playtest after each group. Don't do all 40 sites then test |
+| `Awake()` ordering is undefined | `NetContext.CurrentRole` is still `Standalone` when another script reads it | Script Execution Order = -1000. Verify with timestamped logs |
+| A missed singleton guard | An exception appears after a few minutes of headless running | Run headless for 10 continuous minutes per criterion 2, not 30 seconds |
 
 ---
 
-## 5. Nợ kỹ thuật chấp nhận ở phase này
+## 5. Technical debt accepted in this phase
 
-| Nợ | Vì sao | Trả khi nào |
+| Debt | Why | When it's paid |
 |---|---|---|
-| `Input.*` cho chọn vũ khí (Alpha1-5) chưa vào `Buttons` | Không chặn M1 | Phase 02 |
-| Input xe (`CarInput`, `HelicopterInput`) chưa refactor | Xe ngoài scope core | Không trả trong 14 tuần |
-| Stub trả dữ liệu cứng, không mô phỏng lỗi mạng | B sẽ có `NetworkSimulator` thật ở tuần 2 | Phase 01 |
+| Weapon selection `Input.*` (Alpha1-5) not yet in `Buttons` | Doesn't block M1 | Phase 02 |
+| Vehicle input (`CarInput`, `HelicopterInput`) not refactored | Vehicles are outside core scope | Not paid within the 14 weeks |
+| Stubs return hard-coded data, don't simulate network faults | B will have a real `NetworkSimulator` in week 2 | Phase 01 |
 
 ---
 
-## 6. Bàn giao cho phase sau
+## 6. Handoff to the next phase
 
-Kết thúc phase, những thứ sau phải sẵn sàng cho C và B dùng:
+By the end of this phase, the following must be ready for C and B to use:
 
-- `IInputSource` + `NetInputFrame` (C cần để server áp input)
-- `NetContext` (cả B và C cần)
-- Build server chạy được (C cần để test tick loop)
-- Danh sách trường của `Actor` cần replicate (C cần để thiết kế snapshot)
+- `IInputSource` + `NetInputFrame` (C needs these to apply input on the server)
+- `NetContext` (both B and C need it)
+- A working server build (C needs it to test the tick loop)
+- The list of `Actor` fields that need replicating (C needs it to design the snapshot)
 
-**Gửi cho C trước cuối tuần 2**, đừng chờ họ hỏi.
+**Send them to C before the end of week 2** — don't wait to be asked.

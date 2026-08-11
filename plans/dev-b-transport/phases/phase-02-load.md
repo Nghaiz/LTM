@@ -1,30 +1,30 @@
-# Dev B — Phase 02: Chịu tải, congestion control, chống DoS
+# Dev B — Phase 02: Load handling, congestion control, DoS defenses
 
-**Tuần 7–10** · Mốc **M2** · Ước lượng **3.0 người-tuần**
+**Weeks 7–10** · Milestone **M2** · Estimate **3.0 person-weeks**
 
-> Mục tiêu một câu: **16 kết nối đồng thời chạy ổn định, tự xuống cấp có kiểm soát khi mạng tệ,
-> và không sập khi bị gửi rác.**
+> Goal in one sentence: **16 simultaneous connections running stably, degrading in a controlled way
+> when the network is bad, and not falling over when flooded with junk.**
 
 ---
 
-## 1. Mục tiêu
+## 1. Objectives
 
-| # | Mục tiêu |
+| # | Objective |
 |---|---|
-| 1 | Server chịu 16 kết nối đồng thời, đo được |
-| 2 | Congestion control: tự giảm tải khi mạng xấu |
-| 3 | Flow control: không làm ngập bên nhận |
-| 4 | Chống DoS: rate limit, chống flood, chống amplification |
-| 5 | Benchmark đầy đủ, số liệu cho báo cáo |
-| 6 | Hỗ trợ A và C ở giai đoạn tích hợp chiến đấu |
+| 1 | The server handles 16 simultaneous connections, measurably |
+| 2 | Congestion control: reduce load automatically when the network degrades |
+| 3 | Flow control: don't overwhelm the receiver |
+| 4 | DoS defenses: rate limiting, flood protection, anti-amplification |
+| 5 | A full benchmark suite, with data for the report |
+| 6 | Support A and C through combat integration |
 
 ---
 
-## 2. Task chi tiết
+## 2. Detailed tasks
 
-### Task 1 — Server đa kết nối (3 ngày)
+### Task 1 — Multi-connection server (3 days)
 
-`UdpPeer` hiện xử lý datagram thô. Giờ phải phân phối đúng `Connection`.
+`UdpPeer` currently handles raw datagrams. Now it has to route them to the right `Connection`.
 
 ```csharp
 public sealed class UdpTransportServer : ITransportServer
@@ -35,14 +35,14 @@ public sealed class UdpTransportServer : ITransportServer
 
     private void Dispatch(in PacketHeader h, ReadOnlySpan<byte> payload, EndPoint from)
     {
-        // Gói handshake: xử lý riêng, chưa có connectionId
+        // Handshake packets: handled separately, there's no connectionId yet
         if (h.PacketType <= PacketType.CONNECT_DENIED)
         { HandleHandshake(h, payload, from); return; }
 
         if (!_byEndpoint.TryGetValue(from, out var conn))
-        { Stats.PacketsFromUnknown++; return; }        // drop im lặng
+        { Stats.PacketsFromUnknown++; return; }        // drop silently
 
-        // Kiểm tra connectionId khớp — chống kẻ khác giả mạo từ IP khác
+        // Check the connectionId matches — stops someone spoofing from a different IP
         if (h.ConnectionId != conn.ConnectionId)
         { Stats.PacketsWithBadConnId++; return; }
 
@@ -51,9 +51,9 @@ public sealed class UdpTransportServer : ITransportServer
 }
 ```
 
-**Cạm bẫy 1 — tra cứu theo `EndPoint` chậm.** `IPEndPoint` không override `GetHashCode` hiệu
-quả trong một số phiên bản .NET, và mỗi `ReceiveFrom` cấp phát một `IPEndPoint` mới → GC.
-Giải pháp: dùng struct key `(uint ipv4, ushort port)`:
+**Trap 1 — `EndPoint` lookups are slow.** `IPEndPoint` doesn't override `GetHashCode` efficiently in
+some .NET versions, and every `ReceiveFrom` allocates a fresh `IPEndPoint` → GC pressure. The fix:
+use a struct key `(uint ipv4, ushort port)`:
 
 ```csharp
 private readonly struct EndpointKey : IEquatable<EndpointKey>
@@ -65,36 +65,36 @@ private readonly struct EndpointKey : IEquatable<EndpointKey>
 }
 ```
 
-Và dùng `ReceiveFromInto` với `SocketAddress` để tránh cấp phát (hoặc tái sử dụng một
-`IPEndPoint` duy nhất — `ReceiveFrom` sẽ ghi đè vào nó).
+And use `ReceiveFromInto` with a `SocketAddress` to avoid allocating (or reuse a single
+`IPEndPoint` — `ReceiveFrom` writes into it).
 
-**Cạm bẫy 2 — NAT rebinding.** Client sau NAT có thể đổi cổng nguồn giữa chừng (router hết
-timeout ánh xạ). Khi đó gói tới từ endpoint mới, `_byEndpoint` không tìm thấy → client bị coi
-như mất kết nối dù vẫn đang chơi.
+**Trap 2 — NAT rebinding.** A client behind NAT can change its source port mid-session (the router's
+mapping times out). Packets then arrive from a new endpoint, `_byEndpoint` doesn't find it → the
+client is treated as disconnected even though they're still playing.
 
-Xử lý: nếu gói có `connectionId` hợp lệ nhưng endpoint lạ, **và** vượt được challenge nhẹ
-(kiểm tra một token đã thỏa thuận lúc handshake), thì cập nhật endpoint. Nếu không làm chống
-giả mạo, kẻ tấn công biết `connectionId` có thể cướp kết nối.
+Handling: if a packet has a valid `connectionId` but an unfamiliar endpoint, **and** it passes a
+light challenge (checking a token agreed during the handshake), update the endpoint. Without that
+anti-spoofing step, an attacker who learns a `connectionId` can hijack the connection.
 
 ```csharp
-// Đơn giản và đủ an toàn cho scope này: yêu cầu gói mang lại challengeToken
+// Simple and secure enough for this scope: require the packet to carry the challengeToken
 if (h.ConnectionId < _byId.Length && _byId[h.ConnectionId] is { } c
     && payload.StartsWith(c.RebindToken))
 {
     _byEndpoint.Remove(c.RemoteEndPointKey);
     c.UpdateEndpoint(from);
     _byEndpoint[new EndpointKey(from)] = c;
-    NetLog.Warn($"conn {h.ConnectionId} rebind endpoint (NAT)");
+    NetLog.Warn($"conn {h.ConnectionId} rebound its endpoint (NAT)");
 }
 ```
 
-### Task 2 — Congestion control (3 ngày)
+### Task 2 — Congestion control (3 days)
 
-Theo [`protocol-spec.md § 8`](../../00-shared/protocol-spec.md#8-congestion-control).
+Per [`protocol-spec.md § 8`](../../00-shared/protocol-spec.md#8-congestion-control).
 
-Ta không cài TCP-style AIMD đầy đủ (phức tạp, và ta không cạnh tranh công bằng với TCP flow
-khác trong scope này). Dùng mô hình **hai chế độ có hysteresis** — đơn giản, dễ giải thích, dễ
-đo, và đủ tốt.
+We're not implementing full TCP-style AIMD (complex, and we're not competing fairly against other
+TCP flows at this scope). We use a **two-mode model with hysteresis** — simple, easy to explain,
+easy to measure, and good enough.
 
 ```csharp
 public sealed class CongestionControl
@@ -103,9 +103,9 @@ public sealed class CongestionControl
     public Mode CurrentMode { get; private set; } = Mode.Good;
 
     private const float RTT_THRESHOLD_TO_BAD  = 250f;
-    private const float RTT_THRESHOLD_TO_GOOD = 200f;   // hysteresis 50ms
+    private const float RTT_THRESHOLD_TO_GOOD = 200f;   // 50ms of hysteresis
     private const float MIN_BAD_DURATION_S    = 10f;
-    private const float GOOD_STREAK_TO_SHRINK = 10f;    // thưởng khi ổn định lâu
+    private const float GOOD_STREAK_TO_SHRINK = 10f;    // reward for staying stable
 
     private float _badTimer, _goodStreak;
 
@@ -117,7 +117,7 @@ public sealed class CongestionControl
             {
                 CurrentMode = Mode.Bad;
                 _badTimer = MIN_BAD_DURATION_S;
-                // Thưởng/phạt: nếu vừa mới ở Good rất ngắn, tăng thời gian phạt
+                // Reward/penalty: if we were only briefly in Good, extend the penalty
                 if (_goodStreak < GOOD_STREAK_TO_SHRINK) _badTimer *= 2f;
                 _goodStreak = 0f;
                 NetLog.Warn($"congestion → BAD (rtt {smoothedRttMs:F0}ms)");
@@ -132,69 +132,71 @@ public sealed class CongestionControl
         }
     }
 
-    /// <summary>Tần suất gửi snapshot mà tầng trên nên dùng.</summary>
+    /// <summary>The snapshot rate the layer above should use.</summary>
     public int RecommendedSendRateHz => CurrentMode == Mode.Good ? 20 : 10;
     public bool ShouldReduceDetail   => CurrentMode == Mode.Bad;
 }
 ```
 
-**Vì sao có hysteresis:** nếu dùng cùng một ngưỡng cho cả hai chiều, khi RTT dao động quanh
-250ms, hệ thống sẽ nhảy Good↔Bad liên tục nhiều lần mỗi giây, gây bất ổn tệ hơn cả tắc nghẽn.
-Khoảng chết 50ms + thời gian tối thiểu 10s ở BAD loại bỏ hiện tượng này.
+**Why hysteresis:** with a single threshold in both directions, RTT hovering around 250 ms makes the
+system flip Good↔Bad several times a second, which destabilizes things worse than the congestion
+itself. A 50 ms dead band plus a 10 s minimum in BAD eliminates it.
 
-**Vì sao có `_goodStreak` phạt lũy tiến:** nếu vừa về Good được 2 giây đã lại Bad, chứng tỏ
-mạng thực sự tệ chứ không phải nhiễu nhất thời → phạt gấp đôi thời gian. Ý tưởng lấy từ TCP
-exponential backoff.
+**Why the `_goodStreak` escalating penalty:** if we return to Good for only 2 seconds and then fall
+back to Bad, the network really is bad rather than momentarily noisy → double the penalty duration.
+The idea comes from TCP exponential backoff.
 
-**Tầng trên tiêu thụ thế nào:** C đọc `RecommendedSendRateHz` để giảm tần suất snapshot, và
-`ShouldReduceDetail` để bỏ trường velocity, tăng ngưỡng cull. Bạn chỉ *khuyến nghị*, không tự
-quyết định nội dung — đó là việc của C.
+**How the layer above consumes it:** C reads `RecommendedSendRateHz` to lower the snapshot rate, and
+`ShouldReduceDetail` to drop the velocity field and tighten the cull threshold. You only
+*recommend*; you never decide the content — that's C's job.
 
-### Task 3 — Flow control (2 ngày)
+### Task 3 — Flow control (2 days)
 
-Congestion control lo về *mạng*; flow control lo về *bên nhận*. Nếu client xử lý chậm (máy yếu,
-đang load scene), server gửi nhanh hơn client xử lý → buffer đầy → mất gói.
+Congestion control is about the *network*; flow control is about the *receiver*. If the client
+processes slowly (weak machine, loading a scene), the server sends faster than the client consumes →
+buffers fill → packets are lost.
 
 ```csharp
-// Bên nhận báo lại "còn chỗ" trong keepalive
+// The receiver reports its headroom in the keepalive
 public struct FlowControlInfo
 {
-    public ushort PendingReliableCount;   // số gói reliable đang chờ xử lý
+    public ushort PendingReliableCount;   // reliable packets awaiting processing
     public byte   BufferPressurePercent;  // 0-100
 }
 
-// Bên gửi phản ứng
+// The sender reacts
 if (remoteFlowInfo.BufferPressurePercent > 80)
 {
-    // Ngừng gửi reliable mới, chỉ giữ retransmit
+    // Stop sending new reliables, keep only retransmits
     _pauseNewReliable = true;
 }
 ```
 
-Cách đơn giản hơn và đủ dùng: **giới hạn số gói reliable chưa được ack**. Nếu vượt 64 gói chưa
-ack, ngừng gửi thêm reliable mới cho tới khi thoát.
+A simpler approach that's good enough: **cap the number of unacked reliable packets**. Above 64
+unacked, stop sending new reliables until it clears.
 
 ```csharp
 public bool CanSendReliable => _unackedReliableCount < MAX_UNACKED_RELIABLE;  // 64
 ```
 
-Đây là *sliding window* kinh điển, nêu rõ trong báo cáo.
+That's the classic *sliding window* — state it explicitly in the report.
 
-### Task 4 — Chống DoS (3 ngày)
+### Task 4 — DoS defenses (3 days)
 
-Server công khai trên VPS sẽ bị quét cổng và gửi rác trong vài giờ đầu. Danh sách phải làm:
+A public server on a VPS will be port-scanned and flooded with junk within the first few hours. The
+must-do list:
 
-| Vector tấn công | Chặn |
+| Attack vector | Defense |
 |---|---|
-| Gói rác không đúng protocolId | Đã có: drop im lặng ở `PacketHeader.TryRead` |
-| Flood CONNECT_REQUEST từ IP giả | Challenge–response stateless (phase 01). Server không cấp phát trước bước 3 |
-| Flood CONNECT_REQUEST từ IP thật | Rate limit theo IP: tối đa 5 request/giây/IP |
-| Flood gói lớn để bão hòa băng thông | Không chặn được ở tầng ứng dụng. Ghi nhận, cần firewall/cloud |
-| Fragmentation bomb | Đã có: `MAX_PENDING_GROUPS = 8` + timeout |
-| Amplification (gửi ít, server trả nhiều) | Response ở giai đoạn handshake **luôn nhỏ hơn hoặc bằng** request. `CONNECT_REQUEST` phải padding lên ≥ 200 byte để tỉ lệ khuếch đại < 1 |
-| Gói có payloadLength giả lớn | Đã kiểm tra ở `TryRead` |
-| Kết nối rồi im lặng (slowloris) | Timeout 10 giây |
-| Cùng playerId kết nối nhiều lần | Kiểm tra ở `OnValidateTicket`, từ chối code 6 |
+| Junk packets with the wrong protocolId | Already handled: dropped silently in `PacketHeader.TryRead` |
+| CONNECT_REQUEST flood from spoofed IPs | Stateless challenge–response (phase 01). The server allocates nothing before step 3 |
+| CONNECT_REQUEST flood from real IPs | Per-IP rate limit: max 5 requests/second/IP |
+| Large-packet flood to saturate bandwidth | Not preventable at the application layer. Note it; needs a firewall/cloud |
+| Fragmentation bomb | Already handled: `MAX_PENDING_GROUPS = 8` + timeout |
+| Amplification (small request, large reply) | Handshake responses are **always ≤** the request. `CONNECT_REQUEST` is padded to ≥ 200 bytes so the amplification ratio stays < 1 |
+| Packets with a fake oversized payloadLength | Already checked in `TryRead` |
+| Connect then go silent (slowloris) | 10-second timeout |
+| The same playerId connecting repeatedly | Checked in `OnValidateTicket`, rejected with code 6 |
 
 ```csharp
 public sealed class RateLimiter
@@ -211,75 +213,77 @@ public sealed class RateLimiter
         return true;
     }
 
-    /// <summary>Gọi mỗi 10 giây, xóa entry cũ — nếu không, dictionary sẽ phình vô hạn.</summary>
+    /// <summary>Call every 10 seconds to purge old entries — otherwise the dictionary grows without bound.</summary>
     public void Cleanup(double nowMs) { /* ... */ }
 }
 ```
 
-> **Cạm bẫy 3 — chính rate limiter là vector DoS.** Nếu bạn tạo một entry dictionary cho mỗi IP
-> mà không dọn, kẻ tấn công gửi từ 1 triệu IP giả sẽ làm cạn RAM. Bắt buộc có `Cleanup()` định
-> kỳ và giới hạn tổng số entry (ví dụ 10.000, vượt thì xóa nửa cũ nhất).
+> **Trap 3 — the rate limiter is itself a DoS vector.** If you create a dictionary entry per IP and
+> never clean up, an attacker sending from a million spoofed IPs exhausts RAM. A periodic
+> `Cleanup()` plus a cap on total entries (say 10,000, above which you drop the oldest half) is
+> mandatory.
 
-**Amplification — tính toán cụ thể.** `CONNECT_REQUEST` chứa joinTicket 64 byte + header 16 =
-80 byte. `CONNECT_CHALLENGE` chứa serverSalt 8 byte + header 16 = 24 byte. Tỉ lệ 24/80 = 0.3 —
-an toàn (< 1). Nếu ngược lại (request nhỏ, response lớn), server thành công cụ khuếch đại DDoS
-nhắm vào người khác. **Luôn kiểm tra tỉ lệ này cho mọi gói xử lý trước khi xác thực.**
+**Amplification — the concrete arithmetic.** `CONNECT_REQUEST` carries a 64-byte joinTicket + a
+16-byte header = 80 bytes. `CONNECT_CHALLENGE` carries an 8-byte serverSalt + a 16-byte header =
+24 bytes. The ratio 24/80 = 0.3 — safe (< 1). If it were the other way round (small request, large
+reply), the server becomes a DDoS amplifier aimed at someone else. **Always check this ratio for
+every packet processed before authentication.**
 
-### Task 5 — Benchmark (2 ngày)
+### Task 5 — Benchmarks (2 days)
 
 ```csharp
-// Ironfront.Net.Transport.Bench/Program.cs — dùng BenchmarkDotNet hoặc tự viết
+// Ironfront.Net.Transport.Bench/Program.cs — using BenchmarkDotNet or hand-rolled
 ```
 
-| Benchmark | Đo gì | Ngưỡng chấp nhận |
+| Benchmark | Measures | Acceptable threshold |
 |---|---|---|
-| Header parse | ns/gói | < 50 ns |
-| Reliability `OnPacketReceived` | ns/gói | < 100 ns |
-| Full send path (1 gói 200 B) | ns | < 2 µs |
+| Header parsing | ns/packet | < 50 ns |
+| Reliability `OnPacketReceived` | ns/packet | < 100 ns |
+| Full send path (one 200 B packet) | ns | < 2 µs |
 | Full receive path | ns | < 2 µs |
-| 16 conn × 30 gói/s trong 60s | CPU %, alloc | < 5% CPU 1 lõi, 0 alloc/s sau ấm |
-| Throughput tối đa 1 kết nối | MB/s | > 10 MB/s localhost |
-| Số kết nối tối đa trước khi tick > 5ms | conn | ≥ 64 |
+| 16 conns × 30 packets/s for 60 s | CPU %, allocations | < 5% of one core, 0 alloc/s once warm |
+| Max throughput on one connection | MB/s | > 10 MB/s on localhost |
+| Max connections before tick > 5 ms | conns | ≥ 64 |
 
-**Đo số kết nối tối đa dù chỉ cần 16** — biết headroom là dữ liệu tốt cho báo cáo, và trả lời
-được câu hỏi "hệ thống của em scale tới đâu?" khi bảo vệ.
+**Measure the connection ceiling even though we only need 16** — knowing the headroom is good data
+for the report, and it answers the "how far does your system scale?" question at the defense.
 
 ---
 
-## 3. Tiêu chí nghiệm thu (M2)
+## 3. Acceptance criteria (M2)
 
-| # | Tiêu chí | Cách kiểm chứng |
+| # | Criterion | How to verify |
 |---|---|---|
-| 1 | 16 kết nối đồng thời, 10 phút, không rớt | Load test bot của D |
-| 2 | 64 kết nối vẫn chạy (headroom) | Load test |
-| 3 | Congestion chuyển GOOD→BAD→GOOD đúng, không dao động | Test: sim tăng latency dần, log chuyển chế độ |
-| 4 | Flow control chặn được khi bên nhận chậm | Test: bên nhận cố tình sleep 200ms/frame |
-| 5 | Rate limit chặn flood 100 req/s từ 1 IP | Test |
-| 6 | Fragmentation bomb không làm cạn RAM | Test: 1000 nhóm mảnh dở → RAM ổn định |
-| 7 | Tỉ lệ amplification < 1 cho mọi gói tiền-xác-thực | Kiểm tra thủ công + test |
-| 8 | 0 alloc/s sau khi ấm, 16 conn | Benchmark GC counter |
-| 9 | CPU < 5% một lõi ở 16 conn | Benchmark |
-| 10 | Tổng test ≥ 60 xanh | `dotnet test` |
+| 1 | 16 simultaneous connections for 10 minutes with no drops | D's load-test bots |
+| 2 | 64 connections still work (headroom) | Load test |
+| 3 | Congestion moves GOOD→BAD→GOOD correctly without oscillating | Test: ramp the simulated latency up, log the mode changes |
+| 4 | Flow control kicks in when the receiver is slow | Test: make the receiver sleep 200 ms/frame deliberately |
+| 5 | Rate limiting blocks a 100 req/s flood from one IP | Test |
+| 6 | A fragmentation bomb doesn't exhaust RAM | Test: 1000 incomplete fragment groups → RAM stays flat |
+| 7 | Amplification ratio < 1 for every pre-authentication packet | Manual check + test |
+| 8 | 0 alloc/s once warm, at 16 conns | Benchmark GC counters |
+| 9 | CPU < 5% of one core at 16 conns | Benchmark |
+| 10 | ≥ 60 tests total, all green | `dotnet test` |
 
 ---
 
-## 4. Rủi ro
+## 4. Risks
 
-| Rủi ro | Dấu hiệu | Xử lý |
+| Risk | Sign | Handling |
 |---|---|---|
-| NAT rebinding làm rớt client trên Internet | Client bị disconnect ngẫu nhiên sau vài phút chơi qua VPS | Task 1 cạm bẫy 2. Chỉ lộ ra ở phase 03 khi lên VPS — làm sẵn từ giờ |
-| Rate limiter tự trở thành DoS | RAM tăng khi bị quét | `Cleanup()` + giới hạn entry |
-| Congestion dao động Good↔Bad | Log đầy dòng chuyển chế độ | Hysteresis + thời gian tối thiểu |
-| `IPEndPoint` cấp phát mỗi gói | GC gen0 tăng đều | `EndpointKey` struct, tái dùng `IPEndPoint` |
-| Không kịp tuần 10 | | Contingency: bỏ flow control (chỉ giữ giới hạn 64 unacked), bỏ NAT rebinding (chấp nhận rớt trên Internet) |
+| NAT rebinding dropping clients over the Internet | Clients randomly disconnect after a few minutes over the VPS | Task 1, trap 2. It only surfaces in phase 03 on the VPS — build it now |
+| The rate limiter becomes a DoS vector itself | RAM grows while being scanned | `Cleanup()` + an entry cap |
+| Congestion oscillating Good↔Bad | The log fills with mode-change lines | Hysteresis + a minimum dwell time |
+| `IPEndPoint` allocating per packet | Steadily rising gen0 GCs | The `EndpointKey` struct, reuse an `IPEndPoint` |
+| Week 10 arrives unfinished | | Contingency: drop flow control (keep only the 64-unacked cap), drop NAT rebinding (accept drops over the Internet) |
 
 ---
 
-## 5. Số liệu cho báo cáo
+## 5. Data for the report
 
-| Thí nghiệm | Bảng/biểu đồ cần |
+| Experiment | Table/chart needed |
 |---|---|
-| Congestion control bật vs tắt ở 20% loss | Biểu đồ RTT theo thời gian, 2 đường |
-| Head-of-line: channel 2 vs gửi mọi thứ reliable-ordered | Độ trễ P99 của snapshot khi có event bị mất |
-| Ack bitfield vs ack đơn | Tỉ lệ retransmit thừa, % băng thông tiết kiệm |
-| Scale: 1 → 64 kết nối | Biểu đồ CPU và tick time theo số kết nối |
+| Congestion control on vs. off at 20% loss | RTT over time, two series |
+| Head-of-line: channel 2 vs. sending everything reliable-ordered | P99 snapshot latency when an event is lost |
+| Ack bitfield vs. single ack | Redundant retransmit rate, % bandwidth saved |
+| Scaling: 1 → 64 connections | CPU and tick time vs. connection count |

@@ -1,73 +1,75 @@
-# Kế hoạch — Dev B · Transport Layer (UDP tự viết)
+# Plan — Dev B · Transport Layer (hand-written UDP)
 
-> Đọc trước: [`../00-shared/protocol-spec.md`](../00-shared/protocol-spec.md) (thuộc lòng phần A) ·
-> [`../00-shared/architecture.md`](../00-shared/architecture.md) ·
+> Read first: [`../00-shared/protocol-spec.md`](../00-shared/protocol-spec.md) (know Part A by
+> heart) · [`../00-shared/architecture.md`](../00-shared/architecture.md) ·
 > [`../00-shared/conventions.md`](../00-shared/conventions.md)
 
 ---
 
-## 1. Vai trò
+## 1. Role
 
-Bạn viết **tầng vận chuyển tin cậy trên nền UDP, từ con số 0**. Không dùng Mirror, LiteNetLib,
-ENet, Photon, hay bất kỳ thư viện netcode nào. Chỉ có `System.Net.Sockets.Socket` với
-`SocketType.Dgram`.
+You write **a reliable transport layer on top of UDP, from zero**. No Mirror, LiteNetLib, ENet,
+Photon, or any other netcode library. Just `System.Net.Sockets.Socket` with `SocketType.Dgram`.
 
-Đây là **phần lõi của đồ án môn Lập trình mạng**. Nếu mọi thứ khác đổ vỡ, phần này một mình
-vẫn đủ để bảo vệ: nó chứa toàn bộ nội dung học thuật (reliability, congestion, flow control,
-fragmentation, RTT estimation) và có thể đo đạc, chứng minh bằng số liệu.
+This is **the academic core of a Network Programming capstone**. If everything else falls apart,
+this part alone is enough to defend: it contains all the coursework substance (reliability,
+congestion, flow control, fragmentation, RTT estimation) and it can be measured and proven with
+numbers.
 
-**Bạn KHÔNG làm:** logic game, serialize dữ liệu game (C làm), master server (D làm). Tầng của
-bạn chỉ biết `byte[]` — nó không quan tâm bên trong là snapshot hay chat.
+**What you do NOT do:** game logic, serializing game data (C's job), the master server (D's job).
+Your layer only knows `byte[]` — it doesn't care whether the contents are a snapshot or a chat
+message.
 
-> **Ranh giới sạch:** nếu một file trong `Ironfront.Net.Transport` cần `using UnityEngine`
-> hoặc biết về khái niệm "actor", đó là dấu hiệu thiết kế sai.
+> **A clean boundary:** if a file in `Ironfront.Net.Transport` needs `using UnityEngine` or knows
+> what an "actor" is, that's a sign of a design error.
 
 ---
 
-## 2. Vùng sở hữu
+## 2. Ownership
 
-| Đường dẫn | Quyền |
+| Path | Rights |
 |---|---|
-| `Ironfront.Net.Transport/**` | **Sở hữu toàn quyền** |
-| `Ironfront.Net.Transport.Tests/**` | Sở hữu |
-| `Ironfront.Net.Replication/Serialization/**` | **Sở hữu** (`BitWriter`, `BitReader`, `Quantize`) — mới nhận |
-| `Ironfront.Net.Replication.Tests/Conformance/**` | **Chỉ đọc** — Dev C sở hữu, đây là trọng tài kiểm định code của bạn |
-| `Ironfront.Net.Protocol/**` | PR + 2 approve (chung) |
-| Mọi thứ khác | Chỉ đọc |
+| `Ironfront.Net.Transport/**` | **Full ownership** |
+| `Ironfront.Net.Transport.Tests/**` | Owner |
+| `Ironfront.Net.Replication/Serialization/**` | **Owner** (`BitWriter`, `BitReader`, `Quantize`) — newly assigned |
+| `Ironfront.Net.Replication.Tests/Conformance/**` | **Read-only** — Dev C owns it; it's the referee that verifies your code |
+| `Ironfront.Net.Protocol/**` | PR + 2 approvals (shared) |
+| Everything else | Read-only |
 
-### 2.1. Bạn cài đặt, Dev C kiểm định
+### 2.1. You implement, Dev C verifies
 
-Cặp seam quan trọng nhất dự án:
+The most important seam in the project:
 
-| | Ai làm | Ở đâu |
+| | Who does it | Where |
 |---|---|---|
-| Cài đặt bit-packing + quantization | **Bạn** | `Ironfront.Net.Replication/Serialization/` |
-| Test conformance với hex cứng viết tay | **Dev C** | `Ironfront.Net.Replication.Tests/Conformance/` |
+| Implementing bit-packing + quantization | **You** | `Ironfront.Net.Replication/Serialization/` |
+| Conformance tests with hand-written hex | **Dev C** | `Ironfront.Net.Replication.Tests/Conformance/` |
 
-Lý do tách: nếu cùng một người vừa viết vừa test, test chỉ chứng minh code nhất quán với chính
-nó, không chứng minh nó khớp spec. Tách ra thì test của C thành **trọng tài thật** khi có tranh
-cãi về format.
+Why they're split: if the same person writes and tests it, the tests only prove the code is
+consistent with itself, not that it matches the spec. Split, C's tests become a **genuine referee**
+whenever there's a dispute about the format.
 
-**Hệ quả thực tế cho bạn:** test của C có thể đỏ trên code bạn vừa viết. Đó là tính năng, không
-phải xung đột. Khi đỏ, hai người cùng mở `protocol-spec.md` § 4.4 và xem ai lệch spec.
+**What this means for you in practice:** C's tests may go red against code you just wrote. That's a
+feature, not a conflict. When it happens, the two of you open `protocol-spec.md` § 4.4 together and
+work out who diverged from the spec.
 
-**Không mở Unity Editor.** Bạn làm việc bằng Rider/VS/VSCode + `dotnet build` + `dotnet test`.
+**Don't open the Unity Editor.** You work in Rider/VS/VSCode with `dotnet build` and `dotnet test`.
 
 ---
 
-## 3. Kiến trúc thư viện
+## 3. Library architecture
 
 ```mermaid
 flowchart TB
-    App[Ứng dụng: Unity client / Unity server]
+    App[Application: Unity client / Unity server]
     subgraph T["Ironfront.Net.Transport"]
-        Peer[UdpPeer<br/>vòng lặp socket, dispatch theo endpoint]
-        Conn[Connection<br/>máy trạng thái, RTT, keepalive]
+        Peer[UdpPeer<br/>socket loop, dispatch by endpoint]
+        Conn[Connection<br/>state machine, RTT, keepalive]
         Rel[ReliabilityLayer<br/>seq/ack/bitfield, retransmit]
-        Chan[ChannelSet<br/>4 channel, sequencing riêng]
-        Frag[Fragmentation<br/>cắt/ghép mảnh > MTU]
+        Chan[ChannelSet<br/>4 channels, independent sequencing]
+        Frag[Fragmentation<br/>split/reassemble beyond the MTU]
         Cong[CongestionControl<br/>GOOD/BAD mode]
-        Pool[BufferPool<br/>không cấp phát hot path]
+        Pool[BufferPool<br/>no allocation in the hot path]
         Sim[NetworkSimulator<br/>loss/latency/jitter/reorder]
     end
     Sock[(System.Net.Sockets.Socket<br/>SocketType.Dgram)]
@@ -80,14 +82,15 @@ flowchart TB
     Peer --> Sim --> Sock
 ```
 
-`NetworkSimulator` nằm **giữa** `UdpPeer` và socket thật: khi bật, nó giữ gói lại, làm trễ, làm
-mất, đảo thứ tự trước khi thực sự gửi/nhận. Khi tắt, nó là passthrough chi phí gần bằng 0.
+`NetworkSimulator` sits **between** `UdpPeer` and the real socket: when enabled it holds packets
+back, delays them, drops them and reorders them before actually sending/receiving. When disabled
+it's a near-zero-cost passthrough.
 
 ---
 
-## 4. API công khai — chốt ở tuần 1, không đổi sau đó
+## 4. Public API — frozen in week 1, unchanged thereafter
 
-A và C code dựa trên interface này. Đóng băng sớm.
+A and C write code against this interface. Freeze it early.
 
 ```csharp
 namespace Ironfront.Net.Transport;
@@ -110,7 +113,7 @@ public interface ITransportClient : IDisposable
     void Connect(string host, int port, ReadOnlySpan<byte> joinTicket);
     void Disconnect();
     void Send(byte channelId, ReadOnlySpan<byte> payload, bool reliable);
-    void Poll();                       // gọi mỗi frame; xử lý socket + timer
+    void Poll();                       // call every frame; services the socket + timers
 
     event Action<ReadOnlyMemory<byte>> OnMessage;
     event Action<ConnectResult>        OnConnected;
@@ -129,7 +132,7 @@ public interface ITransportServer : IDisposable
     void Poll();
 
     event Action<ushort, ReadOnlyMemory<byte>> OnMessage;      // (connectionId, payload)
-    event Func<ReadOnlyMemory<byte>, bool>     OnValidateTicket; // trả false → từ chối
+    event Func<ReadOnlyMemory<byte>, bool>     OnValidateTicket; // return false → reject
     event Action<ushort, ConnectionInfo>       OnClientConnected;
     event Action<ushort, DisconnectReason>     OnClientDisconnected;
 }
@@ -143,108 +146,109 @@ public struct TransportStats
 }
 ```
 
-**Điểm cần chú ý về ownership bộ nhớ:** `OnMessage` truyền `ReadOnlyMemory<byte>` trỏ vào buffer
-được pool. Buffer **được trả về pool ngay sau khi handler trả về**. Người nhận muốn giữ dữ liệu
-phải tự copy. Ghi rõ điều này trong XML doc, nếu không A hoặc C sẽ giữ tham chiếu và đọc phải
-dữ liệu rác. **Đây là loại bug rất khó tìm.**
+**A memory-ownership note to be aware of:** `OnMessage` passes a `ReadOnlyMemory<byte>` pointing into
+a pooled buffer. The buffer is **returned to the pool as soon as the handler returns**. A receiver
+that wants to keep the data must copy it. Say this explicitly in the XML docs, or A or C will hold a
+reference and end up reading garbage. **This is a very hard bug to track down.**
 
 ---
 
-## 5. Lộ trình 5 phase
+## 5. The 5-phase roadmap
 
-| Phase | Tuần | Mốc | Kết quả |
+| Phase | Weeks | Milestone | Outcome |
 |---|---|---|---|
-| [phase-00](phases/phase-00-nen-mong.md) | 1–2 | M0 | Ôn socket · project setup · `UdpPeer` gửi/nhận thô · **`NetworkSimulator`** · echo test · **`BitWriter`/`BitReader`/`Quantize`** |
-| [phase-01](phases/phase-01-reliability.md) | 3–6 | M1 | Handshake · seq/ack/bitfield · retransmit · 4 channel · fragmentation · RTT · ≥40 unit test |
-| [phase-02](phases/phase-02-chiu-tai.md) | 7–10 | M2 | Congestion control · flow control · chống DoS · 16 kết nối đồng thời · benchmark |
-| [phase-03](phases/phase-03-van-hanh.md) | 11–13 | M3 | Đo đạc thực tế trên VPS · công cụ chẩn đoán · packet logger/replay · hỗ trợ tích hợp |
-| [phase-04](phases/phase-04-bao-cao.md) | 14 | M4 | Báo cáo đo đạc so sánh với TCP · tài liệu · bảo vệ |
+| [phase-00](phases/phase-00-foundation.md) | 1–2 | M0 | Socket refresher · project setup · raw send/receive in `UdpPeer` · **`NetworkSimulator`** · echo test · **`BitWriter`/`BitReader`/`Quantize`** |
+| [phase-01](phases/phase-01-reliability.md) | 3–6 | M1 | Handshake · seq/ack/bitfield · retransmit · 4 channels · fragmentation · RTT · ≥40 unit tests |
+| [phase-02](phases/phase-02-load.md) | 7–10 | M2 | Congestion control · flow control · DoS defenses · 16 simultaneous connections · benchmarks |
+| [phase-03](phases/phase-03-operations.md) | 11–13 | M3 | Real measurements on a VPS · diagnostic tooling · packet logger/replay · integration support |
+| [phase-04](phases/phase-04-report.md) | 14 | M4 | Measurement report comparing against TCP · documentation · defense |
 
 ---
 
-## 6. Ước lượng
+## 6. Estimate
 
-| Hạng mục | Người-tuần |
+| Item | Person-weeks |
 |---|---|
 | Socket layer + connection lifecycle | 2.0 |
 | Reliability: seq/ack/bitfield/retransmit | 2.5 |
-| Channel + fragmentation + reassembly | 2.0 |
+| Channels + fragmentation + reassembly | 2.0 |
 | Network simulator | 1.5 |
-| Congestion control (bỏ flow control nâng cao) | 1.0 |
-| **Bit-packing serializer** (`BitWriter`/`BitReader`/`Quantize`) — **mới nhận** | 2.0 |
-| Test suite + benchmark + báo cáo | 1.5 |
-| Hỗ trợ tích hợp | 0.5 |
-| **Tổng** | **13.0 / 14** |
+| Congestion control (advanced flow control dropped) | 1.0 |
+| **Bit-packing serializer** (`BitWriter`/`BitReader`/`Quantize`) — **newly assigned** | 2.0 |
+| Test suite + benchmarks + report | 1.5 |
+| Integration support | 0.5 |
+| **Total** | **13.0 / 14** |
 
-> **Đã tái cấu trúc — hai thay đổi, tổng ngân sách không đổi:**
+> **Restructured — two changes, same total budget:**
 >
-> 1. **Nhận thêm bit-packing serializer từ Dev C** (+2.0). Đây là việc byte-level, cô lập hoàn
->    toàn, test bằng xUnit — đúng sở trường của bạn và giữ bạn ở trạng thái **zero phụ thuộc**.
->    **Dev C viết test conformance kiểm định code của bạn** (xem § 4.1) — bạn cài đặt, C là
->    trọng tài.
-> 2. **Trả lại gánh nặng "hỗ trợ tích hợp"** (−1.0) và **flow control nâng cao** (−0.5) cho
->    Dev C, người sở hữu integration harness. Bạn chỉ giữ 0.5 tuần để trả lời câu hỏi.
+> 1. **Took the bit-packing serializer from Dev C** (+2.0). It's byte-level work, fully isolated,
+>    testable with xUnit — squarely in your wheelhouse, and it keeps you at **zero dependencies**.
+>    **Dev C writes the conformance tests that verify your code** (see § 4.1) — you implement, C
+>    referees.
+> 2. **Handed back the "integration support" burden** (−1.0) and **advanced flow control** (−0.5) to
+>    Dev C, who owns the integration harness. You keep only 0.5 weeks for answering questions.
 >
-> Kết quả: **bạn không phụ thuộc ai sau tuần 2, và không ai chặn bạn tới hết dự án.**
-> Xem [dependency-map.md](../00-shared/dependency-map.md).
+> Result: **you depend on nobody after week 2, and nobody blocks you for the rest of the project.**
+> See [dependency-map.md](../00-shared/dependency-map.md).
 
 ---
 
-## 7. Rủi ro riêng
+## 7. Your own risks
 
-| # | Rủi ro | Chặn |
+| # | Risk | Mitigation |
 |---|---|---|
-| B1 | Bug reliability ẩn, biểu hiện gián tiếp, ăn nhiều tuần (rủi ro R1 toàn dự án) | `NetworkSimulator` xong **tuần 2**, trước mọi tính năng. ≥40 unit test. Packet logger từ phase 03 |
-| B2 | So sánh sequence bị wrap sau 36 phút | Dùng `SequenceMath.IsNewer` từ `Ironfront.Net.Protocol`, có unit test biên. Cấm viết `if (a > b)` |
-| B3 | Cấp phát heap trong hot path → GC spike → game giật đều | `BufferPool` từ phase 00. Test bằng benchmark đếm alloc |
-| B4 | Race condition giữa thread socket và thread game | **Quyết định: một thread duy nhất.** Socket non-blocking, poll từ main thread. Không dùng thread riêng ở v1 |
-| B5 | Fragmentation bị lợi dụng làm cạn RAM server | Giới hạn 8 nhóm/connection + timeout 2s, từ phase 01 |
-| B6 | A và C chờ API của bạn | API đóng băng tuần 1. Cung cấp `LoopbackTransport` (in-memory, không qua socket) để họ test sớm |
+| B1 | A hidden reliability bug presenting indirectly and eating weeks (project-wide risk R1) | `NetworkSimulator` done in **week 2**, before any feature. ≥40 unit tests. Packet logger from phase 03 |
+| B2 | Sequence comparison wrapping after 36 minutes | Use `SequenceMath.IsNewer` from `Ironfront.Net.Protocol`, with boundary unit tests. Writing `if (a > b)` is banned |
+| B3 | Heap allocation in the hot path → GC spikes → regular in-game stutter | `BufferPool` from phase 00. Verify with an allocation-counting benchmark |
+| B4 | A race between the socket thread and the game thread | **Decision: a single thread.** Non-blocking socket, polled from the main thread. No dedicated thread in v1 |
+| B5 | Fragmentation exploited to exhaust server RAM | Limit of 8 groups/connection + a 2 s timeout, from phase 01 |
+| B6 | A and C waiting on your API | Freeze the API in week 1. Provide a `LoopbackTransport` (in-memory, bypassing the socket) so they can test early |
 
 ---
 
-## 8. Quyết định kiến trúc riêng
+## 8. Your own architectural decisions
 
-| # | Quyết định | Lý do | Đánh đổi |
+| # | Decision | Reason | Trade-off |
 |---|---|---|---|
-| B-AD-1 | **Một thread duy nhất**, socket non-blocking, poll mỗi frame | Loại bỏ hoàn toàn race condition, dễ debug gấp nhiều lần. 16 kết nối × 30 gói/s = 480 gói/s, một thread thừa sức | Không tận dụng đa lõi. Không cần ở quy mô này |
-| B-AD-2 | `BufferPool` cố định, không `new byte[]` trong hot path | Chặn GC spike | Phải cẩn thận ownership, dễ dùng sai |
-| B-AD-3 | Không mã hóa payload ở v1 | Ngoài scope, thêm phức tạp | Ai bắt được gói sẽ đọc được. Chấp nhận |
-| B-AD-4 | Không dùng `SocketAsyncEventArgs` / `async` | Phức tạp, khó debug, không cần ở quy mô này | Ít hiệu năng hơn ở quy mô rất lớn |
-| B-AD-5 | Reliability theo channel, không theo connection | Snapshot không bị chặn bởi event mất gói. Đây là lợi thế cốt lõi so với TCP | Phức tạp hơn |
+| B-AD-1 | **A single thread**, non-blocking socket, polled every frame | Eliminates race conditions entirely and is far easier to debug. 16 connections × 30 packets/s = 480 packets/s, trivial for one thread | Doesn't use multiple cores. Not needed at this scale |
+| B-AD-2 | A fixed `BufferPool`, no `new byte[]` in the hot path | Prevents GC spikes | Ownership requires care and is easy to get wrong |
+| B-AD-3 | No payload encryption in v1 | Out of scope, adds complexity | Anyone capturing packets can read them. Accepted |
+| B-AD-4 | No `SocketAsyncEventArgs` / `async` | Complex, hard to debug, unnecessary at this scale | Lower performance at very large scale |
+| B-AD-5 | Reliability per channel, not per connection | Snapshots aren't stalled by a lost event. This is the core advantage over TCP | More complex |
 
 ---
 
-## 9. Chuẩn bị kiến thức (làm trong phase 00)
+## 9. Background preparation (during phase 00)
 
-Nếu chưa từng viết socket, dành 2 ngày đầu cho phần này. Không phải phí thời gian.
+If you've never written a socket, spend the first 2 days on this. It isn't wasted time.
 
-| Chủ đề | Vì sao cần | Cách học |
+| Topic | Why it's needed | How to learn it |
 |---|---|---|
-| UDP vs TCP ở tầng OS | Hiểu vì sao UDP không đảm bảo gì | Viết echo server cả hai, so sánh |
-| MTU và IP fragmentation | Vì sao chọn 1200 byte | Gửi gói 2000 byte, quan sát bằng Wireshark |
-| `Socket` non-blocking, `Poll`, `Available` | Cách đọc socket không chặn | Thử nghiệm |
-| RTT estimation, EWMA | Đo ping đúng cách | Đọc RFC 6298 (TCP RTO) — ta dùng ý tưởng, không dùng nguyên |
-| Sliding window | Nền tảng của reliability | Bài giảng LTM |
-| Wireshark cơ bản | Kiểm chứng gói tin thật | Bắt gói echo server của mình |
+| UDP vs TCP at the OS level | Understand why UDP guarantees nothing | Write an echo server for both and compare |
+| MTU and IP fragmentation | Why we chose 1200 bytes | Send a 2000-byte packet and watch it in Wireshark |
+| Non-blocking `Socket`, `Poll`, `Available` | How to read a socket without blocking | Experiment |
+| RTT estimation, EWMA | How to measure ping properly | Read RFC 6298 (TCP RTO) — we borrow the idea, not the whole thing |
+| Sliding windows | The foundation of reliability | Network Programming lectures |
+| Wireshark basics | Verifying real packets | Capture your own echo server's traffic |
 
-**Bài tập khởi động bắt buộc (2 ngày, phase 00):**
-1. Echo server UDP + client, gửi 1000 gói, đếm mất bao nhiêu (LAN thường 0%)
-2. Echo server TCP tương đương, đo độ trễ khi có 1 gói bị mất (dùng `tc netem` hoặc simulator)
-3. So sánh, viết 1 trang nhận xét → đây là chương đầu của báo cáo đồ án
+**Mandatory warm-up exercise (2 days, phase 00):**
+1. A UDP echo server + client, send 1000 packets, count how many are lost (usually 0% on LAN)
+2. The equivalent TCP echo server, measure the latency when one packet is lost (using `tc netem` or
+   the simulator)
+3. Compare and write a one-page commentary → this becomes the first chapter of the capstone report
 
 ---
 
-## 10. Báo cáo đồ án — thu thập dữ liệu từ đầu
+## 10. The capstone report — gather data from day one
 
-Phần của bạn là trọng tâm học thuật. Từ phase 00, mọi thứ đo được đều ghi lại vào
-`reports/measurements.csv`. Cuối kỳ sẽ cần:
+Your part is the academic centerpiece. From phase 00 onward, record everything measurable into
+`reports/measurements.csv`. By the end of the semester you'll need:
 
-| Nội dung báo cáo | Dữ liệu cần | Thu thập từ phase |
+| Report section | Data needed | Collected in phase |
 |---|---|---|
-| So sánh UDP thuần vs TCP về độ trễ khi mất gói | Đo cả hai với cùng điều kiện | 00, 04 |
-| Hiệu quả của ack bitfield vs ack đơn | Số byte ack / gói, tỉ lệ retransmit thừa | 01 |
-| Ảnh hưởng của packet loss tới trải nghiệm | Bandwidth, retransmit rate ở 0/5/15/30% loss | 02 |
-| Congestion control có tác dụng không | Bandwidth và RTT khi bật/tắt | 02 |
-| Head-of-line blocking: có channel vs không | Độ trễ snapshot khi event bị mất | 02 |
-| Chi phí fragmentation | Tỉ lệ mất nhóm mảnh theo kích thước | 01 |
+| Raw UDP vs TCP latency under packet loss | Measure both under identical conditions | 00, 04 |
+| The effectiveness of ack bitfields vs single acks | Ack bytes per packet, rate of redundant retransmits | 01 |
+| The impact of packet loss on the experience | Bandwidth, retransmit rate at 0/5/15/30% loss | 02 |
+| Whether congestion control actually helps | Bandwidth and RTT with it on vs. off | 02 |
+| Head-of-line blocking: with channels vs without | Snapshot latency when an event is lost | 02 |
+| The cost of fragmentation | Fragment-group loss rate by size | 01 |

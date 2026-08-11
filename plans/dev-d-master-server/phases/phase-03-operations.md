@@ -1,37 +1,37 @@
-# Dev D — Phase 03: Triển khai VPS, TLS, monitoring
+# Dev D — Phase 03: VPS deployment, TLS, monitoring
 
-**Tuần 11–13** · Mốc **M3** · Ước lượng **2.5 người-tuần**
+**Weeks 11–13** · Milestone **M3** · Estimate **2.5 person-weeks**
 
-> Mục tiêu một câu: **hệ thống chạy trên Internet thật, 16 người thật, và ta nhìn thấy nó đang
-> làm gì.**
+> Goal in one sentence: **the system runs on the real Internet with 16 real players, and we can see
+> what it's doing.**
 
 ---
 
-## 1. Mục tiêu
+## 1. Objectives
 
-| # | Mục tiêu |
+| # | Objective |
 |---|---|
-| 1 | Triển khai master + game server lên VPS |
-| 2 | TLS cho kết nối TCP (có truyền mật khẩu) |
-| 3 | Monitoring: log có cấu trúc, chỉ số, cảnh báo |
-| 4 | Load test 16 client, tìm và sửa nút thắt |
-| 5 | Độ bền: chạy nhiều ngày không sập |
-| 6 | Hỗ trợ tích hợp M3 |
+| 1 | Deploy the master + game servers to a VPS |
+| 2 | TLS for the TCP connections (they carry passwords) |
+| 3 | Monitoring: structured logs, metrics, alerts |
+| 4 | A 16-client load test, finding and fixing the bottlenecks |
+| 5 | Durability: running for days without falling over |
+| 6 | Support M3 integration |
 
 ---
 
-## 2. Task chi tiết
+## 2. Detailed tasks
 
-### Task 1 — Chuẩn bị VPS (2 ngày)
+### Task 1 — VPS preparation (2 days)
 
-**Cấu hình tối thiểu:** 2 vCPU, 4 GB RAM, Ubuntu 22.04. Game server headless Unity ăn RAM nhiều
-hơn master server nhiều lần.
+**Minimum spec:** 2 vCPU, 4 GB RAM, Ubuntu 22.04. The headless Unity game server uses several times
+more RAM than the master server.
 
 ```
 ┌─ VPS ────────────────────────────────┐
 │  master server   :27000/tcp (TLS)    │
 │  game server 1   :27015/udp          │
-│  game server 2   :27016/udp (dự phòng)│
+│  game server 2   :27016/udp (standby)│
 └──────────────────────────────────────┘
 ```
 
@@ -42,7 +42,7 @@ sudo ufw allow 27015:27020/udp
 sudo ufw enable
 ```
 
-**systemd unit cho master:**
+**A systemd unit for the master:**
 ```ini
 # /etc/systemd/system/ironfront-master.service
 [Unit]
@@ -64,19 +64,21 @@ StandardError=append:/var/log/ironfront/master.err.log
 WantedBy=multi-user.target
 ```
 
-**Game server cần thêm:** Unity headless build Linux, cần `libc6`, và chạy với
+**The game server also needs:** a Linux headless Unity build, `libc6`, and to run with
 `-batchmode -nographics -logFile`.
 
-**Cạm bẫy 1 — `Restart=always` che giấu crash loop.** Nếu server crash mỗi 3 giây, systemd sẽ
-restart mãi và trông như "đang chạy". Thêm `StartLimitBurst=5` và `StartLimitIntervalSec=60`
-để nó dừng hẳn sau 5 lần crash trong 1 phút — bạn sẽ thấy vấn đề thay vì bị che.
+**Trap 1 — `Restart=always` masking a crash loop.** If the server crashes every 3 seconds, systemd
+restarts it forever and it looks like it's "running". Add `StartLimitBurst=5` and
+`StartLimitIntervalSec=60` so it gives up after 5 crashes in a minute — then you see the problem
+instead of having it hidden.
 
-**Cạm bẫy 2 — múi giờ và NTP.** joinTicket dựa vào timestamp. Nếu VPS lệch đồng hồ, ticket hết
-hạn sai. Kiểm tra: `timedatectl status` phải thấy `NTP service: active`.
+**Trap 2 — time zones and NTP.** joinTickets depend on timestamps. If the VPS clock drifts, tickets
+expire wrongly. Check: `timedatectl status` must show `NTP service: active`.
 
-### Task 2 — TLS cho TCP (2 ngày)
+### Task 2 — TLS for TCP (2 days)
 
-Bạn đang truyền hash mật khẩu và session token qua Internet. Bắt buộc có TLS trước khi công khai.
+You're sending password hashes and session tokens over the Internet. TLS is mandatory before going
+public.
 
 ```csharp
 // Ironfront.MasterServer/Net/TlsWrapper.cs
@@ -98,42 +100,44 @@ public sealed class TlsClientConnection
             return true;
         }
         catch (AuthenticationException e)
-        { NetLog.Warn($"TLS handshake thất bại: {e.Message}"); return false; }
+        { NetLog.Warn($"TLS handshake failed: {e.Message}"); return false; }
     }
 }
 ```
 
-**Điểm quan trọng — TLS KHÔNG thay thế framing.** `SslStream` vẫn là byte stream, vẫn không có
-ranh giới message. `MspFraming` của bạn vẫn cần thiết y nguyên, chỉ là đọc từ `SslStream` thay
-vì `Socket` trực tiếp. Đây là hiểu lầm phổ biến, đáng nêu trong báo cáo.
+**An important point — TLS does NOT replace framing.** `SslStream` is still a byte stream and still
+has no message boundaries. Your `MspFraming` is needed exactly as before; it just reads from
+`SslStream` rather than the `Socket` directly. This is a common misconception and worth mentioning in
+the report.
 
-**Chứng chỉ:**
-- Dev/LAN: self-signed, client bỏ qua validation (**chỉ** khi có cờ `--insecure`)
-- VPS: Let's Encrypt qua `certbot` nếu có domain; nếu chỉ có IP thì self-signed + pin fingerprint
-  trong client
+**Certificates:**
+- Dev/LAN: self-signed, with the client skipping validation (**only** behind an `--insecure` flag)
+- VPS: Let's Encrypt via `certbot` if you have a domain; with only an IP, use self-signed plus a
+  pinned fingerprint in the client
 
 ```csharp
-// Client pin fingerprint — an toàn hơn "bỏ qua mọi lỗi"
+// Client-side fingerprint pinning — far safer than "ignore all errors"
 private bool ValidateServerCert(object s, X509Certificate cert, X509Chain chain, SslPolicyErrors e)
 {
     if (e == SslPolicyErrors.None) return true;
-    // Self-signed: chấp nhận nếu fingerprint khớp giá trị đã build vào client
+    // Self-signed: accept if the fingerprint matches the value built into the client
     return cert.GetCertHashString(HashAlgorithmName.SHA256)
                .Equals(PINNED_FINGERPRINT, StringComparison.OrdinalIgnoreCase);
 }
 ```
 
-> **Không bao giờ** viết `(s, c, ch, e) => true` trong build phát hành. Nó vô hiệu hóa hoàn toàn
-> TLS và mở đường cho tấn công man-in-the-middle. Nếu buộc phải có cho dev, gắn `#if DEBUG` và
-> in cảnh báo đỏ ra console.
+> **Never** write `(s, c, ch, e) => true` in a release build. It disables TLS entirely and opens the
+> door to a man-in-the-middle attack. If you must have it for dev, wrap it in `#if DEBUG` and print a
+> loud red warning to the console.
 
-**Game server ↔ master cũng phải TLS** — nó truyền `serverSecret`.
+**Game server ↔ master must use TLS too** — it carries the `serverSecret`.
 
-**UDP không mã hóa** (quyết định B-AD-3, ngoài scope). Ghi rõ trong báo cáo là hạn chế đã biết.
+**UDP is unencrypted** (decision B-AD-3, out of scope). Record it in the report as a known
+limitation.
 
-### Task 3 — Monitoring (2 ngày)
+### Task 3 — Monitoring (2 days)
 
-**Log có cấu trúc** (JSON, một dòng một sự kiện — dễ grep và phân tích):
+**Structured logs** (JSON, one event per line — easy to grep and analyze):
 
 ```csharp
 public static class StructuredLog
@@ -143,15 +147,15 @@ public static class StructuredLog
             ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), type, data }));
 }
 
-// Dùng:
+// Usage:
 StructuredLog.Event("login", new { playerId = 42, ip = "1.2.3.4", latencyMs = 15 });
 StructuredLog.Event("room_join", new { playerId = 42, roomId = 7 });
 StructuredLog.Event("gs_heartbeat", new { serverId = 1, players = 12, tickMs = 18.3 });
 StructuredLog.Event("error", new { code = 3000, msg = "no server available" });
 ```
 
-**Endpoint chỉ số** — thêm một TCP port riêng trả JSON (không dùng HTTP/ASP.NET, giữ nguyên tắc
-TCP thuần):
+**A metrics endpoint** — a separate TCP port returning JSON (no HTTP/ASP.NET, keeping to the raw-TCP
+principle):
 
 ```
 $ nc localhost 27001
@@ -166,106 +170,109 @@ $ nc localhost 27001
 }
 ```
 
-**Cảnh báo tự động** — script chạy mỗi phút, gửi tin nhắn nhóm nếu:
-- Không có game server nào healthy
+**Automated alerts** — a script running every minute that messages the group chat if:
+- No game server is healthy
 - `errorsPerMin` > 10
-- `workingSetMB` tăng > 50% so với 1 giờ trước (dấu hiệu rò rỉ)
-- Master server không phản hồi
+- `workingSetMB` has grown > 50% versus an hour ago (a leak signal)
+- The master server isn't responding
 
-Đơn giản là đủ: một script bash + webhook Discord/Telegram.
+Simple is enough: a bash script + a Discord/Telegram webhook.
 
-### Task 4 — Load test 16 client thật (2 ngày)
+### Task 4 — A real 16-client load test (2 days)
 
-Chạy `Ironfront.Tools.LoadTest` từ **máy khác VPS** (để đo cả đường truyền thật).
+Run `Ironfront.Tools.LoadTest` from **a machine other than the VPS** (so you measure the real network
+path too).
 
-| Kịch bản | Thời lượng | Kiểm tra |
+| Scenario | Duration | Check |
 |---|---|---|
-| 16 client `random-walk` | 30 phút | Băng thông, RTT, không rớt |
-| 16 client `spin` (xấu nhất cho delta) | 15 phút | Băng thông đỉnh |
-| 16 client `join-leave` liên tục | 15 phút | Rò rỉ session, rò rỉ room |
-| 16 client `disconnect-abrupt` | 10 phút | Dọn dẹp server |
-| 32 client (vượt thiết kế) | 10 phút | Xác định ngưỡng gãy |
-| 100 kết nối TCP đồng thời tới master | 5 phút | Master chịu được |
+| 16 `random-walk` clients | 30 minutes | Bandwidth, RTT, no drops |
+| 16 `spin` clients (worst case for deltas) | 15 minutes | Peak bandwidth |
+| 16 clients on continuous `join-leave` | 15 minutes | Session leaks, room leaks |
+| 16 `disconnect-abrupt` clients | 10 minutes | Server-side cleanup |
+| 32 clients (beyond the design point) | 10 minutes | Identify the breaking point |
+| 100 simultaneous TCP connections to the master | 5 minutes | The master holds up |
 
-**Số liệu cần thu, so LAN với Internet:**
+**Data to collect, comparing LAN against the Internet:**
 
-| Chỉ số | LAN | VPS |
+| Metric | LAN | VPS |
 |---|---|---|
-| Độ trễ login (p50 / p99) | | |
-| Độ trễ room list | | |
-| RTT UDP (p50 / p99) | | |
-| Jitter UDP | | |
-| Packet loss thực | | |
-| Băng thông xuống/client | | |
-| RAM master (16 client) | | |
-| CPU master (16 client) | | |
-| RAM game server | | |
-| CPU game server | | |
+| Login latency (p50 / p99) | | |
+| Room list latency | | |
+| UDP RTT (p50 / p99) | | |
+| UDP jitter | | |
+| Real packet loss | | |
+| Downstream bandwidth per client | | |
+| Master RAM (16 clients) | | |
+| Master CPU (16 clients) | | |
+| Game server RAM | | |
+| Game server CPU | | |
 
-### Task 5 — Độ bền (1 ngày)
+### Task 5 — Durability (1 day)
 
-**Chạy liên tục từ tuần 12 tới hết dự án.** Không tắt. Ghi chỉ số mỗi phút vào CSV.
+**Run continuously from week 12 to the end of the project.** Never shut it down. Log metrics to CSV
+every minute.
 
-Cuối kỳ vẽ biểu đồ: RAM, số kết nối, số lỗi theo thời gian. **Đường RAM tăng đơn điệu = rò rỉ.**
+At the end of the semester, chart it: RAM, connection count and error count over time. **A
+monotonically rising RAM line is a leak.**
 
-Đây là bằng chứng thuyết phục nhất về chất lượng hệ thống, và là thứ phân biệt "chạy được lúc
-demo" với "chạy được".
+This is the most convincing evidence of system quality, and it's what separates "worked during the
+demo" from "works".
 
-### Task 6 — Sao lưu và khôi phục (nửa ngày)
+### Task 6 — Backup and restore (half a day)
 
 ```bash
-# tools/backup.sh — cron mỗi 6 giờ
+# tools/backup.sh — cron every 6 hours
 sqlite3 /opt/ironfront/ironfront.db ".backup /opt/ironfront/backups/db-$(date +%F-%H).db"
 find /opt/ironfront/backups -name "db-*.db" -mtime +7 -delete
 ```
 
-Dùng `.backup` chứ không phải `cp` — `cp` trên SQLite đang ghi sẽ cho file hỏng.
+Use `.backup`, not `cp` — copying a SQLite file mid-write produces a corrupt file.
 
-Test khôi phục một lần: dừng server, thay DB bằng bản backup, khởi động, kiểm tra đăng nhập được.
-Backup chưa test khôi phục thì không phải backup.
+Test the restore once: stop the server, swap the DB for a backup, start it, and check that login
+works. A backup you haven't tested restoring isn't a backup.
 
 ---
 
-## 3. Tiêu chí nghiệm thu (M3)
+## 3. Acceptance criteria (M3)
 
-| # | Tiêu chí | Cách kiểm chứng |
+| # | Criterion | How to verify |
 |---|---|---|
-| 1 | Master + 2 game server chạy trên VPS | `systemctl status` |
-| 2 | TLS hoạt động, client kết nối được | Wireshark: không thấy plaintext |
-| 3 | `MspFraming` vẫn đúng qua `SslStream` | Test tích hợp |
-| 4 | Client build phát hành **không** bỏ qua validation cert | Code review |
-| 5 | 16 client thật chơi 30 phút không rớt | Load test + log |
-| 6 | Ngưỡng gãy đã xác định (32 client) | Load test |
-| 7 | Endpoint chỉ số trả JSON đúng | `nc localhost 27001` |
-| 8 | Cảnh báo tự động hoạt động | Test: tắt game server, chờ tin nhắn |
-| 9 | Chạy liên tục 72 giờ, RAM không tăng đơn điệu | Biểu đồ CSV |
-| 10 | Backup chạy tự động, đã test khôi phục | Log cron + test thủ công |
-| 11 | Không có secret trong log | `grep -i secret /var/log/ironfront/*` |
-| 12 | Bảng so sánh LAN vs VPS đã điền | `reports/` |
+| 1 | The master + 2 game servers run on the VPS | `systemctl status` |
+| 2 | TLS works and clients can connect | Wireshark: no plaintext visible |
+| 3 | `MspFraming` still works correctly over `SslStream` | Integration test |
+| 4 | The release client build does **not** skip certificate validation | Code review |
+| 5 | 16 real clients play for 30 minutes without dropping | Load test + logs |
+| 6 | The breaking point is identified (32 clients) | Load test |
+| 7 | The metrics endpoint returns correct JSON | `nc localhost 27001` |
+| 8 | Automated alerts work | Test: kill a game server and wait for the message |
+| 9 | 72 hours of continuous operation with no monotonic RAM growth | The CSV chart |
+| 10 | Backups run automatically and the restore has been tested | Cron logs + a manual test |
+| 11 | No secrets in the logs | `grep -i secret /var/log/ironfront/*` |
+| 12 | The LAN vs VPS comparison table is filled in | `reports/` |
 
 ---
 
-## 4. Rủi ro
+## 4. Risks
 
-| Rủi ro | Dấu hiệu | Xử lý |
+| Risk | Sign | Handling |
 |---|---|---|
-| VPS không đủ RAM cho game server Unity | OOM kill | Đo RAM game server trên máy dev trước khi thuê. Unity headless thường 500 MB – 1.5 GB |
-| TLS handshake thất bại trên một số máy | Client không login được | Log chi tiết `AuthenticationException`. Thường là do cert self-signed hoặc protocol version |
-| Lệch đồng hồ làm ticket hỏng | Vào trận thất bại ngẫu nhiên | `timedatectl`, bật NTP cả hai máy |
-| Rò rỉ chỉ lộ sau nhiều ngày | RAM tăng chậm | Soak test từ tuần 12, không để tới tuần 14 |
-| Chi phí VPS | | VPS 4GB khoảng 5–10 USD/tháng. Chia 4 người, 1 tháng. Hoặc dùng gói miễn phí của sinh viên (GitHub Student Pack, Azure/AWS free tier) |
-| Trễ tuần 13 | | Contingency: bỏ TLS (demo LAN), bỏ monitoring nâng cao (chỉ log file) |
+| The VPS has too little RAM for the Unity game server | OOM kills | Measure the game server's RAM on a dev machine before renting. Unity headless is typically 500 MB – 1.5 GB |
+| TLS handshakes failing on some machines | Clients can't log in | Log the `AuthenticationException` in detail. It's usually the self-signed cert or the protocol version |
+| Clock skew corrupting tickets | Random join failures | `timedatectl`, enable NTP on both machines |
+| Leaks that only surface after days | RAM creeps up | Soak test from week 12, not week 14 |
+| VPS cost | | A 4 GB VPS is roughly 5–10 USD/month. Split 4 ways for one month. Or use a student free tier (GitHub Student Pack, Azure/AWS free tier) |
+| Week 13 arrives unfinished | | Contingency: drop TLS (demo on LAN), drop advanced monitoring (log files only) |
 
 ---
 
-## 5. Danh sách kiểm tra trước khi mời người ngoài vào test
+## 5. Checklist before inviting outsiders to test
 
-- [ ] TLS bật
-- [ ] `IRONFRONT_SHARED_SECRET` là giá trị thật, không phải mặc định
-- [ ] Log level = Info, không phải Debug (tránh đầy đĩa)
-- [ ] Backup DB đã chạy ít nhất 1 lần
-- [ ] Firewall chỉ mở đúng cổng cần
-- [ ] Tài khoản test đã tạo sẵn, có hướng dẫn
-- [ ] Cảnh báo tự động đã bật
-- [ ] Có người trực trong lúc test
-- [ ] Đã test luồng đầy đủ 10 lần từ máy ngoài mạng
+- [ ] TLS enabled
+- [ ] `IRONFRONT_SHARED_SECRET` is a real value, not the default
+- [ ] Log level = Info, not Debug (avoid filling the disk)
+- [ ] The DB backup has run at least once
+- [ ] The firewall opens only the ports that are needed
+- [ ] Test accounts created in advance, with instructions
+- [ ] Automated alerts enabled
+- [ ] Someone on hand during the test
+- [ ] The full flow tested 10 times from an off-network machine

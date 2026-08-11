@@ -1,35 +1,37 @@
-# Dev A — Phase 01: Kết nối và remote player
+# Dev A — Phase 01: Connection and remote players
 
-**Tuần 3–6** · Mốc **M1 (mốc sinh tử)** · Ước lượng **3.0 người-tuần**
+**Weeks 3–6** · Milestone **M1 (the make-or-break milestone)** · Estimate **3.0 person-weeks**
 
-> Mục tiêu một câu: **hai client thấy nhau di chuyển mượt qua UDP tự viết**, ở 100ms RTT và
-> 5% packet loss.
+> Goal in one sentence: **two clients see each other moving smoothly over our own UDP stack**, at
+> 100 ms RTT and 5% packet loss.
 
-Đây là mốc quan trọng nhất của cả dự án. Nếu hết tuần 6 chưa đạt, kích hoạt contingency ở
-[`feasibility-study.md § 6`](../../00-shared/feasibility-study.md#6-phương-án-dự-phòng-contingency).
+This is the most important milestone in the project. If it isn't met by the end of week 6, trigger
+the contingency in
+[`feasibility-study.md § 6`](../../00-shared/feasibility-study.md#6-contingency-plan).
 
 ---
 
-## 1. Mục tiêu
+## 1. Objectives
 
-| # | Mục tiêu |
+| # | Objective |
 |---|---|
-| 1 | `NetworkActorController` — lớp con thứ ba của `ActorController` |
-| 2 | Entity interpolation — remote actor chuyển động mượt dù snapshot chỉ 20Hz |
-| 3 | Client bootstrap: kết nối, nhận snapshot, spawn/despawn actor |
-| 4 | Gửi `C_INPUT` lên server ở 30Hz với redundancy 3 |
-| 5 | Thay stub bằng transport + replication thật của B và C |
+| 1 | `NetworkActorController` — the third subclass of `ActorController` |
+| 2 | Entity interpolation — remote actors move smoothly even though snapshots arrive at 20 Hz |
+| 3 | Client bootstrap: connect, receive snapshots, spawn/despawn actors |
+| 4 | Send `C_INPUT` to the server at 30 Hz with a redundancy of 3 |
+| 5 | Replace the stubs with B's and C's real transport and replication |
 
-**Chưa làm ở phase này:** prediction, reconciliation, bắn nhau, chết. Chỉ di chuyển và nhìn thấy
-nhau. Đừng ôm thêm.
+**Not in this phase:** prediction, reconciliation, shooting, dying. Just moving and seeing each
+other. Don't take on more.
 
 ---
 
-## 2. Task chi tiết
+## 2. Detailed tasks
 
-### Task 1 — `NetworkActorController` (3 ngày)
+### Task 1 — `NetworkActorController` (3 days)
 
-Lớp con thứ ba. Nó **không tự nghĩ**, chỉ đọc lại thứ interpolator đưa cho.
+The third subclass. It **makes no decisions of its own**; it just reads back what the interpolator
+gives it.
 
 ```csharp
 // Assets/Scripts/Net/Client/NetworkActorController.cs
@@ -46,17 +48,17 @@ public sealed class NetworkActorController : ActorController
         ActorId = actorId; IsLocal = isLocal; _interp = interp;
     }
 
-    /// <summary>Gọi mỗi frame TRƯỚC Actor.Update(). Script Execution Order = -100.</summary>
+    /// <summary>Called every frame BEFORE Actor.Update(). Script Execution Order = -100.</summary>
     public void PullFromNetwork()
     {
-        var s = _interp.Sample(Time.time);       // trạng thái đã nội suy
+        var s = _interp.Sample(Time.time);       // the interpolated state
         _input.SetFrame(new NetInputFrame {
             Yaw = s.Yaw, Pitch = s.Pitch,
             MoveX = s.Velocity.x, MoveZ = s.Velocity.z,
             Buttons = s.Buttons
         });
 
-        // Remote actor: đặt thẳng transform, KHÔNG để physics tự chạy
+        // Remote actor: set the transform directly, do NOT let physics drive it
         transform.position = s.Position;
         actor.SetFacing(s.Yaw, s.Pitch);
     }
@@ -72,12 +74,12 @@ public sealed class NetworkActorController : ActorController
     public override float   Lean()       => _input.Lean;
     public override bool    OnGround()   => (_interp.StateFlags & StateFlag.OnGround) != 0;
 
-    // Remote actor KHÔNG BAO GIỜ chạy ragdoll — quyết định AD-4
-    public override void StartRagdoll() { /* cố ý bỏ trống */ }
+    // Remote actors NEVER run ragdolls — decision AD-4
+    public override void StartRagdoll() { /* deliberately empty */ }
     public override void GettingUp()    { }
     public override void EndRagdoll()   { }
 
-    // Vô hiệu hóa mọi thứ chỉ có nghĩa với local player
+    // Disable everything that only makes sense for the local player
     public override SpawnPoint SelectedSpawnPoint() => null;
     public override Transform  WeaponParent()       => actor.defaultWeaponParent;
     public override void       DisableInput()       { }
@@ -87,48 +89,50 @@ public sealed class NetworkActorController : ActorController
 }
 ```
 
-**Cạm bẫy 1 — thứ tự thực thi.** `NetworkActorController.PullFromNetwork()` phải chạy **trước**
-`Actor.Update()`. Đặt Script Execution Order = `-100` cho `NetworkActorController`.
-Nếu ngược thứ tự, actor sẽ dùng dữ liệu của frame trước, gây trễ 1 frame khó nhìn ra.
+**Trap 1 — execution order.** `NetworkActorController.PullFromNetwork()` must run **before**
+`Actor.Update()`. Set Script Execution Order to `-100` for `NetworkActorController`. In the wrong
+order, the actor uses the previous frame's data, adding a hard-to-spot 1-frame delay.
 
-**Cạm bẫy 2 — physics tranh chấp transform.** `Actor` có `hipRigidbody`. Nếu bạn set
-`transform.position` mà Rigidbody vẫn `isKinematic = false`, PhysX sẽ ghi đè ở `FixedUpdate`
-tiếp theo → nhân vật giật liên tục. Bắt buộc:
+**Trap 2 — physics fighting over the transform.** `Actor` has a `hipRigidbody`. If you set
+`transform.position` while the Rigidbody still has `isKinematic = false`, PhysX overwrites it on the
+next `FixedUpdate` → the character jitters constantly. Mandatory:
 
 ```csharp
-// Khi khởi tạo remote actor
+// When initializing a remote actor
 foreach (var rb in actor.GetComponentsInChildren<Rigidbody>())
 {
     rb.isKinematic       = true;
-    rb.detectCollisions  = false;   // remote actor không cần va chạm, server đã lo
+    rb.detectCollisions  = false;   // remote actors need no collisions, the server handles that
 }
 actor.ragdoll.enabled = false;
 actor.animator.enabled = true;      // animation-driven
 ```
 
-### Task 2 — `EntityInterpolator` (4 ngày)
+### Task 2 — `EntityInterpolator` (4 days)
 
-Trái tim của việc "trông mượt". Snapshot về 20Hz (50ms/gói) nhưng render 60–144 fps.
+The heart of "looking smooth". Snapshots arrive at 20 Hz (one every 50 ms) but rendering runs at
+60–144 fps.
 
-**Nguyên lý:** render remote actor ở thời điểm `now - INTERP_BUFFER_MS` (100ms trước), nội suy
-giữa hai snapshot đã nhận được. Đổi 100ms độ trễ hiển thị lấy chuyển động liên tục.
+**The principle:** render remote actors at `now - INTERP_BUFFER_MS` (100 ms in the past),
+interpolating between the two snapshots already received. Trade 100 ms of display latency for
+continuous motion.
 
 ```mermaid
 gantt
     dateFormat X
     axisFormat %L
-    title Trục thời gian interpolation (buffer 100ms)
-    section Snapshot đã nhận
+    title Interpolation timeline (100ms buffer)
+    section Snapshots received
     S1 (t=0)      :milestone, 0, 0
     S2 (t=50)     :milestone, 50, 0
     S3 (t=100)    :milestone, 100, 0
     S4 (t=150)    :milestone, 150, 0
     section Render
-    Đang render ở t=50  :active, 50, 1
+    Rendering at t=50  :active, 50, 1
 ```
 
-Ở thời điểm thực `t=150ms`, ta đã nhận S1..S4, nhưng render ở `150 - 100 = 50ms` tức đúng S2.
-Nếu render ở `t=170`, ta nội suy giữa S2 (50ms) và S3 (100ms) với hệ số `(70-50)/(100-50) = 0.4`.
+At real time `t=150ms` we've received S1..S4, but render at `150 - 100 = 50ms`, i.e. exactly S2. At
+`t=170` we interpolate between S2 (50 ms) and S3 (100 ms) with a factor of `(70-50)/(100-50) = 0.4`.
 
 ```csharp
 // Assets/Scripts/Net/Client/EntityInterpolator.cs
@@ -136,7 +140,7 @@ public sealed class EntityInterpolator
 {
     private struct Sample
     {
-        public float    RecvTime;      // Time.time lúc nhận
+        public float    RecvTime;      // Time.time on arrival
         public uint     ServerTick;
         public Vector3  Position;
         public float    Yaw, Pitch;
@@ -145,7 +149,7 @@ public sealed class EntityInterpolator
         public ushort   Buttons;
     }
 
-    // Ring buffer 16 sample = 800ms lịch sử ở 20Hz, thừa cho buffer 100ms
+    // A 16-sample ring buffer = 800ms of history at 20Hz, plenty for a 100ms buffer
     private readonly Sample[] _buf = new Sample[16];
     private int _count, _head;
 
@@ -167,31 +171,31 @@ public sealed class EntityInterpolator
     {
         float renderTime = now - ProtocolConstants.INTERP_BUFFER_MS / 1000f;
 
-        // Tìm cặp sample bao quanh renderTime
+        // Find the pair of samples bracketing renderTime
         if (!TryFindBracket(renderTime, out var older, out var newer))
-            return Extrapolate(renderTime);          // thiếu dữ liệu → ngoại suy
+            return Extrapolate(renderTime);          // not enough data → extrapolate
 
         float span = newer.RecvTime - older.RecvTime;
         float t    = span > 0.0001f ? (renderTime - older.RecvTime) / span : 0f;
         t = Mathf.Clamp01(t);
 
         CurrentVelocity = Vector3.Lerp(older.Velocity, newer.Velocity, t);
-        StateFlags      = newer.StateFlags;          // flags KHÔNG nội suy, lấy mới nhất
+        StateFlags      = newer.StateFlags;          // flags are NOT interpolated, take the newest
 
         return new InterpolatedState {
             Position = Vector3.Lerp(older.Position, newer.Position, t),
-            Yaw      = Mathf.LerpAngle(older.Yaw,  newer.Yaw,  t),   // LerpAngle, không Lerp!
+            Yaw      = Mathf.LerpAngle(older.Yaw,  newer.Yaw,  t),   // LerpAngle, not Lerp!
             Pitch    = Mathf.Lerp(older.Pitch, newer.Pitch, t),
             Velocity = CurrentVelocity,
             StateFlags = StateFlags
         };
     }
 
-    /// <summary>Khi mất gói và không có sample nào sau renderTime.</summary>
+    /// <summary>When packets are lost and no sample exists after renderTime.</summary>
     private InterpolatedState Extrapolate(float renderTime)
     {
         ref var last = ref _buf[_head];
-        float dt = Mathf.Min(renderTime - last.RecvTime, 0.25f);  // ngoại suy tối đa 250ms
+        float dt = Mathf.Min(renderTime - last.RecvTime, 0.25f);  // extrapolate at most 250ms
         return new InterpolatedState {
             Position = last.Position + last.Velocity * dt,
             Yaw = last.Yaw, Pitch = last.Pitch,
@@ -201,19 +205,19 @@ public sealed class EntityInterpolator
 }
 ```
 
-**Cạm bẫy 3 — `Mathf.Lerp` cho góc.** Nội suy yaw từ 359° sang 1° bằng `Lerp` sẽ quay ngược
-358° qua đường dài. Bắt buộc dùng `Mathf.LerpAngle`. Đây là bug kinh điển, biểu hiện là nhân vật
-thỉnh thoảng xoay tít một vòng.
+**Trap 3 — `Mathf.Lerp` on angles.** Interpolating yaw from 359° to 1° with `Lerp` spins 358° the
+long way round. `Mathf.LerpAngle` is mandatory. This is a classic bug, and it presents as characters
+occasionally whipping through a full rotation.
 
-**Cạm bẫy 4 — nội suy `StateFlags`.** Không bao giờ nội suy giá trị rời rạc (đang ngồi/đứng,
-sống/chết). Lấy giá trị của sample mới hơn.
+**Trap 4 — interpolating `StateFlags`.** Never interpolate discrete values (crouching/standing,
+alive/dead). Take the value from the newer sample.
 
-**Cạm bẫy 5 — ngoại suy quá xa.** Nếu mất kết nối 5 giây, ngoại suy sẽ đẩy nhân vật bay đi
-xa vô tận. Kẹp ở 250ms.
+**Trap 5 — extrapolating too far.** If the connection drops for 5 seconds, extrapolation launches
+the character off into infinity. Clamp it at 250 ms.
 
-### Task 3 — `NetClientBootstrap` (3 ngày)
+### Task 3 — `NetClientBootstrap` (3 days)
 
-Điểm vào phía client, nối mọi thứ lại.
+The client-side entry point that wires everything together.
 
 ```csharp
 // Assets/Scripts/Net/Client/NetClientBootstrap.cs
@@ -234,9 +238,9 @@ public sealed class NetClientBootstrap : MonoBehaviour
 #if IRONFRONT_STUB
         _transport = new FakeTransportClient();
 #else
-        _transport = new UdpTransportClient();        // của B
+        _transport = new UdpTransportClient();        // from B
 #endif
-        _reader = new SnapshotReader();               // của C
+        _reader = new SnapshotReader();               // from C
         _transport.OnMessage    += HandleMessage;
         _transport.OnConnected  += HandleConnected;
         _transport.OnDisconnected += HandleDisconnected;
@@ -244,11 +248,11 @@ public sealed class NetClientBootstrap : MonoBehaviour
 
     private void Update()
     {
-        _transport.Poll();                            // xử lý socket, phát event
+        _transport.Poll();                            // service the socket, raise events
         foreach (var a in _actors.Values) a.PullFromNetwork();
     }
 
-    private void FixedUpdate() => SendInput();        // 30Hz nếu fixedDeltaTime = 1/30
+    private void FixedUpdate() => SendInput();        // 30Hz when fixedDeltaTime = 1/30
 
     private void HandleMessage(ReadOnlyMemory<byte> data)
     {
@@ -259,28 +263,28 @@ public sealed class NetClientBootstrap : MonoBehaviour
             case MsgType.S_SNAPSHOT:     HandleSnapshot(span);   break;
             case MsgType.S_SPAWN_ACTOR:  HandleSpawn(span);      break;
             case MsgType.S_DESPAWN_ACTOR:HandleDespawn(span);    break;
-            // các loại khác ở phase sau
+            // other types in later phases
         }
     }
 
     private void HandleSnapshot(ReadOnlySpan<byte> span)
     {
-        if (!_reader.TryReadSnapshot(span, out var snap)) { NetLog.Warn("snapshot hỏng"); return; }
+        if (!_reader.TryReadSnapshot(span, out var snap)) { NetLog.Warn("corrupt snapshot"); return; }
         foreach (ref readonly var st in snap.Actors.AsSpan())
         {
             if (_interps.TryGetValue(st.ActorId, out var interp))
                 interp.Push(in st, snap.ServerTick);
-            // actor chưa biết → chờ S_SPAWN_ACTOR, không tự tạo
+            // unknown actor → wait for S_SPAWN_ACTOR, don't create it here
         }
     }
 }
 ```
 
-**Cạm bẫy 6 — snapshot đến trước spawn.** Do snapshot đi channel unreliable còn spawn đi
-channel reliable-ordered, snapshot có thể tới trước. Đừng tự tạo actor từ snapshot — bỏ qua
-actor chưa biết, chờ `S_SPAWN_ACTOR`.
+**Trap 6 — snapshots arriving before spawns.** Snapshots travel on an unreliable channel while
+spawns travel on a reliable-ordered one, so a snapshot can arrive first. Don't create actors from
+snapshots — skip unknown actors and wait for `S_SPAWN_ACTOR`.
 
-### Task 4 — Gửi input 30Hz với redundancy (2 ngày)
+### Task 4 — Send input at 30 Hz with redundancy (2 days)
 
 ```csharp
 private readonly NetInputFrame[] _inputHistory = new NetInputFrame[64];  // ring buffer
@@ -296,9 +300,9 @@ private void SendInput()
         Yaw = _localInput.Yaw, Pitch = _localInput.Pitch,
         Lean = _localInput.Lean, Buttons = _localInput.Buttons
     };
-    _inputHistory[_clientTick % 64] = frame;      // giữ lại cho reconciliation ở phase 02
+    _inputHistory[_clientTick % 64] = frame;      // kept for reconciliation in phase 02
 
-    // Gửi 3 frame gần nhất (INPUT_REDUNDANCY)
+    // Send the 3 most recent frames (INPUT_REDUNDANCY)
     Span<byte> buf = stackalloc byte[64];
     int len = InputSerializer.Write(buf, _inputHistory, _clientTick,
                                     ProtocolConstants.INPUT_REDUNDANCY);
@@ -308,68 +312,69 @@ private void SendInput()
 }
 ```
 
-`stackalloc` tránh cấp phát heap mỗi tick (quy ước ở [`conventions.md § 3.2`](../../00-shared/conventions.md)).
+`stackalloc` avoids a heap allocation every tick (per the convention in
+[`conventions.md § 3.2`](../../00-shared/conventions.md)).
 
-### Task 5 — Tích hợp thật với B và C (3 ngày)
+### Task 5 — Real integration with B and C (3 days)
 
-Đổi `FakeTransportClient` → `UdpTransportClient`, `FakeSnapshotReader` → `SnapshotReader`.
+Swap `FakeTransportClient` → `UdpTransportClient` and `FakeSnapshotReader` → `SnapshotReader`.
 
-**Kế hoạch tích hợp theo bước, đừng đổi hết một lần:**
-1. Đổi transport thật, giữ snapshot giả → xác nhận kết nối UDP chạy
-2. Đổi snapshot thật, chạy 1 client 1 server → xác nhận parse đúng
-3. Chạy 2 client → mốc M1
+**Integrate in steps; don't swap everything at once:**
+1. Switch to the real transport, keep fake snapshots → confirm the UDP connection works
+2. Switch to real snapshots, run 1 client + 1 server → confirm parsing is correct
+3. Run 2 clients → milestone M1
 
-Mỗi bước xong thì commit riêng. Nếu bước 3 vỡ, bạn biết chắc lỗi không nằm ở bước 1, 2.
+Commit each step separately. If step 3 breaks, you know for certain the fault isn't in steps 1 or 2.
 
 ---
 
-## 3. Tiêu chí nghiệm thu (M1)
+## 3. Acceptance criteria (M1)
 
-| # | Tiêu chí | Cách kiểm chứng |
+| # | Criterion | How to verify |
 |---|---|---|
-| 1 | 2 client kết nối 1 server, thấy nhau | Video 30 giây, 2 cửa sổ game cạnh nhau |
-| 2 | Chuyển động mượt ở LAN (0ms, 0% loss) | Nhìn bằng mắt, không giật |
-| 3 | **Chuyển động vẫn mượt ở 100ms RTT + 5% loss** | Bật `NetworkSimulator` của B. Video 30 giây |
-| 4 | Chịu được 30% packet loss (xấu nhưng không vỡ) | Nhân vật có thể hơi giật, nhưng không teleport, không biến mất |
-| 5 | Yaw nội suy đúng khi vượt biên 0°/360° | Test: xoay tròn tại chỗ 10 vòng, không thấy giật ngược |
-| 6 | Client ngắt kết nối thì actor bị despawn sạch | Tắt 1 client, client kia thấy actor biến mất trong 10s |
-| 7 | Không cấp phát heap trong `Update()` | Unity Profiler, cột `GC Alloc` của `NetClientBootstrap.Update` = 0 B |
-| 8 | 48 actor giả cùng lúc vẫn ≥ 60 FPS | Spawn 48 bot trên server, đo FPS client |
-| 9 | Single-player vẫn chạy | Chơi thử 5 phút |
+| 1 | 2 clients connect to 1 server and see each other | A 30-second video with the 2 game windows side by side |
+| 2 | Motion is smooth on LAN (0 ms, 0% loss) | Eyeball it — no stutter |
+| 3 | **Motion is still smooth at 100 ms RTT + 5% loss** | Enable B's `NetworkSimulator`. 30-second video |
+| 4 | Survives 30% packet loss (ugly, but not broken) | Characters may stutter, but must not teleport or vanish |
+| 5 | Yaw interpolates correctly across the 0°/360° boundary | Test: spin in place 10 times, no reverse whipping |
+| 6 | When a client disconnects, its actor is cleanly despawned | Kill 1 client; the other sees the actor disappear within 10 s |
+| 7 | No heap allocation inside `Update()` | Unity Profiler, `GC Alloc` column for `NetClientBootstrap.Update` = 0 B |
+| 8 | 48 fake actors at once still holds ≥ 60 FPS | Spawn 48 bots on the server, measure client FPS |
+| 9 | Single-player still runs | Play for 5 minutes |
 
 ---
 
-## 4. Rủi ro của phase này
+## 4. Risks in this phase
 
-| Rủi ro | Dấu hiệu | Xử lý |
+| Risk | Sign | Handling |
 |---|---|---|
-| Remote actor giật do Rigidbody tranh transform | Nhân vật rung liên tục, hoặc chìm xuống đất | `isKinematic = true` cho mọi rigidbody con. Xem cạm bẫy 2 |
-| Yaw quay ngược một vòng | Thỉnh thoảng nhân vật xoay tít | Dùng `Mathf.LerpAngle`, không `Mathf.Lerp` |
-| Actor "trượt băng" (sliding) | Chân không khớp chuyển động | Animator cần `Velocity()` đúng. Kiểm tra `CurrentVelocity` được cập nhật |
-| B chậm tiến độ, chưa có transport | Hết tuần 4 chưa có `ITransportClient` chạy được | Bạn tiếp tục với stub, không chờ. Báo nhóm ở weekly sync |
-| C chậm tiến độ, chưa có snapshot reader | Tương tự | Dùng `FakeSnapshotReader` với format tự parse theo protocol-spec |
-| Tích hợp vỡ vào tuần 6, không kịp M1 | | Kích hoạt contingency: bỏ interpolation, render thẳng snapshot mới nhất (giật nhưng chạy) |
+| Remote actors jitter from Rigidbody/transform contention | The character vibrates constantly, or sinks into the ground | `isKinematic = true` on every child rigidbody. See trap 2 |
+| Yaw spins the long way round | The character occasionally whips around | Use `Mathf.LerpAngle`, not `Mathf.Lerp` |
+| Actors "ice-skate" | Feet don't match the motion | The animator needs a correct `Velocity()`. Check that `CurrentVelocity` is being updated |
+| B falls behind and there's no transport | End of week 4 and `ITransportClient` still doesn't work | Continue on stubs, don't wait. Raise it at the weekly sync |
+| C falls behind and there's no snapshot reader | Same | Use `FakeSnapshotReader` with a format you parse yourself from protocol-spec |
+| Integration breaks in week 6 and M1 slips | | Trigger the contingency: drop interpolation and render the newest snapshot directly (stuttery but functional) |
 
 ---
 
-## 5. Bảng đo bắt buộc ghi vào report
+## 5. Measurements that must go into the report
 
-| Chỉ số | Điều kiện | Ghi giá trị |
+| Metric | Conditions | Value |
 |---|---|---|
-| FPS client | 2 actor, LAN | |
-| FPS client | 48 actor, LAN | |
-| GC alloc / frame | 48 actor | |
-| Thời gian `HandleSnapshot` | 48 actor | |
-| Độ trễ cảm nhận (nhấn W → thấy di chuyển) | RTT 100ms | |
+| Client FPS | 2 actors, LAN | |
+| Client FPS | 48 actors, LAN | |
+| GC alloc / frame | 48 actors | |
+| `HandleSnapshot` duration | 48 actors | |
+| Perceived latency (press W → see movement) | 100 ms RTT | |
 
-> Chỉ số cuối sẽ **xấu** ở phase này (bằng đúng RTT) vì chưa có prediction. Đó là bình thường,
-> ghi lại để so sánh sau phase 02.
+> That last metric will be **bad** in this phase (equal to the full RTT) because there's no
+> prediction yet. That's expected — record it so you can compare after phase 02.
 
 ---
 
-## 6. Bàn giao
+## 6. Handoff
 
-- Xác nhận với C: format `S_SNAPSHOT` parse đúng, có test conformance đi kèm
-- Xác nhận với B: transport chịu được 30% loss mà không rớt kết nối
-- Gửi C danh sách trường bạn thực sự dùng từ snapshot — nếu có trường không dùng, C bỏ đi để
-  tiết kiệm băng thông
+- Confirm with C: the `S_SNAPSHOT` format parses correctly and has conformance tests
+- Confirm with B: the transport survives 30% loss without dropping the connection
+- Send C the list of snapshot fields you actually use — if there are fields you don't use, C drops
+  them to save bandwidth

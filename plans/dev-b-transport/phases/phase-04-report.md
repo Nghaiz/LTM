@@ -1,223 +1,229 @@
-# Dev B — Phase 04: Báo cáo và bảo vệ
+# Dev B — Phase 04: Report and defense
 
-**Tuần 14** · Mốc **M4** · Ước lượng **1.0 người-tuần**
+**Week 14** · Milestone **M4** · Estimate **1.0 person-week**
 
-> Phần của bạn là **trọng tâm học thuật** của đồ án môn Lập trình mạng. Tuần này biến số liệu
-> đã thu thập thành lập luận.
+> Your part is the **academic centerpiece** of a Network Programming capstone. This week turns the
+> data you've collected into an argument.
 
 ---
 
-## 1. Task
+## 1. Tasks
 
-### Task 1 — Hoàn thiện bộ số liệu (2 ngày)
+### Task 1 — Complete the dataset (2 days)
 
-Rà lại `reports/measurements.csv`, bổ sung ô còn trống. Sáu thí nghiệm bắt buộc phải có đủ dữ
-liệu:
+Review `reports/measurements.csv` and fill in the empty cells. Six experiments must have complete
+data:
 
-#### Thí nghiệm 1 — UDP tự viết vs TCP khi mất gói
+#### Experiment 1 — Hand-written UDP vs TCP under packet loss
 
-Điều kiện giống hệt nhau (cùng simulator, cùng seed, cùng khối lượng dữ liệu).
+Identical conditions (same simulator, same seed, same data volume).
 
-| Loss | TCP: độ trễ giao p99 | UDP+reliability: p99 (ch2) | UDP unreliable: p99 (ch1) |
+| Loss | TCP: p99 delivery latency | UDP+reliability: p99 (ch2) | UDP unreliable: p99 (ch1) |
 |---|---|---|---|
 | 0% | | | |
 | 5% | | | |
 | 15% | | | |
 | 30% | | | |
 
-**Luận điểm cần chứng minh:** ở cùng mức mất gói, channel unreliable (snapshot) có độ trễ p99
-gần như không đổi, trong khi TCP tăng vọt. Đây là lý do game dùng UDP.
+**The claim to prove:** at the same loss rate, the unreliable channel (snapshots) has an essentially
+flat p99 latency, while TCP's spikes. That is why games use UDP.
 
-Nêu rõ điều ngược lại cũng đúng: channel reliable-ordered của ta có độ trễ **tương đương TCP** —
-vì nó giải cùng bài toán. Điểm mạnh không phải "UDP nhanh hơn TCP", mà là **ta chọn được loại
-đảm bảo cho từng loại dữ liệu**, còn TCP bắt mọi thứ chung một dòng.
+Say plainly that the converse is also true: our reliable-ordered channel has latency **comparable to
+TCP** — because it solves the same problem. The strength isn't "UDP is faster than TCP", it's that
+**we get to choose the guarantee per data type**, whereas TCP forces everything into one stream.
 
-> Đây là luận điểm sắc nhất trong báo cáo. Đừng nói "UDP nhanh hơn TCP" — đó là hiểu sai phổ
-> biến và người chấm sẽ hỏi vặn.
+> This is the sharpest argument in the report. Don't say "UDP is faster than TCP" — that's a common
+> misconception, and the marker will push back on it.
 
-#### Thí nghiệm 2 — Hiệu quả của ack bitfield
+#### Experiment 2 — The effectiveness of the ack bitfield
 
-| Cơ chế | Băng thông ack | Retransmit thừa | Độ trễ phát hiện mất gói |
+| Mechanism | Ack bandwidth | Redundant retransmits | Loss-detection latency |
 |---|---|---|---|
-| Ack đơn (chỉ ack gói cuối) | | | |
-| Ack + bitfield 32 bit | | | |
+| Single ack (only acking the last packet) | | | |
+| Ack + 32-bit bitfield | | | |
 
-Cài đặt: thêm cờ tắt bitfield trong config, chạy lại cùng kịch bản.
+Implementation: add a config flag to disable the bitfield and re-run the same scenario.
 
-**Luận điểm:** bitfield không tốn thêm gói nào (nằm sẵn trong header), nhưng loại bỏ gần hết
-retransmit thừa. Chi phí 4 byte/gói đổi lấy giảm đáng kể lưu lượng ở mạng có mất gói.
+**The claim:** the bitfield costs no extra packets (it's already in the header), yet eliminates
+almost all redundant retransmits. Four bytes per packet buys a substantial traffic reduction on a
+lossy network.
 
-#### Thí nghiệm 3 — Head-of-line blocking
+#### Experiment 3 — Head-of-line blocking
 
-| Cấu hình | Độ trễ giao snapshot p99 khi có 1 event bị mất |
+| Configuration | p99 snapshot delivery latency when 1 event is lost |
 |---|---|
-| Mọi thứ qua 1 channel reliable-ordered | |
-| Snapshot ch1 (unreliable-seq) + event ch2 (reliable-ord) | |
+| Everything over one reliable-ordered channel | |
+| Snapshots on ch1 (unreliable-seq) + events on ch2 (reliable-ord) | |
 
-**Luận điểm:** tách channel là lý do kiến trúc, không phải tối ưu vặt.
+**The claim:** separating channels is an architectural reason, not a micro-optimization.
 
-#### Thí nghiệm 4 — Congestion control
+#### Experiment 4 — Congestion control
 
-Biểu đồ RTT theo thời gian (60 giây), hai đường: bật và tắt congestion control, ở 20% loss.
+An RTT-over-time chart (60 seconds) with two series: congestion control on and off, at 20% loss.
 
-**Luận điểm:** khi tắt, RTT tăng dần do bufferbloat và bão retransmit. Khi bật, hệ thống tự
-xuống cấp có kiểm soát và RTT ổn định.
+**The claim:** with it off, RTT climbs steadily from bufferbloat and retransmit storms. With it on,
+the system degrades in a controlled way and RTT stays stable.
 
-#### Thí nghiệm 5 — `BufferPool` tự viết vs `ArrayPool<T>` của .NET
+#### Experiment 5 — Hand-written `BufferPool` vs .NET's `ArrayPool<T>`
 
-> Chính sách nhóm: **tự viết trước vì đó là bài học, rồi so sánh với thư viện chuẩn trong báo
-> cáo.** Xem [conventions.md § 3.4](../../00-shared/conventions.md).
+> Team policy: **write it yourself first because that's the lesson, then compare against the standard
+> library in the report.** See [conventions.md § 3.4](../../00-shared/conventions.md).
 
-Benchmark 1 triệu lần Rent/Return, cùng kích thước buffer 1200 byte:
+Benchmark 1 million Rent/Return operations at the same 1200-byte buffer size:
 
-| Cài đặt | ns/thao tác | Alloc | Gen0 GC | Dòng code |
+| Implementation | ns/op | Alloc | Gen0 GCs | Lines of code |
 |---|---|---|---|---|
-| `new byte[1200]` mỗi lần (baseline) | | | | 1 |
-| `BufferPool` tự viết | | | | ~40 |
+| `new byte[1200]` every time (baseline) | | | | 1 |
+| The hand-written `BufferPool` | | | | ~40 |
 | `ArrayPool<byte>.Shared` | | | | 1 |
 | `ArrayPool<byte>.Create(1200, 256)` | | | | 2 |
 
-**Luận điểm cần rút ra — trung thực cả hai chiều:**
+**The conclusion to draw — honest in both directions:**
 
-`ArrayPool<T>` gần như chắc chắn nhanh hơn hoặc ngang, và ít code hơn hẳn. Nhưng cài đặt tự viết
-cho hai thứ mà `ArrayPool` không có: (a) đếm `RentedCount` để phát hiện rò rỉ — thứ đã cứu bạn
-ở soak test phase-03, và (b) fill `0xDD` trong Debug build để bắt use-after-return.
+`ArrayPool<T>` is almost certainly faster or equal, with dramatically less code. But the hand-written
+implementation gives two things `ArrayPool` doesn't: (a) a `RentedCount` for leak detection — which
+already saved you in the phase-03 soak test, and (b) the `0xDD` fill in Debug builds that catches
+use-after-return.
 
-Nêu rõ: **production code nên dùng `ArrayPool`**; cài đặt tự viết tồn tại để hiểu vấn đề và để
-có công cụ chẩn đoán. Đây là câu trả lời cho phản biện *"sao không dùng thư viện có sẵn?"* —
-và nó mạnh hơn nhiều so với việc chỉ dùng thư viện rồi không nói gì.
+State it plainly: **production code should use `ArrayPool`**; the hand-written version exists to
+understand the problem and to provide diagnostics. That's the answer to the challenge *"why not just
+use the built-in library?"* — and it's far stronger than simply using the library and saying nothing.
 
-#### Thí nghiệm 6 — Khả năng mở rộng
+#### Experiment 6 — Scalability
 
-Biểu đồ: số kết nối (1 → 64) trên trục X, thời gian xử lý mỗi tick và CPU% trên trục Y.
+A chart with connection count (1 → 64) on the X axis, and per-tick processing time and CPU% on the Y
+axis.
 
-**Luận điểm:** kiến trúc một thread đủ cho quy mô mục tiêu, và biết ngưỡng gãy ở đâu.
+**The claim:** a single-threaded architecture is sufficient at the target scale, and we know where it
+breaks.
 
-### Task 2 — Viết chương báo cáo (2 ngày)
+### Task 2 — Write your report chapter (2 days)
 
-Đề cương chương của bạn (dự kiến 15–25 trang):
+The outline for your chapter (an expected 15–25 pages):
 
 ```
-Chương X: Thiết kế và cài đặt tầng vận chuyển tin cậy trên UDP
+Chapter X: Designing and implementing a reliable transport layer over UDP
 
-X.1  Đặt vấn đề
-     X.1.1  Yêu cầu của ứng dụng game thời gian thực
-     X.1.2  Vì sao TCP không phù hợp (kèm thí nghiệm 1)
-     X.1.3  Vì sao không dùng WebSocket
-     X.1.4  Vì sao không dùng thư viện có sẵn (mục tiêu học thuật)
+X.1  Problem statement
+     X.1.1  Requirements of a real-time game application
+     X.1.2  Why TCP doesn't fit (with experiment 1)
+     X.1.3  Why not WebSocket
+     X.1.4  Why not an off-the-shelf library (the academic goal)
 
-X.2  Thiết kế giao thức
-     X.2.1  Cấu trúc header 16 byte, lý giải từng trường
-     X.2.2  Sequence number và bài toán wrap-around
-     X.2.3  Cơ chế ack + bitfield (kèm thí nghiệm 2)
-     X.2.4  Mô hình channel và semantics (kèm thí nghiệm 3)
-     X.2.5  Handshake và chống IP spoofing
+X.2  Protocol design
+     X.2.1  The 16-byte header structure, field by field
+     X.2.2  Sequence numbers and the wrap-around problem
+     X.2.3  The ack + bitfield mechanism (with experiment 2)
+     X.2.4  The channel model and its semantics (with experiment 3)
+     X.2.5  The handshake and IP-spoofing defense
      X.2.6  Fragmentation
 
-X.3  Cài đặt
-     X.3.1  Kiến trúc một thread, socket non-blocking
-     X.3.2  Quản lý bộ nhớ không cấp phát (BufferPool)
-     X.3.3  Retransmit và RTO (Karn's algorithm)
-     X.3.4  Ước lượng RTT và jitter bằng EWMA
-     X.3.5  Congestion control hai chế độ (kèm thí nghiệm 4)
-     X.3.6  Flow control bằng sliding window
+X.3  Implementation
+     X.3.1  Single-threaded architecture, non-blocking sockets
+     X.3.2  Allocation-free memory management (BufferPool)
+     X.3.3  Retransmission and RTO (Karn's algorithm)
+     X.3.4  RTT and jitter estimation with EWMA
+     X.3.5  Two-mode congestion control (with experiment 4)
+     X.3.6  Sliding-window flow control
 
-X.4  Bảo mật
-     X.4.1  Chống amplification
+X.4  Security
+     X.4.1  Anti-amplification
      X.4.2  Rate limiting
-     X.4.3  Chống fragmentation bomb
-     X.4.4  Những gì chưa làm (mã hóa) và vì sao
+     X.4.3  Fragmentation-bomb defense
+     X.4.4  What was left out (encryption) and why
 
-X.5  Phương pháp kiểm thử
-     X.5.1  Network simulator có tái lập (random seed)
-     X.5.2  Bộ 60+ unit test
-     X.5.3  Packet logger và replay offline
-     X.5.4  Soak test
+X.5  Testing methodology
+     X.5.1  A reproducible network simulator (random seeds)
+     X.5.2  The 60+ unit test suite
+     X.5.3  The packet logger and offline replay
+     X.5.4  Soak testing
 
-X.6  Kết quả thực nghiệm
-     X.6.1  Môi trường đo (LAN, VPS)
-     X.6.2  Bốn thí nghiệm giao thức (bảng + biểu đồ)
-     X.6.3  So sánh với thư viện chuẩn: BufferPool vs ArrayPool (thí nghiệm 5)
-     X.6.4  Khả năng mở rộng (thí nghiệm 6)
+X.6  Experimental results
+     X.6.1  The measurement environments (LAN, VPS)
+     X.6.2  The four protocol experiments (tables + charts)
+     X.6.3  Comparison against the standard library: BufferPool vs ArrayPool (experiment 5)
+     X.6.4  Scalability (experiment 6)
 
-X.7  Đánh giá và hạn chế
-     X.7.1  Những gì đạt được
-     X.7.2  Hạn chế đã biết
-     X.7.3  Hướng phát triển
+X.7  Evaluation and limitations
+     X.7.1  What was achieved
+     X.7.2  Known limitations
+     X.7.3  Future work
 ```
 
-### Task 3 — Chuẩn bị bảo vệ (1 ngày)
+### Task 3 — Prepare for the defense (1 day)
 
-**Demo trực tiếp 3 phút** — thứ thuyết phục nhất:
-1. Chạy game bình thường, bật màn hình F3, chỉ vào RTT 2ms (LAN)
-2. Bật simulator `IRONFRONT_SIM=bad` **ngay khi đang chơi** — RTT nhảy lên 200ms, loss 15%
-3. Game vẫn chơi được, chỉ số trên F3 phản ánh đúng
-4. Mở file pcap của phiên vừa rồi, chạy `--analyze`, đọc kết quả
+**A 3-minute live demo** — the most convincing thing you can do:
+1. Run the game normally, enable the F3 overlay, point at the 2 ms RTT (LAN)
+2. Enable the simulator with `IRONFRONT_SIM=bad` **while still playing** — RTT jumps to 200 ms, loss
+   to 15%
+3. The game remains playable and the F3 metrics reflect it accurately
+4. Open that session's pcap, run `--analyze`, and read out the results
 
-**Câu hỏi phản biện có thể gặp — chuẩn bị trước:**
+**Likely challenge questions — prepare answers in advance:**
 
-| Câu hỏi | Trả lời ngắn |
+| Question | Short answer |
 |---|---|
-| "UDP nhanh hơn TCP đúng không?" | Không. Cùng độ tin cậy thì chi phí tương đương. Lợi thế là **chọn được** mức đảm bảo cho từng loại dữ liệu — thí nghiệm 3 chứng minh |
-| "Sao không dùng QUIC?" | QUIC giải đúng bài toán này và tốt hơn cài đặt của em. Nhưng mục tiêu đồ án là hiểu và tự cài đặt cơ chế. Ngoài ra QUIC bắt buộc TLS, thêm chi phí handshake không cần cho LAN |
-| "Cài đặt của em có công bằng với TCP flow khác không?" | Không hoàn toàn. Congestion control hai chế độ không phải AIMD, nên trong mạng chia sẻ nó sẽ chiếm phần hơn TCP. Đây là hạn chế đã biết, ghi ở X.7.2 |
-| "Vì sao chọn 1200 byte MTU?" | 1500 (Ethernet) − 20 (IP) − 8 (UDP) = 1472, nhưng PPPoE, VPN, tunnel làm giảm thêm. 1200 là mức mọi đường truyền thực tế đều qua được mà không IP-fragment. Có thí nghiệm Wireshark ở phase 00 |
-| "Bao nhiêu người chơi thì sập?" | Thí nghiệm 6: tick time vượt ngưỡng ở N kết nối. Nút thắt là <điền: CPU / băng thông> |
-| "Sequence 16 bit wrap sau bao lâu?" | 65536 / 30 gói/s ≈ 36 phút. Đã xử lý bằng `SequenceMath.IsNewer`, có unit test biên |
-| "Em chống cheat thế nào?" | Tầng transport chống DoS và giả mạo kết nối. Chống cheat gameplay là server-authoritative, thuộc phần của C |
+| "UDP is faster than TCP, right?" | No. At equal reliability the cost is comparable. The advantage is being able to **choose** the guarantee per data type — experiment 3 proves it |
+| "Why not use QUIC?" | QUIC solves exactly this problem and better than my implementation. But the point of the capstone is to understand and implement the mechanisms. QUIC also mandates TLS, adding handshake cost that a LAN doesn't need |
+| "Is your implementation fair to other TCP flows?" | Not entirely. Two-mode congestion control isn't AIMD, so on a shared network it takes more than its share from TCP. That's a known limitation, recorded in X.7.2 |
+| "Why a 1200-byte MTU?" | 1500 (Ethernet) − 20 (IP) − 8 (UDP) = 1472, but PPPoE, VPNs and tunnels reduce it further. 1200 passes through every real-world path without IP fragmentation. There's a Wireshark experiment from phase 00 |
+| "How many players before it falls over?" | Experiment 6: tick time crosses the threshold at N connections. The bottleneck is <fill in: CPU / bandwidth> |
+| "How long before a 16-bit sequence wraps?" | 65536 / 30 packets/s ≈ 36 minutes. Handled by `SequenceMath.IsNewer`, with boundary unit tests |
+| "How do you prevent cheating?" | The transport layer prevents DoS and connection spoofing. Gameplay anti-cheat is the server-authoritative design, which is C's part |
 
-### Task 4 — Tài liệu code (1 ngày)
+### Task 4 — Code documentation (1 day)
 
-- `Ironfront.Net.Transport/README.md` — cách dùng thư viện, ví dụ tối thiểu
-- XML doc đầy đủ cho mọi public API, **đặc biệt là ownership của buffer**
-- `docs/transport-troubleshooting.md` — triệu chứng → nguyên nhân → cách kiểm chứng
+- `Ironfront.Net.Transport/README.md` — how to use the library, with a minimal example
+- Complete XML docs for every public API, **especially buffer ownership**
+- `docs/transport-troubleshooting.md` — symptom → cause → how to verify
 
 ```markdown
-| Triệu chứng | Nguyên nhân thường gặp | Cách kiểm chứng |
+| Symptom | Common cause | How to verify |
 |---|---|---|
-| Server ngừng nhận gói sau vài phút (Windows) | SIO_UDP_CONNRESET chưa tắt | Bắt SocketException ConnectionReset trong log |
-| RTT đo được âm hoặc rất lớn | Không áp Karn's algorithm | Xem ResendCount của gói vừa ack |
-| Message có nội dung rác | Buffer đã trả về pool nhưng còn tham chiếu | Bật fill 0xDD trong Debug build |
-| Bandwidth tăng vọt, RTT tăng dần | Bão retransmit, RTO quá ngắn | Xem tỉ lệ PacketsResent / PacketsSent |
-| Client rớt sau vài phút chơi qua Internet | NAT rebinding | So sánh endpoint trong pcap trước/sau |
-| RentedCount tăng đều | Rò rỉ buffer | Tìm đường thoát nào quên Return() |
+| The server stops receiving packets after a few minutes (Windows) | SIO_UDP_CONNRESET not disabled | Catch SocketException ConnectionReset in the log |
+| Measured RTT is negative or enormous | Karn's algorithm not applied | Check the ResendCount of the just-acked packet |
+| Messages contain garbage | A buffer was returned to the pool but is still referenced | Enable the 0xDD fill in Debug builds |
+| Bandwidth spikes and RTT climbs steadily | Retransmit storm, RTO too short | Check the PacketsResent / PacketsSent ratio |
+| Clients drop after a few minutes over the Internet | NAT rebinding | Compare endpoints in the pcap before and after |
+| RentedCount climbs steadily | Buffer leak | Find the exit path that forgot to call Return() |
 ```
 
 ---
 
-## 2. Tiêu chí nghiệm thu (M4)
+## 2. Acceptance criteria (M4)
 
-| # | Tiêu chí |
+| # | Criterion |
 |---|---|
-| 1 | 6 thí nghiệm có đủ dữ liệu, có bảng và biểu đồ |
-| 2 | Chương báo cáo hoàn chỉnh theo đề cương |
-| 3 | Demo 3 phút đã tập, chạy được |
-| 4 | 7 câu hỏi phản biện đã chuẩn bị câu trả lời |
-| 5 | README + XML doc + troubleshooting đã viết |
-| 6 | Tổng test ≥ 60 xanh |
-| 7 | Soak test 8 giờ không rò rỉ (từ phase 03) |
+| 1 | All 6 experiments have complete data, tables and charts |
+| 2 | The report chapter is complete and follows the outline |
+| 3 | The 3-minute demo has been rehearsed and works |
+| 4 | Answers prepared for the 7 challenge questions |
+| 5 | README + XML docs + troubleshooting guide written |
+| 6 | ≥ 60 tests total, all green |
+| 7 | The 8-hour soak test shows no leaks (from phase 03) |
 
 ---
 
-## 3. Hạn chế đã biết — mẫu để điền
+## 3. Known limitations — a template to fill in
 
 ```markdown
-## Hạn chế của tầng transport
+## Transport layer limitations
 
-### Có chủ đích, ngoài scope
-- Không mã hóa payload. Người bắt được gói đọc được nội dung. Với game LAN/đồ án là chấp nhận
-  được; ứng dụng thật cần DTLS hoặc tự cài AEAD.
-- Congestion control không phải AIMD nên không công bằng với TCP flow trong mạng chia sẻ.
-- Không có MTU discovery, cố định 1200 byte.
-- Không đồng bộ đồng hồ, giả định độ trễ đối xứng (RTT/2). Sai lệch khi routing bất đối xứng.
+### Deliberate, out of scope
+- No payload encryption. Anyone capturing packets can read the contents. Acceptable for a LAN game
+  and a capstone; a real application needs DTLS or a hand-rolled AEAD.
+- Congestion control isn't AIMD, so it isn't fair to TCP flows on a shared network.
+- No MTU discovery; fixed at 1200 bytes.
+- No clock synchronization; assumes symmetric latency (RTT/2). Inaccurate under asymmetric routing.
 
-### Giới hạn kỹ thuật
-- Một thread: ngưỡng ~N kết nối (thí nghiệm 6). Vượt qua cần đa thread hoặc nhiều tiến trình.
-- Cửa sổ reliable 256 message/channel. Vượt sẽ ngắt kết nối.
-- Sequence 16 bit, wrap 36 phút — đã xử lý nhưng nếu tăng tick rate lên 120Hz thì wrap mỗi 9
-  phút, nên cân nhắc 32 bit.
+### Technical limits
+- Single-threaded: the ceiling is ~N connections (experiment 6). Beyond that needs multiple threads
+  or multiple processes.
+- A 256-message reliable window per channel. Exceeding it disconnects.
+- 16-bit sequences wrap every 36 minutes — handled, but at a 120 Hz tick rate they'd wrap every
+  9 minutes, so 32 bits would be worth considering.
 
-### Chưa kiểm chứng
-- Chưa test trên mạng di động 4G/5G (jitter và loss khác hẳn WiFi).
-- Chưa test IPv6.
+### Untested
+- Not tested on 4G/5G mobile networks (jitter and loss behave very differently from WiFi).
+- IPv6 untested.
 ```

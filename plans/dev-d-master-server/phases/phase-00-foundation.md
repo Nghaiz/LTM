@@ -1,67 +1,68 @@
-# Dev D — Phase 00: TCP framing và hạ tầng
+# Dev D — Phase 00: TCP framing and infrastructure
 
-**Tuần 1–2** · Mốc **M0** · Ước lượng **2.0 người-tuần**
+**Weeks 1–2** · Milestone **M0** · Estimate **2.0 person-weeks**
 
-> Mục tiêu một câu: **giải đúng bài toán framing trên byte stream, và dựng hạ tầng để 3 người
-> kia không phải chờ bạn.**
+> Goal in one sentence: **solve the byte-stream framing problem correctly, and stand up the
+> infrastructure so the other three never have to wait on you.**
 
 ---
 
-## 1. Mục tiêu
+## 1. Objectives
 
-| # | Mục tiêu | Vì sao |
+| # | Objective | Why |
 |---|---|---|
-| 1 | Ôn TCP, hiểu vì sao byte stream không có ranh giới message | Nền tảng, và là chương báo cáo |
-| 2 | **`MspFraming`** — length-prefix với buffer tích lũy | Bài toán trung tâm của TCP |
-| 3 | `TcpListenerHost` — accept loop, quản lý kết nối | |
-| 4 | Chống DoS cơ bản: giới hạn size, timeout, giới hạn kết nối/IP | Server sẽ lên Internet |
-| 5 | **CI + script build** | Cả nhóm phụ thuộc, hạn tuần 2 |
-| 6 | `.env` và quản lý secret | Không được lộ secret lên git |
+| 1 | Refresh TCP, understand why a byte stream has no message boundaries | The foundation, and a report chapter |
+| 2 | **`MspFraming`** — length-prefixing with an accumulating buffer | TCP's central problem |
+| 3 | `TcpListenerHost` — accept loop, connection management | |
+| 4 | Basic DoS defenses: size limits, timeouts, per-IP connection limits | The server will go onto the Internet |
+| 5 | **CI + build scripts** | The whole team depends on them, due week 2 |
+| 6 | `.env` and secret management | No secrets may reach git |
 
 ---
 
-## 2. Task chi tiết
+## 2. Detailed tasks
 
-### Task 1 — Hiểu bài toán framing (1 ngày)
+### Task 1 — Understand the framing problem (1 day)
 
-**Thí nghiệm bắt buộc, làm trước khi code.**
+**A mandatory experiment, before writing any code.**
 
-Viết một TCP server ngây thơ:
+Write a naive TCP server:
 
 ```csharp
-// SAI — đây là code 90% người mới viết
+// WRONG — this is what 90% of newcomers write
 while (true)
 {
     int n = socket.Receive(buffer);
     string json = Encoding.UTF8.GetString(buffer, 0, n);
-    var msg = JsonSerializer.Deserialize<Message>(json);   // sẽ vỡ
+    var msg = JsonSerializer.Deserialize<Message>(json);   // will break
     Handle(msg);
 }
 ```
 
-Rồi cho client gửi:
+Then have a client send:
 ```csharp
-socket.Send(msg1);  socket.Send(msg2);  socket.Send(msg3);   // 3 lần Send liên tiếp
+socket.Send(msg1);  socket.Send(msg2);  socket.Send(msg3);   // 3 consecutive Sends
 ```
 
-Quan sát: server thường nhận **cả 3 message dính trong 1 lần `Receive`** (do Nagle gộp), hoặc
-nhận **nửa message đầu tiên** (nếu message lớn hơn MSS). JSON deserialize ném exception.
+Observe: the server usually receives **all 3 messages glued into one `Receive`** (Nagle coalesced
+them), or **half of the first message** (if the message exceeds the MSS). The JSON deserializer
+throws.
 
-Rồi thử với message 100 KB: `Receive` trả về từng đoạn ~1400 byte.
+Then try a 100 KB message: `Receive` returns it in ~1400-byte chunks.
 
-**Kết luận cần rút ra và ghi vào báo cáo:** TCP đảm bảo *thứ tự byte*, không đảm bảo *ranh giới
-message*. `Send()` và `Receive()` **không tương ứng 1-1**. Đây là khác biệt căn bản với UDP,
-nơi mỗi datagram là một đơn vị nguyên vẹn.
+**The conclusion to draw and record in the report:** TCP guarantees *byte ordering*, not *message
+boundaries*. `Send()` and `Receive()` do **not** correspond one-to-one. This is the fundamental
+difference from UDP, where each datagram is an intact unit.
 
-Bật/tắt `NoDelay` (thuật toán Nagle) và quan sát khác biệt — thêm dữ liệu cho báo cáo:
+Toggle `NoDelay` (Nagle's algorithm) and observe the difference — more data for the report:
 
 ```csharp
-socket.NoDelay = true;   // tắt Nagle: gửi ngay, không gộp
+socket.NoDelay = true;   // disable Nagle: send immediately, don't coalesce
 ```
 
-### Task 2 — `MspFraming` (3 ngày) — DELIVERABLE TRUNG TÂM
+### Task 2 — `MspFraming` (3 days) — THE CENTRAL DELIVERABLE
 
-Theo [`protocol-spec.md § 10`](../../00-shared/protocol-spec.md#10-framing).
+Per [`protocol-spec.md § 10`](../../00-shared/protocol-spec.md#10-framing).
 
 ```csharp
 // Ironfront.MasterServer/Net/MspFraming.cs
@@ -74,8 +75,8 @@ public sealed class MspFrameReader
     private int    _bufferedBytes;
 
     /// <summary>
-    /// Nạp dữ liệu vừa nhận từ socket. Trả về các message HOÀN CHỈNH qua callback.
-    /// Trả false nếu phát hiện message quá lớn (người gọi phải đóng kết nối).
+    /// Feeds data just received from the socket. Emits COMPLETE messages via the callback.
+    /// Returns false if an oversized message is detected (the caller must close the connection).
     /// </summary>
     public bool Feed(ReadOnlySpan<byte> incoming, Action<ushort, ReadOnlySpan<byte>> onMessage)
     {
@@ -86,13 +87,13 @@ public sealed class MspFrameReader
         int offset = 0;
         while (true)
         {
-            if (_bufferedBytes - offset < HEADER_SIZE) break;         // chưa đủ header
+            if (_bufferedBytes - offset < HEADER_SIZE) break;         // not enough for a header
 
             uint length = ReadU32BigEndian(_buffer.AsSpan(offset));
-            if (length > MAX_MESSAGE_SIZE) return false;              // độc hại / hỏng
-            if (length < 2) return false;                             // thiếu cả msgType
+            if (length > MAX_MESSAGE_SIZE) return false;              // malicious / corrupt
+            if (length < 2) return false;                             // not even a msgType
 
-            if (_bufferedBytes - offset < HEADER_SIZE + length) break; // chưa đủ body
+            if (_bufferedBytes - offset < HEADER_SIZE + length) break; // body not complete yet
 
             ushort msgType = ReadU16BigEndian(_buffer.AsSpan(offset + HEADER_SIZE));
             var body = _buffer.AsSpan(offset + HEADER_SIZE + 2, (int)length - 2);
@@ -101,7 +102,7 @@ public sealed class MspFrameReader
             offset += HEADER_SIZE + (int)length;
         }
 
-        // Dồn phần dư về đầu buffer
+        // Compact the leftovers back to the start of the buffer
         if (offset > 0)
         {
             int remaining = _bufferedBytes - offset;
@@ -117,7 +118,7 @@ public sealed class MspFrameReader
         int newSize = _buffer.Length;
         while (newSize < needed) newSize *= 2;
         if (newSize > MAX_MESSAGE_SIZE + 8192)
-            throw new InvalidOperationException("buffer vượt giới hạn");
+            throw new InvalidOperationException("buffer exceeded its limit");
         Array.Resize(ref _buffer, newSize);
     }
 
@@ -126,28 +127,28 @@ public sealed class MspFrameReader
 }
 ```
 
-**Bốn cạm bẫy phải xử lý đúng:**
+**Four traps you must handle correctly:**
 
-1. **Message dính nhau** — vòng `while (true)` xử lý hết mọi message hoàn chỉnh trong buffer,
-   không chỉ message đầu tiên. Nếu chỉ xử lý 1 message rồi return, các message sau nằm kẹt tới
-   lần `Receive` tiếp theo (có thể không bao giờ, nếu client chờ phản hồi → **deadlock**).
+1. **Glued messages** — the `while (true)` loop processes every complete message in the buffer, not
+   just the first. Processing one message and returning leaves the rest stuck until the next
+   `Receive` (which may never come, if the client is waiting on a reply → **deadlock**).
 
-2. **Message bị cắt** — phải break và giữ dữ liệu dư, chờ lần `Feed` sau. Đây là lý do cần
-   buffer tích lũy chứ không thể xử lý ngay trên buffer của socket.
+2. **Split messages** — you must break and keep the leftover data for the next `Feed`. That's why an
+   accumulating buffer is required rather than processing directly on the socket's buffer.
 
-3. **Dồn buffer** — sau khi xử lý, phần dư phải được chuyển về đầu. Nếu không, buffer sẽ phình
-   vô hạn. Cài đặt trên dùng `CopyTo` chồng lấn — `Span.CopyTo` xử lý đúng vùng chồng lấn khi
-   đích ở trước nguồn.
+3. **Compacting the buffer** — after processing, the remainder has to move to the front. Otherwise
+   the buffer grows without bound. The implementation above uses an overlapping `CopyTo` —
+   `Span.CopyTo` handles overlapping regions correctly when the destination precedes the source.
 
-4. **`length` độc hại** — client gửi `length = 0xFFFFFFFF` sẽ làm `EnsureCapacity` cố cấp phát
-   4 GB. Kiểm tra **trước** khi dùng. Đây là quy tắc tuyệt đối: mọi giá trị độ dài từ mạng phải
-   được validate trước khi cấp phát bất cứ thứ gì.
+4. **A malicious `length`** — a client sending `length = 0xFFFFFFFF` would make `EnsureCapacity` try
+   to allocate 4 GB. Check it **before** using it. This is an absolute rule: every length value from
+   the network must be validated before allocating anything.
 
-**Test bắt buộc — đây là bộ test quan trọng nhất của bạn:**
+**Mandatory tests — this is your most important test suite:**
 
 ```csharp
 [Fact]
-public void BaMessageTrongMotFeed_PhaiRaBaMessage()
+public void ThreeMessagesInOneFeed_MustYieldThreeMessages()
 {
     var reader = new MspFrameReader();
     var received = new List<ushort>();
@@ -159,7 +160,7 @@ public void BaMessageTrongMotFeed_PhaiRaBaMessage()
 }
 
 [Fact]
-public void MotMessageChiaLamNamFeed_PhaiRaMotMessage()
+public void OneMessageSplitAcrossFiveFeeds_MustYieldOneMessage()
 {
     var reader = new MspFrameReader();
     var received = new List<ushort>();
@@ -173,7 +174,7 @@ public void MotMessageChiaLamNamFeed_PhaiRaMotMessage()
 }
 
 [Fact]
-public void FeedTungByteMot_VanRaDungMessage()
+public void FeedingOneByteAtATime_StillYieldsTheRightMessages()
 {
     var reader = new MspFrameReader();
     var received = new List<ushort>();
@@ -186,7 +187,7 @@ public void FeedTungByteMot_VanRaDungMessage()
 }
 
 [Fact]
-public void LengthQuaLon_PhaiTraVeFalse()
+public void AnOversizedLength_MustReturnFalse()
 {
     var reader = new MspFrameReader();
     byte[] malicious = { 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x01 };
@@ -194,17 +195,17 @@ public void LengthQuaLon_PhaiTraVeFalse()
 }
 
 [Fact]
-public void MessageDinhNhauVaCatDoi_KetHop()
+public void GluedAndSplitCombined()
 {
-    // msg1 đầy đủ + msg2 chỉ có 3 byte đầu → phải ra 1 message, giữ 3 byte
-    // rồi feed phần còn lại của msg2 → ra message thứ 2
+    // a complete msg1 + the first 3 bytes of msg2 → must yield 1 message and hold 3 bytes
+    // then feed the rest of msg2 → yields the second message
 }
 ```
 
-**Test "feed từng byte một" là test giá trị nhất.** Nếu nó pass, framing của bạn gần như chắc
-chắn đúng.
+**The "one byte at a time" test is the most valuable one.** If it passes, your framing is almost
+certainly correct.
 
-### Task 3 — `TcpListenerHost` (2 ngày)
+### Task 3 — `TcpListenerHost` (2 days)
 
 ```csharp
 public sealed class TcpListenerHost
@@ -223,12 +224,12 @@ public sealed class TcpListenerHost
         _listener.Start();
         _ = AcceptLoopAsync(ct);
 
-        // Vòng lặp logic MỘT THREAD (D-AD-1)
+        // The SINGLE-THREADED logic loop (D-AD-1)
         while (!ct.IsCancellationRequested)
         {
             while (_logicQueue.TryDequeue(out var action)) action();
             CheckTimeouts();
-            await Task.Delay(50, ct);          // 20 Hz là quá đủ cho lobby
+            await Task.Delay(50, ct);          // 20 Hz is plenty for a lobby
         }
     }
 
@@ -242,12 +243,12 @@ public sealed class TcpListenerHost
             _logicQueue.Enqueue(() =>
             {
                 if (_connectionsPerIp.GetValueOrDefault(ip) >= MAX_CONNECTIONS_PER_IP)
-                { socket.Close(); return; }                     // chống flood kết nối
-                socket.NoDelay = true;                          // tắt Nagle: lobby cần phản hồi nhanh
+                { socket.Close(); return; }                     // anti connection-flood
+                socket.NoDelay = true;                          // disable Nagle: lobbies need fast replies
                 var conn = new ClientConnection(socket, _logicQueue);
                 _connections[conn.Id] = conn;
                 _connectionsPerIp[ip] = _connectionsPerIp.GetValueOrDefault(ip) + 1;
-                _ = conn.ReceiveLoopAsync(ct);                  // I/O trên thread pool
+                _ = conn.ReceiveLoopAsync(ct);                  // I/O on the thread pool
             });
         }
     }
@@ -264,27 +265,28 @@ public sealed class TcpListenerHost
 }
 ```
 
-**Mô hình threading (D-AD-1) giải thích rõ:**
-- **I/O** (`AcceptSocketAsync`, `ReceiveAsync`) chạy trên thread pool — không chặn
-- **Logic** (xử lý message, sửa room state, sửa session) chạy trên **một thread duy nhất** qua
-  `_logicQueue`
-- Kết quả: không cần `lock` ở đâu cả, không có race condition (chặn D5)
+**The threading model (D-AD-1), spelled out:**
+- **I/O** (`AcceptSocketAsync`, `ReceiveAsync`) runs on the thread pool — never blocking
+- **Logic** (handling messages, mutating room state, mutating sessions) runs on **one single
+  thread** via `_logicQueue`
+- The result: no `lock` anywhere, no race conditions (mitigating D5)
 
-**Cạm bẫy 1 — `socket.NoDelay = true`.** Thuật toán Nagle gộp các gói nhỏ, thêm tới 200ms độ
-trễ. Với lobby (message nhỏ, cần phản hồi nhanh), tắt Nagle. Với truyền file lớn thì ngược lại.
-Đây là điểm đáng nêu trong báo cáo — nó cho thấy bạn hiểu TCP không chỉ là "gửi và nhận".
+**Trap 1 — `socket.NoDelay = true`.** Nagle's algorithm coalesces small packets, adding up to 200 ms
+of latency. For a lobby (small messages, fast replies needed), disable Nagle. For large file
+transfers you'd want the opposite. Worth mentioning in the report — it shows you understand TCP as
+more than "send and receive".
 
-**Cạm bẫy 2 — phát hiện kết nối nửa chết.** Nếu client rút mạng đột ngột, TCP không báo gì. OS
-keepalive mặc định 2 giờ. Bắt buộc có heartbeat tầng ứng dụng (`0x00F0` mỗi 15 giây, timeout
-45 giây).
+**Trap 2 — detecting half-open connections.** If a client's network is unplugged abruptly, TCP
+reports nothing. The OS keepalive default is 2 hours. An application-level heartbeat is mandatory
+(`0x00F0` every 15 seconds, with a 45-second timeout).
 
-**Cạm bẫy 3 — `_connectionsPerIp` không giảm khi ngắt.** Rò rỉ đếm → sau vài giờ không ai kết
-nối được. Giảm trong mọi đường thoát.
+**Trap 3 — `_connectionsPerIp` never decremented on disconnect.** The count leaks → after a few
+hours nobody can connect. Decrement it on every exit path.
 
-### Task 4 — CI và script build (2 ngày) — HẠN TUẦN 2, CẢ NHÓM PHỤ THUỘC
+### Task 4 — CI and build scripts (2 days) — DUE WEEK 2, THE WHOLE TEAM DEPENDS ON THIS
 
 ```powershell
-# tools/build-libs.ps1 — B và C cần nhất
+# tools/build-libs.ps1 — what B and C need most
 $ErrorActionPreference = "Stop"
 $libs   = @("Ironfront.Net.Protocol", "Ironfront.Net.Transport", "Ironfront.Net.Replication")
 $plugin = "Ironfront_Reborn/Assets/Plugins"
@@ -294,21 +296,22 @@ foreach ($lib in $libs) {
     Copy-Item "$lib/bin/Release/netstandard2.1/$lib.dll" $plugin -Force
 }
 
-# BẮT BUỘC: phụ thuộc của System.Memory — Unity không tự lấy
+# MANDATORY: the System.Memory dependencies — Unity won't fetch them itself
 $deps = @("System.Memory.dll", "System.Buffers.dll", "System.Runtime.CompilerServices.Unsafe.dll",
           "System.Numerics.Vectors.dll")
 foreach ($d in $deps) {
     $src = Get-ChildItem -Recurse -Filter $d "$HOME/.nuget/packages" |
            Where-Object { $_.FullName -match "netstandard2\.[01]" } | Select-Object -First 1
     if ($src) { Copy-Item $src.FullName $plugin -Force }
-    else { Write-Warning "Không tìm thấy $d — Unity có thể không load được DLL" }
+    else { Write-Warning "Could not find $d — Unity may fail to load the DLL" }
 }
-Write-Host "Đã copy $($libs.Count) DLL + $($deps.Count) phụ thuộc vào $plugin"
+Write-Host "Copied $($libs.Count) DLLs + $($deps.Count) dependencies into $plugin"
 ```
 
-> **Cạm bẫy 4 — quên copy phụ thuộc.** `netstandard2.1` + `Span<byte>` cần `System.Memory.dll`.
-> Nếu chỉ copy DLL chính, Unity sẽ báo `TypeLoadException` khi chạy — thông báo lỗi rất khó
-> hiểu, không nói gì tới DLL thiếu. Đây là lỗi rất hay gặp và tốn nhiều giờ.
+> **Trap 4 — forgetting to copy the dependencies.** `netstandard2.1` + `Span<byte>` needs
+> `System.Memory.dll`. Copy only the main DLL and Unity throws `TypeLoadException` at runtime — an
+> error message that's very hard to interpret and says nothing about a missing DLL. This is a very
+> common mistake and costs hours.
 
 ```yaml
 # .github/workflows/ci.yml
@@ -324,14 +327,14 @@ jobs:
         with: { dotnet-version: '8.0.x' }
       - run: dotnet build --configuration Release
       - run: dotnet test --configuration Release --logger "console;verbosity=normal"
-      - name: Kiểm tra ProtocolConstants khớp spec
+      - name: Check ProtocolConstants matches the spec
         run: dotnet run --project tools/SpecChecker
 ```
 
-### Task 5 — Quản lý secret (nửa ngày)
+### Task 5 — Secret management (half a day)
 
 ```
-# .env.example — COMMIT file này
+# .env.example — COMMIT this file
 IRONFRONT_SHARED_SECRET=
 IRONFRONT_DB_PATH=./ironfront.db
 IRONFRONT_MASTER_PORT=27000
@@ -345,56 +348,57 @@ IRONFRONT_LOG_LEVEL=Info
 *.db-wal
 ```
 
-Đọc trong code, **fail nhanh nếu thiếu**:
+Read them in code and **fail fast if missing**:
 ```csharp
 var secret = Environment.GetEnvironmentVariable("IRONFRONT_SHARED_SECRET")
     ?? throw new InvalidOperationException(
-        "Thiếu IRONFRONT_SHARED_SECRET. Copy .env.example thành .env và điền giá trị.");
+        "IRONFRONT_SHARED_SECRET is missing. Copy .env.example to .env and fill it in.");
 if (secret.Length < 32)
-    throw new InvalidOperationException("IRONFRONT_SHARED_SECRET phải ≥ 32 ký tự.");
+    throw new InvalidOperationException("IRONFRONT_SHARED_SECRET must be at least 32 characters.");
 ```
 
-Không dùng giá trị mặc định. Một secret mặc định "để tiện dev" sẽ theo lên production.
+No default values. A default secret added "for convenience during dev" will follow you to
+production.
 
 ---
 
-## 3. Tiêu chí nghiệm thu
+## 3. Acceptance criteria
 
-| # | Tiêu chí | Cách kiểm chứng |
+| # | Criterion | How to verify |
 |---|---|---|
-| 1 | Thí nghiệm framing ngây thơ có ghi chép + kết luận | `reports/warmup-tcp-framing.md` |
-| 2 | **Test "feed từng byte một" pass** | `dotnet test` |
-| 3 | Test 3 message dính nhau pass | như trên |
-| 4 | Test `length` độc hại bị từ chối | như trên |
-| 5 | ≥15 test framing xanh | như trên |
-| 6 | Accept 32 kết nối đồng thời, không lỗi | Test |
-| 7 | Kết nối chưa login bị đóng sau 30s | Test |
-| 8 | Giới hạn 5 kết nối/IP hoạt động, đếm giảm đúng khi ngắt | Test |
-| 9 | **`tools/build-libs.ps1` chạy được, Unity load được DLL** | A xác nhận |
-| 10 | **CI xanh trên GitHub** | Ảnh chụp |
-| 11 | Thiếu `IRONFRONT_SHARED_SECRET` → server không khởi động | Test thủ công |
-| 12 | Không có secret nào trong git | `git log -p \| grep -i secret` |
+| 1 | The naive-framing experiment is written up with conclusions | `reports/warmup-tcp-framing.md` |
+| 2 | **The "one byte at a time" test passes** | `dotnet test` |
+| 3 | The 3-glued-messages test passes | As above |
+| 4 | Malicious `length` values are rejected | As above |
+| 5 | ≥15 framing tests green | As above |
+| 6 | Accepts 32 simultaneous connections without error | Test |
+| 7 | Unauthenticated connections are closed after 30 s | Test |
+| 8 | The 5-connections-per-IP limit works, and the count decrements on disconnect | Test |
+| 9 | **`tools/build-libs.ps1` runs and Unity loads the DLLs** | Confirmed by A |
+| 10 | **CI green on GitHub** | Screenshot |
+| 11 | Missing `IRONFRONT_SHARED_SECRET` → the server refuses to start | Manual test |
+| 12 | No secrets anywhere in git | `git log -p \| grep -i secret` |
 
 ---
 
-## 4. Rủi ro
+## 4. Risks
 
-| Rủi ro | Dấu hiệu | Xử lý |
+| Risk | Sign | Handling |
 |---|---|---|
-| Framing sai (D1) | Message lạ, JSON parse lỗi, đôi khi treo | Bộ test ở Task 2. Nếu pass hết thì gần như chắc đúng |
-| Deadlock do chỉ xử lý 1 message/Feed | Client gửi rồi chờ mãi | Vòng `while (true)`, không phải `if` |
-| Quên copy phụ thuộc DLL | Unity `TypeLoadException` | Task 4 cạm bẫy 4. Test load ngay tuần 2 |
-| CI trễ, cả nhóm không có gate | Test đỏ lọt vào develop | Ưu tiên CI cao hơn tính năng của bạn |
-| Buffer tích lũy phình | RAM tăng | `EnsureCapacity` có trần, dồn buffer sau mỗi Feed |
+| Wrong framing (D1) | Strange messages, JSON parse errors, occasional hangs | The Task 2 test suite. If it all passes, it's almost certainly correct |
+| Deadlock from processing only 1 message per Feed | The client sends and then waits forever | Use `while (true)`, not `if` |
+| Forgetting to copy dependency DLLs | Unity `TypeLoadException` | Task 4, trap 4. Test the load in week 2 |
+| CI late, leaving the team with no gate | Red tests slip into develop | Prioritize CI above your own features |
+| The accumulating buffer growing | RAM climbs | `EnsureCapacity` has a ceiling; compact the buffer after every Feed |
 
 ---
 
-## 5. Bàn giao cuối phase — cả nhóm chờ
+## 5. End-of-phase handoff — the team is waiting
 
-Trước cuối tuần 2, **phải xong**:
-- [ ] `tools/build-libs.ps1` — B và C cần để đưa code vào Unity
-- [ ] `tools/build-server.ps1` — A và C cần để test headless
-- [ ] CI xanh — cả nhóm cần làm gate
-- [ ] `.env.example` + hướng dẫn setup trong `README.md`
+By the end of week 2 these **must** be done:
+- [ ] `tools/build-libs.ps1` — B and C need it to get their code into Unity
+- [ ] `tools/build-server.ps1` — A and C need it to test headless
+- [ ] Green CI — the whole team needs it as a gate
+- [ ] `.env.example` + setup instructions in `README.md`
 
-Nếu trễ những thứ này, bạn chặn 3 người. Ưu tiên chúng trên mọi thứ khác.
+Being late on these blocks 3 people. Prioritize them above everything else.

@@ -1,102 +1,104 @@
-# Report — Phase NN: <tên phase>
+# Report — Phase NN: <phase name>
 
-- **Người viết:** Dev B (Transport)
-- **Ngày:** YYYY-MM-DD
-- **Tuần:** N / 14
+- **Author:** Dev B (Transport)
+- **Date:** YYYY-MM-DD
+- **Week:** N / 14
 - **Phase:** [phases/phase-NN-xxx.md](../phases/phase-NN-xxx.md)
-- **Trạng thái:** ☐ Xong đúng hạn · ☐ Xong trễ · ☐ Xong một phần · ☐ Chưa xong
+- **Status:** ☐ Done on time · ☐ Done late · ☐ Partially done · ☐ Not done
 
 ---
 
-## 1. Tóm tắt một đoạn
+## 1. One-paragraph summary
 
 ---
 
-## 2. Đối chiếu tiêu chí nghiệm thu
+## 2. Acceptance criteria review
 
-| # | Tiêu chí | Đạt | Bằng chứng |
+| # | Criterion | Met | Evidence |
 |---|---|---|---|
 
-> Bằng chứng cho tầng transport = output `dotnet test` + số liệu benchmark, không phải mô tả.
+> For the transport layer, evidence means `dotnet test` output + benchmark numbers, not a
+> description.
 
 ---
 
-## 3. Kết quả test
+## 3. Test results
 
 ```
-<dán nguyên output `dotnet test --logger "console;verbosity=normal"`>
+<paste the raw output of `dotnet test --logger "console;verbosity=normal"`>
 ```
 
-| Nhóm test | Số test | Pass | Fail | Skip |
+| Test group | Tests | Pass | Fail | Skip |
 |---|---|---|---|---|
 | Sequence math | | | | |
 | Reliability | | | | |
-| Channel | | | | |
+| Channels | | | | |
 | Fragmentation | | | | |
 | Congestion | | | | |
-| **Tổng** | | | | |
+| **Total** | | | | |
 
-Test đỏ (nếu có) — ghi rõ tên test, lý do, kế hoạch sửa:
+Red tests (if any) — name the test, the reason, and the fix plan:
 
 ---
 
-## 4. Đo đạc
+## 4. Measurements
 
-Ghi thêm vào `reports/measurements.csv`. Bảng dưới là tóm tắt.
+Also append these to `reports/measurements.csv`. The table below is the summary.
 
-| Điều kiện (RTT / loss / jitter / reorder) | Throughput | Retransmit % | RTT đo được | Alloc/s | Ghi chú |
+| Conditions (RTT / loss / jitter / reorder) | Throughput | Retransmit % | Measured RTT | Alloc/s | Notes |
 |---|---|---|---|---|---|
 | 0ms / 0% / 0ms / 0% | | | | | baseline |
-| 100ms / 5% / 20ms / 2% | | | | | điều kiện M1 |
-| 200ms / 15% / 50ms / 5% | | | | | điều kiện xấu |
-| 300ms / 30% / 100ms / 10% | | | | | điều kiện cực xấu |
+| 100ms / 5% / 20ms / 2% | | | | | the M1 conditions |
+| 200ms / 15% / 50ms / 5% | | | | | bad conditions |
+| 300ms / 30% / 100ms / 10% | | | | | extremely bad conditions |
 
 ---
 
-## 5. Quyết định kỹ thuật
+## 5. Technical decisions
 
-| # | Vấn đề | Chọn | Loại | Lý do |
+| # | Problem | Chosen | Rejected | Reason |
 |---|---|---|---|---|
 
 ---
 
-## 6. Thứ đã thử và THẤT BẠI
+## 6. Things tried that FAILED
 
-| Đã thử | Vì sao không được | Dấu hiệu nhận biết |
+| Tried | Why it didn't work | How to recognize it |
 |---|---|---|
 
 ---
 
-## 7. Bug đã tìm ra và cách tìm
+## 7. Bugs found and how they were found
 
-> Phần đặc biệt quan trọng cho báo cáo đồ án. Ghi cả **phương pháp debug**, không chỉ kết quả.
+> A particularly important section for the capstone report. Record the **debugging method**, not just
+> the outcome.
 
-| Bug | Biểu hiện | Cách tìm ra | Nguyên nhân gốc | Đã có test chưa |
+| Bug | Symptom | How it was found | Root cause | Test written yet |
 |---|---|---|---|---|
 
 ---
 
-## 8. Đang kẹt / cần người khác
+## 8. Blocked / needs someone else
 
-| Kẹt gì | Cần ai | Đã báo chưa | Ảnh hưởng |
+| What's blocking | Who's needed | Reported yet | Impact |
 |---|---|---|---|
 
 ---
 
-## 9. Dữ liệu cho báo cáo đồ án
+## 9. Data for the capstone report
 
-Mục nào trong § 10 của `plan.md` đã có dữ liệu sau phase này:
+Which items from § 10 of `plan.md` now have data after this phase:
 
-- [ ] So sánh UDP vs TCP khi mất gói
-- [ ] Hiệu quả ack bitfield
-- [ ] Ảnh hưởng packet loss
+- [ ] UDP vs TCP under packet loss
+- [ ] Ack bitfield effectiveness
+- [ ] The impact of packet loss
 - [ ] Congestion control
 - [ ] Head-of-line blocking
-- [ ] Chi phí fragmentation
+- [ ] The cost of fragmentation
 
 ---
 
-## 10. Phase sau
+## 10. Next phase
 
-- Việc đầu tiên:
-- Rủi ro nhìn thấy trước:
+- First task:
+- Risks I can see coming:

@@ -1,126 +1,127 @@
-# Quy ước làm việc — Ironfront Reborn
+# Working conventions — Ironfront Reborn
 
-Áp dụng cho cả 4 người. Đọc trước commit đầu tiên.
+Applies to all 4 people. Read before your first commit.
 
 ---
 
 ## 1. Git
 
-### 1.1. Nhánh
+### 1.1. Branches
 
 ```
-main            ← chỉ merge từ develop ở mỗi milestone. Luôn chạy được
-develop         ← nhánh tích hợp. Merge vào mỗi thứ 4 (integration day)
+main            ← only merged from develop at each milestone. Always in a working state
+develop         ← integration branch. Merged every Wednesday (integration day)
 feat/a-input-abstraction
 feat/b-reliability-layer
 fix/c-delta-baseline-drift
 ```
 
-Quy tắc đặt tên: `<loại>/<chữ cái người>-<mô tả-ngắn>`.
-Loại: `feat` `fix` `refactor` `test` `docs` `chore`.
+Naming rule: `<type>/<person-letter>-<short-description>`.
+Types: `feat` `fix` `refactor` `test` `docs` `chore`.
 
-### 1.2. Commit message
+### 1.2. Commit messages
 
-Conventional commits, scope là vùng sở hữu:
+Conventional commits, with the scope being your ownership area:
 
 ```
-feat(transport): thêm ack bitfield 32 bit vào header
-fix(replication): sửa so sánh sequence bị wrap sau 36 phút
-test(transport): thêm 12 test cho reassembly fragment
-docs(protocol): chốt hằng số quantization vị trí
-refactor(client): tách input khỏi FpsActorController
+feat(transport): add a 32-bit ack bitfield to the header
+fix(replication): fix sequence comparison wrapping after 36 minutes
+test(transport): add 12 tests for fragment reassembly
+docs(protocol): freeze the position quantization constants
+refactor(client): split input out of FpsActorController
 ```
 
-Scope hợp lệ: `client` `transport` `replication` `master` `protocol` `tools` `ci`.
+Valid scopes: `client` `transport` `replication` `master` `protocol` `tools` `ci`.
 
-### 1.3. Quy tắc sống còn với Unity
+### 1.3. The survival rule for Unity
 
-> **Chỉ A được mở Unity Editor.** B, C, D dùng Rider/VS/VSCode, build bằng `dotnet build`.
+> **Only A opens the Unity Editor.** B, C and D use Rider/VS/VSCode and build with `dotnet build`.
 
-Lý do: Unity ghi lại file `.meta`, `.unity` (scene), `.prefab` mỗi khi mở project, kể cả khi
-không sửa gì. Hai người cùng mở → conflict trên file YAML hàng nghìn dòng, gần như không giải
-được bằng tay.
+Reason: Unity rewrites `.meta`, `.unity` (scene) and `.prefab` files every time the project is
+opened, even if nothing changed. Two people opening it → conflicts in thousand-line YAML files that
+are effectively unresolvable by hand.
 
-Bắt buộc trong `.gitattributes`:
+Required in `.gitattributes`:
 ```
 *.unity   merge=unityyamlmerge eol=lf
 *.prefab  merge=unityyamlmerge eol=lf
 *.asset   merge=unityyamlmerge eol=lf
 ```
 
-Nếu buộc phải có 2 người đụng scene: **báo trước trong nhóm chat, khóa file, làm xong thì mở**.
+If two people absolutely must touch a scene: **announce it in the group chat first, lock the file,
+and release it when you're done**.
 
-### 1.4. Cấm tuyệt đối
+### 1.4. Absolutely forbidden
 
-- `git add .` hoặc `git add -A` — luôn add từng đường dẫn cụ thể
-- `git push --force` lên `develop` hoặc `main`
-- Commit file `.env`, chuỗi secret, `SHARED_SECRET`
-- Commit thư mục `Library/`, `Temp/`, `obj/`, `bin/`, `Logs/`
+- `git add .` or `git add -A` — always add specific paths
+- `git push --force` to `develop` or `main`
+- Committing `.env` files, secret strings, or `SHARED_SECRET`
+- Committing the `Library/`, `Temp/`, `obj/`, `bin/` or `Logs/` directories
 
 ---
 
-## 2. Quy trình đổi protocol
+## 2. Protocol change process
 
-`protocol-spec.md` bị đóng băng cuối tuần 1. Sau đó:
+`protocol-spec.md` is frozen at the end of week 1. After that:
 
 ```mermaid
 flowchart LR
-    A[Phát hiện cần đổi] --> B[Nêu ở nhóm chat<br/>kèm lý do + tác động]
-    B --> C{Ai bị ảnh hưởng?}
-    C --> D[PR sửa protocol-spec.md<br/>+ ProtocolConstants.cs<br/>+ test conformance]
-    D --> E[2 approve bắt buộc<br/>trong đó có người bị ảnh hưởng]
-    E --> F[Bump PROTOCOL_VERSION<br/>Ghi vào bảng § 15]
-    F --> G[Cả 4 pull ngay trong ngày]
+    A[Change identified as necessary] --> B[Raise it in the group chat<br/>with reason + impact]
+    B --> C{Who is affected?}
+    C --> D[PR editing protocol-spec.md<br/>+ ProtocolConstants.cs<br/>+ conformance test]
+    D --> E[2 mandatory approvals<br/>including the affected person]
+    E --> F[Bump PROTOCOL_VERSION<br/>Record it in the § 15 table]
+    F --> G[All 4 pull the same day]
 ```
 
-**Không bao giờ** sửa hằng số protocol trực tiếp trong code của mình rồi "báo sau". Đây là
-nguyên nhân số 1 của rủi ro R5.
+**Never** change a protocol constant directly in your own code and "tell people later". That is the
+number-one cause of risk R5.
 
 ---
 
-## 3. Quy ước code C#
+## 3. C# code conventions
 
-### 3.1. Đặt tên
+### 3.1. Naming
 
-| Loại | Quy ước | Ví dụ |
+| Kind | Convention | Example |
 |---|---|---|
 | Class, struct, enum, method | PascalCase | `ReliabilityLayer`, `PackPos` |
 | Interface | `I` + PascalCase | `ITransport`, `ISnapshotSink` |
-| Field private | `_camelCase` | `_pendingAcks` |
-| Field public / property | PascalCase | `ConnectionId` |
-| Hằng số | SCREAMING_SNAKE | `MAX_PAYLOAD` |
-| Biến local, tham số | camelCase | `serverTick` |
+| Private field | `_camelCase` | `_pendingAcks` |
+| Public field / property | PascalCase | `ConnectionId` |
+| Constant | SCREAMING_SNAKE | `MAX_PAYLOAD` |
+| Local variable, parameter | camelCase | `serverTick` |
 
-### 3.2. Quy tắc riêng cho code mạng
+### 3.2. Rules specific to network code
 
-**Không cấp phát bộ nhớ trong vòng lặp nóng.** Mỗi tick chạy 30 lần/giây; cấp phát ở đó sẽ
-gây GC spike, biểu hiện là game giật đều đặn.
+**No allocation inside hot loops.** Each tick runs 30 times per second; allocating there causes GC
+spikes, which show up as regular stuttering in-game.
 
 ```csharp
-// SAI — cấp phát mỗi tick
+// WRONG — allocates every tick
 byte[] buffer = new byte[1200];
 socket.Receive(buffer);
 
-// ĐÚNG — pool tái sử dụng
+// RIGHT — reuse a pool
 private readonly BufferPool _pool = new BufferPool(capacity: 256, size: 1200);
 var buffer = _pool.Rent();
 try   { socket.Receive(buffer); }
 finally { _pool.Return(buffer); }
 ```
 
-**Không dùng LINQ trong hot path.** `.Where().Select().ToList()` cấp phát ít nhất 3 object.
-Dùng vòng `for` thường.
+**No LINQ in the hot path.** `.Where().Select().ToList()` allocates at least 3 objects. Use a plain
+`for` loop.
 
-**Không dùng exception cho luồng bình thường.** Packet hỏng là chuyện thường xuyên, không phải
-ngoại lệ. Trả `bool TryParse(...)` thay vì `throw`.
+**Don't use exceptions for normal control flow.** Corrupt packets are routine, not exceptional.
+Return `bool TryParse(...)` instead of throwing.
 
 ```csharp
-// SAI
+// WRONG
 public static Packet Parse(byte[] data) {
     if (data.Length < 16) throw new InvalidPacketException();
 }
 
-// ĐÚNG
+// RIGHT
 public static bool TryParse(ReadOnlySpan<byte> data, out Packet packet) {
     packet = default;
     if (data.Length < GSP_HEADER_SIZE) return false;
@@ -129,197 +130,206 @@ public static bool TryParse(ReadOnlySpan<byte> data, out Packet packet) {
 }
 ```
 
-**Dùng `Span<byte>` / `ReadOnlySpan<byte>`** thay vì `byte[]` cho việc đọc/ghi buffer — tránh
-copy thừa.
+**Use `Span<byte>` / `ReadOnlySpan<byte>`** rather than `byte[]` for buffer reads/writes — it avoids
+redundant copies.
 
 ### 3.3. Logging
 
-Ba mức, có thể bật/tắt runtime:
+Three levels, toggleable at runtime:
 
 ```csharp
-NetLog.Error("...");   // luôn bật. Lỗi thật, cần xử lý
-NetLog.Warn("...");    // bật mặc định. Bất thường nhưng tự phục hồi được
-NetLog.Debug("...");   // tắt mặc định. Chi tiết từng packet
+NetLog.Error("...");   // always on. A real error that needs handling
+NetLog.Warn("...");    // on by default. Abnormal but self-recovering
+NetLog.Debug("...");   // off by default. Per-packet detail
 ```
 
-**Cấm `Debug.Log` trực tiếp trong hot path** — kể cả khi tắt, việc format chuỗi vẫn tốn.
-Dùng guard:
+**No direct `Debug.Log` in the hot path** — even when disabled, formatting the string still costs.
+Use a guard:
 ```csharp
 if (NetLog.DebugEnabled) NetLog.Debug($"recv seq={seq} ack={ack}");
 ```
 
 ---
 
-## 3.4. Chính sách thư viện — cái gì được dùng, cái gì không
+## 3.4. Library policy — what's allowed and what isn't
 
-Phân biệt hai loại. Nhầm lẫn giữa chúng là hiểu nhầm phổ biến nhất về "TCP/UDP thuần".
+There are two distinct categories here. Conflating them is the most common misunderstanding about
+"raw TCP/UDP".
 
-### Cấm tuyệt đối — framework netcode
+### Absolutely forbidden — netcode frameworks
 
 Mirror · Photon · Netcode-for-GameObjects · LiteNetLib · ENet · KCP · SignalR · gRPC ·
 WebSocket · HTTP/REST.
 
-Dùng chúng xóa sổ toàn bộ giá trị đồ án. Đây là ranh giới cứng, không có ngoại lệ.
+Using any of them wipes out the entire point of the capstone. This is a hard line with no
+exceptions.
 
-### Được dùng — primitive trong thư viện chuẩn .NET
+### Allowed — primitives from the .NET standard library
 
 `Span<T>` · `ReadOnlySpan<T>` · `Memory<T>` · `stackalloc` · `ArrayPool<T>` ·
 `System.Threading.Channels` · `MemoryMarshal` · `System.Security.Cryptography` ·
-`BenchmarkDotNet` (công cụ dev).
+`BenchmarkDotNet` (dev tooling).
 
-Chúng là **kiểu dữ liệu và API trong BCL**, không phải framework — dùng chúng không vi phạm
-"TCP/UDP thuần", giống như dùng `List<T>` không phải là "dùng framework".
+These are **data types and APIs in the BCL**, not frameworks — using them doesn't violate "raw
+TCP/UDP", any more than using `List<T>` counts as "using a framework".
 
-### `System.Net.Sockets` — bắt buộc, và đúng
+### `System.Net.Sockets` — mandatory, and correct
 
-Socket API **chính là** giao diện của OS tới TCP/UDP. Không có cách nào nói chuyện TCP hay UDP
-mà không qua nó:
+The socket API **is** the OS's interface to TCP/UDP. There is no way to speak TCP or UDP without
+going through it:
 
 ```
-Ứng dụng của nhóm      ← reliability · channel · snapshot · framing · lobby
+Our application        ← reliability · channels · snapshots · framing · lobby
 ─────────────────────
-Socket API             ← System.Net.Sockets = cửa vào. Không né được
+Socket API             ← System.Net.Sockets = the front door. Unavoidable
 ─────────────────────
-TCP / UDP · IP         ← OS (kernel) làm
-Ethernet / WiFi        ← OS làm
+TCP / UDP · IP         ← handled by the OS (kernel)
+Ethernet / WiFi        ← handled by the OS
 ```
 
-"Không dùng socket" nghĩa là tự viết driver mạng và tự cài đặt IP + TCP — một đồ án khác hoàn
-toàn, cần quyền root.
+"Not using sockets" would mean writing a network driver and implementing IP + TCP yourself — an
+entirely different project, and one that needs root privileges.
 
-### Quy tắc "tự viết trước, so sánh sau"
+### The "write it yourself first, compare afterwards" rule
 
-Hai chỗ có thư viện chuẩn giải sẵn bài toán, nhưng **nhóm vẫn tự viết vì đó chính là bài học**:
+Two places where the standard library already solves the problem, but **we still write it ourselves
+because that's exactly the lesson**:
 
-| Nhóm tự viết | Thư viện chuẩn giải sẵn | Ai |
+| We write | Standard library equivalent | Who |
 |---|---|---|
 | `BufferPool` | `ArrayPool<T>` | B |
-| `MspFrameReader` (framing trên byte stream) | `System.IO.Pipelines` | D |
+| `MspFrameReader` (framing over a byte stream) | `System.IO.Pipelines` | D |
 
-**Cách xử lý:** tự viết trước → benchmark đối chiếu với thư viện chuẩn → **viết một mục so sánh
-trong báo cáo**. Mạnh hơn hẳn việc chỉ dùng thư viện, và trả lời được câu hỏi phản biện chắc
-chắn sẽ có: *"sao không dùng X có sẵn?"*
+**How to handle it:** write it yourself → benchmark against the standard library → **write a
+comparison section in the report**. That's far stronger than simply using the library, and it
+answers the challenge question that will definitely come up: *"why not just use the built-in X?"*
 
-### Cảnh báo về tối ưu sớm
+### A warning about premature optimization
 
-Ở quy mô 16 người + 32 bot, nút thắt **không nằm ở tầng socket** — nó nằm ở Unity physics + AI
-trên server (rủi ro R6/C3). Thứ tự đúng: **làm đúng → đo → chỉ tối ưu chỗ benchmark chỉ ra.**
+At the scale of 16 players + 32 bots, the bottleneck is **not the socket layer** — it's Unity
+physics + AI on the server (risks R6/C3). The correct order is: **make it correct → measure → only
+optimize where the benchmark points.**
 
-## 4. Test
+## 4. Testing
 
-| Loại | Ai viết | Chạy bằng | Yêu cầu |
+| Kind | Written by | Run with | Requirement |
 |---|---|---|---|
-| Unit test thư viện .NET | B, C, D | `dotnet test` (xUnit) | Bắt buộc cho mọi logic protocol |
-| Conformance test | C viết, cả 4 chạy | `dotnet test` | Trọng tài khi tranh cãi |
-| Integration 2-process | Cả 4 | Script `tools/run-integration.ps1` | Chạy mỗi integration day |
-| Unity Play Mode test | A | Unity Test Runner | Chỉ cho logic client thuần |
-| Load test | D | `Ironfront.Tools.LoadTest` | Từ M3 |
+| .NET library unit tests | B, C, D | `dotnet test` (xUnit) | Mandatory for all protocol logic |
+| Conformance tests | Written by C, run by all 4 | `dotnet test` | The referee when there's a dispute |
+| 2-process integration | All 4 | `tools/run-integration.ps1` script | Run every integration day |
+| Unity Play Mode tests | A | Unity Test Runner | Client-only logic |
+| Load tests | D | `Ironfront.Tools.LoadTest` | From M3 onward |
 
-**Ngưỡng bắt buộc trước khi merge vào `develop`:** mọi test đang có phải xanh. Không merge với
-test đỏ, không "sửa sau".
-
----
-
-## 5. CI (GitHub Actions hoặc chạy tay bằng script)
-
-`tools/ci.ps1` phải làm được, chạy dưới 5 phút:
-
-1. `dotnet build` cả 4 project .NET → 0 warning-as-error
-2. `dotnet test` toàn bộ → 0 fail
-3. Kiểm tra `ProtocolConstants.cs` khớp với bảng trong `protocol-spec.md` (script so sánh đơn giản)
-4. Unity batch-mode compile check (chỉ khi có Unity trên máy CI)
+**Mandatory gate before merging into `develop`:** every existing test must be green. No merging with
+red tests, no "I'll fix it later".
 
 ---
 
-## 6. Report — viết vào `reports/` của mình
+## 5. CI (GitHub Actions, or run by hand via script)
 
-Sau **mỗi phase**, người phụ trách viết một file theo `reports/_TEMPLATE.md`.
-Đặt tên: `YYYY-MM-DD-phase-NN-<slug>.md`.
+`tools/ci.ps1` must do the following in under 5 minutes:
 
-Report không phải để báo cáo thành tích. Mục đích là:
-1. Người khác đọc được để biết vùng của bạn đang ở đâu
-2. Ghi lại quyết định kỹ thuật và lý do (3 tháng sau không ai nhớ)
-3. Ghi lại thứ đã thử và **thất bại** — quý hơn thứ thành công
-
-**Bắt buộc trung thực:** nếu test đỏ, ghi là đỏ, kèm output. Nếu bỏ qua một mục, ghi rõ bỏ qua
-mục nào và vì sao. Report tô hồng làm hỏng cả nhóm ở tuần tích hợp.
+1. `dotnet build` all 4 .NET projects → 0 warnings-as-errors
+2. `dotnet test` across the board → 0 failures
+3. Verify `ProtocolConstants.cs` matches the table in `protocol-spec.md` (a simple comparison script)
+4. Unity batch-mode compile check (only when Unity is available on the CI machine)
 
 ---
 
-## 7. Ranh giới sở hữu file
+## 6. Reports — write into your own `reports/`
 
-| Vùng | Chủ | Ai khác được đọc | Ai khác được sửa |
+After **every phase**, the owner writes a file following `reports/_TEMPLATE.md`.
+Naming: `YYYY-MM-DD-phase-NN-<slug>.md`.
+
+Reports are not for showcasing achievements. Their purpose is:
+1. So others can read where your area currently stands
+2. To record technical decisions and their reasons (nobody remembers 3 months later)
+3. To record what was tried and **failed** — more valuable than what succeeded
+
+**Honesty is mandatory:** if a test is red, write that it's red, with the output. If you skipped
+something, say exactly what you skipped and why. A rose-tinted report hurts the whole team during
+integration week.
+
+---
+
+## 7. File ownership boundaries
+
+| Area | Owner | Who else may read | Who else may edit |
 |---|---|---|---|
-| `Ironfront_Reborn/Assets/**` | A | Tất cả | Không ai |
-| `Ironfront_Reborn/Assets/Scripts/Net/Server/**` | C | Tất cả | A (chỉ khi C đồng ý) |
-| `Ironfront_Reborn/Assets/Scripts/Net/Shared/**` | **C** | Tất cả | Không ai |
-| `Ironfront_Reborn/Assets/Scripts/Net/Shared/MovementSimulation.cs` | **C** | Tất cả | **Không ai** — file này là sự thật chung của client và server |
-| `Ironfront.Net.Transport/**` | B | Tất cả | Không ai |
-| `Ironfront.Net.Replication/**` | C | Tất cả | Không ai |
-| `Ironfront.Net.Replication/Serialization/**` (`BitWriter`, `BitReader`, `Quantize`) | **B** | Tất cả | Không ai |
-| `Ironfront.Net.Replication.Tests/Conformance/**` | **C** | Tất cả | Không ai — C là trọng tài, B là người cài đặt |
-| `Ironfront.MasterServer/**` | D | Tất cả | Không ai |
-| `Ironfront.Net.Protocol/**` | **Chung** | Tất cả | PR + 2 approve |
-| `tools/run-integration.ps1` + kịch bản integration | **C** | Tất cả | PR |
-| `plans/00-shared/**` | **Chung** | Tất cả | PR + 2 approve |
-| `plans/dev-X-*/**` | Người X | Tất cả | Không ai |
-| `tools/**` (còn lại: CI, build script) | D | Tất cả | PR |
+| `Ironfront_Reborn/Assets/**` | A | Everyone | Nobody |
+| `Ironfront_Reborn/Assets/Scripts/Net/Server/**` | C | Everyone | A (only with C's consent) |
+| `Ironfront_Reborn/Assets/Scripts/Net/Shared/**` | **C** | Everyone | Nobody |
+| `Ironfront_Reborn/Assets/Scripts/Net/Shared/MovementSimulation.cs` | **C** | Everyone | **Nobody** — this file is the shared source of truth for client and server |
+| `Ironfront.Net.Transport/**` | B | Everyone | Nobody |
+| `Ironfront.Net.Replication/**` | C | Everyone | Nobody |
+| `Ironfront.Net.Replication/Serialization/**` (`BitWriter`, `BitReader`, `Quantize`) | **B** | Everyone | Nobody |
+| `Ironfront.Net.Replication.Tests/Conformance/**` | **C** | Everyone | Nobody — C is the referee, B is the implementer |
+| `Ironfront.MasterServer/**` | D | Everyone | Nobody |
+| `Ironfront.Net.Protocol/**` | **Shared** | Everyone | PR + 2 approvals |
+| `tools/run-integration.ps1` + integration scenarios | **C** | Everyone | PR |
+| `plans/00-shared/**` | **Shared** | Everyone | PR + 2 approvals |
+| `plans/dev-X-*/**` | Person X | Everyone | Nobody |
+| `tools/**` (the rest: CI, build scripts) | D | Everyone | PR |
 
-### Tách người cài đặt và người kiểm định
+### Separating the implementer from the verifier
 
-Cặp seam quan trọng nhất trong dự án: **B viết serializer, C viết test kiểm định nó.**
+The most important seam in the project: **B writes the serializer, C writes the tests that verify
+it.**
 
-| | Ai làm | File |
+| | Who does it | Files |
 |---|---|---|
-| Cài đặt bit-packing + quantization | **B** | `Ironfront.Net.Replication/Serialization/` |
-| Test conformance với hex cứng | **C** | `Ironfront.Net.Replication.Tests/Conformance/` |
+| Implementing bit-packing + quantization | **B** | `Ironfront.Net.Replication/Serialization/` |
+| Conformance tests with hard-coded hex | **C** | `Ironfront.Net.Replication.Tests/Conformance/` |
 
-Lý do: nếu cùng một người vừa viết vừa test, test chỉ chứng minh code nhất quán với chính nó,
-không chứng minh nó khớp spec. Tách ra thì test conformance của C trở thành **trọng tài thật**
-khi có tranh cãi về format. Đây cũng là lý do C không được sửa file của B và ngược lại.
+Reason: if the same person writes and tests it, the tests only prove the code is consistent with
+itself, not that it matches the spec. Splitting them makes C's conformance tests a **genuine
+referee** when there's a dispute about the format. This is also why C may not edit B's files and
+vice versa.
 
-**Nếu bạn cần sửa file của người khác:** mở issue/nhắn tin, mô tả cái cần, để họ sửa. Không tự
-sửa rồi báo sau. Ngoại lệ duy nhất: sửa lỗi chính tả trong comment.
+**If you need a change in someone else's file:** open an issue or message them, describe what you
+need, let them make it. Don't edit it yourself and mention it afterwards. The only exception: fixing
+a typo in a comment.
 
 ---
 
-## 8. Bus factor — ai backup ai
+## 8. Bus factor — who backs up whom
 
-| Vùng | Chính | Backup | Cách duy trì backup |
+| Area | Primary | Backup | How the backup stays current |
 |---|---|---|---|
-| Unity client | A | C | C review PR client hàng tuần |
-| Transport | B | C | B và C review chéo mọi PR |
-| **Replication (vai rủi ro nhất)** | C | **A** | **A dành 1 tuần slack ở W7–10 đọc code của C.** Xem lý do bên dưới |
-| Master server | D | B | B review PR master 2 tuần/lần |
+| Unity client | A | C | C reviews client PRs weekly |
+| Transport | B | C | B and C cross-review every PR |
+| **Replication (the highest-risk role)** | C | **A** | **A spends 1 slack week in W7–10 reading C's code.** Rationale below |
+| Master server | D | B | B reviews master PRs every 2 weeks |
 
-Nếu một người vắng >1 tuần, backup tiếp quản. Đây là lý do report và comment code phải đủ để
-người khác đọc hiểu.
+If someone is away for more than a week, the backup takes over. That's why reports and code comments
+have to be good enough for someone else to follow.
 
-### Vì sao backup của C đổi từ B sang A
+### Why C's backup changed from B to A
 
-C là vai rủi ro cao nhất (47/70 điểm khó, 3 phụ thuộc, chặn A). Nếu C vắng, dự án đứng.
+C is the highest-risk role (47/70 difficulty, 3 dependencies, blocks A). If C is away, the project
+stalls.
 
-| | Dev B làm backup | **Dev A làm backup** |
+| | Dev B as backup | **Dev A as backup** |
 |---|---|---|
-| Còn slack không? | Không — B đầy 13.0 pw | **Có — 2.5 tuần ở W7–10** |
-| Biết Unity? | Không, và không được mở Editor | **Có, sở hữu toàn bộ Unity project** |
-| Hiểu `Actor.cs`? | Không | **Có, đã đọc kỹ ở phase-00** |
-| Hiểu `MovementSimulation`? | Không | **Có, A là người gọi nó mỗi frame** |
-| Hiểu byte-level? | Rất rõ | Vừa đủ |
+| Has slack? | No — B is fully booked at 13.0 pw | **Yes — 2.5 weeks in W7–10** |
+| Knows Unity? | No, and isn't allowed to open the Editor | **Yes, owns the entire Unity project** |
+| Understands `Actor.cs`? | No | **Yes, read it closely in phase-00** |
+| Understands `MovementSimulation`? | No | **Yes, A calls it every frame** |
+| Understands the byte level? | Very well | Well enough |
 
-A thắng ở 4/5 trục. Việc cụ thể của A trong 1 tuần đó: đọc `Net/Server/**`, chạy được server
-tick loop một mình, hiểu luồng snapshot từ đầu tới cuối. Không viết code mới.
+A wins on 4 of 5 axes. What A concretely does in that week: read `Net/Server/**`, get the server
+tick loop running solo, and understand the snapshot flow end to end. No new code.
 
 ---
 
-## 9. Định nghĩa "xong" (Definition of Done)
+## 9. Definition of Done
 
-Một phase chỉ được đánh dấu xong khi **đủ cả 5**:
+A phase is only marked done when **all 5** hold:
 
-1. Code chạy được, đã chạy thật và xem output (không phải "chắc là chạy")
-2. Test của phần đó xanh, đã chạy `dotnet test` và nhìn kết quả
-3. Không phá test của người khác — đã chạy toàn bộ suite
-4. Đã merge vào `develop` và `develop` vẫn xanh
-5. Report đã viết vào `reports/`
+1. The code runs, has actually been run, and the output was inspected (not "it probably runs")
+2. That part's tests are green — `dotnet test` was actually run and the result was read
+3. It doesn't break anyone else's tests — the full suite was run
+4. It's merged into `develop` and `develop` is still green
+5. The report has been written into `reports/`
 
-Thiếu bất kỳ mục nào thì phase chưa xong, dù code đã viết hết.
+Miss any one of them and the phase isn't done, however much code has been written.

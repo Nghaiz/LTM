@@ -1,27 +1,27 @@
-# Dev C — Phase 01: Snapshot, delta, và vòng lặp server
+# Dev C — Phase 01: Snapshots, deltas, and the server loop
 
-**Tuần 3–6** · Mốc **M1 (mốc sinh tử)** · Ước lượng **4.0 người-tuần**
+**Weeks 3–6** · Milestone **M1 (the make-or-break milestone)** · Estimate **4.0 person-weeks**
 
-> Mục tiêu một câu: **server là nguồn sự thật duy nhất, và client biết được sự thật đó với chi
-> phí băng thông thấp nhất có thể.**
+> Goal in one sentence: **the server is the single source of truth, and clients learn that truth at
+> the lowest possible bandwidth cost.**
 
 ---
 
-## 1. Mục tiêu
+## 1. Objectives
 
-| # | Mục tiêu |
+| # | Objective |
 |---|---|
-| 1 | `ServerTickLoop` chạy 30Hz ổn định trên headless |
-| 2 | Áp input từ client một cách authoritative (kẹp tốc độ, chống speed hack) |
-| 3 | Snapshot full: server → client, client dựng lại thế giới |
-| 4 | Delta encoding với baseline được ack |
-| 5 | Tích hợp với transport của B, gameplay của A → 2 client đồng bộ |
+| 1 | `ServerTickLoop` running steadily at 30 Hz on headless |
+| 2 | Applying client input authoritatively (speed clamping, anti speed-hack) |
+| 3 | Full snapshots: server → client, with the client rebuilding the world |
+| 4 | Delta encoding against an acked baseline |
+| 5 | Integration with B's transport and A's gameplay → 2 clients in sync |
 
 ---
 
-## 2. Task chi tiết
+## 2. Detailed tasks
 
-### Task 1 — `ServerTickLoop` (3 ngày)
+### Task 1 — `ServerTickLoop` (3 days)
 
 ```csharp
 // Assets/Scripts/Net/Server/ServerTickLoop.cs
@@ -44,19 +44,19 @@ public sealed class ServerTickLoop : MonoBehaviour
     {
         double nowMs = Time.realtimeSinceStartupAsDouble * 1000.0;
 
-        // 1. Nhận và giải mã input
-        _transport.Poll();                       // phát event OnMessage → điền vào session
+        // 1. Receive and decode input
+        _transport.Poll();                       // raises OnMessage → fills the session
 
-        // 2. Áp input cho từng người chơi
+        // 2. Apply each player's input
         foreach (var s in _sessions.Values) ApplyInput(s);
 
-        // 3. Unity tự chạy physics + AI ở FixedUpdate này (Actor, AiActorController)
-        //    → không cần làm gì, chỉ đảm bảo thứ tự script
+        // 3. Unity runs physics + AI in this same FixedUpdate (Actor, AiActorController)
+        //    → nothing to do here, just make sure the script order is right
 
-        // 4. Lưu lịch sử hitbox cho lag compensation (phase 02)
+        // 4. Store hitbox history for lag compensation (phase 02)
         _hitboxHistory.Capture(_serverTick);
 
-        // 5. Sinh và gửi snapshot ở 20Hz (mỗi 1.5 tick)
+        // 5. Build and send snapshots at 20Hz (every 1.5 ticks)
         _snapshotAccumulator += Time.fixedDeltaTime;
         if (_snapshotAccumulator >= 1f / ProtocolConstants.SNAPSHOT_RATE)
         {
@@ -70,45 +70,45 @@ public sealed class ServerTickLoop : MonoBehaviour
 }
 ```
 
-**Cạm bẫy 1 — thứ tự Script Execution Order.** Bắt buộc:
+**Trap 1 — Script Execution Order.** Mandatory:
 
-| Thứ tự | Script | Vì sao |
+| Order | Script | Why |
 |---|---|---|
-| -1000 | `NetServerBootstrap` | Set role trước mọi Awake |
-| -200 | `ServerTickLoop` (phần nhận input) | Input phải áp trước khi Actor chạy |
-| 0 (mặc định) | `Actor`, `AiActorController` | Mô phỏng |
-| +200 | `ServerTickLoop` (phần snapshot) | Snapshot phải chụp sau khi sim xong |
+| -1000 | `NetServerBootstrap` | Sets the role before any Awake |
+| -200 | `ServerTickLoop` (the input stage) | Input must be applied before Actor runs |
+| 0 (default) | `Actor`, `AiActorController` | Simulation |
+| +200 | `ServerTickLoop` (the snapshot stage) | Snapshots must be captured after the sim finishes |
 
-Unity không cho một script có 2 mức thứ tự. Giải pháp: tách làm 2 MonoBehaviour
-(`ServerInputStage` ở -200 và `ServerSnapshotStage` ở +200), `ServerTickLoop` điều phối.
+Unity doesn't allow one script to have two order values. The fix: split it into 2 MonoBehaviours
+(`ServerInputStage` at -200 and `ServerSnapshotStage` at +200), with `ServerTickLoop` coordinating.
 
-**Cạm bẫy 2 — `FixedUpdate` không chạy đúng 30 lần/giây khi server quá tải.** Nếu một tick tốn
-40ms, Unity sẽ chạy bù nhiều `FixedUpdate` liên tiếp (spiral of death). Chặn bằng
-`Time.maximumDeltaTime = 0.1f` và giám sát: nếu tick time > 30ms liên tục 5 giây, log cảnh báo
-và giảm số bot.
+**Trap 2 — `FixedUpdate` doesn't run exactly 30 times/second when the server is overloaded.** If a
+tick takes 40 ms, Unity runs several `FixedUpdate`s back to back to catch up (the spiral of death).
+Prevent it with `Time.maximumDeltaTime = 0.1f` and monitoring: if tick time exceeds 30 ms
+continuously for 5 seconds, log a warning and reduce the bot count.
 
-### Task 2 — Áp input authoritative (3 ngày)
+### Task 2 — Applying input authoritatively (3 days)
 
 ```csharp
 // Assets/Scripts/Net/Server/ServerAuthority.cs
 private void ApplyInput(ClientSession s)
 {
-    // Lấy frame mới nhất chưa xử lý từ buffer (client gửi redundancy 3)
+    // Take the newest unprocessed frames from the buffer (the client sends 3× redundancy)
     while (s.InputBuffer.TryDequeue(out var frame))
     {
-        if (frame.Tick <= s.LastProcessedInputTick) continue;    // bản lặp, bỏ
+        if (frame.Tick <= s.LastProcessedInputTick) continue;    // duplicate copy, skip
 
-        // === KIỂM TRA AUTHORITATIVE ===
-        // 1. Không nhảy cóc quá xa về tick (chống tua nhanh)
-        if (frame.Tick > s.LastProcessedInputTick + MAX_TICK_JUMP)   // 60 = 2 giây
-        { NetLog.Warn($"conn {s.Id} nhảy tick bất thường"); s.LastProcessedInputTick = frame.Tick - 1; }
+        // === AUTHORITATIVE CHECKS ===
+        // 1. No large forward jumps in tick (prevents fast-forwarding)
+        if (frame.Tick > s.LastProcessedInputTick + MAX_TICK_JUMP)   // 60 = 2 seconds
+        { NetLog.Warn($"conn {s.Id} made an abnormal tick jump"); s.LastProcessedInputTick = frame.Tick - 1; }
 
-        // 2. Chuẩn hóa vector di chuyển (client có thể gửi moveX=moveZ=127 để đi nhanh √2 lần)
+        // 2. Normalize the movement vector (a client could send moveX=moveZ=127 to move √2 faster)
         float mx = frame.MoveX / 127f, mz = frame.MoveZ / 127f;
         float mag = MathF.Sqrt(mx * mx + mz * mz);
         if (mag > 1f) { mx /= mag; mz /= mag; }
 
-        // 3. Áp
+        // 3. Apply
         var netFrame = new NetInputFrame {
             MoveX = mx, MoveZ = mz,
             Yaw = Quantize.UnpackYaw(frame.Yaw), Pitch = Quantize.UnpackPitch(frame.Pitch),
@@ -116,15 +116,15 @@ private void ApplyInput(ClientSession s)
         };
         MovementSimulation.Step(s.Actor, in netFrame, Time.fixedDeltaTime);
 
-        // 4. Hậu kiểm: tốc độ thực tế không vượt ngưỡng
+        // 4. Post-check: the actual speed didn't exceed the limit
         float moved = Vector3.Distance(s.Actor.transform.position, s.PrevPosition);
-        float maxMove = MovementSimulation.SPRINT_SPEED * 1.3f * Time.fixedDeltaTime;  // +30% dung sai
+        float maxMove = MovementSimulation.SPRINT_SPEED * 1.3f * Time.fixedDeltaTime;  // 30% tolerance
         if (moved > maxMove)
         {
             s.Actor.transform.position = s.PrevPosition
                 + (s.Actor.transform.position - s.PrevPosition).normalized * maxMove;
             s.SpeedViolations++;
-            if (s.SpeedViolations > 100) NetLog.Warn($"conn {s.Id} nghi speed hack");
+            if (s.SpeedViolations > 100) NetLog.Warn($"conn {s.Id} suspected of speed hacking");
         }
         s.PrevPosition = s.Actor.transform.position;
         s.LastProcessedInputTick = frame.Tick;
@@ -132,22 +132,23 @@ private void ApplyInput(ClientSession s)
 }
 ```
 
-**Vì sao chuẩn hóa vector là bắt buộc:** đây là cheat kinh điển. Client gửi `moveX = 127`,
-`moveZ = 127`, độ dài vector = √2 ≈ 1.41 → đi nhanh hơn 41%. Không chuẩn hóa là để lỗ hổng.
+**Why normalizing the vector is mandatory:** this is the classic cheat. The client sends
+`moveX = 127`, `moveZ = 127`, giving a vector length of √2 ≈ 1.41 → 41% faster movement. Not
+normalizing leaves the hole open.
 
-**Vì sao dung sai 30%:** nổ hất tung, trượt dốc, nhảy có thể làm di chuyển vượt tốc độ chạy
-danh nghĩa. Quá chặt sẽ làm người chơi bình thường bị kẹt.
+**Why a 30% tolerance:** explosions, sliding down slopes and jumping can all move a player faster
+than the nominal run speed. Too tight and normal players get stuck.
 
-**Cạm bẫy 3 — hụt input.** Nếu gói input mất và không có frame nào cho tick này, đừng để nhân
-vật khựng. Lặp lại frame cuối (giả định người chơi vẫn giữ nguyên phím). Chỉ dừng sau 3 tick
-không có input.
+**Trap 3 — missing input.** If an input packet is lost and there's no frame for this tick, don't let
+the character freeze. Repeat the last frame (assuming the player is still holding the same keys).
+Only stop after 3 ticks with no input.
 
 ```csharp
 if (s.InputBuffer.IsEmpty && s.MissedInputTicks < 3)
 { MovementSimulation.Step(s.Actor, in s.LastFrame, dt); s.MissedInputTicks++; }
 ```
 
-### Task 3 — Snapshot full (3 ngày)
+### Task 3 — Full snapshots (3 days)
 
 ```csharp
 // Ironfront.Net.Replication/SnapshotBuilder.cs
@@ -164,13 +165,13 @@ public int WriteFull(Span<byte> dst, in SnapshotRaw snap)
     {
         ref readonly var a = ref snap.Actors[i];
         w.WriteUInt16(a.ActorId);
-        w.WriteByte(0xFF & ~ChangeMask.Seat);          // full: mọi trường trừ seat
+        w.WriteByte(0xFF & ~ChangeMask.Seat);          // full: every field except seat
         WritePosition(ref w, a.Position);
         WriteRotation(ref w, a.Yaw, a.Pitch);
         WriteVelocity(ref w, a.Velocity);
         w.WriteByte(a.StateFlags);
-        w.WriteBits(a.Health, 7);                      // 0..100 vừa 7 bit
-        w.WriteBits(a.WeaponId, 5);                    // tối đa 32 vũ khí
+        w.WriteBits(a.Health, 7);                      // 0..100 fits in 7 bits
+        w.WriteBits(a.WeaponId, 5);                    // up to 32 weapons
         w.WriteBits(a.AmmoInClip, 8);
         w.WriteBits(a.Team, 2);                        // 0..3
     }
@@ -178,16 +179,16 @@ public int WriteFull(Span<byte> dst, in SnapshotRaw snap)
 }
 ```
 
-**Bit-packing tiết kiệm bao nhiêu:** health+weapon+ammo+team byte-align = 4 byte; bit-packed =
-7+5+8+2 = 22 bit = 2.75 byte. Tiết kiệm 1.25 B/actor × 48 × 20Hz = **1.2 KB/s**. Nhân với 16
-client = 19 KB/s ở server. Đáng làm.
+**How much bit-packing saves:** health+weapon+ammo+team byte-aligned = 4 bytes; bit-packed =
+7+5+8+2 = 22 bits = 2.75 bytes. That saves 1.25 B/actor × 48 × 20 Hz = **1.2 KB/s**. Times 16
+clients = 19 KB/s at the server. Worth doing.
 
-### Task 4 — Delta encoding với baseline (4 ngày) — PHẦN KHÓ NHẤT
+### Task 4 — Delta encoding with baselines (4 days) — THE HARDEST PART
 
-**Vấn đề:** nếu delta so với snapshot ngay trước đó, mất 1 gói làm hỏng toàn bộ chuỗi sau (client
-không có baseline để giải nén).
+**The problem:** if you delta against the immediately preceding snapshot, one lost packet corrupts
+the entire chain that follows (the client has no baseline to decompress against).
 
-**Giải pháp (C-AD-1):** delta so với snapshot **client đã xác nhận nhận được**.
+**The solution (C-AD-1):** delta against a snapshot **the client has confirmed receiving**.
 
 ```mermaid
 sequenceDiagram
@@ -195,21 +196,21 @@ sequenceDiagram
     participant C as Client
     S->>C: snapshot tick 100 (FULL, baseline=0)
     C->>S: C_ACK_BASELINE {100}
-    Note over S: baseline của client này = 100
+    Note over S: this client's baseline = 100
     S->>C: snapshot tick 101 (delta vs 100)
-    S->>C: snapshot tick 102 (delta vs 100)  ❌ MẤT
+    S->>C: snapshot tick 102 (delta vs 100)  ❌ LOST
     C->>S: C_ACK_BASELINE {101}
     Note over S: baseline = 101
-    S->>C: snapshot tick 103 (delta vs 101) ✅ vẫn giải nén được
+    S->>C: snapshot tick 103 (delta vs 101) ✅ still decompressable
 ```
 
 ```csharp
 // Ironfront.Net.Replication/DeltaEncoder.cs
 public sealed class DeltaEncoder
 {
-    private const int BASELINE_HISTORY = 32;              // ~1.6 giây ở 20Hz
+    private const int BASELINE_HISTORY = 32;              // ~1.6 seconds at 20Hz
 
-    // Server lưu lịch sử snapshot cho MỖI client
+    // The server keeps snapshot history for EACH client
     private readonly SnapshotRaw[] _history = new SnapshotRaw[BASELINE_HISTORY];
     private uint _ackedBaselineTick;
 
@@ -223,7 +224,7 @@ public sealed class DeltaEncoder
         bool hasBaseline = _ackedBaselineTick != 0
             && current.ServerTick - _ackedBaselineTick < BASELINE_HISTORY;
 
-        if (!hasBaseline) return WriteFull(dst, in current);   // baseline quá cũ → gửi full
+        if (!hasBaseline) return WriteFull(dst, in current);   // baseline too old → send full
 
         ref readonly var baseline = ref _history[_ackedBaselineTick % BASELINE_HISTORY];
 
@@ -240,13 +241,13 @@ public sealed class DeltaEncoder
             w.WriteUInt16(cur.ActorId);
 
             if (!TryFindInBaseline(in baseline, cur.ActorId, out var old))
-            { w.WriteByte(0xFF); WriteAllFields(ref w, in cur); continue; }  // actor mới → full
+            { w.WriteByte(0xFF); WriteAllFields(ref w, in cur); continue; }  // new actor → full
 
             byte mask = ComputeChangeMask(in old, in cur);
             w.WriteByte(mask);
             if ((mask & ChangeMask.Position) != 0) WritePosition(ref w, cur.Position);
             if ((mask & ChangeMask.Rotation) != 0) WriteRotation(ref w, cur.Yaw, cur.Pitch);
-            // ... từng trường
+            // ... field by field
         }
         return w.BytesWritten;
     }
@@ -254,7 +255,7 @@ public sealed class DeltaEncoder
     private static byte ComputeChangeMask(in ActorStateRaw old, in ActorStateRaw cur)
     {
         byte m = 0;
-        // So sánh Ở MỨC ĐÃ QUANTIZE, không so float thô — xem cạm bẫy 4
+        // Compare AT THE QUANTIZED LEVEL, not raw floats — see trap 4
         if (Quantize.PackPos(old.Position.X) != Quantize.PackPos(cur.Position.X) ||
             Quantize.PackPos(old.Position.Y) != Quantize.PackPos(cur.Position.Y) ||
             Quantize.PackPos(old.Position.Z) != Quantize.PackPos(cur.Position.Z))
@@ -270,21 +271,23 @@ public sealed class DeltaEncoder
 }
 ```
 
-> **Cạm bẫy 4 — so sánh float thô thay vì giá trị đã quantize.**
-> Một actor đứng yên vẫn có `position.x` dao động ±0.0001 do physics. Nếu so sánh float thô,
-> `changeMask` luôn có bit Position → delta vô dụng, băng thông không giảm chút nào.
-> **Bắt buộc so sánh sau khi quantize.** Đây là lỗi khiến delta encoding "chạy nhưng không tiết
-> kiệm gì" — rất dễ bỏ sót vì không có triệu chứng rõ ràng, chỉ là băng thông cao hơn dự kiến.
+> **Trap 4 — comparing raw floats instead of quantized values.**
+> A stationary actor still has `position.x` jittering by ±0.0001 from physics. Comparing raw floats
+> means `changeMask` always has the Position bit set → the delta is useless and bandwidth doesn't
+> drop at all.
+> **You must compare after quantizing.** This is the mistake that makes delta encoding "work but
+> save nothing" — very easy to miss because there's no clear symptom, just higher-than-expected
+> bandwidth.
 
-> **Cạm bẫy 5 — client cũng phải áp dụng đúng logic.** Khi client nhận delta với
-> `mask & Position == 0`, nó phải **giữ nguyên** vị trí từ baseline, không phải đặt về 0. Nghe
-> hiển nhiên nhưng dễ sai khi copy struct.
+> **Trap 5 — the client has to apply the same logic.** When the client receives a delta with
+> `mask & Position == 0`, it must **keep** the position from the baseline, not zero it. It sounds
+> obvious but it's easy to get wrong when copying structs.
 
-**Test bắt buộc cho delta (chặn rủi ro C6):**
+**A mandatory delta test (mitigating risk C6):**
 
 ```csharp
 [Fact]
-public void Delta_Voi20PhanTramMatGoi_TrangThaiCuoiVanKhop()
+public void Delta_With20PercentPacketLoss_FinalStateStillMatches()
 {
     var rng = new Random(42);
     var encoder = new DeltaEncoder();
@@ -293,70 +296,70 @@ public void Delta_Voi20PhanTramMatGoi_TrangThaiCuoiVanKhop()
 
     for (uint tick = 1; tick <= 1000; tick++)
     {
-        MutateWorld(world, rng);                        // di chuyển ngẫu nhiên
+        MutateWorld(world, rng);                        // random movement
         Span<byte> buf = stackalloc byte[4096];
         int n = encoder.Write(buf, in world);
 
-        if (rng.NextDouble() > 0.20)                    // 80% gói tới
+        if (rng.NextDouble() > 0.20)                    // 80% of packets arrive
         {
             decoder.Read(buf[..n], ref clientWorld);
-            encoder.OnClientAck(tick);                  // client ack
+            encoder.OnClientAck(tick);                  // the client acks
         }
-        // 20% mất: client không ack, server tiếp tục delta vs baseline cũ
+        // 20% lost: no ack, so the server keeps deltaing against the old baseline
     }
 
-    AssertWorldsEqual(world, clientWorld, tolerance: 0.07f);   // sai số quantization
+    AssertWorldsEqual(world, clientWorld, tolerance: 0.07f);   // quantization error
 }
 ```
 
-Test này là thứ bắt được gần hết bug delta. Chạy với nhiều seed khác nhau.
+This test catches almost every delta bug. Run it with several different seeds.
 
-### Task 5 — Tích hợp (2 ngày)
+### Task 5 — Integration (2 days)
 
-Thứ tự tích hợp, mỗi bước commit riêng:
-1. Server + `LoopbackTransport` (của B) + 1 client giả → snapshot đi được
-2. Server + transport UDP thật + 1 client Unity của A
-3. 2 client Unity → **M1**
-
----
-
-## 3. Tiêu chí nghiệm thu (M1)
-
-| # | Tiêu chí | Cách kiểm chứng |
-|---|---|---|
-| 1 | Server tick 30Hz ổn định, 48 actor | Log tick time, p99 < 33ms |
-| 2 | Snapshot full round-trip đúng bit-by-bit | Test |
-| 3 | Delta với 20% mất gói, trạng thái cuối khớp | Test ở Task 4 |
-| 4 | Delta tiết kiệm ≥ 35% so với full | Đo trên dữ liệu thật, không phải giả |
-| 5 | Speed hack bị chặn (client gửi moveX=moveZ=127) | Test: viết client giả gửi input độc |
-| 6 | Hụt input 3 tick → nhân vật vẫn mượt | Test với simulator drop input |
-| 7 | 2 client Unity thấy nhau đồng bộ | Cùng A, video |
-| 8 | Băng thông đo được ≤ 12 KB/s/client (chưa có interest mgmt) | Log |
-| 9 | 0 alloc/tick trên server | Unity Profiler |
-| 10 | Tổng test ≥ 45 xanh | `dotnet test` |
+Integration order, committing each step separately:
+1. Server + `LoopbackTransport` (B's) + 1 fake client → snapshots flow
+2. Server + real UDP transport + 1 of A's Unity clients
+3. 2 Unity clients → **M1**
 
 ---
 
-## 4. Rủi ro
+## 3. Acceptance criteria (M1)
 
-| Rủi ro | Dấu hiệu | Xử lý |
+| # | Criterion | How to verify |
 |---|---|---|
-| Baseline drift (C1) | Thế giới client lệch dần khỏi server, càng lâu càng lệch | Test Task 4. Log baselineTick ở cả hai bên, so sánh |
-| Delta không tiết kiệm gì | Băng thông bằng full | Cạm bẫy 4: so sánh sau quantize |
-| Tick time vượt 33ms | Server không giữ nổi 30Hz | Đo phân rã từng giai đoạn. Thường là AI hoặc physics, không phải snapshot. Giảm bot |
-| `MovementSimulation` chưa có từ A | Không áp được input | Tự viết bản tạm theo hằng số ở phase-02 của A, đổi sau |
-| Thứ tự Script Execution sai | Snapshot chụp trạng thái của tick trước | Log tick number ở mỗi giai đoạn, kiểm chứng thứ tự |
-| Trễ tuần 6 | | Contingency: bỏ delta, chỉ gửi full snapshot. Băng thông ~20 KB/s, LAN vẫn chịu được |
+| 1 | The server holds a steady 30 Hz tick with 48 actors | Log tick times, p99 < 33 ms |
+| 2 | Full snapshots round-trip bit-for-bit | Test |
+| 3 | Deltas with 20% packet loss end in a matching state | The Task 4 test |
+| 4 | Deltas save ≥ 35% versus full snapshots | Measured on real data, not synthetic |
+| 5 | Speed hacks are blocked (client sending moveX=moveZ=127) | Test: write a fake client sending malicious input |
+| 6 | 3 ticks of missing input → the character still moves smoothly | Test with the simulator dropping input |
+| 7 | 2 Unity clients see each other in sync | With A, on video |
+| 8 | Measured bandwidth ≤ 12 KB/s/client (before interest management) | Logs |
+| 9 | 0 allocations per tick on the server | Unity Profiler |
+| 10 | ≥ 45 tests total, all green | `dotnet test` |
 
 ---
 
-## 5. Số liệu bắt buộc
+## 4. Risks
 
-| Chỉ số | Điều kiện | Ghi |
+| Risk | Sign | Handling |
 |---|---|---|
-| Kích thước full snapshot | 48 actor | |
-| Kích thước delta trung bình | 48 actor, đang chơi | |
-| Tỉ lệ tiết kiệm của delta | | |
-| Băng thông/client | 48 actor, 20Hz | |
-| Tick time p50 / p99 | 48 actor | |
-| Phân rã tick time | input / sim / snapshot | |
+| Baseline drift (C1) | The client's world drifts further from the server's over time | The Task 4 test. Log `baselineTick` on both sides and compare |
+| Deltas save nothing | Bandwidth equals full snapshots | Trap 4: compare after quantizing |
+| Tick time exceeds 33 ms | The server can't hold 30 Hz | Break down the time per stage. It's usually AI or physics, not snapshots. Reduce bots |
+| `MovementSimulation` not yet available from A | Input can't be applied | Write a temporary version from the constants in A's phase-02 and swap it later |
+| Wrong Script Execution Order | Snapshots capture the previous tick's state | Log the tick number at each stage and verify the ordering |
+| Week 6 arrives unfinished | | Contingency: drop deltas and send full snapshots only. Bandwidth ~20 KB/s, still fine on LAN |
+
+---
+
+## 5. Required measurements
+
+| Metric | Conditions | Value |
+|---|---|---|
+| Full snapshot size | 48 actors | |
+| Mean delta size | 48 actors, mid-game | |
+| Delta saving ratio | | |
+| Bandwidth per client | 48 actors, 20 Hz | |
+| Tick time p50 / p99 | 48 actors | |
+| Tick time breakdown | input / sim / snapshot | |

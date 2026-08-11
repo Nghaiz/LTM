@@ -1,53 +1,53 @@
-# Khảo sát tính khả thi — Ironfront Reborn
+# Feasibility study — Ironfront Reborn
 
-Tài liệu này trả lời một câu hỏi duy nhất: **nhóm 4 người, 14 tuần, có làm nổi không?**
+This document answers a single question: **can a team of 4 pull this off in 14 weeks?**
 
-Kết luận ngắn: **Khả thi, với xác suất đạt M3 (trận đấu đủ) khoảng 60–70%, đạt M2 (chiến đấu
-server-authoritative) khoảng 85%.** Điều kiện bắt buộc: cắt scope đúng như mục 5, và không ai
-được lún vào phần xe cộ trước tuần 13.
+Short answer: **Yes, with roughly a 60–70% chance of reaching M3 (full match) and about 85% of
+reaching M2 (server-authoritative combat).** Mandatory conditions: cut scope exactly as in
+section 5, and nobody touches vehicles before week 13.
 
 ---
 
-## 1. Hiện trạng codebase (số liệu đo thực tế)
+## 1. Current state of the codebase (measured figures)
 
-Đo ngày khảo sát, trên `Ironfront_Reborn/`:
+Measured on `Ironfront_Reborn/` on the survey date:
 
-| Chỉ số | Giá trị |
+| Metric | Value |
 |---|---|
 | Unity version | `6000.3.21f1` (Unity 6.3) |
-| Tổng file `.cs` | 322 |
-| Tổng LOC | 52,880 |
-| LOC thuộc A* Pathfinding Project | ~21,000 (~40%) |
-| **LOC gameplay thực sự phải quan tâm** | **~32,000** |
-| Singleton `public static X instance` | 21 |
-| Điểm gọi `Input.*` trực tiếp | 59 |
-| File có dùng `Random.*` | 27 |
+| Total `.cs` files | 322 |
+| Total LOC | 52,880 |
+| LOC belonging to A* Pathfinding Project | ~21,000 (~40%) |
+| **LOC of gameplay we actually have to care about** | **~32,000** |
+| `public static X instance` singletons | 21 |
+| Direct `Input.*` call sites | 59 |
+| Files using `Random.*` | 27 |
 
-**Đọc số liệu này thế nào:** 40% codebase là thư viện pathfinding, nhóm gần như không cần đụng
-tới, chỉ cần biết nó chạy được trên headless server. Phần thực sự phải hiểu và refactor chỉ
-khoảng 32K LOC, và trong đó chỉ vài file là then chốt.
+**How to read these numbers:** 40% of the codebase is a pathfinding library we barely need to touch
+— we only need it to run on a headless server. The part we genuinely have to understand and refactor
+is about 32K LOC, and only a handful of files within that are critical.
 
-### 1.1. Các file then chốt
+### 1.1. The critical files
 
-| File | LOC | Vai trò | Mức độ phải sửa |
+| File | LOC | Role | How much editing |
 |---|---|---|---|
-| `AiActorController.cs` | 2,153 | Toàn bộ não bot AI | **Gần như không sửa** — chỉ chạy nó trên server |
-| `Actor.cs` | 1,188 | Nhân vật: di chuyển, ragdoll, máu, animation | Sửa nhiều: tách nhánh local/remote |
-| `FpsActorController.cs` | 752 | Input người chơi + camera | Sửa nhiều: tách input khỏi controller |
-| `Weapon.cs` | 561 | Bắn, spread, reload, đạn | Sửa vừa: tách fire-intent khỏi fire-effect |
-| `Vehicle.cs` | 554 | Base class xe | **Không đụng ở M0–M3** |
-| `ActorManager.cs` | ~340 | Registry actor, spawn point, explode | Sửa vừa: thêm authority + id |
-| `GameManager.cs` | ~200 | Vòng đời trận đấu | Sửa vừa: tách client/server |
-| `ActorController.cs` | 60 | **Abstract base — seam netcode** | Chỉ thêm, không sửa |
+| `AiActorController.cs` | 2,153 | The entire bot AI brain | **Almost none** — just run it on the server |
+| `Actor.cs` | 1,188 | The character: movement, ragdoll, health, animation | Heavy: split the local/remote paths |
+| `FpsActorController.cs` | 752 | Player input + camera | Heavy: split input out of the controller |
+| `Weapon.cs` | 561 | Firing, spread, reload, ammo | Moderate: split fire-intent from fire-effect |
+| `Vehicle.cs` | 554 | Vehicle base class | **Untouched through M0–M3** |
+| `ActorManager.cs` | ~340 | Actor registry, spawn points, explosions | Moderate: add authority + ids |
+| `GameManager.cs` | ~200 | Match lifecycle | Moderate: split client/server |
+| `ActorController.cs` | 60 | **Abstract base — the netcode seam** | Additions only, no edits |
 
 ---
 
-## 2. Ba yếu tố khiến dự án khả thi
+## 2. Three things that make the project feasible
 
-### 2.1. `ActorController` là một seam netcode gần như hoàn hảo
+### 2.1. `ActorController` is a near-perfect netcode seam
 
-`Assets/Scripts/Assembly-CSharp/ActorController.cs` là abstract class với các phương thức thuần
-"ý định điều khiển", hoàn toàn không biết gì về nguồn gốc input:
+`Assets/Scripts/Assembly-CSharp/ActorController.cs` is an abstract class of pure "control intent"
+methods that know nothing about where the input came from:
 
 ```csharp
 public abstract class ActorController : MonoBehaviour
@@ -67,299 +67,308 @@ public abstract class ActorController : MonoBehaviour
 }
 ```
 
-Hai lớp con đã tồn tại: `FpsActorController` (người chơi) và `AiActorController` (bot).
-`Actor.cs` chỉ đọc từ `controller` chứ không quan tâm ai điều khiển.
+Two subclasses already exist: `FpsActorController` (player) and `AiActorController` (bot).
+`Actor.cs` only reads from `controller` and doesn't care who is driving it.
 
-**Hệ quả:** chỉ cần viết lớp con thứ ba là remote player chạy được:
+**Consequence:** a third subclass is all it takes to make remote players work:
 
 ```csharp
 public class NetworkActorController : ActorController
 {
-    private NetInputFrame _current;   // đến từ snapshot hoặc từ input người chơi khác
+    private NetInputFrame _current;   // from a snapshot, or from another player's input
     public override Vector3 FacingDirection() => _current.FacingDirection;
     public override bool    Fire()            => _current.Buttons.Has(Btn.Fire);
     // ...
 }
 ```
 
-Đây là thứ tiết kiệm cho nhóm **ước tính 4–6 tuần**. Nếu codebase gốc trộn lẫn input với logic
-nhân vật (kiểu `if (Input.GetKey(KeyCode.W))` nằm thẳng trong `Actor.Update()`), dự án này sẽ
-không khả thi trong 14 tuần.
+This saves the team an **estimated 4–6 weeks**. If the original codebase had mixed input into
+character logic (`if (Input.GetKey(KeyCode.W))` sitting directly inside `Actor.Update()`), this
+project would not be feasible in 14 weeks.
 
-### 2.2. Bot AI đã hoàn chỉnh và tái sử dụng được nguyên vẹn
+### 2.2. The bot AI is complete and reusable as-is
 
-`AiActorController` (2,153 LOC) đã cài đặt: chọn mục tiêu, cover, squad, điều khiển xe, ném lựu
-đạn, chiếm điểm. Nó cũng kế thừa `ActorController`.
+`AiActorController` (2,153 LOC) already implements: target selection, cover, squads, vehicle
+control, grenade throwing, point capture. It also inherits from `ActorController`.
 
-Trên server authoritative, bot chỉ đơn giản là actor mà server tự chạy `AiActorController` cho.
-Client không mô phỏng bot, chỉ nhận snapshot và nội suy. **Không phải viết lại một dòng AI nào.**
+On an authoritative server, a bot is simply an actor for which the server runs
+`AiActorController` itself. The client doesn't simulate bots; it just receives snapshots and
+interpolates. **Not a single line of AI needs rewriting.**
 
-Đây là lợi thế cạnh tranh lớn nhất của việc chọn codebase này thay vì làm từ đầu: một trận
-16 người + 32 bot có cảm giác "chiến trường" mà chỉ tốn công sync 48 actor.
+This is the biggest competitive advantage of choosing this codebase over starting from scratch: a
+16-player + 32-bot match feels like a real battlefield, and all it costs us is syncing 48 actors.
 
-### 2.3. Headless Unity server tái dùng nguyên engine
+### 2.3. A headless Unity server reuses the whole engine
 
-Vì server là build headless của chính game, ta có sẵn:
+Because the server is a headless build of the game itself, we get for free:
 
-- PhysX (collision, raycast, rigidbody) — hành vi **giống hệt** client, không lệch engine
-- A* Pathfinding chạy multi-thread — bot đi đường trên server không cần port
-- Animation system — cần cho hitbox chính xác khi lag compensation
-- Toàn bộ prefab, layer, physics material, terrain collider
+- PhysX (collision, raycast, rigidbody) — behavior **identical** to the client, no engine divergence
+- Multi-threaded A* Pathfinding — bot navigation on the server needs no porting
+- The animation system — required for accurate hitboxes during lag compensation
+- Every prefab, layer, physics material and terrain collider
 
-So với phương án viết server .NET thuần: tiết kiệm ước tính **8–12 tuần** và loại bỏ hoàn toàn
-lớp rủi ro "hai engine physics cho kết quả khác nhau".
+Compared with writing a pure .NET server: an estimated **8–12 weeks** saved, and it eliminates the
+entire "two physics engines produce different results" class of risk.
 
 ---
 
-## 3. Sáu rủi ro lớn — kèm phương án chặn
+## 3. Six major risks — with mitigations
 
-Xếp theo mức thiệt hại × xác suất.
+Ordered by damage × probability.
 
-### R1 — Tầng UDP reliability có bug ẩn, ăn hết nhiều tuần
+### R1 — A hidden bug in the UDP reliability layer eats several weeks
 
-**Xác suất: Cao. Thiệt hại: Rất cao (chặn M1, chặn cả C và A).**
+**Probability: High. Damage: Very high (blocks M1, blocks both C and A).**
 
-Bug ở tầng reliability biểu hiện gián tiếp: game "thỉnh thoảng giật", "đôi khi mất kết nối sau
-10 phút". Rất khó truy ngược. Nếu debug bằng cách chạy game thật thì mỗi vòng lặp mất 5 phút.
+Reliability-layer bugs show up indirectly: the game "stutters sometimes", "occasionally disconnects
+after 10 minutes". Very hard to trace back. Debugging by running the real game costs 5 minutes per
+iteration.
 
-**Chặn:**
-1. **Tuần 2 phải xong `NetworkSimulator`** — inject latency, jitter, packet loss, reorder,
-   duplicate. Đây là deliverable phase-01 của B, ưu tiên cao hơn cả tính năng.
-2. Tầng transport là **thư viện C# thuần, không phụ thuộc Unity** → chạy được xUnit test.
-   Bắt buộc ≥40 unit test cho reliability trước khi tích hợp vào game.
-3. Test kịch bản độc ác từ đầu: 30% loss, RTT 300ms ±100ms jitter, reorder 10%, duplicate 5%.
-4. Mọi packet đều log được ra file `.pcapng`-like để replay offline.
+**Mitigation:**
+1. **`NetworkSimulator` must be done by week 2** — injecting latency, jitter, packet loss,
+   reordering and duplication. This is B's phase-01 deliverable, ranked above features.
+2. The transport layer is a **pure C# library with no Unity dependency** → xUnit tests can run
+   against it. At least 40 reliability unit tests are required before integrating into the game.
+3. Test evil scenarios from the start: 30% loss, 300 ms RTT ±100 ms jitter, 10% reordering, 5%
+   duplication.
+4. Every packet must be loggable to a `.pcapng`-like file for offline replay.
 
-**Lợi ích kép:** đây chính là phần được chấm điểm cao nhất trong môn Lập trình mạng.
+**Double benefit:** this is exactly the part that scores highest in a Network Programming course.
 
-### R2 — Ragdoll không sync được, remote player giật/xoắn/bay
+### R2 — Ragdolls can't be synced; remote players jitter, twist and fly
 
-**Xác suất: Cao. Thiệt hại: Trung bình (xấu về cảm giác, không chặn tiến độ).**
+**Probability: High. Damage: Medium (bad feel, doesn't block progress).**
 
-`Actor.cs` dùng `ActiveRaggy` + `ConfigurableJoint` với `RAGDOLL_DRIVE_SPRING = 700f`. Nhân vật
-Ravenfield **luôn ở trạng thái ragdoll được điều khiển bằng lực**, không phải animation thuần.
-Đây là đặc trưng tạo nên chất hài hước của game, và cũng là ác mộng netcode: mỗi nhân vật có
-~15 rigidbody, sync tất cả là bất khả thi (15 × 6 float × 48 actor × 20Hz ≈ 1.7 MB/s).
+`Actor.cs` uses `ActiveRaggy` + `ConfigurableJoint` with `RAGDOLL_DRIVE_SPRING = 700f`. Ravenfield
+characters are **always force-driven ragdolls**, not pure animation. That's what gives the game its
+comedic character, and it's also a netcode nightmare: each character has ~15 rigidbodies, and
+syncing all of them is impossible (15 × 6 floats × 48 actors × 20 Hz ≈ 1.7 MB/s).
 
-**Chặn — quyết định kiến trúc, không thương lượng:**
+**Mitigation — an architectural decision, non-negotiable:**
 
-| Loại actor | Trên server | Trên client |
+| Actor type | On the server | On the client |
 |---|---|---|
-| Local player | Không chạy ragdoll (chỉ hitbox + capsule) | Ragdoll đầy đủ, mô phỏng cục bộ |
-| Remote player / bot | Không chạy ragdoll | **Animation-driven**, ragdoll tắt |
-| Khi chết | Server gửi `S_DEATH` + vector lực | Client bật ragdoll **cục bộ**, thuần cosmetic. Mỗi client thấy xác nằm khác nhau — chấp nhận được |
+| Local player | No ragdoll (hitboxes + capsule only) | Full ragdoll, simulated locally |
+| Remote player / bot | No ragdoll | **Animation-driven**, ragdoll disabled |
+| On death | Server sends `S_DEATH` + a force vector | Client enables the ragdoll **locally**, purely cosmetic. Each client sees the corpse land differently — acceptable |
 
-Chỉ sync: vị trí hip (3×i16), yaw/pitch, state flags, health. Xác chết không cần đồng bộ vì
-không ảnh hưởng gameplay.
+We sync only: hip position (3×i16), yaw/pitch, state flags, health. Corpses need no syncing because
+they don't affect gameplay.
 
-**Nợ kỹ thuật được chấp nhận:** remote player sẽ trông "cứng" hơn bản gốc. Ghi nhận, không sửa
-trong 14 tuần.
+**Accepted technical debt:** remote players will look "stiffer" than in the original. Noted, not
+fixed within the 14 weeks.
 
-### R3 — Phi tất định: `Random.insideUnitSphere` trong tính spread đạn
+### R3 — Non-determinism: `Random.insideUnitSphere` in bullet spread
 
-**Xác suất: Trung bình. Thiệt hại: Cao nếu chọn sai kiến trúc từ đầu.**
+**Probability: Medium. Damage: High if we pick the wrong architecture up front.**
 
 `Weapon.cs:387`:
 ```csharp
 Quaternion rotation = Quaternion.LookRotation(
     direction + UnityEngine.Random.insideUnitSphere * configuration.spread);
 ```
-và `Weapon.cs:345` cho recoil. 27 file dùng `Random`.
+plus `Weapon.cs:345` for recoil. 27 files use `Random`.
 
-**Chặn — quyết định kiến trúc, không thương lượng: KHÔNG cố làm deterministic.**
+**Mitigation — an architectural decision, non-negotiable: DON'T try to be deterministic.**
 
-Không dùng lockstep, không seed PRNG chung, không cố cho client và server ra cùng kết quả. Thay
-vào đó dùng mô hình server-authoritative kinh điển:
+No lockstep, no shared PRNG seed, no attempt to make client and server produce the same result.
+Instead, use the classic server-authoritative model:
 
-1. Client gửi **ý định**: `Fire = true` + hướng ngắm chính xác (yaw/pitch đã quantize).
-2. Server tự roll spread bằng RNG của nó, tự raycast, tự phán trúng/trượt, tự trừ máu.
-3. Client bắn hiệu ứng **dự đoán** ngay lập tức (âm thanh, muzzle flash, giật) để cảm giác
-   phản hồi tức thì — nhưng viên đạn client thấy chỉ là cosmetic.
-4. Server gửi `S_HIT_CONFIRM` để client hiện hitmarker.
+1. The client sends **intent**: `Fire = true` plus its exact aim direction (quantized yaw/pitch).
+2. The server rolls the spread with its own RNG, raycasts, adjudicates hit/miss, and deducts health.
+3. The client fires **predicted** effects immediately (audio, muzzle flash, recoil) so the response
+   feels instant — but the bullet the client sees is purely cosmetic.
+4. The server sends `S_HIT_CONFIRM` so the client can show a hitmarker.
 
-Hệ quả chấp nhận được: đôi khi client thấy "trúng" mà server báo trượt. Đây là hành vi của mọi
-FPS thương mại, người chơi quen rồi.
+Accepted consequence: sometimes the client sees a "hit" and the server calls it a miss. This is how
+every commercial FPS behaves; players are used to it.
 
-### R4 — 21 singleton `static instance` vỡ khi có 2 world
+### R4 — 21 `static instance` singletons break when there are two worlds
 
-**Xác suất: Trung bình. Thiệt hại: Trung bình.**
+**Probability: Medium. Damage: Medium.**
 
-`ActorManager.instance`, `GameManager.instance`, `FpsActorController.instance`, ... Nếu chạy
-server và client trong cùng một process (chế độ "host"), hai world sẽ tranh nhau singleton.
+`ActorManager.instance`, `GameManager.instance`, `FpsActorController.instance`, ... If server and
+client run in the same process ("host" mode), the two worlds fight over the singletons.
 
-**Chặn:** **Không hỗ trợ chế độ host/listen-server.** Server và client là hai build riêng biệt,
-hai process riêng. Test integration bằng cách chạy 1 server + N client process. Điều này cũng
-làm rõ ranh giới authority, giúp code sạch hơn.
+**Mitigation:** **No host/listen-server mode.** Server and client are two separate builds in two
+separate processes. Integration testing runs 1 server + N client processes. This also clarifies the
+authority boundary and keeps the code cleaner.
 
-Riêng các singleton chỉ có nghĩa ở client (`IngameUi`, `MinimapUi`, `LoadoutUi`,
-`FpsActorController`) phải được guard bằng `#if !UNITY_SERVER` hoặc kiểm tra `NetContext.IsServer`
-để không bị `NullReferenceException` trên headless.
+Singletons that only make sense on the client (`IngameUi`, `MinimapUi`, `LoadoutUi`,
+`FpsActorController`) must be guarded with `#if !UNITY_SERVER` or a `NetContext.IsServer` check so
+they don't throw `NullReferenceException` on headless.
 
-### R5 — Ba backend dev làm ba mảnh khớp nhau nhưng không thấy code nhau
+### R5 — Three backend devs build three interlocking pieces without seeing each other's code
 
-**Xác suất: Cao. Thiệt hại: Rất cao (mất 1–2 tuần ở tuần tích hợp).**
+**Probability: High. Damage: Very high (1–2 weeks lost during integration week).**
 
-Kịch bản điển hình: B định nghĩa header 16 byte với `sequence` ở offset 4; C viết serializer giả
-định `sequence` ở offset 2. Cả hai compile sạch, cả hai unit test riêng đều pass. Chỉ vỡ khi ghép,
-và biểu hiện là "packet rác không parse được" — mất nhiều ngày để tìm.
+Typical scenario: B defines a 16-byte header with `sequence` at offset 4; C writes a serializer
+assuming `sequence` at offset 2. Both compile cleanly, both pass their own unit tests. It only
+breaks when joined, and it presents as "garbage packets that won't parse" — days to track down.
 
-**Chặn:**
-1. [`protocol-spec.md`](protocol-spec.md) là **contract đóng băng cuối tuần 1**, mọi offset, mọi
-   enum value, mọi hằng số quantization đều ghi rõ bằng số.
-2. Sinh code từ spec nếu có thể; nếu không thì hằng số nằm trong **một file duy nhất**
-   `Ironfront.Net.Protocol/ProtocolConstants.cs` mà cả 4 project cùng tham chiếu. Không ai được
-   viết lại hằng số ở chỗ khác.
-3. **Bộ test conformance** (phase-01 của C): tạo packet mẫu bằng hex cứng trong test, assert
-   parser đọc đúng. Bộ test này là trọng tài khi hai người cãi nhau.
-4. Đổi protocol = PR + 2 approve + bump version. Xem [conventions.md](conventions.md).
+**Mitigation:**
+1. [`protocol-spec.md`](protocol-spec.md) is a **contract frozen at the end of week 1**, with every
+   offset, every enum value and every quantization constant written out numerically.
+2. Generate code from the spec where possible; otherwise the constants live in **one single file**,
+   `Ironfront.Net.Protocol/ProtocolConstants.cs`, referenced by all 4 projects. Nobody may redeclare
+   a constant anywhere else.
+3. **A conformance test suite** (C's phase-01): build sample packets from hard-coded hex in the
+   test, then assert the parser reads them correctly. This suite is the referee whenever two people
+   disagree.
+4. Changing the protocol = PR + 2 approvals + version bump. See [conventions.md](conventions.md).
 
-### R6 — Tải CPU trên headless server vượt ngưỡng
+### R6 — CPU load on the headless server exceeds budget
 
-**Xác suất: Thấp–Trung bình. Thiệt hại: Trung bình.**
+**Probability: Low–Medium. Damage: Medium.**
 
-48 actor × (A* pathfinding + AI logic + animation + physics) ở 30Hz. Cộng thêm lag compensation
-phải lưu lịch sử hitbox 1 giây (30 tick × 48 actor × ~8 hitbox).
+48 actors × (A* pathfinding + AI logic + animation + physics) at 30 Hz. On top of that, lag
+compensation has to keep 1 second of hitbox history (30 ticks × 48 actors × ~8 hitboxes).
 
-**Chặn:**
-1. Server tắt: rendering, ragdoll physics, particle, audio, decal, animation của actor ở xa.
-2. Bot AI dùng **LOD tick**: bot cách mọi người chơi >100m chỉ update AI ở 5Hz thay vì 30Hz.
-   Codebase đã có sẵn khái niệm này (`Actor.LQ_UPDATE_RATE = 0.2f`).
-3. Lịch sử hitbox chỉ lưu cho **actor có thể bị bắn** (trong tầm nhìn của ít nhất 1 người chơi).
-4. Đo sớm: phase-02 của C phải có benchmark 48 actor trên máy dev, báo cáo ms/tick.
+**Mitigation:**
+1. The server disables: rendering, ragdoll physics, particles, audio, decals, and animation for
+   distant actors.
+2. Bot AI uses **LOD ticking**: bots more than 100 m from every player update their AI at 5 Hz
+   instead of 30 Hz. The codebase already has this concept (`Actor.LQ_UPDATE_RATE = 0.2f`).
+3. Hitbox history is only kept for **actors that could actually be shot** (visible to at least one
+   player).
+4. Measure early: C's phase-02 must include a 48-actor benchmark on a dev machine, reporting
+   ms/tick.
 
-**Ngưỡng báo động:** nếu server tick > 20ms (tức không giữ nổi 30Hz) ở tuần 8, giảm còn
-16 người + 16 bot.
+**Alarm threshold:** if the server tick exceeds 20 ms (i.e. it can't hold 30 Hz) by week 8, drop to
+16 players + 16 bots.
 
 ---
 
-## 4. Rủi ro về nhân sự và tiến độ
+## 4. People and schedule risks
 
-| Rủi ro | Chặn |
+| Risk | Mitigation |
 |---|---|
-| 1 người biến mất giữa kỳ (thi cử, ốm) | Mỗi phase có mục "Bus factor": ai là người backup. B và C phải review code của nhau hàng tuần |
-| Backend dev chưa từng viết socket | Phase-00 của B và D có phần tự học + bài tập khởi động (echo server TCP/UDP) trước khi vào việc thật |
-| A bị quá tải (1 người gánh cả client) | Cắt UI xuống mức tối thiểu. Từ tuần 11, C hỗ trợ A phần client-side prediction |
-| Ước lượng thời gian sai | Mỗi milestone có buffer 20%. M4 (tuần 14) có thể ăn vào nếu M3 trễ |
+| Someone disappears mid-semester (exams, illness) | Every phase has a "Bus factor" section naming the backup. B and C must review each other's code weekly |
+| A backend dev has never written a socket | B's and D's phase-00 include self-study plus a warm-up exercise (TCP/UDP echo server) before the real work starts |
+| A is overloaded (one person carrying the whole client) | Cut the UI to the bare minimum. From week 11, C helps A with client-side prediction |
+| Time estimates are wrong | Every milestone carries a 20% buffer. M4 (week 14) can be eaten into if M3 slips |
 
 ---
 
-## 5. Scope — thứ gì VÀO, thứ gì RA
+## 5. Scope — what's IN and what's OUT
 
-### Vào scope core (bắt buộc có ở M3)
+### In core scope (required at M3)
 
-- Infantry: chạy, nhảy, ngồi, lean, bơi, ngắm, bắn, reload, ném lựu đạn
-- Vũ khí: 4–6 khẩu (rifle, SMG, sniper, shotgun, launcher, grenade)
-- Bot AI server-side, replicate xuống client
-- 1 map, 1 game mode: **Conquest / chiếm điểm** (`CapturePoint.cs` đã có sẵn)
-- Máu, chết, hồi sinh, chọn spawn point, chọn loadout
+- Infantry: run, jump, crouch, lean, swim, aim, shoot, reload, throw grenades
+- Weapons: 4–6 of them (rifle, SMG, sniper, shotgun, launcher, grenade)
+- Server-side bot AI, replicated down to clients
+- 1 map, 1 game mode: **Conquest / point capture** (`CapturePoint.cs` already exists)
+- Health, death, respawn, spawn-point selection, loadout selection
 - Lag compensation, client-side prediction + reconciliation, entity interpolation
-- Master server TCP: đăng ký/đăng nhập, danh sách phòng, tạo/vào phòng, chat lobby, matchmaking cơ bản
-- Bảng điểm, điều kiện thắng thua
+- TCP master server: register/login, room list, create/join room, lobby chat, basic matchmaking
+- Scoreboard, win/lose conditions
 
-### Ra khỏi scope core (stretch goal, chỉ làm nếu M3 xong sớm)
+### Out of core scope (stretch goals, only if M3 finishes early)
 
-| Thứ bị cắt | Lý do |
+| Cut item | Reason |
 |---|---|
-| **Xe cộ** (Car, Boat, Helicopter, Tank) | Rigidbody sync + client prediction cho xe là bài toán khó riêng, ước tính 4+ tuần. `Vehicle.cs`, `Car.cs`, `Helicopter.cs`, `Tank.cs`, `Boat.cs`, `Seat.cs` **không ai đụng vào trước tuần 13** |
-| Ragdoll sync | Xem R2. Ragdoll là cosmetic cục bộ |
-| Anti-cheat nâng cao | Chỉ làm validation cơ bản: giới hạn tốc độ, rate limit bắn, kiểm tra tầm bắn |
-| Nhiều map / nhiều mode | 1 map là đủ chứng minh kiến trúc |
-| Progression, ranked, skin, thống kê dài hạn | Không liên quan tới mục tiêu kỹ thuật |
-| Voice chat | Riêng nó là một đồ án khác |
-| Thay thế asset / dọn bản quyền | Repo giữ private, không phát hành |
-| Mod support (Ravenfield có sẵn) | Không liên quan multiplayer |
+| **Vehicles** (Car, Boat, Helicopter, Tank) | Rigidbody sync + client prediction for vehicles is its own hard problem, estimated 4+ weeks. `Vehicle.cs`, `Car.cs`, `Helicopter.cs`, `Tank.cs`, `Boat.cs`, `Seat.cs` are **untouched by everyone before week 13** |
+| Ragdoll sync | See R2. Ragdolls are local cosmetics |
+| Advanced anti-cheat | Basic validation only: speed limits, fire rate limits, range checks |
+| Multiple maps / modes | One map is enough to prove the architecture |
+| Progression, ranked, skins, long-term stats | Unrelated to the technical goal |
+| Voice chat | That's a separate capstone on its own |
+| Asset replacement / licensing cleanup | The repo stays private and is never published |
+| Mod support (which Ravenfield has) | Unrelated to multiplayer |
 
-> **Quy tắc chống phình scope:** bất kỳ ai muốn thêm thứ gì vào scope core phải chỉ ra thứ gì
-> bị bỏ ra để đổi lại. Không có "thêm nhẹ thôi mà".
-
----
-
-## 6. Phương án dự phòng (contingency)
-
-Kích hoạt khi mốc bị trễ. Quyết định tại weekly sync, ghi vào report.
-
-### Nếu hết tuần 6 mà M1 chưa xong (2 client chưa thấy nhau)
-
-Đây là tín hiệu nghiêm trọng. Theo thứ tự, làm ngay:
-
-1. **Bỏ client-side prediction ở M1.** Chấp nhận input lag = RTT. Chuyển prediction sang M2.
-   Tiết kiệm ~1 tuần của A và C.
-2. **Bỏ delta compression tạm thời.** Gửi full snapshot. Băng thông tăng ~3× nhưng LAN chịu được.
-   Bật lại ở M2. Tiết kiệm ~1 tuần của C.
-3. **Giảm số actor xuống 8 người + 8 bot** cho tới khi ổn định.
-
-### Nếu hết tuần 10 mà M2 chưa xong (chưa bắn nhau được)
-
-1. **Bỏ lag compensation.** Chuyển sang hit validation đơn giản: server raycast tại vị trí hiện
-   tại, nới rộng hitbox 15% để bù. Chất lượng kém hơn nhưng chơi được. Tiết kiệm ~1.5 tuần của C.
-2. **Bỏ bot khỏi replication.** Chỉ người chơi thật. Tiết kiệm ~0.5 tuần.
-
-### Nếu hết tuần 13 mà M3 chưa xong
-
-1. **Bỏ matchmaking**, chỉ giữ danh sách phòng thủ công. Tiết kiệm ~0.5 tuần của D.
-2. **Bỏ đăng ký tài khoản**, dùng nickname không mật khẩu. Tiết kiệm ~0.5 tuần của D.
-3. Chấp nhận nộp bản M2+ và trình bày M3 như roadmap.
-
-### Mức tối thiểu để đồ án vẫn được chấm
-
-Nếu mọi thứ đổ vỡ, **mức sàn phải giữ bằng mọi giá** là:
-
-- Tầng UDP reliability tự viết, có test suite, có network simulator, có báo cáo đo đạc → phần
-  này một mình đã là nội dung đủ cho đồ án môn Lập trình mạng
-- Master server TCP với auth + lobby
-- 2 client di chuyển thấy nhau
+> **Anti-scope-creep rule:** anyone who wants to add something to core scope must name what comes
+> out in exchange. There is no such thing as "it's only a small addition".
 
 ---
 
-## 7. Ước lượng công sức
+## 6. Contingency plan
 
-Đơn vị: người-tuần. Giả định 15–20 giờ/tuần/người (sinh viên còn môn khác).
+Triggered when a milestone slips. Decided at the weekly sync and recorded in the report.
 
-| Hạng mục | Người | Ước lượng | Ghi chú |
+### If M1 isn't done by the end of week 6 (two clients still can't see each other)
+
+This is a serious signal. In order, act immediately:
+
+1. **Drop client-side prediction for M1.** Accept input lag = RTT. Move prediction to M2. Saves
+   ~1 week each for A and C.
+2. **Drop delta compression temporarily.** Send full snapshots. Bandwidth roughly triples, but a LAN
+   handles it. Re-enable at M2. Saves ~1 week for C.
+3. **Reduce to 8 players + 8 bots** until things stabilize.
+
+### If M2 isn't done by the end of week 10 (no working combat)
+
+1. **Drop lag compensation.** Switch to simple hit validation: the server raycasts at the current
+   position and widens hitboxes by 15% to compensate. Lower quality, but playable. Saves ~1.5 weeks
+   for C.
+2. **Drop bots from replication.** Real players only. Saves ~0.5 weeks.
+
+### If M3 isn't done by the end of week 13
+
+1. **Drop matchmaking**, keep only the manual room list. Saves ~0.5 weeks for D.
+2. **Drop account registration**, use nicknames without passwords. Saves ~0.5 weeks for D.
+3. Accept submitting the M2+ build and presenting M3 as roadmap.
+
+### The floor at which the capstone still gets marked
+
+If everything falls apart, the **floor we hold at all costs** is:
+
+- A hand-written UDP reliability layer with a test suite, a network simulator and a measurement
+  report → this alone is enough material for a Network Programming capstone
+- A TCP master server with auth + lobby
+- Two clients moving and seeing each other
+
+---
+
+## 7. Effort estimate
+
+Unit: person-weeks. Assumes 15–20 hours/week/person (students have other courses).
+
+| Item | Person | Estimate | Notes |
 |---|---|---|---|
-| Refactor input abstraction + seam | A | 2.0 | 59 điểm gọi `Input.*` |
+| Refactor input abstraction + seam | A | 2.0 | 59 `Input.*` call sites |
 | `NetworkActorController` + interpolation | A | 2.0 | |
-| Client prediction + reconciliation (phía client) | A | 2.0 | Phối hợp C |
-| Headless build + guard singleton | A | 1.0 | |
-| UI: lobby, HUD, scoreboard, killfeed | A | 3.0 | Đã cắt tối thiểu |
-| Tích hợp + sửa lỗi client | A | 3.0 | |
-| **Tổng A** | | **13.0** | Vừa khít 14 tuần, không có dư |
+| Client prediction + reconciliation (client side) | A | 2.0 | Coordinated with C |
+| Headless build + singleton guards | A | 1.0 | |
+| UI: lobby, HUD, scoreboard, killfeed | A | 3.0 | Already cut to the minimum |
+| Integration + client bug fixing | A | 3.0 | |
+| **A total** | | **13.0** | Exactly fills 14 weeks, no slack |
 | Socket layer + connection lifecycle | B | 2.0 | |
-| Reliability: seq/ack/bitfield/retransmit | B | 2.5 | Phần khó nhất |
-| Channel + fragmentation + reassembly | B | 2.0 | |
-| Network simulator | B | 1.5 | Ưu tiên cao |
+| Reliability: seq/ack/bitfield/retransmit | B | 2.5 | The hardest part |
+| Channels + fragmentation + reassembly | B | 2.0 | |
+| Network simulator | B | 1.5 | High priority |
 | Congestion control + flow control | B | 1.5 | |
-| Test suite + benchmark + báo cáo đo | B | 2.0 | |
-| Hỗ trợ tích hợp | B | 1.5 | |
-| **Tổng B** | | **13.0** | |
-| Bit-packing serializer + conformance test | C | 2.0 | |
+| Test suite + benchmarks + measurement report | B | 2.0 | |
+| Integration support | B | 1.5 | |
+| **B total** | | **13.0** | |
+| Bit-packing serializer + conformance tests | C | 2.0 | |
 | Snapshot + delta + baseline | C | 2.5 | |
 | Interest management | C | 1.5 | |
 | Server tick loop + authority | C | 2.0 | |
-| Reconciliation (phía server) | C | 1.5 | |
+| Reconciliation (server side) | C | 1.5 | |
 | Lag compensation + hitbox history | C | 2.0 | |
-| Tích hợp + benchmark | C | 1.5 | |
-| **Tổng C** | | **13.0** | |
+| Integration + benchmarks | C | 1.5 | |
+| **C total** | | **13.0** | |
 | TCP framing + connection manager | D | 1.5 | |
-| Auth + account + SQLite | D | 2.0 | |
+| Auth + accounts + SQLite | D | 2.0 | |
 | Lobby + room registry + state push | D | 2.5 | |
-| Matchmaking + join ticket | D | 2.0 | |
+| Matchmaking + join tickets | D | 2.0 | |
 | Game server registry + heartbeat | D | 1.5 | |
 | Chat | D | 1.0 | |
-| Load test harness + monitoring | D | 2.0 | |
-| **Tổng D** | | **12.5** | Có 0.5 tuần dư, dùng để hỗ trợ B |
+| Load-test harness + monitoring | D | 2.0 | |
+| **D total** | | **12.5** | 0.5 weeks spare, used to help B |
 
-**Tổng: ~51.5 người-tuần / 56 người-tuần khả dụng (4 × 14).** Buffer chỉ 8%. Rất căng.
-Đây là lý do các mục ở § 5 bị cắt phải giữ nguyên trạng thái bị cắt.
+**Total: ~51.5 person-weeks out of 56 available (4 × 14).** That's only an 8% buffer. Very tight.
+This is why the items cut in § 5 must stay cut.
 
 ---
 
-## 8. Kết luận và điều kiện thành công
+## 8. Conclusion and success conditions
 
-Dự án khả thi. Ba điều kiện, thiếu một là hỏng:
+The project is feasible. Three conditions; miss one and it fails:
 
-1. **Protocol spec đóng băng cuối tuần 1** và không ai tự ý đổi (chặn R5).
-2. **Network simulator xong tuần 2**, trước cả khi có gì để test (chặn R1).
-3. **Không ai đụng vào xe cộ trước tuần 13** (chặn phình scope).
+1. **The protocol spec is frozen at the end of week 1** and nobody changes it unilaterally
+   (mitigates R5).
+2. **The network simulator is done in week 2**, before there's even anything to test (mitigates R1).
+3. **Nobody touches vehicles before week 13** (blocks scope creep).
 
-Nếu tuần 6 đạt M1 đúng hạn, xác suất về đích M3 tăng lên khoảng 85%.
+If M1 lands on time in week 6, the odds of reaching M3 rise to around 85%.

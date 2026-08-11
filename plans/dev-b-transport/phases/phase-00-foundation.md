@@ -1,38 +1,38 @@
-# Dev B — Phase 00: Nền móng và Network Simulator
+# Dev B — Phase 00: Foundation and the Network Simulator
 
-**Tuần 1–2** · Mốc **M0** · Ước lượng **2.0 người-tuần**
+**Weeks 1–2** · Milestone **M0** · Estimate **2.0 person-weeks**
 
-> Mục tiêu một câu: **gửi được byte qua UDP, và mô phỏng được mạng tệ.**
+> Goal in one sentence: **get bytes across UDP, and be able to simulate a bad network.**
 
-`NetworkSimulator` là deliverable quan trọng nhất phase này, **quan trọng hơn cả việc gửi được
-gói tin**. Không có nó, mọi bug reliability ở phase sau sẽ phải debug bằng cách chơi game thật,
-mỗi vòng lặp mất 5 phút thay vì 50 mili giây.
+`NetworkSimulator` is the most important deliverable of this phase — **more important than actually
+sending packets**. Without it, every reliability bug in later phases has to be debugged by playing
+the real game, at 5 minutes per iteration instead of 50 milliseconds.
 
 ---
 
-## 1. Mục tiêu
+## 1. Objectives
 
-| # | Mục tiêu | Vì sao |
+| # | Objective | Why |
 |---|---|---|
-| 1 | Ôn kiến thức socket, làm 2 bài tập khởi động | Nền tảng, và là chương 1 báo cáo |
-| 2 | Setup project .NET + test + CI | Không có test từ đầu thì sau không ai viết |
-| 3 | `UdpPeer` gửi/nhận datagram thô, parse header 16 byte | Nền của mọi thứ |
-| 4 | **`NetworkSimulator`** đầy đủ 5 loại nhiễu | Chặn rủi ro R1/B1 |
-| 5 | `BufferPool` không cấp phát | Chặn B3 |
-| 6 | `LoopbackTransport` cho A và C dùng sớm | Chặn B6 |
-| 7 | Đóng băng API công khai | A và C code dựa vào nó |
+| 1 | Refresh socket knowledge, complete 2 warm-up exercises | The foundation, and chapter 1 of the report |
+| 2 | Set up the .NET project + tests + CI | If tests aren't there from the start, nobody writes them later |
+| 3 | `UdpPeer` sending/receiving raw datagrams, parsing the 16-byte header | The basis for everything |
+| 4 | **`NetworkSimulator`** with all 5 impairment types | Mitigates risks R1/B1 |
+| 5 | A non-allocating `BufferPool` | Mitigates B3 |
+| 6 | `LoopbackTransport` for A and C to use early | Mitigates B6 |
+| 7 | Freeze the public API | A and C write code against it |
 
 ---
 
-## 2. Task chi tiết
+## 2. Detailed tasks
 
-### Task 1 — Bài tập khởi động (2 ngày)
+### Task 1 — Warm-up exercises (2 days)
 
-Không phải phí thời gian: đây là chương 1 của báo cáo đồ án và là cách bạn kiểm chứng hiểu biết
-trước khi viết thứ phức tạp.
+Not wasted time: this is chapter 1 of the capstone report, and it's how you check your understanding
+before writing anything complex.
 
-**Bài 1 — Echo UDP.** Server nhận datagram, gửi trả nguyên văn. Client gửi 10.000 gói đánh số,
-đếm bao nhiêu gói về, bao nhiêu về sai thứ tự.
+**Exercise 1 — UDP echo.** The server receives a datagram and sends it straight back. The client
+sends 10,000 numbered packets and counts how many come back and how many arrive out of order.
 
 ```csharp
 // tools/warmup/UdpEcho/Program.cs
@@ -47,20 +47,21 @@ while (true)
 }
 ```
 
-Ghi lại: LAN mất bao nhiêu %? Qua Internet (VPS) mất bao nhiêu? Gửi nhanh 10.000 gói liên tục
-có mất không (buffer overflow ở kernel)?
+Record: what percentage is lost on LAN? Over the Internet (a VPS)? Does sending 10,000 packets
+rapidly back to back lose any (kernel buffer overflow)?
 
-**Bài 2 — Echo TCP tương đương.** Cùng số lượng, đo độ trễ end-to-end của gói thứ 5000 khi
-gói thứ 4999 bị mất. Dùng `clumsy` (Windows) hoặc `tc netem` (Linux) để tạo mất gói.
+**Exercise 2 — The equivalent TCP echo.** Same packet count; measure the end-to-end latency of
+packet 5000 when packet 4999 is lost. Use `clumsy` (Windows) or `tc netem` (Linux) to induce the
+loss.
 
-**Kết quả mong đợi:** TCP sẽ cho thấy độ trễ tăng vọt ở gói ngay sau gói mất (head-of-line
-blocking), UDP thì không. Đây là **bằng chứng thực nghiệm** cho quyết định kiến trúc AD-8.
-Viết 1 trang nhận xét kèm biểu đồ.
+**Expected result:** TCP will show a latency spike on the packet immediately after the lost one
+(head-of-line blocking); UDP won't. This is **experimental evidence** for architectural decision
+AD-8. Write a one-page commentary with a chart.
 
-**Bài 3 — MTU.** Gửi datagram 2000 byte, bắt bằng Wireshark, quan sát IP fragmentation. Gửi
-1200 byte, quan sát không fragment. Giải thích vì sao ta chọn 1200.
+**Exercise 3 — MTU.** Send a 2000-byte datagram, capture it in Wireshark, observe the IP
+fragmentation. Send 1200 bytes and observe that it doesn't fragment. Explain why we chose 1200.
 
-### Task 2 — Setup project (nửa ngày)
+### Task 2 — Project setup (half a day)
 
 ```
 Ironfront.Net.Transport/
@@ -77,26 +78,26 @@ Ironfront.Net.Transport.Tests/
 └── ...
 ```
 
-**Vì sao `netstandard2.1`:** Unity hỗ trợ nó. Nếu bạn dùng `net8.0` thì Unity không load được
-DLL. Đây là lỗi hay gặp, phát hiện muộn rất tốn công.
+**Why `netstandard2.1`:** Unity supports it. If you target `net8.0`, Unity can't load the DLL. This
+is a common mistake and expensive to discover late.
 
-**Cạm bẫy — `Span<byte>` trên netstandard2.1:** cần package `System.Memory`. Thêm vào csproj:
+**Trap — `Span<byte>` on netstandard2.1:** it needs the `System.Memory` package. Add to the csproj:
 ```xml
 <PackageReference Include="System.Memory" Version="4.5.5" />
 ```
-Và khi copy DLL sang Unity, phải copy cả `System.Memory.dll`, `System.Buffers.dll`,
-`System.Runtime.CompilerServices.Unsafe.dll`. Ghi rõ trong `tools/build-libs.ps1`.
+And when copying DLLs into Unity you must also copy `System.Memory.dll`, `System.Buffers.dll` and
+`System.Runtime.CompilerServices.Unsafe.dll`. Document this in `tools/build-libs.ps1`.
 
-Bật cảnh báo thành lỗi:
+Turn warnings into errors:
 ```xml
 <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 <Nullable>enable</Nullable>
 ```
 
-### Task 3 — `PacketHeader` (1 ngày)
+### Task 3 — `PacketHeader` (1 day)
 
-Đọc/ghi header 16 byte theo đúng
-[`protocol-spec.md § 2`](../../00-shared/protocol-spec.md#2-header-gsp-16-byte-mọi-datagram).
+Read/write the 16-byte header exactly per
+[`protocol-spec.md § 2`](../../00-shared/protocol-spec.md#2-gsp-header-16-bytes-every-datagram).
 
 ```csharp
 public readonly struct PacketHeader
@@ -117,17 +118,17 @@ public readonly struct PacketHeader
         h = default;
         if (src.Length < SIZE) return false;
         ushort pid = ReadU16(src, 0);
-        if (pid != ProtocolConstants.PROTOCOL_ID) return false;   // gói rác, drop im lặng
+        if (pid != ProtocolConstants.PROTOCOL_ID) return false;   // junk packet, drop silently
         ushort payLen = ReadU16(src, 14);
-        if (src.Length < SIZE + payLen) return false;             // gói cụt
+        if (src.Length < SIZE + payLen) return false;             // truncated packet
         h = new PacketHeader(pid, src[2], src[3], ReadU16(src,4), ReadU16(src,6),
                              ReadU32(src,8), ReadU16(src,12), payLen);
         return true;
     }
 
-    public void Write(Span<byte> dst) { /* đối xứng */ }
+    public void Write(Span<byte> dst) { /* symmetric */ }
 
-    // Đọc/ghi thủ công, KHÔNG dùng BitConverter (phụ thuộc endianness máy)
+    // Read/write manually, NOT with BitConverter (which depends on machine endianness)
     private static ushort ReadU16(ReadOnlySpan<byte> s, int o)
         => (ushort)(s[o] | (s[o + 1] << 8));
     private static uint ReadU32(ReadOnlySpan<byte> s, int o)
@@ -135,17 +136,17 @@ public readonly struct PacketHeader
 }
 ```
 
-> **Cạm bẫy:** `BitConverter.ToUInt16` dùng endianness của máy. Trên x86 nó là little-endian
-> nên "chạy được" — rồi vỡ nếu ai đó chạy trên ARM big-endian. Viết shift thủ công ngay từ đầu,
-> chi phí bằng 0 và không bao giờ sai.
+> **Trap:** `BitConverter.ToUInt16` uses the machine's endianness. On x86 that's little-endian, so it
+> "works" — and then breaks if anyone runs it on big-endian ARM. Write the shifts manually from the
+> start; it costs nothing and can never be wrong.
 
-**Test bắt buộc:**
-- Round-trip mọi trường với giá trị biên (0, max)
-- `TryRead` với `protocolId` sai → false
-- `TryRead` với buffer ngắn hơn 16 byte → false
-- `TryRead` với `payloadLength` lớn hơn dữ liệu thực → false
+**Mandatory tests:**
+- Round-trip every field with boundary values (0, max)
+- `TryRead` with a wrong `protocolId` → false
+- `TryRead` with a buffer shorter than 16 bytes → false
+- `TryRead` with a `payloadLength` larger than the actual data → false
 
-### Task 4 — `BufferPool` (1 ngày)
+### Task 4 — `BufferPool` (1 day)
 
 ```csharp
 public sealed class BufferPool
@@ -164,15 +165,15 @@ public sealed class BufferPool
     public byte[] Rent()
     {
         if (_pool.TryTake(out var b)) { Interlocked.Increment(ref _rented); return b; }
-        // Pool cạn: tạo mới nhưng CẢNH BÁO — pool sizing sai
+        // Pool exhausted: allocate, but WARN — the pool is sized wrong
         Interlocked.Increment(ref _created);
-        NetLog.Warn($"BufferPool cạn, đã tạo {_created} buffer. Tăng capacity.");
+        NetLog.Warn($"BufferPool exhausted, {_created} buffers created. Raise the capacity.");
         return new byte[_bufferSize];
     }
 
     public void Return(byte[] b)
     {
-        if (b.Length != _bufferSize) return;      // không phải của pool này
+        if (b.Length != _bufferSize) return;      // not from this pool
         Interlocked.Decrement(ref _rented);
         _pool.Add(b);
     }
@@ -181,11 +182,12 @@ public sealed class BufferPool
 }
 ```
 
-**Cạm bẫy ownership:** buffer trả về pool rồi mà còn giữ tham chiếu → đọc phải dữ liệu của
-người khác. Bug này biểu hiện là "thỉnh thoảng packet có nội dung lạ", cực khó tìm.
+**The ownership trap:** holding a reference to a buffer after returning it to the pool → you end up
+reading someone else's data. This bug presents as "packets occasionally have strange contents" and
+is extremely hard to find.
 
-Phòng ngừa: trong Debug build, ghi đè buffer bằng `0xDD` khi trả về pool. Ai đọc buffer đã trả
-sẽ thấy toàn `0xDD`, lộ bug ngay.
+Prevention: in Debug builds, overwrite the buffer with `0xDD` on return. Anyone reading a returned
+buffer sees nothing but `0xDD`, exposing the bug immediately.
 
 ```csharp
 #if DEBUG
@@ -193,23 +195,23 @@ sẽ thấy toàn `0xDD`, lộ bug ngay.
 #endif
 ```
 
-### Task 5 — `NetworkSimulator` (3 ngày) — DELIVERABLE QUAN TRỌNG NHẤT
+### Task 5 — `NetworkSimulator` (3 days) — THE MOST IMPORTANT DELIVERABLE
 
-Chèn giữa `UdpPeer` và socket thật. Mô phỏng 5 loại nhiễu.
+Inserted between `UdpPeer` and the real socket. Simulates 5 kinds of impairment.
 
 ```csharp
 // Ironfront.Net.Transport/Simulation/NetworkSimulator.cs
 public sealed class SimulatorConfig
 {
     public bool  Enabled          = false;
-    public float LatencyMs        = 0f;      // độ trễ cơ bản một chiều
-    public float JitterMs         = 0f;      // dao động ± quanh LatencyMs
+    public float LatencyMs        = 0f;      // base one-way latency
+    public float JitterMs         = 0f;      // ± variation around LatencyMs
     public float PacketLossPercent= 0f;      // 0..100
-    public float DuplicatePercent = 0f;      // gói bị nhân đôi
-    public float ReorderPercent   = 0f;      // gói bị đảo thứ tự
-    public int   RandomSeed       = 12345;   // TÁI LẬP ĐƯỢC — cực kỳ quan trọng
+    public float DuplicatePercent = 0f;      // packets duplicated
+    public float ReorderPercent   = 0f;      // packets reordered
+    public int   RandomSeed       = 12345;   // REPRODUCIBLE — extremely important
 
-    // Preset
+    // Presets
     public static SimulatorConfig Lan()  => new() { Enabled = true, LatencyMs = 1 };
     public static SimulatorConfig Good() => new() { Enabled = true, LatencyMs = 30, JitterMs = 5,
                                                     PacketLossPercent = 0.5f };
@@ -239,18 +241,18 @@ internal sealed class NetworkSimulator
 
     public NetworkSimulator(SimulatorConfig cfg) { _cfg = cfg; _rng = new Random(cfg.RandomSeed); }
 
-    /// <summary>Trả false nếu gói bị "mất" — người gọi không gửi thật.</summary>
+    /// <summary>Returns false if the packet was "lost" — the caller must not really send it.</summary>
     public bool ShouldSend(ReadOnlySpan<byte> data, EndPoint ep, double nowMs, BufferPool pool)
     {
         if (!_cfg.Enabled) return true;
 
-        if (Roll() < _cfg.PacketLossPercent) return false;      // mất
+        if (Roll() < _cfg.PacketLossPercent) return false;      // lost
 
-        int copies = Roll() < _cfg.DuplicatePercent ? 2 : 1;    // nhân đôi
+        int copies = Roll() < _cfg.DuplicatePercent ? 2 : 1;    // duplicated
         for (int i = 0; i < copies; i++)
         {
             double delay = _cfg.LatencyMs + (_rng.NextDouble() * 2 - 1) * _cfg.JitterMs;
-            if (Roll() < _cfg.ReorderPercent) delay += _cfg.LatencyMs;  // đẩy lùi → đảo thứ tự
+            if (Roll() < _cfg.ReorderPercent) delay += _cfg.LatencyMs;  // push it back → reordered
             delay = Math.Max(0, delay);
 
             var buf = pool.Rent();
@@ -258,10 +260,10 @@ internal sealed class NetworkSimulator
             _inFlight.Add(new DelayedPacket {
                 DeliverAtMs = nowMs + delay, Data = buf, Length = data.Length, Endpoint = ep });
         }
-        return false;    // luôn false: gói thật được gửi ở Flush()
+        return false;    // always false: the real packet is sent from Flush()
     }
 
-    /// <summary>Gọi mỗi Poll(). Gửi những gói đã tới hạn.</summary>
+    /// <summary>Called on every Poll(). Sends packets whose time has come.</summary>
     public void Flush(double nowMs, Action<byte[], int, EndPoint> reallySend, BufferPool pool)
     {
         for (int i = _inFlight.Count - 1; i >= 0; i--)
@@ -278,21 +280,24 @@ internal sealed class NetworkSimulator
 }
 ```
 
-**Vì sao `RandomSeed` quan trọng:** khi test tìm ra bug ở seed 12345, bạn chạy lại đúng seed đó
-sẽ tái hiện chính xác cùng chuỗi mất/đảo gói. Không có seed cố định thì bug "thỉnh thoảng xảy
-ra" sẽ không bao giờ bắt được. **Đây là kỹ thuật quan trọng nhất trong debug netcode.**
+**Why `RandomSeed` matters:** when a test finds a bug at seed 12345, re-running that exact seed
+reproduces the identical sequence of losses and reorderings. Without a fixed seed, "it only happens
+sometimes" bugs are never caught. **This is the single most important technique in netcode
+debugging.**
 
-**Cạm bẫy — reorder không thực sự đảo.** Cài đặt trên chỉ *đẩy lùi* gói. Nếu gói sau không được
-đẩy lùi thì nó vượt lên → đảo thứ tự. Nhưng nếu `LatencyMs = 0`, đẩy lùi 0ms thì không đảo gì.
-Test phải đặt `LatencyMs > 0` khi test reorder. Ghi chú này vào XML doc.
+**Trap — reordering that doesn't actually reorder.** The implementation above only *pushes packets
+back*. If the following packet isn't pushed back, it overtakes → reordering. But with
+`LatencyMs = 0`, pushing back by 0 ms reorders nothing. Reordering tests must set `LatencyMs > 0`.
+Note this in the XML docs.
 
-**Bật/tắt runtime:** đọc từ biến môi trường để bật khi chạy game thật mà không cần build lại.
+**Runtime toggle:** read it from an environment variable so it can be enabled in the real game
+without a rebuild.
 ```
 IRONFRONT_SIM=typical   dotnet run
 IRONFRONT_SIM=bad       .\Ironfront_Reborn.exe
 ```
 
-### Task 6 — `UdpPeer` gửi/nhận thô (2 ngày)
+### Task 6 — Raw send/receive in `UdpPeer` (2 days)
 
 ```csharp
 public sealed class UdpPeer : IDisposable
@@ -305,8 +310,8 @@ public sealed class UdpPeer : IDisposable
     {
         _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp)
         {
-            Blocking = false,                 // B-AD-1: một thread, non-blocking
-            ReceiveBufferSize = 1 << 20,      // 1 MB, tránh mất gói ở kernel khi burst
+            Blocking = false,                 // B-AD-1: one thread, non-blocking
+            ReceiveBufferSize = 1 << 20,      // 1 MB, avoids kernel packet loss during bursts
             SendBufferSize    = 1 << 20,
         };
         _socket.Bind(new IPEndPoint(IPAddress.Any, bindPort));
@@ -315,7 +320,7 @@ public sealed class UdpPeer : IDisposable
         _sim  = new NetworkSimulator(simCfg);
     }
 
-    /// <summary>Windows: tắt SIO_UDP_CONNRESET. BẮT BUỘC, xem cạm bẫy dưới.</summary>
+    /// <summary>Windows: disable SIO_UDP_CONNRESET. MANDATORY, see the trap below.</summary>
     private void DisableIcmpPortUnreachable()
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
@@ -335,29 +340,30 @@ public sealed class UdpPeer : IDisposable
             catch (SocketException e) when (e.SocketErrorCode == SocketError.WouldBlock)
             { _pool.Return(buf); break; }
             catch (SocketException e)
-            { NetLog.Warn($"recv lỗi {e.SocketErrorCode}"); _pool.Return(buf); continue; }
+            { NetLog.Warn($"recv error {e.SocketErrorCode}"); _pool.Return(buf); continue; }
 
             if (PacketHeader.TryRead(buf.AsSpan(0, n), out var header))
                 Dispatch(header, buf.AsSpan(PacketHeader.SIZE, header.PayloadLength), remote);
-            // header sai → drop im lặng, KHÔNG trả lời (chống amplification)
+            // bad header → drop silently, do NOT reply (anti-amplification)
             _pool.Return(buf);
         }
     }
 }
 ```
 
-> **Cạm bẫy Windows nghiêm trọng — `SIO_UDP_CONNRESET`.**
-> Trên Windows, nếu bạn gửi UDP tới một cổng đóng, OS nhận ICMP Port Unreachable và làm lần
-> `ReceiveFrom` **tiếp theo** ném `SocketException` với `ConnectionReset`. Điều này khiến vòng
-> lặp nhận của bạn chết dù chẳng có gì sai. Biểu hiện: "server chạy được 1 phút rồi ngừng nhận
-> gói". Bắt buộc gọi `IOControl(SIO_UDP_CONNRESET, ...)` như trên. Không có trên Linux.
+> **A serious Windows trap — `SIO_UDP_CONNRESET`.**
+> On Windows, if you send UDP to a closed port, the OS receives an ICMP Port Unreachable and makes
+> your **next** `ReceiveFrom` throw a `SocketException` with `ConnectionReset`. That kills your
+> receive loop even though nothing is actually wrong. It presents as "the server runs for a minute
+> and then stops receiving packets". You must call `IOControl(SIO_UDP_CONNRESET, ...)` as shown
+> above. It doesn't exist on Linux.
 >
-> Đây là một trong những bug tốn thời gian nhất khi tự viết UDP trên Windows.
+> This is one of the most time-consuming bugs when hand-writing UDP on Windows.
 
-### Task 6.5 — Bit-packing serializer (2 ngày) — MỚI NHẬN TỪ DEV C
+### Task 6.5 — Bit-packing serializer (2 days) — NEWLY TAKEN FROM DEV C
 
-Ba class, đặt trong `Ironfront.Net.Replication/Serialization/`. Cùng loại việc byte-level bạn
-đang làm với `PacketHeader`, nên đặt cạnh nhau về mặt tư duy.
+Three classes, placed in `Ironfront.Net.Replication/Serialization/`. It's the same byte-level work
+you're already doing with `PacketHeader`, so mentally it belongs next to it.
 
 ```csharp
 // Ironfront.Net.Replication/Serialization/BitWriter.cs
@@ -372,7 +378,7 @@ public ref struct BitWriter
     public void WriteBits(uint value, int bits)
     {
         Debug.Assert(bits > 0 && bits <= 32);
-        Debug.Assert(bits == 32 || value < (1u << bits), $"giá trị {value} vượt {bits} bit");
+        Debug.Assert(bits == 32 || value < (1u << bits), $"value {value} exceeds {bits} bits");
         for (int i = 0; i < bits; i++)
         {
             int byteIdx = _bitPos >> 3, bitIdx = _bitPos & 7;
@@ -390,75 +396,77 @@ public ref struct BitWriter
 }
 ```
 
-`Quantize` — copy **nguyên văn** công thức từ
-[`protocol-spec.md § 4.4`](../../00-shared/protocol-spec.md#44-quantization--hằng-số-bắt-buộc-dùng-chung).
-**Không sáng tạo lại.** Thấy công thức có vẻ sai thì sửa spec trước qua PR, rồi mới sửa code.
+For `Quantize` — copy the formulas **verbatim** from
+[`protocol-spec.md § 4.4`](../../00-shared/protocol-spec.md#44-quantization--mandatory-shared-constants).
+**Don't reinvent them.** If a formula looks wrong, fix the spec first via a PR, then the code.
 
-**Ba cạm bẫy:**
+**Three traps:**
 
-1. **Thứ tự bit.** Cài đặt trên ghi bit thấp trước (LSB-first). `BitReader` phải đọc cùng thứ
-   tự. Nếu sau này bạn tối ưu `BitWriter` mà quên đổi `BitReader`, mọi thứ vỡ theo cách rất khó
-   hiểu. Test round-trip là bắt buộc.
-2. **Vòng lặp từng bit chậm** — tốn ~8× so với ghi cả word. Với 48 actor × 100 bit × 20 Hz =
-   ~96K lần lặp/giây, vẫn chấp nhận được. **Làm đúng trước, tối ưu sau nếu benchmark chỉ ra.**
-3. **Tràn buffer.** `WriteBits` không kiểm tra `_buf` còn chỗ. Thêm kiểm tra ở Debug build.
+1. **Bit order.** The implementation above writes least-significant bit first (LSB-first).
+   `BitReader` must read in the same order. If you later optimize `BitWriter` and forget to change
+   `BitReader`, everything breaks in very confusing ways. Round-trip tests are mandatory.
+2. **The per-bit loop is slow** — roughly 8× the cost of writing whole words. At 48 actors ×
+   100 bits × 20 Hz = ~96K iterations/second, that's still acceptable. **Get it right first,
+   optimize later only if the benchmark says so.**
+3. **Buffer overrun.** `WriteBits` doesn't check that `_buf` still has room. Add a check in Debug
+   builds.
 
-> **Dev C viết test conformance kiểm định code này**, với dữ liệu hex cứng viết tay theo spec.
-> Test của C có thể đỏ trên code bạn vừa viết — đó là tính năng, không phải xung đột. Khi đỏ,
-> hai người cùng mở spec § 4.4 xem ai lệch.
+> **Dev C writes the conformance tests that verify this code**, using hand-written hex data taken
+> from the spec. C's tests may go red against code you just wrote — that's a feature, not a
+> conflict. When it happens, the two of you open spec § 4.4 and see who diverged.
 >
-> Bạn vẫn nên viết test round-trip của riêng mình (~8 test). Hai bộ test bổ sung nhau: của bạn
-> chứng minh nhất quán nội bộ, của C chứng minh khớp spec.
+> You should still write your own round-trip tests (~8 of them). The two suites complement each
+> other: yours prove internal consistency, C's prove conformance to the spec.
 
-### Task 7 — `LoopbackTransport` (1 ngày)
+### Task 7 — `LoopbackTransport` (1 day)
 
-Cho A và C dùng ngay tuần 3, không cần chờ reliability xong.
+So A and C can start using it in week 3, without waiting for reliability to be finished.
 
 ```csharp
-/// <summary>Transport in-memory, không qua socket. Có thể gắn NetworkSimulator.</summary>
+/// <summary>An in-memory transport that bypasses the socket. Can be attached to NetworkSimulator.</summary>
 public sealed class LoopbackTransport : ITransportClient, ITransportServer
 {
-    // Hai hàng đợi, client↔server. Vẫn qua simulator để mô phỏng mạng tệ.
+    // Two queues, client↔server. Still passes through the simulator to model a bad network.
 }
 ```
 
-Giá trị: A test client-side prediction với 200ms latency mô phỏng **mà không cần bất kỳ socket
-nào**, chạy trong Unity Editor một process duy nhất.
+The value: A can test client-side prediction with 200 ms of simulated latency **without any socket
+at all**, running in a single process inside the Unity Editor.
 
 ---
 
-## 3. Tiêu chí nghiệm thu
+## 3. Acceptance criteria
 
-| # | Tiêu chí | Cách kiểm chứng |
+| # | Criterion | How to verify |
 |---|---|---|
-| 1 | 3 bài tập khởi động xong, có 1 trang nhận xét + biểu đồ | File `reports/warmup-udp-vs-tcp.md` |
-| 2 | `dotnet build` sạch, 0 warning | Output CI |
-| 3 | `PacketHeader` round-trip đúng, ≥8 test xanh | `dotnet test` |
-| 4 | `BufferPool` không cấp phát sau khi ấm | Benchmark: 100k Rent/Return → 0 GC gen0 |
-| 5 | `NetworkSimulator` tái lập được với cùng seed | Test: chạy 2 lần cùng seed → chuỗi gói mất giống hệt |
-| 6 | Simulator mô phỏng đủ 5 loại nhiễu | 5 test riêng, mỗi loại kiểm chứng thống kê trên 10.000 gói |
-| 7 | `UdpPeer` gửi/nhận 10.000 gói qua localhost, không mất | Integration test |
-| 8 | `SIO_UDP_CONNRESET` đã tắt, chạy 10 phút với 1 client tắt giữa chừng | Server không crash |
-| 9 | `LoopbackTransport` giao được cho A và C dùng | A xác nhận |
-| 10 | API công khai đóng băng, có XML doc đầy đủ | Review với A và C |
+| 1 | All 3 warm-up exercises done, with a one-page commentary + chart | The file `reports/warmup-udp-vs-tcp.md` |
+| 2 | `dotnet build` clean, 0 warnings | CI output |
+| 3 | `PacketHeader` round-trips correctly, ≥8 tests green | `dotnet test` |
+| 4 | `BufferPool` doesn't allocate once warm | Benchmark: 100k Rent/Return → 0 gen0 GCs |
+| 5 | `NetworkSimulator` is reproducible with the same seed | Test: two runs with the same seed → identical loss sequences |
+| 6 | The simulator models all 5 impairment types | 5 separate tests, each statistically verified over 10,000 packets |
+| 7 | `UdpPeer` sends/receives 10,000 packets over localhost with no loss | Integration test |
+| 8 | `SIO_UDP_CONNRESET` is disabled; run 10 minutes with one client killed mid-run | The server doesn't crash |
+| 9 | `LoopbackTransport` delivered to A and C | Confirmed by A |
+| 10 | The public API is frozen and fully XML-documented | Reviewed with A and C |
 
 ---
 
-## 4. Rủi ro
+## 4. Risks
 
-| Rủi ro | Dấu hiệu | Xử lý |
+| Risk | Sign | Handling |
 |---|---|---|
-| Chưa quen socket, mất nhiều hơn 2 ngày ôn | | Chấp nhận tới 3 ngày. Nếu hơn, báo nhóm — có thể cần đổi phân công |
-| `netstandard2.1` + `Span` không load được vào Unity | Unity báo lỗi thiếu assembly | Copy đủ 3 DLL phụ thuộc. Test load sớm ở tuần 2, đừng để tới tuần 6 |
-| `SIO_UDP_CONNRESET` không biết → mất nhiều ngày | Server ngừng nhận gói sau vài phút | Đã ghi ở Task 6. Làm đúng từ đầu |
-| Simulator thiết kế sai, không tái lập được | Bug không tái hiện được | `RandomSeed` cố định, `Random` riêng cho simulator, không dùng `Random.Shared` |
+| Unfamiliar with sockets, the refresher takes more than 2 days | | Up to 3 days is fine. Beyond that, tell the team — the assignment may need to change |
+| `netstandard2.1` + `Span` won't load into Unity | Unity reports a missing assembly | Copy all 3 dependency DLLs. Test the load early in week 2, not in week 6 |
+| Not knowing about `SIO_UDP_CONNRESET` → days lost | The server stops receiving packets after a few minutes | Documented in Task 6. Do it right from the start |
+| A badly designed simulator that isn't reproducible | Bugs can't be reproduced | A fixed `RandomSeed`, a dedicated `Random` for the simulator, never `Random.Shared` |
 
 ---
 
-## 5. Bàn giao cuối phase
+## 5. End-of-phase handoff
 
-Gửi cho A và C trước cuối tuần 2:
-- DLL `Ironfront.Net.Transport.dll` + 3 DLL phụ thuộc, đã test load được trong Unity
-- `LoopbackTransport` dùng được
-- File XML doc mô tả rõ **ownership của buffer trong `OnMessage`**
-- Hướng dẫn bật simulator bằng biến môi trường
+Send to A and C before the end of week 2:
+- `Ironfront.Net.Transport.dll` + the 3 dependency DLLs, verified to load in Unity
+- A working `LoopbackTransport`
+- XML docs clearly describing **buffer ownership in `OnMessage`**
+- Instructions for enabling the simulator via environment variables

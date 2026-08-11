@@ -1,34 +1,34 @@
 # Dev B — Phase 01: Reliability layer
 
-**Tuần 3–6** · Mốc **M1 (mốc sinh tử)** · Ước lượng **4.0 người-tuần**
+**Weeks 3–6** · Milestone **M1 (the make-or-break milestone)** · Estimate **4.0 person-weeks**
 
-> Mục tiêu một câu: **gói tin quan trọng luôn tới, gói tin cũ bị bỏ đúng lúc, và cả hai chuyện
-> đó vẫn đúng ở 30% packet loss.**
+> Goal in one sentence: **important packets always arrive, stale packets are dropped at the right
+> moment, and both remain true at 30% packet loss.**
 
-Đây là phần lõi học thuật của đồ án. Làm kỹ.
+This is the academic core of the capstone. Do it thoroughly.
 
 ---
 
-## 1. Mục tiêu
+## 1. Objectives
 
-| # | Mục tiêu |
+| # | Objective |
 |---|---|
-| 1 | Handshake 4 bước, chống IP spoofing |
-| 2 | Sequence + ack + ack bitfield 32 bit |
-| 3 | Retransmit gói reliable chưa được ack |
-| 4 | 4 channel với semantics khác nhau |
-| 5 | Fragmentation / reassembly, có chống DoS |
+| 1 | A 4-step handshake resistant to IP spoofing |
+| 2 | Sequence + ack + 32-bit ack bitfield |
+| 3 | Retransmitting unacked reliable packets |
+| 4 | 4 channels with distinct semantics |
+| 5 | Fragmentation / reassembly with DoS protection |
 | 6 | RTT estimation (EWMA) + jitter |
-| 7 | Keep-alive, timeout, ngắt kết nối sạch |
-| 8 | **≥40 unit test** |
+| 7 | Keep-alive, timeout, clean disconnect |
+| 8 | **≥40 unit tests** |
 
 ---
 
-## 2. Task chi tiết
+## 2. Detailed tasks
 
-### Task 1 — Handshake và `Connection` state machine (3 ngày)
+### Task 1 — Handshake and the `Connection` state machine (3 days)
 
-Theo [`protocol-spec.md § 3.1`](../../00-shared/protocol-spec.md#31-handshake).
+Per [`protocol-spec.md § 3.1`](../../00-shared/protocol-spec.md#31-handshake).
 
 ```csharp
 public sealed class Connection
@@ -46,9 +46,9 @@ public sealed class Connection
         switch (State)
         {
             case ConnectionState.Connecting:
-                if (nowMs - _lastSendMs > 250)          // retry mỗi 250ms
+                if (nowMs - _lastSendMs > 250)          // retry every 250ms
                 {
-                    if (++_connectAttempts > 20)         // 5 giây
+                    if (++_connectAttempts > 20)         // 5 seconds
                     { Fail(DisconnectReason.Timeout); return; }
                     SendConnectRequest(nowMs);
                 }
@@ -66,27 +66,29 @@ public sealed class Connection
 }
 ```
 
-**Vì sao challenge–response:** chống *IP spoofing amplification*. Kẻ tấn công gửi
-`CONNECT_REQUEST` với IP nguồn giả là nạn nhân. Nếu server cấp phát tài nguyên ngay, nó vừa tốn
-RAM vừa gửi dữ liệu tới nạn nhân (khuếch đại tấn công). Với challenge, server **không lưu gì**
-cho tới khi client chứng minh nhận được `serverSalt` — điều mà kẻ giả IP không làm được.
+**Why challenge–response:** it prevents *IP-spoofing amplification*. An attacker sends a
+`CONNECT_REQUEST` with the victim's IP as the source. If the server allocated resources immediately,
+it would both waste RAM and send data to the victim (amplifying the attack). With a challenge, the
+server **stores nothing** until the client proves it received the `serverSalt` — something an IP
+spoofer cannot do.
 
-**Chi tiết quan trọng:** ở bước `CONNECT_CHALLENGE`, server **không** tạo `Connection` object.
-Nó tính `serverSalt = HMAC(clientEndpoint + clientSalt, serverSecret)` — stateless, không tốn
-bộ nhớ. Chỉ khi `CONNECT_RESPONSE` đúng mới cấp phát. Đây gọi là *SYN cookie* trong TCP, ta áp
-dụng ý tưởng tương tự.
+**An important detail:** at the `CONNECT_CHALLENGE` step, the server does **not** create a
+`Connection` object. It computes `serverSalt = HMAC(clientEndpoint + clientSalt, serverSecret)` —
+stateless, costing no memory. It only allocates once a correct `CONNECT_RESPONSE` arrives. This is
+the *SYN cookie* idea from TCP, applied here.
 
-**Ngắt kết nối sạch:** gửi `DISCONNECT` **3 lần** (không reliable, vì đang đóng). Bên kia nhận
-được 1 trong 3 là đủ. Nếu mất cả 3, bên kia sẽ timeout sau 10 giây — vẫn đúng, chỉ chậm hơn.
+**Clean disconnect:** send `DISCONNECT` **3 times** (unreliably, since we're closing). The other side
+only needs 1 of the 3. If all 3 are lost, the peer times out after 10 seconds — still correct, just
+slower.
 
-### Task 2 — `ReliabilityLayer`: sequence, ack, bitfield (4 ngày)
+### Task 2 — `ReliabilityLayer`: sequence, ack, bitfield (4 days)
 
-Trái tim của tầng transport.
+The heart of the transport layer.
 
 ```csharp
 public sealed class ReliabilityLayer
 {
-    private const int SENT_BUFFER_SIZE = 1024;      // lịch sử gói đã gửi
+    private const int SENT_BUFFER_SIZE = 1024;      // history of sent packets
 
     private struct SentPacket
     {
@@ -94,23 +96,23 @@ public sealed class ReliabilityLayer
         public double SentAtMs;
         public bool   Acked;
         public bool   IsReliable;
-        public byte[] Data;        // null nếu unreliable (không cần giữ để resend)
+        public byte[] Data;        // null if unreliable (no need to keep it for resending)
         public int    Length;
         public int    ResendCount;
     }
 
     private readonly SentPacket[] _sent = new SentPacket[SENT_BUFFER_SIZE];
-    private ushort _localSequence;          // seq của gói TA gửi tiếp theo
-    private ushort _remoteSequence;         // seq lớn nhất TA đã nhận từ họ
-    private uint   _receivedBitfield;       // 32 gói trước _remoteSequence
+    private ushort _localSequence;          // the seq of the next packet WE send
+    private ushort _remoteSequence;         // the highest seq WE have received from them
+    private uint   _receivedBitfield;       // the 32 packets before _remoteSequence
 
-    // ===== GỬI =====
+    // ===== SENDING =====
     public ushort NextSequence() => _localSequence++;
 
     public void OnPacketSent(ushort seq, ReadOnlySpan<byte> data, bool reliable, double nowMs)
     {
         int i = seq % SENT_BUFFER_SIZE;
-        if (_sent[i].Data != null) _pool.Return(_sent[i].Data);   // ghi đè slot cũ
+        if (_sent[i].Data != null) _pool.Return(_sent[i].Data);   // overwriting an old slot
         byte[] copy = null;
         if (reliable) { copy = _pool.Rent(); data.CopyTo(copy); }
         _sent[i] = new SentPacket {
@@ -118,28 +120,28 @@ public sealed class ReliabilityLayer
             IsReliable = reliable, Data = copy, Length = data.Length, ResendCount = 0 };
     }
 
-    // ===== NHẬN =====
+    // ===== RECEIVING =====
     public void OnPacketReceived(ushort seq)
     {
         if (SequenceMath.IsNewer(seq, _remoteSequence))
         {
             int shift = SequenceMath.Distance(seq, _remoteSequence);
             _receivedBitfield = shift >= 32 ? 0u : (_receivedBitfield << shift);
-            _receivedBitfield |= 1u << (shift - 1);      // seq cũ giờ nằm ở bit (shift-1)
+            _receivedBitfield |= 1u << (shift - 1);      // the old seq now sits at bit (shift-1)
             _remoteSequence = seq;
         }
         else
         {
             int diff = SequenceMath.Distance(_remoteSequence, seq);
             if (diff >= 1 && diff <= 32)
-                _receivedBitfield |= 1u << (diff - 1);   // gói tới muộn, đánh dấu đã nhận
-            // diff > 32: quá cũ, bỏ qua (đã ra khỏi cửa sổ)
+                _receivedBitfield |= 1u << (diff - 1);   // a late arrival, mark it received
+            // diff > 32: too old, ignore (outside the window)
         }
     }
 
     public (ushort ack, uint bitfield) BuildAck() => (_remoteSequence, _receivedBitfield);
 
-    // ===== XỬ LÝ ACK TỪ ĐỐI PHƯƠNG =====
+    // ===== PROCESSING THE PEER'S ACKS =====
     public void ProcessIncomingAck(ushort ack, uint bitfield, double nowMs)
     {
         AckPacket(ack, nowMs);
@@ -152,7 +154,7 @@ public sealed class ReliabilityLayer
     {
         int i = seq % SENT_BUFFER_SIZE;
         ref var p = ref _sent[i];
-        if (p.Sequence != seq || p.Acked) return;        // slot đã bị ghi đè, hoặc ack trùng
+        if (p.Sequence != seq || p.Acked) return;        // slot overwritten, or a duplicate ack
         p.Acked = true;
         UpdateRtt(nowMs - p.SentAtMs);
         if (p.Data != null) { _pool.Return(p.Data); p.Data = null; }
@@ -168,8 +170,8 @@ public sealed class ReliabilityLayer
             if (p.Acked || !p.IsReliable || p.Data == null) continue;
             if (nowMs - p.SentAtMs < rto) continue;
 
-            if (++p.ResendCount > 10)                    // gửi lại 10 lần vẫn không được
-            { NetLog.Warn($"seq {p.Sequence} bỏ cuộc sau 10 lần"); p.Acked = true;
+            if (++p.ResendCount > 10)                    // 10 resends and still nothing
+            { NetLog.Warn($"seq {p.Sequence} giving up after 10 attempts"); p.Acked = true;
               _pool.Return(p.Data); p.Data = null; continue; }
 
             resend(p.Data, p.Length);
@@ -180,23 +182,24 @@ public sealed class ReliabilityLayer
 }
 ```
 
-**Cạm bẫy 1 — dịch bitfield khi seq nhảy xa.** Nếu nhận seq 200 khi `_remoteSequence` là 100,
-`shift = 100`. `_receivedBitfield << 100` trong C# là **undefined behavior** (thực tế nó dịch
-`100 % 32 = 4` bit — sai hoàn toàn). Phải kiểm tra `shift >= 32` → gán 0. Đây là bug rất khó
-tìm vì chỉ xảy ra sau khi mất kết nối tạm rồi nối lại.
+**Trap 1 — shifting the bitfield when the sequence jumps far.** Receiving seq 200 while
+`_remoteSequence` is 100 gives `shift = 100`. `_receivedBitfield << 100` is **undefined behavior** in
+C# (in practice it shifts by `100 % 32 = 4` bits — completely wrong). You must check `shift >= 32` →
+set 0. This bug is very hard to find because it only occurs after a temporary disconnect and
+reconnect.
 
-**Cạm bẫy 2 — slot bị ghi đè.** Buffer 1024 slot, `seq % 1024`. Nếu gửi 1025 gói mà gói đầu
-chưa được ack, slot của nó bị gói mới ghi đè → mất luôn, không bao giờ retransmit. Ở 30 gói/s,
-1024 gói = 34 giây. An toàn. Nhưng phải kiểm tra `p.Sequence != seq` trong `AckPacket` để không
-ack nhầm gói mới.
+**Trap 2 — overwritten slots.** The buffer has 1024 slots indexed by `seq % 1024`. If you send 1025
+packets while the first is still unacked, its slot is overwritten by the new packet → it's lost
+forever and never retransmitted. At 30 packets/s, 1024 packets = 34 seconds. Safe. But you must
+check `p.Sequence != seq` in `AckPacket` so you don't wrongly ack the newer packet.
 
-**Cạm bẫy 3 — RTO quá ngắn gây bão retransmit.** Nếu `rto` nhỏ hơn RTT thật, mọi gói đều bị gửi
-lại trước khi ack kịp về → lưu lượng nhân đôi → càng tắc nghẽn → càng chậm. Đây là *congestion
-collapse*. Công thức `rtt * 1.5 + 4 * jitter`, kẹp sàn 30ms, là mức an toàn.
+**Trap 3 — too short an RTO causes a retransmit storm.** If `rto` is shorter than the true RTT, every
+packet is resent before its ack can return → traffic doubles → more congestion → slower still. This
+is *congestion collapse*. The `rtt * 1.5 + 4 * jitter` formula with a 30 ms floor is the safe level.
 
-**Cạm bẫy 4 — đo RTT từ gói đã retransmit.** Nếu gói được gửi lại và ack về, bạn không biết ack
-đó cho lần gửi nào → RTT đo sai (có thể âm hoặc quá lớn). Đây là *Karn's algorithm*: **không
-cập nhật RTT từ gói đã retransmit**.
+**Trap 4 — measuring RTT from a retransmitted packet.** If a packet was resent and an ack comes back,
+you don't know which transmission it acknowledges → the RTT measurement is wrong (possibly negative
+or wildly large). This is *Karn's algorithm*: **never update RTT from a retransmitted packet**.
 
 ```csharp
 private void AckPacket(ushort seq, double nowMs)
@@ -207,7 +210,7 @@ private void AckPacket(ushort seq, double nowMs)
 }
 ```
 
-### Task 3 — RTT và jitter estimation (1 ngày)
+### Task 3 — RTT and jitter estimation (1 day)
 
 ```csharp
 public float SmoothedRttMs { get; private set; }
@@ -215,20 +218,20 @@ public float JitterMs      { get; private set; }
 
 private void UpdateRtt(double sampleMs)
 {
-    if (SmoothedRttMs <= 0f) { SmoothedRttMs = (float)sampleMs; return; }   // mẫu đầu
+    if (SmoothedRttMs <= 0f) { SmoothedRttMs = (float)sampleMs; return; }   // first sample
 
-    // EWMA, ý tưởng từ RFC 6298
+    // EWMA, idea taken from RFC 6298
     float delta = (float)sampleMs - SmoothedRttMs;
     SmoothedRttMs += 0.125f * delta;                    // alpha = 1/8
     JitterMs      += 0.25f * (Math.Abs(delta) - JitterMs);  // beta = 1/4
 }
 ```
 
-Ghi lại vào `measurements.csv` mỗi giây để vẽ biểu đồ cho báo cáo.
+Log these to `measurements.csv` once per second so you can chart them for the report.
 
-### Task 4 — Bốn channel (3 ngày)
+### Task 4 — The four channels (3 days)
 
-Theo [`protocol-spec.md § 5`](../../00-shared/protocol-spec.md#5-channel).
+Per [`protocol-spec.md § 5`](../../00-shared/protocol-spec.md#5-channels).
 
 ```csharp
 public abstract class Channel
@@ -239,14 +242,14 @@ public abstract class Channel
                                    Action<ReadOnlyMemory<byte>> deliver);
 }
 
-/// <summary>Channel 0: giao ngay, không quan tâm thứ tự hay trùng lặp.</summary>
+/// <summary>Channel 0: deliver immediately, ignoring order and duplicates.</summary>
 public sealed class UnreliableUnsequencedChannel : Channel
 {
     public override void OnReceive(ushort seq, ReadOnlyMemory<byte> p, Action<ReadOnlyMemory<byte>> d)
         => d(p);
 }
 
-/// <summary>Channel 1, 3: giao nếu MỚI HƠN gói mới nhất đã giao. Gói cũ bị DROP.</summary>
+/// <summary>Channels 1 and 3: deliver only if NEWER than the last delivered. Older packets are DROPPED.</summary>
 public sealed class UnreliableSequencedChannel : Channel
 {
     private ushort _lastDelivered;
@@ -255,13 +258,13 @@ public sealed class UnreliableSequencedChannel : Channel
     public override void OnReceive(ushort seq, ReadOnlyMemory<byte> p, Action<ReadOnlyMemory<byte>> d)
     {
         if (_hasDelivered && !SequenceMath.IsNewer(seq, _lastDelivered))
-        { Stats.StalePacketsDropped++; return; }        // snapshot cũ hơn cái đã có = vô giá trị
+        { Stats.StalePacketsDropped++; return; }        // a snapshot older than what we have is worthless
         _lastDelivered = seq; _hasDelivered = true;
         d(p);
     }
 }
 
-/// <summary>Channel 2: giao đúng thứ tự, không mất. Gói tới sớm nằm chờ trong buffer.</summary>
+/// <summary>Channel 2: deliver in order, losing nothing. Early arrivals wait in the buffer.</summary>
 public sealed class ReliableOrderedChannel : Channel
 {
     private const int WINDOW = 256;
@@ -270,14 +273,14 @@ public sealed class ReliableOrderedChannel : Channel
 
     public override void OnReceive(ushort seq, ReadOnlyMemory<byte> p, Action<ReadOnlyMemory<byte>> d)
     {
-        if (!SequenceMath.IsNewer(seq, (ushort)(_nextExpected - 1))) return;   // trùng, đã giao
+        if (!SequenceMath.IsNewer(seq, (ushort)(_nextExpected - 1))) return;   // duplicate, already delivered
         if (SequenceMath.Distance(seq, _nextExpected) >= WINDOW)
-        { NetLog.Warn("gói vượt cửa sổ reliable, ngắt kết nối"); return; }
+        { NetLog.Warn("packet beyond the reliable window, disconnecting"); return; }
 
-        // Buffer phải COPY — memory gốc sẽ bị trả về pool ngay sau hàm này
+        // The buffer must be COPIED — the original memory returns to the pool right after this method
         _pending[seq % WINDOW] = CopyToOwnedBuffer(p);
 
-        while (_pending[_nextExpected % WINDOW] is { } ready)   // giao liên tiếp
+        while (_pending[_nextExpected % WINDOW] is { } ready)   // deliver consecutively
         {
             _pending[_nextExpected % WINDOW] = null;
             d(ready);
@@ -288,24 +291,25 @@ public sealed class ReliableOrderedChannel : Channel
 }
 ```
 
-**Cạm bẫy 5 — buffer ownership ở reliable-ordered channel.** Gói tới sớm phải nằm chờ, nhưng
-`ReadOnlyMemory` trỏ vào buffer sẽ được trả về pool ngay sau khi hàm trả về. **Bắt buộc copy.**
-Nếu quên, sau vài giây bạn sẽ giao ra dữ liệu rác. Đây là bug rất khó tìm vì nó chỉ xảy ra khi
-có mất gói.
+**Trap 5 — buffer ownership in the reliable-ordered channel.** Early arrivals have to wait, but the
+`ReadOnlyMemory` points at a buffer that returns to the pool the moment the method returns. **You
+must copy.** Forget it and after a few seconds you'll be delivering garbage. This is a very hard bug
+to find, because it only occurs when packets are lost.
 
-**Cạm bẫy 6 — head-of-line blocking trong channel 2 là CỐ Ý.** Đừng "sửa" nó. Nếu message
-"actor 5 chết" tới trước "actor 5 spawn", xử lý sai thứ tự sẽ vỡ trạng thái game. Đó là lý do
-event dùng ordered, còn snapshot dùng channel khác. **Đây chính là luận điểm cốt lõi so sánh với
-TCP** — hãy nêu rõ trong báo cáo: TCP bắt *mọi thứ* chung một dòng, ta chọn được từng loại.
+**Trap 6 — head-of-line blocking in channel 2 is DELIBERATE.** Don't "fix" it. If "actor 5 died"
+arrives before "actor 5 spawned", processing them out of order corrupts the game state. That's
+precisely why events use ordered delivery while snapshots use a different channel. **This is the core
+argument in the comparison against TCP** — state it clearly in the report: TCP forces *everything*
+into one stream; we get to choose per category.
 
-### Task 5 — Fragmentation / reassembly (3 ngày)
+### Task 5 — Fragmentation / reassembly (3 days)
 
-Theo [`protocol-spec.md § 6`](../../00-shared/protocol-spec.md#6-fragmentation).
+Per [`protocol-spec.md § 6`](../../00-shared/protocol-spec.md#6-fragmentation).
 
 ```csharp
 public sealed class FragmentAssembler
 {
-    private const int MAX_PENDING_GROUPS = 8;           // chống DoS
+    private const int MAX_PENDING_GROUPS = 8;           // anti-DoS
 
     private sealed class Group
     {
@@ -327,13 +331,13 @@ public sealed class FragmentAssembler
 
         if (!_groups.TryGetValue(groupId, out var g))
         {
-            if (_groups.Count >= MAX_PENDING_GROUPS) EvictOldest();   // chống cạn RAM
+            if (_groups.Count >= MAX_PENDING_GROUPS) EvictOldest();   // prevent RAM exhaustion
             g = new Group { GroupId = groupId, Count = fragCount, FirstSeenMs = nowMs,
                             Parts = new byte[fragCount][], Lengths = new int[fragCount] };
             _groups[groupId] = g;
         }
-        if (g.Count != fragCount) { _groups.Remove(groupId); return false; }  // không nhất quán
-        if (g.Parts[fragIndex] != null) return false;                        // mảnh trùng
+        if (g.Count != fragCount) { _groups.Remove(groupId); return false; }  // inconsistent
+        if (g.Parts[fragIndex] != null) return false;                        // duplicate fragment
 
         g.Parts[fragIndex] = _pool.Rent();
         data.CopyTo(g.Parts[fragIndex]);
@@ -341,9 +345,9 @@ public sealed class FragmentAssembler
         g.Received++;
 
         if (g.Received < g.Count) return false;
-        // Đủ mảnh → ghép
+        // All fragments present → reassemble
         len = g.Lengths.Sum();
-        full = new byte[len];                     // gói lớn, hiếm, cấp phát chấp nhận được
+        full = new byte[len];                     // large and rare, so allocating is acceptable
         int off = 0;
         for (int i = 0; i < g.Count; i++)
         { Array.Copy(g.Parts[i], 0, full, off, g.Lengths[i]); off += g.Lengths[i];
@@ -361,31 +365,32 @@ public sealed class FragmentAssembler
 }
 ```
 
-**Cạm bẫy 7 — DoS qua fragmentation.** Kẻ tấn công gửi hàng nghìn gói với `fragmentCount = 64`
-nhưng chỉ 1 mảnh mỗi nhóm. Mỗi nhóm chiếm 64 slot buffer. Không giới hạn → cạn RAM trong vài
-giây. `MAX_PENDING_GROUPS = 8` + timeout 2s là bắt buộc, không phải tối ưu.
+**Trap 7 — DoS via fragmentation.** An attacker sends thousands of packets with `fragmentCount = 64`
+but only one fragment per group. Each group occupies 64 buffer slots. Without a limit, RAM is
+exhausted in seconds. `MAX_PENDING_GROUPS = 8` plus a 2 s timeout is mandatory, not an optimization.
 
-**Cạm bẫy 8 — mảnh phải reliable.** Nếu gửi unreliable, mất 1 mảnh = mất cả nhóm 64 mảnh. Với
-5% loss và 20 mảnh, xác suất mất ít nhất 1 mảnh = `1 - 0.95^20 = 64%`. Không chấp nhận được.
+**Trap 8 — fragments must be reliable.** Sent unreliably, losing 1 fragment loses the whole 64-piece
+group. At 5% loss with 20 fragments, the chance of losing at least one is `1 - 0.95^20 = 64%`.
+Unacceptable.
 
-### Task 6 — Unit test (3 ngày) — ≥40 test
+### Task 6 — Unit tests (3 days) — ≥40 tests
 
-| Nhóm | Số test | Nội dung |
+| Group | Tests | Content |
 |---|---|---|
-| `SequenceMath` | 6 | Biên wrap: (0,65535), (65535,0), (5,65530), (32768,0), bằng nhau, distance |
-| `PacketHeader` | 8 | Round-trip, protocolId sai, buffer ngắn, payloadLength sai, mọi giá trị biên |
-| `ReliabilityLayer` — ack | 8 | Nhận theo thứ tự, nhận đảo, nhận trùng, nhảy xa >32, bitfield đúng, ack nhiều gói |
-| `ReliabilityLayer` — resend | 6 | Resend sau RTO, dừng khi ack, bỏ cuộc sau 10 lần, Karn's algorithm |
-| Channel | 8 | Mỗi channel 2 test: hành vi bình thường + hành vi khi mất/đảo gói |
-| Fragmentation | 6 | Ghép đúng, thiếu mảnh, mảnh trùng, timeout, vượt MAX_PENDING_GROUPS, fragCount không nhất quán |
-| Handshake | 4 | Thành công, sai challenge, timeout, server đầy |
-| **Tổng** | **46** | |
+| `SequenceMath` | 6 | Wrap boundaries: (0,65535), (65535,0), (5,65530), (32768,0), equality, distance |
+| `PacketHeader` | 8 | Round-trip, wrong protocolId, short buffer, wrong payloadLength, all boundary values |
+| `ReliabilityLayer` — ack | 8 | In-order receipt, reordered, duplicated, jumps > 32, correct bitfield, acking multiple packets |
+| `ReliabilityLayer` — resend | 6 | Resend after RTO, stop on ack, give up after 10 attempts, Karn's algorithm |
+| Channels | 8 | 2 tests per channel: normal behavior + behavior under loss/reordering |
+| Fragmentation | 6 | Correct reassembly, missing fragment, duplicate fragment, timeout, exceeding MAX_PENDING_GROUPS, inconsistent fragCount |
+| Handshake | 4 | Success, wrong challenge, timeout, server full |
+| **Total** | **46** | |
 
-**Mẫu test quan trọng nhất — bitfield khi nhảy xa:**
+**The single most important test — the bitfield on a far jump:**
 
 ```csharp
 [Fact]
-public void AckBitfield_KhiSequenceNhayXaHon32_PhaiReset()
+public void AckBitfield_WhenSequenceJumpsMoreThan32_MustReset()
 {
     var r = new ReliabilityLayer();
     r.OnPacketReceived(1);
@@ -393,18 +398,18 @@ public void AckBitfield_KhiSequenceNhayXaHon32_PhaiReset()
     r.OnPacketReceived(3);
     var (ack1, bits1) = r.BuildAck();
     Assert.Equal(3, ack1);
-    Assert.Equal(0b11u, bits1);            // đã nhận 2 và 1
+    Assert.Equal(0b11u, bits1);            // received 2 and 1
 
-    r.OnPacketReceived(200);               // nhảy 197 — vượt cửa sổ 32
+    r.OnPacketReceived(200);               // a jump of 197 — beyond the 32-packet window
     var (ack2, bits2) = r.BuildAck();
     Assert.Equal(200, ack2);
-    Assert.Equal(0u, bits2);               // PHẢI reset, không được là rác do shift UB
+    Assert.Equal(0u, bits2);               // MUST reset, not garbage from an undefined shift
 }
 
 [Fact]
-public void SequenceMath_QuaBienWrap_PhaiDung()
+public void SequenceMath_AcrossTheWrapBoundary_MustBeCorrect()
 {
-    Assert.True (SequenceMath.IsNewer(0, 65535));      // 0 mới hơn 65535 (vừa wrap)
+    Assert.True (SequenceMath.IsNewer(0, 65535));      // 0 is newer than 65535 (just wrapped)
     Assert.False(SequenceMath.IsNewer(65535, 0));
     Assert.True (SequenceMath.IsNewer(5, 65530));
     Assert.Equal(6, SequenceMath.Distance(5, 65535));
@@ -413,46 +418,47 @@ public void SequenceMath_QuaBienWrap_PhaiDung()
 
 ---
 
-## 3. Tiêu chí nghiệm thu (M1)
+## 3. Acceptance criteria (M1)
 
-| # | Tiêu chí | Cách kiểm chứng |
+| # | Criterion | How to verify |
 |---|---|---|
-| 1 | ≥40 unit test xanh | `dotnet test` |
-| 2 | Handshake 4 bước hoạt động, chống spoof | Test: `CONNECT_RESPONSE` sai salt → bị từ chối |
-| 3 | Gói reliable **luôn** tới ở 30% loss | Test: gửi 1000 gói reliable qua sim 30% loss → nhận đủ 1000, đúng thứ tự |
-| 4 | Gói unreliable-sequenced **bỏ gói cũ** | Test: gửi seq 1,2,3 nhưng nhận thứ tự 3,1,2 → chỉ giao 3 |
-| 5 | Fragmentation ghép đúng gói 20 KB | Test round-trip byte-by-byte |
-| 6 | RTT đo được sai lệch < 10% so với latency simulator | Sim 100ms → đo được 95–110ms |
-| 7 | Karn's algorithm: RTT không nhiễu bởi retransmit | Test có kiểm chứng |
-| 8 | Kết nối sống 30 phút không rớt, không rò rỉ | Chạy dài, theo dõi `BufferPool.RentedCount` không tăng |
-| 9 | **Sequence wrap sau 36 phút không gây lỗi** | Test: bơm sequence từ 65500 tới 100, kiểm tra hoạt động liên tục |
-| 10 | 0 cấp phát heap trong hot path | Benchmark, đếm GC gen0 collection |
-| 11 | Tích hợp: A chạy được 2 client thấy nhau | Cùng A xác nhận |
+| 1 | ≥40 unit tests green | `dotnet test` |
+| 2 | The 4-step handshake works and resists spoofing | Test: a `CONNECT_RESPONSE` with the wrong salt → rejected |
+| 3 | Reliable packets **always** arrive at 30% loss | Test: send 1000 reliable packets through the simulator at 30% loss → all 1000 received, in order |
+| 4 | Unreliable-sequenced **drops stale packets** | Test: send seq 1,2,3 but receive in order 3,1,2 → only 3 is delivered |
+| 5 | Fragmentation correctly reassembles a 20 KB message | Byte-by-byte round-trip test |
+| 6 | Measured RTT is within 10% of the simulator's latency | Sim at 100 ms → measures 95–110 ms |
+| 7 | Karn's algorithm: RTT isn't skewed by retransmits | A test that verifies it |
+| 8 | A connection survives 30 minutes without dropping or leaking | Long run, watching that `BufferPool.RentedCount` doesn't grow |
+| 9 | **A sequence wrap after 36 minutes causes no errors** | Test: drive the sequence from 65500 to 100 and check continuous operation |
+| 10 | 0 heap allocations in the hot path | Benchmark counting gen0 GC collections |
+| 11 | Integration: A can run 2 clients that see each other | Confirmed jointly with A |
 
 ---
 
-## 4. Rủi ro
+## 4. Risks
 
-| Rủi ro | Dấu hiệu | Xử lý |
+| Risk | Sign | Handling |
 |---|---|---|
-| Bug bitfield khi nhảy xa | Ack sai ngẫu nhiên sau khi mạng gián đoạn | Test #1 ở trên. Kiểm tra `shift >= 32` |
-| Bão retransmit | Bandwidth tăng vọt, RTT tăng dần | RTO có sàn 30ms, Karn's algorithm |
-| Rò rỉ buffer | `RentedCount` tăng dần theo thời gian | Log `RentedCount` mỗi 10 giây. Điều tra ngay khi thấy tăng |
-| Dữ liệu rác ở reliable-ordered | Message có nội dung lạ khi có mất gói | Quên copy buffer (cạm bẫy 5). Bật `0xDD` fill trong Debug |
-| Trễ tuần 6 | | Contingency: bỏ fragmentation (giới hạn message ≤ 1184 B, C phải chia nhỏ snapshot). Tiết kiệm 3 ngày |
+| The far-jump bitfield bug | Randomly wrong acks after a network interruption | Test #1 above. Check `shift >= 32` |
+| Retransmit storm | Bandwidth spikes, RTT climbs steadily | RTO has a 30 ms floor, Karn's algorithm |
+| Buffer leak | `RentedCount` grows over time | Log `RentedCount` every 10 seconds. Investigate the moment it climbs |
+| Garbage data on reliable-ordered | Messages have strange contents when packets are lost | You forgot to copy the buffer (trap 5). Enable the `0xDD` fill in Debug |
+| Week 6 arrives unfinished | | Contingency: drop fragmentation (cap messages at ≤ 1184 B, C has to split snapshots). Saves 3 days |
 
 ---
 
-## 5. Số liệu bắt buộc thu thập cho báo cáo
+## 5. Data that must be collected for the report
 
-Chạy ma trận sau, mỗi ô 60 giây, ghi vào `reports/measurements.csv`:
+Run the following matrix, 60 seconds per cell, recording into `reports/measurements.csv`:
 
-| Loss | Reliable throughput | Retransmit % | Độ trễ giao trung bình (ordered) | Độ trễ giao P99 |
+| Loss | Reliable throughput | Retransmit % | Mean delivery latency (ordered) | P99 delivery latency |
 |---|---|---|---|---|
 | 0% | | | | |
 | 5% | | | | |
 | 15% | | | | |
 | 30% | | | | |
 
-**Đo thêm để so sánh với TCP** (dùng lại code bài tập khởi động): cùng điều kiện, TCP cho độ trễ
-P99 bao nhiêu? Đây là biểu đồ quan trọng nhất trong báo cáo — nó chứng minh vì sao game dùng UDP.
+**Also measure TCP for comparison** (reuse the warm-up exercise code): under identical conditions,
+what's TCP's P99 latency? This is the most important chart in the report — it proves why games use
+UDP.

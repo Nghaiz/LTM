@@ -1,28 +1,28 @@
-# Dev D — Phase 02: Matchmaking, joinTicket, game server registry
+# Dev D — Phase 02: Matchmaking, joinTickets, game server registry
 
-**Tuần 7–10** · Mốc **M2** · Ước lượng **3.0 người-tuần**
+**Weeks 7–10** · Milestone **M2** · Estimate **3.0 person-weeks**
 
-> Mục tiêu một câu: **nối được thế giới TCP với thế giới UDP, an toàn và không cần round-trip
-> thêm.**
+> Goal in one sentence: **bridge the TCP world to the UDP world, securely and without an extra
+> round-trip.**
 
 ---
 
-## 1. Mục tiêu
+## 1. Objectives
 
-| # | Mục tiêu |
+| # | Objective |
 |---|---|
-| 1 | Game server đăng ký với master, gửi heartbeat |
-| 2 | Cấp phát game server cho phòng |
-| 3 | joinTicket HMAC — cầu nối TCP ↔ UDP |
-| 4 | Matchmaking tự động |
-| 5 | Chat lobby |
-| 6 | Nhận và lưu kết quả trận |
+| 1 | Game servers register with the master and send heartbeats |
+| 2 | Allocating a game server to a room |
+| 3 | HMAC joinTickets — the TCP ↔ UDP bridge |
+| 4 | Automatic matchmaking |
+| 5 | Lobby chat |
+| 6 | Receiving and storing match results |
 
 ---
 
-## 2. Task chi tiết
+## 2. Detailed tasks
 
-### Task 1 — `GameServerRegistry` (3 ngày)
+### Task 1 — `GameServerRegistry` (3 days)
 
 ```csharp
 public sealed class GameServerRecord
@@ -35,10 +35,10 @@ public sealed class GameServerRecord
     public byte     State;              // Idle, Warmup, InMatch, Ending
     public float    CpuPercent, AvgTickMs;
     public long     LastHeartbeatMs;
-    public int      AssignedRoomId;     // 0 nếu rảnh
+    public int      AssignedRoomId;     // 0 if free
 
     public bool IsHealthy(long nowMs)
-        => nowMs - LastHeartbeatMs < 15_000       // 3 lần chu kỳ heartbeat 5s
+        => nowMs - LastHeartbeatMs < 15_000       // 3× the 5s heartbeat interval
         && CpuPercent < 90f
         && AvgTickMs  < 40f;
 }
@@ -49,10 +49,10 @@ public sealed class GameServerRegistry
 
     public RegisterResult Register(string secret, string ip, int port, byte maxPlayers, ushort[] maps)
     {
-        // Xác thực game server — chặn kẻ lạ đăng ký server giả để hút người chơi
+        // Authenticate the game server — stops a stranger registering a fake server to harvest players
         if (!CryptographicOperations.FixedTimeEquals(
                 Encoding.UTF8.GetBytes(secret), _sharedSecretBytes))
-        { NetLog.Warn($"GS_REGISTER sai secret từ {ip}"); return RegisterResult.Denied; }
+        { NetLog.Warn($"GS_REGISTER with a bad secret from {ip}"); return RegisterResult.Denied; }
 
         var id = AllocateServerId();
         _servers[id] = new GameServerRecord { ServerId = id, PublicIp = ip, UdpPort = port,
@@ -60,24 +60,24 @@ public sealed class GameServerRegistry
         return RegisterResult.Ok(id);
     }
 
-    /// <summary>Chọn server rảnh, khỏe, hỗ trợ map yêu cầu.</summary>
+    /// <summary>Pick a free, healthy server that supports the requested map.</summary>
     public GameServerRecord? Allocate(ushort mapId, long nowMs)
     {
         return _servers.Values
             .Where(s => s.IsHealthy(nowMs)
                      && s.AssignedRoomId == 0
                      && s.SupportedMapIds.Contains(mapId))
-            .OrderBy(s => s.CpuPercent)          // chọn server nhàn nhất
+            .OrderBy(s => s.CpuPercent)          // pick the least busy server
             .FirstOrDefault();
     }
 
-    /// <summary>Gọi mỗi 5 giây. Xóa server chết.</summary>
+    /// <summary>Call every 5 seconds. Remove dead servers.</summary>
     public void PruneDead(long nowMs)
     {
         foreach (var (id, s) in _servers.ToList())
         {
             if (nowMs - s.LastHeartbeatMs <= 30_000) continue;
-            NetLog.Warn($"game server {id} chết, giải phóng phòng {s.AssignedRoomId}");
+            NetLog.Warn($"game server {id} is dead, releasing room {s.AssignedRoomId}");
             if (s.AssignedRoomId != 0) _lobby.OnGameServerLost(s.AssignedRoomId);
             _servers.Remove(id);
         }
@@ -85,24 +85,25 @@ public sealed class GameServerRegistry
 }
 ```
 
-**Cạm bẫy 1 — game server chết khi đang có trận.** Người chơi sẽ bị treo màn hình chờ. Phải:
-1. Phát hiện qua heartbeat timeout (30 giây)
-2. Đẩy `ERROR_PUSH` cho mọi thành viên phòng đó
-3. Đưa phòng về trạng thái `Waiting` hoặc xóa phòng
-4. Ghi log để điều tra
+**Trap 1 — a game server dying mid-match.** Players are left staring at a frozen screen. You must:
+1. Detect it via the heartbeat timeout (30 seconds)
+2. Push an `ERROR_PUSH` to every member of that room
+3. Return the room to `Waiting` or delete it
+4. Log it for investigation
 
-**Cạm bẫy 2 — server tự khai `PublicIp`.** Nếu game server chạy sau NAT, nó không biết IP công
-khai của mình. Master server **nên tự lấy IP từ kết nối TCP** thay vì tin lời khai:
+**Trap 2 — servers self-declaring their `PublicIp`.** A game server behind NAT doesn't know its own
+public IP. The master server **should take the IP from the TCP connection** rather than trusting the
+declaration:
 
 ```csharp
 string realIp = ((IPEndPoint)connection.Socket.RemoteEndPoint).Address.ToString();
-// Chỉ tin PublicIp do server khai nếu nó khớp, hoặc nếu là địa chỉ private (dev trên LAN)
+// Only trust the declared PublicIp if it matches, or if it's a private address (LAN dev)
 string ipToUse = IsPrivateAddress(realIp) ? declaredIp : realIp;
 ```
 
-### Task 2 — joinTicket (3 ngày) — CẦU NỐI TCP ↔ UDP
+### Task 2 — joinTickets (3 days) — THE TCP ↔ UDP BRIDGE
 
-Theo [`protocol-spec.md § 12`](../../00-shared/protocol-spec.md#12-jointicket--cầu-nối-tcp-và-udp).
+Per [`protocol-spec.md § 12`](../../00-shared/protocol-spec.md#12-jointicket--the-bridge-between-tcp-and-udp).
 
 ```csharp
 public sealed class TicketIssuer
@@ -111,7 +112,7 @@ public sealed class TicketIssuer
     private const int PAYLOAD_SIZE = 32;
     private const int TTL_MS       = 60_000;
 
-    private readonly byte[] _secret;   // từ IRONFRONT_SHARED_SECRET
+    private readonly byte[] _secret;   // from IRONFRONT_SHARED_SECRET
 
     public byte[] Issue(uint playerId, ushort serverId, ushort roomId, string displayName)
     {
@@ -127,7 +128,7 @@ public sealed class TicketIssuer
         var nameBytes = Encoding.UTF8.GetBytes(displayName);
         nameBytes.AsSpan(0, Math.Min(16, nameBytes.Length)).CopyTo(span[16..32]);
 
-        // HMAC 32 byte cuối
+        // The HMAC occupies the last 32 bytes
         using var hmac = new HMACSHA256(_secret);
         var mac = hmac.ComputeHash(ticket, 0, PAYLOAD_SIZE);
         mac.CopyTo(span[32..64]);
@@ -137,44 +138,45 @@ public sealed class TicketIssuer
 }
 ```
 
-**Vì sao thiết kế này (D-AD-4):**
+**Why this design (D-AD-4):**
 
-| Phương án | Ưu | Nhược |
+| Approach | Pros | Cons |
 |---|---|---|
-| **HMAC ticket (đã chọn)** | Game server verify độc lập, không round-trip, không phụ thuộc master còn sống | Không thu hồi được trước hạn |
-| Game server hỏi master xác thực từng lần | Thu hồi được ngay | Thêm round-trip (~50ms) vào lúc vào trận; master chết = không ai vào được |
-| Dùng thẳng sessionToken | Đơn giản | Rò rỉ bí mật dài hạn cho game server (có thể do bên thứ ba vận hành) |
+| **HMAC tickets (chosen)** | The game server verifies independently, no round-trip, no dependency on the master being alive | Can't be revoked before expiry |
+| The game server asks the master to validate each time | Instant revocation | Adds a round-trip (~50 ms) at join time; if the master dies, nobody can join |
+| Using the sessionToken directly | Simple | Leaks a long-lived secret to the game server (possibly third-party operated) |
 
-TTL 60 giây đủ để client chuyển từ lobby sang game (thường 2–5 giây), và đủ ngắn để việc không
-thu hồi được không thành vấn đề.
+A 60-second TTL is enough for a client to move from lobby to game (typically 2–5 seconds), and short
+enough that the lack of revocation doesn't matter.
 
-**Cạm bẫy 3 — `displayName` không phải ASCII.** Tên tiếng Việt có dấu, UTF-8 mỗi ký tự 2–3 byte.
-Cắt cứng ở 16 byte có thể **cắt giữa một ký tự multi-byte** → chuỗi hỏng. Cắt theo ký tự:
+**Trap 3 — non-ASCII `displayName`s.** Vietnamese names with diacritics take 2–3 UTF-8 bytes per
+character. A hard cut at 16 bytes can **slice through a multi-byte character** → a corrupt string.
+Truncate on character boundaries:
 
 ```csharp
 private static byte[] TruncateUtf8(string s, int maxBytes)
 {
     var bytes = Encoding.UTF8.GetBytes(s);
     if (bytes.Length <= maxBytes) return bytes;
-    // Lùi về ranh giới ký tự
+    // Back up to a character boundary
     int len = maxBytes;
-    while (len > 0 && (bytes[len] & 0xC0) == 0x80) len--;   // byte tiếp theo là continuation
+    while (len > 0 && (bytes[len] & 0xC0) == 0x80) len--;   // the next byte is a continuation
     return bytes[..len];
 }
 ```
 
-**Bàn giao cho C:** gửi C hàm verify tương ứng, hoặc tốt hơn — đặt cả `Issue` và `Verify` trong
-`Ironfront.Net.Protocol` để cả hai bên dùng chung một cài đặt. Đây là ứng dụng của nguyên tắc
-SSOT: hai cài đặt HMAC riêng biệt là hai cơ hội để lệch.
+**Handoff to C:** send C the matching verification function — or better, put both `Issue` and
+`Verify` in `Ironfront.Net.Protocol` so both sides share one implementation. That's the SSOT
+principle applied: two separate HMAC implementations are two chances to diverge.
 
-### Task 3 — Cấp phát server và luồng join (2 ngày)
+### Task 3 — Server allocation and the join flow (2 days)
 
 ```csharp
 public JoinRoomResponse JoinRoom(Session s, int roomId, string password)
 {
-    // ... kiểm tra như phase 01 ...
+    // ... the same checks as phase 01 ...
 
-    // Nếu phòng chưa có game server, cấp phát
+    // If the room has no game server yet, allocate one
     if (room.AssignedGameServerId == 0)
     {
         var gs = _registry.Allocate(room.MapId, NowMs());
@@ -186,7 +188,7 @@ public JoinRoomResponse JoinRoom(Session s, int roomId, string password)
     var server = _registry.Get(room.AssignedGameServerId);
     if (server == null || !server.IsHealthy(NowMs()))
     {
-        room.AssignedGameServerId = 0;                    // thử cấp phát lại lần sau
+        room.AssignedGameServerId = 0;                    // try allocating again next time
         return Fail(ErrorCodes.ServerNotResponding);      // 3001
     }
 
@@ -202,9 +204,9 @@ public JoinRoomResponse JoinRoom(Session s, int roomId, string password)
 }
 ```
 
-### Task 4 — Matchmaking (2 ngày)
+### Task 4 — Matchmaking (2 days)
 
-Giữ đơn giản. Với 16 người chơi tổng cộng, matchmaking phức tạp là lãng phí.
+Keep it simple. With 16 players in total, elaborate matchmaking is wasted effort.
 
 ```csharp
 public sealed class MatchmakingService
@@ -220,10 +222,10 @@ public sealed class MatchmakingService
         return new MatchmakeResponse { Ok = true, EstimatedWaitSec = EstimateWait() };
     }
 
-    /// <summary>Gọi mỗi giây từ vòng lặp logic.</summary>
+    /// <summary>Called every second from the logic loop.</summary>
     public void Tick()
     {
-        // 1. Ưu tiên nhét vào phòng đang chờ, còn chỗ
+        // 1. Prefer slotting people into an existing waiting room with space
         foreach (var e in _queue.ToList())
         {
             var room = _lobby.FindJoinableRoom(e.MapId);
@@ -233,30 +235,30 @@ public sealed class MatchmakingService
             _queue.Remove(e);
         }
 
-        // 2. Đủ người thì tạo phòng mới
+        // 2. Enough people → create a new room
         var groups = _queue.GroupBy(e => e.MapId).Where(g => g.Count() >= MIN_TO_START);
         foreach (var g in groups) CreateRoomAndMoveAll(g);
 
-        // 3. Chờ quá 60 giây thì nới lỏng: chấp nhận map bất kỳ
+        // 3. Waiting over 60 seconds → relax the constraint: accept any map
         foreach (var e in _queue.Where(e => NowMs() - e.EnqueuedAtMs > 60_000).ToList())
-            e.MapId = 0;    // 0 = bất kỳ
+            e.MapId = 0;    // 0 = any
     }
 }
 ```
 
-**Cạm bẫy 4 — người chơi rời hàng đợi mà không báo.** Ngắt kết nối phải xóa khỏi `_queue`, nếu
-không sẽ ghép được trận với người không còn ở đó. Dọn trong `OnClientDisconnected`.
+**Trap 4 — players leaving the queue without saying so.** A disconnect must remove them from
+`_queue`, or you'll match a game with someone who isn't there. Clean up in `OnClientDisconnected`.
 
-### Task 5 — Chat (1 ngày)
+### Task 5 — Chat (1 day)
 
 ```csharp
 public void HandleChat(Session s, byte channel, string text)
 {
     // Validate
     if (string.IsNullOrWhiteSpace(text) || text.Length > 200) return;
-    if (!RateLimitChat(s.PlayerId)) return;            // 5 tin/10 giây
+    if (!RateLimitChat(s.PlayerId)) return;            // 5 messages / 10 seconds
 
-    // Lọc ký tự điều khiển (chống phá vỡ hiển thị ở client)
+    // Strip control characters (which would break the client's display)
     text = new string(text.Where(c => !char.IsControl(c)).ToArray());
 
     var msg = new ChatMessage { Channel = channel, FromPlayerId = s.PlayerId,
@@ -272,18 +274,18 @@ public void HandleChat(Session s, byte channel, string text)
 }
 ```
 
-**Cạm bẫy 5 — không lọc ký tự điều khiển.** Người chơi gửi `\n\n\n\n\n` hoặc ký tự Unicode
-điều khiển hướng (RTL override) có thể phá vỡ giao diện của mọi người. Lọc ở server, không
-tin client.
+**Trap 5 — not stripping control characters.** A player sending `\n\n\n\n\n` or Unicode
+direction-control characters (an RTL override) can wreck everyone's interface. Filter on the server;
+never trust the client.
 
-**Không lưu chat vào DB.** Ngoài scope, và tránh vấn đề riêng tư.
+**Don't store chat in the DB.** Out of scope, and it avoids privacy questions.
 
-### Task 6 — Kết quả trận (1 ngày)
+### Task 6 — Match results (1 day)
 
 ```csharp
 public void HandleMatchEnded(ushort serverId, int roomId, PlayerResult[] results)
 {
-    if (!VerifyServerOwnsRoom(serverId, roomId)) return;   // chống server giả gửi kết quả bịa
+    if (!VerifyServerOwnsRoom(serverId, roomId)) return;   // stops a fake server posting made-up results
 
     foreach (var r in results)
         _db.InsertMatchResult(roomId, r.PlayerId, r.Kills, r.Deaths, r.Score);
@@ -299,42 +301,42 @@ public void HandleMatchEnded(ushort serverId, int roomId, PlayerResult[] results
 
 ---
 
-## 3. Tiêu chí nghiệm thu (M2)
+## 3. Acceptance criteria (M2)
 
-| # | Tiêu chí | Cách kiểm chứng |
+| # | Criterion | How to verify |
 |---|---|---|
-| 1 | Game server đăng ký được, hiện trong registry | C xác nhận |
-| 2 | `GS_REGISTER` sai secret bị từ chối | Test |
-| 3 | Heartbeat mất 30s → server bị xóa, phòng được giải phóng | Test: kill game server |
-| 4 | joinTicket đúng → game server chấp nhận | Cùng C, end-to-end |
-| 5 | joinTicket sai HMAC → bị từ chối | Test |
-| 6 | joinTicket hết hạn (đợi 61s) → bị từ chối | Test |
-| 7 | joinTicket với `displayName` tiếng Việt có dấu → không hỏng chuỗi | Test |
-| 8 | Không còn server rảnh → lỗi 3000 rõ ràng | Test |
-| 9 | Matchmaking ghép 2 người vào cùng phòng | Test |
-| 10 | Rời hàng đợi khi ngắt kết nối | Test |
-| 11 | Chat hoạt động, lọc ký tự điều khiển, rate limit | Test |
-| 12 | Kết quả trận lưu vào DB | Kiểm tra DB |
-| 13 | ≥45 test xanh | `dotnet test` |
-| 14 | **Luồng end-to-end: login → join → vào trận UDP** | Cùng A và C, video |
+| 1 | A game server can register and appears in the registry | Confirmed by C |
+| 2 | `GS_REGISTER` with a wrong secret is rejected | Test |
+| 3 | 30 s without a heartbeat → the server is removed and its room released | Test: kill the game server |
+| 4 | A valid joinTicket → accepted by the game server | With C, end to end |
+| 5 | A joinTicket with a bad HMAC → rejected | Test |
+| 6 | An expired joinTicket (wait 61 s) → rejected | Test |
+| 7 | A joinTicket with a diacritic-bearing Vietnamese `displayName` → no string corruption | Test |
+| 8 | No free servers → a clear error 3000 | Test |
+| 9 | Matchmaking puts 2 people into the same room | Test |
+| 10 | Leaving the queue on disconnect | Test |
+| 11 | Chat works, strips control characters, and rate-limits | Test |
+| 12 | Match results are written to the DB | Inspect the DB |
+| 13 | ≥45 tests green | `dotnet test` |
+| 14 | **The end-to-end flow: login → join → into a UDP match** | With A and C, on video |
 
 ---
 
-## 4. Rủi ro
+## 4. Risks
 
-| Rủi ro | Dấu hiệu | Xử lý |
+| Risk | Sign | Handling |
 |---|---|---|
-| HMAC không khớp giữa bạn và C | Mọi joinTicket bị từ chối | Đặt `Issue` + `Verify` chung trong `Ironfront.Net.Protocol`. Test round-trip chung |
-| Lệch đồng hồ giữa master và game server | Ticket "hết hạn" ngay khi cấp, hoặc không bao giờ hết | Cả hai máy chạy NTP. Ghi log timestamp cả hai khi verify thất bại |
-| Game server chết khi đang có trận | Người chơi treo màn hình | Cạm bẫy 1: phát hiện + đẩy lỗi + reset phòng |
-| Cấp phát 2 phòng cho 1 server | Server quá tải | `AssignedRoomId` kiểm tra trước khi cấp. Một thread logic nên không có race |
-| Trễ tuần 10 | | Contingency: bỏ matchmaking (chỉ danh sách phòng thủ công), bỏ chat |
+| HMAC mismatch between you and C | Every joinTicket is rejected | Put `Issue` + `Verify` together in `Ironfront.Net.Protocol`. A shared round-trip test |
+| Clock skew between master and game server | Tickets "expire" immediately on issue, or never expire | Run NTP on both machines. Log both timestamps whenever verification fails |
+| A game server dying mid-match | Players stuck on a frozen screen | Trap 1: detect + push the error + reset the room |
+| Allocating 2 rooms to 1 server | The server is overloaded | Check `AssignedRoomId` before allocating. Single-threaded logic means no race |
+| Week 10 arrives unfinished | | Contingency: drop matchmaking (manual room list only), drop chat |
 
 ---
 
-## 5. Bàn giao
+## 5. Handoff
 
-- Hàm `TicketIssuer.Issue` + `TicketVerifier.Verify` đặt chung trong `Ironfront.Net.Protocol`,
-  có test round-trip mà cả bạn và C cùng chạy
-- Hướng dẫn cấu hình `IRONFRONT_SHARED_SECRET` cho C
-- Bảng mã lỗi khớp với [`protocol-spec.md § 13`](../../00-shared/protocol-spec.md#13-bảng-mã-lỗi-chung) cho A
+- `TicketIssuer.Issue` + `TicketVerifier.Verify` living together in `Ironfront.Net.Protocol`, with a
+  round-trip test that both you and C run
+- Instructions for configuring `IRONFRONT_SHARED_SECRET` for C
+- The error-code table matching [`protocol-spec.md § 13`](../../00-shared/protocol-spec.md#13-shared-error-codes) for A

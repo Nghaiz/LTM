@@ -1,79 +1,81 @@
-# Dev A — Phase 03: Vòng đời trận đấu và UI
+# Dev A — Phase 03: Match lifecycle and UI
 
-**Tuần 11–13** · Mốc **M3** · Ước lượng **2.0 người-tuần** *(giảm từ 3.5 — tải 117% → 67%)*
+**Weeks 11–13** · Milestone **M3** · Estimate **2.0 person-weeks** *(down from 3.5 — load 117% → 67%)*
 
-> Mục tiêu một câu: **từ mở game đến kết thúc trận, không có bước nào phải sửa file cấu hình
-> bằng tay.**
+> Goal in one sentence: **from launching the game to the end of a match, no step requires editing a
+> config file by hand.**
 
-> **Đã tái cấu trúc — 1.5 tuần UI đã được front-load sang phase-02.** Khi vào phase này bạn
-> **đã có sẵn**: màn login, danh sách phòng, HUD máu/đạn, scoreboard, killfeed, thanh ticket,
-> màn debug F3 — tất cả chạy bằng dữ liệu giả.
+> **Restructured — 1.5 weeks of UI were front-loaded into phase-02.** Entering this phase you
+> **already have**: the login screen, room list, health/ammo HUD, scoreboard, killfeed, ticket bar
+> and the F3 debug overlay — all running on fake data.
 >
-> **Việc còn lại của phase này là nối dây thật**, không phải dựng UI từ đầu. Xem
+> **What's left in this phase is wiring in the real sources**, not building the UI from scratch. See
 > [plan.md § 4.1](../plan.md).
 
 ---
 
-## 1. Mục tiêu
+## 1. Objectives
 
-| # | Mục tiêu |
+| # | Objective |
 |---|---|
-| 1 | Màn hình đăng nhập, nối master server của D |
-| 2 | Lobby: danh sách phòng, tạo phòng, vào phòng, chat |
-| 3 | Chuyển từ lobby vào trận (nhận joinTicket, kết nối UDP) |
-| 4 | HUD trong trận: máu, đạn, minimap, điểm chiếm |
-| 5 | Scoreboard (phím Tab), killfeed |
-| 6 | Kết thúc trận: bảng điểm cuối, quay về lobby |
+| 1 | The login screen, wired to D's master server |
+| 2 | Lobby: room list, create room, join room, chat |
+| 3 | Going from the lobby into a match (receive the joinTicket, connect over UDP) |
+| 4 | In-match HUD: health, ammo, minimap, capture points |
+| 5 | Scoreboard (Tab key), killfeed |
+| 6 | Match end: final scoreboard, return to lobby |
 
 ---
 
-## 2. Ưu tiên UI — cắt từ dưới lên nếu thiếu thời gian
+## 2. UI priority — cut from the bottom up if time runs short
 
-> **Sau khi front-load, áp lực cắt đã giảm mạnh** (tải 117% → 67%). Danh sách này vẫn giữ để
-> dùng khi tình huống xấu. Mục 1–7 đã được dựng khung ở phase-02, ở đây chỉ nối dữ liệu thật.
+> **After front-loading, the pressure to cut has dropped sharply** (load 117% → 67%). This list is
+> kept for the bad case. Items 1–7 already have their shells built in phase-02; here they're just
+> connected to real data.
 
-| # | Màn hình / thành phần | Mức | Cắt được? |
+| # | Screen / component | Level | Cuttable? |
 |---|---|---|---|
-| 1 | Đăng nhập (username + password) | **Bắt buộc** | Không |
-| 2 | Danh sách phòng + nút Join | **Bắt buộc** | Không |
-| 3 | HUD: máu, đạn | **Bắt buộc** | Không |
-| 4 | Màn hình chọn spawn point + loadout | **Bắt buộc** | Không (đã có sẵn `LoadoutUi`) |
-| 5 | Scoreboard (Tab) | Cao | Không |
-| 6 | Killfeed | Cao | Rút gọn còn text thuần |
-| 7 | Điểm chiếm + tiến độ trận | Cao | Không |
-| 8 | Bảng điểm cuối trận | Trung bình | Thay bằng text đơn giản |
-| 9 | Tạo phòng có tùy chọn (map, số bot, mật khẩu) | Trung bình | Cắt: chỉ vào phòng có sẵn |
-| 10 | Chat lobby | Trung bình | Cắt được |
-| 11 | Chat trong trận | Thấp | **Cắt** |
-| 12 | Minimap | Thấp (đã có `MinimapUi`) | Giữ nguyên bản gốc, không sửa |
-| 13 | Đăng ký tài khoản trong game | Thấp | **Cắt** — D tạo tài khoản sẵn bằng CLI |
-| 14 | Màn hình cài đặt mạng (nhập IP thủ công) | Thấp | Giữ — hữu ích để debug |
+| 1 | Login (username + password) | **Required** | No |
+| 2 | Room list + Join button | **Required** | No |
+| 3 | HUD: health, ammo | **Required** | No |
+| 4 | Spawn point + loadout selection screen | **Required** | No (`LoadoutUi` already exists) |
+| 5 | Scoreboard (Tab) | High | No |
+| 6 | Killfeed | High | Reduce to plain text |
+| 7 | Capture points + match progress | High | No |
+| 8 | End-of-match scoreboard | Medium | Replace with plain text |
+| 9 | Room creation with options (map, bot count, password) | Medium | Cut: join existing rooms only |
+| 10 | Lobby chat | Medium | Cuttable |
+| 11 | In-match chat | Low | **Cut** |
+| 12 | Minimap | Low (`MinimapUi` already exists) | Keep the original as-is, don't modify |
+| 13 | In-game account registration | Low | **Cut** — D creates accounts with a CLI |
+| 14 | Network settings screen (manual IP entry) | Low | Keep — useful for debugging |
 
 ---
 
-## 3. Task chi tiết
+## 3. Detailed tasks
 
-### Task 1 — Máy trạng thái game flow (2 ngày)
+### Task 1 — The game-flow state machine (2 days)
 
-Trước khi làm UI, định nghĩa rõ các trạng thái. Đây là thứ hay bị làm ẩu rồi phải sửa nhiều.
+Before touching the UI, define the states clearly. This is the thing people rush and then have to
+repeatedly fix.
 
 ```mermaid
 stateDiagram-v2
     [*] --> Booting
     Booting --> LoginScreen
-    LoginScreen --> Authenticating: nhấn Login
-    Authenticating --> LoginScreen: thất bại (hiện lỗi)
+    LoginScreen --> Authenticating: Login pressed
+    Authenticating --> LoginScreen: failed (show error)
     Authenticating --> Lobby: LOGIN_RES ok
     Lobby --> RoomBrowser
-    RoomBrowser --> JoiningRoom: chọn phòng
+    RoomBrowser --> JoiningRoom: room selected
     JoiningRoom --> RoomLobby: ROOM_JOIN_RES ok
-    JoiningRoom --> RoomBrowser: lỗi (phòng đầy...)
-    RoomLobby --> ConnectingGame: server báo trận bắt đầu
+    JoiningRoom --> RoomBrowser: error (room full...)
+    RoomLobby --> ConnectingGame: server signals the match is starting
     ConnectingGame --> InMatch: CONNECT_ACCEPTED
-    ConnectingGame --> RoomLobby: kết nối thất bại
+    ConnectingGame --> RoomLobby: connection failed
     InMatch --> MatchEnd: S_MATCH_STATE state=Ended
-    MatchEnd --> Lobby: sau 15 giây hoặc bấm Continue
-    InMatch --> Lobby: bị disconnect
+    MatchEnd --> Lobby: after 15 seconds or on Continue
+    InMatch --> Lobby: disconnected
 ```
 
 ```csharp
@@ -93,25 +95,25 @@ public sealed class GameFlowController : MonoBehaviour
     {
         [GameFlowState.LoginScreen]    = new[]{ GameFlowState.Authenticating },
         [GameFlowState.Authenticating] = new[]{ GameFlowState.Lobby, GameFlowState.LoginScreen },
-        // ... khai báo hết
+        // ... declare them all
     };
 
     public void Transition(GameFlowState next)
     {
         if (!Allowed[State].Contains(next))
-            throw new InvalidOperationException($"Chuyển trạng thái không hợp lệ: {State} → {next}");
+            throw new InvalidOperationException($"Invalid state transition: {State} → {next}");
         var prev = State; State = next;
         OnStateChanged?.Invoke(prev, next);
     }
 }
 ```
 
-> Chặn chuyển trạng thái không hợp lệ bằng exception ngay từ đầu. Bug loại "đang ở lobby mà UI
-> trận đấu vẫn hiện" rất khó tìm nếu không có máy trạng thái tường minh.
+> Block invalid transitions with an exception from day one. Bugs of the "we're in the lobby but the
+> match HUD is still showing" variety are very hard to find without an explicit state machine.
 
-### Task 2 — Nối master server (3 ngày)
+### Task 2 — Wire up the master server (3 days)
 
-D cung cấp `IMasterClient`. Bạn tiêu thụ nó.
+D provides `IMasterClient`. You consume it.
 
 ```csharp
 // Assets/Scripts/Net/Client/MasterConnection.cs
@@ -122,7 +124,7 @@ public sealed class MasterConnection : MonoBehaviour
     public async void Login(string user, string password)
     {
         _flow.Transition(GameFlowState.Authenticating);
-        string hash = PasswordHasher.Hash(password);   // hash phía client, KHÔNG gửi plaintext
+        string hash = PasswordHasher.Hash(password);   // hash client-side, NEVER send plaintext
         var res = await _master.LoginAsync(user, hash);
         if (!res.Ok)
         {
@@ -140,7 +142,7 @@ public sealed class MasterConnection : MonoBehaviour
         var res = await _master.JoinRoomAsync(roomId, password);
         if (!res.Ok) { ShowError(...); _flow.Transition(GameFlowState.RoomBrowser); return; }
 
-        // Chuyển sang UDP — điểm giao giữa hai protocol
+        // Hand over to UDP — the junction between the two protocols
         _pendingJoin = new PendingJoin {
             Ip = res.GameServerIp, Port = res.GameServerPort, Ticket = res.JoinTicket
         };
@@ -149,38 +151,38 @@ public sealed class MasterConnection : MonoBehaviour
 }
 ```
 
-**Cạm bẫy 1 — `async void` và Unity.** `await` trong Unity chạy trên thread pool, nhưng
-`Transition()` và mọi API Unity chỉ được gọi từ main thread. Bắt buộc D cung cấp `IMasterClient`
-đã marshal callback về main thread, hoặc bạn tự làm:
+**Trap 1 — `async void` and Unity.** `await` in Unity resumes on the thread pool, but `Transition()`
+and every Unity API may only be called from the main thread. Either D must provide an
+`IMasterClient` that already marshals its callbacks to the main thread, or you do it yourself:
 
 ```csharp
-// Hàng đợi thread-safe, drain trong Update()
+// A thread-safe queue, drained in Update()
 private readonly ConcurrentQueue<Action> _mainThreadQueue = new();
 private void Update() { while (_mainThreadQueue.TryDequeue(out var a)) a(); }
 ```
 
-**Chốt với D ở tuần 11:** callback ở main thread hay không. Đây là loại bug gây
-`UnityException: can only be called from the main thread` rất khó chịu.
+**Settle this with D in week 11:** are callbacks on the main thread or not? This is the source of
+the very annoying `UnityException: can only be called from the main thread` class of bug.
 
-**Cạm bẫy 2 — mật khẩu.** Hash phía client trước khi gửi (`SHA256(password + username)` làm
-salt). Master server hash lại lần nữa bằng bcrypt/argon2 trước khi lưu DB. Không bao giờ gửi
-plaintext, kể cả khi chưa có TLS.
+**Trap 2 — passwords.** Hash on the client before sending (`SHA256(password + username)` as the
+salt). The master server hashes it again with bcrypt/argon2 before storing it in the DB. Never send
+plaintext, even before TLS is in place.
 
-### Task 3 — Chuyển từ lobby vào trận (2 ngày)
+### Task 3 — Going from lobby into a match (2 days)
 
-Điểm nối TCP → UDP.
+The TCP → UDP junction.
 
 ```csharp
 private void EnterMatch(PendingJoin join)
 {
     _flow.Transition(GameFlowState.ConnectingGame);
-    ShowLoadingScreen("Đang kết nối tới máy chủ trận đấu...");
+    ShowLoadingScreen("Connecting to the game server...");
 
     _transport.OnConnected += OnGameServerConnected;
     _transport.OnDisconnected += OnGameServerFailed;
     _transport.Connect(join.Ip, join.Port, join.Ticket);
 
-    _connectTimeout = 10f;   // joinTicket hết hạn sau 60s, nhưng ta timeout sớm hơn
+    _connectTimeout = 10f;   // the joinTicket expires after 60s, but we time out sooner
 }
 
 private void OnGameServerConnected(ConnectResult r)
@@ -193,10 +195,10 @@ private void OnGameServerConnected(ConnectResult r)
 }
 ```
 
-**Cạm bẫy 3 — load scene mất thời gian, snapshot vẫn về.** Trong lúc load scene (2–5 giây),
-server đã bắt đầu gửi snapshot. Nếu bạn xử lý chúng khi scene chưa sẵn sàng sẽ
-`NullReferenceException` hàng loạt. Giải pháp: **hàng đợi tạm** — buffer message tới khi scene
-load xong, rồi xử lý message mới nhất và bỏ các message snapshot cũ.
+**Trap 3 — scene loading takes time while snapshots keep arriving.** During the 2–5 seconds of scene
+loading, the server has already started sending snapshots. Processing them before the scene is ready
+gives you a flood of `NullReferenceException`s. Solution: **a holding queue** — buffer messages until
+the scene finishes loading, then process the newest message and discard the stale snapshots.
 
 ```csharp
 private bool _sceneReady;
@@ -207,27 +209,27 @@ private void HandleMessage(ReadOnlyMemory<byte> data)
 }
 ```
 
-### Task 4 — HUD trong trận (3 ngày)
+### Task 4 — In-match HUD (3 days)
 
-Tận dụng `IngameUi.cs`, `ScoreUi.cs`, `MinimapUi.cs` có sẵn. Chỉ đổi **nguồn dữ liệu** từ
-`ActorManager.instance.player` sang snapshot mạng.
+Reuse the existing `IngameUi.cs`, `ScoreUi.cs` and `MinimapUi.cs`. Only the **data source** changes,
+from `ActorManager.instance.player` to the network snapshot.
 
-| Thành phần | File gốc | Đổi gì |
+| Component | Original file | What changes |
 |---|---|---|
-| Máu | `IngameUi` | Đọc từ `_localActorState.Health` (snapshot) thay vì `actor.health` |
-| Đạn | `IngameUi` | Đọc từ snapshot, nhưng **client dự đoán** trừ đạn khi bắn (xem phase 02) |
-| Minimap | `MinimapUi` | Vẽ blip từ danh sách actor mạng thay vì `ActorManager.actors` |
-| Điểm chiếm | `ScoreUi` | Đọc từ `S_CAPTURE_POINT` + `S_MATCH_STATE` |
-| Crosshair | `IngameUi` | Không đổi |
+| Health | `IngameUi` | Read from `_localActorState.Health` (snapshot) instead of `actor.health` |
+| Ammo | `IngameUi` | Read from the snapshot, but the **client predicts** the decrement on firing (see phase 02) |
+| Minimap | `MinimapUi` | Draw blips from the networked actor list instead of `ActorManager.actors` |
+| Capture points | `ScoreUi` | Read from `S_CAPTURE_POINT` + `S_MATCH_STATE` |
+| Crosshair | `IngameUi` | Unchanged |
 
-**Cạm bẫy 4 — nhấp nháy do dự đoán vs snapshot.** Đạn dự đoán = 29, snapshot về = 30 → HUD nhảy
-30 rồi 29 rồi 30. Giải pháp: chỉ nhận số đạn từ snapshot khi **lệch > 2** hoặc khi có sự kiện
-reload; ngoài ra tin client.
+**Trap 4 — flicker between prediction and snapshot.** Predicted ammo = 29, snapshot says 30 → the
+HUD flips 30, 29, 30. Solution: only take the ammo count from the snapshot when it **differs by more
+than 2**, or on a reload event; otherwise trust the client.
 
-### Task 5 — Scoreboard và killfeed (2 ngày)
+### Task 5 — Scoreboard and killfeed (2 days)
 
 ```csharp
-// Scoreboard: nhận từ S_PLAYER_LIST (0x4B), cập nhật mỗi 2 giây hoặc khi có người chết
+// Scoreboard: fed by S_PLAYER_LIST (0x4B), updated every 2 seconds or whenever someone dies
 public struct PlayerScoreRow
 {
     public uint   PlayerId;
@@ -239,10 +241,10 @@ public struct PlayerScoreRow
 }
 ```
 
-Hiển thị: 2 cột theo team, sắp xếp theo Score giảm dần, tô sáng dòng của mình.
-Bot hiển thị tên khác màu (xám) để phân biệt với người thật.
+Display: two columns by team, sorted by Score descending, with your own row highlighted.
+Bots show their names in a different color (grey) to distinguish them from real players.
 
-### Task 6 — Kết thúc trận (2 ngày)
+### Task 6 — Match end (2 days)
 
 ```csharp
 private void HandleMatchState(ReadOnlySpan<byte> span)
@@ -261,60 +263,60 @@ private void HandleMatchState(ReadOnlySpan<byte> span)
 }
 ```
 
-**Đừng quên dọn dẹp:** khi rời trận phải destroy mọi actor, clear interpolator, reset
-`GameFlowController`, ngắt UDP nhưng **giữ** kết nối TCP tới master. Rò rỉ ở đây gây lỗi
-"vào trận thứ hai thì mọi thứ nhân đôi".
+**Don't forget the cleanup:** on leaving a match you must destroy every actor, clear the
+interpolators, reset `GameFlowController`, and close the UDP connection while **keeping** the TCP
+connection to the master. A leak here causes the "everything is doubled in the second match" bug.
 
-### Task 7 — Màn hình debug (1 ngày)
+### Task 7 — Debug overlay (1 day)
 
-Nhỏ nhưng cực kỳ hữu ích cho cả nhóm và cho buổi bảo vệ đồ án.
+Small, but hugely useful for the whole team and for the capstone defense.
 
-Bật bằng phím `F3`, hiển thị overlay:
+Toggled with `F3`, showing an overlay:
 ```
 RTT: 87ms (smoothed)      Jitter: 12ms
-Packet loss: 2.3% (gửi) / 1.8% (nhận)
+Packet loss: 2.3% (sent) / 1.8% (received)
 Bandwidth: ↓ 6.4 KB/s  ↑ 0.9 KB/s
 Server tick: 12847        Client tick: 12849
 Interp delay: 100ms       Extrapolating: no
-Actors: 41 (14 người, 27 bot)   Snapshot size: 512 B
-Reconciles/min: 18        Avg replay: 3.2 tick
+Actors: 41 (14 players, 27 bots)   Snapshot size: 512 B
+Reconciles/min: 18        Avg replay: 3.2 ticks
 ```
 
-Màn hình này là **bằng chứng trực quan** khi bảo vệ đồ án rằng netcode thật sự hoạt động.
-Đáng đầu tư 1 ngày.
+This overlay is **visual proof** at the capstone defense that the netcode genuinely works. Worth the
+one-day investment.
 
 ---
 
-## 4. Tiêu chí nghiệm thu (M3)
+## 4. Acceptance criteria (M3)
 
-| # | Tiêu chí | Cách kiểm chứng |
+| # | Criterion | How to verify |
 |---|---|---|
-| 1 | Luồng đầy đủ không sửa file tay | Video: mở game → login → chọn phòng → chơi → hết trận → về lobby |
-| 2 | 16 người thật cùng lúc | Nhờ cả nhóm + bạn bè, hoặc dùng load-test bot của D |
-| 3 | Chiếm điểm hoạt động, điểm số cập nhật đúng ở mọi client | Video 2+ client cạnh nhau |
-| 4 | Điều kiện thắng thua kích hoạt đúng | Chơi tới hết trận |
-| 5 | Vào trận thứ hai không lỗi (không rò rỉ) | Chơi liên tiếp 3 trận, kiểm tra số actor không tăng bất thường |
-| 6 | Mất kết nối giữa trận → về lobby có thông báo | Rút mạng, quan sát |
-| 7 | Sai mật khẩu → thông báo lỗi rõ ràng | Thử sai |
-| 8 | Màn hình debug F3 hiển thị đủ chỉ số | Ảnh chụp |
-| 9 | Chuyển trạng thái sai ném exception | Unit test cho `GameFlowController` |
+| 1 | The full flow works with no manual file editing | Video: launch → login → pick a room → play → match end → back to lobby |
+| 2 | 16 real players at once | Recruit the team + friends, or use D's load-test bots |
+| 3 | Point capture works and scores update correctly on every client | Video with 2+ clients side by side |
+| 4 | Win/lose conditions fire correctly | Play a match to the end |
+| 5 | A second match starts without errors (no leaks) | Play 3 matches back to back, check the actor count doesn't grow abnormally |
+| 6 | Disconnecting mid-match → returns to the lobby with a message | Unplug the network and observe |
+| 7 | Wrong password → a clear error message | Try a wrong one |
+| 8 | The F3 debug overlay shows every metric | Screenshot |
+| 9 | Invalid state transitions throw | Unit tests for `GameFlowController` |
 
 ---
 
-## 5. Rủi ro
+## 5. Risks
 
-| Rủi ro | Xử lý |
+| Risk | Handling |
 |---|---|
-| `async` callback không ở main thread | Chốt với D ở tuần 11. Có sẵn `ConcurrentQueue` marshal |
-| Snapshot tới khi scene chưa load | Hàng đợi tạm, xem cạm bẫy 3 |
-| Rò rỉ actor giữa các trận | Viết hàm `CleanupMatch()` gọi ở mọi đường thoát. Test bằng cách chơi 3 trận liên tiếp |
-| Không kịp tuần 13 | Cắt UI từ dưới lên theo bảng § 2, ghi rõ vào report |
-| D chậm, master server chưa xong | Dùng chế độ "nhập IP thủ công" (mục 14 trong bảng UI) để vẫn demo được trận đấu |
+| `async` callbacks not on the main thread | Settle it with D in week 11. Have the `ConcurrentQueue` marshaller ready |
+| Snapshots arriving before the scene is loaded | Holding queue, see trap 3 |
+| Actor leaks between matches | Write a `CleanupMatch()` called on every exit path. Test by playing 3 matches back to back |
+| Week 13 arrives unfinished | Cut UI from the bottom of the § 2 table, and record it clearly in the report |
+| D is late and the master server isn't ready | Use "manual IP entry" mode (item 14 in the UI table) so matches can still be demoed |
 
 ---
 
-## 6. Bàn giao
+## 6. Handoff
 
-- Cùng D chạy thử luồng login → join đủ 10 lần liên tiếp, không lỗi
-- Gửi D danh sách mã lỗi client cần hiển thị, đối chiếu với bảng ở
-  [`protocol-spec.md § 13`](../../00-shared/protocol-spec.md#13-bảng-mã-lỗi-chung)
+- Run the login → join flow with D 10 times in a row without an error
+- Send D the list of error codes the client needs to display, cross-checked against the table in
+  [`protocol-spec.md § 13`](../../00-shared/protocol-spec.md#13-shared-error-codes)

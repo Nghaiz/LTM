@@ -1,36 +1,38 @@
-# Quyết định về thuật toán và nền tảng
+# Algorithm and platform decisions
 
-Ghi lại các quyết định đã chốt kèm bằng chứng, để 3 tháng sau không ai phải tranh luận lại.
+A record of settled decisions with the evidence behind them, so that nobody has to re-argue them
+three months from now.
 
 ---
 
-## AD-9 — Giữ nguyên A* Pathfinding Project 3.8.1
+## AD-9 — Keep A* Pathfinding Project 3.8.1
 
-**Trạng thái: ĐÃ CHỐT.** Không thay bằng Unity AI Navigation.
+**Status: SETTLED.** Not replacing it with Unity AI Navigation.
 
-### Bằng chứng đã kiểm chứng
+### Verified evidence
 
-| Kiểm tra | Kết quả | Nguồn |
+| Check | Result | Source |
 |---|---|---|
-| Phiên bản | 3.8.1 (~2015) | [`AstarPath.cs:214`](../../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/AstarPath.cs#L214) |
-| Mô hình thread | `new Thread()` + `IsBackground = true` — thread .NET thuần | [`AstarPath.cs:978`](../../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/AstarPath.cs#L978) |
-| Unity API gọi từ worker thread | **Không có** — grep `Voxelize.cs` (2191 dòng): 0 kết quả | `Pathfinding/Voxels/Voxelize.cs` |
-| Loại graph đang dùng | **RecastGraph** | [`PathfindingManager.cs:13`](../../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/PathfindingManager.cs#L13) |
+| Version | 3.8.1 (~2015) | [`AstarPath.cs:214`](../../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/AstarPath.cs#L214) |
+| Threading model | `new Thread()` + `IsBackground = true` — plain .NET threads | [`AstarPath.cs:978`](../../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/AstarPath.cs#L978) |
+| Unity API calls from worker threads | **None** — grep of `Voxelize.cs` (2191 lines): 0 hits | `Pathfinding/Voxels/Voxelize.cs` |
+| Graph type in use | **RecastGraph** | [`PathfindingManager.cs:13`](../../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/PathfindingManager.cs#L13) |
 
-### Lý do giữ
+### Why we're keeping it
 
-**"Cũ" không đồng nghĩa với "kém".** RecastGraph mà codebase đang dùng chính là thuật toán
-Recast của Mikko Mononen. `com.unity.ai.navigation` **cũng là Recast**. Chúng cùng một dòng:
-voxelize hình học → heightfield → trích contour → tam giác hóa → A* trên navmesh.
+**"Old" does not mean "worse".** The RecastGraph this codebase uses *is* Mikko Mononen's Recast
+algorithm. `com.unity.ai.navigation` **is also Recast**. They're the same lineage: voxelize the
+geometry → heightfield → extract contours → triangulate → A* over the navmesh.
 
-Thay A* Pathfinding bằng Unity AI Navigation = **đổi cách đóng gói cùng một thuật toán**.
-Không thông minh hơn một chút nào. A* được chứng minh tối ưu từ 1968; thứ tiến bộ 10 năm qua là
-tiện ích tích hợp engine và hiệu năng Burst/Jobs, không phải chất lượng đường đi.
+Swapping A* Pathfinding for Unity AI Navigation = **repackaging the same algorithm**. Not one bit
+smarter. A* was proven optimal back in 1968; what has advanced in the last 10 years is engine
+integration convenience and Burst/Jobs performance, not path quality.
 
-Chi phí thay thế: 1–2 tuần của Dev A (bake lại navmesh, sửa mọi lời gọi `Seeker` trong
-`AiActorController` 2153 dòng), kèm rủi ro bot đổi hành vi. Lợi ích gameplay: **bằng không**.
+Cost of replacing it: 1–2 weeks of Dev A's time (re-bake the navmesh, fix every `Seeker` call in
+the 2153-line `AiActorController`), plus the risk of bots changing behavior. Gameplay benefit:
+**zero**.
 
-### Việc duy nhất phải làm — kiểm tra tuần 1
+### The only thing we must do — a week-1 check
 
 [`AstarPath.cs:1000`](../../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/AstarPath.cs#L1000):
 
@@ -39,112 +41,115 @@ if (scanOnStartup && (!astarData.cacheStartup || astarData.file_cachedStartup ==
     Scan();
 ```
 
-| Trường hợp | Hành vi trên headless | Xử lý |
+| Case | Headless behavior | Handling |
 |---|---|---|
-| Scene **có** graph cache | Deserialize, khởi động tức thì | Không cần làm gì |
-| Scene **không có** cache | Server tự voxelize map lúc boot, mất 10–60 giây. **Vẫn chạy**, chỉ chậm | Bake + cache trong Editor (~15 phút việc của Dev A) |
+| Scene **has** a graph cache | Deserialize, starts instantly | Nothing to do |
+| Scene has **no** cache | The server voxelizes the map at boot, taking 10–60 seconds. **Still runs**, just slowly | Bake + cache in the Editor (~15 minutes of Dev A's time) |
 
-Đây là kiểm tra 30 phút, không phải rủi ro chặn dự án.
+This is a 30-minute check, not a project-blocking risk.
 
-### Rủi ro A6 được hạ cấp
+### Risk A6 downgraded
 
-Từ **Cao** xuống **Thấp**. Lý do: worker thread không chạm Unity API (điều kiện then chốt cho
-headless), và trường hợp xấu nhất chỉ là boot chậm chứ không phải không chạy.
+From **High** to **Low**. Reason: the worker threads never touch the Unity API (the key condition
+for headless), and the worst case is a slow boot, not a failure to run.
 
-Phase-00 của Dev A vẫn giữ task kiểm chứng — nhưng nó không còn là "rủi ro có thể sụp dự án".
+Dev A's phase-00 still keeps the verification task — but it is no longer a "could sink the project"
+risk.
 
 ---
 
-## AD-10 — Giữ nguyên `AiActorController`, hoãn hiện đại hóa AI
+## AD-10 — Keep `AiActorController`, defer AI modernization
 
-**Trạng thái: ĐÃ CHỐT cho 14 tuần.** Ghi vào roadmap sau đồ án.
+**Status: SETTLED for the 14 weeks.** Recorded on the post-capstone roadmap.
 
-### Phân biệt hai bài toán khác nhau
+### Two different problems, kept separate
 
-Đây là chỗ hay bị gộp làm một:
+This is where people usually conflate things:
 
-| Bài toán | Ai giải | Còn gì để cải tiến? |
+| Problem | Who solves it | Anything left to improve? |
 |---|---|---|
-| **Tìm đường** — "đi từ A tới B thế nào" | A*, Recast | **Không.** Toán học đã giải xong |
-| **Ra quyết định** — "có nên đi tới B không, hay nấp, hay bắn" | `AiActorController` | **Có.** Đây là nơi 10 năm qua thực sự thay đổi |
+| **Pathfinding** — "how do I get from A to B" | A*, Recast | **No.** The math is solved |
+| **Decision-making** — "should I go to B at all, or take cover, or shoot" | `AiActorController` | **Yes.** This is where the last 10 years actually changed things |
 
-`AiActorController` (2153 dòng) là chuỗi điều kiện `if` lồng nhau cộng một `Squad.State` enum.
-Không có kiến trúc quyết định tường minh.
+`AiActorController` (2153 lines) is a chain of nested `if` conditions plus a `Squad.State` enum.
+There is no explicit decision architecture.
 
-### Các lựa chọn đã cân nhắc
+### Options considered
 
-| Kiến trúc | Bot khá hơn ở đâu | Công sức | Rủi ro |
+| Architecture | Where the bots get better | Effort | Risk |
 |---|---|---|---|
-| **Giữ nguyên (đã chọn)** | — | 0 | 0 |
-| Utility AI | Cân nhắc nhiều lựa chọn có trọng số thay vì if cứng. Hành vi tự nhiên hơn rõ rệt | ~2 tuần | Thấp — bọc quanh code cũ |
-| Behavior Tree | Cấu trúc rõ, dễ debug, dễ mở rộng | ~2.5 tuần | Trung bình — viết lại phần lớn |
-| GOAP | Bot tự lập kế hoạch nhiều bước | ~4 tuần | Cao — hành vi khó đoán |
-| ML / RL | — | 3 tháng+ | Rất cao, cần môi trường huấn luyện |
+| **Keep as-is (chosen)** | — | 0 | 0 |
+| Utility AI | Weighs multiple weighted options instead of hard `if`s. Noticeably more natural behavior | ~2 weeks | Low — wraps around the existing code |
+| Behavior Tree | Clear structure, easy to debug, easy to extend | ~2.5 weeks | Medium — mostly a rewrite |
+| GOAP | Bots plan multiple steps ahead on their own | ~4 weeks | High — behavior is hard to predict |
+| ML / RL | — | 3+ months | Very high, needs a training environment |
 
-### Lý do hoãn
+### Why we're deferring
 
-1. Ngân sách 51.5/56 người-tuần, buffer 8%. Không có chỗ cho 2 tuần tự nguyện.
-2. Đồ án là **Lập trình mạng**. Bot thông minh hơn không thêm điểm; tầng UDP tự viết thì có.
-3. **`AiActorController` nằm sau seam `ActorController`.** Nó thay được bất cứ lúc nào sau này
-   mà không đụng một dòng netcode. Kiến trúc tốt cho phép hoãn — đây chính là lợi ích đó.
+1. Budget is 51.5/56 person-weeks, an 8% buffer. There's no room for 2 voluntary weeks.
+2. This is a **Network Programming** capstone. Smarter bots earn no extra marks; a hand-written UDP
+   layer does.
+3. **`AiActorController` sits behind the `ActorController` seam.** It can be replaced at any point
+   later without touching a single line of netcode. Good architecture makes deferral possible —
+   that's exactly the benefit here.
 
-### Roadmap sau đồ án
+### Post-capstone roadmap
 
-Nếu tiếp tục dự án, **Utility AI là lựa chọn đúng đầu tiên**: công sức thấp nhất, cải thiện rõ
-nhất, và bọc quanh code cũ chứ không thay thế. Behavior Tree là bước hai nếu cần mở rộng nhiều
-hành vi.
+If the project continues, **Utility AI is the right first choice**: lowest effort, clearest
+improvement, and it wraps the existing code rather than replacing it. Behavior Tree is step two if
+we need to scale up the number of behaviors.
 
 ---
 
-## AD-11 — Master server chạy trên .NET, và đó vẫn là C# thuần
+## AD-11 — The master server runs on .NET, and that is still plain C#
 
-**Trạng thái: ĐÃ CHỐT.**
+**Status: SETTLED.**
 
-### Làm rõ thuật ngữ
+### Clearing up the terminology
 
-"C# thuần, không .NET" không tồn tại:
+"Plain C#, no .NET" isn't a thing:
 
-- **C#** là **ngôn ngữ**
-- **.NET** là **runtime** chạy ngôn ngữ đó
+- **C#** is the **language**
+- **.NET** is the **runtime** that runs that language
 
-Unity chạy C# trên **Mono** — một hiện thực của .NET. IL2CPP biên dịch từ .NET IL sang C++.
-Dự án đã dùng .NET từ dòng code Unity đầu tiên.
+Unity runs C# on **Mono** — an implementation of .NET. IL2CPP compiles from .NET IL to C++. This
+project has used .NET since its very first line of Unity code.
 
-### Master server ĐÃ LÀ C# thuần theo nghĩa đang bàn
+### The master server IS plain C# in the sense meant here
 
-| Không dùng | Chỉ dùng |
+| Not used | Only using |
 |---|---|
 | ASP.NET Core | `System.Net.Sockets.TcpListener` |
 | SignalR, gRPC, WebSocket | `System.Net.Sockets.Socket` |
 | Entity Framework | `Microsoft.Data.Sqlite` |
-| Bất kỳ web framework nào | `System.Security.Cryptography` |
+| Any web framework | `System.Security.Cryptography` |
 
-Đó là console app C# thuần dùng thư viện chuẩn. Thứ duy nhất cài thêm là **.NET 8 SDK** —
-cùng loại công cụ với Unity Editor.
+It's a plain C# console app on the standard library. The only extra install is the **.NET 8 SDK** —
+the same class of tool as the Unity Editor.
 
-### Phương án thay thế đã cân nhắc và loại
+### Alternative considered and rejected
 
-Viết master server thành build Unity headless thứ hai:
+Building the master server as a second headless Unity build:
 
-| | .NET console (đã chọn) | Unity headless |
+| | .NET console (chosen) | Unity headless |
 |---|---|---|
-| Số toolchain | 2 | 1 |
-| RAM chạy | ~50–80 MB | ~500–1500 MB |
-| `dotnet test` (xUnit) | Có, vài giây | Không — qua Unity Test Runner, chậm hơn nhiều |
-| Vòng lặp sửa-chạy | 2–5 giây | 20–60 giây (domain reload) |
-| Xung đột git `.meta`/scene | Không | Có — phá quy tắc "chỉ Dev A mở Editor" |
+| Toolchains | 2 | 1 |
+| Runtime RAM | ~50–80 MB | ~500–1500 MB |
+| `dotnet test` (xUnit) | Yes, a few seconds | No — goes through Unity Test Runner, much slower |
+| Edit-run loop | 2–5 seconds | 20–60 seconds (domain reload) |
+| Git conflicts on `.meta`/scenes | No | Yes — breaks the "only Dev A opens the Editor" rule |
 
-Loại vì chi phí vận hành và tốc độ lặp, không phải vì ngôn ngữ.
+Rejected on operational cost and iteration speed, not on language grounds.
 
 ---
 
-## Bảng tổng hợp — cái gì cũ, cái gì không
+## Summary — what is actually old and what isn't
 
-| Thành phần | Thực sự lỗi thời? | Ảnh hưởng dự án | Quyết định |
+| Component | Genuinely outdated? | Project impact | Decision |
 |---|---|---|---|
-| A* Pathfinding 3.8.1 | **Không** — cùng thuật toán với bản mới | Không | Giữ (AD-9) |
-| `Input.GetAxis` (Legacy Input Manager) | **Có** | Không — `IInputSource` đã trừu tượng hóa | Giữ |
-| `Random.insideUnitSphere` cho spread | Không cũ, chỉ phi tất định | Đã xử lý bằng server-authoritative | Giữ (AD-3) |
-| Ragdoll `ConfigurableJoint` | Không cũ — lựa chọn thiết kế, tạo chất Ravenfield | Đã xử lý | Giữ (AD-4) |
-| `AiActorController` — logic quyết định | **Có** — thứ duy nhất đáng bàn | Không chặn gì | Hoãn (AD-10) |
-| Unity 5-era physics API | Đã được nâng cấp | Không | Xong (commit `415bdc2`) |
+| A* Pathfinding 3.8.1 | **No** — same algorithm as the current version | None | Keep (AD-9) |
+| `Input.GetAxis` (Legacy Input Manager) | **Yes** | None — `IInputSource` already abstracts it | Keep |
+| `Random.insideUnitSphere` for spread | Not old, just non-deterministic | Already handled by going server-authoritative | Keep (AD-3) |
+| `ConfigurableJoint` ragdolls | Not old — a design choice, and it's what gives Ravenfield its feel | Already handled | Keep (AD-4) |
+| `AiActorController` — decision logic | **Yes** — the only one worth discussing | Blocks nothing | Defer (AD-10) |
+| Unity 5-era physics API | Already upgraded | None | Done (commit `415bdc2`) |

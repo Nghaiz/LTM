@@ -1,28 +1,28 @@
-# Dev C — Phase 03: Vòng đời trận đấu và tối ưu
+# Dev C — Phase 03: Match lifecycle and optimization
 
-**Tuần 11–13** · Mốc **M3** · Ước lượng **2.5 người-tuần**
+**Weeks 11–13** · Milestone **M3** · Estimate **2.5 person-weeks**
 
-> Mục tiêu một câu: **server tự chạy được một trận đấu hoàn chỉnh từ đầu tới cuối, không cần
-> ai can thiệp.**
+> Goal in one sentence: **the server runs a complete match from start to finish on its own, with no
+> human intervention.**
 
 ---
 
-## 1. Mục tiêu
+## 1. Objectives
 
-| # | Mục tiêu |
+| # | Objective |
 |---|---|
-| 1 | Vòng đời trận: warmup → playing → ended → reset |
-| 2 | Điểm chiếm (Conquest) server-authoritative |
-| 3 | Hệ thống điểm số, ticket, điều kiện thắng thua |
-| 4 | Nối master server của D (register, heartbeat, verify ticket, báo kết quả) |
-| 5 | Tối ưu băng thông và CPU về đúng ngân sách |
-| 6 | Chịu 16 người thật |
+| 1 | Match lifecycle: warmup → playing → ended → reset |
+| 2 | Server-authoritative capture points (Conquest) |
+| 3 | Scoring, tickets, win/lose conditions |
+| 4 | Wire up D's master server (register, heartbeat, ticket verification, result reporting) |
+| 5 | Optimize bandwidth and CPU back within budget |
+| 6 | Handle 16 real players |
 
 ---
 
-## 2. Task chi tiết
+## 2. Detailed tasks
 
-### Task 1 — Máy trạng thái trận đấu (2 ngày)
+### Task 1 — The match state machine (2 days)
 
 ```csharp
 // Assets/Scripts/Net/Server/MatchController.cs
@@ -33,7 +33,7 @@ public sealed class MatchController : MonoBehaviour
     private const int   MIN_PLAYERS_TO_START = 2;
     private const float WARMUP_SECONDS       = 20f;
     private const float POST_MATCH_SECONDS   = 20f;
-    private const int   START_TICKETS        = 200;    // GameManager.victoryPoints gốc
+    private const int   START_TICKETS        = 200;    // the original GameManager.victoryPoints
 
     public MatchState State { get; private set; } = MatchState.WaitingForPlayers;
     private int _tickets0 = START_TICKETS, _tickets1 = START_TICKETS;
@@ -63,7 +63,7 @@ public sealed class MatchController : MonoBehaviour
                 break;
 
             case MatchState.Resetting:
-                ResetWorld();               // despawn hết, reset điểm, quay lại WaitingForPlayers
+                ResetWorld();               // despawn everything, reset scores, back to WaitingForPlayers
                 break;
         }
         BroadcastMatchStateIfChanged();
@@ -71,10 +71,10 @@ public sealed class MatchController : MonoBehaviour
 }
 ```
 
-**Cạm bẫy 1 — reset không sạch.** Trận thứ hai trên cùng server thường lộ ra rò rỉ: actorId
-không được giải phóng, hitbox history còn dữ liệu cũ, interest dictionary còn entry của actor
-đã chết, delta baseline của client cũ. Viết `ResetWorld()` cẩn thận và **test bằng cách chạy 5
-trận liên tiếp**, kiểm tra:
+**Trap 1 — an unclean reset.** The second match on the same server usually exposes the leaks:
+actorIds never freed, stale hitbox history, interest dictionary entries for dead actors, delta
+baselines from old clients. Write `ResetWorld()` carefully and **test it by running 5 matches back
+to back**, checking:
 
 ```csharp
 private void AssertCleanState()
@@ -86,14 +86,14 @@ private void AssertCleanState()
 }
 ```
 
-**Cạm bẫy 2 — tái sử dụng `actorId` quá sớm.** Nếu actor 7 chết và ngay lập tức actor mới lấy
-id 7, client (đang có gói cũ trên đường) sẽ áp trạng thái của actor cũ cho actor mới. Giữ id
-trong "quarantine" ít nhất 5 giây trước khi tái dùng. Đã chốt ở phase-00.
+**Trap 2 — reusing an `actorId` too soon.** If actor 7 dies and a new actor immediately takes id 7,
+a client with stale packets still in flight will apply the old actor's state to the new one. Keep
+ids in "quarantine" for at least 5 seconds before reuse. Settled in phase-00.
 
-### Task 2 — Điểm chiếm (2 ngày)
+### Task 2 — Capture points (2 days)
 
-`CapturePoint.cs` đã tồn tại trong codebase gốc. Việc của bạn là làm nó server-authoritative và
-replicate.
+`CapturePoint.cs` already exists in the original codebase. Your job is to make it
+server-authoritative and replicate it.
 
 ```csharp
 // Assets/Scripts/Net/Server/ServerCapturePoint.cs
@@ -106,12 +106,12 @@ private void UpdateCapture(CapturePoint cp, float dt)
     int diff = count0 - count1;
     if (diff == 0) return;
 
-    // Tốc độ chiếm tăng theo số người, nhưng có trần (chống 16 người chiếm tức thì)
+    // Capture speed scales with headcount, but is capped (so 16 players can't capture instantly)
     float rate = Mathf.Min(Mathf.Abs(diff), 4) * cp.captureSpeed * dt;
     float prev = cp.owner;
     cp.owner = Mathf.Clamp(cp.owner + Mathf.Sign(diff) * rate, -1f, 1f);
 
-    // Chỉ gửi khi vượt ngưỡng đáng kể — tránh spam mỗi tick
+    // Only send on a meaningful change — don't spam every tick
     if (Mathf.Abs(cp.owner - cp.lastSentOwner) > 0.02f || CrossedOwnershipBoundary(prev, cp.owner))
     {
         BroadcastCapturePoint(cp);
@@ -120,14 +120,14 @@ private void UpdateCapture(CapturePoint cp, float dt)
 }
 ```
 
-**Cạm bẫy 3 — spam message điểm chiếm.** Nếu gửi mỗi tick, 5 điểm chiếm × 30 Hz × 16 client =
-2400 message/giây chỉ cho thanh chiếm. Gửi khi thay đổi > 2% hoặc khi đổi chủ. Giảm còn ~5
-message/giây.
+**Trap 3 — spamming capture-point messages.** Sending every tick means 5 capture points × 30 Hz ×
+16 clients = 2400 messages/second just for the capture bars. Send on a > 2% change or on an ownership
+flip. That drops it to ~5 messages/second.
 
-### Task 3 — Ticket và điều kiện thắng (1 ngày)
+### Task 3 — Tickets and win conditions (1 day)
 
-Theo luật Ravenfield gốc: mỗi lần chết mất 1 ticket; giữ nhiều điểm chiếm hơn thì đối phương
-chảy máu ticket theo thời gian.
+Following the original Ravenfield rules: each death costs 1 ticket; holding more capture points
+bleeds the opponent's tickets over time.
 
 ```csharp
 private void DrainTickets(float dt)
@@ -144,9 +144,9 @@ private void DrainTickets(float dt)
 }
 ```
 
-### Task 4 — Nối master server (2 ngày)
+### Task 4 — Wire up the master server (2 days)
 
-Bạn tiêu thụ `IMasterServerLink` của D.
+You consume D's `IMasterServerLink`.
 
 ```csharp
 // Assets/Scripts/Net/Server/MasterServerLink.cs
@@ -165,96 +165,98 @@ private void SendHeartbeat() => _link.Heartbeat(new GsHeartbeat {
     CpuPercent = _perf.CpuPercent, AvgTickMs = _perf.AvgTickMs, State = (byte)_match.State });
 ```
 
-**Verify joinTicket** — theo
-[`protocol-spec.md § 12`](../../00-shared/protocol-spec.md#12-jointicket--cầu-nối-tcp-và-udp):
+**Verifying the joinTicket** — per
+[`protocol-spec.md § 12`](../../00-shared/protocol-spec.md#12-jointicket--the-bridge-between-tcp-and-udp):
 
 ```csharp
-// Đăng ký callback cho transport của B
+// Register the callback with B's transport
 _transport.OnValidateTicket += ticket =>
 {
     if (ticket.Length != 64) return false;
     var payload = ticket[..32];
     var hmac    = ticket[32..64];
     var expected = HMACSHA256.HashData(_sharedSecretBytes, payload);
-    if (!CryptographicOperations.FixedTimeEquals(hmac, expected)) return false;   // chống timing attack
+    if (!CryptographicOperations.FixedTimeEquals(hmac, expected)) return false;   // timing-attack safe
 
     ulong expiresAt = BitConverter.ToUInt64(payload[8..16]);
     if (expiresAt < (ulong)DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) return false;
 
     uint playerId = BitConverter.ToUInt32(payload[0..4]);
-    if (_sessions.Values.Any(s => s.PlayerId == playerId)) return false;   // đã kết nối rồi
+    if (_sessions.Values.Any(s => s.PlayerId == playerId)) return false;   // already connected
     return true;
 };
 ```
 
-> **Cạm bẫy 4 — so sánh HMAC bằng `SequenceEqual`.** So sánh byte thường thoát sớm ở byte đầu
-> khác nhau → kẻ tấn công đo thời gian phản hồi để đoán dần từng byte HMAC (timing attack).
-> Dùng `CryptographicOperations.FixedTimeEquals`. Chi phí bằng 0, không có lý do không dùng.
+> **Trap 4 — comparing HMACs with `SequenceEqual`.** A normal byte comparison exits early at the
+> first differing byte → an attacker can time the responses and guess the HMAC byte by byte (a timing
+> attack). Use `CryptographicOperations.FixedTimeEquals`. It costs nothing, so there's no reason not
+> to.
 
-### Task 5 — Tối ưu về đúng ngân sách (2 ngày)
+### Task 5 — Optimize back within budget (2 days)
 
-Đo, so với ngân sách ở [`plan.md § 10`](../plan.md), xử lý theo thứ tự đã định.
+Measure, compare against the budget in [`plan.md § 10`](../plan.md), and act in the defined order.
 
-**Danh sách tối ưu thường có hiệu quả nhất, theo thứ tự tỉ lệ lợi ích/công sức:**
+**The optimizations that usually pay off most, ordered by benefit per unit of effort:**
 
-| # | Tối ưu | Tiết kiệm ước tính | Công sức |
+| # | Optimization | Estimated saving | Effort |
 |---|---|---|---|
-| 1 | Không gửi velocity ở mức Mid/Far (client tự ước lượng) | ~15% băng thông | 2 giờ |
-| 2 | Gửi Y (độ cao) với 12 bit thay vì 16 (map cao < 512m) | ~5% | 1 giờ |
-| 3 | Không gửi pitch cho actor > 50m (không nhìn thấy) | ~4% | 1 giờ |
-| 4 | Gộp nhiều message vào 1 datagram (batching) | ~10% (giảm header) | 3 giờ |
-| 5 | Bỏ actor đã chết khỏi snapshot sau 3 giây | ~5% | 1 giờ |
-| 6 | LOD tick cho AI (đã làm ở phase 02) | ~30% CPU | — |
-| 7 | Cache kết quả interest 3 tick thay vì tính mỗi snapshot | ~8% CPU | 2 giờ |
+| 1 | Don't send velocity at Mid/Far (the client estimates it) | ~15% bandwidth | 2 hours |
+| 2 | Send Y (height) in 12 bits instead of 16 (maps are under 512 m tall) | ~5% | 1 hour |
+| 3 | Don't send pitch for actors beyond 50 m (it isn't visible) | ~4% | 1 hour |
+| 4 | Batch multiple messages into one datagram | ~10% (less header) | 3 hours |
+| 5 | Drop dead actors from the snapshot after 3 seconds | ~5% | 1 hour |
+| 6 | LOD ticking for AI (already done in phase 02) | ~30% CPU | — |
+| 7 | Cache interest results for 3 ticks instead of recomputing per snapshot | ~8% CPU | 2 hours |
 
-**Đo trước khi tối ưu.** Nếu đã trong ngân sách, đừng tối ưu — dùng thời gian cho việc khác.
+**Measure before optimizing.** If you're already inside the budget, don't optimize — spend the time
+elsewhere.
 
-### Task 6 — Chịu tải 16 người (1 ngày)
+### Task 6 — Handle 16 players (1 day)
 
-Phối hợp D chạy load test với bot client.
+Work with D to run a load test using bot clients.
 
-| Kịch bản | Kiểm tra |
+| Scenario | Check |
 |---|---|
-| 16 client kết nối cùng lúc trong 1 giây | Không rớt ai, không tick spike |
-| 16 client, 32 bot, chơi 20 phút | Tick p99 < 33ms, băng thông trong ngân sách |
-| 16 client cùng vào/ra liên tục | Không rò rỉ actorId, không rò rỉ session |
-| 1 client ngắt đột ngột (kill process) | Server dọn sạch sau timeout 10s |
-| 5 trận liên tiếp | `AssertCleanState()` pass mỗi lần |
+| 16 clients connecting simultaneously within 1 second | Nobody dropped, no tick spike |
+| 16 clients, 32 bots, 20 minutes of play | Tick p99 < 33 ms, bandwidth within budget |
+| 16 clients joining and leaving continuously | No actorId leaks, no session leaks |
+| 1 client disconnecting abruptly (killing the process) | The server cleans up after the 10 s timeout |
+| 5 matches back to back | `AssertCleanState()` passes every time |
 
 ---
 
-## 3. Tiêu chí nghiệm thu (M3)
+## 3. Acceptance criteria (M3)
 
-| # | Tiêu chí | Cách kiểm chứng |
+| # | Criterion | How to verify |
 |---|---|---|
-| 1 | Trận chạy trọn vẹn không can thiệp | Video từ warmup tới ended |
-| 2 | 5 trận liên tiếp, `AssertCleanState()` pass | Log |
-| 3 | Điểm chiếm đồng bộ đúng ở mọi client | Video 2+ client |
-| 4 | Điều kiện thắng kích hoạt đúng | Chơi tới hết |
-| 5 | Register + heartbeat với master hoạt động | D xác nhận thấy server trong danh sách |
-| 6 | joinTicket sai/hết hạn bị từ chối | Test |
-| 7 | HMAC so sánh dùng `FixedTimeEquals` | Code review |
-| 8 | **Băng thông ≤ 8 KB/s/client** | Đo, 16 người + 32 bot |
-| 9 | **Tick time p99 < 33ms** | Đo, cùng điều kiện |
-| 10 | 16 client thật, 20 phút, không rớt | Load test |
-| 11 | Tổng test ≥ 75 xanh | `dotnet test` |
+| 1 | A match runs to completion without intervention | Video from warmup to ended |
+| 2 | 5 matches back to back with `AssertCleanState()` passing | Logs |
+| 3 | Capture points stay in sync on every client | Video with 2+ clients |
+| 4 | Win conditions fire correctly | Play to the end |
+| 5 | Register + heartbeat with the master works | D confirms the server appears in the list |
+| 6 | Invalid/expired joinTickets are rejected | Test |
+| 7 | HMAC comparison uses `FixedTimeEquals` | Code review |
+| 8 | **Bandwidth ≤ 8 KB/s/client** | Measured, 16 players + 32 bots |
+| 9 | **Tick time p99 < 33 ms** | Measured, same conditions |
+| 10 | 16 real clients for 20 minutes with no drops | Load test |
+| 11 | ≥ 75 tests total, all green | `dotnet test` |
 
 ---
 
-## 4. Rủi ro
+## 4. Risks
 
-| Rủi ro | Dấu hiệu | Xử lý |
+| Risk | Sign | Handling |
 |---|---|---|
-| Reset không sạch (cạm bẫy 1) | Trận 2, 3 có hành vi lạ | `AssertCleanState()` sau mỗi reset, chạy 5 trận |
-| Tick time vượt ngưỡng khi đủ 16 người | p99 > 33ms | Danh sách tối ưu ở Task 5. Nếu vẫn vượt: giảm bot xuống 16 |
-| Băng thông vượt ngân sách | > 8 KB/s | Theo thứ tự tối ưu ở `plan.md § 10` |
-| Master server chưa sẵn sàng (phụ thuộc D) | | Chế độ standalone: server chạy không cần master, client nhập IP thủ công. Phải làm sẵn |
-| Không kịp tuần 13 | | Contingency: bỏ ticket bleed (chỉ đếm kill), bỏ warmup, vào là chơi ngay |
+| Unclean reset (trap 1) | Matches 2 and 3 behave oddly | `AssertCleanState()` after every reset, run 5 matches |
+| Tick time over budget with a full 16 players | p99 > 33 ms | The optimization list in Task 5. If it's still over: drop to 16 bots |
+| Bandwidth over budget | > 8 KB/s | Follow the optimization order in `plan.md § 10` |
+| The master server isn't ready (depends on D) | | Standalone mode: the server runs without a master and clients enter the IP manually. Build it in advance |
+| Week 13 arrives unfinished | | Contingency: drop ticket bleed (count kills only), drop warmup, play starts on join |
 
 ---
 
-## 5. Bàn giao
+## 5. Handoff
 
-- Cùng D: chạy luồng đầy đủ 10 lần liên tiếp không lỗi
-- Cùng A: xác nhận mọi message client cần đều có và đúng format
-- Số liệu băng thông + tick time cuối cùng cho báo cáo
+- With D: run the full flow 10 times in a row without an error
+- With A: confirm every message the client needs exists and is in the right format
+- Final bandwidth + tick-time figures for the report

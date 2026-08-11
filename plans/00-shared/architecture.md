@@ -1,14 +1,15 @@
-# Kiến trúc hệ thống — Ironfront Reborn
+# System architecture — Ironfront Reborn
 
-Tài liệu này mô tả kiến trúc mục tiêu. Chi tiết byte-level nằm ở [protocol-spec.md](protocol-spec.md).
+This document describes the target architecture. Byte-level details live in
+[protocol-spec.md](protocol-spec.md).
 
 ---
 
-## 1. Sơ đồ tổng thể
+## 1. Overall diagram
 
 ```mermaid
 flowchart TB
-    subgraph Client["Client (Unity, build thường)"]
+    subgraph Client["Client (Unity, normal build)"]
         CG[Gameplay Layer<br/>Actor · Weapon · UI]
         CP[Prediction + Interpolation]
         CR[Replication Client]
@@ -23,7 +24,7 @@ flowchart TB
         SM[Master Client TCP]
     end
 
-    subgraph MS["Master Server (.NET 8, không Unity)"]
+    subgraph MS["Master Server (.NET 8, no Unity)"]
         MA[Auth · Account]
         ML[Lobby · Room Registry]
         MM[Matchmaking]
@@ -41,114 +42,118 @@ flowchart TB
 
 ---
 
-## 2. Phân vai TCP và UDP
+## 2. Splitting responsibilities between TCP and UDP
 
-Đây là quyết định kiến trúc trung tâm của môn Lập trình mạng, phải nói được rõ khi bảo vệ.
+This is the central architectural decision for a Network Programming course, and we must be able to
+articulate it clearly at the defense.
 
 | | TCP (Master Server) | UDP (Game Server) |
 |---|---|---|
-| **Dùng cho** | Login, danh sách phòng, tạo/vào phòng, matchmaking, chat lobby, server heartbeat | Toàn bộ traffic trong trận: input, snapshot, event gameplay |
-| **Vì sao** | Dữ liệu không real-time, mất gói không chấp nhận được, kích thước không đều, tần suất thấp. TCP cho sẵn tin cậy + thứ tự | Real-time, tần suất cao đều đặn. Dữ liệu **cũ là vô giá trị** — retransmit một snapshot 200ms trước còn tệ hơn là bỏ nó đi |
-| **Vấn đề nếu dùng cái kia** | UDP cho lobby = phải tự viết lại tin cậy cho thứ TCP đã làm tốt | **TCP head-of-line blocking**: 1 gói mất chặn toàn bộ gói sau nó cho tới khi retransmit xong → giật hình dây chuyền. Nagle + delayed ACK cộng thêm 40–200ms |
-| **Tần suất** | Vài gói/phút | 20–60 gói/giây/hướng |
-| **Framing** | Length-prefixed 4 byte | Datagram tự nhiên, header 16 byte tự định nghĩa |
+| **Used for** | Login, room list, create/join room, matchmaking, lobby chat, server heartbeat | All in-match traffic: input, snapshots, gameplay events |
+| **Why** | Non-real-time data, packet loss unacceptable, irregular sizes, low frequency. TCP gives reliability + ordering for free | Real-time, high and steady frequency. Stale data is **worthless** — retransmitting a 200 ms-old snapshot is worse than dropping it |
+| **Problem if swapped** | UDP for the lobby = reimplementing reliability that TCP already does well | **TCP head-of-line blocking**: one lost packet stalls every packet behind it until the retransmit lands → cascading stutter. Nagle + delayed ACK add another 40–200 ms |
+| **Frequency** | A few packets per minute | 20–60 packets/second/direction |
+| **Framing** | 4-byte length prefix | Natural datagrams, custom 16-byte header |
 
-**Không dùng WebSocket** theo yêu cầu: WebSocket chạy trên TCP nên thừa hưởng nguyên head-of-line
-blocking, cộng thêm overhead framing và handshake HTTP. Nó tồn tại để xuyên qua firewall/proxy của
-trình duyệt — một ràng buộc mà game client desktop không có.
+**No WebSocket**, as required: WebSocket runs over TCP and therefore inherits head-of-line blocking
+in full, plus framing overhead and an HTTP handshake. It exists to punch through browser
+firewalls/proxies — a constraint a desktop game client doesn't have.
 
 ---
 
-## 3. Mô hình authority
+## 3. Authority model
 
-**Server-authoritative tuyệt đối.** Client không có quyền quyết định bất cứ điều gì ảnh hưởng
-gameplay.
+**Strictly server-authoritative.** The client decides nothing that affects gameplay.
 
-| Việc | Ai quyết | Client được làm gì |
+| Concern | Who decides | What the client may do |
 |---|---|---|
-| Vị trí nhân vật | Server | Dự đoán (predict) rồi đối chiếu (reconcile) |
-| Trúng đạn / sát thương | Server | Hiện hiệu ứng dự đoán, chờ `S_HIT_CONFIRM` |
-| Máu, chết, hồi sinh | Server | Chỉ hiển thị |
-| Spread đạn, recoil | Server | Hiện recoil cục bộ cho cảm giác, không ảnh hưởng đạn thật |
-| Bot AI | Server | Chỉ nội suy |
-| Chiếm điểm, điểm số | Server | Chỉ hiển thị |
-| Vào/ra ghế xe | Server | Gửi yêu cầu |
-| Camera, UI, âm thanh, ragdoll xác chết | Client | Toàn quyền, không sync |
+| Character position | Server | Predict, then reconcile |
+| Hits / damage | Server | Show predicted effects, wait for `S_HIT_CONFIRM` |
+| Health, death, respawn | Server | Display only |
+| Bullet spread, recoil | Server | Show local recoil for feel; no effect on the real bullet |
+| AI bots | Server | Interpolate only |
+| Point capture, score | Server | Display only |
+| Entering/exiting vehicle seats | Server | Send a request |
+| Camera, UI, audio, corpse ragdolls | Client | Full control, never synced |
 
-### 3.1. Ba kỹ thuật netcode kinh điển được dùng
+### 3.1. The three classic netcode techniques in use
 
 ```mermaid
 sequenceDiagram
     participant C as Client
     participant S as Server
-    Note over C: t=0 nhấn W (tick 100)
-    C->>C: Prediction: di chuyển ngay lập tức<br/>lưu input tick 100 vào buffer
+    Note over C: t=0 press W (tick 100)
+    C->>C: Prediction: move immediately<br/>store input tick 100 in the buffer
     C->>S: C_INPUT {tick:100, moveZ:+1}
-    Note over S: t=50ms xử lý tick 100
-    S->>S: Áp input, mô phỏng, ra vị trí P
+    Note over S: t=50ms processes tick 100
+    S->>S: Apply input, simulate, produce position P
     S-->>C: S_SNAPSHOT {lastProcessedInputTick:100, pos:P}
-    Note over C: t=100ms nhận snapshot
-    C->>C: Reconciliation: so vị trí dự đoán ở tick 100<br/>với P. Lệch > ngưỡng → snap về P<br/>rồi replay input 101..hiện tại
-    Note over C: Remote actor: Interpolation<br/>render ở thời điểm (now - 100ms)<br/>giữa 2 snapshot đã nhận
+    Note over C: t=100ms snapshot arrives
+    C->>C: Reconciliation: compare the predicted position at tick 100<br/>against P. Off by more than the threshold → snap to P<br/>then replay inputs 101..now
+    Note over C: Remote actor: Interpolation<br/>render at (now - 100ms)<br/>between the 2 snapshots already received
 ```
 
-1. **Client-side prediction** — local player di chuyển ngay khi nhấn phím, không chờ server.
-2. **Server reconciliation** — khi snapshot về, client so sánh vị trí dự đoán tại tick đó với
-   vị trí server. Lệch quá ngưỡng thì sửa lại rồi replay toàn bộ input chưa được xác nhận.
-3. **Entity interpolation** — remote actor được render trễ 100ms so với snapshot mới nhất, nội
-   suy giữa hai snapshot đã có. Đổi 100ms độ trễ hiển thị lấy chuyển động mượt.
-4. **Lag compensation** — server "tua ngược" hitbox về thời điểm client thực sự nhìn thấy khi
-   xử lý phát bắn. Xem [protocol-spec.md § 7](protocol-spec.md#7-lag-compensation).
+1. **Client-side prediction** — the local player moves the instant a key is pressed, without
+   waiting for the server.
+2. **Server reconciliation** — when a snapshot arrives, the client compares its predicted position
+   at that tick against the server's. If the gap exceeds the threshold, it corrects and replays
+   every unacknowledged input.
+3. **Entity interpolation** — remote actors are rendered 100 ms behind the latest snapshot,
+   interpolating between the two snapshots already in hand. Trades 100 ms of display latency for
+   smooth motion.
+4. **Lag compensation** — the server "rewinds" hitboxes to the moment the client actually saw when
+   it processes a shot. See [protocol-spec.md § 7](protocol-spec.md#7-lag-compensation).
 
 ---
 
-## 4. Vòng lặp thời gian
+## 4. Timing loop
 
-| Thông số | Giá trị | Ghi chú |
+| Parameter | Value | Notes |
 |---|---|---|
-| Server sim tick | **30 Hz** (33.33ms) | `Time.fixedDeltaTime = 1/30` trên headless |
-| Snapshot rate | **20 Hz** (50ms) | Gửi mỗi 1.5 tick |
-| Client input send rate | **30 Hz** | Mỗi gói chứa 3 frame gần nhất (redundancy chống mất gói) |
-| Client render | Không giới hạn | 60–144 fps |
-| Interpolation buffer | **100ms** | = 2 khoảng snapshot, chịu được mất 1 gói liên tiếp |
-| Lag compensation window | **200ms** tối đa | Chống abuse: ping cao giả để bắn quá khứ |
-| Hitbox history | **1 giây** (30 tick) | Ring buffer trên server |
-| Keep-alive | 1 gói/giây khi không có traffic | |
-| Timeout ngắt kết nối | 10 giây không nhận gì | |
+| Server sim tick | **30 Hz** (33.33 ms) | `Time.fixedDeltaTime = 1/30` on headless |
+| Snapshot rate | **20 Hz** (50 ms) | Sent every 1.5 ticks |
+| Client input send rate | **30 Hz** | Each packet carries the 3 most recent frames (redundancy against loss) |
+| Client render | Uncapped | 60–144 fps |
+| Interpolation buffer | **100 ms** | = 2 snapshot intervals, survives one consecutive lost packet |
+| Lag compensation window | **200 ms** max | Anti-abuse: fake high ping to shoot into the past |
+| Hitbox history | **1 second** (30 ticks) | Ring buffer on the server |
+| Keep-alive | 1 packet/second when idle | |
+| Disconnect timeout | 10 seconds with nothing received | |
 
-**Vì sao 30Hz chứ không 60Hz:** 48 actor với A* + AI + physics ở 60Hz sẽ vượt ngân sách CPU
-(rủi ro R6). 30Hz là tiêu chuẩn của nhiều FPS thương mại và đủ tốt khi có prediction.
+**Why 30 Hz and not 60 Hz:** 48 actors with A* + AI + physics at 60 Hz would blow the CPU budget
+(risk R6). 30 Hz is standard for many commercial FPS titles and is good enough once prediction is
+in place.
 
 ---
 
-## 5. Kiến trúc thư mục và assembly
+## 5. Directory and assembly architecture
 
 ```
-Ironfront_Reborn/                       ← Unity project (A sở hữu)
+Ironfront_Reborn/                       ← Unity project (owned by A)
 ├── Assets/
-│   ├── Scripts/Assembly-CSharp/        ← gameplay gốc (A sở hữu)
+│   ├── Scripts/Assembly-CSharp/        ← original gameplay (owned by A)
 │   │   ├── Actor.cs, Weapon.cs, ...
-│   │   └── Pathfinding/                ← A* — không ai đụng
-│   └── Scripts/Net/                    ← code net trong Unity
-│       ├── Client/                     ← A sở hữu
+│   │   └── Pathfinding/                ← A* — nobody touches this
+│   └── Scripts/Net/                    ← net code inside Unity
+│       ├── Client/                     ← owned by A
 │       │   ├── NetworkActorController.cs
 │       │   ├── ClientPrediction.cs
 │       │   ├── EntityInterpolator.cs
 │       │   └── NetClientBootstrap.cs
-│       ├── Server/                     ← C sở hữu
+│       ├── Server/                     ← owned by C
 │       │   ├── ServerTickLoop.cs
 │       │   ├── ServerAuthority.cs
 │       │   ├── HitboxHistory.cs
 │       │   └── NetServerBootstrap.cs
-│       └── Shared/                     ← C sở hữu, A đọc
+│       └── Shared/                     ← owned by C, read by A
 │           ├── NetContext.cs
 │           ├── NetInputFrame.cs
 │           └── ActorNetId.cs
 │
-Ironfront.Net.Protocol/                 ← .NET class library — SSOT hằng số
-│   └── ProtocolConstants.cs            ← KHÔNG AI được viết lại hằng số ở nơi khác
+Ironfront.Net.Protocol/                 ← .NET class library — SSOT for constants
+│   └── ProtocolConstants.cs            ← NOBODY may redeclare these constants elsewhere
 │
-Ironfront.Net.Transport/                ← B sở hữu — C# thuần, không phụ thuộc Unity
+Ironfront.Net.Transport/                ← owned by B — pure C#, no Unity dependency
 │   ├── UdpSocketPeer.cs
 │   ├── Connection.cs
 │   ├── ReliabilityLayer.cs
@@ -157,39 +162,39 @@ Ironfront.Net.Transport/                ← B sở hữu — C# thuần, không 
 │   ├── CongestionControl.cs
 │   └── Simulation/NetworkSimulator.cs
 │
-Ironfront.Net.Replication/              ← C sở hữu — C# thuần
+Ironfront.Net.Replication/              ← owned by C — pure C#
 │   ├── BitWriter.cs / BitReader.cs
 │   ├── SnapshotBuilder.cs
 │   ├── DeltaEncoder.cs
 │   ├── InterestManager.cs
 │   └── Messages/
 │
-Ironfront.MasterServer/                 ← D sở hữu — .NET 8 console app
+Ironfront.MasterServer/                 ← owned by D — .NET 8 console app
 │   ├── Program.cs
 │   ├── Net/TcpListenerHost.cs, MspFraming.cs
 │   ├── Services/AuthService.cs, LobbyService.cs, MatchmakingService.cs
-│   └── Data/ (SQLite, EF Core hoặc Dapper)
+│   └── Data/ (SQLite, EF Core or Dapper)
 │
-Ironfront.Tools.LoadTest/               ← D sở hữu — bot client giả lập
+Ironfront.Tools.LoadTest/               ← owned by D — simulated bot client
 ```
 
-### 5.1. Vì sao tách thư viện ra khỏi Unity
+### 5.1. Why the libraries live outside Unity
 
-`Ironfront.Net.Transport` và `Ironfront.Net.Replication` là .NET class library thuần
-(`netstandard2.1`), build bằng `dotnet build`, **không tham chiếu `UnityEngine`**. Lợi ích:
+`Ironfront.Net.Transport` and `Ironfront.Net.Replication` are pure .NET class libraries
+(`netstandard2.1`), built with `dotnet build`, and **never reference `UnityEngine`**. Benefits:
 
-1. Chạy được xUnit test bình thường, không cần Unity Test Runner (nhanh hơn nhiều lần).
-2. B và D không phải cài/mở Unity → tránh xung đột `.meta` và scene (rủi ro merge tệ nhất).
-3. Dùng lại được cho công cụ load test và cho master server.
-4. Ranh giới rõ ràng: nếu một file trong Transport cần `using UnityEngine`, đó là dấu hiệu
-   thiết kế sai.
+1. Normal xUnit tests run without the Unity Test Runner (many times faster).
+2. B and D never install or open Unity → avoids `.meta` and scene conflicts (the worst merge risk).
+3. Reusable by the load-test tool and by the master server.
+4. A clean boundary: if a file in Transport needs `using UnityEngine`, that's a sign of a design
+   error.
 
-Unity tiêu thụ chúng qua DLL đặt trong `Assets/Plugins/` (build ra bằng script
-`tools/build-libs.ps1`, chạy tự động trong CI).
+Unity consumes them as DLLs placed in `Assets/Plugins/` (produced by the `tools/build-libs.ps1`
+script, which runs automatically in CI).
 
 ---
 
-## 6. Luồng đầu-cuối: từ mở game tới bắn được phát đạn
+## 6. End-to-end flow: from launching the game to firing a shot
 
 ```mermaid
 sequenceDiagram
@@ -203,76 +208,76 @@ sequenceDiagram
     C->>M: ROOM_LIST_REQ
     M-->>C: ROOM_LIST_RES [{roomId, map, 12/16}, ...]
     C->>M: ROOM_JOIN_REQ {roomId}
-    Note over M: Cấp phát game server còn chỗ<br/>Sinh joinTicket = HMAC(playerId|serverId|exp, secret)
+    Note over M: Allocate a game server with free slots<br/>Generate joinTicket = HMAC(playerId|serverId|exp, secret)
     M-->>C: ROOM_JOIN_RES {ip, port, joinTicket}
 
     C->>G: UDP CONNECT_REQUEST {protocolVersion, joinTicket}
-    Note over G: Verify HMAC bằng shared secret<br/>(không cần hỏi lại master)
+    Note over G: Verify the HMAC with the shared secret<br/>(no need to ask the master again)
     G-->>C: CONNECT_CHALLENGE {nonce}
     C->>G: CONNECT_RESPONSE {nonce+1}
     G-->>C: CONNECT_ACCEPTED {connectionId, serverTick, mapId}
 
     G-->>C: S_MATCH_STATE + S_SPAWN_ACTOR × N (full baseline)
     C->>G: C_SPAWN_REQUEST {spawnPointId, loadoutId}
-    G-->>C: S_SPAWN_ACTOR {actorId = của chính mình, isLocal}
+    G-->>C: S_SPAWN_ACTOR {actorId = your own, isLocal}
 
     loop 30 Hz
-        C->>G: C_INPUT {tick, 3 frame gần nhất}
+        C->>G: C_INPUT {tick, 3 most recent frames}
     end
     loop 20 Hz
-        G-->>C: S_SNAPSHOT {tick, lastProcessedInputTick, delta actors}
+        G-->>C: S_SNAPSHOT {tick, lastProcessedInputTick, actor deltas}
     end
 
-    Note over C: Nhấn chuột trái
-    C->>C: Bắn hiệu ứng dự đoán (âm thanh, muzzle, recoil)
+    Note over C: Left mouse button pressed
+    C->>C: Fire predicted effects (audio, muzzle, recoil)
     C->>G: C_INPUT {buttons: FIRE, yaw, pitch}
-    Note over G: Tua ngược hitbox về (now - RTT/2 - 100ms)<br/>Roll spread bằng RNG server<br/>Raycast, phán trúng
+    Note over G: Rewind hitboxes to (now - RTT/2 - 100ms)<br/>Roll spread with the server RNG<br/>Raycast, adjudicate the hit
     G-->>C: S_HIT_CONFIRM {targetId, damage, isHeadshot}
-    G-->>C: S_SNAPSHOT (health của target đã giảm)
+    G-->>C: S_SNAPSHOT (target's health already reduced)
 ```
 
 ---
 
-## 7. Kiến trúc replication: cái gì được sync
+## 7. Replication architecture: what gets synced
 
-### 7.1. Phân loại đối tượng
+### 7.1. Object classification
 
-| Loại | Ví dụ | Cách xử lý |
+| Class | Examples | Handling |
 |---|---|---|
-| **Replicated actor** | Người chơi, bot | Có `actorId` u16, có trong snapshot, delta encode |
-| **Server-only** | Hitbox history, AI blackboard, cover points | Không bao giờ gửi |
-| **Client-only** | Camera, UI, decal, particle, ragdoll xác, âm thanh | Không bao giờ gửi |
-| **Event một lần** | Chết, nổ, bắn, chiếm điểm | Reliable-ordered channel, không nằm trong snapshot |
-| **Static** | Terrain, nhà cửa, spawn point | Không sync, có sẵn trong scene ở cả hai bên |
+| **Replicated actor** | Players, bots | Has a u16 `actorId`, appears in snapshots, delta-encoded |
+| **Server-only** | Hitbox history, AI blackboard, cover points | Never sent |
+| **Client-only** | Camera, UI, decals, particles, corpse ragdolls, audio | Never sent |
+| **One-shot event** | Death, explosion, gunshot, point capture | Reliable-ordered channel, not part of the snapshot |
+| **Static** | Terrain, buildings, spawn points | Not synced, present in the scene on both sides |
 
-### 7.2. Vì sao tách event khỏi snapshot
+### 7.2. Why events are separate from snapshots
 
-Snapshot là **trạng thái** (state), gửi unreliable — mất gói thì gói sau bù. Event là **sự kiện
-một lần** (một tiếng nổ, một cái chết), mất là mất luôn, phải gửi reliable. Trộn hai loại vào
-một kênh là lỗi thiết kế phổ biến dẫn tới hoặc lãng phí băng thông (gửi state reliable) hoặc
-mất event.
+A snapshot is **state**, sent unreliably — if a packet is lost, the next one makes up for it. An
+event is a **one-shot occurrence** (an explosion, a death); lose it and it's gone for good, so it
+must be sent reliably. Mixing the two on one channel is a common design error that leads either to
+wasted bandwidth (sending state reliably) or to lost events.
 
 ### 7.3. Interest management
 
-Không gửi mọi actor cho mọi client. Với 48 actor, mỗi client chỉ thực sự cần khoảng 15–25.
+Don't send every actor to every client. With 48 actors, each client really only needs about 15–25.
 
-| Vùng | Điều kiện | Tần suất update |
+| Zone | Condition | Update rate |
 |---|---|---|
-| Near | < 60m hoặc đang trong tầm nhìn | Mỗi snapshot (20 Hz) |
-| Mid | 60–150m | 10 Hz |
-| Far | 150–300m | 4 Hz, chỉ vị trí (cho minimap) |
-| Culled | > 300m và không nhìn thấy | Không gửi |
+| Near | < 60 m, or currently in view | Every snapshot (20 Hz) |
+| Mid | 60–150 m | 10 Hz |
+| Far | 150–300 m | 4 Hz, position only (for the minimap) |
+| Culled | > 300 m and not visible | Not sent |
 
-Đồng đội luôn ở ít nhất mức Mid (cần cho minimap và command map).
+Teammates are always at Mid or better (needed for the minimap and the command map).
 
-**Tiết kiệm ước tính:** từ ~15 KB/s xuống ~7 KB/s mỗi client.
+**Estimated saving:** from ~15 KB/s down to ~7 KB/s per client.
 
 ---
 
-## 8. Ranh giới client/server trong code Unity
+## 8. The client/server boundary in Unity code
 
-Vì cùng một codebase build ra cả client lẫn server, mọi đoạn code chỉ có nghĩa ở một phía phải
-được guard.
+Because one codebase builds both the client and the server, every piece of code that only makes
+sense on one side has to be guarded.
 
 ```csharp
 // Ironfront_Reborn/Assets/Scripts/Net/Shared/NetContext.cs
@@ -284,25 +289,25 @@ public static class NetContext
 }
 ```
 
-Quy ước:
+The convention:
 
 ```csharp
-// Trong Actor.cs
+// In Actor.cs
 private void Update()
 {
     if (NetContext.IsServer)
     {
-        // logic authoritative
+        // authoritative logic
     }
     else
     {
-        UpdateVisuals();   // ragdoll, particle, audio
+        UpdateVisuals();   // ragdoll, particles, audio
     }
 }
 ```
 
-Với code chắc chắn không bao giờ chạy trên server (UI), dùng compile-time guard để build server
-nhẹ hơn:
+For code that will definitely never run on the server (UI), use a compile-time guard so the server
+build stays lean:
 
 ```csharp
 #if !UNITY_SERVER
@@ -310,41 +315,41 @@ nhẹ hơn:
 #endif
 ```
 
-Define `UNITY_SERVER` được set trong build profile headless.
+The `UNITY_SERVER` define is set in the headless build profile.
 
 ---
 
-## 9. Bảo mật ở mức phù hợp với scope
+## 9. Security at a level appropriate to the scope
 
-Không làm anti-cheat nâng cao (đã cắt scope). Nhưng những thứ sau là **miễn phí** vì đã có
-server-authoritative, phải làm:
+No advanced anti-cheat (cut from scope). But the following come **for free** once we're
+server-authoritative, so they're mandatory:
 
-| Chống | Cách |
+| Prevents | How |
 |---|---|
-| Speed hack | Server kẹp tốc độ di chuyển tối đa mỗi tick. Vượt quá → bỏ qua phần thừa |
-| Teleport | Server không bao giờ nhận vị trí từ client, chỉ nhận input |
-| Rapid fire | Server tự đếm cooldown vũ khí, bỏ qua fire intent tới sớm |
-| Đạn vô hạn | Server tự quản lý ammo |
-| Bắn xuyên tường | Server tự raycast, có kiểm tra line-of-sight |
-| Bắn quá tầm | Kẹp lag compensation ở 200ms |
-| Giả mạo người khác | `connectionId` gắn với `playerId` từ joinTicket đã ký HMAC |
-| Packet flood | Rate limit theo IP ở tầng transport, drop connection vượt ngưỡng |
-| Gói rác / port scan | Kiểm tra `protocolId` 2 byte đầu, sai thì drop im lặng |
+| Speed hacks | The server clamps maximum movement speed per tick. Anything over is discarded |
+| Teleporting | The server never accepts a position from the client, only input |
+| Rapid fire | The server tracks weapon cooldowns itself and ignores early fire intents |
+| Infinite ammo | The server manages ammo itself |
+| Shooting through walls | The server raycasts itself, with a line-of-sight check |
+| Shooting beyond range | Lag compensation clamped to 200 ms |
+| Impersonation | `connectionId` is bound to the `playerId` from the HMAC-signed joinTicket |
+| Packet floods | Per-IP rate limiting at the transport layer; connections over the threshold are dropped |
+| Junk packets / port scans | Check the 2-byte `protocolId` header; on mismatch, drop silently |
 
-**Không** mã hóa payload UDP (thêm phức tạp, không cần cho scope này). Master server TCP nên
-bọc TLS khi lên VPS ở M3 vì có truyền mật khẩu.
+We do **not** encrypt the UDP payload (extra complexity, unnecessary at this scope). The TCP master
+server should be wrapped in TLS once it moves to the VPS at M3, since it carries passwords.
 
 ---
 
-## 10. Quyết định kiến trúc đã chốt (không thương lượng lại)
+## 10. Settled architectural decisions (not up for renegotiation)
 
-| # | Quyết định | Lý do | Nếu muốn đổi |
+| # | Decision | Reason | If you want to change it |
 |---|---|---|---|
-| AD-1 | Server-authoritative, không host/listen-server | Chặn R4 (singleton), authority rõ ràng | Phải sửa 21 singleton |
-| AD-2 | Server là Unity headless, không phải .NET thuần | Tái dùng PhysX + A* + AI, tiết kiệm 8–12 tuần | Phải port physics + pathfinding |
-| AD-3 | Không cố deterministic, không lockstep | Chặn R3 (`Random` rải rác 27 file) | Phải seed lại toàn bộ RNG |
-| AD-4 | Ragdoll là cosmetic cục bộ, không sync | Chặn R2, tiết kiệm ~1.7 MB/s | Bất khả thi về băng thông |
-| AD-5 | Transport và Replication là .NET lib thuần | Test được bằng xUnit, tránh xung đột Unity | Mất khả năng unit test nhanh |
-| AD-6 | Xe cộ ngoài scope core | Ước tính 4+ tuần, không đủ thời gian | Phải cắt thứ khác |
-| AD-7 | Snapshot unreliable, event reliable-ordered | Đúng bản chất state vs event | |
-| AD-8 | Không dùng WebSocket | Yêu cầu của dự án + head-of-line blocking | |
+| AD-1 | Server-authoritative, no host/listen-server | Blocks R4 (singletons), keeps authority unambiguous | You'd have to fix 21 singletons |
+| AD-2 | The server is headless Unity, not pure .NET | Reuses PhysX + A* + AI, saves 8–12 weeks | You'd have to port physics + pathfinding |
+| AD-3 | No attempt at determinism, no lockstep | Blocks R3 (`Random` scattered across 27 files) | You'd have to re-seed every RNG |
+| AD-4 | Ragdolls are local cosmetics, never synced | Blocks R2, saves ~1.7 MB/s | Infeasible on bandwidth |
+| AD-5 | Transport and Replication are pure .NET libraries | Testable with xUnit, avoids Unity conflicts | You'd lose fast unit testing |
+| AD-6 | Vehicles are outside the core scope | Estimated 4+ weeks, not enough time | You'd have to cut something else |
+| AD-7 | Snapshots unreliable, events reliable-ordered | Matches the true nature of state vs. events | |
+| AD-8 | No WebSocket | Project requirement + head-of-line blocking | |

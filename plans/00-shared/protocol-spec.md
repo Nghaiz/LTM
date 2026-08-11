@@ -1,52 +1,52 @@
 # Protocol Specification — Ironfront Reborn
 
-**Version: 1.0.0-draft** · Trạng thái: **PHẢI ĐÓNG BĂNG CUỐI TUẦN 1**
+**Version: 1.0.0-draft** · Status: **MUST BE FROZEN BY THE END OF WEEK 1**
 
-> Đây là contract chung của cả 4 người. Mọi offset, mọi enum value, mọi hằng số quantization ghi
-> trong tài liệu này là **bắt buộc**. Không ai được tự diễn giải khác. Xem
-> [conventions.md](conventions.md) về quy trình đổi protocol.
+> This is the shared contract for all 4 people. Every offset, every enum value and every
+> quantization constant in this document is **mandatory**. Nobody may interpret them differently.
+> See [conventions.md](conventions.md) for the protocol change process.
 >
-> **Nguồn duy nhất của hằng số trong code:** `Ironfront.Net.Protocol/ProtocolConstants.cs`.
-> Cấm hardcode lại bất kỳ số nào trong tài liệu này ở nơi khác.
+> **The single source of these constants in code:** `Ironfront.Net.Protocol/ProtocolConstants.cs`.
+> Re-hardcoding any number from this document anywhere else is forbidden.
 
 ---
 
-## 0. Quy ước chung
+## 0. General conventions
 
-- **Byte order: Little-endian** cho toàn bộ GSP (UDP) và MSP (TCP). Lý do: x86/ARM đều
-  little-endian, tránh một lần swap thừa. `BitConverter` mặc định trên .NET đã là little-endian,
-  nhưng **phải viết code không phụ thuộc `BitConverter.IsLittleEndian`** (dùng shift thủ công).
-- Kiểu dữ liệu: `u8 u16 u32 u64 i8 i16 i32 f32` — số bit như tên gọi.
-- `[n]` = mảng n phần tử. `{...}` = struct lồng.
-- Mọi trường "reserved" phải ghi 0 khi gửi và bỏ qua khi nhận (để dành cho version sau).
+- **Byte order: little-endian** across all of GSP (UDP) and MSP (TCP). Reason: x86 and ARM are both
+  little-endian, so this avoids a redundant swap. `BitConverter` already defaults to little-endian
+  on .NET, but **the code must not depend on `BitConverter.IsLittleEndian`** (use manual shifts).
+- Data types: `u8 u16 u32 u64 i8 i16 i32 f32` — bit widths as named.
+- `[n]` = an array of n elements. `{...}` = a nested struct.
+- Every "reserved" field must be written as 0 and ignored on receive (kept for future versions).
 
 ---
 
-# PHẦN A — GSP: Game Server Protocol (UDP)
+# PART A — GSP: Game Server Protocol (UDP)
 
-## 1. Hằng số toàn cục
+## 1. Global constants
 
 ```csharp
 // Ironfront.Net.Protocol/ProtocolConstants.cs
 public static class ProtocolConstants
 {
-    public const ushort PROTOCOL_ID       = 0x4946;  // 'IF' — lọc gói rác
+    public const ushort PROTOCOL_ID       = 0x4946;  // 'IF' — filters out junk packets
     public const byte   PROTOCOL_VERSION  = 1;
 
-    public const int    MTU_SAFE          = 1200;    // an toàn qua mọi router
+    public const int    MTU_SAFE          = 1200;    // safe through any router
     public const int    GSP_HEADER_SIZE   = 16;
     public const int    MAX_PAYLOAD       = MTU_SAFE - GSP_HEADER_SIZE;  // 1184
 
     public const int    SIM_TICK_RATE     = 30;      // Hz
     public const int    SNAPSHOT_RATE     = 20;      // Hz
     public const int    INPUT_SEND_RATE   = 30;      // Hz
-    public const int    INPUT_REDUNDANCY  = 3;       // số frame gửi lặp mỗi gói
+    public const int    INPUT_REDUNDANCY  = 3;       // frames repeated per packet
 
     public const int    KEEPALIVE_MS      = 1000;
     public const int    TIMEOUT_MS        = 10000;
     public const int    ACK_BITFIELD_BITS = 32;
 
-    public const int    MAX_FRAGMENTS     = 64;      // → payload logic tối đa ~75 KB
+    public const int    MAX_FRAGMENTS     = 64;      // → max logical payload ~75 KB
     public const int    FRAGMENT_TIMEOUT_MS = 2000;
 
     public const int    INTERP_BUFFER_MS  = 100;
@@ -55,65 +55,65 @@ public static class ProtocolConstants
 
     public const int    MAX_PLAYERS       = 16;
     public const int    MAX_BOTS          = 32;
-    public const int    MAX_ACTORS        = 64;      // = MAX_PLAYERS + MAX_BOTS + dự phòng
+    public const int    MAX_ACTORS        = 64;      // = MAX_PLAYERS + MAX_BOTS + headroom
 }
 ```
 
 ---
 
-## 2. Header GSP (16 byte, mọi datagram)
+## 2. GSP header (16 bytes, every datagram)
 
 ```
-Offset  Size  Type   Field           Mô tả
+Offset  Size  Type   Field           Description
 ------  ----  -----  --------------  --------------------------------------------------
-  0      2    u16    protocolId      Luôn = 0x4946. Sai → drop im lặng, không trả lời
-  2      1    u8     packetType      Xem § 3
-  3      1    u8     flags           Bitfield, xem § 2.1
-  4      2    u16    sequence        Số thứ tự gói của người GỬI, tăng dần, wrap 65535→0
-  6      2    u16    ack             Sequence lớn nhất người gửi đã NHẬN từ đối phương
-  8      4    u32    ackBitfield     32 gói trước `ack`. bit i = 1 ⇔ đã nhận (ack - 1 - i)
- 12      2    u16    connectionId    Server cấp khi CONNECT_ACCEPTED. 0 khi chưa kết nối
- 14      2    u16    payloadLength   Số byte payload sau header. ≤ 1184
+  0      2    u16    protocolId      Always 0x4946. Mismatch → drop silently, no reply
+  2      1    u8     packetType      See § 3
+  3      1    u8     flags           Bitfield, see § 2.1
+  4      2    u16    sequence        The SENDER's packet sequence number, incrementing, wraps 65535→0
+  6      2    u16    ack             Highest sequence the sender has RECEIVED from the peer
+  8      4    u32    ackBitfield     The 32 packets before `ack`. bit i = 1 ⇔ received (ack - 1 - i)
+ 12      2    u16    connectionId    Assigned by the server at CONNECT_ACCEPTED. 0 before connecting
+ 14      2    u16    payloadLength   Payload bytes following the header. ≤ 1184
 ------  ----
  16           payload[payloadLength]
 ```
 
-### 2.1. `flags` bitfield
+### 2.1. The `flags` bitfield
 
-| Bit | Tên | Ý nghĩa |
+| Bit | Name | Meaning |
 |---|---|---|
-| 0 | `RELIABLE` | Gói này cần được ack, retransmit nếu mất |
-| 1 | `FRAGMENTED` | Payload là một mảnh, xem § 6 |
-| 2 | `ORDERED` | Phải giao theo đúng thứ tự trong channel |
-| 3 | `COMPRESSED` | Payload đã nén (không dùng ở v1, để dành) |
-| 4–7 | reserved | Phải = 0 |
+| 0 | `RELIABLE` | This packet must be acked, and retransmitted if lost |
+| 1 | `FRAGMENTED` | The payload is one fragment, see § 6 |
+| 2 | `ORDERED` | Must be delivered in order within its channel |
+| 3 | `COMPRESSED` | Payload is compressed (unused in v1, reserved) |
+| 4–7 | reserved | Must be 0 |
 
-### 2.2. Cơ chế ack — ví dụ cụ thể
+### 2.2. The ack mechanism — a concrete example
 
-Giả sử A đã nhận từ B các sequence: 98, 99, 101, 103 (mất 100 và 102).
-Khi A gửi gói tiếp theo, A ghi:
+Suppose A has received sequences 98, 99, 101, 103 from B (100 and 102 were lost).
+When A sends its next packet, A writes:
 
 ```
 ack         = 103
-ackBitfield = bit0 → seq 102 = 0 (mất)
+ackBitfield = bit0 → seq 102 = 0 (lost)
               bit1 → seq 101 = 1
-              bit2 → seq 100 = 0 (mất)
+              bit2 → seq 100 = 0 (lost)
               bit3 → seq  99 = 1
               bit4 → seq  98 = 1
               → 0b...00011010 = 0x1A
 ```
 
-B nhận được, biết ngay 100 và 102 chưa tới. Vì mỗi gói mang 33 thông tin ack (1 + 32), một ack
-chỉ mất khi 33 gói liên tiếp cùng mất — thực tế coi như không xảy ra. **Đây là lý do không cần
-gói ACK riêng.**
+B receives it and immediately knows 100 and 102 never arrived. Because every packet carries 33
+pieces of ack information (1 + 32), an ack is only lost if 33 consecutive packets are lost — in
+practice, never. **This is why no separate ACK packet is needed.**
 
-### 2.3. So sánh sequence có wrap-around
+### 2.3. Sequence comparison with wrap-around
 
-`sequence` là u16, wrap sau 65535. Ở 30 gói/giây, wrap mỗi ~36 phút. Không được so sánh bằng
-`>` thông thường.
+`sequence` is a u16 and wraps after 65535. At 30 packets/second, that's every ~36 minutes. It must
+not be compared with a plain `>`.
 
 ```csharp
-// Ironfront.Net.Protocol/SequenceMath.cs — SSOT, cả 4 người dùng chung
+// Ironfront.Net.Protocol/SequenceMath.cs — SSOT, shared by all 4
 public static bool IsNewer(ushort a, ushort b)
 {
     const ushort HALF = 32768;
@@ -123,25 +123,25 @@ public static bool IsNewer(ushort a, ushort b)
 public static int Distance(ushort a, ushort b) => (short)(a - b);
 ```
 
-> **Cạm bẫy đã biết:** viết `if (seq > lastSeq)` sẽ chạy đúng 36 phút rồi vỡ. Đây là loại bug
-> chỉ hiện ra khi test dài. Bắt buộc có unit test cho `IsNewer` với các cặp quanh biên
-> (65535, 0), (65530, 5), (0, 65535).
+> **Known trap:** writing `if (seq > lastSeq)` works perfectly for 36 minutes and then breaks. This
+> is the kind of bug that only surfaces in long-running tests. Unit tests for `IsNewer` around the
+> boundary pairs — (65535, 0), (65530, 5), (0, 65535) — are mandatory.
 
 ---
 
 ## 3. `packetType`
 
-| Value | Tên | Hướng | Reliable | Mô tả |
+| Value | Name | Direction | Reliable | Description |
 |---|---|---|---|---|
-| `0x01` | `CONNECT_REQUEST` | C→S | Có (retry) | Xin kết nối, mang joinTicket |
-| `0x02` | `CONNECT_CHALLENGE` | S→C | Có (retry) | Server gửi nonce |
-| `0x03` | `CONNECT_RESPONSE` | C→S | Có (retry) | Client trả lời challenge |
-| `0x04` | `CONNECT_ACCEPTED` | S→C | Có (retry) | Cấp connectionId |
-| `0x05` | `CONNECT_DENIED` | S→C | Không | Kèm mã lý do |
-| `0x06` | `DISCONNECT` | Cả hai | Không (gửi 3 lần) | Ngắt chủ động |
-| `0x07` | `KEEPALIVE` | Cả hai | Không | Giữ kết nối, đo RTT |
-| `0x10` | `PAYLOAD` | Cả hai | Tùy flags | Chứa message, xem § 4 |
-| `0x11` | `FRAGMENT` | Cả hai | Có | Một mảnh của payload lớn |
+| `0x01` | `CONNECT_REQUEST` | C→S | Yes (retry) | Requests a connection, carries the joinTicket |
+| `0x02` | `CONNECT_CHALLENGE` | S→C | Yes (retry) | The server sends a nonce |
+| `0x03` | `CONNECT_RESPONSE` | C→S | Yes (retry) | The client answers the challenge |
+| `0x04` | `CONNECT_ACCEPTED` | S→C | Yes (retry) | Assigns a connectionId |
+| `0x05` | `CONNECT_DENIED` | S→C | No | Carries a reason code |
+| `0x06` | `DISCONNECT` | Both | No (sent 3×) | Deliberate disconnect |
+| `0x07` | `KEEPALIVE` | Both | No | Keeps the connection alive, measures RTT |
+| `0x10` | `PAYLOAD` | Both | Per flags | Carries messages, see § 4 |
+| `0x11` | `FRAGMENT` | Both | Yes | One fragment of a large payload |
 
 ### 3.1. Handshake
 
@@ -150,43 +150,43 @@ sequenceDiagram
     participant C as Client
     participant S as Server
     C->>S: CONNECT_REQUEST {version, joinTicket[64], clientSalt u64}
-    Note over S: Verify HMAC của joinTicket<br/>Kiểm tra hạn, kiểm tra slot còn trống
+    Note over S: Verify the joinTicket's HMAC<br/>Check expiry, check for a free slot
     S-->>C: CONNECT_CHALLENGE {serverSalt u64}
     Note over C: challengeResponse = clientSalt XOR serverSalt
     C->>S: CONNECT_RESPONSE {challengeResponse u64}
-    Note over S: Xác thực → cấp connectionId
+    Note over S: Authenticated → assign a connectionId
     S-->>C: CONNECT_ACCEPTED {connectionId u16, serverTick u32,<br/>mapId u16, myPlayerId u32}
 ```
 
-**Vì sao có challenge:** chống IP spoofing amplification. Kẻ tấn công giả IP nạn nhân gửi
-CONNECT_REQUEST sẽ không nhận được `serverSalt` nên không hoàn tất được handshake, server không
-cấp phát tài nguyên.
+**Why there's a challenge:** to prevent IP-spoofing amplification. An attacker spoofing a victim's
+IP in a CONNECT_REQUEST never receives the `serverSalt`, so they can't complete the handshake and
+the server allocates no resources.
 
-Retry: CONNECT_REQUEST gửi lại mỗi 250ms, tối đa 20 lần (5 giây) rồi báo lỗi.
+Retry: CONNECT_REQUEST is resent every 250 ms, up to 20 times (5 seconds), then reports an error.
 
-### 3.2. `CONNECT_DENIED` — mã lý do (u8)
+### 3.2. `CONNECT_DENIED` — reason codes (u8)
 
-| Code | Ý nghĩa |
+| Code | Meaning |
 |---|---|
-| 1 | Server đầy |
-| 2 | Sai protocol version |
-| 3 | joinTicket không hợp lệ hoặc hết hạn |
-| 4 | Bị cấm (ban) |
-| 5 | Đang tắt server |
-| 6 | Đã kết nối rồi (trùng playerId) |
+| 1 | Server full |
+| 2 | Protocol version mismatch |
+| 3 | joinTicket invalid or expired |
+| 4 | Banned |
+| 5 | Server shutting down |
+| 6 | Already connected (duplicate playerId) |
 
 ---
 
-## 4. Payload: khung message
+## 4. Payload: the message frame
 
-Một `PAYLOAD` datagram chứa **1 hoặc nhiều** message, gộp lại (batching) để giảm overhead header.
+A `PAYLOAD` datagram carries **one or more** messages, batched together to reduce header overhead.
 
 ```
-u8   channelId          Xem § 5
+u8   channelId          See § 5
 u16  messageCount
-lặp messageCount lần:
-    u8   msgType        Xem § 4.1
-    u16  msgLength      Số byte của body
+repeat messageCount times:
+    u8   msgType        See § 4.1
+    u16  msgLength      Body size in bytes
     u8[] body
 ```
 
@@ -194,52 +194,52 @@ lặp messageCount lần:
 
 **Client → Server (0x20–0x3F)**
 
-| Value | Tên | Channel | Mô tả |
+| Value | Name | Channel | Description |
 |---|---|---|---|
-| `0x20` | `C_INPUT` | 3 (unreliable-seq) | Input frame, xem § 4.2 |
-| `0x22` | `C_LOADOUT_SELECT` | 2 (reliable-ord) | Chọn vũ khí trước khi spawn |
-| `0x23` | `C_SPAWN_REQUEST` | 2 | Xin hồi sinh tại spawn point |
-| `0x24` | `C_CHAT` | 2 | Chat trong trận |
-| `0x25` | `C_PING` | 0 (unreliable) | Đo RTT, kèm timestamp client |
-| `0x26` | `C_SEAT_REQUEST` | 2 | Vào/ra ghế xe (stretch goal) |
-| `0x27` | `C_ACK_BASELINE` | 2 | Xác nhận đã nhận snapshot tick N (cho delta) |
+| `0x20` | `C_INPUT` | 3 (unreliable-seq) | Input frames, see § 4.2 |
+| `0x22` | `C_LOADOUT_SELECT` | 2 (reliable-ord) | Weapon selection before spawning |
+| `0x23` | `C_SPAWN_REQUEST` | 2 | Requests a respawn at a spawn point |
+| `0x24` | `C_CHAT` | 2 | In-match chat |
+| `0x25` | `C_PING` | 0 (unreliable) | RTT measurement, carries a client timestamp |
+| `0x26` | `C_SEAT_REQUEST` | 2 | Enter/exit a vehicle seat (stretch goal) |
+| `0x27` | `C_ACK_BASELINE` | 2 | Confirms snapshot tick N was received (for delta) |
 
 **Server → Client (0x40–0x5F)**
 
-| Value | Tên | Channel | Mô tả |
+| Value | Name | Channel | Description |
 |---|---|---|---|
-| `0x40` | `S_SNAPSHOT` | 1 (unreliable-seq) | Trạng thái thế giới, xem § 4.3 |
-| `0x41` | `S_SPAWN_ACTOR` | 2 | Actor mới xuất hiện |
-| `0x42` | `S_DESPAWN_ACTOR` | 2 | Actor biến mất |
-| `0x43` | `S_HIT_CONFIRM` | 2 | Xác nhận bắn trúng (cho hitmarker) |
-| `0x44` | `S_DEATH` | 2 | Ai đó chết, kèm lực để bật ragdoll cục bộ |
-| `0x45` | `S_MATCH_STATE` | 2 | Điểm, thời gian, trạng thái trận |
-| `0x46` | `S_CAPTURE_POINT` | 2 | Thay đổi trạng thái điểm chiếm |
+| `0x40` | `S_SNAPSHOT` | 1 (unreliable-seq) | World state, see § 4.3 |
+| `0x41` | `S_SPAWN_ACTOR` | 2 | A new actor appeared |
+| `0x42` | `S_DESPAWN_ACTOR` | 2 | An actor disappeared |
+| `0x43` | `S_HIT_CONFIRM` | 2 | Hit confirmation (for the hitmarker) |
+| `0x44` | `S_DEATH` | 2 | Someone died, with a force vector for the local ragdoll |
+| `0x45` | `S_MATCH_STATE` | 2 | Score, time, match state |
+| `0x46` | `S_CAPTURE_POINT` | 2 | A capture point changed state |
 | `0x47` | `S_CHAT` | 2 | Chat broadcast |
-| `0x48` | `S_PONG` | 0 | Trả lời ping, echo timestamp client |
-| `0x49` | `S_WEAPON_FIRE` | 1 | Actor khác vừa bắn (cho hiệu ứng, âm thanh) |
-| `0x4A` | `S_EXPLOSION` | 2 | Nổ tại vị trí, cho hiệu ứng + rung màn hình |
-| `0x4B` | `S_PLAYER_LIST` | 2 | Danh sách người chơi + điểm (cho scoreboard) |
+| `0x48` | `S_PONG` | 0 | Ping reply, echoes the client timestamp |
+| `0x49` | `S_WEAPON_FIRE` | 1 | Another actor just fired (for effects and audio) |
+| `0x4A` | `S_EXPLOSION` | 2 | An explosion at a position, for effects + screen shake |
+| `0x4B` | `S_PLAYER_LIST` | 2 | Player list + scores (for the scoreboard) |
 
-### 4.2. `C_INPUT` (0x20) — chi tiết byte
+### 4.2. `C_INPUT` (0x20) — byte layout
 
 ```
-u32  startTick            Tick của frame ĐẦU TIÊN trong gói
-u8   frameCount           1..8, thường = 3 (INPUT_REDUNDANCY)
-lặp frameCount lần:
-    i8   moveX            -127..127  →  -1.0 .. 1.0  (chia 127)
-    i8   moveZ            như trên
+u32  startTick            Tick of the FIRST frame in the packet
+u8   frameCount           1..8, usually 3 (INPUT_REDUNDANCY)
+repeat frameCount times:
+    i8   moveX            -127..127  →  -1.0 .. 1.0  (divide by 127)
+    i8   moveZ            as above
     u16  yaw              0..65535   →  0 .. 360°    (× 360/65536)
     i16  pitch            -16384..16384 → -90 .. 90° (× 90/16384)
-    u16  buttons          Bitfield, xem dưới
+    u16  buttons          Bitfield, see below
 ```
 
-Kích thước: `4 + 1 + 3 × 8 = 29 byte` với frameCount = 3.
-Ở 30 Hz: `29 × 30 = 870 B/s` upstream. Không đáng kể.
+Size: `4 + 1 + 3 × 8 = 29 bytes` at frameCount = 3.
+At 30 Hz: `29 × 30 = 870 B/s` upstream. Negligible.
 
-**`buttons` bitfield (u16)**
+**The `buttons` bitfield (u16)**
 
-| Bit | Nút | Bit | Nút |
+| Bit | Button | Bit | Button |
 |---|---|---|---|
 | 0 | Fire | 8 | LeanLeft |
 | 1 | Aim (ADS) | 9 | LeanRight |
@@ -250,40 +250,40 @@ Kích thước: `4 + 1 + 3 × 8 = 29 byte` với frameCount = 3.
 | 6 | Prone | 14 | SwitchWeapon3 |
 | 7 | ThrowGrenade | 15 | reserved |
 
-**Vì sao gửi lặp 3 frame:** input là dữ liệu quan trọng nhưng gửi unreliable. Nếu mất 1 gói mà
-không có redundancy, server thiếu hẳn 1 tick input → nhân vật khựng. Với redundancy 3, phải mất
-3 gói liên tiếp mới hụt. Chi phí chỉ 16 byte thừa mỗi gói. Đây rẻ hơn nhiều so với gửi reliable
-(vì reliable sẽ retransmit input đã lỗi thời).
+**Why we repeat 3 frames:** input is critical data but is sent unreliably. Without redundancy, one
+lost packet costs the server an entire tick of input → the character stalls. With a redundancy of 3,
+three consecutive packets must be lost before anything is missed. The cost is only 16 extra bytes
+per packet. That's far cheaper than sending reliably (which would retransmit already-stale input).
 
-**Xử lý phía server:** giữ `lastProcessedInputTick` cho mỗi connection. Bỏ qua mọi frame có
-`tick <= lastProcessedInputTick` (đã xử lý rồi, đây là bản lặp).
+**Server-side handling:** keep `lastProcessedInputTick` per connection. Discard any frame with
+`tick <= lastProcessedInputTick` (already processed — it's a duplicate copy).
 
-### 4.3. `S_SNAPSHOT` (0x40) — chi tiết byte
+### 4.3. `S_SNAPSHOT` (0x40) — byte layout
 
 ```
-u32  serverTick                Tick server tạo snapshot này
-u32  lastProcessedInputTick    Input tick cuối server đã áp cho CHÍNH client này (reconciliation)
-u32  baselineTick              0 = full snapshot; khác 0 = delta so với snapshot tick này
+u32  serverTick                Tick at which the server built this snapshot
+u32  lastProcessedInputTick    Last input tick the server applied for THIS client (reconciliation)
+u32  baselineTick              0 = full snapshot; non-zero = delta against that snapshot tick
 u8   actorCount
-lặp actorCount lần:
+repeat actorCount times:
     u16  actorId
-    u8   changeMask            Bitfield, xem dưới
-    [bit0] position    i16 × 3   Quantize, xem § 4.4
+    u8   changeMask            Bitfield, see below
+    [bit0] position    i16 × 3   Quantized, see § 4.4
     [bit1] rotation    u16 yaw + i8 pitch
-    [bit2] velocity    i8 × 3    Quantize -64..64 m/s
-    [bit3] stateFlags  u8        Xem dưới
+    [bit2] velocity    i8 × 3    Quantized -64..64 m/s
+    [bit3] stateFlags  u8        See below
     [bit4] health      u8        0..100
     [bit5] weapon      u8 weaponId + u8 ammoInClip
-    [bit6] team        u8        Chỉ gửi khi đổi (hiếm)
+    [bit6] team        u8        Only sent on change (rare)
     [bit7] seatInfo    u16 vehicleId + u8 seatIndex  (stretch goal)
 ```
 
-**`changeMask`**: bit i = 1 ⇔ trường i có trong gói này. Trong full snapshot, mọi bit cần thiết
-= 1. Trong delta snapshot, chỉ bit của trường thực sự đổi so với `baselineTick`.
+**`changeMask`**: bit i = 1 ⇔ field i is present in this packet. In a full snapshot, every needed
+bit is 1. In a delta snapshot, only the bits for fields that actually changed since `baselineTick`.
 
 **`stateFlags` (u8)**
 
-| Bit | Ý nghĩa |
+| Bit | Meaning |
 |---|---|
 | 0 | IsAlive |
 | 1 | IsCrouching |
@@ -291,35 +291,36 @@ lặp actorCount lần:
 | 3 | IsSprinting |
 | 4 | IsAiming |
 | 5 | IsInWater |
-| 6 | IsRagdoll (đã chết, client tự bật ragdoll) |
+| 6 | IsRagdoll (dead; the client enables its own ragdoll) |
 | 7 | IsSeated |
 
-**Ước lượng kích thước**
+**Size estimate**
 
-| Trường hợp | Bytes/actor |
+| Case | Bytes/actor |
 |---|---|
-| Full (mọi trường) | 2 + 1 + 6 + 3 + 3 + 1 + 1 + 2 + 1 = **20** |
-| Delta điển hình (chỉ pos + rot) | 2 + 1 + 6 + 3 = **12** |
-| Delta actor đứng yên | 2 + 1 = **3** |
+| Full (every field) | 2 + 1 + 6 + 3 + 3 + 1 + 1 + 2 + 1 = **20** |
+| Typical delta (pos + rot only) | 2 + 1 + 6 + 3 = **12** |
+| Delta for a stationary actor | 2 + 1 = **3** |
 
-Với 48 actor, trung bình ~12 B: `48 × 12 = 576 B/snapshot`.
-Cộng header GSP + framing: ~600 B × 20 Hz = **~12 KB/s** downstream.
-Sau interest management (chỉ ~20 actor thực gửi): **~5–7 KB/s**. Đạt mục tiêu.
+With 48 actors averaging ~12 B: `48 × 12 = 576 B/snapshot`.
+Plus the GSP header and framing: ~600 B × 20 Hz = **~12 KB/s** downstream.
+After interest management (only ~20 actors actually sent): **~5–7 KB/s**. Target met.
 
-### 4.4. Quantization — hằng số bắt buộc dùng chung
+### 4.4. Quantization — mandatory shared constants
 
-> **Đây là nơi dễ sai nhất và hậu quả tệ nhất.** Nếu client dùng `POS_RANGE = 2048` mà server
-> dùng `4096`, nhân vật sẽ ở sai vị trí gấp đôi. Bug này rất khó nhìn ra vì không có lỗi runtime.
+> **This is the easiest place to get wrong and the worst place to get it wrong.** If the client uses
+> `POS_RANGE = 2048` while the server uses `4096`, characters end up at double the wrong position.
+> The bug is very hard to spot because there's no runtime error.
 
 ```csharp
 public static class Quantize
 {
-    // ===== VỊ TRÍ =====
-    // Map hiện tại nằm gọn trong hộp ±2048m. i16 có 65536 mức.
+    // ===== POSITION =====
+    // The current map fits inside a ±2048 m box. An i16 has 65536 levels.
     public const float POS_MIN  = -2048f;
     public const float POS_MAX  =  2048f;
     public const float POS_RANGE = POS_MAX - POS_MIN;        // 4096
-    // Độ phân giải = 4096 / 65536 = 0.0625 m = 6.25 cm. Đủ tốt cho FPS.
+    // Resolution = 4096 / 65536 = 0.0625 m = 6.25 cm. Good enough for an FPS.
 
     public static short PackPos(float v)
     {
@@ -329,25 +330,25 @@ public static class Quantize
     public static float UnpackPos(short q)
         => ((q + 32768f) / 65535f) * POS_RANGE + POS_MIN;
 
-    // ===== GÓC =====
+    // ===== ANGLES =====
     public const float YAW_SCALE   = 65536f / 360f;    // u16
-    public const float PITCH_SCALE = 16384f / 90f;     // i16, dùng ±16384
-    // Độ phân giải yaw = 360/65536 = 0.0055° — thừa chính xác cho ngắm bắn
-    // Độ phân giải pitch = 90/16384 = 0.0055°
+    public const float PITCH_SCALE = 16384f / 90f;     // i16, using ±16384
+    // Yaw resolution = 360/65536 = 0.0055° — more than precise enough for aiming
+    // Pitch resolution = 90/16384 = 0.0055°
 
-    // ===== VẬN TỐC =====
-    public const float VEL_MAX = 64f;                  // m/s, đủ cho mọi thứ trừ máy bay
+    // ===== VELOCITY =====
+    public const float VEL_MAX = 64f;                  // m/s, enough for everything but aircraft
     public const float VEL_SCALE = 127f / VEL_MAX;     // i8
-    // Độ phân giải = 64/127 = 0.5 m/s — chỉ dùng cho extrapolation, đủ
+    // Resolution = 64/127 = 0.5 m/s — only used for extrapolation, which is fine
 
-    // ===== MÁU =====
-    // health u8 trực tiếp 0..100, không cần scale
+    // ===== HEALTH =====
+    // health is a u8 directly in 0..100, no scaling needed
 }
 ```
 
-**Kiểm chứng bắt buộc (test conformance):**
+**Mandatory verification (conformance test):**
 ```
-PackPos(0f)      → 0        UnpackPos(0)      ≈ 0f      (sai số < 0.07m)
+PackPos(0f)      → 0        UnpackPos(0)      ≈ 0f      (error < 0.07 m)
 PackPos(100f)    → 1600     UnpackPos(1600)   ≈ 100f
 PackPos(-2048f)  → -32768   UnpackPos(-32768) = -2048f
 PackPos(2048f)   → 32767    UnpackPos(32767)  ≈ 2048f
@@ -357,7 +358,7 @@ PackPos(2048f)   → 32767    UnpackPos(32767)  ≈ 2048f
 
 ```
 u16  targetActorId
-u16  damage            × 10 (fixed point, 1 thập phân)
+u16  damage            × 10 (fixed point, 1 decimal place)
 u8   hitboxType        0=body 1=head 2=limb
 u8   flags             bit0 = killed, bit1 = headshot
 ```
@@ -366,100 +367,103 @@ u8   flags             bit0 = killed, bit1 = headshot
 
 ```
 u16  victimActorId
-u16  killerActorId     0xFFFF nếu chết do môi trường
+u16  killerActorId     0xFFFF if killed by the environment
 u8   causeOfDeath      0=bullet 1=explosion 2=fall 3=drown 4=vehicle
-i16  forceX, forceY, forceZ    Quantize vận tốc, để client bật ragdoll đúng hướng
+i16  forceX, forceY, forceZ    Quantized velocity, so the client's ragdoll flies the right way
 u8   hitboxHit
 ```
 
-Client nhận gói này thì: bật ragdoll **cục bộ**, phát âm thanh, cập nhật killfeed. Xác chết
-không đồng bộ giữa các client — chấp nhận theo AD-4.
+On receiving this the client: enables the ragdoll **locally**, plays audio, updates the killfeed.
+Corpses are not synchronized between clients — accepted per AD-4.
 
 ### 4.7. `S_WEAPON_FIRE` (0x49)
 
 ```
 u16  shooterActorId
 u8   weaponId
-i16  dirX, dirY, dirZ   Hướng bắn quantize (cho tracer)
+i16  dirX, dirY, dirZ   Quantized fire direction (for tracers)
 ```
 
-Gửi unreliable-sequenced: mất một tiếng súng không sao. Dùng cho muzzle flash, âm thanh 3D,
-tracer của người khác.
+Sent unreliable-sequenced: losing one gunshot is harmless. Used for muzzle flashes, 3D audio and
+other players' tracers.
 
 ---
 
-## 5. Channel
+## 5. Channels
 
-Reliability không phải thứ áp cho toàn kết nối, mà theo từng channel. Bốn channel ở v1:
+Reliability isn't applied to the whole connection but per channel. Four channels in v1:
 
-| ID | Loại | Dùng cho | Hành vi khi mất gói |
+| ID | Type | Used for | Behavior on loss |
 |---|---|---|---|
-| 0 | Unreliable-unsequenced | Ping/pong | Bỏ qua |
-| 1 | Unreliable-sequenced | `S_SNAPSHOT`, `S_WEAPON_FIRE` | Bỏ qua. **Gói tới trễ hơn gói đã nhận thì DROP** (dữ liệu cũ vô giá trị) |
-| 2 | Reliable-ordered | Mọi event gameplay, chat, spawn/despawn | Retransmit tới khi được ack. Giao đúng thứ tự, buffer gói tới sớm |
-| 3 | Unreliable-sequenced | `C_INPUT` | Như channel 1, nhưng có redundancy ở tầng ứng dụng |
+| 0 | Unreliable-unsequenced | Ping/pong | Ignored |
+| 1 | Unreliable-sequenced | `S_SNAPSHOT`, `S_WEAPON_FIRE` | Ignored. **A packet arriving older than one already received is DROPPED** (stale data is worthless) |
+| 2 | Reliable-ordered | All gameplay events, chat, spawn/despawn | Retransmitted until acked. Delivered in order, with early arrivals buffered |
+| 3 | Unreliable-sequenced | `C_INPUT` | Like channel 1, but with application-level redundancy |
 
-**Vì sao tách channel 1 và 3:** cả hai cùng loại nhưng khác hướng và khác nhịp. Tách ra để
-sequence counter độc lập, tránh việc mất snapshot làm drop nhầm input.
+**Why channels 1 and 3 are separate:** they're the same type but flow in different directions at
+different rates. Separating them keeps the sequence counters independent, so a lost snapshot never
+causes an input to be wrongly dropped.
 
-**Cạm bẫy channel 2 (reliable-ordered):** nếu message N bị mất, các message N+1, N+2 đã tới phải
-nằm chờ trong buffer. Đây chính là head-of-line blocking — nhưng ta cố tình chấp nhận nó **chỉ
-cho event**, nơi thứ tự thực sự quan trọng (không thể xử lý "chết" trước "spawn"). Snapshot nằm
-ở channel khác nên không bị ảnh hưởng. **Đây là lợi thế cốt lõi của UDP so với TCP**: TCP bắt
-mọi thứ chung một dòng.
+**The channel-2 trap (reliable-ordered):** if message N is lost, messages N+1 and N+2 that already
+arrived have to sit in the buffer. That is head-of-line blocking — but we accept it deliberately
+**for events only**, where ordering genuinely matters (you can't process a "death" before a
+"spawn"). Snapshots live on a different channel and are unaffected. **This is the core advantage of
+UDP over TCP**: TCP forces everything into one stream.
 
 ---
 
 ## 6. Fragmentation
 
-Message lớn hơn `MAX_PAYLOAD` (1184 byte) phải cắt mảnh. Chủ yếu xảy ra với full snapshot đầu
-tiên khi vào trận (64 actor × 20 B ≈ 1280 B) và `S_PLAYER_LIST`.
+Messages larger than `MAX_PAYLOAD` (1184 bytes) must be split. This mainly happens with the first
+full snapshot on joining a match (64 actors × 20 B ≈ 1280 B) and with `S_PLAYER_LIST`.
 
-Header phụ (đặt ngay sau header GSP khi `flags.FRAGMENTED = 1`):
+The extra header (placed immediately after the GSP header when `flags.FRAGMENTED = 1`):
 
 ```
-u16  fragmentGroupId      Id nhóm mảnh, tăng dần
+u16  fragmentGroupId      Fragment group id, incrementing
 u8   fragmentIndex        0-based
-u8   fragmentCount        Tổng số mảnh, ≤ 64
+u8   fragmentCount        Total fragments, ≤ 64
 ```
 
-Quy tắc:
-- Mọi mảnh dùng chung `fragmentGroupId`.
-- Mảnh phải gửi **reliable** (nếu mất 1 mảnh thì cả nhóm vô dụng).
-- Bên nhận giữ buffer theo `fragmentGroupId`, ghép khi đủ `fragmentCount`.
-- Quá `FRAGMENT_TIMEOUT_MS` (2000ms) chưa đủ → hủy nhóm, giải phóng bộ nhớ.
-- **Giới hạn chống DoS:** tối đa 8 nhóm đang chờ ghép mỗi connection. Vượt → drop nhóm cũ nhất.
+Rules:
+- Every fragment shares the same `fragmentGroupId`.
+- Fragments must be sent **reliably** (lose one and the whole group is useless).
+- The receiver buffers by `fragmentGroupId` and reassembles once `fragmentCount` is complete.
+- If it isn't complete within `FRAGMENT_TIMEOUT_MS` (2000 ms) → discard the group, free the memory.
+- **Anti-DoS limit:** at most 8 groups awaiting reassembly per connection. Over that → drop the
+  oldest group.
 
-> **Cạm bẫy:** không được để kẻ tấn công gửi `fragmentCount = 64` rồi chỉ gửi 1 mảnh, lặp lại
-> hàng nghìn lần → cạn RAM server. Giới hạn 8 nhóm + timeout là bắt buộc, không phải tùy chọn.
+> **Trap:** an attacker must not be able to send `fragmentCount = 64` and then only one fragment,
+> repeated thousands of times → exhausting server RAM. The 8-group limit plus the timeout is
+> mandatory, not optional.
 
 ---
 
 ## 7. Lag compensation
 
-### 7.1. Nguyên lý
+### 7.1. The principle
 
-Client với ping 100ms nhìn thấy thế giới ở trạng thái **150ms trước** (50ms đường truyền +
-100ms interpolation buffer). Khi họ bắn vào đầu một người, tại thời điểm server nhận được gói,
-người đó đã chạy đi chỗ khác. Nếu server raycast ở vị trí hiện tại thì client ping cao gần như
-không bao giờ bắn trúng.
+A client with 100 ms ping sees the world as it was **150 ms ago** (50 ms of transit + 100 ms of
+interpolation buffer). When they shoot someone in the head, by the time the server receives the
+packet that person has already moved. If the server raycast at the current position, a high-ping
+client would almost never land a shot.
 
-**Giải pháp:** server tua ngược hitbox về đúng thời điểm client nhìn thấy.
+**The fix:** the server rewinds hitboxes to the exact moment the client was seeing.
 
 ```mermaid
 sequenceDiagram
-    participant C as Client (ping 100ms)
+    participant C as Client (100ms ping)
     participant S as Server
-    Note over S: tick 300, actor B ở x=50
+    Note over S: tick 300, actor B at x=50
     S-->>C: snapshot tick 300
-    Note over C: t+50ms nhận<br/>render trễ 100ms → thấy B ở tick ~297
-    Note over C: Người chơi bắn vào B
+    Note over C: arrives at t+50ms<br/>rendered 100ms behind → sees B at ~tick 297
+    Note over C: The player shoots B
     C->>S: C_INPUT {tick 303, FIRE, yaw, pitch}
-    Note over S: t+100ms, đang ở tick 306, B đã ở x=54<br/>rewindTime = 306 - (RTT/2 + interp)/tickMs<br/>= 306 - (50+100)/33.3 ≈ tick 301<br/>Khôi phục hitbox B về vị trí tick 301<br/>Raycast → TRÚNG
+    Note over S: t+100ms, now at tick 306, B is at x=54<br/>rewindTime = 306 - (RTT/2 + interp)/tickMs<br/>= 306 - (50+100)/33.3 ≈ tick 301<br/>Restore B's hitboxes to their tick-301 position<br/>Raycast → HIT
     S-->>C: S_HIT_CONFIRM
 ```
 
-### 7.2. Công thức
+### 7.2. The formula
 
 ```csharp
 // Ironfront_Reborn/Assets/Scripts/Net/Server/HitboxHistory.cs
@@ -467,15 +471,15 @@ int rewindTicks = Mathf.Clamp(
     Mathf.RoundToInt((conn.SmoothedRttMs * 0.5f + ProtocolConstants.INTERP_BUFFER_MS)
                      / (1000f / ProtocolConstants.SIM_TICK_RATE)),
     0,
-    ProtocolConstants.MAX_REWIND_MS * ProtocolConstants.SIM_TICK_RATE / 1000);   // = 6 tick
+    ProtocolConstants.MAX_REWIND_MS * ProtocolConstants.SIM_TICK_RATE / 1000);   // = 6 ticks
 
 int targetTick = currentServerTick - rewindTicks;
 ```
 
-`MAX_REWIND_MS = 200` là **giới hạn chống lạm dụng**: kẻ gian có thể cố tình làm ping cao để
-"bắn vào quá khứ" xa. 200ms là mức mà mọi FPS thương mại dùng.
+`MAX_REWIND_MS = 200` is the **anti-abuse limit**: a cheater could deliberately inflate their ping
+to "shoot further into the past". 200 ms is the figure every commercial FPS uses.
 
-### 7.3. Ring buffer lịch sử hitbox
+### 7.3. The hitbox history ring buffer
 
 ```csharp
 public struct HitboxSnapshot
@@ -483,94 +487,97 @@ public struct HitboxSnapshot
     public int      Tick;
     public Vector3  Position;
     public Quaternion Rotation;
-    public Bounds[] Hitboxes;    // body, head, limbs — lấy từ Hitbox.cs có sẵn
+    public Bounds[] Hitboxes;    // body, head, limbs — taken from the existing Hitbox.cs
 }
 
-// 30 tick = 1 giây lịch sử, mỗi actor
+// 30 ticks = 1 second of history, per actor
 private readonly HitboxSnapshot[] _history = new HitboxSnapshot[30];
 ```
 
-**Tối ưu bắt buộc (rủi ro R6):** chỉ lưu lịch sử cho actor **có thể bị bắn** — tức đang ở trong
-vùng Near/Mid của ít nhất một người chơi thật. Bot ở góc bản đồ không cần lịch sử.
+**Mandatory optimization (risk R6):** only keep history for actors that **could actually be shot** —
+i.e. currently in the Near/Mid zone of at least one real player. A bot in the corner of the map
+needs no history.
 
-### 7.4. Hệ quả chấp nhận được
+### 7.4. The accepted consequence
 
-Người chơi ping thấp sẽ đôi khi thấy "tôi đã nấp sau tường rồi mà vẫn ăn đạn". Đó là vì kẻ bắn
-ping cao đã bắn khi bạn còn lộ. Đây là đánh đổi cố hữu, mọi FPS đều có, không phải bug.
+Low-ping players will sometimes feel "I was already behind the wall and still got shot". That's
+because the high-ping shooter fired while you were still exposed. It's an inherent trade-off present
+in every FPS, not a bug.
 
 ---
 
 ## 8. Congestion control
 
-Đơn giản hóa cho scope này: **điều chỉnh snapshot rate theo RTT**.
+Simplified for this scope: **adjust the snapshot rate based on RTT**.
 
 ```csharp
 // Ironfront.Net.Transport/CongestionControl.cs
-// Hai chế độ: GOOD và BAD
-// GOOD: gửi 20 snapshot/s
-// BAD:  gửi 10 snapshot/s, giảm chi tiết (bỏ velocity, tăng ngưỡng cull)
+// Two modes: GOOD and BAD
+// GOOD: send 20 snapshots/s
+// BAD:  send 10 snapshots/s, reduce detail (drop velocity, tighten the cull threshold)
 
 if (mode == Mode.Good && smoothedRtt > 250f)
 {
     mode = Mode.Bad;
-    badModeTimer = 10f;          // ở BAD tối thiểu 10 giây
+    badModeTimer = 10f;          // stay in BAD for at least 10 seconds
 }
 else if (mode == Mode.Bad && smoothedRtt < 200f && badModeTimer <= 0f)
 {
     mode = Mode.Good;
 }
-// Hysteresis 250/200ms để tránh dao động qua lại liên tục
+// 250/200ms hysteresis so it doesn't oscillate back and forth
 ```
 
-Đo RTT bằng EWMA (exponentially weighted moving average):
+RTT is measured with an EWMA (exponentially weighted moving average):
 ```csharp
 smoothedRtt = smoothedRtt * 0.9f + newSample * 0.1f;
 ```
 
 ---
 
-## 9. Máy trạng thái kết nối
+## 9. Connection state machine
 
 ```mermaid
 stateDiagram-v2
     [*] --> Disconnected
     Disconnected --> Connecting: Connect()
-    Connecting --> Challenged: nhận CONNECT_CHALLENGE
-    Challenged --> Connected: nhận CONNECT_ACCEPTED
-    Connecting --> Disconnected: timeout 5s / CONNECT_DENIED
-    Challenged --> Disconnected: timeout 5s
-    Connected --> Disconnected: DISCONNECT / timeout 10s
-    Connected --> Connected: KEEPALIVE mỗi 1s khi rảnh
+    Connecting --> Challenged: CONNECT_CHALLENGE received
+    Challenged --> Connected: CONNECT_ACCEPTED received
+    Connecting --> Disconnected: 5s timeout / CONNECT_DENIED
+    Challenged --> Disconnected: 5s timeout
+    Connected --> Disconnected: DISCONNECT / 10s timeout
+    Connected --> Connected: KEEPALIVE every 1s when idle
 ```
 
 ---
 
-# PHẦN B — MSP: Master Server Protocol (TCP)
+# PART B — MSP: Master Server Protocol (TCP)
 
 ## 10. Framing
 
-TCP là byte stream, không có ranh giới message. Bắt buộc tự framing:
+TCP is a byte stream with no message boundaries. We must frame it ourselves:
 
 ```
-u32  length        Số byte SAU trường này (msgType + body). Big-endian (chuẩn network)
+u32  length        Byte count AFTER this field (msgType + body). Big-endian (network standard)
 u16  msgType
-u8[] body          JSON UTF-8
+u8[] body          UTF-8 JSON
 ```
 
-> **Cạm bẫy TCP kinh điển:** một lần `Receive()` có thể trả về nửa message, hoặc 3 message
-> dính nhau. **Bắt buộc** dùng buffer tích lũy, chỉ parse khi đã đủ `length` byte. Đây là lỗi
-> số 1 của người mới viết TCP.
+> **The classic TCP trap:** a single `Receive()` can return half a message, or 3 messages stuck
+> together. An accumulating buffer is **mandatory**, parsing only once `length` bytes are available.
+> This is the number-one mistake made by people new to TCP.
 >
-> Giới hạn `length ≤ 64 KB`, vượt → đóng kết nối (chống memory exhaustion).
+> Limit `length` to ≤ 64 KB; anything larger → close the connection (memory-exhaustion defense).
 
-Body dùng JSON cho MSP (khác GSP dùng binary) vì: tần suất thấp nên overhead không đáng kể,
-dễ debug bằng Wireshark/log, dễ mở rộng thêm trường mà không vỡ tương thích.
+MSP bodies use JSON (unlike GSP, which is binary) because: the frequency is low so the overhead
+doesn't matter, it's easy to debug in Wireshark/logs, and fields can be added later without breaking
+compatibility.
 
-## 11. Bảng message MSP
+## 11. MSP message table
 
 **Client ↔ Master**
 
-| Value | Tên | Hướng | Body |
+| Value | Name | Direction | Body |
 |---|---|---|---|
 | `0x0001` | `LOGIN_REQ` | C→M | `{username, passwordHash, clientVersion}` |
 | `0x0002` | `LOGIN_RES` | M→C | `{ok, errorCode, sessionToken, playerId, displayName}` |
@@ -590,104 +597,105 @@ dễ debug bằng Wireshark/log, dễ mở rộng thêm trường mà không v�
 | `0x0030` | `MATCHMAKE_REQ` | C→M | `{preferredMapId}` |
 | `0x0031` | `MATCHMAKE_RES` | M→C | `{ok, roomId, estimatedWaitSec}` |
 | `0x0032` | `MATCHMAKE_CANCEL` | C→M | `{}` |
-| `0x00F0` | `HEARTBEAT` | C→M | `{}` — mỗi 15s |
+| `0x00F0` | `HEARTBEAT` | C→M | `{}` — every 15s |
 | `0x00F1` | `ERROR_PUSH` | M→C | `{code, message}` |
 
 **Game Server ↔ Master**
 
-| Value | Tên | Hướng | Body |
+| Value | Name | Direction | Body |
 |---|---|---|---|
 | `0x0100` | `GS_REGISTER` | G→M | `{serverSecret, publicIp, udpPort, maxPlayers, mapIds:[]}` |
 | `0x0101` | `GS_REGISTER_RES` | M→G | `{ok, serverId}` |
-| `0x0102` | `GS_HEARTBEAT` | G→M | `{serverId, currentPlayers, cpuPercent, avgTickMs, state}` — mỗi 5s |
+| `0x0102` | `GS_HEARTBEAT` | G→M | `{serverId, currentPlayers, cpuPercent, avgTickMs, state}` — every 5s |
 | `0x0103` | `GS_MATCH_STARTED` | G→M | `{serverId, roomId}` |
 | `0x0104` | `GS_MATCH_ENDED` | G→M | `{serverId, roomId, results:[{playerId, kills, deaths, score}]}` |
 | `0x0105` | `GS_PLAYER_JOINED` | G→M | `{serverId, playerId}` |
 | `0x0106` | `GS_PLAYER_LEFT` | G→M | `{serverId, playerId}` |
 
-## 12. joinTicket — cầu nối TCP và UDP
+## 12. joinTicket — the bridge between TCP and UDP
 
-Đây là điểm giao giữa hai protocol, và là chỗ dễ thiết kế sai nhất.
+This is where the two protocols meet, and the easiest place to design badly.
 
-**Vấn đề:** client kết nối UDP tới game server. Game server làm sao biết client này thật sự đã
-đăng nhập, và là ai?
+**The problem:** the client connects to the game server over UDP. How does the game server know this
+client really logged in, and who they are?
 
-**Phương án đã chọn — HMAC ticket, không cần round-trip:**
+**Chosen approach — an HMAC ticket, no round-trip needed:**
 
 ```
-joinTicket (64 byte):
+joinTicket (64 bytes):
   u32  playerId
   u16  serverId
   u16  roomId
-  u64  expiresAtUnixMs        (hạn 60 giây kể từ khi cấp)
-  u8[16] displayNameUtf8      (cắt/pad về 16 byte)
-  u8[32] hmac                 = HMAC-SHA256(payload 32 byte đầu, SHARED_SECRET)[0..32]
+  u64  expiresAtUnixMs        (valid for 60 seconds from issue)
+  u8[16] displayNameUtf8      (truncated/padded to 16 bytes)
+  u8[32] hmac                 = HMAC-SHA256(the first 32 payload bytes, SHARED_SECRET)[0..32]
 ```
 
-- Master server cấp ticket khi trả `ROOM_JOIN_RES`.
-- Client gửi nguyên ticket trong `CONNECT_REQUEST`.
-- Game server **tự verify HMAC** bằng `SHARED_SECRET` (cùng chuỗi bí mật cấu hình ở cả hai) và
-  kiểm tra `expiresAtUnixMs > now`. Không cần hỏi lại master → không thêm độ trễ, không phụ
-  thuộc master còn sống.
+- The master server issues the ticket when it replies with `ROOM_JOIN_RES`.
+- The client passes the ticket through verbatim in `CONNECT_REQUEST`.
+- The game server **verifies the HMAC itself** with `SHARED_SECRET` (the same secret configured on
+  both sides) and checks `expiresAtUnixMs > now`. No need to call back to the master → no added
+  latency, and no dependency on the master still being alive.
 
-**`SHARED_SECRET` để ở đâu:** biến môi trường `IRONFRONT_SHARED_SECRET`, không commit vào git.
-File `.env.example` ghi tên biến, không ghi giá trị.
+**Where `SHARED_SECRET` lives:** in the `IRONFRONT_SHARED_SECRET` environment variable, never
+committed to git. `.env.example` lists the variable name but no value.
 
-**Vì sao không dùng sessionToken trực tiếp:** sessionToken là bí mật dài hạn của phiên đăng
-nhập; gửi nó qua UDP không mã hóa tới game server (có thể do bên thứ ba vận hành) là rò rỉ.
-Ticket có hạn 60 giây và chỉ dùng được cho đúng 1 server.
+**Why not just use the sessionToken:** the sessionToken is a long-lived login secret; sending it
+unencrypted over UDP to a game server (potentially operated by a third party) is a leak. The ticket
+expires after 60 seconds and only works for one specific server.
 
 ---
 
-## 13. Bảng mã lỗi chung
+## 13. Shared error codes
 
-| Code | Ý nghĩa |
+| Code | Meaning |
 |---|---|
 | 0 | OK |
-| 1000 | Sai username hoặc mật khẩu |
-| 1001 | Username đã tồn tại |
-| 1002 | Username không hợp lệ (độ dài 3–16, chỉ a-z0-9_) |
-| 1003 | Phiên hết hạn, đăng nhập lại |
-| 1004 | Sai client version |
-| 2000 | Phòng không tồn tại |
-| 2001 | Phòng đã đầy |
-| 2002 | Sai mật khẩu phòng |
-| 2003 | Trận đã bắt đầu |
-| 2004 | Đang ở trong phòng khác |
-| 3000 | Không có game server nào rảnh |
-| 3001 | Game server không phản hồi |
-| 9000 | Lỗi nội bộ server |
-| 9001 | Bị rate limit, thử lại sau |
+| 1000 | Wrong username or password |
+| 1001 | Username already exists |
+| 1002 | Invalid username (length 3–16, only a-z0-9_) |
+| 1003 | Session expired, log in again |
+| 1004 | Wrong client version |
+| 2000 | Room doesn't exist |
+| 2001 | Room is full |
+| 2002 | Wrong room password |
+| 2003 | Match already started |
+| 2004 | Already in another room |
+| 3000 | No game server available |
+| 3001 | Game server not responding |
+| 9000 | Internal server error |
+| 9001 | Rate limited, try again later |
 
 ---
 
-## 14. Danh sách kiểm tra conformance
+## 14. Conformance checklist
 
-Bộ test này (phase-01 của C) là **trọng tài** khi hai người tranh cãi về protocol.
+This test suite (C's phase-01) is the **referee** whenever two people disagree about the protocol.
 
-- [ ] Header GSP đúng 16 byte, `protocolId` ở offset 0 = `0x4946`
+- [ ] The GSP header is exactly 16 bytes, with `protocolId` at offset 0 = `0x4946`
 - [ ] `IsNewer(0, 65535)` = true; `IsNewer(65535, 0)` = false
-- [ ] `IsNewer(5, 65530)` = true (đã wrap)
-- [ ] Round-trip `PackPos`/`UnpackPos` sai số < 0.07m trên toàn dải ±2048
-- [ ] Round-trip yaw sai số < 0.01°
-- [ ] Parse packet mẫu hex cứng → ra đúng struct (một test cho mỗi packetType)
-- [ ] Serialize struct → ra đúng byte array hex cứng (test ngược lại)
-- [ ] `C_INPUT` với frameCount = 3 đúng 29 byte
-- [ ] Full snapshot 64 actor được fragment đúng, ghép lại khớp bit-by-bit
-- [ ] Delta snapshot với `changeMask` = 0b00000011 chỉ chứa pos + rot
-- [ ] MSP framing: gửi 3 message dính nhau trong 1 TCP segment → parse ra 3 message
-- [ ] MSP framing: gửi 1 message cắt làm 5 lần `Send()` → parse ra 1 message
-- [ ] MSP `length` > 64 KB → đóng kết nối
-- [ ] joinTicket sai HMAC → `CONNECT_DENIED` code 3
-- [ ] joinTicket hết hạn → `CONNECT_DENIED` code 3
+- [ ] `IsNewer(5, 65530)` = true (wrapped)
+- [ ] `PackPos`/`UnpackPos` round-trip error < 0.07 m across the full ±2048 range
+- [ ] Yaw round-trip error < 0.01°
+- [ ] Parsing a hard-coded hex sample packet → yields the correct struct (one test per packetType)
+- [ ] Serializing a struct → yields the correct hard-coded hex byte array (the reverse test)
+- [ ] `C_INPUT` with frameCount = 3 is exactly 29 bytes
+- [ ] A full 64-actor snapshot fragments correctly and reassembles bit-for-bit
+- [ ] A delta snapshot with `changeMask` = 0b00000011 contains only pos + rot
+- [ ] MSP framing: 3 messages glued into 1 TCP segment → parses into 3 messages
+- [ ] MSP framing: 1 message split across 5 `Send()` calls → parses into 1 message
+- [ ] MSP `length` > 64 KB → connection closed
+- [ ] joinTicket with a bad HMAC → `CONNECT_DENIED` code 3
+- [ ] Expired joinTicket → `CONNECT_DENIED` code 3
 
 ---
 
-## 15. Nhật ký thay đổi protocol
+## 15. Protocol changelog
 
-| Version | Ngày | Người | Thay đổi | PR |
+| Version | Date | Author | Change | PR |
 |---|---|---|---|---|
-| 1.0.0-draft | Tuần 1 | Cả nhóm | Bản đầu | — |
+| 1.0.0-draft | Week 1 | Whole team | Initial version | — |
 
-> Mọi thay đổi sau khi đóng băng phải: bump `PROTOCOL_VERSION`, thêm dòng vào bảng này, PR có
-> 2 approve. Client và server khác `PROTOCOL_VERSION` → `CONNECT_DENIED` code 2.
+> Every change after the freeze must: bump `PROTOCOL_VERSION`, add a row to this table, and land via
+> a PR with 2 approvals. A client and server with different `PROTOCOL_VERSION` → `CONNECT_DENIED`
+> code 2.

@@ -1,132 +1,135 @@
-# Dev A — Phase 04: Hoàn thiện và bàn giao
+# Dev A — Phase 04: Polish and handover
 
-**Tuần 14** · Mốc **M4** · Ước lượng **1.0 người-tuần**
+**Week 14** · Milestone **M4** · Estimate **1.0 person-week**
 
-> Mục tiêu một câu: **thứ đang chạy được phải trông ổn, đo được, và giải thích được.**
+> Goal in one sentence: **what already runs must look decent, be measured, and be explainable.**
 
-Tuần cuối. Không thêm tính năng mới. Bất kỳ ý tưởng nào nảy ra tuần này đều ghi vào mục
-"hướng phát triển" của báo cáo, không code.
+Final week. No new features. Any idea that comes up this week goes into the "future work" section of
+the report, not into code.
 
 ---
 
-## 1. Task
+## 1. Tasks
 
-### Task 1 — Sửa lỗi theo danh sách ưu tiên (2 ngày)
+### Task 1 — Fix bugs by priority (2 days)
 
-Gom mọi bug đã biết vào một bảng, xếp hạng, sửa từ trên xuống. Dừng khi hết ngày thứ 2, phần
-còn lại ghi vào "hạn chế đã biết".
+Collect every known bug into one table, rank them, and fix from the top down. Stop at the end of day
+2 and record the rest under "known limitations".
 
-| Mức | Định nghĩa | Ví dụ |
+| Level | Definition | Example |
 |---|---|---|
-| P0 | Crash, không chơi được | Client crash khi vào trận thứ 2 |
-| P1 | Sai chức năng | Bắn không trúng ở ping cao |
-| P2 | Xấu nhưng chơi được | Remote player trượt chân |
-| P3 | Cosmetic | Killfeed lệch 2px |
+| P0 | Crash, unplayable | The client crashes on entering a second match |
+| P1 | Wrong behavior | Shots miss at high ping |
+| P2 | Ugly but playable | Remote players ice-skate |
+| P3 | Cosmetic | The killfeed is 2px off |
 
-Chỉ sửa P0 và P1. P2/P3 ghi vào hạn chế.
+Only fix P0 and P1. P2/P3 go into the limitations list.
 
-### Task 2 — Tối ưu client (1 ngày)
+### Task 2 — Client optimization (1 day)
 
-Chạy Unity Profiler với 48 actor, tìm 3 hotspot lớn nhất, sửa.
+Run the Unity Profiler with 48 actors, find the 3 biggest hotspots, and fix them.
 
-Danh sách kiểm tra thường gặp:
-- [ ] `GC Alloc` trong `Update()` = 0 B (dùng `stackalloc`, `Span`, pool)
-- [ ] Không `GetComponent` trong vòng lặp (cache ở `Awake`)
-- [ ] Không `Find`/`FindObjectOfType` runtime
-- [ ] Animator của actor xa bị cull (`Actor.CULL_ANIMATOR_DISTANCE = 300f` đã có sẵn)
-- [ ] UI không rebuild layout mỗi frame (scoreboard chỉ update khi mở)
-- [ ] Không log Debug trong hot path
+The usual checklist:
+- [ ] `GC Alloc` in `Update()` = 0 B (use `stackalloc`, `Span`, pools)
+- [ ] No `GetComponent` inside loops (cache in `Awake`)
+- [ ] No runtime `Find`/`FindObjectOfType`
+- [ ] Distant actors' animators are culled (`Actor.CULL_ANIMATOR_DISTANCE = 300f` already exists)
+- [ ] The UI doesn't rebuild its layout every frame (the scoreboard only updates while open)
+- [ ] No Debug logging in the hot path
 
-### Task 3 — Đo đạc cuối cùng cho báo cáo (1 ngày)
+### Task 3 — Final measurements for the report (1 day)
 
-Chạy các kịch bản sau, ghi số liệu vào report. **Đây là dữ liệu dùng cho bảo vệ đồ án.**
+Run the following scenarios and record the numbers in the report. **This is the data used at the
+capstone defense.**
 
-| Kịch bản | Chỉ số cần đo |
+| Scenario | Metrics to record |
 |---|---|
-| LAN, 2 người, 0 bot | RTT, FPS, bandwidth ↓↑ |
-| LAN, 16 người, 32 bot | RTT, FPS, bandwidth ↓↑, snapshot size |
-| Sim 100ms RTT, 5% loss, 16+32 | Số reconcile/phút, lệch trung bình, tỉ lệ bắn trúng |
-| Sim 200ms RTT, 15% loss, 16+32 | Như trên, đánh giá mức xuống cấp |
-| VPS thật (Internet), 4 người | RTT thực, jitter thực, loss thực |
+| LAN, 2 players, 0 bots | RTT, FPS, bandwidth ↓↑ |
+| LAN, 16 players, 32 bots | RTT, FPS, bandwidth ↓↑, snapshot size |
+| Simulated 100 ms RTT, 5% loss, 16+32 | Reconciles/minute, average divergence, hit rate |
+| Simulated 200 ms RTT, 15% loss, 16+32 | Same, assessing the degradation |
+| Real VPS (Internet), 4 players | Real RTT, real jitter, real loss |
 
-Mỗi kịch bản chạy 5 phút, lấy trung bình. Chụp màn hình debug F3 làm bằng chứng.
+Run each scenario for 5 minutes and take the average. Screenshot the F3 debug overlay as evidence.
 
-**Bảng so sánh quan trọng nhất — đưa vào slide bảo vệ:**
+**The most important comparison table — put it on a defense slide:**
 
-| Kỹ thuật | Tắt | Bật | Cải thiện |
+| Technique | Off | On | Improvement |
 |---|---|---|---|
-| Client prediction | độ trễ input = RTT | độ trễ input ≈ 0 | đo cụ thể |
-| Entity interpolation | giật theo 20Hz | mượt theo FPS | video so sánh |
-| Delta compression | ~20 B/actor | ~12 B/actor | % băng thông |
-| Interest management | 48 actor gửi | ~20 actor gửi | % băng thông |
-| Lag compensation | tỉ lệ trúng ở 150ms | tỉ lệ trúng ở 150ms | % |
+| Client prediction | input latency = RTT | input latency ≈ 0 | measure it |
+| Entity interpolation | 20 Hz stutter | smooth at render FPS | side-by-side video |
+| Delta compression | ~20 B/actor | ~12 B/actor | % bandwidth |
+| Interest management | 48 actors sent | ~20 actors sent | % bandwidth |
+| Lag compensation | hit rate at 150 ms | hit rate at 150 ms | % |
 
-Chạy được bảng này = chứng minh được từng kỹ thuật netcode thực sự hoạt động, không phải chỉ
-"có code".
+Filling in this table proves each netcode technique genuinely works, rather than merely "existing in
+the code".
 
-### Task 4 — Video demo (1 ngày)
+### Task 4 — Demo video (1 day)
 
-Kịch bản 3–5 phút:
-1. Mở game, đăng nhập, vào lobby (30s)
-2. Vào trận, chơi với bot, bắn, chết, hồi sinh (90s)
-3. Chia màn hình 2 client, cho thấy đồng bộ (60s)
-4. Bật màn hình debug F3, giải thích chỉ số (30s)
-5. Bật network simulator 200ms/15% loss, cho thấy vẫn chơi được (60s)
+A 3–5 minute script:
+1. Launch the game, log in, enter the lobby (30 s)
+2. Join a match, play against bots, shoot, die, respawn (90 s)
+3. Split screen with 2 clients, showing them in sync (60 s)
+4. Enable the F3 debug overlay and explain the metrics (30 s)
+5. Enable the network simulator at 200 ms / 15% loss and show it's still playable (60 s)
 
-Mục 5 là phần ấn tượng nhất. Đừng bỏ.
+Item 5 is the most impressive part. Don't skip it.
 
-### Task 5 — Tài liệu bàn giao (1 ngày)
+### Task 5 — Handover documentation (1 day)
 
-- `docs/client-architecture.md` — sơ đồ lớp phía client, luồng dữ liệu
-- `docs/build-instructions.md` — cách build client và server, các define symbol
-- `docs/known-limitations.md` — thật thà liệt kê mọi thứ chưa làm được
-- Cập nhật `docs/codebase-map.md` từ phase 00 cho khớp thực tế
+- `docs/client-architecture.md` — the client-side class diagram and data flow
+- `docs/build-instructions.md` — how to build client and server, and the define symbols
+- `docs/known-limitations.md` — an honest list of everything that doesn't work
+- Update `docs/codebase-map.md` from phase 00 to match reality
 
 ---
 
-## 2. Tiêu chí nghiệm thu (M4)
+## 2. Acceptance criteria (M4)
 
-| # | Tiêu chí |
+| # | Criterion |
 |---|---|
-| 1 | 0 bug P0 còn lại |
-| 2 | Bảng đo 5 kịch bản đã điền đầy đủ |
-| 3 | Bảng so sánh bật/tắt 5 kỹ thuật netcode đã điền |
-| 4 | Video demo 3–5 phút đã quay |
-| 5 | 4 file tài liệu đã viết |
-| 6 | Không cấp phát heap trong hot path (Profiler chứng minh) |
-| 7 | Chơi liên tục 30 phút không crash, không rò rỉ bộ nhớ |
+| 1 | 0 P0 bugs remaining |
+| 2 | The 5-scenario measurement table is fully filled in |
+| 3 | The on/off comparison table for the 5 netcode techniques is filled in |
+| 4 | The 3–5 minute demo video is recorded |
+| 5 | All 4 documentation files are written |
+| 6 | No heap allocation in the hot path (proven with the Profiler) |
+| 7 | 30 minutes of continuous play with no crash and no memory leak |
 
 ---
 
-## 3. Hạn chế đã biết — mẫu để điền
+## 3. Known limitations — a template to fill in
 
-Trung thực. Người chấm đánh giá cao việc biết rõ giới hạn của mình hơn là giấu.
+Be honest. Markers value knowing your own limits far more than hiding them.
 
 ```markdown
-## Hạn chế đã biết
+## Known limitations
 
-### Ngoài scope, đã quyết định từ đầu
-- Xe cộ (Car/Boat/Helicopter/Tank) chưa được replicate. Lý do: ước tính 4+ tuần,
-  vượt ngân sách 14 tuần. Xem feasibility-study.md § 5.
-- Ragdoll là cosmetic cục bộ, không đồng bộ. Mỗi client thấy xác chết ở vị trí khác nhau.
-  Lý do: sync 15 rigidbody × 48 actor ≈ 1.7 MB/s, bất khả thi. Xem AD-4.
+### Out of scope, decided up front
+- Vehicles (Car/Boat/Helicopter/Tank) are not replicated. Reason: estimated 4+ weeks, over the
+  14-week budget. See feasibility-study.md § 5.
+- Ragdolls are local cosmetics and are not synchronized. Each client sees corpses in different
+  positions. Reason: syncing 15 rigidbodies × 48 actors ≈ 1.7 MB/s, infeasible. See AD-4.
 
-### Chưa hoàn thiện
-- <điền>
+### Incomplete
+- <fill in>
 
-### Bug đã biết chưa sửa
-- <điền, kèm mức P2/P3>
+### Known unfixed bugs
+- <fill in, with a P2/P3 level>
 ```
 
 ---
 
-## 4. Nếu còn thời gian dư
+## 4. If there's time left over
 
-Theo thứ tự giá trị / công sức:
+In order of value per unit of effort:
 
-1. **Spectator mode** — đã có `SpectatorCamera.cs`, chỉ cần cho phép xem actor khác. ~4 giờ,
-   rất hữu ích khi demo.
-2. **Ghi/phát lại (replay) gói tin** — lưu mọi packet ra file, phát lại offline. ~1 ngày, cực
-   kỳ hữu ích cho debug và cho báo cáo.
-3. **Đồ thị bandwidth realtime** trên màn hình debug. ~4 giờ, nhìn rất thuyết phục khi bảo vệ.
-4. Bắt đầu xe cộ — **không khuyến khích** ở tuần 14, sẽ không xong và làm hỏng bản đang chạy.
+1. **Spectator mode** — `SpectatorCamera.cs` already exists; you just need to allow viewing other
+   actors. ~4 hours, and very useful for demos.
+2. **Packet record/replay** — dump every packet to a file and replay it offline. ~1 day, extremely
+   useful for debugging and for the report.
+3. **A real-time bandwidth graph** on the debug overlay. ~4 hours, and very convincing at the
+   defense.
+4. Starting on vehicles — **not recommended** in week 14; it won't finish and it will break the
+   working build.
