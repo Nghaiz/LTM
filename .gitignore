@@ -128,3 +128,4 @@ Desktop.ini
 # Local editor backups
 *~
 *.bak
+/.claude
