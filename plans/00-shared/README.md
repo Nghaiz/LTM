@@ -46,7 +46,7 @@ scratch** — no WebSocket, no Mirror/Netcode-for-GameObjects/Photon.
 
 | Milestone | Week | Acceptance criteria (measurable) | Status |
 |---|---|---|---|
-| **M0** Foundation | 1–2 | Protocol spec v1.0 frozen · headless build runs · network simulator working · CI compiles all 3 projects | ☐ |
+| **M0** Foundation | 1–2 | Protocol spec v1.0 frozen · headless build runs · network simulator working · CI compiles all 3 projects | **2 / 4** |
 | **M1** Connection | 3–6 | **2 clients see each other moving smoothly** at 100 ms RTT + 5% packet loss | ☐ |
 | **M2** Combat | 7–10 | Server-authoritative shooting with lag compensation · health/death/respawn · AI bots replicate | ☐ |
 | **M3** Full match | 11–13 | Login → lobby → room → capture point → win/lose → back to lobby, 16 players | ☐ |
@@ -55,6 +55,19 @@ scratch** — no WebSocket, no Mirror/Netcode-for-GameObjects/Photon.
 > **M1 is the make-or-break milestone.** If two clients still can't see each other by the end of
 > week 6, trigger the contingency plan in
 > [feasibility-study.md § 6](feasibility-study.md#6-contingency-plan).
+
+### M0 breakdown
+
+| Criterion | Owner | Status |
+|---|---|---|
+| Protocol spec v1.0 frozen | C (chair) | **Done** — [protocol-spec.md](protocol-spec.md) is at 1.0.0 FROZEN, with all 8 open questions recorded in [§ 15.1](protocol-spec.md#151-questions-settled-at-the-freeze) |
+| CI compiles all 3 projects | D | **Done** — `.github/workflows/ci.yml` green on Ubuntu in 57 s: build (0 warnings), 160 tests, spec-drift check |
+| Headless build runs | **A** | Not started — needs the Unity Editor |
+| Network simulator working | B | Not started |
+
+Also already delivered, ahead of their phases: `Ironfront.Net.Protocol` (the shared SSOT, 160
+conformance tests), the four project skeletons, `tools/build-libs.ps1`, `tools/ci.ps1` and
+`tools/SpecChecker`. See each dev's `plan.md` for what that removes from their phase-00.
 
 ---
 

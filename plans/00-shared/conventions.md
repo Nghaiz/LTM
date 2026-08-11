@@ -262,8 +262,8 @@ integration week.
 | `Ironfront_Reborn/Assets/Scripts/Net/Shared/MovementSimulation.cs` | **C** | Everyone | **Nobody** — this file is the shared source of truth for client and server |
 | `Ironfront.Net.Transport/**` | B | Everyone | Nobody |
 | `Ironfront.Net.Replication/**` | C | Everyone | Nobody |
-| `Ironfront.Net.Replication/Serialization/**` (`BitWriter`, `BitReader`, `Quantize`) | **B** | Everyone | Nobody |
-| `Ironfront.Net.Replication.Tests/Conformance/**` | **C** | Everyone | Nobody — C is the referee, B is the implementer |
+| `Ironfront.Net.Replication/Serialization/**` (`BitWriter`, `BitReader`) | **B** | Everyone | Nobody |
+| `Ironfront.Net.Protocol.Tests/Conformance/**` | **C** | Everyone | Nobody — C is the referee, B is the implementer |
 | `Ironfront.MasterServer/**` | D | Everyone | Nobody |
 | `Ironfront.Net.Protocol/**` | **Shared** | Everyone | PR + 2 approvals |
 | `tools/run-integration.ps1` + integration scenarios | **C** | Everyone | PR |
@@ -278,13 +278,27 @@ it.**
 
 | | Who does it | Files |
 |---|---|---|
-| Implementing bit-packing + quantization | **B** | `Ironfront.Net.Replication/Serialization/` |
-| Conformance tests with hard-coded hex | **C** | `Ironfront.Net.Replication.Tests/Conformance/` |
+| Implementing bit-packing | **B** | `Ironfront.Net.Replication/Serialization/` |
+| Conformance tests with hard-coded hex | **C** | `Ironfront.Net.Protocol.Tests/Conformance/` |
 
 Reason: if the same person writes and tests it, the tests only prove the code is consistent with
 itself, not that it matches the spec. Splitting them makes C's conformance tests a **genuine
 referee** when there's a dispute about the format. This is also why C may not edit B's files and
 vice versa.
+
+> **Two corrections made at the week-1 protocol freeze.**
+>
+> **`Quantize` moved out of B's `Serialization/` folder into `Ironfront.Net.Protocol`.** This table
+> previously listed it under B alongside `BitWriter`/`BitReader`, which contradicted
+> [protocol-spec.md § 4.4](protocol-spec.md#44-quantization--mandatory-shared-constants) — the spec
+> declares the quantization constants shared and forbids re-hardcoding them anywhere else. Two
+> owners for one SSOT is exactly the drift the freeze exists to prevent, so the spec wins:
+> `Quantize` is shared (PR + 2 approvals), `BitWriter`/`BitReader` remain B's alone.
+>
+> **The conformance suite lives in `Ironfront.Net.Protocol.Tests/Conformance/`,** not
+> `Ironfront.Net.Replication.Tests/`. It verifies the shared protocol library, which exists and is
+> frozen, whereas `Ironfront.Net.Replication` is still a skeleton. Ownership is unchanged — the
+> suite is **C's**, and the implementer/verifier split matters far more than the folder it sits in.
 
 **If you need a change in someone else's file:** open an issue or message them, describe what you
 need, let them make it. Don't edit it yourself and mention it afterwards. The only exception: fixing

@@ -22,7 +22,35 @@
 
 ## 2. Detailed tasks
 
-### Task 1 — Understand the framing problem (1 day)
+### Task 1 — Understand the framing problem (1 day) — ⚠️ THE READER IS BUILT; THE EXPERIMENT IS STILL YOURS
+
+**A working `MspFrameReader` already exists** — `Ironfront.Net.Protocol/Msp/MspFrame.cs` (PR #2) —
+with the accumulating buffer, the 64 KB cap, and 12 tests covering the three-glued case, the
+split-across-five case, one-byte-at-a-time, and the over-long-length fault. Framing lives in the
+shared library because the client (A), the master server (you) and any tooling all speak MSP; one
+implementation means one place for the boundary bug to be, instead of three.
+
+**Do the experiment anyway.** It is one day, and it is the part that ends up in your report and your
+defence. Writing the naive receive loop and *watching* three messages arrive in one `Receive`, then
+watching a 100 KB message arrive in ~1400-byte chunks, is what makes "TCP guarantees byte ordering,
+not message boundaries" something you know rather than something you were told. Deleting the
+experiment because working code exists would trade the only part of this task that has teaching
+value for one saved day.
+
+Two things to fold into the write-up now that a reference implementation exists:
+
+- **Benchmark your loop against `MspFrameReader`.** conventions.md § 3.4 names `MspFrameReader` as
+  one of the two classes the team writes by hand despite `System.IO.Pipelines` already solving it —
+  write it yourself, measure it, compare. That comparison answers the question you will definitely
+  be asked: *"why not just use the built-in one?"*
+- **The `NoDelay` observation is untouched by any of this** and is still yours to measure.
+
+**Already satisfied by the shipped reader:** acceptance criteria 2, 3 and 4. Criterion 5 (≥15
+framing tests) is at **12** — three short. Add the three that only you can write: 32 simultaneous
+connections, a half-open connection detected by heartbeat, and a `Receive` returning 0 (clean
+remote close).
+
+---
 
 **A mandatory experiment, before writing any code.**
 
@@ -283,7 +311,29 @@ reports nothing. The OS keepalive default is 2 hours. An application-level heart
 **Trap 3 — `_connectionsPerIp` never decremented on disconnect.** The count leaks → after a few
 hours nobody can connect. Decrement it on every exit path.
 
-### Task 4 — CI and build scripts (2 days) — DUE WEEK 2, THE WHOLE TEAM DEPENDS ON THIS
+### Task 4 — CI and build scripts (2 days) — ✅ DONE, and the team is unblocked
+
+**Shipped in PR #2.** This was the week-2 deadline that A, B and C were all waiting on
+([dependency-map.md § 2](../../00-shared/dependency-map.md), sync point 2), so it was done first.
+
+| Deliverable | State |
+|---|---|
+| `tools/build-libs.ps1` | Built and run — produces the 3 netstandard2.1 DLLs and copies them to `Assets/Plugins` |
+| `tools/ci.ps1` | All 4 steps, measured end-to-end at **34 s** against the 5-minute budget in conventions.md § 5. The Unity step is opt-in via `UNITY_PATH` so B and C are never blocked by not having an Editor |
+| `.github/workflows/ci.yml` | **Green on Ubuntu in 57 s** — restore, build, test, spec-check |
+| `tools/SpecChecker` | Extra, not in the original plan: parses `ProtocolConstants` and `Quantize` straight out of `protocol-spec.md` and fails the build on drift. Verified in both directions — passes at 27 constants, and correctly fails when one is changed |
+
+**One correction to Trap 4 below, found by running it.** The script reported all four
+`System.Memory` assemblies missing from the NuGet cache — because nothing restores them. On
+**netstandard2.1** `Span<T>` lives in the reference assembly itself, so no `System.Memory` package
+is ever pulled. That trap is real for netstandard**2.0**, not 2.1. The copy loop is left in place
+and warns rather than failing, which is the right behaviour; **Dev A confirms on first Unity load**
+whether the step is needed at all, and if not it can be deleted.
+
+Acceptance criterion 10 (CI green on GitHub) is met. Criterion 9 is half-met: the script runs and
+produces the DLLs, but "Unity loads them" needs Dev A.
+
+The original content is kept below — the scripts shipped are these, with the fixes noted above.
 
 ```powershell
 # tools/build-libs.ps1 — what B and C need most
@@ -331,7 +381,15 @@ jobs:
         run: dotnet run --project tools/SpecChecker
 ```
 
-### Task 5 — Secret management (half a day)
+### Task 5 — Secret management (half a day) — ✅ MOSTLY DONE
+
+`.env.example` ships (committed, values blank), `.gitignore` excludes `.env` and `.env.*` while
+keeping `.env.example`, and the HMAC half is implemented: `JoinTicket.Issue` and `JoinTicket.Verify`
+both **refuse an empty `sharedSecret`** rather than signing with one — an unset
+`IRONFRONT_SHARED_SECRET` fails loudly instead of producing tickets anyone can forge.
+
+Still yours: reading the variable at master-server startup and refusing to boot when it is missing
+(acceptance criterion 11), and the same check on the game server side.
 
 ```
 # .env.example — COMMIT this file
@@ -366,18 +424,24 @@ production.
 
 | # | Criterion | How to verify |
 |---|---|---|
-| 1 | The naive-framing experiment is written up with conclusions | `reports/warmup-tcp-framing.md` |
-| 2 | **The "one byte at a time" test passes** | `dotnet test` |
-| 3 | The 3-glued-messages test passes | As above |
-| 4 | Malicious `length` values are rejected | As above |
-| 5 | ≥15 framing tests green | As above |
-| 6 | Accepts 32 simultaneous connections without error | Test |
-| 7 | Unauthenticated connections are closed after 30 s | Test |
-| 8 | The 5-connections-per-IP limit works, and the count decrements on disconnect | Test |
-| 9 | **`tools/build-libs.ps1` runs and Unity loads the DLLs** | Confirmed by A |
-| 10 | **CI green on GitHub** | Screenshot |
-| 11 | Missing `IRONFRONT_SHARED_SECRET` → the server refuses to start | Manual test |
-| 12 | No secrets anywhere in git | `git log -p \| grep -i secret` |
+| # | Criterion | How to verify | State |
+|---|---|---|---|
+| 1 | The naive-framing experiment is written up with conclusions | `reports/warmup-tcp-framing.md` | Yours |
+| 2 | **The "one byte at a time" test passes** | `dotnet test` | ✅ `OneByteAtATime_StillParses` |
+| 3 | The 3-glued-messages test passes | As above | ✅ `ThreeMessagesGluedIntoOneSegment_ParseIntoThree` |
+| 4 | Malicious `length` values are rejected | As above | ✅ over-64 KB, under-2, and `uint.MaxValue` all fault the reader |
+| 5 | ≥15 framing tests green | As above | ⚠️ **12 of 15** — add the 3 connection-level ones |
+| 6 | Accepts 32 simultaneous connections without error | Test | Yours — needs the listener |
+| 7 | Unauthenticated connections are closed after 30 s | Test | Yours |
+| 8 | The 5-connections-per-IP limit works, and the count decrements on disconnect | Test | Yours |
+| 9 | **`tools/build-libs.ps1` runs and Unity loads the DLLs** | Confirmed by A | ⚠️ Half — script verified, Unity load needs A |
+| 10 | **CI green on GitHub** | Screenshot | ✅ Run 31519636867, 57 s |
+| 11 | Missing `IRONFRONT_SHARED_SECRET` → the server refuses to start | Manual test | Yours — but `JoinTicket.Issue`/`Verify` already refuse an empty secret rather than signing with one, so the library half is done |
+| 12 | No secrets anywhere in git | `git log -p \| grep -i secret` | ✅ `.env.example` ships variable names with no values; `.gitignore` now excludes `.env` and `.env.*` |
+
+> Criteria 2, 3, 4, 10 and 12 were satisfied by the M0 foundation pass (PR #2). What remains is the
+> part that needs an actual TCP listener — connections, timeouts, per-IP limits — plus your write-up,
+> which nobody else can do for you.
 
 ---
 
