@@ -53,10 +53,33 @@ namespace Ironfront.Net.Transport.Loopback
         /// <summary>The single connection a loopback pair models.</summary>
         public const ushort ConnectionId = 1;
 
+        /// <summary>
+        /// One direction of the wire.
+        /// </summary>
+        /// <remarks>
+        /// There is a simulator pair <i>per direction</i>, not one pair shared by both, and
+        /// that is load-bearing: <see cref="NetworkSimulator{T}.Flush"/> releases every packet
+        /// whose time has come and returns its buffer to the pool. A single shared simulator
+        /// would let a flush of the client-to-server direction consume the server-to-client
+        /// packets that happened to be due, deliver them to a callback that discards them by
+        /// destination, and drop them for good — a silent, direction-dependent packet loss
+        /// that no impairment setting asked for.
+        /// </remarks>
+        private sealed class Direction
+        {
+            public Direction(SimulatorConfig lossy, SimulatorConfig lossless, BufferPool pool)
+            {
+                Lossy    = new NetworkSimulator<int>(lossy, pool);
+                Lossless = new NetworkSimulator<int>(lossless, pool);
+            }
+
+            public NetworkSimulator<int> Lossy { get; }
+            public NetworkSimulator<int> Lossless { get; }
+        }
+
         private readonly BufferPool _pool;
         private readonly SimulatorConfig _config;
-        private readonly NetworkSimulator<int> _lossy;
-        private readonly NetworkSimulator<int> _lossless;
+        private readonly Direction[] _directions;
         private readonly LoopbackClient _client;
         private readonly LoopbackServer _server;
 
@@ -82,8 +105,21 @@ namespace Ironfront.Net.Transport.Loopback
             lossless.DuplicatePercent  = 0f;
             lossless.RandomSeed        = unchecked(_config.RandomSeed + 1);
 
-            _lossy    = new NetworkSimulator<int>(_config, _pool);
-            _lossless = new NetworkSimulator<int>(lossless, _pool);
+            // Each direction gets its own RNG stream as well as its own queue. Sharing one
+            // would correlate upstream and downstream impairments — losing an input packet
+            // and the snapshot answering it in the same instant — which is not how two
+            // independent paths through a network behave.
+            _directions = new Direction[2];
+            for (int route = 0; route < _directions.Length; route++)
+            {
+                SimulatorConfig routeLossy = _config.Clone();
+                routeLossy.RandomSeed = unchecked(_config.RandomSeed + route * 1000);
+
+                SimulatorConfig routeLossless = lossless.Clone();
+                routeLossless.RandomSeed = unchecked(lossless.RandomSeed + route * 1000);
+
+                _directions[route] = new Direction(routeLossy, routeLossless, _pool);
+            }
 
             _client = new LoopbackClient(this);
             _server = new LoopbackServer(this);
@@ -98,8 +134,10 @@ namespace Ironfront.Net.Transport.Loopback
         /// <summary>The virtual clock, in milliseconds since construction.</summary>
         public double NowMs => _nowMs;
 
-        /// <summary>Simulated packets dropped in the client-to-server or server-to-client direction.</summary>
-        public long DroppedCount => _lossy.DroppedCount;
+        /// <summary>Simulated packets dropped, both directions combined.</summary>
+        public long DroppedCount
+            => _directions[RouteClientToServer].Lossy.DroppedCount
+             + _directions[RouteServerToClient].Lossy.DroppedCount;
 
         /// <summary>Packets discarded on arrival for being older than one already delivered.</summary>
         public long StaleDroppedCount { get; private set; }
@@ -148,8 +186,9 @@ namespace Ironfront.Net.Transport.Loopback
             Endian.WriteU16LE(framed, 1, sequence);
             payload.CopyTo(framed.Slice(EnvelopeSize));
 
+            Direction direction = _directions[route];
             NetworkSimulator<int> sim =
-                (reliable || IsReliableChannel(channelId)) ? _lossless : _lossy;
+                (reliable || IsReliableChannel(channelId)) ? direction.Lossless : direction.Lossy;
 
             // ShouldSend returning true means the simulator is disabled and is not taking
             // ownership, so deliver straight away — a disabled simulator must behave like a
@@ -159,16 +198,14 @@ namespace Ironfront.Net.Transport.Loopback
 
         private void FlushRoute(int route)
         {
-            _lossless.Flush(_nowMs, (buf, len, dest) =>
-            {
-                if (dest == route) Deliver(new ReadOnlySpan<byte>(buf, 0, len), dest);
-            });
+            Direction direction = _directions[route];
 
-            _lossy.Flush(_nowMs, (buf, len, dest) =>
-            {
-                if (dest == route) Deliver(new ReadOnlySpan<byte>(buf, 0, len), dest);
-            });
+            direction.Lossless.Flush(_nowMs, DeliverCallback);
+            direction.Lossy.Flush(_nowMs, DeliverCallback);
         }
+
+        private void DeliverCallback(byte[] buffer, int length, int route)
+            => Deliver(new ReadOnlySpan<byte>(buffer, 0, length), route);
 
         private void Deliver(ReadOnlySpan<byte> framed, int route)
         {
@@ -215,8 +252,12 @@ namespace Ironfront.Net.Transport.Loopback
         {
             if (_disposed) return;
             _disposed = true;
-            _lossy.Clear();
-            _lossless.Clear();
+
+            for (int route = 0; route < _directions.Length; route++)
+            {
+                _directions[route].Lossy.Clear();
+                _directions[route].Lossless.Clear();
+            }
         }
 
         // ------------------------------------------------------------------ client endpoint

@@ -38,7 +38,15 @@ namespace Ironfront.Net.Transport.Simulation
         /// <summary>0..100. Delivered twice, each copy with its own delay.</summary>
         public float DuplicatePercent;
 
-        /// <summary>0..100. Delayed by an extra LatencyMs so the next packet overtakes.</summary>
+        /// <summary>
+        /// 0..100. Delayed by an extra LatencyMs so the packets behind it overtake.
+        /// </summary>
+        /// <remarks>
+        /// <b>Do not set this to 100 to "make sure reordering happens" — that reorders
+        /// nothing.</b> The impairment is an extra delay applied to the chosen packets, so
+        /// choosing every packet shifts the whole stream uniformly and preserves the order
+        /// exactly. Useful values are well under 50.
+        /// </remarks>
         public float ReorderPercent;
 
         /// <summary>Fixed seed. Same seed plus same call sequence gives the same impairments.</summary>
