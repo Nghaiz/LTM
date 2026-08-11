@@ -1,0 +1,15 @@
+<Project>
+
+  <!--
+    Intentionally empty. Owner: Dev A (Unity client).
+
+    This file exists ONLY to stop MSBuild walking up to the repository-root
+    Directory.Build.props. Unity regenerates Assembly-CSharp.csproj inside this
+    folder on every Editor open; if it inherited the root file's
+    TreatWarningsAsErrors=true, all 435 decompiled gameplay scripts would fail to
+    compile in the IDE.
+
+    Do not add properties here, and do not delete the file.
+  -->
+
+</Project>
