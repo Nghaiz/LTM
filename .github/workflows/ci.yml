@@ -152,6 +152,28 @@ jobs:
         shell: pwsh
         run: ./tools/check-commit-scope.ps1 -BaseRef "origin/${{ github.base_ref }}" -HeadRef "HEAD"
 
+      # The security scan that actually runs on this repository. CodeQL cannot: code scanning
+      # on a private repo needs GitHub Advanced Security, so codeql.yml skips itself until the
+      # repository is made public (see its header). This needs no paid feature.
+      #
+      # Advisory like the rest of this job, and that is the right call for a dependency
+      # scanner: a CVE published overnight would otherwise break every teammate's merge the
+      # next morning, for a fix that is not theirs to make.
+      #
+      # `dotnet list package --vulnerable` exits 0 whether or not it finds anything, so the
+      # output has to be inspected. Checking the exit code alone would report a permanent
+      # all-clear.
+      - name: Vulnerable dependency scan
+        shell: bash
+        run: |
+          output=$(dotnet list Ironfront.sln package --vulnerable --include-transitive 2>&1)
+          echo "$output"
+          if echo "$output" | grep -qi "has the following vulnerable packages"; then
+            echo "::warning::Vulnerable NuGet packages found — see the listing above."
+            exit 1
+          fi
+          echo "No vulnerable packages."
+
   # =======================================================================================
   # Publishes the DLLs Dev A needs in Unity, so nobody has to build them by hand or ask B
   # and C to send them over chat. Runs only after a green build on an integration branch.

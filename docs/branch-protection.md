@@ -42,17 +42,24 @@ depends on code owners does nothing.
 
 ### Required status checks
 
-Add exactly these three:
+Add exactly these two:
 
 ```
 build-test (ubuntu-latest)
 build-test (windows-latest)
-analyze (csharp)
 ```
 
 **Do not add `style (advisory)`.** It is deliberately `continue-on-error` — adding it as
 required makes a formatting nit block a merge, which is the fastest way to get the whole file
 deleted by whoever it inconveniences first.
+
+**Do not add `analyze (csharp)` either, while this repository is private.** CodeQL skips
+itself on a private repository (see § 3), and a required check that never reports shows as
+**Expected — Waiting** forever, which deadlocks every merge. Add it only after the repository
+is made public and you have seen the job actually run and pass once.
+
+**Do not add `unity-libs`.** It only runs on `push`, so on a pull request it is skipped —
+same deadlock.
 
 The names come from the job/matrix names in `.github/workflows/ci.yml`. If you rename a job,
 this list breaks silently and the check reports **Expected — Waiting** forever. GitHub only
@@ -94,11 +101,38 @@ feature PR, so a two-approval requirement on a four-person team would stall it.
 - [ ] **Dependency graph** — on (Dependabot needs it).
 - [ ] **Dependabot security updates** — on. `.github/dependabot.yml` handles the scheduled
       version bumps; this covers the urgent security ones.
-- [ ] **Secret scanning** + **push protection** — on. conventions.md § 1.4 forbids committing
-      `SHARED_SECRET`; push protection is what actually stops it at the push.
-- [ ] **Code scanning → default setup** — **OFF**. `.github/workflows/codeql.yml` is the
-      advanced setup, and the two conflict: with default setup enabled, the workflow fails
-      with *"Code scanning default setup is enabled"* on every run.
+- [ ] **Secret scanning** + **push protection** — on **if the plan offers it**. On a private
+      repository this is part of GitHub Advanced Security, the same paid add-on as code
+      scanning below, so it may simply not be available. conventions.md § 1.4 forbids
+      committing `SHARED_SECRET`; where push protection is unavailable, the local
+      `secret-guard` hook and code review are what enforce it.
+- [ ] **Code scanning** — see the note below. Nothing to switch on today.
+
+### Why CodeQL is dormant, and what covers the gap
+
+`.github/workflows/codeql.yml` exists and is correct, but it **skips itself while this
+repository is private**. Code scanning on a private repository requires GitHub Advanced
+Security, a paid add-on. On the free plan the analysis runs and only the upload is refused —
+measured on the first run: 471 of 471 C# files scanned, SARIF produced, 4m48s, then
+`##[error] Code scanning is not enabled for this repository`.
+
+Leaving that red on every push would have been worse than not having it: a check that is red
+for a reason nobody can fix teaches everyone to ignore red.
+
+What runs instead, needing no paid feature: the **vulnerable dependency scan** in the `style`
+job of `ci.yml` (`dotnet list package --vulnerable --include-transitive`).
+
+When the repository is made public — likely at submission — CodeQL starts by itself, no edit
+required. On that day, and only then:
+
+1. Confirm the `analyze (csharp)` job actually ran and passed.
+2. Turn **Code scanning → default setup OFF**. `codeql.yml` is the *advanced* setup and the
+   two conflict; with default setup on, the workflow fails with *"Code scanning default setup
+   is enabled"* on every run.
+3. Consider switching `build-mode` from `none` to `manual` in `codeql.yml`. The dormant run
+   reported *low analysis quality* — 53% of calls resolved against a threshold of 85% — which
+   means taint analysis would miss real findings. `manual` costs a build and gets that back.
+4. Only then add `analyze (csharp)` to the required checks.
 
 ---
 
