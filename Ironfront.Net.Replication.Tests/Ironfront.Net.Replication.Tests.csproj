@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    OWNER: Dev C.
+
+    Why this project exists next to Ironfront.Net.Protocol.Tests rather than inside it:
+    that project references Ironfront.Net.Protocol and nothing else, deliberately, so the
+    frozen protocol library is verified in isolation. The suites here need
+    Ironfront.Net.Replication and Ironfront.Net.Transport too — the snapshot/delta core,
+    the server tick loop, and the simulator.
+
+    Conformance/ keeps the implementer/verifier split that conventions.md section 7 is
+    built around: BitWriter and BitReader are Dev B's code, and the tests that judge them
+    are Dev C's, written from protocol-spec.md with hand-written hex rather than from
+    B's implementation. A round-trip test would only prove the code agrees with itself.
+
+    net8.0, not netstandard2.1: this is a test host and is never loaded by Unity.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Ironfront.Net.Replication.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!--
+    No Version attributes: Central Package Management is on (Directory.Packages.props), and
+    CentralPackageVersionOverrideEnabled=false makes an inline version an NU1008 error on
+    purpose. Versions live in Directory.Packages.props.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ironfront.Net.Protocol\Ironfront.Net.Protocol.csproj" />
+    <ProjectReference Include="..\Ironfront.Net.Replication\Ironfront.Net.Replication.csproj" />
+    <ProjectReference Include="..\Ironfront.Net.Transport\Ironfront.Net.Transport.csproj" />
+  </ItemGroup>
+
+</Project>
