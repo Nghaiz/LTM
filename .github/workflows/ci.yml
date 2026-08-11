@@ -3,6 +3,18 @@ name: CI
 # OWNER: Dev D (plans/00-shared/conventions.md section 7).
 # The referee: push, and you immediately know whether you broke someone else's build
 # without having to ask them.
+#
+# GATE POLICY (agreed when this pipeline was set up):
+#   HARD  — build-test. A red build, a red test, or a ProtocolConstants/spec mismatch
+#           blocks the merge. These are correctness.
+#   SOFT  — style. Formatting and commit-scope problems are reported and never block.
+#           A taste gate that can block a merge on integration day gets deleted by the
+#           first person it inconveniences; one that only reports gets read.
+#
+# DO NOT ADD A `paths:` FILTER TO THIS WORKFLOW. build-test is a required status check, and
+# GitHub reports a required check that was skipped by a paths filter as "Expected — Waiting"
+# forever, which deadlocks the merge instead of speeding it up. If you want to skip work for
+# docs-only changes, do it with a step-level `if:`, never a workflow-level path filter.
 
 on:
   push:
@@ -13,10 +25,28 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  NUGET_XMLDOC_MODE: skip
+
 jobs:
+  # =======================================================================================
+  # HARD GATE — this is the job that decides whether a PR can merge.
+  # =======================================================================================
   build-test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    name: build-test
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false # a Windows-only failure must not hide an unrelated Linux failure
+      matrix:
+        os: [ubuntu-latest, windows-latest]
 
     steps:
       - uses: actions/checkout@v4
@@ -25,9 +55,20 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      # Pinned to 8.0.x to match the LTS the team develops against. If you bump this,
-      # bump LangVersion in Directory.Build.props in the same PR, or CI will accept
-      # syntax that other developers' SDKs reject.
+      # Pinned to 8.0.x to match the LTS the team develops against, and enforced on every
+      # developer machine by global.json. If you bump this, bump global.json AND LangVersion
+      # in Directory.Build.props in the same PR, or CI will accept syntax that other
+      # developers' SDKs reject.
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          # Directory.Packages.props is the only file that can change a package version now
+          # (Central Package Management), so it plus the project files fully determine the
+          # restore graph.
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'Directory.Packages.props', 'Directory.Build.props') }}
+          restore-keys: ${{ runner.os }}-nuget-
 
       - name: Restore
         run: dotnet restore Ironfront.sln
@@ -35,11 +76,120 @@ jobs:
       - name: Build
         run: dotnet build Ironfront.sln --configuration Release --no-restore
 
+      # --logger trx writes a machine-readable result file that survives as an artifact, so a
+      # failure can be read after the fact instead of being scraped out of console scrollback.
       - name: Test
-        run: dotnet test Ironfront.sln --configuration Release --no-build --logger "console;verbosity=normal"
+        run: >
+          dotnet test Ironfront.sln
+          --configuration Release
+          --no-build
+          --logger "console;verbosity=normal"
+          --logger "trx;LogFileName=test-results.trx"
+          --collect "XPlat Code Coverage"
+          --results-directory TestResults
 
       - name: Check ProtocolConstants matches the spec
         run: dotnet run --project tools/SpecChecker --configuration Release --no-build
+
+      # if: always() — the results are most valuable exactly when the previous step failed.
+      - name: Upload test results and coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}
+          path: TestResults/
+          retention-days: 14
+          if-no-files-found: warn
+
+  # =======================================================================================
+  # SOFT GATE — reports, never blocks. continue-on-error is set at the JOB level so a
+  # failure here shows as a neutral/green check on the PR.
+  # =======================================================================================
+  style:
+    name: style (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # check-commit-scope.ps1 diffs against the base branch, which a shallow clone does
+          # not contain. Without this the script sees an empty commit list and silently
+          # passes — an under-triggering gate is worse than no gate.
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'Directory.Packages.props', 'Directory.Build.props') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: dotnet restore Ironfront.sln
+
+      # Checks the .editorconfig rules. Severity there is suggestion/warning by design and
+      # EnforceCodeStyleInBuild is off, so this is the only place style is measured at all.
+      #
+      # `style` and `analyzers` only — the `whitespace` subcategory is deliberately NOT run.
+      # This codebase aligns enum members and constant tables into columns on purpose
+      # (Idle      = 1,) and `dotnet format whitespace` wants to collapse every one of them.
+      # That is ~200 findings on day one, none of them defects, and an advisory check that is
+      # permanently red is an advisory check nobody reads.
+      - name: Style check
+        run: dotnet format style Ironfront.sln --verify-no-changes --no-restore --severity warn --verbosity minimal
+
+      - name: Analyzer check
+        run: dotnet format analyzers Ironfront.sln --verify-no-changes --no-restore --severity warn --verbosity minimal
+
+      - name: Commit scope check
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        run: ./tools/check-commit-scope.ps1 -BaseRef "origin/${{ github.base_ref }}" -HeadRef "HEAD"
+
+  # =======================================================================================
+  # Publishes the DLLs Dev A needs in Unity, so nobody has to build them by hand or ask B
+  # and C to send them over chat. Runs only after a green build on an integration branch.
+  # =======================================================================================
+  unity-libs:
+    name: unity-libs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: build-test
+    if: github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'Directory.Packages.props', 'Directory.Build.props') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      # build-libs.ps1 also copies the System.Memory dependency chain out of the NuGet cache.
+      # Omitting those four DLLs is the TypeLoadException trap documented in the script.
+      - name: Build Unity plugin DLLs
+        shell: pwsh
+        run: ./tools/build-libs.ps1 -Configuration Release
+
+      - name: Upload plugin DLLs
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-plugins-${{ github.sha }}
+          path: Ironfront_Reborn/Assets/Plugins/*.dll
+          retention-days: 30
+          if-no-files-found: error
 
   # Unity compilation needs a licensed Editor on the runner, which the free tier does not
   # provide. Dev A runs `pwsh tools/ci.ps1` locally with UNITY_PATH set instead. Enable

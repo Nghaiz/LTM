@@ -1,0 +1,67 @@
+name: CodeQL
+
+# OWNER: Dev D (tools/ and CI, plans/00-shared/conventions.md section 7).
+#
+# Static security analysis. Deliberately a SEPARATE workflow from ci.yml, not an extra job
+# inside it, for two reasons:
+#   1. It is slower than build-test and must never sit on the critical path to a merge.
+#   2. It should keep finding newly published vulnerability patterns in code that has not
+#      changed, which is what the weekly schedule is for.
+#
+# This project hand-writes its packet parsing over raw sockets — buffer indexing, length
+# fields taken straight off the wire, hex parsing. That is precisely the code shape where an
+# attacker-controlled length is read without bounds checking, so the analysis earns its
+# runtime here more than it would on a typical CRUD app.
+#
+# build-mode: none analyses the source directly without compiling. It is faster, needs no
+# NuGet restore, and cannot be broken by an unrelated build failure. If it ever starts
+# missing findings, switch to `manual` and add the dotnet build steps back.
+#
+# NOTE: if GitHub's "default setup" for code scanning is enabled on this repository, this
+# workflow will fail with a conflict. Turn default setup OFF under
+# Settings -> Code security -> Code scanning before merging this file. See
+# docs/branch-protection.md.
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Monday 02:00 UTC = Monday 09:00 ICT, before anyone starts work.
+    - cron: '0 2 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: analyze (csharp)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: csharp
+          build-mode: none
+          # security-and-quality is noisier than the default; security-extended keeps the
+          # focus on exploitable defects, which is what matters for wire-format parsing.
+          queries: security-extended
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:csharp'

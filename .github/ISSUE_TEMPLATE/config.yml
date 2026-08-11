@@ -1,0 +1,14 @@
+# Forces a template choice instead of letting a blank issue through. A blank issue on a
+# four-person team reliably arrives as one sentence with no commit, no repro and no owner.
+blank_issues_enabled: false
+
+contact_links:
+  - name: Working conventions
+    url: https://github.com/Sagitoaz/LTM/blob/main/plans/00-shared/conventions.md
+    about: Branches, commit scopes, file ownership, Definition of Done. Read before your first commit.
+  - name: Protocol specification
+    url: https://github.com/Sagitoaz/LTM/blob/main/plans/00-shared/protocol-spec.md
+    about: The frozen wire format. If your question is "what should the bytes look like", the answer is here.
+  - name: Architecture
+    url: https://github.com/Sagitoaz/LTM/blob/main/plans/00-shared/architecture.md
+    about: How the five projects fit together and why the shared library must never reference UnityEngine.

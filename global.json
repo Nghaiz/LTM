@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json.schemastore.org/global.json",
+
+  "//": [
+    "Pins the .NET SDK feature band for every developer and for CI.",
+    "",
+    "WHY THIS FILE EXISTS: Directory.Build.props pins LangVersion to 12.0 and warns that a",
+    "developer on a newer SDK could commit C# 13+ syntax that compiles locally and fails in",
+    "CI. That warning had no enforcement — a teammate with the .NET 9 or 10 SDK installed",
+    "would still build fine on their machine. This file turns that silent divergence into an",
+    "immediate, readable error at the first `dotnet` command:",
+    "",
+    "  A compatible .NET SDK was not found. Requested: 8.0.100 (rollForward latestFeature)",
+    "",
+    "rollForward=latestFeature accepts ANY 8.0.x SDK at or above 8.0.100 (so 8.0.423 on one",
+    "machine and 8.0.100 on another are both fine) and rejects 9.x / 10.x outright, which is",
+    "exactly the boundary .github/workflows/ci.yml enforces with dotnet-version: 8.0.x.",
+    "",
+    "If the team ever moves to .NET 9, three files change in the SAME PR: this one, the",
+    "LangVersion in Directory.Build.props, and dotnet-version in ci.yml."
+  ],
+
+  "sdk": {
+    "version": "8.0.100",
+    "rollForward": "latestFeature",
+    "allowPrerelease": false
+  }
+}

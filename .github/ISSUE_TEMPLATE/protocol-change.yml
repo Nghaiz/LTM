@@ -1,0 +1,94 @@
+name: Protocol change proposal
+description: Change the wire format, a shared constant, or PROTOCOL_VERSION.
+title: '[protocol] '
+labels: [protocol, needs-2-approvals]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        `protocol-spec.md` was frozen at the end of week 1. After the freeze, every change to
+        the wire format goes through this issue first — raised with a reason and an impact
+        assessment, before any code is written.
+
+        > **Never** change a protocol constant directly in your own code and tell people
+        > later. conventions.md section 2 names that as the number-one cause of risk R5:
+        > two implementations that each work alone and disagree on the wire.
+
+  - type: textarea
+    id: change
+    attributes:
+      label: The change
+      description: Exactly which field, constant, or message. Quote the current spec text.
+      placeholder: |
+        protocol-spec.md § 4.2 — GSP header ack field is 32 bits; proposal is 64 bits.
+        Current: `uint AckBitfield`  ->  proposed: `ulong AckBitfield`
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it is necessary
+      description: |
+        What breaks without it. "Cleaner" is not a reason to change a frozen contract; a
+        measurement or a failing scenario is.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: affected
+    attributes:
+      label: Who is affected
+      description: Everyone ticked here must approve the PR (conventions.md section 2).
+      options:
+        - label: Dev A — Unity client
+        - label: Dev B — Transport
+        - label: Dev C — Replication
+        - label: Dev D — Master server
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact on existing code
+      description: Which files change, and roughly how much work for each person.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: version-bump
+    attributes:
+      label: Does this break the wire format?
+      description: |
+        Breaking means an old client and a new server can no longer talk. If yes,
+        PROTOCOL_VERSION must be bumped and all four people pull on the same day.
+      options:
+        - 'Yes — breaking, PROTOCOL_VERSION must bump'
+        - 'No — additive only, old and new still interoperate'
+        - 'Not sure — needs discussion'
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: pr-contents
+    attributes:
+      label: The PR that implements this will contain all four
+      description: A protocol PR that changes only the code, or only the spec, is incomplete by definition.
+      options:
+        - label: '`plans/00-shared/protocol-spec.md` — the spec text itself'
+          required: true
+        - label: '`ProtocolConstants.cs` — matching, so `SpecChecker` stays green'
+          required: true
+        - label: 'A conformance test in `Ironfront.Net.Protocol.Tests/Conformance/` covering the new behaviour'
+          required: true
+        - label: 'The section 15 version table updated'
+          required: true
+
+  - type: textarea
+    id: discussed
+    attributes:
+      label: Group-chat discussion
+      description: Link or paste the outcome. Section 2 requires it to be raised there first.
+    validations:
+      required: false

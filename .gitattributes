@@ -25,3 +25,14 @@
 *.md       text eol=lf
 *.ps1      text eol=crlf
 *.yml      text eol=lf
+*.yaml     text eol=lf
+*.json     text eol=lf
+
+# Dotfiles and extensionless config. Without these, core.autocrlf checks them out as CRLF on
+# Windows while .editorconfig declares `end_of_line = lf` for the same files — the two then
+# disagree forever and every editor save produces a whole-file diff.
+.editorconfig   text eol=lf
+.gitattributes  text eol=lf
+.gitignore      text eol=lf
+CODEOWNERS      text eol=lf
+LICENSE         text eol=lf

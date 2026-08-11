@@ -156,3 +156,15 @@ Desktop.ini
 .env
 .env.*
 !.env.example
+
+# ---------------------------------------------------------------------------
+# Test and tooling output (added with the CI setup)
+#
+# TestResults/ holds the .trx and coverage.cobertura.xml that `dotnet test` writes
+# and that CI uploads as an artifact; artifacts/integration/ holds the per-process
+# logs from tools/run-integration.ps1. Both are regenerated on every run and are
+# large — they belong in the CI artifact store, not in git history.
+# ---------------------------------------------------------------------------
+**/TestResults/
+/artifacts/
+unity-compile.log

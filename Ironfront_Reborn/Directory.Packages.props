@@ -1,0 +1,25 @@
+<Project>
+
+  <!--
+    Intentionally disables Central Package Management for the Unity project. Owner: Dev A.
+
+    This is the sibling of the empty Directory.Build.props next to it, and it exists for the
+    same reason — but it needs one property rather than being empty.
+
+    MSBuild searches upward for Directory.Packages.props independently of
+    Directory.Build.props, so the empty shield next door does NOT stop the repo-root
+    Directory.Packages.props from reaching Unity's generated Assembly-CSharp.csproj. And an
+    EMPTY file here would be worse than none: NuGet turns CPM ON merely because a
+    Directory.Packages.props was found, which would make every versioned PackageReference in
+    a generated Unity project an NU1008 error.
+
+    Setting the flag to false explicitly is the only shield that actually shields.
+
+    Do not delete this file, and do not add PackageVersion items to it.
+  -->
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,64 @@
+name: Task
+description: A unit of work from a phase plan, or a request for a change in someone else's file.
+labels: [task]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Two uses for this template:
+
+        1. Tracking a task from your own `plans/dev-X-*/phases/phase-NN-*.md`.
+        2. **Asking the owner for a change in a file that is not yours.** conventions.md
+           section 7 is explicit: describe what you need and let them make it — do not edit
+           it yourself and mention it afterwards.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area / owner
+      options:
+        - client (Dev A)
+        - transport (Dev B)
+        - replication (Dev C)
+        - master (Dev D)
+        - protocol (shared — needs PR + 2 approvals)
+        - tools / ci (Dev D)
+    validations:
+      required: true
+
+  - type: input
+    id: phase
+    attributes:
+      label: Phase
+      description: Which plan file this belongs to, if any.
+      placeholder: plans/dev-b-transport/phases/phase-01-reliability.md
+    validations:
+      required: false
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What needs doing
+      description: |
+        If this is a request against someone else's file: what you need it to do, not how you
+        would implement it. The owner decides the how.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Done when
+      description: |
+        Concrete and checkable. "Reliability layer works" is not checkable; "12 fragment
+        reassembly tests green, including out-of-order and duplicate fragments" is.
+    validations:
+      required: true
+
+  - type: textarea
+    id: blocks
+    attributes:
+      label: Who is blocked by this
+      description: Dependencies across the four areas are where a capstone actually slips.
+    validations:
+      required: false
