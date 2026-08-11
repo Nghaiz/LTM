@@ -1,6 +1,6 @@
 # Protocol Specification — Ironfront Reborn
 
-**Version: 1.0.0-draft** · Status: **MUST BE FROZEN BY THE END OF WEEK 1**
+**Version: 1.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 1`
 
 > This is the shared contract for all 4 people. Every offset, every enum value and every
 > quantization constant in this document is **mandatory**. Nobody may interpret them differently.
@@ -8,6 +8,15 @@
 >
 > **The single source of these constants in code:** `Ironfront.Net.Protocol/ProtocolConstants.cs`.
 > Re-hardcoding any number from this document anywhere else is forbidden.
+>
+> **Frozen means:** every change from here on goes through a PR with 2 approvals, adds a row to
+> [§ 15](#15-protocol-changelog-and-freeze-record), and bumps `PROTOCOL_VERSION` **if the bytes on
+> the wire change**. A correction that leaves the wire format untouched (a fixed typo, a clarified
+> ambiguity) still needs the PR and the changelog row, but does **not** bump `PROTOCOL_VERSION` —
+> bumping it would reject every client for a documentation edit.
+>
+> The freeze is enforced mechanically, not on trust: `tools/SpecChecker` parses § 1 and § 4.4 out of
+> this document on every CI run and fails the build if `ProtocolConstants.cs` disagrees.
 
 ---
 
@@ -281,6 +290,20 @@ repeat actorCount times:
 **`changeMask`**: bit i = 1 ⇔ field i is present in this packet. In a full snapshot, every needed
 bit is 1. In a delta snapshot, only the bits for fields that actually changed since `baselineTick`.
 
+### 4.3.1. `actorId` — allocation and lifetime
+
+Settled at the freeze; these three rules are the contract, not suggestions.
+
+| Rule | Decision | Why |
+|---|---|---|
+| **Do bots and players share one id space?** | **Yes.** One `u16` space, 0…`MAX_ACTORS - 1`, allocated by the server with no player/bot partition | The client renders both through the same `NetworkActorController` and never needs to care which is which. A split space would mean two allocators, two lookup tables, and a bug class where a bot id is read as a player id |
+| **Is an id reused as soon as an actor dies?** | **No — quarantine for 5 seconds** (150 ticks) before an id returns to the pool | Snapshots and events for the dead actor are still in flight for up to one interpolation buffer plus retransmits. Reusing the id immediately makes the client apply a dead actor's tail packets to the new one: a freshly spawned player briefly teleports to where the corpse was, or takes damage attributed to the wrong actor. 5 s is far beyond `TIMEOUT_MS`-scale in-flight time |
+| **Is `MAX_ACTORS = 64` enough?** | **Yes.** 16 players + 32 bots = 48 concurrent, with 16 spare | The spare 16 absorbs the quarantine window above: at worst every one of 48 actors dies at once and their ids are still cooling while replacements spawn. 64 also keeps `actorCount` inside its `u8` and the full snapshot inside 2 fragments |
+
+**Is an 8-bit `changeMask` enough?** Yes for v1 — 7 bits used, 1 spare (bit 7, `seatInfo`, is the
+stretch-goal vehicle field). A ninth field would need a `changeMask` widened to `u16`, which is a
+wire-format change: PR, 2 approvals, and a `PROTOCOL_VERSION` bump.
+
 **`stateFlags` (u8)**
 
 | Bit | Meaning |
@@ -349,10 +372,41 @@ public static class Quantize
 **Mandatory verification (conformance test):**
 ```
 PackPos(0f)      → 0        UnpackPos(0)      ≈ 0f      (error < 0.07 m)
-PackPos(100f)    → 1600     UnpackPos(1600)   ≈ 100f
+PackPos(100f)    → 1599     UnpackPos(1599)   ≈ 100f    (see the note below)
 PackPos(-2048f)  → -32768   UnpackPos(-32768) = -2048f
 PackPos(2048f)   → 32767    UnpackPos(32767)  ≈ 2048f
 ```
+
+> **Corrected at the freeze — this row previously read `1600`.** The formula above yields **1599**:
+>
+> ```
+> t                = (100 - (-2048)) / 4096 = 0.5244140625
+> t * 65535        = 34367.4755859375
+> minus 32768      = 1599.4755859375
+> (short) truncate = 1599
+> ```
+>
+> 1600 would require multiplying by 65536 instead of 65535 — which then makes `PackPos(2048f)`
+> produce 32768, an i16 overflow contradicting the `→ 32767` row directly below it. The formula is
+> correct and the worked example was wrong. Both values sit inside the 0.07 m budget that
+> [§ 14](#14-conformance-checklist) actually requires (`UnpackPos(1599)` = 99.97 m,
+> `UnpackPos(1600)` = 100.03 m), so no shipped behavior changes and `PROTOCOL_VERSION` stays at 1.
+
+**The ±2048 m range is verified, not assumed.** Measured directly from the scene files (no Editor
+required — `m_SerializationMode: 2` makes them YAML):
+
+| Scene | `LevelBounds` box | Playable extent | Worst \|coord\| |
+|---|---|---|---|
+| Dustbowl | centre (-70.8, 207.6, -88.6), size 1700 × 700 × 1600 | X -920.8…779.2 · Z -888.6…711.4 | **920.8 m** |
+| Island | none present (`IsInside` returns true everywhere) | all 5 capture points within 263 m | **589.7 m** |
+
+`LevelBounds` is `new Bounds(transform.position, transform.localScale)`
+([`LevelBounds.cs:21`](../../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/LevelBounds.cs#L21)),
+and `LevelBounds.IsInside()` is what keeps actors inside it. Dustbowl does contain ~1,900 transforms
+beyond 2048 m, but those are backdrop terrain and skybox geometry outside the play box — no actor
+can reach them, so they never enter a snapshot. **±2048 m leaves 2.2× headroom over the largest
+playable area.** Re-run this check if a new map is added; if one ever exceeds the box, the options
+are raising `POS_RANGE` (losing precision) or moving position to 24 bits (+3 B per actor).
 
 ### 4.5. `S_HIT_CONFIRM` (0x43)
 
@@ -558,10 +612,29 @@ stateDiagram-v2
 TCP is a byte stream with no message boundaries. We must frame it ourselves:
 
 ```
-u32  length        Byte count AFTER this field (msgType + body). Big-endian (network standard)
-u16  msgType
+u32  length        Byte count AFTER this field (msgType + body). BIG-endian (network standard)
+u16  msgType       LITTLE-endian (the § 0 default). See the mixed-endian note below
 u8[] body          UTF-8 JSON
 ```
+
+> **Settled at the freeze — MSP frames are deliberately mixed-endian.** § 0 makes little-endian the
+> default for all of GSP and MSP; this section overrides it for the `length` prefix only, because a
+> length prefix on a TCP stream is conventionally network byte order. `msgType` was not called out
+> either way, which left it genuinely ambiguous. **It is little-endian**, following the § 0 default.
+>
+> This is worth stating explicitly because of how it fails otherwise: if the client and the master
+> server disagree about `msgType`'s byte order, the `length` prefix still parses perfectly and
+> framing looks healthy, while every message routes to the wrong handler — `LOGIN_REQ` (`0x0001`)
+> arrives as `0x0100` (`GS_REGISTER`). There is no framing error to point at, so it presents as
+> "the server ignores my login" rather than as a byte-order bug.
+>
+> A 13-byte reference frame — `LOGIN_REQ` with body `{"u":1}` — is pinned in the conformance suite:
+>
+> ```
+> 00 00 00 09   length = 9 (u16 msgType + 7 body bytes), big-endian
+> 01 00         msgType = 0x0001 LOGIN_REQ, little-endian
+> 7B 22 75 22 3A 31 7D    {"u":1}
+> ```
 
 > **The classic TCP trap:** a single `Receive()` can return half a message, or 3 messages stuck
 > together. An accumulating buffer is **mandatory**, parsing only once `length` bytes are available.
@@ -670,32 +743,65 @@ expires after 60 seconds and only works for one specific server.
 
 ## 14. Conformance checklist
 
-This test suite (C's phase-01) is the **referee** whenever two people disagree about the protocol.
+This test suite is the **referee** whenever two people disagree about the protocol.
 
-- [ ] The GSP header is exactly 16 bytes, with `protocolId` at offset 0 = `0x4946`
-- [ ] `IsNewer(0, 65535)` = true; `IsNewer(65535, 0)` = false
-- [ ] `IsNewer(5, 65530)` = true (wrapped)
-- [ ] `PackPos`/`UnpackPos` round-trip error < 0.07 m across the full ±2048 range
-- [ ] Yaw round-trip error < 0.01°
-- [ ] Parsing a hard-coded hex sample packet → yields the correct struct (one test per packetType)
-- [ ] Serializing a struct → yields the correct hard-coded hex byte array (the reverse test)
-- [ ] `C_INPUT` with frameCount = 3 is exactly 29 bytes
-- [ ] A full 64-actor snapshot fragments correctly and reassembles bit-for-bit
-- [ ] A delta snapshot with `changeMask` = 0b00000011 contains only pos + rot
-- [ ] MSP framing: 3 messages glued into 1 TCP segment → parses into 3 messages
-- [ ] MSP framing: 1 message split across 5 `Send()` calls → parses into 1 message
-- [ ] MSP `length` > 64 KB → connection closed
-- [ ] joinTicket with a bad HMAC → `CONNECT_DENIED` code 3
-- [ ] Expired joinTicket → `CONNECT_DENIED` code 3
+**Status: all 15 items implemented and green** — 160 tests in `Ironfront.Net.Protocol.Tests/Conformance/`,
+run by `dotnet test` and by CI on every push.
+
+- [x] The GSP header is exactly 16 bytes, with `protocolId` at offset 0 = `0x4946`
+- [x] `IsNewer(0, 65535)` = true; `IsNewer(65535, 0)` = false
+- [x] `IsNewer(5, 65530)` = true (wrapped)
+- [x] `PackPos`/`UnpackPos` round-trip error < 0.07 m across the full ±2048 range
+- [x] Yaw round-trip error < 0.01°
+- [x] Parsing a hard-coded hex sample packet → yields the correct struct (one test per packetType)
+- [x] Serializing a struct → yields the correct hard-coded hex byte array (the reverse test)
+- [x] `C_INPUT` with frameCount = 3 is exactly 29 bytes
+- [x] A full 64-actor snapshot fragments correctly and reassembles bit-for-bit
+- [x] A delta snapshot with `changeMask` = 0b00000011 contains only pos + rot
+- [x] MSP framing: 3 messages glued into 1 TCP segment → parses into 3 messages
+- [x] MSP framing: 1 message split across 5 `Send()` calls → parses into 1 message
+- [x] MSP `length` > 64 KB → connection closed
+- [x] joinTicket with a bad HMAC → `CONNECT_DENIED` code 3
+- [x] Expired joinTicket → `CONNECT_DENIED` code 3
+
+> **Every expected hex string in the suite was written out from the byte tables in this document by
+> hand, not captured from the implementation's own output.** That distinction is the entire value of
+> the suite: a test that records what the code currently does proves only that the code agrees with
+> itself. These strings are what make it a referee.
+>
+> The suite also pins the enum numbering — `packetType`, client and server `msgType`, MSP `msgType`,
+> error codes, `buttons` bits, `stateFlags` bits and `changeMask` bits. A renumbering that the other
+> three people do not pick up routes every message to the wrong handler with nothing to point at.
+>
+> **Owner:** written by Dev C (the verifier), against a serializer implemented by Dev B. Keep that
+> split whatever happens to the file locations — see
+> [conventions.md § 7](conventions.md#7-file-ownership-boundaries).
 
 ---
 
-## 15. Protocol changelog
+## 15. Protocol changelog and freeze record
 
-| Version | Date | Author | Change | PR |
-|---|---|---|---|---|
-| 1.0.0-draft | Week 1 | Whole team | Initial version | — |
+| Version | Date | Author | Change | Wire change? | PR |
+|---|---|---|---|---|---|
+| 1.0.0-draft | Week 1 | Whole team | Initial version | — | — |
+| **1.0.0** | Week 1 | Dev C (chair) | **Freeze.** Corrected the `PackPos(100f)` worked example (1600 → 1599); pinned MSP `msgType` to little-endian; recorded the `actorId` allocation and 5-second quarantine rules; verified `POS_RANGE` against `LevelBounds` | **No** — `PROTOCOL_VERSION` stays 1 | #3 |
 
-> Every change after the freeze must: bump `PROTOCOL_VERSION`, add a row to this table, and land via
-> a PR with 2 approvals. A client and server with different `PROTOCOL_VERSION` → `CONNECT_DENIED`
-> code 2.
+> Every change after the freeze must add a row to this table and land via a PR with 2 approvals.
+> **Bump `PROTOCOL_VERSION` only when the bytes on the wire change** — a client and server with
+> different `PROTOCOL_VERSION` get `CONNECT_DENIED` code 2, so bumping it for a documentation fix
+> would lock out every client for nothing. Record the answer in the "Wire change?" column either way.
+
+### 15.1. Questions settled at the freeze
+
+Each row was an open checkbox in Dev C's phase-00 Task 1. Recorded here so nobody re-argues them.
+
+| Question | Decision | Recorded in |
+|---|---|---|
+| Little-endian for GSP — does everyone read it the same way? | Yes, and the code must **not** depend on `BitConverter.IsLittleEndian`. Enforced by explicit shifts in `Endian.cs` and by hex-sample tests | [§ 0](#0-general-conventions) |
+| Do `POS_MIN`/`POS_MAX` = ±2048 cover the map? | **Yes, 2.2× headroom.** Measured from the scene files: worst playable extent is 920.8 m on Dustbowl | [§ 4.4](#44-quantization--mandatory-shared-constants) |
+| Is `MAX_ACTORS = 64` enough? | Yes — 48 concurrent, 16 spare to absorb the id quarantine | [§ 4.3.1](#431-actorid--allocation-and-lifetime) |
+| Do bots share the `actorId` space with players? | **Yes**, one space, no partition | [§ 4.3.1](#431-actorid--allocation-and-lifetime) |
+| Is an `actorId` reused immediately when an actor dies? | **No — 5-second quarantine** | [§ 4.3.1](#431-actorid--allocation-and-lifetime) |
+| Is an 8-bit `changeMask` enough for the future? | Yes for v1 — 7 used, 1 spare. A ninth field is a wire change | [§ 4.3.1](#431-actorid--allocation-and-lifetime) |
+| MSP `msgType` byte order (raised during implementation, not on the original list) | **Little-endian**, per the § 0 default | [§ 10](#10-framing) |
+| The `Serialization/` ownership boundary between Dev B and Dev C | `Quantize` is shared protocol and lives in `Ironfront.Net.Protocol`; `BitWriter`/`BitReader` stay Dev B's in `Ironfront.Net.Replication/Serialization/` | [conventions.md § 7](conventions.md#7-file-ownership-boundaries) |
