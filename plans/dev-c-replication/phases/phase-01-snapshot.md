@@ -325,18 +325,31 @@ Integration order, committing each step separately:
 
 ## 3. Acceptance criteria (M1)
 
-| # | Criterion | How to verify |
-|---|---|---|
-| 1 | The server holds a steady 30 Hz tick with 48 actors | Log tick times, p99 < 33 ms |
-| 2 | Full snapshots round-trip bit-for-bit | Test |
-| 3 | Deltas with 20% packet loss end in a matching state | The Task 4 test |
-| 4 | Deltas save ≥ 35% versus full snapshots | Measured on real data, not synthetic |
-| 5 | Speed hacks are blocked (client sending moveX=moveZ=127) | Test: write a fake client sending malicious input |
-| 6 | 3 ticks of missing input → the character still moves smoothly | Test with the simulator dropping input |
-| 7 | 2 Unity clients see each other in sync | With A, on video |
-| 8 | Measured bandwidth ≤ 12 KB/s/client (before interest management) | Logs |
-| 9 | 0 allocations per tick on the server | Unity Profiler |
-| 10 | ≥ 45 tests total, all green | `dotnet test` |
+| # | Criterion | How to verify | State |
+|---|---|---|---|
+| 1 | The server holds a steady 30 Hz tick with 48 actors | Log tick times, p99 < 33 ms | ✅ pacing / ⏳ under real load — `ServerTickScheduler` holds 30 Hz and clamps a 2 s stall to 3 ticks; measuring against Unity physics + AI needs a headless build |
+| 2 | Full snapshots round-trip bit-for-bit | Test | ✅ `FullSnapshotRoundTripsEveryField` |
+| 3 | Deltas with 20% packet loss end in a matching state | The Task 4 test | ✅ 1000 ticks × **4 seeds**, exact equality (not a tolerance) |
+| 4 | Deltas save ≥ 35% versus full snapshots | Measured on real data, not synthetic | ✅ **44.7%** over 595 snapshots at 48 actors |
+| 5 | Speed hacks are blocked (client sending moveX=moveZ=127) | Test: write a fake client sending malicious input | ✅ `ASpeedHackingClientIsClampedByTheServer` |
+| 6 | 3 ticks of missing input → the character still moves smoothly | Test with the simulator dropping input | ✅ coasts exactly 3 ticks, then stops |
+| 7 | 2 Unity clients see each other in sync | With A, on video | ⏳ **needs Editor.** Offline equivalent passes: server + `LoopbackTransport` + fake client converges at lan/typical/bad |
+| 8 | Measured bandwidth ≤ 12 KB/s/client (before interest management) | Logs | ✅ **10.94 KB/s** incl. GSP header + framing |
+| 9 | 0 allocations per tick on the server | Unity Profiler | ✅ by construction / ⏳ profiled — fixed rings, pre-allocated buffers, no LINQ |
+| 10 | ≥ 45 tests total, all green | `dotnet test` | ✅ **283** |
+
+> **6 of 10 met, 2 met in the engine-free layer awaiting Unity confirmation, 2 blocked on the
+> Editor.** Full write-up, measurements and decisions:
+> [`reports/2026-08-12-phase-01-snapshot.md`](../reports/2026-08-12-phase-01-snapshot.md).
+>
+> **Deviation from Task 3's sketch:** snapshots stay **byte-aligned** per the frozen spec § 4.3
+> rather than bit-packing health/weapon/ammo/team. The sketch predates the v1.0.0 freeze, and
+> shipping it would be an unannounced wire-format change for a saving of 1.25 B/actor.
+> `BitWriter` still shipped, as a general utility with its own conformance suite.
+>
+> **Traps 4 and 5 are closed structurally, not by discipline.** `WorldSnapshot` stores
+> already-quantized entries, so change detection *cannot* compare raw floats; `DeltaDecoder`
+> seeds each entry from its baseline, so an omitted field is inherited rather than zeroed.
 
 ---
 
@@ -355,11 +368,24 @@ Integration order, committing each step separately:
 
 ## 5. Required measurements
 
+Reproduce with:
+
+```
+dotnet test Ironfront.Net.Replication.Tests --filter FullyQualifiedName~MeasurementReport \
+    --logger "console;verbosity=detailed"
+```
+
 | Metric | Conditions | Value |
 |---|---|---|
-| Full snapshot size | 48 actors | |
-| Mean delta size | 48 actors, mid-game | |
-| Delta saving ratio | | |
-| Bandwidth per client | 48 actors, 20 Hz | |
-| Tick time p50 / p99 | 48 actors | |
-| Tick time breakdown | input / sim / snapshot | |
+| Full snapshot size | 48 actors | **973 B** |
+| Full snapshot size | 64 actors (join) | **1293 B** — over the 1184 B payload limit, fragments as the spec predicts |
+| Mean delta size | 48 actors, mid-game | **537.9 B** |
+| Smallest / largest delta | | 529 B / 543 B |
+| Delta saving ratio | | **44.7%** |
+| Bandwidth per client | 48 actors, 20 Hz, incl. GSP + framing | **10.94 KB/s** |
+| Full vs delta snapshots sent | 600 snapshots | 1 full, 599 delta |
+| Tick time p50 / p99 | 48 actors | ⏳ needs a headless build with Unity physics + AI |
+| Tick time breakdown | input / sim / snapshot | ⏳ same |
+
+Per-actor cost, matching the spec § 4.3 estimate exactly: full **20 B**, position+rotation delta
+**12 B**, unchanged actor **3 B**.
