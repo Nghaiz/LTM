@@ -19,6 +19,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{F7309333
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SpecChecker", "tools\SpecChecker\SpecChecker.csproj", "{AE7B02F1-9E5D-4909-A41F-783E7D15A48D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ironfront.Net.Replication.Tests", "Ironfront.Net.Replication.Tests\Ironfront.Net.Replication.Tests.csproj", "{115C2963-BACC-49F0-98E3-ED8943DD1A78}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -56,6 +58,10 @@ Global
 		{AE7B02F1-9E5D-4909-A41F-783E7D15A48D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AE7B02F1-9E5D-4909-A41F-783E7D15A48D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AE7B02F1-9E5D-4909-A41F-783E7D15A48D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{115C2963-BACC-49F0-98E3-ED8943DD1A78}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{115C2963-BACC-49F0-98E3-ED8943DD1A78}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{115C2963-BACC-49F0-98E3-ED8943DD1A78}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{115C2963-BACC-49F0-98E3-ED8943DD1A78}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{AE7B02F1-9E5D-4909-A41F-783E7D15A48D} = {F7309333-0ADC-4CFA-9FCF-9097CA15D087}
