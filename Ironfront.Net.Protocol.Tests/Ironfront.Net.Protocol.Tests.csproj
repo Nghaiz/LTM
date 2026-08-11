@@ -22,10 +22,23 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
+  <!--
+    Versions deliberately absent: they live in the repo-root Directory.Packages.props
+    (Central Package Management). Adding a Version="..." back here is an NU1008 restore
+    error, not a silent override — that is the point.
+  -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
-    <PackageReference Include="xunit" Version="2.9.2" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+
+    <!--
+      Produces the Cobertura file that the "XPlat Code Coverage" data collector writes into
+      TestResults/ (see the dotnet test invocation in .github/workflows/ci.yml). Without this
+      package the collector silently emits nothing and CI reports a green coverage step that
+      measured zero lines.
+    -->
+    <PackageReference Include="coverlet.collector" />
   </ItemGroup>
 
   <ItemGroup>

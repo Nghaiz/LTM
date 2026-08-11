@@ -16,7 +16,12 @@
 param(
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
-    [switch]$SkipUnity
+    [switch]$SkipUnity,
+
+    # Also run tools/run-integration.ps1 (2-process test, conventions.md section 4). Opt-in
+    # because it starts real processes and binds a port, which the 5-minute pre-push budget
+    # does not have room for. Run it on integration day.
+    [switch]$Integration
 )
 
 $ErrorActionPreference = "Stop"
@@ -57,6 +62,36 @@ try {
         dotnet run --project "$repoRoot/tools/SpecChecker" -c $Configuration --nologo -- $repoRoot
     }
 
+    # ADVISORY — mirrors the `style` job in .github/workflows/ci.yml, which is
+    # continue-on-error. Deliberately NOT routed through Invoke-Step: a formatting nit must
+    # not add to $failures and make this script exit 1, or people will stop running it.
+    #
+    # `style` + `analyzers` only, never `whitespace`: this codebase aligns enum members and
+    # constant tables into columns on purpose, and the whitespace formatter wants to collapse
+    # all of them. Same command set as the CI job, so local and CI agree.
+    Write-Host ""
+    Write-Host "=== 3b. Style, analyzers and commit-scope (advisory) ===" -ForegroundColor Cyan
+    dotnet format style "$repoRoot/Ironfront.sln" --verify-no-changes --severity warn --verbosity minimal
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Naming/style differs from .editorconfig (conventions.md section 3.1)."
+    }
+    else {
+        Write-Host "PASS: style" -ForegroundColor Green
+    }
+
+    dotnet format analyzers "$repoRoot/Ironfront.sln" --verify-no-changes --severity warn --verbosity minimal
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Analyzer findings above. Fix with: dotnet format analyzers Ironfront.sln"
+    }
+    else {
+        Write-Host "PASS: analyzers" -ForegroundColor Green
+    }
+
+    & "$PSScriptRoot/check-commit-scope.ps1" | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Some commit subjects do not match conventions.md section 1.2 (advisory)."
+    }
+
     # Step 4 is opt-in: only Dev A's machine and a Unity-equipped runner can do this, and
     # the other three must not be blocked by its absence.
     if ($SkipUnity) {
@@ -72,6 +107,15 @@ try {
             & $env:UNITY_PATH -batchmode -nographics -quit `
                 -projectPath "$repoRoot/Ironfront_Reborn" `
                 -logFile "$repoRoot/unity-compile.log"
+        }
+    }
+
+    # Step 5 is opt-in for the same reason step 4 is: it costs more than the 5-minute
+    # pre-push budget allows. It is a HARD step when requested — an integration failure on
+    # integration day is exactly the thing this script exists to catch.
+    if ($Integration) {
+        Invoke-Step "5. 2-process integration" {
+            & "$PSScriptRoot/run-integration.ps1" -Configuration $Configuration
         }
     }
 }

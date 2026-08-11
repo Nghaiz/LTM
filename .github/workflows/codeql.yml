@@ -1,0 +1,95 @@
+name: CodeQL
+
+# OWNER: Dev D (tools/ and CI, plans/00-shared/conventions.md section 7).
+#
+# Static security analysis. Deliberately a SEPARATE workflow from ci.yml, not an extra job
+# inside it, for two reasons:
+#   1. It is slower than build-test and must never sit on the critical path to a merge.
+#   2. It should keep finding newly published vulnerability patterns in code that has not
+#      changed, which is what the weekly schedule is for.
+#
+# This project hand-writes its packet parsing over raw sockets — buffer indexing, length
+# fields taken straight off the wire, hex parsing. That is precisely the code shape where an
+# attacker-controlled length is read without bounds checking, so the analysis earns its
+# runtime here more than it would on a typical CRUD app.
+#
+# ===========================================================================================
+# DORMANT WHILE THIS REPOSITORY IS PRIVATE — and that is not a configuration mistake.
+#
+# Code scanning on a PRIVATE repository requires GitHub Advanced Security, which is a paid
+# add-on. On the free plan the analysis runs perfectly and then the upload is rejected:
+#
+#   ##[error]Code scanning is not enabled for this repository.
+#
+# Measured on the first real run: 471/471 C# files scanned, SARIF produced, 4m48s, and the
+# job still went red at the upload step. A workflow that is red on every push for a reason
+# nobody can fix teaches the team to ignore red.
+#
+# The `if:` guard below skips the job while the repository is private and starts it
+# automatically the day the repository is made public — which is likely at submission time,
+# and costs nothing to leave ready. Do NOT list this job as a required status check while it
+# is skipping; a skipped required check shows as "Expected — Waiting" forever and deadlocks
+# the merge (docs/branch-protection.md says the same).
+#
+# What covers the gap in the meantime: the vulnerable-package scan in ci.yml's style job,
+# which needs no paid feature.
+#
+# build-mode: none analyses the source directly without compiling — faster, no restore, and
+# it cannot be broken by an unrelated build failure. The trade-off is real and was measured:
+# the run reported "Low C# analysis quality — calls with a known target 53% (threshold 85%),
+# expressions with a known type 78% (threshold 85%)". If this workflow is ever switched on
+# for real, change build-mode to `manual` and add the dotnet restore + build steps back,
+# because at 53% call resolution the taint analysis will miss things.
+#
+# ALSO: if GitHub's "default setup" for code scanning is enabled, this advanced-setup
+# workflow fails with a conflict. Turn default setup OFF under
+# Settings -> Code security -> Code scanning. See docs/branch-protection.md.
+# ===========================================================================================
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Monday 02:00 UTC = Monday 09:00 ICT, before anyone starts work.
+    - cron: '0 2 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: analyze (csharp)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Skips on a private repository (see the header). The schedule event payload includes
+    # `repository`, so this evaluates correctly on the weekly run too, not only on push/PR.
+    if: github.event.repository.visibility == 'public'
+
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: csharp
+          build-mode: none
+          # security-and-quality is noisier than the default; security-extended keeps the
+          # focus on exploitable defects, which is what matters for wire-format parsing.
+          queries: security-extended
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:csharp'

@@ -1,0 +1,101 @@
+name: Bug report
+description: Something behaves incorrectly — a failing test, a dropped packet, a desync, a crash.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Networking bugs are mostly reproduction problems, not diagnosis problems. The more of
+        the boxes below you fill in, the less likely this turns into three days of
+        "works on my machine".
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which owner does this land on? (conventions.md section 7)
+      options:
+        - client (Dev A — Unity)
+        - transport (Dev B — UDP reliability)
+        - replication (Dev C — snapshots, prediction)
+        - master (Dev D — TCP master server)
+        - protocol (shared — wire format)
+        - tools / ci (Dev D)
+        - not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happens
+    attributes:
+      label: What happens
+      description: Observed behaviour. Paste the actual error text or log lines, not a paraphrase.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should happen instead
+      description: If the spec says so, quote the section of protocol-spec.md.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: |
+        Exact steps. Include the command line. If it only reproduces sometimes, say how often
+        — "about 1 run in 5" is genuinely useful information, "sometimes" is not.
+      placeholder: |
+        1. pwsh tools/ci.ps1 -Configuration Release
+        2. ...
+        3. Fails at ... roughly 1 run in 5
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit
+      description: Output of `git rev-parse --short HEAD`.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Where it reproduces
+      multiple: true
+      options:
+        - Windows (local)
+        - Linux (local)
+        - macOS (local)
+        - CI — ubuntu-latest
+        - CI — windows-latest
+        - Unity Editor
+    validations:
+      required: true
+
+  - type: textarea
+    id: packet-evidence
+    attributes:
+      label: Packet-level evidence
+      description: |
+        For anything on the wire: the hex bytes, sequence numbers, tick numbers, or the
+        Wireshark capture. A conformance test that reproduces it is better than all of these.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What you already tried
+      description: |
+        Including what did NOT work. conventions.md section 6 puts this above successes for a
+        reason — it stops the next person repeating a dead end.
+    validations:
+      required: false

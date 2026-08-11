@@ -1,0 +1,221 @@
+# EditorConfig — encodes conventions.md section 3.1 so the IDE enforces it instead of the
+# reviewer having to.
+#
+# OWNER: shared (it is a code contract), maintained with tools/ by Dev D.
+#
+# DELIBERATE CHOICE — every rule below is `suggestion` or `warning`, never `error`, and
+# EnforceCodeStyleInBuild is NOT enabled anywhere. Reason: Directory.Build.props sets
+# TreatWarningsAsErrors=true. If code-style analyzers ran during the build, a misnamed local
+# variable would fail the build exactly like a real compile error, and someone racing an
+# integration-day deadline would just delete this file. Style is checked by
+# `dotnet format --verify-no-changes` in the `style` CI job, which is a WARNING job and
+# cannot block a merge. Correctness gates are hard; taste gates are soft.
+
+root = true
+
+# ---------------------------------------------------------------------------------------
+# All files
+# ---------------------------------------------------------------------------------------
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{json,yml,yaml,md}]
+indent_size = 2
+
+# .gitattributes checks out .ps1 and .sln with CRLF; telling EditorConfig otherwise would
+# make every editor fight the merge driver.
+[*.{ps1,psm1}]
+end_of_line = crlf
+
+[*.sln]
+end_of_line = crlf
+indent_style = tab
+
+[*.md]
+# Markdown uses two trailing spaces for a hard line break.
+trim_trailing_whitespace = false
+
+# ---------------------------------------------------------------------------------------
+# C#
+# ---------------------------------------------------------------------------------------
+[*.cs]
+indent_size = 4
+max_line_length = 100
+
+# --- using directives -------------------------------------------------------------------
+# ImplicitUsings is disabled in Directory.Build.props, so every using is explicit and worth
+# keeping ordered.
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+csharp_using_directive_placement = outside_namespace:suggestion
+
+# --- language style ---------------------------------------------------------------------
+csharp_style_namespace_declarations = file_scoped:suggestion
+csharp_prefer_braces = true:suggestion
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = true:suggestion
+dotnet_style_readonly_field = true:suggestion
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:suggestion
+dotnet_style_qualification_for_field = false:suggestion
+dotnet_style_qualification_for_property = false:suggestion
+dotnet_style_qualification_for_method = false:suggestion
+
+# --- hot-path rules from conventions.md section 3.2 ---------------------------------------
+# These four are the allocation rules that actually cost frames at 30 ticks/second.
+#
+# THEY ARE `suggestion`, NOT `warning`, AND THAT IS LOAD-BEARING. Unlike the IDExxxx style
+# rules further down, CA rules are real Roslyn analyzers that run during `dotnet build`. At
+# `warning` severity they collide with TreatWarningsAsErrors=true in Directory.Build.props
+# and become hard build errors — measured, not theorised: raising these four to warning broke
+# the build on three pre-existing lines in the conformance suite (Hex.cs, PayloadFrameTests,
+# SnapshotTests) the moment this file was added.
+#
+# At `suggestion` they surface in the IDE and in `dotnet format --severity info`, and never
+# fail a build. Cleaning up the existing hits and promoting these to `warning` is a worthwhile
+# PR of its own — it is just not the CI-setup PR.
+dotnet_diagnostic.CA1825.severity = suggestion   # avoid zero-length array allocations
+dotnet_diagnostic.CA1861.severity = suggestion   # avoid constant arrays as arguments (allocates per call)
+dotnet_diagnostic.CA2016.severity = suggestion   # forward CancellationToken
+dotnet_diagnostic.CA1806.severity = suggestion   # do not ignore method results
+
+# =========================================================================================
+# Naming — conventions.md section 3.1, with ONE documented deviation for constants
+# (see the constants rule below for the reasoning and the evidence).
+#
+#   Class, struct, enum, method    PascalCase        ReliabilityLayer, PackPos
+#   Interface                      I + PascalCase    ITransport, ISnapshotSink
+#   Private field                  _camelCase        _pendingAcks
+#   Public field / property        PascalCase        ConnectionId
+#   Constant                       SCREAMING_SNAKE   MAX_PAYLOAD
+#   Local variable, parameter      camelCase         serverTick
+# =========================================================================================
+
+# --- symbol groups ---
+dotnet_naming_symbols.interfaces.applicable_kinds = interface
+dotnet_naming_symbols.interfaces.applicable_accessibilities = *
+
+dotnet_naming_symbols.types_and_methods.applicable_kinds = class, struct, enum, delegate, method, event
+dotnet_naming_symbols.types_and_methods.applicable_accessibilities = *
+
+dotnet_naming_symbols.constants.applicable_kinds = field
+dotnet_naming_symbols.constants.applicable_accessibilities = *
+dotnet_naming_symbols.constants.required_modifiers = const
+
+# Static (and static readonly) fields are NOT the "_camelCase private field" case. The
+# codebase writes them PascalCase — `static readonly byte[] ReferenceHex` in the conformance
+# suite, `SpecRelativePath` in SpecChecker — which is also the .NET norm. This group is
+# declared before private_fields and its rule is listed first, so it wins for static fields
+# and the underscore rule keeps applying to instance fields only.
+dotnet_naming_symbols.private_static_fields.applicable_kinds = field
+dotnet_naming_symbols.private_static_fields.applicable_accessibilities = private, private_protected
+dotnet_naming_symbols.private_static_fields.required_modifiers = static
+
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private, private_protected
+
+dotnet_naming_symbols.public_fields_and_properties.applicable_kinds = field, property
+dotnet_naming_symbols.public_fields_and_properties.applicable_accessibilities = public, internal, protected, protected_internal
+
+dotnet_naming_symbols.locals_and_parameters.applicable_kinds = parameter, local
+dotnet_naming_symbols.locals_and_parameters.applicable_accessibilities = *
+
+# --- styles ---
+dotnet_naming_style.pascal_case.capitalization = pascal_case
+
+dotnet_naming_style.camel_case.capitalization = camel_case
+
+dotnet_naming_style.i_prefixed_pascal.capitalization = pascal_case
+dotnet_naming_style.i_prefixed_pascal.required_prefix = I
+
+dotnet_naming_style.underscore_camel_case.capitalization = camel_case
+dotnet_naming_style.underscore_camel_case.required_prefix = _
+
+# --- rules (order matters: the first matching rule wins, so put the narrowest first) ---
+dotnet_naming_rule.interfaces_are_i_prefixed.symbols = interfaces
+dotnet_naming_rule.interfaces_are_i_prefixed.style = i_prefixed_pascal
+dotnet_naming_rule.interfaces_are_i_prefixed.severity = warning
+
+# CONSTANTS — the one place this file does NOT read conventions.md § 3.1 literally, and the
+# reasoning is worth reading before someone "fixes" it back.
+#
+# § 3.1 says "Constant -> SCREAMING_SNAKE". Enforcing that on every `const` in the solution
+# produces 38 violations on the day it is switched on, all in code that is already written,
+# reviewed and frozen: `GspHeader.Size`, `MspFrame.LengthPrefixSize`,
+# `PayloadFrame.HeaderSize`, `ClientInputMessage.MaxFrames` and so on are uniformly
+# PascalCase. Renaming them would edit B's, C's and D's owned files at once and break every
+# call site — to satisfy a table.
+#
+# What the code actually does is narrower and more defensible: SCREAMING_SNAKE marks the
+# SHARED PROTOCOL constants — the ones protocol-spec.md freezes (PROTOCOL_VERSION,
+# MAX_PAYLOAD, MAX_PLAYERS) — and ordinary structural constants follow the .NET norm.
+#
+# THE PROTOCOL HALF IS ALREADY ENFORCED, and not from here: tools/SpecChecker looks each
+# spec-listed constant up on the compiled type BY NAME, so renaming PROTOCOL_VERSION to
+# ProtocolVersion fails the build in CI. A naming rule in this file would be a weaker,
+# duplicate gate over a contract the spec checker already owns.
+#
+# SCOPE OF THIS RULE, measured rather than assumed: with no word_separator configured,
+# Roslyn's pascal_case check only requires an upper-case first character, so it catches
+# `const int size` and passes both `HeaderSize` and `PROTOCOL_VERSION`. It is a floor, not a
+# style police.
+#
+# conventions.md § 3.1 should be amended to say all of this. That is a shared document:
+# PR + 2 approvals (§ 7). Until then, this comment is the record of the discrepancy.
+dotnet_naming_rule.constants_are_pascal.symbols = constants
+dotnet_naming_rule.constants_are_pascal.style = pascal_case
+dotnet_naming_rule.constants_are_pascal.severity = warning
+
+dotnet_naming_rule.private_static_fields_are_pascal.symbols = private_static_fields
+dotnet_naming_rule.private_static_fields_are_pascal.style = pascal_case
+dotnet_naming_rule.private_static_fields_are_pascal.severity = warning
+
+dotnet_naming_rule.private_fields_are_underscore_camel.symbols = private_fields
+dotnet_naming_rule.private_fields_are_underscore_camel.style = underscore_camel_case
+dotnet_naming_rule.private_fields_are_underscore_camel.severity = warning
+
+dotnet_naming_rule.public_members_are_pascal.symbols = public_fields_and_properties
+dotnet_naming_rule.public_members_are_pascal.style = pascal_case
+dotnet_naming_rule.public_members_are_pascal.severity = warning
+
+dotnet_naming_rule.types_and_methods_are_pascal.symbols = types_and_methods
+dotnet_naming_rule.types_and_methods_are_pascal.style = pascal_case
+dotnet_naming_rule.types_and_methods_are_pascal.severity = warning
+
+dotnet_naming_rule.locals_are_camel.symbols = locals_and_parameters
+dotnet_naming_rule.locals_are_camel.style = camel_case
+dotnet_naming_rule.locals_are_camel.severity = suggestion
+
+# ---------------------------------------------------------------------------------------
+# The Unity project is excluded from all of the above.
+#
+# Ironfront_Reborn/Assets contains 435 decompiled gameplay scripts that predate these
+# conventions and are not ours to reformat. Its own Directory.Build.props already shields it
+# from the root MSBuild settings; this shields it from the style settings.
+# ---------------------------------------------------------------------------------------
+[Ironfront_Reborn/**.cs]
+dotnet_analyzer_diagnostic.severity = none
+dotnet_diagnostic.CA1825.severity = none
+dotnet_diagnostic.CA1861.severity = none
+dotnet_diagnostic.CA2016.severity = none
+dotnet_diagnostic.CA1806.severity = none
+dotnet_naming_rule.interfaces_are_i_prefixed.severity = none
+dotnet_naming_rule.constants_are_screaming_snake.severity = none
+dotnet_naming_rule.private_fields_are_underscore_camel.severity = none
+dotnet_naming_rule.public_members_are_pascal.severity = none
+dotnet_naming_rule.types_and_methods_are_pascal.severity = none
+dotnet_naming_rule.locals_are_camel.severity = none
+
+# A per-file section forcing SCREAMING_SNAKE on ProtocolConstants.cs was tried here and
+# REMOVED — it silently did nothing. Roslyn picks the first naming rule whose symbol group
+# matches, in declaration order, and a rule with `severity = none` still consumes the match
+# instead of deferring to the next one. Verified by inserting a deliberately misnamed
+# constant into ProtocolConstants.cs: no diagnostic was produced. If you are about to add a
+# per-file naming override, test it with a deliberate violation first — it probably does not
+# do what it reads like. The protocol constants are covered by tools/SpecChecker instead.

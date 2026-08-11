@@ -1,0 +1,54 @@
+version: 2
+
+# OWNER: Dev D (tools/ and CI, plans/00-shared/conventions.md section 7).
+#
+# Two ecosystems, both weekly, both small on purpose.
+#
+# github-actions matters more than it looks: ci.yml pins actions/checkout@v4 and
+# setup-dotnet@v4, and nobody on a four-month capstone is going to notice a security patch
+# to a third-party action on their own. A pinned action that never gets updated is a
+# dependency you have stopped maintaining without deciding to.
+#
+# nuget is intentionally low-volume — Central Package Management means the whole solution
+# has four packages, all test tooling. Any Dependabot PR that proposes a netcode framework
+# (Mirror, LiteNetLib, ENet, KCP, SignalR, gRPC) is a mistake to close, not to merge:
+# conventions.md section 3.4 makes those a hard line.
+
+updates:
+  - package-ecosystem: nuget
+    directory: '/'
+    schedule:
+      interval: weekly
+      day: monday
+      time: '02:00'
+      timezone: Asia/Ho_Chi_Minh
+    open-pull-requests-limit: 3
+    commit-message:
+      # Matches the conventional-commit scopes in conventions.md section 1.2, so
+      # tools/check-commit-scope.ps1 does not flag Dependabot's own PRs.
+      prefix: 'chore(tools)'
+    labels:
+      - dependencies
+    groups:
+      # One PR for the whole test stack instead of four. Microsoft.NET.Test.Sdk, xunit and
+      # the runner have to move together anyway; splitting them produces PRs that each fail
+      # until the others land.
+      test-stack:
+        patterns:
+          - 'xunit*'
+          - 'Microsoft.NET.Test.Sdk'
+          - 'coverlet.*'
+
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: weekly
+      day: monday
+      time: '02:00'
+      timezone: Asia/Ho_Chi_Minh
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: 'chore(ci)'
+    labels:
+      - dependencies
+      - ci
