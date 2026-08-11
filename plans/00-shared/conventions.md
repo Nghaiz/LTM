@@ -87,10 +87,34 @@ number-one cause of risk R5.
 |---|---|---|
 | Class, struct, enum, method | PascalCase | `ReliabilityLayer`, `PackPos` |
 | Interface | `I` + PascalCase | `ITransport`, `ISnapshotSink` |
-| Private field | `_camelCase` | `_pendingAcks` |
+| Private instance field | `_camelCase` | `_pendingAcks` |
+| Private static field | PascalCase | `ReferenceHex` |
 | Public field / property | PascalCase | `ConnectionId` |
-| Constant | SCREAMING_SNAKE | `MAX_PAYLOAD` |
+| **Protocol constant** (in `ProtocolConstants.cs`) | SCREAMING_SNAKE | `MAX_PAYLOAD`, `PROTOCOL_VERSION` |
+| Any other constant | PascalCase | `GspHeader.Size`, `MspFrame.LengthPrefixSize` |
 | Local variable, parameter | camelCase | `serverTick` |
+
+#### Why constants have two conventions
+
+This row used to read "Constant → SCREAMING_SNAKE" for every constant. The code has never
+done that, and it was right not to: `GspHeader.Size`, `MspFrame.LengthPrefixSize`,
+`PayloadFrame.HeaderSize`, `ClientInputMessage.MaxFrames` and 34 others are PascalCase, which
+is the .NET norm for ordinary structural constants.
+
+Splitting the row makes the casing carry information instead of being a formality:
+
+> **SCREAMING_SNAKE means "this value is part of the wire contract".** It lives in
+> `ProtocolConstants.cs`, it appears in the `protocol-spec.md` table, and changing it needs a
+> PR with 2 approvals and a `PROTOCOL_VERSION` bump (section 2).
+
+That distinction is already enforced, and not by a style rule: `tools/SpecChecker` looks each
+spec-listed constant up on the compiled type **by name**, so renaming `PROTOCOL_VERSION` to
+`ProtocolVersion` fails the build on the next push.
+
+`.editorconfig` encodes this table. The naming rules there are `suggestion`/`warning` and
+`EnforceCodeStyleInBuild` is off by design — with `TreatWarningsAsErrors=true`, a style rule
+that produces a warning becomes a hard build error, and a build that fails on a misnamed local
+variable is a build people learn to work around.
 
 ### 3.2. Rules specific to network code
 
