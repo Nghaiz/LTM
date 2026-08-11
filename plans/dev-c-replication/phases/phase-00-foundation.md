@@ -279,21 +279,40 @@ C NO LONGER needs A to extract MovementSimulation — C is doing it.
 |---|---|---|---|
 | 1 | `protocol-spec.md` is frozen with 4 approvals | Git log | ✅ **v1.0.0 FROZEN** — all 8 open questions recorded in [§ 15.1](../../00-shared/protocol-spec.md#151-questions-settled-at-the-freeze) |
 | 2 | `ProtocolConstants.cs` matches the spec, with a self-checking test | `dotnet test` | ✅ `tools/SpecChecker` — 27 constants, and proven to fail on drift |
-| 3 | ≥25 conformance tests green | `dotnet test` | ✅ **160** |
-| 4 | Hard-coded hex tests for `Quantize` and `BitWriter` **verifying B's code** | Read the output | ⚠️ Half — `Quantize` covered; `BitWriter` does not exist yet |
-| 5 | `PackPos` round-trip error < 0.07 m across the full range | Test | ✅ swept at 0.25 m steps across ±2048 |
+| 3 | ≥25 conformance tests green | `dotnet test` | ✅ **283** (160 protocol + 123 replication/transport) |
+| 4 | Hard-coded hex tests for `Quantize` and `BitWriter` **verifying B's code** | Read the output | ✅ **Closed.** `BitWriter`/`BitReader` written, 25 tests in `Conformance/BitStreamTests.cs`, expected bytes hand-derived from the spec |
+| 5 | `PackPos` round-trip error < 0.07 m across the full range | Test | ✅ worst observed **0.0625 m** |
 | 6 | `InputSerializer` rejects truncated packets and malicious `frameCount`s | Test | ✅ `ClientInputMessage.TryParse` — rejects 0, 9, 255 and truncated bodies |
-| 7 | **The 4-question note on movement in `Actor.cs`** | The file `docs/movement-analysis.md` | ❌ Not started |
-| 8 | **`MovementSimulation` runs as a shadow with comparison logging** | Playtest and read the warnings | ❌ Not started |
-| 9 | The 4-item request has been sent to A | Screenshot of the message | ❌ Not started |
-| 10 | The 60-minute session with A about `Actor.cs` happened | | ❌ Not started |
+| 7 | **The 4-question note on movement in `Actor.cs`** | The file `docs/movement-analysis.md` | ✅ [`docs/movement-analysis.md`](../../../docs/movement-analysis.md) — and it found that the movement is **not in `Actor.cs`**, see below |
+| 8 | **`MovementSimulation` runs as a shadow with comparison logging** | Playtest and read the warnings | ✅ code / ⏳ playtest — `MovementShadowCompare.cs` written and staged; the playtest needs the Editor → checklist **A3** |
+| 9 | The 4-item request has been sent to A | Screenshot of the message | ✅ [`handoff/dev-a-checklist.md`](../handoff/dev-a-checklist.md) — 8 items, ~2h15m |
+| 10 | The 60-minute session with A about `Actor.cs` happened | | ⛔ **Cancelled, deliberately** — the session was to explain movement code `Actor.cs` does not contain. Replaced by the written analysis; A reviews it instead (**A8**, 10 min) |
 
-> **5.5 of 10 done.** Everything that can be settled from the spec and the repository is settled;
-> what remains (7–10) all runs through Dev A and the Unity Editor.
+> **8 of 10 done, 1 awaiting a playtest, 1 cancelled with a substitute.** Full write-up:
+> [`reports/2026-08-12-phase-00-foundation.md`](../reports/2026-08-12-phase-00-foundation.md).
 >
-> Criterion 4 stays half-done until Dev B writes `BitWriter` — and that is the correct order.
-> Red tests waiting on an implementation are normal here: the referee is supposed to exist before
-> the thing it judges.
+> ### The finding that reshaped tasks 5 and 6
+>
+> **Character movement is not in `Actor.cs`.** `Actor.cs:528` reads `controller.Velocity()` and
+> drives animation and ragdoll from it; the simulation is three hops away in Unity Standard
+> Assets' `FirstPersonController`, under `Assets/Plugins/Assembly-CSharp-firstpass/` — which is
+> why searching `Assets/Scripts/` finds nothing.
+>
+> Two consequences:
+>
+> - **The speed constants are not in code.** They are `[SerializeField]` fields with no
+>   initialiser, so the source value of every one is `0f`. The real values live in
+>   `Assets/Prefab/Player Fps Actor.prefab` (walk 3.5, run 6.5, jump 5, stick-to-ground 10,
+>   gravity ×1.2). A `MovementSimulation` written from the source alone would produce a character
+>   that cannot move.
+> - **There is no crouch speed.** This document's task 5.2 sketch assumed `CROUCH_SPEED = 2.0f`.
+>   No such value exists — crouching changes the collider height and nothing else. Implementing
+>   the assumed value would have made the server authoritatively slower than the client on every
+>   crouch, presenting as rubber-banding *only while crouch-walking*.
+>
+> Criterion 4 is closed rather than half-done: `BitWriter`/`BitReader` were Dev B's to write, and
+> were landed here to unblock the referee role. The implementer/verifier split survives — the
+> conformance tests were written from the spec, not from the implementation.
 
 ---
 
