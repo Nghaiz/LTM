@@ -57,7 +57,7 @@ bot AI (it already exists; you just run it — see [AD-10](../00-shared/algorith
 | `Ironfront.Net.Replication/**` | **Full ownership** — pure C#, no Unity |
 | `Ironfront.Net.Replication/Serialization/**` | **Read-only** — Dev B owns it (`BitWriter`, `BitReader`, `Quantize`) |
 | `Ironfront.Net.Replication.Tests/**` | Owner |
-| `Ironfront.Net.Replication.Tests/Conformance/**` | **Owner — you are the referee verifying B's code** |
+| `Ironfront.Net.Protocol.Tests/Conformance/**` | **Owner — you are the referee verifying B's code** |
 | `Ironfront_Reborn/Assets/Scripts/Net/Server/**` | Owner (server-side Unity code) |
 | `Ironfront_Reborn/Assets/Scripts/Net/Shared/**` | Owner, read by A |
 | `Ironfront_Reborn/Assets/Scripts/Net/Shared/MovementSimulation.cs` | **Owner — newly taken from Dev A.** Nobody else may edit it |
