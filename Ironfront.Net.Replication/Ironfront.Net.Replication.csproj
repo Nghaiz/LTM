@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    OWNER: Dev C (Replication and Simulation), EXCEPT Serialization/ which is owned by
+    Dev B (plans/00-shared/conventions.md section 7). That split is deliberate: B
+    implements the bit-packing, C writes the conformance tests that verify it, so the
+    tests are a genuine referee rather than a proof that the code agrees with itself.
+
+    Scaffolded empty by the M0 foundation pass. Dev C fills it in per
+    plans/dev-c-replication/plan.md.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <RootNamespace>Ironfront.Net.Replication</RootNamespace>
+    <AssemblyName>Ironfront.Net.Replication</AssemblyName>
+    <Description>Snapshot construction, delta encoding, interest management.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ironfront.Net.Protocol\Ironfront.Net.Protocol.csproj" />
+  </ItemGroup>
+
+</Project>
