@@ -41,6 +41,19 @@ $ErrorActionPreference = "Stop"
 $VALID_TYPES  = @("feat", "fix", "refactor", "test", "docs", "chore")
 $VALID_SCOPES = @("client", "transport", "replication", "master", "protocol", "tools", "ci", "modules")
 
+# Commits whose subject no human wrote and no human can change.
+#
+# Dependabot's `commit-message.prefix` in .github/dependabot.yml already gives us the type and
+# scope, and that part conforms. What it will not do is lower-case the description: a grouped
+# update is always titled "Bump the <group> group with N updates", the wording is generated,
+# and there is no configuration key for it. So every grouped Dependabot PR failed this check on
+# one capital B.
+#
+# A recurring, unfixable finding is worse than no finding. It trains the team to expect the
+# style job to be red, and the next time it goes red for a real reason nobody looks. Skipping
+# bot authors keeps the signal worth reading.
+$BOT_AUTHOR_PATTERN = '\[bot\]$'
+
 # type(scope): description   — scope is required by section 1.2 ("with the scope being your
 # ownership area"), so a bare "feat: ..." is reported too. `!` marks a breaking change.
 $pattern = '^(?<type>[a-z]+)(\((?<scope>[^)]+)\))?(?<breaking>!)?: (?<desc>.+)$'
@@ -90,7 +103,8 @@ function Test-Subject {
 $subjects = @()
 
 if ($Subject) {
-    $subjects = @($Subject)
+    # A literal subject has no author to attribute it to; check it as written.
+    $subjects = @([pscustomobject]@{ Author = ""; Subject = $Subject })
 }
 else {
     $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -107,10 +121,23 @@ else {
             exit 0
         }
 
-        $raw = & git log "$mergeBase..$HeadRef" --no-merges --format=%s
+        # %x1f is the ASCII unit separator: it cannot occur in an author name or a subject, so
+        # splitting on it is safe in a way that splitting on a space or a colon is not.
+        $raw = & git log "$mergeBase..$HeadRef" --no-merges --format="%an%x1f%s"
         if ($LASTEXITCODE -ne 0) { throw "git log failed for range $mergeBase..$HeadRef" }
 
-        $subjects = @($raw | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        $subjects = @(
+            $raw |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+                ForEach-Object {
+                    $parts = $_ -split "`u{001f}", 2
+                    [pscustomobject]@{
+                        Author  = $parts[0]
+                        Subject = if ($parts.Count -gt 1) { $parts[1] } else { "" }
+                    }
+                } |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_.Subject) }
+        )
     }
     finally {
         Pop-Location
@@ -129,20 +156,32 @@ Write-Host "Checking $($subjects.Count) commit subject(s) against conventions.md
 Write-Host ""
 
 $problems = @()
+$skipped  = 0
 
-foreach ($s in $subjects) {
-    $reason = Test-Subject -Line $s
+foreach ($entry in $subjects) {
+    if ($entry.Author -match $BOT_AUTHOR_PATTERN) {
+        $skipped++
+        Write-Host "  skip $($entry.Subject)" -ForegroundColor DarkGray
+        Write-Host "       -> authored by $($entry.Author); generated subjects are not reviewable" -ForegroundColor DarkGray
+        continue
+    }
+
+    $reason = Test-Subject -Line $entry.Subject
     if ($reason) {
-        $problems += [pscustomobject]@{ Subject = $s; Reason = $reason }
-        Write-Host "  BAD  $s" -ForegroundColor Yellow
+        $problems += [pscustomobject]@{ Subject = $entry.Subject; Reason = $reason }
+        Write-Host "  BAD  $($entry.Subject)" -ForegroundColor Yellow
         Write-Host "       -> $reason" -ForegroundColor Yellow
     }
     else {
-        Write-Host "  ok   $s" -ForegroundColor Green
+        Write-Host "  ok   $($entry.Subject)" -ForegroundColor Green
     }
 }
 
 Write-Host ""
+
+if ($skipped -gt 0) {
+    Write-Host "$skipped bot-authored subject(s) skipped."
+}
 
 if ($problems.Count -eq 0) {
     Write-Host "All commit subjects conform." -ForegroundColor Green
