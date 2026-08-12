@@ -20,8 +20,13 @@ encoding against acked baselines, and an end-to-end integration test that runs a
 are closed structurally rather than by discipline: `WorldSnapshot` stores already-quantized
 entries, so change detection *cannot* compare raw floats (trap 4), and `DeltaDecoder` starts each
 entry as a copy of its baseline rather than a fresh struct, so an omitted field is inherited
-rather than zeroed (trap 5). What remains is the Unity half — the `ServerTickLoop` MonoBehaviour,
-script execution order, and two clients visibly in sync — and it is gated on the Dev A checklist.
+rather than zeroed (trap 5). The Unity half has since landed too: `Assets/Scripts/Net/Server/`
+holds the bootstrap, the tick loop and the two ordering stages that straddle Unity's simulation,
+with the −200 / +200 split declared in `[DefaultExecutionOrder]` so Dev A's project settings are
+untouched. What is left is not code: **criteria 1 and 9 need somebody to press Play and read the
+Profiler** (checklist S4), and **criterion 7 is blocked on Dev B, not on the Editor** —
+`LoopbackTransport` is in-process and reaches exactly one client, so two clients waits on the UDP
+transport.
 
 ---
 
@@ -29,18 +34,18 @@ script execution order, and two clients visibly in sync — and it is gated on t
 
 | # | Criterion | Met | Evidence |
 |---|---|---|---|
-| 1 | Steady 30 Hz tick with 48 actors, p99 < 33 ms | ☑ **pacing** / ☐ **under real load** | `ServerTickScheduler` holds 30 Hz on a steady clock and clamps a 2 s stall to 3 ticks instead of spiralling. `TickTimeStats` gives nearest-rank p50/p99. Measuring against real Unity physics + AI needs a headless build |
+| 1 | Steady 30 Hz tick with 48 actors, p99 < 33 ms | ☑ **pacing** / ☐ **under real load** | `ServerTickScheduler` holds 30 Hz on a steady clock and clamps a 2 s stall to 3 ticks instead of spiralling. `TickTimeStats` gives nearest-rank p50/p99. The Unity loop that puts physics + AI inside the sample now exists; reading p99 off it is checklist **S4** |
 | 2 | Full snapshots round-trip bit-for-bit | ☑ | `FullSnapshotRoundTripsEveryField` — 48 actors, every field compared at the quantized level |
 | 3 | Deltas with 20% packet loss end in a matching state | ☑ | `DeltasSurvive20PercentPacketLoss` — 1000 ticks × **4 seeds** (42, 1337, 20260812, 7), exact equality, not a tolerance |
 | 4 | Deltas save ≥ 35% vs full | ☑ | **44.7%** measured over 595 snapshots / 30 s at 48 actors |
 | 5 | Speed hacks blocked (`moveX = moveZ = 127`) | ☑ | `ASpeedHackingClientIsClampedByTheServer` — a fake client sending the raw i8 maximum on both axes covers no more ground than an honest sprinter |
 | 6 | 3 ticks of missing input → still moves smoothly | ☑ | `ThreeTicksOfMissingInputKeepTheCharacterMoving` — coasts exactly 3 ticks, then stops rather than running to the horizon |
-| 7 | 2 Unity clients see each other in sync | ☐ **needs Editor** | The offline equivalent passes: `SnapshotFlowIntegrationTests` runs server + loopback + fake client at lan/typical/bad and converges exactly |
+| 7 | 2 Unity clients see each other in sync | ☐ **blocked on Dev B** | `LoopbackTransport` is in-process — one Editor, one client, never a second process. Two clients needs the UDP transport. The offline equivalent passes: `SnapshotFlowIntegrationTests` runs server + loopback + fake client at lan/typical/bad and converges exactly |
 | 8 | Bandwidth ≤ 12 KB/s/client | ☑ | **10.94 KB/s** including the GSP header and payload framing |
-| 9 | 0 allocations per tick on the server | ☑ **by construction** / ☐ **profiled** | Fixed-size rings and pre-allocated buffers throughout; no LINQ, no per-tick `new`. Confirming with the Unity Profiler needs the Editor |
-| 10 | ≥ 45 tests, all green | ☑ | **283** total; **123** in the new replication/transport suite |
+| 9 | 0 allocations per tick on the server | ☑ **by construction** / ☐ **profiled** | Fixed-size rings, pre-allocated buffers, per-player delegates cached in the constructor; no LINQ, no per-tick `new`. The Profiler read is checklist **S4** |
+| 10 | ≥ 45 tests, all green | ☑ | **297** total; **137** in the replication/transport suite |
 
-**6 met, 2 met in the engine-free layer and awaiting Unity confirmation, 2 blocked on the Editor.**
+**6 met, 3 met in code and awaiting an Editor run, 1 blocked on Dev B.**
 
 ---
 
@@ -110,12 +115,13 @@ it; nobody has yet watched it.
 
 ```
 Passed!  - Failed: 0, Passed: 160, Skipped: 0, Total: 160 - Ironfront.Net.Protocol.Tests.dll
-Passed!  - Failed: 0, Passed: 123, Skipped: 0, Total: 123 - Ironfront.Net.Replication.Tests.dll
+Passed!  - Failed: 0, Passed: 137, Skipped: 0, Total: 137 - Ironfront.Net.Replication.Tests.dll
 Build succeeded. 0 Warning(s), 0 Error(s)   (TreatWarningsAsErrors=true)
 ```
 
 | Group | Tests | Pass | Fail |
 |---|---|---|---|
+| Server messaging (`ServerMessagingTests`) — routing + framing | 14 | 14 | 0 |
 | Bit packing (`BitStreamTests`, verifies Dev B) | 25 | 25 | 0 |
 | Network simulator (`NetworkSimulatorTests`) | 24 | 24 | 0 |
 | Server authority + tick pacing (`ServerAuthorityTests`) | 20 | 20 | 0 |
@@ -143,6 +149,10 @@ Build succeeded. 0 Warning(s), 0 Error(s)   (TreatWarningsAsErrors=true)
 | C-01-7 | The diagonal speed exploit is already dead in `MovementCore` | Keep the explicit normalize in `InputAuthority` anyway | Rely on the port's normalize | Relying on a side effect of the movement port to be the anti-cheat means the hole reopens quietly the day someone restores the slope projection |
 | C-01-8 | Speed clamp derived from horizontal speed fires on every jump | Clamp on the combined horizontal + vertical bound, ×1.3 | Horizontal only | A clamp that drags players back down through their own jump arc is worse than the cheat it prevents. `AJumpIsNotMistakenForASpeedHack` pins it |
 | C-01-9 | Loopback needs the same simulator for both directions | One simulator pair **per direction** | One shared pair | `Flush` releases every due packet and returns its buffer, so a shared instance lets one direction's flush consume and drop the other's packets |
+| C-01-10 | The Unity loop is a MonoBehaviour, so nothing in it is reachable from CI | Push every decision out of it: `ServerMessageRouter` (inbound decode) and `ServerPayloadWriter` (outbound framing) are engine-free and tested; the MonoBehaviour is wiring | Decode and frame inside `ServerTickLoop` | The identical decode already existed inline in the integration test's fake server, which meant the code the real server would run existed only in a test. Extracting it deletes that copy and puts the end-to-end scenario on the shipped path |
+| C-01-11 | Trap 1 wants two execution orders, which the phase document assigns to `ProjectSettings` | `[DefaultExecutionOrder]` on the three components | Ask Dev A to edit `ProjectSettings/ScriptExecutionOrder` | A cross-owner dependency for a value that never changes. The attribute is visible in a diff, travels with the file, and cannot be silently absent |
+| C-01-12 | Task 1's sketch sets `Time.fixedDeltaTime = 1f / SIM_TICK_RATE` in `Awake` | **Do not set it.** The scheduler is fed the wall clock and reports how many 30 Hz ticks are owed | Force the physics rate to 1/30 | `IngameMenuUi.cs:29` and `FpsActorController.cs:497` both assign `Time.timeScale / 60f` at runtime, so the assignment would be overwritten before the first physics step. It would also contradict A5 option B, which deliberately left the physics rate alone |
+| C-01-13 | `WriteSnapshot` could discover the buffer was too small only after encoding | Validate the destination **before** calling the encoder | Encode, then check | `DeltaEncoder.Write` files the snapshot into its baseline history as a side effect of succeeding. Failing afterwards leaves the server believing it sent a snapshot the client never saw, and a later ack then selects a baseline the two sides do not share — pinned by `ADestinationTooSmallLeavesTheEncoderHistoryUntouched` |
 
 ---
 
@@ -154,6 +164,8 @@ Build succeeded. 0 Warning(s), 0 Error(s)   (TreatWarningsAsErrors=true)
 | A single `NetworkSimulator` for both loopback directions | Flushing one direction consumed the other's due packets and returned their buffers — silent, direction-dependent loss appearing only when both directions were busy | Caught by reading `Flush` rather than by a failing test. `FlushingOneDirectionDoesNotConsumeTheOther` now guards it |
 | `ReorderPercent = 100` in the stale-packet test | Reordering is an extra delay on the chosen packets; choosing all of them shifts the stream uniformly and reorders nothing | `StaleDroppedCount == 0` with reordering "at maximum". Now two tests and a documented remark on the field |
 | Asserting p99 of a 100-sample window equals the single worst sample | Nearest-rank is correct: p99 of 100 is the 99th. "p99 < 33 ms" claims 99% of ticks were under budget, and one hitch in a hundred does not violate that | Expected 300 ms, got 8 ms. Both cases kept as tests so the definition is pinned rather than re-argued next time it surprises someone |
+| Testing the malicious `frameCount = 255` with a body honestly sized for 255 frames | 255 frames is 2045 bytes and does not fit a 1184-byte datagram at all, so the fixture failed while building the packet rather than while parsing it — it was testing an attack that cannot be delivered | The real shape is a 29-byte packet *claiming* 255 frames, betting the server sizes a buffer from the claim before checking it. Now three cases: honest-length 0, honest-length 9, and the small-body 255 |
+| Sizing the integration test's snapshot body buffer to `MAX_PAYLOAD` | A body allowed to fill the whole datagram leaves no room for the 6 bytes of framing around it. Latent, never fired: a 48-actor snapshot is 973 B, so nothing ever reached the limit | Found while extracting `ServerPayloadWriter`, whose `MaxSnapshotBodySize` makes the budget explicit. Had it fired, the symptom would have been snapshots silently not sent |
 
 ---
 
@@ -161,9 +173,9 @@ Build succeeded. 0 Warning(s), 0 Error(s)   (TreatWarningsAsErrors=true)
 
 | What's blocking | Who's needed | Reported yet |
 |---|---|---|
-| Criteria 1 & 9 under real load — tick time p99 and 0 alloc/tick with Unity physics + AI | Dev A — headless build | ☑ checklist **A1** unblocks the DLLs; the headless build is the phase-01 dependency |
-| Criterion 7 — two Unity clients in sync | Dev A | ☑ **A4**, after **A1–A2** |
-| `ServerTickLoop` script execution order (trap 1: two MonoBehaviours at −200 and +200) | Dev A owns project settings | Raised here; not yet a checklist item because the wrapper is not written |
+| Criteria 1 & 9 under real load — tick time p99 and 0 alloc/tick with Unity physics + AI | Dev A — Editor only | ☑ checklist **S1–S4**. The Unity loop now exists; what is left is pressing Play and reading the Profiler |
+| Criterion 7 — two Unity clients in sync | **Dev B — UDP transport** | `LoopbackTransport` is in-process and reaches exactly one client. Not an Editor problem and not Dev A's to unblock |
+| ~~`ServerTickLoop` script execution order (trap 1)~~ | ~~Dev A owns project settings~~ | ✅ **Closed without asking.** Declared in `[DefaultExecutionOrder]` on `NetServerBootstrap` (−1000), `ServerInputStage` (−200) and `ServerSnapshotStage` (+200), so `ProjectSettings` is untouched |
 | ~~Fixed timestep 0.02 vs `SIM_TICK_RATE` 30~~ | Dev A | ✅ **A5 answered: B** — `NetPredictionClock` steps the simulation at 1/30 from `Update`, independent of the physics rate |
 | Stable weapon ids | Dev A | ☑ **A6** — `weaponId` ships as 0 until then |
 | `C_ACK_BASELINE` has no byte layout in the spec | All 4, PR + 2 approvals | Implemented as `u32 baselineTick` and flagged in code and in both reports. No `PROTOCOL_VERSION` bump — it documents an unspecified message rather than changing a specified one |
@@ -185,5 +197,11 @@ Build succeeded. 0 Warning(s), 0 Error(s)   (TreatWarningsAsErrors=true)
     is now irrelevant to the netcode — which is the only arrangement that survives
     `IngameMenuUi.cs:29` and `FpsActorController.cs:497` assigning `Time.fixedDeltaTime` at
     runtime. Full account in the phase-00 report § 9.
-  - Criterion 9 (0 alloc/tick) is designed for but unmeasured. The risk is not our code; it is
-    whatever the Unity wrapper does per tick, which nobody has written yet.
+  - Criterion 9 (0 alloc/tick) is designed for but still unmeasured. The wrapper now exists and
+    was written for it — fixed rings, pre-allocated buffers, per-player delegates built once in
+    the constructor rather than as lambdas at the call site, a `List` indexed by `int` instead of
+    a `Dictionary` enumeration. Every one of those is a claim until the Profiler agrees (**S4**).
+  - **Criterion 7 moved off Dev A and onto Dev B, and that is worth saying out loud.** It was
+    filed as "needs Editor" on the assumption that two Editor clients could talk to each other.
+    They cannot: `LoopbackTransport` is in-process by construction. Nothing Dev A does closes it,
+    so chasing it through the Editor checklist would have burned a round finding that out.
