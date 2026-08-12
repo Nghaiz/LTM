@@ -23574,7 +23574,6 @@ GameObject:
   - component: {fileID: 4340}
   - component: {fileID: 5244}
   - component: {fileID: 7472}
-  - component: {fileID: 7437}
   - component: {fileID: 8696}
   m_Layer: 0
   m_Name: Scenery Camera
@@ -88076,13 +88075,6 @@ AudioSource:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 0
---- !u!92 &7437
-Behaviour:
-  m_ObjectHideFlags: 0
-  m_PrefabParentObject: {fileID: 0}
-  m_PrefabInternal: {fileID: 0}
-  m_GameObject: {fileID: 1768}
-  m_Enabled: 1
 --- !u!104 &7438
 RenderSettings:
   m_ObjectHideFlags: 0
@@ -89662,8 +89654,7 @@ LightmapSettings:
     m_PVRFilteringAtrousPositionSigmaIndirect: 2
     m_PVRFilteringAtrousPositionSigmaAO: 1
     m_ShowResolutionOverlay: 1
-  m_LightingDataAsset: {fileID: 112000001, guid: 3014166fe0c22ae479e53bf8a816e650,
-    type: 2}
+  m_LightingDataAsset: {fileID: 0}
   m_UseShadowmask: 0
 --- !u!183 &7504
 Cloth:

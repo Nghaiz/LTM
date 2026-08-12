@@ -21,7 +21,6 @@ GameObject:
   - 4: {fileID: 4253894549820511}
   - 20: {fileID: 20649810381288780}
   - 124: {fileID: 124035247121762148}
-  - 92: {fileID: 92526796110847048}
   - 81: {fileID: 81391270221273138}
   - 114: {fileID: 114365553980548364}
   m_Layer: 0
@@ -80,13 +79,6 @@ Camera:
   m_StereoMirrorMode: 0
 --- !u!124 &124035247121762148
 FlareLayer:
-  m_ObjectHideFlags: 0
-  m_PrefabParentObject: {fileID: 0}
-  m_PrefabInternal: {fileID: 100100000}
-  m_GameObject: {fileID: 1159811210038680}
-  m_Enabled: 1
---- !u!92 &92526796110847048
-GUILayer:
   m_ObjectHideFlags: 0
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 100100000}

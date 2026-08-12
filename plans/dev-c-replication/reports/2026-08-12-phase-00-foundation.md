@@ -114,7 +114,7 @@ Build succeeded. 0 Warning(s), 0 Error(s)   (TreatWarningsAsErrors=true)
 | What's blocking | Who's needed | Reported yet |
 |---|---|---|
 | Shadow-comparison playtest (criterion 8, step 3) | Dev A — Editor only | ☑ **A3** |
-| Fixed timestep is 0.02 (50 Hz) against `SIM_TICK_RATE` 30 | Dev A — project-wide call | ☑ **A5**, with three costed options and a recommendation |
+| ~~Fixed timestep is 0.02 (50 Hz) against `SIM_TICK_RATE` 30~~ | Dev A — project-wide call | ✅ **A5 answered: B.** Prediction runs its own 30 Hz accumulator (`NetPredictionClock`); the physics rate is left alone. My recommendation of A was wrong — see § 9 |
 | Stable weapon id registry for the snapshot `weaponId` field | Dev A | ☑ **A6**. Until then snapshots ship `weaponId = 0` |
 | Confirm no reachable position past ±2048 m | Dev A | ☑ **A7**. Measured from scene YAML already; only "can a player physically get there" is open |
 
@@ -131,9 +131,14 @@ tests were written from the spec, not from the implementation, and B should revi
   (`ServerTickLoop` MonoBehaviour, script execution order, two clients in sync) and gated on
   **A1–A5**.
 - **Risks I can see coming:**
-  - **The fixed-timestep mismatch (A5) is the live one.** Prediction and authority stepping
-    different `dt` values is a divergence that appears only while airborne and only under load,
-    which is the worst possible signature.
+  - ~~**The fixed-timestep mismatch (A5) is the live one.**~~ **Closed, and the way it closed is
+    the lesson.** Dev A chose B: prediction gets its own 30 Hz accumulator
+    (`Assets/Scripts/Net/Shared/NetPredictionClock.cs`) and the physics rate is untouched. The
+    option I recommended, A, could never have worked — `Time.fixedDeltaTime` is assigned at
+    runtime by `IngameMenuUi.cs:29` (from `Awake()`) and `FpsActorController.cs:497`, both to
+    `Time.timeScale / 60f`, so the live rate is 1/60 and the 0.02 in
+    `ProjectSettings/TimeManager.asset` is never what runs. I costed three options off a value
+    the game overwrites before its first physics step. **Read the assignments, not the asset.**
   - Weapon ids (A6) are a small task that will become annoying if it slips past interest
     management, because the snapshot field is inert until it lands.
   - The shadow comparison may find slope divergence larger than expected. That gap is documented
