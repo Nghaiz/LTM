@@ -44,21 +44,15 @@ namespace Ironfront.MasterServer.Diagnostics
     /// </remarks>
     public static class MasterLog
     {
-        private static MasterLogLevel _level = MasterLogLevel.Warn;
-
         /// <summary>The active threshold. Settable at runtime, per conventions.md section 3.3.</summary>
-        public static MasterLogLevel Level
-        {
-            get => _level;
-            set => _level = value;
-        }
+        public static MasterLogLevel Level { get; set; } = MasterLogLevel.Warn;
 
         /// <summary>
         /// Guard for <see cref="Debug"/> call sites. Formatting an interpolated string costs
         /// even when the message is then thrown away, so per-frame logging must be wrapped
         /// in this check (conventions.md section 3.3).
         /// </summary>
-        public static bool DebugEnabled => _level >= MasterLogLevel.Debug;
+        public static bool DebugEnabled => Level >= MasterLogLevel.Debug;
 
         /// <summary>A real error that needs handling. Always on.</summary>
         public static void Error(string message) => Write("ERROR", message);
@@ -66,7 +60,7 @@ namespace Ironfront.MasterServer.Diagnostics
         /// <summary>Abnormal but self-recovering. On by default.</summary>
         public static void Warn(string message)
         {
-            if (_level >= MasterLogLevel.Warn) Write("WARN ", message);
+            if (Level >= MasterLogLevel.Warn) Write("WARN ", message);
         }
 
         /// <summary>Per-connection / per-frame detail. Off by default.</summary>
