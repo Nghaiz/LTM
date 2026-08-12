@@ -16032,7 +16032,6 @@ GameObject:
   - 4: {fileID: 4783368693410261}
   - 20: {fileID: 20047008989736475}
   - 124: {fileID: 124607054632875358}
-  - 92: {fileID: 92867915380062786}
   m_Layer: 0
   m_Name: Camera
   m_TagString: MainCamera
@@ -16089,13 +16088,6 @@ Camera:
   m_StereoMirrorMode: 0
 --- !u!124 &124607054632875358
 FlareLayer:
-  m_ObjectHideFlags: 0
-  m_PrefabParentObject: {fileID: 0}
-  m_PrefabInternal: {fileID: 100100000}
-  m_GameObject: {fileID: 1484854123049521}
-  m_Enabled: 1
---- !u!92 &92867915380062786
-GUILayer:
   m_ObjectHideFlags: 0
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 100100000}

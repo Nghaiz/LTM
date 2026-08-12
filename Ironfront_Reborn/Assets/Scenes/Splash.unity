@@ -940,7 +940,6 @@ GameObject:
   m_Component:
   - component: {fileID: 122}
   - component: {fileID: 126}
-  - component: {fileID: 140}
   - component: {fileID: 148}
   - component: {fileID: 137}
   m_Layer: 0
@@ -2314,13 +2313,6 @@ AudioSource:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 0
---- !u!92 &140
-Behaviour:
-  m_ObjectHideFlags: 0
-  m_PrefabParentObject: {fileID: 0}
-  m_PrefabInternal: {fileID: 0}
-  m_GameObject: {fileID: 62}
-  m_Enabled: 1
 --- !u!95 &141
 Animator:
   serializedVersion: 3
