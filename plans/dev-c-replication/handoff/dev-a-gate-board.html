@@ -1,0 +1,1001 @@
+<title>Gate Dev A → M1</title>
+<style>
+  :root {
+    --paper:      #eceff1;
+    --surface:    #ffffff;
+    --surface-2:  #f4f6f7;
+    --ink:        #161c21;
+    --ink-soft:   #4d5a63;
+    --ink-faint:  #78868f;
+    --rule:       #d3dade;
+    --rule-soft:  #e3e8eb;
+    --accent:     #1f5877;
+    --accent-ink: #ffffff;
+    --stop:       #9d3226;
+    --stop-bg:    #f7e9e7;
+    --hold:       #8a5a06;
+    --hold-bg:    #f8f0dd;
+    --go:         #2c5f47;
+    --go-bg:      #e5efe9;
+    --shadow:     0 1px 2px rgba(22,28,33,.06), 0 8px 24px rgba(22,28,33,.05);
+
+    --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+    --sans: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, "SFMono-Regular", "Liberation Mono", monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:     #12171b;
+      --surface:   #1a2126;
+      --surface-2: #212a30;
+      --ink:       #e6ecef;
+      --ink-soft:  #a8b6bf;
+      --ink-faint: #7c8b95;
+      --rule:      #2f3a42;
+      --rule-soft: #262f36;
+      --accent:    #7cb8d8;
+      --accent-ink:#0e1418;
+      --stop:      #e29288;
+      --stop-bg:   #33211e;
+      --hold:      #e0b463;
+      --hold-bg:   #302719;
+      --go:        #86c4a5;
+      --go-bg:     #1b2b24;
+      --shadow:    0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:     #12171b;
+    --surface:   #1a2126;
+    --surface-2: #212a30;
+    --ink:       #e6ecef;
+    --ink-soft:  #a8b6bf;
+    --ink-faint: #7c8b95;
+    --rule:      #2f3a42;
+    --rule-soft: #262f36;
+    --accent:    #7cb8d8;
+    --accent-ink:#0e1418;
+    --stop:      #e29288;
+    --stop-bg:   #33211e;
+    --hold:      #e0b463;
+    --hold-bg:   #302719;
+    --go:        #86c4a5;
+    --go-bg:     #1b2b24;
+    --shadow:    0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 61rem;
+    margin: 0 auto;
+    padding: 3.5rem 1.5rem 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3.25rem;
+  }
+
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+
+  code, .mono { font-family: var(--mono); font-size: .88em; }
+  code {
+    background: var(--surface-2);
+    border: 1px solid var(--rule-soft);
+    border-radius: 3px;
+    padding: .06em .3em;
+    word-break: break-word;
+  }
+
+  /* ---------- masthead ---------- */
+  header.masthead { display: flex; flex-direction: column; gap: 1rem; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: .72rem;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  h1 {
+    font-family: var(--sans);
+    font-size: clamp(2rem, 5vw, 2.9rem);
+    line-height: 1.08;
+    letter-spacing: -.02em;
+    font-weight: 700;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .standfirst {
+    margin: 0;
+    max-width: 62ch;
+    color: var(--ink-soft);
+    font-size: 1.06rem;
+  }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: .78rem;
+    color: var(--ink-faint);
+  }
+  .meta b { color: var(--ink-soft); font-weight: 600; }
+
+  /* ---------- stat row ---------- */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+  .stat { background: var(--surface); padding: 1.1rem 1.25rem; display: flex; flex-direction: column; gap: .3rem; }
+  .stat .n { font-family: var(--sans); font-size: 1.85rem; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .stat .l { font-family: var(--mono); font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); }
+  .stat.is-stop .n { color: var(--stop); }
+  .stat.is-hold .n { color: var(--hold); }
+
+  /* ---------- sections ---------- */
+  section { display: flex; flex-direction: column; gap: 1.25rem; }
+  h2 {
+    font-family: var(--sans);
+    font-size: 1.3rem;
+    font-weight: 700;
+    letter-spacing: -.01em;
+    margin: 0;
+    padding-bottom: .6rem;
+    border-bottom: 2px solid var(--ink);
+    display: flex;
+    align-items: baseline;
+    gap: .75rem;
+    flex-wrap: wrap;
+  }
+  h2 .tag {
+    font-family: var(--mono);
+    font-size: .68rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--ink-faint);
+  }
+  .lede { margin: 0; max-width: 66ch; color: var(--ink-soft); }
+
+  /* ---------- summary table ---------- */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; min-width: 46rem; font-family: var(--sans); font-size: .9rem; }
+  thead th {
+    text-align: left;
+    font-family: var(--mono);
+    font-size: .68rem;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+    padding: .8rem 1rem;
+    border-bottom: 1px solid var(--rule);
+    white-space: nowrap;
+  }
+  tbody td { padding: .78rem 1rem; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr:nth-child(even) { background: var(--surface-2); }
+  td.id { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+  td.eff { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink-soft); }
+  td.fb { color: var(--ink-soft); }
+
+  .pill {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: .66rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    font-weight: 600;
+    padding: .18rem .45rem;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .pill.stop { background: var(--stop-bg); color: var(--stop); }
+  .pill.hold { background: var(--hold-bg); color: var(--hold); }
+  .pill.go   { background: var(--go-bg);   color: var(--go); }
+  /* "done" reads as go, plus a rule through the row it labels — a finished item should be
+     recognisable from across the page without reading a word of it. */
+  .pill.done { background: var(--go-bg);   color: var(--go); }
+  tr:has(.pill.done) td:not(.fb) { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--go) 55%, transparent); }
+  tr:has(.pill.done) .pill.done  { text-decoration: none; }
+
+  /* ---------- item cards ---------- */
+  .items { display: flex; flex-direction: column; gap: 1rem; }
+  article.item {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 4px solid var(--rule);
+    border-radius: 6px;
+    padding: 1.35rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: .85rem;
+    box-shadow: var(--shadow);
+  }
+  article.item.stop { border-left-color: var(--stop); }
+  article.item.hold { border-left-color: var(--hold); }
+  article.item.go   { border-left-color: var(--go); }
+
+  .item-head { display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap; }
+  .item-id {
+    font-family: var(--mono);
+    font-size: .82rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: .04em;
+  }
+  .item-title { font-family: var(--sans); font-size: 1.06rem; font-weight: 700; margin: 0; letter-spacing: -.005em; }
+  .item-eff { font-family: var(--mono); font-size: .74rem; color: var(--ink-faint); margin-left: auto; font-variant-numeric: tabular-nums; }
+  .item p { margin: 0; max-width: 68ch; }
+  .item ul { margin: 0; padding-left: 1.15rem; max-width: 68ch; display: flex; flex-direction: column; gap: .35rem; }
+
+  pre {
+    margin: 0;
+    background: var(--surface-2);
+    border: 1px solid var(--rule-soft);
+    border-radius: 4px;
+    padding: .8rem 1rem;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: .82rem;
+    line-height: 1.55;
+    color: var(--ink);
+  }
+  pre code { background: none; border: 0; padding: 0; font-size: inherit; }
+
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: .35rem 1rem; font-size: .92rem; }
+  .kv dt {
+    font-family: var(--mono);
+    font-size: .68rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    padding-top: .28rem;
+  }
+  .kv dd { margin: 0; color: var(--ink-soft); }
+  .kv dd b { color: var(--ink); font-weight: 600; }
+
+  .note {
+    background: var(--surface-2);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 4px 4px 0;
+    padding: .8rem 1rem;
+    font-size: .95rem;
+    color: var(--ink-soft);
+    max-width: 70ch;
+  }
+  .note b { color: var(--ink); }
+
+  .choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: .75rem; }
+  .choice { border: 1px solid var(--rule); border-radius: 5px; padding: .9rem 1rem; background: var(--surface-2); display: flex; flex-direction: column; gap: .3rem; }
+  .choice.pick { border-color: var(--accent); }
+  .choice h4 { font-family: var(--sans); font-size: .95rem; margin: 0; font-weight: 700; }
+  .choice p { font-size: .88rem; color: var(--ink-soft); margin: 0; }
+
+  .runbox { display: flex; flex-direction: column; gap: .5rem; }
+  .pathbar {
+    font-family: var(--mono);
+    font-size: .71rem;
+    letter-spacing: .05em;
+    color: var(--ink-faint);
+    display: flex;
+    flex-wrap: wrap;
+    gap: .45rem;
+    align-items: baseline;
+  }
+  .pathbar b { color: var(--ink-soft); font-weight: 600; letter-spacing: .09em; text-transform: uppercase; }
+  ol.steps { margin: 0; padding-left: 1.35rem; max-width: 68ch; display: flex; flex-direction: column; gap: .6rem; }
+  ol.steps li::marker { font-family: var(--mono); font-size: .82em; color: var(--ink-faint); }
+  ol.steps > li > strong { font-family: var(--sans); font-size: .96rem; }
+
+  .traps { display: flex; flex-direction: column; gap: .9rem; }
+  .trap { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 1.1rem 1.35rem; display: flex; flex-direction: column; gap: .45rem; }
+  .trap h4 { font-family: var(--sans); font-size: .98rem; margin: 0; font-weight: 700; }
+  .trap p { margin: 0; font-size: .95rem; color: var(--ink-soft); max-width: 70ch; }
+
+  footer { border-top: 1px solid var(--rule); padding-top: 1.25rem; font-size: .88rem; color: var(--ink-faint); display: flex; flex-direction: column; gap: .5rem; }
+
+  @media (max-width: 620px) {
+    body { font-size: 16px; }
+    .wrap { padding: 2.5rem 1.1rem 4rem; gap: 2.5rem; }
+    .item-eff { margin-left: 0; }
+    .kv { grid-template-columns: 1fr; gap: .15rem; }
+    .kv dd { margin-bottom: .5rem; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Ironfront Reborn · Dev C → Dev A</div>
+    <h1>Việc của A để tôi cook tiếp không vướng gate</h1>
+    <p class="standfirst">
+      Mọi thứ dựng được mà không cần Unity Editor thì đã dựng, đã test, đã merge: 283 test, 0 warning.
+      Phần còn lại cần Editor, mà theo <code>conventions.md § 1.3</code> thì Editor chỉ có A mở.
+      Trang này xếp việc theo <em>gate nào mở ra</em>, kèm cột đường vòng để tôi vẫn chạy tiếp nếu A chưa trả lời.
+      Mỗi mục đều ghi rõ <b>chạy ở đâu</b>: terminal tại gốc repo, hay trong Editor. Chưa từng chạy lệnh nào của
+      repo này thì bắt đầu ở <b>Nhóm 0</b>.
+    </p>
+    <div class="meta">
+      <span><b>Ngày</b> 12-08-2026</span>
+      <span><b>Mốc</b> M0 đóng · M1 mở</span>
+      <span><b>Editor work</b> ~2h15 + phase-00 riêng của A</span>
+      <span><b>SSOT</b> plans/dev-c-replication/handoff/dev-a-checklist.md</span>
+    </div>
+  </header>
+
+  <section>
+    <div class="stats">
+      <div class="stat is-stop">
+        <span class="n">3</span>
+        <span class="l">Chặn ngay hôm nay</span>
+      </div>
+      <div class="stat is-hold">
+        <span class="n">1</span>
+        <span class="l">Quyết định của A</span>
+      </div>
+      <div class="stat">
+        <span class="n">2h15</span>
+        <span class="l">Tổng việc trong Editor</span>
+      </div>
+      <div class="stat">
+        <span class="n">283</span>
+        <span class="l">Test đã xanh, chờ A</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Bảng tổng hợp <span class="tag">việc · gate · đường vòng</span></h2>
+    <p class="lede">
+      Cột cuối là thứ quan trọng nhất với tôi: nếu A trễ một mục, tôi đi đường nào để không dừng lại.
+      Ba mục màu đỏ không có đường vòng.
+    </p>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Mục</th>
+            <th>Việc</th>
+            <th>Công</th>
+            <th>Mở gate nào</th>
+            <th>Nếu A trễ, tôi làm gì</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="id">A1 <span class="pill stop">chặn</span></td>
+            <td>Chạy <code>build-libs.ps1</code>, xác nhận Editor load được DLL</td>
+            <td class="eff">15 ph</td>
+            <td>Mọi thứ trong Unity</td>
+            <td class="fb">Không có. Đây là nút thắt tuyệt đối.</td>
+          </tr>
+          <tr>
+            <td class="id">A2 <span class="pill stop">chặn</span></td>
+            <td>Cài 3 script drop-in, commit kèm <code>.meta</code></td>
+            <td class="eff">10 ph</td>
+            <td>A3, A4</td>
+            <td class="fb">Không có. Script đã viết xong, chỉ thiếu tay đặt vào project.</td>
+          </tr>
+          <tr>
+            <td class="id">A5 <span class="pill done">xong</span></td>
+            <td>Chốt fixed timestep — <b>đã chọn B</b></td>
+            <td class="eff">—</td>
+            <td>Không còn chặn gì</td>
+            <td class="fb">Đã làm xong bằng <code>NetPredictionClock</code>. Không phải đụng vào <code>TimeManager.asset</code>.</td>
+          </tr>
+          <tr>
+            <td class="id">A3 <span class="pill hold">đo</span></td>
+            <td>Playtest shadow comparison, gửi tôi dòng summary</td>
+            <td class="eff">35 ph</td>
+            <td>phase-00 tiêu chí 8</td>
+            <td class="fb">18 unit test đã pin <code>MovementSimulation</code>. Tôi chạy tiếp, đổi lại là rủi ro rubber-banding lúc crouch chỉ lộ ra ở M1.</td>
+          </tr>
+          <tr>
+            <td class="id">A4 <span class="pill hold">gắn</span></td>
+            <td>Gắn <code>NetMovementAgent</code> lên player prefab</td>
+            <td class="eff">10 ph</td>
+            <td>Tích hợp M1</td>
+            <td class="fb">Chạy tiếp bình thường. Chỉ cần trước buổi tích hợp M1.</td>
+          </tr>
+          <tr>
+            <td class="id">HB <span class="pill stop">sync 4</span></td>
+            <td>Headless build chạy 10 phút không crash</td>
+            <td class="eff">~1 ngày</td>
+            <td>Test tick loop thật, M1</td>
+            <td class="fb">Tôi dùng Unity Play Mode thay headless. Chậm hơn nhưng chạy được (dependency-map § 6).</td>
+          </tr>
+          <tr>
+            <td class="id">A6 <span class="pill hold">API</span></td>
+            <td>Danh sách weapon id cố định, đọc được từ code</td>
+            <td class="eff">30 ph</td>
+            <td>Trường <code>weaponId</code> trong snapshot</td>
+            <td class="fb">Snapshot ship <code>weaponId = 0</code>, field nằm im. Không chặn gì.</td>
+          </tr>
+          <tr>
+            <td class="id">A7 <span class="pill go">xác nhận</span></td>
+            <td>Có đường nào ra ngoài ±2048 m không</td>
+            <td class="eff">10 ph</td>
+            <td>Không gate nào</td>
+            <td class="fb">Đã đo từ file scene YAML, 2.2× headroom. Coi như đã chốt trừ khi A nói ngược lại.</td>
+          </tr>
+          <tr>
+            <td class="id">A8 <span class="pill go">đọc</span></td>
+            <td>Đọc lướt <code>movement-analysis.md</code> § 0 và § 5</td>
+            <td class="eff">10 ph</td>
+            <td>Không gate nào</td>
+            <td class="fb">Tài liệu đã pin bằng 18 test. Đọc để bắt chỗ tôi hiểu sai, không phải để duyệt.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Nhóm 0 · Chạy ở đâu, bằng gì <span class="tag">đọc trước khi gõ lệnh đầu tiên</span></h2>
+    <p class="lede">
+      Mọi lệnh trong trang này gõ trong <b>một cửa sổ terminal duy nhất, đứng tại thư mục gốc của repo</b>.
+      Phần việc trong Unity thì làm trong Editor, mở từ Unity Hub. Không có bước nào cần chạy bên trong
+      thư mục <code>Ironfront_Reborn/</code>.
+    </p>
+
+    <div class="items">
+
+      <article class="item go">
+        <div class="item-head">
+          <span class="item-id">0.1</span>
+          <h3 class="item-title">Mở terminal đúng chỗ</h3>
+          <span class="item-eff">~1 phút</span>
+        </div>
+        <ol class="steps">
+          <li>
+            <strong>Mở Windows Terminal</strong> (hoặc PowerShell, hoặc tab Terminal trong VS Code / Rider).
+          </li>
+          <li>
+            <strong>Nhảy về gốc repo</strong> — đây là thư mục chứa <code>Ironfront.sln</code>:
+            <pre><code>cd d:\Coding\LTM</code></pre>
+          </li>
+          <li>
+            <strong>Kiểm tra đã đứng đúng chỗ</strong> trước khi gõ bất kỳ lệnh nào khác:
+            <pre><code>ls Ironfront.sln, tools, Ironfront_Reborn</code></pre>
+            Ba dòng hiện ra là đúng chỗ. Báo <code>Cannot find path</code> là đang đứng sai thư mục.
+          </li>
+        </ol>
+        <div class="note">
+          <b>Vì sao chỗ đứng lại quan trọng.</b> Lệnh ở mục A2 dùng đường dẫn tương đối ở <em>cả hai</em> đầu
+          (<code>plans/...</code> và <code>Ironfront_Reborn/...</code>), nên đứng sai thư mục là nó hoặc báo lỗi,
+          hoặc tệ hơn là tạo ra một cây thư mục rác ở nơi không ai ngờ tới. Riêng
+          <code>build-libs.ps1</code> thì tự nhảy về gốc repo bên trong script, nhưng bản thân đường dẫn
+          <code>tools/build-libs.ps1</code> vẫn là tương đối, nên quy tắc chung vẫn là: <b>luôn đứng ở gốc repo</b>.
+        </div>
+      </article>
+
+      <article class="item go">
+        <div class="item-head">
+          <span class="item-id">0.2</span>
+          <h3 class="item-title">Bốn thứ phải có sẵn trên máy</h3>
+          <span class="item-eff">~5 phút kiểm</span>
+        </div>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr><th>Cần gì</th><th>Bản nào</th><th>Gõ để kiểm</th><th>Thiếu thì sao</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="id">PowerShell 7</td>
+                <td>7.x (đang có 7.6.4)</td>
+                <td><code>pwsh --version</code></td>
+                <td class="fb">Cài từ Microsoft Store. Không dùng Windows PowerShell 5.1 để chạy script.</td>
+              </tr>
+              <tr>
+                <td class="id">.NET SDK</td>
+                <td><b>8.0.x</b> (đang có 8.0.423)</td>
+                <td><code>dotnet --version</code></td>
+                <td class="fb"><code>global.json</code> ghim feature band 8.0 và <b>từ chối SDK 9.x/10.x</b>. Máy chỉ có .NET 9 sẽ lỗi ngay lệnh <code>dotnet</code> đầu tiên.</td>
+              </tr>
+              <tr>
+                <td class="id">Unity</td>
+                <td><b>6000.3.21f1</b>, đúng bản</td>
+                <td>Unity Hub → tab Installs</td>
+                <td class="fb">Bản khác sẽ ép nâng cấp project và làm bẩn <code>ProjectSettings</code>. Số này lấy từ <code>ProjectVersion.txt</code>.</td>
+              </tr>
+              <tr>
+                <td class="id">NuGet cache</td>
+                <td>có sẵn sau lần restore đầu</td>
+                <td><code>ls $HOME\.nuget\packages</code></td>
+                <td class="fb">Trống thì <code>build-libs.ps1</code> không tìm ra 4 DLL phụ và sẽ cảnh báo. Chạy <code>dotnet restore</code> ở gốc repo là có.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="item go">
+        <div class="item-head">
+          <span class="item-id">0.3</span>
+          <h3 class="item-title">Mở project trong Unity</h3>
+          <span class="item-eff">~2 phút lần đầu</span>
+        </div>
+        <ol class="steps">
+          <li><strong>Mở Unity Hub</strong> → <code>Projects</code> → <code>Add</code> → <code>Add project from disk</code>.</li>
+          <li><strong>Chọn thư mục</strong> <code>d:\Coding\LTM\Ironfront_Reborn</code>. Chọn đúng thư mục này, không phải <code>d:\Coding\LTM</code>.</li>
+          <li><strong>Chọn Editor version</strong> <code>6000.3.21f1</code> rồi mở. Lần đầu import sẽ lâu, vài phút là bình thường.</li>
+          <li><strong>Mở Console</strong> (<code>Window → General → Console</code>) và để nguyên đó. Toàn bộ phần "Console sạch" ở các mục dưới là nhìn cửa sổ này.</li>
+        </ol>
+        <div class="note">
+          Terminal và Unity chạy song song, không thay thế nhau: lệnh <code>pwsh</code> tạo ra DLL,
+          Editor là nơi xác nhận Unity nạp được chúng. Sau khi chạy lệnh, quay lại Editor và bấm vào cửa sổ
+          cho nó lấy focus, Unity sẽ tự recompile.
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>Nhóm 1 · Ba việc chặn ngay <span class="tag">làm trước, ~40 phút</span></h2>
+    <p class="lede">Không có đường vòng cho ba mục này. A1 và A2 mở khoá mọi thứ còn lại, A5 là thứ duy nhất tôi không tự quyết được.</p>
+
+    <div class="items">
+
+      <article class="item stop">
+        <div class="item-head">
+          <span class="item-id">A1</span>
+          <h3 class="item-title">Chạy build-libs.ps1 và xác nhận Editor load được DLL</h3>
+          <span class="item-eff">~15 phút</span>
+        </div>
+        <div class="runbox">
+          <div class="pathbar"><b>Chạy ở</b> terminal, đứng tại <code>d:\Coding\LTM</code></div>
+          <pre><code>cd d:\Coding\LTM
+pwsh tools/build-libs.ps1</code></pre>
+        </div>
+        <p>
+          Script tự build 3 project .NET rồi copy DLL sang <code>Ironfront_Reborn/Assets/Plugins/</code>.
+          Mất khoảng 30 giây. Chạy xong, dòng cuối phải có dạng:
+        </p>
+        <pre><code>Copied 3 DLL(s) + 4 dependency/dependencies into
+d:\Coding\LTM\Ironfront_Reborn\Assets\Plugins</code></pre>
+        <p><b>Con số phải là 3 và 4.</b> Kiểm lại bằng hai lệnh này, vẫn ở cùng chỗ đứng:</p>
+        <div class="runbox">
+          <div class="pathbar"><b>Chạy ở</b> cùng terminal đó</div>
+          <pre><code>ls Ironfront_Reborn/Assets/Plugins/Ironfront.Net.*.dll     # phải ra 3 file
+ls Ironfront_Reborn/Assets/Plugins/System.*.dll            # phải ra 4 file</code></pre>
+        </div>
+        <p>
+          Xong phần terminal thì <b>chuyển sang Unity</b>: bấm vào cửa sổ Editor cho nó lấy focus, Unity sẽ tự
+          recompile, rồi nhìn Console. Không có dòng đỏ nào là xong mục này.
+        </p>
+        <div class="note">
+          <b>Cái bẫy tốn hàng giờ nếu gặp lần đầu.</b> <code>netstandard2.1</code> cộng <code>Span&lt;byte&gt;</code>
+          cần <code>System.Memory.dll</code>, <code>System.Buffers.dll</code>,
+          <code>System.Runtime.CompilerServices.Unsafe.dll</code> và <code>System.Numerics.Vectors.dll</code>
+          nằm cạnh ba DLL của mình. Copy thiếu thì Unity ném <code>TypeLoadException</code>, một lỗi không hề
+          nhắc gì tới assembly bị thiếu. <code>build-libs.ps1</code> copy đủ cả bốn và cảnh báo nếu không tìm thấy
+          trong NuGet cache. <b>Nếu nó cảnh báo, dừng lại và báo tôi</b> thay vì tự lách.
+        </div>
+        <dl class="kv">
+          <dt>Trả lời</dt><dd><b>"DLL load được, Console sạch"</b> hoặc dán nguyên văn lỗi.</dd>
+        </dl>
+      </article>
+
+      <article class="item stop">
+        <div class="item-head">
+          <span class="item-id">A2</span>
+          <h3 class="item-title">Cài ba script drop-in</h3>
+          <span class="item-eff">~10 phút</span>
+        </div>
+        <div class="runbox">
+          <div class="pathbar"><b>Chạy ở</b> terminal, đứng tại <code>d:\Coding\LTM</code> · <b>bắt buộc</b>, cả hai đường dẫn đều tương đối</div>
+          <pre><code>cd d:\Coding\LTM
+mkdir -Force Ironfront_Reborn/Assets/Scripts/Net/Shared
+mv plans/dev-c-replication/handoff/unity-dropin/*.cs `
+   Ironfront_Reborn/Assets/Scripts/Net/Shared/</code></pre>
+        </div>
+        <p>
+          Thư mục <code>Assets/Scripts/Net/</code> hiện <b>chưa tồn tại</b>, lệnh <code>mkdir</code> tạo luôn cả nhánh.
+          Dấu <code>`</code> cuối dòng là ký tự nối dòng của PowerShell, muốn gõ một dòng thì bỏ nó đi.
+          Chỉ ba file <code>.cs</code> được chuyển đi, <code>README.md</code> ở lại chỗ cũ.
+        </p>
+        <p>Kiểm ngay tại chỗ, phải ra đúng ba file:</p>
+        <div class="runbox">
+          <div class="pathbar"><b>Chạy ở</b> cùng terminal đó</div>
+          <pre><code>ls Ironfront_Reborn/Assets/Scripts/Net/Shared/</code></pre>
+        </div>
+        <p>
+          Rồi <b>chuyển sang Unity</b>: bấm vào cửa sổ Editor, đợi nó import xong, Unity sẽ sinh ba file
+          <code>.meta</code> nằm cạnh ba file <code>.cs</code>. Sau đó mới commit, và commit
+          <code>.cs</code> <b>cùng lúc với</b> <code>.meta</code> trong một lần:
+        </p>
+        <div class="runbox">
+          <div class="pathbar"><b>Chạy ở</b> terminal, vẫn tại <code>d:\Coding\LTM</code></div>
+          <pre><code>git add Ironfront_Reborn/Assets/Scripts/Net/Shared
+git status --short          # phải thấy 6 file: 3 .cs + 3 .meta</code></pre>
+        </div>
+        <p>
+          Ba file <code>MovementSimulation.cs</code>, <code>NetMovementAgent.cs</code>, <code>MovementShadowCompare.cs</code>
+          đều thuộc quyền tôi theo <code>conventions.md § 7</code>, A chỉ cần đặt vào đúng chỗ.
+        </p>
+        <div class="note">
+          Kế hoạch phase-00 cũ xin A thêm 6 thành viên vào <code>Actor.cs</code>. <b>Bỏ yêu cầu đó.</b>
+          Nó viết dựa trên giả định <code>Actor.cs</code> giữ code di chuyển, mà thực tế không phải: chuyển động
+          nằm cách đó ba lớp và lớp cuối đã ra khỏi assembly
+          (<code>Actor.cs:528</code> → <code>FpsActorController.cs:157</code> → <code>FirstPersonController.cs:216</code>).
+          Đổi lại là <b>một component mới</b> nói chuyện thẳng với <code>CharacterController</code>, không đụng
+          <code>Actor.cs</code>, và không có gì gọi tới nó cho đến khi A tự nối dây, nên không thể làm hỏng gameplay đang chạy.
+        </div>
+      </article>
+
+      <article class="item go">
+        <div class="item-head">
+          <span class="item-id">A5</span>
+          <h3 class="item-title">Chốt fixed timestep — đã chọn <b>B</b>, đã làm xong</h3>
+          <span class="item-eff">không còn việc</span>
+        </div>
+        <p>
+          A chọn <b>B</b>: giữ nguyên physics, prediction chạy accumulator 30 Hz riêng. Đã hiện thực
+          bằng <code>Assets/Scripts/Net/Shared/NetPredictionClock.cs</code> — một accumulator trong
+          <code>Update</code> gọi <code>NetMovementAgent.Tick</code> đúng mỗi
+          <code>MovementSimulation.FixedDeltaTime</code>.
+          <code>ProjectSettings/TimeManager.asset</code> không bị đụng tới.
+          Việc duy nhất còn lại nằm ở <b>A4</b>: gắn thêm <code>NetPredictionClock</code> cạnh
+          <code>NetMovementAgent</code> trên prefab.
+        </p>
+
+        <h4>Tôi khuyên A, và tôi đã khuyên sai</h4>
+        <p>
+          Lời khuyên đó giả định con số trong <code>TimeManager.asset</code> là con số game thật sự
+          chạy. Không phải. Có hai file ghi đè nó lúc runtime:
+        </p>
+        <table>
+          <thead>
+            <tr><th>File</th><th>Dòng</th><th>Câu lệnh</th><th>Chạy lúc nào</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>IngameMenuUi.cs</code></td><td class="eff">29</td>
+              <td><code>Time.fixedDeltaTime = Time.timeScale / 60f</code></td>
+              <td><code>Hide()</code>, gọi từ <code>Awake()</code> — tức trước frame đầu tiên</td>
+            </tr>
+            <tr>
+              <td><code>FpsActorController.cs</code></td><td class="eff">497</td>
+              <td><code>Time.fixedDeltaTime = Time.timeScale / 60f</code></td>
+              <td>mỗi lần bật/tắt slow-motion</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          Nên timestep thật là <b>1/60</b> khi chơi bình thường và <b>0.2/60</b> lúc slow-motion —
+          không bao giờ là 0.02 ghi trong asset, và cũng sẽ không bao giờ là 0.0333 mà phương án A
+          định ghi vào đó. Chọn A tức là sửa một giá trị bị ghi đè trước cả bước physics đầu tiên,
+          và triệu chứng sẽ là prediction lệch với authority vì một lý do không ai tìm thấy trong
+          netcode — bởi netcode lúc đó vẫn đúng.
+        </p>
+        <p>
+          <b>B không chỉ là phương án an toàn hơn.</b> Nó là phương án duy nhất trong ba cái mà một
+          dòng gán <code>Time.timeScale</code> ở file người khác không thể âm thầm phá được.
+        </p>
+      </article>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>Nhóm 2 · Đóng nốt phase-00 <span class="tag">~65 phút</span></h2>
+    <p class="lede">Bốn mục này không chặn tôi viết code, nhưng chặn việc tuyên bố phase-00 đã đóng. A3 là mục có xác suất tìm ra lỗi thật cao nhất trong cả danh sách.</p>
+
+    <div class="items">
+
+      <article class="item hold">
+        <div class="item-head">
+          <span class="item-id">A3</span>
+          <h3 class="item-title">Chạy shadow comparison và gửi tôi dòng summary</h3>
+          <span class="item-eff">~30 phút chơi + 5 phút báo</span>
+        </div>
+        <div class="pathbar"><b>Làm ở</b> Unity Editor · <b>prefab</b> <code>Assets/Prefab/Player Fps Actor.prefab</code></div>
+        <ol class="steps">
+          <li>
+            Trong cửa sổ <strong>Project</strong>, gõ <code>Player Fps Actor</code> vào ô tìm kiếm, bấm đúp để mở prefab.
+            Đây là prefab duy nhất trong project có cả <code>FpsActorController</code> lẫn <code>CharacterController</code>.
+          </li>
+          <li>
+            Chọn GameObject gốc của prefab → <strong>Add Component</strong> → gõ <code>MovementShadowCompare</code> → Enter.
+          </li>
+          <li>
+            <strong>Ctrl+S</strong> để lưu prefab, rồi thoát chế độ prefab và bấm <strong>Play</strong>.
+          </li>
+          <li>Di chuyển có chủ đích theo bảng dưới, mắt để ở cửa sổ <strong>Console</strong>.</li>
+          <li>
+            Bấm <strong>Play</strong> lần nữa để thoát. Đúng lúc thoát, Console in ra một dòng bắt đầu bằng
+            <code>[MovementShadowCompare]</code>. Đó là thứ tôi cần.
+          </li>
+        </ol>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr><th>Làm gì</th><th>Bao lâu</th><th>Nhìn cái gì</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Đi tới, đi lui, đi ngang trên đất phẳng</td><td class="eff">30 s</td><td><b>Phải sạch.</b> Lệch ở đây là bug thật</td></tr>
+              <tr><td>Chạy nước rút trên đất phẳng</td><td class="eff">30 s</td><td>Phải sạch</td></tr>
+              <tr><td>Ngồi và đi trên đất phẳng</td><td class="eff">30 s</td><td>Phải sạch. Xem ghi chú bên dưới</td></tr>
+              <tr><td>Nhảy liên tục, đất phẳng</td><td class="eff">30 s</td><td>Lệch nhẹ ở tick tiếp đất là bình thường</td></tr>
+              <tr><td>Lên xuống dốc</td><td class="eff">60 s</td><td>Lệch, đã biết và đã ghi lại</td></tr>
+              <tr><td>Đâm vào tường, đi men tường</td><td class="eff">60 s</td><td>Lệch, đã biết và đã ghi lại</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          <code>MovementShadowCompare</code> chỉ đọc, không có đường code nào trong đó ghi vào
+          <code>CharacterController</code>, vào transform, hay vào bất kỳ field nào của <code>Actor</code>.
+          Nó không thể làm game chơi khác đi.
+        </p>
+        <div class="note">
+          <b>Vì sao ngồi-và-đi lại nằm riêng trong danh sách.</b> Kế hoạch phase-00 giả định có
+          <code>CROUCH_SPEED</code> bằng 2.0 m/s. Giá trị đó không tồn tại ở đâu trong project: ngồi chỉ đổi chiều cao
+          collider chứ không đổi gì khác (<code>FpsActorController.cs:678-682</code>), và chỗ chọn tốc độ chỉ rẽ nhánh
+          theo cờ sprint (<code>FirstPersonController.cs:280-282</code>). Tôi dựng simulation không có tốc độ ngồi.
+          Nếu ngồi-và-đi bị lệch thì tôi đọc sai, và tôi cần biết trước khi M1 đáp xuống, vì triệu chứng ngoài production
+          sẽ là rubber-banding <em>chỉ khi đang ngồi</em>: chập chờn, và truy về một hằng số chưa ai từng viết ra.
+        </div>
+        <dl class="kv">
+          <dt>Trả lời</dt><dd>Dòng <code>[MovementShadowCompare] ...</code> in ra lúc thoát Play, kèm mọi cảnh báo <b>MOVEMENT DIVERGED</b> xuất hiện trên đất phẳng.</dd>
+        </dl>
+      </article>
+
+      <article class="item hold">
+        <div class="item-head">
+          <span class="item-id">A4</span>
+          <h3 class="item-title">Gắn NetMovementAgent lên player prefab</h3>
+          <span class="item-eff">~10 phút</span>
+        </div>
+        <div class="pathbar"><b>Làm ở</b> Unity Editor · <b>cùng prefab với A3</b> <code>Assets/Prefab/Player Fps Actor.prefab</code></div>
+        <p>
+          Mở lại đúng prefab đó, chọn GameObject gốc → <strong>Add Component</strong> → <code>NetMovementAgent</code> → Ctrl+S.
+          Nó có <code>[RequireComponent(typeof(CharacterController))]</code> nên nếu gắn nhầm GameObject khác,
+          Editor sẽ tự nhét thêm một <code>CharacterController</code> vào đó: thấy vậy là gắn sai chỗ, undo ngay.
+        </p>
+        <p>
+          Chưa cần nối dây gì cả: phần tích hợp M1 mới gọi <code>Tick()</code>, từ giờ tới đó nó chỉ nằm im giữ state.
+          Sau khi lưu, gỡ <code>MovementShadowCompare</code> ra hay để lại đều được, nó chỉ đọc.
+        </p>
+        <dl class="kv">
+          <dt>Trả lời</dt><dd>Đường dẫn prefab, và Console vẫn sạch.</dd>
+        </dl>
+      </article>
+
+      <article class="item go">
+        <div class="item-head">
+          <span class="item-id">A7</span>
+          <h3 class="item-title">Xác nhận biên bản đồ, chỉ để chắc</h3>
+          <span class="item-eff">~10 phút</span>
+        </div>
+        <div class="pathbar"><b>Làm ở</b> Unity Editor, Play mode trên map <code>Dustbowl</code></div>
+        <p>
+          Tôi đo được rồi mà không cần Editor: scene lưu ở dạng YAML text nên <code>LevelBounds</code> đọc thẳng từ
+          <code>Dustbowl.unity</code>, ra 1700 × 700 × 1600 tâm tại (-70.8, 207.6, -88.6), toạ độ chơi được xa nhất
+          920.8 m so với <code>POS_MAX</code> 2048. Dư 2.2 lần, và bản freeze đã ghi là chốt.
+        </p>
+        <p>
+          Thứ tôi không kiểm được từ YAML là liệu người chơi có <em>đi tới</em> được chỗ nào quá 2048 m bằng xe, thang máy
+          hay một lối ra ngoài map. <b>Nếu có đường nào vượt ±2048 m trên bất kỳ map nào, báo tôi</b>: lượng tử hoá vị trí
+          sẽ kẹp ở đó và nhân vật dính vào một bức tường vô hình. Không có thì không cần làm gì.
+        </p>
+      </article>
+
+      <article class="item go">
+        <div class="item-head">
+          <span class="item-id">A8</span>
+          <h3 class="item-title">Đọc lướt bản phân tích chuyển động</h3>
+          <span class="item-eff">~10 phút</span>
+        </div>
+        <div class="pathbar"><b>Đọc ở</b> <code>d:\Coding\LTM\docs\movement-analysis.md</code>, mở bằng VS Code hoặc ngay trên GitHub</div>
+        <p>
+          Phase-00 tiêu chí 10 xin một buổi 60 phút để A giải thích code di chuyển trong <code>Actor.cs</code>.
+          <b>Đã huỷ</b>, vì <code>Actor.cs</code> không chứa code đó.
+        </p>
+        <p>
+          Thứ buổi họp ấy định tạo ra thì giờ đã nằm trong <code>docs/movement-analysis.md</code>, viết từ source và
+          pin bằng 18 unit test. <b>Đọc § 0 và § 5, rồi nói tôi biết có chỗ nào trái với những gì A đang nắm</b>,
+          nhất là danh sách lệch đã biết ở § 5. Với tôi mười phút đó đáng giá hơn một tiếng họp.
+        </p>
+      </article>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>Nhóm 3 · Mở đường vào M1 <span class="tag">sync point 4 + API</span></h2>
+    <p class="lede">Hai mục này quyết định M1 chạy trên hạ tầng thật hay chạy trên đường vòng. Có đường vòng cho cả hai, nhưng đường vòng nào cũng đắt hơn.</p>
+
+    <div class="items">
+
+      <article class="item stop">
+        <div class="item-head">
+          <span class="item-id">HB</span>
+          <h3 class="item-title">Headless build chạy 10 phút không crash</h3>
+          <span class="item-eff">~1 ngày</span>
+        </div>
+        <p>
+          Đây là sync point 4 trong <code>dependency-map.md</code>, và là <b>mục M0 duy nhất còn lại phụ thuộc Editor</b>,
+          nên không ai kéo hộ được. Tiêu chí nghiệm thu lấy nguyên từ phase-00 của A:
+        </p>
+        <div class="pathbar"><b>Làm ở</b> Unity Editor (tạo build) → rồi terminal (chạy build)</div>
+        <p>
+          Build profile cho server <b>chưa tồn tại</b>, đây là Task 7 trong phase-00 của A: trong Editor vào
+          <code>File → Build Profiles</code>, tạo một profile nền tảng <b>Dedicated Server</b> với define symbol
+          <code>UNITY_SERVER</code> và <code>IRONFRONT_SERVER</code>, tắt audio và graphics API. Build ra một thư mục
+          riêng ngoài <code>Assets/</code>, ví dụ <code>d:\Coding\LTM\build\server\</code>, để Unity không import ngược
+          chính output của nó. Sau đó chạy file exe vừa build từ terminal:
+        </p>
+        <div class="runbox">
+          <div class="pathbar"><b>Chạy ở</b> terminal, tại thư mục vừa build ra</div>
+          <pre><code>cd d:\Coding\LTM\build\server
+.\server.exe -batchmode -nographics -logFile s.log</code></pre>
+        </div>
+        <p>Để nó chạy 10 phút, rồi đọc log ngay trong terminal đó:</p>
+        <div class="runbox">
+          <div class="pathbar"><b>Chạy ở</b> cùng terminal đó</div>
+          <pre><code>Select-String -Path s.log -Pattern "Exception" | Measure-Object   # Count phải là 0</code></pre>
+        </div>
+        <p>
+          Script <code>tools/build-server.ps1</code> cũng chưa tồn tại, A viết bản đầu rồi D nối vào CI.
+          Tiêu chí nghiệm thu lấy nguyên từ phase-00 của A:
+        </p>
+        <ul>
+          <li>Chạy 10 phút liên tục, grep <code>Exception</code> trong <code>s.log</code> ra 0 dòng.</li>
+          <li>Bot spawn và di chuyển: log vị trí bot mỗi 5 giây, thấy nó đổi.</li>
+          <li>A* chạy được headless: log <code>Seeker.StartPath</code> trả về path nhiều hơn 1 node.</li>
+          <li>21 singleton đã có guard, vì headless không có UI nên mọi <code>IngameUi.instance</code> đều null.</li>
+          <li>Chơi single-player 5 phút thấy y hệt trước khi refactor: chạy, bắn, ngồi, nghiêng, đổi súng, lên xe, chết, hồi sinh.</li>
+        </ul>
+        <div class="note">
+          <b>Đường vòng của tôi:</b> dùng Unity Play Mode thay headless để test tick loop, đúng như
+          <code>dependency-map § 6</code> đã dự phòng. Nó chạy được, chỉ chậm hơn và không tự động hoá được trong CI.
+          Bước Unity trong <code>tools/ci.ps1</code> vẫn opt-in qua <code>UNITY_PATH</code>, nên B, C, D không bị chặn vì không có Editor.
+        </div>
+        <p>
+          A* có thể bake trước cache trong Editor (<code>AstarPath</code> → <code>Cache startup</code> → <code>Scan</code> → <code>Save to file</code>, ~15 phút).
+          Không bake thì server tự voxelize map lúc boot, mất 10 đến 60 giây, <b>vẫn chạy</b>. Nên đây là việc nên làm, không phải việc chặn.
+        </p>
+      </article>
+
+      <article class="item hold">
+        <div class="item-head">
+          <span class="item-id">A6</span>
+          <h3 class="item-title">Danh sách weapon id cố định</h3>
+          <span class="item-eff">~30 phút</span>
+        </div>
+        <div class="pathbar"><b>Làm ở</b> Unity Editor hoặc IDE · <b>nơi đặt</b> <code>Ironfront_Reborn/Assets/Scripts/</code>, phía A</div>
+        <p>
+          Snapshot mang <code>weaponId</code> kiểu <code>u8</code> theo spec § 4.3, mà tôi không có bảng ánh xạ id sang vũ khí nào ổn định.
+          <code>Actor.activeWeapon</code>, <code>Actor.weapons[5]</code>, <code>activeWeaponSlot</code> đều là tham chiếu object,
+          mà tham chiếu thì không sống sót qua một chặng mạng.
+        </p>
+        <p>
+          Tôi cần <b>một danh sách vũ khí có thứ tự, id nguyên, cố định</b>: cố định nghĩa là id 3 tuần sau vẫn là khẩu đó, và trên máy nào cũng vậy.
+          Một <code>ScriptableObject</code> registry, một mảng serialize trên <code>WeaponManager</code>, hay chỉ một enum có ghi chú, đều được.
+          Hình dạng do A chọn, tôi chỉ cần id cố định và đọc được từ code.
+        </p>
+        <div class="note">
+          Chưa có thì snapshot ship <code>weaponId = 0</code> và field nằm im. <b>Không chặn gì cả</b>, chỉ là M1 sẽ không hiển thị đúng súng trên tay người khác.
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>Ba cái bẫy tôi đã gặp trước <span class="tag">đọc trước khi code</span></h2>
+    <div class="traps">
+      <div class="trap">
+        <h4>OnMessage đưa cho bạn buffer đi mượn</h4>
+        <p>
+          Buffer đó bị thu hồi ngay khi handler return. Giữ lại dữ liệu là lát nữa đọc trúng packet của người khác.
+          Cần sống lâu hơn callback thì phải copy. Đây là loại bug thật sự khó lần ra.
+        </p>
+      </div>
+      <div class="trap">
+        <h4>SimulatorConfig.ReorderPercent = 100 không đảo gì cả</h4>
+        <p>
+          Đảo thứ tự được cài đặt như một độ trễ thêm vào các packet được chọn, nên chọn tất cả nghĩa là dịch đều cả luồng
+          và giữ nguyên thứ tự. Giá trị hữu ích nằm dưới 50 khá xa. Đã pin thành test nên không thể regress.
+        </p>
+      </div>
+      <div class="trap">
+        <h4>TypeLoadException không nói gì về assembly bị thiếu</h4>
+        <p>
+          Nếu Console ném <code>TypeLoadException</code> sau khi copy DLL, gần như chắc chắn là thiếu một trong bốn assembly phụ ở mục A1.
+          Đừng đọc thông điệp lỗi, hãy đếm file trong <code>Assets/Plugins/</code>.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Những gì đã sẵn sàng cho A <span class="tag">merged, xanh, 0 warning</span></h2>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Có sẵn ngay</th><th>Dùng để làm gì</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="id">ITransportClient / ITransportServer</td><td>API đã đóng băng. Code dựa vào đây và chỉ đây.</td></tr>
+          <tr><td class="id">LoopbackTransport</td><td>Client và server trong bộ nhớ, không socket. Test prediction với 200 ms latency ngay trong một tiến trình Editor.</td></tr>
+          <tr><td class="id">NetworkSimulator</td><td>5 kiểu nhiễu, seed cố định. <code>IRONFRONT_SIM=typical|bad|awful</code> ngay lúc chạy, không cần build lại.</td></tr>
+          <tr><td class="id">MovementCore / MovementSimulation</td><td>Simulation dùng chung, hằng số thật, 18 test.</td></tr>
+          <tr><td class="id">SnapshotBuilder / DeltaEncoder / DeltaDecoder</td><td>Snapshot đầy đủ và delta. Đo được: tiết kiệm 44.7%, 10.94 KB/s mỗi client ở 48 actor.</td></tr>
+          <tr><td class="id">ServerTickScheduler / InputAuthority / ClientSession</td><td>Nhịp 30 Hz, xử lý input chống gian lận.</td></tr>
+          <tr><td class="id">BitWriter / BitReader</td><td>Của Dev B, kèm bộ conformance suite chấm nó.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Tôi cần nhận lại đúng những dòng này</h2>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Mục</th><th>Trả lời bằng</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="id">A1</td><td>"clean" hoặc nguyên văn lỗi</td></tr>
+          <tr><td class="id">A2</td><td>done</td></tr>
+          <tr><td class="id">A3</td><td>dòng summary, kèm cảnh báo trên đất phẳng nếu có</td></tr>
+          <tr><td class="id">A4</td><td>đường dẫn prefab</td></tr>
+          <tr><td class="id">A5</td><td><b>A, B hoặc C</b></td></tr>
+          <tr><td class="id">A6</td><td>cách đọc id từ code</td></tr>
+          <tr><td class="id">A7</td><td>có hoặc không</td></tr>
+          <tr><td class="id">A8</td><td>chỗ nào trái với những gì A biết</td></tr>
+          <tr><td class="id">HB</td><td>log 10 phút, hoặc ngày dự kiến xong</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="lede">
+      A5 là mục duy nhất cần một quyết định thay vì một lần kiểm tra. A3 là mục nhiều khả năng tìm ra thứ gì đó nhất.
+      Còn lại đều là xác nhận.
+    </p>
+  </section>
+
+  <section>
+    <h2>Hai thứ tôi thấy trong file của A <span class="tag">báo, không sửa</span></h2>
+    <p class="lede"><code>conventions.md § 7</code> nói báo chứ đừng sửa. Cả hai đều không gấp và đều không thuộc quyền tôi.</p>
+    <div class="traps">
+      <div class="trap">
+        <h4>ForceEndCrouch hardcode khoảng nâng khi đứng dậy</h4>
+        <p>
+          <code>FpsActorController.cs:696-700</code> đặt <code>height = 1.8f</code> rồi nâng transform lên <code>1.3f / 2f</code>.
+          Số <code>1.3</code> chính là <code>1.8 - 0.5</code> viết tay, nên đổi một trong hai chiều cao trong prefab sẽ làm
+          khoảng nâng lệch khỏi collider trong im lặng, và người chơi đứng dậy với nửa người nằm dưới sàn.
+          Suy ra từ công thức <code>(stand - crouch) / 2</code> thì nó tự nhất quán.
+        </p>
+      </div>
+      <div class="trap">
+        <h4>IsProne chưa có phần cài đặt</h4>
+        <p>
+          <code>InputButtons.Prone</code> (bit 6) và <code>ActorStateFlags.IsProne</code> (bit 2) đều nằm trong protocol đã đóng băng,
+          mà không có gì trong game sinh ra hay tiêu thụ chúng. Tôi để nguyên như chỗ trống dành sẵn trên dây,
+          vì bỏ đi là phải bump <code>PROTOCOL_VERSION</code> mà chẳng được gì. Báo để sau này A không bị bất ngờ.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div>Nguồn sự thật: <code>plans/dev-c-replication/handoff/dev-a-checklist.md</code> · <code>plans/00-shared/dependency-map.md</code> · <code>docs/movement-analysis.md</code></div>
+    <div>Trang này chỉ sắp lại theo gate. Khi hai bên lệch nhau, tin file markdown.</div>
+  </footer>
+
+</div>

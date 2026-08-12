@@ -52,14 +52,18 @@ public sealed class ClientPrediction
         public byte    StateFlags;
     }
 
-    /// <summary>Called every FixedUpdate (30Hz). Runs the simulation right here on the client.</summary>
+    /// <summary>Called once per simulated tick (30 Hz) by NetPredictionClock, NOT by FixedUpdate.</summary>
     public void PredictTick(in NetInputFrame input, Actor actor)
     {
         int i = (int)(_clientTick % HISTORY);
         _inputs[i] = input;
 
-        // Apply the input EXACTLY the way the server does — this is the precondition
-        MovementSimulation.Step(actor, in input, Time.fixedDeltaTime);
+        // Apply the input EXACTLY the way the server does — this is the precondition.
+        // MovementSimulation.FixedDeltaTime, never Time.fixedDeltaTime: A5 was decided as
+        // option B, so the physics rate and the tick rate are deliberately different, and
+        // Time.fixedDeltaTime is additionally overwritten to Time.timeScale/60f at runtime
+        // by IngameMenuUi.cs:29 and FpsActorController.cs:497.
+        MovementSimulation.Step(actor, in input, MovementSimulation.FixedDeltaTime);
 
         _states[i] = new PredictedState {
             Tick = _clientTick,
@@ -150,7 +154,7 @@ public void Reconcile(Vector3 serverPos, Vector3 serverVel, uint lastProcessedIn
     for (uint t = lastProcessedInputTick + 1; t < _clientTick; t++)
     {
         int j = (int)(t % HISTORY);
-        MovementSimulation.Step(actor, in _inputs[j], Time.fixedDeltaTime);
+        MovementSimulation.Step(actor, in _inputs[j], MovementSimulation.FixedDeltaTime);
         _states[j].Position = actor.transform.position;
         _states[j].Velocity = actor.NetVelocity;
     }
