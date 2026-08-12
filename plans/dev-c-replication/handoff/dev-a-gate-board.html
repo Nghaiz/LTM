@@ -333,10 +333,18 @@
       trong scene. Tất cả đều đã verify được phần verify được mà không cần Editor. Phần còn lại thì không:
       <b>Nhóm V là năm câu hỏi chỉ Editor mới trả lời được, và nó chặn A3.</b> Bắt đầu ở đó, đừng bắt đầu ở A3.
     </div>
+    <div class="note">
+      <b>Vòng 3 — 12-08 tối. PR #17 của A: tôi đã request changes.</b> Không có gì hỏng, nhưng hai
+      mặc định của package Unity-MCP chạm vào file dùng chung và sẽ theo về máy cả bốn người:
+      17 MB DLL đang được đóng vào player build, và <code>UNITY_MCP_READY</code> đóng dấu lên cả 19
+      platform. Ba điểm nhỏ hơn nữa. Chi tiết ở <b>Nhóm P</b>, và ở
+      <a href="https://github.com/Sagitoaz/LTM/pull/17">review trên PR</a>.
+      <b>Nhóm P không chặn nhóm V — nhưng làm V trước rồi hẵng merge #17.</b> Lý do ở thẻ P0.
+    </div>
     <div class="meta">
-      <span><b>Ngày</b> 12-08-2026 · vòng 2</span>
+      <span><b>Ngày</b> 12-08-2026 · vòng 3</span>
       <span><b>Mốc</b> M0 đóng · M1 mở</span>
-      <span><b>Còn lại</b> ~1h55 trong Editor</span>
+      <span><b>Còn lại</b> ~1h55 trong Editor + ~35 ph cho #17</span>
       <span><b>SSOT</b> plans/dev-c-replication/handoff/dev-a-checklist.md</span>
     </div>
   </header>
@@ -346,6 +354,10 @@
       <div class="stat is-stop">
         <span class="n">5</span>
         <span class="l">Câu hỏi chỉ Editor trả lời được</span>
+      </div>
+      <div class="stat is-stop">
+        <span class="n">2</span>
+        <span class="l">Điểm chặn trong PR #17</span>
       </div>
       <div class="stat is-hold">
         <span class="n">3</span>
@@ -380,6 +392,27 @@
           </tr>
         </thead>
         <tbody>
+          <tr>
+            <td class="id">P1 <span class="pill stop">chặn #17</span></td>
+            <td>Đặt 42 DLL của MCP về <b>Editor-only</b></td>
+            <td class="eff">15 ph</td>
+            <td>Merge được #17</td>
+            <td class="fb">Tôi không merge #17. Không mất gì, vì #17 không mở gate nào của tôi.</td>
+          </tr>
+          <tr>
+            <td class="id">P2 <span class="pill stop">chặn #17</span></td>
+            <td>Gỡ <code>UNITY_MCP_READY</code> khỏi platform không build, và trả lời define đó dùng làm gì</td>
+            <td class="eff">10 ph</td>
+            <td>Merge được #17</td>
+            <td class="fb">Như trên. Nhưng câu trả lời quyết định P1 nghiêm trọng tới đâu.</td>
+          </tr>
+          <tr>
+            <td class="id">P3 <span class="pill hold">dọn</span></td>
+            <td>Gitignore <code>.mcp.json</code> + <code>.claude/</code>, đổi scope commit sang <code>client</code></td>
+            <td class="eff">10 ph</td>
+            <td>Job <code>style</code> xanh lại</td>
+            <td class="fb">Advisory nên không chặn. Nhưng token đã vào history thì gỡ ra phải rewrite.</td>
+          </tr>
           <tr>
             <td class="id">A1 <span class="pill done">xong</span></td>
             <td>Chạy <code>build-libs.ps1</code>, xác nhận Editor load được DLL</td>
@@ -585,6 +618,182 @@
           Editor là nơi xác nhận Unity nạp được chúng. Sau khi chạy lệnh, quay lại Editor và bấm vào cửa sổ
           cho nó lấy focus, Unity sẽ tự recompile.
         </div>
+      </article>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>Nhóm P · PR #17, Unity MCP <span class="tag">vòng 3 · ~35 phút · tôi đã request changes</span></h2>
+    <p class="lede">
+      A mở #17 chiều nay để cài Unity-MCP. Tôi đọc hết 170 file. <b>Không có gì A làm sai</b> — hai điểm
+      chặn dưới đây đều là mặc định của package. Vấn đề là chúng nằm trong <code>ProjectSettings.asset</code>
+      và <code>Assets/Plugins/</code>, tức là file dùng chung, nên chúng theo về máy tôi, B và D ngay lúc merge,
+      và theo vào bản build của cả bốn người.
+    </p>
+    <p class="lede">
+      Toàn bộ lập luận và đoạn log tôi trích đều nằm trong
+      <a href="https://github.com/Sagitoaz/LTM/pull/17">review trên PR</a>. Trang này là bản có các bước bấm.
+    </p>
+
+    <div class="items">
+
+      <article class="item go">
+        <div class="item-head">
+          <span class="item-id">P0</span>
+          <h3 class="item-title">Làm nhóm V trước, rồi mới merge #17</h3>
+          <span class="item-eff">0 phút · chỉ là thứ tự</span>
+        </div>
+        <p>
+          V1 yêu cầu A mở Editor và <b>đếm số dòng đỏ</b> trong Console. Merge #17 trước là thêm một package,
+          một scoped registry và 85 DLL vào đúng phép đo đó.
+        </p>
+        <p>
+          Nếu Console có dòng đỏ sau khi #17 đã vào, ta mất thời gian phân biệt "lỗi Unity 6 còn sót từ #14"
+          với "lỗi do MCP", và cả hai giả thuyết đều hợp lý nên không loại được cái nào bằng suy luận.
+          Làm V trên <code>develop</code> hiện tại thì câu trả lời sạch, và #17 không chặn gì của tôi
+          nên nó chờ được.
+        </p>
+        <div class="note">
+          Nếu A đã lỡ merge rồi thì không sao, chỉ cần nói tôi biết trước khi gửi kết quả V1, để tôi đọc
+          con số đó với đúng bối cảnh.
+        </div>
+      </article>
+
+      <article class="item stop">
+        <div class="item-head">
+          <span class="item-id">P1</span>
+          <h3 class="item-title">85 DLL, 17.2 MB, đang được đóng vào player build</h3>
+          <span class="item-eff">~15 phút</span>
+        </div>
+        <div class="pathbar"><b>Làm ở</b> Unity Editor · Project window + Inspector</div>
+        <p>Bằng chứng, đọc từ <code>Assets/Plugins/NuGet/McpPlugin.dll.meta</code> và 41 file <code>.meta</code> còn lại:</p>
+        <pre><code>platformData:
+  Any:
+    enabled: 1
+    settings:
+      Exclude Editor: 0</code></pre>
+        <p>
+          <code>Any: enabled: 1</code> cộng <code>Exclude Editor: 0</code> nghĩa là Unity mang toàn bộ SignalR
+          client và <code>McpPlugin</code> vào <b>mọi</b> player build, <b>mọi</b> platform. Không chỉ nặng thêm
+          17 MB: bản ship sẽ chứa một network client biết tự mở kết nối ra ngoài, mà không có đường nào
+          trong game gọi tới nó.
+        </p>
+        <div class="choices">
+          <div class="choice pick">
+            <h4>Cách 1 — Inspector (tôi nghiêng về cái này)</h4>
+            <p>
+              Chọn cả 42 DLL trong Project window, Inspector bỏ tick <b>Any Platform</b>, chỉ để <b>Editor</b>,
+              bấm Apply. Diff <code>.meta</code> đọc được, và không đụng vào cấu trúc thư mục nên package
+              không có cớ gì để gãy.
+            </p>
+          </div>
+          <div class="choice">
+            <h4>Cách 2 — đổi tên thư mục</h4>
+            <p>
+              <code>git mv Assets/Plugins/NuGet Assets/Plugins/Editor/NuGet</code>. Unity coi mọi thứ dưới
+              folder tên <code>Editor</code> là editor-only nên khỏi sửa 42 file meta. Nhanh hơn, nhưng nếu
+              asmdef runtime của package có tham chiếu tới mấy DLL này thì nó gãy lúc compile.
+            </p>
+          </div>
+        </div>
+        <div class="note">
+          <b>Tôi không tự chọn được giúp A.</b> Tôi không mở Editor nên không test được cách nào package chịu
+          được. Nếu A chọn cách 2, báo tôi kết quả compile — gãy thì lùi về cách 1, mất thêm 15 phút chứ
+          không mất gì khác.
+        </div>
+        <dl class="kv">
+          <dt>Trả lời</dt><dd>Chọn cách nào, và Console sau khi Apply còn dòng đỏ nào không.</dd>
+        </dl>
+      </article>
+
+      <article class="item stop">
+        <div class="item-head">
+          <span class="item-id">P2</span>
+          <h3 class="item-title">
+            <code>UNITY_MCP_READY</code> đóng dấu lên cả 19 platform
+          </h3>
+          <span class="item-eff">~10 phút</span>
+        </div>
+        <div class="pathbar"><b>Làm ở</b> Unity Editor · Project Settings → Player → Scripting Define Symbols</div>
+        <p>
+          <code>ProjectSettings/ProjectSettings.asset</code> giờ có define đó cho Android, PS4, PS5, Switch,
+          Switch 2, XboxOne, GameCore, VisionOS, QNX, Kepler, WebGL, tvOS và phần còn lại. File này dùng
+          chung, nên nó về máy tôi, B và D ngay khi merge.
+        </p>
+        <div class="note">
+          <b>Câu hỏi tôi cần A trả lời, vì nó quyết định P1 nghiêm trọng tới đâu:</b> package dùng define này
+          để <b>guard code trong Editor</b>, hay để <b>bật hook lúc runtime</b>? Trường hợp đầu thì nó chỉ
+          thừa. Trường hợp sau thì tooling đi thẳng vào bản ship, và P1 chuyển từ "nặng file" thành
+          "có thứ đang chạy trong game mà không ai gọi".
+        </div>
+        <p>
+          Dù câu trả lời là gì: xin gỡ define khỏi những platform ta không build. Dự án chưa từng build PS5
+          hay Switch, và một define còn sót ở đó là thứ sẽ làm ai đó mất một buổi chiều trong hai năm nữa,
+          lúc không còn ai nhớ nó từ đâu ra.
+        </p>
+        <dl class="kv">
+          <dt>Trả lời</dt><dd>Define dùng cho <b>editor</b> hay <b>runtime</b>, và còn để lại ở những platform nào.</dd>
+        </dl>
+      </article>
+
+      <article class="item hold">
+        <div class="item-head">
+          <span class="item-id">P3</span>
+          <h3 class="item-title">Gitignore, và đổi scope commit</h3>
+          <span class="item-eff">~10 phút</span>
+        </div>
+        <div class="pathbar"><b>Chạy ở</b> terminal, đứng tại <code>d:\Coding\LTM</code></div>
+        <p>Ba thứ nhỏ, gộp một lần sửa.</p>
+        <p>
+          <b>Một.</b> <code>.mcp.json</code> có dòng
+          <code>"url": "https://ai-game.dev/mcp/p/b7879af7"</code>. Đoạn <code>b7879af7</code> là thứ duy nhất
+          phân biệt project của A với project của người lạ trên dịch vụ đó. Nó không phải id, nó là bearer
+          token viết trong path, và <code>conventions.md § 1.4</code> xếp secret string vào nhóm cấm commit.
+          Repo đang private nên phạm vi giới hạn trong bốn người, không phải sự cố. Nhưng đã vào history rồi
+          thì gỡ ra cần rewrite, và ta sẽ không muốn làm việc đó lúc đang gấp.
+        </p>
+        <p>
+          <b>Hai.</b> 100 file <code>SKILL.md</code>, 13.5k dòng, đều sinh tự động từ chính MCP server.
+          <code>.gitignore</code> ở gốc vốn đã ignore <code>/.claude</code>; PR mở một ngoại lệ cho thư mục
+          lồng bên trong <code>Ironfront_Reborn/</code>. Để nguyên thì chúng nằm trong mọi
+          <code>git log -p</code>, mọi <code>blame</code>, mọi lần bisect từ nay về sau.
+        </p>
+        <pre><code># thay cho hai dòng settings.json mà PR đang thêm
+/Ironfront_Reborn/.claude/
+/Ironfront_Reborn/.mcp.json</code></pre>
+        <pre><code>git rm -r --cached Ironfront_Reborn/.claude Ironfront_Reborn/.mcp.json</code></pre>
+        <p>File vẫn nằm trên đĩa và A dùng bình thường. Chỉ là git thôi không theo dõi nữa.</p>
+        <p>
+          <b>Ba.</b> Job <code>style</code> đỏ, và tôi đã đọc log run 31568816871: không có lỗi format nào cả,
+          chỉ có scope commit.
+        </p>
+        <pre><code>BAD  chore(unity): install Unity MCP integration
+     -&gt; unknown scope 'unity' — valid: client, transport,
+        replication, master, protocol, tools, ci, modules</code></pre>
+        <p>
+          <code>build-test</code> xanh cả ubuntu lẫn windows. Đổi scope sang <code>client</code> là job xanh
+          lại. Nó advisory nên không chặn merge, nhưng để đỏ lâu thì lần sau không ai nhìn nó nữa, và lúc đó
+          nó vô dụng.
+        </p>
+      </article>
+
+      <article class="item go">
+        <div class="item-head">
+          <span class="item-id">P4</span>
+          <h3 class="item-title"><code>PlayerAudio.mixer</code> — không phải vấn đề, chỉ nằm nhầm chỗ</h3>
+          <span class="item-eff">~5 phút, tuỳ A</span>
+        </div>
+        <p>
+          Diff đúng là Unity 6 serialize lại: <code>m_PrefabParentObject</code> thành
+          <code>m_CorrespondingSourceObject</code> + <code>m_PrefabInstance</code> + <code>m_PrefabAsset</code>,
+          thêm <code>m_Send</code>. Cùng loại với những gì #11 và #14 đã dọn. Giữ nguyên, không cần làm gì.
+        </p>
+        <p>
+          Điều duy nhất đáng nói là nó đi nhờ một PR về MCP. Tách ra commit riêng
+          <code>chore(client): upgrade PlayerAudio mixer serialization</code> rồi cherry-pick sang branch khác
+          thì nó merge được ngay hôm nay, không phải nằm chờ P1 và P2 xong.
+        </p>
       </article>
 
     </div>
@@ -1278,6 +1487,9 @@ C:\Users\&lt;tên&gt;\AppData\LocalLow\&lt;company&gt;\Ironfront_Reborn\Logs\iro
           <tr><td class="id">A1 <span class="pill done">xong</span></td><td>PR #12</td></tr>
           <tr><td class="id">A2 <span class="pill done">xong</span></td><td>PR #12</td></tr>
           <tr><td class="id">A5 <span class="pill done">xong</span></td><td>đã chọn <b>B</b></td></tr>
+          <tr><td class="id">P1</td><td>chọn cách 1 hay cách 2, và Console sau khi Apply</td></tr>
+          <tr><td class="id">P2</td><td><code>UNITY_MCP_READY</code> dùng cho <b>editor</b> hay <b>runtime</b></td></tr>
+          <tr><td class="id">P3</td><td>đã ignore và đã đổi scope, hoặc lý do không làm</td></tr>
           <tr><td class="id">V1</td><td><b>"0 error"</b>, hoặc nguyên văn từng dòng đỏ kèm tên scene</td></tr>
           <tr><td class="id">V2</td><td><b>"census sạch"</b>, hoặc dán mười dòng <code>assembly ...</code></td></tr>
           <tr><td class="id">V3</td><td>"log ghi được", hoặc cái gì thiếu</td></tr>
@@ -1294,7 +1506,12 @@ C:\Users\&lt;tên&gt;\AppData\LocalLow\&lt;company&gt;\Ironfront_Reborn\Logs\iro
     </div>
     <p class="lede">
       <b>V2 là mục có thể đổi một quyết định</b>, còn lại đều là xác nhận. A3 vẫn là mục nhiều khả năng tìm ra
-      thứ gì đó nhất. Không mục nào trong vòng này cần A quyết định gì — A5 đã đóng.
+      thứ gì đó nhất. Vòng này có đúng một quyết định thuộc về A và không ai quyết thay được:
+      <b>P1, chọn cách 1 hay cách 2</b> — vì chỉ A mở được Editor để biết package chịu được cách nào.
+    </p>
+    <p class="lede">
+      Thứ tự tôi đề nghị: <b>V1→V5 trước, rồi A3, rồi P1→P3, rồi A4.</b> Nhóm P không chặn gì của tôi,
+      nên nếu tối nay chỉ đủ thời gian cho một nhóm thì làm V.
     </p>
   </section>
 
