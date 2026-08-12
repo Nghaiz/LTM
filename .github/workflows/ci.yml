@@ -163,7 +163,12 @@ jobs:
       # `dotnet list package --vulnerable` exits 0 whether or not it finds anything, so the
       # output has to be inspected. Checking the exit code alone would report a permanent
       # all-clear.
+      #
+      # `if: always()` because a step in this job defaults to running only after a green
+      # predecessor: a commit-scope typo above would otherwise silently skip the security scan.
+      # A naming nit must never be able to turn the dependency scanner off.
       - name: Vulnerable dependency scan
+        if: always()
         shell: bash
         run: |
           output=$(dotnet list Ironfront.sln package --vulnerable --include-transitive 2>&1)

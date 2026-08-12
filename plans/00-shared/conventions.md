@@ -31,7 +31,10 @@ docs(protocol): freeze the position quantization constants
 refactor(client): split input out of FpsActorController
 ```
 
-Valid scopes: `client` `transport` `replication` `master` `protocol` `tools` `ci`.
+Valid scopes: `client` `transport` `replication` `master` `protocol` `tools` `ci` `modules`.
+
+`modules` is for changes to the solution's project layout itself — scaffolding or restructuring the
+owned projects — which belongs to no single ownership area. Reach for your own scope first.
 
 ### 1.3. The survival rule for Unity
 

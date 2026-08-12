@@ -11,7 +11,12 @@
 #     feat(transport): add a 32-bit ack bitfield to the header
 #
 # Types:  feat fix refactor test docs chore
-# Scopes: client transport replication master protocol tools ci
+# Scopes: client transport replication master protocol tools ci modules
+#
+# `modules` covers changes to the solution's project layout itself — scaffolding or restructuring
+# the owned projects — which belongs to no single ownership area. It is here rather than absent
+# because an integration PR re-checks the whole history: one non-conforming subject already in
+# develop would fail every future develop -> main PR, forever.
 #
 # Usage:
 #     pwsh tools/check-commit-scope.ps1                                  # HEAD vs origin/develop
@@ -34,7 +39,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $VALID_TYPES  = @("feat", "fix", "refactor", "test", "docs", "chore")
-$VALID_SCOPES = @("client", "transport", "replication", "master", "protocol", "tools", "ci")
+$VALID_SCOPES = @("client", "transport", "replication", "master", "protocol", "tools", "ci", "modules")
 
 # type(scope): description   — scope is required by section 1.2 ("with the scope being your
 # ownership area"), so a bare "feat: ..." is reported too. `!` marks a breaking change.
