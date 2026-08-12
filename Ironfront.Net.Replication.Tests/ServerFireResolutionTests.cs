@@ -200,30 +200,66 @@ namespace Ironfront.Net.Replication.Tests
         [Fact]
         public void SpreadStaysInsideItsCone()
         {
-            // A spread roll that could leave the cone would occasionally send a pellet
-            // somewhere the player never aimed, which reads as the server shooting for you.
-            var wide = new WeaponConfig(
-                cooldown: 0f, spread: 0.1f, projectilesPerShot: 200, range: 300f,
+            // The target is sized to the cone, which is the entire point. An earlier version of
+            // this used a 40 m wall at 20 m range: a pellet needed to deviate more than 45
+            // degrees to miss it, against a cone half-angle of 5.7 degrees, so it only failed if
+            // spread was wrong by a factor of about ten.
+            //
+            // spread 0.1 offsets the unit aim by at most 0.1 before renormalising, so the
+            // maximum deviation is asin(0.1) = 5.74 degrees. At 20 m that is 2.01 m of lateral
+            // travel, so a panel with a 2.5 m half-width must catch every pellet.
+            const float spread = 0.1f;
+            const float range = 20f;
+            float maxLateral = MathF.Tan(MathF.Asin(spread)) * range;
+
+            var config = new WeaponConfig(
+                cooldown: 0f, spread: spread, projectilesPerShot: 200, range: 300f,
                 damage: 1f, force: 0f, clipSize: 255);
 
+            Assert.Equal(200, FirePelletsAtPanel(in config, range, halfWidth: maxLateral + 0.5f));
+        }
+
+        [Fact]
+        public void SpreadActuallyReachesTheEdgeOfItsCone()
+        {
+            // The other half: a cone that is real must also MISS a panel narrower than itself.
+            // Together these bracket the spread rather than only bounding it from one side.
+            const float spread = 0.1f;
+            const float range = 20f;
+            float maxLateral = MathF.Tan(MathF.Asin(spread)) * range;
+
+            var config = new WeaponConfig(
+                cooldown: 0f, spread: spread, projectilesPerShot: 200, range: 300f,
+                damage: 1f, force: 0f, clipSize: 255);
+
+            int hits = FirePelletsAtPanel(in config, range, halfWidth: maxLateral * 0.25f);
+
+            Assert.True(hits > 0, "every pellet missed a panel a quarter of the cone wide");
+            Assert.True(hits < 200,
+                $"all 200 pellets fitted inside a quarter of the cone — spread is not reaching "
+                + $"its stated {spread} offset");
+        }
+
+        /// <summary>Fires one full shot at a flat panel and counts the pellets that land.</summary>
+        private static int FirePelletsAtPanel(in WeaponConfig config, float range, float halfWidth)
+        {
             var compensator = new LagCompensator(new HitboxHistory());
             var resolver = new ServerFireResolver(compensator, seed: 7);
-            WeaponRuntimeState state = WeaponRuntimeState.Loaded(in wide);
-            var hits = new HitResult[200];
+            WeaponRuntimeState state = WeaponRuntimeState.Loaded(in config);
+            var hits = new HitResult[config.ProjectilesPerShot];
 
-            // A wall-sized box straight ahead: every pellet inside the cone must land on it.
-            var wall = new HitboxSet(
-                Aabb.FromSize(new Vec3(0f, 1.5f, 20f), new Vec3(20f, 20f, 0.5f)),
-                Aabb.FromSize(new Vec3(0f, 1.5f, 20f), new Vec3(20f, 20f, 0.5f)),
-                Aabb.FromSize(new Vec3(0f, 1.5f, 20f), new Vec3(20f, 20f, 0.5f)),
-                Aabb.FromSize(new Vec3(0f, 1.5f, 20f), new Vec3(20f, 20f, 0.5f)));
+            // Tall enough that vertical spread never leaves it, so this measures the horizontal
+            // bound only and cannot fail for the wrong reason.
+            var panel = Aabb.FromSize(
+                new Vec3(0f, Muzzle.Y, range), new Vec3(halfWidth * 2f, 200f, 0.5f));
+            var target = new HitboxSet(panel, panel, panel, panel);
 
             resolver.Resolve(
-                ref state, in wide, new[] { new HitscanTarget(Target, true, wall) },
+                ref state, in config, new[] { new HitscanTarget(Target, true, target) },
                 Shooter, true, Muzzle, Forward, nowSeconds: 10f, smoothedRttMs: 0f,
                 currentTick: 10, hits, out int hitCount);
 
-            Assert.Equal(200, hitCount);
+            return hitCount;
         }
 
         [Fact]

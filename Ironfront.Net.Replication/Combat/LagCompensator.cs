@@ -140,6 +140,12 @@ namespace Ironfront.Net.Replication.Combat
 
             uint targetTick = ResolveTargetTick(currentTick, smoothedRttMs);
 
+            // Non-finite input is rejected before it can reach the slab test. `SqrMagnitude` is
+            // NaN for a NaN direction and `NaN < 0.5f` is false, so the zero-direction guard
+            // below waves it straight through — and Vec3.Normalized does not stop it either,
+            // because `NaN < 1e-5f` is also false. See Aabb.Raycast for what that costs.
+            if (!IsFinite(in origin) || !IsFinite(in direction)) return HitResult.Miss(targetTick);
+
             Vec3 ray = direction.Normalized;
             if (ray.SqrMagnitude < 0.5f) return HitResult.Miss(targetTick);   // zero direction
 
@@ -209,6 +215,12 @@ namespace Ironfront.Net.Replication.Combat
             return new HitResult(
                 true, bestActor, bestType, in point, bestDistance, targetTick, bestUsedFallback);
         }
+
+        /// <summary>True when every component is a real number.</summary>
+        private static bool IsFinite(in Vec3 v)
+            => !float.IsNaN(v.X) && !float.IsInfinity(v.X)
+               && !float.IsNaN(v.Y) && !float.IsInfinity(v.Y)
+               && !float.IsNaN(v.Z) && !float.IsInfinity(v.Z);
 
         /// <summary>Hit rate over every shot resolved. The phase-02 experiment plots this against RTT.</summary>
         public double HitRatePercent => ShotsResolved == 0 ? 0.0 : 100.0 * ShotsHit / ShotsResolved;

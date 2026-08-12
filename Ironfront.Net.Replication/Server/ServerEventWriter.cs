@@ -104,15 +104,18 @@ namespace Ironfront.Net.Replication.Server
         }
 
         /// <summary>
-        /// Whether a client at <paramref name="listenerDistance"/> metres should receive an
-        /// event audible within <paramref name="radius"/>.
+        /// Whether a listener at <paramref name="listenerDistanceSquared"/> should receive an
+        /// event audible within <paramref name="radius"/> metres.
         /// </summary>
         /// <remarks>
-        /// Compared on squared distance by the caller where it matters; this overload exists so
-        /// the radius policy has one definition rather than a literal at each call site.
+        /// Takes the SQUARED distance, because that is what the caller has: the broadcast loop
+        /// runs per (event, client) and computing a square root per pair to compare against a
+        /// constant is work with no answer attached. Passing a linear distance here reports
+        /// almost everything as in earshot — 150 m against a 200 m radius compares 150 to
+        /// 40,000 — so the parameter is named for its units rather than left to a comment.
         /// </remarks>
-        public static bool IsWithinEarshot(float listenerDistance, float radius)
-            => listenerDistance <= radius;
+        public static bool IsWithinEarshotSquared(float listenerDistanceSquared, float radius)
+            => listenerDistanceSquared <= radius * radius;
 
         private static int Frame(
             Span<byte> destination, ChannelId channel, ServerMessageType type,

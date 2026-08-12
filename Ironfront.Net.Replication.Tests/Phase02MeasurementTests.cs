@@ -141,6 +141,13 @@ namespace Ironfront.Net.Replication.Tests
             for (uint snapshot = 1; snapshot <= 60; snapshot++)
             {
                 world.ServerTick = snapshot;
+
+                // The actors have to MOVE. Without this the assertion below is satisfied by any
+                // stale entry the client happens to be holding, so the test passes whether or
+                // not omitted actors are correctly re-sent in full — which is the whole thing
+                // it claims to check.
+                DriftActors(world, snapshot);
+
                 manager.BeginSnapshot();
                 Assert.True(manager.BuildView(1, world, snapshot, view));
 
@@ -356,6 +363,7 @@ namespace Ironfront.Net.Replication.Tests
         {
             const float strafeSpeed = 5f;
             const float range = 20f;
+            const uint firstShotTick = 200;
             const ushort shooter = 1;
             const ushort target = 2;
             var muzzle = new Vec3(0f, 1.5f, 0f);
@@ -370,7 +378,7 @@ namespace Ironfront.Net.Replication.Tests
 
             for (int shot = 0; shot < 20; shot++)
             {
-                uint currentTick = 200u + (uint)(shot * 3);
+                uint currentTick = firstShotTick + (uint)(shot * 3);
                 uint seenTick = currentTick - (uint)rewind;
 
                 for (uint tick = capturedThrough; tick <= currentTick; tick++)
@@ -378,7 +386,12 @@ namespace Ironfront.Net.Replication.Tests
 
                 capturedThrough = currentTick + 1;
 
-                Vec3 aimPoint = HitboxSet.Humanoid(PositionAt(seenTick)).Torso.Center;
+                // Derived from protocol-spec section 7.1 in milliseconds, NOT by calling
+                // RewindTicks — using the function under test to build the aim point makes the
+                // experiment self-fulfilling.
+                float clientViewLagMs = rttMs * 0.5f + ProtocolConstants.INTERP_BUFFER_MS;
+                float seenTimeMs = currentTick * ProtocolConstants.MS_PER_TICK - clientViewLagMs;
+                Vec3 aimPoint = HitboxSet.Humanoid(PositionAtTime(seenTimeMs)).Torso.Center;
                 var present = new[]
                 {
                     new HitscanTarget(target, true, HitboxSet.Humanoid(PositionAt(currentTick))),
@@ -393,7 +406,14 @@ namespace Ironfront.Net.Replication.Tests
             return hits;
 
             static Vec3 PositionAt(uint tick)
-                => new Vec3(strafeSpeed * tick / ProtocolConstants.SIM_TICK_RATE, 0f, range);
+                => PositionAtTime(tick * ProtocolConstants.MS_PER_TICK);
+
+            static Vec3 PositionAtTime(float milliseconds)
+                => new Vec3(
+                    strafeSpeed * (milliseconds - firstShotTick * ProtocolConstants.MS_PER_TICK)
+                        / 1000f,
+                    0f,
+                    range);
         }
     }
 }

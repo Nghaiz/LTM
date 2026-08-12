@@ -132,11 +132,19 @@ namespace Ironfront.Net.Replication.Combat
             if (!shooterIsAlive) return FireRejection.ShooterDead;
             if (!state.Unholstered) return FireRejection.Holstered;
             if (state.Reloading) return FireRejection.Reloading;
-            if (state.AmmoInClip == 0) return FireRejection.NoAmmo;
 
+            // Cooldown BEFORE ammo, and the order is about detection rather than about which
+            // answer is prettier. Checking ammo first means a cheater whose clip happens to be
+            // empty gets NoAmmo for every one of a thousand illegal fire intents, so
+            // FireRateViolations never moves and the rapid-fire signal criterion 6 is graded on
+            // disappears exactly when the attack is loudest. Neither ordering lets a shot
+            // through — both reject — so the only thing at stake is whether the server notices.
+            //
             // Strictly-less, so a shot arriving exactly on the cooldown boundary is legal.
             // Rejecting the boundary would penalise an honest client whose timing is perfect.
             if (nowSeconds - state.LastFiredTime < config.Cooldown) return FireRejection.OnCooldown;
+
+            if (state.AmmoInClip == 0) return FireRejection.NoAmmo;
 
             return FireRejection.None;
         }

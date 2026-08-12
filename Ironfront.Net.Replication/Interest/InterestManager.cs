@@ -136,22 +136,31 @@ namespace Ironfront.Net.Replication.Interest
             Vec3 targetPos = SnapshotBuilder.UnpackPosition(in target);
             float d2 = (targetPos - viewerPos).SqrMagnitude;
 
-            // Teammates are always at least Mid — the minimap and the command map show them
-            // wherever they are, so a teammate at 250 m that only updated at 4 Hz would crawl
-            // across the map in visible steps.
-            if (viewer.Team == target.Team && d2 < FarRadius * FarRadius)
-                return InterestLevel.Mid;
+            InterestLevel level;
+            if (d2 < NearRadius * NearRadius) level = InterestLevel.Near;
+            else if (d2 < MidRadius * MidRadius) level = InterestLevel.Mid;
+            else if (d2 < CullRadius * CullRadius) level = InterestLevel.Far;
+            else
+            {
+                // Past the cull radius a scoped rifle can still resolve a target, so the view
+                // cone is the one thing that rescues an actor from being dropped. Inside the
+                // cull radius the cone is irrelevant: everything there is already at least Far.
+                return IsInViewCone(in viewer, in viewerPos, in targetPos)
+                    ? InterestLevel.Far
+                    : InterestLevel.Culled;
+            }
 
-            if (d2 < NearRadius * NearRadius) return InterestLevel.Near;
-            if (d2 < MidRadius * MidRadius) return InterestLevel.Mid;
-            if (d2 < CullRadius * CullRadius) return InterestLevel.Far;
+            // Teammates are "at Mid or better" (architecture.md section 7.3) — a FLOOR, not a
+            // cap. Returning Mid directly, before the distance ladder above, is the obvious way
+            // to write it and it quietly demotes a teammate standing next to you from Near
+            // (20 Hz) to Mid (10 Hz): the people whose movement you can see most precisely
+            // would be the ones updating least often.
+            if (viewer.Team == target.Team
+                && level < InterestLevel.Mid
+                && d2 < FarRadius * FarRadius)
+                level = InterestLevel.Mid;
 
-            // Past the cull radius a scoped rifle can still resolve a target, so the view cone
-            // is the one thing that rescues an actor from being dropped. Inside the cull
-            // radius the cone is irrelevant: everything there is already at least Far.
-            return IsInViewCone(in viewer, in viewerPos, in targetPos)
-                ? InterestLevel.Far
-                : InterestLevel.Culled;
+            return level;
         }
 
         /// <summary>
@@ -268,12 +277,49 @@ namespace Ironfront.Net.Replication.Interest
         /// over: the hitbox-history relevance filter (protocol-spec.md section 7.3, risk R6)
         /// and the bot AI LOD scheduler. Both ask the same question — "could a real player
         /// plausibly interact with this actor right now" — so both read it from here rather
-        /// than recomputing distances.
+        /// than recomputing distances. They do NOT use the same threshold: see
+        /// <see cref="ShootableThreshold"/> and <see cref="BotLodScheduler.FullRateThreshold"/>.
         /// </remarks>
         public InterestLevel MaxLevelAmongHumanPlayers(ushort actorId)
             => _maxHumanLevel.TryGetValue(actorId, out InterestLevel level)
                 ? level
                 : InterestLevel.Culled;
+
+        /// <summary>
+        /// The interest level at or above which an actor needs hitbox history kept for it
+        /// (protocol-spec.md section 7.3's mandatory R6 optimization).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Far, not Mid — and the difference is a gameplay bug, not a tuning preference.</b>
+        /// Both the phase-02 task document and protocol-spec.md section 7.3 say to keep history
+        /// for actors in the "Near/Mid zone" of a real player. Mid ends at
+        /// <see cref="MidRadius"/> = 150 m. A rifle's range is 300 m. So a target between 150 m
+        /// and 300 m is inside every weapon that can reach it and outside the filter that
+        /// decides whether it can be rewound — it silently falls back to its present pose, and
+        /// the high-ping player who is supposed to be compensated simply misses. There is no
+        /// error and no log; the shot just does not land.
+        /// </para>
+        /// <para>
+        /// Far reaches <see cref="CullRadius"/> = 500 m, past any weapon in scope, so the
+        /// filter now covers everything that could actually be shot — which is what the spec
+        /// asks for in words even though its own zone table does not deliver it. The
+        /// optimization survives: actors beyond 500 m from every human, and actors no human is
+        /// near at all, are still skipped.
+        /// </para>
+        /// </remarks>
+        public const InterestLevel ShootableThreshold = InterestLevel.Far;
+
+        /// <summary>
+        /// Whether hitbox history should be captured for this actor on the current snapshot.
+        /// </summary>
+        /// <remarks>
+        /// The R6 filter, in one place. It lived at the call site while nothing called it, and
+        /// "the filter is the caller's business" is only a good separation while there is
+        /// exactly one caller getting it right.
+        /// </remarks>
+        public bool IsShootable(ushort actorId)
+            => MaxLevelAmongHumanPlayers(actorId) >= ShootableThreshold;
 
         /// <summary>
         /// Drops every rate-limit entry mentioning this actor, as viewer or as target.

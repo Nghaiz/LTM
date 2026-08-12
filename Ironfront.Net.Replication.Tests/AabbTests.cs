@@ -109,6 +109,49 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void ANaNDirectionMissesRatherThanHittingEveryBoxAtZeroDistance()
+        {
+            // The free-headshot primitive. Every comparison against NaN is false, so an
+            // interval test that cannot reject a NaN has to skip the axis — and skipping all
+            // three reports a hit at distance 0 on every box of every target. Boxes are ordered
+            // head-first and ties keep the first, so the result is a guaranteed headshot on an
+            // arbitrary actor at any range. Not reachable from the wire, where aim is quantized
+            // and comes back through trig; very reachable from a Unity Transform.forward.
+            Assert.False(UnitBox.Raycast(
+                Vec3.Zero, new Vec3(float.NaN, 0f, 1f), maxDistance: 100f, out _));
+            Assert.False(UnitBox.Raycast(
+                new Vec3(float.NaN, 0f, 0f), new Vec3(0f, 0f, 1f), maxDistance: 100f, out _));
+        }
+
+        [Fact]
+        public void AnInfiniteDirectionMisses()
+        {
+            Assert.False(UnitBox.Raycast(
+                Vec3.Zero, new Vec3(float.PositiveInfinity, 0f, 1f), maxDistance: 100f, out _));
+        }
+
+        [Fact]
+        public void ANaNMaxDistanceMisses()
+        {
+            Assert.False(UnitBox.Raycast(
+                Vec3.Zero, new Vec3(0f, 0f, 1f), maxDistance: float.NaN, out _));
+        }
+
+        [Fact]
+        public void ARayOnASlabPlaneParallelToItStillResolvesCorrectly()
+        {
+            // The case that produced the NaN: origin exactly on a slab plane with a zero
+            // direction component. Grazing the box's own min-Y face along +Z must still hit,
+            // and the same ray one micron below it must still miss.
+            var box = Aabb.FromSize(new Vec3(0f, 1f, 10f), new Vec3(2f, 2f, 2f));
+
+            Assert.True(box.Raycast(
+                new Vec3(0f, 0f, 0f), new Vec3(0f, 0f, 1f), maxDistance: 100f, out _));
+            Assert.False(box.Raycast(
+                new Vec3(0f, -0.001f, 0f), new Vec3(0f, 0f, 1f), maxDistance: 100f, out _));
+        }
+
+        [Fact]
         public void ARayBesideTheBoxMisses()
         {
             Assert.False(UnitBox.Raycast(

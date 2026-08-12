@@ -64,11 +64,21 @@ namespace Ironfront.Net.Replication.Combat
         /// <param name="distance">Distance along the ray to the entry point.</param>
         /// <remarks>
         /// <para>
-        /// Division by a zero direction component is intentional and correct here: IEEE-754
-        /// gives +/-infinity, the slab for that axis becomes (-inf, +inf), and a ray parallel
-        /// to the axis is correctly treated as never leaving that slab. Guarding the zero case
-        /// with a branch instead is the classic way to introduce an axis-aligned blind spot —
-        /// shots straight down a corridor silently missing.
+        /// A ray parallel to an axis is handled by an explicit branch rather than by letting
+        /// IEEE division produce infinity. Both give the right answer for finite input, but the
+        /// division form produces <c>0 * infinity = NaN</c> when the origin sits exactly on a
+        /// slab plane, and every comparison against NaN is false — so the interval test cannot
+        /// reject it and the axis has to be skipped. Skipping all three axes reports a hit at
+        /// distance 0 on every box of every target, and since the boxes are ordered head-first
+        /// and ties keep the first, that is a guaranteed headshot on an arbitrary actor at any
+        /// range. The explicit branch means finite input can never produce a NaN at all.
+        /// </para>
+        /// <para>
+        /// Non-finite input is rejected outright. It cannot arrive from the wire — aim is
+        /// quantized to a u16 yaw and an i8 pitch and comes back through trig — but it can
+        /// arrive from the engine the moment the Unity adapter passes a
+        /// <c>Transform.forward</c> in, and a NaN that reaches the slab test is the
+        /// free-headshot primitive described above rather than a miss.
         /// </para>
         /// <para>
         /// A ray starting inside the box reports distance 0 and hits. That is the right answer
@@ -80,6 +90,8 @@ namespace Ironfront.Net.Replication.Combat
         {
             distance = 0f;
             if (IsEmpty) return false;
+            if (!IsFinite(in origin) || !IsFinite(in direction)) return false;
+            if (!(maxDistance > 0f)) return false;   // false for NaN too
 
             Vec3 min = Min;
             Vec3 max = Max;
@@ -98,6 +110,12 @@ namespace Ironfront.Net.Replication.Combat
         private static bool ClipAxis(
             float origin, float direction, float min, float max, ref float tMin, ref float tMax)
         {
+            // Parallel to this axis: the ray never crosses either slab plane, so it is either
+            // inside the slab for its whole length or outside for all of it. Deciding that here
+            // is what keeps NaN out of the arithmetic below — see Raycast's remarks for what a
+            // NaN reaching the interval test costs.
+            if (direction == 0f) return origin >= min && origin <= max;
+
             float inverse = 1f / direction;
             float tNear = (min - origin) * inverse;
             float tFar = (max - origin) * inverse;
@@ -109,15 +127,20 @@ namespace Ironfront.Net.Replication.Combat
                 tFar = swap;
             }
 
-            // NaN appears when the origin sits exactly on a slab plane and the direction
-            // component is zero: (0 - 0) * infinity. Comparisons against NaN are all false, so
-            // an unguarded `>` would silently keep the interval instead of rejecting it.
-            if (float.IsNaN(tNear) || float.IsNaN(tFar)) return true;
-
             if (tNear > tMin) tMin = tNear;
             if (tFar < tMax) tMax = tFar;
 
             return tMin <= tMax;
         }
+
+        /// <summary>True when every component is a real number.</summary>
+        /// <remarks>
+        /// Spelled out rather than using <c>float.IsFinite</c> so the assembly keeps building
+        /// against the older surface the Unity player targets.
+        /// </remarks>
+        private static bool IsFinite(in Vec3 v)
+            => !float.IsNaN(v.X) && !float.IsInfinity(v.X)
+               && !float.IsNaN(v.Y) && !float.IsInfinity(v.Y)
+               && !float.IsNaN(v.Z) && !float.IsInfinity(v.Z);
     }
 }

@@ -107,6 +107,34 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void PastTheRewindClampAFastTargetStartsToBeMissed()
+        {
+            // Proof that the corrected fixture is actually sensitive, and the clamp is real.
+            //
+            // At 300 ms the client saw the world 250 ms ago, but MAX_REWIND_MS caps the server
+            // at 200 — a deliberate 50 ms disagreement, because the alternative is letting a
+            // cheater inflate their ping and shoot arbitrarily far into the past. At 5 m/s that
+            // is 0.25 m of strafe, which is still inside the hitbox, so the volley at that speed
+            // reports 100% and the clamp is invisible. Wind the target up to 20 m/s and the same
+            // 50 ms is a full metre, which is not.
+            //
+            // This is also the test that would have caught the self-fulfilling fixture: when the
+            // aim point was derived by calling RewindTicks, the clamp applied to BOTH sides and
+            // this stayed at 100% no matter how fast the target moved.
+            var fast = new StrafingScenario(strafeSpeed: 20f, rangeMetres: 20f);
+
+            int insideTheClamp = fast.FireVolley(shots: 20, rttMs: 200f, compensated: true);
+            int pastTheClamp = fast.FireVolley(shots: 20, rttMs: 400f, compensated: true);
+
+            Assert.True(insideTheClamp >= 15,
+                $"compensation should still work at 200 ms; landed {insideTheClamp}/20");
+            Assert.True(pastTheClamp < insideTheClamp,
+                $"the rewind clamp had no effect on a 20 m/s target: {pastTheClamp}/20 past the "
+                + $"clamp against {insideTheClamp}/20 inside it — the aim point is probably still "
+                + "being derived from the code under test");
+        }
+
+        [Fact]
         public void AStationaryTargetIsHitWithOrWithoutCompensation()
         {
             // The sanity check that keeps the volley tests honest: if this failed, the strafing
@@ -387,8 +415,41 @@ namespace Ironfront.Net.Replication.Tests
         /// Passing <c>compensated: false</c> resolves against an empty history so every target
         /// falls back to its present pose, which is exactly what "lag compensation off" means.
         /// </remarks>
+        /// <summary>
+        /// A target strafing across the shooter's view, with the history the server would have
+        /// captured for it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The aim point is derived from the spec, not from the code under test.</b> The
+        /// obvious way to write this fixture is to call
+        /// <see cref="LagCompensator.RewindTicks"/> to find which tick the client was seeing and
+        /// aim at the hitbox stored in history for exactly that tick. That makes the experiment
+        /// self-fulfilling: the aim point and the rewound pose are then the same value read
+        /// twice, so the compensated arm reports 100% whatever <c>RewindTicks</c> returns, and
+        /// an off-by-one — or an off-by-anything constant — shifts both sides together and
+        /// still passes.
+        /// </para>
+        /// <para>
+        /// Instead the client's view time is computed here in MILLISECONDS from
+        /// protocol-spec.md section 7.1's own definition — the client renders
+        /// <c>rtt/2 + INTERP_BUFFER_MS</c> behind the server — and the target's position at that
+        /// continuous instant is what the crosshair sits on. The server then rewinds by whatever
+        /// its own tick arithmetic decides. If the two disagree, the shot misses, which is the
+        /// whole property being measured.
+        /// </para>
+        /// <para>
+        /// One consequence worth stating: past the <see cref="ProtocolConstants.MAX_REWIND_MS"/>
+        /// clamp the two are SUPPOSED to disagree. A 300 ms client is compensated as though it
+        /// were at 200 ms, so its hit rate degrades — and the fixture now shows that instead of
+        /// hiding it behind a shared constant.
+        /// </para>
+        /// </remarks>
         private sealed class StrafingScenario
         {
+            /// <summary>Tick the volley opens on. The target is at the origin here.</summary>
+            private const uint FirstShotTick = 200;
+
             private readonly float _strafeSpeed;
             private readonly float _range;
 
@@ -406,24 +467,25 @@ namespace Ironfront.Net.Replication.Tests
                 // needed frame already overwritten and silently tests the present-pose fallback.
                 var history = new HitboxHistory();
                 var compensator = new LagCompensator(compensated ? history : new HitboxHistory());
-                int rewind = LagCompensator.RewindTicks(rttMs);
                 int hits = 0;
                 uint capturedThrough = 0;
 
                 for (int shot = 0; shot < shots; shot++)
                 {
                     // Spread the volley over the strafe so the sample is not one lucky phase.
-                    uint currentTick = 200u + (uint)(shot * 3);
-                    uint seenTick = currentTick - (uint)rewind;
+                    uint currentTick = FirstShotTick + (uint)(shot * 3);
 
                     for (uint tick = capturedThrough; tick <= currentTick; tick++)
                         history.Capture(tick, Target, HitboxSet.Humanoid(PositionAt(tick)));
 
                     capturedThrough = currentTick + 1;
 
-                    // Where the client rendered the target, and therefore where the crosshair was.
-                    HitboxSet seen = HitboxSet.Humanoid(PositionAt(seenTick));
-                    Vec3 aimPoint = seen.Torso.Center;
+                    // protocol-spec.md section 7.1, in milliseconds and independent of the
+                    // implementation: half the trip plus the interpolation buffer.
+                    float clientViewLagMs = rttMs * 0.5f + ProtocolConstants.INTERP_BUFFER_MS;
+                    float seenTimeMs = currentTick * ProtocolConstants.MS_PER_TICK - clientViewLagMs;
+
+                    Vec3 aimPoint = HitboxSet.Humanoid(PositionAtTime(seenTimeMs)).Torso.Center;
 
                     var present = new[]
                     {
@@ -441,7 +503,22 @@ namespace Ironfront.Net.Replication.Tests
             }
 
             private Vec3 PositionAt(uint tick)
-                => new Vec3(_strafeSpeed * tick / ProtocolConstants.SIM_TICK_RATE, 0f, _range);
+                => PositionAtTime(tick * ProtocolConstants.MS_PER_TICK);
+
+            /// <summary>Where the target is at a continuous instant, in milliseconds.</summary>
+            /// <remarks>
+            /// Measured from <see cref="FirstShotTick"/> so the target crosses in front of the
+            /// shooter during the volley instead of starting wherever `speed x tick` happens to
+            /// put it. Without the offset a fast target has already run past the weapon's range
+            /// by the first shot, and the volley measures "out of range" while looking like it
+            /// measures compensation.
+            /// </remarks>
+            private Vec3 PositionAtTime(float milliseconds)
+                => new Vec3(
+                    _strafeSpeed * (milliseconds - FirstShotTick * ProtocolConstants.MS_PER_TICK)
+                        / 1000f,
+                    0f,
+                    _range);
         }
     }
 }

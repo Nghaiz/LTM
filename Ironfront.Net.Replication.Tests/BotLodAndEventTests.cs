@@ -294,10 +294,14 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(100f, ServerEventWriter.WeaponFireAudibleRadius, 3);
             Assert.Equal(200f, ServerEventWriter.ExplosionAudibleRadius, 3);
 
-            Assert.True(ServerEventWriter.IsWithinEarshot(
-                99f, ServerEventWriter.WeaponFireAudibleRadius));
-            Assert.False(ServerEventWriter.IsWithinEarshot(
-                101f, ServerEventWriter.WeaponFireAudibleRadius));
+            // Squared, because that is what the broadcast loop has. Passing a linear distance
+            // would compare 150 against 40,000 and report almost everything as audible.
+            Assert.True(ServerEventWriter.IsWithinEarshotSquared(
+                99f * 99f, ServerEventWriter.WeaponFireAudibleRadius));
+            Assert.False(ServerEventWriter.IsWithinEarshotSquared(
+                101f * 101f, ServerEventWriter.WeaponFireAudibleRadius));
+            Assert.True(ServerEventWriter.IsWithinEarshotSquared(
+                150f * 150f, ServerEventWriter.ExplosionAudibleRadius));
         }
 
         private static void AssertChannel(

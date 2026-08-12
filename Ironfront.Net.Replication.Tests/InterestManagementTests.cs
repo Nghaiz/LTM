@@ -1,4 +1,5 @@
 using Ironfront.Net.Protocol;
+using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Interest;
 using Ironfront.Net.Replication.Movement;
 using Ironfront.Net.Replication.Server;
@@ -80,6 +81,60 @@ namespace Ironfront.Net.Replication.Tests
             ActorSnapshotEntry target = Actor(2, new Vec3(0f, 0f, 700f), TeamB);
 
             Assert.Equal(InterestLevel.Far, manager.Evaluate(in viewer, in target));
+        }
+
+        [Fact]
+        public void ATeammateStandingNextToYouIsStillNear()
+        {
+            // "Teammates are always at Mid or better" is a FLOOR. Returning Mid directly, before
+            // the distance ladder, is the obvious way to write it and demotes the teammate you
+            // are standing beside from 20 Hz to 10 Hz — the people whose movement you can see
+            // most precisely would be the ones updating least often.
+            var manager = new InterestManager();
+            ActorSnapshotEntry viewer = Actor(1, Vec3.Zero, TeamA);
+            ActorSnapshotEntry mate = Actor(2, new Vec3(5f, 0f, 0f), TeamA);
+
+            Assert.Equal(InterestLevel.Near, manager.Evaluate(in viewer, in mate));
+        }
+
+        [Fact]
+        public void TheShootableThresholdCoversFullWeaponRange()
+        {
+            // The R6 filter decides who gets hitbox history, i.e. who can be lag-compensated.
+            // Both the phase document and protocol-spec section 7.3 say "Near/Mid zone", and Mid
+            // ends at 150 m while a rifle reaches 300 m — so a target in the outer half of every
+            // weapon's range would silently fall back to its present pose and the high-ping
+            // player who is supposed to be compensated simply misses, with no error anywhere.
+            Assert.True(InterestManager.CullRadius >= WeaponConfig.Rifle.Range,
+                "the shootable band must reach at least as far as a weapon can shoot");
+            Assert.Equal(InterestLevel.Far, InterestManager.ShootableThreshold);
+
+            var manager = new InterestManager();
+            var world = new WorldSnapshot();
+            world.Add(Actor(1, Vec3.Zero, TeamA));
+            world.Add(Actor(2, new Vec3(250f, 0f, 0f), TeamB));   // inside rifle range, past Mid
+            var view = new WorldSnapshot();
+
+            manager.BeginSnapshot();
+            manager.BuildView(1, world, 0, view);
+
+            Assert.True(manager.IsShootable(2),
+                "a target at 250 m is inside a 300 m weapon and must keep hitbox history");
+        }
+
+        [Fact]
+        public void AnActorNobodyIsNearIsNotShootable()
+        {
+            var manager = new InterestManager();
+            var world = new WorldSnapshot();
+            world.Add(Actor(1, Vec3.Zero, TeamA, yawDegrees: 0f));
+            world.Add(Actor(2, new Vec3(1500f, 0f, 0f), TeamB));
+            var view = new WorldSnapshot();
+
+            manager.BeginSnapshot();
+            manager.BuildView(1, world, 0, view);
+
+            Assert.False(manager.IsShootable(2));
         }
 
         [Fact]
