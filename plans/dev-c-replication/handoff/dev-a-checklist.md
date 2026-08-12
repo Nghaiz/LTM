@@ -17,6 +17,20 @@ Items are ordered by what unblocks the most.
 > Step-by-step version of the same thing, with the exact clicks:
 > [`dev-a-gate-board.html`](dev-a-gate-board.html).
 
+> **Round 4 — 2026-08-12, late.** [#17](https://github.com/Sagitoaz/LTM/pull/17) is merged. You
+> fixed all three points and I verified each one on the new head: 42 `.meta` files at
+> `Any: 0 / Editor: 1`, the define down to `Server` + `Standalone` only, `.mcp.json` and
+> `Ironfront_Reborn/.claude/` untracked, commit scope `client` so `style` is green again.
+> **Group P is closed, and I withdrew P0** — your Editor has had MCP installed since you opened
+> the PR, so merging changed nothing about the measurement. Just write "measured with MCP
+> installed" next to the V1 number when you send it.
+>
+> **Group V is now the only thing blocking A3.** Start there.
+>
+> One item left open, not urgent: the DLLs are Editor-only but the define still covers
+> `Standalone`. If the first player build ever fails on `McpPlugin`, drop the define from
+> `Standalone` — that class of error never shows up in the Editor.
+
 ---
 
 ## The original request has changed, and here is why

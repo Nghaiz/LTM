@@ -276,6 +276,7 @@
     max-width: 70ch;
   }
   .note b { color: var(--ink); }
+  .note.is-done { border-left-color: var(--go); background: var(--go-bg); }
 
   .choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: .75rem; }
   .choice { border: 1px solid var(--rule); border-radius: 5px; padding: .9rem 1rem; background: var(--surface-2); display: flex; flex-direction: column; gap: .3rem; }
@@ -341,10 +342,19 @@
       <a href="https://github.com/Sagitoaz/LTM/pull/17">review trên PR</a>.
       <b>Nhóm P không chặn nhóm V — nhưng làm V trước rồi hẵng merge #17.</b> Lý do ở thẻ P0.
     </div>
+    <div class="note is-done">
+      <b>Vòng 4 — 12-08 khuya. #17 đã merge vào <code>develop</code>.</b> A sửa hết cả ba điểm:
+      42 file <code>.meta</code> về <code>Any: 0 / Editor: 1</code>, define còn đúng
+      <code>Server</code> và <code>Standalone</code>, <code>.mcp.json</code> cùng
+      <code>Ironfront_Reborn/.claude/</code> đã untracked, scope commit đổi sang <code>client</code>
+      nên job <code>style</code> xanh lại. <b>Toàn bộ Nhóm P đóng.</b> P0 tôi rút lại: máy A đã cài MCP
+      từ lúc mở PR nên Console của A vốn đã ở trạng thái sau-MCP, merge không đổi phép đo.
+      <b>Giờ chỉ còn Nhóm V chặn A3.</b> Lúc gửi kết quả V1 nhớ ghi kèm một dòng "đo với MCP đã cài".
+    </div>
     <div class="meta">
-      <span><b>Ngày</b> 12-08-2026 · vòng 3</span>
+      <span><b>Ngày</b> 12-08-2026 · vòng 4</span>
       <span><b>Mốc</b> M0 đóng · M1 mở</span>
-      <span><b>Còn lại</b> ~1h55 trong Editor + ~35 ph cho #17</span>
+      <span><b>Còn lại</b> ~1h55 trong Editor · #17 đã xong</span>
       <span><b>SSOT</b> plans/dev-c-replication/handoff/dev-a-checklist.md</span>
     </div>
   </header>
@@ -355,13 +365,13 @@
         <span class="n">5</span>
         <span class="l">Câu hỏi chỉ Editor trả lời được</span>
       </div>
-      <div class="stat is-stop">
-        <span class="n">2</span>
-        <span class="l">Điểm chặn trong PR #17</span>
+      <div class="stat">
+        <span class="n">3/3</span>
+        <span class="l">Điểm #17 đã sửa · merged</span>
       </div>
       <div class="stat is-hold">
-        <span class="n">3</span>
-        <span class="l">Mục đã đóng vòng 1</span>
+        <span class="n">6</span>
+        <span class="l">Mục đã đóng</span>
       </div>
       <div class="stat">
         <span class="n">1h55</span>
@@ -393,25 +403,25 @@
         </thead>
         <tbody>
           <tr>
-            <td class="id">P1 <span class="pill stop">chặn #17</span></td>
+            <td class="id">P1 <span class="pill done">xong</span></td>
             <td>Đặt 42 DLL của MCP về <b>Editor-only</b></td>
-            <td class="eff">15 ph</td>
+            <td class="eff">—</td>
             <td>Merge được #17</td>
-            <td class="fb">Tôi không merge #17. Không mất gì, vì #17 không mở gate nào của tôi.</td>
+            <td class="fb">Đã verify cả 42 file <code>.meta</code>: <code>Any: 0 · Editor: 1</code>.</td>
           </tr>
           <tr>
-            <td class="id">P2 <span class="pill stop">chặn #17</span></td>
+            <td class="id">P2 <span class="pill done">xong</span></td>
             <td>Gỡ <code>UNITY_MCP_READY</code> khỏi platform không build, và trả lời define đó dùng làm gì</td>
-            <td class="eff">10 ph</td>
+            <td class="eff">—</td>
             <td>Merge được #17</td>
-            <td class="fb">Như trên. Nhưng câu trả lời quyết định P1 nghiêm trọng tới đâu.</td>
+            <td class="fb">Còn đúng <code>Server</code> + <code>Standalone</code>. Grep cả repo: không code nào của ta dùng define đó.</td>
           </tr>
           <tr>
-            <td class="id">P3 <span class="pill hold">dọn</span></td>
+            <td class="id">P3 <span class="pill done">xong</span></td>
             <td>Gitignore <code>.mcp.json</code> + <code>.claude/</code>, đổi scope commit sang <code>client</code></td>
-            <td class="eff">10 ph</td>
+            <td class="eff">—</td>
             <td>Job <code>style</code> xanh lại</td>
-            <td class="fb">Advisory nên không chặn. Nhưng token đã vào history thì gỡ ra phải rewrite.</td>
+            <td class="fb">Untracked, PR từ 170 file còn 92, <code>style</code> đã xanh.</td>
           </tr>
           <tr>
             <td class="id">A1 <span class="pill done">xong</span></td>
@@ -624,7 +634,15 @@
   </section>
 
   <section>
-    <h2>Nhóm P · PR #17, Unity MCP <span class="tag">vòng 3 · ~35 phút · tôi đã request changes</span></h2>
+    <h2>Nhóm P · PR #17, Unity MCP <span class="tag">vòng 4 · đã merge · không còn việc</span></h2>
+    <div class="note is-done">
+      <b>Đóng lúc 12-08 khuya.</b> A sửa hết ba điểm, tôi verify lại từng cái trên head mới rồi approve và
+      merge vào <code>develop</code>. Phần dưới giữ nguyên làm hồ sơ: nó là lý do 42 DLL và một scoped
+      registry xuất hiện trên máy cả bốn người, và lần sau cài package Unity nào thì đây là ba chỗ phải nhìn.
+      <b>Một việc còn treo, không gấp:</b> DLL giờ Editor-only nhưng define vẫn còn trên
+      <code>Standalone</code>. Nếu lần đầu build player mà nó nổ ở <code>McpPlugin</code>, gỡ define khỏi
+      <code>Standalone</code> là xong — lỗi kiểu này không hiện trong Editor.
+    </div>
     <p class="lede">
       A mở #17 chiều nay để cài Unity-MCP. Tôi đọc hết 170 file. <b>Không có gì A làm sai</b> — hai điểm
       chặn dưới đây đều là mặc định của package. Vấn đề là chúng nằm trong <code>ProjectSettings.asset</code>
@@ -641,8 +659,13 @@
       <article class="item go">
         <div class="item-head">
           <span class="item-id">P0</span>
-          <h3 class="item-title">Làm nhóm V trước, rồi mới merge #17</h3>
+          <h3 class="item-title">Làm nhóm V trước, rồi mới merge #17 <span class="pill done">rút lại</span></h3>
           <span class="item-eff">0 phút · chỉ là thứ tự</span>
+        </div>
+        <div class="note is-done">
+          <b>Tôi rút lại thẻ này.</b> Máy A đã cài MCP từ lúc mở PR, nên Console của A vốn đã ở trạng thái
+          sau-MCP dù merge hay chưa — merge không đổi phép đo. Chỉ cần khi gửi kết quả V1, A ghi kèm một dòng
+          <b>"đo với MCP đã cài"</b> là tôi đọc đúng bối cảnh. Lập luận gốc giữ lại bên dưới.
         </div>
         <p>
           V1 yêu cầu A mở Editor và <b>đếm số dòng đỏ</b> trong Console. Merge #17 trước là thêm một package,
