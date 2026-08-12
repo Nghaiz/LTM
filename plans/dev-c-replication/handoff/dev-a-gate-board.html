@@ -327,10 +327,16 @@
       Mỗi mục đều ghi rõ <b>chạy ở đâu</b>: terminal tại gốc repo, hay trong Editor. Chưa từng chạy lệnh nào của
       repo này thì bắt đầu ở <b>Nhóm 0</b>.
     </p>
+    <div class="note">
+      <b>Bản cập nhật vòng 2 — 12-08 buổi chiều.</b> A1, A2 và A5 đã đóng. Trong lúc đó tôi merge ba PR nữa
+      (#12 của A, #13, #14) chữa hai bug A báo — không quit được và không thấy log — cộng bốn lỗi Unity 6
+      trong scene. Tất cả đều đã verify được phần verify được mà không cần Editor. Phần còn lại thì không:
+      <b>Nhóm V là năm câu hỏi chỉ Editor mới trả lời được, và nó chặn A3.</b> Bắt đầu ở đó, đừng bắt đầu ở A3.
+    </div>
     <div class="meta">
-      <span><b>Ngày</b> 12-08-2026</span>
+      <span><b>Ngày</b> 12-08-2026 · vòng 2</span>
       <span><b>Mốc</b> M0 đóng · M1 mở</span>
-      <span><b>Editor work</b> ~2h15 + phase-00 riêng của A</span>
+      <span><b>Còn lại</b> ~1h55 trong Editor</span>
       <span><b>SSOT</b> plans/dev-c-replication/handoff/dev-a-checklist.md</span>
     </div>
   </header>
@@ -338,16 +344,16 @@
   <section>
     <div class="stats">
       <div class="stat is-stop">
-        <span class="n">3</span>
-        <span class="l">Chặn ngay hôm nay</span>
+        <span class="n">5</span>
+        <span class="l">Câu hỏi chỉ Editor trả lời được</span>
       </div>
       <div class="stat is-hold">
-        <span class="n">1</span>
-        <span class="l">Quyết định của A</span>
+        <span class="n">3</span>
+        <span class="l">Mục đã đóng vòng 1</span>
       </div>
       <div class="stat">
-        <span class="n">2h15</span>
-        <span class="l">Tổng việc trong Editor</span>
+        <span class="n">1h55</span>
+        <span class="l">Việc còn lại trong Editor</span>
       </div>
       <div class="stat">
         <span class="n">283</span>
@@ -375,18 +381,53 @@
         </thead>
         <tbody>
           <tr>
-            <td class="id">A1 <span class="pill stop">chặn</span></td>
+            <td class="id">A1 <span class="pill done">xong</span></td>
             <td>Chạy <code>build-libs.ps1</code>, xác nhận Editor load được DLL</td>
-            <td class="eff">15 ph</td>
+            <td class="eff">—</td>
             <td>Mọi thứ trong Unity</td>
-            <td class="fb">Không có. Đây là nút thắt tuyệt đối.</td>
+            <td class="fb">PR #12. DLL đã nằm trong <code>Assets/Plugins</code>.</td>
           </tr>
           <tr>
-            <td class="id">A2 <span class="pill stop">chặn</span></td>
+            <td class="id">A2 <span class="pill done">xong</span></td>
             <td>Cài 3 script drop-in, commit kèm <code>.meta</code></td>
-            <td class="eff">10 ph</td>
+            <td class="eff">—</td>
             <td>A3, A4</td>
-            <td class="fb">Không có. Script đã viết xong, chỉ thiếu tay đặt vào project.</td>
+            <td class="fb">PR #12. Ba script đã ở <code>Assets/Scripts/Net/Shared</code>.</td>
+          </tr>
+          <tr>
+            <td class="id">V1 <span class="pill stop">chặn</span></td>
+            <td>Pull, build lib, mở Editor, đọc Console</td>
+            <td class="eff">10 ph</td>
+            <td>Tất cả nhóm V và A3</td>
+            <td class="fb">Không có. Console còn error thì mọi số đo sau đó đều vô nghĩa.</td>
+          </tr>
+          <tr>
+            <td class="id">V2 <span class="pill stop">chặn</span></td>
+            <td>Đọc assembly census ở đầu file log</td>
+            <td class="eff">5 ph</td>
+            <td>Chốt chính sách DLL trong Plugins</td>
+            <td class="fb">Không có. Tôi không đọc được cái này từ ngoài Editor.</td>
+          </tr>
+          <tr>
+            <td class="id">V3 <span class="pill hold">xác nhận</span></td>
+            <td>File log có được ghi ra đĩa không</td>
+            <td class="eff">3 ph</td>
+            <td>Bug "không thấy log" của A</td>
+            <td class="fb">Coi như chưa fix xong cho tới khi A xác nhận.</td>
+          </tr>
+          <tr>
+            <td class="id">V4 <span class="pill hold">xác nhận</span></td>
+            <td>Nút Quit có thoát được không</td>
+            <td class="eff">3 ph</td>
+            <td>Bug "không quit được" của A</td>
+            <td class="fb">Coi như chưa fix xong cho tới khi A xác nhận.</td>
+          </tr>
+          <tr>
+            <td class="id">V5 <span class="pill hold">quét</span></td>
+            <td>Mở Island, Dustbowl, Splash mỗi scene một lần</td>
+            <td class="eff">5 ph</td>
+            <td>Còn class nào Unity 6 đã gỡ nữa không</td>
+            <td class="fb">Tôi đã quét YAML, chỉ chắc chắn được với class 92. Ba scene kia là suy đoán.</td>
           </tr>
           <tr>
             <td class="id">A5 <span class="pill done">xong</span></td>
@@ -397,17 +438,17 @@
           </tr>
           <tr>
             <td class="id">A3 <span class="pill hold">đo</span></td>
-            <td>Playtest shadow comparison, gửi tôi dòng summary</td>
+            <td>Playtest shadow comparison, gửi tôi dòng summary — <b>sau nhóm V, trước A4</b></td>
             <td class="eff">35 ph</td>
             <td>phase-00 tiêu chí 8</td>
             <td class="fb">18 unit test đã pin <code>MovementSimulation</code>. Tôi chạy tiếp, đổi lại là rủi ro rubber-banding lúc crouch chỉ lộ ra ở M1.</td>
           </tr>
           <tr>
             <td class="id">A4 <span class="pill hold">gắn</span></td>
-            <td>Gắn <code>NetMovementAgent</code> lên player prefab</td>
+            <td>Gắn <code>NetMovementAgent</code> + <code>NetPredictionClock</code> lên player prefab, <b>clock để tắt</b></td>
             <td class="eff">10 ph</td>
             <td>Tích hợp M1</td>
-            <td class="fb">Chạy tiếp bình thường. Chỉ cần trước buổi tích hợp M1.</td>
+            <td class="fb">Chạy tiếp bình thường. Nhưng làm trước A3 thì hỏng số đo A3 — xem thẻ A4.</td>
           </tr>
           <tr>
             <td class="id">HB <span class="pill stop">sync 4</span></td>
@@ -448,6 +489,11 @@
       Mọi lệnh trong trang này gõ trong <b>một cửa sổ terminal duy nhất, đứng tại thư mục gốc của repo</b>.
       Phần việc trong Unity thì làm trong Editor, mở từ Unity Hub. Không có bước nào cần chạy bên trong
       thư mục <code>Ironfront_Reborn/</code>.
+    </p>
+    <p class="lede">
+      Đã làm nhóm này ở vòng 1 rồi thì bỏ qua, nhảy thẳng xuống <b>Nhóm V</b> — nhưng đọc câu này trước:
+      <b>đóng Unity lại trước khi <code>git pull</code></b>. PR #14 sửa thẳng vào file scene và prefab, mà Editor
+      thì giữ scene trong bộ nhớ và ghi đè ngược lại lúc save.
     </p>
 
     <div class="items">
@@ -545,16 +591,19 @@
   </section>
 
   <section>
-    <h2>Nhóm 1 · Ba việc chặn ngay <span class="tag">làm trước, ~40 phút</span></h2>
-    <p class="lede">Không có đường vòng cho ba mục này. A1 và A2 mở khoá mọi thứ còn lại, A5 là thứ duy nhất tôi không tự quyết được.</p>
+    <h2>Nhóm 1 · Ba việc chặn ngay <span class="tag">đã đóng cả ba</span></h2>
+    <p class="lede">
+      Cả ba xong rồi. Giữ lại nguyên văn vì A1 vẫn là lệnh phải chạy lại mỗi khi kéo code mới về, và
+      cái bẫy bốn DLL trong đó là thứ <b>V2</b> sắp trả lời dứt điểm.
+    </p>
 
     <div class="items">
 
-      <article class="item stop">
+      <article class="item go">
         <div class="item-head">
           <span class="item-id">A1</span>
-          <h3 class="item-title">Chạy build-libs.ps1 và xác nhận Editor load được DLL</h3>
-          <span class="item-eff">~15 phút</span>
+          <h3 class="item-title">Chạy build-libs.ps1 và xác nhận Editor load được DLL — xong, PR #12</h3>
+          <span class="item-eff">chạy lại sau mỗi lần pull</span>
         </div>
         <div class="runbox">
           <div class="pathbar"><b>Chạy ở</b> terminal, đứng tại <code>d:\Coding\LTM</code></div>
@@ -590,11 +639,11 @@ ls Ironfront_Reborn/Assets/Plugins/System.*.dll            # phải ra 4 file</c
         </dl>
       </article>
 
-      <article class="item stop">
+      <article class="item go">
         <div class="item-head">
           <span class="item-id">A2</span>
-          <h3 class="item-title">Cài ba script drop-in</h3>
-          <span class="item-eff">~10 phút</span>
+          <h3 class="item-title">Cài ba script drop-in — xong, PR #12</h3>
+          <span class="item-eff">không phải làm lại</span>
         </div>
         <div class="runbox">
           <div class="pathbar"><b>Chạy ở</b> terminal, đứng tại <code>d:\Coding\LTM</code> · <b>bắt buộc</b>, cả hai đường dẫn đều tương đối</div>
@@ -658,23 +707,25 @@ git status --short          # phải thấy 6 file: 3 .cs + 3 .meta</code></pre>
           Lời khuyên đó giả định con số trong <code>TimeManager.asset</code> là con số game thật sự
           chạy. Không phải. Có hai file ghi đè nó lúc runtime:
         </p>
-        <table>
-          <thead>
-            <tr><th>File</th><th>Dòng</th><th>Câu lệnh</th><th>Chạy lúc nào</th></tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code>IngameMenuUi.cs</code></td><td class="eff">29</td>
-              <td><code>Time.fixedDeltaTime = Time.timeScale / 60f</code></td>
-              <td><code>Hide()</code>, gọi từ <code>Awake()</code> — tức trước frame đầu tiên</td>
-            </tr>
-            <tr>
-              <td><code>FpsActorController.cs</code></td><td class="eff">497</td>
-              <td><code>Time.fixedDeltaTime = Time.timeScale / 60f</code></td>
-              <td>mỗi lần bật/tắt slow-motion</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr><th>File</th><th>Dòng</th><th>Câu lệnh</th><th>Chạy lúc nào</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>IngameMenuUi.cs</code></td><td class="eff">29</td>
+                <td><code>Time.fixedDeltaTime = Time.timeScale / 60f</code></td>
+                <td><code>Hide()</code>, gọi từ <code>Awake()</code> — tức trước frame đầu tiên</td>
+              </tr>
+              <tr>
+                <td><code>FpsActorController.cs</code></td><td class="eff">497</td>
+                <td><code>Time.fixedDeltaTime = Time.timeScale / 60f</code></td>
+                <td>mỗi lần bật/tắt slow-motion</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <p>
           Nên timestep thật là <b>1/60</b> khi chơi bình thường và <b>0.2/60</b> lúc slow-motion —
           không bao giờ là 0.02 ghi trong asset, và cũng sẽ không bao giờ là 0.0333 mà phương án A
@@ -692,8 +743,250 @@ git status --short          # phải thấy 6 file: 3 .cs + 3 .meta</code></pre>
   </section>
 
   <section>
-    <h2>Nhóm 2 · Đóng nốt phase-00 <span class="tag">~65 phút</span></h2>
+    <h2>Nhóm V · Xác nhận ba bản vá hôm nay <span class="tag">làm trước A3 · ~25 phút</span></h2>
+    <p class="lede">
+      Hôm nay merge ba PR: #12 của A, rồi #13 chữa hai bug A báo, rồi #14 dọn bốn lỗi Unity 6 trong scene.
+      Phần nào verify được mà không cần Editor thì tôi verify rồi — 283 test, 0 dangling reference, diff
+      88 dòng xoá không thêm dòng nào. Phần còn lại thì <b>không ai ngoài A trả lời được</b>, và một trong số đó
+      (V2) có thể lật ngược một quyết định về DLL.
+    </p>
+    <p class="lede">
+      <b>Làm tuần tự V1 → V5.</b> V1 hỏng thì bốn mục sau vô nghĩa, nên dừng ở đó và báo tôi.
+    </p>
+
+    <div class="items">
+
+      <article class="item stop">
+        <div class="item-head">
+          <span class="item-id">V1</span>
+          <h3 class="item-title">Kéo code mới, build lại lib, mở Editor, đọc Console</h3>
+          <span class="item-eff">~10 phút</span>
+        </div>
+        <div class="runbox">
+          <div class="pathbar"><b>Chạy ở</b> terminal, đứng tại <code>d:\Coding\LTM</code></div>
+          <pre><code>cd d:\Coding\LTM
+git checkout develop
+git pull
+pwsh tools/build-libs.ps1</code></pre>
+        </div>
+        <p>
+          <code>git pull</code> kéo về ba PR. Trong đó #14 sửa thẳng vào file scene và file prefab, nên
+          <b>nếu Unity đang mở thì đóng nó lại trước khi pull</b> — Editor giữ scene trong bộ nhớ và sẽ ghi đè
+          ngược lại lúc save, làm mất bản vá.
+        </p>
+        <p>Mở lại project từ Unity Hub, đợi import xong, rồi mở scene <code>Assets/Scenes/Menu.unity</code>. Nhìn Console.</p>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr><th>Thấy gì</th><th>Nghĩa là</th><th>Làm gì</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><b>0 error</b>, không còn dòng nào nhắc <code>GUI Layer</code></td>
+                <td>#14 đúng như thiết kế</td>
+                <td>Sang V2</td>
+              </tr>
+              <tr>
+                <td>Vẫn còn <code>Component GUI Layer ... is no longer available</code></td>
+                <td>Còn chỗ nào tôi chưa quét tới</td>
+                <td>Gửi tôi nguyên văn dòng đó, <b>kèm tên scene hoặc prefab</b> trong dòng lỗi</td>
+              </tr>
+              <tr>
+                <td>Lỗi <b>mới</b> chưa từng thấy trước hôm nay</td>
+                <td>Bản vá làm hỏng thứ gì đó</td>
+                <td>Dừng lại, gửi nguyên văn, đừng save scene. <code>git checkout -- Ironfront_Reborn/Assets</code> là đường lùi</td>
+              </tr>
+              <tr>
+                <td><code>TypeLoadException</code></td>
+                <td>Chuỗi 4 DLL phụ thuộc có vấn đề</td>
+                <td>Sang V2 luôn, census sẽ chỉ đúng thủ phạm</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note">
+          <b>Cảnh báo không phải lỗi.</b> Console sẽ vẫn còn vài dòng vàng — Unity 6 cảnh báo về serialization
+          kiểu cũ ở 60 chỗ, và đó là chuyện tôi đã biết, đã ghi lại, và cố ý chưa đụng vào. Chỉ cần đếm
+          <b>dòng đỏ</b>. Con số tôi cần là số error, không phải số warning.
+        </div>
+        <dl class="kv">
+          <dt>Trả lời</dt><dd><b>"0 error"</b>, hoặc nguyên văn từng dòng đỏ kèm tên scene.</dd>
+        </dl>
+      </article>
+
+      <article class="item stop">
+        <div class="item-head">
+          <span class="item-id">V2</span>
+          <h3 class="item-title">Đọc assembly census — câu hỏi tôi không tự trả lời được</h3>
+          <span class="item-eff">~5 phút</span>
+        </div>
+        <div class="pathbar"><b>Làm ở</b> Unity Editor, Play mode · bất kỳ scene nào</div>
+        <p>
+          Bấm <strong>Play</strong>. Ngay dòng đầu tiên trong Console sẽ có:
+        </p>
+        <pre><code>[IronfrontLog] this session is being written to
+C:\Users\&lt;tên&gt;\AppData\LocalLow\&lt;company&gt;\Ironfront_Reborn\Logs\ironfront-20260812-143052.log</code></pre>
+        <p>
+          Copy đường dẫn đó, mở file bằng VS Code hoặc Notepad. <b>Mười dòng đầu là thứ tôi cần.</b>
+          Chúng liệt kê bảy assembly và nơi mỗi cái được nạp:
+        </p>
+        <pre><code>14:30:52.104 [INFO] assembly Ironfront.Net.Protocol: 1.0.0.0 from ...
+14:30:52.105 [INFO] assembly System.Memory: 4.0.1.2 from ...</code></pre>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr><th>Census nói gì</th><th>Kết luận</th><th>Việc phát sinh</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Mỗi assembly xuất hiện <b>đúng một dòng</b></td>
+                <td>Bốn DLL shim không xung đột. Giữ nguyên như hiện tại.</td>
+                <td>Không có. Báo tôi "census sạch" là xong.</td>
+              </tr>
+              <tr>
+                <td>Có dòng đỏ <code>[IronfrontLog] &lt;tên&gt; is loaded 2 times</code></td>
+                <td>Đúng như tôi nghi: Unity 6 đã có sẵn shim đó, bản trong <code>Plugins</code> là thừa và đang phá</td>
+                <td>Xoá đúng những file bị báo trùng khỏi <code>Assets/Plugins</code> (cả <code>.dll</code> lẫn <code>.dll.meta</code>), rồi báo tôi tên chúng — tôi sẽ sửa <code>build-libs.ps1</code> để lần sau không copy nữa</td>
+              </tr>
+              <tr>
+                <td><code>System.Memory: not loaded</code> mà game vẫn chạy</td>
+                <td>Unity nạp lười, chưa có code nào chạm tới</td>
+                <td>Không sao. Đi lại vài giây trong game rồi thoát Play, đọc lại file log.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note">
+          <b>Vì sao mục này đáng 5 phút của A.</b> Hai bản <code>System.Memory</code> cùng nạp không sinh ra lỗi nào
+          nhắc tới <code>System.Memory</code>. Nó sinh ra <code>TypeLoadException</code>, hoặc một
+          <code>Span&lt;byte&gt;</code> không gán được vào một <code>Span&lt;byte&gt;</code> khác — và người gặp
+          sẽ đi tìm trong code netcode suốt buổi chiều. Đọc một dòng bây giờ rẻ hơn nhiều.
+        </div>
+        <dl class="kv">
+          <dt>Trả lời</dt><dd><b>"census sạch"</b>, hoặc dán mười dòng <code>assembly ...</code> đó vào chat.</dd>
+        </dl>
+      </article>
+
+      <article class="item hold">
+        <div class="item-head">
+          <span class="item-id">V3</span>
+          <h3 class="item-title">Xác nhận log thật sự được ghi ra đĩa</h3>
+          <span class="item-eff">~3 phút</span>
+        </div>
+        <div class="pathbar"><b>Làm ở</b> file explorer hoặc terminal · đường dẫn lấy từ V2</div>
+        <p>
+          Đây là bug <em>"không thấy ghi log"</em> A báo. Hoá ra không phải logger hỏng — <b>project này chưa từng
+          ghi log ra file bao giờ</b>. Console là nơi duy nhất, mà Console thì xoá sạch mỗi lần Play, và bản build
+          thì không có Console. <code>IronfrontLog</code> trong PR #13 sửa chuyện đó, và nó tự khởi động, không cần
+          gắn component nào cả.
+        </p>
+        <p>Mở thư mục chứa file log từ V2 và kiểm ba thứ:</p>
+        <ol class="steps">
+          <li>File <code>ironfront-&lt;ngày&gt;-&lt;giờ&gt;.log</code> <strong>tồn tại</strong> và không rỗng.</li>
+          <li>
+            Nó chứa cả những dòng A thấy trong Console — thử <code>Debug.Log("test")</code> ở đâu đó, hoặc đơn giản
+            là bắn một phát súng rồi xem file có dài ra không. <strong>Đọc được file trong lúc game đang chạy</strong>
+            là cố ý: nó mở với <code>FileShare.ReadWrite</code> và flush từng dòng.
+          </li>
+          <li>Thoát Play, file kết thúc bằng dòng <code>session ended</code>.</li>
+        </ol>
+        <div class="note">
+          <b>Log nằm ngoài repo, cố ý.</b> <code>persistentDataPath</code>, không phải trong <code>Assets/</code> —
+          một thư mục log nằm dưới <code>Assets/</code> sẽ bị Unity import từng dòng một thành asset. Giữ mười phiên
+          gần nhất, cũ hơn thì tự xoá.
+        </div>
+        <dl class="kv">
+          <dt>Trả lời</dt><dd><b>"log ghi được"</b>, hoặc mô tả cái gì thiếu.</dd>
+        </dl>
+      </article>
+
+      <article class="item hold">
+        <div class="item-head">
+          <span class="item-id">V4</span>
+          <h3 class="item-title">Thử nút Quit — và phân biệt hai kiểu hỏng</h3>
+          <span class="item-eff">~3 phút</span>
+        </div>
+        <div class="pathbar"><b>Làm ở</b> Unity Editor, Play mode trên map bất kỳ</div>
+        <p>
+          Bug <em>"không thể quit được"</em>: <code>Application.Quit()</code> <b>không làm gì cả</b> trong Editor,
+          đó là hành vi Unity ghi trong tài liệu chứ không phải lỗi. Cả hai nút Quit trong project đều gọi thẳng
+          nó, nên trong Editor — chỗ game thực sự được chơi lúc phát triển — bấm Quit không có chuyện gì xảy ra.
+          PR #13 thay bằng <code>AppQuit.Quit()</code>: trong Editor thì tắt Play mode, trong bản build thì quit thật.
+        </p>
+        <p>Bấm Play → <strong>Esc</strong> để mở menu → bấm <strong>Quit</strong>. Rồi đối chiếu bảng này:</p>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr><th>Play mode</th><th>Console in <code>[AppQuit] quit requested</code></th><th>Nghĩa là</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><b>Dừng</b></td><td><b>Có</b></td>
+                <td>Fix chạy đúng. Xong mục này.</td>
+              </tr>
+              <tr>
+                <td>Không dừng</td><td><b>Không</b></td>
+                <td>Nút Quit <b>chưa được nối dây</b> trong scene — nó không gọi vào code. Xem hộp bên dưới.</td>
+              </tr>
+              <tr>
+                <td>Không dừng</td><td>Có</td>
+                <td>Code chạy mà Editor không thoát. Đây là lỗi khác và tôi cần biết ngay — báo tôi.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note">
+          <b>Nếu Console không in gì</b>, vấn đề nằm ở scene chứ không nằm ở code, và chỉ Editor sửa được:
+          mở <code>Menu.unity</code>, tìm GameObject có <code>IngameMenuUi</code> (hoặc <code>MainMenu</code> ở
+          màn hình chính), chọn nút Quit trong Canvas, nhìn mục <strong>On Click ()</strong> trong Inspector.
+          Nó phải trỏ tới object đó và chọn hàm <code>Quit()</code>. Trống, hoặc hiện
+          <code>&lt;Missing&gt;</code>, thì kéo GameObject vào ô và chọn lại hàm, Ctrl+S.
+          <b>Thử luôn cả hai chỗ</b>: nút Quit ở màn hình chính và nút Quit trong menu Esc là hai nút khác nhau,
+          ở hai scene khác nhau.
+        </div>
+        <dl class="kv">
+          <dt>Trả lời</dt><dd>Một trong ba dòng của bảng trên. Nếu phải nối dây thì nói tôi biết nút nào.</dd>
+        </dl>
+      </article>
+
+      <article class="item hold">
+        <div class="item-head">
+          <span class="item-id">V5</span>
+          <h3 class="item-title">Mở ba scene còn lại, mỗi cái một lần</h3>
+          <span class="item-eff">~5 phút</span>
+        </div>
+        <div class="pathbar"><b>Làm ở</b> Unity Editor · <code>Island.unity</code>, <code>Dustbowl.unity</code>, <code>Splash.unity</code></div>
+        <p>
+          Mở lần lượt ba scene, mỗi lần <b>xoá Console trước khi mở</b> (nút Clear), rồi đọc.
+          Không cần bấm Play, chỉ cần mở.
+        </p>
+        <p>
+          Lý do: tôi quét được toàn bộ YAML và <b>chắc chắn</b> class 92 (GUILayer) là class duy nhất Unity 6 đã gỡ
+          <em>trong Menu.unity</em> — chắc chắn vì chính Unity đã nói vậy, nó báo GUI Layer và không báo gì khác
+          trong khi file đó cũng chứa FlareLayer, Animator, ParticleSystem và Canvas. Ba scene kia thì
+          <b>tôi chỉ suy đoán</b>: chúng còn <code>TextMesh</code>, <code>Animation</code>, <code>Cloth</code>,
+          <code>Terrain</code> và vài class nữa. Module tương ứng đều có trong manifest nên nhiều khả năng ổn,
+          nhưng suy đoán không phải kiểm chứng, và mở scene một lần là cách xác nhận miễn phí.
+        </p>
+        <dl class="kv">
+          <dt>Trả lời</dt><dd>Ba chữ <b>"sạch"</b>, hoặc nguyên văn dòng đỏ kèm tên scene.</dd>
+        </dl>
+      </article>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>Nhóm 2 · Đóng nốt phase-00 <span class="tag">~65 phút · sau nhóm V</span></h2>
     <p class="lede">Bốn mục này không chặn tôi viết code, nhưng chặn việc tuyên bố phase-00 đã đóng. A3 là mục có xác suất tìm ra lỗi thật cao nhất trong cả danh sách.</p>
+    <div class="note">
+      <b>Thứ tự trong nhóm này không đổi được: A3 trước, A4 sau.</b> Lượt trước tôi bảo A gắn
+      <code>NetPredictionClock</code> cạnh <code>NetMovementAgent</code> ở A4 mà quên nói rõ điều này, nên nói lại
+      cho chắc: clock đó gọi <code>Tick()</code> → <code>CharacterController.Move()</code> mỗi 1/30 giây, trong khi
+      <code>FirstPersonController</code> cũng đang gọi <code>Move()</code> trên đúng controller đó. Hai hệ thống cùng
+      đẩy một nhân vật, còn <code>MovementShadowCompare</code> thì giả định chỉ có bản gốc điều khiển —
+      <b>bật clock lên trước khi đo A3 là số đo A3 thành rác</b>, và là loại rác trông vẫn hợp lý.
+    </div>
 
     <div class="items">
 
@@ -721,6 +1014,15 @@ git status --short          # phải thấy 6 file: 3 .cs + 3 .meta</code></pre>
             <code>[MovementShadowCompare]</code>. Đó là thứ tôi cần.
           </li>
         </ol>
+        <div class="note">
+          <b>Ngay khi bấm Play, Console phải in một dòng</b> — trước cả khi A kịp di chuyển:
+          <code>[MovementShadowCompare] attached to '...' and ticking.</code>
+          Không thấy dòng đó thì component chưa chạy, và <b>đừng chơi tiếp ba mươi phút cho phí</b>: nó đang nằm trên
+          một GameObject không được spawn, hoặc bị tắt, hoặc gắn vào object trong scene chứ không phải vào prefab.
+          Tôi thêm dòng này ở PR #13 chính vì thiếu nó: bản cũ im lặng hoàn toàn khi gắn sai chỗ — không cảnh báo,
+          không summary, không gì cả — và im lặng đó trông y hệt "logger hỏng". Nếu lúc thoát Play mà nhận được
+          <code>ran zero ticks</code> thì đó cũng là cùng một chuyện, và dòng cảnh báo sẽ nói luôn phải sửa ở đâu.
+        </div>
         <div class="tablewrap">
           <table>
             <thead>
@@ -757,21 +1059,39 @@ git status --short          # phải thấy 6 file: 3 .cs + 3 .meta</code></pre>
       <article class="item hold">
         <div class="item-head">
           <span class="item-id">A4</span>
-          <h3 class="item-title">Gắn NetMovementAgent lên player prefab</h3>
+          <h3 class="item-title">Gắn NetMovementAgent và NetPredictionClock, clock để tắt</h3>
           <span class="item-eff">~10 phút</span>
         </div>
-        <div class="pathbar"><b>Làm ở</b> Unity Editor · <b>cùng prefab với A3</b> <code>Assets/Prefab/Player Fps Actor.prefab</code></div>
+        <div class="pathbar"><b>Làm ở</b> Unity Editor · <b>cùng prefab với A3</b> <code>Assets/Prefab/Player Fps Actor.prefab</code> · <b>chỉ làm sau khi A3 xong</b></div>
+        <ol class="steps">
+          <li>
+            Mở lại đúng prefab đó, chọn GameObject gốc → <strong>Add Component</strong> →
+            <code>NetMovementAgent</code>.
+            Nó có <code>[RequireComponent(typeof(CharacterController))]</code> nên nếu gắn nhầm GameObject khác,
+            Editor sẽ tự nhét thêm một <code>CharacterController</code> vào đó: thấy vậy là gắn sai chỗ, undo ngay.
+          </li>
+          <li>
+            <strong>Add Component</strong> lần nữa → <code>NetPredictionClock</code>, trên cùng GameObject.
+          </li>
+          <li>
+            <strong>Bỏ dấu tick ở ô vuông bên trái tên <code>NetPredictionClock</code></strong> trong Inspector.
+            Đây là bước quan trọng nhất của cả mục này.
+          </li>
+          <li><strong>Ctrl+S</strong>.</li>
+        </ol>
+        <div class="note">
+          <b>Vì sao phải tắt.</b> <code>NetMovementAgent</code> gắn vào rồi nằm im — không có gì gọi
+          <code>Tick()</code> cho tới lúc tích hợp M1. <code>NetPredictionClock</code> thì ngược lại: nó
+          <em>chính là</em> thứ gọi <code>Tick()</code>, ngay từ frame đầu tiên, 30 lần mỗi giây. Bật nó lúc này là
+          có hai hệ thống cùng điều khiển một <code>CharacterController</code>, và triệu chứng sẽ là nhân vật đi
+          nhanh gấp đôi hoặc giật — trông như bug vật lý, thật ra là bug tích hợp.
+          Bật nó lên là việc của buổi M1, khi bản gốc đã được tắt đi.
+        </div>
         <p>
-          Mở lại đúng prefab đó, chọn GameObject gốc → <strong>Add Component</strong> → <code>NetMovementAgent</code> → Ctrl+S.
-          Nó có <code>[RequireComponent(typeof(CharacterController))]</code> nên nếu gắn nhầm GameObject khác,
-          Editor sẽ tự nhét thêm một <code>CharacterController</code> vào đó: thấy vậy là gắn sai chỗ, undo ngay.
-        </p>
-        <p>
-          Chưa cần nối dây gì cả: phần tích hợp M1 mới gọi <code>Tick()</code>, từ giờ tới đó nó chỉ nằm im giữ state.
           Sau khi lưu, gỡ <code>MovementShadowCompare</code> ra hay để lại đều được, nó chỉ đọc.
         </p>
         <dl class="kv">
-          <dt>Trả lời</dt><dd>Đường dẫn prefab, và Console vẫn sạch.</dd>
+          <dt>Trả lời</dt><dd>Đường dẫn prefab, <b>xác nhận clock đang tắt</b>, và Console vẫn sạch.</dd>
         </dl>
       </article>
 
@@ -938,6 +1258,10 @@ git status --short          # phải thấy 6 file: 3 .cs + 3 .meta</code></pre>
           <tr><td class="id">SnapshotBuilder / DeltaEncoder / DeltaDecoder</td><td>Snapshot đầy đủ và delta. Đo được: tiết kiệm 44.7%, 10.94 KB/s mỗi client ở 48 actor.</td></tr>
           <tr><td class="id">ServerTickScheduler / InputAuthority / ClientSession</td><td>Nhịp 30 Hz, xử lý input chống gian lận.</td></tr>
           <tr><td class="id">BitWriter / BitReader</td><td>Của Dev B, kèm bộ conformance suite chấm nó.</td></tr>
+          <tr><td class="id">NetPredictionClock</td><td>Mới, PR #13. Nhịp 30 Hz riêng cho prediction — phương án B của A5. Gắn ở A4, để tắt cho tới M1.</td></tr>
+          <tr><td class="id">IronfrontLog</td><td>Mới, PR #13. Ghi Console ra file, kèm assembly census. Tự chạy, không cần gắn gì.</td></tr>
+          <tr><td class="id">AppQuit</td><td>Mới, PR #13. Một chỗ thoát game duy nhất, chạy đúng cả trong Editor lẫn trong build.</td></tr>
+          <tr><td class="id">tools/strip-removed-components.ps1</td><td>Mới, PR #14. Xoá component thuộc class Unity đã gỡ khỏi scene và prefab, không phải mở Editor re-save cả file.</td></tr>
         </tbody>
       </table>
     </div>
@@ -951,11 +1275,16 @@ git status --short          # phải thấy 6 file: 3 .cs + 3 .meta</code></pre>
           <tr><th>Mục</th><th>Trả lời bằng</th></tr>
         </thead>
         <tbody>
-          <tr><td class="id">A1</td><td>"clean" hoặc nguyên văn lỗi</td></tr>
-          <tr><td class="id">A2</td><td>done</td></tr>
+          <tr><td class="id">A1 <span class="pill done">xong</span></td><td>PR #12</td></tr>
+          <tr><td class="id">A2 <span class="pill done">xong</span></td><td>PR #12</td></tr>
+          <tr><td class="id">A5 <span class="pill done">xong</span></td><td>đã chọn <b>B</b></td></tr>
+          <tr><td class="id">V1</td><td><b>"0 error"</b>, hoặc nguyên văn từng dòng đỏ kèm tên scene</td></tr>
+          <tr><td class="id">V2</td><td><b>"census sạch"</b>, hoặc dán mười dòng <code>assembly ...</code></td></tr>
+          <tr><td class="id">V3</td><td>"log ghi được", hoặc cái gì thiếu</td></tr>
+          <tr><td class="id">V4</td><td>một trong ba dòng của bảng V4</td></tr>
+          <tr><td class="id">V5</td><td>ba chữ "sạch", hoặc dòng đỏ kèm tên scene</td></tr>
           <tr><td class="id">A3</td><td>dòng summary, kèm cảnh báo trên đất phẳng nếu có</td></tr>
-          <tr><td class="id">A4</td><td>đường dẫn prefab</td></tr>
-          <tr><td class="id">A5</td><td><b>A, B hoặc C</b></td></tr>
+          <tr><td class="id">A4</td><td>đường dẫn prefab, và xác nhận clock đang tắt</td></tr>
           <tr><td class="id">A6</td><td>cách đọc id từ code</td></tr>
           <tr><td class="id">A7</td><td>có hoặc không</td></tr>
           <tr><td class="id">A8</td><td>chỗ nào trái với những gì A biết</td></tr>
@@ -964,8 +1293,8 @@ git status --short          # phải thấy 6 file: 3 .cs + 3 .meta</code></pre>
       </table>
     </div>
     <p class="lede">
-      A5 là mục duy nhất cần một quyết định thay vì một lần kiểm tra. A3 là mục nhiều khả năng tìm ra thứ gì đó nhất.
-      Còn lại đều là xác nhận.
+      <b>V2 là mục có thể đổi một quyết định</b>, còn lại đều là xác nhận. A3 vẫn là mục nhiều khả năng tìm ra
+      thứ gì đó nhất. Không mục nào trong vòng này cần A quyết định gì — A5 đã đóng.
     </p>
   </section>
 
@@ -996,6 +1325,10 @@ git status --short          # phải thấy 6 file: 3 .cs + 3 .meta</code></pre>
   <footer>
     <div>Nguồn sự thật: <code>plans/dev-c-replication/handoff/dev-a-checklist.md</code> · <code>plans/00-shared/dependency-map.md</code> · <code>docs/movement-analysis.md</code></div>
     <div>Trang này chỉ sắp lại theo gate. Khi hai bên lệch nhau, tin file markdown.</div>
+    <div>
+      Vòng 2 · 12-08-2026 chiều · PR #12, #13, #14 đã merge vào <code>develop</code>.
+      Phần Unity trong ba PR đó <b>chưa ai mở Editor để kiểm</b> — đó chính là nhóm V.
+    </div>
   </footer>
 
 </div>
