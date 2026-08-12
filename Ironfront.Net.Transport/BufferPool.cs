@@ -75,6 +75,12 @@ namespace Ironfront.Net.Transport
                 throw new ArgumentException(
                     $"Buffer is {buffer.Length} bytes, pool holds {BufferSize}.", nameof(buffer));
 
+#if DEBUG
+            // A returned buffer must never be observed by an application callback. Filling it
+            // makes accidental retention fail loudly and deterministically in debug builds.
+            Array.Fill(buffer, (byte)0xDD);
+#endif
+
             _free.Push(buffer);
         }
     }
