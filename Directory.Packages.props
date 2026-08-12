@@ -31,15 +31,15 @@
   </PropertyGroup>
 
   <ItemGroup Label="Test host">
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
-    <PackageVersion Include="xunit" Version="2.9.2" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
     <!--
       Required by the "XPlat Code Coverage" data collector that ci.yml asks dotnet test for.
       Without this package the collector produces no coverage file and the CI step reports
       success while measuring nothing — a silent hole, worse than no coverage at all.
     -->
-    <PackageVersion Include="coverlet.collector" Version="6.0.2" />
+    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
   </ItemGroup>
 
 </Project>
