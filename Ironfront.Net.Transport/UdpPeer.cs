@@ -35,6 +35,15 @@ namespace Ironfront.Net.Transport
         private EndPoint? _connectedEndpoint;
         private bool _disposed;
 
+        /// <summary>
+        /// Socket buffer size asked of the OS, in bytes. 1 MB holds roughly 870 datagrams at
+        /// <see cref="ProtocolConstants.MTU_SAFE"/> — comfortably more than a 16-client burst.
+        /// </summary>
+        /// <remarks>
+        /// Asking is not getting. See <see cref="ReceiveBufferWasClampedByTheOs"/>.
+        /// </remarks>
+        public const int RequestedSocketBufferSize = 1 << 20;
+
         public UdpPeer(
             int bindPort,
             SimulatorConfig? simulatorConfig = null,
@@ -46,9 +55,26 @@ namespace Ironfront.Net.Transport
             _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp)
             {
                 Blocking = false,
-                ReceiveBufferSize = 1 << 20,
-                SendBufferSize = 1 << 20,
+                ReceiveBufferSize = RequestedSocketBufferSize,
+                SendBufferSize = RequestedSocketBufferSize,
             };
+
+            // Read back what the OS actually granted. Linux clamps SO_RCVBUF to
+            // net.core.rmem_max — 208 KB by default — and does it SILENTLY: the assignment above
+            // succeeds, the property reports the clamped value, and nothing anywhere says so.
+            // 208 KB is ~170 datagrams at MTU_SAFE, so a server receiving a burst from 16 clients
+            // overflows the buffer and the kernel discards the excess before any of this code
+            // runs. The symptom is packet loss on localhost that looks like a transport bug.
+            ReceiveBufferSize = _socket.ReceiveBufferSize;
+            SendBufferSize = _socket.SendBufferSize;
+
+            if (ReceiveBufferWasClampedByTheOs)
+            {
+                NetLog.Warn(
+                    $"socket receive buffer clamped to {ReceiveBufferSize} B "
+                    + $"(asked for {RequestedSocketBufferSize} B). On Linux raise it with "
+                    + "`sysctl -w net.core.rmem_max=1048576`. Until then, expect drops under load.");
+            }
 
             DisableIcmpPortUnreachable();
             _socket.Bind(new IPEndPoint(IPAddress.Any, bindPort));
@@ -67,6 +93,21 @@ namespace Ironfront.Net.Transport
         public int Port => ((IPEndPoint)_socket.LocalEndPoint!).Port;
 
         public BufferPool Pool => _pool;
+
+        /// <summary>Receive buffer the OS actually granted, in bytes.</summary>
+        public int ReceiveBufferSize { get; }
+
+        /// <summary>Send buffer the OS actually granted, in bytes.</summary>
+        public int SendBufferSize { get; }
+
+        /// <summary>
+        /// True when the OS gave less receive buffer than <see cref="RequestedSocketBufferSize"/>.
+        /// </summary>
+        /// <remarks>
+        /// Worth checking before blaming the transport for loss: a clamped buffer drops
+        /// datagrams in the kernel, where no amount of correct user-space code can see them.
+        /// </remarks>
+        public bool ReceiveBufferWasClampedByTheOs => ReceiveBufferSize < RequestedSocketBufferSize;
 
         public long DroppedBySimulator => _simulator.DroppedCount;
 
