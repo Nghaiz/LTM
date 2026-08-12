@@ -29,6 +29,7 @@ namespace Ironfront.Net.Transport
         private ulong _clientSalt;
         private ulong _serverSalt;
         private double _lastSendMs;
+        private double _lastKeepAliveMs;
         private double _lastReceiveMs;
         private double _lastUpdateMs;
         private int _connectAttempts;
@@ -61,6 +62,35 @@ namespace Ironfront.Net.Transport
         public TransportStats Stats => _stats;
 
         public CongestionControl Congestion => _congestion;
+
+        /// <summary>
+        /// Whether the ack cursor has been seeded yet, i.e. whether any DATA packet has arrived.
+        /// </summary>
+        /// <remarks>
+        /// Exposed because "the handshake must not seed this" is the invariant behind a failure
+        /// that is otherwise almost unobservable: seeding it from the server's global control
+        /// counter costs nothing on a fresh server — the gap is inside the 32-bit ack bitfield
+        /// and repairs itself in a few packets — and costs the client every reliable delivery
+        /// for tens of thousands of packets once that counter has been running for a while.
+        /// Asserting the symptom needs a server that has already handled hundreds of joins;
+        /// asserting the invariant needs one handshake.
+        /// </remarks>
+        public bool HasSeededAckCursor => _reliability.HasReceivedSequence;
+
+        /// <summary>The sequence this side is currently acking, i.e. the newest it has seen.</summary>
+        public ushort AckCursor => _reliability.BuildAck().ack;
+
+        /// <summary>
+        /// Periodic keep-alives emitted. Excludes the ack-keep-alive sent on reliable receipt.
+        /// </summary>
+        /// <remarks>
+        /// Observable because keep-alives are the only carrier of flow-control state, and the
+        /// failure this counts is a keep-alive that never goes out at all: gating it on the last
+        /// send of ANYTHING means a peer streaming at 20 Hz emits none, so the far side's
+        /// advertised pressure is never refreshed and a single transient reading pauses reliable
+        /// sending permanently. Nothing else about the connection looks wrong when that happens.
+        /// </remarks>
+        public long PeriodicKeepAlivesSent { get; private set; }
 
         public bool CanSendReliable => _flow.CanSendReliable(_reliability.PendingReliableCount)
             && _reliability.CanSendReliable;
@@ -197,14 +227,40 @@ namespace Ironfront.Net.Transport
                 return;
             }
 
-            if (nowMs - _lastSendMs >= ProtocolConstants.KEEPALIVE_MS)
+            // Gated on the last KEEP-ALIVE, not the last send of anything. _lastSendMs is
+            // bumped by every outgoing packet, so on a connection streaming snapshots at 20 Hz
+            // the old condition never became true and no keep-alive ever went out. Keep-alives
+            // are the only carrier of flow-control state, so the peer's advertised pressure was
+            // never refreshed: one transient "pressure > 80" reading latched _pauseNewReliable
+            // on and nothing could ever clear it, permanently disabling reliable sends in that
+            // direction on exactly the busy connections that need them.
+            if (nowMs - _lastKeepAliveMs >= ProtocolConstants.KEEPALIVE_MS)
             {
+                _lastKeepAliveMs = nowMs;
+                PeriodicKeepAlivesSent++;
                 Span<byte> keepAlive = stackalloc byte[3];
                 WriteFlowControl(keepAlive);
                 SendPacket(PacketType.Keepalive, PacketFlags.None, keepAlive, false, nowMs, false);
             }
 
             _reliability.Update(nowMs, _resendCallback);
+
+            // A reliable packet that ran out of retransmissions is a hole the ordered channel
+            // can never fill: the receiver's next-expected sequence is stuck on it forever, so
+            // every spawn, death, hit confirmation and chat message after it is dropped for the
+            // rest of the session. Keep-alives carry on, so the 10 s timeout never fires and the
+            // connection looks perfectly healthy while delivering nothing. There is no recovery
+            // short of a reconnect, so this ends the connection loudly instead of continuing
+            // quietly (development-principles.md, "Errors Over Silent Fallbacks").
+            if (_reliability.HasAbandonedReliable)
+            {
+                NetLog.Warn(
+                    $"connection {ConnectionId}: a reliable packet was abandoned; the ordered "
+                    + "channel cannot recover, disconnecting");
+                Fail(DisconnectReason.TransportError);
+                return;
+            }
+
             _stats.SmoothedRttMs = SmoothedRttMs;
             _stats.JitterMs = JitterMs;
             _stats.PendingReliableCount = _reliability.PendingReliableCount;
@@ -321,7 +377,17 @@ namespace Ironfront.Net.Transport
                         || !ConnectChallengePayload.TryParse(payload, out ConnectChallengePayload challenge))
                         return;
                     _serverSalt = challenge.ServerSalt;
-                    _reliability.OnPacketReceived(header.Sequence);
+                    // NOT _reliability.OnPacketReceived(header.Sequence). The handshake is
+                    // stamped from the server's GLOBAL control counter, which is shared across
+                    // every connection and every denied request; the data stream that follows
+                    // is stamped from this connection's own counter, starting at 0. Latching
+                    // the ack cursor to the control value leaves the client believing it has
+                    // already seen sequence N, so every data packet arrives "behind" by more
+                    // than the 32-bit bitfield can express and is never acked at all. The
+                    // sender then retransmits everything ten times, abandons it, saturates its
+                    // unacked window and stops sending reliably — while the connection looks
+                    // healthy. Leaving _hasReceived false here lets the FIRST DATA PACKET
+                    // initialise the cursor, which is the only value it can correctly be.
                     State = ConnectionState.Challenged;
                     _connectAttempts = 0;
                     SendConnectResponse(nowMs);
@@ -333,7 +399,8 @@ namespace Ironfront.Net.Transport
                         || !ConnectAcceptedPayload.TryParse(payload, out ConnectAcceptedPayload accepted))
                         return;
                     ConnectionId = accepted.ConnectionId;
-                    _reliability.OnPacketReceived(header.Sequence);
+                    // Same reason as ConnectChallenge above — do not seed the data-stream ack
+                    // cursor from the control sequence space.
                     State = ConnectionState.Connected;
                     _lastReceiveMs = nowMs;
                     _lastSendMs = nowMs;

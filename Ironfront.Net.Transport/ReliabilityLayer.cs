@@ -10,7 +10,12 @@ namespace Ironfront.Net.Transport
     public sealed class ReliabilityLayer
     {
         private const int SentBufferSize = 1024;
-        private const int MaxResends = 10;
+        /// <summary>
+        /// Retransmissions before a reliable packet is given up on. Public because giving up
+        /// is not a private detail — it ends the connection (see
+        /// <see cref="HasAbandonedReliable"/>), so a test has to be able to reach the ceiling.
+        /// </summary>
+        public const int MaxResends = 10;
         private const float MinRtoMs = 30f;
         private const float MaxRtoMs = 1000f;
 
@@ -53,6 +58,16 @@ namespace Ironfront.Net.Transport
         public bool CanSendReliable => _unackedReliableCount < 64;
 
         public ushort NextSequence() => _localSequence++;
+
+        /// <summary>
+        /// True once a reliable packet has exhausted <see cref="MaxResends"/> and been dropped.
+        /// </summary>
+        /// <remarks>
+        /// Latching, and deliberately so: the ordered channel on the far side is now blocked on
+        /// a sequence that will never arrive, and no later success makes that untrue. The owner
+        /// is expected to end the connection rather than carry on — see Connection.Update.
+        /// </remarks>
+        public bool HasAbandonedReliable { get; private set; }
 
         /// <summary>Returns the current retransmission timeout in milliseconds.</summary>
         public float RetransmissionTimeoutMs
@@ -161,6 +176,7 @@ namespace Ironfront.Net.Transport
                 if (packet.ResendCount > MaxResends)
                 {
                     NetLog.Warn($"reliable sequence {packet.Sequence} abandoned after {MaxResends} resends");
+                    HasAbandonedReliable = true;
                     ReleaseSlot(ref packet);
                     continue;
                 }
@@ -174,6 +190,7 @@ namespace Ironfront.Net.Transport
         {
             for (int i = 0; i < _sent.Length; i++) ReleaseSlot(ref _sent[i]);
             _unackedReliableCount = 0;
+            HasAbandonedReliable = false;
         }
 
         private void AckPacket(ushort sequence, double nowMs)

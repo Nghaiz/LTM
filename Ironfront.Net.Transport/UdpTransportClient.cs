@@ -38,6 +38,20 @@ namespace Ironfront.Net.Transport
 
         public TransportStats Stats => _connection?.Stats ?? default;
 
+        /// <summary>
+        /// Whether a DATA packet has seeded the ack cursor. False immediately after a handshake.
+        /// </summary>
+        /// <remarks>See <see cref="Connection.HasSeededAckCursor"/> for why this is public.</remarks>
+        public bool HasSeededAckCursor => _connection?.HasSeededAckCursor ?? false;
+
+        /// <summary>The sequence this client is currently acking.</summary>
+        /// <remarks>See <see cref="Connection.HasSeededAckCursor"/> for why this is public.</remarks>
+        public ushort AckCursor => _connection?.AckCursor ?? (ushort)0;
+
+        /// <summary>Periodic keep-alives this client has emitted.</summary>
+        /// <remarks>See <see cref="Connection.PeriodicKeepAlivesSent"/> for why this is public.</remarks>
+        public long PeriodicKeepAlivesSent => _connection?.PeriodicKeepAlivesSent ?? 0;
+
         public event Action<ReadOnlyMemory<byte>>? OnMessage;
 
         public event Action<ConnectResult>? OnConnected;
