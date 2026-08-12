@@ -46,7 +46,7 @@ scratch** — no WebSocket, no Mirror/Netcode-for-GameObjects/Photon.
 
 | Milestone | Week | Acceptance criteria (measurable) | Status |
 |---|---|---|---|
-| **M0** Foundation | 1–2 | Protocol spec v1.0 frozen · headless build runs · network simulator working · CI compiles all 3 projects | **2 / 4** |
+| **M0** Foundation | 1–2 | Protocol spec v1.0 frozen · headless build runs · network simulator working · CI compiles all 3 projects | **3 / 4** |
 | **M1** Connection | 3–6 | **2 clients see each other moving smoothly** at 100 ms RTT + 5% packet loss | ☐ |
 | **M2** Combat | 7–10 | Server-authoritative shooting with lag compensation · health/death/respawn · AI bots replicate | ☐ |
 | **M3** Full match | 11–13 | Login → lobby → room → capture point → win/lose → back to lobby, 16 players | ☐ |
@@ -61,9 +61,9 @@ scratch** — no WebSocket, no Mirror/Netcode-for-GameObjects/Photon.
 | Criterion | Owner | Status |
 |---|---|---|
 | Protocol spec v1.0 frozen | C (chair) | **Done** — [protocol-spec.md](protocol-spec.md) is at 1.0.0 FROZEN, with all 8 open questions recorded in [§ 15.1](protocol-spec.md#151-questions-settled-at-the-freeze) |
-| CI compiles all 3 projects | D | **Done** — `.github/workflows/ci.yml` green on Ubuntu in 57 s: build (0 warnings), 160 tests, spec-drift check |
-| Headless build runs | **A** | Not started — needs the Unity Editor |
-| Network simulator working | B | Not started |
+| CI compiles all 3 projects | D | **Done** — `.github/workflows/ci.yml` green on Ubuntu and Windows: build (0 warnings), **297 tests**, spec-drift check |
+| Network simulator working | B | **Done** — `NetworkSimulator` + `SimulatorConfig` with lan/typical/bad profiles, covered by `NetworkSimulatorTests`. Shipped ahead of B's phase-00 Task 5 so A and C were never blocked on it |
+| Headless build runs | **A** | **The last open M0 item.** Needs the Unity Editor, so nobody can pull it forward — see [roadmap.md](roadmap.md) |
 
 Also already delivered, ahead of their phases: `Ironfront.Net.Protocol` (the shared SSOT, 160
 conformance tests), the four project skeletons, `tools/build-libs.ps1`, `tools/ci.ps1` and
