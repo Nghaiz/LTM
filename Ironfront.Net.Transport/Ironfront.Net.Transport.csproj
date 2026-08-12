@@ -13,7 +13,9 @@
   -->
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.1</TargetFramework>
+    <!-- Unity consumes netstandard2.1; net8.0 additionally exposes the allocation-free
+         SocketAddress receive overload used by the benchmark and server runtime on .NET. -->
+    <TargetFrameworks>netstandard2.1;net8.0</TargetFrameworks>
     <RootNamespace>Ironfront.Net.Transport</RootNamespace>
     <AssemblyName>Ironfront.Net.Transport</AssemblyName>
     <Description>Hand-written UDP reliability layer: sequencing, acks, channels, fragmentation, congestion control.</Description>

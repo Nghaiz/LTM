@@ -82,6 +82,7 @@ namespace Ironfront.Net.Transport.Loopback
         private readonly Direction[] _directions;
         private readonly LoopbackClient _client;
         private readonly LoopbackServer _server;
+        private readonly Action<byte[], int, int> _deliverCallback;
 
         // Sequence state for the unreliable-sequenced channels, per route per channel.
         private readonly ushort[] _sendSequence = new ushort[2 * 256];
@@ -110,6 +111,7 @@ namespace Ironfront.Net.Transport.Loopback
             // and the snapshot answering it in the same instant — which is not how two
             // independent paths through a network behave.
             _directions = new Direction[2];
+            _deliverCallback = DeliverCallback;
             for (int route = 0; route < _directions.Length; route++)
             {
                 SimulatorConfig routeLossy = _config.Clone();
@@ -200,8 +202,8 @@ namespace Ironfront.Net.Transport.Loopback
         {
             Direction direction = _directions[route];
 
-            direction.Lossless.Flush(_nowMs, DeliverCallback);
-            direction.Lossy.Flush(_nowMs, DeliverCallback);
+            direction.Lossless.Flush(_nowMs, _deliverCallback);
+            direction.Lossy.Flush(_nowMs, _deliverCallback);
         }
 
         private void DeliverCallback(byte[] buffer, int length, int route)
