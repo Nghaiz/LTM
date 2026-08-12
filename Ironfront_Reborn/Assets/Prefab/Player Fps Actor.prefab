@@ -349,7 +349,6 @@ GameObject:
   - 20: {fileID: 20891516420539815}
   - 81: {fileID: 81217141214464441}
   - 124: {fileID: 124403043021550990}
-  - 92: {fileID: 92549472157447402}
   - 114: {fileID: 114604408727007298}
   - 164: {fileID: 164569126481396336}
   - 114: {fileID: 114138954997351537}
@@ -417,13 +416,6 @@ AudioListener:
   m_Enabled: 1
 --- !u!124 &124403043021550990
 FlareLayer:
-  m_ObjectHideFlags: 0
-  m_PrefabParentObject: {fileID: 0}
-  m_PrefabInternal: {fileID: 100100000}
-  m_GameObject: {fileID: 1369040739045613}
-  m_Enabled: 1
---- !u!92 &92549472157447402
-GUILayer:
   m_ObjectHideFlags: 0
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 100100000}
@@ -4112,7 +4104,6 @@ GameObject:
   - 4: {fileID: 4231454414967855}
   - 20: {fileID: 20078730586720719}
   - 124: {fileID: 124961101863438855}
-  - 92: {fileID: 92735473312828484}
   - 114: {fileID: 114039254134927434}
   - 114: {fileID: 114626394761054163}
   m_Layer: 0
@@ -4171,13 +4162,6 @@ Camera:
   m_StereoMirrorMode: 0
 --- !u!124 &124961101863438855
 FlareLayer:
-  m_ObjectHideFlags: 0
-  m_PrefabParentObject: {fileID: 0}
-  m_PrefabInternal: {fileID: 100100000}
-  m_GameObject: {fileID: 1055126122634302}
-  m_Enabled: 1
---- !u!92 &92735473312828484
-GUILayer:
   m_ObjectHideFlags: 0
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 100100000}
