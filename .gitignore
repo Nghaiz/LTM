@@ -144,6 +144,10 @@ Desktop.ini
 *.bak
 /.claude
 
+# Unity-MCP is personal tooling: its config contains a token and its skills are generated.
+/Ironfront_Reborn/.claude/
+/Ironfront_Reborn/.mcp.json
+
 # ---------------------------------------------------------------------------
 # Hand-authored .NET solution (added by the M0 foundation pass)
 #
