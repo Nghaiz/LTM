@@ -109,24 +109,42 @@ integration calls `Tick()`; until then it just sits there holding state.
 
 ---
 
-## A5 — Confirm the fixed-timestep decision  ⏱ ~15 min  🟡 real M1 risk, needs your call
+## A5 — Fixed-timestep decision  ✅ DECIDED: **B**  ·  implemented, nothing left to do
 
 `ProjectSettings/TimeManager.asset` has `Fixed Timestep: 0.02` — **50 Hz**. `SIM_TICK_RATE` is
 **30**. Client prediction and the server must step the *same* dt or prediction disagrees with
 authority on every airborne tick.
 
-Three options; the choice is yours because it is your project:
-
 | Option | Effect | Cost |
 |---|---|---|
-| **A. Set `Fixed Timestep` to `0.0333`** (recommended) | Everything lines up, one setting | Physics runs at 30 Hz. Ragdolls will feel slightly different |
-| **B. Keep 0.02, run prediction on its own 30 Hz accumulator** | Physics unchanged | Prediction no longer rides `FixedUpdate`; more moving parts |
-| **C. Change `SIM_TICK_RATE` to 50** | Everything lines up | **Protocol change** — PR, 2 approvals, `PROTOCOL_VERSION` bump, and 66% more snapshot bandwidth |
+| A. Set `Fixed Timestep` to `0.0333` | Everything lines up, one setting | Physics runs at 30 Hz. Ragdolls will feel slightly different |
+| **B. Keep 0.02, run prediction on its own 30 Hz accumulator** ← **chosen** | Physics unchanged | Prediction no longer rides `FixedUpdate`; more moving parts |
+| C. Change `SIM_TICK_RATE` to 50 | Everything lines up | **Protocol change** — PR, 2 approvals, `PROTOCOL_VERSION` bump, and 66% more snapshot bandwidth |
 
-I lean **A**. `MovementSimulation.FixedDeltaTime` already exposes `1/SIM_TICK_RATE`, so the
-netcode is correct under any of the three; this decides what happens to the rest of the game.
+**Dev A chose B.** Implemented as
+[`NetPredictionClock`](../../../Ironfront_Reborn/Assets/Scripts/Net/Shared/NetPredictionClock.cs):
+an accumulator in `Update` that calls `NetMovementAgent.Tick` at exactly
+`MovementSimulation.FixedDeltaTime`, whatever the physics rate happens to be.
+`ProjectSettings/TimeManager.asset` is untouched.
 
-**Reply with A, B or C.** This is the one item I genuinely cannot decide for you.
+### I recommended A, and I was wrong — A could not have worked
+
+The recommendation assumed `Fixed Timestep` in the asset is what the game runs at. It is not.
+Two files overwrite it at runtime:
+
+| File | Line | Assignment | When |
+|---|---|---|---|
+| `IngameMenuUi.cs` | 29 | `Time.fixedDeltaTime = Time.timeScale / 60f` | `Hide()`, called from `Awake()` — so before the first frame |
+| `FpsActorController.cs` | 497 | `Time.fixedDeltaTime = Time.timeScale / 60f` | every slow-motion toggle |
+
+So the live timestep is **1/60 during normal play** and **0.2/60 in slow motion** — never the
+0.02 in the asset, and never the 0.0333 option A would have written there. Option A would have
+edited a value that is overwritten before the first `FixedUpdate` of every session, and the
+symptom would have been prediction that disagrees with authority for a reason no one could find
+in the netcode, because the netcode would have been correct.
+
+B is not merely the safer choice here. It is the only one of the three that a `Time.timeScale`
+assignment in someone else's file cannot silently break.
 
 ---
 
@@ -220,14 +238,15 @@ Two gotchas worth knowing before you meet them:
 
 | # | Item | Effort | Reply with |
 |---|---|---|---|
-| A1 | DLLs load in the Editor | 15 min | "clean" or the error |
-| A2 | Drop-in scripts installed + `.meta` committed | 10 min | done |
+| A1 | ✅ DLLs load in the Editor | 15 min | done — PR #12 |
+| A2 | ✅ Drop-in scripts installed + `.meta` committed | 10 min | done — PR #12 |
 | A3 | Shadow-comparison run | 35 min | the summary line + flat-ground warnings |
-| A4 | `NetMovementAgent` on the player prefab | 10 min | prefab path |
-| A5 | **Fixed timestep: A, B or C** | 15 min | **A, B or C** |
+| A4 | `NetMovementAgent` + `NetPredictionClock` on the player prefab | 10 min | prefab path |
+| A5 | ✅ **Fixed timestep — chose B** | 15 min | done — `NetPredictionClock` |
 | A6 | Weapon id registry | 30 min | how to read the ids |
 | A7 | Can a player pass ±2048 m? | 10 min | yes/no |
 | A8 | Skim the movement analysis | 10 min | anything that contradicts what you know |
 
-**Roughly 2 hours 15 minutes of Editor work.** A5 is the only one that needs a decision rather
-than a check, and A3 is the one most likely to find something.
+**A1, A2 and A5 are closed.** Roughly 1 hour 25 minutes of Editor work left, and A3 is the one
+most likely to find something. A4 now wants two components rather than one: add
+`NetPredictionClock` next to `NetMovementAgent`, which is what makes option B real.

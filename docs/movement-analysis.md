@@ -276,12 +276,29 @@ Holding jump while grounded jumps every tick.
 |---|---|---|---|
 | 1 | **No slope projection.** The original projects the wish direction onto the ground normal from a `SphereCast` (`:194-196`) | Only on slopes. On flat ground the normal is straight up and the projection is a no-op, so the port is **exact** there | Needs a collision query. `Ironfront.Net.Replication` must not reference UnityEngine (architecture.md § 5.1) |
 | 2 | **No collision resolution.** `MovementCore.Step` returns the motion it *wants* | Against any geometry | `CharacterController.Move` does this on both sides. Returning a delta is what keeps the seam honest |
-| 3 | **Fixed timestep mismatch, and this one is a live risk.** The project's `Time.fixedDeltaTime` is **0.02** (50 Hz, `ProjectSettings/TimeManager.asset`), but `SIM_TICK_RATE` is **30** | Everywhere, if unaddressed | Client prediction and server simulation must step the *same* dt. See the Dev A checklist |
+| 3 | ~~**Fixed timestep mismatch, and this one is a live risk.**~~ **Closed — A5 decided B.** The project's fixed timestep stays where it is; prediction runs its own 30 Hz accumulator | Nowhere, now | `NetPredictionClock` owns the netcode's clock; `SIM_TICK_RATE` and `Time.fixedDeltaTime` no longer have to agree |
 
 Divergence 3 is worth stating plainly: at 0.02 the original applies gravity 50 times a second; at
 1/30 the simulation applies it 30 times. Same acceleration, same trajectory in continuous time —
 but the *discrete* positions differ, and client prediction compares discrete positions. The
 client must run prediction at `1/SIM_TICK_RATE`, not at the project's fixed timestep.
+
+**How it was closed, and the thing that makes it worth reading twice.** Dev A chose option B —
+keep the physics rate, give prediction its own accumulator
+(`Assets/Scripts/Net/Shared/NetPredictionClock.cs`). Option A, which this document's checklist
+originally recommended, would not have worked at all: `Time.fixedDeltaTime` is *assigned at
+runtime* by two files that have nothing to do with netcode —
+
+| File | Line | Assignment | When |
+|---|---|---|---|
+| `IngameMenuUi.cs` | 29 | `Time.fixedDeltaTime = Time.timeScale / 60f` | `Hide()`, reached from `Awake()`, so before frame 1 |
+| `FpsActorController.cs` | 497 | `Time.fixedDeltaTime = Time.timeScale / 60f` | every slow-motion toggle |
+
+— so the live rate is 1/60 in normal play and 0.2/60 in slow motion, and the 0.02 in
+`ProjectSettings/TimeManager.asset` is never what the game actually runs at. Writing 0.0333 into
+that asset would have been overwritten before the first physics step, and the resulting
+mispredictions would have looked like a bug in the simulation rather than in the clock.
+**Do not read a timestep out of `TimeManager.asset` and assume it is live.**
 
 ---
 

@@ -164,7 +164,7 @@ Build succeeded. 0 Warning(s), 0 Error(s)   (TreatWarningsAsErrors=true)
 | Criteria 1 & 9 under real load — tick time p99 and 0 alloc/tick with Unity physics + AI | Dev A — headless build | ☑ checklist **A1** unblocks the DLLs; the headless build is the phase-01 dependency |
 | Criterion 7 — two Unity clients in sync | Dev A | ☑ **A4**, after **A1–A2** |
 | `ServerTickLoop` script execution order (trap 1: two MonoBehaviours at −200 and +200) | Dev A owns project settings | Raised here; not yet a checklist item because the wrapper is not written |
-| Fixed timestep 0.02 vs `SIM_TICK_RATE` 30 | Dev A | ☑ **A5** — three costed options, recommendation given |
+| ~~Fixed timestep 0.02 vs `SIM_TICK_RATE` 30~~ | Dev A | ✅ **A5 answered: B** — `NetPredictionClock` steps the simulation at 1/30 from `Update`, independent of the physics rate |
 | Stable weapon ids | Dev A | ☑ **A6** — `weaponId` ships as 0 until then |
 | `C_ACK_BASELINE` has no byte layout in the spec | All 4, PR + 2 approvals | Implemented as `u32 baselineTick` and flagged in code and in both reports. No `PROTOCOL_VERSION` bump — it documents an unspecified message rather than changing a specified one |
 
@@ -180,8 +180,10 @@ Build succeeded. 0 Warning(s), 0 Error(s)   (TreatWarningsAsErrors=true)
     inside the criterion this phase is graded on, but the § 10 number is the one that matters at
     M3, and phase 02's optimisation ("only keep history for actors that could actually be shot")
     depends on the same visibility set. Interest management is now on two critical paths.
-  - **The fixed-timestep decision (A5) is the highest-value open item.** Prediction and authority
-    stepping different `dt` diverges only while airborne and only under load — the worst possible
-    signature to debug later.
+  - ~~**The fixed-timestep decision (A5) is the highest-value open item.**~~ **Answered: B.**
+    `NetPredictionClock` steps the simulation at exactly 1/30 from `Update`, so the physics rate
+    is now irrelevant to the netcode — which is the only arrangement that survives
+    `IngameMenuUi.cs:29` and `FpsActorController.cs:497` assigning `Time.fixedDeltaTime` at
+    runtime. Full account in the phase-00 report § 9.
   - Criterion 9 (0 alloc/tick) is designed for but unmeasured. The risk is not our code; it is
     whatever the Unity wrapper does per tick, which nobody has written yet.
