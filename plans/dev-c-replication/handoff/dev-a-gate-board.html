@@ -351,6 +351,20 @@
       từ lúc mở PR nên Console của A vốn đã ở trạng thái sau-MCP, merge không đổi phép đo.
       <b>Giờ chỉ còn Nhóm V chặn A3.</b> Lúc gửi kết quả V1 nhớ ghi kèm một dòng "đo với MCP đã cài".
     </div>
+    <div class="note is-done">
+      <b>#21 cũng đã merge — và nó chữa một thứ đang hỏng mà tôi không thấy.</b> Hai điểm meta thì chỉ là
+      lớp bảo hiểm thứ hai (<code>defineConstraints: UNITY_EDITOR</code> trên cả 42 file, chặn ở tầng compile
+      thay vì chỉ ở toggle Inspector). Thứ đáng giá là ba DLL: bản
+      <code>Ironfront.Net.Replication.dll</code> nằm trên <code>develop</code> đang <b>thiếu</b>
+      <code>ServerMessageRouter</code> và <code>ServerPayloadWriter</code> kể từ lúc #19 merge — tức Unity
+      load một bản cũ hơn source suốt từ đó, và không có gì báo. A build lại sau #19 nên bản trong #21 mới
+      là bản khớp. Nhánh <code>chore/install-unity-mcp</code> trùng tree byte-for-byte với #21 nên không cần
+      PR thứ hai, tôi đã xoá.
+      <b>Rút ra, và nó thành việc thường trực:</b> ba DLL đó là build artifact của source B/C/D nhưng được
+      commit vào git. Từ giờ ai merge source vào <code>Ironfront.Net.*</code> thì phải chạy
+      <code>build-libs.ps1</code> và commit DLL trong cùng PR — không thì Unity chạy code cũ. Tôi đã đưa
+      một CI gate cảnh báo drift vào roadmap của D.
+    </div>
     <div class="meta">
       <span><b>Ngày</b> 12-08-2026 · vòng 4</span>
       <span><b>Mốc</b> M0 đóng · M1 mở</span>

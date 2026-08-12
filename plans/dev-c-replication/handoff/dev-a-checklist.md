@@ -30,6 +30,19 @@ Items are ordered by what unblocks the most.
 > One item left open, not urgent: the DLLs are Editor-only but the define still covers
 > `Standalone`. If the first player build ever fails on `McpPlugin`, drop the define from
 > `Standalone` — that class of error never shows up in the Editor.
+>
+> **[#21](https://github.com/Sagitoaz/LTM/pull/21) is merged too, and it fixed something I had
+> missed.** The meta half is belt-and-braces (`defineConstraints: UNITY_EDITOR` on all 42, which
+> holds at compile time rather than at an Inspector toggle). The part that mattered is the three
+> plugin DLLs: `Ironfront.Net.Replication.dll` on `develop` had been **missing**
+> `ServerMessageRouter` and `ServerPayloadWriter` ever since #19 merged — Unity was loading a build
+> older than the source, silently. You rebuilt after #19, so #21 is the first version that matches.
+> `chore/install-unity-mcp` had an identical tree, so it needed no second PR and I deleted it.
+>
+> **This becomes a standing rule.** Those three DLLs are build artifacts of B/C/D source that live
+> in git. From now on, whoever merges source into `Ironfront.Net.*` runs `build-libs.ps1` and
+> commits the DLLs in the same PR. Unity has no way to tell you it is running last week's code.
+> A drift-warning CI job is on Dev D's roadmap.
 
 ---
 
