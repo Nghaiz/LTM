@@ -17,6 +17,33 @@ Items are ordered by what unblocks the most.
 > Step-by-step version of the same thing, with the exact clicks:
 > [`dev-a-gate-board.html`](dev-a-gate-board.html).
 
+> **Round 4 — 2026-08-12, late.** [#17](https://github.com/Sagitoaz/LTM/pull/17) is merged. You
+> fixed all three points and I verified each one on the new head: 42 `.meta` files at
+> `Any: 0 / Editor: 1`, the define down to `Server` + `Standalone` only, `.mcp.json` and
+> `Ironfront_Reborn/.claude/` untracked, commit scope `client` so `style` is green again.
+> **Group P is closed, and I withdrew P0** — your Editor has had MCP installed since you opened
+> the PR, so merging changed nothing about the measurement. Just write "measured with MCP
+> installed" next to the V1 number when you send it.
+>
+> **Group V is now the only thing blocking A3.** Start there.
+>
+> One item left open, not urgent: the DLLs are Editor-only but the define still covers
+> `Standalone`. If the first player build ever fails on `McpPlugin`, drop the define from
+> `Standalone` — that class of error never shows up in the Editor.
+>
+> **[#21](https://github.com/Sagitoaz/LTM/pull/21) is merged too, and it fixed something I had
+> missed.** The meta half is belt-and-braces (`defineConstraints: UNITY_EDITOR` on all 42, which
+> holds at compile time rather than at an Inspector toggle). The part that mattered is the three
+> plugin DLLs: `Ironfront.Net.Replication.dll` on `develop` had been **missing**
+> `ServerMessageRouter` and `ServerPayloadWriter` ever since #19 merged — Unity was loading a build
+> older than the source, silently. You rebuilt after #19, so #21 is the first version that matches.
+> `chore/install-unity-mcp` had an identical tree, so it needed no second PR and I deleted it.
+>
+> **This becomes a standing rule.** Those three DLLs are build artifacts of B/C/D source that live
+> in git. From now on, whoever merges source into `Ironfront.Net.*` runs `build-libs.ps1` and
+> commits the DLLs in the same PR. Unity has no way to tell you it is running last week's code.
+> A drift-warning CI job is on Dev D's roadmap.
+
 ---
 
 ## The original request has changed, and here is why
@@ -185,6 +212,47 @@ and save.
 
 ---
 
+## S — Stand the server layer up  ⏱ ~40 min  🔴 closes M1 criteria 1 and 9
+
+New round. `Assets/Scripts/Net/Server/` now exists: `NetServerBootstrap`, `ServerTickLoop`,
+`ServerInputStage`, `ServerSnapshotStage`, `NetServerActor`, `ServerActorRegistry`. That was the
+last piece of phase-01 that was mine to write, and it is the piece that turns "the encoder is
+correct in a unit test" into "the server holds 30 Hz with real physics and real AI in the loop".
+
+I cannot run any of it. Every one of these is Editor-only.
+
+**Script execution order needs nothing from you.** The ordering the phase document asks you to
+enter into `ProjectSettings` is declared in `[DefaultExecutionOrder]` on the components instead
+— -1000 / -200 / +200. Your project settings file is untouched.
+
+| # | Do | Report back |
+|---|---|---|
+| **S1** | `git pull`, `pwsh tools/build-libs.ps1`, open the Editor. It compiles the seven new scripts and generates their `.meta`. **Commit the `.meta` files** — I do not create them. | `"0 error"`, or each red line verbatim |
+| **S2** | Empty GameObject in `Dustbowl.unity`, name it `NetServer`. Add **`NetServerBootstrap`** — `[RequireComponent]` pulls in `ServerTickLoop` for you. Then add **`ServerInputStage`** and **`ServerSnapshotStage`** by hand. Leave every field at its default. | the GameObject path |
+| **S3** | On the player prefab (the one that got `NetMovementAgent` in A4) add **`NetServerActor`** and tick **Available For Players**. Leave `Actor Id` at 0 — the registry assigns it. Do the same on a couple of bot prefabs but leave their tick **off**. | how many actors carry it |
+| **S4** | Press Play. Window → Analysis → Profiler, record ~30 s, and read two numbers: **GC Alloc per frame** on the `ServerSnapshotStage.FixedUpdate` / `ServerInputStage.FixedUpdate` rows, and the p99 warning if one appears. | the two numbers, plus any `[net] server over budget` line |
+
+> **S4 is the whole point of the round.** M1 criterion 1 (p99 < 33 ms with 48 actors) and
+> criterion 9 (0 allocations per tick) are the only two acceptance criteria in phase-01 that no
+> test can answer, because both are about what Unity does, not what the encoder does. Everything
+> on my side is allocation-free by construction — fixed rings, pre-allocated buffers, cached
+> delegates, no LINQ, no per-tick `new`. **Designed for it is not measured for it**, and the risk
+> was never my code; it is whatever the wrapper does per tick, which until this round nobody had
+> written.
+
+**What S does NOT close, and I want to be straight about it.** Criterion 7 — *two* Unity clients
+seeing each other in sync — is not reachable this round, and not because of anything you have
+left to do. The only transport that exists is `LoopbackTransport`, which is in-process: it can
+run a server and **one** client inside a single Editor, and cannot reach a second process. Two
+clients needs Dev B's UDP transport. So after S the M1 score is 8 of 10 with one criterion on
+Dev B, not on you.
+
+**Expect the Console to say `no free player slot` if you skip S3.** That is the server telling
+you a connection arrived and there was no `NetServerActor` marked available — it disconnects with
+`ServerFull` rather than silently accepting a player nobody can see.
+
+---
+
 ## A5 — Fixed-timestep decision  ✅ DECIDED: **B**  ·  implemented, nothing left to do
 
 `ProjectSettings/TimeManager.asset` has `Fixed Timestep: 0.02` — **50 Hz**. `SIM_TICK_RATE` is
@@ -297,6 +365,8 @@ M0 and the offline half of M1 are merged and green: 283 tests, 0 warnings.
 | `MovementCore` / `MovementSimulation` | The shared simulation, real constants, 18 tests |
 | `SnapshotBuilder`, `DeltaEncoder`, `DeltaDecoder` | Full and delta snapshots. Measured: 44.7% saving, 10.94 KB/s per client at 48 actors |
 | `ServerTickScheduler`, `InputAuthority`, `ClientSession` | 30 Hz pacing, anti-cheat input handling |
+| `ServerMessageRouter`, `ServerPayloadWriter` | New. Inbound decode and outbound framing, engine-free and unit-tested, so the MonoBehaviour above them holds no decision CI cannot reach |
+| `Assets/Scripts/Net/Server/**` | New. The Unity server: bootstrap, tick loop, the two ordering stages, the replicated-actor component and its registry. Needs group **S** |
 | `BitWriter` / `BitReader` | Dev B's, with the conformance suite that judges them |
 | `NetPredictionClock` | New, #13. The 30 Hz accumulator that makes A5 option B real. Attach in A4, leave disabled until M1 |
 | `IronfrontLog` | New, #13. Mirrors the Console to a file and prints the assembly census. Self-starting, nothing to attach |
@@ -330,11 +400,15 @@ Do them in this order. Group V blocks A3, and A3 blocks A4.
 | **V5** | Open the other three scenes once each | 5 min | `"clean"` ×3, or the red line with its scene |
 | A3 | Shadow-comparison run | 35 min | the summary line + flat-ground warnings |
 | A4 | `NetMovementAgent` + `NetPredictionClock` on the prefab, **clock disabled** | 10 min | prefab path + clock disabled |
+| **S1** | Compile the new server scripts, **commit their `.meta`** | 10 min | `"0 error"` |
+| **S2** | `NetServer` GameObject with the bootstrap + both stages | 10 min | the GameObject path |
+| **S3** | `NetServerActor` on the player prefab, **Available For Players** ticked | 10 min | how many actors carry it |
+| **S4** | Profiler: GC alloc per tick + p99 | 10 min | the two numbers |
 | A6 | Weapon id registry | 30 min | how to read the ids |
 | A7 | Can a player pass ±2048 m? | 10 min | yes/no |
 | A8 | Skim the movement analysis | 10 min | anything that contradicts what you know |
 
-**A1, A2 and A5 are closed; roughly 1 hour 55 minutes of Editor work left.** Nothing in this
+**A1, A2 and A5 are closed; roughly 2 hours 35 minutes of Editor work left.** Nothing in this
 round needs a decision from you — A5 was the last one. V2 is the only item whose answer changes
-a decision already made, A3 is still the one most likely to find a real bug, and A4 is the one
-with a trap in it.
+a decision already made, A3 is still the one most likely to find a real bug, A4 is the one with a
+trap in it, and **S4 answers the two M1 criteria that no test can reach.**

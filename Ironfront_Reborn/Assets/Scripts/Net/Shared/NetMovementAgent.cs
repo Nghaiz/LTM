@@ -99,6 +99,30 @@ namespace Ironfront.Net.Unity
             ApplyStanceHeight();
         }
 
+        /// <summary>
+        /// Adopts a state some other component has already simulated, without simulating
+        /// again.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The server drives movement through <c>InputAuthority.ApplyPendingInput</c>, which
+        /// owns the authoritative <see cref="MoveState"/> on the session and calls back into
+        /// <see cref="CharacterMove"/> for collision. That leaves this component holding a
+        /// stale copy of a state it did not produce — harmless for position, which the
+        /// CharacterController already moved, but not for the stance height, which is derived
+        /// from <see cref="MoveState.IsCrouching"/> and would never change.
+        /// </para>
+        /// <para>
+        /// Calling <see cref="Tick"/> instead would step the simulation a second time for the
+        /// same input, which is why this exists rather than being folded into it.
+        /// </para>
+        /// </remarks>
+        public void ApplyAuthoritativeState(in MoveState state)
+        {
+            State = state;
+            ApplyStanceHeight();
+        }
+
         /// <summary>Teleports the actor, used on spawn and on a hard server correction.</summary>
         public void Teleport(Vector3 position, bool resetVelocity = true)
         {

@@ -42,7 +42,7 @@ flowchart LR
 |---|---|---|---|---|
 | 1 | **All 4 wait on the protocol spec** | End of week 1 | 90-minute meeting | ✅ **Cleared** — [protocol-spec.md](protocol-spec.md) is at v1.0.0 FROZEN, all 8 open questions recorded in [§ 15.1](protocol-spec.md#151-questions-settled-at-the-freeze) |
 | 2 | A, B, C wait on **D**: `build-libs.ps1` + CI | End of week 2 | ~1 day | ✅ **Cleared** — both scripts plus `.github/workflows/ci.yml`, green on Ubuntu in 57 s |
-| 3 | A, C wait on **B**: `LoopbackTransport` + frozen API | End of week 2 | ~1.5 days | ⏳ Open. The API in [dev-b plan § 4](../dev-b-transport/plan.md) is already written down — freezing it is the cheap half |
+| 3 | A, C wait on **B**: `LoopbackTransport` + frozen API | End of week 2 | ~1.5 days | ✅ **Cleared** — `ITransport` / `ITransportServer` are frozen and shipped with `LoopbackTransport`, `BufferPool` and `NetworkSimulator`. Written ahead of B's phase-00 so A and C were never blocked; B's real UDP work is unchanged and in progress |
 | 4 | C waits on **A**: a working headless build | End of week 2 | ~1 day | ⏳ Open. **The only remaining item that needs the Unity Editor**, so it cannot be pulled forward by anyone else |
 
 After week 2, everyone has enough stubs/loopback to run independently through the end of the project.
