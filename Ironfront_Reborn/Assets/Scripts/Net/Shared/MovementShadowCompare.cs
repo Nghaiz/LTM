@@ -51,10 +51,19 @@ namespace Ironfront.Net.Unity
         private float _worstDivergence;
         private float _totalDivergence;
         private bool _primed;
+        private bool _reported;
 
         private void Awake()
         {
             _controller = GetComponent<CharacterController>();
+            if (_controller == null)
+            {
+                Debug.LogWarning(
+                    $"[MovementShadowCompare] no CharacterController on '{name}'. Ground contact " +
+                    "will be read as false for every tick and the comparison will be meaningless. " +
+                    "Attach this to Assets/Prefab/Player Fps Actor.prefab, the only prefab that has " +
+                    "both FpsActorController and CharacterController.");
+            }
 
             // The original derives its forward from the camera, not the body transform
             // (FirstPersonController.cs:189). Using the body would introduce a divergence that
@@ -63,7 +72,19 @@ namespace Ironfront.Net.Unity
             _cameraParent = camera != null ? camera.transform : transform;
         }
 
-        private void OnEnable() => Resync();
+        private void OnEnable()
+        {
+            // Says "I am here and I am running" before any measurement exists to report.
+            // Without this line the component is indistinguishable, in the Console, from a
+            // component that was never attached — which is the failure that actually happened
+            // and cost a playtest: the summary below early-returns at zero ticks, so a
+            // harness sitting on the wrong GameObject stays completely silent.
+            Debug.Log($"[MovementShadowCompare] attached to '{name}' and ticking. " +
+                      "Play, move around, then stop Play — the summary line prints on exit.");
+
+            _reported = false;
+            Resync();
+        }
 
         private void FixedUpdate()
         {
@@ -130,9 +151,27 @@ namespace Ironfront.Net.Unity
 
         private void OnDisable() => Report();
 
+        // OnDisable is not guaranteed to run when a built player exits; OnApplicationQuit is.
+        // In the Editor both fire, hence the _reported latch.
+        private void OnApplicationQuit() => Report();
+
         private void Report()
         {
-            if (_ticks == 0) return;
+            if (_reported) return;
+            _reported = true;
+
+            if (_ticks == 0)
+            {
+                // Silence here used to be the whole bug report: "no logs". It is not a
+                // logging failure, it is this harness never having been stepped, and saying
+                // so turns an afternoon of looking at the logger into a ten-second fix.
+                Debug.LogWarning(
+                    $"[MovementShadowCompare] on '{name}' ran zero ticks, so there is nothing to " +
+                    "report. FixedUpdate never fired: the component is on a GameObject that was " +
+                    "not spawned, was disabled the whole session, or is on the scene object rather " +
+                    "than on Assets/Prefab/Player Fps Actor.prefab.");
+                return;
+            }
 
             float mean = _totalDivergence / _ticks;
             string verdict = _divergences == 0
