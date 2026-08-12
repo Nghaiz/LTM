@@ -63,7 +63,7 @@ public class IngameMenuUi : MonoBehaviour
 
 	public void Quit()
 	{
-		Application.Quit();
+		AppQuit.Quit();
 	}
 
 	private void Update()
