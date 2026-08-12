@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    OWNER: Dev D. Simulated bot client used for the M3/M4 load tests
+    (plans/00-shared/conventions.md section 4: "Load tests | D | Ironfront.Tools.LoadTest").
+
+    Scaffolded empty by the M0 foundation pass.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Ironfront.Tools.LoadTest</RootNamespace>
+    <AssemblyName>Ironfront.Tools.LoadTest</AssemblyName>
+    <Description>Headless bot clients for load-testing the master and game servers.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ironfront.Net.Protocol\Ironfront.Net.Protocol.csproj" />
+    <ProjectReference Include="..\Ironfront.Net.Transport\Ironfront.Net.Transport.csproj" />
+  </ItemGroup>
+
+</Project>

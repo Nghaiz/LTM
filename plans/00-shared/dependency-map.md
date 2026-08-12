@@ -38,14 +38,22 @@ flowchart LR
 
 ## 2. Four sync points — all in weeks 1–2
 
-| # | Who waits on whom | Deadline | Effort for the person being waited on | If late |
+| # | Who waits on whom | Deadline | Effort for the person being waited on | Status |
 |---|---|---|---|---|
-| 1 | **All 4 wait on the protocol spec** | End of week 1 | 90-minute meeting | This sync is **deliberate**. It can't be avoided, and shouldn't be |
-| 2 | A, B, C wait on **D**: `build-libs.ps1` + CI | End of week 2 | ~1 day | D must prioritize this above everything else |
-| 3 | A, C wait on **B**: `LoopbackTransport` + frozen API | End of week 2 | ~1.5 days | Freezing the API is only half a day; the in-memory loopback is ~1 day |
-| 4 | C waits on **A**: a working headless build | End of week 2 | ~1 day | Without it C can't test the server tick loop |
+| 1 | **All 4 wait on the protocol spec** | End of week 1 | 90-minute meeting | ✅ **Cleared** — [protocol-spec.md](protocol-spec.md) is at v1.0.0 FROZEN, all 8 open questions recorded in [§ 15.1](protocol-spec.md#151-questions-settled-at-the-freeze) |
+| 2 | A, B, C wait on **D**: `build-libs.ps1` + CI | End of week 2 | ~1 day | ✅ **Cleared** — both scripts plus `.github/workflows/ci.yml`, green on Ubuntu in 57 s |
+| 3 | A, C wait on **B**: `LoopbackTransport` + frozen API | End of week 2 | ~1.5 days | ⏳ Open. The API in [dev-b plan § 4](../dev-b-transport/plan.md) is already written down — freezing it is the cheap half |
+| 4 | C waits on **A**: a working headless build | End of week 2 | ~1 day | ⏳ Open. **The only remaining item that needs the Unity Editor**, so it cannot be pulled forward by anyone else |
 
 After week 2, everyone has enough stubs/loopback to run independently through the end of the project.
+
+> **Two of the four sync points cleared ahead of schedule** (week 1, PR #2 and #3), and both were on
+> the critical path: the protocol freeze that all four people wait on, and D's CI that A, B and C
+> wait on. `Ironfront.Net.Protocol` shipped with them, so B and C are already coding against real
+> constants, a real 16-byte header codec and a real MSP framer rather than against stubs.
+>
+> Sync 4 is now the one that matters. It is the single remaining M0 item gated on the Unity Editor,
+> and [§ 6](#6-if-someone-is-late--who-is-affected) below is the fallback if it slips.
 
 ---
 

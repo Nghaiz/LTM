@@ -31,10 +31,19 @@ message.
 |---|---|
 | `Ironfront.Net.Transport/**` | **Full ownership** |
 | `Ironfront.Net.Transport.Tests/**` | Owner |
-| `Ironfront.Net.Replication/Serialization/**` | **Owner** (`BitWriter`, `BitReader`, `Quantize`) — newly assigned |
-| `Ironfront.Net.Replication.Tests/Conformance/**` | **Read-only** — Dev C owns it; it's the referee that verifies your code |
+| `Ironfront.Net.Replication/Serialization/**` | **Owner** (`BitWriter`, `BitReader`) — newly assigned |
+| `Ironfront.Net.Protocol.Tests/Conformance/**` | **Read-only** — Dev C owns it; it's the referee that verifies your code |
 | `Ironfront.Net.Protocol/**` | PR + 2 approvals (shared) |
 | Everything else | Read-only |
+
+> **Changed at the week-1 protocol freeze.** `Quantize` is **no longer yours** — it moved to
+> `Ironfront.Net.Protocol` and is already implemented. This table used to list it alongside
+> `BitWriter`/`BitReader`, which contradicted
+> [protocol-spec.md § 4.4](../00-shared/protocol-spec.md#44-quantization--mandatory-shared-constants):
+> the spec declares the quantization constants shared and forbids re-hardcoding them anywhere else.
+> Two owners for one SSOT is the exact drift the freeze exists to prevent. You keep `BitWriter` and
+> `BitReader`, which are genuinely yours. See
+> [conventions.md § 7](../00-shared/conventions.md#7-file-ownership-boundaries).
 
 ### 2.1. You implement, Dev C verifies
 
@@ -42,8 +51,8 @@ The most important seam in the project:
 
 | | Who does it | Where |
 |---|---|---|
-| Implementing bit-packing + quantization | **You** | `Ironfront.Net.Replication/Serialization/` |
-| Conformance tests with hand-written hex | **Dev C** | `Ironfront.Net.Replication.Tests/Conformance/` |
+| Implementing bit-packing | **You** | `Ironfront.Net.Replication/Serialization/` |
+| Conformance tests with hand-written hex | **Dev C** | `Ironfront.Net.Protocol.Tests/Conformance/` |
 
 Why they're split: if the same person writes and tests it, the tests only prove the code is
 consistent with itself, not that it matches the spec. Split, C's tests become a **genuine referee**
@@ -157,7 +166,7 @@ reference and end up reading garbage. **This is a very hard bug to track down.**
 
 | Phase | Weeks | Milestone | Outcome |
 |---|---|---|---|
-| [phase-00](phases/phase-00-foundation.md) | 1–2 | M0 | Socket refresher · project setup · raw send/receive in `UdpPeer` · **`NetworkSimulator`** · echo test · **`BitWriter`/`BitReader`/`Quantize`** |
+| [phase-00](phases/phase-00-foundation.md) | 1–2 | M0 | Socket refresher · project setup · raw send/receive in `UdpPeer` · **`NetworkSimulator`** · echo test · **`BitWriter`/`BitReader`** (`PacketHeader` and `Quantize` already shipped — see § 2) |
 | [phase-01](phases/phase-01-reliability.md) | 3–6 | M1 | Handshake · seq/ack/bitfield · retransmit · 4 channels · fragmentation · RTT · ≥40 unit tests |
 | [phase-02](phases/phase-02-load.md) | 7–10 | M2 | Congestion control · flow control · DoS defenses · 16 simultaneous connections · benchmarks |
 | [phase-03](phases/phase-03-operations.md) | 11–13 | M3 | Real measurements on a VPS · diagnostic tooling · packet logger/replay · integration support |

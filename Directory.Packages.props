@@ -1,0 +1,45 @@
+<Project>
+
+  <!--
+    Central Package Management — every NuGet version for the whole solution lives here.
+
+    OWNER: shared (it is a build contract), maintained with tools/ by Dev D.
+
+    WHY: with versions written into individual .csproj files, four people adding test
+    projects over four months end up pinning three different xunit versions. The symptom is
+    not a clean error — it is one project silently restoring a different assembly than the
+    others and a test that passes on one machine and fails on another. Here there is exactly
+    one place to look and one place to change.
+
+    HOW TO ADD A PACKAGE:
+      1. Add a <PackageVersion Include="Foo" Version="1.2.3" /> line below.
+      2. In the .csproj, write <PackageReference Include="Foo" />  — WITHOUT a Version.
+      Putting a Version in the .csproj while CPM is on is an error (NU1008), on purpose.
+
+    REMINDER (conventions.md section 3.4): netcode frameworks are a hard no. Anything that
+    shows up here must be dev tooling or a BCL primitive package, never Mirror / LiteNetLib /
+    ENet / KCP / SignalR / gRPC.
+  -->
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!--
+      Fails restore if a .csproj still carries an inline Version. Without this the inline
+      version wins silently and CPM becomes decorative.
+    -->
+    <CentralPackageVersionOverrideEnabled>false</CentralPackageVersionOverrideEnabled>
+  </PropertyGroup>
+
+  <ItemGroup Label="Test host">
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageVersion Include="xunit" Version="2.9.2" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <!--
+      Required by the "XPlat Code Coverage" data collector that ci.yml asks dotnet test for.
+      Without this package the collector produces no coverage file and the CI step reports
+      success while measuring nothing — a silent hole, worse than no coverage at all.
+    -->
+    <PackageVersion Include="coverlet.collector" Version="6.0.2" />
+  </ItemGroup>
+
+</Project>

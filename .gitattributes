@@ -1,0 +1,38 @@
+# Required by plans/00-shared/conventions.md section 1.3.
+# Unity rewrites these YAML assets on every Editor open; without a merge driver
+# the conflicts are thousand-line YAML blobs that cannot be resolved by hand.
+#
+# To activate unityyamlmerge locally, each developer runs once:
+#   git config merge.unityyamlmerge.name "Unity SmartMerge"
+#   git config merge.unityyamlmerge.driver '"<UnityInstall>/Editor/Data/Tools/UnityYAMLMerge.exe" merge -p %O %A %B %A'
+
+*.unity   merge=unityyamlmerge eol=lf
+*.prefab  merge=unityyamlmerge eol=lf
+*.asset   merge=unityyamlmerge eol=lf
+
+# Unity binary assets — never diff or merge these.
+*.psd      binary
+*.fbx      binary
+*.tga      binary
+*.dds      binary
+*.unitypackage binary
+
+# Normalize line endings for source and scripts.
+*.cs       text eol=lf diff=csharp
+*.csproj   text eol=lf
+*.sln      text eol=crlf
+*.props    text eol=lf
+*.md       text eol=lf
+*.ps1      text eol=crlf
+*.yml      text eol=lf
+*.yaml     text eol=lf
+*.json     text eol=lf
+
+# Dotfiles and extensionless config. Without these, core.autocrlf checks them out as CRLF on
+# Windows while .editorconfig declares `end_of_line = lf` for the same files — the two then
+# disagree forever and every editor save produces a whole-file diff.
+.editorconfig   text eol=lf
+.gitattributes  text eol=lf
+.gitignore      text eol=lf
+CODEOWNERS      text eol=lf
+LICENSE         text eol=lf

@@ -31,7 +31,10 @@ docs(protocol): freeze the position quantization constants
 refactor(client): split input out of FpsActorController
 ```
 
-Valid scopes: `client` `transport` `replication` `master` `protocol` `tools` `ci`.
+Valid scopes: `client` `transport` `replication` `master` `protocol` `tools` `ci` `modules`.
+
+`modules` is for changes to the solution's project layout itself — scaffolding or restructuring the
+owned projects — which belongs to no single ownership area. Reach for your own scope first.
 
 ### 1.3. The survival rule for Unity
 
@@ -87,10 +90,34 @@ number-one cause of risk R5.
 |---|---|---|
 | Class, struct, enum, method | PascalCase | `ReliabilityLayer`, `PackPos` |
 | Interface | `I` + PascalCase | `ITransport`, `ISnapshotSink` |
-| Private field | `_camelCase` | `_pendingAcks` |
+| Private instance field | `_camelCase` | `_pendingAcks` |
+| Private static field | PascalCase | `ReferenceHex` |
 | Public field / property | PascalCase | `ConnectionId` |
-| Constant | SCREAMING_SNAKE | `MAX_PAYLOAD` |
+| **Protocol constant** (in `ProtocolConstants.cs`) | SCREAMING_SNAKE | `MAX_PAYLOAD`, `PROTOCOL_VERSION` |
+| Any other constant | PascalCase | `GspHeader.Size`, `MspFrame.LengthPrefixSize` |
 | Local variable, parameter | camelCase | `serverTick` |
+
+#### Why constants have two conventions
+
+This row used to read "Constant → SCREAMING_SNAKE" for every constant. The code has never
+done that, and it was right not to: `GspHeader.Size`, `MspFrame.LengthPrefixSize`,
+`PayloadFrame.HeaderSize`, `ClientInputMessage.MaxFrames` and 34 others are PascalCase, which
+is the .NET norm for ordinary structural constants.
+
+Splitting the row makes the casing carry information instead of being a formality:
+
+> **SCREAMING_SNAKE means "this value is part of the wire contract".** It lives in
+> `ProtocolConstants.cs`, it appears in the `protocol-spec.md` table, and changing it needs a
+> PR with 2 approvals and a `PROTOCOL_VERSION` bump (section 2).
+
+That distinction is already enforced, and not by a style rule: `tools/SpecChecker` looks each
+spec-listed constant up on the compiled type **by name**, so renaming `PROTOCOL_VERSION` to
+`ProtocolVersion` fails the build on the next push.
+
+`.editorconfig` encodes this table. The naming rules there are `suggestion`/`warning` and
+`EnforceCodeStyleInBuild` is off by design — with `TreatWarningsAsErrors=true`, a style rule
+that produces a warning becomes a hard build error, and a build that fails on a misnamed local
+variable is a build people learn to work around.
 
 ### 3.2. Rules specific to network code
 
@@ -262,8 +289,8 @@ integration week.
 | `Ironfront_Reborn/Assets/Scripts/Net/Shared/MovementSimulation.cs` | **C** | Everyone | **Nobody** — this file is the shared source of truth for client and server |
 | `Ironfront.Net.Transport/**` | B | Everyone | Nobody |
 | `Ironfront.Net.Replication/**` | C | Everyone | Nobody |
-| `Ironfront.Net.Replication/Serialization/**` (`BitWriter`, `BitReader`, `Quantize`) | **B** | Everyone | Nobody |
-| `Ironfront.Net.Replication.Tests/Conformance/**` | **C** | Everyone | Nobody — C is the referee, B is the implementer |
+| `Ironfront.Net.Replication/Serialization/**` (`BitWriter`, `BitReader`) | **B** | Everyone | Nobody |
+| `Ironfront.Net.Protocol.Tests/Conformance/**` | **C** | Everyone | Nobody — C is the referee, B is the implementer |
 | `Ironfront.MasterServer/**` | D | Everyone | Nobody |
 | `Ironfront.Net.Protocol/**` | **Shared** | Everyone | PR + 2 approvals |
 | `tools/run-integration.ps1` + integration scenarios | **C** | Everyone | PR |
@@ -278,13 +305,27 @@ it.**
 
 | | Who does it | Files |
 |---|---|---|
-| Implementing bit-packing + quantization | **B** | `Ironfront.Net.Replication/Serialization/` |
-| Conformance tests with hard-coded hex | **C** | `Ironfront.Net.Replication.Tests/Conformance/` |
+| Implementing bit-packing | **B** | `Ironfront.Net.Replication/Serialization/` |
+| Conformance tests with hard-coded hex | **C** | `Ironfront.Net.Protocol.Tests/Conformance/` |
 
 Reason: if the same person writes and tests it, the tests only prove the code is consistent with
 itself, not that it matches the spec. Splitting them makes C's conformance tests a **genuine
 referee** when there's a dispute about the format. This is also why C may not edit B's files and
 vice versa.
+
+> **Two corrections made at the week-1 protocol freeze.**
+>
+> **`Quantize` moved out of B's `Serialization/` folder into `Ironfront.Net.Protocol`.** This table
+> previously listed it under B alongside `BitWriter`/`BitReader`, which contradicted
+> [protocol-spec.md § 4.4](protocol-spec.md#44-quantization--mandatory-shared-constants) — the spec
+> declares the quantization constants shared and forbids re-hardcoding them anywhere else. Two
+> owners for one SSOT is exactly the drift the freeze exists to prevent, so the spec wins:
+> `Quantize` is shared (PR + 2 approvals), `BitWriter`/`BitReader` remain B's alone.
+>
+> **The conformance suite lives in `Ironfront.Net.Protocol.Tests/Conformance/`,** not
+> `Ironfront.Net.Replication.Tests/`. It verifies the shared protocol library, which exists and is
+> frozen, whereas `Ironfront.Net.Replication` is still a skeleton. Ownership is unchanged — the
+> suite is **C's**, and the implementer/verifier split matters far more than the folder it sits in.
 
 **If you need a change in someone else's file:** open an issue or message them, describe what you
 need, let them make it. Don't edit it yourself and mention it afterwards. The only exception: fixing

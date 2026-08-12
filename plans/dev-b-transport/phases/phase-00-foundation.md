@@ -94,7 +94,28 @@ Turn warnings into errors:
 <Nullable>enable</Nullable>
 ```
 
-### Task 3 — `PacketHeader` (1 day)
+### Task 3 — `PacketHeader` (1 day) — ✅ ALREADY DONE, skip to Task 4
+
+**Delivered during the M0 foundation pass as `Ironfront.Net.Protocol/Gsp/GspHeader.cs`** (PR #2).
+The header is protocol surface that the client, both servers and the load-test tool all parse, so it
+lives in the shared library rather than in `Ironfront.Net.Transport` — one definition, one set of
+tests, no chance of the two sides drifting.
+
+It is field-for-field what the sketch below describes, with the same `TryParse` rejections
+(bad `protocolId`, over-long `payloadLength`, `payloadLength` longer than the datagram) and the same
+manual shifts instead of `BitConverter`. It also carries the ack-bitfield helpers —
+`BuildAckBitfield` and `IsAcked` — verified against the worked example in
+[`protocol-spec.md § 2.2`](../../00-shared/protocol-spec.md#22-the-ack-mechanism--a-concrete-example)
+(`0x1A`), which you would otherwise have written in Task 4 of phase-01.
+
+**Acceptance criterion 3 ("`PacketHeader` round-trips correctly, ≥8 tests green") is satisfied** —
+20 tests in `Ironfront.Net.Protocol.Tests/Conformance/GspHeaderTests.cs`.
+
+**What is still yours:** using it. `Connection`, `ReliabilityLayer` and `ChannelSet` are untouched —
+`GspHeader` only reads and writes the 16 bytes; deciding what `sequence` to put in them, what to
+retransmit and when, is the whole of your phase-01 and is not done.
+
+The original sketch is kept below for reference, since the reasoning is still the reasoning.
 
 Read/write the 16-byte header exactly per
 [`protocol-spec.md § 2`](../../00-shared/protocol-spec.md#2-gsp-header-16-bytes-every-datagram).
@@ -360,9 +381,24 @@ public sealed class UdpPeer : IDisposable
 >
 > This is one of the most time-consuming bugs when hand-writing UDP on Windows.
 
-### Task 6.5 — Bit-packing serializer (2 days) — NEWLY TAKEN FROM DEV C
+### Task 6.5 — Bit-packing serializer (2 days → ~1.3 days) — NEWLY TAKEN FROM DEV C
 
-Three classes, placed in `Ironfront.Net.Replication/Serialization/`. It's the same byte-level work
+> **Scope reduced at the week-1 freeze: `Quantize` is no longer part of this task.** It moved to
+> `Ironfront.Net.Protocol/Quantize.cs` and is already implemented and verified — position, yaw,
+> pitch, velocity and move-axis pack/unpack, with round-trip error proven under 0.07 m and 0.01°
+> across the full range. Reason: the spec declares those constants shared SSOT, so they cannot sit
+> in a folder one person owns. See the note in [`plan.md § 2`](../plan.md#2-ownership).
+>
+> **Still yours: `BitWriter` and `BitReader`** — the two classes below. Byte-level packing genuinely
+> is transport-adjacent work and stays with you.
+>
+> Two things already exist that you should build on rather than duplicate:
+> - `SpanWriter` / `SpanReader` in `Ironfront.Net.Protocol/Io/` — byte-aligned sequential
+>   read/write with the same latch-on-overflow contract. `BitWriter` is the sub-byte version of the
+>   same idea; match its API shape so callers do not have to learn two conventions.
+> - `Endian.cs` — the little-endian primitives. Do not write another set.
+
+Two classes, placed in `Ironfront.Net.Replication/Serialization/`. It's the same byte-level work
 you're already doing with `PacketHeader`, so mentally it belongs next to it.
 
 ```csharp
@@ -440,8 +476,8 @@ at all**, running in a single process inside the Unity Editor.
 | # | Criterion | How to verify |
 |---|---|---|
 | 1 | All 3 warm-up exercises done, with a one-page commentary + chart | The file `reports/warmup-udp-vs-tcp.md` |
-| 2 | `dotnet build` clean, 0 warnings | CI output |
-| 3 | `PacketHeader` round-trips correctly, ≥8 tests green | `dotnet test` |
+| 2 | `dotnet build` clean, 0 warnings | CI output — ✅ **done**, CI green on Ubuntu, 0 warnings with warnings-as-errors on |
+| 3 | `PacketHeader` round-trips correctly, ≥8 tests green | `dotnet test` — ✅ **done**, 20 tests in `GspHeaderTests.cs` (see Task 3) |
 | 4 | `BufferPool` doesn't allocate once warm | Benchmark: 100k Rent/Return → 0 gen0 GCs |
 | 5 | `NetworkSimulator` is reproducible with the same seed | Test: two runs with the same seed → identical loss sequences |
 | 6 | The simulator models all 5 impairment types | 5 separate tests, each statistically verified over 10,000 packets |
