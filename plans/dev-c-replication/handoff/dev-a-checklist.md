@@ -336,6 +336,37 @@ would have been, and costs you ten minutes instead of an hour.
 
 ---
 
+## S5 / A9 — Phase 02 landed  ⏱ ~25 min  🔴 closes M2 criteria 7 and 8
+
+Interest management, hitbox history, lag compensation, shot resolution, bot AI LOD and the
+gameplay-event framing are all written and green — 156 new tests, 453 in the solution. Every M2
+criterion except one is now pinned by a test rather than by an opinion. The exception is the same
+shape as S4: it is about what Unity does per tick, not what the encoder does.
+
+| # | Do | Report back |
+|---|---|---|
+| **S5** | Same Play session as S4, but put **32 bots** in the scene. Record ~60 s in the Profiler and read **tick p99** off the `ServerSnapshotStage.FixedUpdate` row (or the `[net] server over budget` warning, which prints it for you). Then toggle the LOD off — set `BotLodScheduler`'s threshold so every bot ticks — and record again. | the two p99 numbers, and the AI cost before/after |
+| **A9** | **A decision, not Editor work.** `BotLodScheduler` decides *which* bots should think this tick; something has to act on that. The obvious mechanism is `AiActorController.enabled = false`, and phase-02 trap 7 warns that a controller using coroutines or `Time.deltaTime` timers can misbehave when toggled at 6 Hz. The clean fix is an `updateInterval` field inside `AiActorController` — **your file**. Tell me which you want. | `"use .enabled"` or `"I'll add updateInterval"` |
+
+> **S5 is M2 criterion 7** — 32 bots with tick p99 under 33 ms — and it is the only M2 criterion
+> that can still fail. The thing that makes it affordable is built and measured: distant bots
+> think at 6 Hz instead of 30, which skips **50%** of AI updates with 20 of 32 bots distant. But
+> that is a skipped-update *share*, not milliseconds, and the criterion asks for the Profiler. If
+> p99 comes in over budget the contingency is a scope cut — 32 bots down to 16 — so it is worth
+> knowing early.
+
+**A9 needs no work from you if you do not want to do any.** The scheduler does not care which
+mechanism is used; policy and mechanism are deliberately separate so your answer does not touch
+my code or its tests. `.enabled` is what the wrapper will use unless you say otherwise — I just
+do not want to find out at M3 that it quietly broke your AI's timers.
+
+**One thing you should know rather than discover.** Dev B's UDP transport has landed, so
+`ITransportServer.OnValidateTicket` is now **fail-closed**: with no ticket validator registered,
+every UDP connection is rejected. That is mine to wire, not yours, and it is done — but if you
+ever stand a server up by hand and it accepts nobody with no error in the Console, that is why.
+
+---
+
 ## Two things I found in your files — reported, not touched
 
 conventions.md § 7 says to tell you rather than edit. Neither is urgent and neither is mine.
@@ -404,11 +435,14 @@ Do them in this order. Group V blocks A3, and A3 blocks A4.
 | **S2** | `NetServer` GameObject with the bootstrap + both stages | 10 min | the GameObject path |
 | **S3** | `NetServerActor` on the player prefab, **Available For Players** ticked | 10 min | how many actors carry it |
 | **S4** | Profiler: GC alloc per tick + p99 | 10 min | the two numbers |
+| **S5** | Profiler: 32 bots, tick p99 + AI cost with LOD on/off | 25 min | the two p99 numbers |
+| **A9** | Bot LOD mechanism: `.enabled` or `updateInterval`? | 2 min | which one |
 | A6 | Weapon id registry | 30 min | how to read the ids |
 | A7 | Can a player pass ±2048 m? | 10 min | yes/no |
 | A8 | Skim the movement analysis | 10 min | anything that contradicts what you know |
 
-**A1, A2 and A5 are closed; roughly 2 hours 35 minutes of Editor work left.** Nothing in this
+**A1, A2 and A5 are closed; roughly 3 hours of Editor work left.** Nothing in this
 round needs a decision from you — A5 was the last one. V2 is the only item whose answer changes
 a decision already made, A3 is still the one most likely to find a real bug, A4 is the one with a
-trap in it, and **S4 answers the two M1 criteria that no test can reach.**
+trap in it, **S4 answers the two M1 criteria that no test can reach**, and **S5 answers the last M2
+criterion that no test can reach**. A9 is the only item in this round that is a decision.

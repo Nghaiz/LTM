@@ -1,5 +1,6 @@
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication;
+using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Movement;
 using UnityEngine;
 
@@ -147,6 +148,31 @@ namespace Ironfront.Net.Unity.Server
             }
 
             return flags;
+        }
+
+        /// <summary>
+        /// This actor's hitboxes in world space, for the rewind history.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// World space is what makes lag compensation free of mutation: the stored pose is a
+        /// value the raycast reads, so nothing is ever moved into the past and nothing has to be
+        /// put back. See <c>LagCompensator</c>.
+        /// </para>
+        /// <para>
+        /// <b>The boxes are a placeholder built from the actor's position.</b> Dev A's rig has
+        /// the real ones, and swapping them in is a change to this method and nothing else —
+        /// the resolution path does not care where the numbers came from. Until then, hit
+        /// geometry is a plausible humanoid rather than this character.
+        /// </para>
+        /// </remarks>
+        public HitboxSet CaptureHitboxes()
+        {
+            Vec3 feet = Movement != null
+                ? Movement.State.Position
+                : MovementSimulation.ToCore(transform.position);
+
+            return HitboxSet.Humanoid(in feet);
         }
 
         internal void Claim() => IsClaimed = true;

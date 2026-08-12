@@ -42,8 +42,11 @@ namespace Ironfront.Net.Unity.Server
         [SerializeField] private bool _startOnAwake = true;
 
         [Header("Transport")]
-        [Tooltip("In-process wire with no socket. The only transport that exists until Dev B lands UDP.")]
+        [Tooltip("In-process wire with no socket, for a single-Editor test. Off = real UDP.")]
         [SerializeField] private bool _useLoopbackTransport = true;
+
+        [Tooltip("Accept any join ticket. Development only — see RegisterTicketValidator.")]
+        [SerializeField] private bool _acceptUnsignedTickets = true;
 
         [SerializeField] private int _port = 27015;
         [SerializeField] private int _maxConnections = 16;
@@ -57,6 +60,9 @@ namespace Ironfront.Net.Unity.Server
 
         /// <summary>The loopback wire, when one was created. Hand <c>.Client</c> to a test client.</summary>
         public LoopbackTransport Loopback { get; private set; }
+
+        /// <summary>The UDP server, when one was created.</summary>
+        public UdpTransportServer Udp { get; private set; }
 
         /// <summary>The tick loop this bootstrap drives.</summary>
         public ServerTickLoop TickLoop { get; private set; }
@@ -96,10 +102,17 @@ namespace Ironfront.Net.Unity.Server
 
             if (!_useLoopbackTransport)
             {
-                Debug.LogError(
-                    "[net] no UDP transport exists yet (Dev B, phase-01). Either leave "
-                    + "'Use Loopback Transport' on, or call ServerTickLoop.Bind with your own "
-                    + "ITransportServer before this component's Awake.");
+                var udp = new UdpTransportServer();
+                _ownsTransport = true;
+                Udp = udp;
+
+                RegisterTicketValidator(udp);
+                udp.Start(_port, _maxConnections);
+
+                // Null clock pump: a real socket runs on the wall clock and needs no advancing.
+                TickLoop.Bind(udp, null);
+
+                Debug.Log($"[net] server up on UDP :{_port}, {_maxConnections} slots");
                 return;
             }
 
@@ -107,6 +120,7 @@ namespace Ironfront.Net.Unity.Server
             _ownsTransport = true;
 
             ITransportServer server = Loopback.Server;
+            RegisterTicketValidator(server);
             server.Start(_port, _maxConnections);
 
             // The loopback clock is virtual and delivers nothing until advanced, so the loop
@@ -116,15 +130,64 @@ namespace Ironfront.Net.Unity.Server
             Debug.Log($"[net] server up on the loopback wire, {_maxConnections} slots");
         }
 
+        /// <summary>
+        /// Installs the join-ticket validator the transport requires before it will accept
+        /// anybody.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The transport is fail-closed: with no validator registered it rejects every
+        /// connection.</b> That is the right default — it is the HMAC check from
+        /// protocol-spec.md section 12, and a server that silently accepted unsigned tickets
+        /// would be one nobody noticed was open. But it also means forgetting this call
+        /// produces a server that starts cleanly, logs nothing, and turns away every client, so
+        /// it is done here rather than left to whoever wires the scene.
+        /// </para>
+        /// <para>
+        /// The transport deliberately does not know the shared secret. Validating the HMAC
+        /// belongs to whoever holds it — the master-server integration, which is Dev D's and is
+        /// not built yet. Until then <see cref="_acceptUnsignedTickets"/> accepts any ticket and
+        /// says so loudly on every start, because a development shortcut that goes quiet is one
+        /// that ships.
+        /// </para>
+        /// </remarks>
+        private void RegisterTicketValidator(ITransportServer server)
+        {
+            if (!_acceptUnsignedTickets)
+            {
+                Debug.LogError(
+                    "[net] ticket validation is required but no validator is wired yet "
+                    + "(master-server integration is Dev D's, M3). The server will reject every "
+                    + "connection. Tick 'Accept Unsigned Tickets' for local testing.");
+                return;
+            }
+
+            Debug.LogWarning(
+                "[net] accepting UNSIGNED join tickets. Development only — this bypasses the "
+                + "protocol-spec section 12 HMAC check and must not reach a public server.");
+
+            server.OnValidateTicket += _ => true;
+        }
+
         /// <summary>Unbinds the loop and disposes a transport this component created.</summary>
         public void StopServer()
         {
             if (TickLoop != null) TickLoop.Unbind();
 
-            if (_ownsTransport && Loopback != null)
+            if (_ownsTransport)
             {
-                Loopback.Dispose();
-                Loopback = null;
+                if (Loopback != null)
+                {
+                    Loopback.Dispose();
+                    Loopback = null;
+                }
+
+                if (Udp != null)
+                {
+                    Udp.Dispose();
+                    Udp = null;
+                }
+
                 _ownsTransport = false;
             }
 
