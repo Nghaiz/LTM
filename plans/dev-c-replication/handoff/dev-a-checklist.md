@@ -7,7 +7,15 @@
 Everything that could be built without the Unity Editor is built, tested and merged. What is left
 needs the Editor, which under conventions.md § 1.3 means it needs you.
 
-Items are ordered by what unblocks the most. **A1 and A2 unblock everything else.**
+Items are ordered by what unblocks the most.
+
+> **Round 2 — 2026-08-12, afternoon.** A1, A2 and A5 are closed. Three more PRs merged since
+> (#12 yours, #13, #14): the two bugs you reported — cannot quit, no logs — plus four Unity 6
+> errors in the scene files. Everything verifiable without the Editor has been verified;
+> everything else is now **group V below, and it blocks A3.** Start there, not at A3.
+>
+> Step-by-step version of the same thing, with the exact clicks:
+> [`dev-a-gate-board.html`](dev-a-gate-board.html).
 
 ---
 
@@ -69,9 +77,68 @@ Three files, all mine under conventions.md § 7 — `MovementSimulation.cs`, `Ne
 
 ---
 
+## V — Confirm today's three PRs  ⏱ ~25 min  🔴 blocks A3
+
+Run V1→V5 in order. If V1 fails, the other four are meaningless — stop and tell me.
+
+**Close Unity before `git pull`.** PR #14 edits scene and prefab files directly, and an open
+Editor holds the scene in memory and writes it back on save.
+
+```powershell
+cd d:\Coding\LTM
+git checkout develop
+git pull
+pwsh tools/build-libs.ps1
+```
+
+| # | Do | Report back |
+|---|---|---|
+| **V1** | Reopen the project, open `Assets/Scenes/Menu.unity`, read the Console. Count **red lines only** — Unity 6 still warns about legacy serialization in 60 places and that is known and deliberate. | `"0 error"`, or each red line verbatim **with the scene name** |
+| **V2** | Press Play. Line one of the Console gives the log file path. Open it; the first ten lines are an assembly census. | `"census clean"`, or paste the ten `assembly ...` lines |
+| **V3** | Confirm that log file exists, is non-empty, grows while the game runs, and ends with `session ended`. | `"log written"`, or what is missing |
+| **V4** | In Play mode: Esc → menu → Quit. | Which of the three rows below |
+| **V5** | Open `Island.unity`, `Dustbowl.unity`, `Splash.unity` once each, clearing the Console before each. No need to Play. | `"clean"` ×3, or the red line with its scene name |
+
+**V2 is the one that can change a decision.** If the census reports
+`[IronfrontLog] <name> is loaded 2 times`, then Unity 6's .NET Standard profile already supplies
+that shim and the copy in `Assets/Plugins` is both redundant and actively breaking things: delete
+the named `.dll` and `.dll.meta`, and tell me which, so I can stop `build-libs.ps1` copying them.
+A duplicated `System.Memory` never produces an error that names `System.Memory` — it produces a
+`TypeLoadException`, or a `Span<byte>` that will not assign to a `Span<byte>`, and an afternoon
+spent reading the wrong file.
+
+**V4 — three outcomes, and they mean different things.** `Application.Quit()` is a documented
+no-op in the Editor, which is why both Quit buttons did nothing; `AppQuit.Quit()` now stops Play
+mode in the Editor and quits for real in a build.
+
+| Play mode | `[AppQuit] quit requested` in Console | Meaning |
+|---|---|---|
+| Stops | yes | Working. Done. |
+| Keeps running | **no** | The button is **not wired** to the method in the scene — Inspector → the Quit button's **On Click ()** must point at the `IngameMenuUi` / `MainMenu` object and select `Quit()`. Check both: the main-menu button and the Esc-menu button are different buttons in different scenes. |
+| Keeps running | yes | The code ran and the Editor did not stop. Different bug — tell me immediately. |
+
+**V5 — why I cannot do this one from outside.** I scanned every scene's YAML and I am *certain*
+class 92 (GUILayer) was the only removed class in `Menu.unity` — certain because Unity said so
+itself, reporting GUI Layer and nothing else while that file also contains FlareLayer, Animator,
+ParticleSystem and Canvas. The other three scenes additionally carry `TextMesh`, `Animation`,
+`Cloth`, `Terrain` and others. Every hosting module is in the manifest so they are very likely
+fine, but **that is suspicion, not verification**, and opening each scene once settles it free.
+
+---
+
 ## A3 — Run the shadow comparison and send me the summary  ⏱ ~30 min play + 5 min report  🔴 closes phase-00 criterion 8
 
+**Do group V first.** And do A3 before A4 — see A4 for why.
+
 Attach `MovementShadowCompare` to the player prefab, press Play, and move around deliberately:
+
+> **The Console prints one line the moment you press Play**, before you have moved:
+> `[MovementShadowCompare] attached to '...' and ticking.` If that line is absent, the component
+> is not running — **do not spend thirty minutes playing.** It is on a GameObject that was never
+> spawned, or disabled, or on the scene object rather than the prefab. I added that line in #13
+> precisely because it was missing: the old version was completely silent when attached to the
+> wrong object, which is indistinguishable from a broken logger. A `ran zero ticks` warning on
+> exit means the same thing, and says where to look.
 
 | Do this | For | Watching for |
 |---|---|---|
@@ -99,13 +166,22 @@ line plus any `MOVEMENT DIVERGED` warnings from flat ground.**
 
 ---
 
-## A4 — Add `NetMovementAgent` to the player prefab  ⏱ ~10 min  🟡 blocks M1 integration
+## A4 — Add `NetMovementAgent` + `NetPredictionClock` to the player prefab  ⏱ ~10 min  🟡 blocks M1 integration
 
-Add the component to the same GameObject that has the `CharacterController` (it is
-`[RequireComponent]`, so the Editor will insist anyway). Do not wire it to anything yet — M1
-integration calls `Tick()`; until then it just sits there holding state.
+**Do this after A3, not before.** See the warning below.
 
-**Report back:** the prefab path and that the Console is still clean.
+Add both components to the same GameObject that has the `CharacterController` (`NetMovementAgent`
+is `[RequireComponent]`, so the Editor will insist anyway). Then **untick `NetPredictionClock`**
+and save.
+
+> **Why the clock ships disabled.** `NetMovementAgent` sits inert — nothing calls `Tick()` until
+> M1 integration. `NetPredictionClock` is the thing that calls it, from the first frame, 30 times
+> a second, and `Tick()` ends in `CharacterController.Move()`. `FirstPersonController` is already
+> calling `Move()` on that same controller. Enable it now and two systems drive one character:
+> A3's shadow comparison measures nonsense, and the nonsense looks plausible. Enabling it is an
+> M1 step, once the original controller is switched off.
+
+**Report back:** the prefab path, that the clock is disabled, and that the Console is still clean.
 
 ---
 
@@ -222,6 +298,10 @@ M0 and the offline half of M1 are merged and green: 283 tests, 0 warnings.
 | `SnapshotBuilder`, `DeltaEncoder`, `DeltaDecoder` | Full and delta snapshots. Measured: 44.7% saving, 10.94 KB/s per client at 48 actors |
 | `ServerTickScheduler`, `InputAuthority`, `ClientSession` | 30 Hz pacing, anti-cheat input handling |
 | `BitWriter` / `BitReader` | Dev B's, with the conformance suite that judges them |
+| `NetPredictionClock` | New, #13. The 30 Hz accumulator that makes A5 option B real. Attach in A4, leave disabled until M1 |
+| `IronfrontLog` | New, #13. Mirrors the Console to a file and prints the assembly census. Self-starting, nothing to attach |
+| `AppQuit` | New, #13. One exit point, correct in the Editor and in a build |
+| `tools/strip-removed-components.ps1` | New, #14. Deletes components of Unity-removed classes from scenes and prefabs without an Editor re-save of the whole file |
 
 Two gotchas worth knowing before you meet them:
 
@@ -236,17 +316,25 @@ Two gotchas worth knowing before you meet them:
 
 ## Summary — what I need back
 
+Do them in this order. Group V blocks A3, and A3 blocks A4.
+
 | # | Item | Effort | Reply with |
 |---|---|---|---|
-| A1 | ✅ DLLs load in the Editor | 15 min | done — PR #12 |
-| A2 | ✅ Drop-in scripts installed + `.meta` committed | 10 min | done — PR #12 |
+| A1 | ✅ DLLs load in the Editor | — | done — PR #12 |
+| A2 | ✅ Drop-in scripts installed + `.meta` committed | — | done — PR #12 |
+| A5 | ✅ **Fixed timestep — chose B** | — | done — `NetPredictionClock` |
+| **V1** | Pull, build libs, open Editor, read the Console | 10 min | `"0 error"`, or each red line with its scene |
+| **V2** | Read the assembly census in the log file | 5 min | `"census clean"`, or the ten `assembly ...` lines |
+| **V3** | Confirm the log file is written | 3 min | `"log written"`, or what is missing |
+| **V4** | Test the Quit button | 3 min | one of the three rows in the V4 table |
+| **V5** | Open the other three scenes once each | 5 min | `"clean"` ×3, or the red line with its scene |
 | A3 | Shadow-comparison run | 35 min | the summary line + flat-ground warnings |
-| A4 | `NetMovementAgent` + `NetPredictionClock` on the player prefab | 10 min | prefab path |
-| A5 | ✅ **Fixed timestep — chose B** | 15 min | done — `NetPredictionClock` |
+| A4 | `NetMovementAgent` + `NetPredictionClock` on the prefab, **clock disabled** | 10 min | prefab path + clock disabled |
 | A6 | Weapon id registry | 30 min | how to read the ids |
 | A7 | Can a player pass ±2048 m? | 10 min | yes/no |
 | A8 | Skim the movement analysis | 10 min | anything that contradicts what you know |
 
-**A1, A2 and A5 are closed.** Roughly 1 hour 25 minutes of Editor work left, and A3 is the one
-most likely to find something. A4 now wants two components rather than one: add
-`NetPredictionClock` next to `NetMovementAgent`, which is what makes option B real.
+**A1, A2 and A5 are closed; roughly 1 hour 55 minutes of Editor work left.** Nothing in this
+round needs a decision from you — A5 was the last one. V2 is the only item whose answer changes
+a decision already made, A3 is still the one most likely to find a real bug, and A4 is the one
+with a trap in it.
