@@ -1,3 +1,5 @@
+using System;
+using System.Text;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Server;
 using Ironfront.Net.Transport;
@@ -38,6 +40,18 @@ namespace Ironfront.Net.Unity.Server
         /// </remarks>
         public const float MaxDeltaTime = 0.1f;
 
+        /// <summary>
+        /// Environment variable holding the HMAC key that signs join tickets, shared with the
+        /// master server (protocol-spec.md section 12).
+        /// </summary>
+        /// <remarks>
+        /// From the environment, never from a serialized field or a committed file: a secret in
+        /// a scene asset is a secret in the repository, and the whole point of the ticket is
+        /// that a game server operated by a third party can verify one without holding a login
+        /// credential. The name matches the phase-03 task-4 sketch.
+        /// </remarks>
+        public const string SharedSecretVariable = "IRONFRONT_SHARED_SECRET";
+
         [Header("Startup")]
         [SerializeField] private bool _startOnAwake = true;
 
@@ -45,7 +59,7 @@ namespace Ironfront.Net.Unity.Server
         [Tooltip("In-process wire with no socket, for a single-Editor test. Off = real UDP.")]
         [SerializeField] private bool _useLoopbackTransport = true;
 
-        [Tooltip("Accept any join ticket. Development only — see RegisterTicketValidator.")]
+        [Tooltip("Accept any join ticket when no shared secret is configured. Development only.")]
         [SerializeField] private bool _acceptUnsignedTickets = true;
 
         [SerializeField] private int _port = 27015;
@@ -58,6 +72,11 @@ namespace Ironfront.Net.Unity.Server
         private float _nextOverloadCheck;
         private bool _ownsTransport;
 
+        // connectionId -> the playerId its join ticket named, so a disconnect releases the
+        // right claim regardless of the order clients leave in.
+        private readonly System.Collections.Generic.Dictionary<ushort, uint> _playerByConnection =
+            new System.Collections.Generic.Dictionary<ushort, uint>(ProtocolConstants.MAX_PLAYERS);
+
         /// <summary>The loopback wire, when one was created. Hand <c>.Client</c> to a test client.</summary>
         public LoopbackTransport Loopback { get; private set; }
 
@@ -66,6 +85,12 @@ namespace Ironfront.Net.Unity.Server
 
         /// <summary>The tick loop this bootstrap drives.</summary>
         public ServerTickLoop TickLoop { get; private set; }
+
+        /// <summary>
+        /// The join-ticket validator, or null when running with unsigned tickets. The
+        /// connection lifecycle needs it to confirm and release player claims.
+        /// </summary>
+        public TicketValidator Validator { get; private set; }
 
         private void Awake()
         {
@@ -153,20 +178,75 @@ namespace Ironfront.Net.Unity.Server
         /// </remarks>
         private void RegisterTicketValidator(ITransportServer server)
         {
-            if (!_acceptUnsignedTickets)
+            string secret = Environment.GetEnvironmentVariable(SharedSecretVariable);
+
+            if (string.IsNullOrEmpty(secret))
             {
-                Debug.LogError(
-                    "[net] ticket validation is required but no validator is wired yet "
-                    + "(master-server integration is Dev D's, M3). The server will reject every "
-                    + "connection. Tick 'Accept Unsigned Tickets' for local testing.");
+                if (!_acceptUnsignedTickets)
+                {
+                    Debug.LogError(
+                        $"[net] {SharedSecretVariable} is not set and unsigned tickets are "
+                        + "disabled, so the server will reject every connection. Set the "
+                        + "variable to the master server's shared secret, or tick 'Accept "
+                        + "Unsigned Tickets' for local testing.");
+                    return;
+                }
+
+                Debug.LogWarning(
+                    "[net] accepting UNSIGNED join tickets. Development only — this bypasses "
+                    + "the protocol-spec section 12 HMAC check and must not reach a public "
+                    + $"server. Set {SharedSecretVariable} to turn validation on.");
+
+                server.OnValidateTicket += _ => true;
                 return;
             }
 
-            Debug.LogWarning(
-                "[net] accepting UNSIGNED join tickets. Development only — this bypasses the "
-                + "protocol-spec section 12 HMAC check and must not reach a public server.");
+            // The ticket names a serverId, and the validator only enforces it once we have been
+            // told our own — which is GS_REGISTER's answer and arrives later, if at all. 0 here
+            // means "signature and expiry only", which is the correct standalone behaviour;
+            // ServerMasterReporter re-registers a stricter validator once it has an id.
+            Validator = new TicketValidator(Encoding.UTF8.GetBytes(secret), serverId: 0);
 
-            server.OnValidateTicket += _ => true;
+            Debug.Log("[net] join-ticket validation ON (HMAC + expiry + one-session-per-player)");
+
+            server.OnValidateTicket += ticket =>
+            {
+                bool admitted = Validator.TryAdmit(
+                    ticket.Span,
+                    DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                    out uint playerId,
+                    out TicketRejection reason);
+
+                // Logged here and reported to the client as a bare InvalidTicket, never as the
+                // specific reason: a handshake that says which check failed is an oracle for
+                // forging a ticket one byte at a time.
+                if (!admitted) Debug.LogWarning($"[net] join rejected: {reason}");
+                else Debug.Log($"[net] join admitted for player {playerId}");
+
+                return admitted;
+            };
+
+            // A connection has to be paired with the player its ticket named, so the claim can
+            // be released when that connection goes away. The transport does not carry the
+            // ticket through to OnClientConnected, so the pairing is made from the admission
+            // queue at connect time — see TicketValidator.TryTakePendingAdmission for why that
+            // is sound and what the fallback costs. From there on it is keyed by connection id,
+            // so clients may leave in any order.
+            server.OnClientConnected += (connectionId, _) =>
+            {
+                if (!Validator.TryTakePendingAdmission(out uint playerId)) return;
+
+                Validator.ConfirmConnected(playerId);
+                _playerByConnection[connectionId] = playerId;
+            };
+
+            server.OnClientDisconnected += (connectionId, _) =>
+            {
+                if (!_playerByConnection.TryGetValue(connectionId, out uint playerId)) return;
+
+                _playerByConnection.Remove(connectionId);
+                Validator.Release(playerId);
+            };
         }
 
         /// <summary>Unbinds the loop and disposes a transport this component created.</summary>

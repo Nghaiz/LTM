@@ -60,6 +60,8 @@ namespace Ironfront.Net.Unity.Server
         private readonly SpawnAckTracker _spawnAcks = new SpawnAckTracker();
         private readonly LagCompensator _lagCompensator;
 
+        private ServerStateAudit _stateAudit;
+
         private uint _snapshotIndex;
 
         private readonly byte[] _snapshotBody = new byte[ServerPayloadWriter.MaxSnapshotBodySize];
@@ -311,6 +313,69 @@ namespace Ironfront.Net.Unity.Server
                     new ReadOnlySpan<byte>(_eventPayload, 0, written),
                     reliable: true);
             }
+        }
+
+        /// <summary>
+        /// Sends one already-framed payload to every connected client on a reliable channel.
+        /// </summary>
+        /// <remarks>
+        /// Lives here rather than on <see cref="MatchController"/> because the session list is
+        /// this class's, and a second component iterating it would be a second place that has
+        /// to be right about which connections are still live.
+        /// </remarks>
+        public void BroadcastReliable(ReadOnlySpan<byte> payload, byte channel)
+        {
+            if (Transport == null) return;
+
+            for (int i = 0; i < _players.Count; i++)
+                Transport.Send(_players[i].Session.ConnectionId, channel, payload, reliable: true);
+        }
+
+        /// <summary>
+        /// Attaches the match's id pool, so the loop can audit and reset per-round state.
+        /// </summary>
+        /// <remarks>
+        /// Built once and cached rather than constructed per reset: the audit closes over
+        /// <c>_players.Count</c>, and a closure allocated on every round is a small leak in
+        /// the one loop that is graded on allocating nothing.
+        /// </remarks>
+        public void BindMatch(ActorIdPool actorIds)
+            => _stateAudit = new ServerStateAudit(
+                actorIds ?? throw new ArgumentNullException(nameof(actorIds)),
+                _hitboxHistory, _interest, _spawnAcks, () => _players.Count);
+
+        /// <summary>
+        /// Reads the per-actor and per-pair table sizes, for the phase-03 clean-state check.
+        /// </summary>
+        public ServerStateSnapshot AuditState()
+            => _stateAudit?.Capture() ?? default;
+
+        /// <summary>
+        /// Empties everything the netcode remembers about the previous round.
+        /// </summary>
+        /// <remarks>
+        /// Sessions are deliberately NOT dropped. A match reset is not a disconnect — the
+        /// players stay connected across rounds, and tearing their sessions down would take
+        /// their delta baselines and input rings with it, so every client would need a full
+        /// re-handshake at the top of every round. What is cleared is the per-actor state,
+        /// which is exactly what the new round is about to rebuild. Each session's delta
+        /// encoder is reset so the first snapshot of the round is full rather than a delta
+        /// against a world that no longer exists.
+        /// </remarks>
+        public void ResetForNewMatch()
+        {
+            if (_stateAudit == null)
+            {
+                Debug.LogError(
+                    "[net] ResetForNewMatch called before BindMatch. Per-round state was NOT "
+                    + "cleared — the next round inherits the previous round's hitbox history, "
+                    + "interest pairs and spawn acknowledgements.");
+                return;
+            }
+
+            _stateAudit.ResetForNewMatch();
+
+            for (int i = 0; i < _players.Count; i++) _players[i].Session.Encoder.Reset();
         }
 
         /// <summary>

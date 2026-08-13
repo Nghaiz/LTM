@@ -360,8 +360,19 @@ namespace Ironfront.Net.Replication.Tests
 
         /// <summary>20 shots at a strafing target; returns how many landed.</summary>
         private static int StrafeVolley(float rttMs, bool compensated)
+            => StrafeVolleyFor(rttMs, compensated);
+
+        /// <summary>
+        /// 20 shots at a strafing target; returns how many landed.
+        /// </summary>
+        /// <remarks>
+        /// Internal rather than private because the phase-04 experiment prints the same
+        /// measurement across six RTTs and two target speeds. Re-implementing it there would
+        /// give the report a chart drawn by a second fixture that could drift from the one the
+        /// phase-02 criteria were graded on.
+        /// </remarks>
+        internal static int StrafeVolleyFor(float rttMs, bool compensated, float strafeSpeed = 5f)
         {
-            const float strafeSpeed = 5f;
             const float range = 20f;
             const uint firstShotTick = 200;
             const ushort shooter = 1;
@@ -405,10 +416,12 @@ namespace Ironfront.Net.Replication.Tests
 
             return hits;
 
-            static Vec3 PositionAt(uint tick)
+            // Not `static`: the target speed is now a parameter, and a static local function
+            // cannot see it (CS8421).
+            Vec3 PositionAt(uint tick)
                 => PositionAtTime(tick * ProtocolConstants.MS_PER_TICK);
 
-            static Vec3 PositionAtTime(float milliseconds)
+            Vec3 PositionAtTime(float milliseconds)
                 => new Vec3(
                     strafeSpeed * (milliseconds - firstShotTick * ProtocolConstants.MS_PER_TICK)
                         / 1000f,

@@ -104,6 +104,40 @@ namespace Ironfront.Net.Replication.Server
         }
 
         /// <summary>
+        /// Writes S_MATCH_STATE as a channel-2 payload. Broadcast — every client draws the
+        /// same scoreboard. Phase-03 task 1.
+        /// </summary>
+        /// <remarks>
+        /// Reliable, unlike a gunshot, because it is the only thing that tells a client the
+        /// round has ended. A dropped one leaves that client playing a match everyone else has
+        /// finished, and the next thing it sees is the world resetting under it.
+        /// </remarks>
+        public static int WriteMatchState(Span<byte> destination, in MatchStateMessage message)
+        {
+            Span<byte> body = stackalloc byte[MatchStateMessage.Size];
+            return message.Write(body) < 0
+                ? -1
+                : Frame(destination, ReliableChannel, ServerMessageType.MatchState, body);
+        }
+
+        /// <summary>
+        /// Writes S_CAPTURE_POINT as a channel-2 payload. Phase-03 task 2.
+        /// </summary>
+        /// <remarks>
+        /// <b>Trap 3 is not solved here.</b> This class turns one capture point into bytes; how
+        /// often it is asked to is <c>CapturePointState.Tick</c>'s answer, and that is where the
+        /// send threshold lives. Sending every tick would be 5 points x 30 Hz x 16 clients =
+        /// 2400 messages a second, and no amount of efficient framing would make that acceptable.
+        /// </remarks>
+        public static int WriteCapturePoint(Span<byte> destination, in CapturePointMessage message)
+        {
+            Span<byte> body = stackalloc byte[CapturePointMessage.Size];
+            return message.Write(body) < 0
+                ? -1
+                : Frame(destination, ReliableChannel, ServerMessageType.CapturePoint, body);
+        }
+
+        /// <summary>
         /// Whether a listener at <paramref name="listenerDistanceSquared"/> should receive an
         /// event audible within <paramref name="radius"/> metres.
         /// </summary>

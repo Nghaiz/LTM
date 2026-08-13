@@ -68,6 +68,12 @@ namespace Ironfront.Net.Replication.Interest
         private readonly Dictionary<uint, uint> _lastSentSnapshot;
         private readonly Dictionary<ushort, InterestLevel> _maxHumanLevel;
 
+        /// <summary>
+        /// actorId -> the snapshot index at which it was first seen dead. Phase-03 task 5,
+        /// optimization 5.
+        /// </summary>
+        private readonly Dictionary<ushort, uint> _deadSinceSnapshot;
+
         private static readonly float CosViewConeHalfAngle =
             (float)Math.Cos(ViewConeHalfAngleDegrees * Math.PI / 180.0);
 
@@ -78,7 +84,28 @@ namespace Ironfront.Net.Replication.Interest
             _lastSentSnapshot = new Dictionary<uint, uint>(
                 ProtocolConstants.MAX_PLAYERS * ProtocolConstants.MAX_ACTORS);
             _maxHumanLevel = new Dictionary<ushort, InterestLevel>(ProtocolConstants.MAX_ACTORS);
+            _deadSinceSnapshot = new Dictionary<ushort, uint>(ProtocolConstants.MAX_ACTORS);
         }
+
+        /// <summary>
+        /// Which of the phase-03 task-5 optimizations are on. Defaults to the shipped set.
+        /// </summary>
+        /// <remarks>
+        /// Only the two that are expressible in the frozen v1 wire format are read here —
+        /// <see cref="ReplicationConfig.UseVelocityCulling"/> and
+        /// <see cref="ReplicationConfig.DropStaleDeadActors"/>. Both change <i>what</i> goes in
+        /// a snapshot, never how a field is laid out, so a client built against the frozen spec
+        /// decodes either setting without knowing which is in force. See
+        /// <see cref="ReplicationConfig"/> for the two flags that are deliberately not honoured
+        /// anywhere on the shipped path.
+        /// </remarks>
+        public ReplicationConfig Config { get; set; } = ReplicationConfig.Shipped;
+
+        /// <summary>Actor slots dropped because the actor had been dead too long to be worth sending.</summary>
+        public long EntriesDroppedDead { get; private set; }
+
+        /// <summary>Velocity fields suppressed because the actor was below Near.</summary>
+        public long VelocityFieldsCulled { get; private set; }
 
         /// <summary>Actor slots examined since construction. Denominator for the saving figure.</summary>
         public long EntriesConsidered { get; private set; }
@@ -226,12 +253,28 @@ namespace Ironfront.Net.Replication.Interest
 
                 EntriesConsidered++;
 
+                // Before the cull test, deliberately. An actor that dies while out of range
+                // would otherwise never get a death time recorded, and would then be held in
+                // full for three seconds the moment it came back into range — a corpse
+                // reappearing at 20 Hz is the opposite of the optimization.
+                TrackLiveness(in target, snapshotIndex);
+
                 InterestLevel level = Evaluate(in viewer, in target);
                 RecordHumanInterest(target.ActorId, level);
 
                 if (level == InterestLevel.Culled)
                 {
                     EntriesCulled++;
+                    continue;
+                }
+
+                // Dropped BEFORE the spawn gate and the rate limit, because a body nobody is
+                // going to move again should not consume either. Corpses are never synchronised
+                // (AD-4) — the client runs its own ragdoll off S_DEATH — so every snapshot after
+                // the first few is describing a pose that has not changed and will not.
+                if (IsStaleDead(target.ActorId, snapshotIndex))
+                {
+                    EntriesDroppedDead++;
                     continue;
                 }
 
@@ -261,7 +304,27 @@ namespace Ironfront.Net.Replication.Interest
                     continue;
                 }
 
-                if (!destination.Add(in target)) break;   // full; MAX_ACTORS is the fence
+                // A copy, because the outgoing entry may differ from the world's. Mutating
+                // world.Actors[i] in place would apply one viewer's culling decision to every
+                // other viewer in the same snapshot — a client standing next to an actor would
+                // lose its velocity because somebody else was far from it.
+                ActorSnapshotEntry outgoing = target;
+
+                if (Config.UseVelocityCulling && level < InterestLevel.Near
+                    && (outgoing.VelX != 0 || outgoing.VelY != 0 || outgoing.VelZ != 0))
+                {
+                    // Zeroed rather than omitted: the change mask is computed against the
+                    // client's acked baseline, which also went through this filter, so writing
+                    // the same zero every snapshot clears the Velocity bit for free. Omission
+                    // is not expressible here at all — the encoder derives the mask, it is not
+                    // handed one.
+                    outgoing.VelX = 0;
+                    outgoing.VelY = 0;
+                    outgoing.VelZ = 0;
+                    VelocityFieldsCulled++;
+                }
+
+                if (!destination.Add(in outgoing)) break;   // full; MAX_ACTORS is the fence
 
                 EntriesRefreshed++;
             }
@@ -331,9 +394,54 @@ namespace Ironfront.Net.Replication.Interest
         /// the despawn path, not from a periodic sweep — a sweep needs a liveness oracle this
         /// class has no business owning.
         /// </remarks>
+        /// <summary>
+        /// Notes when an actor was first seen dead, and forgets it the moment it revives.
+        /// </summary>
+        /// <remarks>
+        /// Called once per (viewer, target) pair and therefore several times per actor per
+        /// snapshot, so it is written to be idempotent within a snapshot: the first viewer
+        /// records the index and the rest find it already there. Recording per snapshot instead
+        /// would need a separate pass over the world, for a dictionary write that costs less
+        /// than the pass would.
+        /// </remarks>
+        private void TrackLiveness(in ActorSnapshotEntry entry, uint snapshotIndex)
+        {
+            if (!Config.DropStaleDeadActors) return;
+
+            bool alive = (entry.StateFlags & ActorStateFlags.IsAlive) != 0;
+
+            if (alive)
+            {
+                // Respawn. Must clear, or the actor is dropped from every snapshot the instant
+                // it comes back — invisible player, no error anywhere.
+                if (_deadSinceSnapshot.Count != 0) _deadSinceSnapshot.Remove(entry.ActorId);
+                return;
+            }
+
+            if (!_deadSinceSnapshot.ContainsKey(entry.ActorId))
+                _deadSinceSnapshot[entry.ActorId] = snapshotIndex;
+        }
+
+        /// <summary>
+        /// Whether this actor has been dead long enough to stop sending.
+        /// </summary>
+        private bool IsStaleDead(ushort actorId, uint snapshotIndex)
+        {
+            if (!Config.DropStaleDeadActors) return false;
+            if (!_deadSinceSnapshot.TryGetValue(actorId, out uint deadSince)) return false;
+
+            int held = (int)(ProtocolConstants.SNAPSHOT_RATE * Config.DeadActorHoldSeconds);
+
+            // Signed distance for the same reason ShouldSend uses it: an unsigned subtraction
+            // turns a recorded index that is somehow ahead of us into a two-billion gap that
+            // passes every threshold, which here would drop a freshly killed actor instantly.
+            return SequenceMath.Distance32(snapshotIndex, deadSince) >= held;
+        }
+
         public void Forget(ushort actorId)
         {
             _maxHumanLevel.Remove(actorId);
+            _deadSinceSnapshot.Remove(actorId);
 
             // Materialised into a list first: removing from a Dictionary while enumerating it
             // is undefined. This runs once per despawn, not per tick.
@@ -357,10 +465,13 @@ namespace Ironfront.Net.Replication.Interest
         {
             _lastSentSnapshot.Clear();
             _maxHumanLevel.Clear();
+            _deadSinceSnapshot.Clear();
             EntriesConsidered = 0;
             EntriesRefreshed = 0;
             EntriesHeld = 0;
             EntriesCulled = 0;
+            EntriesDroppedDead = 0;
+            VelocityFieldsCulled = 0;
         }
 
         /// <summary>
