@@ -262,6 +262,7 @@ public class Actor : Hurtable
 			return;
 		}
 		Weapon component = UnityEngine.Object.Instantiate(entry.prefab).GetComponent<Weapon>();
+		component.NetworkId = WeaponManager.NetworkIdOf(entry);
 		component.gameObject.name = entry.name;
 		if (aiControlled)
 		{

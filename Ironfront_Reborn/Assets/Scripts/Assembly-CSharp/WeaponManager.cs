@@ -15,6 +15,9 @@ public class WeaponManager : MonoBehaviour
 	[Serializable]
 	public class WeaponEntry
 	{
+		[Range(1, 255)]
+		public int NetworkId = 1;
+
 		public string name = "Weapon";
 
 		public Sprite image;
@@ -53,6 +56,8 @@ public class WeaponManager : MonoBehaviour
 	public static WeaponManager instance;
 
 	public List<WeaponEntry> weapons;
+
+	private readonly Dictionary<byte, WeaponEntry> _weaponsByNetworkId = new Dictionary<byte, WeaponEntry>();
 
 	private int sequenceIndex;
 
@@ -97,6 +102,44 @@ public class WeaponManager : MonoBehaviour
 	private void Awake()
 	{
 		instance = this;
+		BuildNetworkIdLookup();
+	}
+
+	private void BuildNetworkIdLookup()
+	{
+		_weaponsByNetworkId.Clear();
+		foreach (WeaponEntry weapon in weapons)
+		{
+			if (weapon.NetworkId <= 0 || weapon.NetworkId > byte.MaxValue)
+			{
+				Debug.LogError("Weapon '" + weapon.name + "' has invalid network id " + weapon.NetworkId + ". Valid ids are 1..255; 0 is reserved for no weapon.");
+				continue;
+			}
+
+			byte networkId = (byte)weapon.NetworkId;
+			if (_weaponsByNetworkId.ContainsKey(networkId))
+			{
+				Debug.LogError("Duplicate weapon network id " + networkId + " on '" + weapon.name + "' and '" + _weaponsByNetworkId[networkId].name + "'.");
+				continue;
+			}
+
+			_weaponsByNetworkId.Add(networkId, weapon);
+		}
+	}
+
+	public static bool TryGetEntry(byte networkId, out WeaponEntry entry)
+	{
+		entry = null;
+		return instance != null && instance._weaponsByNetworkId.TryGetValue(networkId, out entry);
+	}
+
+	public static byte NetworkIdOf(WeaponEntry entry)
+	{
+		if (entry == null || entry.NetworkId <= 0 || entry.NetworkId > byte.MaxValue)
+		{
+			return 0;
+		}
+		return (byte)entry.NetworkId;
 	}
 
 	public static List<WeaponEntry> GetWeaponEntriesOfSlot(WeaponSlot slot)
