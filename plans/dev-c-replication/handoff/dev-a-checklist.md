@@ -15,6 +15,16 @@ Items are ordered by what unblocks the most.
 > Dustbowl, and Splash. Full evidence: [Unity V1-V5 verification](../../reports/2026-08-13-unity-v1-v5.md).
 > A3 is no longer blocked by Group V.
 
+> **Round 6 — 2026-08-13. The A3 harness is repaired; please re-run A3.** Your round-5 report was
+> right on all three counts and the harness has been fixed for each: the grounded vertical channel
+> is now excluded (that was the 787 idle false positives), spawn/respawn/teleport samples are
+> detected and skipped instead of scored (the 1123 m sample), and the component now declares
+> `[DefaultExecutionOrder(1000)]` so it always samples the transform after the original controller
+> has moved for that tick. A fourth bug you did not see is also fixed: `_primed` was never reset on
+> re-enable, so a pooled respawn measured against a stale position — the most likely origin of that
+> 1123 m entry. The summary line has changed shape: **the verdict is now the GROUNDED number**, and
+> it reports skipped discontinuities separately. Details: [harness repair](../../reports/2026-08-13-movement-shadow-harness-repair.md).
+
 > **Round 2 — 2026-08-12, afternoon.** A1, A2 and A5 are closed. Three more PRs merged since
 > (#12 yours, #13, #14): the two bugs you reported — cannot quit, no logs — plus four Unity 6
 > errors in the scene files. Everything verifiable without the Editor has been verified;
@@ -188,6 +198,15 @@ plays.
 
 On exiting Play mode it prints a one-line summary (`[MovementShadowCompare] ...`). **Send me that
 line plus any `MOVEMENT DIVERGED` warnings from flat ground.**
+
+> **How to read the summary after the round-6 repair.** The verdict is the **grounded** count, not
+> the total: `CLEAN on the ground` or `N of M GROUNDED ticks diverged`. Airborne divergence is
+> reported next to it but does not by itself condemn the port — slopes and geometry are the two
+> documented gaps. `skipped_discontinuities=N` counts spawn/respawn/teleport samples that were
+> deliberately not scored; a handful is normal, hundreds means something is teleporting the actor
+> every few seconds and is worth telling me about. Per-tick warnings now print `dH=` (horizontal,
+> always scored) and `dV=` which reads `absorbed` while grounded — that is the collision channel
+> being correctly ignored, not a measurement being hidden.
 
 > **Why crouch-walking is on that list specifically.** The phase-00 plan assumed a
 > `CROUCH_SPEED` of 2.0 m/s. No such value exists anywhere in the project — crouching changes the

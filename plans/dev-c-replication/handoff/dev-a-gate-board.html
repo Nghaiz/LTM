@@ -372,6 +372,17 @@
       <b>Island sạch · Dustbowl sạch · Splash sạch</b>. Biên bản đầy đủ ở
       <code>plans/reports/2026-08-13-unity-v1-v5.md</code>. A3 không còn bị Nhóm V chặn.
     </div>
+    <div class="note is-done">
+      <b>Vòng 6 — 13-08. Harness A3 đã sửa xong, mời anh chạy lại A3.</b> Báo cáo vòng 5 của anh
+      đúng cả ba điểm và mỗi điểm đã được vá: trục dọc khi chạm đất không còn bị tính là sai lệch
+      (đó là 787 cảnh báo giả lúc đứng yên), mẫu spawn/hồi sinh/dịch chuyển bị phát hiện và bỏ qua
+      thay vì cộng vào trung bình (mẫu 1123 m), và component nay khai báo
+      <code>[DefaultExecutionOrder(1000)]</code> nên luôn đọc transform sau khi controller gốc đã
+      di chuyển trong cùng tick. Thêm một lỗi thứ tư anh chưa thấy: <code>_primed</code> không
+      được reset khi bật lại, nên một lần hồi sinh từ pool sẽ đo với vị trí cũ — nhiều khả năng
+      chính là nguồn của mẫu 1123 m đó. <b>Dòng tổng kết đã đổi dạng: kết luận giờ là con số khi
+      CHẠM ĐẤT</b>, và số mẫu bị bỏ qua được báo riêng.
+    </div>
     <div class="meta">
       <span><b>Ngày</b> 12-08-2026 · vòng 4</span>
       <span><b>Mốc</b> M0 đóng · M1 mở</span>
