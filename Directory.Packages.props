@@ -32,6 +32,15 @@
 
   <ItemGroup Label="Master Server">
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="8.0.12" />
+    <!--
+      Pinned ahead of what Microsoft.Data.Sqlite 8.0.12 asks for (2.1.6). Every
+      SQLitePCLRaw.lib.e_sqlite3 up to and including 2.1.11 bundles a SQLite build carrying
+      GHSA-2m69-gcr7-jv3q (High), which the CI vulnerable-package scan fails on. Referenced
+      directly by Ironfront.MasterServer so this version wins over the transitive one; the
+      test project inherits it through the project reference. Drop this pin once
+      Microsoft.Data.Sqlite ships a net8.0 build that already resolves to 2.1.12 or later.
+    -->
+    <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.12" />
     <PackageVersion Include="BCrypt.Net-Next" Version="4.0.3" />
     <PackageVersion Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>

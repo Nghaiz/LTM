@@ -26,6 +26,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" />
+    <!-- Version pin only — see the GHSA-2m69-gcr7-jv3q note in Directory.Packages.props. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
     <PackageReference Include="BCrypt.Net-Next" />
   </ItemGroup>
 
