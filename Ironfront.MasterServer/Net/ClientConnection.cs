@@ -1,9 +1,11 @@
 using System;
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Ironfront.MasterServer.Auth;
 using Ironfront.MasterServer.Diagnostics;
 using Ironfront.Net.Protocol;
 
@@ -58,6 +60,8 @@ namespace Ironfront.MasterServer.Net
         private readonly MspFrameHandler _onFrame;
         private readonly Action<ClientConnection, string> _onClosed;
         private readonly MspFrameReader _reader = new MspFrameReader();
+        private readonly ConcurrentQueue<byte[]> _sendQueue = new ConcurrentQueue<byte[]>();
+        private int _sendRunning;
 
         private long _lastActivityMs;
         private int _disposed;
@@ -66,6 +70,7 @@ namespace Ironfront.MasterServer.Net
             int id,
             Socket socket,
             uint remoteIpKey,
+            IPAddress remoteAddress,
             string remoteEndPoint,
             Action<Action> postToLogicThread,
             MspFrameHandler onFrame,
@@ -74,6 +79,7 @@ namespace Ironfront.MasterServer.Net
             Id                 = id;
             _socket            = socket;
             RemoteIpKey        = remoteIpKey;
+            RemoteAddress      = remoteAddress;
             RemoteEndPoint     = remoteEndPoint;
             _postToLogicThread = postToLogicThread;
             _onFrame           = onFrame;
@@ -91,6 +97,8 @@ namespace Ironfront.MasterServer.Net
         /// </summary>
         public uint RemoteIpKey { get; }
 
+        public IPAddress RemoteAddress { get; }
+
         /// <summary>Human-readable <c>ip:port</c>, captured at accept time because the socket
         /// stops being able to report it once it is closed.</summary>
         public string RemoteEndPoint { get; }
@@ -102,6 +110,59 @@ namespace Ironfront.MasterServer.Net
         /// window.
         /// </summary>
         public bool IsAuthenticated { get; private set; }
+
+        public Session? Session { get; private set; }
+
+        internal void SetSession(Session session)
+        {
+            Session = session ?? throw new ArgumentNullException(nameof(session));
+            IsAuthenticated = true;
+        }
+
+        internal void ClearSession()
+        {
+            Session = null;
+            IsAuthenticated = false;
+        }
+
+        internal void Send(MspMessageType messageType, ReadOnlySpan<byte> body)
+        {
+            byte[] frame = new byte[MspFrame.FrameSizeFor(body.Length)];
+            int written = MspFrame.Write(frame, messageType, body);
+            if (written < 0) throw new InvalidOperationException("MSP response exceeds the frame limit.");
+            _sendQueue.Enqueue(frame);
+            if (Interlocked.Exchange(ref _sendRunning, 1) == 0) _ = SendLoopAsync();
+        }
+
+        private async Task SendLoopAsync()
+        {
+            try
+            {
+                while (_sendQueue.TryDequeue(out byte[]? frame))
+                {
+                    int sent = 0;
+                    while (sent < frame.Length)
+                    {
+                        int written = await _socket
+                            .SendAsync(frame.AsMemory(sent), SocketFlags.None)
+                            .ConfigureAwait(false);
+                        if (written == 0)
+                            throw new SocketException((int)SocketError.ConnectionReset);
+                        sent += written;
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is SocketException or ObjectDisposedException)
+            {
+                _postToLogicThread(() => _onClosed(this, "send failed"));
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _sendRunning, 0);
+                if (!_sendQueue.IsEmpty && !IsDisposed && Interlocked.Exchange(ref _sendRunning, 1) == 0)
+                    _ = SendLoopAsync();
+            }
+        }
 
         /// <summary>
         /// <see cref="Environment.TickCount64"/> at the last byte received. Read and written

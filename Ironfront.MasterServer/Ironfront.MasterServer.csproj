@@ -24,6 +24,13 @@
     <ProjectReference Include="..\Ironfront.Net.Protocol\Ironfront.Net.Protocol.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <!-- Version pin only — see the GHSA-2m69-gcr7-jv3q note in Directory.Packages.props. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
+    <PackageReference Include="BCrypt.Net-Next" />
+  </ItemGroup>
+
   <!--
     The test project drives the single logic thread (D-AD-1) through InvokeOnLogicThreadAsync
     and reads ConnectionsUnsafe / calls MarkAuthenticated on it — which is precisely how the
