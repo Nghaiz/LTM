@@ -97,6 +97,9 @@ public class Weapon : MonoBehaviour
 	public int ammo;
 
 	[NonSerialized]
+	public byte NetworkId;
+
+	[NonSerialized]
 	public bool reloading;
 
 	protected float lastFired;
