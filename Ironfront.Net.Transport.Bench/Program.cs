@@ -22,10 +22,12 @@ namespace Ironfront.Net.Transport.Bench
             bool ackBitfield = ParseAckBitfield(args);
             bool idle = HasFlag(args, "--idle");
             string? reportPath = ParseReportPath(args);
+            string? phase4ReportPath = ParsePhase4ReportPath(args);
             Console.WriteLine("Ironfront transport benchmark (hand-rolled, .NET 8)");
             RunMicrobenchmarks();
             RunPoolComparison();
             RunConnectionLoad(seconds, connections, ackBitfield, idle, reportPath);
+            if (phase4ReportPath != null) Phase4ExperimentRunner.Run(phase4ReportPath);
             return 0;
         }
 
@@ -347,6 +349,14 @@ namespace Ironfront.Net.Transport.Bench
         {
             for (int i = 0; i + 1 < args.Length; i++)
                 if (string.Equals(args[i], "--report", StringComparison.OrdinalIgnoreCase))
+                    return args[i + 1];
+            return null;
+        }
+
+        private static string? ParsePhase4ReportPath(string[] args)
+        {
+            for (int i = 0; i + 1 < args.Length; i++)
+                if (string.Equals(args[i], "--phase4-report", StringComparison.OrdinalIgnoreCase))
                     return args[i + 1];
             return null;
         }
