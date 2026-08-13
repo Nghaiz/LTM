@@ -39,6 +39,13 @@
     <ProjectReference Include="..\Ironfront.Net.Protocol\Ironfront.Net.Protocol.csproj" />
     <ProjectReference Include="..\Ironfront.Net.Replication\Ironfront.Net.Replication.csproj" />
     <ProjectReference Include="..\Ironfront.Net.Transport\Ironfront.Net.Transport.csproj" />
+    <!--
+      Phase 03 task 4: the master-server link. Both are here so the adapter is exercised
+      against the real IGameServerLink shape (via FakeGameServerLink) rather than against a
+      hand-written stand-in that could drift from it.
+    -->
+    <ProjectReference Include="..\Ironfront.MasterClient\Ironfront.MasterClient.csproj" />
+    <ProjectReference Include="..\Ironfront.Net.MasterLink\Ironfront.Net.MasterLink.csproj" />
   </ItemGroup>
 
 </Project>

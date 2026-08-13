@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    OWNER: Dev C.
+
+    The opt-in bridge between the game server's IMatchReporter port
+    (Ironfront.Net.Replication) and Dev D's IGameServerLink TCP client
+    (Ironfront.MasterClient). It exists as its own assembly so that NEITHER of those two
+    has to reference the other:
+
+      - Ironfront.Net.Replication.dll ships into Unity as a plugin, so a reference to the
+        master client would drag a TCP socket and System.Text.Json into the Editor.
+      - Ironfront.MasterClient is Dev D's, and a master-protocol client has no business
+        knowing what a snapshot is.
+
+    A server that never references this assembly runs in standalone mode
+    (NullMatchReporter) and plays complete matches with nobody advertising it — the
+    phase-03 risk-table contingency, reached by composition rather than by a null check.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <RootNamespace>Ironfront.Net.MasterLink</RootNamespace>
+    <AssemblyName>Ironfront.Net.MasterLink</AssemblyName>
+    <Description>Bridges the game server's match reporter onto the master-server TCP client.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ironfront.Net.Replication\Ironfront.Net.Replication.csproj" />
+    <ProjectReference Include="..\Ironfront.MasterClient\Ironfront.MasterClient.csproj" />
+  </ItemGroup>
+
+</Project>

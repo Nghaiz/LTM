@@ -135,6 +135,59 @@ namespace Ironfront.Net.Protocol
         Environment = 3,
     }
 
+    /// <summary>
+    /// Where a match is in its lifecycle. Carried by <see cref="MatchStateMessage"/> and by
+    /// the <c>state</c> field of GS_HEARTBEAT (protocol-spec.md section 11).
+    /// </summary>
+    /// <remarks>
+    /// Declared in the protocol rather than in the replication library because two parties
+    /// outside Dev C read it: the client renders a different HUD per phase, and the master
+    /// server decides whether a server is joinable from the heartbeat's copy of it. A second
+    /// enum on either side is the duplicate source of truth the conventions forbid.
+    /// </remarks>
+    public enum MatchPhase : byte
+    {
+        /// <summary>Not enough humans to start. Bots may still be running.</summary>
+        WaitingForPlayers = 0,
+        /// <summary>Countdown before the round opens. Spawns allowed, damage is not.</summary>
+        Warmup = 1,
+        /// <summary>Live round. The only phase in which tickets drain.</summary>
+        Playing = 2,
+        /// <summary>Round decided; the scoreboard is up and the reset timer is running.</summary>
+        Ended = 3,
+        /// <summary>Tearing the world down. A single tick in practice — see <c>MatchStateMachine</c>.</summary>
+        Resetting = 4,
+    }
+
+    /// <summary>
+    /// The team that owns something, where "nobody" is a legal answer.
+    /// </summary>
+    /// <remarks>
+    /// A <c>byte</c> rather than a nullable, because it goes on the wire. 255 is used for the
+    /// absent case instead of 2 so that a client which switches on 0/1 and forgets the third
+    /// case falls through rather than rendering the neutral state as a third team.
+    /// </remarks>
+    public static class TeamId
+    {
+        public const byte Team0 = 0;
+        public const byte Team1 = 1;
+        /// <summary>Neutral, contested, or undecided.</summary>
+        public const byte None = 255;
+    }
+
+    /// <summary>S_CAPTURE_POINT flags byte. Layout defined by <see cref="CapturePointMessage"/>.</summary>
+    [Flags]
+    public enum CaptureFlags : byte
+    {
+        None = 0,
+        /// <summary>
+        /// Both teams have somebody inside the radius. NOT derivable from the ownership
+        /// value — a point can be fully owned and contested at the same time — so it is the
+        /// one bit here that is genuinely new information.
+        /// </summary>
+        Contested = 1 << 0,
+    }
+
     /// <summary>S_DEATH causeOfDeath. protocol-spec.md section 4.6.</summary>
     public enum CauseOfDeath : byte
     {
