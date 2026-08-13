@@ -37,12 +37,15 @@ namespace Ironfront.MasterServer.Tests
         {
             using var database = CreateDatabase();
             var auth = new AuthService(database);
-            auth.Register("PlayerOne", PasswordHash, "Player One");
+            // Lowercase on purpose: AuthService rejects an uppercase username outright, so
+            // "PlayerOne" would come back InvalidUsername and never reach the credential check
+            // this test is about. See UppercaseUsernameIsRejected.
+            auth.Register("playerone", PasswordHash, "Player One");
 
             for (int attempt = 0; attempt < 5; attempt++)
-                Assert.Equal(ErrorCode.WrongCredentials, auth.Login("PlayerOne", OtherHash(), 1).ErrorCode);
+                Assert.Equal(ErrorCode.WrongCredentials, auth.Login("playerone", OtherHash(), 1).ErrorCode);
 
-            Assert.Equal(ErrorCode.RateLimited, auth.Login("PlayerOne", OtherHash(), 1).ErrorCode);
+            Assert.Equal(ErrorCode.RateLimited, auth.Login("playerone", OtherHash(), 1).ErrorCode);
         }
 
         [Fact]
