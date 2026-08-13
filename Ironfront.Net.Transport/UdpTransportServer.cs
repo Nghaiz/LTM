@@ -72,6 +72,12 @@ namespace Ironfront.Net.Transport
 
         public int ConnectionCount => _connectionCount;
 
+        /// <summary>
+        /// Controls the ACK history for connections created by <see cref="Start"/>. Keep enabled
+        /// except for the Phase 4 ACK-bitfield comparison run.
+        /// </summary>
+        public bool AckBitfieldEnabled { get; set; } = true;
+
         /// <summary>Server simulation tick copied into CONNECT_ACCEPTED.</summary>
         public uint ServerTick { get; set; }
 
@@ -355,7 +361,11 @@ namespace Ironfront.Net.Transport
             if (_freeIds.Count == 0) return;
             ushort connectionId = _freeIds.Dequeue();
             if (playerId != 0) _playerIdToConnection[playerId] = connectionId;
-            Connection connection = new Connection(CloneEndpoint(remote), isClient: false, _peer!.Pool);
+            Connection connection = new Connection(
+                CloneEndpoint(remote),
+                isClient: false,
+                pool: _peer!.Pool,
+                ackBitfieldEnabled: AckBitfieldEnabled);
             connection.PlayerId = playerId;
             connection.AttachSender(SendRaw);
             connection.ActivateServer(connectionId, _nowMs);

@@ -16,10 +16,11 @@ namespace Ironfront.Net.Transport.Bench
         {
             int seconds = ParseSeconds(args);
             int connections = ParseConnections(args);
+            bool ackBitfield = ParseAckBitfield(args);
             Console.WriteLine("Ironfront transport benchmark (hand-rolled, .NET 8)");
             RunMicrobenchmarks();
             RunPoolComparison();
-            RunConnectionLoad(seconds, connections);
+            RunConnectionLoad(seconds, connections, ackBitfield);
             return 0;
         }
 
@@ -155,9 +156,10 @@ namespace Ironfront.Net.Transport.Bench
                 + $"alloc={allocated / (double)iterations,8:F2} B/op gen0={gen0Collections}");
         }
 
-        private static void RunConnectionLoad(int seconds, int connectionCount)
+        private static void RunConnectionLoad(int seconds, int connectionCount, bool ackBitfield)
         {
             using var server = new UdpTransportServer();
+            server.AckBitfieldEnabled = ackBitfield;
             var clients = new UdpTransportClient?[connectionCount];
             long messages = 0;
             server.OnValidateTicket += _ => true;
@@ -178,6 +180,7 @@ namespace Ironfront.Net.Transport.Bench
                     for (int batch = 0; batch < 4 && nextClient < clients.Length; batch++)
                     {
                         clients[nextClient] = new UdpTransportClient();
+                        clients[nextClient]!.AckBitfieldEnabled = ackBitfield;
                         clients[nextClient]!.Connect(
                             "127.0.0.1", server.Port,
                             new byte[ProtocolConstants.JOIN_TICKET_SIZE]);
@@ -245,6 +248,7 @@ namespace Ironfront.Net.Transport.Bench
             for (int i = 0; i < clients.Length; i++) clients[i]!.Dispose();
             Console.WriteLine(
                 $"load: conns={connectedCount}, seconds={seconds}, messages={messages}, "
+                + $"ack-bitfield={(ackBitfield ? "on" : "off")}, "
                 + $"thread-alloc={allocated} B, send={sendAlloc} B, poll={pollAlloc} B, "
                 + $"server-poll={serverPollAlloc} B, client-poll={clientPollAlloc} B, "
                 + $"cpu={cpuPercent:F2}% of one core, working-set-delta={workingSetDelta} B");
@@ -292,6 +296,19 @@ namespace Ironfront.Net.Transport.Bench
                 if (int.TryParse(args[i + 1], out int value) && value > 0 && value <= 64) return value;
             }
             return ProtocolConstants.MAX_PLAYERS;
+        }
+
+        private static bool ParseAckBitfield(string[] args)
+        {
+            for (int i = 0; i + 1 < args.Length; i++)
+            {
+                if (!string.Equals(args[i], "--ack-bitfield", StringComparison.OrdinalIgnoreCase)) continue;
+                return !string.Equals(args[i + 1], "off", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(args[i + 1], "false", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(args[i + 1], "0", StringComparison.OrdinalIgnoreCase);
+            }
+
+            return true;
         }
     }
 }

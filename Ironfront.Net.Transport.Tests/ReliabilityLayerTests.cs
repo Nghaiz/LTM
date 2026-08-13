@@ -57,6 +57,16 @@ namespace Ironfront.Net.Transport.Tests
         }
 
         [Fact]
+        public void AckBitfieldCanBeDisabledForTheComparisonExperiment()
+        {
+            var reliability = new ReliabilityLayer { AckBitfieldEnabled = false };
+            reliability.OnPacketReceived(10);
+            reliability.OnPacketReceived(11);
+
+            Assert.Equal(((ushort)11, 0u), reliability.BuildAck());
+        }
+
+        [Fact]
         public void AReorderedPacketSetsItsSpecificHistoryBit()
         {
             var reliability = new ReliabilityLayer();
@@ -136,6 +146,20 @@ namespace Ironfront.Net.Transport.Tests
             reliability.Update(62, (_, _) => { });
 
             Assert.Equal(1, reliability.PacketsLost);
+        }
+
+        [Fact]
+        public void RetryMetricsCountDistinctPacketsAndEveryResendSeparately()
+        {
+            var reliability = new ReliabilityLayer();
+            reliability.OnPacketSent(0, new byte[] { 0xAB }, true, 0);
+
+            reliability.Update(31, (_, _) => { });
+            reliability.Update(62, (_, _) => { });
+
+            Assert.Equal(1, reliability.ReliablePacketsSent);
+            Assert.Equal(1, reliability.ReliablePacketsRetried);
+            Assert.Equal(2, reliability.ReliablePacketsResent);
         }
 
         [Fact]

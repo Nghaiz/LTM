@@ -14,7 +14,7 @@
 | Experiment | Current evidence | Status |
 |---|---|---|
 | UDP vs TCP under 0/5/15/30% loss | Local UDP/simulator evidence; no approved TCP impairment run | Pending external run |
-| ACK bitfield on/off | ACK implementation/tests; no comparative run | Pending experiment harness/data |
+| ACK bitfield on/off | Runtime flag plus reproducible benchmark modes `--ack-bitfield on|off`; no lossy comparative table yet | Harness ready; comparative data pending |
 | Head-of-line blocking | Channel semantics/tests; no p99 comparison table | Pending experiment harness/data |
 | Congestion on/off at 20% loss | Hysteresis tests and local benchmark; no chart | Pending experiment harness/data |
 | BufferPool vs ArrayPool | Reproducible 1M-operation runner now covers `new byte[]`, `BufferPool`, `ArrayPool.Shared` and `ArrayPool.Create` | Local run complete; not a cross-machine claim |
@@ -40,10 +40,10 @@ The run was performed on Windows with .NET 8 Release binaries. The pool comparis
 
 | Implementation | ns/op | Alloc/op | Gen0 collections |
 |---|---:|---:|---:|
-| `new byte[1200]` | 17.5 | 1224.00 B | 146 |
-| Hand-written `BufferPool` | 10.2 | 0.00 B | 0 |
-| `ArrayPool<byte>.Shared` | 18.8 | 0.00 B | 0 |
-| `ArrayPool<byte>.Create(1200,256)` | 18.4 | 0.00 B | 0 |
+| `new byte[1200]` | 16.7 | 1224.00 B | 146 |
+| Hand-written `BufferPool` | 10.4 | 0.00 B | 0 |
+| `ArrayPool<byte>.Shared` | 17.4 | 0.00 B | 0 |
+| `ArrayPool<byte>.Create(1200,256)` | 19.4 | 0.00 B | 0 |
 
 These are local benchmark observations, not universal performance guarantees. The benchmark
 also completed the local 16-connection load window; the VPS 10-minute scaling, TCP comparison
@@ -53,8 +53,12 @@ The same smoke benchmark completed 64 local connections in one run (`conns=64`, 
 `cpu=7.76% of one core`). This is a reproducibility check, not the required 10-minute VPS
 capacity result or a completed scalability chart.
 
+The paired ACK smoke runs completed 16 local connections: `ack-bitfield=on` produced 496 messages
+and `ack-bitfield=off` produced 480 messages. This verifies the experiment switch and handshake
+compatibility only; it is not the required lossy-network comparison table.
+
 ## Test evidence
 
-The full Release solution run passed 605 tests: Protocol 198, Replication 284, Transport 81 and
+The full Release solution run passed 726 tests: Protocol 198, Replication 403, Transport 83 and
 MasterServer 42. The repository therefore exceeds the 60-test floor; the mandatory eight-hour
 soak remains an external run.

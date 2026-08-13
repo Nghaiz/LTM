@@ -9,6 +9,10 @@ namespace Ironfront.Tools.PacketReplay
 {
     internal static class Program
     {
+        // The wire sequence wraps after 36 minutes at 30 Hz. A duplicate inside this bounded
+        // window can still be a resend; a much later occurrence is a new sequence generation.
+        private const uint RetransmissionWindowMs = 15_000;
+
         public static int Main(string[] args)
         {
             if (!TryParse(args, out string? path, out Options options, out string? error))
@@ -82,9 +86,12 @@ namespace Ironfront.Tools.PacketReplay
             long estimatedLoss = 0;
             int longestBurst = 0;
             var previous = new Dictionary<SequenceKey, ushort>();
-            var seenOutgoing = new HashSet<PacketSequenceKey>();
+            var lastOutgoing = new Dictionary<PacketSequenceKey, uint>();
             var rtts = new List<double>();
-            var pending = new List<PendingPacket>();
+            var rttSamples = new List<RttSample>();
+            var pending = new Dictionary<PacketSequenceKey, PendingPacket>();
+            var retransmitted = new HashSet<PacketSequenceKey>();
+            int acknowledgedRetransmits = 0;
             uint duration = 0;
 
             for (int i = 0; i < records.Count; i++)
@@ -103,9 +110,21 @@ namespace Ironfront.Tools.PacketReplay
                 var key = new SequenceKey(record.Outgoing, header.ConnectionId);
                 if (record.Outgoing)
                 {
-                    if (!seenOutgoing.Add(new PacketSequenceKey(key, header.Sequence))) retransmits++;
-                    if (header.IsReliable)
-                        pending.Add(new PendingPacket(key, header.Sequence, record.TimestampMs));
+                    var packetKey = new PacketSequenceKey(key, header.Sequence);
+                    bool isRetransmit = lastOutgoing.TryGetValue(packetKey, out uint previousTimestamp)
+                        && record.TimestampMs >= previousTimestamp
+                        && record.TimestampMs - previousTimestamp <= RetransmissionWindowMs;
+                    lastOutgoing[packetKey] = record.TimestampMs;
+                    if (isRetransmit)
+                    {
+                        retransmits++;
+                        if (header.IsReliable) retransmitted.Add(packetKey);
+                    }
+                    else if (header.IsReliable)
+                    {
+                        retransmitted.Remove(packetKey);
+                        pending[packetKey] = new PendingPacket(record.TimestampMs);
+                    }
                 }
                 else
                 {
@@ -121,16 +140,32 @@ namespace Ironfront.Tools.PacketReplay
                         }
                     }
 
-                    for (int pendingIndex = pending.Count - 1; pendingIndex >= 0; pendingIndex--)
+                    var acknowledged = new List<PacketSequenceKey>();
+                    foreach (KeyValuePair<PacketSequenceKey, PendingPacket> pair in pending)
                     {
-                        PendingPacket packet = pending[pendingIndex];
-                        if (!packet.Key.Direction || record.Outgoing
-                            || packet.Key.ConnectionId != header.ConnectionId
-                            || !GspHeader.IsAcked(packet.Sequence, header.Ack, header.AckBitfield))
+                        PacketSequenceKey packetKey = pair.Key;
+                        if (!packetKey.Direction.Direction
+                            || record.Outgoing
+                            || packetKey.Direction.ConnectionId != header.ConnectionId
+                            || !GspHeader.IsAcked(packetKey.Sequence, header.Ack, header.AckBitfield))
                             continue;
-                        rtts.Add(record.TimestampMs - packet.TimestampMs);
-                        pending.RemoveAt(pendingIndex);
+
+                        acknowledged.Add(packetKey);
+                        if (retransmitted.Remove(packetKey))
+                        {
+                            acknowledgedRetransmits++;
+                            continue;
+                        }
+
+                        double rttMs = record.TimestampMs - pair.Value.TimestampMs;
+                        rtts.Add(rttMs);
+                        rttSamples.Add(new RttSample(record.TimestampMs, rttMs));
                     }
+
+                    for (int acknowledgedIndex = 0;
+                         acknowledgedIndex < acknowledged.Count;
+                         acknowledgedIndex++)
+                        pending.Remove(acknowledged[acknowledgedIndex]);
                 }
 
                 if (!previous.TryGetValue(key, out ushort previousSequence)
@@ -146,8 +181,36 @@ namespace Ironfront.Tools.PacketReplay
             Console.WriteLine($"Estimated receive loss: {lossPercent:F2}%");
             Console.WriteLine($"Longest loss burst: {longestBurst} packets");
             Console.WriteLine($"Retransmits (duplicate outgoing sequence): {retransmits}");
+            Console.WriteLine(
+                $"Retransmits later acknowledged (not provably redundant): {acknowledgedRetransmits}");
             PrintRtt(rtts);
-            Console.WriteLine("Congestion mode changes: unavailable (mode is not encoded on the wire)");
+            PrintCongestionChanges(rttSamples);
+        }
+
+        private static void PrintCongestionChanges(List<RttSample> samples)
+        {
+            if (samples.Count == 0)
+            {
+                Console.WriteLine("Congestion mode changes: no RTT samples available");
+                return;
+            }
+
+            samples.Sort((left, right) => left.TimestampMs.CompareTo(right.TimestampMs));
+            var congestion = new CongestionControl();
+            int changes = 0;
+            uint previousTimestamp = samples[0].TimestampMs;
+            for (int i = 0; i < samples.Count; i++)
+            {
+                RttSample sample = samples[i];
+                float deltaSeconds = Math.Max(0f, sample.TimestampMs - previousTimestamp) / 1000f;
+                CongestionControl.Mode before = congestion.CurrentMode;
+                congestion.Update(deltaSeconds, (float)sample.RttMs);
+                if (before != congestion.CurrentMode) changes++;
+                previousTimestamp = sample.TimestampMs;
+            }
+
+            Console.WriteLine(
+                $"Congestion mode changes (inferred from ACK RTT): {changes}");
         }
 
         private static bool IsDataStreamPacket(in GspHeader header)
@@ -266,8 +329,8 @@ namespace Ironfront.Tools.PacketReplay
                 Sequence = sequence;
             }
 
-            private SequenceKey Direction { get; }
-            private ushort Sequence { get; }
+            public SequenceKey Direction { get; }
+            public ushort Sequence { get; }
             public bool Equals(PacketSequenceKey other)
                 => Direction.Equals(other.Direction) && Sequence == other.Sequence;
             public override bool Equals(object? obj)
@@ -277,16 +340,24 @@ namespace Ironfront.Tools.PacketReplay
 
         private readonly struct PendingPacket
         {
-            public PendingPacket(SequenceKey key, ushort sequence, uint timestampMs)
+            public PendingPacket(uint timestampMs)
             {
-                Key = key;
-                Sequence = sequence;
                 TimestampMs = timestampMs;
             }
 
-            public SequenceKey Key { get; }
-            public ushort Sequence { get; }
             public uint TimestampMs { get; }
+        }
+
+        private readonly struct RttSample
+        {
+            public RttSample(uint timestampMs, double rttMs)
+            {
+                TimestampMs = timestampMs;
+                RttMs = rttMs;
+            }
+
+            public uint TimestampMs { get; }
+            public double RttMs { get; }
         }
     }
 }

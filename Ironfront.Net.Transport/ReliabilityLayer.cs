@@ -50,6 +50,12 @@ namespace Ironfront.Net.Transport
 
         public int PendingReliableCount => _unackedReliableCount;
 
+        /// <summary>
+        /// Enables the 32-bit receive history in outgoing ACKs. Disabled only for the Phase 4
+        /// comparison experiment; production transport must leave it enabled.
+        /// </summary>
+        public bool AckBitfieldEnabled { get; set; } = true;
+
         /// <summary>Reliable transmissions that reached their first retransmission timeout.</summary>
         public long PacketsLost { get; private set; }
 
@@ -58,6 +64,9 @@ namespace Ironfront.Net.Transport
 
         /// <summary>Reliable retransmissions issued by this layer.</summary>
         public long ReliablePacketsResent { get; private set; }
+
+        /// <summary>Distinct reliable packets that needed at least one retransmission.</summary>
+        public long ReliablePacketsRetried { get; private set; }
 
         /// <summary>
         /// Estimated missing sequence numbers observed in forward jumps. Reordering can make
@@ -172,7 +181,8 @@ namespace Ironfront.Net.Transport
         }
 
         public (ushort ack, uint bitfield) BuildAck()
-            => (_hasReceived ? _remoteSequence : (ushort)0, _hasReceived ? _receivedBitfield : 0u);
+            => (_hasReceived ? _remoteSequence : (ushort)0,
+                _hasReceived && AckBitfieldEnabled ? _receivedBitfield : 0u);
 
         /// <summary>Applies the peer's cumulative ack and ack bitfield.</summary>
         public void ProcessIncomingAck(ushort ack, uint bitfield, double nowMs)
@@ -201,7 +211,11 @@ namespace Ironfront.Net.Transport
                     continue;
                 if (nowMs - packet.SentAtMs < rto) continue;
 
-                if (packet.ResendCount == 0) PacketsLost++;
+                if (packet.ResendCount == 0)
+                {
+                    PacketsLost++;
+                    ReliablePacketsRetried++;
+                }
                 packet.ResendCount++;
                 if (packet.ResendCount > MaxResends)
                 {
@@ -224,6 +238,7 @@ namespace Ironfront.Net.Transport
             HasAbandonedReliable = false;
             ReliablePacketsSent = 0;
             ReliablePacketsResent = 0;
+            ReliablePacketsRetried = 0;
             PacketsLost = 0;
             PacketsMissingEstimated = 0;
         }

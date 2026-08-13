@@ -72,8 +72,8 @@ dotnet run --project tools/SpecChecker -c Release
 
 The packet logger records raw datagrams in a versioned `.ifpcap` format. The offline replay tool
 decodes headers, filters a time/connection window, estimates sequence gaps and correlates ACKs to
-RTT samples. It deliberately does not claim congestion mode from a capture because that state is
-not on the wire.
+RTT samples. It reports congestion changes inferred from those RTT samples; the mode is not
+authoritative because it is local control state and is not encoded on the wire.
 
 ## Experimental evidence
 

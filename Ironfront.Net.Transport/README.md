@@ -27,8 +27,12 @@ must survive the callback. The server-side ticket validator is fail-closed: no v
 validator returning `false`, rejects the connection.
 
 `TransportStats` exposes cumulative counters plus one-second byte-rate values. The two loss
-percentages are estimates: sent loss is based on reliable retransmission timeouts, while received
-loss is based on observed sequence gaps and can count reordering as loss.
+percentages are five-second estimates: sent loss counts distinct reliable packets that needed a
+retry, while received loss counts observed sequence gaps and can count reordering as loss.
+
+The ACK bitfield is enabled by default. `UdpTransportClient.AckBitfieldEnabled` and
+`UdpTransportServer.AckBitfieldEnabled` may be set before connecting/starting only for the Phase 4
+comparison run; production configuration must leave them enabled.
 
 ## Capture and replay
 
@@ -50,9 +54,16 @@ dotnet run --project Ironfront.Tools.PacketReplay -c Release -- artifacts/sessio
 dotnet run --project Ironfront.Tools.PacketReplay -c Release -- artifacts/session.ifpcap --filter conn=3 --from 12000 --to 15000
 ```
 
+The benchmark can run the ACK comparison with the history enabled or disabled:
+
+```powershell
+dotnet run --project Ironfront.Net.Transport.Bench -c Release -- --connections 16 --seconds 10 --ack-bitfield on
+dotnet run --project Ironfront.Net.Transport.Bench -c Release -- --connections 16 --seconds 10 --ack-bitfield off
+```
+
 The analyzer reports packet counts, invalid records, estimated sequence gaps, duplicate outgoing
-sequences, and RTT samples correlated through the GSP ACK plus bitfield. Congestion mode is not
-claimed from a capture because it is a local control state and is not encoded on the wire.
+sequences, and RTT samples correlated through the GSP ACK plus bitfield. Congestion mode changes
+are inferred from those RTT samples; they are diagnostic estimates, not authoritative wire data.
 
 ## Operational defaults
 

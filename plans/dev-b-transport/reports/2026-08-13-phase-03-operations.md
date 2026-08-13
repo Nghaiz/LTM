@@ -10,8 +10,8 @@
 - `PacketCaptureReader` validates the header/version and rejects truncated or oversized records.
 - `Ironfront.Tools.PacketReplay` supports replay filtering and `--analyze` sequence-gap,
   retransmit and ACK-correlated RTT summaries.
-- `TransportStats` now exposes byte rates, sent/received loss estimates, congestion mode, pending
-  fragments and pool rentals.
+- `TransportStats` now exposes byte rates, five-second sent/received loss estimates, congestion
+  mode, pending fragments and pool rentals.
 - `UdpPeer` logs at the socket boundary only when `IRONFRONT_PCAP` or an injected logger is used.
 - Reliability slot collisions fail loudly; challenge retries, endpoint reconnect denials and
   CONNECT_ACCEPTED metadata are explicit.
@@ -19,7 +19,7 @@
 ## Local evidence
 
 ```text
-Ironfront.Net.Transport.Tests: 81 passed, 0 failed
+Ironfront.Net.Transport.Tests: 83 passed, 0 failed
 PacketLoggerTests: capture round-trip, malformed capture cleanup and UdpPeer boundary logging
 ControlAndSocketTests: metadata and one-second diagnostic rate window
 ```
