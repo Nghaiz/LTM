@@ -53,16 +53,24 @@ namespace Ironfront.MasterServer.Lobby
         {
             var matched = new List<MatchmakeResult>();
             var grouped = new Dictionary<ushort, List<QueueEntry>>();
+            var relaxed = new List<QueueEntry>();
             foreach (QueueEntry entry in _queued.Values)
             {
-                ushort mapId = now - entry.EnqueuedAt >= 60_000 ? (ushort)0 : entry.PreferredMapId;
-                if (!grouped.TryGetValue(mapId, out List<QueueEntry>? entries))
+                if (now - entry.EnqueuedAt >= 60_000) { relaxed.Add(entry); continue; }
+                if (!grouped.TryGetValue(entry.PreferredMapId, out List<QueueEntry>? entries))
                 {
                     entries = new List<QueueEntry>();
-                    grouped.Add(mapId, entries);
+                    grouped.Add(entry.PreferredMapId, entries);
                 }
                 entries.Add(entry);
             }
+
+            // Someone past the 60 s mark has said "any map", so they belong in whichever group is
+            // closest to starting — not in a bucket of their own. Grouping them under map 0 as a
+            // separate key was the opposite of relaxing the constraint: it left a player who had
+            // already waited a minute able to match only with other one-minute waiters, so a
+            // relaxed player and a fresh map-5 player sat next to each other in the queue forever.
+            if (relaxed.Count > 0) AbsorbRelaxed(relaxed, grouped);
 
             foreach (KeyValuePair<ushort, List<QueueEntry>> group in grouped)
             {
@@ -87,6 +95,38 @@ namespace Ironfront.MasterServer.Lobby
             }
 
             return matched;
+        }
+
+        /// <summary>
+        /// Place every relaxed entry into the group closest to starting, longest waiter first. If
+        /// nobody is waiting on a specific map, the relaxed entries become a group of their own on
+        /// the lowest map any of them asked for.
+        /// </summary>
+        private static void AbsorbRelaxed(List<QueueEntry> relaxed, Dictionary<ushort, List<QueueEntry>> grouped)
+        {
+            relaxed.Sort(static (left, right) => left.EnqueuedAt.CompareTo(right.EnqueuedAt));
+            if (grouped.Count == 0)
+            {
+                grouped.Add(SelectRelaxedMap(relaxed), relaxed);
+                return;
+            }
+
+            foreach (QueueEntry entry in relaxed) FullestGroup(grouped).Add(entry);
+        }
+
+        /// <summary>Ties break on the lower map id, so a tick is reproducible.</summary>
+        private static List<QueueEntry> FullestGroup(Dictionary<ushort, List<QueueEntry>> grouped)
+        {
+            List<QueueEntry>? best = null;
+            ushort bestMapId = 0;
+            foreach (KeyValuePair<ushort, List<QueueEntry>> group in grouped)
+            {
+                if (best is not null && group.Value.Count <= best.Count && (group.Value.Count != best.Count || group.Key >= bestMapId)) continue;
+                best = group.Value;
+                bestMapId = group.Key;
+            }
+
+            return best!;
         }
 
         private static ushort SelectRelaxedMap(List<QueueEntry> entries)
