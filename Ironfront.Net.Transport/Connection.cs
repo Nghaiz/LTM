@@ -32,6 +32,9 @@ namespace Ironfront.Net.Transport
         private double _lastKeepAliveMs;
         private double _lastReceiveMs;
         private double _lastUpdateMs;
+        private double _statsWindowStartMs;
+        private long _statsWindowBytesSent;
+        private long _statsWindowBytesReceived;
         private int _connectAttempts;
         private bool _disposed;
         private TransportStats _stats;
@@ -140,6 +143,9 @@ namespace Ironfront.Net.Transport
             _lastReceiveMs = nowMs;
             _lastSendMs = nowMs;
             _lastUpdateMs = nowMs;
+            _statsWindowStartMs = nowMs;
+            _statsWindowBytesSent = 0;
+            _statsWindowBytesReceived = 0;
         }
 
         internal void UpdateEndpoint(EndPoint endpoint)
@@ -276,6 +282,17 @@ namespace Ironfront.Net.Transport
             _stats.JitterMs = JitterMs;
             _stats.PendingReliableCount = _reliability.PendingReliableCount;
             _stats.PacketsLost = _reliability.PacketsLost;
+            _stats.PacketLossPercentSent = _reliability.ReliablePacketsSent <= 0
+                ? 0f
+                : _reliability.PacketsLost * 100f / _reliability.ReliablePacketsSent;
+            long receivedDenominator = _stats.PacketsReceived + _reliability.PacketsMissingEstimated;
+            _stats.PacketLossPercentReceived = receivedDenominator <= 0
+                ? 0f
+                : _reliability.PacketsMissingEstimated * 100f / receivedDenominator;
+            _stats.CongestionMode = (int)_congestion.CurrentMode;
+            _stats.PendingFragmentGroups = _fragments.PendingGroupCount;
+            _stats.BufferPoolRented = _pool.RentedCount;
+            UpdateRateStats(nowMs);
         }
 
         /// <summary>
@@ -387,7 +404,7 @@ namespace Ironfront.Net.Transport
             switch (header.PacketType)
             {
                 case PacketType.ConnectChallenge:
-                    if (State != ConnectionState.Connecting
+                    if (State != ConnectionState.Connecting && State != ConnectionState.Challenged
                         || payload.Length != ConnectChallengePayload.Size
                         || !ConnectChallengePayload.TryParse(payload, out ConnectChallengePayload challenge))
                         return;
@@ -420,7 +437,14 @@ namespace Ironfront.Net.Transport
                     _lastReceiveMs = nowMs;
                     _lastSendMs = nowMs;
                     _connectAttempts = 0;
-                    Connected?.Invoke(new ConnectResult(accepted.ConnectionId, accepted.ServerTick));
+                    _statsWindowStartMs = nowMs;
+                    _statsWindowBytesSent = _stats.BytesSent;
+                    _statsWindowBytesReceived = _stats.BytesReceived;
+                    Connected?.Invoke(new ConnectResult(
+                        accepted.ConnectionId,
+                        accepted.ServerTick,
+                        accepted.MapId,
+                        accepted.MyPlayerId));
                     break;
 
                 case PacketType.ConnectDenied:
@@ -532,6 +556,28 @@ namespace Ironfront.Net.Transport
             _stats.BytesSent += length;
         }
 
+        private void UpdateRateStats(double nowMs)
+        {
+            if (_statsWindowStartMs <= 0.0)
+            {
+                _statsWindowStartMs = nowMs;
+                _statsWindowBytesSent = _stats.BytesSent;
+                _statsWindowBytesReceived = _stats.BytesReceived;
+                return;
+            }
+
+            double elapsed = nowMs - _statsWindowStartMs;
+            if (elapsed < 1000.0) return;
+
+            _stats.BytesPerSecondSent = (float)Math.Max(
+                0.0, (_stats.BytesSent - _statsWindowBytesSent) * 1000.0 / elapsed);
+            _stats.BytesPerSecondReceived = (float)Math.Max(
+                0.0, (_stats.BytesReceived - _statsWindowBytesReceived) * 1000.0 / elapsed);
+            _statsWindowStartMs = nowMs;
+            _statsWindowBytesSent = _stats.BytesSent;
+            _statsWindowBytesReceived = _stats.BytesReceived;
+        }
+
         private void WriteFlowControl(Span<byte> destination)
         {
             Endian.WriteU16LE(destination, 0, (ushort)_reliability.PendingReliableCount);
@@ -555,6 +601,7 @@ namespace Ironfront.Net.Transport
                 ConnectDenyReason.ServerFull => DisconnectReason.ServerFull,
                 ConnectDenyReason.ProtocolVersionMismatch => DisconnectReason.ProtocolMismatch,
                 ConnectDenyReason.Banned => DisconnectReason.Banned,
+                ConnectDenyReason.AlreadyConnected => DisconnectReason.AlreadyConnected,
                 _ => DisconnectReason.InvalidTicket,
             };
 

@@ -29,10 +29,7 @@ namespace Ironfront.Net.Transport
             {
                 if (_connection == null) return 0f;
                 TransportStats stats = _connection.Stats;
-                long originalSent = stats.PacketsSent - stats.PacketsResent;
-                return originalSent <= 0
-                    ? 0f
-                    : stats.PacketsLost * 100f / originalSent;
+                return stats.PacketLossPercentSent;
             }
         }
 

@@ -44,6 +44,19 @@ namespace Ironfront.Net.Transport.Tests
         }
 
         [Fact]
+        public void AnExactThirtyTwoPacketJumpKeepsTheOldestHistoryBit()
+        {
+            var reliability = new ReliabilityLayer();
+            reliability.OnPacketReceived(100);
+            reliability.OnPacketReceived(132);
+
+            (ushort ack, uint bitfield) = reliability.BuildAck();
+
+            Assert.Equal((ushort)132, ack);
+            Assert.Equal(1u << 31, bitfield);
+        }
+
+        [Fact]
         public void AReorderedPacketSetsItsSpecificHistoryBit()
         {
             var reliability = new ReliabilityLayer();
@@ -98,6 +111,7 @@ namespace Ironfront.Net.Transport.Tests
             reliability.ProcessIncomingAck(0, 0, 2000);
 
             Assert.Equal(1024, reliability.PendingReliableCount);
+            Assert.True(reliability.HasAbandonedReliable);
         }
 
         [Fact]

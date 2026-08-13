@@ -192,6 +192,52 @@ namespace Ironfront.Net.Transport.Tests
         }
 
         [Fact]
+        public void ConnectAcceptedCarriesServerMetadata()
+        {
+            using var server = new UdpTransportServer { ServerTick = 1234, MapId = 7 };
+            using var client = new UdpTransportClient();
+            ConnectResult result = default;
+            server.OnValidateTicket += _ => true;
+            client.OnConnected += value => result = value;
+            server.Start(0, 4);
+            client.Connect("127.0.0.1", server.Port, new byte[ProtocolConstants.JOIN_TICKET_SIZE]);
+
+            Pump(server, client, () => client.State == ConnectionState.Connected, 2000);
+
+            Assert.Equal((ushort)7, result.MapId);
+            Assert.Equal(1234u, result.ServerTick);
+            Assert.Equal(0u, result.MyPlayerId);
+        }
+
+        [Fact]
+        public void TransportStatsExposeRatesAndDiagnosticsAfterAWindow()
+        {
+            using var server = new UdpTransportServer();
+            using var client = new UdpTransportClient();
+            server.OnValidateTicket += _ => true;
+            server.Start(0, 4);
+            client.Connect("127.0.0.1", server.Port, new byte[ProtocolConstants.JOIN_TICKET_SIZE]);
+            Pump(server, client, () => client.State == ConnectionState.Connected, 2000);
+
+            DateTime until = DateTime.UtcNow.AddMilliseconds(1200);
+            while (DateTime.UtcNow < until)
+            {
+                client.Send((byte)ChannelId.InputSequenced, new byte[8], reliable: false);
+                server.Poll();
+                client.Poll();
+            }
+
+            TransportStats stats = client.Stats;
+            Assert.True(stats.BytesPerSecondSent > 0f);
+            Assert.True(stats.BytesPerSecondReceived > 0f);
+            Assert.Equal(0, stats.CongestionMode);
+            Assert.Equal(0, stats.PendingFragmentGroups);
+            Assert.InRange(stats.BufferPoolRented, 0, 2);
+            Assert.InRange(stats.PacketLossPercentSent, 0f, 100f);
+            Assert.InRange(stats.PacketLossPercentReceived, 0f, 100f);
+        }
+
+        [Fact]
         public void ReliableAckReportsTheConfiguredRoundTripLatency()
         {
             var serverConfig = new SimulatorConfig

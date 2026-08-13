@@ -21,6 +21,7 @@ namespace Ironfront.Net.Transport
         InvalidTicket    = 5,
         Banned           = 6,
         TransportError   = 7,
+        AlreadyConnected = 8,
     }
 
     /// <summary>Handed to the client when a handshake completes.</summary>
@@ -28,11 +29,20 @@ namespace Ironfront.Net.Transport
     {
         public readonly ushort ConnectionId;
         public readonly uint ServerTick;
+        public readonly ushort MapId;
+        public readonly uint MyPlayerId;
 
         public ConnectResult(ushort connectionId, uint serverTick)
+            : this(connectionId, serverTick, 0, 0)
+        {
+        }
+
+        public ConnectResult(ushort connectionId, uint serverTick, ushort mapId, uint myPlayerId)
         {
             ConnectionId = connectionId;
             ServerTick   = serverTick;
+            MapId        = mapId;
+            MyPlayerId    = myPlayerId;
         }
     }
 
@@ -43,14 +53,29 @@ namespace Ironfront.Net.Transport
         public readonly string RemoteAddress;
         public readonly float SmoothedRttMs;
         public readonly ConnectionState State;
+        public readonly uint PlayerId;
+        public readonly TransportStats Stats;
 
         public ConnectionInfo(
             ushort connectionId, string remoteAddress, float smoothedRttMs, ConnectionState state)
+            : this(connectionId, remoteAddress, smoothedRttMs, state, 0, default)
+        {
+        }
+
+        public ConnectionInfo(
+            ushort connectionId,
+            string remoteAddress,
+            float smoothedRttMs,
+            ConnectionState state,
+            uint playerId,
+            TransportStats stats)
         {
             ConnectionId  = connectionId;
             RemoteAddress = remoteAddress;
             SmoothedRttMs = smoothedRttMs;
             State         = state;
+            PlayerId      = playerId;
+            Stats         = stats;
         }
     }
 
@@ -61,6 +86,11 @@ namespace Ironfront.Net.Transport
         public long PacketsSent, PacketsReceived, PacketsLost, PacketsResent;
         public float SmoothedRttMs, JitterMs;
         public int PendingReliableCount;
+        public float BytesPerSecondSent, BytesPerSecondReceived;
+        public float PacketLossPercentSent, PacketLossPercentReceived;
+        public int CongestionMode;
+        public int PendingFragmentGroups;
+        public int BufferPoolRented;
     }
 
     /// <summary>
