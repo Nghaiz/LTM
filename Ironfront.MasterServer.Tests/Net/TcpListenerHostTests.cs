@@ -197,7 +197,14 @@ namespace Ironfront.MasterServer.Tests.Net
                 // Generous, because this test is not about the deadline — it is about the
                 // heartbeat window, and the connection is authenticated below.
                 o.UnauthenticatedTimeout = TimeSpan.FromSeconds(30);
-                o.HeartbeatTimeout       = TimeSpan.FromMilliseconds(300);
+                // 1.5 s rather than 300 ms. The reaper is a plain
+                // `now - LastActivityMs > HeartbeatTimeout` comparison, so the window has to
+                // absorb the worst single `Task.Delay` overshoot on a loaded CI runner, not the
+                // average one. At 300 ms / 80 ms the slack was 220 ms per beat, and a shared
+                // windows-latest runner overshoots that often enough to fail the job (run
+                // 31727492322): the connection got reaped mid-loop and the remaining frames were
+                // counted against a connection that no longer existed.
+                o.HeartbeatTimeout       = TimeSpan.FromMilliseconds(1500);
             });
 
             TcpClient client = await harness.ConnectAsync();
@@ -213,12 +220,14 @@ namespace Ironfront.MasterServer.Tests.Net
             NetworkStream stream = client.GetStream();
             byte[] heartbeat = HeartbeatFrame();
 
-            // Beat every 80 ms for ~640 ms — comfortably past the 300 ms heartbeat window, so
-            // if the frames were not resetting the clock the connection would already be gone.
+            // Beat every 250 ms for ~2 s — past the 1.5 s heartbeat window, so if the frames
+            // were not resetting the clock the connection would already be gone. The property
+            // under test is the ratio (total run > window), not the absolute numbers; both were
+            // scaled up together so a slow beat cannot be mistaken for a silent connection.
             for (int i = 0; i < 8; i++)
             {
                 await stream.WriteAsync(heartbeat);
-                await Task.Delay(80);
+                await Task.Delay(250);
             }
 
             Assert.True(await MasterHostHarness.WaitUntilAsync(() => harness.Host.TotalHeartbeats >= 8));
