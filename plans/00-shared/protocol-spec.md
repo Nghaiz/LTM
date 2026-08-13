@@ -483,27 +483,27 @@ section is that mapping.
 // Ironfront.Net.Protocol/WeaponIds.cs
 public static class WeaponIds
 {
-    public const byte NONE = 0;              // no weapon, or one this build does not know
+    public const byte NONE              = 0;              // no weapon, or one this build does not know
 
-    public const byte RK44               = 1;
-    public const byte S_IND7             = 2;
-    public const byte S_IND7_SUPPRESSED  = 3;
-    public const byte EAGLE_76           = 4;
-    public const byte BEU_AW1            = 5;
-    public const byte SL_DEFENDER        = 6;
-    public const byte FRAG               = 7;
-    public const byte SPEARHEAD          = 8;
-    public const byte BINOCS             = 9;
-    public const byte AMMO_BAG           = 10;
-    public const byte MEDIPACK           = 11;
-    public const byte BIL_SCALPEL        = 12;
-    public const byte SIGNAL_DMR         = 13;
-    public const byte NV_GOGGLES         = 14;
-    public const byte RECON_LRR          = 15;
-    public const byte WRENCH             = 16;
-    public const byte SUPER_WRENCH       = 17;
+    public const byte RK44              = 1;
+    public const byte SIND7             = 2;
+    public const byte SIND7_SUPPRESSED  = 3;
+    public const byte EAGLE_76          = 4;
+    public const byte BEU_AW1           = 5;
+    public const byte SL_DEFENDER       = 6;
+    public const byte FRAG              = 7;
+    public const byte SPEARHEAD         = 8;
+    public const byte BINOCS            = 9;
+    public const byte AMMO_BAG          = 10;
+    public const byte MEDIPACK          = 11;
+    public const byte BIL_SCALPEL       = 12;
+    public const byte SIGNAL_DMR        = 13;
+    public const byte NV_GOGGLES        = 14;
+    public const byte RECON_LRR         = 15;
+    public const byte WRENCH            = 16;
+    public const byte SUPER_WRENCH      = 17;
 
-    public const byte MAX_ASSIGNED = 17;     // the next new weapon takes 18
+    public const byte MAX_ASSIGNED      = 17;     // the next new weapon takes 18
 }
 ```
 
