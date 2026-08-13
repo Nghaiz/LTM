@@ -13,3 +13,7 @@ phase,condition,connections,duration_s,packets_or_messages,measured_rtt_ms,retra
 02,localhost load 30Hz warmed,64,20,38784,,,4384,CPU 0.39% of one core; send=0 B, poll=0 B after 12 s warm-up; 64/64 connected
 02,UdpPeer idle poll,1,1,0,,,0,100000 polls; 0 B/op
 02,UdpPeer receive path,1,,1000,,,,0.05 B/packet diagnostic average; steady connection load poll region remained 0 B
+03,packet capture and replay round-trip,1,,,,,,82 transport tests pass; no production pcap committed because captures may contain tickets
+04,ACK bitfield smoke on,16,1,496,,,,local handshake/load compatibility only; benchmark flag --ack-bitfield on
+04,ACK bitfield smoke off,16,1,480,,,,local handshake/load compatibility only; benchmark flag --ack-bitfield off
+04,BufferPool versus ArrayPool local,1,1,1000000,,,,Release .NET 8: BufferPool 10.4 ns/op; ArrayPool.Shared 17.4 ns/op; new byte[] 16.7 ns/op; 0 Gen0 for pools

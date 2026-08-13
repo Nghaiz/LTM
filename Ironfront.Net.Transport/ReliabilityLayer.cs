@@ -50,8 +50,29 @@ namespace Ironfront.Net.Transport
 
         public int PendingReliableCount => _unackedReliableCount;
 
+        /// <summary>
+        /// Enables the 32-bit receive history in outgoing ACKs. Disabled only for the Phase 4
+        /// comparison experiment; production transport must leave it enabled.
+        /// </summary>
+        public bool AckBitfieldEnabled { get; set; } = true;
+
         /// <summary>Reliable transmissions that reached their first retransmission timeout.</summary>
         public long PacketsLost { get; private set; }
+
+        /// <summary>Reliable packet records created by this layer.</summary>
+        public long ReliablePacketsSent { get; private set; }
+
+        /// <summary>Reliable retransmissions issued by this layer.</summary>
+        public long ReliablePacketsResent { get; private set; }
+
+        /// <summary>Distinct reliable packets that needed at least one retransmission.</summary>
+        public long ReliablePacketsRetried { get; private set; }
+
+        /// <summary>
+        /// Estimated missing sequence numbers observed in forward jumps. Reordering can make
+        /// this overestimate, so it is a diagnostic percentage rather than packet accounting.
+        /// </summary>
+        public long PacketsMissingEstimated { get; private set; }
 
         public bool HasReceivedSequence => _hasReceived;
 
@@ -90,6 +111,14 @@ namespace Ironfront.Net.Transport
         {
             int index = sequence % SentBufferSize;
             ref SentPacket old = ref _sent[index];
+            if (old.InUse && old.IsReliable && !old.Acked)
+            {
+                // Reusing a live slot would silently discard a packet that may still be needed
+                // by the ordered channel. The connection must fail loudly instead of allowing
+                // that channel to stall forever.
+                NetLog.Warn($"reliable sequence slot collision at {sequence}");
+                HasAbandonedReliable = true;
+            }
             ReleaseSlot(ref old);
 
             byte[]? copy = null;
@@ -98,6 +127,7 @@ namespace Ironfront.Net.Transport
                 copy = _pool.Rent();
                 data.CopyTo(copy);
                 _unackedReliableCount++;
+                ReliablePacketsSent++;
             }
 
             old = new SentPacket
@@ -129,9 +159,18 @@ namespace Ironfront.Net.Transport
             int distance = SequenceMath.Distance(sequence, _remoteSequence);
             if (distance > 0)
             {
-                _receivedBitfield = distance >= ProtocolConstants.ACK_BITFIELD_BITS
+                if (distance > 1)
+                    PacketsMissingEstimated += distance - 1;
+
+                uint shifted = distance > ProtocolConstants.ACK_BITFIELD_BITS
                     ? 0u
-                    : (_receivedBitfield << distance) | (1u << (distance - 1));
+                    : distance == ProtocolConstants.ACK_BITFIELD_BITS
+                        ? 0u
+                        : _receivedBitfield << distance;
+                uint newestHistory = distance > ProtocolConstants.ACK_BITFIELD_BITS
+                    ? 0u
+                    : 1u << (distance - 1);
+                _receivedBitfield = shifted | newestHistory;
                 _remoteSequence = sequence;
                 return;
             }
@@ -142,7 +181,8 @@ namespace Ironfront.Net.Transport
         }
 
         public (ushort ack, uint bitfield) BuildAck()
-            => (_hasReceived ? _remoteSequence : (ushort)0, _hasReceived ? _receivedBitfield : 0u);
+            => (_hasReceived ? _remoteSequence : (ushort)0,
+                _hasReceived && AckBitfieldEnabled ? _receivedBitfield : 0u);
 
         /// <summary>Applies the peer's cumulative ack and ack bitfield.</summary>
         public void ProcessIncomingAck(ushort ack, uint bitfield, double nowMs)
@@ -171,7 +211,11 @@ namespace Ironfront.Net.Transport
                     continue;
                 if (nowMs - packet.SentAtMs < rto) continue;
 
-                if (packet.ResendCount == 0) PacketsLost++;
+                if (packet.ResendCount == 0)
+                {
+                    PacketsLost++;
+                    ReliablePacketsRetried++;
+                }
                 packet.ResendCount++;
                 if (packet.ResendCount > MaxResends)
                 {
@@ -182,6 +226,7 @@ namespace Ironfront.Net.Transport
                 }
 
                 resend(packet.Data, packet.Length);
+                ReliablePacketsResent++;
                 packet.SentAtMs = nowMs;
             }
         }
@@ -191,6 +236,11 @@ namespace Ironfront.Net.Transport
             for (int i = 0; i < _sent.Length; i++) ReleaseSlot(ref _sent[i]);
             _unackedReliableCount = 0;
             HasAbandonedReliable = false;
+            ReliablePacketsSent = 0;
+            ReliablePacketsResent = 0;
+            ReliablePacketsRetried = 0;
+            PacketsLost = 0;
+            PacketsMissingEstimated = 0;
         }
 
         private void AckPacket(ushort sequence, double nowMs)
@@ -218,7 +268,9 @@ namespace Ironfront.Net.Transport
 
             float delta = (float)sampleMs - SmoothedRttMs;
             JitterMs += 0.25f * (Math.Abs(delta) - JitterMs);
-            SmoothedRttMs += 0.125f * delta;
+            // Keep the EWMA coefficient in lockstep with protocol-spec.md §8. The jitter
+            // estimate remains a local diagnostic input to the bounded RTO calculation.
+            SmoothedRttMs = SmoothedRttMs * 0.9f + (float)sampleMs * 0.1f;
         }
 
         private void ReleaseSlot(ref SentPacket packet)

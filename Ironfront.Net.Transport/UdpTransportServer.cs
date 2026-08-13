@@ -30,6 +30,7 @@ namespace Ironfront.Net.Transport
             public ulong ClientSalt;
             public ulong ServerSalt;
             public ushort ConnectionId;
+            public uint PlayerId;
             public double CreatedMs;
         }
 
@@ -70,6 +71,18 @@ namespace Ironfront.Net.Transport
             => _simulatorConfig = simulatorConfig;
 
         public int ConnectionCount => _connectionCount;
+
+        /// <summary>
+        /// Controls the ACK history for connections created by <see cref="Start"/>. Keep enabled
+        /// except for the Phase 4 ACK-bitfield comparison run.
+        /// </summary>
+        public bool AckBitfieldEnabled { get; set; } = true;
+
+        /// <summary>Server simulation tick copied into CONNECT_ACCEPTED.</summary>
+        public uint ServerTick { get; set; }
+
+        /// <summary>Map identifier copied into CONNECT_ACCEPTED.</summary>
+        public ushort MapId { get; set; }
 
         public long PacketsFromUnknown { get; private set; }
 
@@ -241,7 +254,11 @@ namespace Ironfront.Net.Transport
                 return;
             }
 
-            if (_byEndpoint.ContainsKey(key)) return;
+            if (_byEndpoint.ContainsKey(key))
+            {
+                SendDenied(remote, header.Sequence, ConnectDenyReason.AlreadyConnected);
+                return;
+            }
 
             if (_connectionCount >= _maxConnections || _freeIds.Count == 0)
             {
@@ -297,7 +314,7 @@ namespace Ironfront.Net.Transport
                     == ConnectResponsePayload.ComputeResponse(
                         accepted.ClientSalt, accepted.ServerSalt))
             {
-                SendAccepted(accepted.Endpoint, header.Sequence, accepted.ConnectionId);
+                SendAccepted(accepted.Endpoint, header.Sequence, accepted.ConnectionId, accepted.PlayerId);
                 return;
             }
 
@@ -344,7 +361,11 @@ namespace Ironfront.Net.Transport
             if (_freeIds.Count == 0) return;
             ushort connectionId = _freeIds.Dequeue();
             if (playerId != 0) _playerIdToConnection[playerId] = connectionId;
-            Connection connection = new Connection(CloneEndpoint(remote), isClient: false, _peer!.Pool);
+            Connection connection = new Connection(
+                CloneEndpoint(remote),
+                isClient: false,
+                pool: _peer!.Pool,
+                ackBitfieldEnabled: AckBitfieldEnabled);
             connection.PlayerId = playerId;
             connection.AttachSender(SendRaw);
             connection.ActivateServer(connectionId, _nowMs);
@@ -360,9 +381,10 @@ namespace Ironfront.Net.Transport
                 ClientSalt = response.ClientSalt,
                 ServerSalt = serverSalt,
                 ConnectionId = connectionId,
+                PlayerId = playerId,
                 CreatedMs = _nowMs,
             };
-            SendAccepted(connection.RemoteEndPoint, header.Sequence, connectionId);
+            SendAccepted(connection.RemoteEndPoint, header.Sequence, connectionId, connection.PlayerId);
             OnClientConnected?.Invoke(connectionId, CreateInfo(connection));
         }
 
@@ -410,10 +432,11 @@ namespace Ironfront.Net.Transport
             SendControl(endpoint, PacketType.ConnectDenied, PacketFlags.None, requestSequence, 0, payload);
         }
 
-        private void SendAccepted(EndPoint endpoint, ushort responseSequence, ushort connectionId)
+        private void SendAccepted(
+            EndPoint endpoint, ushort responseSequence, ushort connectionId, uint playerId)
         {
             Span<byte> payload = stackalloc byte[ConnectAcceptedPayload.Size];
-            new ConnectAcceptedPayload(connectionId, 0, 0, 0).Write(payload);
+            new ConnectAcceptedPayload(connectionId, ServerTick, MapId, playerId).Write(payload);
             SendControl(
                 endpoint,
                 PacketType.ConnectAccepted,
@@ -489,7 +512,9 @@ namespace Ironfront.Net.Transport
                 connection.ConnectionId,
                 connection.RemoteEndPoint.ToString() ?? string.Empty,
                 connection.SmoothedRttMs,
-                connection.State);
+                connection.State,
+                connection.PlayerId,
+                connection.Stats);
 
         private static EndPoint CloneEndpoint(EndPoint endpoint)
         {

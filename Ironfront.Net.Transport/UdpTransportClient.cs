@@ -19,6 +19,12 @@ namespace Ironfront.Net.Transport
         public UdpTransportClient(SimulatorConfig? simulatorConfig = null)
             => _simulatorConfig = simulatorConfig;
 
+        /// <summary>
+        /// Controls the ACK history for a new connection. Keep enabled except for the Phase 4
+        /// ACK-bitfield comparison run; set it before <see cref="Connect"/>.
+        /// </summary>
+        public bool AckBitfieldEnabled { get; set; } = true;
+
         public ConnectionState State => _connection?.State ?? ConnectionState.Disconnected;
 
         public float SmoothedRttMs => _connection?.SmoothedRttMs ?? 0f;
@@ -29,10 +35,7 @@ namespace Ironfront.Net.Transport
             {
                 if (_connection == null) return 0f;
                 TransportStats stats = _connection.Stats;
-                long originalSent = stats.PacketsSent - stats.PacketsResent;
-                return originalSent <= 0
-                    ? 0f
-                    : stats.PacketsLost * 100f / originalSent;
+                return stats.PacketLossPercentSent;
             }
         }
 
@@ -69,7 +72,11 @@ namespace Ironfront.Net.Transport
             _peer = new UdpPeer(0, _simulatorConfig);
             EndPoint remote = new IPEndPoint(address, port);
             _peer.Connect(remote);
-            _connection = new Connection(remote, isClient: true, _peer.Pool);
+            _connection = new Connection(
+                remote,
+                isClient: true,
+                pool: _peer.Pool,
+                ackBitfieldEnabled: AckBitfieldEnabled);
             _connection.AttachSender(SendRaw);
             _connection.MessageReceived += payload => OnMessage?.Invoke(payload);
             _connection.Connected += result => OnConnected?.Invoke(result);

@@ -13,6 +13,7 @@ namespace Ironfront.Net.Transport
     {
         private const double HandshakeRetryMs = 250.0;
         private const int MaxHandshakeAttempts = 20;
+        private const int LossWindowBucketCount = 5;
 
         private readonly bool _isClient;
         private readonly BufferPool _pool;
@@ -23,6 +24,10 @@ namespace Ironfront.Net.Transport
         private readonly FlowControl _flow = new FlowControl();
         private readonly Action<ReadOnlyMemory<byte>> _deliverMessage;
         private readonly Action<byte[], int> _resendCallback;
+        private readonly long[] _lossReliableSent = new long[LossWindowBucketCount];
+        private readonly long[] _lossReliableRetried = new long[LossWindowBucketCount];
+        private readonly long[] _lossPacketsReceived = new long[LossWindowBucketCount];
+        private readonly long[] _lossPacketsMissing = new long[LossWindowBucketCount];
         private Action<byte[], int, EndPoint, double>? _send;
 
         private byte[] _joinTicket = Array.Empty<byte>();
@@ -32,16 +37,34 @@ namespace Ironfront.Net.Transport
         private double _lastKeepAliveMs;
         private double _lastReceiveMs;
         private double _lastUpdateMs;
+        private double _statsWindowStartMs;
+        private long _statsWindowBytesSent;
+        private long _statsWindowBytesReceived;
+        private double _lossBucketStartMs;
+        private int _lossBucketIndex;
+        private bool _statsWindowInitialized;
+        private bool _lossWindowInitialized;
+        private long _lastReliablePacketsSent;
+        private long _lastReliablePacketsRetried;
+        private long _lastPacketsReceived;
+        private long _lastPacketsMissing;
         private int _connectAttempts;
         private bool _disposed;
         private TransportStats _stats;
 
-        public Connection(EndPoint remoteEndPoint, bool isClient, BufferPool? pool = null)
+        public Connection(
+            EndPoint remoteEndPoint,
+            bool isClient,
+            BufferPool? pool = null,
+            bool ackBitfieldEnabled = true)
         {
             RemoteEndPoint = remoteEndPoint ?? throw new ArgumentNullException(nameof(remoteEndPoint));
             _isClient = isClient;
             _pool = pool ?? new BufferPool(256, ProtocolConstants.MTU_SAFE);
-            _reliability = new ReliabilityLayer(_pool);
+            _reliability = new ReliabilityLayer(_pool)
+            {
+                AckBitfieldEnabled = ackBitfieldEnabled,
+            };
             _channels = new ChannelSet(_pool);
             _fragments = new FragmentAssembler(_pool);
             _deliverMessage = DeliverMessage;
@@ -140,6 +163,7 @@ namespace Ironfront.Net.Transport
             _lastReceiveMs = nowMs;
             _lastSendMs = nowMs;
             _lastUpdateMs = nowMs;
+            ResetMetricWindows(nowMs);
         }
 
         internal void UpdateEndpoint(EndPoint endpoint)
@@ -276,6 +300,18 @@ namespace Ironfront.Net.Transport
             _stats.JitterMs = JitterMs;
             _stats.PendingReliableCount = _reliability.PendingReliableCount;
             _stats.PacketsLost = _reliability.PacketsLost;
+            UpdateLossWindow(nowMs);
+            _stats.PacketLossPercentSent = _windowReliableSent <= 0
+                ? 0f
+                : _windowReliableRetried * 100f / _windowReliableSent;
+            long receivedDenominator = _windowPacketsReceived + _windowPacketsMissing;
+            _stats.PacketLossPercentReceived = receivedDenominator <= 0
+                ? 0f
+                : _windowPacketsMissing * 100f / receivedDenominator;
+            _stats.CongestionMode = (int)_congestion.CurrentMode;
+            _stats.PendingFragmentGroups = _fragments.PendingGroupCount;
+            _stats.BufferPoolRented = _pool.RentedCount;
+            UpdateRateStats(nowMs);
         }
 
         /// <summary>
@@ -387,7 +423,7 @@ namespace Ironfront.Net.Transport
             switch (header.PacketType)
             {
                 case PacketType.ConnectChallenge:
-                    if (State != ConnectionState.Connecting
+                    if (State != ConnectionState.Connecting && State != ConnectionState.Challenged
                         || payload.Length != ConnectChallengePayload.Size
                         || !ConnectChallengePayload.TryParse(payload, out ConnectChallengePayload challenge))
                         return;
@@ -420,7 +456,12 @@ namespace Ironfront.Net.Transport
                     _lastReceiveMs = nowMs;
                     _lastSendMs = nowMs;
                     _connectAttempts = 0;
-                    Connected?.Invoke(new ConnectResult(accepted.ConnectionId, accepted.ServerTick));
+                    ResetMetricWindows(nowMs);
+                    Connected?.Invoke(new ConnectResult(
+                        accepted.ConnectionId,
+                        accepted.ServerTick,
+                        accepted.MapId,
+                        accepted.MyPlayerId));
                     break;
 
                 case PacketType.ConnectDenied:
@@ -532,6 +573,109 @@ namespace Ironfront.Net.Transport
             _stats.BytesSent += length;
         }
 
+        private void UpdateRateStats(double nowMs)
+        {
+            if (!_statsWindowInitialized)
+            {
+                _statsWindowStartMs = nowMs;
+                _statsWindowBytesSent = _stats.BytesSent;
+                _statsWindowBytesReceived = _stats.BytesReceived;
+                _statsWindowInitialized = true;
+                return;
+            }
+
+            double elapsed = nowMs - _statsWindowStartMs;
+            if (elapsed < 1000.0) return;
+
+            _stats.BytesPerSecondSent = (float)Math.Max(
+                0.0, (_stats.BytesSent - _statsWindowBytesSent) * 1000.0 / elapsed);
+            _stats.BytesPerSecondReceived = (float)Math.Max(
+                0.0, (_stats.BytesReceived - _statsWindowBytesReceived) * 1000.0 / elapsed);
+            _statsWindowStartMs = nowMs;
+            _statsWindowBytesSent = _stats.BytesSent;
+            _statsWindowBytesReceived = _stats.BytesReceived;
+        }
+
+        private long _windowReliableSent;
+        private long _windowReliableRetried;
+        private long _windowPacketsReceived;
+        private long _windowPacketsMissing;
+
+        private void ResetMetricWindows(double nowMs)
+        {
+            Array.Clear(_lossReliableSent, 0, _lossReliableSent.Length);
+            Array.Clear(_lossReliableRetried, 0, _lossReliableRetried.Length);
+            Array.Clear(_lossPacketsReceived, 0, _lossPacketsReceived.Length);
+            Array.Clear(_lossPacketsMissing, 0, _lossPacketsMissing.Length);
+            _lossBucketIndex = 0;
+            _lossBucketStartMs = nowMs;
+            _lossWindowInitialized = true;
+            _lastReliablePacketsSent = _reliability.ReliablePacketsSent;
+            _lastReliablePacketsRetried = _reliability.ReliablePacketsRetried;
+            _lastPacketsReceived = _stats.PacketsReceived;
+            _lastPacketsMissing = _reliability.PacketsMissingEstimated;
+
+            _statsWindowStartMs = nowMs;
+            _statsWindowBytesSent = _stats.BytesSent;
+            _statsWindowBytesReceived = _stats.BytesReceived;
+            _statsWindowInitialized = true;
+        }
+
+        private void UpdateLossWindow(double nowMs)
+        {
+            if (!_lossWindowInitialized)
+                ResetMetricWindows(nowMs);
+
+            double elapsed = nowMs - _lossBucketStartMs;
+            if (elapsed < 0.0)
+            {
+                ResetMetricWindows(nowMs);
+                elapsed = 0.0;
+            }
+
+            int elapsedBuckets = (int)(elapsed / 1000.0);
+            if (elapsedBuckets >= _lossReliableSent.Length)
+            {
+                ResetMetricWindows(nowMs);
+            }
+            else
+            {
+                for (int i = 0; i < elapsedBuckets; i++)
+                {
+                    _lossBucketIndex = (_lossBucketIndex + 1) % _lossReliableSent.Length;
+                    _lossReliableSent[_lossBucketIndex] = 0;
+                    _lossReliableRetried[_lossBucketIndex] = 0;
+                    _lossPacketsReceived[_lossBucketIndex] = 0;
+                    _lossPacketsMissing[_lossBucketIndex] = 0;
+                    _lossBucketStartMs += 1000.0;
+                }
+            }
+
+            AddDelta(_lossReliableSent, _reliability.ReliablePacketsSent, ref _lastReliablePacketsSent);
+            AddDelta(_lossReliableRetried, _reliability.ReliablePacketsRetried, ref _lastReliablePacketsRetried);
+            AddDelta(_lossPacketsReceived, _stats.PacketsReceived, ref _lastPacketsReceived);
+            AddDelta(_lossPacketsMissing, _reliability.PacketsMissingEstimated, ref _lastPacketsMissing);
+
+            _windowReliableSent = Sum(_lossReliableSent);
+            _windowReliableRetried = Sum(_lossReliableRetried);
+            _windowPacketsReceived = Sum(_lossPacketsReceived);
+            _windowPacketsMissing = Sum(_lossPacketsMissing);
+        }
+
+        private void AddDelta(long[] buckets, long current, ref long previous)
+        {
+            long delta = current - previous;
+            previous = current;
+            if (delta > 0) buckets[_lossBucketIndex] += delta;
+        }
+
+        private static long Sum(long[] values)
+        {
+            long total = 0;
+            for (int i = 0; i < values.Length; i++) total += values[i];
+            return total;
+        }
+
         private void WriteFlowControl(Span<byte> destination)
         {
             Endian.WriteU16LE(destination, 0, (ushort)_reliability.PendingReliableCount);
@@ -555,6 +699,7 @@ namespace Ironfront.Net.Transport
                 ConnectDenyReason.ServerFull => DisconnectReason.ServerFull,
                 ConnectDenyReason.ProtocolVersionMismatch => DisconnectReason.ProtocolMismatch,
                 ConnectDenyReason.Banned => DisconnectReason.Banned,
+                ConnectDenyReason.AlreadyConnected => DisconnectReason.AlreadyConnected,
                 _ => DisconnectReason.InvalidTicket,
             };
 
