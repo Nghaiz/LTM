@@ -327,20 +327,34 @@ Integration order, committing each step separately:
 
 | # | Criterion | How to verify | State |
 |---|---|---|---|
-| 1 | The server holds a steady 30 Hz tick with 48 actors | Log tick times, p99 < 33 ms | ✅ pacing / ⏳ under real load — `ServerTickScheduler` holds 30 Hz and clamps a 2 s stall to 3 ticks; measuring against Unity physics + AI needs a headless build |
+| 1 | The server holds a steady 30 Hz tick with 48 actors | Log tick times, p99 < 33 ms | ✅ pacing / ⏳ under real load — `ServerTickScheduler` holds 30 Hz and clamps a 2 s stall to 3 ticks. The Unity loop that puts physics + AI inside the measurement now exists (`Assets/Scripts/Net/Server/`); reading p99 off it is checklist **S4** |
 | 2 | Full snapshots round-trip bit-for-bit | Test | ✅ `FullSnapshotRoundTripsEveryField` |
 | 3 | Deltas with 20% packet loss end in a matching state | The Task 4 test | ✅ 1000 ticks × **4 seeds**, exact equality (not a tolerance) |
 | 4 | Deltas save ≥ 35% versus full snapshots | Measured on real data, not synthetic | ✅ **44.7%** over 595 snapshots at 48 actors |
 | 5 | Speed hacks are blocked (client sending moveX=moveZ=127) | Test: write a fake client sending malicious input | ✅ `ASpeedHackingClientIsClampedByTheServer` |
 | 6 | 3 ticks of missing input → the character still moves smoothly | Test with the simulator dropping input | ✅ coasts exactly 3 ticks, then stops |
-| 7 | 2 Unity clients see each other in sync | With A, on video | ⏳ **needs Editor.** Offline equivalent passes: server + `LoopbackTransport` + fake client converges at lan/typical/bad |
+| 7 | 2 Unity clients see each other in sync | With A, on video | ⏳ **blocked on Dev B, not on the Editor.** `LoopbackTransport` is in-process: one Editor can host the server and *one* client, never a second process. Two clients needs the UDP transport. The offline equivalent passes — server + loopback + fake client converges at lan/typical/bad |
 | 8 | Measured bandwidth ≤ 12 KB/s/client (before interest management) | Logs | ✅ **10.94 KB/s** incl. GSP header + framing |
-| 9 | 0 allocations per tick on the server | Unity Profiler | ✅ by construction / ⏳ profiled — fixed rings, pre-allocated buffers, no LINQ |
-| 10 | ≥ 45 tests total, all green | `dotnet test` | ✅ **283** |
+| 9 | 0 allocations per tick on the server | Unity Profiler | ✅ by construction / ⏳ profiled — fixed rings, pre-allocated buffers, cached per-player delegates, no LINQ. Checklist **S4** reads the number |
+| 10 | ≥ 45 tests total, all green | `dotnet test` | ✅ **297** |
 
-> **6 of 10 met, 2 met in the engine-free layer awaiting Unity confirmation, 2 blocked on the
-> Editor.** Full write-up, measurements and decisions:
+> **6 of 10 met, 3 met in code and awaiting an Editor run, 1 blocked on Dev B's UDP transport.**
+> Full write-up, measurements and decisions:
 > [`reports/2026-08-12-phase-01-snapshot.md`](../reports/2026-08-12-phase-01-snapshot.md).
+>
+> **Task 1's Unity half has landed.** `ServerTickLoop` is split into `ServerInputStage` (-200)
+> and `ServerSnapshotStage` (+200) with the loop holding state between them, exactly as trap 1
+> requires — but the ordering is declared in `[DefaultExecutionOrder]` on the components rather
+> than entered into `ProjectSettings/ScriptExecutionOrder`. That removes a cross-owner dependency
+> on Dev A for a value that never changes, and it keeps the ordering visible in a diff and
+> present for anyone who drops these scripts into another project.
+>
+> **The loop is not driven by the FixedUpdate count**, and cannot be: `IngameMenuUi.cs:29` and
+> `FpsActorController.cs:497` both assign `Time.fixedDeltaTime = Time.timeScale / 60f` at
+> runtime, so FixedUpdate runs at 60 Hz and the 0.02 in `TimeManager.asset` never applies. The
+> scheduler is fed the wall clock and reports how many 30 Hz ticks are owed. This is decision A5
+> option B carried into the server, and it is why Task 1's sketched
+> `Time.fixedDeltaTime = 1f / SIM_TICK_RATE` is deliberately *not* in the shipped bootstrap.
 >
 > **Deviation from Task 3's sketch:** snapshots stay **byte-aligned** per the frozen spec § 4.3
 > rather than bit-packing health/weapon/ammo/team. The sketch predates the v1.0.0 freeze, and

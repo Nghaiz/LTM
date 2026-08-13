@@ -119,7 +119,11 @@ namespace Ironfront.Net.Transport
 
         event Action<ushort, ReadOnlyMemory<byte>> OnMessage;
 
-        /// <summary>Return false to reject the join ticket (protocol-spec.md section 12).</summary>
+        /// <summary>
+        /// Validates the HMAC/expiry/player policy for a join ticket. Every registered
+        /// validator must return <c>true</c>; if no validator is registered, UDP connections
+        /// are rejected (fail-closed). The transport does not know the shared secret itself.
+        /// </summary>
         event Func<ReadOnlyMemory<byte>, bool> OnValidateTicket;
 
         event Action<ushort, ConnectionInfo> OnClientConnected;

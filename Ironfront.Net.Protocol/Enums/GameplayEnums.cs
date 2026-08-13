@@ -95,6 +95,46 @@ namespace Ironfront.Net.Protocol
         Headshot = 1 << 1,
     }
 
+    /// <summary>
+    /// S_SPAWN_ACTOR flags byte. Layout defined by <see cref="SpawnActorMessage"/>, not by
+    /// the spec — see that type's remarks.
+    /// </summary>
+    [Flags]
+    public enum SpawnFlags : byte
+    {
+        None = 0,
+        /// <summary>Server-driven AI. The client never predicts these.</summary>
+        IsBot = 1 << 0,
+        /// <summary>The receiving client's own player. Drives camera + prediction attachment.</summary>
+        IsLocalPlayer = 1 << 1,
+    }
+
+    /// <summary>
+    /// S_DESPAWN_ACTOR reason. Layout defined by <see cref="DespawnActorMessage"/>, not by
+    /// the spec.
+    /// </summary>
+    public enum DespawnReason : byte
+    {
+        /// <summary>Player disconnected or bot was removed. The id may be reused later.</summary>
+        Left = 0,
+        /// <summary>Destroyed in the world. Distinct from death, which keeps the actor.</summary>
+        Destroyed = 1,
+        /// <summary>
+        /// Left the viewer's interest set. Reserved — the v1 server never sends it, because
+        /// interest management keeps every actor inside 500 m at Far rather than culling it.
+        /// </summary>
+        Culled = 2,
+    }
+
+    /// <summary>S_EXPLOSION kind. Layout defined by <see cref="ExplosionMessage"/>, not by the spec.</summary>
+    public enum ExplosionKind : byte
+    {
+        Grenade = 0,
+        Rocket = 1,
+        Vehicle = 2,
+        Environment = 3,
+    }
+
     /// <summary>S_DEATH causeOfDeath. protocol-spec.md section 4.6.</summary>
     public enum CauseOfDeath : byte
     {

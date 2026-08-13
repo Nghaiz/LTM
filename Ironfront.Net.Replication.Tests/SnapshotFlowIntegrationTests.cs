@@ -111,11 +111,15 @@ namespace Ironfront.Net.Replication.Tests
             private readonly LoopbackTransport _wire;
             private readonly ServerTickScheduler _scheduler = new ServerTickScheduler();
             private readonly WorldSnapshot _world = new WorldSnapshot();
-            private readonly byte[] _snapshotBody = new byte[ProtocolConstants.MAX_PAYLOAD];
+            private readonly ServerMessageRouter _router = new ServerMessageRouter();
+
+            // Sized to the body budget, not to MAX_PAYLOAD. A body allowed to fill the whole
+            // datagram leaves no room for the 6 bytes of framing around it, and the write would
+            // fail at the last step with the snapshot already filed as a baseline candidate.
+            private readonly byte[] _snapshotBody = new byte[ServerPayloadWriter.MaxSnapshotBodySize];
             private readonly byte[] _payload = new byte[ProtocolConstants.MAX_PAYLOAD];
             private readonly byte[] _inputBody = new byte[64];
             private readonly byte[] _ackBody = new byte[AckBaselineMessage.Size];
-            private readonly InputFrame[] _inputScratch = new InputFrame[ClientInputMessage.MaxFrames];
             private readonly InputFrame[] _recentInput = new InputFrame[ProtocolConstants.INPUT_REDUNDANCY];
 
             private readonly int _actorCount;
@@ -260,15 +264,16 @@ namespace Ironfront.Net.Replication.Tests
             {
                 _world.ServerTick = _scheduler.CurrentTick;
 
-                int bodyLength = PlayerSession.Encoder.Write(
-                    _snapshotBody, _world, PlayerSession.LastProcessedInputTick);
+                // The same call the Unity ServerTickLoop makes, so this scenario exercises the
+                // shipped encode-and-frame path rather than a copy of it that could drift.
+                int total = ServerPayloadWriter.WriteSnapshot(
+                    _payload,
+                    _snapshotBody,
+                    PlayerSession.Encoder,
+                    _world,
+                    PlayerSession.LastProcessedInputTick);
 
-                if (bodyLength < 0) return;
-
-                var writer = new PayloadFrameWriter(_payload, ChannelId.SnapshotSequenced);
-                writer.WriteMessage(
-                    ServerMessageType.Snapshot, new ReadOnlySpan<byte>(_snapshotBody, 0, bodyLength));
-                if (!writer.TryFinish(out int total)) return;
+                if (total < 0) return;
 
                 _wire.Server.Send(
                     LoopbackTransport.ConnectionId,
@@ -278,29 +283,7 @@ namespace Ironfront.Net.Replication.Tests
             }
 
             private void OnServerMessage(ushort connectionId, ReadOnlyMemory<byte> payload)
-            {
-                var reader = new PayloadFrameReader(payload.Span);
-
-                while (reader.TryReadMessage(out byte msgType, out ReadOnlySpan<byte> body))
-                {
-                    switch ((ClientMessageType)msgType)
-                    {
-                        case ClientMessageType.Input:
-                            if (ClientInputMessage.TryParse(
-                                    body, _inputScratch, out uint startTick, out int count))
-                            {
-                                for (int i = 0; i < count; i++)
-                                    PlayerSession.EnqueueInput(startTick + (uint)i, in _inputScratch[i]);
-                            }
-                            break;
-
-                        case ClientMessageType.AckBaseline:
-                            if (AckBaselineMessage.TryParse(body, out uint acked))
-                                PlayerSession.Encoder.OnClientAck(acked);
-                            break;
-                    }
-                }
-            }
+                => _router.Route(payload.Span, PlayerSession);
 
             private void OnClientMessage(ReadOnlyMemory<byte> payload)
             {

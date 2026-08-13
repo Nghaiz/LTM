@@ -144,6 +144,13 @@ Desktop.ini
 *.bak
 /.claude
 
+# Unity-MCP is personal tooling: its config contains a token and its skills are generated.
+/Ironfront_Reborn/.claude/
+/Ironfront_Reborn/.mcp.json
+# Keep the project on the registry package declared in manifest.json. Unity may create this
+# embedded copy locally while developing or troubleshooting the package.
+/Ironfront_Reborn/Packages/com.ivanmurzak.unity.mcp/
+
 # ---------------------------------------------------------------------------
 # Hand-authored .NET solution (added by the M0 foundation pass)
 #
