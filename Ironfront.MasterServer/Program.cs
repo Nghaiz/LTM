@@ -2,7 +2,12 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Ironfront.MasterServer.Configuration;
+using Ironfront.MasterServer.Data;
 using Ironfront.MasterServer.Diagnostics;
+using Ironfront.MasterServer.Auth;
+using Ironfront.MasterServer.Dispatch;
+using Ironfront.MasterServer.GameServers;
+using Ironfront.MasterServer.Lobby;
 using Ironfront.MasterServer.Net;
 using Ironfront.Net.Protocol;
 
@@ -67,8 +72,13 @@ namespace Ironfront.MasterServer
                 if (!cts.IsCancellationRequested) cts.Cancel();
             };
 
+            using var database = new SqliteDatabase(config.DatabasePath);
+            var auth = new AuthService(database);
+            var lobby = new LobbyService();
+            var gameServers = new GameServerRegistry(config.SharedSecret);
+            var dispatcher = new MspMessageDispatcher(auth, lobby, gameServers, database, config.SharedSecret);
             var options = new TcpListenerHostOptions { Port = config.Port };
-            using var host = new TcpListenerHost(options);
+            using var host = new TcpListenerHost(options, dispatcher);
 
             try
             {

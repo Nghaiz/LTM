@@ -155,14 +155,12 @@ namespace Ironfront.Net.Protocol.Tests
         }
 
         [Fact]
-        public void ATicketIsStillValidAtItsExactExpiryInstant()
+        public void ATicketIsExpiredAtItsExactExpiryInstant()
         {
             long expiresAt = Now;
             byte[] ticket = IssueSample(expiresAt);
 
-            // Boundary: expiry is inclusive. One millisecond later it is not.
-            Assert.Equal(TicketVerifyResult.Valid, JoinTicket.Verify(ticket, Secret, Now));
-            Assert.Equal(TicketVerifyResult.Expired, JoinTicket.Verify(ticket, Secret, Now + 1));
+            Assert.Equal(TicketVerifyResult.Expired, JoinTicket.Verify(ticket, Secret, Now));
         }
 
         [Fact]
@@ -237,6 +235,20 @@ namespace Ironfront.Net.Protocol.Tests
                                                  out string displayName));
             Assert.True(Encoding.UTF8.GetByteCount(displayName) <= JoinTicket.DisplayNameSize);
             Assert.Equal(TicketVerifyResult.Valid, JoinTicket.Verify(ticket, Secret, Now));
+        }
+
+        [Fact]
+        public void VietnameseDisplayNameIsTruncatedAtAUtf8CharacterBoundary()
+        {
+            var ticket = new byte[JoinTicket.Size];
+            Assert.Equal(JoinTicket.Size, JoinTicket.Issue(
+                ticket, 1, 1, 1, Now + 1000, "NgườiChơiViệtNam", Secret));
+
+            Assert.True(JoinTicket.TryReadFields(ticket, out _, out _, out _, out _,
+                                                 out string displayName));
+            Assert.Equal("NgườiChơiV", displayName);
+            Assert.True(Encoding.UTF8.GetByteCount(displayName) <= JoinTicket.DisplayNameSize);
+            Assert.DoesNotContain('�', displayName);
         }
 
         [Fact]

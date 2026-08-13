@@ -33,6 +33,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Ironfront.MasterServer\Ironfront.MasterServer.csproj" />
+    <ProjectReference Include="..\Ironfront.MasterClient\Ironfront.MasterClient.csproj" />
     <ProjectReference Include="..\Ironfront.Net.Protocol\Ironfront.Net.Protocol.csproj" />
   </ItemGroup>
 

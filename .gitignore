@@ -189,3 +189,6 @@ Desktop.ini
 **/TestResults/
 /artifacts/
 unity-compile.log
+
+# Ignore Claude context
+CLAUDE.md

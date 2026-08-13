@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Ironfront.MasterServer.Dispatch;
 using Ironfront.MasterServer.Diagnostics;
 using Ironfront.Net.Protocol;
 
@@ -38,6 +39,7 @@ namespace Ironfront.MasterServer.Net
     public sealed class TcpListenerHost : IDisposable
     {
         private readonly TcpListenerHostOptions _options;
+        private readonly IMspMessageDispatcher? _dispatcher;
         private readonly ConcurrentQueue<Action> _logicQueue = new ConcurrentQueue<Action>();
 
         /// <summary>
@@ -81,8 +83,14 @@ namespace Ironfront.MasterServer.Net
 
         /// <summary>Creates a host with explicit options.</summary>
         public TcpListenerHost(TcpListenerHostOptions options)
+            : this(options, null)
+        {
+        }
+
+        public TcpListenerHost(TcpListenerHostOptions options, IMspMessageDispatcher? dispatcher)
         {
             _options = options ?? throw new ArgumentNullException(nameof(options));
+            _dispatcher = dispatcher;
         }
 
         /// <summary>
@@ -161,6 +169,7 @@ namespace Ironfront.MasterServer.Net
                 while (!ct.IsCancellationRequested)
                 {
                     DrainLogicQueue();
+                    _dispatcher?.Tick(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
                     CheckTimeouts();
 
                     try
@@ -311,7 +320,7 @@ namespace Ironfront.MasterServer.Net
 
             int id = ++_nextConnectionId;
             var connection = new ClientConnection(
-                id, socket, ipKey, endPoint, _logicQueue.Enqueue, HandleFrame, HandleClosed);
+                id, socket, ipKey, address, endPoint, _logicQueue.Enqueue, HandleFrame, HandleClosed);
 
             _connections[id] = connection;
             _connectionsPerIp[ipKey] = ConnectionsForIpUnsafe(ipKey) + 1;
@@ -342,6 +351,12 @@ namespace Ironfront.MasterServer.Net
                     break;
 
                 default:
+                    if (_dispatcher is not null)
+                    {
+                        _dispatcher.Dispatch(connection, msgType, body);
+                        break;
+                    }
+
                     Interlocked.Increment(ref _totalUnhandledFrames);
                     if (MasterLog.DebugEnabled)
                     {
@@ -423,6 +438,8 @@ namespace Ironfront.MasterServer.Net
             Volatile.Write(ref _connectionCount, _connections.Count);
             Interlocked.Increment(ref _totalDisconnected);
 
+            _dispatcher?.OnDisconnected(connection);
+            connection.ClearSession();
             connection.Dispose();
 
             if (MasterLog.DebugEnabled)
