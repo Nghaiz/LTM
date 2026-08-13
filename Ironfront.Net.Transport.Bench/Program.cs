@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
@@ -17,6 +18,7 @@ namespace Ironfront.Net.Transport.Bench
             int connections = ParseConnections(args);
             Console.WriteLine("Ironfront transport benchmark (hand-rolled, .NET 8)");
             RunMicrobenchmarks();
+            RunPoolComparison();
             RunConnectionLoad(seconds, connections);
             return 0;
         }
@@ -87,6 +89,70 @@ namespace Ironfront.Net.Transport.Bench
             long peerReceiveAllocated = GC.GetAllocatedBytesForCurrentThread() - beforePeerReceiveAlloc;
             Console.WriteLine(
                 $"udppeer.receive: {peerReceiveAllocated / 1_000.0:F2} B/packet");
+        }
+
+        private static void RunPoolComparison()
+        {
+            const int iterations = 1_000_000;
+            const int bufferSize = ProtocolConstants.MTU_SAFE;
+            Console.WriteLine("pool comparison (1M Rent/Return operations, 1200-byte target):");
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            Measure(
+                "new byte[1200]",
+                iterations,
+                () => new byte[bufferSize],
+                buffer => { });
+
+            var handWritten = new BufferPool(256, bufferSize);
+            Measure(
+                "BufferPool",
+                iterations,
+                handWritten.Rent,
+                handWritten.Return);
+
+            ArrayPool<byte> shared = ArrayPool<byte>.Shared;
+            Measure(
+                "ArrayPool.Shared",
+                iterations,
+                () => shared.Rent(bufferSize),
+                buffer => shared.Return(buffer, clearArray: false));
+
+            ArrayPool<byte> bounded = ArrayPool<byte>.Create(bufferSize, 256);
+            Measure(
+                "ArrayPool.Create(1200,256)",
+                iterations,
+                () => bounded.Rent(bufferSize),
+                buffer => bounded.Return(buffer, clearArray: false));
+        }
+
+        private static void Measure(
+            string name,
+            int iterations,
+            Func<byte[]> rent,
+            Action<byte[]> release)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            int gen0Before = GC.CollectionCount(0);
+            long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            Stopwatch clock = Stopwatch.StartNew();
+            for (int i = 0; i < iterations; i++)
+            {
+                byte[] buffer = rent();
+                buffer[0] = 0xA5;
+                release(buffer);
+            }
+            clock.Stop();
+
+            long allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+            int gen0Collections = GC.CollectionCount(0) - gen0Before;
+            Console.WriteLine(
+                $"  {name,-26} {clock.Elapsed.TotalMilliseconds * 1_000_000.0 / iterations,8:F1} ns/op "
+                + $"alloc={allocated / (double)iterations,8:F2} B/op gen0={gen0Collections}");
         }
 
         private static void RunConnectionLoad(int seconds, int connectionCount)
