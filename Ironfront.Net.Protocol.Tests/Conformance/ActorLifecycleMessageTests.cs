@@ -209,11 +209,14 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
         }
 
         [Fact]
-        public void DefiningTheseLayoutsDidNotBumpTheProtocolVersion()
+        public void TheseLayoutsAreStillNotWhatMovedTheProtocolVersion()
         {
-            // Documenting an unspecified message is not changing a specified one. The phase-01
-            // precedent for C_ACK_BASELINE, applied again on purpose.
-            Assert.Equal(1, ProtocolConstants.PROTOCOL_VERSION);
+            // Documenting an unspecified message is not changing a specified one, so these three
+            // layouts did not move the version — the phase-01 precedent for C_ACK_BASELINE,
+            // applied again on purpose. The version is 2 because of two OTHER changes: the
+            // channel envelope (protocol-spec section 5.1) and the widened CONNECT_RESPONSE,
+            // both genuine wire changes. Pinned so a future bump has to be deliberate.
+            Assert.Equal(2, ProtocolConstants.PROTOCOL_VERSION);
         }
     }
 }

@@ -13,11 +13,26 @@ namespace Ironfront.Net.Protocol
     public static class ProtocolConstants
     {
         public const ushort PROTOCOL_ID       = 0x4946;  // 'IF' — filters out junk packets
-        public const byte   PROTOCOL_VERSION  = 1;
+        public const byte   PROTOCOL_VERSION  = 2;
 
         public const int    MTU_SAFE          = 1200;    // safe through any router
         public const int    GSP_HEADER_SIZE   = 16;
         public const int    MAX_PAYLOAD       = MTU_SAFE - GSP_HEADER_SIZE;  // 1184
+
+        /// <summary>
+        /// The transport's per-channel header, between the GSP header and the section-4
+        /// payload frame. See <see cref="ChannelEnvelope"/>.
+        /// </summary>
+        public const int    CHANNEL_ENVELOPE_SIZE = 3;
+
+        /// <summary>
+        /// Payload-frame budget once the channel envelope is accounted for: 1181 bytes.
+        /// </summary>
+        /// <remarks>
+        /// Anything sizing a buffer against <see cref="MAX_PAYLOAD"/> and then writing a
+        /// payload frame into it is over by exactly <see cref="CHANNEL_ENVELOPE_SIZE"/>.
+        /// </remarks>
+        public const int    MAX_CHANNEL_PAYLOAD = MAX_PAYLOAD - CHANNEL_ENVELOPE_SIZE;
 
         public const int    SIM_TICK_RATE     = 30;      // Hz
         public const int    SNAPSHOT_RATE     = 20;      // Hz

@@ -11,15 +11,18 @@ namespace Ironfront.Net.Transport
     /// <summary>Multi-connection server implementation of the frozen transport API.</summary>
     public sealed class UdpTransportServer : ITransportServer
     {
-        private const int MaxPendingChallenges = 2048;
-        private sealed class PendingChallenge
-        {
-            public EndPoint Endpoint = null!;
-            public ulong ClientSalt;
-            public ulong ServerSalt;
-            public double CreatedMs;
-            public ushort RequestSequence;
-        }
+        /// <summary>
+        /// Packets drained from the socket per <see cref="Poll"/>.
+        /// </summary>
+        /// <remarks>
+        /// The drain loop used to run until the socket was empty, which under a sustained flood
+        /// is "until the attacker stops" — the whole game tick lives inside that loop, so a
+        /// server being flooded stops simulating rather than merely dropping packets. Anything
+        /// still queued is read on the next tick, which at 30 Hz is 33 ms away; a real client at
+        /// 30 Hz sends one packet per tick, so 1024 is roughly sixty times a full server's
+        /// legitimate burst.
+        /// </remarks>
+        public const int MaxPacketsPerPoll = 1024;
 
         private sealed class AcceptedHandshake
         {
@@ -33,8 +36,20 @@ namespace Ironfront.Net.Transport
         private readonly SimulatorConfig? _simulatorConfig;
         private readonly Dictionary<EndpointKey, Connection> _byEndpoint
             = new Dictionary<EndpointKey, Connection>();
-        private readonly Dictionary<EndpointKey, PendingChallenge> _pending
-            = new Dictionary<EndpointKey, PendingChallenge>();
+        private readonly HandshakeCookie _cookie = new HandshakeCookie();
+
+        /// <summary>
+        /// Which connection currently holds each authenticated playerId.
+        /// </summary>
+        /// <remarks>
+        /// architecture.md section 9 lists impersonation as something server authority closes
+        /// "for free" by binding connectionId to the playerId in the signed ticket. It was not
+        /// closed: the ticket was reduced to a bool by the validator and its playerId never read,
+        /// so one captured ticket opened as many connections as the holder liked, each a
+        /// distinct player as far as the rest of the stack could tell. This is that binding.
+        /// </remarks>
+        private readonly Dictionary<uint, ushort> _playerIdToConnection
+            = new Dictionary<uint, ushort>();
         private readonly Dictionary<EndpointKey, AcceptedHandshake> _accepted
             = new Dictionary<EndpointKey, AcceptedHandshake>();
         private readonly List<EndpointKey> _expiredChallengeKeys = new List<EndpointKey>(16);
@@ -61,6 +76,19 @@ namespace Ironfront.Net.Transport
         public long PacketsWithBadConnectionId { get; private set; }
 
         public long RateLimitedRequests => _rateLimiter.RejectedCount;
+
+        /// <summary>
+        /// Handshakes denied because the ticket's playerId was already connected.
+        /// </summary>
+        /// <remarks>
+        /// A non-zero value here is either a client reconnecting before the server noticed the
+        /// old socket was gone, or somebody using a ticket that is not theirs. Both are worth
+        /// seeing; neither is an error.
+        /// </remarks>
+        public long TotalRejectedByPlayerIdBinding
+            => System.Threading.Interlocked.Read(ref _totalRejectedByPlayerIdBinding);
+
+        private long _totalRejectedByPlayerIdBinding;
 
         /// <summary>The OS-assigned UDP port; useful when binding port 0 in tests.</summary>
         public int Port => _peer?.Port ?? 0;
@@ -101,7 +129,7 @@ namespace Ironfront.Net.Transport
                 connection?.Disconnect(DisconnectReason.LocalRequest, _nowMs);
             }
 
-            _pending.Clear();
+            _playerIdToConnection.Clear();
             _accepted.Clear();
             _peer?.Dispose();
             _peer = null;
@@ -177,7 +205,7 @@ namespace Ironfront.Net.Transport
 
             if (header.PacketType == PacketType.ConnectResponse)
             {
-                HandleConnectResponse(header, payload, key);
+                HandleConnectResponse(header, payload, remote, key);
                 return;
             }
 
@@ -215,37 +243,25 @@ namespace Ironfront.Net.Transport
 
             if (_byEndpoint.ContainsKey(key)) return;
 
-            if (_pending.TryGetValue(key, out PendingChallenge? existing))
-            {
-                if (existing.ClientSalt == request.ClientSalt)
-                    SendChallenge(existing, header.Sequence);
-                return;
-            }
-
             if (_connectionCount >= _maxConnections || _freeIds.Count == 0)
             {
                 SendDenied(remote, header.Sequence, ConnectDenyReason.ServerFull);
                 return;
             }
 
-            if (!ValidateTicket(request.JoinTicket))
-            {
-                SendDenied(remote, header.Sequence, ConnectDenyReason.InvalidTicket);
-                return;
-            }
-
-            if (_pending.Count >= MaxPendingChallenges) EvictOldestChallenge();
-
-            var pending = new PendingChallenge
-            {
-                Endpoint = CloneEndpoint(remote),
-                ClientSalt = request.ClientSalt,
-                ServerSalt = CreateSalt(),
-                CreatedMs = _nowMs,
-                RequestSequence = header.Sequence,
-            };
-            _pending[key] = pending;
-            SendChallenge(pending, header.Sequence);
+            // NOTHING is stored, and the ticket is deliberately NOT verified here.
+            //
+            // Until the challenge round trip completes, the source address is a claim. Every
+            // byte of state and every HMAC spent on it is spent on behalf of an address that may
+            // not exist, and an attacker with a list of forged sources can spend it faster than
+            // the server can reclaim it — which is exactly what the old pending-challenge table
+            // did, right up to evicting real clients mid-handshake once it filled. The ticket is
+            // verified in HandleConnectResponse, where the address has been proved.
+            //
+            // The reply goes to the claimed address, so a spoofed request only ever sends one
+            // datagram to a third party, rate-limited per source. See HandshakeCookie.
+            ulong serverSalt = _cookie.Derive(key.Address, key.Port, request.ClientSalt, _nowMs);
+            SendChallenge(remote, serverSalt, header.Sequence);
         }
 
         private bool ValidateTicket(byte[] ticket)
@@ -265,7 +281,8 @@ namespace Ironfront.Net.Transport
             return true;
         }
 
-        private void HandleConnectResponse(in GspHeader header, ReadOnlySpan<byte> payload, EndpointKey key)
+        private void HandleConnectResponse(
+            in GspHeader header, ReadOnlySpan<byte> payload, EndPoint remote, EndpointKey key)
         {
             if (payload.Length != ConnectResponsePayload.Size
                 || !ConnectResponsePayload.TryParse(payload, out ConnectResponsePayload response)) return;
@@ -274,27 +291,61 @@ namespace Ironfront.Net.Transport
             // the connection id does not exist until that packet is sent. Keep a small,
             // endpoint-bound replay record so a lost accepted packet can be recovered when the
             // client retries CONNECT_RESPONSE.
-            if (!_pending.TryGetValue(key, out PendingChallenge? pending))
+            if (_accepted.TryGetValue(key, out AcceptedHandshake? accepted)
+                && _byId[accepted.ConnectionId] != null
+                && response.ChallengeResponse
+                    == ConnectResponsePayload.ComputeResponse(
+                        accepted.ClientSalt, accepted.ServerSalt))
             {
-                if (!_accepted.TryGetValue(key, out AcceptedHandshake? accepted)
-                    || _byId[accepted.ConnectionId] == null
-                    || response.ChallengeResponse
-                        != ConnectResponsePayload.ComputeResponse(
-                            accepted.ClientSalt, accepted.ServerSalt))
-                    return;
-
                 SendAccepted(accepted.Endpoint, header.Sequence, accepted.ConnectionId);
                 return;
             }
 
-            ulong expected = ConnectResponsePayload.ComputeResponse(
-                pending.ClientSalt, pending.ServerSalt);
-            if (response.ChallengeResponse != expected) return;
+            // The address is only proved once this verifies: the client could not have produced
+            // the answer without receiving the challenge we sent TO that address.
+            if (!_cookie.Verify(
+                    key.Address, key.Port, response.ClientSalt, response.ChallengeResponse, _nowMs))
+                return;
 
-            _pending.Remove(key);
+            // Now, and only now, is it worth doing real work for this peer.
+            if (!ValidateTicket(response.JoinTicket))
+            {
+                SendDenied(remote, header.Sequence, ConnectDenyReason.InvalidTicket);
+                return;
+            }
+
+            // Bind the ticket's playerId, so one captured ticket cannot become many players.
+            if (!JoinTicket.TryReadFields(
+                    response.JoinTicket,
+                    out uint playerId, out ushort _, out ushort _, out long _, out string _))
+            {
+                SendDenied(remote, header.Sequence, ConnectDenyReason.InvalidTicket);
+                return;
+            }
+
+            // playerId 0 is reserved for "no identity" and is never bound. Real tickets are
+            // issued by the master server with a non-zero playerId; 0 is what an anonymous or
+            // development-stub ticket carries, and binding it would mean the FIRST such client
+            // locked out every other one — sixteen players sharing one unauthenticated slot.
+            // The binding engages the moment real tickets do, which is where it matters.
+            if (playerId != 0
+                && _playerIdToConnection.TryGetValue(playerId, out ushort heldBy)
+                && _byId[heldBy] != null)
+            {
+                // Already playing. Denied rather than silently dropped so the second client sees
+                // why, and rather than kicking the first so a stolen ticket cannot evict its
+                // rightful owner.
+                System.Threading.Interlocked.Increment(ref _totalRejectedByPlayerIdBinding);
+                SendDenied(remote, header.Sequence, ConnectDenyReason.AlreadyConnected);
+                return;
+            }
+
+            ulong serverSalt = _cookie.Derive(key.Address, key.Port, response.ClientSalt, _nowMs);
             if (_freeIds.Count == 0) return;
             ushort connectionId = _freeIds.Dequeue();
-            Connection connection = new Connection(pending.Endpoint, isClient: false, _peer!.Pool);
+            if (playerId != 0) _playerIdToConnection[playerId] = connectionId;
+            Connection connection = new Connection(CloneEndpoint(remote), isClient: false, _peer!.Pool);
+            connection.PlayerId = playerId;
             connection.AttachSender(SendRaw);
             connection.ActivateServer(connectionId, _nowMs);
             connection.MessageReceived += payload => OnMessage?.Invoke(connectionId, payload);
@@ -305,13 +356,13 @@ namespace Ironfront.Net.Transport
 
             _accepted[key] = new AcceptedHandshake
             {
-                Endpoint = pending.Endpoint,
-                ClientSalt = pending.ClientSalt,
-                ServerSalt = pending.ServerSalt,
+                Endpoint = connection.RemoteEndPoint,
+                ClientSalt = response.ClientSalt,
+                ServerSalt = serverSalt,
                 ConnectionId = connectionId,
                 CreatedMs = _nowMs,
             };
-            SendAccepted(pending.Endpoint, header.Sequence, connectionId);
+            SendAccepted(connection.RemoteEndPoint, header.Sequence, connectionId);
             OnClientConnected?.Invoke(connectionId, CreateInfo(connection));
         }
 
@@ -326,18 +377,25 @@ namespace Ironfront.Net.Transport
                 _byEndpoint.Remove(key);
                 _accepted.Remove(key);
             }
+            // Release the playerId binding, or that player can never reconnect: the slot
+            // would report "already connected" against a connection that no longer exists.
+            if (connection.PlayerId != 0
+                && _playerIdToConnection.TryGetValue(connection.PlayerId, out ushort boundTo)
+                && boundTo == connectionId)
+                _playerIdToConnection.Remove(connection.PlayerId);
+
             _byId[connectionId] = null;
             _freeIds.Enqueue(connectionId);
             _connectionCount--;
             OnClientDisconnected?.Invoke(connectionId, reason);
         }
 
-        private void SendChallenge(PendingChallenge pending, ushort requestSequence)
+        private void SendChallenge(EndPoint endpoint, ulong serverSalt, ushort requestSequence)
         {
             Span<byte> payload = stackalloc byte[ConnectChallengePayload.Size];
-            new ConnectChallengePayload(pending.ServerSalt).Write(payload);
+            new ConnectChallengePayload(serverSalt).Write(payload);
             SendControl(
-                pending.Endpoint,
+                endpoint,
                 PacketType.ConnectChallenge,
                 PacketFlags.Reliable,
                 requestSequence,
@@ -398,39 +456,26 @@ namespace Ironfront.Net.Transport
         private void SendRaw(byte[] data, int length, EndPoint endpoint, double nowMs)
             => _peer?.Send(data, length, endpoint, nowMs);
 
+        /// <summary>
+        /// Expires the accepted-handshake replay records. Nothing else needs sweeping.
+        /// </summary>
+        /// <remarks>
+        /// There is no pending-challenge table to expire any more, and no eviction policy to go
+        /// with it. That is the point of the cookie: an unproved address leaves nothing behind,
+        /// so there is nothing for a flood to fill and nothing for an eviction policy to throw
+        /// out the wrong entry from. <see cref="_accepted"/> only ever holds addresses that
+        /// completed a handshake, so it is bounded by the connection count.
+        /// </remarks>
         private void CleanupChallenges()
         {
             _expiredChallengeKeys.Clear();
-            foreach (KeyValuePair<EndpointKey, PendingChallenge> pair in _pending)
-            {
-                if (_nowMs - pair.Value.CreatedMs <= ProtocolConstants.TIMEOUT_MS) continue;
-                _expiredChallengeKeys.Add(pair.Key);
-            }
             foreach (KeyValuePair<EndpointKey, AcceptedHandshake> pair in _accepted)
             {
                 if (_nowMs - pair.Value.CreatedMs <= ProtocolConstants.TIMEOUT_MS) continue;
                 _expiredChallengeKeys.Add(pair.Key);
             }
             for (int i = 0; i < _expiredChallengeKeys.Count; i++)
-            {
-                _pending.Remove(_expiredChallengeKeys[i]);
                 _accepted.Remove(_expiredChallengeKeys[i]);
-            }
-        }
-
-        private void EvictOldestChallenge()
-        {
-            EndpointKey oldestKey = default;
-            double oldest = double.MaxValue;
-            bool found = false;
-            foreach (KeyValuePair<EndpointKey, PendingChallenge> pair in _pending)
-            {
-                if (pair.Value.CreatedMs >= oldest) continue;
-                oldest = pair.Value.CreatedMs;
-                oldestKey = pair.Key;
-                found = true;
-            }
-            if (found) _pending.Remove(oldestKey);
         }
 
         private bool TryGetConnection(ushort id, out Connection? connection)

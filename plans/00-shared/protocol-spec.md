@@ -40,11 +40,13 @@
 public static class ProtocolConstants
 {
     public const ushort PROTOCOL_ID       = 0x4946;  // 'IF' — filters out junk packets
-    public const byte   PROTOCOL_VERSION  = 1;
+    public const byte   PROTOCOL_VERSION  = 2;
 
     public const int    MTU_SAFE          = 1200;    // safe through any router
     public const int    GSP_HEADER_SIZE   = 16;
     public const int    MAX_PAYLOAD       = MTU_SAFE - GSP_HEADER_SIZE;  // 1184
+    public const int    CHANNEL_ENVELOPE_SIZE = 3;                       // § 5.1
+    public const int    MAX_CHANNEL_PAYLOAD = MAX_PAYLOAD - CHANNEL_ENVELOPE_SIZE;  // 1181
 
     public const int    SIM_TICK_RATE     = 30;      // Hz
     public const int    SNAPSHOT_RATE     = 20;      // Hz
@@ -159,17 +161,40 @@ sequenceDiagram
     participant C as Client
     participant S as Server
     C->>S: CONNECT_REQUEST {version, joinTicket[64], clientSalt u64}
-    Note over S: Verify the joinTicket's HMAC<br/>Check expiry, check for a free slot
+    Note over S: Check version and free slots ONLY.<br/>No state stored, no HMAC verified yet
     S-->>C: CONNECT_CHALLENGE {serverSalt u64}
     Note over C: challengeResponse = clientSalt XOR serverSalt
-    C->>S: CONNECT_RESPONSE {challengeResponse u64}
-    Note over S: Authenticated → assign a connectionId
+    C->>S: CONNECT_RESPONSE {challengeResponse u64, clientSalt u64,<br/>joinTicket[64]}
+    Note over S: Address now proved.<br/>Verify the joinTicket's HMAC + expiry,<br/>bind its playerId, assign a connectionId
     S-->>C: CONNECT_ACCEPTED {connectionId u16, serverTick u32,<br/>mapId u16, myPlayerId u32}
 ```
 
 **Why there's a challenge:** to prevent IP-spoofing amplification. An attacker spoofing a victim's
 IP in a CONNECT_REQUEST never receives the `serverSalt`, so they can't complete the handshake and
-the server allocates no resources.
+**the server allocates no resources**.
+
+**How the server keeps that promise (v2).** The obvious implementation — remember a pending
+challenge per source address — breaks it: the address is still just a claim at that point, so a
+flood of forged sources fills the table, and whatever eviction policy protects it then starts
+throwing out legitimate clients mid-handshake. The server therefore stores nothing and derives the
+salt instead:
+
+```
+serverSalt = HMAC-SHA256(serverKey, address ‖ port ‖ clientSalt ‖ epoch)[0..8]
+```
+
+`serverKey` is per-process and never leaves it; `epoch` is a 30-second bucket, and the previous
+bucket is accepted too so a handshake straddling a boundary still completes. To recompute the salt
+on CONNECT_RESPONSE the server needs the client's salt back, which is why **CONNECT_RESPONSE echoes
+`clientSalt` and repeats the `joinTicket`** — the server has no memory of either. A spoofed
+CONNECT_REQUEST now costs one HMAC and one datagram sent to the forged address.
+
+**The ticket is verified at CONNECT_RESPONSE, not CONNECT_REQUEST.** Before the challenge completes
+the source address is unproved, so any work done for it is work an attacker can direct at will.
+The ticket's `playerId` is bound to the `connectionId` at that point (architecture.md § 9,
+impersonation); a second handshake presenting a `playerId` that is already connected is denied with
+`ALREADY_CONNECTED` rather than replacing the existing connection, so a captured ticket cannot
+evict its rightful owner.
 
 Retry: CONNECT_REQUEST is resent every 250 ms, up to 20 times (5 seconds), then reports an error.
 
@@ -189,6 +214,11 @@ Retry: CONNECT_REQUEST is resent every 250 ms, up to 20 times (5 seconds), then 
 ## 4. Payload: the message frame
 
 A `PAYLOAD` datagram carries **one or more** messages, batched together to reduce header overhead.
+
+> **This frame does not start at byte 16.** A `PAYLOAD` datagram is three layers: the 16-byte GSP
+> header, then the 3-byte **channel envelope** (§ 5.1), then the frame below. Anything decoding
+> from `GSP_HEADER_SIZE` reads the envelope's `channelSequence` where it expects `messageCount`.
+> The budget for this frame is `MAX_CHANNEL_PAYLOAD` = **1181 bytes**, not `MAX_PAYLOAD`.
 
 ```
 u8   channelId          See § 5
@@ -463,6 +493,39 @@ arrived have to sit in the buffer. That is head-of-line blocking — but we acce
 **for events only**, where ordering genuinely matters (you can't process a "death" before a
 "spawn"). Snapshots live on a different channel and are unaffected. **This is the core advantage of
 UDP over TCP**: TCP forces everything into one stream.
+
+### 5.1. The channel envelope (3 bytes, every `PAYLOAD` datagram)
+
+Between the GSP header and the § 4 message frame sits a small transport-owned header:
+
+```
+u8   channelId          0..3, see the table above
+u16  channelSequence    per-channel, little-endian
+```
+
+So a complete `PAYLOAD` datagram is:
+
+```
+[ GSP header, 16 B ][ channel envelope, 3 B ][ message frame, § 4 ]
+```
+
+**`channelSequence` is not the GSP `sequence`.** The GSP sequence counts every datagram on the
+connection — keep-alives, acks, packets for other channels — so it advances at a rate that has
+nothing to do with any one channel. Sequenced channels (1 and 3) decide staleness on
+`channelSequence`, so a lost snapshot can never make an input look old. Compare it with the
+wrap-safe helper in § 2.3, never with `>`.
+
+**Why `channelId` appears here as well as in § 4.** It reads as duplication and it is not. A
+fragmented message frame is not a parseable object until every fragment has arrived (§ 6), but the
+channel is exactly what the transport must know *first* — it selects the reliability and ordering
+rules, and therefore whether an arriving fragment should be buffered, acked, or dropped as stale.
+Reading the channel out of the application frame would mean the transport could only route packets
+it had already finished reassembling, which is circular. The cost is one byte per datagram, 0.08%
+of `MTU_SAFE`.
+
+**Ownership:** the envelope is written and read by the transport (Dev B). Nothing above the
+transport ever sees it — `ITransportServer.Send` takes a channel id and a payload, and the frame in
+§ 4 is what the payload contains.
 
 ---
 
@@ -785,6 +848,7 @@ run by `dotnet test` and by CI on every push.
 |---|---|---|---|---|---|
 | 1.0.0-draft | Week 1 | Whole team | Initial version | — | — |
 | **1.0.0** | Week 1 | Dev C (chair) | **Freeze.** Corrected the `PackPos(100f)` worked example (1600 → 1599); pinned MSP `msgType` to little-endian; recorded the `actorId` allocation and 5-second quarantine rules; verified `POS_RANGE` against `LevelBounds` | **No** — `PROTOCOL_VERSION` stays 1 | #3 |
+| **2.0.0** | Week 2 | Dev B + Dev C | **Documented the channel envelope (new § 5.1)**, which the transport had been writing since the UDP layer landed but which no section described — so a decoder written from the spec read `channelSequence` as `messageCount`. Added `CHANNEL_ENVELOPE_SIZE` and `MAX_CHANNEL_PAYLOAD`. **Widened `CONNECT_RESPONSE` 8 → 80 bytes** (echoed `clientSalt` + repeated `joinTicket`) so the server can answer a handshake without storing per-address state — see § 3.1 | **Yes** | (this PR) |
 
 > Every change after the freeze must add a row to this table and land via a PR with 2 approvals.
 > **Bump `PROTOCOL_VERSION` only when the bytes on the wire change** — a client and server with
