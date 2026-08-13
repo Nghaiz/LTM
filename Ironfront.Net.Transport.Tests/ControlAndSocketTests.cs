@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Transport;
 using Ironfront.Net.Transport.Simulation;
@@ -219,12 +220,27 @@ namespace Ironfront.Net.Transport.Tests
             client.Connect("127.0.0.1", server.Port, new byte[ProtocolConstants.JOIN_TICKET_SIZE]);
             Pump(server, client, () => client.State == ConnectionState.Connected, 2000);
 
+            // Roughly 60 Hz in both directions for 1.2 s, rather than a spin loop.
+            //
+            // The spin loop this replaces failed on both runners for two different reasons, and
+            // neither was about the stats block. It only ever sent client->server, so
+            // BytesPerSecondReceived depended on the handshake bytes still being inside the
+            // sliding window when the assertion ran — on ubuntu they had aged out and the rate was
+            // a legitimate 0. And an unthrottled flood over loopback pushed the smoothed RTT past
+            // the 250 ms threshold in CongestionControl, so windows saw Bad: the transport
+            // reporting congestion correctly, under a load no client would ever generate, while
+            // the test asserted Good. Pacing the loop and giving the server something to send
+            // makes both assertions measure what they claim to.
+            var payloadUp = new byte[8];
+            var payloadDown = new byte[16];
             DateTime until = DateTime.UtcNow.AddMilliseconds(1200);
             while (DateTime.UtcNow < until)
             {
-                client.Send((byte)ChannelId.InputSequenced, new byte[8], reliable: false);
+                client.Send((byte)ChannelId.InputSequenced, payloadUp, reliable: false);
                 server.Poll();
+                server.Broadcast((byte)ChannelId.SnapshotSequenced, payloadDown, reliable: false);
                 client.Poll();
+                Thread.Sleep(16);
             }
 
             TransportStats stats = client.Stats;
