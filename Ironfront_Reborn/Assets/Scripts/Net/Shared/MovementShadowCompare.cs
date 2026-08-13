@@ -17,7 +17,7 @@ namespace Ironfront.Net.Unity
     /// <para>
     /// <b>Read-only by construction.</b> There is no code path here that writes to the
     /// <see cref="CharacterController"/>, the transform, or any Actor state. The shadow
-    /// position is integrated in a local field. Deleting this component changes nothing about
+    /// velocity is integrated in a local field. Deleting this component changes nothing about
     /// how the game plays, which is what makes it safe to leave attached.
     /// </para>
     /// <para>
@@ -27,7 +27,43 @@ namespace Ironfront.Net.Unity
     /// gaps in the port (docs/movement-analysis.md § 5). Divergence on <i>flat open ground</i>
     /// is a real bug and worth stopping for.
     /// </para>
+    /// <para>
+    /// <b>What this harness compares, and what it deliberately does not.</b> Round 5 of the
+    /// Dev A playtest (plans/reports/2026-08-13-unity-a3-shadow-harness.md) reported 87.4 % of
+    /// ticks as divergent and the measurement was not usable, because the harness was comparing
+    /// two quantities that are not the same kind of thing:
+    /// </para>
+    /// <list type="number">
+    /// <item>
+    /// <b>The vertical channel while grounded belongs to collision, not to the simulation.</b>
+    /// <see cref="MovementCore.Step"/> requests <c>-StickToGroundForce * dt</c> downwards every
+    /// grounded tick by design; <c>CharacterController.Move</c> then resolves that request
+    /// against the floor and the actor does not descend. Scoring "requested -0.167 m, moved
+    /// 0 m" as divergence flagged 787 ticks of an idle player standing correctly still. The
+    /// grounded vertical channel is therefore counted as absorbed-by-collision and excluded
+    /// from the verdict. Airborne vertical IS scored — there, gravity integration is exactly
+    /// what is under test.
+    /// </item>
+    /// <item>
+    /// <b>Spawn, respawn and teleport are not locomotion.</b> A 1123 m relocation entered the
+    /// mean and became the reported worst sample. Any real delta larger than one tick of
+    /// legitimate motion is now treated as a discontinuity: the shadow re-syncs and the sample
+    /// is skipped rather than scored.
+    /// </item>
+    /// <item>
+    /// <b>Tick alignment is now declared, not hoped for.</b> With no execution order the
+    /// harness could sample a transform the original had not moved yet that tick, comparing a
+    /// real delta from tick N-1 against shadow motion for tick N. The
+    /// <see cref="DefaultExecutionOrder"/> below pins this component to run after the default
+    /// batch, so <c>transform.position</c> is always read after
+    /// <c>FirstPersonController.FixedUpdate</c> has already moved for the same tick.
+    /// </item>
+    /// </list>
     /// </remarks>
+    // Ordering, not cosmetics: the whole comparison is invalid if this samples the transform
+    // before the original controller has moved it this tick. Standard Assets' controller sits
+    // at the default order of 0, so any positive value runs strictly after it.
+    [DefaultExecutionOrder(1000)]
     public sealed class MovementShadowCompare : MonoBehaviour
     {
         [Tooltip("Metres of disagreement per tick before a warning is logged.")]
@@ -40,18 +76,55 @@ namespace Ironfront.Net.Unity
         [Tooltip("Log every tick's delta, not just the ones past the threshold. Very noisy.")]
         public bool VerboseLogging;
 
+        /// <summary>
+        /// Multiplier on the fastest single tick a player can legitimately produce. Anything
+        /// past that is a teleport, not movement.
+        /// </summary>
+        /// <remarks>
+        /// The bound is derived, not guessed: full run speed horizontally plus a generous
+        /// vertical allowance for a long fall, times the tick length, times this margin. The
+        /// margin exists so that a fast lift, a steep slide or one late physics frame is not
+        /// mistaken for a respawn — the cost of a false teleport is a skipped sample, the cost
+        /// of a missed one is another 1123 m entry in the mean.
+        /// </remarks>
+        [Tooltip("Safety margin on the largest plausible single-tick move before it is " +
+                 "treated as a teleport and skipped.")]
+        public float DiscontinuityMargin = 4f;
+
         private CharacterController _controller;
         private Transform _cameraParent;
         private MoveState _shadow;
-        private Vector3 _shadowPosition;
         private Vector3 _previousRealPosition;
 
         private int _ticks;
-        private int _divergences;
-        private float _worstDivergence;
-        private float _totalDivergence;
+        private int _skippedDiscontinuities;
+
+        // Horizontal is the criterion the port is actually judged on: it is the only channel
+        // where MovementCore and the original are both fully responsible for the answer.
+        private int _groundedTicks;
+        private int _groundedDiverged;
+        private int _airborneTicks;
+        private int _airborneDiverged;
+
+        private float _worstHorizontal;
+        private float _totalHorizontal;
+        private float _worstAirborneVertical;
+
         private bool _primed;
         private bool _reported;
+
+        /// <summary>
+        /// The largest distance one tick of legitimate movement can cover, before the margin.
+        /// </summary>
+        private static float MaxPlausibleTickDistance(float dt)
+        {
+            // Horizontal is bounded by run speed. Vertical is not bounded by jump speed — a
+            // fall accelerates — so allow a terminal-velocity-ish 60 m/s downward.
+            const float terminalFallSpeed = 60f;
+            float horizontal = MovementSimulation.RunSpeed * dt;
+            float vertical   = terminalFallSpeed * dt;
+            return Mathf.Sqrt(horizontal * horizontal + vertical * vertical);
+        }
 
         private void Awake()
         {
@@ -83,6 +156,11 @@ namespace Ironfront.Net.Unity
                       "Play, move around, then stop Play — the summary line prints on exit.");
 
             _reported = false;
+
+            // Dropping the prime on every enable is what makes a pooled respawn safe. Leaving
+            // it set meant the first tick after re-enable measured against wherever the actor
+            // stood before it was pooled, which is a whole-map delta arriving as movement.
+            _primed = false;
             Resync();
         }
 
@@ -104,44 +182,83 @@ namespace Ironfront.Net.Unity
             float dt = Time.fixedDeltaTime;
             MoveInput input = MovementSimulation.FromUnityInput(_cameraParent.eulerAngles.y);
 
-            _shadow.IsGrounded = _controller != null && _controller.isGrounded;
+            bool grounded = _controller != null && _controller.isGrounded;
+            _shadow.IsGrounded = grounded;
             Vector3 shadowMotion = MovementSimulation.Step(ref _shadow, in input, dt);
-            _shadowPosition += shadowMotion;
 
             // Compare the DELTA, not the absolute position. Absolute positions drift apart the
             // moment collision moves the real actor and the shadow keeps flying, which says
             // nothing about whether the simulation agrees.
             Vector3 realDelta = realPosition - _previousRealPosition;
-            float divergence = Vector3.Distance(realDelta, shadowMotion);
+            _previousRealPosition = realPosition;
+
+            // A discontinuity is scored as nothing at all. Re-sync and move on — including the
+            // shadow's velocity, so the tick after a respawn does not inherit a stale fall.
+            if (realDelta.magnitude > MaxPlausibleTickDistance(dt) * DiscontinuityMargin)
+            {
+                _skippedDiscontinuities++;
+                Resync();
+                if (VerboseLogging)
+                {
+                    Debug.Log($"[MovementShadowCompare] discontinuity skipped: moved " +
+                              $"{realDelta.magnitude:F1}m in one tick — spawn, respawn or teleport, " +
+                              "not locomotion. Shadow re-synced.");
+                }
+                return;
+            }
 
             _ticks++;
-            _totalDivergence += divergence;
-            if (divergence > _worstDivergence) _worstDivergence = divergence;
 
-            if (divergence > WarnThreshold)
+            // Horizontal: both sides are fully responsible for this, so it is always scored.
+            Vector2 realHorizontal   = new Vector2(realDelta.x, realDelta.z);
+            Vector2 shadowHorizontal = new Vector2(shadowMotion.x, shadowMotion.z);
+            float horizontal = Vector2.Distance(realHorizontal, shadowHorizontal);
+
+            _totalHorizontal += horizontal;
+            if (horizontal > _worstHorizontal) _worstHorizontal = horizontal;
+
+            // Vertical: only meaningful while airborne. Grounded, the simulation's downward
+            // stick force is a REQUEST that collision is supposed to absorb, and an actor that
+            // does not sink into the floor is the correct outcome, not a divergence.
+            float vertical = Mathf.Abs(realDelta.y - shadowMotion.y);
+            bool verticalCounts = !grounded;
+            if (verticalCounts && vertical > _worstAirborneVertical) _worstAirborneVertical = vertical;
+
+            bool diverged = horizontal > WarnThreshold ||
+                            (verticalCounts && vertical > WarnThreshold);
+
+            if (grounded)
             {
-                _divergences++;
+                _groundedTicks++;
+                if (diverged) _groundedDiverged++;
+            }
+            else
+            {
+                _airborneTicks++;
+                if (diverged) _airborneDiverged++;
+            }
+
+            if (diverged)
+            {
                 Debug.LogWarning(
-                    $"MOVEMENT DIVERGED tick={_ticks} d={divergence:F4}m " +
+                    $"MOVEMENT DIVERGED tick={_ticks} dH={horizontal:F4}m " +
+                    $"dV={(verticalCounts ? vertical.ToString("F4") + "m" : "absorbed")} " +
                     $"real={realDelta} shadow={shadowMotion} " +
-                    $"grounded={_shadow.IsGrounded} input=({input.MoveX:F2},{input.MoveZ:F2}) " +
+                    $"grounded={grounded} input=({input.MoveX:F2},{input.MoveZ:F2}) " +
                     $"sprint={input.Sprint} jump={input.Jump} crouch={input.Crouch}");
             }
             else if (VerboseLogging)
             {
-                Debug.Log($"movement ok tick={_ticks} d={divergence:F5}m");
+                Debug.Log($"movement ok tick={_ticks} dH={horizontal:F5}m");
             }
-
-            _previousRealPosition = realPosition;
 
             if (ResyncEveryTicks > 0 && _ticks % ResyncEveryTicks == 0) Resync();
         }
 
         private void Resync()
         {
-            _shadowPosition = transform.position;
             _shadow = MoveState.AtRest(
-                MovementSimulation.ToCore(_shadowPosition),
+                MovementSimulation.ToCore(transform.position),
                 grounded: _controller == null || _controller.isGrounded);
 
             // Carry the real velocity across so a resync mid-jump does not register as a
@@ -173,16 +290,30 @@ namespace Ironfront.Net.Unity
                 return;
             }
 
-            float mean = _totalDivergence / _ticks;
-            string verdict = _divergences == 0
-                ? "CLEAN — the port agrees with the original on every tick observed"
-                : $"{_divergences} of {_ticks} ticks diverged ({(float)_divergences / _ticks:P1})";
+            int diverged = _groundedDiverged + _airborneDiverged;
+            float mean = _totalHorizontal / _ticks;
+
+            // The grounded number is the verdict. Airborne divergence is informative but is
+            // also where the two documented port gaps live, so it does not by itself condemn
+            // MovementCore; a grounded horizontal disagreement has no innocent explanation.
+            string verdict = _groundedDiverged == 0
+                ? "CLEAN on the ground — the port agrees with the original on every grounded tick observed"
+                : $"{_groundedDiverged} of {_groundedTicks} GROUNDED ticks diverged " +
+                  $"({(float)_groundedDiverged / Mathf.Max(1, _groundedTicks):P1})";
 
             Debug.Log(
                 $"[MovementShadowCompare] {verdict}. " +
-                $"mean={mean:F5}m worst={_worstDivergence:F4}m threshold={WarnThreshold:F3}m. " +
+                $"airborne {_airborneDiverged}/{_airborneTicks} diverged. " +
+                $"scored={_ticks} skipped_discontinuities={_skippedDiscontinuities} " +
+                $"total_diverged={diverged}. " +
+                $"meanH={mean:F5}m worstH={_worstHorizontal:F4}m " +
+                $"worstV_airborne={_worstAirborneVertical:F4}m threshold={WarnThreshold:F3}m. " +
+                "The grounded vertical channel is excluded on purpose: MovementCore requests a " +
+                "downward stick-to-ground force that CharacterController.Move is supposed to " +
+                "absorb, so an actor standing still on flat ground is agreement, not divergence. " +
                 "Divergence on slopes and against geometry is expected and documented " +
-                "(docs/movement-analysis.md section 5); divergence on flat open ground is not.");
+                "(docs/movement-analysis.md section 5); horizontal divergence on flat open " +
+                "ground is not.");
         }
     }
 }
