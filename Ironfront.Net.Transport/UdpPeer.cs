@@ -44,6 +44,16 @@ namespace Ironfront.Net.Transport
         /// </remarks>
         public const int RequestedSocketBufferSize = 1 << 20;
 
+        /// <summary>
+        /// Datagrams read per <see cref="Poll"/> call.
+        /// </summary>
+        /// <remarks>
+        /// A full server at 16 clients x 30 Hz offers ~16 packets per tick, so this is roughly
+        /// sixty times the legitimate burst — high enough never to throttle real traffic, finite
+        /// enough that a flood cannot hold the caller inside the loop indefinitely.
+        /// </remarks>
+        public const int MaxPacketsPerPoll = 1024;
+
         public UdpPeer(
             int bindPort,
             SimulatorConfig? simulatorConfig = null,
@@ -112,6 +122,16 @@ namespace Ironfront.Net.Transport
         public long DroppedBySimulator => _simulator.DroppedCount;
 
         /// <summary>
+        /// Times a <see cref="Poll"/> hit <see cref="MaxPacketsPerPoll"/> with more waiting.
+        /// </summary>
+        /// <remarks>
+        /// Sustained non-zero means the peer is receiving faster than it is being polled — a
+        /// flood, or a caller whose tick is running long. Either way it is the number to look at
+        /// before concluding the transport is losing packets on its own.
+        /// </remarks>
+        public long PollBudgetExhausted { get; private set; }
+
+        /// <summary>
         /// Connects the UDP socket to one peer. The OS then supplies the remote endpoint and the
         /// send/receive path can use the allocation-free connected socket overloads.
         /// </summary>
@@ -162,8 +182,14 @@ namespace Ironfront.Net.Transport
             // Socket.Available allocates on the netstandard2.1/.NET 8 socket path used by
             // Unity-compatible builds. Poll(0, SelectRead) checks readiness without creating
             // a per-frame managed value, while the socket remains non-blocking below.
-            while (_socket.Poll(0, SelectMode.SelectRead))
+            // Bounded, not "until the socket is empty". The caller's whole game tick lives
+            // inside this loop, so an unbounded drain under a sustained flood means the server
+            // stops simulating rather than merely dropping packets — the attacker sets the tick
+            // rate. Anything left is read on the next Poll, 33 ms later at 30 Hz.
+            int drained = 0;
+            while (drained < MaxPacketsPerPoll && _socket.Poll(0, SelectMode.SelectRead))
             {
+                drained++;
                 byte[] buffer = _pool.Rent();
                 int received;
                 EndPoint remote = _receiveEndpoint;
@@ -218,6 +244,8 @@ namespace Ironfront.Net.Transport
                     _pool.Return(buffer);
                 }
             }
+
+            if (drained >= MaxPacketsPerPoll) PollBudgetExhausted++;
         }
 
         public void Dispose()

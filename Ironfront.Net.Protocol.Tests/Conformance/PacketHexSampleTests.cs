@@ -25,9 +25,13 @@ namespace Ironfront.Net.Protocol.Tests
 
         // ------------------------------------------------------- CONNECT_REQUEST 0x01
 
+        // Leading byte is PROTOCOL_VERSION, so it is built from the constant rather than
+        // written as a literal — a hardcoded "01" here would keep passing after a version bump
+        // while asserting the previous protocol.
         private static readonly string ConnectRequestHex =
-            "01 " + Hex.Repeat(0xAA, ProtocolConstants.JOIN_TICKET_SIZE) +
-            " EF CD AB 89 67 45 23 01";
+            Hex.ToHex(new[] { ProtocolConstants.PROTOCOL_VERSION }) + " "
+            + Hex.Repeat(0xAA, ProtocolConstants.JOIN_TICKET_SIZE)
+            + " EF CD AB 89 67 45 23 01";
 
         [Fact]
         public void ConnectRequest_Serializes_ToTheExpectedBytes()
@@ -77,22 +81,41 @@ namespace Ironfront.Net.Protocol.Tests
 
         // ------------------------------------------------------ CONNECT_RESPONSE 0x03
 
-        // clientSalt XOR serverSalt = 0x10017623DCCDBA67, little-endian on the wire.
-        private const string ConnectResponseHex = "67 BA CD DC 23 76 01 10";
+        // v2: challengeResponse (clientSalt XOR serverSalt) + the echoed clientSalt + the
+        // 64-byte joinTicket. Both u64s are little-endian on the wire.
+        private const string ConnectResponseHeadHex =
+            "67 BA CD DC 23 76 01 10 EF CD AB 89 67 45 23 01";
 
         [Fact]
-        public void ConnectResponse_IsTheXorOfTheTwoSalts()
+        public void ConnectResponse_CarriesTheXorTheEchoedSaltAndTheTicket()
         {
             ulong response = ConnectResponsePayload.ComputeResponse(ClientSalt, ServerSalt);
             Assert.Equal(0x10017623DCCDBA67ul, response);
 
-            Span<byte> buffer = stackalloc byte[ConnectResponsePayload.Size];
-            Assert.Equal(8, new ConnectResponsePayload(response).Write(buffer));
-            Assert.Equal(ConnectResponseHex, Hex.ToHex(buffer));
+            // The echoed salt and the repeated ticket are what let the server keep no state
+            // between CHALLENGE and RESPONSE — see HandshakeCookie. Before v2 the server had to
+            // remember a pending challenge per source address, which a spoofed-source flood
+            // filled until it began evicting legitimate clients mid-handshake.
+            var ticket = new byte[ProtocolConstants.JOIN_TICKET_SIZE];
+            for (int i = 0; i < ticket.Length; i++) ticket[i] = (byte)i;
 
-            Assert.True(ConnectResponsePayload.TryParse(
-                Hex.FromHex(ConnectResponseHex), out ConnectResponsePayload parsed));
+            Span<byte> buffer = stackalloc byte[ConnectResponsePayload.Size];
+            Assert.Equal(80, ConnectResponsePayload.Size);
+            Assert.Equal(80, new ConnectResponsePayload(response, ClientSalt, ticket).Write(buffer));
+
+            Assert.Equal(ConnectResponseHeadHex, Hex.ToHex(buffer.Slice(0, 16)));
+
+            Assert.True(ConnectResponsePayload.TryParse(buffer, out ConnectResponsePayload parsed));
             Assert.Equal(response, parsed.ChallengeResponse);
+            Assert.Equal(ClientSalt, parsed.ClientSalt);
+            Assert.Equal(ticket, parsed.JoinTicket);
+        }
+
+        [Fact]
+        public void ConnectResponse_RejectsATruncatedTicket()
+        {
+            Span<byte> short_ = stackalloc byte[ConnectResponsePayload.Size - 1];
+            Assert.False(ConnectResponsePayload.TryParse(short_, out _));
         }
 
         // ------------------------------------------------------ CONNECT_ACCEPTED 0x04

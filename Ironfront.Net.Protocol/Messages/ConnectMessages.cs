@@ -86,14 +86,44 @@ namespace Ironfront.Net.Protocol
     /// <summary>
     /// CONNECT_RESPONSE (0x03) payload. protocol-spec.md section 3.1.
     /// </summary>
+    /// <remarks>
+    /// <b>The client echoes its own salt back.</b> That is what lets the server keep NO state
+    /// between CHALLENGE and RESPONSE: it recomputes the server salt from the client's address
+    /// and this salt with a secret key it never shares, so a challenge costs it nothing to
+    /// issue and nothing to remember. Storing a pending-challenge record per request instead
+    /// means a spoofed source address can make the server allocate — the resource-exhaustion
+    /// hole protocol-spec.md section 3.1 exists to forbid ("the server allocates no
+    /// resources"). See section 3.1's cookie description.
+    /// </remarks>
     public readonly struct ConnectResponsePayload
     {
-        public const int Size = 8;
+        /// <summary>u64 + u64 + joinTicket = 80 bytes.</summary>
+        public const int Size = 16 + ProtocolConstants.JOIN_TICKET_SIZE;
 
         public readonly ulong ChallengeResponse;
 
-        public ConnectResponsePayload(ulong challengeResponse)
-            => ChallengeResponse = challengeResponse;
+        /// <summary>The salt the client sent in CONNECT_REQUEST, echoed unchanged.</summary>
+        public readonly ulong ClientSalt;
+
+        /// <summary>
+        /// The same joinTicket the request carried, repeated here.
+        /// </summary>
+        /// <remarks>
+        /// Repeated because the server keeps no memory of the request. It is also the only
+        /// place the ticket is AUTHORITATIVELY checked: at CONNECT_REQUEST the source address
+        /// is still unproven, so anything decided there is decided for an address that may not
+        /// exist. By the time this arrives the challenge round trip has proved the client holds
+        /// the address, so this is where the ticket is verified and its playerId is bound to
+        /// the connection.
+        /// </remarks>
+        public readonly byte[] JoinTicket;
+
+        public ConnectResponsePayload(ulong challengeResponse, ulong clientSalt, byte[] joinTicket)
+        {
+            ChallengeResponse = challengeResponse;
+            ClientSalt = clientSalt;
+            JoinTicket = joinTicket ?? throw new ArgumentNullException(nameof(joinTicket));
+        }
 
         /// <summary>The expected answer: clientSalt XOR serverSalt.</summary>
         public static ulong ComputeResponse(ulong clientSalt, ulong serverSalt)
@@ -103,6 +133,8 @@ namespace Ironfront.Net.Protocol
         {
             var w = new SpanWriter(dst);
             w.WriteU64(ChallengeResponse);
+            w.WriteU64(ClientSalt);
+            w.WriteBytes(JoinTicket);
             return w.Ok ? w.Position : -1;
         }
 
@@ -111,8 +143,10 @@ namespace Ironfront.Net.Protocol
             payload = default;
             var r = new SpanReader(src);
             ulong response = r.ReadU64();
+            ulong clientSalt = r.ReadU64();
+            ReadOnlySpan<byte> ticket = r.ReadBytes(ProtocolConstants.JOIN_TICKET_SIZE);
             if (!r.Ok) return false;
-            payload = new ConnectResponsePayload(response);
+            payload = new ConnectResponsePayload(response, clientSalt, ticket.ToArray());
             return true;
         }
     }

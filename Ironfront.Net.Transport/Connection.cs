@@ -92,6 +92,17 @@ namespace Ironfront.Net.Transport
         /// </remarks>
         public long PeriodicKeepAlivesSent { get; private set; }
 
+        /// <summary>
+        /// The authenticated playerId from the joinTicket, once the handshake has bound it.
+        /// </summary>
+        /// <remarks>
+        /// architecture.md section 9 closes impersonation by binding connectionId to the signed
+        /// ticket's playerId. Until this existed the ticket was reduced to a bool and its
+        /// playerId never read, so one captured ticket could open as many connections as its
+        /// holder liked and every one of them looked like a different player.
+        /// </remarks>
+        public uint PlayerId { get; internal set; }
+
         public bool CanSendReliable => _flow.CanSendReliable(_reliability.PendingReliableCount)
             && _reliability.CanSendReliable;
 
@@ -283,13 +294,17 @@ namespace Ironfront.Net.Transport
             if (mustBeReliable && !CanSendReliable) return false;
 
             ushort channelSequence = _channels.NextSequence(channelId);
-            int envelopeLength = 3 + payload.Length;
+
+            // ChannelEnvelope.Size, not a bare 3. The envelope is a wire format and it now has
+            // a single definition in Ironfront.Net.Protocol that the writer, the reader and the
+            // conformance tests all agree on — see protocol-spec.md section 5.1. It lived here
+            // as three raw byte pokes, which is how it stayed undocumented for a milestone.
+            int envelopeLength = ChannelEnvelope.Size + payload.Length;
             if (envelopeLength <= ProtocolConstants.MAX_PAYLOAD)
             {
                 byte[] envelope = _pool.Rent();
-                envelope[0] = channelId;
-                Endian.WriteU16LE(envelope, 1, channelSequence);
-                payload.CopyTo(envelope.AsSpan(3, payload.Length));
+                new ChannelEnvelope((ChannelId)channelId, channelSequence).Write(envelope);
+                payload.CopyTo(envelope.AsSpan(ChannelEnvelope.Size, payload.Length));
                 bool result = SendPacket(
                     PacketType.Payload,
                     mustBeReliable ? PacketFlags.Reliable : PacketFlags.None,
@@ -457,8 +472,13 @@ namespace Ironfront.Net.Transport
         private void SendConnectResponse(double nowMs)
         {
             Span<byte> payload = stackalloc byte[ConnectResponsePayload.Size];
+            // The salt and the ticket are echoed because the server deliberately remembers
+            // neither — see HandshakeCookie for why keeping state for an unproved address is
+            // the resource-exhaustion hole this replaces.
             var response = new ConnectResponsePayload(
-                ConnectResponsePayload.ComputeResponse(_clientSalt, _serverSalt));
+                ConnectResponsePayload.ComputeResponse(_clientSalt, _serverSalt),
+                _clientSalt,
+                _joinTicket);
             response.Write(payload);
             SendPacket(PacketType.ConnectResponse, PacketFlags.Reliable, payload, false, nowMs, false);
         }
