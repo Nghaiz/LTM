@@ -1,10 +1,10 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Ironfront.MasterServer.Auth;
 using Ironfront.MasterServer.Configuration;
 using Ironfront.MasterServer.Data;
 using Ironfront.MasterServer.Diagnostics;
-using Ironfront.MasterServer.Auth;
 using Ironfront.MasterServer.Dispatch;
 using Ironfront.MasterServer.GameServers;
 using Ironfront.MasterServer.Lobby;

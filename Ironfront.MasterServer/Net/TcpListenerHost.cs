@@ -5,8 +5,8 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-using Ironfront.MasterServer.Dispatch;
 using Ironfront.MasterServer.Diagnostics;
+using Ironfront.MasterServer.Dispatch;
 using Ironfront.Net.Protocol;
 
 namespace Ironfront.MasterServer.Net
