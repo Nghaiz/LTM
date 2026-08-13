@@ -55,6 +55,12 @@ namespace Ironfront.Tools.SpecChecker
 
             checkedCount += Check(spec, "ProtocolConstants", typeof(ProtocolConstants), failures);
             checkedCount += Check(spec, "Quantize", typeof(Quantize), failures);
+            checkedCount += Check(spec, "WeaponIds", typeof(WeaponIds), failures);
+
+            // The weapon registry has a third copy that is not a constant anywhere: the
+            // serialized NetworkId fields in the Unity prefab. Nothing else in the build can see
+            // it — the server has no Unity reference and the prefab is not compiled.
+            checkedCount += CheckWeaponPrefab(repoRoot, failures);
 
             if (checkedCount == 0)
             {
@@ -146,6 +152,113 @@ namespace Ironfront.Tools.SpecChecker
                     failures.Add(
                         $"{type.Name}.{name}: spec says {Format(specValue)}, " +
                         $"code says {Format(codeValue)}.");
+                }
+            }
+
+            return count;
+        }
+
+        private const string WeaponPrefabRelativePath =
+            "Ironfront_Reborn/Assets/Resources/_Managers.prefab";
+
+        /// <summary>
+        /// Compares the serialized weapon registry in the Unity prefab against
+        /// <see cref="WeaponIds"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This is the only copy of the weapon mapping that no compiler ever reads. The server is
+        /// a netstandard library with no Unity reference, so an id reassigned in the Inspector
+        /// produces a green build, a green test suite, and a server and client that disagree
+        /// about which gun id 4 is — at runtime, for every player. Parsing the YAML here is ugly
+        /// and it is still cheaper than that bug.
+        /// </para>
+        /// <para>
+        /// The prefab is matched on shape rather than parsed as YAML: entries in the
+        /// <c>weapons</c> list serialize as a <c>- NetworkId:</c> line followed immediately by
+        /// the <c>name:</c> line, which is stable across Unity's serializer as long as both
+        /// fields stay declared in that order on <c>WeaponManager.WeaponEntry</c>.
+        /// </para>
+        /// </remarks>
+        private static int CheckWeaponPrefab(string repoRoot, List<string> failures)
+        {
+            string prefabPath = Path.Combine(
+                repoRoot, WeaponPrefabRelativePath.Replace('/', Path.DirectorySeparatorChar));
+
+            if (!File.Exists(prefabPath))
+            {
+                failures.Add($"weapon registry: prefab not found at {WeaponPrefabRelativePath}.");
+                return 0;
+            }
+
+            var entries = Regex.Matches(
+                File.ReadAllText(prefabPath),
+                @"-\s+NetworkId:\s*(?<id>-?\d+)\r?\n\s+name:\s*(?<name>.*?)\r?$",
+                RegexOptions.Multiline);
+
+            if (entries.Count == 0)
+            {
+                failures.Add(
+                    "weapon registry: parsed 0 entries out of the prefab. Either the weapons " +
+                    "list is empty or WeaponEntry no longer serializes NetworkId immediately " +
+                    "before name — update this checker to match.");
+                return 0;
+            }
+
+            var seen = new Dictionary<int, string>();
+            int count = 0;
+
+            foreach (Match entry in entries)
+            {
+                int id = int.Parse(entry.Groups["id"].Value, CultureInfo.InvariantCulture);
+                string name = entry.Groups["name"].Value.Trim();
+                count++;
+
+                if (seen.TryGetValue(id, out string? owner))
+                {
+                    failures.Add(
+                        $"weapon registry: id {id} is on both '{owner}' and '{name}'. Ids are " +
+                        "unique and permanent — give the new weapon the next free id.");
+                    continue;
+                }
+                seen[id] = name;
+
+                if (id <= 0 || id > byte.MaxValue)
+                {
+                    failures.Add(
+                        $"weapon registry: '{name}' has id {id}. Valid ids are 1..255; " +
+                        "0 is reserved for no/unknown weapon.");
+                    continue;
+                }
+
+                string expected = WeaponIds.NameOf((byte)id);
+                if (expected.Length == 0)
+                {
+                    failures.Add(
+                        $"weapon registry: the prefab has '{name}' at id {id}, which " +
+                        $"WeaponIds does not know (MAX_ASSIGNED is {WeaponIds.MAX_ASSIGNED}). " +
+                        "Add it to WeaponIds.cs and to protocol-spec.md § 4.8.");
+                    continue;
+                }
+
+                if (!string.Equals(expected, name, StringComparison.Ordinal))
+                {
+                    failures.Add(
+                        $"weapon registry: id {id} is '{name}' in the prefab and " +
+                        $"'{expected}' in WeaponIds. One of the two was renamed or reassigned.");
+                }
+            }
+
+            // The reverse direction: an id the code claims exists but the prefab has dropped.
+            // Left alone, the server would keep resolving an id no client can ever equip.
+            for (byte id = 1; id <= WeaponIds.MAX_ASSIGNED; id++)
+            {
+                if (!seen.ContainsKey(id))
+                {
+                    failures.Add(
+                        $"weapon registry: WeaponIds declares id {id} " +
+                        $"('{WeaponIds.NameOf(id)}') but no prefab entry has it. Ids are " +
+                        "permanent — a removed weapon keeps its id rather than freeing it.");
                 }
             }
 

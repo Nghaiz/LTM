@@ -383,6 +383,18 @@
       chính là nguồn của mẫu 1123 m đó. <b>Dòng tổng kết đã đổi dạng: kết luận giờ là con số khi
       CHẠM ĐẤT</b>, và số mẫu bị bỏ qua được báo riêng.
     </div>
+    <div class="note is-done">
+      <b>Vòng 7 — 13-08. Weapon id đã thành hợp đồng, không còn nằm riêng trong prefab.</b> PR #33
+      của anh đúng hướng và đã merge. Nhưng bảng id chỉ tồn tại trong
+      <code>_Managers.prefab</code>, mà server là thư viện netstandard không đọc được file Unity —
+      đúng loại lỗi mà envelope kênh đã mắc suốt một mốc (§ 5.1). Nay có
+      <code>protocol-spec.md § 4.8</code> + <code>WeaponIds.cs</code>, và
+      <code>SpecChecker</code> so cả ba bản trên mỗi lần CI chạy. <b>Hai chỗ trong code của anh
+      cần biết:</b> giá trị mặc định của <code>NetworkId</code> đổi từ 1 sang <b>0</b> — thêm vũ
+      khí mới trong Inspector giờ sẽ báo "chưa gán id" thay vì âm thầm trùng với RK-44; và
+      <code>NetworkIdOf</code> nay tra qua bảng đã kiểm, nên một entry trùng id sẽ phát ra 0 chứ
+      không mượn danh vũ khí khác. Thêm vũ khí mới thì phải sửa cả ba nơi, nếu quên thì CI đỏ.
+    </div>
     <div class="meta">
       <span><b>Ngày</b> 12-08-2026 · vòng 4</span>
       <span><b>Mốc</b> M0 đóng · M1 mở</span>
