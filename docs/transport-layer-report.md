@@ -77,15 +77,19 @@ authoritative because it is local control state and is not encoded on the wire.
 
 ## Experimental evidence
 
-The repository contains deterministic localhost transport and benchmark evidence. A complete
-academic comparison still requires the same TCP and UDP workloads under 0/5/15/30% loss, an ACK
-bitfield on/off run, a head-of-line run, congestion on/off at 20% loss, a BufferPool/ArrayPool
-comparison and a 1-to-64 connection sweep.
+The repository contains deterministic localhost transport and benchmark evidence. The
+`--phase4-report` benchmark option writes
+`plans/dev-b-transport/reports/2026-08-14-phase-04-local-experiments.csv` with local ACK-history,
+head-of-line and congestion-hysteresis results. The regular benchmark also prints the
+BufferPool/ArrayPool comparison and supports connection-load CSV output.
+
+A complete academic comparison still requires the same TCP and UDP workloads under 0/5/15/30%
+loss, congestion on/off at 20% loss and a 1-to-64 connection sweep under controlled conditions.
 
 No VPS endpoint, packet impairment appliance, Wireshark capture or Unity F3 screenshot is present
 in this workspace. Those values are intentionally not fabricated. The final report must append
 the externally collected LAN/VPS table and the eight-hour soak log before claiming the M3/M4
-acceptance criteria complete.
+runtime-evidence criteria complete.
 
 ## Limitations and defense answers
 

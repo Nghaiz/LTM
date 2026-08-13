@@ -71,6 +71,31 @@ The analyzer reports packet counts, invalid records, estimated sequence gaps, du
 sequences, and RTT samples correlated through the GSP ACK plus bitfield. Congestion mode changes
 are inferred from those RTT samples; they are diagnostic estimates, not authoritative wire data.
 
+## Unity diagnostics overlay
+
+`Ironfront_Reborn/Assets/Scripts/Net/Diagnostics/TransportDebugOverlay.cs` is the optional Unity
+IMGUI surface for the same `TransportStats` fields used by headless tools. Add the component to a
+debug object and bind the live client after that client is created:
+
+```csharp
+overlay.Bind(transportClient);
+```
+
+The default toggle is `Shift+F3`; bare `F3` remains available to the legacy vehicle-seat
+binding. The component does not create sockets or synthesize values while unbound. A Unity Editor
+compile and screenshot are still external integration evidence, not claimed by this source-level
+commit.
+
+The local Phase 4 behaviour report can be generated with:
+
+```powershell
+dotnet run --project Ironfront.Net.Transport.Bench -c Release -- --seconds 1 --connections 1 --idle `
+  --phase4-report plans/dev-b-transport/reports/2026-08-14-phase-04-local-experiments.csv
+```
+
+That CSV covers ACK history, per-channel head-of-line behaviour and congestion hysteresis. It is
+deterministic local evidence; it does not replace packet-loss, VPS/NAT or long-soak measurements.
+
 ## Operational defaults
 
 - Safe datagram MTU: 1200 bytes; IP fragmentation is never delegated to the network.
