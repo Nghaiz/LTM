@@ -392,6 +392,105 @@ ever stand a server up by hand and it accepts nobody with no error in the Consol
 
 ---
 
+## S6 / A11–A13 — Phase 03 landed: the match runs itself  ⏱ ~25 min  🔴 closes M3 criteria 1–7
+
+Phase 03 is merged. The server now runs a complete match on its own: warmup, play, capture points,
+ticket bleed, a winner, a scoreboard pause, a clean reset, and back to waiting. All of it is
+engine-free and tested — 403 tests in the replication suite, 718 across the solution.
+
+Two new scripts landed under `Assets/Scripts/Net/Server/`, and as usual I did not create their
+`.meta` files:
+
+| | |
+|---|---|
+| `MatchController.cs` | Drives the match, reads capture-point occupancy out of the scene, broadcasts `S_MATCH_STATE` and `S_CAPTURE_POINT` |
+| `ServerMasterReporter.cs` | Heartbeats and match results to the master. Defaults to standalone, so it does nothing until wired |
+
+### S6 — Compile them and commit their `.meta`  ⏱ 10 min
+
+Same as S1. Pull, run `build-libs.ps1` (the DLLs changed), open the Editor, confirm 0 errors,
+commit the two new `.meta` files.
+
+**Reply with:** `"0 error"` — or the red lines.
+
+### S7 — Put both components on the `NetServer` GameObject  ⏱ 10 min
+
+Both declare `[RequireComponent(typeof(ServerTickLoop))]`, so drop them on the same object S2
+created. Then fill in `MatchController`'s **Capture Points** array with the map's capture-point
+transforms, **in id order** — the array index *is* the point id on the wire, so a gap renumbers
+every point after it and desynchronises the flags on every client. Leave the array empty for a
+deathmatch: no points, no ticket bleed, and the round then only ends on deaths.
+
+**Reply with:** how many capture points you wired, and for which map.
+
+### A11 — Two more plugin DLLs, if you want the master server connected  ⏱ 10 min  🟡 optional
+
+`ServerMasterReporter` talks to an interface (`IMatchReporter`) that lives in
+`Ironfront.Net.Replication.dll`, which you already have. The concrete implementation that speaks
+TCP to Dev D's master lives in two assemblies you do not: `Ironfront.MasterClient.dll` and
+`Ironfront.Net.MasterLink.dll`.
+
+That split is deliberate. `Replication.dll` ships into the Editor, so it must not drag a socket and
+`System.Text.Json` in behind it for four calls made once every five seconds. The cost is that
+connecting to the master needs those two DLLs dropped into `Assets/Plugins` with their `.meta`
+files — yours, not mine.
+
+**Until you do, the server runs in standalone mode**: complete matches, correct scoring, simply not
+advertised anywhere, with clients connecting by IP. That is a supported configuration, not a
+degraded one, so this is genuinely optional until Dev D's master is up.
+
+When you do want it, the wiring is one line from a boot script:
+
+```csharp
+var link = new GameServerLink();
+var reporter = new GameServerMatchReporter(link, ownsLink: true);
+await reporter.ConnectAndRegisterAsync(masterHost, masterPort, registration);
+GetComponent<ServerMasterReporter>().SetReporter(reporter);
+```
+
+**Reply with:** whether you want this now or after Dev D confirms the master is reachable.
+
+### A12 — Server CPU percentage: I am sending −1  ⏱ 2 min  🟡 decision
+
+GS_HEARTBEAT carries a `cpuPercent` that the master sorts servers on. Unity exposes no portable
+process-CPU counter, so I send **−1** rather than a number I made up — a fabricated value on a
+matchmaking input is worse than an absent one, because the master will act on it. Average tick time
+is a real load signal and is sent alongside.
+
+**Reply with:** leave it at −1, or name a counter you would rather I read.
+
+### A13 — Nobody is tallying kills and deaths  ⏱ 5 min  🟡 decision
+
+GS_MATCH_ENDED carries per-player kills/deaths/score. `S_DEATH` already names the killer, but
+nothing accumulates it, so I report an **empty** list rather than a row of zeroes per player —
+all-zero rows are indistinguishable from a match where nobody scored, and the master stores what it
+is given.
+
+Ticket accounting is unaffected: `MatchController.ReportDeath(team)` costs the dying team a ticket
+and that is wired.
+
+**Reply with:** whether the scoreboard is yours or mine. If it is mine, tell me where a kill is
+resolved on the server and I will tally from there.
+
+---
+
+## B7 — For Dev B, not you: the connection carries no player identity
+
+Recorded here so it is not lost. `ITransportServer.OnValidateTicket` hands me the ticket, and
+`OnClientConnected` hands me a `ConnectionInfo` — which has no player id on it. So there is nothing
+to match a validated ticket against its connection, and I pair them positionally: admission and
+connection happen in the same `Poll`, in order, one immediately after the other.
+
+It is sound in the normal case and it has a cost in the abnormal one. A handshake that validates
+and then fails before connecting leaves its admission at the head of the queue, and the next
+connection is paired with the wrong player — that player's claim is then not released on
+disconnect and lapses on the ticket's own 60-second expiry instead. Nobody is admitted who should
+not be; one player waits up to a minute to rejoin after a crash.
+
+The clean fix is a `PlayerId` (or the raw ticket) on `ConnectionInfo`. Filed for Dev B.
+
+---
+
 ## Two things I found in your files — reported, not touched
 
 conventions.md § 7 says to tell you rather than edit. Neither is urgent and neither is mine.
@@ -465,6 +564,11 @@ Do them in this order. Group V blocks A3, and A3 blocks A4.
 | A6 | Weapon id registry | 30 min | how to read the ids |
 | A7 | Can a player pass ±2048 m? | 10 min | yes/no |
 | A8 | Skim the movement analysis | 10 min | anything that contradicts what you know |
+| **S6** | Compile the two new match scripts, **commit their `.meta`** | 10 min | `"0 error"` |
+| **S7** | `MatchController` + `ServerMasterReporter` on `NetServer`, capture points in id order | 10 min | how many points, which map |
+| A11 | Master-link DLLs in `Assets/Plugins` — optional, standalone works without them | 10 min | now, or after Dev D is up |
+| A12 | `cpuPercent`: leave at −1, or name a counter | 2 min | which |
+| A13 | Who owns the kill/death tally | 5 min | yours or mine |
 
 **A1, A2 and A5 are closed; roughly 3 hours of Editor work left.** Nothing in this
 round needs a decision from you — A5 was the last one. V2 is the only item whose answer changes
