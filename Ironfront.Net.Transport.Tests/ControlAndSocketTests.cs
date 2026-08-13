@@ -215,9 +215,22 @@ namespace Ironfront.Net.Transport.Tests
 
             client.Send((byte)ChannelId.ReliableOrdered, new byte[] { 7 }, reliable: true);
             Pump(server, client, () => received.Count == 1, 5000);
+
+            // One reliable packet is not enough to guarantee a sample. The layer follows Karn's
+            // algorithm and throws away the RTT of any packet it had to retransmit, and the 30 ms
+            // floor on the RTO leaves barely 10 ms of slack over this 20 ms simulated round trip.
+            // A single scheduling hiccup on a loaded runner burns that slack, the packet is
+            // resent, its sample is discarded, and a lone send would leave the RTT at zero
+            // forever. Keep offering fresh reliable packets until one round-trips untouched.
             Stopwatch ackClock = Stopwatch.StartNew();
+            double nextSendAtMs = 0.0;
             while (client.Stats.SmoothedRttMs <= 0f && ackClock.ElapsedMilliseconds < 5000)
             {
+                if (ackClock.Elapsed.TotalMilliseconds >= nextSendAtMs)
+                {
+                    client.Send((byte)ChannelId.ReliableOrdered, new byte[] { 7 }, reliable: true);
+                    nextSendAtMs = ackClock.Elapsed.TotalMilliseconds + 100.0;
+                }
                 server.Poll();
                 client.Poll();
             }
