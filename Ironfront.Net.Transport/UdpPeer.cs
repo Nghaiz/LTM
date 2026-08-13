@@ -24,6 +24,7 @@ namespace Ironfront.Net.Transport
         private readonly Socket _socket;
         private readonly BufferPool _pool;
         private readonly NetworkSimulator<EndPoint> _simulator;
+        private readonly PacketLogger? _packetLogger;
 #if NET8_0_OR_GREATER
         private readonly SocketAddress _receiveSocketAddress =
             new SocketAddress(AddressFamily.InterNetwork, 16);
@@ -57,7 +58,8 @@ namespace Ironfront.Net.Transport
         public UdpPeer(
             int bindPort,
             SimulatorConfig? simulatorConfig = null,
-            int poolCapacity = 256)
+            int poolCapacity = 256,
+            PacketLogger? packetLogger = null)
         {
             if (bindPort < 0 || bindPort > ushort.MaxValue)
                 throw new ArgumentOutOfRangeException(nameof(bindPort));
@@ -92,6 +94,7 @@ namespace Ironfront.Net.Transport
             _pool = new BufferPool(poolCapacity, ProtocolConstants.MTU_SAFE);
             _simulator = new NetworkSimulator<EndPoint>(
                 simulatorConfig ?? SimulatorConfig.FromEnvironment(), _pool);
+            _packetLogger = packetLogger ?? PacketLogger.FromEnvironment();
             _rawSendCallback = RawSendPooled;
         }
 
@@ -120,6 +123,9 @@ namespace Ironfront.Net.Transport
         public bool ReceiveBufferWasClampedByTheOs => ReceiveBufferSize < RequestedSocketBufferSize;
 
         public long DroppedBySimulator => _simulator.DroppedCount;
+
+        /// <summary>The capture logger owned by this peer, or <c>null</c> when diagnostics are off.</summary>
+        public PacketLogger? PacketLogger => _packetLogger;
 
         /// <summary>
         /// Times a <see cref="Poll"/> hit <see cref="MaxPacketsPerPoll"/> with more waiting.
@@ -156,8 +162,9 @@ namespace Ironfront.Net.Transport
             if (datagram.Length < GspHeader.Size || datagram.Length > ProtocolConstants.MTU_SAFE)
                 throw new ArgumentOutOfRangeException(nameof(datagram));
 
-            if (_simulator.ShouldSend(datagram, destination, nowMs))
-                RawSend(datagram.ToArray(), datagram.Length, destination);
+            EndPoint stableDestination = StableDestination(destination);
+            if (_simulator.ShouldSend(datagram, stableDestination, nowMs))
+                RawSend(datagram.ToArray(), datagram.Length, stableDestination);
         }
 
         /// <summary>Allocation-free send overload for pooled transport buffers.</summary>
@@ -169,8 +176,9 @@ namespace Ironfront.Net.Transport
                 throw new ArgumentOutOfRangeException(nameof(length));
             if (destination == null) throw new ArgumentNullException(nameof(destination));
 
-            if (_simulator.ShouldSend(datagram.AsSpan(0, length), destination, nowMs))
-                RawSend(datagram, length, destination);
+            EndPoint stableDestination = StableDestination(destination);
+            if (_simulator.ShouldSend(datagram.AsSpan(0, length), stableDestination, nowMs))
+                RawSend(datagram, length, stableDestination);
         }
 
         /// <summary>Flushes delayed packets, then drains all currently available datagrams.</summary>
@@ -225,6 +233,8 @@ namespace Ironfront.Net.Transport
                     continue;
                 }
 
+                _packetLogger?.Log(false, buffer.AsSpan(0, received), remote, nowMs);
+
                 if (GspHeader.TryParse(buffer.AsSpan(0, received), out GspHeader header))
                 {
                     ReadOnlyMemory<byte> view = new ReadOnlyMemory<byte>(buffer, 0, received);
@@ -257,6 +267,7 @@ namespace Ironfront.Net.Transport
             _sendSocketAddresses.Clear();
 #endif
             _socket.Dispose();
+            _packetLogger?.Dispose();
         }
 
         private void RawSendPooled(byte[] data, int length, EndPoint destination)
@@ -264,6 +275,7 @@ namespace Ironfront.Net.Transport
 
         private void RawSend(byte[] datagram, int length, EndPoint destination)
         {
+            _packetLogger?.Log(true, datagram.AsSpan(0, length), destination, NowMs());
             try
             {
                 if (_connectedEndpoint != null)
@@ -283,6 +295,11 @@ namespace Ironfront.Net.Transport
                 NetLog.Warn($"UDP send failed: {ex.SocketErrorCode}");
             }
         }
+
+        private EndPoint StableDestination(EndPoint destination)
+            => _simulator.Enabled && destination is ReusableIpv4EndPoint reusable
+                ? reusable.ToIPEndPoint()
+                : destination;
 
 #if NET8_0_OR_GREATER
         private SocketAddress GetSendSocketAddress(EndPoint destination)
@@ -319,5 +336,9 @@ namespace Ironfront.Net.Transport
         {
             if (_disposed) throw new ObjectDisposedException(nameof(UdpPeer));
         }
+
+        private static double NowMs()
+            => System.Diagnostics.Stopwatch.GetTimestamp() * 1000.0
+               / System.Diagnostics.Stopwatch.Frequency;
     }
 }
