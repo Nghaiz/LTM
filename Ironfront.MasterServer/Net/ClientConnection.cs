@@ -78,7 +78,8 @@ namespace Ironfront.MasterServer.Net
             _postToLogicThread = postToLogicThread;
             _onFrame           = onFrame;
             _onClosed          = onClosed;
-            _lastActivityMs    = Environment.TickCount64;
+            ConnectedAtMs      = Environment.TickCount64;
+            _lastActivityMs    = ConnectedAtMs;
         }
 
         /// <summary>Monotonically increasing per host. Used in log lines.</summary>
@@ -106,7 +107,27 @@ namespace Ironfront.MasterServer.Net
         /// <see cref="Environment.TickCount64"/> at the last byte received. Read and written
         /// on the logic thread only.
         /// </summary>
+        /// <remarks>
+        /// This is an IDLE clock and it resets on any byte, including a byte that is not part
+        /// of any complete frame. That makes it the right measure for the heartbeat window of
+        /// an authenticated connection and the WRONG measure for the unauthenticated one — see
+        /// <see cref="ConnectedAtMs"/>.
+        /// </remarks>
         public long LastActivityMs => _lastActivityMs;
+
+        /// <summary>
+        /// <see cref="Environment.TickCount64"/> at accept. Never updated.
+        /// </summary>
+        /// <remarks>
+        /// The unauthenticated timeout is a DEADLINE measured from here, not an idle gap
+        /// measured from <see cref="LastActivityMs"/>. Measured from last activity it is not a
+        /// Slowloris defense at all: the attack is precisely a client that stays busy enough to
+        /// look alive while never finishing anything, so a clock that any byte resets is a
+        /// clock the attacker controls. Verified before the fix — a connection dribbling one
+        /// byte every 20 s held its slot for 89 s against a documented 30 s limit, and would
+        /// have held it indefinitely.
+        /// </remarks>
+        public long ConnectedAtMs { get; }
 
         /// <summary>How many complete frames this connection has produced.</summary>
         public int FramesReceived { get; private set; }

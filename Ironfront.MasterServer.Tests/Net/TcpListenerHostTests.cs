@@ -175,26 +175,46 @@ namespace Ironfront.MasterServer.Tests.Net
 
         /// <summary>
         /// The frame path end to end: heartbeats sent over the wire are parsed, counted, and
-        /// reset the activity clock — so a connection that keeps sending them outlives a
-        /// timeout it would otherwise trip. This is the liveness half of D7.
+        /// reset the activity clock — so an AUTHENTICATED connection that keeps sending them
+        /// outlives a timeout it would otherwise trip. This is the liveness half of D7.
         /// </summary>
+        /// <remarks>
+        /// This test used to run against an UNAUTHENTICATED connection and assert that
+        /// heartbeats kept it alive past its unauthenticated timeout. That is the Slowloris
+        /// hole rather than a feature: "you have N seconds to authenticate" means nothing if
+        /// any traffic resets the clock, and heartbeats are traffic an attacker can send
+        /// forever without ever logging in. The unauthenticated timeout is now an absolute
+        /// deadline from accept, so the liveness property being asserted here belongs where it
+        /// is actually true — after authentication, which is exactly the window HEARTBEAT
+        /// exists to hold open. The security half is pinned by
+        /// <c>TcpStreamFramingTests.HeartbeatsDoNotExtendAnUnauthenticatedDeadline</c>.
+        /// </remarks>
         [Fact]
         public async Task HeartbeatsAreParsedCountedAndKeepTheConnectionAlive()
         {
             await using var harness = new MasterHostHarness(o =>
             {
-                o.UnauthenticatedTimeout = TimeSpan.FromMilliseconds(300);
+                // Generous, because this test is not about the deadline — it is about the
+                // heartbeat window, and the connection is authenticated below.
+                o.UnauthenticatedTimeout = TimeSpan.FromSeconds(30);
                 o.HeartbeatTimeout       = TimeSpan.FromMilliseconds(300);
             });
 
             TcpClient client = await harness.ConnectAsync();
             Assert.True(await MasterHostHarness.WaitUntilAsync(() => harness.Host.ConnectionCount == 1));
 
+            await harness.Host.InvokeOnLogicThreadAsync(() =>
+            {
+                foreach (ClientConnection connection in harness.Host.ConnectionsUnsafe)
+                    connection.MarkAuthenticated();
+                return true;
+            });
+
             NetworkStream stream = client.GetStream();
             byte[] heartbeat = HeartbeatFrame();
 
-            // Beat every 80 ms for ~640 ms — comfortably past the 300 ms timeout, so if the
-            // frames were not resetting the clock the connection would already be gone.
+            // Beat every 80 ms for ~640 ms — comfortably past the 300 ms heartbeat window, so
+            // if the frames were not resetting the clock the connection would already be gone.
             for (int i = 0; i < 8; i++)
             {
                 await stream.WriteAsync(heartbeat);

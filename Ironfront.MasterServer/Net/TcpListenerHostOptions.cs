@@ -33,6 +33,20 @@ namespace Ironfront.MasterServer.Net
         public int MaxConnectionsPerIp { get; set; } = 5;
 
         /// <summary>
+        /// Total accepted connections held at once, across every address. 0 disables the cap.
+        /// </summary>
+        /// <remarks>
+        /// The per-IP limit alone bounds one attacker on one address; it does nothing about a
+        /// botnet, an IPv4 range, or a NAT gateway, each of which arrives as a stream of
+        /// distinct addresses that are individually under the per-IP limit. Every accepted
+        /// connection costs a socket, a pooled receive buffer and a task, so with no ceiling
+        /// the process runs out of handles rather than refusing anybody. 256 is roughly two
+        /// orders of magnitude above a full lobby and still far below any file-descriptor
+        /// limit, so it only ever fires on something that is not real traffic.
+        /// </remarks>
+        public int MaxTotalConnections { get; set; } = 256;
+
+        /// <summary>
         /// Slowloris defense: connect, say nothing, hold a slot forever. Until a connection
         /// has authenticated it gets this long and no longer.
         /// </summary>

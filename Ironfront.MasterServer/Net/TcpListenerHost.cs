@@ -40,6 +40,13 @@ namespace Ironfront.MasterServer.Net
         private readonly TcpListenerHostOptions _options;
         private readonly ConcurrentQueue<Action> _logicQueue = new ConcurrentQueue<Action>();
 
+        /// <summary>
+        /// Held only by <see cref="Dispose"/> and the logic loop's own teardown. Not a general
+        /// lock over the connection state — see Dispose for exactly which race it closes and
+        /// why the rest of the class still needs none.
+        /// </summary>
+        private readonly object _stateGate = new object();
+
         // Both dictionaries are touched ONLY from the logic thread. That is the invariant the
         // absence of locking rests on; every path that reaches them goes through _logicQueue.
         private readonly Dictionary<int, ClientConnection> _connections =
@@ -58,6 +65,7 @@ namespace Ironfront.MasterServer.Net
 
         private long _totalAccepted;
         private long _totalRejectedByIpLimit;
+        private long _totalRejectedByTotalLimit;
         private long _totalDisconnected;
         private long _totalTimedOut;
         private long _totalFramesReceived;
@@ -95,6 +103,12 @@ namespace Ironfront.MasterServer.Net
 
         /// <summary>Connections refused because their IP was already at the limit.</summary>
         public long TotalRejectedByIpLimit => Interlocked.Read(ref _totalRejectedByIpLimit);
+
+        /// <summary>
+        /// Connections refused by the global cap. See
+        /// <see cref="TcpListenerHostOptions.MaxTotalConnections"/>.
+        /// </summary>
+        public long TotalRejectedByTotalLimit => Interlocked.Read(ref _totalRejectedByTotalLimit);
 
         /// <summary>Connections closed, for any reason.</summary>
         public long TotalDisconnected => Interlocked.Read(ref _totalDisconnected);
@@ -267,6 +281,19 @@ namespace Ironfront.MasterServer.Net
 
             uint ipKey = ClientConnection.ToIpKey(address);
 
+            // Checked before the per-IP limit, because it is the broader one: a botnet or a
+            // whole IPv4 range arrives as a stream of distinct addresses each individually
+            // under the per-IP cap, so per-IP alone never fires and the process runs out of
+            // file descriptors instead of refusing anybody.
+            if (_options.MaxTotalConnections > 0 && _connections.Count >= _options.MaxTotalConnections)
+            {
+                Interlocked.Increment(ref _totalRejectedByTotalLimit);
+                MasterLog.Warn(
+                    $"refused {endPoint}: already at {_options.MaxTotalConnections} total connections");
+                socket.Dispose();
+                return;
+            }
+
             if (ConnectionsForIpUnsafe(ipKey) >= _options.MaxConnectionsPerIp)
             {
                 // Refused BEFORE the counter is touched, so a flood cannot inflate the count
@@ -336,11 +363,23 @@ namespace Ironfront.MasterServer.Net
             _timeoutScratch.Clear();
             foreach (ClientConnection connection in _connections.Values)
             {
-                long limit = connection.IsAuthenticated
-                    ? (long)_options.HeartbeatTimeout.TotalMilliseconds
-                    : (long)_options.UnauthenticatedTimeout.TotalMilliseconds;
+                // The two clocks are deliberately different, and swapping them breaks one of
+                // the two things this sweep is for.
+                //
+                //   Authenticated -> IDLE gap since the last byte. A logged-in client that has
+                //   nothing to say is supposed to send HEARTBEAT, so silence is the signal.
+                //
+                //   Unauthenticated -> absolute DEADLINE since accept. Using the idle gap here
+                //   makes the Slowloris defense defend nothing: the attack is a client that
+                //   stays just busy enough to look alive while never completing a frame or
+                //   authenticating, so a clock any byte resets is a clock the attacker owns.
+                //   Measured before this was fixed: one byte every 20 s held a slot for 89 s
+                //   against a 30 s limit, indefinitely in principle.
+                bool expired = connection.IsAuthenticated
+                    ? now - connection.LastActivityMs > (long)_options.HeartbeatTimeout.TotalMilliseconds
+                    : now - connection.ConnectedAtMs > (long)_options.UnauthenticatedTimeout.TotalMilliseconds;
 
-                if (now - connection.LastActivityMs > limit) _timeoutScratch.Add(connection);
+                if (expired) _timeoutScratch.Add(connection);
             }
 
             // Collected first, removed second: mutating _connections while enumerating it
@@ -451,14 +490,28 @@ namespace Ironfront.MasterServer.Net
             CloseListenSocket();
 
             // Dispose can arrive from a thread that is not the logic thread — a test's using
-            // block, or Ctrl+C — and by then the logic loop has already exited, so there is
-            // nobody left to drain the queue. Closing the sockets directly is the only way to
-            // avoid leaking them; the dictionaries are about to be garbage anyway.
-            foreach (ClientConnection connection in _connections.Values) connection.Dispose();
+            // block, or Ctrl+C — and by then the logic loop has normally already exited, so
+            // there is nobody left to drain the queue. Closing the sockets directly is the only
+            // way to avoid leaking them.
+            //
+            // "Normally" is the problem. Every current caller happens to await RunAsync first,
+            // so the logic thread is provably gone by the time this runs — but nothing in the
+            // type enforces that, and Dispose is public. A caller that disposes a host still
+            // running (a test tightening a timeout, a bug in a future shutdown path) would have
+            // this thread enumerating and clearing the two dictionaries the whole no-locking
+            // design says are touched by the logic thread and nothing else. That is silent
+            // corruption, not an exception, and it would contradict the class documentation.
+            //
+            // The lock is only ever contended in that already-broken case, so it costs nothing
+            // in the normal one and turns a data race into a wait.
+            lock (_stateGate)
+            {
+                foreach (ClientConnection connection in _connections.Values) connection.Dispose();
 
-            _connections.Clear();
-            _connectionsPerIp.Clear();
-            Volatile.Write(ref _connectionCount, 0);
+                _connections.Clear();
+                _connectionsPerIp.Clear();
+                Volatile.Write(ref _connectionCount, 0);
+            }
         }
     }
 }
