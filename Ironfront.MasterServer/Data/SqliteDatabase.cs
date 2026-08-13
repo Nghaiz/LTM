@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Microsoft.Data.Sqlite;
 
 namespace Ironfront.MasterServer.Data
@@ -11,6 +12,16 @@ namespace Ironfront.MasterServer.Data
         public string DisplayName { get; init; } = string.Empty;
         public long LockedUntil { get; init; }
         public bool IsBanned { get; init; }
+    }
+
+    public sealed class MatchResultRecord
+    {
+        public int RoomId { get; init; }
+        public int PlayerId { get; init; }
+        public int Kills { get; init; }
+        public int Deaths { get; init; }
+        public int Score { get; init; }
+        public long EndedAt { get; init; }
     }
 
     public sealed class SqliteDatabase : IDisposable
@@ -101,6 +112,29 @@ CREATE INDEX IF NOT EXISTS idx_results_player ON match_results(player_id);");
             cmd.Parameters.AddWithValue("$room", roomId); cmd.Parameters.AddWithValue("$player", playerId);
             cmd.Parameters.AddWithValue("$kills", kills); cmd.Parameters.AddWithValue("$deaths", deaths); cmd.Parameters.AddWithValue("$score", score); cmd.Parameters.AddWithValue("$ended", endedAt);
             cmd.ExecuteNonQuery();
+        }
+
+        /// <summary>
+        /// Every result row recorded for one match, oldest first. Exists so the M2 criterion
+        /// "match results are written to the DB" can be checked by a test rather than by a human
+        /// opening the file with a SQLite browser, which is what the phase document assumed.
+        /// </summary>
+        public List<MatchResultRecord> FindMatchResults(int roomId)
+        {
+            var results = new List<MatchResultRecord>();
+            using SqliteCommand cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT room_id, player_id, kills, deaths, score, ended_at FROM match_results WHERE room_id = $room ORDER BY id";
+            cmd.Parameters.AddWithValue("$room", roomId);
+            using SqliteDataReader reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                results.Add(new MatchResultRecord
+                {
+                    RoomId = reader.GetInt32(0), PlayerId = reader.GetInt32(1), Kills = reader.GetInt32(2),
+                    Deaths = reader.GetInt32(3), Score = reader.GetInt32(4), EndedAt = reader.GetInt64(5)
+                });
+            }
+            return results;
         }
 
         private void Execute(string sql)
