@@ -9,6 +9,12 @@ needs the Editor, which under conventions.md § 1.3 means it needs you.
 
 Items are ordered by what unblocks the most.
 
+> **Round 5 — 2026-08-13. Group V is closed.** V1: **0 errors** (measured with MCP installed).
+> V2: **census clean**. V3: **log written**. V4: Play Mode stopped and
+> `[AppQuit] quit requested` was logged; both Quit buttons are wired. V5: **clean x3** for Island,
+> Dustbowl, and Splash. Full evidence: [Unity V1-V5 verification](../../reports/2026-08-13-unity-v1-v5.md).
+> A3 is no longer blocked by Group V.
+
 > **Round 2 — 2026-08-12, afternoon.** A1, A2 and A5 are closed. Three more PRs merged since
 > (#12 yours, #13, #14): the two bugs you reported — cannot quit, no logs — plus four Unity 6
 > errors in the scene files. Everything verifiable without the Editor has been verified;
