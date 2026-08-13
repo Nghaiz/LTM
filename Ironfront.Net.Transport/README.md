@@ -59,7 +59,13 @@ The benchmark can run the ACK comparison with the history enabled or disabled:
 ```powershell
 dotnet run --project Ironfront.Net.Transport.Bench -c Release -- --connections 16 --seconds 10 --ack-bitfield on
 dotnet run --project Ironfront.Net.Transport.Bench -c Release -- --connections 16 --seconds 10 --ack-bitfield off
+dotnet run --project Ironfront.Net.Transport.Bench -c Release -- --connections 16 --seconds 28800 --idle --report artifacts/transport-soak.csv
 ```
+
+`--report` writes one CSV row per minute plus a final row. `--idle` stops application payloads
+after the handshake while the transport continues polling keep-alives, which is the run mode for
+the five-minute NAT-idle check. Keep the generated CSV under ignored `artifacts/` and attach it to
+the integration report rather than committing it.
 
 The analyzer reports packet counts, invalid records, estimated sequence gaps, duplicate outgoing
 sequences, and RTT samples correlated through the GSP ACK plus bitfield. Congestion mode changes

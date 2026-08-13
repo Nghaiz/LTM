@@ -13,6 +13,8 @@
 - `TransportStats` now exposes byte rates, five-second sent/received loss estimates, congestion
   mode, pending fragments and pool rentals.
 - `UdpPeer` logs at the socket boundary only when `IRONFRONT_PCAP` or an injected logger is used.
+- The benchmark can run an idle keep-alive soak and emit one-minute CSV rows with connection
+  count, pool rentals, RTT, loss, Gen0 and working set (`--idle --report`).
 - Reliability slot collisions fail loudly; challenge retries, endpoint reconnect denials and
   CONNECT_ACCEPTED metadata are explicit.
 

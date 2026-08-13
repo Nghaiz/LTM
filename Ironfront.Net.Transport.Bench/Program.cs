@@ -1,8 +1,11 @@
 using System;
 using System.Buffers;
 using System.Diagnostics;
+using System.Globalization;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using System.Threading;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Transport;
@@ -17,10 +20,12 @@ namespace Ironfront.Net.Transport.Bench
             int seconds = ParseSeconds(args);
             int connections = ParseConnections(args);
             bool ackBitfield = ParseAckBitfield(args);
+            bool idle = HasFlag(args, "--idle");
+            string? reportPath = ParseReportPath(args);
             Console.WriteLine("Ironfront transport benchmark (hand-rolled, .NET 8)");
             RunMicrobenchmarks();
             RunPoolComparison();
-            RunConnectionLoad(seconds, connections, ackBitfield);
+            RunConnectionLoad(seconds, connections, ackBitfield, idle, reportPath);
             return 0;
         }
 
@@ -156,11 +161,21 @@ namespace Ironfront.Net.Transport.Bench
                 + $"alloc={allocated / (double)iterations,8:F2} B/op gen0={gen0Collections}");
         }
 
-        private static void RunConnectionLoad(int seconds, int connectionCount, bool ackBitfield)
+        private static void RunConnectionLoad(
+            int seconds,
+            int connectionCount,
+            bool ackBitfield,
+            bool idle,
+            string? reportPath)
         {
             using var server = new UdpTransportServer();
             server.AckBitfieldEnabled = ackBitfield;
             var clients = new UdpTransportClient?[connectionCount];
+            using StreamWriter? metrics = CreateMetricsWriter(reportPath);
+            if (metrics != null)
+                metrics.WriteLine(
+                    "timestamp,elapsedSec,connCount,bufferPoolRented,rttAvgMs,lossPercent,"
+                    + "gen0Collections,workingSetMB");
             long messages = 0;
             server.OnValidateTicket += _ => true;
             server.OnMessage += (_, _) => messages++;
@@ -202,7 +217,7 @@ namespace Ironfront.Net.Transport.Bench
                 return;
             }
 
-            WarmConnectionLoad(server, clients);
+            WarmConnectionLoad(server, clients, idle);
             GC.Collect();
             GC.WaitForPendingFinalizers();
             GC.Collect();
@@ -218,9 +233,10 @@ namespace Ironfront.Net.Transport.Bench
             Stopwatch loadClock = Stopwatch.StartNew();
             byte[] payload = { 0x42 };
             long nextSendMs = 0;
+            long nextReportMs = 60_000;
             while (loadClock.Elapsed.TotalSeconds < seconds)
             {
-                if (loadClock.ElapsedMilliseconds >= nextSendMs)
+                if (!idle && loadClock.ElapsedMilliseconds >= nextSendMs)
                 {
                     long beforeSend = GC.GetAllocatedBytesForCurrentThread();
                     for (int i = 0; i < clients.Length; i++)
@@ -236,6 +252,11 @@ namespace Ironfront.Net.Transport.Bench
                 for (int i = 0; i < clients.Length; i++) clients[i]!.Poll();
                 clientPollAlloc += GC.GetAllocatedBytesForCurrentThread() - beforeClientPoll;
                 pollAlloc += GC.GetAllocatedBytesForCurrentThread() - beforePoll;
+                if (metrics != null && loadClock.ElapsedMilliseconds >= nextReportMs)
+                {
+                    WriteMetrics(metrics, loadClock, server, clients);
+                    nextReportMs += 60_000;
+                }
                 Thread.Sleep(1);
             }
 
@@ -245,17 +266,21 @@ namespace Ironfront.Net.Transport.Bench
                 / loadClock.Elapsed.TotalMilliseconds * 100.0;
             long workingSetDelta = process.WorkingSet64 - beforeWorkingSet;
             int connectedCount = server.ConnectionCount;
+            if (metrics != null) WriteMetrics(metrics, loadClock, server, clients);
             for (int i = 0; i < clients.Length; i++) clients[i]!.Dispose();
             Console.WriteLine(
                 $"load: conns={connectedCount}, seconds={seconds}, messages={messages}, "
                 + $"ack-bitfield={(ackBitfield ? "on" : "off")}, "
+                + $"mode={(idle ? "idle" : "traffic")}, "
                 + $"thread-alloc={allocated} B, send={sendAlloc} B, poll={pollAlloc} B, "
                 + $"server-poll={serverPollAlloc} B, client-poll={clientPollAlloc} B, "
                 + $"cpu={cpuPercent:F2}% of one core, working-set-delta={workingSetDelta} B");
         }
 
         private static void WarmConnectionLoad(
-            UdpTransportServer server, UdpTransportClient?[] clients)
+            UdpTransportServer server,
+            UdpTransportClient?[] clients,
+            bool idle)
         {
             Stopwatch clock = Stopwatch.StartNew();
             byte[] payload = { 0x42 };
@@ -265,7 +290,7 @@ namespace Ironfront.Net.Transport.Bench
             // capacity growth in a periodic maintenance list.
             while (clock.ElapsedMilliseconds < 12_000)
             {
-                if (clock.ElapsedMilliseconds >= nextSendMs)
+                if (!idle && clock.ElapsedMilliseconds >= nextSendMs)
                 {
                     for (int i = 0; i < clients.Length; i++)
                         clients[i]!.Send((byte)ChannelId.InputSequenced, payload, reliable: false);
@@ -309,6 +334,70 @@ namespace Ironfront.Net.Transport.Bench
             }
 
             return true;
+        }
+
+        private static bool HasFlag(string[] args, string flag)
+        {
+            for (int i = 0; i < args.Length; i++)
+                if (string.Equals(args[i], flag, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        private static string? ParseReportPath(string[] args)
+        {
+            for (int i = 0; i + 1 < args.Length; i++)
+                if (string.Equals(args[i], "--report", StringComparison.OrdinalIgnoreCase))
+                    return args[i + 1];
+            return null;
+        }
+
+        private static StreamWriter? CreateMetricsWriter(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return null;
+
+            string fullPath = Path.GetFullPath(path);
+            string? directory = Path.GetDirectoryName(fullPath);
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            return new StreamWriter(fullPath, append: false, Encoding.UTF8);
+        }
+
+        private static void WriteMetrics(
+            StreamWriter writer,
+            Stopwatch clock,
+            UdpTransportServer server,
+            UdpTransportClient?[] clients)
+        {
+            double rttTotal = 0.0;
+            double lossTotal = 0.0;
+            long poolRented = 0;
+            int connected = 0;
+            for (int i = 0; i < clients.Length; i++)
+            {
+                UdpTransportClient? client = clients[i];
+                if (client == null) continue;
+                if (client.State == ConnectionState.Connected) connected++;
+                rttTotal += client.SmoothedRttMs;
+                lossTotal += client.Stats.PacketLossPercentSent;
+                poolRented += client.Stats.BufferPoolRented;
+
+                ConnectionInfo info = server.GetInfo((ushort)(i + 1));
+                poolRented += info.Stats.BufferPoolRented;
+            }
+
+            double divisor = clients.Length == 0 ? 1.0 : clients.Length;
+            Process process = Process.GetCurrentProcess();
+            process.Refresh();
+            writer.WriteLine(
+                string.Join(",",
+                    DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture),
+                    clock.Elapsed.TotalSeconds.ToString("F3", CultureInfo.InvariantCulture),
+                    connected.ToString(CultureInfo.InvariantCulture),
+                    poolRented.ToString(CultureInfo.InvariantCulture),
+                    (rttTotal / divisor).ToString("F2", CultureInfo.InvariantCulture),
+                    (lossTotal / divisor).ToString("F2", CultureInfo.InvariantCulture),
+                    GC.CollectionCount(0).ToString(CultureInfo.InvariantCulture),
+                    (process.WorkingSet64 / (1024.0 * 1024.0)).ToString("F2", CultureInfo.InvariantCulture)));
+            writer.Flush();
         }
     }
 }
