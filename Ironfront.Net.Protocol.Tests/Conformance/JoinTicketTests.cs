@@ -246,7 +246,10 @@ namespace Ironfront.Net.Protocol.Tests
 
             Assert.True(JoinTicket.TryReadFields(ticket, out _, out _, out _, out _,
                                                  out string displayName));
-            Assert.Equal("NgườiChơiV", displayName);
+            // "NgườiChơiVi" is 15 UTF-8 bytes: ư (U+01B0) and ơ (U+01A1) cost two bytes each,
+            // not three. The next character, ệ (U+1EC7), needs three more and would overrun the
+            // 16-byte field, so the cut lands after the "i".
+            Assert.Equal("NgườiChơiVi", displayName);
             Assert.True(Encoding.UTF8.GetByteCount(displayName) <= JoinTicket.DisplayNameSize);
             Assert.DoesNotContain('�', displayName);
         }
