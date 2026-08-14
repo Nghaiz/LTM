@@ -1,0 +1,56 @@
+# Ironfront headless game server — templated systemd unit (phase 03 task 1).
+#
+# The @ makes this a template: %i is the instance number, so one file runs both servers.
+#   sudo systemctl enable --now ironfront-gameserver@1
+#   sudo systemctl enable --now ironfront-gameserver@2
+#
+# Instance N listens on UDP port 27014+N (27015, 27016, ...), matching the port range
+# opened in docs/operations.md.
+#
+# OWNER NOTE: the Unity headless build itself is Dev A's and Dev C's; this unit is Dev D's
+# deployment wrapper around whatever they produce. It is written against the build layout
+# tools/build-server.ps1 emits.
+
+[Unit]
+Description=Ironfront Game Server instance %i (UDP)
+After=network-online.target ironfront-master.service
+Wants=network-online.target
+
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+[Service]
+Type=simple
+User=ironfront
+Group=ironfront
+WorkingDirectory=/opt/ironfront/gameserver
+
+# The same shared secret as the master: joinTickets are HMAC-signed by the master and
+# verified here, and a mismatch denies every CONNECT_REQUEST with reason 3.
+EnvironmentFile=/opt/ironfront/.env
+Environment=IRONFRONT_GAMESERVER_UDP_PORT=2701%i
+
+# -batchmode -nographics is what makes a Unity build runnable on a headless VPS at all;
+# without them it tries to initialise a graphics device and exits.
+ExecStart=/opt/ironfront/gameserver/Ironfront.Server.x86_64 \
+    -batchmode -nographics \
+    -logFile /var/log/ironfront/gameserver-%i.log \
+    -port 2701%i
+
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+# Expect 500 MB - 1.5 GB resident per instance. On a 4 GB VPS running the master plus two
+# instances that is the constraint to watch; MemoryMax turns "the OOM killer picked a
+# process at random" into "this instance was restarted", which is diagnosable.
+MemoryMax=1600M
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/ironfront /var/log/ironfront
+
+[Install]
+WantedBy=multi-user.target

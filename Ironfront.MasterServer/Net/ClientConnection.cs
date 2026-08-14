@@ -1,8 +1,12 @@
 using System;
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.IO;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using Ironfront.MasterServer.Auth;
@@ -38,10 +42,13 @@ namespace Ironfront.MasterServer.Net
     /// single <c>lock</c> in this class.
     /// </para>
     /// <para>
-    /// <b>Phase 00 is receive-only.</b> The only master-to-client messages the spec defines
-    /// are responses and pushes that belong to the phase 01 dispatcher, and
-    /// <c>0x00F0 HEARTBEAT</c> is C→M with no reply (protocol-spec.md section 11), so there
-    /// is deliberately no send path here yet.
+    /// <b>Bytes move over a <see cref="Stream"/>, not the socket</b> (phase 03). With no
+    /// certificate configured that stream is a <see cref="NetworkStream"/> and the behaviour
+    /// is byte-for-byte what it was; with one, it is an <see cref="SslStream"/> and everything
+    /// above this line is unchanged. That is the whole point worth making about TLS here:
+    /// <b>it does not replace framing</b>. <c>SslStream</c> decrypts records, not messages, so
+    /// one <c>Read</c> still returns three glued frames or half of one, and
+    /// <see cref="MspFrameReader"/> is needed exactly as before.
     /// </para>
     /// </remarks>
     public sealed class ClientConnection : IDisposable
@@ -61,6 +68,18 @@ namespace Ironfront.MasterServer.Net
         private readonly Action<ClientConnection, string> _onClosed;
         private readonly MspFrameReader _reader = new MspFrameReader();
         private readonly ConcurrentQueue<byte[]> _sendQueue = new ConcurrentQueue<byte[]>();
+        private readonly X509Certificate2? _serverCertificate;
+
+        /// <summary>
+        /// Completed once the transport is usable. <see cref="Send"/> can in principle be
+        /// called before a TLS handshake finishes — the dispatcher only replies to a frame,
+        /// which cannot arrive first, but nothing in the type enforces that ordering — so the
+        /// send loop waits on this rather than racing a null stream.
+        /// </summary>
+        private readonly TaskCompletionSource<Stream> _transportReady =
+            new TaskCompletionSource<Stream>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        private Stream? _transport;
         private int _sendRunning;
 
         private long _lastActivityMs;
@@ -74,7 +93,8 @@ namespace Ironfront.MasterServer.Net
             string remoteEndPoint,
             Action<Action> postToLogicThread,
             MspFrameHandler onFrame,
-            Action<ClientConnection, string> onClosed)
+            Action<ClientConnection, string> onClosed,
+            X509Certificate2? serverCertificate = null)
         {
             Id                 = id;
             _socket            = socket;
@@ -84,6 +104,7 @@ namespace Ironfront.MasterServer.Net
             _postToLogicThread = postToLogicThread;
             _onFrame           = onFrame;
             _onClosed          = onClosed;
+            _serverCertificate = serverCertificate;
             ConnectedAtMs      = Environment.TickCount64;
             _lastActivityMs    = ConnectedAtMs;
         }
@@ -125,6 +146,17 @@ namespace Ironfront.MasterServer.Net
             IsAuthenticated = false;
         }
 
+        /// <summary>True once this connection is carried over TLS.</summary>
+        public bool IsTls { get; private set; }
+
+        /// <summary>
+        /// True when the TLS handshake failed. Read once by the host so the failure is
+        /// counted and surfaced on the metrics endpoint rather than buried in a log line —
+        /// "some clients cannot log in" is the symptom, and a non-zero handshake-failure
+        /// count is the one number that names the cause immediately.
+        /// </summary>
+        public bool TlsHandshakeFailed { get; private set; }
+
         internal void Send(MspMessageType messageType, ReadOnlySpan<byte> body)
         {
             byte[] frame = new byte[MspFrame.FrameSizeFor(body.Length)];
@@ -138,21 +170,24 @@ namespace Ironfront.MasterServer.Net
         {
             try
             {
+                // Waits for the handshake rather than assuming it has happened. On a plaintext
+                // connection this completes on the first pass through the receive loop, so the
+                // cost is a task that is already complete.
+                Stream transport = await _transportReady.Task.ConfigureAwait(false);
+
                 while (_sendQueue.TryDequeue(out byte[]? frame))
                 {
-                    int sent = 0;
-                    while (sent < frame.Length)
-                    {
-                        int written = await _socket
-                            .SendAsync(frame.AsMemory(sent), SocketFlags.None)
-                            .ConfigureAwait(false);
-                        if (written == 0)
-                            throw new SocketException((int)SocketError.ConnectionReset);
-                        sent += written;
-                    }
+                    // Stream.WriteAsync writes the whole buffer or throws — unlike
+                    // Socket.SendAsync, which is free to accept a prefix and return. The
+                    // partial-write loop that was here is not just unnecessary now, it would
+                    // be wrong: SslStream has no notion of "wrote 40 of 100 bytes" a caller
+                    // could resume from, because the 100 bytes became one encrypted record.
+                    await transport.WriteAsync(frame.AsMemory(0, frame.Length)).ConfigureAwait(false);
                 }
+
+                await transport.FlushAsync().ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is SocketException or ObjectDisposedException)
+            catch (Exception ex) when (ex is SocketException or ObjectDisposedException or IOException or OperationCanceledException)
             {
                 _postToLogicThread(() => _onClosed(this, "send failed"));
             }
@@ -213,6 +248,35 @@ namespace Ironfront.MasterServer.Net
         {
             string reason = "receive loop ended";
 
+            Stream transport;
+            try
+            {
+                transport = await EstablishTransportAsync(ct).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                // Includes AuthenticationException (bad certificate, no shared protocol
+                // version) and the ObjectDisposedException raised when the unauthenticated
+                // timeout sweep closed the socket out from under a stalled handshake — which
+                // is itself the Slowloris defense doing its job, since a peer that opens a
+                // connection and never finishes the handshake would otherwise hold a slot
+                // forever.
+                bool handshake = ex is AuthenticationException;
+                if (handshake)
+                {
+                    TlsHandshakeFailed = true;
+                    MasterLog.Warn($"conn #{Id} {RemoteEndPoint}: TLS handshake failed — {ex.Message}");
+                }
+
+                _transportReady.TrySetException(ex);
+                _postToLogicThread(() => _onClosed(
+                    this, handshake ? "TLS handshake failed" : $"transport setup failed: {ex.GetType().Name}"));
+                return;
+            }
+
+            _transport = transport;
+            _transportReady.TrySetResult(transport);
+
             try
             {
                 while (!ct.IsCancellationRequested)
@@ -222,8 +286,8 @@ namespace Ironfront.MasterServer.Net
 
                     try
                     {
-                        received = await _socket
-                            .ReceiveAsync(buffer.AsMemory(0, ReceiveChunkSize), SocketFlags.None, ct)
+                        received = await transport
+                            .ReadAsync(buffer.AsMemory(0, ReceiveChunkSize), ct)
                             .ConfigureAwait(false);
                     }
                     catch
@@ -269,8 +333,66 @@ namespace Ironfront.MasterServer.Net
                 // An abrupt peer death is routine on the public Internet, not an incident.
                 reason = $"socket error {ex.SocketErrorCode}";
             }
+            catch (IOException ex)
+            {
+                // The stream-level face of the same event. NetworkStream and SslStream wrap a
+                // reset in an IOException instead of surfacing the SocketException, so without
+                // this arm an ordinary abrupt disconnect becomes an unhandled exception on a
+                // thread-pool thread once TLS is switched on.
+                reason = ex.InnerException is SocketException socket
+                    ? $"socket error {socket.SocketErrorCode}"
+                    : "stream closed";
+            }
 
             _postToLogicThread(() => _onClosed(this, reason));
+        }
+
+        /// <summary>
+        /// Builds the byte transport: a plain <see cref="NetworkStream"/>, or an
+        /// <see cref="SslStream"/> that has completed a server-side handshake.
+        /// </summary>
+        /// <remarks>
+        /// There is no explicit handshake timeout here, and that is deliberate rather than an
+        /// omission: the connection is unauthenticated until it logs in, so the host's
+        /// <c>UnauthenticatedTimeout</c> sweep already covers a peer that stalls mid-handshake
+        /// — it disposes the socket, and this await fails. One clock, one policy, instead of
+        /// two that can disagree.
+        /// </remarks>
+        private async Task<Stream> EstablishTransportAsync(CancellationToken ct)
+        {
+            // ownsSocket: false — Dispose() closes the socket itself, in a specific order, and
+            // handing that responsibility to two owners is how a socket gets double-closed.
+            var network = new NetworkStream(_socket, ownsSocket: false);
+            if (_serverCertificate is null) return network;
+
+            var ssl = new SslStream(network, leaveInnerStreamOpen: false);
+            try
+            {
+                await ssl.AuthenticateAsServerAsync(
+                    new SslServerAuthenticationOptions
+                    {
+                        ServerCertificate = _serverCertificate,
+                        // The client is authenticated by LOGIN_REQ, not by a certificate. A
+                        // client-cert PKI would mean issuing and shipping a certificate per
+                        // player, which is a different project.
+                        ClientCertificateRequired = false,
+                        EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                        CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+                    },
+                    ct).ConfigureAwait(false);
+            }
+            catch
+            {
+                await ssl.DisposeAsync().ConfigureAwait(false);
+                throw;
+            }
+
+            IsTls = true;
+
+            if (MasterLog.DebugEnabled)
+                MasterLog.Debug($"conn #{Id} {RemoteEndPoint}: TLS {ssl.SslProtocol} established");
+
+            return ssl;
         }
 
         /// <summary>
@@ -318,6 +440,10 @@ namespace Ironfront.MasterServer.Net
         {
             if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
+            // Anything still awaiting the transport has to be released, or a send loop parked
+            // on a handshake that will never complete keeps this object alive forever.
+            _transportReady.TrySetCanceled();
+
             try
             {
                 // Shutdown before Close so the peer sees a FIN and its own Receive returns 0,
@@ -329,6 +455,18 @@ namespace Ironfront.MasterServer.Net
                 // Already gone. Nothing to shut down and nothing to report.
             }
             catch (ObjectDisposedException)
+            {
+            }
+
+            try
+            {
+                // After the shutdown, not before: SslStream.Dispose tries to write a
+                // close_notify alert, and on a socket whose peer has already vanished that is
+                // a write into a reset connection. The FIN has been sent, the alert is
+                // courtesy, and the exception it can raise is not interesting.
+                _transport?.Dispose();
+            }
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException or SocketException)
             {
             }
 

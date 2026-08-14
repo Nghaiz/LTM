@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Microsoft.Data.Sqlite;
 
 namespace Ironfront.MasterServer.Data
@@ -135,6 +136,78 @@ CREATE INDEX IF NOT EXISTS idx_results_player ON match_results(player_id);");
                 });
             }
             return results;
+        }
+
+        /// <summary>Accounts in the database. Reported by the metrics endpoint.</summary>
+        public int CountAccounts()
+        {
+            using SqliteCommand cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT COUNT(*) FROM accounts";
+            object? scalar = cmd.ExecuteScalar();
+            return scalar is long count ? (int)count : 0;
+        }
+
+        /// <summary>
+        /// Writes a consistent copy of the live database to <paramref name="destinationPath"/>
+        /// using SQLite's online backup API (phase 03 task 6).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b><c>cp ironfront.db backup.db</c> is not a backup.</b> It is a byte copy of a file
+        /// that is being written to, and in WAL mode — which this connection turns on — it is
+        /// worse than that: the committed state lives partly in <c>ironfront.db-wal</c>, so
+        /// copying only the main file can produce a backup that is both corrupt and older than
+        /// the last commit. The backup API takes a read lock per page, copies through SQLite
+        /// itself, and produces a single file that is a valid database as of a real instant.
+        /// </para>
+        /// <para>
+        /// Backing up an <b>open</b> connection is the point: the server does not stop. The
+        /// cron job in <c>tools/backup.sh</c> runs against a running master.
+        /// </para>
+        /// <para>
+        /// A backup nobody has restored is not a backup, which is why criterion 10 asks for a
+        /// tested restore and why the test suite performs one rather than merely asserting
+        /// that a file appeared.
+        /// </para>
+        /// </remarks>
+        public void BackupTo(string destinationPath)
+        {
+            if (string.IsNullOrWhiteSpace(destinationPath))
+                throw new ArgumentException("Destination path is required.", nameof(destinationPath));
+
+            string? directory = Path.GetDirectoryName(Path.GetFullPath(destinationPath));
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+
+            // Overwrite rather than append-to-existing: SqliteConnection.BackupDatabase copies
+            // into whatever is there, and a stale larger file left behind would be silently
+            // reused as the target's page store.
+            if (File.Exists(destinationPath)) File.Delete(destinationPath);
+
+            var destinationConnectionString = new SqliteConnectionStringBuilder
+            {
+                DataSource = destinationPath,
+                Mode = SqliteOpenMode.ReadWriteCreate,
+
+                // Pooling OFF, and this is load-bearing rather than a micro-optimisation.
+                // Microsoft.Data.Sqlite pools connections by connection string, so a pooled
+                // destination is returned to the pool on Dispose with its file handle still
+                // open — and the NEXT backup to the same path then fails at the File.Delete
+                // above with "the process cannot access the file". A backup job that works
+                // the first time and fails every time after is exactly the kind of failure
+                // nobody notices until they need the backup. Found by
+                // BackingUpTwiceOverwritesRatherThanMergingIntoTheOldFile.
+                Pooling = false,
+            }.ToString();
+
+            using (var destination = new SqliteConnection(destinationConnectionString))
+            {
+                destination.Open();
+                _connection.BackupDatabase(destination);
+            }
+
+            // Belt and braces: if a pooled connection for this path exists from anywhere else
+            // in the process, release it so the file is not left mapped.
+            SqliteConnection.ClearPool(new SqliteConnection(destinationConnectionString));
         }
 
         private void Execute(string sql)

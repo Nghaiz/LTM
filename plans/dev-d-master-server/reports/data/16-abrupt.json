@@ -1,0 +1,44 @@
+{
+  "Scenario": "16-abrupt",
+  "Behavior": "disconnect-abrupt",
+  "Master": "127.0.0.1:27000",
+  "Tls": false,
+  "Clients": 16,
+  "RequestedDurationSec": 30,
+  "ActualDurationSec": 30,
+  "Operations": 1376,
+  "OperationsPerSecond": 45.87,
+  "Failures": 0,
+  "AbruptDisconnects": 1376,
+  "ConnectionsHeldToEnd": 0,
+  "LoginLatencyMs": {
+    "Samples": 0,
+    "Min": 0,
+    "P50": 0,
+    "P95": 0,
+    "P99": 0,
+    "Max": 0,
+    "Mean": 0
+  },
+  "OperationLatencyMs": {
+    "Samples": 0,
+    "Min": 0,
+    "P50": 0,
+    "P95": 0,
+    "P99": 0,
+    "Max": 0,
+    "Mean": 0
+  },
+  "Server": {
+    "Samples": 5,
+    "PeakConnections": 112,
+    "PeakWorkingSetMb": 74,
+    "FinalWorkingSetMb": 70,
+    "FinalThreadCount": 22,
+    "FinalGen2Collections": 1,
+    "FinalRoomsActive": 0,
+    "FinalOnlineNow": 0,
+    "WorkingSetGrowthMb": -4
+  },
+  "Errors": []
+}

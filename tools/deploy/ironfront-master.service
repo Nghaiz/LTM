@@ -1,0 +1,62 @@
+# Ironfront master server — systemd unit (phase 03 task 1).
+#
+# Install:
+#   sudo cp tools/deploy/ironfront-master.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now ironfront-master
+#
+# See docs/operations.md for the full deployment procedure.
+
+[Unit]
+Description=Ironfront Master Server (TCP lobby, auth, matchmaking)
+Documentation=https://github.com/Sagitoaz/LTM/blob/main/docs/operations.md
+After=network-online.target
+Wants=network-online.target
+
+# Trap 1 from the phase document. Restart=always alone turns a process that dies every
+# three seconds into a process that LOOKS like it is running: systemctl reports "active",
+# the port is briefly open, and nothing anywhere says the server is in a crash loop. These
+# two lines make systemd give up after 5 failures in 60 seconds and mark the unit failed,
+# so the crash is visible in `systemctl status` instead of hidden behind the restart.
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+[Service]
+Type=simple
+User=ironfront
+Group=ironfront
+WorkingDirectory=/opt/ironfront/master
+
+# The secret and the certificate password live here, not in this file: a unit file is
+# world-readable under /etc/systemd/system, and `systemctl show` prints Environment= values
+# to any user. /opt/ironfront/.env is chmod 600, owned by ironfront.
+EnvironmentFile=/opt/ironfront/.env
+
+ExecStart=/usr/bin/dotnet /opt/ironfront/master/Ironfront.MasterServer.dll
+
+Restart=always
+RestartSec=5
+
+# SIGINT rather than the default SIGTERM: Program.cs handles Console.CancelKeyPress, which
+# is what drains the logic queue and closes sockets in order. SIGTERM would kill the process
+# mid-write.
+KillSignal=SIGINT
+TimeoutStopSec=20
+
+StandardOutput=append:/var/log/ironfront/master.log
+StandardError=append:/var/log/ironfront/master.err.log
+
+# Hardening. The master server reads one .env, writes one SQLite file and opens two TCP
+# ports; nothing else it can be talked into doing is legitimate.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+ReadWritePaths=/opt/ironfront /var/log/ironfront
+
+[Install]
+WantedBy=multi-user.target
