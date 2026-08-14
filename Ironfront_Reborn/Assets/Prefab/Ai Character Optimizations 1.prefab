@@ -91,6 +91,7 @@ GameObject:
   - component: {fileID: 114614192184273107}
   - component: {fileID: 114098779080409132}
   - component: {fileID: 54734626843160919}
+  - component: {fileID: 900000000001003}
   m_Layer: 0
   m_Name: Ai Character Optimizations 1
   m_TagString: Untagged
@@ -2583,6 +2584,23 @@ ConfigurableJoint:
   m_EnablePreprocessing: 1
   m_MassScale: 1
   m_ConnectedMassScale: 1
+--- !u!114 &900000000001003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1152437832874254}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: eb1b866ad5fced0498f91288487785a2, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  _actorId: 0
+  _team: 0
+  _availableForPlayers: 0
+  _health: 100
+  _weaponId: 0
+  _ammoInClip: 0
 --- !u!153 &153299140927352611
 ConfigurableJoint:
   m_ObjectHideFlags: 0
