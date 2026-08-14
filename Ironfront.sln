@@ -33,6 +33,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ironfront.MasterClient", "I
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ironfront.Net.MasterLink", "Ironfront.Net.MasterLink\Ironfront.Net.MasterLink.csproj", "{568CFB05-A798-4EE8-B118-3A21467FAE6F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ironfront.Tools.MspBench", "Ironfront.Tools.MspBench\Ironfront.Tools.MspBench.csproj", "{AD046AE5-A645-46FD-BFA0-B4337038E901}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -98,6 +100,10 @@ Global
 		{568CFB05-A798-4EE8-B118-3A21467FAE6F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{568CFB05-A798-4EE8-B118-3A21467FAE6F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{568CFB05-A798-4EE8-B118-3A21467FAE6F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AD046AE5-A645-46FD-BFA0-B4337038E901}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AD046AE5-A645-46FD-BFA0-B4337038E901}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AD046AE5-A645-46FD-BFA0-B4337038E901}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AD046AE5-A645-46FD-BFA0-B4337038E901}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{AE7B02F1-9E5D-4909-A41F-783E7D15A48D} = {F7309333-0ADC-4CFA-9FCF-9097CA15D087}

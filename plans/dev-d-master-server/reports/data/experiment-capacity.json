@@ -1,0 +1,74 @@
+[
+  {
+    "Connections": 16,
+    "Accepted": 16,
+    "Refused": 0,
+    "WorkingSetMb": 67,
+    "ThreadCount": 16,
+    "Gen2Collections": 0,
+    "ConnectP50Ms": 0.24,
+    "ConnectP99Ms": 8.052,
+    "LoginMsUnderLoad": 199.08,
+    "Note": "all accepted"
+  },
+  {
+    "Connections": 50,
+    "Accepted": 50,
+    "Refused": 0,
+    "WorkingSetMb": 69,
+    "ThreadCount": 17,
+    "Gen2Collections": 0,
+    "ConnectP50Ms": 0.282,
+    "ConnectP99Ms": 0.707,
+    "LoginMsUnderLoad": 185.043,
+    "Note": "all accepted"
+  },
+  {
+    "Connections": 100,
+    "Accepted": 100,
+    "Refused": 0,
+    "WorkingSetMb": 71,
+    "ThreadCount": 17,
+    "Gen2Collections": 0,
+    "ConnectP50Ms": 0.333,
+    "ConnectP99Ms": 0.665,
+    "LoginMsUnderLoad": 199.811,
+    "Note": "all accepted"
+  },
+  {
+    "Connections": 250,
+    "Accepted": 250,
+    "Refused": 0,
+    "WorkingSetMb": 73,
+    "ThreadCount": 17,
+    "Gen2Collections": 0,
+    "ConnectP50Ms": 0.307,
+    "ConnectP99Ms": 0.776,
+    "LoginMsUnderLoad": 184.22,
+    "Note": "all accepted"
+  },
+  {
+    "Connections": 500,
+    "Accepted": 500,
+    "Refused": 0,
+    "WorkingSetMb": 77,
+    "ThreadCount": 17,
+    "Gen2Collections": 0,
+    "ConnectP50Ms": 0.314,
+    "ConnectP99Ms": 0.634,
+    "LoginMsUnderLoad": 191.217,
+    "Note": "all accepted"
+  },
+  {
+    "Connections": 1000,
+    "Accepted": 1000,
+    "Refused": 0,
+    "WorkingSetMb": 81,
+    "ThreadCount": 18,
+    "Gen2Collections": 0,
+    "ConnectP50Ms": 0.324,
+    "ConnectP99Ms": 0.632,
+    "LoginMsUnderLoad": 202.192,
+    "Note": "all accepted"
+  }
+]
