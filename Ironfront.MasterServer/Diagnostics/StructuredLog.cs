@@ -42,7 +42,10 @@ namespace Ironfront.MasterServer.Diagnostics
             WriteIndented = false,
         };
 
-        private static TextWriter _output = Console.Out;
+        // PascalCase, not _output: conventions.md section 3.1 gives private STATIC fields
+        // PascalCase and reserves the underscore prefix for instance fields. Caught by the
+        // dotnet-format style gate (IDE1006), which is what that gate is for.
+        private static TextWriter Output = Console.Out;
 
         /// <summary>
         /// Off by default so a developer running the server locally gets readable output.
@@ -73,13 +76,13 @@ namespace Ironfront.MasterServer.Diagnostics
         /// <summary>Redirects output. For tests; production always writes to stdout.</summary>
         internal static void RedirectTo(TextWriter writer)
         {
-            lock (Gate) _output = writer ?? throw new ArgumentNullException(nameof(writer));
+            lock (Gate) Output = writer ?? throw new ArgumentNullException(nameof(writer));
         }
 
         /// <summary>Restores stdout.</summary>
         internal static void RestoreOutput()
         {
-            lock (Gate) _output = Console.Out;
+            lock (Gate) Output = Console.Out;
         }
 
         /// <summary>
@@ -140,7 +143,7 @@ namespace Ironfront.MasterServer.Diagnostics
         {
             lock (Gate)
             {
-                _output.WriteLine(line);
+                Output.WriteLine(line);
             }
         }
     }
