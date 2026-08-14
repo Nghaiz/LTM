@@ -222,4 +222,3 @@ Create a draft PR titled `fix(replication): align A3 shadow sprint sampling` tar
 - [ ] **Step 3: Verify the published PR**
 
 Confirm the PR URL, base/head branches, draft state, commits, and changed-file scope.
-

@@ -1,7 +1,9 @@
 # A3 Shadow Input Alignment Design
 
-**Date:** 2026-08-14  
-**Owner:** Dev C — Replication and Simulation  
+**Date:** 2026-08-14
+
+**Owner:** Dev C — Replication and Simulation
+
 **Evidence:** Dev A's A3 rerun in PR #42 (`952c2f2`)
 
 ## Problem
