@@ -1,13 +1,32 @@
 # A3 shadow-comparison rerun — Dev A report
 
 - **Author:** Dev A (Unity Client)
-- **Test session:** 2026-08-13 22:45:05–22:46:57 (Asia/Saigon)
+- **Test sessions:** 2026-08-13 22:45:05–22:46:57 and 2026-08-14 17:51:15–17:52:07 (Asia/Saigon)
 - **Report date:** 2026-08-14
 - **Unity:** 6.3 LTS (6000.3.21f1), MCP installed
-- **Harness revision:** `c0e4619` (`MovementShadowCompare` is unchanged on `develop` at `722ba6c`)
-- **Status:** **Partially passed — A3 must remain open**
+- **Harness revision:** `4b3f1df` (PR #43, aligned legacy sprint sampling and deployment gating)
+- **Status:** **Passed — A3 closed; A4 unblocked**
 
-## Result
+## Round 7 closure
+
+Dev C's PR #43 changed the harness to read the sprint latch actually consumed by the legacy
+controller and to wait until both controllers are active. Dev A repeated the focused flat-ground
+run with walk/sprint transitions. Unity compiled with zero errors after the separate global
+`Action` name collision in `MatchController` was fixed by PR #44.
+
+```text
+[MovementShadowCompare] CLEAN on the ground — the port agrees with the original on every grounded tick observed.
+airborne 1/39 diverged. scored=2559 skipped_discontinuities=0 total_diverged=1.
+meanH=0.00115m worstH=0.0076m worstV_airborne=0.1765m threshold=0.010m.
+```
+
+There were zero grounded warnings, including across the repeated walk/sprint transitions.
+`worstH=0.0076m` stayed below the `0.010m` threshold. The sole warning was airborne, with
+`dH=0.0024m` and vertical disagreement while crouch was active; it does not affect the grounded
+flat-ground acceptance criterion. No pre-deployment warning flood remained, and no discontinuity
+was skipped. This closes A3 and unblocks A4.
+
+## Round 6 result (historical)
 
 The repaired harness attached to `Player Fps Actor(Clone)`, ran 5,342 scored ticks, skipped one
 spawn/teleport discontinuity, printed its exit summary, and produced no runtime exception or red
@@ -79,11 +98,14 @@ Builds: 3 succeeded, 0 warnings, 0 errors
 Dependencies copied: 4/4
 ```
 
-## Requested follow-up from Dev C
+## Requested follow-up from Dev C — resolved by Round 7
 
 1. Review the two flat-ground sprint-transition samples above.
 2. Decide whether to fix `MovementSimulation`, align input sampling in the harness, or explicitly
    exclude transition-edge ticks with a documented reason.
 3. Optionally suppress pre-deploy airborne scoring.
-4. Ask Dev A for another focused Editor rerun after the change. Until then, A3 remains open and A4
-   should not be performed.
+4. Ask Dev A for another focused Editor rerun after the change.
+
+PR #43 implemented items 2–3 by aligning the observed sprint latch and suppressing inactive
+pre-deployment scoring. The clean Round 7 rerun above satisfies item 4. No further A3 action is
+required; A4 may proceed.
