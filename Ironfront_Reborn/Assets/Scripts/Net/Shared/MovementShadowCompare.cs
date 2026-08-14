@@ -1,5 +1,6 @@
 using Ironfront.Net.Replication.Movement;
 using UnityEngine;
+using UnityStandardAssets.Characters.FirstPerson;
 
 namespace Ironfront.Net.Unity
 {
@@ -92,6 +93,7 @@ namespace Ironfront.Net.Unity
         public float DiscontinuityMargin = 4f;
 
         private CharacterController _controller;
+        private FirstPersonController _legacyController;
         private Transform _cameraParent;
         private MoveState _shadow;
         private Vector3 _previousRealPosition;
@@ -138,6 +140,15 @@ namespace Ironfront.Net.Unity
                     "both FpsActorController and CharacterController.");
             }
 
+            _legacyController = GetComponent<FirstPersonController>();
+            if (_legacyController == null)
+            {
+                Debug.LogWarning(
+                    $"[MovementShadowCompare] no FirstPersonController on '{name}'. The harness " +
+                    "cannot observe the effective input used by legacy movement and will not " +
+                    "score this run.");
+            }
+
             // The original derives its forward from the camera, not the body transform
             // (FirstPersonController.cs:189). Using the body would introduce a divergence that
             // is an artefact of this harness rather than of the port.
@@ -168,10 +179,21 @@ namespace Ironfront.Net.Unity
         {
             Vector3 realPosition = transform.position;
 
+            // The prefab exists before the player is deployed. During that interval the legacy
+            // input and CharacterController are disabled, so a stationary airborne-looking
+            // transform is lifecycle state, not locomotion. Do not let those ticks pollute A3.
+            if (!IsReadyToScore())
+            {
+                _primed = false;
+                Resync();
+                return;
+            }
+
             if (!_primed)
             {
                 _primed = true;
                 _previousRealPosition = realPosition;
+                Resync();
                 return;
             }
 
@@ -180,7 +202,20 @@ namespace Ironfront.Net.Unity
             // at: the point is to compare against what the original ACTUALLY did this frame,
             // and the original used the project's fixed timestep.
             float dt = Time.fixedDeltaTime;
-            MoveInput input = MovementSimulation.FromUnityInput(_cameraParent.eulerAngles.y);
+            MoveInput sampledInput = MovementSimulation.FromUnityInput(_cameraParent.eulerAngles.y);
+
+            // FpsActorController.Update latches the effective sprint decision here before the
+            // legacy FirstPersonController consumes it in FixedUpdate. Reading the raw button
+            // again after that move can see a newer render-frame value; PR #42 caught exactly
+            // two such physics ticks. Preserve every other live field, but compare both systems
+            // with the sprint state the observed movement actually used.
+            MoveInput input = new MoveInput(
+                sampledInput.MoveX,
+                sampledInput.MoveZ,
+                sampledInput.YawDegrees,
+                sampledInput.Jump,
+                _legacyController.sprinting,
+                sampledInput.Crouch);
 
             bool grounded = _controller != null && _controller.isGrounded;
             _shadow.IsGrounded = grounded;
@@ -254,6 +289,13 @@ namespace Ironfront.Net.Unity
 
             if (ResyncEveryTicks > 0 && _ticks % ResyncEveryTicks == 0) Resync();
         }
+
+        private bool IsReadyToScore()
+            => _controller != null
+               && _controller.enabled
+               && _legacyController != null
+               && _legacyController.enabled
+               && _legacyController.inputEnabled;
 
         private void Resync()
         {
