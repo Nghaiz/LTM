@@ -311,6 +311,40 @@ timers based on `Time.deltaTime`. Toggling repeatedly can make them behave oddly
 add an `updateInterval` field and have the AI skip ticks itself, rather than disabling the component.
 But that requires changing `AiActorController.cs` → ask A.
 
+**Resolved, 2026-08-15 — and both options above were wrong.** Dev A declined the `enabled` toggle
+on #47 and was right to: `AiActorController` runs **eight** coroutines alongside `Update`. Unity
+does pause a disabled behaviour's coroutines, so the work genuinely stops — but all eight are
+parked on a `WaitForSeconds`, and a paused-then-resumed wait resumes at a time nobody can assert
+on, while `Update` sees one large `Time.deltaTime` on the frame it returns. A run measured that
+way measures the toggle.
+
+`updateInterval` is worse, not safer: it gates `Update` and leaves all eight coroutines running,
+so it would report a saving while most of the AI cost carried on.
+
+What shipped instead is `BotLodGate` (`Assets/Scripts/Net/Server/BotLodGate.cs`, Dev C) plus a
+one-line guard at the head of `Update` and of each of the eight coroutines — nine call sites,
+about 60 lines in Dev A's file, no behaviour change when no gate is attached because the guard
+reads `lodGate == null || lodGate.AllowAiWork`.
+
+Three details worth carrying forward:
+
+- **The gate evaluates once per simulation tick, not once per frame.** `MaxLevelAmongHumanPlayers`
+  is a pure function of (id, interest, tick), so a second call in the same tick returns the same
+  answer — but `BotLodScheduler` counts every call, and those counters *are* the criterion-8
+  figure. At 60 fps against a 30 Hz tick, per-frame evaluation would make "ticks granted" mean
+  frames.
+- **It reads interest data one tick old, deliberately.** `MaxLevelAmongHumanPlayers` is populated
+  by the snapshot stage at execution order +200; the gate sits at -100, ahead of the AI's default
+  order. Evaluating after +200 instead would have the AI act on it a frame later anyway — same
+  staleness, more machinery.
+- **`ServerTickLoop.Current` exists because of this.** One gate per bot × `FindFirstObjectByType`
+  that misses = 47 scene searches per frame on a client build, which is the per-frame `Find` that
+  phase-04 task 2 forbids.
+
+`BotLodMode.AlwaysOn` is the LOD-off arm Dev A needs for the 32-bot before/after. **Still Dev A's
+to run** — the seam is unblocked, the measurement is not yet taken, and nothing here has been
+through a Unity compile.
+
 ### Task 6 — Gameplay events (2 days)
 
 | Event | Message | Channel | Sent to |
