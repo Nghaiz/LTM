@@ -23,9 +23,21 @@ namespace Ironfront.MasterServer.Tests
         private const string PasswordHash =
             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
+        /// <summary>
+        /// Every socket-driven test here carries an explicit timeout.
+        /// </summary>
+        /// <remarks>
+        /// A hung handshake or a starved logic loop otherwise shows up as a CI job that
+        /// produces no output for fifteen minutes and is then cancelled, naming nothing. With
+        /// a timeout it fails as itself, on the line that hung. Measured cost of not having
+        /// one: a 15m17s Linux job whose log ends mid-suite.
+        /// </remarks>
+        private const int SocketTestTimeoutMs = 60_000;
+
+
         // ---------------------------------------------------------------- metrics endpoint
 
-        [Fact]
+        [Fact(Timeout = SocketTestTimeoutMs)]
         public async Task TheMetricsEndpointReturnsTheDocumentedJsonShape()
         {
             await using var server = new Phase03ServerHarness(metrics: true);
@@ -46,7 +58,7 @@ namespace Ironfront.MasterServer.Tests
             Assert.True(root.GetProperty("resources").GetProperty("workingSetMB").GetInt64() > 0);
         }
 
-        [Fact]
+        [Fact(Timeout = SocketTestTimeoutMs)]
         public async Task TheSnapshotReflectsLiveConnectionsAndSessions()
         {
             await using var server = new Phase03ServerHarness(metrics: true);
@@ -59,8 +71,11 @@ namespace Ironfront.MasterServer.Tests
             LoginResult login = await PumpAsync(client.LoginAsync("metricsuser", PasswordHash), client);
             Assert.True(login.Ok);
 
-            Assert.True(await MasterHostHarness.WaitUntilAsync(() =>
-                server.Collector.CollectAsync().GetAwaiter().GetResult().AccountsOnlineNow == 1));
+            // Awaited, never .GetAwaiter().GetResult(). CollectAsync completes on the logic
+            // thread, which is itself a thread-pool continuation — blocking a pool thread
+            // while polling for it starves the loop being waited on.
+            Assert.True(await MasterHostHarness.WaitUntilAsync(
+                async () => (await server.Collector.CollectAsync()).AccountsOnlineNow == 1));
 
             MetricsSnapshot snapshot = await server.Collector.CollectAsync();
             Assert.Equal(1, snapshot.ConnectionsCurrent);
@@ -71,7 +86,7 @@ namespace Ironfront.MasterServer.Tests
             Assert.False(snapshot.TlsEnabled);
         }
 
-        [Fact]
+        [Fact(Timeout = SocketTestTimeoutMs)]
         public async Task TheMetricsPayloadCarriesNoSessionTokenOrSecret()
         {
             await using var server = new Phase03ServerHarness(metrics: true);
@@ -258,7 +273,7 @@ namespace Ironfront.MasterServer.Tests
             }
         }
 
-        [Fact]
+        [Fact(Timeout = SocketTestTimeoutMs)]
         public async Task TheLoginEventNeverCarriesTheSessionToken()
         {
             var captured = new StringWriter();

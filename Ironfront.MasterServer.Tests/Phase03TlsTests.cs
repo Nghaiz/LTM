@@ -21,7 +21,19 @@ namespace Ironfront.MasterServer.Tests
         private const string PasswordHash =
             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
-        [Fact]
+        /// <summary>
+        /// Every socket-driven test here carries an explicit timeout.
+        /// </summary>
+        /// <remarks>
+        /// A hung handshake or a starved logic loop otherwise shows up as a CI job that
+        /// produces no output for fifteen minutes and is then cancelled, naming nothing. With
+        /// a timeout it fails as itself, on the line that hung. Measured cost of not having
+        /// one: a 15m17s Linux job whose log ends mid-suite.
+        /// </remarks>
+        private const int SocketTestTimeoutMs = 60_000;
+
+
+        [Fact(Timeout = SocketTestTimeoutMs)]
         public async Task AClientThatPinsTheCertificateCompletesTheHandshakeAndLogsIn()
         {
             await using var server = new Phase03ServerHarness(tls: true);
@@ -56,7 +68,7 @@ namespace Ironfront.MasterServer.Tests
         /// somehow supplied message boundaries, both would work with a naive one-read-one-
         /// message parser. They do not; the reader is what makes them work, exactly as before.
         /// </remarks>
-        [Fact]
+        [Fact(Timeout = SocketTestTimeoutMs)]
         public async Task FramingSurvivesGluedAndSplitWritesOverSslStream()
         {
             await using var server = new Phase03ServerHarness(tls: true);
@@ -100,7 +112,7 @@ namespace Ironfront.MasterServer.Tests
                 "a frame split across single-byte TLS writes was not reassembled");
         }
 
-        [Fact]
+        [Fact(Timeout = SocketTestTimeoutMs)]
         public async Task APlaintextClientAgainstATlsServerIsCountedAsAHandshakeFailure()
         {
             await using var server = new Phase03ServerHarness(tls: true);
@@ -118,7 +130,7 @@ namespace Ironfront.MasterServer.Tests
                 "a plaintext connection to a TLS listener should be recorded as a handshake failure");
         }
 
-        [Fact]
+        [Fact(Timeout = SocketTestTimeoutMs)]
         public async Task AClientPinningTheWrongFingerprintIsRefused()
         {
             await using var server = new Phase03ServerHarness(tls: true);
