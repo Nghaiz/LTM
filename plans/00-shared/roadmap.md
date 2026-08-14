@@ -132,14 +132,23 @@ Both of these are already written up in [`docs/branch-protection.md`](../../docs
 and neither has been done. They matter more than any code this week because four people are now
 merging into one repository.
 
-1. **Branch protection on `main` and `develop`.** The API returns 404 for both today, meaning
-   nothing blocks a force-push or a merge over red CI.
-2. **`.github/CODEOWNERS` still ships the placeholder handles** `@dev-a-handle` … `@dev-d-handle`.
-   GitHub silently ignores handles it cannot resolve, so that file currently does nothing at all.
-3. **New — the plugin-DLL drift gate.** See § 7 rule 1 for the failure it is meant to catch. An
-   advisory CI job is enough: if the last commit touching `Ironfront.Net.*/**/*.cs` is newer than
-   the last commit touching `Assets/Plugins/Ironfront.Net.*.dll`, warn. No reproducible-build
-   machinery required, which is why it is cheap.
+1. ~~**Branch protection on `main` and `develop`.**~~ **Resolved as not-ours, 2026-08-15.** The
+   404 was not "nobody got round to it" — it is what GitHub returns to a **non-admin** on an
+   admin-only endpoint. No collaborator account has admin here, and the repository is private
+   under a personal free plan, where branch protection is a paid feature regardless of role.
+   Only @Sagitoaz can move this, by going public or upgrading. Written up with the three
+   options in [`docs/branch-protection.md`](../../docs/branch-protection.md) § Status; it now
+   belongs in the report's limitations, not on a to-do list.
+2. ~~**`.github/CODEOWNERS` still ships the placeholder handles.**~~ **Done, 2026-08-15.** The
+   four handles are mapped from merged-PR authorship — @Sagitoaz (A), @MinhToan4 (B), @Nghaiz
+   (C), @ngtukien (D) — and all four already hold Write. Note the file only becomes *binding*
+   once "Require review from Code Owners" is on, which is item 1's blocker.
+3. ~~**New — the plugin-DLL drift gate.**~~ **Done, 2026-08-15.** Advisory step in the `style`
+   job of `ci.yml`. It discovers the libraries from the DLLs actually present in
+   `Assets/Plugins` rather than from a hardcoded list, so adding a library to `build-libs.ps1`
+   extends the check with no edit to the workflow. Verified both ways before merging: silent on
+   today's `develop`, and it fires on the real historical drift at #26, where the Replication
+   DLL sat 5h41m behind its source with nothing reporting it.
 4. Then `TcpListenerHost` (phase-00 Task 3 — `MspFrame` shipped with the protocol so Task 2 is
    lighter), then phase-01, prioritising **Task 5 `Ironfront.Tools.LoadTest`** because both B and C
    need it to produce numbers for the report.

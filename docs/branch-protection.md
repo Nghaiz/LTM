@@ -9,11 +9,52 @@ Owner: Dev D. Estimated time: about ten minutes.
 
 ---
 
+## Status, 2026-08-15 — §0 done, §1 and §2 blocked on someone who is not Dev D
+
+Read this before spending time on the rest of the page.
+
+**§0 is done.** The four placeholders are replaced with real handles, mapped from merged-PR
+authorship rather than from anyone's recollection — see the header of `.github/CODEOWNERS`.
+All four are already collaborators, so the Write-access requirement in step 3 is satisfied.
+
+**§1 and §2 cannot be done by Dev D, or by anyone else on the team.** Two separate walls,
+and the second one survives fixing the first:
+
+1. **Nobody but the repository owner has admin.** `GET /repos/Sagitoaz/LTM` reports
+   `permissions.admin: false` for a collaborator account. Branch-protection writes are an
+   admin-only endpoint, and GitHub answers a non-admin with **404 rather than 403** — which is
+   why the roadmap read this as "not configured yet" instead of "cannot be configured by us".
+   `PUT /branches/{main,develop}/protection` returns 404 for both branches.
+2. **The repository is private and owned by a personal account on the free plan.** Branch
+   protection rules and rulesets on a private repository need GitHub Pro, Team or Enterprise.
+   Granting a teammate admin does not lift this; the plan does.
+
+So there are exactly three ways forward, and all three belong to the repository owner
+(@Sagitoaz), not to Dev D:
+
+| Option | What it costs | What it buys |
+|---|---|---|
+| Make the repository public | Loses privacy before the report is submitted | Branch protection and rulesets become free and immediate |
+| Upgrade the owner account to Pro | A paid plan | Protection on the private repository, no other change |
+| Leave it unprotected for the rest of the project | Nothing up front | `main` and `develop` stay force-pushable and merge-over-red for four contributors |
+
+Until one of those happens, the honest description of this repository's state is: **the CI
+gates report, and nothing enforces them.** That belongs in the report's limitations section
+rather than being quietly carried as a to-do that four people keep reassigning.
+
+The advisory half of this page that *is* enforceable from a PR has been done instead — see
+the plugin-DLL drift check in `.github/workflows/ci.yml`.
+
+---
+
 ## 0. Prerequisite — replace the CODEOWNERS placeholders
 
-`.github/CODEOWNERS` ships with `@dev-a-handle` … `@dev-d-handle`. GitHub silently ignores
-handles it cannot resolve, so until they are real usernames every rule on this page that
-depends on code owners does nothing.
+> **Done, 2026-08-15.** Kept for the record and because the failure mode it describes is worth
+> knowing: a code owner without write access is never requested as a reviewer, silently.
+
+`.github/CODEOWNERS` shipped with `@dev-a-handle` … `@dev-d-handle`. GitHub silently ignores
+handles it cannot resolve, so until they were real usernames every rule on this page that
+depends on code owners did nothing.
 
 1. Collect the four GitHub usernames.
 2. Replace the placeholders in `.github/CODEOWNERS`.

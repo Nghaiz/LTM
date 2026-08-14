@@ -211,6 +211,21 @@ The other three depend on these three things. Do them early; don't make people w
 3. Verify `ProtocolConstants.cs` matches `protocol-spec.md`
 4. Unity batch-mode compile check (if the runner has Unity; otherwise run it on A's machine)
 
+**Done, 2026-08-15, by the lead rather than by Dev D** — plus a fifth gate the original list did
+not have: an advisory **plugin-DLL drift check** in the `style` job. `Assets/Plugins/Ironfront.Net.*.dll`
+are build artifacts living in git, so Unity can load a build older than the source it came from
+and no gate on this page would notice — that is the #19/#26 failure. The step discovers the
+libraries from the DLLs actually present rather than from a hardcoded list, so extending
+`build-libs.ps1` (§ 10.2) extends the check for free. Advisory on purpose: a stale DLL never
+breaks the .NET build or the tests, because those compile from source; it breaks Unity at
+Dev A's desk.
+
+**Not done, and not doable by Dev D:** branch protection on `main`/`develop`. It needs repo
+admin, which no collaborator has, on a plan that does not include the feature for private
+repositories. Only @Sagitoaz can resolve it — three options in
+[`docs/branch-protection.md`](../../../docs/branch-protection.md) § Status. `.github/CODEOWNERS`
+now carries the four real handles, but stays non-binding until that lands.
+
 ### 10.2. Build scripts — due week 2
 
 | Script | What it does |

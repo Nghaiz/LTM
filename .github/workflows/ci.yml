@@ -152,6 +152,46 @@ jobs:
         shell: pwsh
         run: ./tools/check-commit-scope.ps1 -BaseRef "origin/${{ github.base_ref }}" -HeadRef "HEAD"
 
+      # Plugin-DLL drift. Assets/Plugins/Ironfront.Net.*.dll are build artifacts of B, C and D
+      # source that live in git, so the Unity project can silently load a build older than the
+      # source it was built from. That is not hypothetical: after #19 merged,
+      # Ironfront.Net.Replication.dll on develop was missing ServerMessageRouter and
+      # ServerPayloadWriter, and nothing reported it — it was fixed by accident in #21 by
+      # someone rebuilding for an unrelated reason. Standing rule 1 in plans/00-shared/roadmap.md
+      # says rebuild in the same PR as the source change; this is the thing that notices when
+      # nobody did.
+      #
+      # Discovered from the DLLs actually present rather than from a hardcoded project list, so
+      # adding a library to build-libs.ps1 extends the check with no edit here.
+      #
+      # Advisory, and deliberately so: a stale DLL never breaks the .NET build or the tests
+      # (they compile from source), it breaks Unity at Dev A's desk. Blocking a merge on it
+      # would stop work that is provably correct on every gate that can measure it.
+      - name: Plugin DLL drift check
+        if: always()
+        shell: bash
+        run: |
+          drift=0
+          for dll in Ironfront_Reborn/Assets/Plugins/Ironfront.Net.*.dll; do
+            [ -e "$dll" ] || continue
+            lib=$(basename "$dll" .dll)
+            [ -d "$lib" ] || continue
+            # The whole project directory, not just *.cs: a .csproj or Directory.Packages.props
+            # bump changes the emitted assembly just as a source edit does. bin/ and obj/ are
+            # gitignored, so they contribute no noise.
+            src_at=$(git log -1 --format=%ct -- "$lib")
+            dll_at=$(git log -1 --format=%ct -- "$dll")
+            if [ -z "$src_at" ] || [ -z "$dll_at" ]; then
+              echo "$lib: no history for one side, skipping"
+              continue
+            fi
+            if [ "$src_at" -gt "$dll_at" ]; then
+              echo "::warning file=$dll::$lib source changed after this DLL was last committed. Run tools/build-libs.ps1 and commit the result — Unity is loading a stale build."
+              drift=1
+            fi
+          done
+          if [ "$drift" -eq 0 ]; then echo "No plugin DLL drift."; fi
+
       # The security scan that actually runs on this repository. CodeQL cannot: code scanning
       # on a private repo needs GitHub Advanced Security, so codeql.yml skips itself until the
       # repository is made public (see its header). This needs no paid feature.

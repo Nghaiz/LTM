@@ -5,18 +5,23 @@
 # other shared contract.
 #
 # =========================================================================================
-# TODO BEFORE THIS FILE DOES ANYTHING — replace the four placeholder handles below.
+# THE FOUR HANDLES, and how they were established.
 #
-#   @dev-a-handle  -> Dev A, Unity client
-#   @dev-b-handle  -> Dev B, Transport
-#   @dev-c-handle  -> Dev C, Replication
-#   @dev-d-handle  -> Dev D, Master server + tools/CI
+#   @Sagitoaz   -> Dev A, Unity client
+#   @MinhToan4  -> Dev B, Transport
+#   @Nghaiz     -> Dev C, Replication
+#   @ngtukien   -> Dev D, Master server + tools/CI
 #
-# Until they are real GitHub usernames, GitHub shows "Unknown owner" in the PR sidebar and
-# assigns nobody. Two further requirements for reviewers to actually be requested:
-#   * each handle must have WRITE access to the repository, and
-#   * "Require review from Code Owners" must be on in the branch protection rule
-#     (docs/branch-protection.md).
+# Mapped from merged-PR authorship rather than from anybody's say-so, because a wrong handle
+# here fails silently: GitHub shows "Unknown owner" and assigns nobody, which is exactly the
+# state this file sat in from its creation until 2026-08-15. The evidence is one-to-one —
+# #47/#44/#42/#33 (client) are Sagitoaz, #39/#25 (dev b transport) are MinhToan4,
+# #35/#28 (dev d master) are ngtukien, and the replication/protocol series is Nghaiz.
+#
+# All four are repository collaborators, so all four have the WRITE access that code-owner
+# review requests require. The second requirement is a branch-protection setting rather than
+# anything this file can express: "Require review from Code Owners" must be on in the rule
+# for main and develop (docs/branch-protection.md).
 # =========================================================================================
 #
 # HOW GITHUB READS THIS FILE: the LAST matching pattern wins — the opposite of .gitignore.
@@ -26,19 +31,19 @@
 # -----------------------------------------------------------------------------------------
 # Default — anything not claimed below reaches all four, so nothing merges unreviewed.
 # -----------------------------------------------------------------------------------------
-*                                               @dev-a-handle @dev-b-handle @dev-c-handle @dev-d-handle
+*                                               @Sagitoaz @MinhToan4 @Nghaiz @ngtukien
 
 # -----------------------------------------------------------------------------------------
 # Dev A — Unity client
 # -----------------------------------------------------------------------------------------
-/Ironfront_Reborn/                              @dev-a-handle
-/plans/dev-a-unity-client/                      @dev-a-handle
+/Ironfront_Reborn/                              @Sagitoaz
+/plans/dev-a-unity-client/                      @Sagitoaz
 
 # -----------------------------------------------------------------------------------------
 # Dev B — Transport
 # -----------------------------------------------------------------------------------------
-/Ironfront.Net.Transport/                       @dev-b-handle
-/plans/dev-b-transport/                         @dev-b-handle
+/Ironfront.Net.Transport/                       @MinhToan4
+/plans/dev-b-transport/                         @MinhToan4
 
 # -----------------------------------------------------------------------------------------
 # Dev C — Replication and simulation
@@ -46,15 +51,15 @@
 # Server-side and shared client scripts live inside A's Unity folder but belong to C, so
 # these must come AFTER the /Ironfront_Reborn/ line above to override it.
 # -----------------------------------------------------------------------------------------
-/Ironfront.Net.Replication/                     @dev-c-handle
-/plans/dev-c-replication/                       @dev-c-handle
-/Ironfront_Reborn/Assets/Scripts/Net/Server/    @dev-c-handle
-/Ironfront_Reborn/Assets/Scripts/Net/Shared/    @dev-c-handle
+/Ironfront.Net.Replication/                     @Nghaiz
+/plans/dev-c-replication/                       @Nghaiz
+/Ironfront_Reborn/Assets/Scripts/Net/Server/    @Nghaiz
+/Ironfront_Reborn/Assets/Scripts/Net/Shared/    @Nghaiz
 
 # MovementSimulation is the single shared source of truth for client and server prediction.
 # conventions.md marks it "Nobody else may edit" without qualification — it gets its own
 # line so a reviewer sees the ownership on the file itself, not on its folder.
-/Ironfront_Reborn/Assets/Scripts/Net/Shared/MovementSimulation.cs   @dev-c-handle
+/Ironfront_Reborn/Assets/Scripts/Net/Shared/MovementSimulation.cs   @Nghaiz
 
 # -----------------------------------------------------------------------------------------
 # Dev B again — the implementer/verifier seam, the most important line in this file.
@@ -64,23 +69,23 @@
 # If the same person could approve both sides, the conformance suite would only prove the
 # code agrees with itself instead of agreeing with the spec.
 # -----------------------------------------------------------------------------------------
-/Ironfront.Net.Replication/Serialization/       @dev-b-handle
+/Ironfront.Net.Replication/Serialization/       @MinhToan4
 
 # ...and the referee side of that same seam belongs to C.
-/Ironfront.Net.Protocol.Tests/Conformance/      @dev-c-handle
+/Ironfront.Net.Protocol.Tests/Conformance/      @Nghaiz
 
 # -----------------------------------------------------------------------------------------
 # Dev D — Master server, load-test harness, tooling and CI
 # -----------------------------------------------------------------------------------------
-/Ironfront.MasterServer/                        @dev-d-handle
-/Ironfront.Tools.LoadTest/                      @dev-d-handle
-/plans/dev-d-master-server/                     @dev-d-handle
-/tools/                                         @dev-d-handle
-/.github/                                       @dev-d-handle
+/Ironfront.MasterServer/                        @ngtukien
+/Ironfront.Tools.LoadTest/                      @ngtukien
+/plans/dev-d-master-server/                     @ngtukien
+/tools/                                         @ngtukien
+/.github/                                       @ngtukien
 
 # tools/run-integration.ps1 and its scenarios are C's, per conventions.md section 7 — after
 # the /tools/ line so it wins.
-/tools/run-integration.ps1                      @dev-c-handle
+/tools/run-integration.ps1                      @Nghaiz
 
 # -----------------------------------------------------------------------------------------
 # Shared contracts — PR + 2 approvals (conventions.md sections 2 and 7).
@@ -89,10 +94,10 @@
 # the affected person" rule from the protocol-change process is a branch-protection setting
 # (required approving reviews = 2), not something CODEOWNERS can express on its own.
 # -----------------------------------------------------------------------------------------
-/Ironfront.Net.Protocol/                        @dev-a-handle @dev-b-handle @dev-c-handle @dev-d-handle
-/plans/00-shared/                               @dev-a-handle @dev-b-handle @dev-c-handle @dev-d-handle
-/Directory.Build.props                          @dev-a-handle @dev-b-handle @dev-c-handle @dev-d-handle
-/Directory.Packages.props                       @dev-a-handle @dev-b-handle @dev-c-handle @dev-d-handle
-/global.json                                    @dev-a-handle @dev-b-handle @dev-c-handle @dev-d-handle
-/.editorconfig                                  @dev-a-handle @dev-b-handle @dev-c-handle @dev-d-handle
-/Ironfront.sln                                  @dev-a-handle @dev-b-handle @dev-c-handle @dev-d-handle
+/Ironfront.Net.Protocol/                        @Sagitoaz @MinhToan4 @Nghaiz @ngtukien
+/plans/00-shared/                               @Sagitoaz @MinhToan4 @Nghaiz @ngtukien
+/Directory.Build.props                          @Sagitoaz @MinhToan4 @Nghaiz @ngtukien
+/Directory.Packages.props                       @Sagitoaz @MinhToan4 @Nghaiz @ngtukien
+/global.json                                    @Sagitoaz @MinhToan4 @Nghaiz @ngtukien
+/.editorconfig                                  @Sagitoaz @MinhToan4 @Nghaiz @ngtukien
+/Ironfront.sln                                  @Sagitoaz @MinhToan4 @Nghaiz @ngtukien
