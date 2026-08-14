@@ -87,6 +87,16 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>Who sees whom, and how often. Phase-02 task 1.</summary>
         public InterestManager Interest => _interest;
 
+        /// <summary>
+        /// Which bots think this tick. Phase-02 task 5, read by <see cref="BotLodGate"/>.
+        /// </summary>
+        /// <remarks>
+        /// One instance for the whole server rather than one per bot, because the counters it
+        /// keeps are the phase-02 criterion-8 figure — the share of AI updates skipped — and a
+        /// per-bot scheduler would give 47 separate percentages nobody can add up.
+        /// </remarks>
+        public BotLodScheduler BotLod { get; } = new BotLodScheduler();
+
         /// <summary>One second of past hitbox poses, for rewinding. Phase-02 task 2.</summary>
         public HitboxHistory HitboxHistory => _hitboxHistory;
 
@@ -105,7 +115,28 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>The tick the loop is on.</summary>
         public uint CurrentTick => _scheduler.CurrentTick;
 
-        private void OnDestroy() => Unbind();
+        /// <summary>
+        /// The loop this process is running, or null on a client. Set by <see cref="Bind"/>.
+        /// </summary>
+        /// <remarks>
+        /// Exists so per-bot components do not have to search the scene for it.
+        /// <see cref="BotLodGate"/> is the first, and there is one per bot: a
+        /// <c>FindFirstObjectByType</c> that misses would run 47 scene searches every frame on a
+        /// client build, which is exactly the per-frame <c>Find</c> phase-04 task 2 forbids.
+        /// Same shape as <see cref="ServerActorRegistry.Instance"/>, including the reset below,
+        /// which matters when Play mode runs with domain reload disabled and statics survive
+        /// from the previous session.
+        /// </remarks>
+        public static ServerTickLoop Current { get; private set; }
+
+        private void OnDestroy()
+        {
+            if (ReferenceEquals(Current, this)) Current = null;
+            Unbind();
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetCurrentOnLoad() => Current = null;
 
         /// <summary>
         /// Attaches a transport and starts ticking.
@@ -130,6 +161,11 @@ namespace Ironfront.Net.Unity.Server
 
             _lastPumpMs = NowMs();
             _running = true;
+
+            // Published here rather than in Awake: a loop that was never bound has no transport
+            // and no tick, so advertising it would hand BotLodGate a CurrentTick that never
+            // advances -- every bot would sit on the same tick's LOD answer forever.
+            Current = this;
         }
 
         /// <summary>Detaches from the transport. Safe to call when never bound.</summary>
