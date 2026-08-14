@@ -9,7 +9,12 @@
 [CmdletBinding()]
 param(
     [ValidateSet("Debug", "Release")]
-    [string]$Configuration = "Release"
+    [string]$Configuration = "Release",
+
+    # Ship System.Threading.Tasks.Extensions and Microsoft.Bcl.AsyncInterfaces even though
+    # Unity's netstandard2.1 profile provides the types they backfill. Off by default: see the
+    # $unityProvided block below for why a duplicate is the more expensive failure.
+    [switch]$IncludeBclFacades
 )
 
 $ErrorActionPreference = "Stop"
@@ -18,7 +23,12 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot
 
 try {
-    $libs = @("Ironfront.Net.Protocol", "Ironfront.Net.Transport", "Ironfront.Net.Replication")
+    # Ironfront.MasterClient and Ironfront.Net.MasterLink were added 2026-08-15 to close A11.
+    # Until then ServerMasterReporter could only ever be a NullMatchReporter -- it documents that
+    # wiring GameServerMatchReporter is "a two-line change and a plugin drop", and this is the
+    # plugin drop. They come last because MasterLink references Replication and MasterClient.
+    $libs = @("Ironfront.Net.Protocol", "Ironfront.Net.Transport", "Ironfront.Net.Replication",
+              "Ironfront.MasterClient", "Ironfront.Net.MasterLink")
     $plugin = Join-Path $repoRoot "Ironfront_Reborn/Assets/Plugins"
 
     if (-not (Test-Path $plugin)) {
@@ -43,41 +53,70 @@ try {
         Write-Host "  -> $lib.dll"
     }
 
-    # MANDATORY: the System.Memory dependency chain. Unity will not fetch these itself.
+    # MANDATORY: the managed dependency closure. Unity will not fetch any of it itself.
     #
-    # TRAP: netstandard2.1 plus Span<byte> needs System.Memory.dll at runtime. Copy only
-    # the main DLLs and Unity throws TypeLoadException — an error that says nothing about
-    # a missing assembly and costs hours to track down. This is a very common mistake.
-    $deps = @("System.Memory.dll", "System.Buffers.dll",
-              "System.Runtime.CompilerServices.Unsafe.dll", "System.Numerics.Vectors.dll")
+    # TRAP: netstandard2.1 plus Span<byte> needs System.Memory.dll at runtime. Copy only the
+    # main DLLs and Unity throws TypeLoadException -- an error that says nothing about a
+    # missing assembly and costs hours to track down. This is a very common mistake.
+    #
+    # This used to be a hardcoded list of four names scavenged out of the NuGet cache by a
+    # recursive Get-ChildItem. That worked while the only dependency was System.Memory, and
+    # broke the moment Ironfront.MasterClient arrived carrying System.Text.Json: the closure
+    # is now eight assemblies, and a hardcoded list is a list that silently goes stale every
+    # time somebody adds a PackageReference.
+    #
+    # `dotnet publish` computes the closure the same way the runtime resolves it, so the set
+    # below is measured rather than remembered. Adding a package to any library extends this
+    # automatically.
+    $publishRoot = Join-Path ([System.IO.Path]::GetTempPath()) "ironfront-libs-publish"
+    if (Test-Path $publishRoot) { Remove-Item $publishRoot -Recurse -Force }
 
-    $nugetRoot = Join-Path $HOME ".nuget/packages"
-    $missing = @()
-
-    foreach ($d in $deps) {
-        if (-not (Test-Path $nugetRoot)) { $missing += $d; continue }
-
-        $src = Get-ChildItem -Recurse -Filter $d $nugetRoot -ErrorAction SilentlyContinue |
-               Where-Object { $_.FullName -match "netstandard2\.[01]" } |
-               Select-Object -First 1
-
-        if ($src) {
-            Copy-Item $src.FullName $plugin -Force
-            Write-Host "  -> $d"
-        }
-        else {
-            $missing += $d
-        }
+    foreach ($lib in $libs) {
+        # -f is not optional. Ironfront.Net.Transport multi-targets netstandard2.1 and net8.0,
+        # and `dotnet publish` on a cross-targeting project fails outright (NETSDK1129) rather
+        # than picking one. Pinning it also stops a net8.0 asset from reaching Unity, which
+        # cannot load one.
+        dotnet publish (Join-Path $repoRoot "$lib/$lib.csproj") -c $Configuration -f netstandard2.1 -o $publishRoot --nologo | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $lib" }
     }
 
-    foreach ($d in $missing) {
-        Write-Warning "Could not find $d in the NuGet cache — Unity may fail to load the DLLs with TypeLoadException."
+    # Assemblies Unity's own .NET Standard 2.1 profile ALREADY provides. Shipping these is not
+    # a harmless duplicate -- Unity fails the whole compile with a duplicate-assembly error,
+    # which blocks every script in the project rather than just the feature that needed them.
+    #
+    # A missing assembly is the cheaper failure of the two: it surfaces as a TypeLoadException
+    # on the one code path that touches it, and the remedy is -IncludeBclFacades. A duplicate
+    # stops Dev A's Editor dead. So the default excludes them.
+    #
+    # ValueTask lives in netstandard2.1's System.Runtime facade, and IAsyncDisposable /
+    # IAsyncEnumerable came in with netstandard2.1 as well -- which is exactly what these two
+    # packages exist to backfill for netstandard2.0 consumers. Unity does not need either.
+    $unityProvided = @("System.Threading.Tasks.Extensions.dll", "Microsoft.Bcl.AsyncInterfaces.dll")
+
+    $libDlls = $libs | ForEach-Object { "$_.dll" }
+    $copiedDeps = @()
+    $skipped = @()
+
+    foreach ($f in Get-ChildItem -Path $publishRoot -Filter *.dll) {
+        if ($libDlls -contains $f.Name) { continue }   # already copied above, from bin/
+
+        if ($unityProvided -contains $f.Name -and -not $IncludeBclFacades) {
+            $skipped += $f.Name
+            continue
+        }
+
+        Copy-Item $f.FullName $plugin -Force
+        $copiedDeps += $f.Name
+        Write-Host "  -> $($f.Name)"
     }
+
+    Remove-Item $publishRoot -Recurse -Force -ErrorAction SilentlyContinue
 
     Write-Host ""
-    Write-Host "Copied $($libs.Count) DLL(s) + $($deps.Count - $missing.Count) dependency/dependencies into $plugin"
-    if ($missing.Count -gt 0) {
-        Write-Host "$($missing.Count) dependency/dependencies were not found; see the warnings above."
+    Write-Host "Copied $($libs.Count) library DLL(s) + $($copiedDeps.Count) dependency/dependencies into $plugin"
+
+    foreach ($s in $skipped) {
+        Write-Host "  skipped $s — Unity's netstandard2.1 profile provides it. Re-run with -IncludeBclFacades if Unity reports the types as missing rather than as duplicated."
     }
 }
 finally {

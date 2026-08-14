@@ -215,12 +215,37 @@ The other three depend on these three things. Do them early; don't make people w
 
 | Script | What it does |
 |---|---|
-| `tools/build-libs.ps1` | Builds the 3 .NET libraries and copies the DLLs + dependencies into `Assets/Plugins/` |
+| `tools/build-libs.ps1` | Builds the **5** .NET libraries and copies the DLLs + their measured dependency closure into `Assets/Plugins/` |
 | `tools/build-client.ps1` | Unity client build |
 | `tools/build-server.ps1` | Unity headless server build |
 | `tools/run-integration.ps1` | Starts 1 server + N clients and runs a smoke test |
 
 `build-libs.ps1` is what B and C need most — it's what gets their code into Unity for A to use.
+
+**Extended 2026-08-15 to close A11.** `Ironfront.MasterClient` and `Ironfront.Net.MasterLink` are
+now built and dropped too, so the game server can finally report to the master instead of being
+permanently stuck on `NullMatchReporter`.
+
+The dependency handling had to change with it, and the old version was carrying a latent bug. It
+kept a hardcoded list of four `System.*` facades and hunted for each one with a recursive
+`Get-ChildItem` over `~/.nuget/packages` ending in `Select-Object -First 1` — so the version Unity
+loaded was **whichever the filesystem enumerated first**. This machine's cache holds System.Memory
+4.5.3 *and* 4.5.5; the build resolves 4.5.5, and the old script was shipping 4.5.3.
+
+It now runs `dotnet publish` per library and copies the resulting closure, which is how the runtime
+itself resolves the graph. That fixes the version pick, and it means adding a `PackageReference`
+anywhere extends the drop automatically instead of silently going stale — which matters, because
+`System.Text.Json` took the closure from four assemblies to eight.
+
+Two of those eight are **excluded by default**: `System.Threading.Tasks.Extensions` and
+`Microsoft.Bcl.AsyncInterfaces` exist to backfill `ValueTask` and `IAsyncDisposable` for
+netstandard2.0, and Unity's netstandard2.1 profile already has both. Shipping them risks a
+duplicate-assembly error, which fails the *entire* Unity compile rather than one feature — a
+strictly worse failure than the missing-assembly `TypeLoadException` the include switch fixes.
+`-IncludeBclFacades` forces them in if the Editor asks for them.
+
+`-f netstandard2.1` is not optional on the publish call: `Ironfront.Net.Transport` multi-targets,
+and `dotnet publish` fails a cross-targeting project outright (NETSDK1129) rather than picking.
 
 ### 10.3. Load-test harness — due week 6
 
