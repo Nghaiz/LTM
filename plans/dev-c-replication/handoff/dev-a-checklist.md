@@ -25,6 +25,16 @@ Items are ordered by what unblocks the most.
 > 1123 m entry. The summary line has changed shape: **the verdict is now the GROUNDED number**, and
 > it reports skipped discontinuities separately. Details: [harness repair](../../reports/2026-08-13-movement-shadow-harness-repair.md).
 
+> **Round 7 — 2026-08-14. PR #42 isolated the last flat-ground warnings to two sprint-edge
+> physics ticks.** The shared simulation was not delaying sprint: the harness sampled the raw
+> Sprint button in `FixedUpdate`, while the legacy controller consumed the `sprinting` value
+> latched by `FpsActorController.Update`. Two physics ticks before the next render update therefore
+> compared different inputs. The harness now reads the exact legacy sprint latch and waits until
+> both legacy input and the `CharacterController` are active, removing the pre-deploy airborne
+> noise too. After this PR merges, repeat A3 on flat ground with several walk↔sprint transitions
+> and send the grounded summary plus any flat-ground warnings. **A3 and A4 remain open until that
+> focused rerun is clean.** Evidence: [Dev A's rerun](https://github.com/Sagitoaz/LTM/pull/42).
+
 > **Round 2 — 2026-08-12, afternoon.** A1, A2 and A5 are closed. Three more PRs merged since
 > (#12 yours, #13, #14): the two bugs you reported — cannot quit, no logs — plus four Unity 6
 > errors in the scene files. Everything verifiable without the Editor has been verified;
