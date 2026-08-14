@@ -1,0 +1,62 @@
+[
+  {
+    "Scenario": "200,000 x 50-byte messages, 8 KB reads",
+    "Implementation": "hand-written MspFrameReader",
+    "Messages": 200000,
+    "ElapsedMs": 1.61,
+    "MessagesPerSecond": 124277636,
+    "NanosecondsPerMessage": 8,
+    "BytesAllocatedPerMessage": 0.14,
+    "LinesOfCode": 62
+  },
+  {
+    "Scenario": "200,000 x 50-byte messages, 8 KB reads",
+    "Implementation": "System.IO.Pipelines",
+    "Messages": 200000,
+    "ElapsedMs": 46.58,
+    "MessagesPerSecond": 4293946,
+    "NanosecondsPerMessage": 232.9,
+    "BytesAllocatedPerMessage": 0.01,
+    "LinesOfCode": 41
+  },
+  {
+    "Scenario": "2,000 x 32 KB messages, 4 KB reads",
+    "Implementation": "hand-written MspFrameReader",
+    "Messages": 2000,
+    "ElapsedMs": 4.59,
+    "MessagesPerSecond": 435901,
+    "NanosecondsPerMessage": 2294.1,
+    "BytesAllocatedPerMessage": 63.59,
+    "LinesOfCode": 62
+  },
+  {
+    "Scenario": "2,000 x 32 KB messages, 4 KB reads",
+    "Implementation": "System.IO.Pipelines",
+    "Messages": 2000,
+    "ElapsedMs": 41.71,
+    "MessagesPerSecond": 47946,
+    "NanosecondsPerMessage": 20856.9,
+    "BytesAllocatedPerMessage": 2.07,
+    "LinesOfCode": 41
+  },
+  {
+    "Scenario": "100,000 mixed messages, 1 KB reads",
+    "Implementation": "hand-written MspFrameReader",
+    "Messages": 100000,
+    "ElapsedMs": 32.07,
+    "MessagesPerSecond": 3117887,
+    "NanosecondsPerMessage": 320.7,
+    "BytesAllocatedPerMessage": 0.62,
+    "LinesOfCode": 62
+  },
+  {
+    "Scenario": "100,000 mixed messages, 1 KB reads",
+    "Implementation": "System.IO.Pipelines",
+    "Messages": 100000,
+    "ElapsedMs": 271.78,
+    "MessagesPerSecond": 367938,
+    "NanosecondsPerMessage": 2717.8,
+    "BytesAllocatedPerMessage": 0.04,
+    "LinesOfCode": 41
+  }
+]

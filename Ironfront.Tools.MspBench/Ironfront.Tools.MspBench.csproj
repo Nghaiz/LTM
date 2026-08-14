@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    OWNER: Dev D. The phase-04 experiment harness — the measurements behind the report's
+    TCP chapter (plans/dev-d-master-server/phases/phase-04-report.md section 1).
+
+    WHY A SEPARATE PROJECT rather than more tests: an experiment is not an assertion. These
+    produce NUMBERS, and a number that varies with the machine cannot be a pass/fail gate
+    without becoming a flaky test. They run on demand, write JSON and markdown, and the
+    report quotes them with the machine stated.
+
+    WHY NOT IN Ironfront.Net.Protocol: experiment 4 needs a second frame reader built on
+    System.IO.Pipelines to compare against the hand-written one. That belongs nowhere near
+    the shipped protocol library — conventions.md section 7 makes Ironfront.Net.Protocol
+    shared and PR-gated, and a benchmark variant of a load-bearing class is exactly the kind
+    of second implementation that later gets used by accident.
+
+    No BenchmarkDotNet. It is allowed (conventions.md section 3.4) but it measures
+    steady-state throughput of a method, and three of these five experiments measure how a
+    SOCKET behaves — Send/Receive correspondence, Nagle's interaction with delayed ACK,
+    concurrent login cost. Stopwatch over a real connection is the honest instrument.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Ironfront.Tools.MspBench</RootNamespace>
+    <AssemblyName>Ironfront.Tools.MspBench</AssemblyName>
+    <Description>Phase-04 TCP experiments: framing, Nagle, Pipelines comparison, capacity.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ironfront.Net.Protocol\Ironfront.Net.Protocol.csproj" />
+    <ProjectReference Include="..\Ironfront.MasterClient\Ironfront.MasterClient.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Version lives in Directory.Packages.props. This project is the ONLY consumer. -->
+    <PackageReference Include="System.IO.Pipelines" />
+  </ItemGroup>
+
+</Project>

@@ -45,6 +45,23 @@
     <PackageVersion Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
 
+  <ItemGroup Label="Benchmarks">
+    <!--
+      Used ONLY by Ironfront.Tools.MspBench, for the phase-04 experiment that compares the
+      hand-written MspFrameReader against the standard-library answer to the same problem
+      (conventions.md section 3.4 names this comparison explicitly).
+
+      This is a BCL primitive, not a netcode framework — it is a buffer abstraction, in the
+      same category as ArrayPool<T> and System.Threading.Channels, both of which section 3.4
+      lists as allowed. It is deliberately NOT referenced by Ironfront.Net.Protocol: the
+      shipped reader stays hand-written, because writing it is the lesson.
+
+      It needs a PackageReference despite looking like part of the BCL: System.IO.Pipelines
+      ships in the ASP.NET Core shared framework, not in Microsoft.NETCore.App.
+    -->
+    <PackageVersion Include="System.IO.Pipelines" Version="8.0.0" />
+  </ItemGroup>
+
   <ItemGroup Label="Test host">
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />

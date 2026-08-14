@@ -81,6 +81,31 @@ namespace Ironfront.MasterServer.Tests
             return condition();
         }
 
+        /// <summary>
+        /// Polls an <b>asynchronous</b> condition to a deadline.
+        /// </summary>
+        /// <remarks>
+        /// Exists because the synchronous overload above invites
+        /// <c>SomethingAsync().GetAwaiter().GetResult()</c> inside the predicate, and that
+        /// deadlocks here rather than merely being untidy. Anything that reads host state goes
+        /// through <c>InvokeOnLogicThreadAsync</c>, whose completion needs the logic loop to
+        /// run — and the logic loop is itself a thread-pool continuation. Blocking a pool
+        /// thread inside a polling loop, on a CI runner with few cores, starves the very loop
+        /// the block is waiting for. It cost a 15-minute silent hang on the Linux job before
+        /// this overload existed.
+        /// </remarks>
+        public static async Task<bool> WaitUntilAsync(Func<Task<bool>> condition, int timeoutMs = 5000)
+        {
+            long deadline = Environment.TickCount64 + timeoutMs;
+            while (Environment.TickCount64 < deadline)
+            {
+                if (await condition()) return true;
+                await Task.Delay(15);
+            }
+
+            return await condition();
+        }
+
         public async ValueTask DisposeAsync()
         {
             lock (_clients)
