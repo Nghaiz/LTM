@@ -2,7 +2,9 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -19,35 +21,88 @@ namespace Ironfront.MasterClient
         private readonly SemaphoreSlim _writeLock = new SemaphoreSlim(1, 1);
         private readonly JsonSerializerOptions _json = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
         private TcpClient? _client;
+        private Stream? _transport;
         private CancellationTokenSource? _receiveCts;
         private TaskCompletionSource<Response>? _pending;
         private int _disconnected;
 
         public MasterConnectionState State { get; private set; } = MasterConnectionState.Disconnected;
+
+        /// <summary>True once the connection is carried over TLS.</summary>
+        public bool IsTls { get; private set; }
         public event Action<RoomState>? OnRoomStatePush;
         public event Action<ChatMessage>? OnChat;
         public event Action<int, string>? OnError;
         public event Action? OnDisconnected;
 
-        public async Task ConnectAsync(string host, int port, CancellationToken ct = default)
+        public Task ConnectAsync(string host, int port, CancellationToken ct = default)
+            => ConnectAsync(host, port, null, ct);
+
+        /// <summary>
+        /// Connects, optionally wrapping the socket in TLS (phase 03).
+        /// </summary>
+        /// <remarks>
+        /// TLS changes nothing above this method. <see cref="MspFrameReader"/> reads from the
+        /// <see cref="SslStream"/> exactly as it read from the <see cref="NetworkStream"/>,
+        /// because an encrypted byte stream is still a byte stream with no message boundaries
+        /// — TLS frames records, not application messages.
+        /// </remarks>
+        public async Task ConnectAsync(string host, int port, MasterClientTlsOptions? tls, CancellationToken ct = default)
         {
             if (State != MasterConnectionState.Disconnected) throw new InvalidOperationException("Master client is already connected.");
             State = MasterConnectionState.Connecting;
             var client = new TcpClient();
+            Stream transport;
             try
             {
                 Task connect = client.ConnectAsync(host, port);
                 Task cancelled = Task.Delay(Timeout.Infinite, ct);
                 if (await Task.WhenAny(connect, cancelled).ConfigureAwait(false) != connect) throw new OperationCanceledException(ct);
                 await connect.ConfigureAwait(false);
+                transport = await EstablishTransportAsync(client, host, tls).ConfigureAwait(false);
             }
             catch { client.Dispose(); State = MasterConnectionState.Disconnected; throw; }
             _reader.Reset();
             Interlocked.Exchange(ref _disconnected, 0);
             _receiveCts?.Dispose();
-            _client = client; _receiveCts = new CancellationTokenSource(); State = MasterConnectionState.Connected;
+            _client = client; _transport = transport; _receiveCts = new CancellationTokenSource(); State = MasterConnectionState.Connected;
             _ = ReceiveLoopAsync(_receiveCts.Token);
             _ = HeartbeatLoopAsync(_receiveCts.Token);
+        }
+
+        private async Task<Stream> EstablishTransportAsync(TcpClient client, string host, MasterClientTlsOptions? tls)
+        {
+            NetworkStream network = client.GetStream();
+            if (tls is null || !tls.Enabled)
+            {
+                IsTls = false;
+                return network;
+            }
+
+            string? pinned = tls.PinnedFingerprintSha256;
+            bool allowAny = tls.AllowAnyCertificate;
+            var ssl = new SslStream(
+                network,
+                leaveInnerStreamOpen: false,
+                (_, certificate, _, errors) =>
+                    MasterClientTlsOptions.ValidateCertificate(certificate, errors, pinned, allowAny));
+
+            try
+            {
+                // SslProtocols.None means "whatever the OS considers acceptable today", which
+                // ages better than a hard-coded list: when TLS 1.2 is eventually deprecated,
+                // an OS policy update fixes this client and a literal here would not.
+                await ssl.AuthenticateAsClientAsync(tls.TargetHost ?? host, null, SslProtocols.None, false)
+                         .ConfigureAwait(false);
+            }
+            catch
+            {
+                ssl.Dispose();
+                throw;
+            }
+
+            IsTls = true;
+            return ssl;
         }
 
         public Task<LoginResult> LoginAsync(string username, string passwordHash, CancellationToken ct = default)
@@ -103,14 +158,19 @@ namespace Ironfront.MasterClient
 
         private async Task SendAsync(MspMessageType type, object value, CancellationToken ct)
         {
-            TcpClient client = _client ?? throw new InvalidOperationException("Master client is not connected.");
+            Stream transport = _transport ?? throw new InvalidOperationException("Master client is not connected.");
             byte[] json = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(value, _json));
             byte[] frame = new byte[MspFrame.FrameSizeFor(json.Length)];
             if (MspFrame.Write(frame, type, json) < 0) throw new InvalidOperationException("MSP request exceeds the frame limit.");
             await _writeLock.WaitAsync(ct).ConfigureAwait(false);
             try
             {
-                await client.GetStream().WriteAsync(frame, 0, frame.Length, ct).ConfigureAwait(false);
+                // The write lock is load-bearing on TLS, not merely tidy. Two concurrent
+                // writes to an SslStream interleave inside one encrypted record and produce a
+                // stream the peer cannot decrypt at all — a far worse failure than the
+                // interleaved-but-parseable frames the same race would cause in plaintext.
+                await transport.WriteAsync(frame, 0, frame.Length, ct).ConfigureAwait(false);
+                await transport.FlushAsync(ct).ConfigureAwait(false);
             }
             finally
             {
@@ -138,7 +198,7 @@ namespace Ironfront.MasterClient
             byte[] buffer = new byte[4096];
             try
             {
-                NetworkStream stream = _client!.GetStream();
+                Stream stream = _transport!;
                 while (!ct.IsCancellationRequested)
                 {
                     int received = await stream.ReadAsync(buffer, 0, buffer.Length, ct).ConfigureAwait(false);
@@ -146,7 +206,7 @@ namespace Ironfront.MasterClient
                     Ingest(buffer, received);
                 }
             }
-            catch (Exception ex) when (ex is SocketException or ObjectDisposedException or OperationCanceledException) { }
+            catch (Exception ex) when (ex is SocketException or ObjectDisposedException or OperationCanceledException or IOException) { }
             finally { QueueDisconnected(); }
         }
 
@@ -203,7 +263,12 @@ namespace Ironfront.MasterClient
 
         public void Dispose()
         {
-            _receiveCts?.Cancel(); _receiveCts?.Dispose(); _client?.Dispose();
+            _receiveCts?.Cancel(); _receiveCts?.Dispose();
+            // Transport first: disposing the TcpClient underneath a live SslStream leaves the
+            // SslStream writing its close_notify into a closed socket.
+            try { _transport?.Dispose(); } catch (Exception ex) when (ex is IOException or ObjectDisposedException or SocketException) { }
+            _transport = null;
+            _client?.Dispose();
             QueueDisconnected(); _requestLock.Dispose(); _writeLock.Dispose();
         }
 

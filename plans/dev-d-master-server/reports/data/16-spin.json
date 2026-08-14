@@ -1,0 +1,44 @@
+{
+  "Scenario": "16-spin",
+  "Behavior": "spin",
+  "Master": "127.0.0.1:27000",
+  "Tls": false,
+  "Clients": 16,
+  "RequestedDurationSec": 30,
+  "ActualDurationSec": 30,
+  "Operations": 366927,
+  "OperationsPerSecond": 12229.96,
+  "Failures": 0,
+  "AbruptDisconnects": 0,
+  "ConnectionsHeldToEnd": 0,
+  "LoginLatencyMs": {
+    "Samples": 16,
+    "Min": 2502.936,
+    "P50": 2546.852,
+    "P95": 2638.885,
+    "P99": 2638.885,
+    "Max": 2638.885,
+    "Mean": 2559.004
+  },
+  "OperationLatencyMs": {
+    "Samples": 366927,
+    "Min": 0.082,
+    "P50": 0.888,
+    "P95": 1.99,
+    "P99": 7.419,
+    "Max": 2342.652,
+    "Mean": 1.131
+  },
+  "Server": {
+    "Samples": 5,
+    "PeakConnections": 16,
+    "PeakWorkingSetMb": 68,
+    "FinalWorkingSetMb": 66,
+    "FinalThreadCount": 32,
+    "FinalGen2Collections": 1,
+    "FinalRoomsActive": 0,
+    "FinalOnlineNow": 16,
+    "WorkingSetGrowthMb": 0
+  },
+  "Errors": []
+}

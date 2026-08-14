@@ -31,6 +31,13 @@ namespace Ironfront.MasterServer.Lobby
 
         public MatchmakingService(LobbyService lobby) => _lobby = lobby ?? throw new ArgumentNullException(nameof(lobby));
 
+        /// <summary>
+        /// Players waiting for a match right now. Surfaced on the metrics endpoint because a
+        /// queue that only grows is the visible symptom of "no game server is allocatable" —
+        /// error 3000 is per-request and scrolls past; this number does not.
+        /// </summary>
+        public int QueueLength => _queued.Count;
+
         public MatchmakeResult Enqueue(Session session, ushort preferredMapId, long now)
         {
             if (_queued.ContainsKey(session.PlayerId) || _lobby.TryGetRoom(session.PlayerId, out _))

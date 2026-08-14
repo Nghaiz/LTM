@@ -43,6 +43,29 @@ namespace Ironfront.MasterServer.Net
         private readonly ConcurrentQueue<Action> _logicQueue = new ConcurrentQueue<Action>();
 
         /// <summary>
+        /// Wakes the logic loop when work is posted, instead of making it wait out the tick.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Measured, phase 03.</b> The loop used to drain, tick, sweep and then sleep the
+        /// full <see cref="TcpListenerHostOptions.LogicTickInterval"/>, which meant a request
+        /// that arrived one millisecond after a drain waited 50 ms for the next one. Across
+        /// 7,952 room-list round trips from 16 concurrent bots on loopback, p50 was 50.9 ms
+        /// and p99 was 54.1 ms — a distribution far too tight to be network latency, and
+        /// exactly the shape of "everything waits for the next tick".
+        /// </para>
+        /// <para>
+        /// Signalling costs nothing in the design: every posted action still runs on the one
+        /// logic thread, in order, and nothing else gained access to the connection tables.
+        /// The <b>housekeeping</b> cadence is deliberately NOT accelerated — see the loop —
+        /// because the timeout sweep and <c>Tick</c> allocate per call, and running them at
+        /// request frequency would trade a latency problem for a garbage problem.
+        /// </para>
+        /// </remarks>
+        private readonly SemaphoreSlim _workAvailable = new SemaphoreSlim(0, 1);
+        private int _workSignalled;
+
+        /// <summary>
         /// Held only by <see cref="Dispose"/> and the logic loop's own teardown. Not a general
         /// lock over the connection state — see Dispose for exactly which race it closes and
         /// why the rest of the class still needs none.
@@ -73,7 +96,9 @@ namespace Ironfront.MasterServer.Net
         private long _totalFramesReceived;
         private long _totalHeartbeats;
         private long _totalUnhandledFrames;
+        private long _totalTlsHandshakeFailures;
         private int _connectionCount;
+        private int _peakConnectionCount;
 
         /// <summary>Creates a host with the phase 00 defaults.</summary>
         public TcpListenerHost()
@@ -134,6 +159,22 @@ namespace Ironfront.MasterServer.Net
         public long TotalUnhandledFrames => Interlocked.Read(ref _totalUnhandledFrames);
 
         /// <summary>
+        /// The high-water mark of <see cref="ConnectionCount"/>. Reported by the metrics
+        /// endpoint because the instantaneous count says nothing about whether a limit was
+        /// ever approached — by the time an operator looks, the spike is over.
+        /// </summary>
+        public int PeakConnectionCount => Volatile.Read(ref _peakConnectionCount);
+
+        /// <summary>
+        /// Connections lost to a failed TLS handshake. Non-zero means clients cannot reach
+        /// the server at all, which no other counter distinguishes from "nobody is playing".
+        /// </summary>
+        public long TotalTlsHandshakeFailures => Interlocked.Read(ref _totalTlsHandshakeFailures);
+
+        /// <summary>True when a certificate is configured, so connections are encrypted.</summary>
+        public bool TlsEnabled => _options.ServerCertificate is not null;
+
+        /// <summary>
         /// Binds and starts listening. Separate from <see cref="RunAsync"/> so
         /// <see cref="Port"/> is readable before the loops start.
         /// </summary>
@@ -153,7 +194,18 @@ namespace Ironfront.MasterServer.Net
             Port = ((IPEndPoint)socket.LocalEndPoint!).Port;
 
             MasterLog.Warn($"listening on {_options.BindAddress}:{Port} " +
-                           $"(max {_options.MaxConnectionsPerIp} connections/IP)");
+                           $"({(TlsEnabled ? "TLS" : "PLAINTEXT")}, " +
+                           $"max {_options.MaxConnectionsPerIp} connections/IP)");
+
+            // Loud, because a server that quietly runs without TLS on a public address is the
+            // failure this warning exists to prevent — everything works, and every password
+            // hash on the wire is readable by anybody on the path.
+            if (!TlsEnabled && !IPAddress.IsLoopback(_options.BindAddress))
+            {
+                MasterLog.Warn("TLS is OFF and the listener is not loopback-only — password " +
+                               "hashes and session tokens are in cleartext. Set " +
+                               "IRONFRONT_TLS_CERT_PATH before exposing this to a network.");
+            }
         }
 
         /// <summary>
@@ -164,17 +216,40 @@ namespace Ironfront.MasterServer.Net
             Start();
             _acceptLoop = AcceptLoopAsync(ct);
 
+            var tickInterval = (int)_options.LogicTickInterval.TotalMilliseconds;
+            long nextHousekeepingAt = Environment.TickCount64;
+
             try
             {
                 while (!ct.IsCancellationRequested)
                 {
                     DrainLogicQueue();
-                    _dispatcher?.Tick(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-                    CheckTimeouts();
+
+                    // Two cadences on one thread, and the split is the point. Dispatch runs as
+                    // soon as bytes arrive; housekeeping stays at the tick rate it was written
+                    // for. Tick() and CheckTimeouts() each allocate — the session reaper, the
+                    // matchmaking sweep and the game-server prune all build a List per call —
+                    // so running them at request frequency would turn a 50 ms latency floor
+                    // into a stream of garbage, which is the trade conventions.md section 3.2
+                    // spends its whole length telling us not to make.
+                    long now = Environment.TickCount64;
+                    if (now >= nextHousekeepingAt)
+                    {
+                        _dispatcher?.Tick(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+                        CheckTimeouts();
+                        nextHousekeepingAt = now + tickInterval;
+                    }
+
+                    int wait = (int)Math.Clamp(nextHousekeepingAt - Environment.TickCount64, 0, tickInterval);
 
                     try
                     {
-                        await Task.Delay(_options.LogicTickInterval, ct).ConfigureAwait(false);
+                        // Reset BEFORE waiting. A producer that signals in the window between
+                        // the reset and the wait has already released the semaphore, so the
+                        // wait returns immediately — the wakeup cannot be lost, only
+                        // duplicated, and a duplicate costs one empty drain.
+                        Interlocked.Exchange(ref _workSignalled, 0);
+                        await _workAvailable.WaitAsync(wait, ct).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException)
                     {
@@ -220,7 +295,7 @@ namespace Ironfront.MasterServer.Net
 
             var completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            _logicQueue.Enqueue(() =>
+            PostToLogicThread(() =>
             {
                 try { completion.TrySetResult(work()); }
                 catch (Exception ex) { completion.TrySetException(ex); }
@@ -265,7 +340,7 @@ namespace Ironfront.MasterServer.Net
                 }
 
                 // The decision is made on the logic thread, because it reads the per-IP table.
-                _logicQueue.Enqueue(() => Admit(socket, ct));
+                PostToLogicThread(() => Admit(socket, ct));
             }
         }
 
@@ -320,11 +395,14 @@ namespace Ironfront.MasterServer.Net
 
             int id = ++_nextConnectionId;
             var connection = new ClientConnection(
-                id, socket, ipKey, address, endPoint, _logicQueue.Enqueue, HandleFrame, HandleClosed);
+                id, socket, ipKey, address, endPoint, PostToLogicThread, HandleFrame, HandleClosed,
+                _options.ServerCertificate);
 
             _connections[id] = connection;
             _connectionsPerIp[ipKey] = ConnectionsForIpUnsafe(ipKey) + 1;
             Volatile.Write(ref _connectionCount, _connections.Count);
+            if (_connections.Count > _peakConnectionCount)
+                Volatile.Write(ref _peakConnectionCount, _connections.Count);
             Interlocked.Increment(ref _totalAccepted);
 
             if (MasterLog.DebugEnabled)
@@ -437,6 +515,7 @@ namespace Ironfront.MasterServer.Net
             ReleaseIpSlot(connection.RemoteIpKey);
             Volatile.Write(ref _connectionCount, _connections.Count);
             Interlocked.Increment(ref _totalDisconnected);
+            if (connection.TlsHandshakeFailed) Interlocked.Increment(ref _totalTlsHandshakeFailures);
 
             _dispatcher?.OnDisconnected(connection);
             connection.ClearSession();
@@ -458,6 +537,26 @@ namespace Ironfront.MasterServer.Net
             // connected, never reclaimed.
             if (count <= 1) _connectionsPerIp.Remove(ipKey);
             else _connectionsPerIp[ipKey] = count - 1;
+        }
+
+        /// <summary>
+        /// Queues an action for the logic thread and wakes it. The only way in.
+        /// </summary>
+        /// <remarks>
+        /// Signalling is conditional so a burst of sixteen frames releases the semaphore once
+        /// rather than sixteen times: the loop drains the whole queue per wakeup anyway, and
+        /// surplus permits would make it spin through empty iterations.
+        /// </remarks>
+        private void PostToLogicThread(Action action)
+        {
+            _logicQueue.Enqueue(action);
+
+            if (Interlocked.Exchange(ref _workSignalled, 1) == 0)
+            {
+                try { _workAvailable.Release(); }
+                catch (ObjectDisposedException) { }   // raced with Dispose; the work is moot
+                catch (SemaphoreFullException) { }    // already signalled; nothing to add
+            }
         }
 
         private void DrainLogicQueue()
@@ -505,6 +604,7 @@ namespace Ironfront.MasterServer.Net
             if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
             CloseListenSocket();
+            _workAvailable.Dispose();
 
             // Dispose can arrive from a thread that is not the logic thread — a test's using
             // block, or Ctrl+C — and by then the logic loop has normally already exited, so

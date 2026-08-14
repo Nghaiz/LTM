@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Ironfront.MasterServer.Auth;
 using Ironfront.MasterServer.Data;
+using Ironfront.MasterServer.Diagnostics;
 using Ironfront.MasterServer.GameServers;
 using Ironfront.MasterServer.Lobby;
 using Ironfront.MasterServer.Net;
@@ -29,6 +30,20 @@ namespace Ironfront.MasterServer.Dispatch
             _lobby.RoomChanged += BroadcastRoom;
             _lobby.RoomRemoved += room => _gameServers.Release(room.AssignedGameServerId, room.RoomId);
         }
+
+        /// <summary>Successful logins, total and per completed minute (phase 03 metrics).</summary>
+        public RateCounter Logins { get; } = new RateCounter();
+
+        /// <summary>
+        /// <c>ERROR_PUSH</c> frames sent, total and per completed minute. This is the number
+        /// the alert script thresholds on: a healthy lobby produces almost none, so a sustained
+        /// rate means something structural — no game server, a client on the wrong protocol
+        /// version, or an expired session storm.
+        /// </summary>
+        public RateCounter Errors { get; } = new RateCounter();
+
+        /// <summary>Players waiting in matchmaking. See <see cref="MatchmakingService.QueueLength"/>.</summary>
+        public int MatchmakingQueueLength => _matchmaking.QueueLength;
 
         public void Dispatch(ClientConnection connection, MspMessageType messageType, ReadOnlySpan<byte> body)
         {
@@ -114,6 +129,8 @@ namespace Ironfront.MasterServer.Dispatch
 
         public void Tick(long nowUnixMs)
         {
+            Logins.Advance(nowUnixMs);
+            Errors.Advance(nowUnixMs);
             _auth.ReapExpiredSessions(nowUnixMs);
             foreach (MatchmakeResult result in _matchmaking.Tick(nowUnixMs))
                 PushMatchmakeResult(result);
@@ -154,6 +171,20 @@ namespace Ironfront.MasterServer.Dispatch
             }
             connection.SetSession(result.Session);
             _connectionsByPlayer[result.Session.PlayerId] = connection;
+            Logins.Increment();
+
+            // The session token is deliberately absent. It is a bearer credential for 24
+            // hours — anybody holding it can act as this player — and a log file is read by
+            // more people, and kept longer, than anyone assumes when they add "just for
+            // debugging". StructuredLog can redact fixed secrets; it cannot redact a value
+            // minted fresh per login.
+            StructuredLog.Event("login", new
+            {
+                playerId = result.Session.PlayerId,
+                ip = connection.RemoteAddress.ToString(),
+                tls = connection.IsTls,
+            });
+
             Send(connection, MspMessageType.LoginResponse, new { ok = true, errorCode = (ushort)ErrorCode.Ok, sessionToken = result.Session.Token, playerId = result.Session.PlayerId, displayName = result.Session.DisplayName });
         }
 
@@ -215,6 +246,17 @@ namespace Ironfront.MasterServer.Dispatch
 
             var ticket = new byte[JoinTicket.Size];
             JoinTicket.Issue(ticket, (uint)session.PlayerId, server.ServerId, (ushort)room.RoomId, now + JoinTicket.ValidityMs, session.DisplayName, _sharedSecret);
+
+            // The ticket itself is not logged. It is a signed bearer credential the game
+            // server accepts for 60 seconds, so a log line containing one is a log line that
+            // can be replayed out of.
+            StructuredLog.Event("room_join", new
+            {
+                playerId = session.PlayerId,
+                roomId = room.RoomId,
+                serverId = server.ServerId,
+            });
+
             Send(connection, MspMessageType.RoomJoinResponse, new { ok = true, gameServerIp = server.PublicIp, gameServerPort = server.UdpPort, joinTicket = Convert.ToBase64String(ticket), errorCode = (ushort)ErrorCode.Ok });
         }
 
@@ -228,6 +270,14 @@ namespace Ironfront.MasterServer.Dispatch
         private void HandleGameServerHeartbeat(ClientConnection connection, GameServerHeartbeatRequest request)
         {
             _gameServers.Heartbeat(connection.Id, request.ServerId, request.CurrentPlayers, request.CpuPercent, request.AverageTickMs, request.State, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+
+            StructuredLog.Event("gs_heartbeat", new
+            {
+                serverId = request.ServerId,
+                players = request.CurrentPlayers,
+                cpu = request.CpuPercent,
+                tickMs = request.AverageTickMs,
+            });
         }
 
         private void Matchmake(ClientConnection connection, Session session, MatchmakeRequest request)
@@ -342,7 +392,11 @@ namespace Ironfront.MasterServer.Dispatch
             => JsonSerializer.Deserialize<T>(body, _json) ?? new T();
 
         private void SendError(ClientConnection connection, ErrorCode code, string message)
-            => Send(connection, MspMessageType.ErrorPush, new { code = (ushort)code, message });
+        {
+            Errors.Increment();
+            StructuredLog.Event("error", new { code = (ushort)code, msg = message, conn = connection.Id });
+            Send(connection, MspMessageType.ErrorPush, new { code = (ushort)code, message });
+        }
 
         private void Send(ClientConnection connection, MspMessageType type, object response)
             => connection.Send(type, Encoding.UTF8.GetBytes(JsonSerializer.Serialize(response, _json)));

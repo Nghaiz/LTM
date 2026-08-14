@@ -72,6 +72,32 @@ namespace Ironfront.MasterServer.GameServers
 
         public bool TryGet(ushort serverId, out GameServerRecord? server) => _servers.TryGetValue(serverId, out server);
 
+        /// <summary>Game servers registered, healthy or not.</summary>
+        public int Count => _servers.Count;
+
+        /// <summary>
+        /// Registered servers that pass <see cref="GameServerRecord.IsHealthy"/>. The gap
+        /// between this and <see cref="Count"/> is what the "no healthy game server" alert
+        /// fires on — a server can be registered and useless (CPU pegged, ticks over 40 ms)
+        /// long before the 30-second reaper removes it.
+        /// </summary>
+        public int CountHealthy(long now)
+        {
+            int healthy = 0;
+            foreach (GameServerRecord server in _servers.Values)
+                if (server.IsHealthy(now)) healthy++;
+            return healthy;
+        }
+
+        /// <summary>Servers currently holding a room.</summary>
+        public int CountAllocated()
+        {
+            int allocated = 0;
+            foreach (GameServerRecord server in _servers.Values)
+                if (server.AssignedRoomId != 0) allocated++;
+            return allocated;
+        }
+
         public bool OwnsRoom(int ownerConnectionId, ushort serverId, int roomId)
             => _servers.TryGetValue(serverId, out GameServerRecord? server) &&
                server.OwnerConnectionId == ownerConnectionId &&

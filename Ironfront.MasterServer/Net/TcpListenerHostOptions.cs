@@ -1,5 +1,6 @@
 using System;
 using System.Net;
+using System.Security.Cryptography.X509Certificates;
 
 namespace Ironfront.MasterServer.Net
 {
@@ -65,5 +66,24 @@ namespace Ironfront.MasterServer.Net
         /// 20 Hz is generous for a lobby whose traffic is a few messages per minute per client.
         /// </summary>
         public TimeSpan LogicTickInterval { get; set; } = TimeSpan.FromMilliseconds(50);
+
+        /// <summary>
+        /// The certificate presented to clients. <c>null</c> means plaintext.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Null by default, which is the honest default for a LAN test run and for every test
+        /// in this repository — but it is <b>not</b> an acceptable production setting (D-AD-6).
+        /// The wire carries a password hash and a session token, and to this server the hash
+        /// <i>is</i> the password, so anybody on the path who captures it can log in as that
+        /// account. Client-side hashing protects the user's original secret, which they reuse
+        /// elsewhere. It does nothing for this account. Only TLS does.
+        /// </para>
+        /// <para>
+        /// The game server's connection is the same listener, so a certificate here also
+        /// covers <c>GS_REGISTER</c> — which carries the shared secret in plaintext otherwise.
+        /// </para>
+        /// </remarks>
+        public X509Certificate2? ServerCertificate { get; set; }
     }
 }

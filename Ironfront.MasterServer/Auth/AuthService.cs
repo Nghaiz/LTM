@@ -36,16 +36,57 @@ namespace Ironfront.MasterServer.Auth
     {
         private const int BcryptCost = 11;
         private const int MaxFailedLogins = 10;
-        private const int RatePerMinute = 5;
+
+        /// <summary>The phase-01 security table's number: 5 login attempts per minute per IP.</summary>
+        public const int DefaultRatePerMinute = 5;
+
         private const long LockDurationMs = 15 * 60 * 1000;
         private const long SessionDurationMs = 24 * 60 * 60 * 1000;
         private const string DummyHash = "$2a$11$BHywQ2fudMwWA.zauC4w5.dsi8MZqOZIgvQI0P02ldviQkqFypvje";
 
         private readonly SqliteDatabase _database;
+        private readonly int _ratePerMinute;
         private readonly Dictionary<uint, RateWindow> _rates = new Dictionary<uint, RateWindow>();
         private readonly Dictionary<string, Session> _sessions = new Dictionary<string, Session>(StringComparer.Ordinal);
 
-        public AuthService(SqliteDatabase database) => _database = database ?? throw new ArgumentNullException(nameof(database));
+        public AuthService(SqliteDatabase database)
+            : this(database, DefaultRatePerMinute)
+        {
+        }
+
+        /// <summary>
+        /// Creates the service with an explicit per-IP login rate limit.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Configurable because of what the phase-03 load test found. The limit counts
+        /// attempts per <b>source address</b>, and every bot on a test rig shares one — so a
+        /// 16-client run logs five bots in and gets error 9001 for the other eleven. Measured:
+        /// 16 bots produced 5 sessions and 11 <c>RateLimited</c> failures, and the run then
+        /// silently measured a five-player lobby while claiming sixteen.
+        /// </para>
+        /// <para>
+        /// The default stays at 5. It is the right number against a brute-force attempt from
+        /// one address, and moving it because a benchmark found it inconvenient would let the
+        /// benchmark set the security policy. What was missing was a way for the operator to
+        /// say "this address is the test rig", which is a deployment statement, not a change
+        /// to the defence.
+        /// </para>
+        /// </remarks>
+        public AuthService(SqliteDatabase database, int ratePerMinute)
+        {
+            _database = database ?? throw new ArgumentNullException(nameof(database));
+            if (ratePerMinute < 1) throw new ArgumentOutOfRangeException(nameof(ratePerMinute));
+            _ratePerMinute = ratePerMinute;
+        }
+
+        /// <summary>
+        /// Sessions currently held. This is the "online now" figure on the metrics endpoint,
+        /// and comparing it against the raw connection count is the leak check the operations
+        /// runbook asks for: the two should track each other, and a connection count that
+        /// climbs while this stays flat means connections are not being released.
+        /// </summary>
+        public int ActiveSessionCount => _sessions.Count;
 
         public RegisterResult Register(string username, string passwordHash, string displayName)
         {
@@ -119,7 +160,7 @@ namespace Ironfront.MasterServer.Auth
                 _rates[ip] = new RateWindow { StartedAt = now, Attempts = 1 }; return true;
             }
             window.Attempts++;
-            return window.Attempts <= RatePerMinute;
+            return window.Attempts <= _ratePerMinute;
         }
 
         private Session CreateSession(int playerId, string displayName, uint ip, long now)
