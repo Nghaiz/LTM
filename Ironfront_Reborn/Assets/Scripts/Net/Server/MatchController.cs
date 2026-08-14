@@ -70,7 +70,7 @@ namespace Ironfront.Net.Unity.Server
         public ActorIdPool ActorIds => _actorIds;
 
         /// <summary>Raised when the world must be torn down. The spawner subscribes.</summary>
-        public event Action WorldResetRequested;
+        public event System.Action WorldResetRequested;
 
         private void Awake()
         {
