@@ -23,13 +23,15 @@ namespace Ironfront.Net.Unity.Server
     /// call.
     /// </para>
     /// <para>
-    /// <b>Wiring the real link is a two-line change and a plugin drop.</b>
-    /// <c>Ironfront.Net.MasterLink.GameServerMatchReporter</c> adapts Dev D's TCP client onto
-    /// this port; handing one to <see cref="SetReporter"/> from a boot script is all this
-    /// component needs. It is not referenced here because the Unity project consumes prebuilt
-    /// DLLs from <c>Assets/Plugins</c> and neither <c>Ironfront.Net.MasterLink.dll</c> nor
-    /// <c>Ironfront.MasterClient.dll</c> is dropped there yet — a <c>.meta</c>-file change,
-    /// which Dev C is not permitted to make (plan.md section 2.2). Checklist item A11.
+    /// <b>Wiring the real link is a two-line change and a plugin drop — both landed 2026-08-15,
+    /// closing A11.</b> <c>Ironfront.Net.MasterLink.GameServerMatchReporter</c> adapts Dev D's
+    /// TCP client onto this port, and <see cref="MasterLinkBootstrap"/> is the boot script that
+    /// builds one and hands it to <see cref="SetReporter"/>. It is still not referenced from
+    /// this file, and deliberately so: keeping the transport-facing half in its own component is
+    /// what lets this one stay network-agnostic, and it confines the <c>System.Text.Json</c>
+    /// dependency chain that <c>GameServerLink</c> drags in to a single file.
+    /// <c>Ironfront.Net.MasterLink.dll</c> and <c>Ironfront.MasterClient.dll</c> now ship from
+    /// <c>Assets/Plugins</c> via <c>tools/build-libs.ps1</c>.
     /// </para>
     /// <para>
     /// Pacing is <see cref="HeartbeatPacer"/> rather than <c>InvokeRepeating</c>, which the
