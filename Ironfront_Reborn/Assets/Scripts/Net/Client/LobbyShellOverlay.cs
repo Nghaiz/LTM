@@ -54,6 +54,19 @@ namespace Ironfront.Net.Unity.Client
         [SerializeField] private string _masterHost = "127.0.0.1";
         [SerializeField] private int _masterPort = 27020;
 
+        [Header("Master TLS")]
+        [Tooltip("Wrap the master link in TLS. Required against a public deployment, which " +
+                 "presents a certificate; leave off for a plaintext LAN master.")]
+        [SerializeField] private bool _masterTls;
+
+        [Tooltip("Certificate name to validate. Empty uses the master host, which is what a " +
+                 "publicly trusted certificate for the domain wants.")]
+        [SerializeField] private string _masterTlsTargetHost = string.Empty;
+
+        [Tooltip("SHA-256 fingerprint to pin, for a self-signed development certificate. Leave " +
+                 "empty for a CA-issued certificate such as Let's Encrypt.")]
+        [SerializeField] private string _masterTlsPinnedFingerprint = string.Empty;
+
         [Header("Direct connect (LAN, or the master being down)")]
         [SerializeField] private string _directHost = "127.0.0.1";
         [SerializeField] private int _directPort = 27015;
@@ -379,10 +392,35 @@ namespace Ironfront.Net.Unity.Client
                     return false;
                 }
 
-                if (!await _session.ConnectAsync(_masterHost, port)) return false;
+                if (!await _session.ConnectAsync(_masterHost, port, BuildMasterTls())) return false;
             }
 
             return await _session.LoginAsync(_username, _password);
+        }
+
+        /// <summary>
+        /// Builds the master TLS policy from the inspector fields, or null for plaintext.
+        /// </summary>
+        /// <remarks>
+        /// An empty target host falls back to the dialled host, so a certificate issued for the
+        /// domain validates without a second field to keep in sync. There is no
+        /// accept-any-certificate switch here on purpose — a debug shell that could be talked
+        /// into skipping validation is exactly the shell that ends up pointed at production.
+        /// </remarks>
+        private MasterClientTlsOptions BuildMasterTls()
+        {
+            if (!_masterTls) return null;
+
+            return new MasterClientTlsOptions
+            {
+                Enabled = true,
+                TargetHost = string.IsNullOrWhiteSpace(_masterTlsTargetHost)
+                    ? _masterHost
+                    : _masterTlsTargetHost,
+                PinnedFingerprintSha256 = string.IsNullOrWhiteSpace(_masterTlsPinnedFingerprint)
+                    ? null
+                    : _masterTlsPinnedFingerprint,
+            };
         }
 
         /// <summary>

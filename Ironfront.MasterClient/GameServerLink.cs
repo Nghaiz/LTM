@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Concurrent;
 using System.IO;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -39,6 +41,7 @@ namespace Ironfront.MasterClient
             new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
         private TcpClient? _client;
+        private Stream? _transport;
         private CancellationTokenSource? _receiveCts;
         private TaskCompletionSource<Response>? _pending;
         private int _disconnected;
@@ -50,13 +53,21 @@ namespace Ironfront.MasterClient
         public event Action? OnDisconnected;
         public event Action<int, string>? OnError;
 
-        public async Task ConnectAsync(string host, int port, CancellationToken ct = default)
+        public Task ConnectAsync(string host, int port, CancellationToken ct = default)
+            => ConnectAsync(host, port, null, ct);
+
+        public async Task ConnectAsync(
+            string host,
+            int port,
+            MasterClientTlsOptions? tls,
+            CancellationToken ct = default)
         {
             if (State != MasterConnectionState.Disconnected)
                 throw new InvalidOperationException("Game server link is already connected.");
 
             State = MasterConnectionState.Connecting;
             var client = new TcpClient();
+            Stream transport;
             try
             {
                 Task connect = client.ConnectAsync(host, port);
@@ -64,6 +75,7 @@ namespace Ironfront.MasterClient
                 if (await Task.WhenAny(connect, cancelled).ConfigureAwait(false) != connect)
                     throw new OperationCanceledException(ct);
                 await connect.ConfigureAwait(false);
+                transport = await EstablishTransportAsync(client, host, tls).ConfigureAwait(false);
             }
             catch
             {
@@ -76,9 +88,42 @@ namespace Ironfront.MasterClient
             Interlocked.Exchange(ref _disconnected, 0);
             _receiveCts?.Dispose();
             _client = client;
+            _transport = transport;
             _receiveCts = new CancellationTokenSource();
             State = MasterConnectionState.Connected;
             _ = ReceiveLoopAsync(_receiveCts.Token);
+        }
+
+        private static async Task<Stream> EstablishTransportAsync(
+            TcpClient client,
+            string host,
+            MasterClientTlsOptions? tls)
+        {
+            NetworkStream network = client.GetStream();
+            if (tls is null || !tls.Enabled) return network;
+
+            string? pinned = tls.PinnedFingerprintSha256;
+            bool allowAny = tls.AllowAnyCertificate;
+            var ssl = new SslStream(
+                network,
+                leaveInnerStreamOpen: false,
+                (_, certificate, _, errors) =>
+                    MasterClientTlsOptions.ValidateCertificate(certificate, errors, pinned, allowAny));
+
+            try
+            {
+                await ssl.AuthenticateAsClientAsync(
+                    tls.TargetHost ?? host,
+                    null,
+                    SslProtocols.None,
+                    checkCertificateRevocation: false).ConfigureAwait(false);
+                return ssl;
+            }
+            catch
+            {
+                ssl.Dispose();
+                throw;
+            }
         }
 
         public async Task<GameServerRegistrationResult> RegisterAsync(
@@ -152,6 +197,11 @@ namespace Ironfront.MasterClient
         {
             _receiveCts?.Cancel();
             _receiveCts?.Dispose();
+            // An SslStream owns its NetworkStream, so dispose it before its TcpClient just as
+            // MasterClient does; otherwise close_notify is attempted through a dead socket.
+            try { _transport?.Dispose(); }
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException or SocketException) { }
+            _transport = null;
             _client?.Dispose();
             QueueDisconnected();
             _writeLock.Dispose();
@@ -184,7 +234,7 @@ namespace Ironfront.MasterClient
 
         private async Task SendAsync(MspMessageType type, object value, CancellationToken ct)
         {
-            TcpClient client = _client
+            Stream transport = _transport
                 ?? throw new InvalidOperationException("Game server link is not connected.");
 
             byte[] json = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(value, _json));
@@ -195,7 +245,7 @@ namespace Ironfront.MasterClient
             await _writeLock.WaitAsync(ct).ConfigureAwait(false);
             try
             {
-                await client.GetStream().WriteAsync(frame, 0, frame.Length, ct).ConfigureAwait(false);
+                await transport.WriteAsync(frame, 0, frame.Length, ct).ConfigureAwait(false);
             }
             finally
             {
@@ -208,7 +258,8 @@ namespace Ironfront.MasterClient
             byte[] buffer = new byte[4096];
             try
             {
-                NetworkStream stream = _client!.GetStream();
+                Stream stream = _transport
+                    ?? throw new InvalidOperationException("Game server link is not connected.");
                 while (!ct.IsCancellationRequested)
                 {
                     int received = await stream.ReadAsync(buffer, 0, buffer.Length, ct)

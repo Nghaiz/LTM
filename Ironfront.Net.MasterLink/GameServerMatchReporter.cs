@@ -55,11 +55,25 @@ namespace Ironfront.Net.MasterLink
         /// what <see cref="TicketValidator"/> checks every join ticket against. A server that
         /// carried on without it would accept tickets issued for a different server.
         /// </remarks>
+        public Task<ushort> ConnectAndRegisterAsync(
+            string host,
+            int port,
+            GameServerRegistration registration,
+            CancellationToken ct = default)
+            => ConnectAndRegisterAsync(host, port, registration, null, ct);
+
+        /// <summary>
+        /// Connects and registers with an optional TLS policy. The game-server registration
+        /// carries the shared server secret, so the caller enables this on every public path.
+        /// </summary>
         public async Task<ushort> ConnectAndRegisterAsync(
-            string host, int port, GameServerRegistration registration,
+            string host,
+            int port,
+            GameServerRegistration registration,
+            MasterClientTlsOptions? tls,
             CancellationToken ct = default)
         {
-            await _link.ConnectAsync(host, port, ct).ConfigureAwait(false);
+            await _link.ConnectAsync(host, port, tls, ct).ConfigureAwait(false);
             GameServerRegistrationResult result =
                 await _link.RegisterAsync(registration, ct).ConfigureAwait(false);
             return result.Ok ? result.ServerId : (ushort)0;

@@ -89,6 +89,17 @@ namespace Ironfront.MasterClient
 
         Task ConnectAsync(string host, int port, CancellationToken ct = default);
 
+        /// <summary>
+        /// Connects using the same certificate validation policy as the player-side master
+        /// client. A game server presents the shared secret during registration, so its link
+        /// must not downgrade to plaintext on a public network.
+        /// </summary>
+        Task ConnectAsync(
+            string host,
+            int port,
+            MasterClientTlsOptions? tls,
+            CancellationToken ct = default);
+
         /// <summary>Announces this server and receives its id.</summary>
         Task<GameServerRegistrationResult> RegisterAsync(
             GameServerRegistration registration, CancellationToken ct = default);

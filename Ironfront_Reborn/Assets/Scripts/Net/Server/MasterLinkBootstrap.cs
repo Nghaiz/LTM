@@ -153,7 +153,11 @@ namespace Ironfront.Net.Unity.Server
 
             try
             {
-                ServerId = await reporter.ConnectAndRegisterAsync(_config.MasterHost, _config.MasterPort, registration);
+                ServerId = await reporter.ConnectAndRegisterAsync(
+                    _config.MasterHost,
+                    _config.MasterPort,
+                    registration,
+                    CreateTlsOptions()).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -175,6 +179,20 @@ namespace Ironfront.Net.Unity.Server
             _link = reporter;
             _reporter.SetReporter(reporter);
             Debug.Log($"[net] master link: registered as server {ServerId} with {_config.MasterHost}:{_config.MasterPort}.");
+        }
+
+        private MasterClientTlsOptions? CreateTlsOptions()
+        {
+            if (!_config.MasterTlsEnabled) return null;
+
+            return new MasterClientTlsOptions
+            {
+                Enabled = true,
+                TargetHost = string.IsNullOrWhiteSpace(_config.MasterTlsTargetHost)
+                    ? _config.MasterHost
+                    : _config.MasterTlsTargetHost,
+                PinnedFingerprintSha256 = _config.MasterTlsPinnedFingerprintSha256,
+            };
         }
 
         // The Poll() contract from Dev D's plan section 5: every event and Task continuation

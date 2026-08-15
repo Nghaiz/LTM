@@ -47,6 +47,9 @@ namespace Ironfront.Client.Flow.Tests
         public int LastRoomId { get; private set; }
         public string? LastRoomPasswordHash { get; private set; }
 
+        /// <summary>The TLS policy handed to the most recent connect, if any.</summary>
+        public MasterClientTlsOptions? LastTls { get; private set; }
+
         public event Action<RoomState>? OnRoomStatePush;
         public event Action<ChatMessage>? OnChat;
         public event Action<int, string>? OnError;
@@ -57,6 +60,12 @@ namespace Ironfront.Client.Flow.Tests
             Throw();
             State = MasterConnectionState.Connected;
             return Task.CompletedTask;
+        }
+
+        public Task ConnectAsync(string host, int port, MasterClientTlsOptions? tls, CancellationToken ct = default)
+        {
+            LastTls = tls;
+            return ConnectAsync(host, port, ct);
         }
 
         public Task<LoginResult> LoginAsync(string username, string passwordHash, CancellationToken ct = default)
