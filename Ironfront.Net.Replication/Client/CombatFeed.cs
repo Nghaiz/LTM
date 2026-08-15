@@ -240,18 +240,25 @@ namespace Ironfront.Net.Replication.Client
         /// Drops every line older than <see cref="HoldSeconds"/>. Call once a frame.
         /// </summary>
         /// <remarks>
-        /// Entries are newest-first and every clock reading is the same one, so the expired
-        /// ones are always a suffix — finding the first expired index is the whole operation,
-        /// with no compaction to do afterwards.
+        /// <b>Compacts rather than truncating at the first expired entry.</b> Truncating is
+        /// correct only while the timestamps are non-increasing down the feed, which holds for
+        /// every push that comes off the wire in order — and stops holding for one that does
+        /// not. A single out-of-order entry at the head would then take every live line below it
+        /// with it, emptying the killfeed at the moment it is busiest. Five iterations is not
+        /// worth an ordering assumption that nothing enforces.
         /// </remarks>
         public void Prune(float nowSeconds)
         {
+            int kept = 0;
+
             for (int i = 0; i < _count; i++)
             {
-                if (nowSeconds - _entries[i].PostedAtSeconds < HoldSeconds) continue;
-                _count = i;
-                return;
+                if (nowSeconds - _entries[i].PostedAtSeconds >= HoldSeconds) continue;
+                if (kept != i) _entries[kept] = _entries[i];
+                kept++;
             }
+
+            _count = kept;
         }
 
         /// <summary>Empties the feed. Call when leaving a match.</summary>
