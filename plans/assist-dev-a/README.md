@@ -13,7 +13,7 @@ Audited 2026-08-15 against the repository, not against the plan text.
 
 | Dev A task | Status | Evidence |
 |---|---|---|
-| **00**·1 `docs/codebase-map.md` | ✗ absent | No such file; `docs/` has `movement-analysis.md`, which covers movement only |
+| **00**·1 `docs/codebase-map.md` | ✓ done | [`docs/codebase-map.md`](../../docs/codebase-map.md), written by [step 01](step-01-codebase-map.md) |
 | **00**·2 A* headless + graph bake | ? unverifiable | Needs the Editor to check |
 | **00**·3 `IInputSource` | ✗ absent | No `IInputSource`, no `LocalInputSource` |
 | **00**·4 `NetContext` | ✓ done | `Assets/Scripts/Net/Shared/NetContext.cs` |
@@ -33,7 +33,7 @@ Audited 2026-08-15 against the repository, not against the plan text.
 
 **The netcode is a parallel system that was never wired into the original game.** `Assembly-CSharp/`
 (169 files, the single-player game) references `NetContext`, `NetMovementAgent` and
-`MovementSimulation` exactly zero times, and still calls `Input.*` in 85 places. Phase-00 tasks 3 and
+`MovementSimulation` exactly zero times, and still calls `Input.*` on 80 lines. Phase-00 tasks 3 and
 5 are the ones that were supposed to open that seam, and they are the two that did not happen — so
 everything downstream is built beside the game rather than inside it.
 
