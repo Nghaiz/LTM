@@ -181,7 +181,10 @@ namespace Ironfront.Net.Unity.Server
             Debug.Log($"[net] master link: registered as server {ServerId} with {_config.MasterHost}:{_config.MasterPort}.");
         }
 
-        private MasterClientTlsOptions? CreateTlsOptions()
+        // No `?` on the return type: this file has no `#nullable enable`, so the annotation
+        // would only earn a CS8632 without telling the compiler anything. Null means the
+        // plaintext LAN path, and the overload it feeds takes a nullable parameter.
+        private MasterClientTlsOptions CreateTlsOptions()
         {
             if (!_config.MasterTlsEnabled) return null;
 

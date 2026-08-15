@@ -125,24 +125,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # A release tag and a workflow_dispatch input are both attacker-influenced strings.
+      # Interpolating them into `run:` would let `$(...)` execute on a runner that holds a
+      # token with packages:write. Cross the boundary through env, where the shell sees data.
       - name: Determine release tag
         id: release_tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.gameserver_release_tag }}
         run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT_NAME" = "release" ]; then
+            echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           else
-            echo "tag=${{ inputs.gameserver_release_tag }}" >> "$GITHUB_OUTPUT"
+            echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Fetch the Unity Linux artifact from the release
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release_tag.outputs.tag }}
+          REPO: ${{ github.repository }}
         run: |
           mkdir -p build/server
-          gh release download "${{ steps.release_tag.outputs.tag }}" \
-            --repo "${{ github.repository }}" \
+          gh release download "$TAG" \
+            --repo "$REPO" \
             --pattern 'gameserver-linux.tar.gz' --dir /tmp || {
-            echo "::warning::No gameserver-linux.tar.gz in release ${{ steps.release_tag.outputs.tag }}, skipping."
+            echo "::warning::No gameserver-linux.tar.gz in release $TAG, skipping."
             echo "skip=true" >> "$GITHUB_ENV"
             exit 0
           }

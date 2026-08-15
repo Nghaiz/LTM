@@ -19,6 +19,13 @@ name: ironfront
 x-gameserver-base: &gameserver-base
   image: ${IRONFRONT_GAMESERVER_IMAGE:?set IRONFRONT_GAMESERVER_IMAGE to a pinned ghcr.io digest/tag}
   restart: unless-stopped
+  # The image already drops to a non-root user. These two make that stick: no-new-privileges
+  # blocks a setuid binary re-gaining root inside the container, and cap_drop removes the
+  # ambient capabilities a game server that only opens one UDP socket never needs.
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
   depends_on:
     # service_started, not service_healthy: the game server has no health probe (a Unity
     # UDP listener cannot be probed honestly) and registers to the master with its own
@@ -67,6 +74,12 @@ services:
   master:
     image: ${IRONFRONT_MASTER_IMAGE:?set IRONFRONT_MASTER_IMAGE to a pinned ghcr.io digest/tag}
     restart: unless-stopped
+    # See the game-server anchor: the master is the one container facing the Internet on a
+    # TCP port, so it is the one that most wants a privilege escalation to be impossible.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     # Matches the master's own 20 s drain on SIGINT (delivered via the image STOPSIGNAL),
     # with margin.
     stop_grace_period: 25s

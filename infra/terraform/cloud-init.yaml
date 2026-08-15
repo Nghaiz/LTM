@@ -106,18 +106,30 @@ runcmd:
     # Optional convenience: if a PUBLIC repo URL was supplied, install the compose file,
     # tools and systemd units so only the .env and the PFX remain to be delivered. A private
     # repo is left to the manual BOOTSTRAP.md path — no token is ever placed in user-data.
+    # Every step below was `|| true`, and the marker was written unconditionally after it.
+    # A failed clone or a failed cp then produced a VM that reports "bootstrap complete"
+    # while missing compose.yaml, deploy.sh and the timers — the operator finds out at
+    # `./deploy.sh up`. The whole block is already guarded by repo_clone_url being set, so
+    # a failure inside it is a real failure: record it and leave the marker unwritten.
+    install_ok=1
     if [ -n "${repo_clone_url}" ]; then
-      git clone --depth 1 "${repo_clone_url}" /opt/ironfront/repo || true
-      if [ -d /opt/ironfront/repo/infra/compose ]; then
-        cp /opt/ironfront/repo/infra/compose/compose.yaml /opt/ironfront/ || true
-        cp /opt/ironfront/repo/infra/compose/deploy.sh /opt/ironfront/ || true
-        cp /opt/ironfront/repo/infra/compose/.env.example /opt/ironfront/ || true
-        cp -r /opt/ironfront/repo/tools/. /opt/ironfront/tools/ || true
-        cp /opt/ironfront/repo/infra/systemd/ironfront-*.service /etc/systemd/system/ || true
-        cp /opt/ironfront/repo/infra/systemd/ironfront-*.timer /etc/systemd/system/ || true
-        chmod +x /opt/ironfront/deploy.sh /opt/ironfront/tools/*.sh || true
-        systemctl daemon-reload || true
-      fi
+      {
+        git clone --depth 1 "${repo_clone_url}" /opt/ironfront/repo &&
+        test -d /opt/ironfront/repo/infra/compose &&
+        cp /opt/ironfront/repo/infra/compose/compose.yaml /opt/ironfront/ &&
+        cp /opt/ironfront/repo/infra/compose/deploy.sh /opt/ironfront/ &&
+        cp /opt/ironfront/repo/infra/compose/.env.example /opt/ironfront/ &&
+        cp -r /opt/ironfront/repo/tools/. /opt/ironfront/tools/ &&
+        cp /opt/ironfront/repo/infra/systemd/ironfront-*.service /etc/systemd/system/ &&
+        cp /opt/ironfront/repo/infra/systemd/ironfront-*.timer /etc/systemd/system/ &&
+        chmod +x /opt/ironfront/deploy.sh /opt/ironfront/tools/*.sh &&
+        systemctl daemon-reload
+      } || install_ok=0
     fi
 
-    echo "ironfront cloud-init bootstrap complete" > /opt/ironfront/.bootstrap-done
+    if [ "$install_ok" -eq 1 ]; then
+      echo "ironfront cloud-init bootstrap complete" > /opt/ironfront/.bootstrap-done
+    else
+      echo "repo install failed — see /var/log/cloud-init-output.log, then follow BOOTSTRAP.md" \
+        > /opt/ironfront/.bootstrap-failed
+    fi

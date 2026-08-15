@@ -183,7 +183,11 @@ jobs:
         shell: bash
         run: |
           drift=0
-          for dll in Ironfront_Reborn/Assets/Plugins/Ironfront.Net.*.dll; do
+          # Ironfront.*, not Ironfront.Net.*: Ironfront.MasterClient.dll is equally
+          # load-bearing (it holds IMasterClient and MasterClientTlsOptions) and was invisible
+          # to the narrower glob. The `[ -d "$lib" ]` guard below filters anything without a
+          # matching source directory, so third-party DLLs stay out on their own.
+          for dll in Ironfront_Reborn/Assets/Plugins/Ironfront.*.dll; do
             [ -e "$dll" ] || continue
             lib=$(basename "$dll" .dll)
             [ -d "$lib" ] || continue

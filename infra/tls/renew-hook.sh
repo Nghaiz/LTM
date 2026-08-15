@@ -31,6 +31,12 @@ if [ -z "${IRONFRONT_TLS_CERT_PASSWORD:-}" ]; then
     echo "[renew-hook] IRONFRONT_TLS_CERT_PASSWORD not set (env or $ENV_FILE)" >&2
     exit 2
 fi
+
+# openssl below reads the password with `-passout env:`, not `-passout pass:`, because
+# `pass:` puts the secret in argv where any local user can read it out of
+# /proc/<pid>/cmdline while the process lives. `env:` requires it to be exported: sourcing
+# the .env under `set -a` already does that, but an inherited-from-certbot value may not be.
+export IRONFRONT_TLS_CERT_PASSWORD
 for f in privkey.pem fullchain.pem; do
     [ -s "$LINEAGE/$f" ] || { echo "[renew-hook] missing $LINEAGE/$f" >&2; exit 1; }
 done
@@ -43,7 +49,7 @@ trap 'rm -f "$tmp"' EXIT
 openssl pkcs12 -export \
     -inkey "$LINEAGE/privkey.pem" \
     -in "$LINEAGE/fullchain.pem" \
-    -passout pass:"$IRONFRONT_TLS_CERT_PASSWORD" \
+    -passout env:IRONFRONT_TLS_CERT_PASSWORD \
     -out "$tmp"
 
 # Owned by the container's app UID (1654), readable only by it. `install` places it in one

@@ -10,8 +10,16 @@
 #     <type>(<scope>): <description>
 #     feat(transport): add a 32-bit ack bitfield to the header
 #
-# Types:  feat fix refactor test docs chore
-# Scopes: client transport replication master protocol tools ci modules
+# Types:  feat fix refactor test docs chore ci
+# Scopes: client transport replication master protocol tools ci modules infra
+#
+# `ci` is both a type and a scope, which reads odd but is deliberate: `ci(...)` is the
+# Conventional Commits type for a workflow change, while `<type>(ci)` is how this repo has
+# always scoped one. Rejecting the former made every workflow commit non-conforming.
+#
+# `infra` covers the deployment tree phase-03 created — infra/terraform, infra/compose,
+# infra/docker, infra/tls, infra/systemd. It is not `tools` (developer scripts) and not
+# `master` (the server's own code); it is the machine the servers run on.
 #
 # `modules` covers changes to the solution's project layout itself — scaffolding or restructuring
 # the owned projects — which belongs to no single ownership area. It is here rather than absent
@@ -38,8 +46,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$VALID_TYPES  = @("feat", "fix", "refactor", "test", "docs", "chore")
-$VALID_SCOPES = @("client", "transport", "replication", "master", "protocol", "tools", "ci", "modules")
+$VALID_TYPES  = @("feat", "fix", "refactor", "test", "docs", "chore", "ci")
+$VALID_SCOPES = @("client", "transport", "replication", "master", "protocol", "tools", "ci", "modules", "infra")
 
 # Commits whose subject no human wrote and no human can change.
 #
