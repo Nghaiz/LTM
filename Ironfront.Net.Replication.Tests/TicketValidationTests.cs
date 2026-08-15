@@ -251,6 +251,46 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void AdoptingTheMastersServerIdStartsEnforcingIt()
+        {
+            // Before registration the id is 0, which means signature and expiry only — a server
+            // that refused every ticket because the master had not answered yet would be
+            // unjoinable in standalone mode, which phase-03 supports on purpose.
+            var validator = new TicketValidator(Secret);
+            Assert.Equal(0, validator.ServerId);
+            Assert.True(validator.TryAdmit(Issue(42, serverId: 9), Now, out _, out _));
+
+            validator.AdoptServerId(7);
+            Assert.Equal(7, validator.ServerId);
+
+            // Now a ticket issued for a different server in the same fleet is refused, which is
+            // what the WrongServer rejection was written for and could never do while every
+            // construction site passed 0.
+            Assert.False(validator.TryAdmit(
+                Issue(43, serverId: 9), Now, out _, out TicketRejection reason));
+            Assert.Equal(TicketRejection.WrongServer, reason);
+
+            Assert.True(validator.TryAdmit(Issue(44, serverId: 7), Now, out _, out _));
+        }
+
+        [Fact]
+        public void AdoptingAnIdKeepsEveryLiveClaim()
+        {
+            // Reconstructing the validator instead of adopting would forget who is connected,
+            // and a replay of a live player's ticket would then be admitted alongside them.
+            var validator = new TicketValidator(Secret);
+            validator.TryAdmit(Issue(42, serverId: 7), Now, out _, out _);
+            validator.ConfirmConnected(42);
+
+            validator.AdoptServerId(7);
+
+            Assert.True(validator.IsClaimed(42));
+            Assert.False(validator.TryAdmit(
+                Issue(42, serverId: 7), Now, out _, out TicketRejection reason));
+            Assert.Equal(TicketRejection.AlreadyConnected, reason);
+        }
+
+        [Fact]
         public void ARejectedTicketQueuesNoAdmission()
         {
             var validator = new TicketValidator(Secret, serverId: 7);

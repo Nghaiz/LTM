@@ -178,7 +178,36 @@ namespace Ironfront.Net.Unity.Server
 
             _link = reporter;
             _reporter.SetReporter(reporter);
+
+            AdoptServerIdOnValidator();
+
             Debug.Log($"[net] master link: registered as server {ServerId} with {_config.MasterHost}:{_config.MasterPort}.");
+        }
+
+        /// <summary>
+        /// Hands the master-assigned id to the ticket validator, so it can start enforcing that
+        /// a ticket was issued for THIS server.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This is the re-registration <c>NetServerBootstrap</c> already promised in a comment
+        /// and that nothing performed. Until it runs, the validator's serverId is 0, which
+        /// disables the check — correct before registration, wrong forever after it. With a
+        /// fleet sharing one secret, a ticket the master issued for another server verified
+        /// here and was admitted, so matchmaking assignment was advisory rather than enforced.
+        /// </para>
+        /// <para>
+        /// Absent bootstrap or validator is not an error: a scene may run this component alone,
+        /// and an unsigned-ticket development build has no validator at all.
+        /// </para>
+        /// </remarks>
+        private void AdoptServerIdOnValidator()
+        {
+            NetServerBootstrap bootstrap = FindObjectOfType<NetServerBootstrap>();
+            if (bootstrap == null || bootstrap.Validator == null) return;
+
+            bootstrap.Validator.AdoptServerId(ServerId);
+            Debug.Log($"[net] join tickets are now checked against server id {ServerId}.");
         }
 
         // No `?` on the return type: this file has no `#nullable enable`, so the annotation
