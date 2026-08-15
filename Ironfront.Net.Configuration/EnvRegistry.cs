@@ -46,7 +46,8 @@ namespace Ironfront.Net.Configuration
             "\n" +
             "Generate one with:\n" +
             "  [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Max 256 }))",
-            secret: true);
+            secret: true,
+            summary: "REQUIRED, >= 32 chars, signs joinTickets");
 
         // ---- Master server -------------------------------------------------------------
 
@@ -56,7 +57,8 @@ namespace Ironfront.Net.Configuration
             "The master's single TCP port. Clients and game servers both dial it — GS_REGISTER\n" +
             "travels the same MSP connection as a player login, so there is no second port to\n" +
             "configure and a game server pointed at one will simply never reach the master.",
-            "27000");
+            "27000",
+            summary: "TCP port for clients and game servers alike");
 
         /// <summary>Host name or address of the master, from a game server's point of view.</summary>
         public static readonly EnvVar MasterHost = new EnvVar(
@@ -69,7 +71,8 @@ namespace Ironfront.Net.Configuration
         public static readonly EnvVar DatabasePath = new EnvVar(
             "IRONFRONT_DB_PATH", "Master server", "master server, tools/backup.sh",
             "The SQLite file holding accounts, sessions and the room registry.",
-            "./ironfront.db");
+            "./ironfront.db",
+            summary: "SQLite file holding accounts, sessions and rooms");
 
         // ---- Game server ---------------------------------------------------------------
 
@@ -86,10 +89,18 @@ namespace Ironfront.Net.Configuration
         public static readonly EnvVar GameServerTransport = new EnvVar(
             "IRONFRONT_GAMESERVER_TRANSPORT", "Game server", "game server",
             "udp | loopback. The loopback wire is an in-process pipe with no socket, for driving\n" +
-            "both ends from one Editor; anything reachable over a network needs udp. A headless\n" +
-            "build left on loopback starts cleanly, logs nothing unusual and accepts nobody,\n" +
-            "which is why this is settable without opening the scene.",
-            "udp");
+            "both ends from one Editor; anything reachable over a network needs udp.\n" +
+            "\n" +
+            "SHIPPED BLANK ON PURPOSE, unlike every other value in this file. The others repeat\n" +
+            "a default that matches what the code already does, so copying this template changes\n" +
+            "nothing. This one does not: the scene ships with the loopback wire on, because that\n" +
+            "is what a single-Editor test wants, so writing 'udp' here would silently switch the\n" +
+            "Editor to real sockets for anyone who copied the template. Blank leaves the scene\n" +
+            "alone.\n" +
+            "\n" +
+            "A DEPLOYMENT MUST SET IT. A headless build left on loopback starts cleanly, logs\n" +
+            "nothing unusual and accepts nobody — so tools/deploy/ironfront-gameserver@.service\n" +
+            "sets udp explicitly rather than inheriting it from anywhere.");
 
         /// <summary>Connection slots on the game server's transport.</summary>
         public static readonly EnvVar GameServerMaxConnections = new EnvVar(
@@ -156,14 +167,16 @@ namespace Ironfront.Net.Configuration
             "IRONFRONT_LOG_LEVEL", "Logging", "master server",
             "Error | Warn | Debug. Debug logs per-connection and per-frame detail and will fill\n" +
             "a VPS disk in days — keep it at Warn outside an investigation.",
-            "Warn");
+            "Warn",
+            summary: "Error | Warn | Debug");
 
         /// <summary>JSON event stream on stdout.</summary>
         public static readonly EnvVar StructuredLog = new EnvVar(
             "IRONFRONT_STRUCTURED_LOG", "Logging", "master server",
             "1 emits one JSON object per line on stdout beside the human log, for jq and log\n" +
             "aggregation. Values registered as secrets are redacted before writing.",
-            "0");
+            "0",
+            summary: "1 to emit JSON events on stdout beside the human log");
 
         // ---- TLS -----------------------------------------------------------------------
 
@@ -175,14 +188,16 @@ namespace Ironfront.Net.Configuration
             "password — anyone who captures it can log in as that account.\n" +
             "\n" +
             "Generate a certificate and get the fingerprint to pin in the client:\n" +
-            "  ./tools/new-dev-cert.ps1 -Subject <hostname> -AlsoValidFor <ip>");
+            "  ./tools/new-dev-cert.ps1 -Subject <hostname> -AlsoValidFor <ip>",
+            summary: "PKCS#12 bundle; empty = plaintext");
 
         /// <summary>Password for the PKCS#12 bundle.</summary>
         public static readonly EnvVar TlsCertificatePassword = new EnvVar(
             "IRONFRONT_TLS_CERT_PASSWORD", "TLS", "master server",
             "The certificate bundle's password. Registered for redaction at startup and never\n" +
             "printed.",
-            secret: true);
+            secret: true,
+            summary: "password for the bundle; never printed");
 
         // ---- Metrics and durability ----------------------------------------------------
 
@@ -191,7 +206,8 @@ namespace Ironfront.Net.Configuration
             "IRONFRONT_METRICS_PORT", "Metrics and durability", "master server, tools/alert.sh",
             "`nc 127.0.0.1 27001` prints a JSON snapshot. 0 disables the endpoint. It must differ\n" +
             "from IRONFRONT_MASTER_PORT or the second listener fails to bind.",
-            "27001");
+            "27001",
+            summary: "JSON snapshot endpoint; 0 disables it");
 
         /// <summary>Metrics endpoint bind address.</summary>
         public static readonly EnvVar MetricsBind = new EnvVar(
@@ -199,7 +215,8 @@ namespace Ironfront.Net.Configuration
             "The bind address stays on loopback deliberately: the payload is unauthenticated and\n" +
             "tells anyone who can reach it how many players are online and whether a game server\n" +
             "is down. Reach it over the SSH session you already have.",
-            "127.0.0.1");
+            "127.0.0.1",
+            summary: "bind address for the endpoint; loopback deliberately");
 
         /// <summary>Host the alert script polls.</summary>
         public static readonly EnvVar MetricsHost = new EnvVar(
@@ -212,13 +229,15 @@ namespace Ironfront.Net.Configuration
         public static readonly EnvVar MetricsCsvPath = new EnvVar(
             "IRONFRONT_METRICS_CSV", "Metrics and durability", "master server",
             "One CSV row per interval, for the durability chart (tools/chart-durability.ps1).\n" +
-            "Empty disables sampling.");
+            "Empty disables sampling.",
+            summary: "durability CSV path; empty disables sampling");
 
         /// <summary>Seconds between durability CSV rows.</summary>
         public static readonly EnvVar MetricsCsvIntervalSeconds = new EnvVar(
             "IRONFRONT_METRICS_CSV_INTERVAL_SEC", "Metrics and durability", "master server",
             "Seconds between durability CSV rows.",
-            "60");
+            "60",
+            summary: "seconds between durability CSV rows");
 
         // ---- Limits --------------------------------------------------------------------
 
@@ -233,19 +252,22 @@ namespace Ironfront.Net.Configuration
             "\n" +
             "  IRONFRONT_MAX_CONNECTIONS_PER_IP=200\n" +
             "  IRONFRONT_LOGIN_RATE_PER_MINUTE=500",
-            "5");
+            "5",
+            summary: "anti-flood cap; raise it only on a test rig");
 
         /// <summary>Global connection cap on the master. 0 disables.</summary>
         public static readonly EnvVar MaxTotalConnections = new EnvVar(
             "IRONFRONT_MAX_TOTAL_CONNECTIONS", "Limits", "master server",
             "Global connection cap. 0 removes it.",
-            "256");
+            "256",
+            summary: "global cap; 0 removes it");
 
         /// <summary>Per-IP login attempts per minute.</summary>
         public static readonly EnvVar LoginRatePerMinute = new EnvVar(
             "IRONFRONT_LOGIN_RATE_PER_MINUTE", "Limits", "master server",
             "Per-IP login attempts per minute.",
-            "5");
+            "5",
+            summary: "login attempts per source IP; raise it on a test rig");
 
         // ---- Diagnostics ---------------------------------------------------------------
 
@@ -342,6 +364,58 @@ namespace Ironfront.Net.Configuration
             AlertWebhook, AlertErrorsPerMinute, AlertRssGrowthPercent, AlertStatePath,
         };
 
+        /// <summary>
+        /// The variables a given process reads, matched against <see cref="EnvVar.ReadBy"/>.
+        /// </summary>
+        /// <param name="reader">A reader name as written in the declarations, e.g. "master server".</param>
+        public static IReadOnlyList<EnvVar> For(string reader)
+        {
+            if (string.IsNullOrWhiteSpace(reader)) throw new ArgumentException("Reader is required.", nameof(reader));
+
+            var matched = new List<EnvVar>();
+            for (int i = 0; i < All.Count; i++)
+            {
+                if (All[i].ReadBy.IndexOf(reader, StringComparison.OrdinalIgnoreCase) >= 0) matched.Add(All[i]);
+            }
+
+            return matched;
+        }
+
+        /// <summary>
+        /// Renders the configuration section of a process's <c>--help</c> screen.
+        /// </summary>
+        /// <remarks>
+        /// The master server used to carry this list as a string literal, and it went stale the
+        /// moment the registry grew: eight variables were missing from it on the day it was
+        /// written into. Deriving it means a variable is documented in <c>--help</c>,
+        /// <c>.env.example</c> and the code by the same act.
+        /// </remarks>
+        public static string RenderUsage(string reader, string indent = "  ")
+        {
+            IReadOnlyList<EnvVar> variables = For(reader);
+
+            int width = 0;
+            for (int i = 0; i < variables.Count; i++)
+            {
+                if (variables[i].Name.Length > width) width = variables[i].Name.Length;
+            }
+
+            var text = new StringBuilder();
+
+            for (int i = 0; i < variables.Count; i++)
+            {
+                EnvVar variable = variables[i];
+
+                text.Append(indent).Append(variable.Name.PadRight(width)).Append("  ").Append(variable.Summary);
+
+                if (variable.DefaultValue.Length > 0) text.Append(" (default ").Append(variable.DefaultValue).Append(')');
+
+                if (i < variables.Count - 1) text.Append('\n');
+            }
+
+            return text.ToString();
+        }
+
         /// <summary>Looks a variable up by name, or null when it is not declared.</summary>
         public static EnvVar? Find(string name)
         {
@@ -379,8 +453,14 @@ namespace Ironfront.Net.Configuration
                 "reaches it automatically — which is what stops a documented setting from being\n" +
                 "read by nothing, and a setting that is read from being documented nowhere.\n" +
                 "\n" +
-                "Every value below is the DEFAULT the code already uses. Uncommented lines are\n" +
-                "here to be found and changed, not because they must be set.");
+                "Copying this file to .env changes NO behaviour. Every value written below is\n" +
+                "already what the code does, so the copy is a starting point to edit rather than\n" +
+                "a set of overrides. A blank value is not a gap to fill: for most variables it IS\n" +
+                "the default and it means something specific — standalone, plaintext, disabled,\n" +
+                "no preference, inherited from the scene. The comment on each one says which.\n" +
+                "\n" +
+                "IRONFRONT_SHARED_SECRET is the one exception: blank there means unset, the master\n" +
+                "server refuses to start, and that is deliberate.");
 
             string? section = null;
 
