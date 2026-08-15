@@ -112,9 +112,11 @@ namespace Ironfront.Client.Flow.Tests
                     Assert.False(flow.CanTransition(to));
                     Assert.False(flow.TryTransition(to));
 
-                    InvalidOperationException error =
-                        Assert.Throws<InvalidOperationException>(() => flow.Transition(to));
+                    IllegalGameFlowTransitionException error =
+                        Assert.Throws<IllegalGameFlowTransitionException>(() => flow.Transition(to));
 
+                    Assert.Equal(from, error.From);
+                    Assert.Equal(to, error.To);
                     Assert.Contains(from.ToString(), error.Message);
                     Assert.Contains(to.ToString(), error.Message);
                     Assert.Equal(from, flow.State);   // a refused move changes nothing
@@ -201,7 +203,7 @@ namespace Ironfront.Client.Flow.Tests
             int raised = 0;
             flow.OnStateChanged += (_, _) => raised++;
 
-            Assert.Throws<InvalidOperationException>(() => flow.Transition(GameFlowState.InMatch));
+            Assert.Throws<IllegalGameFlowTransitionException>(() => flow.Transition(GameFlowState.InMatch));
             Assert.False(flow.TryTransition(GameFlowState.InMatch));
 
             Assert.Equal(0, raised);
@@ -253,6 +255,21 @@ namespace Ironfront.Client.Flow.Tests
 
             Assert.False(GameFlowController.IsLegal(GameFlowState.Authenticating, GameFlowState.InMatch));
             Assert.True(GameFlowController.IsLegal(GameFlowState.Authenticating, GameFlowState.Lobby));
+        }
+
+        [Fact]
+        public void TheIllegalTransitionExceptionIsDistinguishableFromTheFrameworksOwn()
+        {
+            // MasterClient throws InvalidOperationException for "not connected"; a catch around
+            // a request that also transitions must be able to tell the two apart, or a bug here
+            // is laundered into "lost the connection to the master server".
+            var flow = new GameFlowController();
+
+            Exception error = Assert.Throws<IllegalGameFlowTransitionException>(
+                () => flow.Transition(GameFlowState.InMatch));
+
+            Assert.IsNotType<InvalidOperationException>(error);   // the exact base, not this type
+            Assert.IsAssignableFrom<InvalidOperationException>(error);
         }
 
         [Fact]

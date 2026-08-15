@@ -146,11 +146,18 @@ namespace Ironfront.Net.Unity.Client
             _transport.OnConnected += OnConnected;
             _transport.OnDisconnected += OnDisconnected;
 
-            // An empty ticket, not a fabricated one. The master issues these, and a client that
-            // invented 64 bytes would be indistinguishable on the wire from one attacking the
-            // signature check -- the server's _acceptUnsignedTickets is the switch that decides
-            // whether an empty one is allowed, and that decision belongs on the server.
-            _transport.Connect(Config.Host, Config.Port, ReadOnlySpan<byte>.Empty);
+            // A placeholder ticket, not a fabricated one: 64 zero bytes carry no more authority
+            // than nothing at all, and a server with validation on rejects them on the HMAC like
+            // any other unsigned ticket. That decision still belongs on the server.
+            //
+            // It cannot be ReadOnlySpan<byte>.Empty, which is what this line used to pass.
+            // Connection.BeginConnect rejects any ticket that is not exactly JOIN_TICKET_SIZE
+            // bytes and throws before a packet is sent, so an empty one never reached the
+            // _acceptUnsignedTickets switch it was written to defer to -- it threw
+            // ArgumentException out of Awake instead. The loopback path has no such check, which
+            // is why this survived: every test that exercised this method used a loopback
+            // transport, and the UDP path had never been dialled.
+            _transport.Connect(Config.Host, Config.Port, PendingJoin.CreateUnsignedTicket());
         }
 
         /// <summary>

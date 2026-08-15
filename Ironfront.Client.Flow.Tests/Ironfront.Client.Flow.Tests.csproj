@@ -56,11 +56,32 @@
     the next Unity-only file somebody adds to that folder and fail with a screenful of
     UnityEngine errors that look like a broken build rather than a misplaced file.
   -->
+  <!--
+    The libraries the linked files compile against. Unity gets the same code from
+    Assets/Plugins/*.dll, which tools/build-libs.ps1 drops there; here it comes from source,
+    so a change to either side is caught by this project's build rather than at Dev A's desk.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Ironfront.MasterClient\Ironfront.MasterClient.csproj" />
+    <ProjectReference Include="..\Ironfront.Net.Protocol\Ironfront.Net.Protocol.csproj" />
+    <ProjectReference Include="..\Ironfront.Net.Transport\Ironfront.Net.Transport.csproj" />
+  </ItemGroup>
+
   <ItemGroup>
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\GameFlowState.cs"
              Link="Linked\GameFlowState.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\GameFlowController.cs"
              Link="Linked\GameFlowController.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\PasswordHasher.cs"
+             Link="Linked\PasswordHasher.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\MasterErrorText.cs"
+             Link="Linked\MasterErrorText.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\PendingJoin.cs"
+             Link="Linked\PendingJoin.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\SnapshotHoldingQueue.cs"
+             Link="Linked\SnapshotHoldingQueue.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\MasterSession.cs"
+             Link="Linked\MasterSession.cs" />
   </ItemGroup>
 
 </Project>
