@@ -292,14 +292,29 @@ namespace Ironfront.Net.Unity.Server
             };
 
             // A connection has to be paired with the player its ticket named, so the claim can
-            // be released when that connection goes away. The transport does not carry the
-            // ticket through to OnClientConnected, so the pairing is made from the admission
-            // queue at connect time — see TicketValidator.TryTakePendingAdmission for why that
-            // is sound and what the fallback costs. From there on it is keyed by connection id,
-            // so clients may leave in any order.
-            server.OnClientConnected += (connectionId, _) =>
+            // be released when that connection goes away.
+            //
+            // Pair on ConnectionInfo.PlayerId, which the UDP transport reads out of the signed
+            // ticket during the handshake (checklist B7). The positional fallback below is for
+            // the loopback transport, which admits without a ticket and reports 0. Pairing
+            // positionally on a real transport mis-pairs whenever an admitted handshake dies
+            // before connecting, and a mis-paired claim is then confirmed as permanent — the
+            // real owner cannot rejoin until the other connection drops.
+            server.OnClientConnected += (connectionId, info) =>
             {
-                if (!Validator.TryTakePendingAdmission(out uint playerId)) return;
+                uint playerId = info.PlayerId;
+
+                if (playerId != 0)
+                {
+                    // Drop the matching admission so the pending list does not grow. A miss is
+                    // not an error: an unsigned-ticket build admits through OnValidateTicket
+                    // without ever recording one.
+                    Validator.TryTakePendingAdmission(playerId);
+                }
+                else if (!Validator.TryTakePendingAdmission(out playerId))
+                {
+                    return;
+                }
 
                 Validator.ConfirmConnected(playerId);
                 _playerByConnection[connectionId] = playerId;

@@ -134,7 +134,7 @@ namespace Ironfront.Net.Unity.Server
 
             _respawnGate.MarkRespawned(session.ActorId);
 
-            actor.Health = 100f;
+            actor.Health = NetServerActor.DefaultSpawnHealth;
             actor.IsAlive = true;
 
             session.ResetWeapon();

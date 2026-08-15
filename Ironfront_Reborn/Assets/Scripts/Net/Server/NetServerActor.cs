@@ -41,7 +41,8 @@ namespace Ironfront.Net.Unity.Server
         [SerializeField] private bool _availableForPlayers;
 
         [Header("Replicated gameplay state")]
-        [Tooltip("Ships as 0 until Dev A lands the weapon id registry (checklist A6).")]
+        [Tooltip("Fallback for an actor with no Actor component. A real actor reports the "
+               + "network id of whatever it is currently holding.")]
         [SerializeField] private byte _weaponId;
 
         [SerializeField] private byte _ammoInClip;
@@ -95,9 +96,35 @@ namespace Ironfront.Net.Unity.Server
             }
         }
 
+        /// <summary>
+        /// The network id of the weapon this actor is holding. A pass-through to
+        /// <c>Actor.activeWeapon.NetworkId</c> whenever this GameObject has one, for the same
+        /// reason <see cref="Health"/> is a pass-through to <c>Actor.health</c> (D9).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This used to be a plain serialized field that the snapshot read and <b>nothing ever
+        /// wrote</b> — so every actor, in every snapshot, in every <c>S_SPAWN</c> and every
+        /// <c>S_WEAPON_FIRE</c>, reported weapon 0. Remote clients drew no weapon at all and
+        /// nothing anywhere reported an error, because 0 is a legal value meaning "unknown".
+        /// </para>
+        /// <para>
+        /// The id itself has been available since checklist A6: <c>Actor.SpawnWeapon</c> stamps
+        /// <c>WeaponManager.NetworkIdOf(entry)</c> onto <c>Weapon.NetworkId</c> at spawn, and
+        /// <c>Actor.activeWeapon</c> is whichever one is unholstered. Nobody had connected the
+        /// two ends.
+        /// </para>
+        /// <para>
+        /// <b>The serialized field survives as the fallback</b> for a replicated object with no
+        /// <c>Actor</c> — a prop, a bare test rig. Exactly one of the two is live at any moment,
+        /// which is the property that keeps this from being a second copy of the same fact.
+        /// </para>
+        /// </remarks>
         public byte WeaponId
         {
-            get => _weaponId;
+            get => _actor != null && _actor.activeWeapon != null
+                ? _actor.activeWeapon.NetworkId
+                : _weaponId;
             set => _weaponId = value;
         }
 
@@ -115,6 +142,39 @@ namespace Ironfront.Net.Unity.Server
 
         /// <summary>Aim pitch in degrees, driven by whoever controls this actor.</summary>
         public float PitchDegrees { get; set; }
+
+        /// <summary>
+        /// Aim yaw in degrees, written from the accepted input frame. <see cref="float.NaN"/>
+        /// means nothing drives it, and the transform's own rotation is used instead.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A headless server's player transform does not turn.</b> Player rotation in the
+        /// original game comes from <c>FpsActorController</c> reading the mouse, and there is no
+        /// mouse in batch mode — so <see cref="Capture"/> reading <c>transform.eulerAngles.y</c>
+        /// reported the spawn heading for the whole match. Every remote client drew the player
+        /// facing one fixed direction while they shot in another, and the &gt;500 m view-cone
+        /// rescue in <c>InterestManager</c> tested that same fixed direction. Phase-05 already
+        /// says aim comes from the frame, not the transform; only pitch had been wired.
+        /// </para>
+        /// <para>
+        /// <b>The NaN default is what keeps bots correct.</b> An AI actor is rotated by its own
+        /// controller and never receives an input frame, so for it the transform is the truth.
+        /// Defaulting to 0 would have snapped every bot to face north.
+        /// </para>
+        /// </remarks>
+        public float YawDegrees { get; set; } = float.NaN;
+
+        /// <summary>
+        /// Health an actor is given when it takes a fresh life — a claimed player slot or a
+        /// respawn.
+        /// </summary>
+        /// <remarks>
+        /// One constant rather than the literal 100 written at each site. It is still a guess at
+        /// what <c>Actor</c> considers full health; reading a real maximum off the actor is a
+        /// separate change.
+        /// </remarks>
+        public const float DefaultSpawnHealth = 100f;
 
         /// <summary>Alive flag. A corpse is never replicated (AD-4) but the flag still ships.</summary>
         /// <remarks>
@@ -177,15 +237,20 @@ namespace Ironfront.Net.Unity.Server
 
             Vec3 velocity = Movement != null ? Movement.State.Velocity : Vec3.Zero;
 
+            // Through the properties, not the backing fields: both are pass-throughs to the
+            // gameplay actor now, and reading _weaponId here is how the weapon id stayed 0 in
+            // the snapshot and in S_SPAWN even after the property was correct.
+            float yaw = float.IsNaN(YawDegrees) ? transform.eulerAngles.y : YawDegrees;
+
             return SnapshotBuilder.Capture(
                 _actorId,
                 position,
-                transform.eulerAngles.y,
+                yaw,
                 PitchDegrees,
                 velocity,
                 BuildStateFlags(),
                 Health,
-                _weaponId,
+                WeaponId,
                 _ammoInClip,
                 _team);
         }

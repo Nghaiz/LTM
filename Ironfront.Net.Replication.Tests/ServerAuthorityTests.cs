@@ -345,6 +345,80 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(0f, session.State.Position.Magnitude, 6);
         }
 
+        // ------------------------------------------------------------------ input flooding
+
+        [Fact]
+        public void AFloodedInputRingIsMeteredToTheServersOwnTickRate()
+        {
+            // The speed hack: keep the 32-frame ring saturated and the server used to drain all
+            // of it in one tick, each frame moving a full tick's length — 32x run speed, with
+            // SpeedViolations at zero because no individual step broke the per-step clamp.
+            var flooded = new ClientSession(connectionId: 1, actorId: 1);
+            flooded.State = MoveState.AtRest(Vec3.Zero, grounded: true);
+            flooded.PreviousPosition = Vec3.Zero;
+
+            InputFrame running = InputFrame.FromFloats(0f, 1f, 0f, 0f, InputButtons.None);
+            for (uint tick = 1; tick <= 32; tick++) flooded.EnqueueInput(tick, in running);
+
+            int firstTick = ApplyTick(flooded);
+
+            Assert.True(
+                firstTick <= InputAuthority.MaxInputBurst,
+                $"{firstTick} frames applied in one tick, budget is {InputAuthority.MaxInputBurst}");
+
+            // The surplus is held, not dropped — a throttled client loses no intent.
+            Assert.True(flooded.PendingInputCount > 0);
+            Assert.True(flooded.InputThrottleEvents > 0);
+
+            // And the sustained rate is one frame per tick, not the ring's depth.
+            for (int tick = 0; tick < 8; tick++) Assert.Equal(1, ApplyTick(flooded));
+        }
+
+        [Fact]
+        public void ABurstAfterPacketLossIsAllowedToCatchUp()
+        {
+            // The honest case the budget must NOT punish: frames for several ticks arrive in
+            // one delivery after a hiccup. They represent ticks the player really did intend to
+            // move for, so they are applied together.
+            var session = new ClientSession(connectionId: 1, actorId: 1);
+            session.State = MoveState.AtRest(Vec3.Zero, grounded: true);
+            session.PreviousPosition = Vec3.Zero;
+
+            InputFrame running = InputFrame.FromFloats(0f, 1f, 0f, 0f, InputButtons.None);
+
+            // Idle ticks bank the budget.
+            session.EnqueueInput(1, in running);
+            ApplyTick(session);
+            ApplyTick(session);
+            ApplyTick(session);
+
+            session.EnqueueInput(2, in running);
+            session.EnqueueInput(3, in running);
+            session.EnqueueInput(4, in running);
+
+            Assert.Equal(3, ApplyTick(session));
+            Assert.Equal(0, session.InputThrottleEvents);
+        }
+
+        [Fact]
+        public void OneFrameATickIsNeverThrottled()
+        {
+            var session = new ClientSession(connectionId: 1, actorId: 1);
+            session.State = MoveState.AtRest(Vec3.Zero, grounded: true);
+            session.PreviousPosition = Vec3.Zero;
+
+            InputFrame running = InputFrame.FromFloats(0f, 1f, 0f, 0f, InputButtons.None);
+
+            for (uint tick = 1; tick <= 20; tick++)
+            {
+                session.EnqueueInput(tick, in running);
+                Assert.Equal(1, ApplyTick(session));
+            }
+
+            Assert.Equal(0, session.InputThrottleEvents);
+            Assert.Equal(0, session.SpeedViolations);
+        }
+
         /// <summary>
         /// Runs one authoritative tick with straight-line integration standing in for
         /// collision — the seam a Unity server fills with CharacterController.Move.
