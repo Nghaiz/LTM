@@ -164,6 +164,31 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(-MovementCore.StickToGroundForce, state.Velocity.Y, 4);
         }
 
+        /// <summary>
+        /// Pins the reason MovementShadowCompare excludes the grounded vertical channel.
+        /// </summary>
+        /// <remarks>
+        /// An idle grounded actor asks to move DOWN and not sideways. CharacterController.Move
+        /// then resolves that request against the floor and the actor stays put, so the real
+        /// transform delta is zero on all three axes while this returns a non-zero Y. Comparing
+        /// those two directly is what produced 787 false "divergences" from a player standing
+        /// still in the round-5 playtest (plans/reports/2026-08-13-unity-a3-shadow-harness.md).
+        /// If anyone ever makes this return zero here, the harness exclusion becomes dead
+        /// weight and this test is where they find out.
+        /// </remarks>
+        [Fact]
+        public void GroundedIdleRequestsDownwardMotionThatCollisionIsMeantToAbsorb()
+        {
+            var state = MoveState.AtRest(Vec3.Zero, grounded: true);
+            var idle  = new MoveInput(0f, 0f, 0f, false, false, false);
+
+            Vec3 motion = MovementCore.Step(ref state, in idle, Dt);
+
+            Assert.Equal(-MovementCore.StickToGroundForce * Dt, motion.Y, 5);
+            Assert.Equal(0f, motion.X, 6);
+            Assert.Equal(0f, motion.Z, 6);
+        }
+
         [Fact]
         public void JumpSetsUpwardVelocityOnlyWhenGrounded()
         {

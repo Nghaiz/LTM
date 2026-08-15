@@ -1,0 +1,44 @@
+{
+  "Scenario": "100-connections",
+  "Behavior": "connect-storm",
+  "Master": "127.0.0.1:27000",
+  "Tls": false,
+  "Clients": 100,
+  "RequestedDurationSec": 40,
+  "ActualDurationSec": 40,
+  "Operations": 100,
+  "OperationsPerSecond": 2.5,
+  "Failures": 0,
+  "AbruptDisconnects": 0,
+  "ConnectionsHeldToEnd": 0,
+  "LoginLatencyMs": {
+    "Samples": 0,
+    "Min": 0,
+    "P50": 0,
+    "P95": 0,
+    "P99": 0,
+    "Max": 0,
+    "Mean": 0
+  },
+  "OperationLatencyMs": {
+    "Samples": 100,
+    "Min": 0.199,
+    "P50": 0.226,
+    "P95": 0.285,
+    "P99": 0.495,
+    "Max": 15.63,
+    "Mean": 0.385
+  },
+  "Server": {
+    "Samples": 7,
+    "PeakConnections": 100,
+    "PeakWorkingSetMb": 72,
+    "FinalWorkingSetMb": 71,
+    "FinalThreadCount": 16,
+    "FinalGen2Collections": 1,
+    "FinalRoomsActive": 0,
+    "FinalOnlineNow": 0,
+    "WorkingSetGrowthMb": -1
+  },
+  "Errors": []
+}

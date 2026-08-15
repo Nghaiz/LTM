@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <RootNamespace>Ironfront.MasterClient</RootNamespace>
+    <AssemblyName>Ironfront.MasterClient</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Ironfront.Net.Protocol\Ironfront.Net.Protocol.csproj" />
+    <PackageReference Include="System.Text.Json" />
+  </ItemGroup>
+
+  <!--
+    MasterClientTlsOptions.ValidateCertificate is the certificate-pinning decision, factored
+    out of the SslStream callback so phase-03 criterion 4 ("the release client does not skip
+    validation") can be a test instead of a code review. It stays internal because A and C
+    consume this assembly and a public "here is how validation is decided" hook is an
+    invitation to call it with the wrong arguments.
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ironfront.MasterServer.Tests" />
+  </ItemGroup>
+</Project>

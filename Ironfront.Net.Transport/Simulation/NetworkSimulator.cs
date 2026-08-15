@@ -59,6 +59,9 @@ namespace Ironfront.Net.Transport.Simulation
             _rng  = new Random(config.RandomSeed);
         }
 
+        /// <summary>Whether this instance delays, drops or duplicates packets.</summary>
+        public bool Enabled => _cfg.Enabled;
+
         /// <summary>Packets currently held back, waiting for their delivery time.</summary>
         public int InFlightCount => _inFlight.Count;
 

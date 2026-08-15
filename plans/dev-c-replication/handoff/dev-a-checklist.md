@@ -9,6 +9,32 @@ needs the Editor, which under conventions.md § 1.3 means it needs you.
 
 Items are ordered by what unblocks the most.
 
+> **Round 5 — 2026-08-13. Group V is closed.** V1: **0 errors** (measured with MCP installed).
+> V2: **census clean**. V3: **log written**. V4: Play Mode stopped and
+> `[AppQuit] quit requested` was logged; both Quit buttons are wired. V5: **clean x3** for Island,
+> Dustbowl, and Splash. Full evidence: [Unity V1-V5 verification](../../reports/2026-08-13-unity-v1-v5.md).
+> A3 is no longer blocked by Group V.
+
+> **Round 6 — 2026-08-13. The A3 harness is repaired; please re-run A3.** Your round-5 report was
+> right on all three counts and the harness has been fixed for each: the grounded vertical channel
+> is now excluded (that was the 787 idle false positives), spawn/respawn/teleport samples are
+> detected and skipped instead of scored (the 1123 m sample), and the component now declares
+> `[DefaultExecutionOrder(1000)]` so it always samples the transform after the original controller
+> has moved for that tick. A fourth bug you did not see is also fixed: `_primed` was never reset on
+> re-enable, so a pooled respawn measured against a stale position — the most likely origin of that
+> 1123 m entry. The summary line has changed shape: **the verdict is now the GROUNDED number**, and
+> it reports skipped discontinuities separately. Details: [harness repair](../../reports/2026-08-13-movement-shadow-harness-repair.md).
+
+> **Round 7 — 2026-08-14. PR #42 isolated the last flat-ground warnings to two sprint-edge
+> physics ticks.** The shared simulation was not delaying sprint: the harness sampled the raw
+> Sprint button in `FixedUpdate`, while the legacy controller consumed the `sprinting` value
+> latched by `FpsActorController.Update`. Two physics ticks before the next render update therefore
+> compared different inputs. The harness now reads the exact legacy sprint latch and waits until
+> both legacy input and the `CharacterController` are active, removing the pre-deploy airborne
+> noise too. After this PR merges, repeat A3 on flat ground with several walk↔sprint transitions
+> and send the grounded summary plus any flat-ground warnings. **A3 and A4 remain open until that
+> focused rerun is clean.** Evidence: [Dev A's rerun](https://github.com/Sagitoaz/LTM/pull/42).
+
 > **Round 2 — 2026-08-12, afternoon.** A1, A2 and A5 are closed. Three more PRs merged since
 > (#12 yours, #13, #14): the two bugs you reported — cannot quit, no logs — plus four Unity 6
 > errors in the scene files. Everything verifiable without the Editor has been verified;
@@ -183,6 +209,15 @@ plays.
 On exiting Play mode it prints a one-line summary (`[MovementShadowCompare] ...`). **Send me that
 line plus any `MOVEMENT DIVERGED` warnings from flat ground.**
 
+> **How to read the summary after the round-6 repair.** The verdict is the **grounded** count, not
+> the total: `CLEAN on the ground` or `N of M GROUNDED ticks diverged`. Airborne divergence is
+> reported next to it but does not by itself condemn the port — slopes and geometry are the two
+> documented gaps. `skipped_discontinuities=N` counts spawn/respawn/teleport samples that were
+> deliberately not scored; a handful is normal, hundreds means something is teleporting the actor
+> every few seconds and is worth telling me about. Per-tick warnings now print `dH=` (horizontal,
+> always scored) and `dV=` which reads `absorbed` while grounded — that is the collision channel
+> being correctly ignored, not a measurement being hidden.
+
 > **Why crouch-walking is on that list specifically.** The phase-00 plan assumed a
 > `CROUCH_SPEED` of 2.0 m/s. No such value exists anywhere in the project — crouching changes the
 > collider height and nothing else (`FpsActorController.cs:678-682`), and speed selection has two
@@ -336,6 +371,136 @@ would have been, and costs you ten minutes instead of an hour.
 
 ---
 
+## S5 / A9 — Phase 02 landed  ⏱ ~25 min  🔴 closes M2 criteria 7 and 8
+
+Interest management, hitbox history, lag compensation, shot resolution, bot AI LOD and the
+gameplay-event framing are all written and green — 156 new tests, 453 in the solution. Every M2
+criterion except one is now pinned by a test rather than by an opinion. The exception is the same
+shape as S4: it is about what Unity does per tick, not what the encoder does.
+
+| # | Do | Report back |
+|---|---|---|
+| **S5** | Same Play session as S4, but put **32 bots** in the scene. Record ~60 s in the Profiler and read **tick p99** off the `ServerSnapshotStage.FixedUpdate` row (or the `[net] server over budget` warning, which prints it for you). Then toggle the LOD off — set `BotLodScheduler`'s threshold so every bot ticks — and record again. | the two p99 numbers, and the AI cost before/after |
+| **A9** | **A decision, not Editor work.** `BotLodScheduler` decides *which* bots should think this tick; something has to act on that. The obvious mechanism is `AiActorController.enabled = false`, and phase-02 trap 7 warns that a controller using coroutines or `Time.deltaTime` timers can misbehave when toggled at 6 Hz. The clean fix is an `updateInterval` field inside `AiActorController` — **your file**. Tell me which you want. | `"use .enabled"` or `"I'll add updateInterval"` |
+
+> **S5 is M2 criterion 7** — 32 bots with tick p99 under 33 ms — and it is the only M2 criterion
+> that can still fail. The thing that makes it affordable is built and measured: distant bots
+> think at 6 Hz instead of 30, which skips **50%** of AI updates with 20 of 32 bots distant. But
+> that is a skipped-update *share*, not milliseconds, and the criterion asks for the Profiler. If
+> p99 comes in over budget the contingency is a scope cut — 32 bots down to 16 — so it is worth
+> knowing early.
+
+**A9 needs no work from you if you do not want to do any.** The scheduler does not care which
+mechanism is used; policy and mechanism are deliberately separate so your answer does not touch
+my code or its tests. `.enabled` is what the wrapper will use unless you say otherwise — I just
+do not want to find out at M3 that it quietly broke your AI's timers.
+
+**One thing you should know rather than discover.** Dev B's UDP transport has landed, so
+`ITransportServer.OnValidateTicket` is now **fail-closed**: with no ticket validator registered,
+every UDP connection is rejected. That is mine to wire, not yours, and it is done — but if you
+ever stand a server up by hand and it accepts nobody with no error in the Console, that is why.
+
+---
+
+## S6 / A11–A13 — Phase 03 landed: the match runs itself  ⏱ ~25 min  🔴 closes M3 criteria 1–7
+
+Phase 03 is merged. The server now runs a complete match on its own: warmup, play, capture points,
+ticket bleed, a winner, a scoreboard pause, a clean reset, and back to waiting. All of it is
+engine-free and tested — 403 tests in the replication suite, 718 across the solution.
+
+Two new scripts landed under `Assets/Scripts/Net/Server/`, and as usual I did not create their
+`.meta` files:
+
+| | |
+|---|---|
+| `MatchController.cs` | Drives the match, reads capture-point occupancy out of the scene, broadcasts `S_MATCH_STATE` and `S_CAPTURE_POINT` |
+| `ServerMasterReporter.cs` | Heartbeats and match results to the master. Defaults to standalone, so it does nothing until wired |
+
+### S6 — Compile them and commit their `.meta`  ⏱ 10 min
+
+Same as S1. Pull, run `build-libs.ps1` (the DLLs changed), open the Editor, confirm 0 errors,
+commit the two new `.meta` files.
+
+**Reply with:** `"0 error"` — or the red lines.
+
+### S7 — Put both components on the `NetServer` GameObject  ⏱ 10 min
+
+Both declare `[RequireComponent(typeof(ServerTickLoop))]`, so drop them on the same object S2
+created. Then fill in `MatchController`'s **Capture Points** array with the map's capture-point
+transforms, **in id order** — the array index *is* the point id on the wire, so a gap renumbers
+every point after it and desynchronises the flags on every client. Leave the array empty for a
+deathmatch: no points, no ticket bleed, and the round then only ends on deaths.
+
+**Reply with:** how many capture points you wired, and for which map.
+
+### A11 — Two more plugin DLLs, if you want the master server connected  ⏱ 10 min  🟡 optional
+
+`ServerMasterReporter` talks to an interface (`IMatchReporter`) that lives in
+`Ironfront.Net.Replication.dll`, which you already have. The concrete implementation that speaks
+TCP to Dev D's master lives in two assemblies you do not: `Ironfront.MasterClient.dll` and
+`Ironfront.Net.MasterLink.dll`.
+
+That split is deliberate. `Replication.dll` ships into the Editor, so it must not drag a socket and
+`System.Text.Json` in behind it for four calls made once every five seconds. The cost is that
+connecting to the master needs those two DLLs dropped into `Assets/Plugins` with their `.meta`
+files — yours, not mine.
+
+**Until you do, the server runs in standalone mode**: complete matches, correct scoring, simply not
+advertised anywhere, with clients connecting by IP. That is a supported configuration, not a
+degraded one, so this is genuinely optional until Dev D's master is up.
+
+When you do want it, the wiring is one line from a boot script:
+
+```csharp
+var link = new GameServerLink();
+var reporter = new GameServerMatchReporter(link, ownsLink: true);
+await reporter.ConnectAndRegisterAsync(masterHost, masterPort, registration);
+GetComponent<ServerMasterReporter>().SetReporter(reporter);
+```
+
+**Reply with:** whether you want this now or after Dev D confirms the master is reachable.
+
+### A12 — Server CPU percentage: I am sending −1  ⏱ 2 min  🟡 decision
+
+GS_HEARTBEAT carries a `cpuPercent` that the master sorts servers on. Unity exposes no portable
+process-CPU counter, so I send **−1** rather than a number I made up — a fabricated value on a
+matchmaking input is worse than an absent one, because the master will act on it. Average tick time
+is a real load signal and is sent alongside.
+
+**Reply with:** leave it at −1, or name a counter you would rather I read.
+
+### A13 — Nobody is tallying kills and deaths  ⏱ 5 min  🟡 decision
+
+GS_MATCH_ENDED carries per-player kills/deaths/score. `S_DEATH` already names the killer, but
+nothing accumulates it, so I report an **empty** list rather than a row of zeroes per player —
+all-zero rows are indistinguishable from a match where nobody scored, and the master stores what it
+is given.
+
+Ticket accounting is unaffected: `MatchController.ReportDeath(team)` costs the dying team a ticket
+and that is wired.
+
+**Reply with:** whether the scoreboard is yours or mine. If it is mine, tell me where a kill is
+resolved on the server and I will tally from there.
+
+---
+
+## B7 — For Dev B, not you: the connection carries no player identity
+
+Recorded here so it is not lost. `ITransportServer.OnValidateTicket` hands me the ticket, and
+`OnClientConnected` hands me a `ConnectionInfo` — which has no player id on it. So there is nothing
+to match a validated ticket against its connection, and I pair them positionally: admission and
+connection happen in the same `Poll`, in order, one immediately after the other.
+
+It is sound in the normal case and it has a cost in the abnormal one. A handshake that validates
+and then fails before connecting leaves its admission at the head of the queue, and the next
+connection is paired with the wrong player — that player's claim is then not released on
+disconnect and lapses on the ticket's own 60-second expiry instead. Nobody is admitted who should
+not be; one player waits up to a minute to rejoin after a crash.
+
+The clean fix is a `PlayerId` (or the raw ticket) on `ConnectionInfo`. Filed for Dev B.
+
+---
+
 ## Two things I found in your files — reported, not touched
 
 conventions.md § 7 says to tell you rather than edit. Neither is urgent and neither is mine.
@@ -404,11 +569,19 @@ Do them in this order. Group V blocks A3, and A3 blocks A4.
 | **S2** | `NetServer` GameObject with the bootstrap + both stages | 10 min | the GameObject path |
 | **S3** | `NetServerActor` on the player prefab, **Available For Players** ticked | 10 min | how many actors carry it |
 | **S4** | Profiler: GC alloc per tick + p99 | 10 min | the two numbers |
+| **S5** | Profiler: 32 bots, tick p99 + AI cost with LOD on/off | 25 min | the two p99 numbers |
+| **A9** | Bot LOD mechanism: `.enabled` or `updateInterval`? | 2 min | which one |
 | A6 | Weapon id registry | 30 min | how to read the ids |
 | A7 | Can a player pass ±2048 m? | 10 min | yes/no |
 | A8 | Skim the movement analysis | 10 min | anything that contradicts what you know |
+| **S6** | Compile the two new match scripts, **commit their `.meta`** | 10 min | `"0 error"` |
+| **S7** | `MatchController` + `ServerMasterReporter` on `NetServer`, capture points in id order | 10 min | how many points, which map |
+| A11 | Master-link DLLs in `Assets/Plugins` — optional, standalone works without them | 10 min | now, or after Dev D is up |
+| A12 | `cpuPercent`: leave at −1, or name a counter | 2 min | which |
+| A13 | Who owns the kill/death tally | 5 min | yours or mine |
 
-**A1, A2 and A5 are closed; roughly 2 hours 35 minutes of Editor work left.** Nothing in this
+**A1, A2 and A5 are closed; roughly 3 hours of Editor work left.** Nothing in this
 round needs a decision from you — A5 was the last one. V2 is the only item whose answer changes
 a decision already made, A3 is still the one most likely to find a real bug, A4 is the one with a
-trap in it, and **S4 answers the two M1 criteria that no test can reach.**
+trap in it, **S4 answers the two M1 criteria that no test can reach**, and **S5 answers the last M2
+criterion that no test can reach**. A9 is the only item in this round that is a decision.

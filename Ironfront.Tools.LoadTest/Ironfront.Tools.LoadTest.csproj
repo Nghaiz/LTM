@@ -16,7 +16,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Ironfront.Net.Protocol\Ironfront.Net.Protocol.csproj" />
+    <ProjectReference Include="..\Ironfront.MasterClient\Ironfront.MasterClient.csproj" />
+    <ProjectReference Include="..\Ironfront.Net.Configuration\Ironfront.Net.Configuration.csproj" />
     <ProjectReference Include="..\Ironfront.Net.Transport\Ironfront.Net.Transport.csproj" />
   </ItemGroup>
 

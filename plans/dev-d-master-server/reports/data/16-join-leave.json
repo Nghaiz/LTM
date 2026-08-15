@@ -1,0 +1,44 @@
+{
+  "Scenario": "16-join-leave",
+  "Behavior": "join-leave",
+  "Master": "127.0.0.1:27000",
+  "Tls": false,
+  "Clients": 16,
+  "RequestedDurationSec": 30,
+  "ActualDurationSec": 30,
+  "Operations": 3911,
+  "OperationsPerSecond": 130.36,
+  "Failures": 147,
+  "AbruptDisconnects": 0,
+  "ConnectionsHeldToEnd": 0,
+  "LoginLatencyMs": {
+    "Samples": 16,
+    "Min": 2534.352,
+    "P50": 2661.18,
+    "P95": 2740.833,
+    "P99": 2740.833,
+    "Max": 2740.833,
+    "Mean": 2652.875
+  },
+  "OperationLatencyMs": {
+    "Samples": 3911,
+    "Min": 0.282,
+    "P50": 0.72,
+    "P95": 2.883,
+    "P99": 5.68,
+    "Max": 2384.241,
+    "Mean": 5.822
+  },
+  "Server": {
+    "Samples": 5,
+    "PeakConnections": 16,
+    "PeakWorkingSetMb": 67,
+    "FinalWorkingSetMb": 66,
+    "FinalThreadCount": 21,
+    "FinalGen2Collections": 1,
+    "FinalRoomsActive": 0,
+    "FinalOnlineNow": 16,
+    "WorkingSetGrowthMb": 0
+  },
+  "Errors": []
+}

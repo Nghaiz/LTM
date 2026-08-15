@@ -40,11 +40,13 @@
 public static class ProtocolConstants
 {
     public const ushort PROTOCOL_ID       = 0x4946;  // 'IF' — filters out junk packets
-    public const byte   PROTOCOL_VERSION  = 1;
+    public const byte   PROTOCOL_VERSION  = 2;
 
     public const int    MTU_SAFE          = 1200;    // safe through any router
     public const int    GSP_HEADER_SIZE   = 16;
     public const int    MAX_PAYLOAD       = MTU_SAFE - GSP_HEADER_SIZE;  // 1184
+    public const int    CHANNEL_ENVELOPE_SIZE = 3;                       // § 5.1
+    public const int    MAX_CHANNEL_PAYLOAD = MAX_PAYLOAD - CHANNEL_ENVELOPE_SIZE;  // 1181
 
     public const int    SIM_TICK_RATE     = 30;      // Hz
     public const int    SNAPSHOT_RATE     = 20;      // Hz
@@ -159,17 +161,40 @@ sequenceDiagram
     participant C as Client
     participant S as Server
     C->>S: CONNECT_REQUEST {version, joinTicket[64], clientSalt u64}
-    Note over S: Verify the joinTicket's HMAC<br/>Check expiry, check for a free slot
+    Note over S: Check version and free slots ONLY.<br/>No state stored, no HMAC verified yet
     S-->>C: CONNECT_CHALLENGE {serverSalt u64}
     Note over C: challengeResponse = clientSalt XOR serverSalt
-    C->>S: CONNECT_RESPONSE {challengeResponse u64}
-    Note over S: Authenticated → assign a connectionId
+    C->>S: CONNECT_RESPONSE {challengeResponse u64, clientSalt u64,<br/>joinTicket[64]}
+    Note over S: Address now proved.<br/>Verify the joinTicket's HMAC + expiry,<br/>bind its playerId, assign a connectionId
     S-->>C: CONNECT_ACCEPTED {connectionId u16, serverTick u32,<br/>mapId u16, myPlayerId u32}
 ```
 
 **Why there's a challenge:** to prevent IP-spoofing amplification. An attacker spoofing a victim's
 IP in a CONNECT_REQUEST never receives the `serverSalt`, so they can't complete the handshake and
-the server allocates no resources.
+**the server allocates no resources**.
+
+**How the server keeps that promise (v2).** The obvious implementation — remember a pending
+challenge per source address — breaks it: the address is still just a claim at that point, so a
+flood of forged sources fills the table, and whatever eviction policy protects it then starts
+throwing out legitimate clients mid-handshake. The server therefore stores nothing and derives the
+salt instead:
+
+```
+serverSalt = HMAC-SHA256(serverKey, address ‖ port ‖ clientSalt ‖ epoch)[0..8]
+```
+
+`serverKey` is per-process and never leaves it; `epoch` is a 30-second bucket, and the previous
+bucket is accepted too so a handshake straddling a boundary still completes. To recompute the salt
+on CONNECT_RESPONSE the server needs the client's salt back, which is why **CONNECT_RESPONSE echoes
+`clientSalt` and repeats the `joinTicket`** — the server has no memory of either. A spoofed
+CONNECT_REQUEST now costs one HMAC and one datagram sent to the forged address.
+
+**The ticket is verified at CONNECT_RESPONSE, not CONNECT_REQUEST.** Before the challenge completes
+the source address is unproved, so any work done for it is work an attacker can direct at will.
+The ticket's `playerId` is bound to the `connectionId` at that point (architecture.md § 9,
+impersonation); a second handshake presenting a `playerId` that is already connected is denied with
+`ALREADY_CONNECTED` rather than replacing the existing connection, so a captured ticket cannot
+evict its rightful owner.
 
 Retry: CONNECT_REQUEST is resent every 250 ms, up to 20 times (5 seconds), then reports an error.
 
@@ -189,6 +214,11 @@ Retry: CONNECT_REQUEST is resent every 250 ms, up to 20 times (5 seconds), then 
 ## 4. Payload: the message frame
 
 A `PAYLOAD` datagram carries **one or more** messages, batched together to reduce header overhead.
+
+> **This frame does not start at byte 16.** A `PAYLOAD` datagram is three layers: the 16-byte GSP
+> header, then the 3-byte **channel envelope** (§ 5.1), then the frame below. Anything decoding
+> from `GSP_HEADER_SIZE` reads the envelope's `channelSequence` where it expects `messageCount`.
+> The budget for this frame is `MAX_CHANNEL_PAYLOAD` = **1181 bytes**, not `MAX_PAYLOAD`.
 
 ```
 u8   channelId          See § 5
@@ -441,6 +471,70 @@ i16  dirX, dirY, dirZ   Quantized fire direction (for tracers)
 Sent unreliable-sequenced: losing one gunshot is harmless. Used for muzzle flashes, 3D audio and
 other players' tracers.
 
+### 4.8. `weaponId` — the value space
+
+`weaponId` is a `u8` in three places (§ 4.3 snapshot weapon field, `S_SPAWN`, § 4.7
+`S_WEAPON_FIRE`) and was frozen without any section saying what a value means. The mapping lived
+only in serialized fields inside `Ironfront_Reborn/Assets/Resources/_Managers.prefab` — a Unity
+YAML asset the server cannot open, being a netstandard library with no Unity reference. This
+section is that mapping.
+
+```csharp
+// Ironfront.Net.Protocol/WeaponIds.cs
+public static class WeaponIds
+{
+    public const byte NONE              = 0;              // no weapon, or one this build does not know
+
+    public const byte RK44              = 1;
+    public const byte SIND7             = 2;
+    public const byte SIND7_SUPPRESSED  = 3;
+    public const byte EAGLE_76          = 4;
+    public const byte BEU_AW1           = 5;
+    public const byte SL_DEFENDER       = 6;
+    public const byte FRAG              = 7;
+    public const byte SPEARHEAD         = 8;
+    public const byte BINOCS            = 9;
+    public const byte AMMO_BAG          = 10;
+    public const byte MEDIPACK          = 11;
+    public const byte BIL_SCALPEL       = 12;
+    public const byte SIGNAL_DMR        = 13;
+    public const byte NV_GOGGLES        = 14;
+    public const byte RECON_LRR         = 15;
+    public const byte WRENCH            = 16;
+    public const byte SUPER_WRENCH      = 17;
+
+    public const byte MAX_ASSIGNED      = 17;     // the next new weapon takes 18
+}
+```
+
+| Id | Registry name | Id | Registry name |
+|---|---|---|---|
+| 0 | *(none / unknown)* | 9 | BINOCS |
+| 1 | RK-44 | 10 | AMMO BAG |
+| 2 | S-IND7 | 11 | MEDIPACK |
+| 3 | S-IND7 [SUP] | 12 | BIL SCALPEL |
+| 4 | 76 EAGLE | 13 | SIGNAL DMR |
+| 5 | BEU AW1 | 14 | N.V. GOGGLES |
+| 6 | SL-DEFENDER | 15 | RECON LRR |
+| 7 | FRAG | 16 | WRENCH |
+| 8 | SPEARHEAD | 17 | SUPER WRENCH |
+
+**Ids are permanent and append-only.** Reassigning one breaks no build and no test — it makes a
+server that says "shot with 4" and a client that draws weapon 4 disagree about which gun that is,
+at runtime, for every player. A new weapon takes the next free id; a retired weapon's id retires
+with it and is never recycled. Adding an id is **not** a wire change and does not bump
+`PROTOCOL_VERSION`: an older client receiving an id past its `MAX_ASSIGNED` reads it as `NONE`,
+draws no weapon, and keeps the snapshot.
+
+**0 is reserved and never assigned.** It is what a receiver reads for an actor holding nothing,
+and it is what a sender emits for a registry entry whose id is missing or duplicated — so a
+misconfigured weapon transmits "unknown" rather than impersonating whichever weapon legitimately
+owns that number.
+
+Three copies of this mapping exist: this section, `WeaponIds.cs`, and the `NetworkId` fields in
+`_Managers.prefab`. `tools/SpecChecker` compares all three on every CI run, because the failure
+mode of drift here is silent on both sides.
+
 ---
 
 ## 5. Channels
@@ -463,6 +557,39 @@ arrived have to sit in the buffer. That is head-of-line blocking — but we acce
 **for events only**, where ordering genuinely matters (you can't process a "death" before a
 "spawn"). Snapshots live on a different channel and are unaffected. **This is the core advantage of
 UDP over TCP**: TCP forces everything into one stream.
+
+### 5.1. The channel envelope (3 bytes, every `PAYLOAD` datagram)
+
+Between the GSP header and the § 4 message frame sits a small transport-owned header:
+
+```
+u8   channelId          0..3, see the table above
+u16  channelSequence    per-channel, little-endian
+```
+
+So a complete `PAYLOAD` datagram is:
+
+```
+[ GSP header, 16 B ][ channel envelope, 3 B ][ message frame, § 4 ]
+```
+
+**`channelSequence` is not the GSP `sequence`.** The GSP sequence counts every datagram on the
+connection — keep-alives, acks, packets for other channels — so it advances at a rate that has
+nothing to do with any one channel. Sequenced channels (1 and 3) decide staleness on
+`channelSequence`, so a lost snapshot can never make an input look old. Compare it with the
+wrap-safe helper in § 2.3, never with `>`.
+
+**Why `channelId` appears here as well as in § 4.** It reads as duplication and it is not. A
+fragmented message frame is not a parseable object until every fragment has arrived (§ 6), but the
+channel is exactly what the transport must know *first* — it selects the reliability and ordering
+rules, and therefore whether an arriving fragment should be buffered, acked, or dropped as stale.
+Reading the channel out of the application frame would mean the transport could only route packets
+it had already finished reassembling, which is circular. The cost is one byte per datagram, 0.08%
+of `MTU_SAFE`.
+
+**Ownership:** the envelope is written and read by the transport (Dev B). Nothing above the
+transport ever sees it — `ITransportServer.Send` takes a channel id and a payload, and the frame in
+§ 4 is what the payload contains.
 
 ---
 
@@ -785,6 +912,9 @@ run by `dotnet test` and by CI on every push.
 |---|---|---|---|---|---|
 | 1.0.0-draft | Week 1 | Whole team | Initial version | — | — |
 | **1.0.0** | Week 1 | Dev C (chair) | **Freeze.** Corrected the `PackPos(100f)` worked example (1600 → 1599); pinned MSP `msgType` to little-endian; recorded the `actorId` allocation and 5-second quarantine rules; verified `POS_RANGE` against `LevelBounds` | **No** — `PROTOCOL_VERSION` stays 1 | #3 |
+| **2.0.0** | Week 2 | Dev B + Dev C | **Documented the channel envelope (new § 5.1)**, which the transport had been writing since the UDP layer landed but which no section described — so a decoder written from the spec read `channelSequence` as `messageCount`. Added `CHANNEL_ENVELOPE_SIZE` and `MAX_CHANNEL_PAYLOAD`. **Widened `CONNECT_RESPONSE` 8 → 80 bytes** (echoed `clientSalt` + repeated `joinTicket`) so the server can answer a handshake without storing per-address state — see § 3.1 | **Yes** | (this PR) |
+
+| **2.0.1** | Week 2 | Dev A + Dev D | **Documented the `weaponId` value space (new § 4.8)**, which was a `u8` in three messages from the freeze onward with no section saying what any value meant — the mapping existed only inside `_Managers.prefab`, which the server cannot read. Added `WeaponIds`; SpecChecker now gates spec ↔ code ↔ prefab | **No** — no byte changed | #34 |
 
 > Every change after the freeze must add a row to this table and land via a PR with 2 approvals.
 > **Bump `PROTOCOL_VERSION` only when the bytes on the wire change** — a client and server with

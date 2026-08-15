@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using Ironfront.Net.Unity.Server;
 using Pathfinding;
 using UnityEngine;
 
@@ -357,8 +358,23 @@ public class AiActorController : ActorController
 		PARAMETERS_NORMAL.TAKING_FIRE_REACTION_TIME = 0.15f;
 	}
 
+	// Bot level-of-detail. Null on every bot that has no BotLodGate attached, which is all of
+	// them unless a measurement run adds one -- see AiWorkAllowed below.
+	private BotLodGate lodGate;
+
+	// The one question the LOD gate answers, asked at the head of Update and of all eight AI
+	// coroutines. No gate means no gating: a bot without the component behaves exactly as it
+	// did before this seam existed, which is what makes the nine call sites safe to land ahead
+	// of any measurement. Unity's overloaded == also makes a destroyed gate read as null here,
+	// so a bot outliving its gate keeps thinking rather than freezing.
+	private bool AiWorkAllowed()
+	{
+		return lodGate == null || lodGate.AllowAiWork;
+	}
+
 	private void Awake()
 	{
+		lodGate = GetComponent<BotLodGate>();
 		seeker = GetComponent<Seeker>();
 		Seeker obj = seeker;
 		obj.pathCallback = (OnPathDelegate)Delegate.Combine(obj.pathCallback, new OnPathDelegate(OnPathComplete));
@@ -403,6 +419,14 @@ public class AiActorController : ActorController
 		Collider[] colliders = new Collider[128];
 		while (true)
 		{
+			// LOD gate, 1 of 8. `yield return null` rather than a longer wait so the bot
+			// resumes on the frame it re-enters interest instead of up to a WaitForSeconds
+			// later, and so the skipped iteration costs one bool read.
+			if (!AiWorkAllowed())
+			{
+				yield return null;
+				continue;
+			}
 			if (hasPath)
 			{
 				Ray ray = new Ray(base.actor.CenterPosition(), GetWaypointDelta());
@@ -454,6 +478,12 @@ public class AiActorController : ActorController
 		float lastSampleTime = 0f;
 		while (true)
 		{
+			// LOD gate, 2 of 8.
+			if (!AiWorkAllowed())
+			{
+				yield return null;
+				continue;
+			}
 			if (actor.IsSeated() && actor.seat.vehicle != null && actor.IsDriver())
 			{
 				Type vehicleType = actor.seat.vehicle.GetType();
@@ -578,6 +608,12 @@ public class AiActorController : ActorController
 		yield return new WaitForSeconds(UnityEngine.Random.Range(0.5f, 1f));
 		while (true)
 		{
+			// LOD gate, 3 of 8.
+			if (!AiWorkAllowed())
+			{
+				yield return null;
+				continue;
+			}
 			if (!hasPath && ShouldHavePath() && moveTimeoutAction.TrueDone())
 			{
 				CreateRougeSquad();
@@ -685,6 +721,13 @@ public class AiActorController : ActorController
 		Action investigateAction = new Action(3f);
 		while (true)
 		{
+			// LOD gate, 4 of 8. The most expensive of the eight -- FindPotentialTargets walks
+			// the actor list -- and therefore the one the LOD saving mostly comes from.
+			if (!AiWorkAllowed())
+			{
+				yield return null;
+				continue;
+			}
 			List<Actor> potentialTargets = FindPotentialTargets();
 			Actor closestHighlighted = null;
 			foreach (Actor a in potentialTargets)
@@ -769,6 +812,13 @@ public class AiActorController : ActorController
 		yield return new WaitForSeconds(UnityEngine.Random.Range(0f, 0.5f));
 		while (true)
 		{
+			// LOD gate, 5 of 8. Note `fire` keeps whatever value it had while gated rather than
+			// being cleared: releasing the gate must not double as a cease-fire order.
+			if (!AiWorkAllowed())
+			{
+				yield return null;
+				continue;
+			}
 			fire = false;
 			if (actor.HasUnholsteredWeapon() && !actor.activeWeapon.HasAnyAmmo())
 			{
@@ -886,6 +936,12 @@ public class AiActorController : ActorController
 		yield return new WaitForSeconds(UnityEngine.Random.Range(0f, 0.2f));
 		while (true)
 		{
+			// LOD gate, 6 of 8.
+			if (!AiWorkAllowed())
+			{
+				yield return null;
+				continue;
+			}
 			if (HasTarget())
 			{
 				if (target.dead)
@@ -911,6 +967,13 @@ public class AiActorController : ActorController
 		yield return new WaitForSeconds(UnityEngine.Random.Range(0f, 0.2f));
 		while (true)
 		{
+			// LOD gate, 7 of 8. Ahead of the wait rather than after it, so a gated bot never
+			// holds a scan timer that fires the instant it comes back.
+			if (!AiWorkAllowed())
+			{
+				yield return null;
+				continue;
+			}
 			yield return new WaitForSeconds(UnityEngine.Random.Range(0.8f, 3f));
 			if (!skipNextScan && !HasTarget())
 			{
@@ -972,6 +1035,12 @@ public class AiActorController : ActorController
 		yield return new WaitForSeconds(UnityEngine.Random.Range(0f, 1f));
 		while (true)
 		{
+			// LOD gate, 8 of 8.
+			if (!AiWorkAllowed())
+			{
+				yield return null;
+				continue;
+			}
 			closeActors = ActorManager.AliveActorsInRange(base.transform.position, 10f);
 			yield return new WaitForSeconds(1f);
 		}
@@ -1088,6 +1157,11 @@ public class AiActorController : ActorController
 
 	private void Update()
 	{
+		// Ahead of the dead check, not after it: a skipped tick must cost nothing at all.
+		if (!AiWorkAllowed())
+		{
+			return;
+		}
 		if (actor.dead)
 		{
 			return;

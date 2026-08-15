@@ -1,0 +1,163 @@
+using System;
+using Ironfront.Net.Protocol;
+
+namespace Ironfront.Net.Replication.Server
+{
+    /// <summary>
+    /// Frames gameplay events into payloads. phase-02 task 6.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The companion to <see cref="ServerPayloadWriter"/>, and engine-free for the same
+    /// reason: the Unity tick loop cannot be reached from CI, so the framing it performs is
+    /// written here where it can be. Which clients receive an event is the caller's decision —
+    /// this class only turns an event into bytes on the right channel.
+    /// </para>
+    /// <para>
+    /// <b>The channel per event type is not a free choice.</b> phase-02 task 6 and
+    /// architecture.md AD-7 assign each one, and the assignment follows from what the event
+    /// is. Spawn, despawn, death, hit confirmation and explosions are facts — missing one
+    /// leaves the client permanently wrong, so they go reliable-ordered on channel 2. A
+    /// gunshot is a cue for a muzzle flash and a sound; retransmitting it would put the effect
+    /// on screen after the moment had passed, so it goes unreliable-sequenced on channel 1.
+    /// </para>
+    /// </remarks>
+    public static class ServerEventWriter
+    {
+        /// <summary>Channel for events that must not be lost.</summary>
+        public const ChannelId ReliableChannel = ChannelId.ReliableOrdered;
+
+        /// <summary>Channel for cosmetic, time-sensitive cues.</summary>
+        public const ChannelId CosmeticChannel = ChannelId.SnapshotSequenced;
+
+        /// <summary>Metres beyond which a gunshot is not worth sending. phase-02 task 6.</summary>
+        public const float WeaponFireAudibleRadius = 100f;
+
+        /// <summary>Metres beyond which an explosion is not worth sending.</summary>
+        public const float ExplosionAudibleRadius = 200f;
+
+        /// <summary>Writes S_SPAWN_ACTOR as a channel-2 payload.</summary>
+        /// <returns>Bytes written, or -1 when the destination was too small.</returns>
+        public static int WriteSpawn(Span<byte> destination, in SpawnActorMessage message)
+        {
+            Span<byte> body = stackalloc byte[SpawnActorMessage.Size];
+            return message.Write(body) < 0
+                ? -1
+                : Frame(destination, ReliableChannel, ServerMessageType.SpawnActor, body);
+        }
+
+        /// <summary>Writes S_DESPAWN_ACTOR as a channel-2 payload.</summary>
+        public static int WriteDespawn(Span<byte> destination, in DespawnActorMessage message)
+        {
+            Span<byte> body = stackalloc byte[DespawnActorMessage.Size];
+            return message.Write(body) < 0
+                ? -1
+                : Frame(destination, ReliableChannel, ServerMessageType.DespawnActor, body);
+        }
+
+        /// <summary>Writes S_DEATH as a channel-2 payload. Broadcast — the killfeed is global.</summary>
+        public static int WriteDeath(Span<byte> destination, in DeathMessage message)
+        {
+            Span<byte> body = stackalloc byte[DeathMessage.Size];
+            return message.Write(body) < 0
+                ? -1
+                : Frame(destination, ReliableChannel, ServerMessageType.Death, body);
+        }
+
+        /// <summary>
+        /// Writes S_HIT_CONFIRM as a channel-2 payload.
+        /// </summary>
+        /// <remarks>
+        /// Sent to the shooter and nobody else. Broadcasting it would tell every client
+        /// exactly when and how hard everyone else was being hit, which is a wallhack served
+        /// by the server.
+        /// </remarks>
+        public static int WriteHitConfirm(Span<byte> destination, in HitConfirmMessage message)
+        {
+            Span<byte> body = stackalloc byte[HitConfirmMessage.Size];
+            return message.Write(body) < 0
+                ? -1
+                : Frame(destination, ReliableChannel, ServerMessageType.HitConfirm, body);
+        }
+
+        /// <summary>Writes S_WEAPON_FIRE as a channel-1 payload. Lossy on purpose.</summary>
+        public static int WriteWeaponFire(Span<byte> destination, in WeaponFireMessage message)
+        {
+            Span<byte> body = stackalloc byte[WeaponFireMessage.Size];
+            return message.Write(body) < 0
+                ? -1
+                : Frame(destination, CosmeticChannel, ServerMessageType.WeaponFire, body);
+        }
+
+        /// <summary>Writes S_EXPLOSION as a channel-2 payload.</summary>
+        /// <remarks>
+        /// Reliable while a gunshot is not, because an explosion also carries damage the client
+        /// has to account for and a blast the camera has to react to. A missed muzzle flash is
+        /// invisible; a missed explosion is a player dying to nothing.
+        /// </remarks>
+        public static int WriteExplosion(Span<byte> destination, in ExplosionMessage message)
+        {
+            Span<byte> body = stackalloc byte[ExplosionMessage.Size];
+            return message.Write(body) < 0
+                ? -1
+                : Frame(destination, ReliableChannel, ServerMessageType.Explosion, body);
+        }
+
+        /// <summary>
+        /// Writes S_MATCH_STATE as a channel-2 payload. Broadcast — every client draws the
+        /// same scoreboard. Phase-03 task 1.
+        /// </summary>
+        /// <remarks>
+        /// Reliable, unlike a gunshot, because it is the only thing that tells a client the
+        /// round has ended. A dropped one leaves that client playing a match everyone else has
+        /// finished, and the next thing it sees is the world resetting under it.
+        /// </remarks>
+        public static int WriteMatchState(Span<byte> destination, in MatchStateMessage message)
+        {
+            Span<byte> body = stackalloc byte[MatchStateMessage.Size];
+            return message.Write(body) < 0
+                ? -1
+                : Frame(destination, ReliableChannel, ServerMessageType.MatchState, body);
+        }
+
+        /// <summary>
+        /// Writes S_CAPTURE_POINT as a channel-2 payload. Phase-03 task 2.
+        /// </summary>
+        /// <remarks>
+        /// <b>Trap 3 is not solved here.</b> This class turns one capture point into bytes; how
+        /// often it is asked to is <c>CapturePointState.Tick</c>'s answer, and that is where the
+        /// send threshold lives. Sending every tick would be 5 points x 30 Hz x 16 clients =
+        /// 2400 messages a second, and no amount of efficient framing would make that acceptable.
+        /// </remarks>
+        public static int WriteCapturePoint(Span<byte> destination, in CapturePointMessage message)
+        {
+            Span<byte> body = stackalloc byte[CapturePointMessage.Size];
+            return message.Write(body) < 0
+                ? -1
+                : Frame(destination, ReliableChannel, ServerMessageType.CapturePoint, body);
+        }
+
+        /// <summary>
+        /// Whether a listener at <paramref name="listenerDistanceSquared"/> should receive an
+        /// event audible within <paramref name="radius"/> metres.
+        /// </summary>
+        /// <remarks>
+        /// Takes the SQUARED distance, because that is what the caller has: the broadcast loop
+        /// runs per (event, client) and computing a square root per pair to compare against a
+        /// constant is work with no answer attached. Passing a linear distance here reports
+        /// almost everything as in earshot — 150 m against a 200 m radius compares 150 to
+        /// 40,000 — so the parameter is named for its units rather than left to a comment.
+        /// </remarks>
+        public static bool IsWithinEarshotSquared(float listenerDistanceSquared, float radius)
+            => listenerDistanceSquared <= radius * radius;
+
+        private static int Frame(
+            Span<byte> destination, ChannelId channel, ServerMessageType type,
+            ReadOnlySpan<byte> body)
+        {
+            var writer = new PayloadFrameWriter(destination, channel);
+            if (!writer.WriteMessage(type, body)) return -1;
+            return writer.TryFinish(out int total) ? total : -1;
+        }
+    }
+}

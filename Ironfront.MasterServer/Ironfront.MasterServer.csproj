@@ -22,6 +22,25 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Ironfront.Net.Protocol\Ironfront.Net.Protocol.csproj" />
+    <ProjectReference Include="..\Ironfront.Net.Configuration\Ironfront.Net.Configuration.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <!-- Version pin only — see the GHSA-2m69-gcr7-jv3q note in Directory.Packages.props. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
+    <PackageReference Include="BCrypt.Net-Next" />
+  </ItemGroup>
+
+  <!--
+    The test project drives the single logic thread (D-AD-1) through InvokeOnLogicThreadAsync
+    and reads ConnectionsUnsafe / calls MarkAuthenticated on it — which is precisely how the
+    XML docs on those members say host state must be touched from another thread. Exposing
+    them to the tests rather than making them public keeps that contract internal to Dev D's
+    code and out of the public API A and C consume.
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ironfront.MasterServer.Tests" />
   </ItemGroup>
 
 </Project>

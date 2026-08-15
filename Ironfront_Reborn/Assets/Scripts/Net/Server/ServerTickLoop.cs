@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication;
+using Ironfront.Net.Replication.Combat;
+using Ironfront.Net.Replication.Interest;
 using Ironfront.Net.Replication.Server;
 using Ironfront.Net.Transport;
 using UnityEngine;
@@ -49,6 +51,19 @@ namespace Ironfront.Net.Unity.Server
         private readonly ServerMessageRouter _router = new ServerMessageRouter();
         private readonly WorldSnapshot _world = new WorldSnapshot();
 
+        // Rebuilt per client, per snapshot. One scratch is enough because clients are encoded
+        // one after another and DeltaEncoder copies whatever it files into its own history.
+        private readonly WorldSnapshot _view = new WorldSnapshot();
+
+        private readonly InterestManager _interest = new InterestManager();
+        private readonly HitboxHistory _hitboxHistory = new HitboxHistory();
+        private readonly SpawnAckTracker _spawnAcks = new SpawnAckTracker();
+        private readonly LagCompensator _lagCompensator;
+
+        private ServerStateAudit _stateAudit;
+
+        private uint _snapshotIndex;
+
         private readonly byte[] _snapshotBody = new byte[ServerPayloadWriter.MaxSnapshotBodySize];
         private readonly byte[] _payload = new byte[ProtocolConstants.MAX_PAYLOAD];
 
@@ -56,14 +71,37 @@ namespace Ironfront.Net.Unity.Server
         // calls Bind from its Awake, which is before this component's own Awake would have run.
         private readonly ServerTickScheduler _scheduler = new ServerTickScheduler();
 
+        private readonly byte[] _eventPayload = new byte[ProtocolConstants.MAX_PAYLOAD];
+
         private Action<double> _clockPump;
         private int _ticksOwedThisStep;
         private double _stepStartMs;
         private double _lastPumpMs;
         private bool _running;
 
+        public ServerTickLoop() => _lagCompensator = new LagCompensator(_hitboxHistory);
+
         /// <summary>The transport this loop is bound to. Null until <see cref="Bind"/>.</summary>
         public ITransportServer Transport { get; private set; }
+
+        /// <summary>Who sees whom, and how often. Phase-02 task 1.</summary>
+        public InterestManager Interest => _interest;
+
+        /// <summary>
+        /// Which bots think this tick. Phase-02 task 5, read by <see cref="BotLodGate"/>.
+        /// </summary>
+        /// <remarks>
+        /// One instance for the whole server rather than one per bot, because the counters it
+        /// keeps are the phase-02 criterion-8 figure — the share of AI updates skipped — and a
+        /// per-bot scheduler would give 47 separate percentages nobody can add up.
+        /// </remarks>
+        public BotLodScheduler BotLod { get; } = new BotLodScheduler();
+
+        /// <summary>One second of past hitbox poses, for rewinding. Phase-02 task 2.</summary>
+        public HitboxHistory HitboxHistory => _hitboxHistory;
+
+        /// <summary>Resolves hitscan against the world the shooter saw. Phase-02 task 3.</summary>
+        public LagCompensator LagCompensator => _lagCompensator;
 
         /// <summary>Pacing and the tick-time distribution M1 criterion 1 is graded on.</summary>
         public ServerTickScheduler Scheduler => _scheduler;
@@ -77,7 +115,28 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>The tick the loop is on.</summary>
         public uint CurrentTick => _scheduler.CurrentTick;
 
-        private void OnDestroy() => Unbind();
+        /// <summary>
+        /// The loop this process is running, or null on a client. Set by <see cref="Bind"/>.
+        /// </summary>
+        /// <remarks>
+        /// Exists so per-bot components do not have to search the scene for it.
+        /// <see cref="BotLodGate"/> is the first, and there is one per bot: a
+        /// <c>FindFirstObjectByType</c> that misses would run 47 scene searches every frame on a
+        /// client build, which is exactly the per-frame <c>Find</c> phase-04 task 2 forbids.
+        /// Same shape as <see cref="ServerActorRegistry.Instance"/>, including the reset below,
+        /// which matters when Play mode runs with domain reload disabled and statics survive
+        /// from the previous session.
+        /// </remarks>
+        public static ServerTickLoop Current { get; private set; }
+
+        private void OnDestroy()
+        {
+            if (ReferenceEquals(Current, this)) Current = null;
+            Unbind();
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetCurrentOnLoad() => Current = null;
 
         /// <summary>
         /// Attaches a transport and starts ticking.
@@ -102,6 +161,11 @@ namespace Ironfront.Net.Unity.Server
 
             _lastPumpMs = NowMs();
             _running = true;
+
+            // Published here rather than in Awake: a loop that was never bound has no transport
+            // and no tick, so advertising it would hand BotLodGate a CurrentTick that never
+            // advances -- every bot would sit on the same tick's LOD answer forever.
+            Current = this;
         }
 
         /// <summary>Detaches from the transport. Safe to call when never bound.</summary>
@@ -151,8 +215,13 @@ namespace Ironfront.Net.Unity.Server
             if (!_running || Transport == null || _ticksOwedThisStep == 0) return;
 
             for (int tick = 0; tick < _ticksOwedThisStep; tick++)
-                if (_scheduler.ShouldSendSnapshot())
-                    BuildAndSendSnapshots();
+            {
+                // History first: the pose being recorded belongs to the tick just simulated, and
+                // a snapshot may change who counts as shootable from here on.
+                CaptureHitboxHistory();
+
+                if (_scheduler.ShouldSendSnapshot()) BuildAndSendSnapshots();
+            }
 
             _ticksOwedThisStep = 0;
 
@@ -162,26 +231,67 @@ namespace Ironfront.Net.Unity.Server
             _scheduler.RecordTickTime(NowMs() - _stepStartMs);
         }
 
+        /// <summary>
+        /// Stores this tick's hitbox poses for every actor a real player could plausibly shoot.
+        /// </summary>
+        /// <remarks>
+        /// The R6 optimization from protocol-spec.md section 7.3: a bot in a corner of the map
+        /// that nobody is near cannot be shot, so recording its pose 30 times a second is pure
+        /// cost. The threshold is <see cref="InterestManager.ShootableThreshold"/> rather than
+        /// Mid — see that constant for why Mid silently disables lag compensation over the outer
+        /// half of every weapon's range.
+        /// </remarks>
+        private void CaptureHitboxHistory()
+        {
+            uint tick = _scheduler.CurrentTick;
+            IReadOnlyList<NetServerActor> actors = ServerActorRegistry.Instance.Actors;
+
+            for (int i = 0; i < actors.Count; i++)
+            {
+                NetServerActor actor = actors[i];
+                if (actor == null || !actor.isActiveAndEnabled || !actor.IsAlive) continue;
+                if (!_interest.IsShootable(actor.ActorId)) continue;
+
+                _hitboxHistory.Capture(tick, actor.ActorId, actor.CaptureHitboxes());
+            }
+        }
+
         private void BuildAndSendSnapshots()
         {
             _world.ServerTick = _scheduler.CurrentTick;
             ServerActorRegistry.Instance.CaptureInto(_world);
 
+            _snapshotIndex++;
+
+            // Once per snapshot, NOT once per viewer. Per viewer would leave the interest map
+            // holding only the last client's opinion, silently stripping hitbox history from
+            // every actor except the ones that client happens to be standing near.
+            _interest.BeginSnapshot();
+
             for (int i = 0; i < _players.Count; i++)
             {
                 ClientSession session = _players[i].Session;
 
-                // Each client is encoded against its own acked baseline, so the change masks in
-                // _world are recomputed per client. Reusing one world across all of them is
-                // safe because the encoder overwrites every mask it reads.
+                AnnounceNewActors(session);
+
+                // Interest management picks which actors this client is sent and how often. The
+                // per-client view is what the encoder files as its baseline, so a client can
+                // never hold a baseline containing an actor it was not actually sent.
+                if (!_interest.BuildView(
+                        session.ActorId, _world, _snapshotIndex, _view, _spawnAcks))
+                    continue;
+
+                // Each client is encoded against its own acked baseline, so the change masks are
+                // recomputed per client. Reusing one scratch view across all of them is safe
+                // because the encoder overwrites every mask it reads and copies what it keeps.
                 int total = ServerPayloadWriter.WriteSnapshot(
-                    _payload, _snapshotBody, session.Encoder, _world, session.LastProcessedInputTick);
+                    _payload, _snapshotBody, session.Encoder, _view, session.LastProcessedInputTick);
 
                 if (total < 0)
                 {
                     Debug.LogError(
                         $"[net] snapshot for conn {session.ConnectionId} did not fit one "
-                        + $"datagram at {_world.ActorCount} actors. Nothing was sent and no "
+                        + $"datagram at {_view.ActorCount} actors. Nothing was sent and no "
                         + "baseline was recorded; fragmentation is still owed.");
                     continue;
                 }
@@ -192,6 +302,134 @@ namespace Ironfront.Net.Unity.Server
                     new ReadOnlySpan<byte>(_payload, 0, total),
                     reliable: false);
             }
+        }
+
+        /// <summary>
+        /// Sends S_SPAWN_ACTOR for every actor this client has not been told about yet.
+        /// </summary>
+        /// <remarks>
+        /// <b>Trap 8.</b> Spawns go reliable-ordered on channel 2 and snapshots go
+        /// unreliable-sequenced on channel 1, so a snapshot naming an actor can overtake the
+        /// spawn that introduced it. The client skips ids it does not know, so nothing breaks
+        /// loudly — the actor simply fails to appear until some later snapshot happens to carry
+        /// it, which at Far is a quarter of a second away. Sending the spawn first AND holding
+        /// the actor out of the snapshot until it has gone (the tracker handed to
+        /// <c>BuildView</c>) makes the ordering a property of the send rather than a race.
+        /// </remarks>
+        private void AnnounceNewActors(ClientSession session)
+        {
+            IReadOnlyList<NetServerActor> actors = ServerActorRegistry.Instance.Actors;
+
+            for (int i = 0; i < actors.Count; i++)
+            {
+                NetServerActor actor = actors[i];
+                if (actor == null || !actor.isActiveAndEnabled) continue;
+                if (!_spawnAcks.MarkSpawnSent(session.ActorId, actor.ActorId)) continue;
+
+                ActorSnapshotEntry entry = actor.Capture();
+                var message = new SpawnActorMessage(
+                    actor.ActorId,
+                    actor.Team,
+                    actor.ActorId == session.ActorId ? SpawnFlags.IsLocalPlayer : SpawnFlags.None,
+                    entry.PosX, entry.PosY, entry.PosZ,
+                    entry.Yaw,
+                    entry.Health,
+                    entry.WeaponId);
+
+                int written = ServerEventWriter.WriteSpawn(_eventPayload, in message);
+                if (written < 0)
+                {
+                    Debug.LogError($"[net] spawn for actor {actor.ActorId} did not frame");
+                    continue;
+                }
+
+                Transport.Send(
+                    session.ConnectionId,
+                    (byte)ServerEventWriter.ReliableChannel,
+                    new ReadOnlySpan<byte>(_eventPayload, 0, written),
+                    reliable: true);
+            }
+        }
+
+        /// <summary>
+        /// Sends one already-framed payload to every connected client on a reliable channel.
+        /// </summary>
+        /// <remarks>
+        /// Lives here rather than on <see cref="MatchController"/> because the session list is
+        /// this class's, and a second component iterating it would be a second place that has
+        /// to be right about which connections are still live.
+        /// </remarks>
+        public void BroadcastReliable(ReadOnlySpan<byte> payload, byte channel)
+        {
+            if (Transport == null) return;
+
+            for (int i = 0; i < _players.Count; i++)
+                Transport.Send(_players[i].Session.ConnectionId, channel, payload, reliable: true);
+        }
+
+        /// <summary>
+        /// Attaches the match's id pool, so the loop can audit and reset per-round state.
+        /// </summary>
+        /// <remarks>
+        /// Built once and cached rather than constructed per reset: the audit closes over
+        /// <c>_players.Count</c>, and a closure allocated on every round is a small leak in
+        /// the one loop that is graded on allocating nothing.
+        /// </remarks>
+        public void BindMatch(ActorIdPool actorIds)
+            => _stateAudit = new ServerStateAudit(
+                actorIds ?? throw new ArgumentNullException(nameof(actorIds)),
+                _hitboxHistory, _interest, _spawnAcks, () => _players.Count);
+
+        /// <summary>
+        /// Reads the per-actor and per-pair table sizes, for the phase-03 clean-state check.
+        /// </summary>
+        public ServerStateSnapshot AuditState()
+            => _stateAudit?.Capture() ?? default;
+
+        /// <summary>
+        /// Empties everything the netcode remembers about the previous round.
+        /// </summary>
+        /// <remarks>
+        /// Sessions are deliberately NOT dropped. A match reset is not a disconnect — the
+        /// players stay connected across rounds, and tearing their sessions down would take
+        /// their delta baselines and input rings with it, so every client would need a full
+        /// re-handshake at the top of every round. What is cleared is the per-actor state,
+        /// which is exactly what the new round is about to rebuild. Each session's delta
+        /// encoder is reset so the first snapshot of the round is full rather than a delta
+        /// against a world that no longer exists.
+        /// </remarks>
+        public void ResetForNewMatch()
+        {
+            if (_stateAudit == null)
+            {
+                Debug.LogError(
+                    "[net] ResetForNewMatch called before BindMatch. Per-round state was NOT "
+                    + "cleared — the next round inherits the previous round's hitbox history, "
+                    + "interest pairs and spawn acknowledgements.");
+                return;
+            }
+
+            _stateAudit.ResetForNewMatch();
+
+            for (int i = 0; i < _players.Count; i++) _players[i].Session.Encoder.Reset();
+        }
+
+        /// <summary>
+        /// Drops every per-pair table entry mentioning this actor.
+        /// </summary>
+        /// <remarks>
+        /// Phase-02 trap 2, and it is only closed if this is actually called. The interest and
+        /// spawn tables are keyed on (viewer, target) pairs, and ids keep being allocated as
+        /// players and bots come and go, so without this they grow for the whole match. Worse
+        /// than the leak: a REUSED id inherits the previous incarnation's spawn rows, so the
+        /// gate reports "already announced" and the new actor streams to a client that was never
+        /// told it exists.
+        /// </remarks>
+        private void ForgetActor(ushort actorId)
+        {
+            _interest.Forget(actorId);
+            _spawnAcks.Forget(actorId);
+            _hitboxHistory.Forget(actorId);
         }
 
         private void OnTransportMessage(ushort connectionId, ReadOnlyMemory<byte> payload)
@@ -231,6 +469,7 @@ namespace Ironfront.Net.Unity.Server
             if (!_byConnection.TryGetValue(connectionId, out ServerPlayer player)) return;
 
             ServerActorRegistry.Instance.ReleaseSlot(player.Actor);
+            ForgetActor(player.Session.ActorId);
 
             _byConnection.Remove(connectionId);
             _players.Remove(player);

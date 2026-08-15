@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Ironfront.Net.Transport.Bench</RootNamespace>
+    <AssemblyName>Ironfront.Net.Transport.Bench</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ironfront.Net.Transport\Ironfront.Net.Transport.csproj" />
+    <ProjectReference Include="..\Ironfront.Net.Protocol\Ironfront.Net.Protocol.csproj" />
+  </ItemGroup>
+
+</Project>

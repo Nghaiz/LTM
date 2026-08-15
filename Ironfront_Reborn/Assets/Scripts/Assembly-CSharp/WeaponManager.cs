@@ -15,6 +15,14 @@ public class WeaponManager : MonoBehaviour
 	[Serializable]
 	public class WeaponEntry
 	{
+		// Defaults to 0, not 1. A new entry created in the Inspector inherits this value, and 1
+		// is a real weapon's id — defaulting to it made every new weapon a silent duplicate of
+		// RK-44 that the validator dropped from the lookup while still stamping spawned weapons
+		// with 1. 0 is the reserved unassigned value, so a new entry announces itself as
+		// unconfigured instead of impersonating something. protocol-spec.md section 4.8.
+		[Range(0, 255)]
+		public int NetworkId;
+
 		public string name = "Weapon";
 
 		public Sprite image;
@@ -53,6 +61,8 @@ public class WeaponManager : MonoBehaviour
 	public static WeaponManager instance;
 
 	public List<WeaponEntry> weapons;
+
+	private readonly Dictionary<byte, WeaponEntry> _weaponsByNetworkId = new Dictionary<byte, WeaponEntry>();
 
 	private int sequenceIndex;
 
@@ -97,6 +107,67 @@ public class WeaponManager : MonoBehaviour
 	private void Awake()
 	{
 		instance = this;
+		BuildNetworkIdLookup();
+	}
+
+	private void BuildNetworkIdLookup()
+	{
+		_weaponsByNetworkId.Clear();
+		if (weapons == null)
+		{
+			return;
+		}
+		foreach (WeaponEntry weapon in weapons)
+		{
+			if (weapon == null)
+			{
+				continue;
+			}
+
+			if (weapon.NetworkId <= 0 || weapon.NetworkId > byte.MaxValue)
+			{
+				Debug.LogError("Weapon '" + weapon.name + "' has no network id (" + weapon.NetworkId + "). Valid ids are 1..255; 0 is reserved for no/unknown weapon. Give it the next free id and add it to protocol-spec.md section 4.8 and WeaponIds.cs — an unassigned weapon is transmitted as 0 and remote clients will not draw it.");
+				continue;
+			}
+
+			byte networkId = (byte)weapon.NetworkId;
+			if (_weaponsByNetworkId.ContainsKey(networkId))
+			{
+				Debug.LogError("Duplicate weapon network id " + networkId + " on '" + weapon.name + "' and '" + _weaponsByNetworkId[networkId].name + "'. Both are transmitted as 0 until this is fixed — see protocol-spec.md section 4.8, ids are unique and permanent.");
+				continue;
+			}
+
+			_weaponsByNetworkId.Add(networkId, weapon);
+		}
+	}
+
+	public static bool TryGetEntry(byte networkId, out WeaponEntry entry)
+	{
+		entry = null;
+		return instance != null && instance._weaponsByNetworkId.TryGetValue(networkId, out entry);
+	}
+
+	// Resolves through the validated lookup rather than reading the field directly, which is the
+	// whole point: an entry can carry a duplicate id, and returning it would put a weapon on the
+	// wire wearing another weapon's identity. Remote clients would then draw the wrong gun and
+	// the server would apply the wrong ballistics, with nothing failing anywhere. Falling back to
+	// 0 makes a misconfigured weapon invisible instead, which is wrong in a way somebody notices.
+	public static byte NetworkIdOf(WeaponEntry entry)
+	{
+		if (entry == null || entry.NetworkId <= 0 || entry.NetworkId > byte.MaxValue)
+		{
+			return 0;
+		}
+		byte networkId = (byte)entry.NetworkId;
+		if (instance == null)
+		{
+			return networkId;
+		}
+		if (!instance._weaponsByNetworkId.TryGetValue(networkId, out WeaponEntry owner) || owner != entry)
+		{
+			return 0;
+		}
+		return networkId;
 	}
 
 	public static List<WeaponEntry> GetWeaponEntriesOfSlot(WeaponSlot slot)

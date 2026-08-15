@@ -88,87 +88,104 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier:
   weapons:
-  - name: RK-44
+  - NetworkId: 1
+    name: RK-44
     image: {fileID: 21300000, guid: 358e114c38d70714b9519003c49d0631, type: 2}
     prefab: {fileID: 1929859040227752, guid: 12f98c23afb8fbf469ec360854fe8cfe, type: 2}
     slot: 0
     hidden: 0
-  - name: S-IND7
+  - NetworkId: 2
+    name: S-IND7
     image: {fileID: 21300000, guid: 5a693d707759edb40baf0379dd758ab4, type: 2}
     prefab: {fileID: 1773290220623914, guid: b0d956c599ef2f94fbbc34c9a78d08cb, type: 2}
     slot: 1
     hidden: 0
-  - name: S-IND7 [SUP]
+  - NetworkId: 3
+    name: S-IND7 [SUP]
     image: {fileID: 21300000, guid: 64143195a2d372d4fb62b95e5c6634ca, type: 2}
     prefab: {fileID: 1285763414414914, guid: 78b8d6c4b9ad1304a9815c80c5548af8, type: 2}
     slot: 1
     hidden: 0
-  - name: 76 EAGLE
+  - NetworkId: 4
+    name: 76 EAGLE
     image: {fileID: 21300000, guid: deecc64de43e5374bbc3d9397c0295ec, type: 2}
     prefab: {fileID: 1479104840890495, guid: 4e54300c5438dd04e86ee48950b1ece5, type: 2}
     slot: 0
     hidden: 0
-  - name: BEU AW1
+  - NetworkId: 5
+    name: BEU AW1
     image: {fileID: 21300000, guid: 081d302a51af16b4cb274f34794c0446, type: 2}
     prefab: {fileID: 1838152004868020, guid: 2253eaebc1dc90a4db89108bb3f77edf, type: 2}
     slot: 3
     hidden: 0
-  - name: SL-DEFENDER
+  - NetworkId: 6
+    name: SL-DEFENDER
     image: {fileID: 21300000, guid: ff06a96faa0092c4a872018ea3a5fb61, type: 2}
     prefab: {fileID: 1460384028653730, guid: 7d283533ecfcc58429b49ae291d5de13, type: 2}
     slot: 0
     hidden: 0
-  - name: FRAG
+  - NetworkId: 7
+    name: FRAG
     image: {fileID: 21300000, guid: 63b5ad3a8ef1a3d4c9876ef504189639, type: 2}
     prefab: {fileID: 1549323022466008, guid: d1916a9cc352b1f449a86ecf7fb3116f, type: 2}
     slot: 2
     hidden: 0
-  - name: SPEARHEAD
+  - NetworkId: 8
+    name: SPEARHEAD
     image: {fileID: 21300000, guid: e27ea21951e542c438b5512682bfb027, type: 2}
     prefab: {fileID: 1208350233632617, guid: a365e37d5fc08814f9948f40d284f185, type: 2}
     slot: 2
     hidden: 0
-  - name: BINOCS
+  - NetworkId: 9
+    name: BINOCS
     image: {fileID: 21300000, guid: 93ce4f77229239943ae7585043a34a82, type: 2}
     prefab: {fileID: 1737260576506585, guid: d512c274647cb634b9425cacfb8b5f46, type: 2}
     slot: 2
     hidden: 0
-  - name: AMMO BAG
+  - NetworkId: 10
+    name: AMMO BAG
     image: {fileID: 21300000, guid: 328cdda34b87b444f976a1d7ca7b93d0, type: 2}
     prefab: {fileID: 1099406028731448, guid: d0b4c21b4ebd803479952285a915132d, type: 2}
     slot: 2
     hidden: 0
-  - name: MEDIPACK
+  - NetworkId: 11
+    name: MEDIPACK
     image: {fileID: 21300000, guid: 01e35d88833e2304a87783129c050980, type: 2}
     prefab: {fileID: 1271089597381085, guid: e44d2f71d10c8e94db55f57bd98fbf10, type: 2}
     slot: 2
     hidden: 0
-  - name: BIL SCALPEL
+  - NetworkId: 12
+    name: BIL SCALPEL
     image: {fileID: 21300000, guid: da1d99ac5fb1e29478a63a53e93de527, type: 2}
     prefab: {fileID: 1401938537521486, guid: 290643c1cb1ef964997e7300ea07dd58, type: 2}
     slot: 3
     hidden: 0
-  - name: SIGNAL DMR
+  - NetworkId: 13
+    name: SIGNAL DMR
     image: {fileID: 21300000, guid: e3e71ea0f67cdee418ecf6e88cbf35cd, type: 2}
     prefab: {fileID: 1716337106093347, guid: a5c9b3a4acaf5e746b34856f4478790c, type: 2}
     slot: 0
     hidden: 0
-  - name: N.V. GOGGLES
+  - NetworkId: 14
+    name: N.V. GOGGLES
     image: {fileID: 21300000, guid: 18a9057a659d44948b5ada0bd3a681f7, type: 2}
     prefab: {fileID: 1511150004935881, guid: d104e81d613cf204a9294c79b38f2b48, type: 2}
     slot: 2
     hidden: 0
-  - name: RECON LRR
+  - NetworkId: 15
+    name: RECON LRR
     image: {fileID: 21300000, guid: da7bd62b41a51024d8494bde86b9c26e, type: 2}
     prefab: {fileID: 1012052848447905, guid: f54dad73206dccd4eaecacea26b6eb65, type: 2}
     slot: 0
     hidden: 0
-  - name: WRENCH
+  - NetworkId: 16
+    name: WRENCH
     image: {fileID: 21300000, guid: e34c2909ba192e54b954d3bb1df43899, type: 2}
     prefab: {fileID: 1668977200520726, guid: 161384db56e03a240860dafaa3492f17, type: 2}
     slot: 2
     hidden: 0
-  - name: SUPER WRENCH
+  - NetworkId: 17
+    name: SUPER WRENCH
     image: {fileID: 21300000, guid: 34fa2025f6556804f929d5c68df99cbe, type: 2}
     prefab: {fileID: 1312138427509458, guid: 4a94a33595ddd74428c739cb43c53512, type: 2}
     slot: 2

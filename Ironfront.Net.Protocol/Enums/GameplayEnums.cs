@@ -95,6 +95,99 @@ namespace Ironfront.Net.Protocol
         Headshot = 1 << 1,
     }
 
+    /// <summary>
+    /// S_SPAWN_ACTOR flags byte. Layout defined by <see cref="SpawnActorMessage"/>, not by
+    /// the spec — see that type's remarks.
+    /// </summary>
+    [Flags]
+    public enum SpawnFlags : byte
+    {
+        None = 0,
+        /// <summary>Server-driven AI. The client never predicts these.</summary>
+        IsBot = 1 << 0,
+        /// <summary>The receiving client's own player. Drives camera + prediction attachment.</summary>
+        IsLocalPlayer = 1 << 1,
+    }
+
+    /// <summary>
+    /// S_DESPAWN_ACTOR reason. Layout defined by <see cref="DespawnActorMessage"/>, not by
+    /// the spec.
+    /// </summary>
+    public enum DespawnReason : byte
+    {
+        /// <summary>Player disconnected or bot was removed. The id may be reused later.</summary>
+        Left = 0,
+        /// <summary>Destroyed in the world. Distinct from death, which keeps the actor.</summary>
+        Destroyed = 1,
+        /// <summary>
+        /// Left the viewer's interest set. Reserved — the v1 server never sends it, because
+        /// interest management keeps every actor inside 500 m at Far rather than culling it.
+        /// </summary>
+        Culled = 2,
+    }
+
+    /// <summary>S_EXPLOSION kind. Layout defined by <see cref="ExplosionMessage"/>, not by the spec.</summary>
+    public enum ExplosionKind : byte
+    {
+        Grenade = 0,
+        Rocket = 1,
+        Vehicle = 2,
+        Environment = 3,
+    }
+
+    /// <summary>
+    /// Where a match is in its lifecycle. Carried by <see cref="MatchStateMessage"/> and by
+    /// the <c>state</c> field of GS_HEARTBEAT (protocol-spec.md section 11).
+    /// </summary>
+    /// <remarks>
+    /// Declared in the protocol rather than in the replication library because two parties
+    /// outside Dev C read it: the client renders a different HUD per phase, and the master
+    /// server decides whether a server is joinable from the heartbeat's copy of it. A second
+    /// enum on either side is the duplicate source of truth the conventions forbid.
+    /// </remarks>
+    public enum MatchPhase : byte
+    {
+        /// <summary>Not enough humans to start. Bots may still be running.</summary>
+        WaitingForPlayers = 0,
+        /// <summary>Countdown before the round opens. Spawns allowed, damage is not.</summary>
+        Warmup = 1,
+        /// <summary>Live round. The only phase in which tickets drain.</summary>
+        Playing = 2,
+        /// <summary>Round decided; the scoreboard is up and the reset timer is running.</summary>
+        Ended = 3,
+        /// <summary>Tearing the world down. A single tick in practice — see <c>MatchStateMachine</c>.</summary>
+        Resetting = 4,
+    }
+
+    /// <summary>
+    /// The team that owns something, where "nobody" is a legal answer.
+    /// </summary>
+    /// <remarks>
+    /// A <c>byte</c> rather than a nullable, because it goes on the wire. 255 is used for the
+    /// absent case instead of 2 so that a client which switches on 0/1 and forgets the third
+    /// case falls through rather than rendering the neutral state as a third team.
+    /// </remarks>
+    public static class TeamId
+    {
+        public const byte Team0 = 0;
+        public const byte Team1 = 1;
+        /// <summary>Neutral, contested, or undecided.</summary>
+        public const byte None = 255;
+    }
+
+    /// <summary>S_CAPTURE_POINT flags byte. Layout defined by <see cref="CapturePointMessage"/>.</summary>
+    [Flags]
+    public enum CaptureFlags : byte
+    {
+        None = 0,
+        /// <summary>
+        /// Both teams have somebody inside the radius. NOT derivable from the ownership
+        /// value — a point can be fully owned and contested at the same time — so it is the
+        /// one bit here that is genuinely new information.
+        /// </summary>
+        Contested = 1 << 0,
+    }
+
     /// <summary>S_DEATH causeOfDeath. protocol-spec.md section 4.6.</summary>
     public enum CauseOfDeath : byte
     {

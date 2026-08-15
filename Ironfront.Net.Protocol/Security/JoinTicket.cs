@@ -126,7 +126,7 @@ namespace Ironfront.Net.Protocol
                 return TicketVerifyResult.BadSignature;
 
             long expiresAt = unchecked((long)Endian.ReadU64LE(ticket, OffsetExpiresAt));
-            if (nowUnixMs > expiresAt) return TicketVerifyResult.Expired;
+            if (nowUnixMs >= expiresAt) return TicketVerifyResult.Expired;
 
             return TicketVerifyResult.Valid;
         }
@@ -203,7 +203,9 @@ namespace Ironfront.Net.Protocol
             if (string.IsNullOrEmpty(displayName)) return;
 
             byte[] utf8 = Encoding.UTF8.GetBytes(displayName!);
-            int count = utf8.Length > dst.Length ? dst.Length : utf8.Length;
+            int count = Math.Min(utf8.Length, dst.Length);
+            if (count < utf8.Length)
+                while (count > 0 && (utf8[count] & 0xC0) == 0x80) count--;
             utf8.AsSpan(0, count).CopyTo(dst);
         }
 

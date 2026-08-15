@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    OWNER: Dev D (Master Server and Services). conventions.md section 7.
+
+    The connection-level half of the phase-00 test suite. The framing itself is verified in
+    Ironfront.Net.Protocol.Tests (the shared MspFrameReader); what only this project can
+    cover is the live TcpListenerHost — 32 simultaneous connections, the unauthenticated
+    timeout, the per-IP limit and its decrement, the half-open heartbeat reap, and a clean
+    remote close (Receive returning 0). Those are the three phase-00 asks that need an actual
+    listener plus the surrounding coverage.
+
+    net8.0 (not netstandard2.1) because it is a test host, never loaded by Unity, and it
+    references the net8.0 Ironfront.MasterServer console directly.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Ironfront.MasterServer.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!--
+    Versions live in the repo-root Directory.Packages.props (Central Package Management).
+    Adding a Version="..." here is an NU1008 restore error, on purpose.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ironfront.MasterServer\Ironfront.MasterServer.csproj" />
+    <ProjectReference Include="..\Ironfront.MasterClient\Ironfront.MasterClient.csproj" />
+    <ProjectReference Include="..\Ironfront.Net.Protocol\Ironfront.Net.Protocol.csproj" />
+  </ItemGroup>
+
+</Project>
