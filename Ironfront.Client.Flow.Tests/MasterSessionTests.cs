@@ -580,6 +580,23 @@ namespace Ironfront.Client.Flow.Tests
             Assert.Equal(ProtocolConstants.JOIN_TICKET_SIZE, PendingJoin.CreateUnsignedTicket().Length);
         }
 
+        [Fact]
+        public async Task MasterConnectednessIsAskedOfTheLinkNotRemembered()
+        {
+            // The debug shell skips ConnectAsync when this is true. A value cached at first
+            // success survives the link dying, and every later login attempt then talks to a
+            // dead socket with no way back short of restarting the game.
+            var h = new Harness();
+            Assert.False(h.Session.IsMasterConnected);
+
+            Assert.True(await h.Session.ConnectAsync("127.0.0.1", 27020));
+            Assert.True(h.Session.IsMasterConnected);
+
+            h.Master.Dispose();   // the link goes away underneath us
+
+            Assert.False(h.Session.IsMasterConnected);
+        }
+
         // --------------------------------------------------------- threading
 
         [Fact]
