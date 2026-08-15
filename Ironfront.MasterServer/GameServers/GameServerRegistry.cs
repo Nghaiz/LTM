@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -44,9 +45,24 @@ namespace Ironfront.MasterServer.GameServers
         {
             server = null;
             byte[] claim = Encoding.UTF8.GetBytes(claimedSecret ?? string.Empty);
-            if (!CryptographicOperations.FixedTimeEquals(claim, _secret) || udpPort is < 1 or > 65535 || maxPlayers == 0 || mapIds.Length == 0) return false;
+            if (!CryptographicOperations.FixedTimeEquals(claim, _secret) ||
+                !IPAddress.TryParse(publicIp, out IPAddress? parsedAddress) ||
+                udpPort is < 1 or > 65535 || maxPlayers == 0 || mapIds.Length == 0)
+            {
+                return false;
+            }
+
             ushort id = NextId();
-            server = new GameServerRecord { OwnerConnectionId = ownerConnectionId, ServerId = id, PublicIp = publicIp, UdpPort = udpPort, MaxPlayers = maxPlayers, MapIds = mapIds, LastHeartbeatAt = now };
+            server = new GameServerRecord
+            {
+                OwnerConnectionId = ownerConnectionId,
+                ServerId = id,
+                PublicIp = parsedAddress.ToString(),
+                UdpPort = udpPort,
+                MaxPlayers = maxPlayers,
+                MapIds = mapIds,
+                LastHeartbeatAt = now,
+            };
             _servers.Add(id, server);
             return true;
         }

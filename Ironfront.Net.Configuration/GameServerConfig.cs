@@ -51,6 +51,15 @@ namespace Ironfront.Net.Configuration
         /// <summary>The master's TCP port.</summary>
         public int MasterPort { get; set; } = 27000;
 
+        /// <summary>Whether the game-server-to-master link uses TLS.</summary>
+        public bool MasterTlsEnabled { get; set; }
+
+        /// <summary>Certificate name for the game-server-to-master TLS link.</summary>
+        public string MasterTlsTargetHost { get; set; } = string.Empty;
+
+        /// <summary>Optional SHA-256 pin for a self-signed master certificate.</summary>
+        public string MasterTlsPinnedFingerprintSha256 { get; set; } = string.Empty;
+
         /// <summary>The address clients dial, or empty to let the master infer it.</summary>
         public string PublicIp { get; set; } = string.Empty;
 
@@ -79,6 +88,17 @@ namespace Ironfront.Net.Configuration
 
             string host = EnvParse.Trimmed(EnvRegistry.MasterHost.Read(read));
             if (host.Length > 0) MasterHost = host;
+
+            MasterTlsEnabled = EnvParse.Flag(
+                EnvRegistry.GameServerMasterTls.Read(read), MasterTlsEnabled);
+
+            string tlsTargetHost = EnvParse.Trimmed(
+                EnvRegistry.GameServerMasterTlsTargetHost.Read(read));
+            if (tlsTargetHost.Length > 0) MasterTlsTargetHost = tlsTargetHost;
+
+            string tlsPin = EnvParse.Trimmed(
+                EnvRegistry.GameServerMasterTlsPinnedFingerprint.Read(read));
+            if (tlsPin.Length > 0) MasterTlsPinnedFingerprintSha256 = tlsPin;
 
             // Validated as a literal address even though it is only ever passed through: the
             // master hands this string to clients verbatim, so a typo here is a lobby full of

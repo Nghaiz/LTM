@@ -1,5 +1,8 @@
 # Ironfront master server — systemd unit (phase 03 task 1).
 #
+# SUPERSEDED by infra/compose/compose.yaml, the phase-03 deployment path (a single VM running
+# Docker Compose with images pulled from GHCR). Kept as the fallback for a non-container VM.
+#
 # Install:
 #   sudo cp tools/deploy/ironfront-master.service /etc/systemd/system/
 #   sudo systemctl daemon-reload

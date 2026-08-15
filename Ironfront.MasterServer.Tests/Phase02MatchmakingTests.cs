@@ -264,21 +264,35 @@ namespace Ironfront.MasterServer.Tests
         }
 
         /// <summary>
-        /// Trap 2. A game server behind NAT does not know its own public address, so the master
-        /// takes the address off the TCP connection and never off the registration message. This
-        /// pins the registry side of that: whatever the caller passes in is what is handed back to
-        /// clients, so MspMessageDispatcher passing connection.RemoteAddress is load-bearing.
+        /// A game server's endpoint ultimately reaches every player, so it must be an address
+        /// literal and is normalized before storage. The dispatcher chooses either the TCP peer
+        /// address or the authenticated server's explicit deployment endpoint before calling this
+        /// registry; the registry makes neither path capable of storing arbitrary host text.
         /// </summary>
         [Fact]
-        public void TheRegistryHandsBackExactlyTheAddressItWasGiven()
+        public void TheRegistryStoresTheValidatedEndpointItWasGiven()
         {
             var registry = new GameServerRegistry(SharedSecret);
             long now = 1_000_000;
 
-            registry.TryRegister(1, SharedSecret, "203.0.113.9", 27015, 16, Dustbowl, now, out GameServerRecord? server);
+            Assert.True(registry.TryRegister(
+                1, SharedSecret, "203.0.113.9", 27015, 16, Dustbowl, now,
+                out GameServerRecord? server));
 
             Assert.Equal("203.0.113.9", server!.PublicIp);
             Assert.Equal(27015, server.UdpPort);
+        }
+
+        [Theory]
+        [InlineData("")]
+        [InlineData("not-an-ip")]
+        [InlineData("game-server.ironfront.example")]
+        public void ARegistrationWithAnInvalidEndpointIsRefused(string endpoint)
+        {
+            var registry = new GameServerRegistry(SharedSecret);
+
+            Assert.False(registry.TryRegister(
+                1, SharedSecret, endpoint, 27015, 16, Dustbowl, 1_000_000, out _));
         }
 
         /// <summary>A registration that could never host a match is refused at the door.</summary>

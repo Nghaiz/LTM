@@ -263,7 +263,25 @@ namespace Ironfront.MasterServer.Dispatch
         private void RegisterGameServer(ClientConnection connection, GameServerRegistration request)
         {
             long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            bool ok = _gameServers.TryRegister(connection.Id, request.ServerSecret ?? string.Empty, connection.RemoteAddress.ToString(), request.UdpPort, request.MaxPlayers, request.MapIds ?? Array.Empty<ushort>(), now, out GameServerRecord? server);
+
+            // A colocated game-server container reaches the master through the Compose network,
+            // so its TCP peer is a private 172.x address. Returning that address to Internet
+            // players makes them dial a host that exists only inside the VM. The shared secret
+            // authenticates this registration; after that proof, use the explicitly configured
+            // public endpoint when one is supplied, otherwise preserve the direct-host fallback.
+            string endpoint = string.IsNullOrWhiteSpace(request.PublicIp)
+                ? connection.RemoteAddress.ToString()
+                : request.PublicIp;
+
+            bool ok = _gameServers.TryRegister(
+                connection.Id,
+                request.ServerSecret ?? string.Empty,
+                endpoint,
+                request.UdpPort,
+                request.MaxPlayers,
+                request.MapIds ?? Array.Empty<ushort>(),
+                now,
+                out GameServerRecord? server);
             Send(connection, MspMessageType.GsRegisterResponse, new { ok, serverId = server?.ServerId ?? 0 });
         }
 

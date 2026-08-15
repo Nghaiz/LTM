@@ -46,6 +46,9 @@ namespace Ironfront.MasterClient
 
         public GameServerRegistration? Registration { get; private set; }
 
+        /// <summary>The TLS policy passed to the latest connection attempt, if any.</summary>
+        public MasterClientTlsOptions? TlsOptions { get; private set; }
+
         public IReadOnlyList<GameServerHeartbeat> Heartbeats => _heartbeats;
 
         public IReadOnlyList<int> MatchStarts => _matchStarts;
@@ -59,6 +62,16 @@ namespace Ironfront.MasterClient
         {
             State = MasterConnectionState.Connected;
             return Task.CompletedTask;
+        }
+
+        public Task ConnectAsync(
+            string host,
+            int port,
+            MasterClientTlsOptions? tls,
+            CancellationToken ct = default)
+        {
+            TlsOptions = tls;
+            return ConnectAsync(host, port, ct);
         }
 
         public Task<GameServerRegistrationResult> RegisterAsync(

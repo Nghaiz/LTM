@@ -1,0 +1,15 @@
+# Runs the Ironfront alert check every minute. Enable with:
+#   sudo systemctl enable --now ironfront-alert.timer
+
+[Unit]
+Description=Run the Ironfront alert check every minute
+
+[Timer]
+# Every minute, matching the cron cadence alert.sh was written for. The RSS-growth check
+# is deliberately hour-over-hour inside the script, so a per-minute trigger does not mean
+# per-minute memory alerts.
+OnCalendar=minutely
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target

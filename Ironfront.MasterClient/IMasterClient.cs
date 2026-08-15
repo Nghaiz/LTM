@@ -26,6 +26,11 @@ namespace Ironfront.MasterClient
     {
         MasterConnectionState State { get; }
         Task ConnectAsync(string host, int port, CancellationToken ct = default);
+
+        // The TLS-aware overload. A production client dials a master that presents a
+        // certificate, so it must be able to hand the same MasterClientTlsOptions the load
+        // test and the game-server link already use; a null policy is the plaintext LAN path.
+        Task ConnectAsync(string host, int port, MasterClientTlsOptions? tls, CancellationToken ct = default);
         Task<LoginResult> LoginAsync(string username, string passwordHash, CancellationToken ct = default);
         Task<RegisterResult> RegisterAsync(string username, string passwordHash, string displayName, CancellationToken ct = default);
         Task<RoomInfo[]> GetRoomsAsync(CancellationToken ct = default);

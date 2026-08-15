@@ -6,6 +6,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
 using Ironfront.MasterClient;
+using Ironfront.MasterServer.GameServers;
 using Ironfront.MasterServer.Security;
 using Ironfront.Net.Protocol;
 using Xunit;
@@ -59,7 +60,43 @@ namespace Ironfront.MasterServer.Tests
         }
 
         /// <summary>
-        /// Criterion 3, and the point the report makes about TLS: <b>encryption is not
+        /// A game server carries the deployment shared secret in GS_REGISTER, so this link must
+        /// follow the same TLS and pin-validation path as a player client. This also proves that
+        /// an explicitly configured public endpoint survives the container-facing registration
+        /// path instead of being replaced with the Docker peer address.
+        /// </summary>
+        [Fact(Timeout = SocketTestTimeoutMs)]
+        public async Task AGameServerCanRegisterOverTlsAndAdvertiseItsConfiguredPublicEndpoint()
+        {
+            await using var server = new Phase03ServerHarness(tls: true);
+            using var gameServer = new GameServerLink();
+
+            await gameServer.ConnectAsync("127.0.0.1", server.Port, new MasterClientTlsOptions
+            {
+                Enabled                 = true,
+                TargetHost              = "localhost",
+                PinnedFingerprintSha256 = server.CertificateFingerprint,
+            });
+
+            Task<GameServerRegistrationResult> registration = gameServer.RegisterAsync(
+                new GameServerRegistration
+                {
+                    ServerSecret = Phase03ServerHarness.SharedSecret,
+                    PublicIp     = "203.0.113.41",
+                    UdpPort      = 27015,
+                    MaxPlayers   = 16,
+                    MapIds       = new ushort[] { 1 },
+                });
+
+            GameServerRegistrationResult registered = await PumpAsync(registration, gameServer);
+
+            Assert.True(registered.Ok);
+            Assert.NotEqual((ushort)0, registered.ServerId);
+            Assert.True(server.GameServers.TryGet(registered.ServerId, out GameServerRecord? record));
+            Assert.Equal("203.0.113.41", record!.PublicIp);
+            Assert.Equal(27015, record.UdpPort);
+        }
+
         /// framing</b>.
         /// </summary>
         /// <remarks>
@@ -243,14 +280,20 @@ namespace Ironfront.MasterServer.Tests
         }
 
         private static async Task<T> PumpAsync<T>(Task<T> task, MasterClient.MasterClient client)
+            => await PumpAsync(task, client.Poll);
+
+        private static async Task<T> PumpAsync<T>(Task<T> task, GameServerLink gameServer)
+            => await PumpAsync(task, gameServer.Poll);
+
+        private static async Task<T> PumpAsync<T>(Task<T> task, Action poll)
         {
             while (!task.IsCompleted)
             {
-                client.Poll();
+                poll();
                 await Task.Delay(5);
             }
 
-            client.Poll();
+            poll();
             return await task;
         }
     }

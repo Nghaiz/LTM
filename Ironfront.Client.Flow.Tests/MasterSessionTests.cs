@@ -597,6 +597,21 @@ namespace Ironfront.Client.Flow.Tests
             Assert.False(h.Session.IsMasterConnected);
         }
 
+        [Fact]
+        public async Task ConnectPassesTheTlsPolicyThroughUnchanged()
+        {
+            // A production client dials a master that presents a certificate, so the session
+            // must carry the caller's MasterClientTlsOptions to the client rather than quietly
+            // opening a plaintext link. The default overload stays plaintext for a LAN master.
+            var h = new Harness();
+            Assert.True(await h.Session.ConnectAsync("master.example", 27000));
+            Assert.Null(h.Master.LastTls);
+
+            var tls = new MasterClientTlsOptions { Enabled = true, TargetHost = "master.example" };
+            Assert.True(await h.Session.ConnectAsync("master.example", 27000, tls));
+            Assert.Same(tls, h.Master.LastTls);
+        }
+
         // --------------------------------------------------------- threading
 
         [Fact]

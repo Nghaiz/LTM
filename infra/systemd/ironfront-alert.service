@@ -1,0 +1,23 @@
+# Ironfront alerting check (phase 03 task 3, criterion 8). Triggered by
+# ironfront-alert.timer, not enabled directly. See infra/systemd/README.md.
+#
+# A HOST unit, deliberately: a process cannot report the one failure that matters most —
+# that it is not running. Condition 1 (master not answering) is only observable from
+# outside the master, which is why this is not a container.
+
+[Unit]
+Description=Ironfront alerting check
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+# Holds the metrics host/port, the webhook and the thresholds. chmod 600, owned by root.
+EnvironmentFile=/opt/ironfront/.env
+# Reads the master's metrics on the host loopback publish (compose maps
+# 127.0.0.1:27001 -> master:27001) and posts to the webhook when something is wrong.
+ExecStart=/opt/ironfront/tools/alert.sh
+User=root
+# A non-zero exit here means "master did not answer" — alert.sh notifies first, then
+# exits 1. Leaving it as a failed run makes the outage visible in `systemctl status`
+# too; the timer keeps firing regardless.

@@ -1,0 +1,208 @@
+name: images
+
+# Builds and pushes Docker images to GHCR.
+#
+# Triggers:
+#   - Push to main or develop branches
+#   - Tags matching v* (e.g. v1.0.0)
+#   - Pull requests (build only, no push)
+#   - Published releases
+#   - Manual dispatch
+#
+# Image tagging strategy (docker/metadata-action):
+#   - Branch push:  <branch>  + <YYYY-MM-DDTHH-MM-SSVN>
+#   - Tag push:     v1.2.3, 1.2.3, 1.2, 1  (semver)
+#   - PR:           pr-<number>
+#   - Release:      <release-tag>
+#   - Always:       <YYYY-MM-DDTHH-MM-SSVN>  (Vietnam Time TZ=Asia/Ho_Chi_Minh)
+#
+# THE GAME-SERVER IMAGE IS NOT BUILT HERE FROM SCRATCH: GitHub-hosted runners have no Unity
+# licence. The Unity Linux dedicated artifact is produced on a licensed machine
+# (`pwsh tools/build-server.ps1`), attached to a GitHub Release as gameserver-linux.tar.gz,
+# and this workflow packages THAT into the image. There is deliberately no pseudo-headless
+# fallback — provide the artifact or the job does nothing.
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ['v*']
+  pull_request:
+    branches: [main, develop]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      build_master:
+        description: Build and push the master image.
+        type: boolean
+        default: true
+      gameserver_release_tag:
+        description: >-
+          Release tag whose asset gameserver-linux.tar.gz holds the Unity Linux dedicated
+          artifact. Leave blank to skip the game-server image.
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  # Do NOT cancel in progress: a cancelled build mid-push can leave a half-written tag.
+  group: images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  master:
+    name: master image
+    # Skip on manual dispatch if build_master is false.
+    if: >-
+      github.event_name != 'workflow_dispatch' || inputs.build_master
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate timestamp
+        id: timestamp
+        run: echo "ts=$(TZ='Asia/Ho_Chi_Minh' date +'%Y-%m-%dT%H-%M-%SVN')" >> "$GITHUB_OUTPUT"
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/ironfront-master
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=${{ steps.timestamp.outputs.ts }}
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        # Don't push on PRs from forks (GITHUB_TOKEN has no write access).
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/master.Dockerfile
+          # Push on everything except PRs (PRs only verify the build).
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Record digest
+        if: github.event_name != 'pull_request'
+        run: |
+          {
+            echo "### master image";
+            echo "- tags: \`${{ steps.meta.outputs.tags }}\`";
+            echo "- digest: \`${{ steps.build.outputs.digest }}\`";
+            echo "";
+            echo "Pin this digest in the deploy manifest / infra/compose/.env.";
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  gameserver:
+    name: game-server image
+    # Manual only, and only when an artifact release tag is supplied.
+    # Also runs on published releases if the release has a gameserver-linux.tar.gz asset.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.gameserver_release_tag != '') ||
+      github.event_name == 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # A release tag and a workflow_dispatch input are both attacker-influenced strings.
+      # Interpolating them into `run:` would let `$(...)` execute on a runner that holds a
+      # token with packages:write. Cross the boundary through env, where the shell sees data.
+      - name: Determine release tag
+        id: release_tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.gameserver_release_tag }}
+        run: |
+          if [ "$EVENT_NAME" = "release" ]; then
+            echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fetch the Unity Linux artifact from the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release_tag.outputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          mkdir -p build/server
+          gh release download "$TAG" \
+            --repo "$REPO" \
+            --pattern 'gameserver-linux.tar.gz' --dir /tmp || {
+            echo "::warning::No gameserver-linux.tar.gz in release $TAG, skipping."
+            echo "skip=true" >> "$GITHUB_ENV"
+            exit 0
+          }
+          tar -xzf /tmp/gameserver-linux.tar.gz -C build/server
+          # Fail loudly rather than build an image around an empty directory.
+          test -f build/server/Ironfront.Server.x86_64 \
+            || { echo "::error::gameserver-linux.tar.gz has no Ironfront.Server.x86_64"; exit 1; }
+
+      - name: Generate timestamp
+        if: env.skip != 'true'
+        id: timestamp
+        run: echo "ts=$(TZ='Asia/Ho_Chi_Minh' date +'%Y-%m-%dT%H-%M-%SVN')" >> "$GITHUB_OUTPUT"
+
+      - name: Docker meta
+        if: env.skip != 'true'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/ironfront-gameserver
+          tags: |
+            type=semver,pattern={{version}},value=${{ steps.release_tag.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.release_tag.outputs.tag }}
+            type=semver,pattern={{major}},value=${{ steps.release_tag.outputs.tag }}
+            type=raw,value=${{ steps.release_tag.outputs.tag }}
+            type=raw,value=${{ steps.timestamp.outputs.ts }}
+
+      - uses: docker/setup-buildx-action@v3
+        if: env.skip != 'true'
+      - uses: docker/login-action@v3
+        if: env.skip != 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        if: env.skip != 'true'
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: build/server
+          file: infra/docker/gameserver.Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Record digest
+        if: env.skip != 'true'
+        run: |
+          {
+            echo "### game-server image";
+            echo "- tags: \`${{ steps.meta.outputs.tags }}\`";
+            echo "- digest: \`${{ steps.build.outputs.digest }}\`";
+          } >> "$GITHUB_STEP_SUMMARY"

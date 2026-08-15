@@ -77,6 +77,31 @@ namespace Ironfront.Net.Configuration
             "advertisement, matches still play to completion. That is the phase-03 contingency\n" +
             "for the master not being up, and it is deliberately what you get by doing nothing.");
 
+        /// <summary>Whether game servers use TLS when connecting to the master.</summary>
+        public static readonly EnvVar GameServerMasterTls = new EnvVar(
+            "IRONFRONT_GAMESERVER_MASTER_TLS", "Master server", "game server",
+            "Set to 1 when the master listener presents TLS. A game server sends the shared\n" +
+            "server secret while registering, so a public deployment must not leave this\n" +
+            "link in plaintext.",
+            "0",
+            summary: "1 to use TLS for game-server-to-master registration");
+
+        /// <summary>Server name used by a game server's TLS client.</summary>
+        public static readonly EnvVar GameServerMasterTlsTargetHost = new EnvVar(
+            "IRONFRONT_GAMESERVER_MASTER_TLS_TARGET_HOST", "Master server", "game server",
+            "Certificate name for the master TLS connection. Empty uses IRONFRONT_MASTER_HOST.\n" +
+            "Set this when the game server dials an internal Compose service name but the\n" +
+            "certificate names the public domain.",
+            summary: "TLS certificate name; empty uses master host");
+
+        /// <summary>Optional self-signed certificate pin for a game-server-to-master link.</summary>
+        public static readonly EnvVar GameServerMasterTlsPinnedFingerprint = new EnvVar(
+            "IRONFRONT_GAMESERVER_MASTER_TLS_PINNED_FINGERPRINT_SHA256", "Master server", "game server",
+            "SHA-256 certificate fingerprint for a self-signed master certificate. Leave empty\n" +
+            "for a publicly trusted certificate such as Let's Encrypt. Never use an\n" +
+            "accept-any-certificate switch in a deployment.",
+            summary: "optional SHA-256 pin for a self-signed master certificate");
+
         /// <summary>SQLite file backing accounts, sessions and rooms.</summary>
         public static readonly EnvVar DatabasePath = new EnvVar(
             "IRONFRONT_DB_PATH", "Master server", "master server, tools/backup.sh",
@@ -361,7 +386,8 @@ namespace Ironfront.Net.Configuration
         public static readonly IReadOnlyList<EnvVar> All = new[]
         {
             SharedSecret,
-            MasterPort, MasterHost, DatabasePath,
+            MasterPort, MasterHost, GameServerMasterTls, GameServerMasterTlsTargetHost,
+            GameServerMasterTlsPinnedFingerprint, DatabasePath,
             GameServerUdpPort, GameServerTransport, GameServerMaxConnections, GameServerMaxPlayers,
             GameServerPublicIp, GameServerMapIds, GameServerAcceptUnsignedTickets,
             ClientHost, ClientPort, ClientVerbose,

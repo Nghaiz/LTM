@@ -1,0 +1,136 @@
+#cloud-config
+# Ironfront VM bootstrap (phase 03 task 4).
+#
+# MACHINE setup ONLY. Terraform renders this into the VM's user-data, which is readable by
+# anyone who can read the instance metadata — so it MUST hold no secret. The shared secret,
+# the .env, the TLS PFX and the GHCR pull credential are delivered to the box out of band
+# afterwards; /opt/ironfront/BOOTSTRAP.md (written below) is the checklist for that.
+#
+# NOTE ON TEMPLATING: this file is passed through Terraform's templatefile(), so a
+# $${name} placeholder is substituted by Terraform. Do not introduce shell brace-expansions
+# here — use brace-less $var (as in the ufw loop) or Terraform would try to interpolate them.
+
+package_update: true
+package_upgrade: false
+
+# certbot for the ACME cert; sqlite3/jq/curl for the host backup+alert timers; ufw as the
+# host-firewall second line behind the NSG; git only for the optional repo clone below.
+packages:
+  - ca-certificates
+  - curl
+  - jq
+  - sqlite3
+  - ufw
+  - git
+  - certbot
+
+write_files:
+  # Bound container log growth so a 72-hour durability run can't fill the OS disk. Written
+  # before runcmd starts Docker, so the daemon picks it up on first launch.
+  - path: /etc/docker/daemon.json
+    permissions: "0644"
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": { "max-size": "20m", "max-file": "5" }
+      }
+
+  - path: /opt/ironfront/BOOTSTRAP.md
+    permissions: "0644"
+    content: |
+      # Ironfront VM — finishing the deploy
+
+      cloud-init has done the MACHINE setup only:
+      - Docker Engine + Compose plugin, Azure CLI, certbot, sqlite3, jq, ufw
+      - /opt/ironfront/{data,tls,backups,tools,alert-state}; data and tls are owned by
+        UID/GID 1654 (the container's non-root app user) so the master can read the PFX
+        and own the database
+      - host firewall (ufw): 22/tcp, ${master_port}/tcp, and udp ${udp_ports} are open
+
+      There are NO secrets on this box yet. Finish from your workstation:
+
+      1. DNS: create an A record for ${dns_hostname} pointing at this VM's static public
+         IP (see `terraform output public_ip_address`). Wait for it:
+         `dig +short ${dns_hostname}` should return that IP.
+
+      2. TLS: issue the certificate and convert it to PKCS#12 at
+         /opt/ironfront/tls/master.pfx (see infra/tls/README.md). Never commit the PFX or
+         its password.
+
+      3. Config: put infra/compose/{compose.yaml,deploy.sh} and .env.example in
+         /opt/ironfront/ (already done if repo_clone_url was set). Create /opt/ironfront/.env
+         from .env.example, fill in the pinned image digests, the shared secret, the TLS
+         password, the domain (${dns_hostname}) and this VM's static IP, then `chmod 600`
+         it. The shared secret and TLS password must NOT come from Terraform or git.
+
+      4. GHCR: log in with a short-lived read:packages token, never stored —
+         `export GHCR_USER=<user> GHCR_TOKEN=<pat>` then run the deploy.
+
+      5. Deploy: `cd /opt/ironfront && ./deploy.sh up`, then `./deploy.sh status` and
+         `./deploy.sh digests` to confirm the running images.
+
+      6. Timers: enable the host backup + alert timers (see infra/systemd/README.md).
+
+runcmd:
+  # One shell script, run top to bottom with `set -e`, so a hard failure (Docker install)
+  # aborts and shows up in /var/log/cloud-init-output.log rather than silently half-booting.
+  - |
+    set -eux
+
+    # Directory tree. data/ and tls/ belong to the container's app UID (1654) so the
+    # non-root master can own its SQLite file and read the read-only-mounted PFX.
+    install -d -m 0755 /opt/ironfront /opt/ironfront/tools /opt/ironfront/backups /opt/ironfront/alert-state
+    install -d -m 0755 /opt/ironfront/data /opt/ironfront/tls
+    chown -R 1654:1654 /opt/ironfront/data /opt/ironfront/tls
+
+    # Docker Engine + Compose plugin via the official convenience script.
+    curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+    sh /tmp/get-docker.sh
+    systemctl enable --now docker
+    usermod -aG docker ${admin_username} || true
+
+    # Azure CLI — the backup uploader uses `az login --identity` (VM managed identity).
+    curl -fsSL https://aka.ms/InstallAzureCLIDeb -o /tmp/az.sh
+    bash /tmp/az.sh
+
+    # Host firewall: a second line behind the NSG. SSH source is restricted by the NSG, so
+    # 22 is opened here without a source filter; the game ports mirror the NSG's public rules.
+    ufw --force reset
+    ufw default deny incoming
+    ufw default allow outgoing
+    ufw allow 22/tcp
+    ${acme_http_ufw_rule}
+    ufw allow ${master_port}/tcp
+    for p in ${udp_ports}; do ufw allow $p/udp; done
+    ufw --force enable
+
+    # Optional convenience: if a PUBLIC repo URL was supplied, install the compose file,
+    # tools and systemd units so only the .env and the PFX remain to be delivered. A private
+    # repo is left to the manual BOOTSTRAP.md path — no token is ever placed in user-data.
+    # Every step below was `|| true`, and the marker was written unconditionally after it.
+    # A failed clone or a failed cp then produced a VM that reports "bootstrap complete"
+    # while missing compose.yaml, deploy.sh and the timers — the operator finds out at
+    # `./deploy.sh up`. The whole block is already guarded by repo_clone_url being set, so
+    # a failure inside it is a real failure: record it and leave the marker unwritten.
+    install_ok=1
+    if [ -n "${repo_clone_url}" ]; then
+      {
+        git clone --depth 1 "${repo_clone_url}" /opt/ironfront/repo &&
+        test -d /opt/ironfront/repo/infra/compose &&
+        cp /opt/ironfront/repo/infra/compose/compose.yaml /opt/ironfront/ &&
+        cp /opt/ironfront/repo/infra/compose/deploy.sh /opt/ironfront/ &&
+        cp /opt/ironfront/repo/infra/compose/.env.example /opt/ironfront/ &&
+        cp -r /opt/ironfront/repo/tools/. /opt/ironfront/tools/ &&
+        cp /opt/ironfront/repo/infra/systemd/ironfront-*.service /etc/systemd/system/ &&
+        cp /opt/ironfront/repo/infra/systemd/ironfront-*.timer /etc/systemd/system/ &&
+        chmod +x /opt/ironfront/deploy.sh /opt/ironfront/tools/*.sh &&
+        systemctl daemon-reload
+      } || install_ok=0
+    fi
+
+    if [ "$install_ok" -eq 1 ]; then
+      echo "ironfront cloud-init bootstrap complete" > /opt/ironfront/.bootstrap-done
+    else
+      echo "repo install failed — see /var/log/cloud-init-output.log, then follow BOOTSTRAP.md" \
+        > /opt/ironfront/.bootstrap-failed
+    fi

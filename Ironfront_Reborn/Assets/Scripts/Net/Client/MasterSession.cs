@@ -135,11 +135,17 @@ namespace Ironfront.Net.Unity.Client
         // ------------------------------------------------------------------ master server
 
         /// <summary>Opens the TCP link to the master. Does not log in.</summary>
-        public async Task<bool> ConnectAsync(string host, int port)
+        /// <remarks>
+        /// <paramref name="tls"/> null is the plaintext LAN path; a populated policy is what a
+        /// production client needs against a master that presents a certificate. The password
+        /// is hashed before it leaves the machine either way, but a public deployment carries a
+        /// session token as well, so the link itself must be encrypted there.
+        /// </remarks>
+        public async Task<bool> ConnectAsync(string host, int port, MasterClientTlsOptions? tls = null)
         {
             try
             {
-                await _master.ConnectAsync(host, port).ConfigureAwait(false);
+                await _master.ConnectAsync(host, port, tls).ConfigureAwait(false);
                 return true;
             }
             catch (Exception ex) when (IsLinkFailure(ex))

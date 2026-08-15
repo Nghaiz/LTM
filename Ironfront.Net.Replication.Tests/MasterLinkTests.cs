@@ -48,6 +48,29 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(0, await reporter.ConnectAndRegisterAsync("master", 7777, Registration()));
         }
 
+        [Fact]
+        public async Task RegistrationCanUseTlsWithoutChangingTheReporterContract()
+        {
+            var link = new FakeGameServerLink(assignedServerId: 12);
+            var reporter = new GameServerMatchReporter(link);
+
+            ushort serverId = await reporter.ConnectAndRegisterAsync(
+                "master",
+                7777,
+                Registration(),
+                new MasterClientTlsOptions
+                {
+                    Enabled = true,
+                    TargetHost = "master.ironfront.example",
+                });
+
+            Assert.Equal(12, serverId);
+            Assert.True(reporter.IsConnected);
+            Assert.NotNull(link.TlsOptions);
+            Assert.True(link.TlsOptions!.Enabled);
+            Assert.Equal("master.ironfront.example", link.TlsOptions.TargetHost);
+        }
+
         // ------------------------------------------------------------------ heartbeat
 
         [Fact]

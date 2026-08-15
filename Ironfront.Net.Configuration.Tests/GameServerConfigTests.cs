@@ -54,6 +54,21 @@ namespace Ironfront.Net.Configuration.Tests
         }
 
         [Fact]
+        public void GameServerMasterTlsSettingsAreResolvedFromTheEnvironment()
+        {
+            var config = new GameServerConfig()
+                .ApplyEnvironment(Env(
+                    (EnvRegistry.GameServerMasterTls.Name, "1"),
+                    (EnvRegistry.GameServerMasterTlsTargetHost.Name, "master.ironfront.example"),
+                    (EnvRegistry.GameServerMasterTlsPinnedFingerprint.Name,
+                        "AA:BB:CC:DD")));
+
+            Assert.True(config.MasterTlsEnabled);
+            Assert.Equal("master.ironfront.example", config.MasterTlsTargetHost);
+            Assert.Equal("AA:BB:CC:DD", config.MasterTlsPinnedFingerprintSha256);
+        }
+
+        [Fact]
         public void TheMasterPortDefaultsToTheOneTheMasterActuallyBinds()
         {
             // Regression guard. MasterLinkBootstrap shipped with 27100 hard-coded while the
