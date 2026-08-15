@@ -12,7 +12,7 @@
 Phase-00 objective 2 says it outright: *"Required for `NetworkActorController` to exist at all"*. The
 netcode currently runs beside the game because there is no seam to plug it into. This is the seam.
 
-It is also smaller than the plan implies. 85 `Input.*` hits sounds like a sweep of the whole game;
+It is also smaller than the plan implies. 80 `Input.*` lines sounds like a sweep of the whole game;
 they are not evenly spread:
 
 ```
@@ -22,12 +22,17 @@ PathTypesDemo.cs         9   │ phase-00 criterion 6 permits these to stay
 ObjectPlacer.cs          4   │ ("leaves only UI/debug hits")
 CommandRoomCamera.cs     4   │
 GroupController.cs       4   │
-MainMenu.cs              3   │
+ScoreUi.cs               2   │
 WeaponManager.cs         2   ┘
+                         9   nine more files with one line each
 ```
 
-One file. The other 48 hits are spectator, editor tooling and menus, which criterion 6 explicitly
+One file. The other 43 lines are spectator, editor tooling and menus, which criterion 6 explicitly
 allows to keep using `Input` directly.
+
+> Counts are the anchored ones (`grep "\bInput\."`). `MainMenu.cs` used to appear here with 3; those
+> were `victoryScoreInput.text` and friends — `InputField` members, not input reads. See
+> [`docs/codebase-map.md` § 4](../../docs/codebase-map.md#4-every-input-site-in-fpsactorcontroller-and-its-surrounding-condition).
 
 ## Deliverable
 
