@@ -15,7 +15,7 @@ Audited 2026-08-15 against the repository, not against the plan text.
 |---|---|---|
 | **00**·1 `docs/codebase-map.md` | ✓ done | [`docs/codebase-map.md`](../../docs/codebase-map.md), written by [step 01](step-01-codebase-map.md) |
 | **00**·2 A* headless + graph bake | ? unverifiable | Needs the Editor to check |
-| **00**·3 `IInputSource` | ✗ absent | No `IInputSource`, no `LocalInputSource` |
+| **00**·3 `IInputSource` | ✓ done | `Assets/Scripts/Net/Input/`, by [step 02](step-02-input-source.md). Dev A's 5-minute playtest still outstanding |
 | **00**·4 `NetContext` | ✓ done | `Assets/Scripts/Net/Shared/NetContext.cs` |
 | **00**·5 Guard 21 singletons | ✗ absent | `Assembly-CSharp/` contains **0** references to `NetContext` |
 | **00**·6 Stub B/C/D interfaces | ✗ / moot | The real libraries exist and are referenced; stubs are no longer the point |

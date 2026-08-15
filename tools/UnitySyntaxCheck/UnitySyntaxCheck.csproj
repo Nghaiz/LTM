@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    OWNER: shared, maintained with tools/ by Dev D.
+
+    WHY IT EXISTS
+
+    Nothing in this repository compiles Unity code. .github/workflows/ci.yml says so in its
+    own comment: a licensed Editor is needed on the runner and the free tier does not
+    provide one, so the unity-compile job is commented out. Everything under
+    Ironfront_Reborn/Assets/Scripts/ is therefore edited on trust and only found to be
+    broken when Dev A next opens the Editor.
+
+    This closes the cheapest part of that hole. It parses the files with Roslyn at the
+    language version Unity actually uses, and fails on a syntax error. That catches an
+    unbalanced brace, a mistyped expression, and — the reason for the version pin — C# 10+
+    syntax that a .NET 8 developer writes without thinking and Unity 6000.3 rejects.
+
+    WHAT IT DOES NOT DO
+
+    It does not resolve types, so it will not notice a missing using, a misspelled member,
+    or a wrong argument type. It is a syntax gate, not a compiler. Read a green run as
+    "this will parse", never as "this will build".
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Ironfront.Tools.UnitySyntaxCheck</RootNamespace>
+    <AssemblyName>UnitySyntaxCheck</AssemblyName>
+    <Description>Parses Unity scripts at Unity's C# language version and fails on syntax errors.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- No Version: Central Package Management (Directory.Packages.props) owns it. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+  </ItemGroup>
+
+</Project>
