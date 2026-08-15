@@ -462,6 +462,60 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(1, InputAuthority.ApplyPendingInput(session, 1f / 30f, Move));
         }
 
+        // ------------------------------------------------------------------ task 6, the wire half
+
+        [Fact]
+        public void AWorldKillIsFramedAsAnEnvironmentDeath()
+        {
+            // Bot and world damage reaches the netcode through the Actor.Damage guard, which has
+            // no shooter to name — a fall, a grenade with no owner, a vehicle. The sentinel is
+            // what stops the killfeed crediting actor 0, which is a real id.
+            var payload = new byte[ProtocolConstants.MAX_PAYLOAD];
+
+            var message = new DeathMessage(
+                Victim, DeathMessage.EnvironmentKiller, CauseOfDeath.Explosion,
+                0, 0, 0, (byte)HitboxType.Body);
+
+            int written = ServerEventWriter.WriteDeath(payload, in message);
+            Assert.True(written > 0);
+
+            Assert.True(message.KilledByEnvironment);
+        }
+
+        [Fact]
+        public void TheLocalPlayerAcceptsAnEnvironmentDeath()
+        {
+            // The guard's client branch skips Die() and waits for this. If S_DEATH with the
+            // environment sentinel were rejected here, a player killed by a bot would keep
+            // walking around on their own screen at zero health.
+            var state = new Client.ClientCombatState { LocalActorId = Victim };
+
+            bool wasLocal = state.ApplyDeath(
+                new DeathMessage(
+                    Victim, DeathMessage.EnvironmentKiller, CauseOfDeath.Explosion,
+                    0, 0, 0, (byte)HitboxType.Body),
+                nowSeconds: 10f);
+
+            Assert.True(wasLocal);
+            Assert.False(state.IsAlive);
+            Assert.False(state.CanRequestRespawn(10f));
+            Assert.True(state.CanRequestRespawn(10f + ProtocolConstants.RESPAWN_SECONDS));
+        }
+
+        [Fact]
+        public void ASecondDeathFromTheOtherDamagePathDoesNotMoveTheRespawnClock()
+        {
+            // Both damage paths stamp the gate — hitscan through ServerCombatAuthority, bot and
+            // world damage through the Actor.Damage guard — and a victim can be hit by both on
+            // the same tick. The stamp has to be idempotent or the countdown jumps.
+            var gate = new ServerRespawnGate();
+
+            gate.MarkDeath(Victim, 10f);
+            gate.MarkDeath(Victim, 10.5f);
+
+            Assert.True(gate.MayRespawn(Victim, 10f + ProtocolConstants.RESPAWN_SECONDS));
+        }
+
         // ------------------------------------------------------------------ helpers
 
         private static Vec3 Move(Vec3 motion) => motion;
