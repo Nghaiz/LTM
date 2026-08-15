@@ -12,6 +12,31 @@
 > **What's left in this phase is wiring in the real sources**, not building the UI from scratch. See
 > [plan.md § 4.1](../plan.md).
 
+> ### ⚠️ Check the premise before you plan against this file
+>
+> **The paragraph above describes the state phase-02 is supposed to leave behind, not the state of
+> the repository.** The 3.5 → 2.0 person-week reduction is the *consequence* of that front-loading,
+> so it only holds once phase-02 has actually shipped the shells. As of 2026-08-15 it has not, and
+> reading this file as a to-do list today under-scopes it by roughly the 1.5 weeks that were moved.
+>
+> What is actually in `Assets/Scripts` right now:
+>
+> | Component | Status |
+> |---|---|
+> | Login, room list, killfeed, ticket bar | **absent** |
+> | `GameFlowController`, `MasterConnection` | **absent** |
+> | `IngameUi`, `ScoreUi`, `MinimapUi`, `LoadoutUi` | present, but these are the **original single-player** scripts under `Assembly-CSharp/`, not shells fed by fake data |
+> | F3 debug overlay (task 7) | **already done** — `Net/Diagnostics/TransportDebugOverlay.cs`, on Shift+F3 |
+>
+> Verify rather than trust this table — it is a snapshot:
+>
+> ```bash
+> ls Ironfront_Reborn/Assets/Scripts/Net/Client/
+> grep -rl "MasterClient" Ironfront_Reborn/Assets/Scripts/   # client-side hits = task 2 has started
+> ```
+>
+> Re-estimate against what you find. Do not carry the 2.0 figure forward on faith.
+
 ---
 
 ## 1. Objectives
@@ -110,6 +135,15 @@ public sealed class GameFlowController : MonoBehaviour
 
 > Block invalid transitions with an exception from day one. Bugs of the "we're in the lobby but the
 > match HUD is still showing" variety are very hard to find without an explicit state machine.
+
+**Do not make the state machine a `MonoBehaviour`.** Acceptance criterion 9 asks for unit tests on
+`GameFlowController`, and there is no way to run them as written: the `.NET` test projects cannot
+reference `UnityEngine`, and the Unity Test Framework is not set up (`Assets/` contains no
+`.asmdef`). Put the transition table and the guard in a plain class — in a `netstandard2.1` library
+if it is to be tested by `dotnet test`, which is how `Ironfront.Net.Replication` is already
+structured — and leave a thin `MonoBehaviour` that owns nothing but the reference to it. Everything
+in tasks 1, 2, 3, 5 and 6 that is decision logic rather than drawing can live there, which is also
+what lets it be written and tested without opening the Editor at all.
 
 ### Task 2 — Wire up the master server (3 days)
 
@@ -267,9 +301,15 @@ private void HandleMatchState(ReadOnlySpan<byte> span)
 interpolators, reset `GameFlowController`, and close the UDP connection while **keeping** the TCP
 connection to the master. A leak here causes the "everything is doubled in the second match" bug.
 
-### Task 7 — Debug overlay (1 day)
+### Task 7 — Debug overlay (1 day) — ✅ already built
 
-Small, but hugely useful for the whole team and for the capstone defense.
+`Net/Diagnostics/TransportDebugOverlay.cs` ships this, toggled with **Shift+F3** rather than bare F3
+(the legacy project already binds F3 to vehicle controls). It draws entirely from `OnGUI()` — no
+Canvas, no prefab, no Editor work — which also makes it the working precedent for building the login
+and room-list screens from code if you want this phase to progress without opening the Editor.
+
+What follows is the original specification, kept for the fields it lists; compare against the
+overlay's current output rather than rebuilding it.
 
 Toggled with `F3`, showing an overlay:
 ```
