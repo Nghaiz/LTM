@@ -1,0 +1,139 @@
+# Ironfront online backend — single-VM Docker Compose topology (phase 03 task 2).
+#
+# One master + two headless game servers, all pulled as IMMUTABLE images from GHCR (a
+# pinned digest or commit-SHA tag, never :latest). This is process/capacity resilience,
+# NOT high availability: a VM, disk or region failure is a full outage. Backups and
+# alerting run as HOST systemd timers (infra/systemd/), not containers, because the
+# down-detector must live outside the thing it watches and the backup uploader uses the
+# VM's managed identity.
+#
+# Nothing secret is in this file. Real values come from a root-readable .env beside it
+# (see .env.example); ${VAR:?...} makes a missing one a loud startup error, never a
+# silent default. Never commit the real .env.
+
+name: ironfront
+
+# ---- shared game-server definition ---------------------------------------------------
+# The two instances differ ONLY by UDP port, published port and preferred maps — never by
+# a rebuilt image. YAML anchors keep that promise structural rather than a copy to drift.
+x-gameserver-base: &gameserver-base
+  image: ${IRONFRONT_GAMESERVER_IMAGE:?set IRONFRONT_GAMESERVER_IMAGE to a pinned ghcr.io digest/tag}
+  restart: unless-stopped
+  depends_on:
+    # service_started, not service_healthy: the game server has no health probe (a Unity
+    # UDP listener cannot be probed honestly) and registers to the master with its own
+    # retry, so ordering startup is all that is wanted here.
+    master:
+      condition: service_started
+  networks:
+    - ironfront
+  deploy:
+    resources:
+      limits:
+        # Applied by `docker compose up` under Compose v2. Expect 0.5-1.5 GB resident per
+        # Unity instance; the cap turns "the OOM killer picked a process at random" into
+        # "this instance restarted", which is diagnosable.
+        memory: 1536M
+
+x-gameserver-env: &gameserver-env
+  # The SAME HMAC key as the master: it verifies the joinTickets the master signed, and a
+  # mismatch denies every CONNECT_REQUEST with reason 3.
+  IRONFRONT_SHARED_SECRET: ${IRONFRONT_SHARED_SECRET:?set IRONFRONT_SHARED_SECRET (>=32 chars) in .env}
+  # The master is a peer on the private compose network, reached by service name.
+  IRONFRONT_MASTER_HOST: master
+  IRONFRONT_MASTER_PORT: "27000"
+  # The registration link carries the shared secret, so it MUST be TLS on a public
+  # deployment. The game server dials the internal name `master`, but the certificate is
+  # issued for the public domain — TARGET_HOST names what the certificate must match, so
+  # CA validation succeeds without pointing the dial at the public IP and hairpinning.
+  IRONFRONT_GAMESERVER_MASTER_TLS: "1"
+  IRONFRONT_GAMESERVER_MASTER_TLS_TARGET_HOST: ${IRONFRONT_DOMAIN:?set IRONFRONT_DOMAIN to the master certificate hostname}
+  # The address the master advertises to players for the UDP data plane. It must be the
+  # VM's real public IP (a literal, validated as one) — never the container's private IP,
+  # which is what the master would otherwise infer from the TCP peer and hand to clients
+  # who could never reach it.
+  IRONFRONT_GAMESERVER_PUBLIC_IP: ${IRONFRONT_PUBLIC_IP:?set IRONFRONT_PUBLIC_IP to the VM public IPv4}
+  # A headless build left on the loopback transport starts cleanly and accepts nobody, so
+  # a deployment states udp rather than inheriting the scene default.
+  IRONFRONT_GAMESERVER_TRANSPORT: udp
+  # Off on anything reachable from the Internet: with unsigned tickets accepted, anyone
+  # can join as anyone. A missing secret then refuses every connection, which is the
+  # failure you want.
+  IRONFRONT_GAMESERVER_ACCEPT_UNSIGNED_TICKETS: "0"
+  IRONFRONT_GAMESERVER_MAX_PLAYERS: ${IRONFRONT_GAMESERVER_MAX_PLAYERS:-16}
+  IRONFRONT_GAMESERVER_MAX_CONNECTIONS: ${IRONFRONT_GAMESERVER_MAX_CONNECTIONS:-16}
+
+services:
+  master:
+    image: ${IRONFRONT_MASTER_IMAGE:?set IRONFRONT_MASTER_IMAGE to a pinned ghcr.io digest/tag}
+    restart: unless-stopped
+    # Matches the master's own 20 s drain on SIGINT (delivered via the image STOPSIGNAL),
+    # with margin.
+    stop_grace_period: 25s
+    networks:
+      - ironfront
+    ports:
+      # Public: the MSP lobby/auth/matchmaking port, TLS-wrapped.
+      - "27000:27000"
+      # Metrics — HOST LOOPBACK ONLY. The payload is unauthenticated (player counts, room
+      # states, whether a game server is down), so it is never published to the Internet:
+      # the host side binds 127.0.0.1 and the NSG/ufw opens no 27001 rule. tools/alert.sh
+      # runs on the host and reads it here. NOTE the container-internal bind below is
+      # 0.0.0.0 on purpose — Docker's port proxy reaches a container port over the bridge,
+      # not the container's loopback, so a 127.0.0.1 bind inside would make this
+      # unreachable. The loopback restriction is enforced by THIS publish binding.
+      - "127.0.0.1:27001:27001"
+    volumes:
+      # SQLite database + durability CSV. A bind mount (not a named volume) so the host's
+      # sqlite3 can take an online backup and the ACME/off-host upload can read it.
+      - ${IRONFRONT_DATA_DIR:-./data}:/data
+      # The PKCS#12 the master presents, written by the host ACME hook, mounted read-only.
+      - ${IRONFRONT_TLS_DIR:-./tls}:/tls:ro
+    environment:
+      IRONFRONT_SHARED_SECRET: ${IRONFRONT_SHARED_SECRET:?set IRONFRONT_SHARED_SECRET (>=32 chars) in .env}
+      IRONFRONT_MASTER_PORT: "27000"
+      # TLS is mandatory on the public Internet: the wire carries a password hash the
+      # server treats AS the password. The PFX is mounted read-only; its password comes
+      # from the protected .env and is registered for log redaction at startup.
+      IRONFRONT_TLS_CERT_PATH: /tls/master.pfx
+      IRONFRONT_TLS_CERT_PASSWORD: ${IRONFRONT_TLS_CERT_PASSWORD:?set IRONFRONT_TLS_CERT_PASSWORD in .env}
+      IRONFRONT_METRICS_PORT: "27001"
+      IRONFRONT_METRICS_BIND: "0.0.0.0"
+      IRONFRONT_DB_PATH: /data/ironfront.db
+      IRONFRONT_METRICS_CSV: /data/durability.csv
+      IRONFRONT_METRICS_CSV_INTERVAL_SEC: ${IRONFRONT_METRICS_CSV_INTERVAL_SEC:-60}
+      IRONFRONT_LOG_LEVEL: ${IRONFRONT_LOG_LEVEL:-Warn}
+      IRONFRONT_STRUCTURED_LOG: "1"
+      # Defaults are sized for real players. Raise ONLY for a single-machine load test,
+      # where every bot shares one source address (see .env.example).
+      IRONFRONT_MAX_CONNECTIONS_PER_IP: ${IRONFRONT_MAX_CONNECTIONS_PER_IP:-5}
+      IRONFRONT_MAX_TOTAL_CONNECTIONS: ${IRONFRONT_MAX_TOTAL_CONNECTIONS:-256}
+      IRONFRONT_LOGIN_RATE_PER_MINUTE: ${IRONFRONT_LOGIN_RATE_PER_MINUTE:-5}
+    deploy:
+      resources:
+        limits:
+          memory: ${IRONFRONT_MASTER_MEMORY:-768M}
+    # The healthcheck is defined in the image (a TCP connect to 27000); compose inherits
+    # it. `docker compose ps` shows the status.
+
+  game-server-1:
+    <<: *gameserver-base
+    ports:
+      - "27015:27015/udp"
+    environment:
+      <<: *gameserver-env
+      IRONFRONT_GAMESERVER_UDP_PORT: "27015"
+      IRONFRONT_GAMESERVER_MAP_IDS: ${IRONFRONT_GAMESERVER_1_MAP_IDS:-}
+
+  game-server-2:
+    <<: *gameserver-base
+    ports:
+      - "27016:27016/udp"
+    environment:
+      <<: *gameserver-env
+      IRONFRONT_GAMESERVER_UDP_PORT: "27016"
+      IRONFRONT_GAMESERVER_MAP_IDS: ${IRONFRONT_GAMESERVER_2_MAP_IDS:-}
+
+networks:
+  ironfront:
+    driver: bridge

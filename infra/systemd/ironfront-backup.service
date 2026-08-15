@@ -1,0 +1,23 @@
+# Ironfront database backup + off-host upload (phase 03). Triggered by
+# ironfront-backup.timer, not enabled directly. See infra/systemd/README.md.
+#
+# A HOST unit, deliberately: the uploader authenticates with the VM's managed identity and
+# reads the bind-mounted database from outside the container.
+
+[Unit]
+Description=Ironfront database backup and off-host upload
+# The database lives on a bind mount the master container writes; Docker being up is not
+# strictly required to copy the file, but ordering after it avoids racing a fresh boot.
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+# Holds the backup dir, retention, blob account/container. chmod 600, owned by root.
+EnvironmentFile=/opt/ironfront/.env
+ExecStart=/opt/ironfront/tools/backup-upload.sh
+# root reads the UID-1654-owned SQLite file and uses the managed identity via IMDS.
+User=root
+# A backup is never urgent enough to compete with the game servers for disk or CPU.
+Nice=10
+IOSchedulingClass=idle

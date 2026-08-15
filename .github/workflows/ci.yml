@@ -269,6 +269,68 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+  # =======================================================================================
+  # Infra syntax gate (phase 03). A compose file that does not render is a deploy that does
+  # not start, so this blocks like build-test does — but it only fails on Dev D's infra/,
+  # never on app code. No Unity licence, no cloud credentials, no network beyond Docker.
+  # =======================================================================================
+  infra-validate:
+    name: infra-validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+
+      # `config -q` interpolates every ${...} and validates the schema without starting
+      # anything. The values below are throwaway — they only have to be present and shaped
+      # right (a 32-char secret, a digest-pinned image) so the ${VAR:?} guards pass.
+      - name: Validate compose renders
+        env:
+          IRONFRONT_MASTER_IMAGE: ghcr.io/example/ironfront-master@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          IRONFRONT_GAMESERVER_IMAGE: ghcr.io/example/ironfront-gameserver@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          IRONFRONT_SHARED_SECRET: ci-placeholder-secret-0123456789abcd
+          IRONFRONT_TLS_CERT_PASSWORD: ci-placeholder
+          IRONFRONT_DOMAIN: master.example.com
+          IRONFRONT_PUBLIC_IP: 203.0.113.10
+        run: docker compose -f infra/compose/compose.yaml config -q
+
+  # =======================================================================================
+  # SOFT infra lint — advisory like `style`. hadolint nitpicks and a flaky provider fetch
+  # must never block a merge, so continue-on-error is set at the job level.
+  # =======================================================================================
+  infra-lint:
+    name: infra-lint (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Hadolint (master Dockerfile)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: infra/docker/master.Dockerfile
+          failure-threshold: error
+
+      - name: Hadolint (game-server Dockerfile)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: infra/docker/gameserver.Dockerfile
+          failure-threshold: error
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.5"
+
+      - name: Terraform fmt
+        run: terraform -chdir=infra/terraform fmt -check -recursive
+
+      # -backend=false: validate the configuration without contacting a state backend.
+      - name: Terraform validate
+        run: |
+          terraform -chdir=infra/terraform init -backend=false -input=false
+          terraform -chdir=infra/terraform validate
+
   # Unity compilation needs a licensed Editor on the runner, which the free tier does not
   # provide. Dev A runs `pwsh tools/ci.ps1` locally with UNITY_PATH set instead. Enable
   # this job once a self-hosted runner with Unity 6000.3.21f1 exists.

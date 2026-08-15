@@ -1,0 +1,60 @@
+# Build context filter for the master image (infra/docker/master.Dockerfile),
+# whose context is the repository root.
+#
+# WHY THIS FILE EXISTS: without it every `docker build` at the repo root ships the
+# entire Ironfront_Reborn Unity project (gigabytes of Library/, imported assets and a
+# TerrainData asset) plus any local .env, backups, TLS material and Terraform state to
+# the daemon. That is slow, and it is how a secret ends up baked into an image layer.
+# The master build needs only the root MSBuild props, global.json and the three .NET
+# projects in its reference graph — everything else is excluded.
+#
+# The game-server image builds from a DIFFERENT context (the Unity Linux artifact dir,
+# e.g. build/server) and is unaffected by this file.
+
+# Version control and editor/tooling state.
+.git
+.github
+.gitignore
+.gitattributes
+.vs
+.vscode
+.idea
+.claude
+**/*.user
+**/*.suo
+
+# .NET build outputs — regenerated inside the image; stale local copies must not leak in.
+**/bin
+**/obj
+**/*.binlog
+
+# The Unity project: enormous and not part of the master's build graph.
+Ironfront_Reborn/
+
+# Unity dedicated-server artifacts and generic build output.
+build/
+builds/
+
+# Everything that is not the master's source or build contract.
+infra/
+docs/
+plans/
+tools/
+**/*.md
+
+# Secrets and runtime state — must NEVER enter an image layer.
+**/.env
+**/.env.*
+!**/.env.example
+**/*.pfx
+**/*.p12
+**/*.key
+**/*.pem
+**/*.crt
+backups/
+tls/
+**/*.db
+**/*.db-wal
+**/*.db-shm
+**/*.log
+**/*.csv

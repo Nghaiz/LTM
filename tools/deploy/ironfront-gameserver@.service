@@ -1,11 +1,16 @@
 # Ironfront headless game server — templated systemd unit (phase 03 task 1).
 #
-# The @ makes this a template: %i is the instance number, so one file runs both servers.
-#   sudo systemctl enable --now ironfront-gameserver@1
-#   sudo systemctl enable --now ironfront-gameserver@2
+# SUPERSEDED by infra/compose/compose.yaml, which is the phase-03 deployment path (a single
+# VM running Docker Compose with images pulled from GHCR). This unit is kept as the fallback
+# for a non-container VM; if you use it, the port convention below is the honest one.
 #
-# Instance N listens on UDP port 27014+N (27015, 27016, ...), matching the port range
-# opened in docs/operations.md.
+# The @ makes this a template: %i is the instance number, so one file runs every server.
+#   sudo systemctl enable --now ironfront-gameserver@15
+#   sudo systemctl enable --now ironfront-gameserver@16
+#
+# Instance N listens on UDP port 270N — so @15 binds 27015 and @16 binds 27016, and the
+# instance number reads as the last digits of the port. The pair above matches the 27015-27020
+# UDP range docs/operations.md and tools/deploy.sh open; enable @17..@20 for more instances.
 #
 # OWNER NOTE: the Unity headless build itself is Dev A's and Dev C's; this unit is Dev D's
 # deployment wrapper around whatever they produce. It is written against the build layout
@@ -35,7 +40,11 @@ EnvironmentFile=/opt/ironfront/.env
 # said, which is 27015 for both — so the second one failed to bind and the file looked
 # correct while doing it. The variable is live now and -port is gone rather than left in
 # place to be trusted again.
-Environment=IRONFRONT_GAMESERVER_UDP_PORT=2701%i
+#
+# systemd does no arithmetic in Environment=, so this is string concatenation: 270 + %i.
+# An earlier 2701%i emitted 27011/27012 for @1/@2 while the header promised 27015/27016 —
+# honest now because the instance number IS the last two digits, so @15 -> 27015.
+Environment=IRONFRONT_GAMESERVER_UDP_PORT=270%i
 
 # The scene ships with the loopback transport on, because that is what a single-Editor test
 # wants. A headless instance left on it starts cleanly, logs nothing unusual and accepts

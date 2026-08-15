@@ -1,0 +1,175 @@
+name: images
+
+# Builds and pushes the production images to GHCR (phase 03 task 3). Immutable tags only —
+# a commit SHA always, an optional release tag on manual runs, NEVER :latest.
+#
+# GATING: the master image publishes automatically only after the CI workflow has gone
+# green on main (workflow_run below), and never on a pull request — so a fork PR cannot
+# push an image. Manual dispatch covers re-publishing and the game-server image.
+#
+# THE GAME-SERVER IMAGE IS NOT BUILT HERE FROM SCRATCH: GitHub-hosted runners have no Unity
+# licence. The Unity Linux dedicated artifact is produced on a licensed machine
+# (`pwsh tools/build-server.ps1`), attached to a GitHub Release as gameserver-linux.tar.gz,
+# and this workflow packages THAT into the image. There is deliberately no pseudo-headless
+# fallback — provide the artifact or the job does nothing.
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      build_master:
+        description: Build and push the master image.
+        type: boolean
+        default: true
+      gameserver_release_tag:
+        description: >-
+          Release tag whose asset gameserver-linux.tar.gz holds the Unity Linux dedicated
+          artifact. Leave blank to skip the game-server image.
+        type: string
+        default: ''
+      extra_tag:
+        description: Optional immutable tag to apply alongside the commit SHA (e.g. v1.2.0).
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  # Do NOT cancel in progress: a cancelled build mid-push can leave a half-written tag.
+  group: images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  master:
+    name: master image
+    # Manual run that asked for it, OR CI went green on main.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.build_master) ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # workflow_run reports github.sha as the default branch tip, not the commit CI tested.
+      # Resolve the real head so the image tag names the commit that was actually built.
+      - name: Resolve build ref
+        id: ref
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.ref.outputs.sha }}
+
+      - name: Lowercase owner
+        id: owner
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Compute tags
+        id: tags
+        run: |
+          img="ghcr.io/${{ steps.owner.outputs.owner }}/ironfront-master"
+          tags="$img:sha-${{ steps.ref.outputs.sha }}"
+          if [ -n "${{ inputs.extra_tag }}" ]; then tags="$tags,$img:${{ inputs.extra_tag }}"; fi
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/master.Dockerfile
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.ref.outputs.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Record digest
+        run: |
+          {
+            echo "### master image";
+            echo "- tags: \`${{ steps.tags.outputs.tags }}\`";
+            echo "- digest: \`${{ steps.build.outputs.digest }}\`";
+            echo "";
+            echo "Pin this digest in the deploy manifest / infra/compose/.env.";
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  gameserver:
+    name: game-server image
+    # Manual only, and only when an artifact release tag is supplied.
+    if: github.event_name == 'workflow_dispatch' && inputs.gameserver_release_tag != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the Unity Linux artifact from the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p build/server
+          gh release download "${{ inputs.gameserver_release_tag }}" \
+            --repo "${{ github.repository }}" \
+            --pattern 'gameserver-linux.tar.gz' --dir /tmp
+          tar -xzf /tmp/gameserver-linux.tar.gz -C build/server
+          # Fail loudly rather than build an image around an empty directory.
+          test -f build/server/Ironfront.Server.x86_64 \
+            || { echo "::error::gameserver-linux.tar.gz has no Ironfront.Server.x86_64"; exit 1; }
+
+      - name: Lowercase owner
+        id: owner
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Compute tags
+        id: tags
+        run: |
+          img="ghcr.io/${{ steps.owner.outputs.owner }}/ironfront-gameserver"
+          # The release tag IS the immutable identity of this artifact.
+          tags="$img:${{ inputs.gameserver_release_tag }}"
+          if [ -n "${{ inputs.extra_tag }}" ]; then tags="$tags,$img:${{ inputs.extra_tag }}"; fi
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: build/server
+          file: infra/docker/gameserver.Dockerfile
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ inputs.gameserver_release_tag }}
+
+      - name: Record digest
+        run: |
+          {
+            echo "### game-server image";
+            echo "- tags: \`${{ steps.tags.outputs.tags }}\`";
+            echo "- digest: \`${{ steps.build.outputs.digest }}\`";
+          } >> "$GITHUB_STEP_SUMMARY"
