@@ -12,7 +12,7 @@
 
 # TerrainData is a native binary asset despite its .asset suffix. Treating it as YAML makes
 # Git's line-ending filter report a byte-identical Editor round trip as a binary modification.
-Ironfront_Reborn/Assets/TerrainData/TerrainData.asset binary
+Ironfront_Reborn/Assets/TerrainData/*.asset binary
 
 # Unity binary assets — never diff or merge these.
 *.psd      binary
