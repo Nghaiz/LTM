@@ -101,9 +101,16 @@ namespace Ironfront.Net.Unity.Server
         {
             if (_combat == null) return;
 
-            // Aim pitch is replicated from the frame the shot was graded on, so the pose other
-            // clients see and the pose the server resolved against are the same one.
-            if (Actor != null) Actor.PitchDegrees = frame.PitchDegrees;
+            // Aim is replicated from the frame the shot was graded on, so the pose other clients
+            // see and the pose the server resolved against are the same one. Yaw as well as
+            // pitch: a headless server's player transform never turns, so leaving yaw to
+            // NetServerActor's transform read had every remote player facing their spawn
+            // heading while shooting somewhere else entirely.
+            if (Actor != null)
+            {
+                Actor.YawDegrees   = frame.YawDegrees;
+                Actor.PitchDegrees = frame.PitchDegrees;
+            }
 
             _combat.StepCombat(this, in frame);
         }

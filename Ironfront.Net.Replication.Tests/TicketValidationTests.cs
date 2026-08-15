@@ -208,6 +208,49 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void AnAdmissionCanBeTakenByThePlayerItNames()
+        {
+            var validator = new TicketValidator(Secret, serverId: 7);
+            validator.TryAdmit(Issue(1), Now, out _, out _);
+            validator.TryAdmit(Issue(2), Now, out _, out _);
+
+            // The connection being reported is the SECOND one. Positional pairing would hand
+            // back player 1.
+            Assert.True(validator.TryTakePendingAdmission(2u));
+            Assert.Equal(1, validator.PendingAdmissionCount);
+
+            Assert.True(validator.TryTakePendingAdmission(out uint remaining));
+            Assert.Equal(1u, remaining);
+
+            // Taking one that was never admitted is a miss, not a throw: an unsigned-ticket
+            // build admits without recording an admission at all.
+            Assert.False(validator.TryTakePendingAdmission(99u));
+        }
+
+        [Fact]
+        public void PairingByIdSurvivesAHandshakeThatDiesBeforeConnecting()
+        {
+            // Player 1 is admitted and then vanishes. Player 2 connects.
+            var validator = new TicketValidator(Secret, serverId: 7);
+            validator.TryAdmit(Issue(1), Now, out _, out _);
+            validator.TryAdmit(Issue(2), Now, out _, out _);
+
+            // What the transport now reports on connect is the id out of the signed ticket.
+            Assert.True(validator.TryTakePendingAdmission(2u));
+            validator.ConfirmConnected(2u);
+
+            // Player 2 leaves; the claim released is player 2's, and player 2 can rejoin.
+            Assert.True(validator.Release(2u));
+            Assert.True(validator.TryAdmit(Issue(2), Now + 1, out _, out _));
+
+            // Player 1's abandoned claim still lapses with its own ticket, as designed. That is
+            // the whole point: it was never confirmed as permanent under player 2's connection,
+            // which is what positional pairing would have done and what no expiry can undo.
+            Assert.True(validator.TryAdmit(
+                Issue(1, expiresAt: Now + 120_000), Now + 61_000, out _, out _));
+        }
+
+        [Fact]
         public void ARejectedTicketQueuesNoAdmission()
         {
             var validator = new TicketValidator(Secret, serverId: 7);

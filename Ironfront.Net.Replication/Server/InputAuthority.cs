@@ -68,6 +68,36 @@ namespace Ironfront.Net.Replication.Server
         public const int MaxMissedInputTicks = 3;
 
         /// <summary>
+        /// The most input frames one session may have applied in a single tick.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why a bound on frames and not on distance.</b> The post-move clamp bounds ONE
+        /// frame, and re-baselines on every call, so it could never bound a tick: a client that
+        /// kept the 32-frame ring saturated had all 32 drained in one tick, each moving a full
+        /// tick's length, and <c>SpeedViolations</c> stayed at zero because no individual step
+        /// ever broke the limit. Clamping the tick's total displacement instead looks like the
+        /// obvious fix and is wrong — it also punishes an honest client recovering from packet
+        /// loss, whose bunched frames represent ticks it really did intend to move for. The
+        /// integration test over an impaired link is what says so.
+        /// </para>
+        /// <para>
+        /// What separates the two is rate, not distance: honest input arrives at one frame per
+        /// tick on average, however unevenly it is delivered. So the budget refills at exactly
+        /// that rate and only saves up <see cref="MaxInputBurst"/> of it. A recovering client
+        /// spends the savings and catches up; a flooding one is metered to the refill rate no
+        /// matter how much it sends, and its surplus stays in the ring rather than being
+        /// silently dropped.
+        /// </para>
+        /// <para>
+        /// The size matches <see cref="MaxMissedInputTicks"/> plus the tick being served, which
+        /// is the largest gap the coast path already tolerates — past that the server has given
+        /// up on the connection anyway.
+        /// </para>
+        /// </remarks>
+        public const int MaxInputBurst = MaxMissedInputTicks + 1;
+
+        /// <summary>
         /// Vets one frame and converts it to movement intent.
         /// </summary>
         /// <returns>False when the frame must be discarded.</returns>
@@ -177,9 +207,17 @@ namespace Ironfront.Net.Replication.Server
 
             int steps = 0;
 
-            while (session.TryDequeueInput(out uint tick, out InputFrame frame))
+            // One tick's worth of budget arrives per tick, and unspent budget accumulates only
+            // up to MaxInputBurst. See MaxInputBurst for why a bound on FRAMES, rather than on
+            // the distance they cover, is the correct shape of this check.
+            session.InputBudget = Math.Min(session.InputBudget + 1, MaxInputBurst);
+
+            while (session.InputBudget > 0
+                && session.TryDequeueInput(out uint tick, out InputFrame frame))
             {
                 if (!TryAccept(session, tick, in frame, out MoveInput input)) continue;
+
+                session.InputBudget--;
 
                 StepOnce(session, in input, dt, applyMove);
                 session.LastProcessedInputTick = tick;
@@ -194,6 +232,11 @@ namespace Ironfront.Net.Replication.Server
                 // taken while rounding a corner had line of sight.
                 observer?.OnAcceptedFrame(session, tick, in frame, in input);
             }
+
+            // Ran out of budget with frames still waiting: the client is sending faster than the
+            // server ticks. They stay in the ring for the next tick rather than being dropped,
+            // so an honest burst is delayed and a flood is metered.
+            if (session.InputBudget == 0 && session.PendingInputCount > 0) session.InputThrottleEvents++;
 
             if (steps > 0) return steps;
 

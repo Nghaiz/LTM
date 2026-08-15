@@ -69,6 +69,24 @@ namespace Ironfront.Net.Replication.Server
         /// <summary>Times the post-move speed clamp fired. High values suggest a speed hack.</summary>
         public int SpeedViolations;
 
+        /// <summary>
+        /// Input frames this session may still have applied. Refilled one per tick, capped at
+        /// <c>InputAuthority.MaxInputBurst</c>. See that constant for what it defends against.
+        /// </summary>
+        /// <remarks>
+        /// Starts full rather than empty. A session that has just connected has been idle for
+        /// longer than any gap the budget is meant to absorb, so metering its very first
+        /// delivery would throttle the one client that has provably sent nothing yet.
+        /// </remarks>
+        public int InputBudget = InputAuthority.MaxInputBurst;
+
+        /// <summary>
+        /// Frames left in the ring because the budget ran out. A sustained non-zero value is a
+        /// client sending faster than the server ticks, which is the speed hack the budget
+        /// meters — the frames are held, not dropped, so an honest burst is only delayed.
+        /// </summary>
+        public int InputThrottleEvents;
+
         /// <summary>Times an abnormal forward tick jump was rejected.</summary>
         public int TickJumpViolations;
 

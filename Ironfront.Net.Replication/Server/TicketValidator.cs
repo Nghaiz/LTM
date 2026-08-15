@@ -69,8 +69,9 @@ namespace Ironfront.Net.Replication.Server
         private readonly Dictionary<uint, long> _claims = new Dictionary<uint, long>();
 
         // Players admitted whose connection has not been reported yet. See
-        // TryTakePendingAdmission.
-        private readonly Queue<uint> _pendingAdmissions = new Queue<uint>();
+        // TryTakePendingAdmission. A List rather than a Queue because the identity-matched
+        // overload has to remove from the middle; index 0 is still the head.
+        private readonly List<uint> _pendingAdmissions = new List<uint>();
 
         /// <param name="sharedSecret">
         /// The HMAC key, shared with the master server. An empty secret makes every ticket
@@ -136,7 +137,7 @@ namespace Ironfront.Net.Replication.Server
                 return Reject(TicketRejection.AlreadyConnected, out reason);
 
             _claims[id] = expiresAtUnixMs;
-            _pendingAdmissions.Enqueue(id);
+            _pendingAdmissions.Add(id);
             playerId    = id;
             reason      = TicketRejection.None;
             Accepted++;
@@ -147,24 +148,47 @@ namespace Ironfront.Net.Replication.Server
         public int PendingAdmissionCount => _pendingAdmissions.Count;
 
         /// <summary>
+        /// Takes the admission belonging to a known player id.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Prefer this over the positional overload.</b> <c>ConnectionInfo.PlayerId</c> now
+        /// carries the identity the transport read out of the signed ticket (checklist B7), so
+        /// a caller holding a <c>ConnectionInfo</c> can pair on the identity itself and never
+        /// has to assume the queue head is the connection being reported.
+        /// </para>
+        /// </remarks>
+        /// <returns>False when this player has no admission outstanding.</returns>
+        public bool TryTakePendingAdmission(uint playerId)
+        {
+            int index = _pendingAdmissions.IndexOf(playerId);
+            if (index < 0) return false;
+
+            _pendingAdmissions.RemoveAt(index);
+            return true;
+        }
+
+        /// <summary>
         /// Takes the oldest admission that has not yet been paired with a connection.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <b>Why positional rather than by id.</b> The transport asks
-        /// <see cref="TryAdmit"/> during the handshake and then raises its connected event, but
-        /// <c>ConnectionInfo</c> carries no player identity, so there is nothing to match on.
+        /// <b>Positional, and therefore the fallback.</b> It exists for a transport that reports
+        /// no player identity on connect — the loopback, which has no ticket to read one out of.
         /// Admission and connection happen in the same <c>Poll</c>, in order, one immediately
-        /// after the other, so the queue head is the connection being reported.
+        /// after the other, so on that transport the head is the connection being reported.
         /// </para>
         /// <para>
-        /// <b>What it costs when that is wrong.</b> A handshake that is admitted and then fails
-        /// before connecting leaves its admission at the head of the queue, and the next
-        /// connection is paired with the wrong player — so that player's claim is not released
-        /// on disconnect and lapses on the ticket's own 60-second expiry instead. The player
-        /// cannot immediately rejoin; nobody is admitted who should not have been. The clean
-        /// fix is for the transport to surface the ticket, or the playerId read from it, on
-        /// <c>ConnectionInfo</c>. Reported to Dev B — checklist item B7.
+        /// <b>What it costs when that assumption breaks.</b> A handshake that is admitted and
+        /// then fails before connecting leaves its admission at the head, and the next
+        /// connection is paired with the wrong player. The consequence is worse than it looks:
+        /// the mis-paired claim is then passed to <see cref="ConfirmConnected"/>, which sets it
+        /// to <see cref="long.MaxValue"/> — so it does <b>not</b> lapse with the ticket, and the
+        /// real owner cannot rejoin until whoever was mis-paired disconnects, or the server
+        /// restarts. Nobody is admitted who should not have been.
+        /// </para>
+        /// <para>
+        /// On the UDP transport, use <see cref="TryTakePendingAdmission(uint)"/> instead.
         /// </para>
         /// </remarks>
         public bool TryTakePendingAdmission(out uint playerId)
@@ -175,7 +199,8 @@ namespace Ironfront.Net.Replication.Server
                 return false;
             }
 
-            playerId = _pendingAdmissions.Dequeue();
+            playerId = _pendingAdmissions[0];
+            _pendingAdmissions.RemoveAt(0);
             return true;
         }
 

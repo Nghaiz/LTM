@@ -81,6 +81,9 @@ namespace Ironfront.Net.Unity.Server
 
         private readonly byte[] _eventPayload = new byte[ProtocolConstants.MAX_PAYLOAD];
 
+        /// <summary>Layers a bullet cannot pass through. Mirrors <c>Projectile.cs</c>'s mask.</summary>
+        private const int BulletBlockingLayers = -2049;
+
         private Action<double> _clockPump;
         private int _ticksOwedThisStep;
         private double _stepStartMs;
@@ -90,6 +93,13 @@ namespace Ironfront.Net.Unity.Server
         public ServerTickLoop()
         {
             _lagCompensator = new LagCompensator(_hitboxHistory);
+
+            // LagCompensator ships with this hook null and a doc saying the Unity server assigns
+            // it at bootstrap. Nobody did, so the `Occlusion != null` guard inside was always
+            // false and every wall, floor and container in the map was transparent to bullets:
+            // a player could aim through solid concrete and score a confirmed hit. ShotsOccluded
+            // stayed at 0, so the metric that would have exposed it read as healthy.
+            _lagCompensator.Occlusion = IsOccluded;
             _fireResolver = new ServerFireResolver(_lagCompensator);
             _damageSink = new ServerActorDamageSink(ServerActorRegistry.Instance);
             _combatAuthority = new ServerCombatAuthority(_fireResolver, _damageSink, _respawnGate);
@@ -624,6 +634,13 @@ namespace Ironfront.Net.Unity.Server
                 return;
             }
 
+            // A slot is reused across the match, and the previous occupant may have left while
+            // dead. Without this the new player inherits that corpse: Health 0, Actor.dead true,
+            // and every shot they take rejected as ShooterDead until they work out that pressing
+            // respawn on a player who never died is what fixes it.
+            actor.Health  = NetServerActor.DefaultSpawnHealth;
+            actor.IsAlive = true;
+
             var player = new ServerPlayer(connectionId, actor.ActorId, _combat) { Actor = actor };
             player.SyncFromActor();
 
@@ -642,6 +659,25 @@ namespace Ironfront.Net.Unity.Server
         {
             if (!_byConnection.TryGetValue(connectionId, out ServerPlayer player)) return;
 
+            // Announce the departure BEFORE the tables are cleared, or the clients that are
+            // still here keep a frozen, fully shootable mannequin standing at the leaver's last
+            // position for the rest of the round. ServerEventWriter.WriteDespawn, the client's
+            // receive path and DespawnReason.Left all existed already; the writer simply had no
+            // caller anywhere in the repo.
+            var despawn = new DespawnActorMessage(player.Session.ActorId, DespawnReason.Left);
+            int written = ServerEventWriter.WriteDespawn(_eventPayload, in despawn);
+
+            if (written > 0)
+            {
+                BroadcastReliable(
+                    new ReadOnlySpan<byte>(_eventPayload, 0, written),
+                    (byte)ServerEventWriter.ReliableChannel);
+            }
+            else
+            {
+                Debug.LogError($"[net] despawn for actor {player.Session.ActorId} did not frame");
+            }
+
             ServerActorRegistry.Instance.ReleaseSlot(player.Actor);
             ForgetActor(player.Session.ActorId);
 
@@ -649,6 +685,28 @@ namespace Ironfront.Net.Unity.Server
             _players.Remove(player);
 
             Debug.Log($"[net] conn {connectionId} left ({reason})");
+        }
+
+        /// <summary>
+        /// True when world geometry stands between the shooter and the point that was hit.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The mask is the one the original game's own bullets use — <c>Projectile.cs</c> raycasts
+        /// with <c>-2049</c>, every layer except 11. Picking a different set here would mean a
+        /// shot that the server rejects and the client's own tracer sails through.
+        /// </para>
+        /// <para>
+        /// Triggers are ignored: a capture-point volume or a water trigger is not cover.
+        /// </para>
+        /// </remarks>
+        private static bool IsOccluded(Vec3 origin, Vec3 point, float distance)
+        {
+            return Physics.Linecast(
+                MovementSimulation.ToUnity(origin),
+                MovementSimulation.ToUnity(point),
+                BulletBlockingLayers,
+                QueryTriggerInteraction.Ignore);
         }
 
         private static double NowMs() => Time.realtimeSinceStartupAsDouble * 1000.0;
