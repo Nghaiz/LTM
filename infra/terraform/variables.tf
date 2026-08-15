@@ -78,6 +78,17 @@ variable "game_udp_ports" {
   default     = [27015, 27016]
 }
 
+variable "acme_http_enabled" {
+  description = <<-EOT
+    Open 80/tcp for ACME HTTP-01. Required when the master's hostname is a wildcard-DNS
+    name (nip.io, sslip.io) whose zone has no TXT records to create, which rules DNS-01
+    out. Leave it on for the life of the deployment so `certbot renew --standalone` needs
+    no operator. Set false if you own the DNS zone and use IRONFRONT_ACME_CHALLENGE=dns-plugin.
+  EOT
+  type        = bool
+  default     = true
+}
+
 variable "os_disk_size_gb" {
   description = "OS disk size. Holds the database, backups, durability CSV, TLS material and container images."
   type        = number

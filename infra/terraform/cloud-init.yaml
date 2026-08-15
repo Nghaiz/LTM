@@ -99,6 +99,7 @@ runcmd:
     ufw default deny incoming
     ufw default allow outgoing
     ufw allow 22/tcp
+    ${acme_http_ufw_rule}
     ufw allow ${master_port}/tcp
     for p in ${udp_ports}; do ufw allow $p/udp; done
     ufw --force enable

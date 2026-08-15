@@ -87,6 +87,27 @@ resource "azurerm_network_security_group" "main" {
     destination_address_prefix = "*"
   }
 
+  # ACME HTTP-01, public. Nothing listens on 80 except certbot --standalone, and only for
+  # the seconds it takes to answer a challenge. The rule exists because the alternative is
+  # worse: DNS-01 needs a TXT record, and the deployment's hostname is a wildcard-DNS name
+  # (nip.io) whose zone nobody here can edit. With 80 permanently reachable,
+  # `certbot renew` is unattended; with it opened by hand per issuance, a renewal that
+  # nobody remembers is a certificate that expires mid-demo.
+  dynamic "security_rule" {
+    for_each = var.acme_http_enabled ? [1] : []
+    content {
+      name                       = "allow-acme-http"
+      priority                   = 130
+      direction                  = "Inbound"
+      access                     = "Allow"
+      protocol                   = "Tcp"
+      source_port_range          = "*"
+      destination_port_range     = "80"
+      source_address_prefix      = "Internet"
+      destination_address_prefix = "*"
+    }
+  }
+
   # There is deliberately NO rule for 27001 (metrics). It is unauthenticated and binds to
   # the host loopback only; operators reach it over SSH. Azure's default inbound-deny rule
   # keeps it — and everything else — closed.
@@ -169,6 +190,10 @@ resource "azurerm_linux_virtual_machine" "main" {
     udp_ports      = join(" ", [for p in var.game_udp_ports : tostring(p)])
     repo_clone_url = var.repo_clone_url
     dns_hostname   = var.dns_hostname
+    # A whole line, not a flag, so the rendered script has no dead `if` in it when ACME
+    # HTTP-01 is off. ufw and the NSG have to agree — opening one without the other is the
+    # failure that reads as "certbot just hangs".
+    acme_http_ufw_rule = var.acme_http_enabled ? "ufw allow 80/tcp" : "# 80/tcp closed (acme_http_enabled = false)"
   }))
 }
 

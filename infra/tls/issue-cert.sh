@@ -10,8 +10,15 @@
 # factored into renew-hook.sh and registered as certbot's --deploy-hook, so renewals do the
 # same thing unattended.
 #
-# WHY DNS-01 BY DEFAULT: the NSG opens 27000/tcp and the game UDP ports and NOTHING else —
-# port 80 is closed. HTTP-01 would need 80 opened; DNS-01 needs no inbound port at all.
+# WHY DNS-01 BY DEFAULT: DNS-01 needs no inbound port at all, so it is the right default for
+# a deployment whose only public ports are 27000/tcp and the game UDP range.
+#
+# BUT IT NEEDS A ZONE YOU CAN EDIT. A wildcard-DNS hostname (nip.io, sslip.io) has no TXT
+# record you can create, so DNS-01 is impossible there and HTTP-01 is the only route. That is
+# what Terraform's `acme_http_enabled` (default true) opens 80/tcp for, in both the NSG and
+# ufw. On such a deployment set IRONFRONT_ACME_CHALLENGE=http. Leaving 80 open permanently is
+# deliberate: it is what makes `certbot renew` unattended, and a renewal nobody remembers is
+# a certificate that expires mid-demo. Nothing listens on 80 between challenges.
 #
 # NO SECRET IS BAKED IN. The PFX password is read from the deployment .env (or the env) and
 # never appears in this file, in git, or in Terraform.
@@ -78,9 +85,10 @@ dns-plugin)
         --deploy-hook "$HOOK"
     ;;
 http)
-    # Only if you have DELIBERATELY opened 80/tcp (an NSG inbound rule AND `ufw allow
-    # 80/tcp`). Remove that rule again afterwards — the app does not use 80.
-    echo "[issue-cert] HTTP-01 needs 80/tcp reachable — ensure the NSG and ufw allow it now" >&2
+    # Needs 80/tcp reachable from the Internet: an NSG inbound rule AND `ufw allow 80/tcp`.
+    # Terraform's acme_http_enabled (default true) creates both. Keep them — `certbot renew`
+    # re-runs this same challenge unattended every 60 days and cannot open a port for itself.
+    echo "[issue-cert] HTTP-01 needs 80/tcp reachable — NSG and ufw must both allow it" >&2
     certbot certonly --standalone --preferred-challenges http \
         -d "$DOMAIN" --agree-tos "${email_args[@]}" \
         --deploy-hook "$HOOK"
