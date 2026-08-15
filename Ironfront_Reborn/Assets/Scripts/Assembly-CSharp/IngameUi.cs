@@ -64,6 +64,12 @@ public class IngameUi : MonoBehaviour
 
 	public static void Hit()
 	{
+		// Reached from every projectile, melee and explosion impact, so it runs on a dedicated
+		// server for every bot-versus-bot hit. There is no HUD there to mark.
+		if (instance == null)
+		{
+			return;
+		}
 		if (OptionsUi.GetOptions().hitmarkers)
 		{
 			instance.ShowHitmarker();

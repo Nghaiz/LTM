@@ -97,6 +97,13 @@ public class MinimapUi : MonoBehaviour
 
 	public static SpawnPoint SelectedSpawnPoint()
 	{
+		// Only the player picks a spawn point from a minimap. Bots use
+		// ActorManager.RandomFrontlineSpawnPointForTeam through their own controller, and
+		// AiActorController.SelectedSpawnPoint never comes here.
+		if (instance == null || FpsActorController.instance == null)
+		{
+			return null;
+		}
 		if (LoadoutUi.IsOpen())
 		{
 			return null;
@@ -114,6 +121,11 @@ public class MinimapUi : MonoBehaviour
 
 	public static void UpdateSpawnPointButtons()
 	{
+		// Reached from CapturePoint whenever a flag changes hands, which happens on a server.
+		if (instance == null)
+		{
+			return;
+		}
 		int num = 0;
 		foreach (SpawnPoint key in instance.minimapSpawnPointButton.Keys)
 		{
@@ -141,16 +153,30 @@ public class MinimapUi : MonoBehaviour
 
 	public static void PinToLoadoutScreen()
 	{
+		if (instance == null)
+		{
+			return;
+		}
 		instance.minimap.rectTransform.SetParent(instance.loadoutParent, false);
 	}
 
 	public static void PinToIngameScreen()
 	{
+		if (instance == null)
+		{
+			return;
+		}
 		instance.minimap.rectTransform.SetParent(instance.ingameParent, false);
 	}
 
 	public static void AddActorBlip(Actor actor)
 	{
+		// On the registration path of every actor (ActorManager.Register), so this is the first
+		// UI call a headless server makes -- once per bot, before anything has moved.
+		if (instance == null)
+		{
+			return;
+		}
 		ActorBlip component = ((GameObject)Object.Instantiate(instance.actorBlipPrefab, instance.minimap.rectTransform)).GetComponent<ActorBlip>();
 		component.SetActor(actor, !actor.aiControlled);
 	}

@@ -137,6 +137,13 @@ public class DecalManager : MonoBehaviour
 
 	public static void AddDecal(Vector3 point, Vector3 normal, float size, DecalType type)
 	{
+		// Every bullet and grenade impact reaches here, so it runs constantly on a headless
+		// server. Returning first also skips the four raycasts in CanSpawnDecal, which are
+		// pure cost when nothing will be drawn.
+		if (instance == null)
+		{
+			return;
+		}
 		Vector3 vector = Vector3.Cross(normal, UnityEngine.Random.insideUnitSphere).normalized * (size / 2f);
 		Vector3 vector2 = Vector3.Cross(normal, vector);
 		point += normal * 0.03f;
@@ -187,6 +194,12 @@ public class DecalManager : MonoBehaviour
 
 	public static void CreateBloodDrop(Vector3 point, Vector3 baseVelocity, int team)
 	{
+		// Actor.Damage calls this ceil(damage / 10) times per hit, so on a server it is the
+		// highest-frequency UI touch in the game.
+		if (instance == null)
+		{
+			return;
+		}
 		Color color = ColorScheme.TeamColor(team);
 		BloodParticle component = ((GameObject)UnityEngine.Object.Instantiate(instance.bloodDropPrefab, point, Quaternion.identity)).GetComponent<BloodParticle>();
 		component.transform.localScale.Scale(Vector3.one * UnityEngine.Random.Range(2f, 3f));

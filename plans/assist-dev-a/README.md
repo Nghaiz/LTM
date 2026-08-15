@@ -17,7 +17,7 @@ Audited 2026-08-15 against the repository, not against the plan text.
 | **00**·2 A* headless + graph bake | ? unverifiable | Needs the Editor to check |
 | **00**·3 `IInputSource` | ✓ done | `Assets/Scripts/Net/Input/`, by [step 02](step-02-input-source.md). Dev A's 5-minute playtest still outstanding |
 | **00**·4 `NetContext` | ✓ done | `Assets/Scripts/Net/Shared/NetContext.cs` |
-| **00**·5 Guard 21 singletons | ✗ absent | `Assembly-CSharp/` contains **0** references to `NetContext` |
+| **00**·5 Guard 21 singletons | ✓ done | Guarded by [step 03](step-03-singleton-guards.md) via `Net/Headless/LocalClient.cs`. Dev A's 10-minute headless run still outstanding |
 | **00**·6 Stub B/C/D interfaces | ✗ / moot | The real libraries exist and are referenced; stubs are no longer the point |
 | **00**·7 Build profiles | partial | `tools/build-server.ps1` exists, written by Dev D |
 | **01**·1–4 Remote actors, interpolation, bootstrap, input send | ✓ done, different shape | See § 2 |
