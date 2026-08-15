@@ -1167,11 +1167,24 @@ public class Actor : Hurtable
 		{
 			return false;
 		}
+		// Reached from Update, for every bot, on the very first frame -- so on a headless
+		// server this throws before any of the 21 singletons on the phase-00 task-5 list get
+		// the chance to. Camera.main is not on that list at all.
+		//
+		// False, not true: low quality means "skip work because nobody can see this actor",
+		// and with no camera there is no distance test that could justify the skip. Phase-00
+		// criterion 3 wants bots spawning and moving on headless, and this is the code path
+		// that decides whether they update at 5 Hz or every frame.
+		Camera camera = Camera.main;
+		if (camera == null)
+		{
+			return false;
+		}
 		if (fallenOver)
 		{
-			return !skinnedRendererRagdoll.isVisible || Vector3.Distance(base.transform.position, Camera.main.transform.position) > 12000f / Camera.main.fieldOfView;
+			return !skinnedRendererRagdoll.isVisible || Vector3.Distance(base.transform.position, camera.transform.position) > 12000f / camera.fieldOfView;
 		}
-		return !skinnedRenderer.isVisible || Vector3.Distance(base.transform.position, Camera.main.transform.position) > 12000f / Camera.main.fieldOfView;
+		return !skinnedRenderer.isVisible || Vector3.Distance(base.transform.position, camera.transform.position) > 12000f / camera.fieldOfView;
 	}
 
 	public virtual TargetType GetTargetType()

@@ -13,6 +13,10 @@ public class IngameMenuUi : MonoBehaviour
 
 	public static void Show()
 	{
+		if (instance == null)
+		{
+			return;
+		}
 		instance.canvas.enabled = true;
 		MouseLook.paused = true;
 		Cursor.lockState = CursorLockMode.None;
@@ -23,6 +27,10 @@ public class IngameMenuUi : MonoBehaviour
 
 	public static void Hide()
 	{
+		if (instance == null)
+		{
+			return;
+		}
 		instance.canvas.enabled = false;
 		MouseLook.paused = false;
 		Time.timeScale = 1f;
@@ -32,9 +40,13 @@ public class IngameMenuUi : MonoBehaviour
 		Cursor.visible = false;
 	}
 
+	/// <summary>
+	/// Whether the pause menu is showing. False where there is no menu — a server is never
+	/// paused, and <c>Actor.UpdateMovement</c> asks this for every actor on every frame.
+	/// </summary>
 	public static bool IsOpen()
 	{
-		return instance.canvas.enabled;
+		return instance != null && instance.canvas.enabled;
 	}
 
 	private void Awake()
