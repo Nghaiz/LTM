@@ -68,6 +68,35 @@ namespace Ironfront.Net.Replication.Client
         /// <summary>An actor left it, or died out of view.</summary>
         public event Action<DespawnActorMessage>? OnDespawnActor;
 
+        /// <summary>
+        /// A shot this client fired connected. Drives the hitmarker and its audio.
+        /// </summary>
+        /// <remarks>
+        /// Only ever sent to the shooter — see <c>ServerEventWriter.WriteHitConfirm</c>, which
+        /// explains why broadcasting it would be a wallhack served by the server. The damage it
+        /// carries is for feedback only; the authoritative health is in the next snapshot.
+        /// </remarks>
+        public event Action<HitConfirmMessage>? OnHitConfirm;
+
+        /// <summary>
+        /// Someone died. Drives the local ragdoll, the death audio and the killfeed.
+        /// </summary>
+        /// <remarks>
+        /// Broadcast, because the killfeed is global. Corpses are never synchronized (AD-4) —
+        /// the force vector is here so each client's ragdoll flies roughly the right way
+        /// without a byte of ongoing replication.
+        /// </remarks>
+        public event Action<DeathMessage>? OnDeath;
+
+        /// <summary>
+        /// Another actor fired. Drives muzzle flashes, tracers and 3D audio.
+        /// </summary>
+        /// <remarks>
+        /// Unreliable-sequenced on channel 1 and lossy on purpose, so a handler must be
+        /// tolerant of gaps: it is a cue to play an effect, never a fact to accumulate.
+        /// </remarks>
+        public event Action<WeaponFireMessage>? OnWeaponFire;
+
         /// <summary>Match phase, timer or score changed.</summary>
         public event Action<MatchStateMessage>? OnMatchState;
 
@@ -129,6 +158,33 @@ namespace Ironfront.Net.Replication.Client
                         if (DespawnActorMessage.TryParse(body, out DespawnActorMessage despawn))
                         {
                             OnDespawnActor?.Invoke(despawn);
+                            handled++;
+                        }
+                        else MalformedMessages++;
+                        break;
+
+                    case ServerMessageType.HitConfirm:
+                        if (HitConfirmMessage.TryParse(body, out HitConfirmMessage hit))
+                        {
+                            OnHitConfirm?.Invoke(hit);
+                            handled++;
+                        }
+                        else MalformedMessages++;
+                        break;
+
+                    case ServerMessageType.Death:
+                        if (DeathMessage.TryParse(body, out DeathMessage death))
+                        {
+                            OnDeath?.Invoke(death);
+                            handled++;
+                        }
+                        else MalformedMessages++;
+                        break;
+
+                    case ServerMessageType.WeaponFire:
+                        if (WeaponFireMessage.TryParse(body, out WeaponFireMessage weaponFire))
+                        {
+                            OnWeaponFire?.Invoke(weaponFire);
                             handled++;
                         }
                         else MalformedMessages++;
