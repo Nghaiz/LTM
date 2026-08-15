@@ -7,6 +7,21 @@
 
 ---
 
+> **Update — 2026-08-15 · deployment mechanism superseded (objectives unchanged).** The
+> VPS + systemd + `scp` mechanism written below — Task 1's `ironfront-master.service`, the raw
+> `ufw`/`certbot` steps, the acceptance rows that verify with `systemctl status` — was the
+> original Phase 03 design. The M3 implementation moved to a **Terraform-provisioned Azure VM
+> running Docker Compose**, pulling immutable images from GHCR; the application no longer runs
+> under systemd units (only the host backup/alert timers do). The **objectives, the security
+> requirements, the TLS contract and every acceptance criterion still stand** — only *how* the
+> processes are placed on the box changed, and "the VPS" now reads "the Azure VM". For the
+> current mechanism see [`infra/terraform/README.md`](../../../infra/terraform/README.md),
+> [`infra/compose/README.md`](../../../infra/compose/README.md),
+> [`docs/operations.md`](../../../docs/operations.md) and
+> [`docs/infrastructure-handover.md`](../../../docs/infrastructure-handover.md). No
+> `terraform apply` has been run yet, so the real-network criteria (1, 5, 9) remain open exactly
+> as the phase report records. The brief below is kept verbatim as the original phase plan.
+
 ## 1. Objectives
 
 | # | Objective |

@@ -8,6 +8,22 @@
 
 ---
 
+> **Addendum — 2026-08-15 · the deployment mechanism has since changed; the evidence has not.**
+> This report was written against the original Phase 03 plan of a manually-provisioned **VPS**
+> with systemd units and `scp`. After it was filed, the M3 deployment was re-implemented as a
+> **Terraform-provisioned Azure VM running Docker Compose** with immutable GHCR images — see
+> [`infra/`](../../../infra/) and the rewritten [`docs/operations.md`](../../../docs/operations.md)
+> and [`docs/infrastructure-handover.md`](../../../docs/infrastructure-handover.md). **Nothing
+> measured below changes:** the LAN numbers in § 6, the test counts in § 4 and the
+> acceptance-criteria verdicts in § 2 were true on 2026-08-14 and remain so — every "VPS" now
+> reads "Azure VM", but the figures were taken on loopback and are independent of the target.
+> Criteria 1, 5, 9 and the VPS/Internet column of § 6 are **still open**: no `terraform apply`
+> has been run and no images have been published, so no real-network M3 evidence exists yet.
+> The blocker in § 9 is unchanged in substance — it is now "an Azure subscription and one
+> `terraform apply`", not "a rented VPS".
+
+---
+
 ## 1. One-paragraph summary
 
 TLS, the metrics endpoint, structured logging, the durability sampler, the online backup and
