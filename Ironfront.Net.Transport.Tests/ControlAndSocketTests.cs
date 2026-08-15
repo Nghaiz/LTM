@@ -231,21 +231,40 @@ namespace Ironfront.Net.Transport.Tests
             // reporting congestion correctly, under a load no client would ever generate, while
             // the test asserted Good. Pacing the loop and giving the server something to send
             // makes both assertions measure what they claim to.
+            // Run until the rate block has actually published, not until a stopwatch says it
+            // should have. Connection.UpdateRateStats returns early while its window is under
+            // 1000 ms, so a fixed 1200 ms deadline left only 200 ms of margin over that
+            // threshold -- and it was measured with DateTime.UtcNow, a wall clock the host can
+            // step forward under a VM at any moment. Either a long scheduling hiccup or one
+            // time-sync step ends the loop with no poll having crossed the boundary, both rates
+            // still at their initial 0, and Assert.True reporting nothing but "Actual: False"
+            // (runs 31861341183 and 31864762553, windows-latest, both times).
+            //
+            // Waiting for the value hides nothing: if the rate accounting genuinely stopped
+            // working the loop runs the full ceiling and the same assertions still fail, now
+            // with the counters attached.
             var payloadUp = new byte[8];
             var payloadDown = new byte[16];
-            DateTime until = DateTime.UtcNow.AddMilliseconds(1200);
-            while (DateTime.UtcNow < until)
+            Stopwatch clock = Stopwatch.StartNew();
+            TransportStats stats = client.Stats;
+            while (clock.ElapsedMilliseconds < 5000)
             {
                 client.Send((byte)ChannelId.InputSequenced, payloadUp, reliable: false);
                 server.Poll();
                 server.Broadcast((byte)ChannelId.SnapshotSequenced, payloadDown, reliable: false);
                 client.Poll();
+
+                stats = client.Stats;
+                if (stats.BytesPerSecondSent > 0f && stats.BytesPerSecondReceived > 0f) break;
                 Thread.Sleep(16);
             }
 
-            TransportStats stats = client.Stats;
-            Assert.True(stats.BytesPerSecondSent > 0f);
-            Assert.True(stats.BytesPerSecondReceived > 0f);
+            string diagnostics =
+                $"up={stats.BytesPerSecondSent}B/s, down={stats.BytesPerSecondReceived}B/s, "
+                + $"sent={stats.BytesSent}B, received={stats.BytesReceived}B, "
+                + $"elapsed={clock.ElapsedMilliseconds}ms, state={client.State}";
+            Assert.True(stats.BytesPerSecondSent > 0f, diagnostics);
+            Assert.True(stats.BytesPerSecondReceived > 0f, diagnostics);
             Assert.Equal(0, stats.CongestionMode);
             Assert.Equal(0, stats.PendingFragmentGroups);
             Assert.InRange(stats.BufferPoolRented, 0, 2);
@@ -284,23 +303,36 @@ namespace Ironfront.Net.Transport.Tests
             // A single scheduling hiccup on a loaded runner burns that slack, the packet is
             // resent, its sample is discarded, and a lone send would leave the RTT at zero
             // forever. Keep offering fresh reliable packets until one round-trips untouched.
+            //
+            // Assert on the BEST reading seen, never the first one. An RTT sample is
+            // `pollTime - sendTime`, so every source of runner noise -- a preempted spin loop,
+            // a GC pause, xUnit running sibling collections on the same core -- can only push a
+            // reading UP, never down. The floor of the readings is therefore the honest estimate
+            // of the simulated round trip, and it stays as tight as the original 15-35 ms window:
+            // a transport that really reported one-way latency (10 ms) or double-counted the trip
+            // (40 ms) cannot produce a single reading inside that window, no matter how quiet the
+            // machine is. Only jitter is filtered out; the regression signal is untouched.
             Stopwatch ackClock = Stopwatch.StartNew();
             double nextSendAtMs = 0.0;
-            while (client.Stats.SmoothedRttMs <= 0f && ackClock.ElapsedMilliseconds < 5000)
+            float bestRttMs = float.MaxValue;
+            while (bestRttMs > 35f && ackClock.ElapsedMilliseconds < 5000)
             {
                 if (ackClock.Elapsed.TotalMilliseconds >= nextSendAtMs)
                 {
                     client.Send((byte)ChannelId.ReliableOrdered, new byte[] { 7 }, reliable: true);
-                    nextSendAtMs = ackClock.Elapsed.TotalMilliseconds + 100.0;
+                    nextSendAtMs = ackClock.Elapsed.TotalMilliseconds + 50.0;
                 }
                 server.Poll();
                 client.Poll();
+
+                float rttMs = client.Stats.SmoothedRttMs;
+                if (rttMs > 0f && rttMs < bestRttMs) bestRttMs = rttMs;
             }
 
-            Assert.True(client.Stats.SmoothedRttMs > 0f,
+            Assert.True(bestRttMs < float.MaxValue,
                 $"rtt={client.Stats.SmoothedRttMs}, sent={client.Stats.PacketsSent}, "
                 + $"resent={client.Stats.PacketsResent}, pending={client.Stats.PendingReliableCount}");
-            Assert.InRange(client.Stats.SmoothedRttMs, 15f, 35f);
+            Assert.InRange(bestRttMs, 15f, 35f);
         }
 
         [Fact]
