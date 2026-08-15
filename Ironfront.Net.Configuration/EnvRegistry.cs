@@ -44,8 +44,18 @@ namespace Ironfront.Net.Configuration
             "production, and a shared key that reached a git history is not a key any more. The\n" +
             "master server refuses to start without it; the game server stays standalone.\n" +
             "\n" +
-            "Generate one with:\n" +
-            "  [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Max 256 }))",
+            "Do not fill this in by hand. Run:\n" +
+            "  pwsh tools/new-env.ps1\n" +
+            "\n" +
+            "It writes a .env from this template with a key from RandomNumberGenerator. The\n" +
+            "instruction here used to be a Get-Random one-liner, which is a clock-seeded PRNG:\n" +
+            "adequate for choosing a test case and not for a key whose predictability means\n" +
+            "forgeable joinTickets.\n" +
+            "\n" +
+            "You need the SAME key as somebody else only when you share a master server. Running\n" +
+            "your own master and game server means any key will do — generate your own and send\n" +
+            "it nowhere. If you do have to pass one on, it goes out of band: never a commit, a\n" +
+            "PR, an issue or a screenshot.",
             secret: true,
             summary: "REQUIRED, >= 32 chars, signs joinTickets");
 

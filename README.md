@@ -84,6 +84,34 @@ dotnet build Ironfront.sln -c Release
 dotnet test  Ironfront.sln -c Release
 ```
 
+### One-time: create your `.env`
+
+Building and testing need nothing. **Running** the master server does: it refuses to start
+without `IRONFRONT_SHARED_SECRET`, which signs the joinTickets the game server verifies.
+
+```powershell
+pwsh tools/new-env.ps1
+```
+
+That writes `.env` from the committed `.env.example` with a freshly generated key. `.env` is
+gitignored and stays that way — a key in a git history is not a key — so **every clone does
+this once**, and the file never travels with the repository.
+
+The two processes must agree on the key, not the two people. Running your own master and game
+server means any key will do; generate your own and send it nowhere. Only if you connect to a
+master **somebody else** is running do you need theirs, and it goes out of band — a password
+manager or a direct message, never a commit, a PR, an issue or a screenshot:
+
+```powershell
+pwsh tools/new-env.ps1 -Secret '<the key they sent you>'
+```
+
+Everything else in `.env.example` is already the default, so copying it changes no behaviour.
+A blank value there is usually not a gap to fill — it means standalone, plaintext, disabled,
+or inherited from the scene. The comment on each variable says which. The full list, with
+what reads it, is generated from `Ironfront.Net.Configuration/EnvRegistry.cs`; see
+[operations.md § 10](docs/operations.md).
+
 Before every push, run the local mirror of CI — same four checks, under five minutes:
 
 ```powershell
@@ -92,6 +120,7 @@ pwsh tools/ci.ps1
 
 | Command | What it does |
 |---|---|
+| `pwsh tools/new-env.ps1` | create the gitignored `.env` this checkout needs, with a fresh key |
 | `pwsh tools/ci.ps1` | build + test + spec drift check + advisory format/commit-scope check |
 | `pwsh tools/ci.ps1 -Integration` | the above, plus the 2-process integration test |
 | `pwsh tools/build-libs.ps1` | build the libraries and copy the DLLs into `Assets/Plugins` for Unity |
