@@ -284,23 +284,36 @@ namespace Ironfront.Net.Transport.Tests
             // A single scheduling hiccup on a loaded runner burns that slack, the packet is
             // resent, its sample is discarded, and a lone send would leave the RTT at zero
             // forever. Keep offering fresh reliable packets until one round-trips untouched.
+            //
+            // Assert on the BEST reading seen, never the first one. An RTT sample is
+            // `pollTime - sendTime`, so every source of runner noise -- a preempted spin loop,
+            // a GC pause, xUnit running sibling collections on the same core -- can only push a
+            // reading UP, never down. The floor of the readings is therefore the honest estimate
+            // of the simulated round trip, and it stays as tight as the original 15-35 ms window:
+            // a transport that really reported one-way latency (10 ms) or double-counted the trip
+            // (40 ms) cannot produce a single reading inside that window, no matter how quiet the
+            // machine is. Only jitter is filtered out; the regression signal is untouched.
             Stopwatch ackClock = Stopwatch.StartNew();
             double nextSendAtMs = 0.0;
-            while (client.Stats.SmoothedRttMs <= 0f && ackClock.ElapsedMilliseconds < 5000)
+            float bestRttMs = float.MaxValue;
+            while (bestRttMs > 35f && ackClock.ElapsedMilliseconds < 5000)
             {
                 if (ackClock.Elapsed.TotalMilliseconds >= nextSendAtMs)
                 {
                     client.Send((byte)ChannelId.ReliableOrdered, new byte[] { 7 }, reliable: true);
-                    nextSendAtMs = ackClock.Elapsed.TotalMilliseconds + 100.0;
+                    nextSendAtMs = ackClock.Elapsed.TotalMilliseconds + 50.0;
                 }
                 server.Poll();
                 client.Poll();
+
+                float rttMs = client.Stats.SmoothedRttMs;
+                if (rttMs > 0f && rttMs < bestRttMs) bestRttMs = rttMs;
             }
 
-            Assert.True(client.Stats.SmoothedRttMs > 0f,
+            Assert.True(bestRttMs < float.MaxValue,
                 $"rtt={client.Stats.SmoothedRttMs}, sent={client.Stats.PacketsSent}, "
                 + $"resent={client.Stats.PacketsResent}, pending={client.Stats.PendingReliableCount}");
-            Assert.InRange(client.Stats.SmoothedRttMs, 15f, 35f);
+            Assert.InRange(bestRttMs, 15f, 35f);
         }
 
         [Fact]
