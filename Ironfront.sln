@@ -35,6 +35,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ironfront.Net.MasterLink", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ironfront.Tools.MspBench", "Ironfront.Tools.MspBench\Ironfront.Tools.MspBench.csproj", "{AD046AE5-A645-46FD-BFA0-B4337038E901}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ironfront.Net.Configuration", "Ironfront.Net.Configuration\Ironfront.Net.Configuration.csproj", "{1CE0AB0D-7E7B-4DD7-BF9E-1744C0B10691}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ironfront.Net.Configuration.Tests", "Ironfront.Net.Configuration.Tests\Ironfront.Net.Configuration.Tests.csproj", "{F1034844-5021-4F0D-B7A4-B94B700101F8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -104,6 +108,14 @@ Global
 		{AD046AE5-A645-46FD-BFA0-B4337038E901}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AD046AE5-A645-46FD-BFA0-B4337038E901}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AD046AE5-A645-46FD-BFA0-B4337038E901}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1CE0AB0D-7E7B-4DD7-BF9E-1744C0B10691}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1CE0AB0D-7E7B-4DD7-BF9E-1744C0B10691}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1CE0AB0D-7E7B-4DD7-BF9E-1744C0B10691}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1CE0AB0D-7E7B-4DD7-BF9E-1744C0B10691}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F1034844-5021-4F0D-B7A4-B94B700101F8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F1034844-5021-4F0D-B7A4-B94B700101F8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F1034844-5021-4F0D-B7A4-B94B700101F8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F1034844-5021-4F0D-B7A4-B94B700101F8}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{AE7B02F1-9E5D-4909-A41F-783E7D15A48D} = {F7309333-0ADC-4CFA-9FCF-9097CA15D087}

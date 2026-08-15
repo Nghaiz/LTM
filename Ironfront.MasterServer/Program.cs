@@ -11,6 +11,7 @@ using Ironfront.MasterServer.GameServers;
 using Ironfront.MasterServer.Lobby;
 using Ironfront.MasterServer.Net;
 using Ironfront.MasterServer.Security;
+using Ironfront.Net.Configuration;
 using Ironfront.Net.Protocol;
 
 namespace Ironfront.MasterServer
@@ -27,9 +28,11 @@ namespace Ironfront.MasterServer
     /// exit code — the server refuses to start rather than booting with a forgeable key.
     /// </para>
     /// <para>
-    /// <see cref="DotEnv.LoadDefault"/> runs first so a local <c>.env</c> populates the
+    /// <see cref="DotEnv.LoadFromAncestors"/> runs first so a local <c>.env</c> populates the
     /// environment for development, but a real environment variable always wins over the file
     /// (see <see cref="DotEnv"/>), which is the direction the phase-03 systemd unit needs.
+    /// Ancestors rather than the working directory: <c>dotnet run</c> starts in the project
+    /// folder and the single <c>.env</c> lives at the repository root.
     /// </para>
     /// <para>
     /// <b>Phase 03 adds three background jobs</b> beside the listener: the metrics endpoint,
@@ -43,7 +46,7 @@ namespace Ironfront.MasterServer
     {
         public static async Task<int> Main(string[] args)
         {
-            DotEnv.LoadDefault();
+            int loaded = DotEnv.LoadFromAncestors(null, out string envPath);
 
             if (args.Length > 0 && IsHelp(args[0]))
             {
@@ -71,6 +74,14 @@ namespace Ironfront.MasterServer
             StructuredLog.Redact(config.SharedSecret);
             StructuredLog.Redact(config.TlsCertificatePassword);
             StructuredLog.Enabled = config.StructuredLog;
+
+            // Printed after redaction is registered, and only at Debug: it is the answer to
+            // "the value I set is not taking effect", which was previously unanswerable
+            // without attaching a debugger. A stale .env in the working directory, a unit-file
+            // variable the process does not read, and a systemd override nobody remembers all
+            // look identical from outside and all become obvious here.
+            if (loaded > 0) MasterLog.Debug($"loaded {loaded} variable(s) from {envPath}");
+            MasterLog.Debug("effective configuration:\n" + EnvDump.Render());
 
             if (args.Length > 0)
                 return await RunCommandAsync(args, config).ConfigureAwait(false);

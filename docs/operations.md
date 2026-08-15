@@ -284,7 +284,50 @@ sudo systemctl start ironfront-master
 
 ---
 
-## 10. Related
+## 10. Configuration
+
+Every setting is an `IRONFRONT_*` environment variable, read from `/opt/ironfront/.env` or
+from the unit file. A real environment variable always beats the file, which is the
+direction a systemd override needs.
+
+`.env.example` is the complete list and is **generated** from
+`Ironfront.Net.Configuration/EnvRegistry.cs` — a test fails when the two disagree, so a
+variable cannot be documented without being read or read without being documented. Add one
+there and regenerate:
+
+```bash
+IRONFRONT_WRITE_ENV_EXAMPLE=1 dotnet test Ironfront.Net.Configuration.Tests
+```
+
+To see what a running master actually resolved, set `IRONFRONT_LOG_LEVEL=Debug` and read the
+`effective configuration` block it prints at startup. Secrets are redacted there. That block
+is the fastest answer to "the value I set is not taking effect", which usually turns out to
+be a stale `.env` in a working directory or a variable the process never reads.
+
+### The game server's knobs
+
+The headless build used to take its port, slot count, transport and master address from the
+scene asset, so a second instance on one host meant editing the scene and rebuilding. It now
+reads them from the environment, with the scene's values as the defaults:
+
+| Variable | Default | Notes |
+|---|---|---|
+| `IRONFRONT_GAMESERVER_UDP_PORT` | `27015` | Bound **and** advertised — one number, not two |
+| `IRONFRONT_GAMESERVER_TRANSPORT` | `udp` | `loopback` is a single-Editor test and accepts nobody |
+| `IRONFRONT_GAMESERVER_MAX_CONNECTIONS` | `16` | Rejected if below the player count |
+| `IRONFRONT_GAMESERVER_MAX_PLAYERS` | `16` | What the matchmaker fills |
+| `IRONFRONT_GAMESERVER_PUBLIC_IP` | inferred | Set it behind NAT: the master otherwise advertises the gateway |
+| `IRONFRONT_GAMESERVER_MAP_IDS` | none | Comma-separated; drives the preferred-map filter |
+| `IRONFRONT_GAMESERVER_ACCEPT_UNSIGNED_TICKETS` | `1` | **Set to 0 on anything public** |
+| `IRONFRONT_MASTER_HOST` | empty | Empty means standalone: matches play, nobody is matched in |
+
+A malformed value makes the game server refuse to start and say which variable was wrong,
+rather than falling back to the scene's default. The fallback would be worse: a server told
+to bind `2705` and quietly binding `27015` keeps receiving players who cannot reach it.
+
+---
+
+## 11. Related
 
 - [`infrastructure-handover.md`](infrastructure-handover.md) — who holds what, and how to
   take over

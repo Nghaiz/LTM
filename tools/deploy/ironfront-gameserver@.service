@@ -28,14 +28,34 @@ WorkingDirectory=/opt/ironfront/gameserver
 # The same shared secret as the master: joinTickets are HMAC-signed by the master and
 # verified here, and a mismatch denies every CONNECT_REQUEST with reason 3.
 EnvironmentFile=/opt/ironfront/.env
+
+# Until Ironfront.Net.Configuration landed, NEITHER of this unit's two ways of setting the
+# port did anything: no code read IRONFRONT_GAMESERVER_UDP_PORT, and no code parsed the
+# -port argument on the ExecStart line below. Both instances bound whatever the scene asset
+# said, which is 27015 for both — so the second one failed to bind and the file looked
+# correct while doing it. The variable is live now and -port is gone rather than left in
+# place to be trusted again.
 Environment=IRONFRONT_GAMESERVER_UDP_PORT=2701%i
+
+# The scene ships with the loopback transport on, because that is what a single-Editor test
+# wants. A headless instance left on it starts cleanly, logs nothing unusual and accepts
+# nobody — so a deployment states the transport rather than inheriting it.
+Environment=IRONFRONT_GAMESERVER_TRANSPORT=udp
+
+# Likewise the development shortcut: with unsigned tickets accepted, anyone can join as
+# anyone. Off here, which makes a missing IRONFRONT_SHARED_SECRET a server that refuses
+# every connection rather than one that admits every connection.
+Environment=IRONFRONT_GAMESERVER_ACCEPT_UNSIGNED_TICKETS=0
+
+# The master runs on the same box (After= above). Empty would mean standalone: matches play
+# to completion but the server is never advertised, so nobody is matched into it.
+Environment=IRONFRONT_MASTER_HOST=127.0.0.1
 
 # -batchmode -nographics is what makes a Unity build runnable on a headless VPS at all;
 # without them it tries to initialise a graphics device and exits.
 ExecStart=/opt/ironfront/gameserver/Ironfront.Server.x86_64 \
     -batchmode -nographics \
-    -logFile /var/log/ironfront/gameserver-%i.log \
-    -port 2701%i
+    -logFile /var/log/ironfront/gameserver-%i.log
 
 Restart=always
 RestartSec=5

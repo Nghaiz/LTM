@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Ironfront.MasterClient;
+using Ironfront.Net.Configuration;
 using Ironfront.Net.MasterLink;
 using Ironfront.Net.Replication.Server;
 using UnityEngine;
@@ -52,10 +53,11 @@ namespace Ironfront.Net.Unity.Server
     public sealed class MasterLinkBootstrap : MonoBehaviour
     {
         [Header("Master")]
-        [Tooltip("Leave empty for standalone mode: no connection, no advertisement, matches still play.")]
+        [Tooltip("Defaults, all overridable from the environment. Leave empty for standalone mode: no connection, no advertisement, matches still play.")]
         [SerializeField] private string _masterHost = string.Empty;
 
-        [SerializeField] private int _masterPort = 27100;
+        [Tooltip("The master's single TCP port. GS_REGISTER shares the MSP connection player logins use — there is no separate registration port.")]
+        [SerializeField] private int _masterPort = 27000;
 
         [Header("What to advertise")]
         [Tooltip("The address clients dial. Empty means the master infers it from the connection.")]
@@ -69,6 +71,7 @@ namespace Ironfront.Net.Unity.Server
 
         private ServerMasterReporter _reporter;
         private GameServerMatchReporter _link;
+        private GameServerConfig _config;
 
         /// <summary>The id the master assigned, or 0 when standalone or not yet registered.</summary>
         public ushort ServerId { get; private set; }
@@ -80,7 +83,40 @@ namespace Ironfront.Net.Unity.Server
 
         private void Start()
         {
-            if (string.IsNullOrWhiteSpace(_masterHost))
+            // Resolved here rather than shared with NetServerBootstrap's instance on purpose:
+            // this component works in a scene that has no NetServerBootstrap, and both read
+            // the same variables through the same type, so the two cannot drift the way the
+            // duplicated _udpPort and _maxPlayers fields could.
+            //
+            // The port default moved from 27100 to 27000 with this change. 27100 was a port
+            // the master has never listened on — GS_REGISTER travels the ordinary MSP
+            // connection — so every registration attempt was dialling a closed port and
+            // reporting it below as "the master is down".
+            var defaults = new GameServerConfig
+            {
+                MasterHost = _masterHost,
+                MasterPort = _masterPort,
+                PublicIp   = _publicIp,
+                UdpPort    = _udpPort,
+                MaxPlayers = _maxPlayers,
+                MapIds     = _mapIds,
+
+                // Not advertised, and not this component's business — but the resolver rejects
+                // a slot count below the player count, so it needs a value that cannot trip it.
+                MaxConnections = Math.Max(_maxPlayers, byte.MaxValue),
+            };
+
+            try
+            {
+                _config = defaults.ApplyEnvironment();
+            }
+            catch (InvalidOperationException ex)
+            {
+                Debug.LogError($"[net] master link: configuration rejected, staying standalone. {ex.Message}");
+                return;
+            }
+
+            if (!_config.IsLinkedToMaster)
             {
                 Debug.Log("[net] master link: standalone — no host configured, matches will not be advertised.");
                 return;
@@ -107,17 +143,17 @@ namespace Ironfront.Net.Unity.Server
             var registration = new GameServerRegistration
             {
                 ServerSecret = secret,
-                PublicIp     = _publicIp,
-                UdpPort      = _udpPort,
-                MaxPlayers   = _maxPlayers,
-                MapIds       = _mapIds,
+                PublicIp     = _config.PublicIp,
+                UdpPort      = _config.UdpPort,
+                MaxPlayers   = _config.MaxPlayers,
+                MapIds       = _config.MapIds,
             };
 
             var reporter = new GameServerMatchReporter(new GameServerLink(), ownsLink: true);
 
             try
             {
-                ServerId = await reporter.ConnectAndRegisterAsync(_masterHost, _masterPort, registration);
+                ServerId = await reporter.ConnectAndRegisterAsync(_config.MasterHost, _config.MasterPort, registration);
             }
             catch (Exception ex)
             {
@@ -138,7 +174,7 @@ namespace Ironfront.Net.Unity.Server
 
             _link = reporter;
             _reporter.SetReporter(reporter);
-            Debug.Log($"[net] master link: registered as server {ServerId} with {_masterHost}:{_masterPort}.");
+            Debug.Log($"[net] master link: registered as server {ServerId} with {_config.MasterHost}:{_config.MasterPort}.");
         }
 
         // The Poll() contract from Dev D's plan section 5: every event and Task continuation

@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Ownership: SHARED, following Ironfront.Net.Configuration itself.
+
+    net8.0 (not netstandard2.1) because it is a test host, never loaded by Unity. It
+    references the netstandard2.1 library, which net8.0 consumes fine.
+
+    EnvExampleTests is the gate that keeps .env.example honest: it renders the registry and
+    compares the result against the file in the repository root. Regenerate with
+
+      IRONFRONT_WRITE_ENV_EXAMPLE=1 dotnet test Ironfront.Net.Configuration.Tests
+
+    which makes the test write the file instead of asserting against it.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Ironfront.Net.Configuration.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!--
+    Versions deliberately absent: they live in the repo-root Directory.Packages.props
+    (Central Package Management). Adding a Version="..." back here is an NU1008 restore
+    error, not a silent override — that is the point.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ironfront.Net.Configuration\Ironfront.Net.Configuration.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,4 +1,5 @@
 using System;
+using Ironfront.Net.Configuration;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Client;
 using Ironfront.Net.Transport;
@@ -45,6 +46,7 @@ namespace Ironfront.Net.Unity.Client
         [SerializeField] private bool _connectOnStart = true;
 
         [Header("Server")]
+        [Tooltip("Defaults, overridable with IRONFRONT_CLIENT_HOST and IRONFRONT_CLIENT_PORT.")]
         [SerializeField] private string _host = "127.0.0.1";
         [SerializeField] private int _port = 27015;
 
@@ -91,8 +93,22 @@ namespace Ironfront.Net.Unity.Client
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetCurrentOnLoad() => Current = null;
 
+        /// <summary>
+        /// Where this client dials: the inspector fields with any <c>IRONFRONT_CLIENT_*</c>
+        /// variable layered on top.
+        /// </summary>
+        /// <remarks>
+        /// The point of the override is a run nobody is driving through the Editor — an
+        /// automated two-process test, a smoke check on a build machine, a QA build aimed at
+        /// staging. In the Editor nothing changes: with no variables set the serialized fields
+        /// are what they always were.
+        /// </remarks>
+        public GameClientConfig Config { get; private set; }
+
         private void Awake()
         {
+            ResolveConfiguration();
+
             // Not claimed on a machine already running the server. A loopback test puts both in
             // one process, and a client that overwrote the role there would make every
             // NetContext.IsServer check answer false halfway through the server's own startup.
@@ -113,6 +129,7 @@ namespace Ironfront.Net.Unity.Client
         public void Connect()
         {
             if (_transport != null) return;
+            if (Config == null) ResolveConfiguration();   // Connect() is public and may precede Awake.
 
             if (ExternalTransport != null)
             {
@@ -133,7 +150,33 @@ namespace Ironfront.Net.Unity.Client
             // invented 64 bytes would be indistinguishable on the wire from one attacking the
             // signature check -- the server's _acceptUnsignedTickets is the switch that decides
             // whether an empty one is allowed, and that decision belongs on the server.
-            _transport.Connect(_host, _port, ReadOnlySpan<byte>.Empty);
+            _transport.Connect(Config.Host, Config.Port, ReadOnlySpan<byte>.Empty);
+        }
+
+        /// <summary>
+        /// Loads a reachable <c>.env</c> and layers the environment over the inspector fields.
+        /// </summary>
+        /// <remarks>
+        /// A malformed value keeps the inspector default here, unlike on the server, and the
+        /// asymmetry is the point: a client that fails to connect says so immediately to the
+        /// person running it, whereas a misconfigured server fails silently to players who
+        /// have no way to report what went wrong.
+        /// </remarks>
+        private void ResolveConfiguration()
+        {
+            DotEnv.LoadFromAncestors(null, out _);
+
+            var defaults = new GameClientConfig { Host = _host, Port = _port, Verbose = _verbose };
+
+            try
+            {
+                Config = defaults.ApplyEnvironment();
+            }
+            catch (InvalidOperationException ex)
+            {
+                Config = defaults;
+                Debug.LogWarning($"[net] client configuration ignored, using the scene's values. {ex.Message}");
+            }
         }
 
         /// <summary>Drops the link and clears every piece of decoded state.</summary>
@@ -169,7 +212,7 @@ namespace Ironfront.Net.Unity.Client
         {
             Router.Route(payload.Span);
 
-            if (_verbose && !_loggedFirstSnapshot && Router.SnapshotsApplied > 0)
+            if (Config.Verbose && !_loggedFirstSnapshot && Router.SnapshotsApplied > 0)
             {
                 _loggedFirstSnapshot = true;
                 Debug.Log($"[net] first snapshot applied at server tick {Router.Decoder.Current.ServerTick}");
@@ -181,13 +224,13 @@ namespace Ironfront.Net.Unity.Client
             ConnectionId = result.ConnectionId;
             NetContext.CurrentTick = result.ServerTick;
 
-            if (_verbose)
+            if (Config.Verbose)
                 Debug.Log($"[net] connected as {ConnectionId}, server tick {result.ServerTick}");
         }
 
         private void OnDisconnected(DisconnectReason reason)
         {
-            if (_verbose) Debug.Log($"[net] disconnected: {reason}");
+            if (Config.Verbose) Debug.Log($"[net] disconnected: {reason}");
 
             // State is cleared rather than kept. A reconnect that resumed against a stale
             // baseline would decode every delta into a plausible-looking wrong world -- the
