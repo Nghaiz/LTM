@@ -1,0 +1,87 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    OWNER: Dev A (written by the lead's assist track,
+    plans/assist-dev-a/step-05-game-flow.md).
+
+    THE SAME SHAPE AS Ironfront.Client.Input.Tests, AND FOR THE SAME REASON
+
+    The code it tests lives under Ironfront_Reborn/Assets/Scripts/Net/Client/ because that
+    is where Unity has to be able to compile it from, and Assets/ has no .asmdef — so the
+    Unity Test Framework is not available, and there is no assembly for a .NET project to
+    reference either. Compiling the same source files a second time here is the only way
+    anything under Assets/ is reachable by `dotnet test`.
+
+    That is what makes phase-03 acceptance criterion 9 ("unit tests for GameFlowController")
+    implementable at all. As phase-03 sketches it — a MonoBehaviour — the criterion cannot
+    be met in this repository by any route.
+
+    A netstandard2.1 library whose DLL is copied into Assets/Plugins would also work, and
+    costs a new plugin DLL, a hand-written .meta and a build-libs.ps1 entry. The link is
+    cheaper, is the precedent step 02 already set, and has one failure mode, guarded below.
+
+    THE ONE RULE FOR THE LINKED FILES: no UnityEngine.
+
+    A `using UnityEngine;` in any file listed below fails the build here rather than
+    silently dropping out of coverage. That is why the IMGUI shell from step 07 is not in
+    the list — it is drawing, and drawing is Unity's.
+
+    NOTE the two compilers disagree slightly and the linked files must satisfy both:
+      - Unity 6000.3 compiles C# 9. LangVersion here is 12 (Directory.Build.props), so
+        this project will happily accept syntax Unity rejects. tools/UnitySyntaxCheck
+        parses Assets/ at C# 9 in CI, which is what actually catches that.
+      - Nullable and TreatWarningsAsErrors are on here (root Directory.Build.props) and off
+        in Unity (Ironfront_Reborn/Directory.Build.props is empty on purpose). So this
+        project is the stricter of the two, which is the useful direction. The linked files
+        carry a file-scoped `#nullable enable` so both compilers read them the same way.
+
+    net8.0, not netstandard2.1: this is a test host and is never loaded by Unity.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Ironfront.Client.Flow.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+  <!--
+    Listed one by one rather than with a wildcard, on purpose: a glob would quietly pull in
+    the next Unity-only file somebody adds to that folder and fail with a screenful of
+    UnityEngine errors that look like a broken build rather than a misplaced file.
+  -->
+  <!--
+    The libraries the linked files compile against. Unity gets the same code from
+    Assets/Plugins/*.dll, which tools/build-libs.ps1 drops there; here it comes from source,
+    so a change to either side is caught by this project's build rather than at Dev A's desk.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Ironfront.MasterClient\Ironfront.MasterClient.csproj" />
+    <ProjectReference Include="..\Ironfront.Net.Protocol\Ironfront.Net.Protocol.csproj" />
+    <ProjectReference Include="..\Ironfront.Net.Transport\Ironfront.Net.Transport.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\GameFlowState.cs"
+             Link="Linked\GameFlowState.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\GameFlowController.cs"
+             Link="Linked\GameFlowController.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\PasswordHasher.cs"
+             Link="Linked\PasswordHasher.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\MasterErrorText.cs"
+             Link="Linked\MasterErrorText.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\PendingJoin.cs"
+             Link="Linked\PendingJoin.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\SnapshotHoldingQueue.cs"
+             Link="Linked\SnapshotHoldingQueue.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\MasterSession.cs"
+             Link="Linked\MasterSession.cs" />
+  </ItemGroup>
+
+</Project>

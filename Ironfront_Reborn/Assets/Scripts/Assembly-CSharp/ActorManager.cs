@@ -39,6 +39,18 @@ public class ActorManager : MonoBehaviour
 
 	private Dictionary<int, List<Actor>> aliveActors;
 
+	/// <summary>
+	/// The local player's actor, or null. Null on a dedicated server, and on a client between
+	/// level load and the player prefab registering itself.
+	/// </summary>
+	/// <remarks>
+	/// The AI reads the player's position, team, health and resupply state in several places.
+	/// Every one of those was a direct <c>instance.player</c> dereference and every one of them
+	/// throws on a headless server, where no non-AI actor ever registers. Route reads through
+	/// here and null-check, rather than assuming a player exists because one always did.
+	/// </remarks>
+	public static Actor Player => (instance != null) ? instance.player : null;
+
 	public static void Register(Actor actor)
 	{
 		instance.actors.Add(actor);

@@ -43,8 +43,24 @@ public class ScoreUi : MonoBehaviour
 
 	private bool gameEnded;
 
+	/// <summary>
+	/// Awards a kill. Does nothing where there is no scoreboard.
+	/// </summary>
+	/// <remarks>
+	/// <b>This class holds match state, not just its rendering</b> — the score, the flag count
+	/// and the win condition all live here, in a UI component. So on a headless server this
+	/// guard does not merely skip a redraw: the original game's match neither scores nor ends.
+	/// That is a deliberate, surfaced limitation and not a silent fallback. The networked match
+	/// is scored by <c>Ironfront.Net.Replication.Match.MatchStateMachine</c>, which is where
+	/// authoritative match state belongs; separating this component's state from its rendering
+	/// is a redesign, not a guard, and it is Dev A's call to make.
+	/// </remarks>
 	public static void AddScore(int blue, int red)
 	{
+		if (instance == null)
+		{
+			return;
+		}
 		instance.blueScore += blue * ScoreMultiplier(instance.blueFlags);
 		instance.redScore += red * ScoreMultiplier(instance.redFlags);
 		if (blue > 0)
@@ -69,8 +85,13 @@ public class ScoreUi : MonoBehaviour
 		}
 	}
 
+	/// <summary>Records a capture. See <see cref="AddScore"/> for the headless caveat.</summary>
 	public static void AddFlag(int blue, int red)
 	{
+		if (instance == null)
+		{
+			return;
+		}
 		instance.blueFlags += blue;
 		instance.redFlags += red;
 		instance.UpdateUi();
@@ -87,8 +108,13 @@ public class ScoreUi : MonoBehaviour
 		}
 	}
 
+	/// <summary>Ends the match. See <see cref="AddScore"/> for the headless caveat.</summary>
 	public static void Win(bool blue)
 	{
+		if (instance == null)
+		{
+			return;
+		}
 		if (!instance.gameEnded)
 		{
 			instance.gameEnded = true;

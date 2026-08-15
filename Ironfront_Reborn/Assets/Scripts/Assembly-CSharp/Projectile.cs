@@ -75,7 +75,15 @@ public class Projectile : MonoBehaviour
 		{
 			return;
 		}
-		Vector3 vector = ActorManager.instance.player.Position();
+		// A flyby is a sound played near the local player's ears. On a dedicated server there
+		// is no player and this whole block is measurement for nobody -- and every bot's every
+		// bullet used to run it.
+		Actor player = ActorManager.Player;
+		if (player == null || FpsActorController.instance == null)
+		{
+			return;
+		}
+		Vector3 vector = player.Position();
 		Vector3 lhs = base.transform.position - vector;
 		bool flag = travellingTowardsPlayer;
 		travellingTowardsPlayer = Vector3.Dot(lhs, velocity) < 0f;
@@ -139,7 +147,9 @@ public class Projectile : MonoBehaviour
 		{
 			attachedRigidbody.AddForceAtPosition(velocity.normalized * configuration.impactForce, hitInfo.point, ForceMode.Impulse);
 		}
-		if (configuration.makesFlybySound && travellingTowardsPlayer && Vector3.Distance(hitInfo.point, ActorManager.instance.player.Position()) < 15f)
+		if (configuration.makesFlybySound && travellingTowardsPlayer && ActorManager.Player != null
+			&& FpsActorController.instance != null
+			&& Vector3.Distance(hitInfo.point, ActorManager.Player.Position()) < 15f)
 		{
 			FpsActorController.instance.BulletFlyby(hitInfo.point, configuration.flybyPitch);
 		}

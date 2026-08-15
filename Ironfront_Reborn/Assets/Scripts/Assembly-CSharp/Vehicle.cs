@@ -522,7 +522,9 @@ public class Vehicle : MonoBehaviour
 
 	protected virtual void HeavyDamage()
 	{
-		if (heavyDamageAudio != null && claimedByPlayer)
+		// claimedByPlayer is false on a server, so this is guarded already -- by a flag that
+		// means "a player is in it", not "a player exists". Say what is actually required.
+		if (heavyDamageAudio != null && claimedByPlayer && FpsActorController.instance != null)
 		{
 			heavyDamageAudio.Play();
 			FpsActorController.instance.Deafen();

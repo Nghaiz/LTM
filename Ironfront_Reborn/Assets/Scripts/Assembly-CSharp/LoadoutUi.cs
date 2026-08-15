@@ -399,23 +399,36 @@ public class LoadoutUi : MonoBehaviour
 		FpsActorController.instance.CloseLoadout();
 	}
 
+	/// <summary>
+	/// Whether the loadout screen is showing. False where there is no loadout screen: the
+	/// server has no UI to suppress firing behind, and every gameplay button read passes
+	/// through here.
+	/// </summary>
 	public static bool IsOpen()
 	{
-		return instance.uiCanvas.enabled;
+		return instance != null && instance.uiCanvas.enabled;
 	}
 
 	public static void Show()
 	{
+		if (instance == null)
+		{
+			return;
+		}
 		instance.ShowCanvas();
 	}
 
 	public static void Hide()
 	{
+		if (instance == null)
+		{
+			return;
+		}
 		instance.HideCanvas();
 	}
 
 	public static bool HasBeenOpen()
 	{
-		return instance.hasBeenOpen;
+		return instance != null && instance.hasBeenOpen;
 	}
 }

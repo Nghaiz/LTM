@@ -1,4 +1,5 @@
 using System;
+using Ironfront.Net.Unity;
 using UnityEngine;
 using UnityEngine.Audio;
 using UnityEngine.Rendering;
@@ -99,6 +100,27 @@ public class FpsActorController : ActorController
 
 	private bool crouchInput;
 
+	// Phase-00 task 3: every gameplay input below arrives through this, so a networked
+	// controller can supply one. UI and debug keys keep reading Input directly -- criterion 6
+	// permits it, and widening the seam to cover them buys nothing and risks the loadout screen.
+	// See plans/assist-dev-a/step-02-input-source.md and docs/codebase-map.md section 4.
+	// Starts as the null object rather than null: MoveX, Lean and LookDelta* are plain property
+	// reads with no extension-method guard behind them, and they sit on per-frame paths. A field
+	// that can be null turns one ordering mistake into an exception every frame forever.
+	private IInputSource inputSource = NullInputSource.Instance;
+
+	/// <summary>The active input source. Local keyboard and mouse unless something replaced it.</summary>
+	public IInputSource InputSource => inputSource;
+
+	/// <summary>
+	/// Replaces the input source. Call before Awake, or at any point afterwards; the controller
+	/// re-reads it on every access rather than caching anything derived from it.
+	/// </summary>
+	public void SetInputSource(IInputSource source)
+	{
+		inputSource = source ?? NullInputSource.Instance;
+	}
+
 	private void Awake()
 	{
 		instance = this;
@@ -110,6 +132,17 @@ public class FpsActorController : ActorController
 		fpCameraParentOffset = fpCameraParent.transform.localPosition;
 		fpNoise = fpCamera.GetComponent<NoiseAndGrain>();
 		tpNoise = tpCamera.GetComponent<NoiseAndGrain>();
+		if (inputSource == NullInputSource.Instance)
+		{
+			// Default to local input, so single-player runs exactly as it did before any
+			// networking exists to override it. Anything that called SetInputSource before
+			// Awake keeps what it set.
+			inputSource = new LocalInputSource(fpCamera.transform);
+			// Temporary, and deliberately unconditional: the harness that says whether the
+			// substitution above was correct. Delete both this line and InputShadowCompare.cs
+			// once a playtest has come back quiet.
+			InputShadowCompare.Install(base.gameObject, inputSource);
+		}
 		ForceEndCrouch();
 	}
 
@@ -127,7 +160,7 @@ public class FpsActorController : ActorController
 		{
 			return false;
 		}
-		return (Input.GetButton("Fire1") || Input.GetMouseButton(0)) && !LoadoutUi.IsOpen();
+		return inputSource.Fire();
 	}
 
 	public override bool Aiming()
@@ -136,12 +169,12 @@ public class FpsActorController : ActorController
 		{
 			return aimToggle && !LoadoutUi.IsOpen();
 		}
-		return (Input.GetButton("Fire2") || Input.GetMouseButton(1)) && !LoadoutUi.IsOpen();
+		return inputSource.Aim();
 	}
 
 	public override bool Reload()
 	{
-		return Input.GetButton("Reload") && !LoadoutUi.IsOpen();
+		return inputSource.Reload();
 	}
 
 	public override bool OnGround()
@@ -161,7 +194,10 @@ public class FpsActorController : ActorController
 
 	public override Vector3 SwimInput()
 	{
-		return tpCamera.transform.forward * Input.GetAxis("Vertical") + tpCamera.transform.right * Input.GetAxis("Horizontal");
+		// The basis stays the third-person camera. The phase-00 mapping table proposed a
+		// yaw/pitch basis here; that is a handling change to swimming, not a refactor, and
+		// step 02 is a refactor. Only the two axis reads move.
+		return tpCamera.transform.forward * inputSource.MoveZ + tpCamera.transform.right * inputSource.MoveX;
 	}
 
 	public override Vector3 FacingDirection()
@@ -185,7 +221,7 @@ public class FpsActorController : ActorController
 
 	public override Vector2 CarInput()
 	{
-		return new Vector2(Input.GetAxis("Horizontal"), Input.GetAxis("Vertical"));
+		return new Vector2(inputSource.MoveX, inputSource.MoveZ);
 	}
 
 	public override Vector4 HelicopterInput()
@@ -193,13 +229,19 @@ public class FpsActorController : ActorController
 		float num = OptionsUi.GetOptions().mouseSensitivity * OptionsUi.GetOptions().helicopterSensitivity;
 		if (OptionsUi.GetOptions().helicopterType == 2)
 		{
+			// The four helicopter axes stay on Input: phase-00 section 5 books vehicle input as
+			// accepted debt, IInputSource has no member for them, and inventing four is
+			// speculative work for a channel outside the 14-week scope.
 			float num2 = Input.GetAxis("Helicopter Pitch") * ((!OptionsUi.GetOptions().heliInvertPitch) ? 1f : (-1f));
 			float num3 = Input.GetAxis("Helicopter Yaw") * ((!OptionsUi.GetOptions().heliInvertYaw) ? 1f : (-1f));
 			float num4 = Input.GetAxis("Helicopter Roll") * ((!OptionsUi.GetOptions().heliInvertRoll) ? 1f : (-1f));
 			float y = Input.GetAxis("Helicopter Throttle") * ((!OptionsUi.GetOptions().heliInvertThrottle) ? 1f : (-1f));
 			return new Vector4(num3 * 30f * num, y, num4 * 20f * num, num2 * 30f * num);
 		}
-		Vector2 vector = new Vector2(num * Input.GetAxis("Mouse X"), num * Input.GetAxis("Mouse Y"));
+		// LookDelta*, not Yaw/Pitch: helicopter control integrates a per-frame mouse delta and
+		// an absolute angle is a different quantity. Substituting one for the other would change
+		// handling silently, which is why IInputSource carries both.
+		Vector2 vector = new Vector2(num * inputSource.LookDeltaX, num * inputSource.LookDeltaY);
 		if (!OptionsUi.GetOptions().heliInvertPitch)
 		{
 			vector.y = 0f - vector.y;
@@ -210,9 +252,9 @@ public class FpsActorController : ActorController
 		}
 		if (OptionsUi.GetOptions().helicopterType == 0)
 		{
-			return new Vector4(Input.GetAxis("Horizontal"), Input.GetAxis("Vertical"), vector.x * 20f, vector.y * 30f);
+			return new Vector4(inputSource.MoveX, inputSource.MoveZ, vector.x * 20f, vector.y * 30f);
 		}
-		return new Vector4(vector.x * 30f, Input.GetAxis("Vertical"), Input.GetAxis("Horizontal") * 20f, vector.y * 30f);
+		return new Vector4(vector.x * 30f, inputSource.MoveZ, inputSource.MoveX * 20f, vector.y * 30f);
 	}
 
 	public override bool UseMuzzleDirection()
@@ -375,7 +417,7 @@ public class FpsActorController : ActorController
 		{
 			return 0f;
 		}
-		return Input.GetAxis("Lean");
+		return inputSource.Lean;
 	}
 
 	private void HideFpModel()
@@ -518,6 +560,11 @@ public class FpsActorController : ActorController
 		}
 	}
 
+	// Everything below is edge-triggered -- GetKeyDown, GetButtonDown, mouseScrollDelta --
+	// and IInputSource reports levels, not edges. Weapon and seat selection do affect gameplay
+	// and phase-00 section 5 books them as debt to be paid in phase 02, when the C_INPUT
+	// weapon-switch bits (11..14) get a consumer. Routing an edge through a level channel now
+	// would either drop presses or fire them twice.
 	private void UpdateInput()
 	{
 		if (Input.GetKeyDown(KeyCode.Alpha1))
@@ -672,7 +719,7 @@ public class FpsActorController : ActorController
 		{
 			return crouchInput;
 		}
-		return Input.GetButton("Crouch");
+		return inputSource.Crouch();
 	}
 
 	public override void StartCrouch()
@@ -712,7 +759,7 @@ public class FpsActorController : ActorController
 
 	public override bool IsSprinting()
 	{
-		return !Crouch() && !Aiming() && !IsReloading() && Input.GetButton("Sprint") && !actor.IsSeated();
+		return !Crouch() && !Aiming() && !IsReloading() && inputSource.Sprint() && !actor.IsSeated();
 	}
 
 	public void DisableCameras()

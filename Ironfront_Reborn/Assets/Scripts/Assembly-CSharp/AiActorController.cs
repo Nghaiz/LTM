@@ -459,8 +459,40 @@ public class AiActorController : ActorController
 		}
 	}
 
+	/// <summary>
+	/// Whether a living teammate-player is short of ammo and close enough to hand a box to.
+	/// </summary>
+	/// <remarks>
+	/// This and <see cref="PlayerWantsHealthNearby"/> replace four copies of the same compound
+	/// expression, each of which dereferenced <c>ActorManager.instance.player</c> three or four
+	/// times. There is no player on a dedicated server, so every one of those copies threw --
+	/// and the outer condition reaches them whenever the squad itself does not need resupply,
+	/// which is most of the time.
+	/// </remarks>
+	private bool PlayerWantsAmmoNearby()
+	{
+		Actor player = ActorManager.Player;
+		return player != null && !player.dead && actor.team == player.team && player.needsResupply
+			&& Vector3.Distance(player.transform.position, base.transform.position) < 10f;
+	}
+
+	/// <summary>Whether a living teammate-player is hurt and close enough to heal.</summary>
+	private bool PlayerWantsHealthNearby()
+	{
+		Actor player = ActorManager.Player;
+		return player != null && !player.dead && actor.team == player.team && player.health < 80f
+			&& Vector3.Distance(player.transform.position, base.transform.position) < 10f;
+	}
+
 	private bool PlayerIsApproaching()
 	{
+		// No player, nobody approaching. Today this is unreachable on a server because the
+		// only caller first compares against FpsActorController.playerTeam, which stays -1
+		// there -- an accidental guard, and not one to depend on.
+		if (FpsActorController.instance == null)
+		{
+			return false;
+		}
 		Actor actor = FpsActorController.instance.actor;
 		if (!actor.fallenOver && !actor.IsSeated())
 		{
@@ -641,7 +673,7 @@ public class AiActorController : ActorController
 				{
 					squad.NewAttackOrder();
 				}
-				if (!squad.HasVehicle() && squad.state == Squad.State.Moving)
+				if (!squad.HasVehicle() && squad.state == Squad.State.Moving && FpsActorController.instance != null)
 				{
 					Actor playerActor = FpsActorController.instance.actor;
 					if (playerActor.IsSeated() && !playerActor.seat.vehicle.IsFull() && playerActor.seat.vehicle.HasUnclaimedSeats() && Vector3.Distance(playerActor.Position(), base.transform.position) < 8f)
@@ -845,13 +877,13 @@ public class AiActorController : ActorController
 				yield return new WaitForSeconds(0.2f);
 				continue;
 			}
-			if (!HasTarget() && actor.hasAmmoBox && actor.weapons[actor.ammoBoxSlot].AmmoFull() && (squad.MemberNeedsResupply() || (!ActorManager.instance.player.dead && actor.team == ActorManager.instance.player.team && ActorManager.instance.player.needsResupply && Vector3.Distance(ActorManager.instance.player.transform.position, base.transform.position) < 10f)))
+			if (!HasTarget() && actor.hasAmmoBox && actor.weapons[actor.ammoBoxSlot].AmmoFull() && (squad.MemberNeedsResupply() || PlayerWantsAmmoNearby()))
 			{
 				if (actor.activeWeapon == actor.weapons[actor.ammoBoxSlot])
 				{
-					if (!ActorManager.instance.player.dead && actor.team == ActorManager.instance.player.team && ActorManager.instance.player.needsResupply && Vector3.Distance(ActorManager.instance.player.transform.position, base.transform.position) < 10f)
+					if (PlayerWantsAmmoNearby())
 					{
-						LookAt(ActorManager.instance.player.transform.position);
+						LookAt(ActorManager.Player.transform.position);
 					}
 					fire = !IsMovingToCover() && UnityEngine.Random.Range(0, 2) == 0;
 				}
@@ -862,13 +894,13 @@ public class AiActorController : ActorController
 				yield return new WaitForSeconds(0.2f);
 				continue;
 			}
-			if (!HasTarget() && actor.hasMedipack && actor.weapons[actor.medipackSlot].AmmoFull() && (squad.MemberNeedsHealth() || (!ActorManager.instance.player.dead && actor.team == ActorManager.instance.player.team && ActorManager.instance.player.health < 80f && Vector3.Distance(ActorManager.instance.player.transform.position, base.transform.position) < 10f)))
+			if (!HasTarget() && actor.hasMedipack && actor.weapons[actor.medipackSlot].AmmoFull() && (squad.MemberNeedsHealth() || PlayerWantsHealthNearby()))
 			{
 				if (actor.activeWeapon == actor.weapons[actor.medipackSlot])
 				{
-					if (!ActorManager.instance.player.dead && actor.team == ActorManager.instance.player.team && ActorManager.instance.player.health < 80f && Vector3.Distance(ActorManager.instance.player.transform.position, base.transform.position) < 10f)
+					if (PlayerWantsHealthNearby())
 					{
-						LookAt(ActorManager.instance.player.transform.position);
+						LookAt(ActorManager.Player.transform.position);
 					}
 					fire = !IsMovingToCover() && UnityEngine.Random.Range(0, 2) == 0;
 				}
@@ -2042,7 +2074,7 @@ public class AiActorController : ActorController
 
 	public void EmoteHailPlayer()
 	{
-		if (!HasTarget())
+		if (!HasTarget() && FpsActorController.instance != null)
 		{
 			LookAt(FpsActorController.instance.actor.CenterPosition());
 			actor.EmoteHail();

@@ -91,6 +91,17 @@ jobs:
       - name: Check ProtocolConstants matches the spec
         run: dotnet run --project tools/SpecChecker --configuration Release --no-build
 
+      # Nothing else in this pipeline compiles Unity code — the unity-compile job below needs a
+      # licensed Editor and is commented out for that reason. So an unbalanced brace or a piece
+      # of C# 10 syntax in Ironfront_Reborn/Assets/Scripts/ reaches develop green and is found
+      # by Dev A opening the Editor, which is the slowest possible feedback loop in the project.
+      #
+      # This parses those files with Roslyn at Unity's language version (C# 9). It resolves no
+      # types, so it is a syntax gate and not a compiler — but a file that does not parse is a
+      # correctness failure, not a style one, which is why it sits in the HARD job.
+      - name: Check Unity scripts parse at Unity's C# version
+        run: dotnet run --project tools/UnitySyntaxCheck --configuration Release --no-build
+
       # if: always() — the results are most valuable exactly when the previous step failed.
       - name: Upload test results and coverage
         if: always()
