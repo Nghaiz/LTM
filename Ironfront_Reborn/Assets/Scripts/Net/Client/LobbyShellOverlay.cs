@@ -1,4 +1,6 @@
 using System;
+using System.Net;
+using System.Net.Sockets;
 using System.Threading.Tasks;
 using Ironfront.MasterClient;
 using UnityEngine;
@@ -96,6 +98,11 @@ namespace Ironfront.Net.Unity.Client
 
         private GUIStyle _panelStyle;
 
+        // The header line and the two values it was built from. See StateLabel.
+        private string _stateLabel;
+        private GameFlowState _stateLabelFor;
+        private bool _stateLabelBusy;
+
         /// <summary>Whether the shell is currently drawn.</summary>
         public bool Visible => _visible;
 
@@ -175,7 +182,7 @@ namespace Ironfront.Net.Unity.Client
             GameFlowState drawn = _flow.State;
             bool busy = _busy;
 
-            GUILayout.Label($"state: {drawn}{(busy ? "  (working...)" : string.Empty)}");
+            GUILayout.Label(StateLabel(drawn, busy));
             GUILayout.Space(4f);
 
             switch (drawn)
@@ -194,6 +201,34 @@ namespace Ironfront.Net.Unity.Client
 
             DrawErrors();
             GUILayout.EndArea();
+        }
+
+        /// <summary>
+        /// The header line, rebuilt only when the state or the busy flag actually changes.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>M8.</b> The interpolated form allocated twice on every <c>OnGUI</c> pass: once
+        /// boxing <see cref="GameFlowState"/> so interpolation could call <c>ToString</c> on it,
+        /// and once for the joined string. IMGUI runs <c>OnGUI</c> several times a frame, so at
+        /// 60 fps a screen that is doing nothing at all produced a few hundred short-lived
+        /// allocations a second — enough to keep the GC awake in a menu.
+        /// </para>
+        /// <para>
+        /// <c>ToString()</c> is called on the enum rather than interpolating it, which is what
+        /// avoids the box: the value is already a string by the time the concatenation sees it.
+        /// The cache turns the remaining cost into one allocation per actual state change.
+        /// </para>
+        /// </remarks>
+        private string StateLabel(GameFlowState state, bool busy)
+        {
+            if (_stateLabel != null && _stateLabelFor == state && _stateLabelBusy == busy)
+                return _stateLabel;
+
+            _stateLabel = "state: " + state.ToString() + (busy ? "  (working...)" : string.Empty);
+            _stateLabelFor = state;
+            _stateLabelBusy = busy;
+            return _stateLabel;
         }
 
         // ------------------------------------------------------------------ screens
@@ -317,7 +352,11 @@ namespace Ironfront.Net.Unity.Client
             _directPortText = GUILayout.TextField(_directPortText, GUILayout.Width(70f));
             GUILayout.EndHorizontal();
 
-            if (!GUILayout.Button("Connect directly")) return;
+            GUI.enabled = !_busy;
+            bool pressed = GUILayout.Button("Connect directly");
+            GUI.enabled = true;
+
+            if (!pressed) return;
 
             if (!TryParsePort(_directPortText, out int port))
             {
@@ -326,7 +365,69 @@ namespace Ironfront.Net.Unity.Client
             }
 
             _shellError = string.Empty;
-            Guard(() => _session.ConnectDirect(_directHost, port));
+
+            // An IP literal needs no lookup, so the overwhelmingly common case — a LAN or
+            // RadminVPN address typed into this field — still connects synchronously on the
+            // button press.
+            if (IPAddress.TryParse(_directHost, out IPAddress _))
+            {
+                Guard(() => _session.ConnectDirect(_directHost, port));
+                return;
+            }
+
+            Submit(ConnectToHostNameAsync(_directHost, port));
+        }
+
+        /// <summary>
+        /// Resolves a host name off the GUI thread, then dials the address it produced.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>M7.</b> <c>UdpTransportClient.ResolveIPv4</c> calls
+        /// <c>Dns.GetHostAddresses</c> synchronously, and the dial reaches it straight from a
+        /// button press. A host name that does not resolve blocks on the operating system's DNS
+        /// timeout — several seconds, and up to thirty on a network with an unreachable
+        /// resolver — with the whole game frozen and no indication of why. Handing the lookup
+        /// to the thread pool and passing the resulting literal down means the transport takes
+        /// the <c>IPAddress.TryParse</c> branch and never blocks anybody.
+        /// </para>
+        /// <para>
+        /// The failure modes are named rather than caught wholesale: a name that does not
+        /// resolve is a <c>SocketException</c>, and a name that resolves to IPv6 only is the
+        /// <c>NotSupportedException</c> the v1 peer throws. Both are reported to the player as
+        /// the one thing that went wrong. <see cref="Submit"/> catches whatever is left.
+        /// </para>
+        /// </remarks>
+        private async Task<bool> ConnectToHostNameAsync(string host, int port)
+        {
+            IPAddress[] addresses;
+
+            try
+            {
+                addresses = await Task.Run(() => Dns.GetHostAddresses(host));
+            }
+            catch (Exception ex) when (ex is SocketException || ex is ArgumentException)
+            {
+                _shellError = $"'{host}' did not resolve: {ex.Message}";
+                return false;
+            }
+
+            IPAddress ipv4 = null;
+            for (int i = 0; i < addresses.Length; i++)
+            {
+                if (addresses[i].AddressFamily != AddressFamily.InterNetwork) continue;
+                ipv4 = addresses[i];
+                break;
+            }
+
+            if (ipv4 == null)
+            {
+                _shellError = $"'{host}' has no IPv4 address, and the v1 peer is IPv4 only.";
+                return false;
+            }
+
+            _session.ConnectDirect(ipv4.ToString(), port);
+            return true;
         }
 
         /// <summary>
@@ -395,7 +496,15 @@ namespace Ironfront.Net.Unity.Client
                 if (!await _session.ConnectAsync(_masterHost, port, BuildMasterTls())) return false;
             }
 
-            return await _session.LoginAsync(_username, _password);
+            if (!await _session.LoginAsync(_username, _password)) return false;
+
+            // M10. Held no longer than the request that needed it. A managed string cannot be
+            // wiped — this drops the only reference the shell keeps, and the copy the hasher
+            // took is its own business — but leaving it in a field for the rest of the session
+            // means it is live in a memory dump, in a crash report, and in the PasswordField
+            // that redraws it on every OnGUI pass for as long as the login screen is reachable.
+            _password = string.Empty;
+            return true;
         }
 
         /// <summary>

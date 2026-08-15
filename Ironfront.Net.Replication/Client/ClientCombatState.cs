@@ -40,22 +40,33 @@ namespace Ironfront.Net.Replication.Client
         public const byte AmmoResyncThreshold = 2;
 
         /// <summary>Seconds after death before a respawn may be requested.</summary>
-        public const float DefaultRespawnDelaySeconds = 3f;
+        /// <remarks>
+        /// The shared constant, not a local literal (phase-05 D3).
+        /// <see cref="ServerRespawnGate"/> reads the same one, so the moment this client's
+        /// respawn button lights up is the moment the server starts accepting the request
+        /// rather than a moment that happens to be close to it.
+        /// </remarks>
+        public const float DefaultRespawnDelaySeconds = ProtocolConstants.RESPAWN_SECONDS;
 
         /// <summary>
         /// Seconds a predicted reload takes before the clip is treated as full.
         /// </summary>
         /// <remarks>
-        /// <b>The server has no reload model at all.</b> <c>InputButtons.Reload</c> is packed
-        /// and sent, and nothing reads it: grep for it across the replication and protocol
-        /// libraries and the only consumers are this class and
-        /// <see cref="WeaponRuntimeState.Reloading"/>, which no server code ever sets. So the
-        /// snapshot's ammo does not change when a player reloads, and a client that waited for
-        /// it to would wait forever — <see cref="ServerFireResolver.CheckCanFire"/> tests
-        /// <c>Reloading</c> before ammo, so every later shot would be rejected and the player
-        /// could not fire again for the rest of that life.
+        /// <para>
+        /// The shared constant (phase-05 D3), read by <see cref="ServerReloadPolicy"/> too.
+        /// </para>
+        /// <para>
+        /// <b>Historical note, because the comment that used to be here was the bug report.</b>
+        /// Until phase-05 the server had no reload model: <c>InputButtons.Reload</c> was packed
+        /// and sent and nothing read it, so <c>SnapshotField.Weapon</c> never changed — the
+        /// delta encoder masks on change — and <see cref="_reloadPending"/> never cleared. The
+        /// fix was not to make this side stop waiting; it was to give the server a reload, which
+        /// is what makes the field move. <see cref="ServerReloadPolicy"/> is that model, and it
+        /// mirrors this one exactly: fire is refused while reloading and does not cancel the
+        /// reload (D7). Changing either side's rules is a change to both in one commit.
+        /// </para>
         /// </remarks>
-        public const float DefaultReloadSeconds = 2f;
+        public const float DefaultReloadSeconds = ProtocolConstants.RELOAD_SECONDS;
 
         private WeaponConfig _weapon = WeaponConfig.Rifle;
         private WeaponRuntimeState _runtime = WeaponRuntimeState.Loaded(WeaponConfig.Rifle);

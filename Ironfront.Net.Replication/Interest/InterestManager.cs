@@ -74,6 +74,30 @@ namespace Ironfront.Net.Replication.Interest
         /// </summary>
         private readonly Dictionary<ushort, uint> _deadSinceSnapshot;
 
+        // Per-level candidate buckets, rebuilt each BuildView call. Fixed capacity and reused,
+        // so the shedding pass is as allocation-free as the single pass it replaced.
+        private readonly int[] _nearBucket = new int[ProtocolConstants.MAX_ACTORS];
+        private readonly int[] _midBucket = new int[ProtocolConstants.MAX_ACTORS];
+        private readonly int[] _farBucket = new int[ProtocolConstants.MAX_ACTORS];
+        private int _nearCount;
+        private int _midCount;
+        private int _farCount;
+
+        /// <summary>
+        /// The widest one actor can encode to: every v1 field present.
+        /// </summary>
+        /// <remarks>
+        /// <b>Deliberately the worst case rather than the real one.</b> The actual width depends
+        /// on the change mask, which <see cref="DeltaEncoder"/> computes later against a
+        /// baseline this class has never seen. Projecting optimistically and being wrong means
+        /// the encode overruns and the whole snapshot is discarded — the exact failure this
+        /// shedding exists to remove. Projecting pessimistically costs a handful of actor slots
+        /// at extreme densities: the budget admits 58 actors where 64 might have fitted, and
+        /// the 48-actor case the game actually ships never sheds at all.
+        /// </remarks>
+        private static readonly int MaxEntrySize =
+            SnapshotMessage.EntrySize(SnapshotField.FullNoSeat);
+
         private static readonly float CosViewConeHalfAngle =
             (float)Math.Cos(ViewConeHalfAngleDegrees * Math.PI / 180.0);
 
@@ -118,6 +142,21 @@ namespace Ironfront.Net.Replication.Interest
 
         /// <summary>Slots dropped entirely — beyond the cull radius and out of the view cone.</summary>
         public long EntriesCulled { get; private set; }
+
+        /// <summary>
+        /// Slots that were due but did not fit the datagram budget. Phase-05 task 4.
+        /// </summary>
+        /// <remarks>
+        /// <b>Watch this, not just "a snapshot was produced".</b> Shedding turns an overflow
+        /// from a dropped snapshot into a degraded one, which is strictly better and also
+        /// strictly quieter — a bandwidth regression that used to announce itself with a
+        /// <c>LogError</c> would otherwise hide behind "it always sends something". The phase-05
+        /// risk table's threshold: non-zero at 48 actors on Dustbowl is a failure, not a pass.
+        /// </remarks>
+        public long EntriesShed { get; private set; }
+
+        /// <summary>Actors shed from the most recent <see cref="BuildView"/> call.</summary>
+        public int LastViewShedCount { get; private set; }
 
         /// <summary>
         /// Percentage of actor slots that did not carry fresh state. This is the update-rate
@@ -201,23 +240,42 @@ namespace Ironfront.Net.Replication.Interest
         public bool ShouldSend(
             ushort viewerActorId, ushort targetActorId, InterestLevel level, uint snapshotIndex)
         {
+            if (!IsDue(viewerActorId, targetActorId, level, snapshotIndex)) return false;
+
+            RecordSend(viewerActorId, targetActorId, snapshotIndex);
+            return true;
+        }
+
+        /// <summary>
+        /// Whether this pair is due, <b>without</b> recording the send.
+        /// </summary>
+        /// <remarks>
+        /// Split out of <see cref="ShouldSend"/> for the shedding path (phase-05 task 4), and
+        /// the split is the whole reason shedding does not starve anyone. An actor that is
+        /// dropped for lack of byte budget must not have consumed its rate slot: recording a
+        /// send that never happened would make a Far actor wait a further five snapshots — a
+        /// quarter of a second — every time it lost the budget race, and the actors most likely
+        /// to lose it are the same ones every snapshot.
+        /// </remarks>
+        public bool IsDue(
+            ushort viewerActorId, ushort targetActorId, InterestLevel level, uint snapshotIndex)
+        {
             if (level == InterestLevel.Culled) return false;
 
             int everyN = SendEveryN[(int)level];
             uint key = PackPair(viewerActorId, targetActorId);
 
-            if (_lastSentSnapshot.TryGetValue(key, out uint last))
-            {
-                // Signed distance, not `snapshotIndex - last`: an unsigned subtraction turns
-                // "the recorded index is somehow ahead of us" into a two-billion gap that
-                // passes every threshold, which would pin the pair to sending every snapshot.
-                int since = SequenceMath.Distance32(snapshotIndex, last);
-                if (since < everyN) return false;
-            }
+            if (!_lastSentSnapshot.TryGetValue(key, out uint last)) return true;
 
-            _lastSentSnapshot[key] = snapshotIndex;
-            return true;
+            // Signed distance, not `snapshotIndex - last`: an unsigned subtraction turns
+            // "the recorded index is somehow ahead of us" into a two-billion gap that
+            // passes every threshold, which would pin the pair to sending every snapshot.
+            return SequenceMath.Distance32(snapshotIndex, last) >= everyN;
         }
+
+        /// <summary>Marks this pair as sent on <paramref name="snapshotIndex"/>.</summary>
+        public void RecordSend(ushort viewerActorId, ushort targetActorId, uint snapshotIndex)
+            => _lastSentSnapshot[PackPair(viewerActorId, targetActorId)] = snapshotIndex;
 
         /// <summary>
         /// Fills <paramref name="destination"/> with the actors <paramref name="viewerActorId"/>
@@ -235,6 +293,58 @@ namespace Ironfront.Net.Replication.Interest
             uint snapshotIndex,
             WorldSnapshot destination,
             SpawnAckTracker? spawnGate = null)
+            => BuildViewCore(
+                viewerActorId, world, snapshotIndex, destination, spawnGate,
+                byteBudget: 0, session: null);
+
+        /// <summary>
+        /// Fills <paramref name="destination"/> for one client, shedding actors rather than
+        /// overflowing <paramref name="byteBudget"/>. Phase-05 task 4.
+        /// </summary>
+        /// <param name="byteBudget">
+        /// The largest snapshot body that still fits one datagram — normally
+        /// <c>ServerPayloadWriter.MaxSnapshotBodySize</c>. Zero or negative means unlimited,
+        /// which is the pre-phase-05 behaviour.
+        /// </param>
+        /// <remarks>
+        /// <para>
+        /// <b>Why shed here rather than fragment.</b> The transport does fragment, and it forces
+        /// <c>PacketFlags.Reliable</c> on every fragment — which would turn snapshots
+        /// reliable-ordered and introduce head-of-line blocking on the one channel whose entire
+        /// design premise is that a late snapshot is worthless. Dropping the whole snapshot,
+        /// which is what the loop did before this, is worse still: at 64 actors the client
+        /// received nothing at all.
+        /// </para>
+        /// <para>
+        /// <b>Deferring an actor is already a supported concept.</b> Rate-limited actors are
+        /// omitted exactly this way, and the delta baseline is the client's <i>acked</i>
+        /// snapshot rather than the previous one, so an omitted actor is picked up by a later
+        /// delta with no special handling and no despawn/respawn handshake.
+        /// </para>
+        /// </remarks>
+        public bool BuildView(
+            ClientSession session,
+            WorldSnapshot world,
+            uint snapshotIndex,
+            WorldSnapshot destination,
+            SpawnAckTracker? spawnGate,
+            int byteBudget)
+        {
+            if (session == null) throw new ArgumentNullException(nameof(session));
+
+            return BuildViewCore(
+                session.ActorId, world, snapshotIndex, destination, spawnGate, byteBudget,
+                session);
+        }
+
+        private bool BuildViewCore(
+            ushort viewerActorId,
+            WorldSnapshot world,
+            uint snapshotIndex,
+            WorldSnapshot destination,
+            SpawnAckTracker? spawnGate,
+            int byteBudget,
+            ClientSession? session)
         {
             if (world == null) throw new ArgumentNullException(nameof(world));
             if (destination == null) throw new ArgumentNullException(nameof(destination));
@@ -246,6 +356,17 @@ namespace Ironfront.Net.Replication.Interest
 
             destination.Clear();
             destination.ServerTick = world.ServerTick;
+
+            LastViewShedCount = 0;
+
+            // ---- Pass 1: classify, and bucket by interest level.
+            //
+            // Split from the emit pass so that shedding can honour D6 — lowest level first —
+            // which a single pass in world order cannot: it would shed whichever actors
+            // happened to be last in the registry, regardless of how close they are.
+            _nearCount = 0;
+            _midCount = 0;
+            _farCount = 0;
 
             for (int i = 0; i < world.ActorCount; i++)
             {
@@ -286,49 +407,141 @@ namespace Ironfront.Net.Replication.Interest
                     && !spawnGate.HasSpawnBeenSent(viewerActorId, target.ActorId))
                     continue;
 
-                // Not due: omitted from this snapshot entirely. The client keeps the last
-                // position it was told, which is what a reduced update rate means.
-                //
-                // The tempting alternative is to keep the actor in the view at its previously
-                // sent values, so the change mask comes out empty and it costs 3 bytes instead
-                // of being absent from the baseline and needing a full 20-byte re-send later.
-                // That reasoning is wrong, and measurably so. The baseline is the client's
-                // ACKED snapshot, roughly two behind, not the previous one — so a held entry
-                // usually still differs from the baseline and encodes a full delta anyway.
-                // Holding therefore pays 12 bytes every snapshot where omitting pays 12 bytes
-                // every second or fifth. Measured over 30 s at 48 actors: omitting cut
-                // bandwidth 25.5%, holding cut it 11.0%.
-                if (!ShouldSend(viewerActorId, target.ActorId, level, snapshotIndex))
+                // The viewer is emitted first and unconditionally, so it is not bucketed —
+                // otherwise a rotation could put it behind actors that then exhaust the budget,
+                // and a client that cannot see itself is the one failure this must never have.
+                if (target.ActorId == viewerActorId) continue;
+
+                switch (level)
                 {
-                    EntriesHeld++;
-                    continue;
+                    case InterestLevel.Near: _nearBucket[_nearCount++] = i; break;
+                    case InterestLevel.Mid:  _midBucket[_midCount++]   = i; break;
+                    default:                 _farBucket[_farCount++]   = i; break;
                 }
-
-                // A copy, because the outgoing entry may differ from the world's. Mutating
-                // world.Actors[i] in place would apply one viewer's culling decision to every
-                // other viewer in the same snapshot — a client standing next to an actor would
-                // lose its velocity because somebody else was far from it.
-                ActorSnapshotEntry outgoing = target;
-
-                if (Config.UseVelocityCulling && level < InterestLevel.Near
-                    && (outgoing.VelX != 0 || outgoing.VelY != 0 || outgoing.VelZ != 0))
-                {
-                    // Zeroed rather than omitted: the change mask is computed against the
-                    // client's acked baseline, which also went through this filter, so writing
-                    // the same zero every snapshot clears the Velocity bit for free. Omission
-                    // is not expressible here at all — the encoder derives the mask, it is not
-                    // handed one.
-                    outgoing.VelX = 0;
-                    outgoing.VelY = 0;
-                    outgoing.VelZ = 0;
-                    VelocityFieldsCulled++;
-                }
-
-                if (!destination.Add(in outgoing)) break;   // full; MAX_ACTORS is the fence
-
-                EntriesRefreshed++;
             }
 
+            // ---- Pass 2: emit, highest interest first, until the budget runs out.
+            int remaining = byteBudget > 0
+                ? byteBudget - SnapshotHeader.Size
+                : int.MaxValue;
+
+            Emit(viewerActorId, world, viewerIndex, InterestLevel.Near, snapshotIndex,
+                 destination, ref remaining);
+
+            int cursor = session?.ShedCursor ?? 0;
+
+            int admitted = EmitBucket(
+                viewerActorId, world, _nearBucket, _nearCount, InterestLevel.Near,
+                snapshotIndex, destination, cursor, ref remaining);
+
+            admitted += EmitBucket(
+                viewerActorId, world, _midBucket, _midCount, InterestLevel.Mid,
+                snapshotIndex, destination, cursor, ref remaining);
+
+            admitted += EmitBucket(
+                viewerActorId, world, _farBucket, _farCount, InterestLevel.Far,
+                snapshotIndex, destination, cursor, ref remaining);
+
+            // The cursor only moves when something was actually shed, and it moves by however
+            // many actors got through. That slides the admission window forward each snapshot,
+            // so the actors that lost this round are at the front of the next one — which is
+            // what turns "some actors are dropped" into "every actor arrives within a bounded
+            // number of snapshots" (D6). Advancing unconditionally would rotate a view that
+            // fits comfortably, re-ordering entries for no reason.
+            if (session != null && LastViewShedCount > 0)
+                session.ShedCursor = cursor + (admitted > 0 ? admitted : 1);
+
+            return true;
+        }
+
+        /// <summary>
+        /// Emits one bucket, starting <paramref name="cursor"/> entries in and wrapping.
+        /// </summary>
+        /// <returns>How many actors were admitted.</returns>
+        private int EmitBucket(
+            ushort viewerActorId, WorldSnapshot world, int[] bucket, int count,
+            InterestLevel level, uint snapshotIndex, WorldSnapshot destination,
+            int cursor, ref int remaining)
+        {
+            if (count == 0) return 0;
+
+            int start = ((cursor % count) + count) % count;   // negative-safe
+            int admitted = 0;
+
+            for (int k = 0; k < count; k++)
+            {
+                int index = bucket[(start + k) % count];
+
+                // Budget checked BEFORE due-ness, and that ordering is the anti-starvation
+                // property. Asking ShouldSend first would record a send for an actor that is
+                // then shed, so it would wait a further full period on top of losing this
+                // round. Every entry costs the same worst-case width, so once one does not fit
+                // none will — everything left in this bucket, and in every lower one, is shed.
+                if (remaining < MaxEntrySize)
+                {
+                    LastViewShedCount += count - k;
+                    EntriesShed += count - k;
+                    return admitted;
+                }
+
+                if (Emit(viewerActorId, world, index, level, snapshotIndex, destination,
+                         ref remaining))
+                    admitted++;
+            }
+
+            return admitted;
+        }
+
+        /// <summary>Emits one actor if it is due. Returns whether it was written.</summary>
+        private bool Emit(
+            ushort viewerActorId, WorldSnapshot world, int index, InterestLevel level,
+            uint snapshotIndex, WorldSnapshot destination, ref int remaining)
+        {
+            ref ActorSnapshotEntry target = ref world.Actors[index];
+
+            // Not due: omitted from this snapshot entirely. The client keeps the last
+            // position it was told, which is what a reduced update rate means.
+            //
+            // The tempting alternative is to keep the actor in the view at its previously
+            // sent values, so the change mask comes out empty and it costs 3 bytes instead
+            // of being absent from the baseline and needing a full 20-byte re-send later.
+            // That reasoning is wrong, and measurably so. The baseline is the client's
+            // ACKED snapshot, roughly two behind, not the previous one — so a held entry
+            // usually still differs from the baseline and encodes a full delta anyway.
+            // Holding therefore pays 12 bytes every snapshot where omitting pays 12 bytes
+            // every second or fifth. Measured over 30 s at 48 actors: omitting cut
+            // bandwidth 25.5%, holding cut it 11.0%.
+            if (!IsDue(viewerActorId, target.ActorId, level, snapshotIndex))
+            {
+                EntriesHeld++;
+                return false;
+            }
+
+            // A copy, because the outgoing entry may differ from the world's. Mutating
+            // world.Actors[index] in place would apply one viewer's culling decision to every
+            // other viewer in the same snapshot — a client standing next to an actor would
+            // lose its velocity because somebody else was far from it.
+            ActorSnapshotEntry outgoing = target;
+
+            if (Config.UseVelocityCulling && level < InterestLevel.Near
+                && (outgoing.VelX != 0 || outgoing.VelY != 0 || outgoing.VelZ != 0))
+            {
+                // Zeroed rather than omitted: the change mask is computed against the
+                // client's acked baseline, which also went through this filter, so writing
+                // the same zero every snapshot clears the Velocity bit for free. Omission
+                // is not expressible here at all — the encoder derives the mask, it is not
+                // handed one.
+                outgoing.VelX = 0;
+                outgoing.VelY = 0;
+                outgoing.VelZ = 0;
+                VelocityFieldsCulled++;
+            }
+
+            if (!destination.Add(in outgoing)) return false;   // full; MAX_ACTORS is the fence
+
+            RecordSend(viewerActorId, target.ActorId, snapshotIndex);
+            remaining -= MaxEntrySize;
+            EntriesRefreshed++;
             return true;
         }
 
@@ -471,6 +684,8 @@ namespace Ironfront.Net.Replication.Interest
             EntriesHeld = 0;
             EntriesCulled = 0;
             EntriesDroppedDead = 0;
+            EntriesShed = 0;
+            LastViewShedCount = 0;
             VelocityFieldsCulled = 0;
         }
 

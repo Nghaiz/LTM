@@ -92,6 +92,11 @@ namespace Ironfront.Net.Unity.Server
             _match.ResetRequested += OnResetRequested;
 
             _loop.BindMatch(_actorIds);
+
+            // So an authoritative kill reaches the scoreboard. Before phase-05 nothing resolved
+            // damage on the server at all, so ReportDeath had no caller and the ticket count
+            // never moved in a networked match.
+            _loop.BindMatchController(this);
         }
 
         private void OnDestroy()

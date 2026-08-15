@@ -758,6 +758,23 @@ public class Actor : Hurtable
 		return Velocity().sqrMagnitude < 0.1f;
 	}
 
+	// phase-05 task 6. Every damage source in the game funnels through this one method --
+	// Hitbox, MeleeWeapon, ExplodingProjectile, ActorManager, Vehicle and AiActorController all
+	// end up here -- which is why the network guard is here and not spread across six callers,
+	// and emphatically not inside AiActorController's eight coroutines.
+	//
+	// The guard is a single question: who owns this actor's health?
+	//
+	//   Offline -- this actor does. Unchanged; the single-player game behaves exactly as before,
+	//              because `ownsHealth` is true and nothing below is skipped.
+	//   Server  -- this actor does, and it is the authoritative copy. NetServerActor.Health is a
+	//              pass-through to this field (D9), so `health -=` below IS the number the
+	//              snapshot sends. What the server owes on top is telling the netcode, which is
+	//              the ServerCombatEvents call in the death branch.
+	//   Client  -- the SERVER does. Health arrives in the snapshot and death arrives as S_DEATH,
+	//              so the subtraction and Die() are skipped (D5). ReceivedDamage, the blood
+	//              decals, the ragdoll force and the knockback all still run, because hit
+	//              feedback that waited for a round trip would feel broken at any real ping.
 	public override bool Damage(float healthDamage, float balanceDamage, bool piercing, Vector3 point, Vector3 direction, Vector3 impactForce)
 	{
 		bool flag = IsSeated() && seat.enclosed;
@@ -769,8 +786,12 @@ public class Actor : Hurtable
 		{
 			return false;
 		}
+		bool ownsHealth = !Ironfront.Net.Unity.NetContext.IsClient;
 		controller.ReceivedDamage(healthDamage, balanceDamage, point, direction, impactForce);
-		health -= healthDamage;
+		if (ownsHealth)
+		{
+			health -= healthDamage;
+		}
 		if (!flag)
 		{
 			balance = Mathf.Max(balance - balanceDamage, -100f);
@@ -780,9 +801,13 @@ public class Actor : Hurtable
 		{
 			DecalManager.CreateBloodDrop(point, Vector3.ClampMagnitude(impactForce * 0.1f, 5f), team);
 		}
-		if (health <= 0f)
+		// `ownsHealth &&` rather than relying on health never reaching zero on a client: the
+		// client's copy of this field is written from snapshots, so it genuinely can be zero
+		// here, and Die() would then fire locally for a death S_DEATH is about to announce.
+		if (ownsHealth && health <= 0f)
 		{
 			Die(impactForce);
+			Ironfront.Net.Unity.Server.ServerCombatEvents.ReportDeath(this, impactForce);
 		}
 		else if (ragdoll.IsRagdoll())
 		{
