@@ -62,6 +62,17 @@
     <PackageVersion Include="System.IO.Pipelines" Version="8.0.0" />
   </ItemGroup>
 
+  <ItemGroup Label="Build tooling">
+    <!--
+      Used ONLY by tools/UnitySyntaxCheck, which parses Ironfront_Reborn/Assets/Scripts at
+      Unity's C# language version so that a broken brace in a Unity script is caught by a
+      gate rather than by Dev A opening the Editor. Nothing shipped references it.
+
+      Dev tooling, not a netcode framework — section 3.4's hard no does not apply.
+    -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
+  </ItemGroup>
+
   <ItemGroup Label="Test host">
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />
