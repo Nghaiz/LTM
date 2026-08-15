@@ -231,21 +231,40 @@ namespace Ironfront.Net.Transport.Tests
             // reporting congestion correctly, under a load no client would ever generate, while
             // the test asserted Good. Pacing the loop and giving the server something to send
             // makes both assertions measure what they claim to.
+            // Run until the rate block has actually published, not until a stopwatch says it
+            // should have. Connection.UpdateRateStats returns early while its window is under
+            // 1000 ms, so a fixed 1200 ms deadline left only 200 ms of margin over that
+            // threshold -- and it was measured with DateTime.UtcNow, a wall clock the host can
+            // step forward under a VM at any moment. Either a long scheduling hiccup or one
+            // time-sync step ends the loop with no poll having crossed the boundary, both rates
+            // still at their initial 0, and Assert.True reporting nothing but "Actual: False"
+            // (runs 31861341183 and 31864762553, windows-latest, both times).
+            //
+            // Waiting for the value hides nothing: if the rate accounting genuinely stopped
+            // working the loop runs the full ceiling and the same assertions still fail, now
+            // with the counters attached.
             var payloadUp = new byte[8];
             var payloadDown = new byte[16];
-            DateTime until = DateTime.UtcNow.AddMilliseconds(1200);
-            while (DateTime.UtcNow < until)
+            Stopwatch clock = Stopwatch.StartNew();
+            TransportStats stats = client.Stats;
+            while (clock.ElapsedMilliseconds < 5000)
             {
                 client.Send((byte)ChannelId.InputSequenced, payloadUp, reliable: false);
                 server.Poll();
                 server.Broadcast((byte)ChannelId.SnapshotSequenced, payloadDown, reliable: false);
                 client.Poll();
+
+                stats = client.Stats;
+                if (stats.BytesPerSecondSent > 0f && stats.BytesPerSecondReceived > 0f) break;
                 Thread.Sleep(16);
             }
 
-            TransportStats stats = client.Stats;
-            Assert.True(stats.BytesPerSecondSent > 0f);
-            Assert.True(stats.BytesPerSecondReceived > 0f);
+            string diagnostics =
+                $"up={stats.BytesPerSecondSent}B/s, down={stats.BytesPerSecondReceived}B/s, "
+                + $"sent={stats.BytesSent}B, received={stats.BytesReceived}B, "
+                + $"elapsed={clock.ElapsedMilliseconds}ms, state={client.State}";
+            Assert.True(stats.BytesPerSecondSent > 0f, diagnostics);
+            Assert.True(stats.BytesPerSecondReceived > 0f, diagnostics);
             Assert.Equal(0, stats.CongestionMode);
             Assert.Equal(0, stats.PendingFragmentGroups);
             Assert.InRange(stats.BufferPoolRented, 0, 2);
