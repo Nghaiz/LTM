@@ -9,6 +9,37 @@ using System;
 namespace Ironfront.Net.Unity.Client
 {
     /// <summary>
+    /// A move the transition table does not list was attempted.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Its own type, rather than a bare <see cref="InvalidOperationException"/>, because callers
+    /// have to be able to tell it apart from one. <c>MasterClient</c> throws
+    /// <see cref="InvalidOperationException"/> for "not connected" and "already connected", so a
+    /// <c>catch (InvalidOperationException)</c> around a request that also transitions would
+    /// swallow a state-machine bug and report it as a dead network link — a failure that is
+    /// reported, but as the wrong thing, which is harder to find than one that is not reported
+    /// at all.
+    /// </para>
+    /// <para>
+    /// It derives from <see cref="InvalidOperationException"/> so that existing handlers and
+    /// phase-03's own sketch, which throws that type, keep working.
+    /// </para>
+    /// </remarks>
+    public sealed class IllegalGameFlowTransitionException : InvalidOperationException
+    {
+        public IllegalGameFlowTransitionException(GameFlowState from, GameFlowState to)
+            : base($"Invalid state transition: {from} -> {to}")
+        {
+            From = from;
+            To = to;
+        }
+
+        public GameFlowState From { get; }
+        public GameFlowState To { get; }
+    }
+
+    /// <summary>
     /// The game-flow state machine: the ten states of phase-03 task 1, the transition table
     /// between them, and a guard that refuses every move the table does not list.
     /// </summary>
@@ -124,13 +155,12 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>
         /// Moves to <paramref name="next"/>.
         /// </summary>
-        /// <exception cref="InvalidOperationException">
+        /// <exception cref="IllegalGameFlowTransitionException">
         /// The table does not list <paramref name="next"/> as reachable from <see cref="State"/>.
         /// </exception>
         public void Transition(GameFlowState next)
         {
-            if (!IsLegal(State, next))
-                throw new InvalidOperationException($"Invalid state transition: {State} -> {next}");
+            if (!IsLegal(State, next)) throw new IllegalGameFlowTransitionException(State, next);
 
             GameFlowState previous = State;
             State = next;
@@ -178,7 +208,12 @@ namespace Ironfront.Net.Unity.Client
             int row = (int)from;
             if (row < 0 || row >= Allowed.Length) return false;
 
+            // A row can be null only if the enum grew without BuildTable growing with it. That is
+            // a programming error, but answering it with "illegal" rather than a NullReference
+            // keeps the promise this method makes to every caller: it reports, it never throws.
             GameFlowState[] destinations = Allowed[row];
+            if (destinations == null) return false;
+
             for (int i = 0; i < destinations.Length; i++)
                 if (destinations[i] == to) return true;
 
@@ -196,7 +231,7 @@ namespace Ironfront.Net.Unity.Client
         public static GameFlowState[] DestinationsFrom(GameFlowState from)
         {
             int row = (int)from;
-            if (row < 0 || row >= Allowed.Length) return Array.Empty<GameFlowState>();
+            if (row < 0 || row >= Allowed.Length || Allowed[row] == null) return Array.Empty<GameFlowState>();
 
             var copy = new GameFlowState[Allowed[row].Length];
             Array.Copy(Allowed[row], copy, copy.Length);

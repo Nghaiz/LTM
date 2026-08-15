@@ -26,9 +26,17 @@ namespace Ironfront.Client.Flow.Tests
             Ok = true,
             GameServerIp = "203.0.113.7",
             GameServerPort = 27015,
-            JoinTicket = new byte[] { 1, 2, 3, 4 },
+            JoinTicket = DefaultTicket(),
         };
         public RoomInfo[] NextRooms { get; set; } = Array.Empty<RoomInfo>();
+
+        /// <summary>A wire-legal 64-byte ticket, as the master would issue.</summary>
+        private static byte[] DefaultTicket()
+        {
+            var ticket = new byte[ProtocolConstants.JOIN_TICKET_SIZE];
+            for (int i = 0; i < ticket.Length; i++) ticket[i] = (byte)(i + 1);
+            return ticket;
+        }
 
         /// <summary>Thrown by the next call instead of answering, then cleared.</summary>
         public Exception? ThrowOnNextCall { get; set; }
@@ -111,8 +119,20 @@ namespace Ironfront.Client.Flow.Tests
     /// A scripted <see cref="ITransportClient"/> that connects only when a test says so.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The junction is entirely about <i>when</i> things happen — accept, refuse, or say
     /// nothing until the timeout fires — so the fake never completes on its own.
+    /// </para>
+    /// <para>
+    /// <b>It mirrors the two places UdpTransportClient is strict, and that is not decoration.</b>
+    /// An earlier version of this fake accepted any ticket and raised nothing from
+    /// <c>Disconnect()</c>. Both defects it hid were real: a direct connect threw
+    /// <c>ArgumentException</c> out of <c>OnGUI</c> because the ticket was empty, and a
+    /// deliberate <c>LeaveMatch</c> painted a red "you were disconnected" line, because the real
+    /// <c>Connection.Disconnect</c> raises <c>OnDisconnected</c> synchronously before it
+    /// returns. A test double looser than the collaborator it stands in for is a test that
+    /// passes for the wrong reason.
+    /// </para>
     /// </remarks>
     internal sealed class FakeTransportClient : ITransportClient
     {
@@ -133,6 +153,13 @@ namespace Ironfront.Client.Flow.Tests
 
         public void Connect(string host, int port, ReadOnlySpan<byte> joinTicket)
         {
+            // Connection.BeginConnect throws exactly this, before a packet is sent.
+            if (joinTicket.Length != ProtocolConstants.JOIN_TICKET_SIZE)
+                throw new ArgumentException("A join ticket must be exactly 64 bytes.", nameof(joinTicket));
+
+            if (port < 1 || port > ushort.MaxValue)
+                throw new ArgumentOutOfRangeException(nameof(port));
+
             LastHost = host;
             LastPort = port;
             LastTicket = joinTicket.ToArray();
@@ -143,7 +170,13 @@ namespace Ironfront.Client.Flow.Tests
         public void Disconnect()
         {
             DisconnectCount++;
+
+            // Connection.Disconnect calls Fail(reason, notify: true), which raises Disconnected
+            // on the calling thread before Disconnect returns. Anything that calls this has the
+            // handler run underneath it.
+            bool wasUp = State != ConnectionState.Disconnected;
             State = ConnectionState.Disconnected;
+            if (wasUp) OnDisconnected?.Invoke(DisconnectReason.LocalRequest);
         }
 
         public void Send(byte channelId, ReadOnlySpan<byte> payload, bool reliable) { }

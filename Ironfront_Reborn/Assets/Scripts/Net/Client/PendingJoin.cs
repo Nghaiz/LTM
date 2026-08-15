@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using Ironfront.Net.Protocol;
 
 namespace Ironfront.Net.Unity.Client
 {
@@ -34,25 +35,56 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>Its UDP port.</summary>
         public readonly int Port;
 
+        private readonly byte[] _ticket;
+
         /// <summary>The master's signed ticket. Never fabricated by the client.</summary>
-        public readonly byte[] Ticket;
+        /// <remarks>
+        /// Read through the field rather than exposed directly so that <see cref="None"/> — and
+        /// any other <c>default(PendingJoin)</c>, which bypasses the constructor entirely — reads
+        /// as empty rather than null. <c>LeaveMatch</c> assigns <see cref="None"/>, and
+        /// <see cref="ToString"/> is on a debug screen, which is a poor place to learn that a
+        /// struct's default is not what its constructor guarantees.
+        /// </remarks>
+        public byte[] Ticket => _ticket ?? Array.Empty<byte>();
 
         public PendingJoin(string ip, int port, byte[] ticket)
         {
             Ip = ip ?? string.Empty;
             Port = port;
-            Ticket = ticket ?? Array.Empty<byte>();
+            _ticket = ticket ?? Array.Empty<byte>();
         }
+
+        /// <summary>
+        /// A placeholder ticket for a server that accepts unsigned ones. phase-03 UI item 14.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>An empty ticket does not reach the wire — it throws.</b>
+        /// <c>Connection.BeginConnect</c> rejects anything that is not exactly
+        /// <c>ProtocolConstants.JOIN_TICKET_SIZE</c> bytes, before a packet is sent, so a client
+        /// dialling with <c>ReadOnlySpan&lt;byte&gt;.Empty</c> raises <c>ArgumentException</c> at
+        /// its own <c>Connect</c> call and never gets an answer from anybody. The server's
+        /// <c>_acceptUnsignedTickets</c> switch is real, but it is reached only by a ticket that
+        /// is the right length: with it on, the validator is <c>_ =&gt; true</c> and the contents
+        /// are never examined.
+        /// </para>
+        /// <para>
+        /// So the LAN path sends 64 zero bytes. It is not a forgery attempt — a server with
+        /// validation on rejects it on the HMAC like any other unsigned ticket, which is the
+        /// correct outcome. It is the difference between being turned away by the server and
+        /// never leaving the building.
+        /// </para>
+        /// </remarks>
+        public static byte[] CreateUnsignedTicket() => new byte[ProtocolConstants.JOIN_TICKET_SIZE];
 
         /// <summary>
         /// Whether this is worth dialling.
         /// </summary>
         /// <remarks>
-        /// An empty ticket is allowed and is not checked here: a game server running standalone
-        /// accepts unsigned tickets when its own <c>_acceptUnsignedTickets</c> switch says so,
-        /// which is the LAN path step 07's direct-connect field uses. Whether an empty ticket is
-        /// acceptable is the server's decision, and asserting it here would break that path for
-        /// no gain.
+        /// The ticket is not checked here: whether its contents are acceptable is the server's
+        /// decision, and a standalone server with <c>_acceptUnsignedTickets</c> on never looks.
+        /// Its <i>length</i> is a different matter and is not optional — see
+        /// <see cref="CreateUnsignedTicket"/>.
         /// </remarks>
         public bool IsValid => !string.IsNullOrEmpty(Ip) && Port > 0 && Port <= ushort.MaxValue;
 

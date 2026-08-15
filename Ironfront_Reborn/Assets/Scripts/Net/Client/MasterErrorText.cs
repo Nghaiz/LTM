@@ -36,6 +36,19 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>A player-facing sentence for one error code.</summary>
         public static string Describe(int errorCode) => Describe((ErrorCode)errorCode);
 
+        /// <summary>
+        /// A player-facing sentence for a request that failed, whatever code it carried.
+        /// </summary>
+        /// <remarks>
+        /// The difference from <see cref="Describe"/> is code 0. A master that answers
+        /// <c>ok=false</c> without filling in <c>errorCode</c> is not reporting success, but
+        /// <see cref="Describe"/> would translate the 0 into "OK." and put that word in red on
+        /// the login screen. Every failure path uses this overload for that reason; the plain
+        /// one is for when a code is being described on its own terms.
+        /// </remarks>
+        public static string DescribeFailure(int errorCode)
+            => errorCode == (int)ErrorCode.Ok ? Unknown : Describe((ErrorCode)errorCode);
+
         /// <summary>A player-facing sentence for one error code.</summary>
         public static string Describe(ErrorCode code)
         {

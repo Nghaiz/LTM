@@ -184,7 +184,7 @@ namespace Ironfront.Client.Flow.Tests
             Assert.True(h.Session.PendingJoin.IsValid);
             Assert.Equal("203.0.113.7", h.Session.PendingJoin.Ip);
             Assert.Equal(27015, h.Session.PendingJoin.Port);
-            Assert.Equal(new byte[] { 1, 2, 3, 4 }, h.Session.PendingJoin.Ticket);
+            Assert.Equal(Ticket(), h.Session.PendingJoin.Ticket);
         }
 
         [Fact]
@@ -250,7 +250,7 @@ namespace Ironfront.Client.Flow.Tests
             Assert.Equal(1, h.Game.ConnectCount);
             Assert.Equal("203.0.113.7", h.Game.LastHost);
             Assert.Equal(27015, h.Game.LastPort);
-            Assert.Equal(new byte[] { 1, 2, 3, 4 }, h.Game.LastTicket);
+            Assert.Equal(Ticket(), h.Game.LastTicket);
             Assert.True(h.Session.Inbound.IsHolding);
         }
 
@@ -424,7 +424,7 @@ namespace Ironfront.Client.Flow.Tests
         // --------------------------------------------------------- direct connect
 
         [Fact]
-        public void DirectConnectDialsWithNoTicketAndLeavesTheFlowAlone()
+        public void DirectConnectDialsWithAPlaceholderTicketAndLeavesTheFlowAlone()
         {
             // phase-03 UI item 14, and its stated contingency for the master not being ready.
             // The diagram has no edge into ConnectingGame that does not come from RoomLobby, so
@@ -436,7 +436,12 @@ namespace Ironfront.Client.Flow.Tests
 
             Assert.Equal(GameFlowState.LoginScreen, h.Flow.State);
             Assert.Equal("10.0.0.5", h.Game.LastHost);
-            Assert.Empty(h.Game.LastTicket);
+
+            // 64 zero bytes, not Array.Empty. An empty ticket is rejected by the transport
+            // before a packet is sent, so the LAN path would never reach the server that was
+            // going to accept it.
+            Assert.Equal(ProtocolConstants.JOIN_TICKET_SIZE, h.Game.LastTicket.Length);
+            Assert.All(h.Game.LastTicket, b => Assert.Equal(0, b));
             Assert.True(h.Session.Inbound.IsHolding);
         }
 
@@ -467,6 +472,114 @@ namespace Ironfront.Client.Flow.Tests
             Assert.Equal("There is no room to join.", h.Session.LastError);
         }
 
+        // --------------------------------------------------------- failures that got through review
+
+        [Fact]
+        public void ADialThatThrowsIsReportedRatherThanEscapingIntoTheCaller()
+        {
+            // ConnectDirect is called straight out of an OnGUI button. UdpTransportClient.Connect
+            // throws synchronously on a bad port, an unresolvable host, or a wrong-length ticket,
+            // and an exception escaping there takes down the frame with the GUI clip stack
+            // unbalanced -- and no error line, because the shell cleared it a moment earlier.
+            var h = new Harness();
+            h.Flow.Transition(GameFlowState.LoginScreen);
+
+            string? failure = null;
+            h.Session.OnGameServerFailed += message => failure = message;
+
+            h.Session.ConnectDirect("10.0.0.5", port: 0);   // the fake rejects this, as the real one does
+
+            Assert.NotNull(failure);
+            Assert.Contains("Could not dial", failure!);
+            Assert.False(h.Session.Inbound.IsHolding);
+            Assert.Equal(GameFlowState.LoginScreen, h.Flow.State);
+        }
+
+        [Fact]
+        public async Task LeavingAMatchDoesNotReportADisconnection()
+        {
+            // The real Connection.Disconnect raises OnDisconnected synchronously before it
+            // returns, so LeaveMatch's own call re-enters the handler. Without a guard the
+            // player who chose to leave gets a red "Disconnected from the game server".
+            Harness h = await new Harness().AtRoomLobbyAsync();
+            h.Session.EnterMatch();
+            h.Game.Accept();
+            h.Session.OnSceneReady();
+
+            int errors = 0;
+            h.Session.OnError += _ => errors++;
+
+            h.Session.LeaveMatch();
+
+            Assert.Equal(0, errors);
+            Assert.Equal(string.Empty, h.Session.LastError);
+            Assert.Equal(GameFlowState.Lobby, h.Flow.State);
+        }
+
+        [Fact]
+        public async Task LeavingWhileStillDiallingDoesNotStrandTheFlow()
+        {
+            // ConnectingGame's only exits are driven by a junction that LeaveMatch has just
+            // cancelled, and clearing _connecting stops the timeout ever firing. Without the
+            // extra recovery edge the flow parks there for the rest of the process.
+            Harness h = await new Harness().AtRoomLobbyAsync();
+            h.Session.EnterMatch();
+            Assert.Equal(GameFlowState.ConnectingGame, h.Flow.State);
+
+            h.Session.LeaveMatch();
+
+            Assert.Equal(GameFlowState.RoomLobby, h.Flow.State);
+            Assert.True(h.Flow.CanTransition(GameFlowState.ConnectingGame));
+        }
+
+        [Fact]
+        public async Task AStateMachineBugIsNotReportedAsALostConnection()
+        {
+            // IllegalGameFlowTransitionException derives from InvalidOperationException, which
+            // MasterClient also throws. If IsLinkFailure did not exclude it by name, calling
+            // LoginAsync from the wrong state would be laundered into "lost the connection".
+            var h = new Harness();   // still Booting: LoginScreen -> Authenticating is not legal here
+
+            await Assert.ThrowsAsync<IllegalGameFlowTransitionException>(
+                () => h.Session.LoginAsync("tester", "hunter2"));
+
+            Assert.Equal(string.Empty, h.Session.LastError);
+            Assert.Equal(GameFlowState.Booting, h.Flow.State);
+        }
+
+        [Fact]
+        public async Task AFailedResponseCarryingNoCodeDoesNotSayOk()
+        {
+            // ErrorCode.Ok is 0, so a master answering ok=false without filling in errorCode
+            // would otherwise put the word "OK." on the login screen in red.
+            var h = new Harness().AtLoginScreen();
+            h.Master.NextLogin = new LoginResult(false, 0, string.Empty, 0, string.Empty);
+
+            Assert.False(await h.Session.LoginAsync("tester", "hunter2"));
+
+            Assert.Equal(MasterErrorText.Unknown, h.Session.LastError);
+            Assert.DoesNotContain("OK", h.Session.LastError);
+        }
+
+        [Fact]
+        public void ADefaultPendingJoinHasAnEmptyTicketRatherThanNull()
+        {
+            // PendingJoin.None bypasses the constructor. LeaveMatch assigns it and the debug
+            // shell interpolates it, which is a poor place to discover a null array.
+            PendingJoin none = PendingJoin.None;
+
+            Assert.NotNull(none.Ticket);
+            Assert.Empty(none.Ticket);
+            Assert.False(none.IsValid);
+            Assert.Contains("0-byte ticket", none.ToString());
+        }
+
+        [Fact]
+        public void TheUnsignedTicketIsTheLengthTheTransportDemands()
+        {
+            Assert.Equal(ProtocolConstants.JOIN_TICKET_SIZE, PendingJoin.CreateUnsignedTicket().Length);
+        }
+
         // --------------------------------------------------------- threading
 
         [Fact]
@@ -494,6 +607,14 @@ namespace Ironfront.Client.Flow.Tests
 
             Assert.Equal(GameFlowState.Booting, h.Flow.State);
             Assert.Equal(string.Empty, h.Session.LastError);
+        }
+
+        /// <summary>A wire-legal 64-byte ticket. Anything shorter is refused by the transport.</summary>
+        private static byte[] Ticket()
+        {
+            var ticket = new byte[ProtocolConstants.JOIN_TICKET_SIZE];
+            for (int i = 0; i < ticket.Length; i++) ticket[i] = (byte)(i + 1);
+            return ticket;
         }
 
         private static string Sha256Hex(string value)

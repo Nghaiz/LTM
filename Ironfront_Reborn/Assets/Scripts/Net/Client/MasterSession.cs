@@ -63,6 +63,9 @@ namespace Ironfront.Net.Unity.Client
         private float _connectDeadline;
         private bool _connecting;
 
+        /// <summary>Set while our own <c>Disconnect()</c> is on the stack. See <see cref="LeaveMatch"/>.</summary>
+        private bool _leaving;
+
         /// <summary>Whether the junction in flight came through the master, or was a direct dial.</summary>
         private bool _junctionDrivesFlow;
 
@@ -156,8 +159,8 @@ namespace Ironfront.Net.Unity.Client
 
                 if (!result.Ok)
                 {
-                    Fail(MasterErrorText.Describe(result.ErrorCode));
-                    _flow.Transition(GameFlowState.LoginScreen);
+                    Fail(MasterErrorText.DescribeFailure(result.ErrorCode));
+                    Recover(GameFlowState.LoginScreen);
                     return false;
                 }
 
@@ -171,14 +174,14 @@ namespace Ironfront.Net.Unity.Client
             }
             catch (MasterServerException ex)
             {
-                Fail(MasterErrorText.Describe(ex.ErrorCode));
-                _flow.Transition(GameFlowState.LoginScreen);
+                Fail(MasterErrorText.DescribeFailure(ex.ErrorCode));
+                Recover(GameFlowState.LoginScreen);
                 return false;
             }
             catch (Exception ex) when (IsLinkFailure(ex))
             {
                 Fail("Lost the connection to the master server.");
-                _flow.Transition(GameFlowState.LoginScreen);
+                Recover(GameFlowState.LoginScreen);
                 return false;
             }
         }
@@ -210,7 +213,7 @@ namespace Ironfront.Net.Unity.Client
             }
             catch (MasterServerException ex)
             {
-                Fail(MasterErrorText.Describe(ex.ErrorCode));
+                Fail(MasterErrorText.DescribeFailure(ex.ErrorCode));
                 return false;
             }
             catch (Exception ex) when (IsLinkFailure(ex))
@@ -245,8 +248,8 @@ namespace Ironfront.Net.Unity.Client
 
                 if (!result.Ok)
                 {
-                    Fail(MasterErrorText.Describe(result.ErrorCode));
-                    _flow.Transition(GameFlowState.RoomBrowser);
+                    Fail(MasterErrorText.DescribeFailure(result.ErrorCode));
+                    Recover(GameFlowState.RoomBrowser);
                     return false;
                 }
 
@@ -259,7 +262,7 @@ namespace Ironfront.Net.Unity.Client
                     // timeout ten seconds later, blaming the wrong machine.
                     PendingJoin = PendingJoin.None;
                     Fail("The master server did not name a game server for that room.");
-                    _flow.Transition(GameFlowState.RoomBrowser);
+                    Recover(GameFlowState.RoomBrowser);
                     return false;
                 }
 
@@ -269,14 +272,14 @@ namespace Ironfront.Net.Unity.Client
             }
             catch (MasterServerException ex)
             {
-                Fail(MasterErrorText.Describe(ex.ErrorCode));
-                _flow.Transition(GameFlowState.RoomBrowser);
+                Fail(MasterErrorText.DescribeFailure(ex.ErrorCode));
+                Recover(GameFlowState.RoomBrowser);
                 return false;
             }
             catch (Exception ex) when (IsLinkFailure(ex))
             {
                 Fail("Lost the connection to the master server.");
-                _flow.Transition(GameFlowState.RoomBrowser);
+                Recover(GameFlowState.RoomBrowser);
                 return false;
             }
         }
@@ -302,8 +305,7 @@ namespace Ironfront.Net.Unity.Client
 
             _flow.Transition(GameFlowState.ConnectingGame);
             _junctionDrivesFlow = true;
-            BeginJunction(PendingJoin);
-            return true;
+            return BeginJunction(PendingJoin);
         }
 
         /// <summary>
@@ -328,10 +330,14 @@ namespace Ironfront.Net.Unity.Client
         public void ConnectDirect(string host, int port)
         {
             _junctionDrivesFlow = false;
-            BeginJunction(new PendingJoin(host, port, Array.Empty<byte>()));
+
+            // NOT Array.Empty: Connection.BeginConnect rejects a ticket that is not exactly 64
+            // bytes before it sends anything, so an empty one never reaches the server that was
+            // going to accept it. See PendingJoin.CreateUnsignedTicket.
+            BeginJunction(new PendingJoin(host, port, PendingJoin.CreateUnsignedTicket()));
         }
 
-        private void BeginJunction(in PendingJoin join)
+        private bool BeginJunction(in PendingJoin join)
         {
             Inbound.Clear();
             Inbound.Hold();
@@ -339,7 +345,22 @@ namespace Ironfront.Net.Unity.Client
             _connecting = true;
             _connectDeadline = ConnectTimeoutSeconds;
 
-            _game.Connect(join.Ip, join.Port, join.Ticket);
+            try
+            {
+                _game.Connect(join.Ip, join.Port, join.Ticket);
+                return true;
+            }
+            catch (Exception ex) when (ex is ArgumentException || ex is SocketException || ex is NotSupportedException)
+            {
+                // The dial can fail before a packet is sent: a ticket of the wrong length, a
+                // port out of range, a host name that will not resolve. Letting that escape
+                // would take down whichever frame called it -- and the UI calls this straight
+                // out of a button.
+                _connecting = false;
+                Inbound.Clear();
+                FailJunction($"Could not dial {join.Ip}:{join.Port} — {ex.Message}");
+                return false;
+            }
         }
 
         /// <summary>
@@ -384,10 +405,27 @@ namespace Ironfront.Net.Unity.Client
             Inbound.Clear();
             PendingJoin = PendingJoin.None;
 
-            _game.Disconnect();
+            // The real transport raises OnDisconnected synchronously from inside Disconnect()
+            // (Connection.Disconnect -> Fail(reason, notify: true)), so the handler below runs
+            // before the next line does. Without this flag it would report "Disconnected from
+            // the game server (LocalRequest)" in red at a player who chose to leave.
+            _leaving = true;
+            try
+            {
+                _game.Disconnect();
+            }
+            finally
+            {
+                _leaving = false;
+            }
 
+            // ConnectingGame is included on purpose. Leaving mid-dial clears _connecting, so the
+            // timeout in Tick can never fire, and ConnectingGame's only exits are driven by a
+            // junction that no longer exists -- the flow would park there permanently.
             if (_flow.State == GameFlowState.InMatch || _flow.State == GameFlowState.MatchEnd)
-                _flow.Transition(GameFlowState.Lobby);
+                Recover(GameFlowState.Lobby);
+            else if (_flow.State == GameFlowState.ConnectingGame)
+                Recover(GameFlowState.RoomLobby);
         }
 
         /// <summary>
@@ -435,6 +473,10 @@ namespace Ironfront.Net.Unity.Client
 
         private void OnGameDisconnected(DisconnectReason reason)
         {
+            // Our own Disconnect(), re-entering synchronously. LeaveMatch owns the tidy-up and
+            // the flow move; reporting an error here would contradict the player's own action.
+            if (_leaving) return;
+
             bool duringJunction = _connecting;
             _connecting = false;
             Inbound.Clear();
@@ -450,7 +492,7 @@ namespace Ironfront.Net.Unity.Client
             Fail($"Disconnected from the game server ({reason}).");
 
             if (_flow.State == GameFlowState.InMatch || _flow.State == GameFlowState.MatchEnd)
-                _flow.Transition(GameFlowState.Lobby);
+                Recover(GameFlowState.Lobby);
         }
 
         private void FailJunction(string message)
@@ -458,7 +500,7 @@ namespace Ironfront.Net.Unity.Client
             Fail(message);
 
             if (_junctionDrivesFlow && _flow.State == GameFlowState.ConnectingGame)
-                _flow.Transition(GameFlowState.RoomLobby);
+                Recover(GameFlowState.RoomLobby);
 
             OnGameServerFailed?.Invoke(message);
         }
@@ -470,6 +512,19 @@ namespace Ironfront.Net.Unity.Client
         }
 
         /// <summary>
+        /// Moves the flow along a recovery edge, and does nothing if the table has none.
+        /// </summary>
+        /// <remarks>
+        /// Recovery paths use this rather than <c>Transition</c> because they run from inside a
+        /// catch block or a transport callback, where the state may already have moved --
+        /// two overlapping requests, or a disconnect landing during a response. Throwing there
+        /// would replace the failure being reported with a second one nobody is catching. The
+        /// happy path still calls <c>Transition</c>, so a genuine caller bug still throws where
+        /// it can be seen.
+        /// </remarks>
+        private void Recover(GameFlowState next) => _flow.TryTransition(next);
+
+        /// <summary>
         /// Whether an exception is the link dying rather than a bug worth propagating.
         /// </summary>
         /// <remarks>
@@ -479,10 +534,18 @@ namespace Ironfront.Net.Unity.Client
         /// but as the wrong thing, which is worse than not catching it.
         /// </remarks>
         private static bool IsLinkFailure(Exception ex)
-            => ex is IOException
-            || ex is SocketException
-            || ex is ObjectDisposedException
-            || ex is OperationCanceledException
-            || ex is InvalidOperationException;
+        {
+            // An illegal transition is a bug in this class, not a dead socket. It derives from
+            // InvalidOperationException -- which MasterClient also throws, for "not connected"
+            // and "already connected" -- so it has to be excluded by name or the filter below
+            // would launder a state-machine bug into "lost the connection to the master server".
+            if (ex is IllegalGameFlowTransitionException) return false;
+
+            return ex is IOException
+                || ex is SocketException
+                || ex is ObjectDisposedException
+                || ex is OperationCanceledException
+                || ex is InvalidOperationException;
+        }
     }
 }
