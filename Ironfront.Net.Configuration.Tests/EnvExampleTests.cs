@@ -73,6 +73,29 @@ namespace Ironfront.Net.Configuration.Tests
             }
         }
 
+        [Fact]
+        public void CopyingTheTemplateVerbatimChangesNoBehaviour()
+        {
+            // The template writes out the defaults, which is only harmless while each written
+            // value matches what the code already does. IRONFRONT_GAMESERVER_TRANSPORT is the
+            // one where it did not: the resolver defaults to udp, the scene ships with the
+            // loopback wire on, and the environment beats the scene -- so a copied .env would
+            // have switched every Editor to real sockets. It is blank for that reason and this
+            // is the guard that keeps it blank.
+            Assert.Equal(string.Empty, EnvRegistry.GameServerTransport.DefaultValue);
+
+            var scene = new GameServerConfig { UseLoopbackTransport = true };
+            var resolved = new GameServerConfig { UseLoopbackTransport = true }
+                .ApplyEnvironment(name => EnvRegistry.Find(name)?.DefaultValue);
+
+            Assert.Equal(scene.UseLoopbackTransport, resolved.UseLoopbackTransport);
+            Assert.Equal(scene.UdpPort, resolved.UdpPort);
+            Assert.Equal(scene.MaxConnections, resolved.MaxConnections);
+            Assert.Equal(scene.MaxPlayers, resolved.MaxPlayers);
+            Assert.Equal(scene.MasterPort, resolved.MasterPort);
+            Assert.Equal(scene.AcceptUnsignedTickets, resolved.AcceptUnsignedTickets);
+        }
+
         /// <summary>
         /// Walks up from the test binary to the repository root. The test host's working
         /// directory is <c>bin/Debug/net8.0</c>, which is four levels down and not somewhere

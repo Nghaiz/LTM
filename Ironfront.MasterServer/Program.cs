@@ -269,6 +269,10 @@ namespace Ironfront.MasterServer
 
         private static void PrintUsage()
         {
+            // The variable list is rendered from EnvRegistry rather than written out here. It
+            // used to be a string literal, and a literal is a copy: this block was already
+            // missing every variable added after it was typed, and would have gone on missing
+            // them. Now --help, .env.example and the code that reads the value are one act.
             Console.Out.WriteLine(@"Ironfront Master Server
 
   (no arguments)                      run the server until Ctrl+C
@@ -277,22 +281,10 @@ namespace Ironfront.MasterServer
   --backup <destination.db>           consistent online copy of the database
   --help                              this text
 
-Configuration comes from the environment (or a .env file beside the binary):
+Configuration comes from the environment, or from the nearest .env at or above the
+working directory. A real environment variable always wins over the file.
 
-  IRONFRONT_SHARED_SECRET             REQUIRED, >= 32 chars, signs joinTickets
-  IRONFRONT_MASTER_PORT               default 27000
-  IRONFRONT_DB_PATH                   default ./ironfront.db
-  IRONFRONT_LOG_LEVEL                 Error | Warn | Debug (default Warn)
-  IRONFRONT_TLS_CERT_PATH             PKCS#12 bundle; empty = plaintext
-  IRONFRONT_TLS_CERT_PASSWORD         password for the bundle
-  IRONFRONT_METRICS_PORT              default 27001, 0 disables
-  IRONFRONT_METRICS_BIND              default 127.0.0.1
-  IRONFRONT_METRICS_CSV               durability CSV path; empty disables
-  IRONFRONT_METRICS_CSV_INTERVAL_SEC  default 60
-  IRONFRONT_STRUCTURED_LOG            1 to emit JSON events on stdout
-  IRONFRONT_MAX_CONNECTIONS_PER_IP    default 5; raise it for a load test rig
-  IRONFRONT_MAX_TOTAL_CONNECTIONS     default 256; 0 disables the cap
-  IRONFRONT_LOGIN_RATE_PER_MINUTE     default 5 per source IP; raise it for a load test
+" + EnvRegistry.RenderUsage("master server") + @"
 
 Operating instructions: docs/operations.md");
         }
