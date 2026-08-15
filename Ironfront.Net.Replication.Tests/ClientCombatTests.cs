@@ -49,6 +49,79 @@ namespace Ironfront.Net.Replication.Tests
                 AmmoInClip = ammo,
             };
 
+        /// <summary>
+        /// A delta entry that does <b>not</b> carry <see cref="SnapshotField.Weapon"/> — the
+        /// shape every real snapshot has once the ammo count stops changing.
+        /// </summary>
+        private static ActorSnapshotEntry LocalEntryWithoutWeapon(
+            byte health = 100, bool alive = true)
+            => new ActorSnapshotEntry
+            {
+                ActorId = 1,
+                ChangeMask = SnapshotField.Health | SnapshotField.StateFlags,
+                Health = health,
+                StateFlags = alive ? ActorStateFlags.IsAlive : ActorStateFlags.None,
+            };
+
+        // ------------------------------------------------------- phase-05 regression
+
+        [Fact]
+        public void AReloadClearsWhenTheDeltaCarriesNoWeaponField()
+        {
+            // The regression that had never been covered. Every test in this file fed
+            // LocalEntry(ammo: 30) — a snapshot that DOES carry the weapon field — so the delta
+            // case that produced finding C2 had never once run. The delta encoder masks on
+            // change (DeltaEncoder.ComputeChangeMask), and before phase-05 the server never
+            // changed anyone's ammo, so the field the client is waiting on simply never
+            // appeared: _reloadPending stayed set, IsReloading stayed true, and
+            // ServerFireResolver.CheckCanFire tests Reloading before ammo — so every later shot
+            // was refused and the player could not fire again for the rest of that life.
+            var state = new ClientCombatState { LocalActorId = 1 };
+            state.ApplySnapshot(LocalEntry(ammo: 30), Now);   // clears the equip resync
+
+            state.PredictFire(Now);
+            state.BeginReload(Now);
+            Assert.True(state.IsReloading);
+
+            // Snapshots keep arriving, and none of them mentions the weapon.
+            for (int i = 0; i < 10; i++)
+                state.ApplySnapshot(LocalEntryWithoutWeapon(), Now + i * 0.05f);
+
+            Assert.True(state.IsReloading, "a delta with no weapon field must not answer the reload");
+
+            // The predicted reload is what gets the player out, on the shared clock. This is the
+            // client half holding up its end; the server half is ServerReloadPolicy, and the two
+            // read one constant so they land together.
+            state.Tick(Now + ClientCombatState.DefaultReloadSeconds);
+
+            Assert.False(state.IsReloading);
+            Assert.Equal((byte)ClipSize, state.AmmoInClip);
+
+            // And the player can fire again — the assertion that would have failed before.
+            Assert.Equal(
+                FireRejection.None,
+                state.PredictFire(Now + ClientCombatState.DefaultReloadSeconds + 1f));
+        }
+
+        [Fact]
+        public void AWeaponCarryingSnapshotAnswersTheReloadAndClearsThePendingFlag()
+        {
+            // The other side of the same coin, and the one phase-05 makes reachable: once the
+            // server actually reloads, SnapshotField.Weapon moves and the snapshot's count is
+            // taken verbatim rather than reconciled against the prediction.
+            var state = new ClientCombatState { LocalActorId = 1 };
+            state.ApplySnapshot(LocalEntry(ammo: 30), Now);
+
+            for (int i = 0; i < 5; i++) state.PredictFire(ShotTime(i));
+            state.BeginReload(Now);
+
+            // The server finished its own reload and said so.
+            state.ApplySnapshot(LocalEntry(ammo: 30), Now + 0.1f);
+
+            Assert.False(state.IsReloading);
+            Assert.Equal(30, state.AmmoInClip);
+        }
+
         // --------------------------------------------------------- ammo anti-flicker
 
         [Theory]

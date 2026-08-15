@@ -104,6 +104,31 @@ namespace Ironfront.Net.Protocol
 
         public static float UnpackVel(sbyte q) => q / VEL_SCALE;
 
+        /// <summary>
+        /// Packs a velocity into the i16 slot S_DEATH and S_WEAPON_FIRE use for their force and
+        /// direction vectors (protocol-spec.md §§ 4.6 and 4.7).
+        /// </summary>
+        /// <remarks>
+        /// <b>A wider slot at the same scale, not a second scale.</b> The snapshot's velocity is
+        /// an i8, which saturates at <see cref="VEL_MAX"/>; a ragdoll impulse is routinely
+        /// several times that, and reusing <see cref="PackVel"/> here would clamp every kill's
+        /// force to 64 m/s and make heavy weapons feel identical to light ones. Sharing
+        /// <see cref="VEL_SCALE"/> keeps one conversion factor for both widths, so a reader that
+        /// knows the scale can decode either.
+        /// </remarks>
+        public static short PackVel16(float v)
+        {
+            float scaled = v * VEL_SCALE;
+
+            if (scaled >= short.MaxValue) return short.MaxValue;
+            if (scaled <= short.MinValue) return short.MinValue;
+
+            return (short)scaled;
+        }
+
+        /// <summary>Inverse of <see cref="PackVel16"/>.</summary>
+        public static float UnpackVel16(short q) => q / VEL_SCALE;
+
         // -------------------------------------------------------------- input axis
 
         /// <summary>Packs a -1..1 movement axis into an i8 (-127..127).</summary>
