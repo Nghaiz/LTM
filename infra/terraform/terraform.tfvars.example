@@ -1,0 +1,40 @@
+# Example variables for the Ironfront single-VM baseline. Copy to terraform.tfvars and edit.
+#
+#   cp terraform.tfvars.example terraform.tfvars
+#
+# terraform.tfvars is gitignored (see infra/terraform/.gitignore). NOTHING secret goes here
+# anyway — no shared secret, no TLS password, no GHCR token. Those live only in the VM's
+# root-only /opt/ironfront/.env, delivered out of band.
+
+# --- Region & size: PREFLIGHT BEFORE APPLY -----------------------------------------------
+# Azure Student SKU/quota is not guaranteed. Confirm the pair is available to your offer:
+#   az vm list-skus --location koreacentral --size Standard_B2ms --output table
+# If it is not, change these values (not the code) to a confirmed Student-eligible option.
+location = "koreacentral"
+vm_size  = "Standard_B2ms" # 2 vCPU / 8 GB — master + two game servers + OS headroom
+
+# --- Access ------------------------------------------------------------------------------
+# Your OpenSSH PUBLIC key (the .pub). This is how you log in; there is no password auth.
+admin_ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAExampleReplaceWithYourRealPublicKey you@host"
+
+# CIDRs allowed to reach SSH. Use your real admin IP(s). NEVER 0.0.0.0/0 (validation rejects
+# it). Find yours with: curl -s ifconfig.me
+ssh_source_cidrs = ["203.0.113.7/32"]
+
+# --- DNS ---------------------------------------------------------------------------------
+# The hostname clients use and the TLS cert is issued for. Terraform does NOT create DNS —
+# it outputs the static IP so you point this name's A record at it manually.
+dns_hostname = "master.example.com"
+
+# --- Optional ----------------------------------------------------------------------------
+# name_prefix           = "ironfront"
+# admin_username        = "ironadmin"
+# master_tcp_port       = 27000
+# game_udp_ports        = [27015, 27016]
+# os_disk_size_gb       = 64
+# backup_retention_days = 30
+
+# Optional: PUBLIC https git URL of this repo. If set, cloud-init clones it and installs the
+# compose file, tools and systemd units automatically. Leave empty for a private repo (the
+# default) — a token must never be placed in user-data.
+# repo_clone_url = "https://github.com/<owner>/<repo>.git"

@@ -1,0 +1,27 @@
+# Terraform working files that must never be committed.
+#
+# State can contain resource IDs, the VM identity and network layout; the real tfvars and
+# backend carry your admin IP and account details. The .example files ARE committed (they
+# are templates). The provider lock file IS committed on purpose — it pins provider hashes.
+
+# State and crash logs
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Provider plugins and downloaded modules
+.terraform/
+.terraform.tfstate.lock.info
+
+# Real inputs and backend (keep only the *.example templates)
+terraform.tfvars
+*.auto.tfvars
+backend.tf
+
+# Saved plans
+*.tfplan
+
+# Committed on purpose — do NOT ignore:
+!*.example
+!.terraform.lock.hcl

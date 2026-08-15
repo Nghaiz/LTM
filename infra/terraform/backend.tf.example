@@ -1,0 +1,29 @@
+# Remote state backend TEMPLATE (phase 03 task 4). This file is a TEMPLATE, not credentials.
+#
+#   cp backend.tf.example backend.tf   # then edit, then: terraform init
+#
+# WHY REMOTE STATE: this configuration keeps secrets OUT of state (storage key auth is
+# disabled, so no key is ever read into it), but state still records resource IDs, the VM's
+# identity principal and IP, and the network layout. Local state on a laptop is easy to lose
+# or leak. A locking remote backend also stops two applies from racing.
+#
+# The backend storage account is a CHICKEN-AND-EGG resource: it must exist before this
+# configuration is applied, so create it once, by hand, in its own resource group — do NOT
+# manage it from this configuration. Example (run once):
+#
+#   az group create -n tfstate-rg -l koreacentral
+#   az storage account create -n <globally-unique-name> -g tfstate-rg -l koreacentral \
+#       --sku Standard_LRS --min-tls-version TLS1_2 --allow-blob-public-access false
+#   az storage container create --account-name <name> -n tfstate --auth-mode login
+#
+# Auth is your `az login` context (use_azuread_auth = true) — no key in this file.
+
+# terraform {
+#   backend "azurerm" {
+#     resource_group_name  = "tfstate-rg"
+#     storage_account_name = "<globally-unique-name>"
+#     container_name       = "tfstate"
+#     key                  = "ironfront/phase03.tfstate"
+#     use_azuread_auth     = true
+#   }
+# }
