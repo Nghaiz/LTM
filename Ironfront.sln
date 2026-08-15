@@ -41,6 +41,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ironfront.Net.Configuration
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ironfront.Client.Input.Tests", "Ironfront.Client.Input.Tests\Ironfront.Client.Input.Tests.csproj", "{4C4E152D-AE0E-4E6F-8C86-3DE79B618AC4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ironfront.Client.Flow.Tests", "Ironfront.Client.Flow.Tests\Ironfront.Client.Flow.Tests.csproj", "{A714020C-469B-4E4D-9B27-DD011AF26646}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnitySyntaxCheck", "tools\UnitySyntaxCheck\UnitySyntaxCheck.csproj", "{64579C10-C37A-4CBD-AA0B-341F993145B0}"
 EndProject
 Global
@@ -124,6 +126,10 @@ Global
 		{4C4E152D-AE0E-4E6F-8C86-3DE79B618AC4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4C4E152D-AE0E-4E6F-8C86-3DE79B618AC4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4C4E152D-AE0E-4E6F-8C86-3DE79B618AC4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A714020C-469B-4E4D-9B27-DD011AF26646}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A714020C-469B-4E4D-9B27-DD011AF26646}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A714020C-469B-4E4D-9B27-DD011AF26646}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A714020C-469B-4E4D-9B27-DD011AF26646}.Release|Any CPU.Build.0 = Release|Any CPU
 		{64579C10-C37A-4CBD-AA0B-341F993145B0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{64579C10-C37A-4CBD-AA0B-341F993145B0}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{64579C10-C37A-4CBD-AA0B-341F993145B0}.Release|Any CPU.ActiveCfg = Release|Any CPU
