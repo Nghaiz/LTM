@@ -31,6 +31,9 @@ namespace Ironfront.Net.Replication.Tests
 
         private static WeaponConfig Rifle => WeaponConfig.Rifle;
 
+        /// <summary>A clock reading for the calls that need one but are not testing timing.</summary>
+        private const float Now = 10f;
+
         /// <summary>A time far enough past the cooldown that every shot is legal.</summary>
         private static float ShotTime(int index) => 10f + index * (Rifle.Cooldown + 0.01f);
 
@@ -82,7 +85,7 @@ namespace Ironfront.Net.Replication.Tests
                 Assert.Equal(FireRejection.None, state.PredictFire(ShotTime(shot)));
                 seen.Add(state.AmmoInClip);
 
-                state.ApplySnapshot(LocalEntry(ammo: (byte)(ClipSize - shot)));
+                state.ApplySnapshot(LocalEntry(ammo: (byte)(ClipSize - shot)), ShotTime(shot));
                 seen.Add(state.AmmoInClip);
             }
 
@@ -96,9 +99,9 @@ namespace Ironfront.Net.Replication.Tests
         public void ASnapshotFurtherOutThanTheThresholdIsCountedAsACorrection()
         {
             var state = new ClientCombatState();
-            state.ApplySnapshot(LocalEntry(ammo: 30));   // clears the equip resync
+            state.ApplySnapshot(LocalEntry(ammo: 30), Now);   // clears the equip resync
 
-            state.ApplySnapshot(LocalEntry(ammo: 12));
+            state.ApplySnapshot(LocalEntry(ammo: 12), Now);
 
             Assert.Equal(12, state.AmmoInClip);
             Assert.Equal(1, state.SnapshotAmmoCorrections);
@@ -135,7 +138,7 @@ namespace Ironfront.Net.Replication.Tests
         public void ACorpseDoesNotFire()
         {
             var state = new ClientCombatState();
-            state.ApplySnapshot(LocalEntry(health: 0, alive: false));
+            state.ApplySnapshot(LocalEntry(health: 0, alive: false), Now);
 
             Assert.Equal(FireRejection.ShooterDead, state.PredictFire(ShotTime(0)));
         }
@@ -151,10 +154,10 @@ namespace Ironfront.Net.Replication.Tests
 
             // A hit confirm on someone else must not touch local health, even though it carries
             // a damage number — the same damage is already in the snapshot.
-            state.ApplySnapshot(LocalEntry(health: 100));
+            state.ApplySnapshot(LocalEntry(health: 100), Now);
             Assert.Equal(100, state.Health);
 
-            state.ApplySnapshot(LocalEntry(health: 65));
+            state.ApplySnapshot(LocalEntry(health: 65), Now);
 
             Assert.Equal(65, state.Health);
             Assert.Equal(100, previous);
@@ -164,7 +167,7 @@ namespace Ironfront.Net.Replication.Tests
         [Fact]
         public void DeathStampsTheRespawnClockAndTheDelayHasToElapse()
         {
-            var state = new ClientCombatState { RespawnDelaySeconds = 3f };
+            var state = new ClientCombatState { RespawnDelaySeconds = 3f, LocalActorId = 1 };
             int died = 0;
             state.OnDied += () => died++;
 
@@ -182,11 +185,11 @@ namespace Ironfront.Net.Replication.Tests
         public void TheSnapshotArrivingFirstDoesNotFireDiedTwice()
         {
             // S_DEATH and the snapshot's IsAlive bit say the same thing a fraction apart.
-            var state = new ClientCombatState();
+            var state = new ClientCombatState { LocalActorId = 1 };
             int died = 0;
             state.OnDied += () => died++;
 
-            state.ApplySnapshot(LocalEntry(health: 0, alive: false));
+            state.ApplySnapshot(LocalEntry(health: 0, alive: false), Now);
             state.ApplyDeath(new DeathMessage(1, 2, CauseOfDeath.Bullet, 0, 0, 0, 0), 100f);
 
             Assert.Equal(1, died);
@@ -199,11 +202,11 @@ namespace Ironfront.Net.Replication.Tests
             int respawned = 0;
             state.OnRespawned += () => respawned++;
 
-            state.ApplySnapshot(LocalEntry(ammo: 30));
+            state.ApplySnapshot(LocalEntry(ammo: 30), Now);
             for (int shot = 0; shot < 5; shot++) state.PredictFire(ShotTime(shot));
-            state.ApplySnapshot(LocalEntry(health: 0, alive: false, ammo: 25));
+            state.ApplySnapshot(LocalEntry(health: 0, alive: false, ammo: 25), Now);
 
-            state.ApplySnapshot(LocalEntry(health: 100, alive: true, ammo: 30));
+            state.ApplySnapshot(LocalEntry(health: 100, alive: true, ammo: 30), Now);
 
             Assert.Equal(1, respawned);
             Assert.True(state.IsAlive);
@@ -214,21 +217,128 @@ namespace Ironfront.Net.Replication.Tests
         public void AReloadResyncsOnceAndThenGoesBackToTrustingTheClient()
         {
             var state = new ClientCombatState();
-            state.ApplySnapshot(LocalEntry(ammo: 30));
+            state.ApplySnapshot(LocalEntry(ammo: 30), Now);
             for (int shot = 0; shot < 20; shot++) state.PredictFire(ShotTime(shot));
             Assert.Equal(10, state.AmmoInClip);
 
-            state.BeginReload();
+            state.BeginReload(Now);
             Assert.True(state.IsReloading);
 
-            state.ApplySnapshot(LocalEntry(ammo: 30));
+            state.ApplySnapshot(LocalEntry(ammo: 30), Now);
             Assert.Equal(30, state.AmmoInClip);
             Assert.False(state.IsReloading);
 
             // Back to normal: one predicted shot ahead of the snapshot keeps the client's count.
             state.PredictFire(ShotTime(21));
-            state.ApplySnapshot(LocalEntry(ammo: 30));
+            state.ApplySnapshot(LocalEntry(ammo: 30), Now);
             Assert.Equal(29, state.AmmoInClip);
+        }
+
+        // --------------------------------------------------------- what review found
+
+        [Fact]
+        public void AReloadCompletesOnItsOwnClockBecauseTheServerHasNone()
+        {
+            // The absorbing state this fixes: InputButtons.Reload is packed and sent, and no
+            // server code reads it, so the snapshot's ammo never changes on a reload and the
+            // Weapon field is only present when it does. A client waiting for that snapshot
+            // waits forever -- and CheckCanFire tests Reloading BEFORE ammo, so every later
+            // shot is rejected and the player cannot fire again for the rest of that life.
+            var state = new ClientCombatState { ReloadSeconds = 2f };
+            for (int shot = 0; shot < 20; shot++) state.PredictFire(ShotTime(shot));
+            Assert.Equal(10, state.AmmoInClip);
+
+            state.BeginReload(100f);
+            Assert.True(state.IsReloading);
+
+            state.Tick(101.9f);
+            Assert.True(state.IsReloading);
+            Assert.Equal(10, state.AmmoInClip);
+
+            state.Tick(102f);
+
+            Assert.False(state.IsReloading);
+            Assert.Equal(30, state.AmmoInClip);
+            Assert.Equal(FireRejection.None, state.PredictFire(103f));
+        }
+
+        [Fact]
+        public void AShotOnTheFrameAReloadFinishesIsNotRejected()
+        {
+            // PredictFire runs the same check first, so a caller that never calls Tick still
+            // recovers rather than locking up.
+            var state = new ClientCombatState { ReloadSeconds = 2f };
+            for (int shot = 0; shot < 30; shot++) state.PredictFire(ShotTime(shot));
+            state.BeginReload(100f);
+
+            Assert.Equal(FireRejection.None, state.PredictFire(102f));
+            Assert.Equal(29, state.AmmoInClip);
+        }
+
+        [Fact]
+        public void ASnapshotDeathStampsTheRespawnClockToo()
+        {
+            // Both orders must stamp. S_DEATH is reliable and the snapshot is not, but they are
+            // produced on the same tick, so either can arrive first -- and an earlier version
+            // stamped only on the S_DEATH path, leaving the other at negative infinity and
+            // making the respawn available instantly for roughly half of all deaths.
+            var state = new ClientCombatState { RespawnDelaySeconds = 3f, LocalActorId = 1 };
+
+            state.ApplySnapshot(LocalEntry(health: 0, alive: false), 100f);
+
+            Assert.False(state.IsAlive);
+            Assert.False(state.CanRequestRespawn(102f));
+            Assert.True(state.CanRequestRespawn(103f));
+        }
+
+        [Fact]
+        public void TheSecondNotificationOfADeathDoesNotMoveTheRespawnClock()
+        {
+            var state = new ClientCombatState { RespawnDelaySeconds = 3f, LocalActorId = 1 };
+
+            state.ApplySnapshot(LocalEntry(health: 0, alive: false), 100f);
+            state.ApplyDeath(new DeathMessage(1, 2, CauseOfDeath.Bullet, 0, 0, 0, 0), 100.4f);
+
+            // Stamped at 100, not re-stamped at 100.4 -- otherwise every death would push the
+            // respawn out by however far apart the two notifications happened to land.
+            Assert.True(state.CanRequestRespawn(103f));
+        }
+
+        [Fact]
+        public void SomebodyElsesDeathIsNotThisPlayersDeath()
+        {
+            // ClientMessageRouter.OnDeath is a broadcast, because the killfeed is global. Wiring
+            // it straight to ApplyDeath used to kill the local player on every death in the match.
+            var state = new ClientCombatState { LocalActorId = 7 };
+            int died = 0;
+            state.OnDied += () => died++;
+
+            Assert.False(state.ApplyDeath(new DeathMessage(9, 3, CauseOfDeath.Bullet, 0, 0, 0, 0), 100f));
+
+            Assert.True(state.IsAlive);
+            Assert.Equal(0, died);
+
+            Assert.True(state.ApplyDeath(new DeathMessage(7, 3, CauseOfDeath.Bullet, 0, 0, 0, 0), 100f));
+            Assert.False(state.IsAlive);
+            Assert.Equal(1, died);
+        }
+
+        [Fact]
+        public void AnOutOfOrderKillfeedEntryDoesNotWipeTheLiveOnes()
+        {
+            // Prune used to truncate at the first expired entry, which is correct only while the
+            // timestamps are non-increasing down the feed. One late arrival at the head took
+            // every live line below it with it.
+            var feed = new KillfeedModel();
+            feed.Push(new DeathMessage(1, 2, CauseOfDeath.Bullet, 0, 0, 0, 0), 10f);
+            feed.Push(new DeathMessage(3, 4, CauseOfDeath.Bullet, 0, 0, 0, 0), 11f);
+            feed.Push(new DeathMessage(5, 6, CauseOfDeath.Bullet, 0, 0, 0, 0), 2f);   // stale, arrived last
+
+            feed.Prune(12f);
+
+            Assert.Equal(2, feed.Count);
+            Assert.Equal(3, feed[0].VictimActorId);
+            Assert.Equal(1, feed[1].VictimActorId);
         }
 
         // --------------------------------------------------------- hitmarker
