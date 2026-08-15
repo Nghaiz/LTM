@@ -99,6 +99,15 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>Whether a login has succeeded on this connection.</summary>
         public bool IsLoggedIn => SessionToken.Length > 0;
 
+        /// <summary>
+        /// Whether the TCP link to the master is up.
+        /// </summary>
+        /// <remarks>
+        /// Asked of the client rather than remembered, so a caller cannot hold a stale "yes"
+        /// across a dropped link and then skip reconnecting forever.
+        /// </remarks>
+        public bool IsMasterConnected => _master.State == MasterConnectionState.Connected;
+
         /// <summary>The newest room list. Empty until <see cref="OpenRoomBrowserAsync"/> runs.</summary>
         public RoomInfo[] Rooms { get; private set; } = Array.Empty<RoomInfo>();
 
