@@ -199,6 +199,11 @@ namespace Ironfront.Net.Unity.Server
             transport.OnClientConnected += OnClientConnected;
             transport.OnClientDisconnected += OnClientDisconnected;
 
+            // ForgetActor used to run only from OnClientDisconnected, so it covered players and
+            // nothing else. A bot that is disabled or pooled left its hitbox ring, interest rows
+            // and spawn-ack rows behind for the rest of the match.
+            ServerActorRegistry.Instance.ActorUnregistered += ForgetActor;
+
             _lastPumpMs = NowMs();
             _running = true;
 
@@ -214,6 +219,8 @@ namespace Ironfront.Net.Unity.Server
             _running = false;
 
             if (Transport == null) return;
+
+            ServerActorRegistry.Instance.ActorUnregistered -= ForgetActor;
 
             Transport.OnMessage -= OnTransportMessage;
             Transport.OnClientConnected -= OnClientConnected;
@@ -254,11 +261,26 @@ namespace Ironfront.Net.Unity.Server
         {
             if (!_running || Transport == null || _ticksOwedThisStep == 0) return;
 
+            // The input stage advanced CurrentTick once per owed tick, so by the time this runs
+            // it names the LAST of them. Recording every owed tick's history under that one
+            // number wrote the same slot repeatedly and left the earlier ticks with no frame at
+            // all: a rewind landing on one of them found nothing and silently fell back to the
+            // target's present pose, so lag compensation was simply off for that shot. Walk the
+            // span the input stage actually simulated instead.
+            uint lastTick = _scheduler.CurrentTick;
+            uint firstTick = lastTick >= (uint)(_ticksOwedThisStep - 1)
+                ? lastTick - (uint)(_ticksOwedThisStep - 1)
+                : 0u;
+
             for (int tick = 0; tick < _ticksOwedThisStep; tick++)
             {
                 // History first: the pose being recorded belongs to the tick just simulated, and
                 // a snapshot may change who counts as shootable from here on.
-                CaptureHitboxHistory();
+                //
+                // Unity's physics ran once for the whole step, so these poses genuinely are the
+                // same for every owed tick. Writing that one pose under each tick number is
+                // what makes a rewind into the middle of a catch-up find something to hit.
+                CaptureHitboxHistory(firstTick + (uint)tick);
 
                 if (_scheduler.ShouldSendSnapshot()) BuildAndSendSnapshots();
             }
@@ -281,9 +303,12 @@ namespace Ironfront.Net.Unity.Server
         /// Mid — see that constant for why Mid silently disables lag compensation over the outer
         /// half of every weapon's range.
         /// </remarks>
-        private void CaptureHitboxHistory()
+        /// <param name="tick">
+        /// The tick these poses belong to. Passed in rather than read from the scheduler, which
+        /// by this stage has already advanced past every tick but the last.
+        /// </param>
+        private void CaptureHitboxHistory(uint tick)
         {
-            uint tick = _scheduler.CurrentTick;
             IReadOnlyList<NetServerActor> actors = ServerActorRegistry.Instance.Actors;
 
             for (int i = 0; i < actors.Count; i++)

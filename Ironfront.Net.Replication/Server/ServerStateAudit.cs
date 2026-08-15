@@ -41,11 +41,26 @@ namespace Ironfront.Net.Replication.Server
         /// keyed on an actor that no longer exists.
         /// </remarks>
         public bool IsClean =>
+            IsCleanOfActorState
+            && Sessions == 0;
+
+        /// <summary>
+        /// Everything <see cref="IsClean"/> checks except the session count.
+        /// </summary>
+        /// <remarks>
+        /// This is the right question after a MATCH RESET, which deliberately keeps its
+        /// sessions — a reset is not a disconnect, and the players are still standing there
+        /// waiting for the next round. Asking <see cref="IsClean"/> there reported a leak on
+        /// every round transition with anyone connected, so the one log line that would have
+        /// announced a real trap-1 leak had been crying wolf since the day it was written.
+        /// <see cref="IsClean"/> remains the right question at shutdown, when the sessions
+        /// really should all be gone.
+        /// </remarks>
+        public bool IsCleanOfActorState =>
             ActorIdsInUse == 0
             && HitboxHistoryActors == 0
             && InterestPairs == 0
-            && SpawnAckPairs == 0
-            && Sessions == 0;
+            && SpawnAckPairs == 0;
 
         public override string ToString()
         {

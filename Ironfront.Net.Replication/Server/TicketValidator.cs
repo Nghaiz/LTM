@@ -62,7 +62,7 @@ namespace Ironfront.Net.Replication.Server
     public sealed class TicketValidator
     {
         private readonly byte[] _sharedSecret;
-        private readonly ushort _serverId;
+        private ushort _serverId;
 
         // playerId -> the Unix ms at which this claim lapses. Never larger than the number of
         // tickets issued inside one 60 s window, so a Dictionary is the right shape.
@@ -89,6 +89,30 @@ namespace Ironfront.Net.Replication.Server
             _sharedSecret = sharedSecret.ToArray();
             _serverId     = serverId;
         }
+
+        /// <summary>This server's id as the master assigned it, or 0 before it has one.</summary>
+        public ushort ServerId => _serverId;
+
+        /// <summary>
+        /// Takes the server id the master handed back from GS_REGISTER, turning the ticket's
+        /// serverId field from a decoration into a check.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A validator is constructed before registration has happened, so it starts at 0 — and
+        /// 0 means "signature and expiry only", which is the correct standalone behaviour.
+        /// NetServerBootstrap's comment promised that the master link would re-register a
+        /// stricter validator once it had an id. <b>Nothing did.</b> There was one construction
+        /// site in the whole repo, it passed the literal 0, and the WrongServer rejection was
+        /// therefore dead code: a ticket the master issued for server B was admitted by server
+        /// A, since both share the fleet secret and neither could tell which one it was.
+        /// </para>
+        /// <para>
+        /// Adopting rather than reconstructing keeps every live claim: a validator swapped out
+        /// mid-session would forget who is connected and admit a replay of their ticket.
+        /// </para>
+        /// </remarks>
+        public void AdoptServerId(ushort serverId) => _serverId = serverId;
 
         public long Accepted { get; private set; }
 

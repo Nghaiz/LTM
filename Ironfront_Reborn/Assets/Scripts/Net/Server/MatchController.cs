@@ -87,6 +87,11 @@ namespace Ironfront.Net.Unity.Server
             _actorIds = new ActorIdPool(
                 ProtocolConstants.MAX_ACTORS, rules.ActorIdQuarantineSeconds);
 
+            // Without this the pool is decoration: the registry allocated from its own counter
+            // and nothing ever called TryAcquire, so the quarantine never ran and the audit's
+            // ActorIdsInUse was always zero.
+            ServerActorRegistry.Instance.UseIdPool(_actorIds);
+
             _match = new MatchStateMachine(rules, BuildCapturePoints());
             _match.PhaseChanged   += OnPhaseChanged;
             _match.ResetRequested += OnResetRequested;
@@ -252,7 +257,11 @@ namespace Ironfront.Net.Unity.Server
             _loop.ResetForNewMatch();
 
             ServerStateSnapshot state = _loop.AuditState();
-            if (state.IsClean) return;
+
+            // IsCleanOfActorState, not IsClean: ResetForNewMatch deliberately keeps its sessions
+            // because a reset is not a disconnect, so IsClean's Sessions == 0 could never hold
+            // here and this line fired on every round transition with anyone connected.
+            if (state.IsCleanOfActorState) return;
 
             // Phase-03 trap 1. Logged rather than asserted: the leak this catches shows up on
             // the second and third round of a server that has been up for an hour with nobody

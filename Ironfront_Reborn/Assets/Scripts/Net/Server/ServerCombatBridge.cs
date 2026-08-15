@@ -5,6 +5,7 @@ using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Movement;
 using Ironfront.Net.Replication.Server;
 using Ironfront.Net.Transport;
+using UnityEngine;
 
 namespace Ironfront.Net.Unity.Server
 {
@@ -137,6 +138,8 @@ namespace Ironfront.Net.Unity.Server
             actor.Health = NetServerActor.DefaultSpawnHealth;
             actor.IsAlive = true;
 
+            MoveToSpawnPoint(player);
+
             session.ResetWeapon();
             actor.AmmoInClip = session.Weapon.AmmoInClip;
 
@@ -188,6 +191,64 @@ namespace Ironfront.Net.Unity.Server
 
             float rtt = transport.GetInfo(connectionId).SmoothedRttMs;
             return float.IsNaN(rtt) || rtt < 0f ? 0f : rtt;
+        }
+
+        /// <summary>
+        /// Puts a respawning player back at a spawn point instead of where they died.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Respawn used to restore health and the alive flag and nothing else, so a player
+        /// killed at a chokepoint reappeared at full health in the same square metre, usually
+        /// still inside the killer's line of fire. Spawn-camping was free and needed no skill.
+        /// </para>
+        /// <para>
+        /// <b>The authoritative position has to move with the transform.</b> The client is
+        /// predicting against <c>MoveState</c>, and the speed clamp measures against
+        /// <c>PreviousPosition</c> — teleporting the GameObject alone would leave the simulation
+        /// standing at the corpse, and moving the simulation without re-baselining the clamp
+        /// would score the teleport itself as a speed violation on the very next tick.
+        /// </para>
+        /// <para>
+        /// Spawn points come from the game's own <c>ActorManager</c>, filtered by team the way
+        /// <c>SpawnPoint.owner</c> already defines it. No spawn points at all (a bare test
+        /// scene) leaves the player where they were, which is the previous behaviour.
+        /// </para>
+        /// </remarks>
+        private static void MoveToSpawnPoint(ServerPlayer player)
+        {
+            NetServerActor actor = player.Actor;
+            ActorManager manager = ActorManager.instance;
+            if (manager == null || manager.spawnPoints == null) return;
+
+            SpawnPoint chosen = null;
+            int candidates = 0;
+
+            // Reservoir sampling over the matching points: one pass, no allocation, and an even
+            // spread rather than always the first one in the array.
+            for (int i = 0; i < manager.spawnPoints.Length; i++)
+            {
+                SpawnPoint point = manager.spawnPoints[i];
+                if (point == null) continue;
+                if (point.owner >= 0 && point.owner != actor.Team) continue;
+
+                candidates++;
+                if (UnityEngine.Random.Range(0, candidates) == 0) chosen = point;
+            }
+
+            if (chosen == null) return;
+
+            Vector3 position = chosen.GetSpawnPosition();
+
+            // Teleport, not a transform write: it disables the CharacterController around the
+            // assignment, which otherwise fights it and lands the actor somewhere else.
+            if (actor.Movement != null) actor.Movement.Teleport(position);
+            else actor.transform.position = position;
+
+            Vec3 core = MovementSimulation.ToCore(position);
+            player.Session.State.Position = core;
+            player.Session.State.Velocity = Vec3.Zero;
+            player.Session.PreviousPosition = core;
         }
 
         private void EmitWeaponFire(

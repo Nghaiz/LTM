@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication;
@@ -78,12 +79,31 @@ namespace Ironfront.Net.Unity.Server
             _actors.Add(actor);
         }
 
+        /// <summary>
+        /// Raised with an actor's id once it has left the world, whatever removed it.
+        /// </summary>
+        /// <remarks>
+        /// The per-pair tables keyed on (viewer, target) are only cleaned up on player
+        /// disconnect, which covers players and nothing else. A bot that is disabled or pooled
+        /// unregisters itself here and used to leave its hitbox ring, interest rows and
+        /// spawn-ack rows behind — the exact trap-2 leak that machinery exists to prevent, and
+        /// enough to have the state audit report the world as unclean at the end of a round.
+        /// </remarks>
+        public event Action<ushort> ActorUnregistered;
+
         public void Unregister(NetServerActor actor)
         {
             if (actor == null) return;
 
+            ushort actorId = actor.ActorId;
+
             actor.Release();
             _actors.Remove(actor);
+
+            // Back to the pool, which quarantines it rather than handing it straight out again.
+            if (_idPool != null) _idPool.Release(actorId, NowSeconds());
+
+            ActorUnregistered?.Invoke(actorId);
         }
 
         public bool TryFind(ushort actorId, out NetServerActor actor)
@@ -145,11 +165,37 @@ namespace Ironfront.Net.Unity.Server
             }
         }
 
+        /// <summary>
+        /// Points auto-id allocation at the match's <see cref="ActorIdPool"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The pool was built for phase-02 trap 2 — an id must cool in quarantine before it can
+        /// be handed out again, or a reused id inherits the previous incarnation's spawn rows
+        /// and the gate reports "already announced" for an actor no client has been told about.
+        /// It was constructed, wired into the audit, and then never called: ids actually came
+        /// from the private counter below, which has no quarantine and never resets. Two
+        /// allocators for one id space, and the audit's ActorIdsInUse was structurally always
+        /// zero, so it could not have detected anything.
+        /// </para>
+        /// <para>
+        /// A registry with no pool (a bare test scene, anything without a MatchController)
+        /// keeps the counter, so this is additive.
+        /// </para>
+        /// </remarks>
+        public void UseIdPool(ActorIdPool pool) => _idPool = pool;
+
+        private ActorIdPool _idPool;
+
         private ushort NextAutoId()
         {
+            if (_idPool != null && _idPool.TryAcquire(NowSeconds(), out ushort pooled)) return pooled;
+
             while (TryFind(_nextAutoId, out NetServerActor _)) _nextAutoId++;
             return _nextAutoId++;
         }
+
+        private static float NowSeconds() => (float)Time.realtimeSinceStartupAsDouble;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetOnLoad() => _instance = null;

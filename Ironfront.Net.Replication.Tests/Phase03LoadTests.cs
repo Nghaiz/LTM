@@ -181,6 +181,25 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void AMatchResetIsCleanWithItsSessionsStillConnected()
+        {
+            // The distinction MatchController.OnResetRequested depends on. ResetForNewMatch
+            // deliberately keeps sessions — a reset is not a disconnect, the players are
+            // standing there waiting for the next round — so IsClean's Sessions == 0 could
+            // never hold there and the trap-1 log line fired on every round transition with
+            // anyone connected. IsCleanOfActorState is the question that reset should ask.
+            var audit = new ServerStateAudit(
+                new ActorIdPool(8), new HitboxHistory(), new InterestManager(),
+                new SpawnAckTracker(), () => 3);
+
+            ServerStateSnapshot state = audit.Capture();
+
+            Assert.True(state.IsCleanOfActorState);
+            Assert.False(state.IsClean);
+            Assert.Equal(3, state.Sessions);
+        }
+
+        [Fact]
         public void TheAuditReportsWhatIsActuallyLeftRatherThanJustPassOrFail()
         {
             var manager = new InterestManager();
@@ -200,6 +219,7 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(1, state.HitboxHistoryActors);
             Assert.Equal(1, state.ActorIdsInUse);
             Assert.Equal(3, state.Sessions);
+            Assert.False(state.IsCleanOfActorState);
             Assert.Contains("spawnAckPairs=1", state.ToString());
         }
 
