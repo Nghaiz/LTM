@@ -256,26 +256,11 @@ namespace Ironfront.Net.Unity.Server
                 break;
             }
 
-            var message = new DeathMessage(
-                result.DeadActorId,
-                killer.ActorId,
-                CauseOfDeath.Bullet,
-                Quantize.PackVel16(force.X),
-                Quantize.PackVel16(force.Y),
-                Quantize.PackVel16(force.Z),
-                hitbox);
+            // Through the loop's single death path, not framed here: a bot bullet and a player
+            // bullet must produce the same S_DEATH, the same respawn stamp and the same ticket.
+            _loop.EmitDeath(
+                result.DeadActorId, killer.ActorId, in force, hitbox, CauseOfDeath.Bullet);
 
-            int written = ServerEventWriter.WriteDeath(_eventPayload, in message);
-            if (written >= 0)
-            {
-                // Broadcast — the killfeed is global, and every client needs it to run its own
-                // ragdoll for a corpse that is never replicated (AD-4).
-                _loop.BroadcastReliable(
-                    new ReadOnlySpan<byte>(_eventPayload, 0, written),
-                    (byte)ServerEventWriter.ReliableChannel);
-            }
-
-            _loop.ReportDeathToMatch(result.DeadActorId);
             DeathsReported++;
         }
     }

@@ -441,6 +441,51 @@ namespace Ironfront.Net.Unity.Server
             }
         }
 
+        /// <summary>
+        /// Broadcasts S_DEATH, stamps the respawn clock and reports the kill to the match.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The single death path, shared by hitscan (<see cref="ServerCombatBridge"/>) and by
+        /// bot, melee, explosion and vehicle damage arriving through the <c>Actor.Damage</c>
+        /// guard. Two implementations would drift on exactly the details that are invisible
+        /// until a match is running — whether the respawn clock was stamped, whether the
+        /// killfeed saw it, whether the ticket came off the right team.
+        /// </para>
+        /// <para>
+        /// Stamping the gate here is safe even though the hitscan path already did:
+        /// <c>ServerRespawnGate.MarkDeath</c> ignores a second stamp within one life, precisely
+        /// so a death arriving from more than one place does not push the countdown out by the
+        /// gap between them.
+        /// </para>
+        /// </remarks>
+        public void EmitDeath(
+            ushort victimActorId, ushort killerActorId, in Vec3 force, byte hitbox,
+            CauseOfDeath cause)
+        {
+            _respawnGate.MarkDeath(
+                victimActorId, _scheduler.CurrentTick / (float)ProtocolConstants.SIM_TICK_RATE);
+
+            var message = new DeathMessage(
+                victimActorId, killerActorId, cause,
+                Quantize.PackVel16(force.X),
+                Quantize.PackVel16(force.Y),
+                Quantize.PackVel16(force.Z),
+                hitbox);
+
+            int written = ServerEventWriter.WriteDeath(_eventPayload, in message);
+            if (written >= 0)
+            {
+                // Broadcast — the killfeed is global, and every client needs it to run its own
+                // ragdoll for a corpse that is never replicated (AD-4).
+                BroadcastReliable(
+                    new ReadOnlySpan<byte>(_eventPayload, 0, written),
+                    (byte)ServerEventWriter.ReliableChannel);
+            }
+
+            ReportDeathToMatch(victimActorId);
+        }
+
         /// <summary>Reports a death to the match, once, for the score and the win condition.</summary>
         /// <remarks>
         /// Resolved through the registry rather than taken as a team argument so the caller
