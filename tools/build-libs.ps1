@@ -27,7 +27,14 @@ try {
     # Until then ServerMasterReporter could only ever be a NullMatchReporter -- it documents that
     # wiring GameServerMatchReporter is "a two-line change and a plugin drop", and this is the
     # plugin drop. They come last because MasterLink references Replication and MasterClient.
-    $libs = @("Ironfront.Net.Protocol", "Ironfront.Net.Transport", "Ironfront.Net.Replication",
+    #
+    # Ironfront.Net.Configuration comes first and has no dependencies of its own: it is the
+    # IRONFRONT_* registry, the .env reader and the shared parsers, and the Unity bootstraps
+    # read their port, slot count and master address through it. Before it existed those
+    # settings lived only in scene assets, so a headless build could not be reconfigured
+    # without opening the Editor.
+    $libs = @("Ironfront.Net.Configuration",
+              "Ironfront.Net.Protocol", "Ironfront.Net.Transport", "Ironfront.Net.Replication",
               "Ironfront.MasterClient", "Ironfront.Net.MasterLink")
     $plugin = Join-Path $repoRoot "Ironfront_Reborn/Assets/Plugins"
 

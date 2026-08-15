@@ -20,6 +20,11 @@ namespace Ironfront.Tools.LoadTest
     {
         public static async Task<int> Main(string[] args)
         {
+            // Before the options are parsed: the .env is where IRONFRONT_MASTER_PORT lives for
+            // everything else in the repository, and a load test aimed at a port nobody is
+            // serving is a test that measures the operating system's refusal.
+            Ironfront.Net.Configuration.DotEnv.LoadFromAncestors(null, out _);
+
             if (args.Length == 0 || args[0] is "--help" or "-h")
             {
                 Console.Out.WriteLine(LoadTestOptions.Usage);

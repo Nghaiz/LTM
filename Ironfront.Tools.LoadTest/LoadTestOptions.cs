@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Ironfront.Net.Configuration;
 
 namespace Ironfront.Tools.LoadTest
 {
@@ -73,9 +74,43 @@ namespace Ironfront.Tools.LoadTest
         /// <summary>Milliseconds a bot pauses between operations. 0 for <see cref="LoadBehavior.Spin"/>.</summary>
         public int ThinkTimeMs { get; private set; } = 100;
 
+        /// <summary>
+        /// Seeds <see cref="Host"/> and <see cref="Port"/> from the environment before the
+        /// command line is read, so the harness aims at the same master the rest of the
+        /// repository is configured for.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Command-line flags still win — the environment only moves the default. That
+        /// ordering is what makes a soak script readable: <c>IRONFRONT_MASTER_PORT</c> is set
+        /// once in the shell, and the ad-hoc run that needs a different port says so on the
+        /// line where the difference is visible.
+        /// </para>
+        /// <para>
+        /// A malformed value is ignored rather than fatal here, unlike in a server process:
+        /// this tool prints its target on the first line of output, so an operator who is
+        /// looking at the wrong machine can see it immediately.
+        /// </para>
+        /// </remarks>
+        private void ApplyEnvironmentDefaults()
+        {
+            string host = EnvParse.Trimmed(EnvRegistry.MasterHost.Read());
+            if (host.Length > 0) Host = host;
+
+            try
+            {
+                Port = EnvParse.Port(EnvRegistry.MasterPort.Read(), Port, EnvRegistry.MasterPort.Name);
+            }
+            catch (InvalidOperationException)
+            {
+                // Keep 27000 and say nothing: the banner already shows what was used.
+            }
+        }
+
         public static bool TryParse(string[] args, out LoadTestOptions options, out string error)
         {
             options = new LoadTestOptions();
+            options.ApplyEnvironmentDefaults();
             error = string.Empty;
 
             var seen = new HashSet<string>(StringComparer.Ordinal);

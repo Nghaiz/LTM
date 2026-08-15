@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using Ironfront.Net.Configuration;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Server;
 using Ironfront.Net.Transport;
@@ -50,13 +51,13 @@ namespace Ironfront.Net.Unity.Server
         /// that a game server operated by a third party can verify one without holding a login
         /// credential. The name matches the phase-03 task-4 sketch.
         /// </remarks>
-        public const string SharedSecretVariable = "IRONFRONT_SHARED_SECRET";
+        public static readonly string SharedSecretVariable = EnvRegistry.SharedSecret.Name;
 
         [Header("Startup")]
         [SerializeField] private bool _startOnAwake = true;
 
         [Header("Transport")]
-        [Tooltip("In-process wire with no socket, for a single-Editor test. Off = real UDP.")]
+        [Tooltip("Defaults, all overridable from the environment. In-process wire with no socket, for a single-Editor test. Off = real UDP.")]
         [SerializeField] private bool _useLoopbackTransport = true;
 
         [Tooltip("Accept any join ticket when no shared secret is configured. Development only.")]
@@ -71,11 +72,32 @@ namespace Ironfront.Net.Unity.Server
 
         private float _nextOverloadCheck;
         private bool _ownsTransport;
+        private bool _misconfigured;
 
         // connectionId -> the playerId its join ticket named, so a disconnect releases the
         // right claim regardless of the order clients leave in.
         private readonly System.Collections.Generic.Dictionary<ushort, uint> _playerByConnection =
             new System.Collections.Generic.Dictionary<ushort, uint>(ProtocolConstants.MAX_PLAYERS);
+
+        /// <summary>
+        /// The settings this server actually resolved: the inspector fields with any
+        /// <c>IRONFRONT_*</c> variable layered on top.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Every field above used to be the last word, which meant a headless build's port,
+        /// slot count and transport lived in a scene asset — running a second instance on one
+        /// host meant editing the scene and rebuilding it. Now the scene carries the
+        /// developer's convenient defaults and the deployment carries the truth.
+        /// </para>
+        /// <para>
+        /// It is also where the UDP port stopped being two numbers.
+        /// <see cref="MasterLinkBootstrap"/> had its own copy of the port and the player count
+        /// to advertise, free to disagree with the ones actually bound here; both now read
+        /// the same variables through the same object.
+        /// </para>
+        /// </remarks>
+        public GameServerConfig Config { get; private set; }
 
         /// <summary>The loopback wire, when one was created. Hand <c>.Client</c> to a test client.</summary>
         public LoopbackTransport Loopback { get; private set; }
@@ -95,6 +117,8 @@ namespace Ironfront.Net.Unity.Server
         private void Awake()
         {
             TickLoop = GetComponent<ServerTickLoop>();
+
+            ResolveConfiguration();
 
             NetContext.SetRole(NetRole.Server);
             Time.maximumDeltaTime = MaxDeltaTime;
@@ -119,25 +143,66 @@ namespace Ironfront.Net.Unity.Server
 
         private void OnDestroy() => StopServer();
 
+        /// <summary>
+        /// Loads a <c>.env</c> if one is reachable, then layers the environment over the
+        /// inspector fields.
+        /// </summary>
+        /// <remarks>
+        /// A malformed value leaves <see cref="_misconfigured"/> set and the server does not
+        /// start. Falling back to the inspector default instead would be worse than not
+        /// starting: a server told to bind 2705 and quietly binding 27015 is one the
+        /// matchmaker keeps sending players who cannot reach it, and nothing in the log says
+        /// why.
+        /// </remarks>
+        private void ResolveConfiguration()
+        {
+            // A player runs with its working directory set to the build output and the Editor
+            // runs from the Unity project folder, so the repository-root .env is above both.
+            // Missing file is not an error — a systemd unit sets the environment directly.
+            DotEnv.LoadFromAncestors(null, out _);
+
+            var defaults = new GameServerConfig
+            {
+                UseLoopbackTransport  = _useLoopbackTransport,
+                AcceptUnsignedTickets = _acceptUnsignedTickets,
+                UdpPort               = _port,
+                MaxConnections        = _maxConnections,
+            };
+
+            try
+            {
+                Config = defaults.ApplyEnvironment();
+            }
+            catch (InvalidOperationException ex)
+            {
+                _misconfigured = true;
+                Config = defaults;
+
+                Debug.LogError($"[net] configuration rejected, the server will not start. {ex.Message}");
+            }
+        }
+
         /// <summary>Creates the transport (unless one was injected) and starts the loop.</summary>
         public void StartServer()
         {
+            if (_misconfigured) return;
+            if (Config == null) ResolveConfiguration();
             if (TickLoop == null) TickLoop = GetComponent<ServerTickLoop>();
             if (TickLoop.Transport != null) return;
 
-            if (!_useLoopbackTransport)
+            if (!Config.UseLoopbackTransport)
             {
                 var udp = new UdpTransportServer();
                 _ownsTransport = true;
                 Udp = udp;
 
                 RegisterTicketValidator(udp);
-                udp.Start(_port, _maxConnections);
+                udp.Start(Config.UdpPort, Config.MaxConnections);
 
                 // Null clock pump: a real socket runs on the wall clock and needs no advancing.
                 TickLoop.Bind(udp, null);
 
-                Debug.Log($"[net] server up on UDP :{_port}, {_maxConnections} slots");
+                Debug.Log($"[net] server up on UDP :{Config.UdpPort}, {Config.MaxConnections} slots");
                 return;
             }
 
@@ -146,13 +211,13 @@ namespace Ironfront.Net.Unity.Server
 
             ITransportServer server = Loopback.Server;
             RegisterTicketValidator(server);
-            server.Start(_port, _maxConnections);
+            server.Start(Config.UdpPort, Config.MaxConnections);
 
             // The loopback clock is virtual and delivers nothing until advanced, so the loop
             // feeds it the real elapsed milliseconds once per fixed step.
             TickLoop.Bind(server, Loopback.Advance);
 
-            Debug.Log($"[net] server up on the loopback wire, {_maxConnections} slots");
+            Debug.Log($"[net] server up on the loopback wire, {Config.MaxConnections} slots");
         }
 
         /// <summary>
@@ -182,13 +247,13 @@ namespace Ironfront.Net.Unity.Server
 
             if (string.IsNullOrEmpty(secret))
             {
-                if (!_acceptUnsignedTickets)
+                if (!Config.AcceptUnsignedTickets)
                 {
                     Debug.LogError(
                         $"[net] {SharedSecretVariable} is not set and unsigned tickets are "
                         + "disabled, so the server will reject every connection. Set the "
-                        + "variable to the master server's shared secret, or tick 'Accept "
-                        + "Unsigned Tickets' for local testing.");
+                        + "variable to the master server's shared secret, or set "
+                        + $"{EnvRegistry.GameServerAcceptUnsignedTickets.Name}=1 for local testing.");
                     return;
                 }
 

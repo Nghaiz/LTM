@@ -1,10 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using Ironfront.MasterServer.Configuration;
 using Xunit;
 
-namespace Ironfront.MasterServer.Tests.Configuration
+namespace Ironfront.Net.Configuration.Tests
 {
     /// <summary>
     /// The <c>.env</c> reader behind phase-00 objective 6. The parse tests operate on line

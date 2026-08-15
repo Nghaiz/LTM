@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Ownership: SHARED. Changes require a PR with 2 approvals
+    (plans/00-shared/conventions.md section 7).
+
+    Every process in this repository reads the same IRONFRONT_* variables, and until this
+    project existed only one of them could: DotEnv and the parse helpers lived inside
+    Ironfront.MasterServer, so the Unity game server, the load-test harness and the replay
+    tool each had to either re-implement them or go without. Going without is what happened,
+    and it produced two bugs at once — IRONFRONT_GAMESERVER_UDP_PORT was documented in
+    .env.example and read by nothing, and MasterLinkBootstrap dialled port 27100 while the
+    master listened on 27000.
+
+    netstandard2.1 is mandatory: tools/build-libs.ps1 copies
+    bin/Release/netstandard2.1/*.dll into Ironfront_Reborn/Assets/Plugins, and Unity 6000.3
+    consumes the library from there. This project must NEVER reference UnityEngine — the
+    engine-facing half lives in Assets/Scripts/Net, and keeping the seam means the same
+    resolution logic is unit-testable without an Editor.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <RootNamespace>Ironfront.Net.Configuration</RootNamespace>
+    <AssemblyName>Ironfront.Net.Configuration</AssemblyName>
+    <Description>Single source of truth for every IRONFRONT_* environment variable: the registry, the .env reader, and the shared parsers.</Description>
+  </PropertyGroup>
+
+</Project>
