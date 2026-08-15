@@ -32,6 +32,20 @@ namespace Ironfront.Net.Replication.Server
     {
         private readonly InputFrame[] _scratch = new InputFrame[ClientInputMessage.MaxFrames];
 
+        /// <summary>
+        /// Where an accepted C_SPAWN_REQUEST goes. Null leaves the message counted and
+        /// otherwise ignored. Phase-05 task 3.
+        /// </summary>
+        /// <remarks>
+        /// An interface rather than an event for the reason every seam in this file is: the
+        /// router runs inside the tick loop and must not allocate, and a multicast delegate
+        /// invocation list is state this class has no business owning.
+        /// </remarks>
+        public ISpawnRequestHandler? SpawnRequests { get; set; }
+
+        /// <summary>C_SPAWN_REQUEST messages received, whether or not the gate granted them.</summary>
+        public long SpawnRequestsReceived { get; private set; }
+
         /// <summary>Input frames that were new to the session and were buffered.</summary>
         public long InputFramesAccepted { get; private set; }
 
@@ -100,6 +114,17 @@ namespace Ironfront.Net.Replication.Server
                             MalformedMessages++;
                         }
 
+                        break;
+
+                    case ClientMessageType.SpawnRequest:
+                        // The body carries no fields in protocol-spec.md § 4.1, so its contents
+                        // are ignored rather than parsed. Counted as handled either way: the
+                        // gate refusing an early request is a normal outcome, not a malformed
+                        // message, and conflating the two would have an honest client whose
+                        // clock runs a few milliseconds fast show up in the corruption counter.
+                        SpawnRequestsReceived++;
+                        SpawnRequests?.OnSpawnRequested(session);
+                        handled++;
                         break;
 
                     default:

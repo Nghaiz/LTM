@@ -85,5 +85,47 @@ namespace Ironfront.Net.Protocol
 
         /// <summary>joinTicket total size in bytes (protocol-spec.md section 12).</summary>
         public const int    JOIN_TICKET_SIZE = 64;
+
+        // ===== Shared gameplay constants =====
+        //
+        // These are NOT wire-format values, so protocol-spec.md does not declare them and
+        // tools/SpecChecker does not grade them — it only walks the constants the spec names.
+        // They live here anyway because they are the one thing a wire constant and a gameplay
+        // constant have in common: the client and the server must agree on them exactly, and
+        // this is the file both sides already reference. A reload the client believes takes 2 s
+        // and the server believes takes 2.5 s produces a clip that refills twice, which is the
+        // same class of bug as a field the two sides pack differently.
+
+        /// <summary>
+        /// Seconds a reload takes, on both the client's prediction and the server's clock.
+        /// </summary>
+        /// <remarks>
+        /// Read by <c>ClientCombatState.DefaultReloadSeconds</c> and by
+        /// <c>ServerReloadPolicy</c>. Neither declares its own literal.
+        /// </remarks>
+        public const float  RELOAD_SECONDS  = 2f;
+
+        /// <summary>Seconds after death before a respawn may be requested, on both sides.</summary>
+        public const float  RESPAWN_SECONDS = 3f;
+
+        /// <summary>
+        /// Metres from an actor's feet to its eyes while standing. The hitscan origin.
+        /// </summary>
+        /// <remarks>
+        /// Derived from <c>MovementCore.StandHeight</c> (1.8 m) at the ~0.89 of full height a
+        /// humanoid's eyes sit at. It cannot reference that constant directly — this assembly
+        /// is below the replication library and must stay that way — so the derivation is
+        /// recorded here instead of implied.
+        /// </remarks>
+        public const float  EYE_HEIGHT = 1.6f;
+
+        /// <summary>Metres from feet to eyes while crouched or prone.</summary>
+        /// <remarks>
+        /// The same 0.89 ratio applied to <c>MovementCore.CrouchHeight</c> (0.5 m). Low, and
+        /// deliberately so: a crouched shooter firing from standing eye height is the bug this
+        /// constant exists to stop, and it only shows up as "shots that should have cleared a
+        /// wall did not".
+        /// </remarks>
+        public const float  EYE_HEIGHT_CROUCHED = 0.45f;
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using Ironfront.Net.Protocol;
+using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Movement;
 
 namespace Ironfront.Net.Replication.Server
@@ -70,6 +71,43 @@ namespace Ironfront.Net.Replication.Server
 
         /// <summary>Times an abnormal forward tick jump was rejected.</summary>
         public int TickJumpViolations;
+
+        /// <summary>
+        /// This player's authoritative weapon state: ammo, cooldown stamp, reload clock.
+        /// </summary>
+        /// <remarks>
+        /// A field rather than a property so <c>ServerCombatAuthority.Step</c> can take it by
+        /// <c>ref</c>. Passing a property's value would step a copy and throw the result away,
+        /// which compiles, runs, and leaves the ammo count frozen forever.
+        /// </remarks>
+        public WeaponRuntimeState Weapon = WeaponRuntimeState.Loaded(WeaponConfig.Rifle);
+
+        /// <summary>
+        /// The server's copy of this player's weapon numbers. Never accepted from the client.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="WeaponConfig.Rifle"/> until a loadout message or Dev A's weapon assets
+        /// say otherwise — the placeholder the phase-05 risk table names. Because the seam
+        /// takes a config rather than hardcoding one, swapping in the real numbers is data.
+        /// </remarks>
+        public WeaponConfig WeaponConfig = WeaponConfig.Rifle;
+
+        /// <summary>
+        /// Where this client's snapshot last stopped shedding actors, so the next one resumes
+        /// past it. Phase-05 task 4, decision D6.
+        /// </summary>
+        /// <remarks>
+        /// Lives on the session rather than inside <c>InterestManager</c>'s tables because it
+        /// is per-connection state with a per-connection lifetime: it dies with the session
+        /// instead of needing its own entry in the trap-2 forget path.
+        /// </remarks>
+        public int ShedCursor;
+
+        /// <summary>Re-arms the weapon with a full clip. Called on spawn and respawn.</summary>
+        public void ResetWeapon()
+        {
+            Weapon = WeaponRuntimeState.Loaded(WeaponConfig);
+        }
 
         /// <summary>Input frames buffered right now.</summary>
         public int PendingInputCount => _count;

@@ -66,12 +66,27 @@ namespace Ironfront.Net.Replication.Combat
         /// <summary>False while switching weapons or sprinting with the weapon lowered.</summary>
         public bool Unholstered;
 
+        /// <summary>
+        /// Server time the running reload began, or <see cref="float.NegativeInfinity"/> when
+        /// none is running.
+        /// </summary>
+        /// <remarks>
+        /// Negative infinity rather than NaN so that <c>now - ReloadStartedAt</c> is a huge
+        /// positive number rather than a NaN when nothing is reloading. Every comparison
+        /// against NaN is false, so a NaN sentinel would make an "elapsed?" test answer no
+        /// forever — which is the same shape of bug as the one this whole phase is closing.
+        /// <see cref="Reloading"/> is still the flag that decides whether the field means
+        /// anything; this only decides what a stale read costs.
+        /// </remarks>
+        public float ReloadStartedAt;
+
         public static WeaponRuntimeState Loaded(in WeaponConfig config) => new WeaponRuntimeState
         {
             LastFiredTime = float.NegativeInfinity,
             AmmoInClip = config.ClipSize,
             Reloading = false,
             Unholstered = true,
+            ReloadStartedAt = float.NegativeInfinity,
         };
     }
 

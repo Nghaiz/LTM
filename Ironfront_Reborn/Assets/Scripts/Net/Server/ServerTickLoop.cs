@@ -4,6 +4,7 @@ using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication;
 using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Interest;
+using Ironfront.Net.Replication.Movement;
 using Ironfront.Net.Replication.Server;
 using Ironfront.Net.Transport;
 using UnityEngine;
@@ -38,7 +39,7 @@ namespace Ironfront.Net.Unity.Server
     /// </para>
     /// </remarks>
     [DisallowMultipleComponent]
-    public sealed class ServerTickLoop : MonoBehaviour
+    public sealed class ServerTickLoop : MonoBehaviour, ISpawnRequestHandler
     {
         private readonly Dictionary<ushort, ServerPlayer> _byConnection =
             new Dictionary<ushort, ServerPlayer>(ProtocolConstants.MAX_ACTORS);
@@ -60,7 +61,14 @@ namespace Ironfront.Net.Unity.Server
         private readonly SpawnAckTracker _spawnAcks = new SpawnAckTracker();
         private readonly LagCompensator _lagCompensator;
 
+        private readonly ServerRespawnGate _respawnGate = new ServerRespawnGate();
+        private readonly ServerFireResolver _fireResolver;
+        private readonly ServerActorDamageSink _damageSink;
+        private readonly ServerCombatAuthority _combatAuthority;
+        private readonly ServerCombatBridge _combat;
+
         private ServerStateAudit _stateAudit;
+        private MatchController _match;
 
         private uint _snapshotIndex;
 
@@ -79,7 +87,20 @@ namespace Ironfront.Net.Unity.Server
         private double _lastPumpMs;
         private bool _running;
 
-        public ServerTickLoop() => _lagCompensator = new LagCompensator(_hitboxHistory);
+        public ServerTickLoop()
+        {
+            _lagCompensator = new LagCompensator(_hitboxHistory);
+            _fireResolver = new ServerFireResolver(_lagCompensator);
+            _damageSink = new ServerActorDamageSink(ServerActorRegistry.Instance);
+            _combatAuthority = new ServerCombatAuthority(_fireResolver, _damageSink, _respawnGate);
+            _combat = new ServerCombatBridge(
+                this, ServerActorRegistry.Instance, _combatAuthority, _respawnGate);
+
+            // Wired in the constructor, not in Bind: the router is a field initializer too, and
+            // an accepted C_SPAWN_REQUEST arriving before Bind ran would otherwise be counted
+            // and dropped rather than gated.
+            _router.SpawnRequests = this;
+        }
 
         /// <summary>The transport this loop is bound to. Null until <see cref="Bind"/>.</summary>
         public ITransportServer Transport { get; private set; }
@@ -102,6 +123,15 @@ namespace Ironfront.Net.Unity.Server
 
         /// <summary>Resolves hitscan against the world the shooter saw. Phase-02 task 3.</summary>
         public LagCompensator LagCompensator => _lagCompensator;
+
+        /// <summary>Cooldown, ammo and spread. Its counters are the rapid-fire evidence.</summary>
+        public ServerFireResolver FireResolver => _fireResolver;
+
+        /// <summary>Reload, fire and damage for one accepted frame. Phase-05 task 1.</summary>
+        public ServerCombatAuthority CombatAuthority => _combatAuthority;
+
+        /// <summary>When a dead actor may come back. Phase-05 task 1.</summary>
+        public ServerRespawnGate RespawnGate => _respawnGate;
 
         /// <summary>Pacing and the tick-time distribution M1 criterion 1 is graded on.</summary>
         public ServerTickScheduler Scheduler => _scheduler;
@@ -277,8 +307,12 @@ namespace Ironfront.Net.Unity.Server
                 // Interest management picks which actors this client is sent and how often. The
                 // per-client view is what the encoder files as its baseline, so a client can
                 // never hold a baseline containing an actor it was not actually sent.
+                // Budgeted, so an over-dense world sheds its least interesting actors instead of
+                // producing a snapshot that does not fit and is thrown away whole. Phase-05
+                // task 4.
                 if (!_interest.BuildView(
-                        session.ActorId, _world, _snapshotIndex, _view, _spawnAcks))
+                        session, _world, _snapshotIndex, _view, _spawnAcks,
+                        ServerPayloadWriter.MaxSnapshotBodySize))
                     continue;
 
                 // Each client is encoded against its own acked baseline, so the change masks are
@@ -289,10 +323,15 @@ namespace Ironfront.Net.Unity.Server
 
                 if (total < 0)
                 {
+                    // Now genuinely unreachable through density: BuildView admits at most
+                    // MaxSnapshotBodySize worth of worst-case entries. Kept as a loud failure
+                    // rather than deleted, because the projection is conservative-by-design and
+                    // this line is what would catch a future field widening the entry past what
+                    // InterestManager.MaxEntrySize believes it costs.
                     Debug.LogError(
                         $"[net] snapshot for conn {session.ConnectionId} did not fit one "
-                        + $"datagram at {_view.ActorCount} actors. Nothing was sent and no "
-                        + "baseline was recorded; fragmentation is still owed.");
+                        + $"datagram at {_view.ActorCount} actors despite the shed budget. "
+                        + "The per-entry size projection is stale.");
                     continue;
                 }
 
@@ -367,6 +406,72 @@ namespace Ironfront.Net.Unity.Server
                 Transport.Send(_players[i].Session.ConnectionId, channel, payload, reliable: true);
         }
 
+        /// <summary>Sends one already-framed payload to a single connection.</summary>
+        public void SendTo(
+            ushort connectionId, byte channel, ReadOnlySpan<byte> payload, bool reliable)
+        {
+            if (Transport == null) return;
+
+            Transport.Send(connectionId, channel, payload, reliable);
+        }
+
+        /// <summary>
+        /// Sends one already-framed payload to every client within
+        /// <paramref name="radius"/> metres of <paramref name="source"/>. Phase-05 task 3.
+        /// </summary>
+        /// <remarks>
+        /// The squared distance is what is compared, because computing a square root per
+        /// (event, client) pair to test against a constant is work with no answer attached —
+        /// see <c>ServerEventWriter.IsWithinEarshotSquared</c>, which takes the squared form for
+        /// exactly this reason.
+        /// </remarks>
+        public void SendToListenersInEarshot(
+            Vec3 source, float radius, ReadOnlySpan<byte> payload, byte channel, bool reliable)
+        {
+            if (Transport == null) return;
+
+            for (int i = 0; i < _players.Count; i++)
+            {
+                ClientSession listener = _players[i].Session;
+
+                float d2 = (listener.State.Position - source).SqrMagnitude;
+                if (!ServerEventWriter.IsWithinEarshotSquared(d2, radius)) continue;
+
+                Transport.Send(listener.ConnectionId, channel, payload, reliable);
+            }
+        }
+
+        /// <summary>Reports a death to the match, once, for the score and the win condition.</summary>
+        /// <remarks>
+        /// Resolved through the registry rather than taken as a team argument so the caller
+        /// cannot get the team wrong — the actor knows which side it was on, and passing that
+        /// through the combat path would mean threading a team byte through code that has no
+        /// other use for one.
+        /// </remarks>
+        public void ReportDeathToMatch(ushort victimActorId)
+        {
+            if (_match == null) return;
+            if (!ServerActorRegistry.Instance.TryFind(victimActorId, out NetServerActor victim))
+                return;
+
+            _match.ReportDeath(victim.Team);
+        }
+
+        /// <summary>
+        /// A client asked to respawn. Granted only when the gate says the delay has elapsed.
+        /// </summary>
+        /// <remarks>
+        /// Dropped silently when it has not. An early request is the normal consequence of a
+        /// client clock running a few milliseconds fast, not a protocol violation, and treating
+        /// it as one would disconnect honest players over clock skew.
+        /// </remarks>
+        void ISpawnRequestHandler.OnSpawnRequested(ClientSession session)
+        {
+            if (!_byConnection.TryGetValue(session.ConnectionId, out ServerPlayer player)) return;
+
+            _combat.TryRespawn(player);
+        }
+
         /// <summary>
         /// Attaches the match's id pool, so the loop can audit and reset per-round state.
         /// </summary>
@@ -379,6 +484,16 @@ namespace Ironfront.Net.Unity.Server
             => _stateAudit = new ServerStateAudit(
                 actorIds ?? throw new ArgumentNullException(nameof(actorIds)),
                 _hitboxHistory, _interest, _spawnAcks, () => _players.Count);
+
+        /// <summary>
+        /// Attaches the match controller, so an authoritative death reaches the scoreboard.
+        /// </summary>
+        /// <remarks>
+        /// Separate from <see cref="BindMatch"/> because the two have different lifetimes: the
+        /// id pool is per-round and the controller is not. Leaving this unset costs the score,
+        /// not the combat — deaths still replicate.
+        /// </remarks>
+        public void BindMatchController(MatchController match) => _match = match;
 
         /// <summary>
         /// Reads the per-actor and per-pair table sizes, for the phase-03 clean-state check.
@@ -410,8 +525,17 @@ namespace Ironfront.Net.Unity.Server
             }
 
             _stateAudit.ResetForNewMatch();
+            _respawnGate.Reset();
 
-            for (int i = 0; i < _players.Count; i++) _players[i].Session.Encoder.Reset();
+            for (int i = 0; i < _players.Count; i++)
+            {
+                _players[i].Session.Encoder.Reset();
+
+                // Re-armed with the round, so a player who ended the previous one mid-reload
+                // does not start this one with the old clock still running and a clip that
+                // refills a second in.
+                _players[i].Session.ResetWeapon();
+            }
         }
 
         /// <summary>
@@ -455,8 +579,13 @@ namespace Ironfront.Net.Unity.Server
                 return;
             }
 
-            var player = new ServerPlayer(connectionId, actor.ActorId) { Actor = actor };
+            var player = new ServerPlayer(connectionId, actor.ActorId, _combat) { Actor = actor };
             player.SyncFromActor();
+
+            // The session's clip and the actor's must agree from the first snapshot, or the
+            // client's first reload reconciles against a number nobody ever set.
+            player.Session.ResetWeapon();
+            actor.AmmoInClip = player.Session.Weapon.AmmoInClip;
 
             _byConnection.Add(connectionId, player);
             _players.Add(player);

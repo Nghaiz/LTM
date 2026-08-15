@@ -164,8 +164,13 @@ namespace Ironfront.Net.Replication.Server
         /// this class does itself. In a unit test it is straight-line integration; in Unity it
         /// is <c>CharacterController.Move</c>.
         /// </param>
+        /// <param name="observer">
+        /// Optional. Invoked once per <b>accepted</b> frame, with the frame intact. Phase-05
+        /// task 2 — the seam through which combat reaches the server at all.
+        /// </param>
         public static int ApplyPendingInput(
-            ClientSession session, float dt, Func<Vec3, Vec3> applyMove)
+            ClientSession session, float dt, Func<Vec3, Vec3> applyMove,
+            IAcceptedFrameObserver? observer = null)
         {
             if (session == null) throw new ArgumentNullException(nameof(session));
             if (applyMove == null) throw new ArgumentNullException(nameof(applyMove));
@@ -182,11 +187,24 @@ namespace Ironfront.Net.Replication.Server
                 session.HasInput  = true;
                 session.MissedInputTicks = 0;
                 steps++;
+
+                // AFTER the move, so the shot originates from where the server actually put the
+                // player this tick rather than from where they were at the top of it. At a
+                // sprint that gap is about 20 cm, which is enough to change whether a shot
+                // taken while rounding a corner had line of sight.
+                observer?.OnAcceptedFrame(session, tick, in frame, in input);
             }
 
             if (steps > 0) return steps;
 
             // Nothing arrived this tick. Coast on the last known intent, briefly.
+            //
+            // The observer is deliberately NOT called here. Coasting repeats a movement intent
+            // to cover one dropped packet; repeating a combat intent would have a player who
+            // was holding the trigger when their connection hiccuped fire three free rounds
+            // they never asked for — and, worse, do it from a frame the anti-cheat has already
+            // graded. Movement can be replayed because it is idempotent in aggregate. A shot
+            // cannot.
             if (!session.HasInput || session.MissedInputTicks >= MaxMissedInputTicks) return 0;
 
             StepOnce(session, in session.LastInput, dt, applyMove);

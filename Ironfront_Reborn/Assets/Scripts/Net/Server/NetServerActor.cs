@@ -41,8 +41,6 @@ namespace Ironfront.Net.Unity.Server
         [SerializeField] private bool _availableForPlayers;
 
         [Header("Replicated gameplay state")]
-        [SerializeField] private float _health = 100f;
-
         [Tooltip("Ships as 0 until Dev A lands the weapon id registry (checklist A6).")]
         [SerializeField] private byte _weaponId;
 
@@ -61,10 +59,40 @@ namespace Ironfront.Net.Unity.Server
             set => _team = value;
         }
 
+        /// <summary>
+        /// The actor's authoritative health. A pass-through to <c>Actor.health</c> whenever
+        /// this GameObject has one. Decision D9.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>There is one health field, not two kept in sync.</b> This component used to carry
+        /// its own <c>[SerializeField] float _health</c>, which the snapshot read and nothing
+        /// ever wrote, while <c>Actor.health</c> was the number <c>Die()</c>, the AI and the
+        /// ragdoll all read. Two numbers with one writer is a bug waiting for a second writer;
+        /// two numbers with two writers is the silent divergence phase-05 exists to remove, and
+        /// <c>development-principles.md</c> § "No Derived Fields" already forbids it.
+        /// </para>
+        /// <para>
+        /// <b>The serialized field's removal is safe because nothing had authored a meaningful
+        /// value into it.</b> The three prefabs carrying a <c>NetServerActor</c> all stored
+        /// <c>_health: 100</c>, which is also <c>Actor.health</c>'s declared default — so no
+        /// authored value is lost. This is called out in the task-6 PR so Dev A sees it.
+        /// </para>
+        /// <para>
+        /// <b>The fallback is for actors with no <c>Actor</c>,</b> which is every bare test rig
+        /// and any replicated prop. It is not a mirror: when <see cref="_actor"/> exists the
+        /// fallback is dead, and when it does not the fallback is the only copy. Exactly one is
+        /// live at any moment, which is the property that matters.
+        /// </para>
+        /// </remarks>
         public float Health
         {
-            get => _health;
-            set => _health = value;
+            get => _actor != null ? _actor.health : _healthWithoutActor;
+            set
+            {
+                if (_actor != null) _actor.health = value;
+                else _healthWithoutActor = value;
+            }
         }
 
         public byte WeaponId
@@ -89,7 +117,31 @@ namespace Ironfront.Net.Unity.Server
         public float PitchDegrees { get; set; }
 
         /// <summary>Alive flag. A corpse is never replicated (AD-4) but the flag still ships.</summary>
-        public bool IsAlive { get; set; } = true;
+        /// <remarks>
+        /// <para>
+        /// A pass-through to <c>Actor.dead</c> for the same reason <see cref="Health"/> is a
+        /// pass-through to <c>Actor.health</c> (D9), and it is the same defect: with an
+        /// auto-property here, an actor killed through <c>Actor.Damage</c> would set
+        /// <c>dead = true</c> while the snapshot kept reporting <c>IsAlive</c>, so every client
+        /// would render a corpse that was still standing and still a valid hitscan target.
+        /// D9 names health because health is where it was noticed; the flag beside it had
+        /// exactly the same shape.
+        /// </para>
+        /// <para>
+        /// <b>Setting this true does not resurrect a Unity actor.</b> It clears the gameplay
+        /// flag and the replicated bit; the animator, ragdoll and collider work a real respawn
+        /// needs is Editor-phase work and deliberately not attempted here.
+        /// </para>
+        /// </remarks>
+        public bool IsAlive
+        {
+            get => _actor != null ? !_actor.dead : _isAliveWithoutActor;
+            set
+            {
+                if (_actor != null) _actor.dead = !value;
+                else _isAliveWithoutActor = value;
+            }
+        }
 
         /// <summary>Aiming down sights, for the state flags byte.</summary>
         public bool IsAiming { get; set; }
@@ -97,7 +149,20 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>The movement seam, when this actor has one. Bots may not.</summary>
         public NetMovementAgent Movement { get; private set; }
 
-        private void Awake() => Movement = GetComponent<NetMovementAgent>();
+        /// <summary>The gameplay actor whose health is the authoritative one. May be absent.</summary>
+        private Actor _actor;
+
+        /// <summary>Health for a replicated object that is not an <c>Actor</c>. See <see cref="Health"/>.</summary>
+        private float _healthWithoutActor = 100f;
+
+        /// <summary>Alive flag for a replicated object that is not an <c>Actor</c>.</summary>
+        private bool _isAliveWithoutActor = true;
+
+        private void Awake()
+        {
+            Movement = GetComponent<NetMovementAgent>();
+            _actor = GetComponent<Actor>();
+        }
 
         private void OnEnable() => ServerActorRegistry.Instance.Register(this);
 
@@ -119,7 +184,7 @@ namespace Ironfront.Net.Unity.Server
                 PitchDegrees,
                 velocity,
                 BuildStateFlags(),
-                _health,
+                Health,
                 _weaponId,
                 _ammoInClip,
                 _team);
