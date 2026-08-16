@@ -70,7 +70,7 @@
 
       Dev tooling, not a netcode framework — section 3.4's hard no does not apply.
     -->
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.6.0" />
   </ItemGroup>
 
   <ItemGroup Label="Test host">
