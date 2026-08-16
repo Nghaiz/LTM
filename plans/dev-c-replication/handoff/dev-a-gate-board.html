@@ -1,4 +1,4 @@
-<title>Gate Dev A → M1</title>
+<title>Việc còn lại của Dev A</title>
 <style>
   :root {
     --paper:      #eceff1;
@@ -70,1549 +70,734 @@
 
   body {
     margin: 0;
+    padding: 2.5rem 1.25rem 6rem;
     background: var(--paper);
     color: var(--ink);
-    font-family: var(--serif);
-    font-size: 17px;
+    font-family: var(--sans);
+    font-size: 16px;
     line-height: 1.62;
-    -webkit-font-smoothing: antialiased;
   }
 
-  .wrap {
-    max-width: 61rem;
-    margin: 0 auto;
-    padding: 3.5rem 1.5rem 6rem;
-    display: flex;
-    flex-direction: column;
-    gap: 3.25rem;
-  }
-
-  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
-  a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
-
-  code, .mono { font-family: var(--mono); font-size: .88em; }
-  code {
-    background: var(--surface-2);
-    border: 1px solid var(--rule-soft);
-    border-radius: 3px;
-    padding: .06em .3em;
-    word-break: break-word;
-  }
+  .wrap { max-width: 62rem; margin: 0 auto; }
 
   /* ---------- masthead ---------- */
-  header.masthead { display: flex; flex-direction: column; gap: 1rem; }
+
+  .masthead {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 2rem 2rem 1.75rem;
+    box-shadow: var(--shadow);
+    margin-bottom: 2.5rem;
+  }
+
   .eyebrow {
-    font-family: var(--mono);
-    font-size: .72rem;
-    letter-spacing: .16em;
+    font-size: .75rem;
+    letter-spacing: .13em;
     text-transform: uppercase;
     color: var(--ink-faint);
+    font-weight: 600;
+    margin-bottom: .6rem;
   }
-  h1 {
-    font-family: var(--sans);
-    font-size: clamp(2rem, 5vw, 2.9rem);
-    line-height: 1.08;
-    letter-spacing: -.02em;
-    font-weight: 700;
-    margin: 0;
-    text-wrap: balance;
-  }
-  .standfirst {
-    margin: 0;
-    max-width: 62ch;
-    color: var(--ink-soft);
-    font-size: 1.06rem;
-  }
-  .meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .5rem 1.5rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--rule);
-    font-family: var(--mono);
-    font-size: .78rem;
-    color: var(--ink-faint);
-  }
-  .meta b { color: var(--ink-soft); font-weight: 600; }
 
-  /* ---------- stat row ---------- */
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
-  .stat { background: var(--surface); padding: 1.1rem 1.25rem; display: flex; flex-direction: column; gap: .3rem; }
-  .stat .n { font-family: var(--sans); font-size: 1.85rem; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1; }
-  .stat .l { font-family: var(--mono); font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); }
-  .stat.is-stop .n { color: var(--stop); }
-  .stat.is-hold .n { color: var(--hold); }
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(1.7rem, 4vw, 2.5rem);
+    line-height: 1.18;
+    margin: 0 0 1rem;
+    letter-spacing: -.012em;
+  }
+
+  .standfirst {
+    font-size: 1.06rem;
+    color: var(--ink-soft);
+    margin: 0 0 1.25rem;
+    max-width: 52rem;
+  }
+
+  .note {
+    background: var(--surface-2);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+    padding: .85rem 1.1rem;
+    font-size: .94rem;
+    color: var(--ink-soft);
+    margin-top: 1rem;
+  }
+
+  .note.is-done { border-left-color: var(--go); }
+  .note.is-stop { border-left-color: var(--stop); }
 
   /* ---------- sections ---------- */
-  section { display: flex; flex-direction: column; gap: 1.25rem; }
+
   h2 {
-    font-family: var(--sans);
-    font-size: 1.3rem;
-    font-weight: 700;
-    letter-spacing: -.01em;
-    margin: 0;
-    padding-bottom: .6rem;
-    border-bottom: 2px solid var(--ink);
+    font-family: var(--serif);
+    font-size: 1.5rem;
+    margin: 3rem 0 .4rem;
+    letter-spacing: -.008em;
+  }
+
+  .lede {
+    color: var(--ink-soft);
+    margin: 0 0 1.4rem;
+    max-width: 52rem;
+  }
+
+  /* ---------- items ---------- */
+
+  .items { display: grid; gap: 1.1rem; }
+
+  .item {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 4px solid var(--rule);
+    border-radius: 8px;
+    padding: 1.25rem 1.4rem 1.35rem;
+    box-shadow: var(--shadow);
+  }
+
+  .item.stop { border-left-color: var(--stop); }
+  .item.hold { border-left-color: var(--hold); }
+  .item.go   { border-left-color: var(--go); }
+
+  .item-head {
     display: flex;
     align-items: baseline;
-    gap: .75rem;
+    gap: .7rem;
     flex-wrap: wrap;
+    margin-bottom: .5rem;
   }
-  h2 .tag {
-    font-family: var(--mono);
-    font-size: .68rem;
-    letter-spacing: .12em;
-    text-transform: uppercase;
-    font-weight: 600;
-    color: var(--ink-faint);
-  }
-  .lede { margin: 0; max-width: 66ch; color: var(--ink-soft); }
 
-  /* ---------- summary table ---------- */
-  .tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); box-shadow: var(--shadow); }
-  table { border-collapse: collapse; width: 100%; min-width: 46rem; font-family: var(--sans); font-size: .9rem; }
-  thead th {
-    text-align: left;
+  .item-id {
     font-family: var(--mono);
-    font-size: .68rem;
-    letter-spacing: .11em;
-    text-transform: uppercase;
+    font-size: .8rem;
+    font-weight: 700;
+    background: var(--accent);
+    color: var(--accent-ink);
+    padding: .18rem .5rem;
+    border-radius: 4px;
+    letter-spacing: .04em;
+  }
+
+  .item-title {
+    font-family: var(--serif);
+    font-size: 1.18rem;
+    margin: 0;
+    flex: 1 1 20rem;
+    line-height: 1.3;
+  }
+
+  .item-eff {
+    font-size: .82rem;
     color: var(--ink-faint);
-    font-weight: 600;
-    padding: .8rem 1rem;
-    border-bottom: 1px solid var(--rule);
+    font-family: var(--mono);
     white-space: nowrap;
   }
-  tbody td { padding: .78rem 1rem; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
-  tbody tr:last-child td { border-bottom: 0; }
-  tbody tr:nth-child(even) { background: var(--surface-2); }
-  td.id { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
-  td.eff { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink-soft); }
-  td.fb { color: var(--ink-soft); }
+
+  .pathbar {
+    font-size: .85rem;
+    color: var(--ink-soft);
+    background: var(--surface-2);
+    border-radius: 5px;
+    padding: .4rem .7rem;
+    margin-bottom: .85rem;
+  }
+
+  .item p { margin: .7rem 0; }
+  .item p:last-child { margin-bottom: 0; }
+
+  .fb {
+    background: var(--surface-2);
+    border-radius: 6px;
+    padding: .7rem .9rem;
+    font-size: .93rem;
+    margin-top: .9rem;
+  }
+  .fb b { color: var(--ink); }
+
+  /* ---------- pills ---------- */
 
   .pill {
     display: inline-block;
-    font-family: var(--mono);
-    font-size: .66rem;
-    letter-spacing: .08em;
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .06em;
     text-transform: uppercase;
-    font-weight: 600;
-    padding: .18rem .45rem;
-    border-radius: 3px;
+    padding: .18rem .55rem;
+    border-radius: 999px;
     white-space: nowrap;
   }
   .pill.stop { background: var(--stop-bg); color: var(--stop); }
   .pill.hold { background: var(--hold-bg); color: var(--hold); }
   .pill.go   { background: var(--go-bg);   color: var(--go); }
-  /* "done" reads as go, plus a rule through the row it labels — a finished item should be
-     recognisable from across the page without reading a word of it. */
   .pill.done { background: var(--go-bg);   color: var(--go); }
-  tr:has(.pill.done) td:not(.fb) { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--go) 55%, transparent); }
-  tr:has(.pill.done) .pill.done  { text-decoration: none; }
 
-  /* ---------- item cards ---------- */
-  .items { display: flex; flex-direction: column; gap: 1rem; }
-  article.item {
+  /* ---------- tables ---------- */
+
+  .tablewrap { overflow-x: auto; margin: 1rem 0; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .93rem;
     background: var(--surface);
-    border: 1px solid var(--rule);
-    border-left: 4px solid var(--rule);
-    border-radius: 6px;
-    padding: 1.35rem 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: .85rem;
-    box-shadow: var(--shadow);
   }
-  article.item.stop { border-left-color: var(--stop); }
-  article.item.hold { border-left-color: var(--hold); }
-  article.item.go   { border-left-color: var(--go); }
 
-  .item-head { display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap; }
-  .item-id {
-    font-family: var(--mono);
-    font-size: .82rem;
-    font-weight: 700;
-    color: var(--accent);
-    letter-spacing: .04em;
+  th, td {
+    text-align: left;
+    padding: .58rem .75rem;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
   }
-  .item-title { font-family: var(--sans); font-size: 1.06rem; font-weight: 700; margin: 0; letter-spacing: -.005em; }
-  .item-eff { font-family: var(--mono); font-size: .74rem; color: var(--ink-faint); margin-left: auto; font-variant-numeric: tabular-nums; }
-  .item p { margin: 0; max-width: 68ch; }
-  .item ul { margin: 0; padding-left: 1.15rem; max-width: 68ch; display: flex; flex-direction: column; gap: .35rem; }
 
-  pre {
-    margin: 0;
-    background: var(--surface-2);
-    border: 1px solid var(--rule-soft);
-    border-radius: 4px;
-    padding: .8rem 1rem;
-    overflow-x: auto;
-    font-family: var(--mono);
-    font-size: .82rem;
-    line-height: 1.55;
-    color: var(--ink);
-  }
-  pre code { background: none; border: 0; padding: 0; font-size: inherit; }
-
-  .kv { display: grid; grid-template-columns: max-content 1fr; gap: .35rem 1rem; font-size: .92rem; }
-  .kv dt {
-    font-family: var(--mono);
-    font-size: .68rem;
-    letter-spacing: .1em;
+  thead th {
+    font-size: .76rem;
+    letter-spacing: .07em;
     text-transform: uppercase;
     color: var(--ink-faint);
-    padding-top: .28rem;
+    border-bottom: 1px solid var(--rule);
+    font-weight: 700;
   }
-  .kv dd { margin: 0; color: var(--ink-soft); }
-  .kv dd b { color: var(--ink); font-weight: 600; }
 
-  .note {
-    background: var(--surface-2);
-    border-left: 3px solid var(--accent);
-    border-radius: 0 4px 4px 0;
-    padding: .8rem 1rem;
-    font-size: .95rem;
-    color: var(--ink-soft);
-    max-width: 70ch;
-  }
-  .note b { color: var(--ink); }
-  .note.is-done { border-left-color: var(--go); background: var(--go-bg); }
+  tbody tr:last-child td { border-bottom: none; }
 
-  .choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: .75rem; }
-  .choice { border: 1px solid var(--rule); border-radius: 5px; padding: .9rem 1rem; background: var(--surface-2); display: flex; flex-direction: column; gap: .3rem; }
-  .choice.pick { border-color: var(--accent); }
-  .choice h4 { font-family: var(--sans); font-size: .95rem; margin: 0; font-weight: 700; }
-  .choice p { font-size: .88rem; color: var(--ink-soft); margin: 0; }
+  /* ---------- code ---------- */
 
-  .runbox { display: flex; flex-direction: column; gap: .5rem; }
-  .pathbar {
+  code {
     font-family: var(--mono);
-    font-size: .71rem;
-    letter-spacing: .05em;
-    color: var(--ink-faint);
-    display: flex;
-    flex-wrap: wrap;
-    gap: .45rem;
-    align-items: baseline;
+    font-size: .89em;
+    background: var(--surface-2);
+    padding: .1rem .32rem;
+    border-radius: 4px;
   }
-  .pathbar b { color: var(--ink-soft); font-weight: 600; letter-spacing: .09em; text-transform: uppercase; }
-  ol.steps { margin: 0; padding-left: 1.35rem; max-width: 68ch; display: flex; flex-direction: column; gap: .6rem; }
-  ol.steps li::marker { font-family: var(--mono); font-size: .82em; color: var(--ink-faint); }
-  ol.steps > li > strong { font-family: var(--sans); font-size: .96rem; }
 
-  .traps { display: flex; flex-direction: column; gap: .9rem; }
-  .trap { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 1.1rem 1.35rem; display: flex; flex-direction: column; gap: .45rem; }
-  .trap h4 { font-family: var(--sans); font-size: .98rem; margin: 0; font-weight: 700; }
-  .trap p { margin: 0; font-size: .95rem; color: var(--ink-soft); max-width: 70ch; }
+  pre {
+    background: var(--surface-2);
+    border: 1px solid var(--rule-soft);
+    border-radius: 6px;
+    padding: .85rem 1rem;
+    overflow-x: auto;
+    margin: .9rem 0;
+  }
+  pre code { background: none; padding: 0; font-size: .86rem; line-height: 1.55; }
 
-  footer { border-top: 1px solid var(--rule); padding-top: 1.25rem; font-size: .88rem; color: var(--ink-faint); display: flex; flex-direction: column; gap: .5rem; }
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
 
-  @media (max-width: 620px) {
-    body { font-size: 16px; }
-    .wrap { padding: 2.5rem 1.1rem 4rem; gap: 2.5rem; }
-    .item-eff { margin-left: 0; }
-    .kv { grid-template-columns: 1fr; gap: .15rem; }
-    .kv dd { margin-bottom: .5rem; }
+  ul { padding-left: 1.2rem; margin: .7rem 0; }
+  li { margin: .3rem 0; }
+
+  hr {
+    border: none;
+    border-top: 1px solid var(--rule);
+    margin: 3rem 0 0;
+  }
+
+  .foot {
+    margin-top: 1.4rem;
+    font-size: .87rem;
+    color: var(--ink-faint);
   }
 </style>
 
 <div class="wrap">
 
   <header class="masthead">
-    <div class="eyebrow">Ironfront Reborn · Dev C → Dev A</div>
-    <h1>Việc của A để tôi cook tiếp không vướng gate</h1>
+    <div class="eyebrow">Ironfront Reborn · Dev C → Dev A · Vòng 8 · 16-08-2026</div>
+    <h1>Việc còn lại của A, và cái duy nhất đang chặn cả dự án</h1>
     <p class="standfirst">
-      Mọi thứ dựng được mà không cần Unity Editor thì đã dựng, đã test, đã merge: 283 test, 0 warning.
-      Phần còn lại cần Editor, mà theo <code>conventions.md § 1.3</code> thì Editor chỉ có A mở.
-      Trang này xếp việc theo <em>gate nào mở ra</em>, kèm cột đường vòng để tôi vẫn chạy tiếp nếu A chưa trả lời.
-      Mỗi mục đều ghi rõ <b>chạy ở đâu</b>: terminal tại gốc repo, hay trong Editor. Chưa từng chạy lệnh nào của
-      repo này thì bắt đầu ở <b>Nhóm 0</b>.
+      Server đã dựng xong trên Azure, image master đã build và đẩy lên registry, runbook triển khai
+      đã viết sẵn. Vào trận vẫn không được, vì thiếu đúng một thứ: <b>bản build Linux dedicated của
+      game server</b>. GitHub runner không có licence Unity nên CI không tự làm được — chỉ máy có
+      Editor mới làm được, tức là A.
     </p>
-    <div class="note">
-      <b>Bản cập nhật vòng 2 — 12-08 buổi chiều.</b> A1, A2 và A5 đã đóng. Trong lúc đó tôi merge ba PR nữa
-      (#12 của A, #13, #14) chữa hai bug A báo — không quit được và không thấy log — cộng bốn lỗi Unity 6
-      trong scene. Tất cả đều đã verify được phần verify được mà không cần Editor. Phần còn lại thì không:
-      <b>Nhóm V là năm câu hỏi chỉ Editor mới trả lời được, và nó chặn A3.</b> Bắt đầu ở đó, đừng bắt đầu ở A3.
-    </div>
-    <div class="note">
-      <b>Vòng 3 — 12-08 tối. PR #17 của A: tôi đã request changes.</b> Không có gì hỏng, nhưng hai
-      mặc định của package Unity-MCP chạm vào file dùng chung và sẽ theo về máy cả bốn người:
-      17 MB DLL đang được đóng vào player build, và <code>UNITY_MCP_READY</code> đóng dấu lên cả 19
-      platform. Ba điểm nhỏ hơn nữa. Chi tiết ở <b>Nhóm P</b>, và ở
-      <a href="https://github.com/Sagitoaz/LTM/pull/17">review trên PR</a>.
-      <b>Nhóm P không chặn nhóm V — nhưng làm V trước rồi hẵng merge #17.</b> Lý do ở thẻ P0.
+    <p class="standfirst">
+      Trang này liệt kê toàn bộ việc còn mở của A, xếp theo thứ tự mở khoá được nhiều nhất. Bản
+      tiếng Anh cho AI đọc nằm ở <code>dev-a-checklist.md</code> cùng thư mục, nội dung tương đương.
+    </p>
+    <div class="note is-stop">
+      <b>Có thêm việc mới so với vòng 7.</b> Hai PR #81 và #82 vừa sửa mười một lỗi ở tầng server
+      authority. <b>Tám trong số đó nằm ở tầng Unity và chưa ai mở Editor kiểm chứng</b> — tôi lập
+      luận theo cấu trúc code chứ không quan sát thấy. Nhóm E là danh sách cần A nhìn tận mắt.
     </div>
     <div class="note is-done">
-      <b>Vòng 4 — 12-08 khuya. #17 đã merge vào <code>develop</code>.</b> A sửa hết cả ba điểm:
-      42 file <code>.meta</code> về <code>Any: 0 / Editor: 1</code>, define còn đúng
-      <code>Server</code> và <code>Standalone</code>, <code>.mcp.json</code> cùng
-      <code>Ironfront_Reborn/.claude/</code> đã untracked, scope commit đổi sang <code>client</code>
-      nên job <code>style</code> xanh lại. <b>Toàn bộ Nhóm P đóng.</b> P0 tôi rút lại: máy A đã cài MCP
-      từ lúc mở PR nên Console của A vốn đã ở trạng thái sau-MCP, merge không đổi phép đo.
-      <b>Giờ chỉ còn Nhóm V chặn A3.</b> Lúc gửi kết quả V1 nhớ ghi kèm một dòng "đo với MCP đã cài".
-    </div>
-    <div class="note is-done">
-      <b>#21 cũng đã merge — và nó chữa một thứ đang hỏng mà tôi không thấy.</b> Hai điểm meta thì chỉ là
-      lớp bảo hiểm thứ hai (<code>defineConstraints: UNITY_EDITOR</code> trên cả 42 file, chặn ở tầng compile
-      thay vì chỉ ở toggle Inspector). Thứ đáng giá là ba DLL: bản
-      <code>Ironfront.Net.Replication.dll</code> nằm trên <code>develop</code> đang <b>thiếu</b>
-      <code>ServerMessageRouter</code> và <code>ServerPayloadWriter</code> kể từ lúc #19 merge — tức Unity
-      load một bản cũ hơn source suốt từ đó, và không có gì báo. A build lại sau #19 nên bản trong #21 mới
-      là bản khớp. Nhánh <code>chore/install-unity-mcp</code> trùng tree byte-for-byte với #21 nên không cần
-      PR thứ hai, tôi đã xoá.
-      <b>Rút ra, và nó thành việc thường trực:</b> ba DLL đó là build artifact của source B/C/D nhưng được
-      commit vào git. Từ giờ ai merge source vào <code>Ironfront.Net.*</code> thì phải chạy
-      <code>build-libs.ps1</code> và commit DLL trong cùng PR — không thì Unity chạy code cũ. Tôi đã đưa
-      một CI gate cảnh báo drift vào roadmap của D.
-    </div>
-    <div class="note is-done">
-      <b>Vòng 5 — 13-08. Nhóm V đã đóng.</b> V1: <b>0 error</b>, đo với MCP đã cài.
-      V2: <b>census sạch</b>. V3: <b>log ghi được</b>. V4: Play Mode dừng và Console có
-      <code>[AppQuit] quit requested</code>; cả hai nút Quit đều đã nối dây. V5:
-      <b>Island sạch · Dustbowl sạch · Splash sạch</b>. Biên bản đầy đủ ở
-      <code>plans/reports/2026-08-13-unity-v1-v5.md</code>. A3 không còn bị Nhóm V chặn.
-    </div>
-    <div class="note is-done">
-      <b>Vòng 6 — 13-08. Harness A3 đã sửa xong, mời anh chạy lại A3.</b> Báo cáo vòng 5 của anh
-      đúng cả ba điểm và mỗi điểm đã được vá: trục dọc khi chạm đất không còn bị tính là sai lệch
-      (đó là 787 cảnh báo giả lúc đứng yên), mẫu spawn/hồi sinh/dịch chuyển bị phát hiện và bỏ qua
-      thay vì cộng vào trung bình (mẫu 1123 m), và component nay khai báo
-      <code>[DefaultExecutionOrder(1000)]</code> nên luôn đọc transform sau khi controller gốc đã
-      di chuyển trong cùng tick. Thêm một lỗi thứ tư anh chưa thấy: <code>_primed</code> không
-      được reset khi bật lại, nên một lần hồi sinh từ pool sẽ đo với vị trí cũ — nhiều khả năng
-      chính là nguồn của mẫu 1123 m đó. <b>Dòng tổng kết đã đổi dạng: kết luận giờ là con số khi
-      CHẠM ĐẤT</b>, và số mẫu bị bỏ qua được báo riêng.
-    </div>
-    <div class="note is-done">
-      <b>Vòng 7 — 13-08. Weapon id đã thành hợp đồng, không còn nằm riêng trong prefab.</b> PR #33
-      của anh đúng hướng và đã merge. Nhưng bảng id chỉ tồn tại trong
-      <code>_Managers.prefab</code>, mà server là thư viện netstandard không đọc được file Unity —
-      đúng loại lỗi mà envelope kênh đã mắc suốt một mốc (§ 5.1). Nay có
-      <code>protocol-spec.md § 4.8</code> + <code>WeaponIds.cs</code>, và
-      <code>SpecChecker</code> so cả ba bản trên mỗi lần CI chạy. <b>Hai chỗ trong code của anh
-      cần biết:</b> giá trị mặc định của <code>NetworkId</code> đổi từ 1 sang <b>0</b> — thêm vũ
-      khí mới trong Inspector giờ sẽ báo "chưa gán id" thay vì âm thầm trùng với RK-44; và
-      <code>NetworkIdOf</code> nay tra qua bảng đã kiểm, nên một entry trùng id sẽ phát ra 0 chứ
-      không mượn danh vũ khí khác. Thêm vũ khí mới thì phải sửa cả ba nơi, nếu quên thì CI đỏ.
-    </div>
-    <div class="meta">
-      <span><b>Ngày</b> 12-08-2026 · vòng 4</span>
-      <span><b>Mốc</b> M0 đóng · M1 mở</span>
-      <span><b>Còn lại</b> ~1h55 trong Editor · #17 đã xong</span>
-      <span><b>SSOT</b> plans/dev-c-replication/handoff/dev-a-checklist.md</span>
+      <b>S5 đã hết chặn.</b> Báo cáo 15-08 của A đúng: <code>BotLodScheduler</code> lúc đó chỉ là
+      class policy không có wrapper Unity nên đo LOD bật/tắt là đo hai lần cùng một đường code. Giờ
+      <code>BotLodGate.cs</code> đã có, kèm <code>BotLodMode</code> ba chế độ trong đó có
+      <code>AlwaysOff</code> tất định. Đo được rồi.
     </div>
   </header>
 
-  <section>
-    <div class="stats">
-      <div class="stat">
-        <span class="n">0</span>
-        <span class="l">Câu hỏi Nhóm V còn mở</span>
+  <h2>Bảng tổng hợp</h2>
+  <p class="lede">
+    Khoảng 3 tiếng làm việc trong Editor, cộng ba câu trả lời mỗi câu vài phút. Cột cuối là thứ tôi
+    cần nhận lại — trả lời đúng dòng đó là đủ, không cần viết dài.
+  </p>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>Mã</th><th>Việc</th><th>Thời gian</th><th>Mức</th><th>Trả lời bằng</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><b>D1</b></td><td>Build Linux dedicated + sửa build target</td><td>45 phút</td><td><span class="pill stop">Chặn hết</span></td><td>tag release + digest image</td></tr>
+        <tr><td><b>E1–E8</b></td><td>Kiểm chứng tám sửa đổi Unity của #81/#82</td><td>30 phút</td><td><span class="pill stop">Chặn niềm tin</span></td><td>mỗi dòng một câu</td></tr>
+        <tr><td><b>A3</b></td><td>Chạy lại shadow comparison, có trọng tâm</td><td>35 phút</td><td><span class="pill stop">Chặn A4</span></td><td>dòng tóm tắt grounded</td></tr>
+        <tr><td><b>A4</b></td><td>Gắn hai component lên prefab, clock tắt</td><td>10 phút</td><td><span class="pill hold">Chờ A3</span></td><td>đường dẫn prefab</td></tr>
+        <tr><td><b>S5/A9</b></td><td>Profiler 32 bot, LOD bật và tắt</td><td>25 phút</td><td><span class="pill go">Làm được ngay</span></td><td>hai số p99</td></tr>
+        <tr><td><b>A11</b></td><td>Hai DLL master-link vào <code>Assets/Plugins</code></td><td>10 phút</td><td><span class="pill hold">Giờ mới cần</span></td><td>xong / chờ Dev D</td></tr>
+        <tr><td><b>D2</b></td><td>Duyệt <code>EditorBuild.cs</code> Dev D thêm vào <code>Assets/</code></td><td>10 phút</td><td><span class="pill hold">Quyền sở hữu</span></td><td>giữ / chuyển chỗ</td></tr>
+        <tr><td><b>A7</b></td><td>Người chơi có ra được ngoài ±2048 m không</td><td>10 phút</td><td><span class="pill go">Xác nhận</span></td><td>có / không</td></tr>
+        <tr><td><b>A12</b></td><td><code>cpuPercent</code>: giữ −1 hay đọc counter nào</td><td>2 phút</td><td><span class="pill hold">Quyết định</span></td><td>−1 / tên counter</td></tr>
+        <tr><td><b>A13</b></td><td>Bảng điểm kill/death ai làm</td><td>5 phút</td><td><span class="pill hold">Quyết định</span></td><td>A / tôi</td></tr>
+        <tr><td><b>F</b></td><td>Tách asmdef — chỉ cần A đồng ý, chưa làm</td><td>—</td><td><span class="pill hold">Bàn trước</span></td><td>đồng ý / phản đối</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Nhóm D · Cái đang chặn triển khai</h2>
+  <p class="lede">
+    Không có mục nào khác trong dự án đang bị kẹt vì thiếu người. Mục này thì có, và chỉ A gỡ được.
+  </p>
+
+  <div class="items">
+
+    <article class="item stop">
+      <div class="item-head">
+        <span class="item-id">D1</span>
+        <h3 class="item-title">Build artifact Linux dedicated cho game server</h3>
+        <span class="item-eff">~45 phút</span>
       </div>
-      <div class="stat">
-        <span class="n">3/3</span>
-        <span class="l">Điểm #17 đã sửa · merged</span>
+      <div class="pathbar"><b>Làm ở</b> máy có Unity Editor kèm module <b>Linux Dedicated Server</b> · terminal tại gốc repo · GitHub</div>
+
+      <p>
+        Đây là <a href="https://github.com/Sagitoaz/LTM/issues/80">issue #80</a>, và là việc ưu tiên
+        số một của cả dự án lúc này. VM đã chạy, image master đã có digest, runbook đã viết trong
+        <a href="https://github.com/Sagitoaz/LTM/issues/78">issue #78</a>. Thiếu mỗi image game server.
+      </p>
+      <p>
+        <code>images.yml</code> <b>không</b> build image này từ đầu được — runner của GitHub không có
+        licence Unity. Nó chỉ đóng gói một artifact dựng sẵn từ máy có Editor. Không có artifact thì
+        job đó skip, compose không có image để pull, và VM chỉ chạy được master: đăng nhập, lobby,
+        matchmaking đều sống, còn vào trận thì không.
+      </p>
+
+      <p><b>Bước 1 — sửa build target trước khi build.</b></p>
+      <p>
+        <code>tools/build-server.ps1</code> không truyền <code>-buildTarget</code>, và
+        <code>Assets/Editor/EditorBuild.cs</code> không gọi <code>SwitchActiveBuildTarget</code>.
+        Trên máy Windows (đúng máy build được ghi trong tài liệu) hệ quả là:
+      </p>
+      <ul>
+        <li>
+          <code>standaloneBuildSubtarget = Server</code> ở <code>EditorBuild.cs:63</code> áp lên
+          platform <b>đang active</b>, tức Windows, không phải Linux. Comment ngay trên nó nói là để
+          lần build tương tác sau không bị revert — nó không làm được điều đó cho một platform chưa
+          active.
+        </li>
+        <li>
+          <code>BuildPipeline.BuildPlayer</code> với target chưa active sẽ kích hoạt platform switch
+          ngầm cộng full reimport ngay giữa phiên <code>-quit</code> batch. Đây đúng là chỗ sinh ra
+          loại bug "build báo thành công nhưng ra sai subtarget".
+        </li>
+      </ul>
+      <p>Sửa một trong hai cách:</p>
+      <pre><code>EditorUserBuildSettings.SwitchActiveBuildTarget(
+    BuildTargetGroup.Standalone, BuildTarget.StandaloneLinux64);</code></pre>
+      <p>
+        đặt trước dòng gán subtarget, <b>hoặc</b> truyền <code>-buildTarget Linux64</code> từ
+        <code>build-server.ps1</code>. Tiện thể: <code>EditorBuild.cs:63</code> set
+        <code>standaloneBuildSubtarget = Server</code> rồi không bao giờ trả lại, nên menu item
+        tương tác sẽ để Editor của A kẹt ở chế độ server subtarget.
+      </p>
+
+      <p><b>Bước 2 — build và publish.</b></p>
+      <pre><code>pwsh tools/build-server.ps1</code></pre>
+      <p>
+        Ra <code>gameserver-linux.tar.gz</code> chứa <code>Ironfront.Server.x86_64</code>. Sau đó:
+      </p>
+      <ul>
+        <li>Tạo một GitHub Release (tag gì cũng được, ví dụ <code>gs-2026-08-16</code>) và attach file tarball, <b>tên phải đúng</b> <code>gameserver-linux.tar.gz</code> vì workflow match theo tên.</li>
+        <li>Chạy tay workflow <code>images</code>, điền <code>gameserver_release_tag</code> bằng tag đó.</li>
+        <li>Workflow push <code>ghcr.io/sagitoaz/ironfront-gameserver</code>, và fail rõ ràng nếu tarball không có <code>Ironfront.Server.x86_64</code> bên trong.</li>
+      </ul>
+
+      <div class="fb">
+        <b>Tôi cần nhận lại:</b> tag của release, và digest của image đã push. Dev D cần digest đó để
+        điền <code>IRONFRONT_GAMESERVER_IMAGE</code> vào <code>.env</code> trên VM.
       </div>
-      <div class="stat is-hold">
-        <span class="n">6</span>
-        <span class="l">Mục đã đóng</span>
+    </article>
+
+    <article class="item hold">
+      <div class="item-head">
+        <span class="item-id">D2</span>
+        <h3 class="item-title">Duyệt <code>EditorBuild.cs</code> mà Dev D thêm vào <code>Assets/</code></h3>
+        <span class="item-eff">~10 phút</span>
       </div>
-      <div class="stat">
-        <span class="n">1h55</span>
-        <span class="l">Việc còn lại trong Editor</span>
+      <div class="pathbar"><b>Làm ở</b> đọc file, không cần chạy gì</div>
+      <p>
+        File này Dev D thêm trong #77. Nó nằm trong cây <code>Assets/</code> của A nhưng tồn tại để
+        phục vụ pipeline image: <code>gameserver.Dockerfile</code> và <code>images.yml</code> đều phụ
+        thuộc vào artifact nó sinh ra.
+      </p>
+      <p>
+        Cần A duyệt vì nó ghi vào <code>EditorUserBuildSettings</code> — state của Editor, không phải
+        state của project. Phần <code>Application.isBatchMode</code> bọc quanh
+        <code>EditorApplication.Exit</code> thì viết đúng kỷ luật; phần thiếu là build target ở D1.
+      </p>
+      <div class="fb"><b>Tôi cần nhận lại:</b> giữ nguyên chỗ đó, hay A muốn chuyển đi đâu.</div>
+    </article>
+
+  </div>
+
+  <h2>Nhóm E · Kiểm chứng tám sửa đổi chưa ai nhìn thấy</h2>
+  <p class="lede">
+    PR #81 và #82 sửa mười một lỗi ở tầng server authority. Tám lỗi nằm ở tầng Unity, và
+    <b>không test nào chạm tới được</b> — lý do nằm ở nhóm F. Tôi lập luận theo cấu trúc code, không
+    quan sát. Mỗi dòng dưới đây ghi rõ cần nhìn gì và thế nào là đúng.
+  </p>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>Mã</th><th>Đã sửa gì</th><th>Nhìn gì</th><th>Đúng thì thấy</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>E1</b></td>
+          <td><code>WeaponId</code> giờ đọc <code>Actor.activeWeapon.NetworkId</code></td>
+          <td>Vào cùng một client thứ hai, nhìn người chơi kia</td>
+          <td>Họ cầm súng nhìn thấy được, đổi súng thì hình đổi theo</td>
+        </tr>
+        <tr>
+          <td><b>E2</b></td>
+          <td>Yaw ghi từ input frame thay vì transform</td>
+          <td>Bảo người chơi kia xoay tại chỗ</td>
+          <td>Thân họ quay. Trước đó họ đứng yên hướng spawn mãi mãi</td>
+        </tr>
+        <tr>
+          <td><b>E3</b></td>
+          <td><code>Occlusion</code> gán <code>Physics.Linecast</code>, mask <code>-2049</code></td>
+          <td>Ngắm xuyên qua một bức tường đặc rồi bắn</td>
+          <td>Không trúng, không kill. Xem <code>ShotsOccluded</code> đã khác 0 chưa</td>
+        </tr>
+        <tr>
+          <td><b>E4</b></td>
+          <td>Input drain có ngân sách mỗi tick</td>
+          <td>Chơi bình thường, rồi chơi qua link mất gói</td>
+          <td>Di chuyển không đổi cảm giác. <code>SpeedViolations</code> và <code>InputThrottleEvents</code> vẫn 0 với client trung thực</td>
+        </tr>
+        <tr>
+          <td><b>E5</b></td>
+          <td><code>S_DESPAWN_ACTOR</code> gửi khi rời; slot reset health/alive khi nhận</td>
+          <td>Cho một người rời phòng, rồi vào lại</td>
+          <td>Không còn xác đứng yên. Người vào lại sống, đủ máu, không phải cái xác</td>
+        </tr>
+        <tr>
+          <td><b>E6</b></td>
+          <td>Respawn teleport về spawn point của <code>ActorManager</code></td>
+          <td>Chết ở chốt rồi hồi sinh</td>
+          <td>Hiện ra ở spawn point chứ không phải chỗ chết, và không bị ghi speed violation vì cú teleport</td>
+        </tr>
+        <tr>
+          <td><b>E7</b></td>
+          <td>Hitbox history ghi dưới từng tick còn nợ</td>
+          <td>Chơi lúc server giật, hoặc dưới tải 32 bot</td>
+          <td>Lag compensation ổn định. <code>PresentFallbacks</code> không tăng theo tải</td>
+        </tr>
+        <tr>
+          <td><b>E8</b></td>
+          <td><code>ActorIdPool</code> giờ là nguồn cấp id; <code>ForgetActor</code> chạy cả cho bot</td>
+          <td>Chơi trọn một vòng có bot sinh ra và biến mất, rồi reset match</td>
+          <td>Actor vẫn xuất hiện bình thường. <b>Đây là thay đổi dễ gây bất ngờ nhất — nếu actor ngừng spawn thì soi chỗ này trước</b></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="items">
+    <article class="item go">
+      <div class="item-head">
+        <span class="item-id">E9</span>
+        <h3 class="item-title">Ba field mới trên <code>LobbyShellOverlay</code> sẽ làm bẩn prefab/scene</h3>
+        <span class="item-eff">~5 phút</span>
       </div>
-      <div class="stat">
-        <span class="n">283</span>
-        <span class="l">Test đã xanh, chờ A</span>
+      <div class="pathbar"><b>Làm ở</b> biết trước là đủ, không phải việc</div>
+      <p>
+        #77 thêm <code>_masterTls</code> và hai field chuỗi TLS vào <code>LobbyShellOverlay</code>.
+        <code>_masterTls</code> là <code>bool</code> không có initializer nên mặc định
+        <code>false</code>, tức đường LAN/plaintext không đổi một byte nào.
+      </p>
+      <p>
+        Điều cần biết: <b>prefab hay scene nào tham chiếu component này sẽ bị đánh dấu dirty ở lần
+        save Editor kế tiếp.</b> Đó là bình thường, không phải lỗi. Nó cũng là nguồn gốc khả dĩ nhất
+        của vụ <code>New Terrain.asset</code> bị re-serialize rồi đi nhờ vào #77 — luật
+        <code>.gitattributes</code> chặn chuyện đó đã sửa ở #79.
+      </p>
+    </article>
+  </div>
+
+  <p class="foot">
+    Ngoài tám dòng trên, còn một dấu hiệu phụ đáng để ý: log
+    <code>[net] match reset left state behind</code> lẽ ra không còn xuất hiện ở mỗi lần chuyển vòng
+    nữa. Trước đây nó kiểm <code>Sessions == 0</code> trong khi reset thì cố ý giữ session lại, nên
+    dòng cảnh báo đó kêu oan suốt từ ngày được viết.
+  </p>
+
+  <h2>Nhóm A · Việc còn mở từ các vòng trước</h2>
+
+  <div class="items">
+
+    <article class="item stop">
+      <div class="item-head">
+        <span class="item-id">A3</span>
+        <h3 class="item-title">Chạy lại shadow comparison, có trọng tâm</h3>
+        <span class="item-eff">~35 phút</span>
       </div>
-    </div>
-  </section>
-
-  <section>
-    <h2>Bảng tổng hợp <span class="tag">việc · gate · đường vòng</span></h2>
-    <p class="lede">
-      Cột cuối là thứ quan trọng nhất với tôi: nếu A trễ một mục, tôi đi đường nào để không dừng lại.
-      Ba mục màu đỏ không có đường vòng.
-    </p>
-    <div class="tablewrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Mục</th>
-            <th>Việc</th>
-            <th>Công</th>
-            <th>Mở gate nào</th>
-            <th>Nếu A trễ, tôi làm gì</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td class="id">P1 <span class="pill done">xong</span></td>
-            <td>Đặt 42 DLL của MCP về <b>Editor-only</b></td>
-            <td class="eff">—</td>
-            <td>Merge được #17</td>
-            <td class="fb">Đã verify cả 42 file <code>.meta</code>: <code>Any: 0 · Editor: 1</code>.</td>
-          </tr>
-          <tr>
-            <td class="id">P2 <span class="pill done">xong</span></td>
-            <td>Gỡ <code>UNITY_MCP_READY</code> khỏi platform không build, và trả lời define đó dùng làm gì</td>
-            <td class="eff">—</td>
-            <td>Merge được #17</td>
-            <td class="fb">Còn đúng <code>Server</code> + <code>Standalone</code>. Grep cả repo: không code nào của ta dùng define đó.</td>
-          </tr>
-          <tr>
-            <td class="id">P3 <span class="pill done">xong</span></td>
-            <td>Gitignore <code>.mcp.json</code> + <code>.claude/</code>, đổi scope commit sang <code>client</code></td>
-            <td class="eff">—</td>
-            <td>Job <code>style</code> xanh lại</td>
-            <td class="fb">Untracked, PR từ 170 file còn 92, <code>style</code> đã xanh.</td>
-          </tr>
-          <tr>
-            <td class="id">A1 <span class="pill done">xong</span></td>
-            <td>Chạy <code>build-libs.ps1</code>, xác nhận Editor load được DLL</td>
-            <td class="eff">—</td>
-            <td>Mọi thứ trong Unity</td>
-            <td class="fb">PR #12. DLL đã nằm trong <code>Assets/Plugins</code>.</td>
-          </tr>
-          <tr>
-            <td class="id">A2 <span class="pill done">xong</span></td>
-            <td>Cài 3 script drop-in, commit kèm <code>.meta</code></td>
-            <td class="eff">—</td>
-            <td>A3, A4</td>
-            <td class="fb">PR #12. Ba script đã ở <code>Assets/Scripts/Net/Shared</code>.</td>
-          </tr>
-          <tr>
-            <td class="id">V1 <span class="pill stop">chặn</span></td>
-            <td>Pull, build lib, mở Editor, đọc Console</td>
-            <td class="eff">10 ph</td>
-            <td>Tất cả nhóm V và A3</td>
-            <td class="fb">Không có. Console còn error thì mọi số đo sau đó đều vô nghĩa.</td>
-          </tr>
-          <tr>
-            <td class="id">V2 <span class="pill stop">chặn</span></td>
-            <td>Đọc assembly census ở đầu file log</td>
-            <td class="eff">5 ph</td>
-            <td>Chốt chính sách DLL trong Plugins</td>
-            <td class="fb">Không có. Tôi không đọc được cái này từ ngoài Editor.</td>
-          </tr>
-          <tr>
-            <td class="id">V3 <span class="pill hold">xác nhận</span></td>
-            <td>File log có được ghi ra đĩa không</td>
-            <td class="eff">3 ph</td>
-            <td>Bug "không thấy log" của A</td>
-            <td class="fb">Coi như chưa fix xong cho tới khi A xác nhận.</td>
-          </tr>
-          <tr>
-            <td class="id">V4 <span class="pill hold">xác nhận</span></td>
-            <td>Nút Quit có thoát được không</td>
-            <td class="eff">3 ph</td>
-            <td>Bug "không quit được" của A</td>
-            <td class="fb">Coi như chưa fix xong cho tới khi A xác nhận.</td>
-          </tr>
-          <tr>
-            <td class="id">V5 <span class="pill hold">quét</span></td>
-            <td>Mở Island, Dustbowl, Splash mỗi scene một lần</td>
-            <td class="eff">5 ph</td>
-            <td>Còn class nào Unity 6 đã gỡ nữa không</td>
-            <td class="fb">Tôi đã quét YAML, chỉ chắc chắn được với class 92. Ba scene kia là suy đoán.</td>
-          </tr>
-          <tr>
-            <td class="id">A5 <span class="pill done">xong</span></td>
-            <td>Chốt fixed timestep — <b>đã chọn B</b></td>
-            <td class="eff">—</td>
-            <td>Không còn chặn gì</td>
-            <td class="fb">Đã làm xong bằng <code>NetPredictionClock</code>. Không phải đụng vào <code>TimeManager.asset</code>.</td>
-          </tr>
-          <tr>
-            <td class="id">A3 <span class="pill hold">đo</span></td>
-            <td>Playtest shadow comparison, gửi tôi dòng summary — <b>sau nhóm V, trước A4</b></td>
-            <td class="eff">35 ph</td>
-            <td>phase-00 tiêu chí 8</td>
-            <td class="fb">18 unit test đã pin <code>MovementSimulation</code>. Tôi chạy tiếp, đổi lại là rủi ro rubber-banding lúc crouch chỉ lộ ra ở M1.</td>
-          </tr>
-          <tr>
-            <td class="id">A4 <span class="pill hold">gắn</span></td>
-            <td>Gắn <code>NetMovementAgent</code> + <code>NetPredictionClock</code> lên player prefab, <b>clock để tắt</b></td>
-            <td class="eff">10 ph</td>
-            <td>Tích hợp M1</td>
-            <td class="fb">Chạy tiếp bình thường. Nhưng làm trước A3 thì hỏng số đo A3 — xem thẻ A4.</td>
-          </tr>
-          <tr>
-            <td class="id">HB <span class="pill stop">sync 4</span></td>
-            <td>Headless build chạy 10 phút không crash</td>
-            <td class="eff">~1 ngày</td>
-            <td>Test tick loop thật, M1</td>
-            <td class="fb">Tôi dùng Unity Play Mode thay headless. Chậm hơn nhưng chạy được (dependency-map § 6).</td>
-          </tr>
-          <tr>
-            <td class="id">A6 <span class="pill hold">API</span></td>
-            <td>Danh sách weapon id cố định, đọc được từ code</td>
-            <td class="eff">30 ph</td>
-            <td>Trường <code>weaponId</code> trong snapshot</td>
-            <td class="fb">Snapshot ship <code>weaponId = 0</code>, field nằm im. Không chặn gì.</td>
-          </tr>
-          <tr>
-            <td class="id">A7 <span class="pill go">xác nhận</span></td>
-            <td>Có đường nào ra ngoài ±2048 m không</td>
-            <td class="eff">10 ph</td>
-            <td>Không gate nào</td>
-            <td class="fb">Đã đo từ file scene YAML, 2.2× headroom. Coi như đã chốt trừ khi A nói ngược lại.</td>
-          </tr>
-          <tr>
-            <td class="id">A8 <span class="pill go">đọc</span></td>
-            <td>Đọc lướt <code>movement-analysis.md</code> § 0 và § 5</td>
-            <td class="eff">10 ph</td>
-            <td>Không gate nào</td>
-            <td class="fb">Tài liệu đã pin bằng 18 test. Đọc để bắt chỗ tôi hiểu sai, không phải để duyệt.</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <section>
-    <h2>Nhóm 0 · Chạy ở đâu, bằng gì <span class="tag">đọc trước khi gõ lệnh đầu tiên</span></h2>
-    <p class="lede">
-      Mọi lệnh trong trang này gõ trong <b>một cửa sổ terminal duy nhất, đứng tại thư mục gốc của repo</b>.
-      Phần việc trong Unity thì làm trong Editor, mở từ Unity Hub. Không có bước nào cần chạy bên trong
-      thư mục <code>Ironfront_Reborn/</code>.
-    </p>
-    <p class="lede">
-      Đã làm nhóm này ở vòng 1 rồi thì bỏ qua, nhảy thẳng xuống <b>Nhóm V</b> — nhưng đọc câu này trước:
-      <b>đóng Unity lại trước khi <code>git pull</code></b>. PR #14 sửa thẳng vào file scene và prefab, mà Editor
-      thì giữ scene trong bộ nhớ và ghi đè ngược lại lúc save.
-    </p>
-
-    <div class="items">
-
-      <article class="item go">
-        <div class="item-head">
-          <span class="item-id">0.1</span>
-          <h3 class="item-title">Mở terminal đúng chỗ</h3>
-          <span class="item-eff">~1 phút</span>
-        </div>
-        <ol class="steps">
-          <li>
-            <strong>Mở Windows Terminal</strong> (hoặc PowerShell, hoặc tab Terminal trong VS Code / Rider).
-          </li>
-          <li>
-            <strong>Nhảy về gốc repo</strong> — đây là thư mục chứa <code>Ironfront.sln</code>:
-            <pre><code>cd d:\Coding\LTM</code></pre>
-          </li>
-          <li>
-            <strong>Kiểm tra đã đứng đúng chỗ</strong> trước khi gõ bất kỳ lệnh nào khác:
-            <pre><code>ls Ironfront.sln, tools, Ironfront_Reborn</code></pre>
-            Ba dòng hiện ra là đúng chỗ. Báo <code>Cannot find path</code> là đang đứng sai thư mục.
-          </li>
-        </ol>
-        <div class="note">
-          <b>Vì sao chỗ đứng lại quan trọng.</b> Lệnh ở mục A2 dùng đường dẫn tương đối ở <em>cả hai</em> đầu
-          (<code>plans/...</code> và <code>Ironfront_Reborn/...</code>), nên đứng sai thư mục là nó hoặc báo lỗi,
-          hoặc tệ hơn là tạo ra một cây thư mục rác ở nơi không ai ngờ tới. Riêng
-          <code>build-libs.ps1</code> thì tự nhảy về gốc repo bên trong script, nhưng bản thân đường dẫn
-          <code>tools/build-libs.ps1</code> vẫn là tương đối, nên quy tắc chung vẫn là: <b>luôn đứng ở gốc repo</b>.
-        </div>
-      </article>
-
-      <article class="item go">
-        <div class="item-head">
-          <span class="item-id">0.2</span>
-          <h3 class="item-title">Bốn thứ phải có sẵn trên máy</h3>
-          <span class="item-eff">~5 phút kiểm</span>
-        </div>
-        <div class="tablewrap">
-          <table>
-            <thead>
-              <tr><th>Cần gì</th><th>Bản nào</th><th>Gõ để kiểm</th><th>Thiếu thì sao</th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="id">PowerShell 7</td>
-                <td>7.x (đang có 7.6.4)</td>
-                <td><code>pwsh --version</code></td>
-                <td class="fb">Cài từ Microsoft Store. Không dùng Windows PowerShell 5.1 để chạy script.</td>
-              </tr>
-              <tr>
-                <td class="id">.NET SDK</td>
-                <td><b>8.0.x</b> (đang có 8.0.423)</td>
-                <td><code>dotnet --version</code></td>
-                <td class="fb"><code>global.json</code> ghim feature band 8.0 và <b>từ chối SDK 9.x/10.x</b>. Máy chỉ có .NET 9 sẽ lỗi ngay lệnh <code>dotnet</code> đầu tiên.</td>
-              </tr>
-              <tr>
-                <td class="id">Unity</td>
-                <td><b>6000.3.21f1</b>, đúng bản</td>
-                <td>Unity Hub → tab Installs</td>
-                <td class="fb">Bản khác sẽ ép nâng cấp project và làm bẩn <code>ProjectSettings</code>. Số này lấy từ <code>ProjectVersion.txt</code>.</td>
-              </tr>
-              <tr>
-                <td class="id">NuGet cache</td>
-                <td>có sẵn sau lần restore đầu</td>
-                <td><code>ls $HOME\.nuget\packages</code></td>
-                <td class="fb">Trống thì <code>build-libs.ps1</code> không tìm ra 4 DLL phụ và sẽ cảnh báo. Chạy <code>dotnet restore</code> ở gốc repo là có.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </article>
-
-      <article class="item go">
-        <div class="item-head">
-          <span class="item-id">0.3</span>
-          <h3 class="item-title">Mở project trong Unity</h3>
-          <span class="item-eff">~2 phút lần đầu</span>
-        </div>
-        <ol class="steps">
-          <li><strong>Mở Unity Hub</strong> → <code>Projects</code> → <code>Add</code> → <code>Add project from disk</code>.</li>
-          <li><strong>Chọn thư mục</strong> <code>d:\Coding\LTM\Ironfront_Reborn</code>. Chọn đúng thư mục này, không phải <code>d:\Coding\LTM</code>.</li>
-          <li><strong>Chọn Editor version</strong> <code>6000.3.21f1</code> rồi mở. Lần đầu import sẽ lâu, vài phút là bình thường.</li>
-          <li><strong>Mở Console</strong> (<code>Window → General → Console</code>) và để nguyên đó. Toàn bộ phần "Console sạch" ở các mục dưới là nhìn cửa sổ này.</li>
-        </ol>
-        <div class="note">
-          Terminal và Unity chạy song song, không thay thế nhau: lệnh <code>pwsh</code> tạo ra DLL,
-          Editor là nơi xác nhận Unity nạp được chúng. Sau khi chạy lệnh, quay lại Editor và bấm vào cửa sổ
-          cho nó lấy focus, Unity sẽ tự recompile.
-        </div>
-      </article>
-
-    </div>
-  </section>
-
-  <section>
-    <h2>Nhóm P · PR #17, Unity MCP <span class="tag">vòng 4 · đã merge · không còn việc</span></h2>
-    <div class="note is-done">
-      <b>Đóng lúc 12-08 khuya.</b> A sửa hết ba điểm, tôi verify lại từng cái trên head mới rồi approve và
-      merge vào <code>develop</code>. Phần dưới giữ nguyên làm hồ sơ: nó là lý do 42 DLL và một scoped
-      registry xuất hiện trên máy cả bốn người, và lần sau cài package Unity nào thì đây là ba chỗ phải nhìn.
-      <b>Một việc còn treo, không gấp:</b> DLL giờ Editor-only nhưng define vẫn còn trên
-      <code>Standalone</code>. Nếu lần đầu build player mà nó nổ ở <code>McpPlugin</code>, gỡ define khỏi
-      <code>Standalone</code> là xong — lỗi kiểu này không hiện trong Editor.
-    </div>
-    <p class="lede">
-      A mở #17 chiều nay để cài Unity-MCP. Tôi đọc hết 170 file. <b>Không có gì A làm sai</b> — hai điểm
-      chặn dưới đây đều là mặc định của package. Vấn đề là chúng nằm trong <code>ProjectSettings.asset</code>
-      và <code>Assets/Plugins/</code>, tức là file dùng chung, nên chúng theo về máy tôi, B và D ngay lúc merge,
-      và theo vào bản build của cả bốn người.
-    </p>
-    <p class="lede">
-      Toàn bộ lập luận và đoạn log tôi trích đều nằm trong
-      <a href="https://github.com/Sagitoaz/LTM/pull/17">review trên PR</a>. Trang này là bản có các bước bấm.
-    </p>
-
-    <div class="items">
-
-      <article class="item go">
-        <div class="item-head">
-          <span class="item-id">P0</span>
-          <h3 class="item-title">Làm nhóm V trước, rồi mới merge #17 <span class="pill done">rút lại</span></h3>
-          <span class="item-eff">0 phút · chỉ là thứ tự</span>
-        </div>
-        <div class="note is-done">
-          <b>Tôi rút lại thẻ này.</b> Máy A đã cài MCP từ lúc mở PR, nên Console của A vốn đã ở trạng thái
-          sau-MCP dù merge hay chưa — merge không đổi phép đo. Chỉ cần khi gửi kết quả V1, A ghi kèm một dòng
-          <b>"đo với MCP đã cài"</b> là tôi đọc đúng bối cảnh. Lập luận gốc giữ lại bên dưới.
-        </div>
-        <p>
-          V1 yêu cầu A mở Editor và <b>đếm số dòng đỏ</b> trong Console. Merge #17 trước là thêm một package,
-          một scoped registry và 85 DLL vào đúng phép đo đó.
-        </p>
-        <p>
-          Nếu Console có dòng đỏ sau khi #17 đã vào, ta mất thời gian phân biệt "lỗi Unity 6 còn sót từ #14"
-          với "lỗi do MCP", và cả hai giả thuyết đều hợp lý nên không loại được cái nào bằng suy luận.
-          Làm V trên <code>develop</code> hiện tại thì câu trả lời sạch, và #17 không chặn gì của tôi
-          nên nó chờ được.
-        </p>
-        <div class="note">
-          Nếu A đã lỡ merge rồi thì không sao, chỉ cần nói tôi biết trước khi gửi kết quả V1, để tôi đọc
-          con số đó với đúng bối cảnh.
-        </div>
-      </article>
-
-      <article class="item stop">
-        <div class="item-head">
-          <span class="item-id">P1</span>
-          <h3 class="item-title">85 DLL, 17.2 MB, đang được đóng vào player build</h3>
-          <span class="item-eff">~15 phút</span>
-        </div>
-        <div class="pathbar"><b>Làm ở</b> Unity Editor · Project window + Inspector</div>
-        <p>Bằng chứng, đọc từ <code>Assets/Plugins/NuGet/McpPlugin.dll.meta</code> và 41 file <code>.meta</code> còn lại:</p>
-        <pre><code>platformData:
-  Any:
-    enabled: 1
-    settings:
-      Exclude Editor: 0</code></pre>
-        <p>
-          <code>Any: enabled: 1</code> cộng <code>Exclude Editor: 0</code> nghĩa là Unity mang toàn bộ SignalR
-          client và <code>McpPlugin</code> vào <b>mọi</b> player build, <b>mọi</b> platform. Không chỉ nặng thêm
-          17 MB: bản ship sẽ chứa một network client biết tự mở kết nối ra ngoài, mà không có đường nào
-          trong game gọi tới nó.
-        </p>
-        <div class="choices">
-          <div class="choice pick">
-            <h4>Cách 1 — Inspector (tôi nghiêng về cái này)</h4>
-            <p>
-              Chọn cả 42 DLL trong Project window, Inspector bỏ tick <b>Any Platform</b>, chỉ để <b>Editor</b>,
-              bấm Apply. Diff <code>.meta</code> đọc được, và không đụng vào cấu trúc thư mục nên package
-              không có cớ gì để gãy.
-            </p>
-          </div>
-          <div class="choice">
-            <h4>Cách 2 — đổi tên thư mục</h4>
-            <p>
-              <code>git mv Assets/Plugins/NuGet Assets/Plugins/Editor/NuGet</code>. Unity coi mọi thứ dưới
-              folder tên <code>Editor</code> là editor-only nên khỏi sửa 42 file meta. Nhanh hơn, nhưng nếu
-              asmdef runtime của package có tham chiếu tới mấy DLL này thì nó gãy lúc compile.
-            </p>
-          </div>
-        </div>
-        <div class="note">
-          <b>Tôi không tự chọn được giúp A.</b> Tôi không mở Editor nên không test được cách nào package chịu
-          được. Nếu A chọn cách 2, báo tôi kết quả compile — gãy thì lùi về cách 1, mất thêm 15 phút chứ
-          không mất gì khác.
-        </div>
-        <dl class="kv">
-          <dt>Trả lời</dt><dd>Chọn cách nào, và Console sau khi Apply còn dòng đỏ nào không.</dd>
-        </dl>
-      </article>
-
-      <article class="item stop">
-        <div class="item-head">
-          <span class="item-id">P2</span>
-          <h3 class="item-title">
-            <code>UNITY_MCP_READY</code> đóng dấu lên cả 19 platform
-          </h3>
-          <span class="item-eff">~10 phút</span>
-        </div>
-        <div class="pathbar"><b>Làm ở</b> Unity Editor · Project Settings → Player → Scripting Define Symbols</div>
-        <p>
-          <code>ProjectSettings/ProjectSettings.asset</code> giờ có define đó cho Android, PS4, PS5, Switch,
-          Switch 2, XboxOne, GameCore, VisionOS, QNX, Kepler, WebGL, tvOS và phần còn lại. File này dùng
-          chung, nên nó về máy tôi, B và D ngay khi merge.
-        </p>
-        <div class="note">
-          <b>Câu hỏi tôi cần A trả lời, vì nó quyết định P1 nghiêm trọng tới đâu:</b> package dùng define này
-          để <b>guard code trong Editor</b>, hay để <b>bật hook lúc runtime</b>? Trường hợp đầu thì nó chỉ
-          thừa. Trường hợp sau thì tooling đi thẳng vào bản ship, và P1 chuyển từ "nặng file" thành
-          "có thứ đang chạy trong game mà không ai gọi".
-        </div>
-        <p>
-          Dù câu trả lời là gì: xin gỡ define khỏi những platform ta không build. Dự án chưa từng build PS5
-          hay Switch, và một define còn sót ở đó là thứ sẽ làm ai đó mất một buổi chiều trong hai năm nữa,
-          lúc không còn ai nhớ nó từ đâu ra.
-        </p>
-        <dl class="kv">
-          <dt>Trả lời</dt><dd>Define dùng cho <b>editor</b> hay <b>runtime</b>, và còn để lại ở những platform nào.</dd>
-        </dl>
-      </article>
-
-      <article class="item hold">
-        <div class="item-head">
-          <span class="item-id">P3</span>
-          <h3 class="item-title">Gitignore, và đổi scope commit</h3>
-          <span class="item-eff">~10 phút</span>
-        </div>
-        <div class="pathbar"><b>Chạy ở</b> terminal, đứng tại <code>d:\Coding\LTM</code></div>
-        <p>Ba thứ nhỏ, gộp một lần sửa.</p>
-        <p>
-          <b>Một.</b> <code>.mcp.json</code> có dòng
-          <code>"url": "https://ai-game.dev/mcp/p/b7879af7"</code>. Đoạn <code>b7879af7</code> là thứ duy nhất
-          phân biệt project của A với project của người lạ trên dịch vụ đó. Nó không phải id, nó là bearer
-          token viết trong path, và <code>conventions.md § 1.4</code> xếp secret string vào nhóm cấm commit.
-          Repo đang private nên phạm vi giới hạn trong bốn người, không phải sự cố. Nhưng đã vào history rồi
-          thì gỡ ra cần rewrite, và ta sẽ không muốn làm việc đó lúc đang gấp.
-        </p>
-        <p>
-          <b>Hai.</b> 100 file <code>SKILL.md</code>, 13.5k dòng, đều sinh tự động từ chính MCP server.
-          <code>.gitignore</code> ở gốc vốn đã ignore <code>/.claude</code>; PR mở một ngoại lệ cho thư mục
-          lồng bên trong <code>Ironfront_Reborn/</code>. Để nguyên thì chúng nằm trong mọi
-          <code>git log -p</code>, mọi <code>blame</code>, mọi lần bisect từ nay về sau.
-        </p>
-        <pre><code># thay cho hai dòng settings.json mà PR đang thêm
-/Ironfront_Reborn/.claude/
-/Ironfront_Reborn/.mcp.json</code></pre>
-        <pre><code>git rm -r --cached Ironfront_Reborn/.claude Ironfront_Reborn/.mcp.json</code></pre>
-        <p>File vẫn nằm trên đĩa và A dùng bình thường. Chỉ là git thôi không theo dõi nữa.</p>
-        <p>
-          <b>Ba.</b> Job <code>style</code> đỏ, và tôi đã đọc log run 31568816871: không có lỗi format nào cả,
-          chỉ có scope commit.
-        </p>
-        <pre><code>BAD  chore(unity): install Unity MCP integration
-     -&gt; unknown scope 'unity' — valid: client, transport,
-        replication, master, protocol, tools, ci, modules</code></pre>
-        <p>
-          <code>build-test</code> xanh cả ubuntu lẫn windows. Đổi scope sang <code>client</code> là job xanh
-          lại. Nó advisory nên không chặn merge, nhưng để đỏ lâu thì lần sau không ai nhìn nó nữa, và lúc đó
-          nó vô dụng.
-        </p>
-      </article>
-
-      <article class="item go">
-        <div class="item-head">
-          <span class="item-id">P4</span>
-          <h3 class="item-title"><code>PlayerAudio.mixer</code> — không phải vấn đề, chỉ nằm nhầm chỗ</h3>
-          <span class="item-eff">~5 phút, tuỳ A</span>
-        </div>
-        <p>
-          Diff đúng là Unity 6 serialize lại: <code>m_PrefabParentObject</code> thành
-          <code>m_CorrespondingSourceObject</code> + <code>m_PrefabInstance</code> + <code>m_PrefabAsset</code>,
-          thêm <code>m_Send</code>. Cùng loại với những gì #11 và #14 đã dọn. Giữ nguyên, không cần làm gì.
-        </p>
-        <p>
-          Điều duy nhất đáng nói là nó đi nhờ một PR về MCP. Tách ra commit riêng
-          <code>chore(client): upgrade PlayerAudio mixer serialization</code> rồi cherry-pick sang branch khác
-          thì nó merge được ngay hôm nay, không phải nằm chờ P1 và P2 xong.
-        </p>
-      </article>
-
-    </div>
-  </section>
-
-  <section>
-    <h2>Nhóm 1 · Ba việc chặn ngay <span class="tag">đã đóng cả ba</span></h2>
-    <p class="lede">
-      Cả ba xong rồi. Giữ lại nguyên văn vì A1 vẫn là lệnh phải chạy lại mỗi khi kéo code mới về, và
-      cái bẫy bốn DLL trong đó là thứ <b>V2</b> sắp trả lời dứt điểm.
-    </p>
-
-    <div class="items">
-
-      <article class="item go">
-        <div class="item-head">
-          <span class="item-id">A1</span>
-          <h3 class="item-title">Chạy build-libs.ps1 và xác nhận Editor load được DLL — xong, PR #12</h3>
-          <span class="item-eff">chạy lại sau mỗi lần pull</span>
-        </div>
-        <div class="runbox">
-          <div class="pathbar"><b>Chạy ở</b> terminal, đứng tại <code>d:\Coding\LTM</code></div>
-          <pre><code>cd d:\Coding\LTM
-pwsh tools/build-libs.ps1</code></pre>
-        </div>
-        <p>
-          Script tự build 3 project .NET rồi copy DLL sang <code>Ironfront_Reborn/Assets/Plugins/</code>.
-          Mất khoảng 30 giây. Chạy xong, dòng cuối phải có dạng:
-        </p>
-        <pre><code>Copied 3 DLL(s) + 4 dependency/dependencies into
-d:\Coding\LTM\Ironfront_Reborn\Assets\Plugins</code></pre>
-        <p><b>Con số phải là 3 và 4.</b> Kiểm lại bằng hai lệnh này, vẫn ở cùng chỗ đứng:</p>
-        <div class="runbox">
-          <div class="pathbar"><b>Chạy ở</b> cùng terminal đó</div>
-          <pre><code>ls Ironfront_Reborn/Assets/Plugins/Ironfront.Net.*.dll     # phải ra 3 file
-ls Ironfront_Reborn/Assets/Plugins/System.*.dll            # phải ra 4 file</code></pre>
-        </div>
-        <p>
-          Xong phần terminal thì <b>chuyển sang Unity</b>: bấm vào cửa sổ Editor cho nó lấy focus, Unity sẽ tự
-          recompile, rồi nhìn Console. Không có dòng đỏ nào là xong mục này.
-        </p>
-        <div class="note">
-          <b>Cái bẫy tốn hàng giờ nếu gặp lần đầu.</b> <code>netstandard2.1</code> cộng <code>Span&lt;byte&gt;</code>
-          cần <code>System.Memory.dll</code>, <code>System.Buffers.dll</code>,
-          <code>System.Runtime.CompilerServices.Unsafe.dll</code> và <code>System.Numerics.Vectors.dll</code>
-          nằm cạnh ba DLL của mình. Copy thiếu thì Unity ném <code>TypeLoadException</code>, một lỗi không hề
-          nhắc gì tới assembly bị thiếu. <code>build-libs.ps1</code> copy đủ cả bốn và cảnh báo nếu không tìm thấy
-          trong NuGet cache. <b>Nếu nó cảnh báo, dừng lại và báo tôi</b> thay vì tự lách.
-        </div>
-        <dl class="kv">
-          <dt>Trả lời</dt><dd><b>"DLL load được, Console sạch"</b> hoặc dán nguyên văn lỗi.</dd>
-        </dl>
-      </article>
-
-      <article class="item go">
-        <div class="item-head">
-          <span class="item-id">A2</span>
-          <h3 class="item-title">Cài ba script drop-in — xong, PR #12</h3>
-          <span class="item-eff">không phải làm lại</span>
-        </div>
-        <div class="runbox">
-          <div class="pathbar"><b>Chạy ở</b> terminal, đứng tại <code>d:\Coding\LTM</code> · <b>bắt buộc</b>, cả hai đường dẫn đều tương đối</div>
-          <pre><code>cd d:\Coding\LTM
-mkdir -Force Ironfront_Reborn/Assets/Scripts/Net/Shared
-mv plans/dev-c-replication/handoff/unity-dropin/*.cs `
-   Ironfront_Reborn/Assets/Scripts/Net/Shared/</code></pre>
-        </div>
-        <p>
-          Thư mục <code>Assets/Scripts/Net/</code> hiện <b>chưa tồn tại</b>, lệnh <code>mkdir</code> tạo luôn cả nhánh.
-          Dấu <code>`</code> cuối dòng là ký tự nối dòng của PowerShell, muốn gõ một dòng thì bỏ nó đi.
-          Chỉ ba file <code>.cs</code> được chuyển đi, <code>README.md</code> ở lại chỗ cũ.
-        </p>
-        <p>Kiểm ngay tại chỗ, phải ra đúng ba file:</p>
-        <div class="runbox">
-          <div class="pathbar"><b>Chạy ở</b> cùng terminal đó</div>
-          <pre><code>ls Ironfront_Reborn/Assets/Scripts/Net/Shared/</code></pre>
-        </div>
-        <p>
-          Rồi <b>chuyển sang Unity</b>: bấm vào cửa sổ Editor, đợi nó import xong, Unity sẽ sinh ba file
-          <code>.meta</code> nằm cạnh ba file <code>.cs</code>. Sau đó mới commit, và commit
-          <code>.cs</code> <b>cùng lúc với</b> <code>.meta</code> trong một lần:
-        </p>
-        <div class="runbox">
-          <div class="pathbar"><b>Chạy ở</b> terminal, vẫn tại <code>d:\Coding\LTM</code></div>
-          <pre><code>git add Ironfront_Reborn/Assets/Scripts/Net/Shared
-git status --short          # phải thấy 6 file: 3 .cs + 3 .meta</code></pre>
-        </div>
-        <p>
-          Ba file <code>MovementSimulation.cs</code>, <code>NetMovementAgent.cs</code>, <code>MovementShadowCompare.cs</code>
-          đều thuộc quyền tôi theo <code>conventions.md § 7</code>, A chỉ cần đặt vào đúng chỗ.
-        </p>
-        <div class="note">
-          Kế hoạch phase-00 cũ xin A thêm 6 thành viên vào <code>Actor.cs</code>. <b>Bỏ yêu cầu đó.</b>
-          Nó viết dựa trên giả định <code>Actor.cs</code> giữ code di chuyển, mà thực tế không phải: chuyển động
-          nằm cách đó ba lớp và lớp cuối đã ra khỏi assembly
-          (<code>Actor.cs:528</code> → <code>FpsActorController.cs:157</code> → <code>FirstPersonController.cs:216</code>).
-          Đổi lại là <b>một component mới</b> nói chuyện thẳng với <code>CharacterController</code>, không đụng
-          <code>Actor.cs</code>, và không có gì gọi tới nó cho đến khi A tự nối dây, nên không thể làm hỏng gameplay đang chạy.
-        </div>
-      </article>
-
-      <article class="item go">
-        <div class="item-head">
-          <span class="item-id">A5</span>
-          <h3 class="item-title">Chốt fixed timestep — đã chọn <b>B</b>, đã làm xong</h3>
-          <span class="item-eff">không còn việc</span>
-        </div>
-        <p>
-          A chọn <b>B</b>: giữ nguyên physics, prediction chạy accumulator 30 Hz riêng. Đã hiện thực
-          bằng <code>Assets/Scripts/Net/Shared/NetPredictionClock.cs</code> — một accumulator trong
-          <code>Update</code> gọi <code>NetMovementAgent.Tick</code> đúng mỗi
-          <code>MovementSimulation.FixedDeltaTime</code>.
-          <code>ProjectSettings/TimeManager.asset</code> không bị đụng tới.
-          Việc duy nhất còn lại nằm ở <b>A4</b>: gắn thêm <code>NetPredictionClock</code> cạnh
-          <code>NetMovementAgent</code> trên prefab.
-        </p>
-
-        <h4>Tôi khuyên A, và tôi đã khuyên sai</h4>
-        <p>
-          Lời khuyên đó giả định con số trong <code>TimeManager.asset</code> là con số game thật sự
-          chạy. Không phải. Có hai file ghi đè nó lúc runtime:
-        </p>
-        <div class="tablewrap">
-          <table>
-            <thead>
-              <tr><th>File</th><th>Dòng</th><th>Câu lệnh</th><th>Chạy lúc nào</th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><code>IngameMenuUi.cs</code></td><td class="eff">29</td>
-                <td><code>Time.fixedDeltaTime = Time.timeScale / 60f</code></td>
-                <td><code>Hide()</code>, gọi từ <code>Awake()</code> — tức trước frame đầu tiên</td>
-              </tr>
-              <tr>
-                <td><code>FpsActorController.cs</code></td><td class="eff">497</td>
-                <td><code>Time.fixedDeltaTime = Time.timeScale / 60f</code></td>
-                <td>mỗi lần bật/tắt slow-motion</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p>
-          Nên timestep thật là <b>1/60</b> khi chơi bình thường và <b>0.2/60</b> lúc slow-motion —
-          không bao giờ là 0.02 ghi trong asset, và cũng sẽ không bao giờ là 0.0333 mà phương án A
-          định ghi vào đó. Chọn A tức là sửa một giá trị bị ghi đè trước cả bước physics đầu tiên,
-          và triệu chứng sẽ là prediction lệch với authority vì một lý do không ai tìm thấy trong
-          netcode — bởi netcode lúc đó vẫn đúng.
-        </p>
-        <p>
-          <b>B không chỉ là phương án an toàn hơn.</b> Nó là phương án duy nhất trong ba cái mà một
-          dòng gán <code>Time.timeScale</code> ở file người khác không thể âm thầm phá được.
-        </p>
-      </article>
-
-    </div>
-  </section>
-
-  <section>
-    <h2>Nhóm V · Xác nhận ba bản vá hôm nay <span class="tag">làm trước A3 · ~25 phút</span></h2>
-    <p class="lede">
-      Hôm nay merge ba PR: #12 của A, rồi #13 chữa hai bug A báo, rồi #14 dọn bốn lỗi Unity 6 trong scene.
-      Phần nào verify được mà không cần Editor thì tôi verify rồi — 283 test, 0 dangling reference, diff
-      88 dòng xoá không thêm dòng nào. Phần còn lại thì <b>không ai ngoài A trả lời được</b>, và một trong số đó
-      (V2) có thể lật ngược một quyết định về DLL.
-    </p>
-    <p class="lede">
-      <b>Làm tuần tự V1 → V5.</b> V1 hỏng thì bốn mục sau vô nghĩa, nên dừng ở đó và báo tôi.
-    </p>
-
-    <div class="items">
-
-      <article class="item stop">
-        <div class="item-head">
-          <span class="item-id">V1</span>
-          <h3 class="item-title">Kéo code mới, build lại lib, mở Editor, đọc Console</h3>
-          <span class="item-eff">~10 phút</span>
-        </div>
-        <div class="runbox">
-          <div class="pathbar"><b>Chạy ở</b> terminal, đứng tại <code>d:\Coding\LTM</code></div>
-          <pre><code>cd d:\Coding\LTM
-git checkout develop
-git pull
-pwsh tools/build-libs.ps1</code></pre>
-        </div>
-        <p>
-          <code>git pull</code> kéo về ba PR. Trong đó #14 sửa thẳng vào file scene và file prefab, nên
-          <b>nếu Unity đang mở thì đóng nó lại trước khi pull</b> — Editor giữ scene trong bộ nhớ và sẽ ghi đè
-          ngược lại lúc save, làm mất bản vá.
-        </p>
-        <p>Mở lại project từ Unity Hub, đợi import xong, rồi mở scene <code>Assets/Scenes/Menu.unity</code>. Nhìn Console.</p>
-        <div class="tablewrap">
-          <table>
-            <thead>
-              <tr><th>Thấy gì</th><th>Nghĩa là</th><th>Làm gì</th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><b>0 error</b>, không còn dòng nào nhắc <code>GUI Layer</code></td>
-                <td>#14 đúng như thiết kế</td>
-                <td>Sang V2</td>
-              </tr>
-              <tr>
-                <td>Vẫn còn <code>Component GUI Layer ... is no longer available</code></td>
-                <td>Còn chỗ nào tôi chưa quét tới</td>
-                <td>Gửi tôi nguyên văn dòng đó, <b>kèm tên scene hoặc prefab</b> trong dòng lỗi</td>
-              </tr>
-              <tr>
-                <td>Lỗi <b>mới</b> chưa từng thấy trước hôm nay</td>
-                <td>Bản vá làm hỏng thứ gì đó</td>
-                <td>Dừng lại, gửi nguyên văn, đừng save scene. <code>git checkout -- Ironfront_Reborn/Assets</code> là đường lùi</td>
-              </tr>
-              <tr>
-                <td><code>TypeLoadException</code></td>
-                <td>Chuỗi 4 DLL phụ thuộc có vấn đề</td>
-                <td>Sang V2 luôn, census sẽ chỉ đúng thủ phạm</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="note">
-          <b>Cảnh báo không phải lỗi.</b> Console sẽ vẫn còn vài dòng vàng — Unity 6 cảnh báo về serialization
-          kiểu cũ ở 60 chỗ, và đó là chuyện tôi đã biết, đã ghi lại, và cố ý chưa đụng vào. Chỉ cần đếm
-          <b>dòng đỏ</b>. Con số tôi cần là số error, không phải số warning.
-        </div>
-        <dl class="kv">
-          <dt>Trả lời</dt><dd><b>"0 error"</b>, hoặc nguyên văn từng dòng đỏ kèm tên scene.</dd>
-        </dl>
-      </article>
-
-      <article class="item stop">
-        <div class="item-head">
-          <span class="item-id">V2</span>
-          <h3 class="item-title">Đọc assembly census — câu hỏi tôi không tự trả lời được</h3>
-          <span class="item-eff">~5 phút</span>
-        </div>
-        <div class="pathbar"><b>Làm ở</b> Unity Editor, Play mode · bất kỳ scene nào</div>
-        <p>
-          Bấm <strong>Play</strong>. Ngay dòng đầu tiên trong Console sẽ có:
-        </p>
-        <pre><code>[IronfrontLog] this session is being written to
-C:\Users\&lt;tên&gt;\AppData\LocalLow\&lt;company&gt;\Ironfront_Reborn\Logs\ironfront-20260812-143052.log</code></pre>
-        <p>
-          Copy đường dẫn đó, mở file bằng VS Code hoặc Notepad. <b>Mười dòng đầu là thứ tôi cần.</b>
-          Chúng liệt kê bảy assembly và nơi mỗi cái được nạp:
-        </p>
-        <pre><code>14:30:52.104 [INFO] assembly Ironfront.Net.Protocol: 1.0.0.0 from ...
-14:30:52.105 [INFO] assembly System.Memory: 4.0.1.2 from ...</code></pre>
-        <div class="tablewrap">
-          <table>
-            <thead>
-              <tr><th>Census nói gì</th><th>Kết luận</th><th>Việc phát sinh</th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Mỗi assembly xuất hiện <b>đúng một dòng</b></td>
-                <td>Bốn DLL shim không xung đột. Giữ nguyên như hiện tại.</td>
-                <td>Không có. Báo tôi "census sạch" là xong.</td>
-              </tr>
-              <tr>
-                <td>Có dòng đỏ <code>[IronfrontLog] &lt;tên&gt; is loaded 2 times</code></td>
-                <td>Đúng như tôi nghi: Unity 6 đã có sẵn shim đó, bản trong <code>Plugins</code> là thừa và đang phá</td>
-                <td>Xoá đúng những file bị báo trùng khỏi <code>Assets/Plugins</code> (cả <code>.dll</code> lẫn <code>.dll.meta</code>), rồi báo tôi tên chúng — tôi sẽ sửa <code>build-libs.ps1</code> để lần sau không copy nữa</td>
-              </tr>
-              <tr>
-                <td><code>System.Memory: not loaded</code> mà game vẫn chạy</td>
-                <td>Unity nạp lười, chưa có code nào chạm tới</td>
-                <td>Không sao. Đi lại vài giây trong game rồi thoát Play, đọc lại file log.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="note">
-          <b>Vì sao mục này đáng 5 phút của A.</b> Hai bản <code>System.Memory</code> cùng nạp không sinh ra lỗi nào
-          nhắc tới <code>System.Memory</code>. Nó sinh ra <code>TypeLoadException</code>, hoặc một
-          <code>Span&lt;byte&gt;</code> không gán được vào một <code>Span&lt;byte&gt;</code> khác — và người gặp
-          sẽ đi tìm trong code netcode suốt buổi chiều. Đọc một dòng bây giờ rẻ hơn nhiều.
-        </div>
-        <dl class="kv">
-          <dt>Trả lời</dt><dd><b>"census sạch"</b>, hoặc dán mười dòng <code>assembly ...</code> đó vào chat.</dd>
-        </dl>
-      </article>
-
-      <article class="item hold">
-        <div class="item-head">
-          <span class="item-id">V3</span>
-          <h3 class="item-title">Xác nhận log thật sự được ghi ra đĩa</h3>
-          <span class="item-eff">~3 phút</span>
-        </div>
-        <div class="pathbar"><b>Làm ở</b> file explorer hoặc terminal · đường dẫn lấy từ V2</div>
-        <p>
-          Đây là bug <em>"không thấy ghi log"</em> A báo. Hoá ra không phải logger hỏng — <b>project này chưa từng
-          ghi log ra file bao giờ</b>. Console là nơi duy nhất, mà Console thì xoá sạch mỗi lần Play, và bản build
-          thì không có Console. <code>IronfrontLog</code> trong PR #13 sửa chuyện đó, và nó tự khởi động, không cần
-          gắn component nào cả.
-        </p>
-        <p>Mở thư mục chứa file log từ V2 và kiểm ba thứ:</p>
-        <ol class="steps">
-          <li>File <code>ironfront-&lt;ngày&gt;-&lt;giờ&gt;.log</code> <strong>tồn tại</strong> và không rỗng.</li>
-          <li>
-            Nó chứa cả những dòng A thấy trong Console — thử <code>Debug.Log("test")</code> ở đâu đó, hoặc đơn giản
-            là bắn một phát súng rồi xem file có dài ra không. <strong>Đọc được file trong lúc game đang chạy</strong>
-            là cố ý: nó mở với <code>FileShare.ReadWrite</code> và flush từng dòng.
-          </li>
-          <li>Thoát Play, file kết thúc bằng dòng <code>session ended</code>.</li>
-        </ol>
-        <div class="note">
-          <b>Log nằm ngoài repo, cố ý.</b> <code>persistentDataPath</code>, không phải trong <code>Assets/</code> —
-          một thư mục log nằm dưới <code>Assets/</code> sẽ bị Unity import từng dòng một thành asset. Giữ mười phiên
-          gần nhất, cũ hơn thì tự xoá.
-        </div>
-        <dl class="kv">
-          <dt>Trả lời</dt><dd><b>"log ghi được"</b>, hoặc mô tả cái gì thiếu.</dd>
-        </dl>
-      </article>
-
-      <article class="item hold">
-        <div class="item-head">
-          <span class="item-id">V4</span>
-          <h3 class="item-title">Thử nút Quit — và phân biệt hai kiểu hỏng</h3>
-          <span class="item-eff">~3 phút</span>
-        </div>
-        <div class="pathbar"><b>Làm ở</b> Unity Editor, Play mode trên map bất kỳ</div>
-        <p>
-          Bug <em>"không thể quit được"</em>: <code>Application.Quit()</code> <b>không làm gì cả</b> trong Editor,
-          đó là hành vi Unity ghi trong tài liệu chứ không phải lỗi. Cả hai nút Quit trong project đều gọi thẳng
-          nó, nên trong Editor — chỗ game thực sự được chơi lúc phát triển — bấm Quit không có chuyện gì xảy ra.
-          PR #13 thay bằng <code>AppQuit.Quit()</code>: trong Editor thì tắt Play mode, trong bản build thì quit thật.
-        </p>
-        <p>Bấm Play → <strong>Esc</strong> để mở menu → bấm <strong>Quit</strong>. Rồi đối chiếu bảng này:</p>
-        <div class="tablewrap">
-          <table>
-            <thead>
-              <tr><th>Play mode</th><th>Console in <code>[AppQuit] quit requested</code></th><th>Nghĩa là</th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><b>Dừng</b></td><td><b>Có</b></td>
-                <td>Fix chạy đúng. Xong mục này.</td>
-              </tr>
-              <tr>
-                <td>Không dừng</td><td><b>Không</b></td>
-                <td>Nút Quit <b>chưa được nối dây</b> trong scene — nó không gọi vào code. Xem hộp bên dưới.</td>
-              </tr>
-              <tr>
-                <td>Không dừng</td><td>Có</td>
-                <td>Code chạy mà Editor không thoát. Đây là lỗi khác và tôi cần biết ngay — báo tôi.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="note">
-          <b>Nếu Console không in gì</b>, vấn đề nằm ở scene chứ không nằm ở code, và chỉ Editor sửa được:
-          mở <code>Menu.unity</code>, tìm GameObject có <code>IngameMenuUi</code> (hoặc <code>MainMenu</code> ở
-          màn hình chính), chọn nút Quit trong Canvas, nhìn mục <strong>On Click ()</strong> trong Inspector.
-          Nó phải trỏ tới object đó và chọn hàm <code>Quit()</code>. Trống, hoặc hiện
-          <code>&lt;Missing&gt;</code>, thì kéo GameObject vào ô và chọn lại hàm, Ctrl+S.
-          <b>Thử luôn cả hai chỗ</b>: nút Quit ở màn hình chính và nút Quit trong menu Esc là hai nút khác nhau,
-          ở hai scene khác nhau.
-        </div>
-        <dl class="kv">
-          <dt>Trả lời</dt><dd>Một trong ba dòng của bảng trên. Nếu phải nối dây thì nói tôi biết nút nào.</dd>
-        </dl>
-      </article>
-
-      <article class="item hold">
-        <div class="item-head">
-          <span class="item-id">V5</span>
-          <h3 class="item-title">Mở ba scene còn lại, mỗi cái một lần</h3>
-          <span class="item-eff">~5 phút</span>
-        </div>
-        <div class="pathbar"><b>Làm ở</b> Unity Editor · <code>Island.unity</code>, <code>Dustbowl.unity</code>, <code>Splash.unity</code></div>
-        <p>
-          Mở lần lượt ba scene, mỗi lần <b>xoá Console trước khi mở</b> (nút Clear), rồi đọc.
-          Không cần bấm Play, chỉ cần mở.
-        </p>
-        <p>
-          Lý do: tôi quét được toàn bộ YAML và <b>chắc chắn</b> class 92 (GUILayer) là class duy nhất Unity 6 đã gỡ
-          <em>trong Menu.unity</em> — chắc chắn vì chính Unity đã nói vậy, nó báo GUI Layer và không báo gì khác
-          trong khi file đó cũng chứa FlareLayer, Animator, ParticleSystem và Canvas. Ba scene kia thì
-          <b>tôi chỉ suy đoán</b>: chúng còn <code>TextMesh</code>, <code>Animation</code>, <code>Cloth</code>,
-          <code>Terrain</code> và vài class nữa. Module tương ứng đều có trong manifest nên nhiều khả năng ổn,
-          nhưng suy đoán không phải kiểm chứng, và mở scene một lần là cách xác nhận miễn phí.
-        </p>
-        <dl class="kv">
-          <dt>Trả lời</dt><dd>Ba chữ <b>"sạch"</b>, hoặc nguyên văn dòng đỏ kèm tên scene.</dd>
-        </dl>
-      </article>
-
-    </div>
-  </section>
-
-  <section>
-    <h2>Nhóm 2 · Đóng nốt phase-00 <span class="tag">~65 phút · sau nhóm V</span></h2>
-    <p class="lede">Bốn mục này không chặn tôi viết code, nhưng chặn việc tuyên bố phase-00 đã đóng. A3 là mục có xác suất tìm ra lỗi thật cao nhất trong cả danh sách.</p>
-    <div class="note">
-      <b>Thứ tự trong nhóm này không đổi được: A3 trước, A4 sau.</b> Lượt trước tôi bảo A gắn
-      <code>NetPredictionClock</code> cạnh <code>NetMovementAgent</code> ở A4 mà quên nói rõ điều này, nên nói lại
-      cho chắc: clock đó gọi <code>Tick()</code> → <code>CharacterController.Move()</code> mỗi 1/30 giây, trong khi
-      <code>FirstPersonController</code> cũng đang gọi <code>Move()</code> trên đúng controller đó. Hai hệ thống cùng
-      đẩy một nhân vật, còn <code>MovementShadowCompare</code> thì giả định chỉ có bản gốc điều khiển —
-      <b>bật clock lên trước khi đo A3 là số đo A3 thành rác</b>, và là loại rác trông vẫn hợp lý.
-    </div>
-
-    <div class="items">
-
-      <article class="item hold">
-        <div class="item-head">
-          <span class="item-id">A3</span>
-          <h3 class="item-title">Chạy shadow comparison và gửi tôi dòng summary</h3>
-          <span class="item-eff">~30 phút chơi + 5 phút báo</span>
-        </div>
-        <div class="pathbar"><b>Làm ở</b> Unity Editor · <b>prefab</b> <code>Assets/Prefab/Player Fps Actor.prefab</code></div>
-        <ol class="steps">
-          <li>
-            Trong cửa sổ <strong>Project</strong>, gõ <code>Player Fps Actor</code> vào ô tìm kiếm, bấm đúp để mở prefab.
-            Đây là prefab duy nhất trong project có cả <code>FpsActorController</code> lẫn <code>CharacterController</code>.
-          </li>
-          <li>
-            Chọn GameObject gốc của prefab → <strong>Add Component</strong> → gõ <code>MovementShadowCompare</code> → Enter.
-          </li>
-          <li>
-            <strong>Ctrl+S</strong> để lưu prefab, rồi thoát chế độ prefab và bấm <strong>Play</strong>.
-          </li>
-          <li>Di chuyển có chủ đích theo bảng dưới, mắt để ở cửa sổ <strong>Console</strong>.</li>
-          <li>
-            Bấm <strong>Play</strong> lần nữa để thoát. Đúng lúc thoát, Console in ra một dòng bắt đầu bằng
-            <code>[MovementShadowCompare]</code>. Đó là thứ tôi cần.
-          </li>
-        </ol>
-        <div class="note">
-          <b>Ngay khi bấm Play, Console phải in một dòng</b> — trước cả khi A kịp di chuyển:
-          <code>[MovementShadowCompare] attached to '...' and ticking.</code>
-          Không thấy dòng đó thì component chưa chạy, và <b>đừng chơi tiếp ba mươi phút cho phí</b>: nó đang nằm trên
-          một GameObject không được spawn, hoặc bị tắt, hoặc gắn vào object trong scene chứ không phải vào prefab.
-          Tôi thêm dòng này ở PR #13 chính vì thiếu nó: bản cũ im lặng hoàn toàn khi gắn sai chỗ — không cảnh báo,
-          không summary, không gì cả — và im lặng đó trông y hệt "logger hỏng". Nếu lúc thoát Play mà nhận được
-          <code>ran zero ticks</code> thì đó cũng là cùng một chuyện, và dòng cảnh báo sẽ nói luôn phải sửa ở đâu.
-        </div>
-        <div class="tablewrap">
-          <table>
-            <thead>
-              <tr><th>Làm gì</th><th>Bao lâu</th><th>Nhìn cái gì</th></tr>
-            </thead>
-            <tbody>
-              <tr><td>Đi tới, đi lui, đi ngang trên đất phẳng</td><td class="eff">30 s</td><td><b>Phải sạch.</b> Lệch ở đây là bug thật</td></tr>
-              <tr><td>Chạy nước rút trên đất phẳng</td><td class="eff">30 s</td><td>Phải sạch</td></tr>
-              <tr><td>Ngồi và đi trên đất phẳng</td><td class="eff">30 s</td><td>Phải sạch. Xem ghi chú bên dưới</td></tr>
-              <tr><td>Nhảy liên tục, đất phẳng</td><td class="eff">30 s</td><td>Lệch nhẹ ở tick tiếp đất là bình thường</td></tr>
-              <tr><td>Lên xuống dốc</td><td class="eff">60 s</td><td>Lệch, đã biết và đã ghi lại</td></tr>
-              <tr><td>Đâm vào tường, đi men tường</td><td class="eff">60 s</td><td>Lệch, đã biết và đã ghi lại</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <p>
-          <code>MovementShadowCompare</code> chỉ đọc, không có đường code nào trong đó ghi vào
-          <code>CharacterController</code>, vào transform, hay vào bất kỳ field nào của <code>Actor</code>.
-          Nó không thể làm game chơi khác đi.
-        </p>
-        <div class="note">
-          <b>Vì sao ngồi-và-đi lại nằm riêng trong danh sách.</b> Kế hoạch phase-00 giả định có
-          <code>CROUCH_SPEED</code> bằng 2.0 m/s. Giá trị đó không tồn tại ở đâu trong project: ngồi chỉ đổi chiều cao
-          collider chứ không đổi gì khác (<code>FpsActorController.cs:678-682</code>), và chỗ chọn tốc độ chỉ rẽ nhánh
-          theo cờ sprint (<code>FirstPersonController.cs:280-282</code>). Tôi dựng simulation không có tốc độ ngồi.
-          Nếu ngồi-và-đi bị lệch thì tôi đọc sai, và tôi cần biết trước khi M1 đáp xuống, vì triệu chứng ngoài production
-          sẽ là rubber-banding <em>chỉ khi đang ngồi</em>: chập chờn, và truy về một hằng số chưa ai từng viết ra.
-        </div>
-        <dl class="kv">
-          <dt>Trả lời</dt><dd>Dòng <code>[MovementShadowCompare] ...</code> in ra lúc thoát Play, kèm mọi cảnh báo <b>MOVEMENT DIVERGED</b> xuất hiện trên đất phẳng.</dd>
-        </dl>
-      </article>
-
-      <article class="item hold">
-        <div class="item-head">
-          <span class="item-id">A4</span>
-          <h3 class="item-title">Gắn NetMovementAgent và NetPredictionClock, clock để tắt</h3>
-          <span class="item-eff">~10 phút</span>
-        </div>
-        <div class="pathbar"><b>Làm ở</b> Unity Editor · <b>cùng prefab với A3</b> <code>Assets/Prefab/Player Fps Actor.prefab</code> · <b>chỉ làm sau khi A3 xong</b></div>
-        <ol class="steps">
-          <li>
-            Mở lại đúng prefab đó, chọn GameObject gốc → <strong>Add Component</strong> →
-            <code>NetMovementAgent</code>.
-            Nó có <code>[RequireComponent(typeof(CharacterController))]</code> nên nếu gắn nhầm GameObject khác,
-            Editor sẽ tự nhét thêm một <code>CharacterController</code> vào đó: thấy vậy là gắn sai chỗ, undo ngay.
-          </li>
-          <li>
-            <strong>Add Component</strong> lần nữa → <code>NetPredictionClock</code>, trên cùng GameObject.
-          </li>
-          <li>
-            <strong>Bỏ dấu tick ở ô vuông bên trái tên <code>NetPredictionClock</code></strong> trong Inspector.
-            Đây là bước quan trọng nhất của cả mục này.
-          </li>
-          <li><strong>Ctrl+S</strong>.</li>
-        </ol>
-        <div class="note">
-          <b>Vì sao phải tắt.</b> <code>NetMovementAgent</code> gắn vào rồi nằm im — không có gì gọi
-          <code>Tick()</code> cho tới lúc tích hợp M1. <code>NetPredictionClock</code> thì ngược lại: nó
-          <em>chính là</em> thứ gọi <code>Tick()</code>, ngay từ frame đầu tiên, 30 lần mỗi giây. Bật nó lúc này là
-          có hai hệ thống cùng điều khiển một <code>CharacterController</code>, và triệu chứng sẽ là nhân vật đi
-          nhanh gấp đôi hoặc giật — trông như bug vật lý, thật ra là bug tích hợp.
-          Bật nó lên là việc của buổi M1, khi bản gốc đã được tắt đi.
-        </div>
-        <p>
-          Sau khi lưu, gỡ <code>MovementShadowCompare</code> ra hay để lại đều được, nó chỉ đọc.
-        </p>
-        <dl class="kv">
-          <dt>Trả lời</dt><dd>Đường dẫn prefab, <b>xác nhận clock đang tắt</b>, và Console vẫn sạch.</dd>
-        </dl>
-      </article>
-
-      <article class="item go">
-        <div class="item-head">
-          <span class="item-id">A7</span>
-          <h3 class="item-title">Xác nhận biên bản đồ, chỉ để chắc</h3>
-          <span class="item-eff">~10 phút</span>
-        </div>
-        <div class="pathbar"><b>Làm ở</b> Unity Editor, Play mode trên map <code>Dustbowl</code></div>
-        <p>
-          Tôi đo được rồi mà không cần Editor: scene lưu ở dạng YAML text nên <code>LevelBounds</code> đọc thẳng từ
-          <code>Dustbowl.unity</code>, ra 1700 × 700 × 1600 tâm tại (-70.8, 207.6, -88.6), toạ độ chơi được xa nhất
-          920.8 m so với <code>POS_MAX</code> 2048. Dư 2.2 lần, và bản freeze đã ghi là chốt.
-        </p>
-        <p>
-          Thứ tôi không kiểm được từ YAML là liệu người chơi có <em>đi tới</em> được chỗ nào quá 2048 m bằng xe, thang máy
-          hay một lối ra ngoài map. <b>Nếu có đường nào vượt ±2048 m trên bất kỳ map nào, báo tôi</b>: lượng tử hoá vị trí
-          sẽ kẹp ở đó và nhân vật dính vào một bức tường vô hình. Không có thì không cần làm gì.
-        </p>
-      </article>
-
-      <article class="item go">
-        <div class="item-head">
-          <span class="item-id">A8</span>
-          <h3 class="item-title">Đọc lướt bản phân tích chuyển động</h3>
-          <span class="item-eff">~10 phút</span>
-        </div>
-        <div class="pathbar"><b>Đọc ở</b> <code>d:\Coding\LTM\docs\movement-analysis.md</code>, mở bằng VS Code hoặc ngay trên GitHub</div>
-        <p>
-          Phase-00 tiêu chí 10 xin một buổi 60 phút để A giải thích code di chuyển trong <code>Actor.cs</code>.
-          <b>Đã huỷ</b>, vì <code>Actor.cs</code> không chứa code đó.
-        </p>
-        <p>
-          Thứ buổi họp ấy định tạo ra thì giờ đã nằm trong <code>docs/movement-analysis.md</code>, viết từ source và
-          pin bằng 18 unit test. <b>Đọc § 0 và § 5, rồi nói tôi biết có chỗ nào trái với những gì A đang nắm</b>,
-          nhất là danh sách lệch đã biết ở § 5. Với tôi mười phút đó đáng giá hơn một tiếng họp.
-        </p>
-      </article>
-
-    </div>
-  </section>
-
-  <section>
-    <h2>Nhóm 3 · Mở đường vào M1 <span class="tag">sync point 4 + API</span></h2>
-    <p class="lede">Hai mục này quyết định M1 chạy trên hạ tầng thật hay chạy trên đường vòng. Có đường vòng cho cả hai, nhưng đường vòng nào cũng đắt hơn.</p>
-
-    <div class="items">
-
-      <article class="item stop">
-        <div class="item-head">
-          <span class="item-id">HB</span>
-          <h3 class="item-title">Headless build chạy 10 phút không crash</h3>
-          <span class="item-eff">~1 ngày</span>
-        </div>
-        <p>
-          Đây là sync point 4 trong <code>dependency-map.md</code>, và là <b>mục M0 duy nhất còn lại phụ thuộc Editor</b>,
-          nên không ai kéo hộ được. Tiêu chí nghiệm thu lấy nguyên từ phase-00 của A:
-        </p>
-        <div class="pathbar"><b>Làm ở</b> Unity Editor (tạo build) → rồi terminal (chạy build)</div>
-        <p>
-          Build profile cho server <b>chưa tồn tại</b>, đây là Task 7 trong phase-00 của A: trong Editor vào
-          <code>File → Build Profiles</code>, tạo một profile nền tảng <b>Dedicated Server</b> với define symbol
-          <code>UNITY_SERVER</code> và <code>IRONFRONT_SERVER</code>, tắt audio và graphics API. Build ra một thư mục
-          riêng ngoài <code>Assets/</code>, ví dụ <code>d:\Coding\LTM\build\server\</code>, để Unity không import ngược
-          chính output của nó. Sau đó chạy file exe vừa build từ terminal:
-        </p>
-        <div class="runbox">
-          <div class="pathbar"><b>Chạy ở</b> terminal, tại thư mục vừa build ra</div>
-          <pre><code>cd d:\Coding\LTM\build\server
-.\server.exe -batchmode -nographics -logFile s.log</code></pre>
-        </div>
-        <p>Để nó chạy 10 phút, rồi đọc log ngay trong terminal đó:</p>
-        <div class="runbox">
-          <div class="pathbar"><b>Chạy ở</b> cùng terminal đó</div>
-          <pre><code>Select-String -Path s.log -Pattern "Exception" | Measure-Object   # Count phải là 0</code></pre>
-        </div>
-        <p>
-          Script <code>tools/build-server.ps1</code> cũng chưa tồn tại, A viết bản đầu rồi D nối vào CI.
-          Tiêu chí nghiệm thu lấy nguyên từ phase-00 của A:
-        </p>
-        <ul>
-          <li>Chạy 10 phút liên tục, grep <code>Exception</code> trong <code>s.log</code> ra 0 dòng.</li>
-          <li>Bot spawn và di chuyển: log vị trí bot mỗi 5 giây, thấy nó đổi.</li>
-          <li>A* chạy được headless: log <code>Seeker.StartPath</code> trả về path nhiều hơn 1 node.</li>
-          <li>21 singleton đã có guard, vì headless không có UI nên mọi <code>IngameUi.instance</code> đều null.</li>
-          <li>Chơi single-player 5 phút thấy y hệt trước khi refactor: chạy, bắn, ngồi, nghiêng, đổi súng, lên xe, chết, hồi sinh.</li>
-        </ul>
-        <div class="note">
-          <b>Đường vòng của tôi:</b> dùng Unity Play Mode thay headless để test tick loop, đúng như
-          <code>dependency-map § 6</code> đã dự phòng. Nó chạy được, chỉ chậm hơn và không tự động hoá được trong CI.
-          Bước Unity trong <code>tools/ci.ps1</code> vẫn opt-in qua <code>UNITY_PATH</code>, nên B, C, D không bị chặn vì không có Editor.
-        </div>
-        <p>
-          A* có thể bake trước cache trong Editor (<code>AstarPath</code> → <code>Cache startup</code> → <code>Scan</code> → <code>Save to file</code>, ~15 phút).
-          Không bake thì server tự voxelize map lúc boot, mất 10 đến 60 giây, <b>vẫn chạy</b>. Nên đây là việc nên làm, không phải việc chặn.
-        </p>
-      </article>
-
-      <article class="item hold">
-        <div class="item-head">
-          <span class="item-id">A6</span>
-          <h3 class="item-title">Danh sách weapon id cố định</h3>
-          <span class="item-eff">~30 phút</span>
-        </div>
-        <div class="pathbar"><b>Làm ở</b> Unity Editor hoặc IDE · <b>nơi đặt</b> <code>Ironfront_Reborn/Assets/Scripts/</code>, phía A</div>
-        <p>
-          Snapshot mang <code>weaponId</code> kiểu <code>u8</code> theo spec § 4.3, mà tôi không có bảng ánh xạ id sang vũ khí nào ổn định.
-          <code>Actor.activeWeapon</code>, <code>Actor.weapons[5]</code>, <code>activeWeaponSlot</code> đều là tham chiếu object,
-          mà tham chiếu thì không sống sót qua một chặng mạng.
-        </p>
-        <p>
-          Tôi cần <b>một danh sách vũ khí có thứ tự, id nguyên, cố định</b>: cố định nghĩa là id 3 tuần sau vẫn là khẩu đó, và trên máy nào cũng vậy.
-          Một <code>ScriptableObject</code> registry, một mảng serialize trên <code>WeaponManager</code>, hay chỉ một enum có ghi chú, đều được.
-          Hình dạng do A chọn, tôi chỉ cần id cố định và đọc được từ code.
-        </p>
-        <div class="note">
-          Chưa có thì snapshot ship <code>weaponId = 0</code> và field nằm im. <b>Không chặn gì cả</b>, chỉ là M1 sẽ không hiển thị đúng súng trên tay người khác.
-        </div>
-      </article>
-
-    </div>
-  </section>
-
-  <section>
-    <h2>Ba cái bẫy tôi đã gặp trước <span class="tag">đọc trước khi code</span></h2>
-    <div class="traps">
-      <div class="trap">
-        <h4>OnMessage đưa cho bạn buffer đi mượn</h4>
-        <p>
-          Buffer đó bị thu hồi ngay khi handler return. Giữ lại dữ liệu là lát nữa đọc trúng packet của người khác.
-          Cần sống lâu hơn callback thì phải copy. Đây là loại bug thật sự khó lần ra.
-        </p>
+      <div class="pathbar"><b>Làm ở</b> Unity Editor · Play Mode</div>
+      <p>
+        Còn mở từ vòng 7. PR #42 đã khoanh vùng những cảnh báo flat-ground cuối cùng về đúng hai
+        physics tick ở rìa sprint: harness lấy mẫu nút Sprint thô trong <code>FixedUpdate</code>,
+        còn controller cũ tiêu thụ giá trị <code>sprinting</code> đã được
+        <code>FpsActorController.Update</code> chốt lại. Hai physics tick trước mỗi lần render vì thế
+        so sánh hai input khác nhau. Harness giờ đọc đúng cái latch sprint của controller cũ, và chờ
+        cho tới khi cả input cũ lẫn <code>CharacterController</code> đều active.
+      </p>
+      <p><b>Chạy lại có trọng tâm:</b> mặt đất phẳng, vài lần chuyển walk ↔ sprint.</p>
+      <div class="fb">
+        <b>Tôi cần nhận lại:</b> dòng tóm tắt grounded, cộng mọi cảnh báo flat-ground còn sót.
+        A3 và A4 còn mở tới khi lần chạy này sạch.
       </div>
-      <div class="trap">
-        <h4>SimulatorConfig.ReorderPercent = 100 không đảo gì cả</h4>
-        <p>
-          Đảo thứ tự được cài đặt như một độ trễ thêm vào các packet được chọn, nên chọn tất cả nghĩa là dịch đều cả luồng
-          và giữ nguyên thứ tự. Giá trị hữu ích nằm dưới 50 khá xa. Đã pin thành test nên không thể regress.
-        </p>
-      </div>
-      <div class="trap">
-        <h4>TypeLoadException không nói gì về assembly bị thiếu</h4>
-        <p>
-          Nếu Console ném <code>TypeLoadException</code> sau khi copy DLL, gần như chắc chắn là thiếu một trong bốn assembly phụ ở mục A1.
-          Đừng đọc thông điệp lỗi, hãy đếm file trong <code>Assets/Plugins/</code>.
-        </p>
-      </div>
-    </div>
-  </section>
+    </article>
 
-  <section>
-    <h2>Những gì đã sẵn sàng cho A <span class="tag">merged, xanh, 0 warning</span></h2>
-    <div class="tablewrap">
-      <table>
-        <thead>
-          <tr><th>Có sẵn ngay</th><th>Dùng để làm gì</th></tr>
-        </thead>
-        <tbody>
-          <tr><td class="id">ITransportClient / ITransportServer</td><td>API đã đóng băng. Code dựa vào đây và chỉ đây.</td></tr>
-          <tr><td class="id">LoopbackTransport</td><td>Client và server trong bộ nhớ, không socket. Test prediction với 200 ms latency ngay trong một tiến trình Editor.</td></tr>
-          <tr><td class="id">NetworkSimulator</td><td>5 kiểu nhiễu, seed cố định. <code>IRONFRONT_SIM=typical|bad|awful</code> ngay lúc chạy, không cần build lại.</td></tr>
-          <tr><td class="id">MovementCore / MovementSimulation</td><td>Simulation dùng chung, hằng số thật, 18 test.</td></tr>
-          <tr><td class="id">SnapshotBuilder / DeltaEncoder / DeltaDecoder</td><td>Snapshot đầy đủ và delta. Đo được: tiết kiệm 44.7%, 10.94 KB/s mỗi client ở 48 actor.</td></tr>
-          <tr><td class="id">ServerTickScheduler / InputAuthority / ClientSession</td><td>Nhịp 30 Hz, xử lý input chống gian lận.</td></tr>
-          <tr><td class="id">BitWriter / BitReader</td><td>Của Dev B, kèm bộ conformance suite chấm nó.</td></tr>
-          <tr><td class="id">NetPredictionClock</td><td>Mới, PR #13. Nhịp 30 Hz riêng cho prediction — phương án B của A5. Gắn ở A4, để tắt cho tới M1.</td></tr>
-          <tr><td class="id">IronfrontLog</td><td>Mới, PR #13. Ghi Console ra file, kèm assembly census. Tự chạy, không cần gắn gì.</td></tr>
-          <tr><td class="id">AppQuit</td><td>Mới, PR #13. Một chỗ thoát game duy nhất, chạy đúng cả trong Editor lẫn trong build.</td></tr>
-          <tr><td class="id">tools/strip-removed-components.ps1</td><td>Mới, PR #14. Xoá component thuộc class Unity đã gỡ khỏi scene và prefab, không phải mở Editor re-save cả file.</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <section>
-    <h2>Tôi cần nhận lại đúng những dòng này</h2>
-    <div class="tablewrap">
-      <table>
-        <thead>
-          <tr><th>Mục</th><th>Trả lời bằng</th></tr>
-        </thead>
-        <tbody>
-          <tr><td class="id">A1 <span class="pill done">xong</span></td><td>PR #12</td></tr>
-          <tr><td class="id">A2 <span class="pill done">xong</span></td><td>PR #12</td></tr>
-          <tr><td class="id">A5 <span class="pill done">xong</span></td><td>đã chọn <b>B</b></td></tr>
-          <tr><td class="id">P1</td><td>chọn cách 1 hay cách 2, và Console sau khi Apply</td></tr>
-          <tr><td class="id">P2</td><td><code>UNITY_MCP_READY</code> dùng cho <b>editor</b> hay <b>runtime</b></td></tr>
-          <tr><td class="id">P3</td><td>đã ignore và đã đổi scope, hoặc lý do không làm</td></tr>
-          <tr><td class="id">V1</td><td><b>"0 error"</b>, hoặc nguyên văn từng dòng đỏ kèm tên scene</td></tr>
-          <tr><td class="id">V2</td><td><b>"census sạch"</b>, hoặc dán mười dòng <code>assembly ...</code></td></tr>
-          <tr><td class="id">V3</td><td>"log ghi được", hoặc cái gì thiếu</td></tr>
-          <tr><td class="id">V4</td><td>một trong ba dòng của bảng V4</td></tr>
-          <tr><td class="id">V5</td><td>ba chữ "sạch", hoặc dòng đỏ kèm tên scene</td></tr>
-          <tr><td class="id">A3</td><td>dòng summary, kèm cảnh báo trên đất phẳng nếu có</td></tr>
-          <tr><td class="id">A4</td><td>đường dẫn prefab, và xác nhận clock đang tắt</td></tr>
-          <tr><td class="id">A6</td><td>cách đọc id từ code</td></tr>
-          <tr><td class="id">A7</td><td>có hoặc không</td></tr>
-          <tr><td class="id">A8</td><td>chỗ nào trái với những gì A biết</td></tr>
-          <tr><td class="id">HB</td><td>log 10 phút, hoặc ngày dự kiến xong</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="lede">
-      <b>V2 là mục có thể đổi một quyết định</b>, còn lại đều là xác nhận. A3 vẫn là mục nhiều khả năng tìm ra
-      thứ gì đó nhất. Vòng này có đúng một quyết định thuộc về A và không ai quyết thay được:
-      <b>P1, chọn cách 1 hay cách 2</b> — vì chỉ A mở được Editor để biết package chịu được cách nào.
-    </p>
-    <p class="lede">
-      Thứ tự tôi đề nghị: <b>V1→V5 trước, rồi A3, rồi P1→P3, rồi A4.</b> Nhóm P không chặn gì của tôi,
-      nên nếu tối nay chỉ đủ thời gian cho một nhóm thì làm V.
-    </p>
-  </section>
-
-  <section>
-    <h2>Hai thứ tôi thấy trong file của A <span class="tag">báo, không sửa</span></h2>
-    <p class="lede"><code>conventions.md § 7</code> nói báo chứ đừng sửa. Cả hai đều không gấp và đều không thuộc quyền tôi.</p>
-    <div class="traps">
-      <div class="trap">
-        <h4>ForceEndCrouch hardcode khoảng nâng khi đứng dậy</h4>
-        <p>
-          <code>FpsActorController.cs:696-700</code> đặt <code>height = 1.8f</code> rồi nâng transform lên <code>1.3f / 2f</code>.
-          Số <code>1.3</code> chính là <code>1.8 - 0.5</code> viết tay, nên đổi một trong hai chiều cao trong prefab sẽ làm
-          khoảng nâng lệch khỏi collider trong im lặng, và người chơi đứng dậy với nửa người nằm dưới sàn.
-          Suy ra từ công thức <code>(stand - crouch) / 2</code> thì nó tự nhất quán.
-        </p>
+    <article class="item hold">
+      <div class="item-head">
+        <span class="item-id">A4</span>
+        <h3 class="item-title">Gắn <code>NetMovementAgent</code> + <code>NetPredictionClock</code> lên prefab người chơi</h3>
+        <span class="item-eff">~10 phút</span>
       </div>
-      <div class="trap">
-        <h4>IsProne chưa có phần cài đặt</h4>
-        <p>
-          <code>InputButtons.Prone</code> (bit 6) và <code>ActorStateFlags.IsProne</code> (bit 2) đều nằm trong protocol đã đóng băng,
-          mà không có gì trong game sinh ra hay tiêu thụ chúng. Tôi để nguyên như chỗ trống dành sẵn trên dây,
-          vì bỏ đi là phải bump <code>PROTOCOL_VERSION</code> mà chẳng được gì. Báo để sau này A không bị bất ngờ.
-        </p>
-      </div>
-    </div>
-  </section>
+      <div class="pathbar"><b>Làm ở</b> Unity Editor · Inspector · chờ A3 sạch</div>
+      <p>
+        Cả hai component lên prefab người chơi, <b><code>NetPredictionClock</code> để tắt</b>. Bẫy
+        của mục này nằm đúng ở đó: bật clock trước khi A3 sạch thì nó chiếm quyền điều khiển
+        timestep, và một phép so sánh shadow chạy trên timestep do chính clock lái thì không đo được
+        gì cả.
+      </p>
+      <div class="fb"><b>Tôi cần nhận lại:</b> đường dẫn prefab, và xác nhận clock đang tắt.</div>
+    </article>
 
-  <footer>
-    <div>Nguồn sự thật: <code>plans/dev-c-replication/handoff/dev-a-checklist.md</code> · <code>plans/00-shared/dependency-map.md</code> · <code>docs/movement-analysis.md</code></div>
-    <div>Trang này chỉ sắp lại theo gate. Khi hai bên lệch nhau, tin file markdown.</div>
-    <div>
-      Vòng 2 · 12-08-2026 chiều · PR #12, #13, #14 đã merge vào <code>develop</code>.
-      Phần Unity trong ba PR đó <b>chưa ai mở Editor để kiểm</b> — đó chính là nhóm V.
-    </div>
-  </footer>
+    <article class="item go">
+      <div class="item-head">
+        <span class="item-id">S5 / A9</span>
+        <h3 class="item-title">Profiler bot LOD — đã hết chặn</h3>
+        <span class="item-eff">~25 phút</span>
+      </div>
+      <div class="pathbar"><b>Làm ở</b> Unity Editor · Profiler · scene 32 bot</div>
+      <p>
+        Báo cáo 15-08 của A đúng cả hai điểm. Thứ nhất, <code>BotLodScheduler</code> lúc đó không có
+        wrapper Unity nào gọi <code>ShouldTick</code>, nên đo LOD bật/tắt là đo hai lần cùng một
+        đường code. Thứ hai, phản đối việc bật/tắt <code>AiActorController.enabled</code> là có cơ
+        sở: controller khởi tám coroutine và còn làm việc theo <code>Time.deltaTime</code> trong
+        <code>Update</code>, nên tắt riêng MonoBehaviour sẽ tách state <code>Update</code> đang dừng
+        khỏi state coroutine vẫn chạy nhịp riêng.
+      </p>
+      <p>
+        <b>Đã có seam.</b> <code>Assets/Scripts/Net/Server/BotLodGate.cs</code> với
+        <code>BotLodMode</code> serialize được trong Inspector:
+      </p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Chế độ</th><th>Hành vi</th></tr></thead>
+          <tbody>
+            <tr><td><code>Scheduler</code></td><td>hỏi <code>BotLodScheduler</code> — hành vi khi ship</td></tr>
+            <tr><td><code>AlwaysOn</code></td><td>mọi bot tick mọi frame — mốc so sánh khi tắt LOD</td></tr>
+            <tr><td><code>AlwaysOff</code></td><td>override tất định để đối chứng</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="fb">
+        <b>Tôi cần nhận lại:</b> p99 tick với 32 bot ở <code>AlwaysOn</code> và ở
+        <code>Scheduler</code>, kèm chi phí AI ở cả hai. Đây là hai tiêu chí M2 cuối cùng mà không
+        test nào chạm tới được.
+      </div>
+    </article>
+
+    <article class="item hold">
+      <div class="item-head">
+        <span class="item-id">A11</span>
+        <h3 class="item-title">Hai DLL master-link vào <code>Assets/Plugins</code></h3>
+        <span class="item-eff">~10 phút</span>
+      </div>
+      <div class="pathbar"><b>Làm ở</b> terminal tại gốc repo</div>
+      <p>
+        Mục này trước đây là tuỳ chọn vì master server chưa tồn tại. Dev D đang triển khai nó ngay
+        lúc này, nên client cần kết nối tới được.
+      </p>
+      <p>
+        <code>tools/build-libs.ps1</code> vốn đã copy cả sáu thư viện, gồm
+        <code>Ironfront.MasterClient.dll</code> và <code>Ironfront.Net.MasterLink.dll</code>, vào
+        <code>Assets/Plugins</code>. Chạy rồi commit kết quả.
+      </p>
+      <p>
+        <b>Cái bẫy này đã cắn repo hai lần.</b> Drift check của CI so thời điểm commit của DLL với
+        thời điểm commit của thư mục source. Sửa thư viện mà quên rebuild thì Unity nạp bản cũ, lỗi
+        compile hiện trong Editor mà CI im lặng. #77 suýt ship đúng tình huống đó: ba DLL cũ thiếu
+        member mới, và drift check không nhìn thấy cái tệ nhất vì glob của nó là
+        <code>Ironfront.Net.*.dll</code>, không bao giờ khớp
+        <code>Ironfront.MasterClient.dll</code>. Glob đã nới rồi.
+      </p>
+      <div class="fb"><b>Tôi cần nhận lại:</b> xong, hoặc "chờ Dev D xác nhận master đã tới được".</div>
+    </article>
+
+    <article class="item go">
+      <div class="item-head">
+        <span class="item-id">A7</span>
+        <h3 class="item-title">Người chơi có ra được ngoài ±2048 m không</h3>
+        <span class="item-eff">~10 phút</span>
+      </div>
+      <div class="pathbar"><b>Làm ở</b> Unity Editor · Play Mode · thử đi lạc</div>
+      <p>
+        Phần đo được từ YAML tôi đã đo, vì scene lưu ở dạng force-text: <code>LevelBounds</code> của
+        Dustbowl là 1700 × 700 × 1600, tâm tại (-70.8, 207.6, -88.6), toạ độ chơi được xa nhất
+        920.8 m so với <code>POS_MAX</code> 2048 — dư 2.2 lần, và đã ghi là chốt ở lần freeze
+        protocol.
+      </p>
+      <p>
+        Thứ YAML không trả lời được là người chơi có <em>tới</em> được chỗ xa hơn 2048 m qua xe, qua
+        thang, hay qua một lối ra ngoài bản đồ hay không. Dustbowl có khoảng 1.900 transform nằm xa
+        hơn 2048 m, toàn địa hình nền ngoài hộp chơi.
+      </p>
+      <div class="fb">
+        <b>Tôi cần nhận lại:</b> có hoặc không. Nếu có, lượng tử hoá vị trí sẽ kẹp ở đó và nhân vật
+        dính vào một bức tường vô hình — tôi cần biết trước khi người chơi phát hiện ra.
+      </div>
+    </article>
+
+  </div>
+
+  <h2>Nhóm quyết định · Vài phút mỗi câu, mở khoá việc bên tôi</h2>
+
+  <div class="items">
+
+    <article class="item hold">
+      <div class="item-head">
+        <span class="item-id">A12</span>
+        <h3 class="item-title"><code>cpuPercent</code> đang gửi −1</h3>
+        <span class="item-eff">~2 phút</span>
+      </div>
+      <div class="pathbar"><b>Làm ở</b> trả lời, không cần mở gì</div>
+      <p>
+        <code>GS_HEARTBEAT</code> mang theo một trường <code>cpuPercent</code> mà master dùng để xếp
+        hạng server. Unity không phơi ra counter CPU tiến trình nào chạy được đa nền tảng, nên tôi
+        gửi <b>−1</b> thay vì một con số bịa: một giá trị bịa trên đầu vào matchmaking còn tệ hơn
+        không có giá trị, vì master sẽ hành động theo nó. Thời gian tick trung bình là tín hiệu tải
+        thật và vẫn được gửi kèm.
+      </p>
+      <div class="fb"><b>Tôi cần nhận lại:</b> giữ −1, hoặc tên counter A muốn tôi đọc.</div>
+    </article>
+
+    <article class="item hold">
+      <div class="item-head">
+        <span class="item-id">A13</span>
+        <h3 class="item-title">Chưa ai đếm kill và death</h3>
+        <span class="item-eff">~5 phút</span>
+      </div>
+      <div class="pathbar"><b>Làm ở</b> trả lời, không cần mở gì</div>
+      <p>
+        <code>GS_MATCH_ENDED</code> mang bảng kill/death/score theo từng người. <code>S_DEATH</code>
+        đã nêu tên người giết, nhưng không có gì cộng dồn, nên
+        <code>ServerMasterReporter.CollectScores</code> báo về một danh sách <b>rỗng</b> thay vì một
+        hàng toàn số 0 cho mỗi người — hàng toàn 0 không phân biệt được với một trận mà không ai ghi
+        điểm, và master lưu đúng những gì nó nhận.
+      </p>
+      <p>
+        Phần đếm vé không ảnh hưởng: <code>MatchController.ReportDeath(team)</code> trừ vé của đội có
+        người chết, và chỗ đó đã nối dây.
+      </p>
+      <div class="fb">
+        <b>Tôi cần nhận lại:</b> bảng điểm là của A hay của tôi. Nếu của tôi, chỉ tôi chỗ một cú kill
+        được phân giải trên server và tôi cộng dồn từ đó.
+      </div>
+    </article>
+
+    <article class="item hold">
+      <div class="item-head">
+        <span class="item-id">F</span>
+        <h3 class="item-title">Tách asmdef — cần A đồng ý, chưa cần A làm hôm nay</h3>
+        <span class="item-eff">một phase riêng</span>
+      </div>
+      <div class="pathbar"><b>Làm ở</b> đọc và cho ý kiến · <a href="https://github.com/Sagitoaz/LTM/issues/83">issue #83</a></div>
+      <p>
+        Mười một lỗi trong #81 và #82 có chung một tính chất: <b>không lỗi nào bị test bắt, vì không
+        test nào chạm tới được.</b> <code>Assets/</code> không có asmdef nào, nên
+        <code>Assets/Scripts/Net/**</code> biên dịch thẳng vào <code>Assembly-CSharp</code>, và nó
+        phụ thuộc ba type cũng nằm trong đó:
+      </p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Type</th><th>Dùng ở</th></tr></thead>
+          <tbody>
+            <tr><td><code>Actor</code></td><td><code>NetServerActor</code> — health, dead, activeWeapon</td></tr>
+            <tr><td><code>Weapon</code></td><td><code>NetServerActor.WeaponId</code></td></tr>
+            <tr><td><code>IngameUi</code></td><td><code>ServerTickLoop</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        <code>Assembly-CSharp</code> là <em>predefined assembly</em>: Unity biên dịch nó sau mọi
+        asmdef, nên <b>không asmdef nào tham chiếu được vào nó</b>. Hai hệ quả: đưa
+        <code>Net/Server</code> vào asmdef thì nó mất quyền thấy ba type kia và ngừng compile; còn
+        test asmdef cũng chịu đúng luật đó nên không nhìn thấy <code>NetServerActor</code>.
+      </p>
+      <p>Thêm Test Framework không giải quyết được. Hình dạng giải quyết được:</p>
+      <pre><code>Ironfront.Net.Unity.Server (asmdef)
+  IGameplayActor  { Health, IsAlive, WeaponNetworkId, Teleport(...) }
+  IHudSink        { HideIngameUi() }
+
+Assembly-CSharp (không asmdef, tự thấy mọi asmdef)
+  ActorGameplayAdapter : IGameplayActor
+  IngameUiSink         : IHudSink</code></pre>
+      <p>
+        Chiều phụ thuộc đảo lại: asmdef khai báo interface, <code>Assembly-CSharp</code> hiện thực và
+        đăng ký. Đó là chiều Unity cho phép.
+      </p>
+      <p>
+        Việc này chạm file của A nên cần A đồng ý. Trong lúc chưa làm, cách tạm vẫn giữ nguyên: đẩy
+        quyết định xuống thư viện netstandard nơi CI test được, để Unity chỉ còn là lớp adapter mỏng.
+      </p>
+      <div class="fb"><b>Tôi cần nhận lại:</b> đồng ý làm ở một phase riêng, hay A phản đối chỗ nào.</div>
+    </article>
+
+  </div>
+
+  <h2>Những gì đã đóng từ vòng 7, đừng làm lại</h2>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Mục</th><th>Đóng bởi</th><th>Bằng chứng</th></tr></thead>
+      <tbody>
+        <tr><td>V1–V5</td><td>vòng 5</td><td>0 lỗi, census sạch, log ghi được, nút Quit chạy, 3 scene sạch</td></tr>
+        <tr><td>S1, S2, S3</td><td>phiên đo S4 của A</td><td>Dustbowl chạy loopback server với 1 người + 47 bot</td></tr>
+        <tr><td>S4</td><td>15-08</td><td>0 B GC alloc, snapshot stage 0.12 ms, input stage 0.01 ms</td></tr>
+        <tr><td>S6, S7</td><td>15-08</td><td>báo cáo <code>2026-08-15-dev-a-s4-s7-and-s5-blocker.md</code></td></tr>
+        <tr><td>A1, A2, A5</td><td>vòng 2</td><td>PR #12, <code>NetPredictionClock</code></td></tr>
+        <tr><td>A6 — registry weapon id</td><td>đã landed</td><td><code>WeaponIds.cs</code>, <code>WeaponManager.NetworkIdOf</code>, <code>SpecChecker</code> đối chiếu với prefab mỗi lần CI chạy</td></tr>
+        <tr><td>A8</td><td>huỷ</td><td>vòng 3</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note is-stop">
+    <b>A6 đáng nói riêng.</b> Registry đã landed, nhưng tới tận 16-08 <em>không ai đọc nó</em>:
+    <code>NetServerActor._weaponId</code> là một serialized field mà snapshot đọc còn không ai ghi,
+    nên mọi actor trong mọi snapshot và mọi <code>S_WEAPON_FIRE</code> đều báo weapon 0. Đã sửa ở
+    #81 thành pass-through tới <code>Actor.activeWeapon.NetworkId</code>. Ghi ở đây vì nó đổi thứ A
+    sẽ thấy trong Editor: actor ở xa giờ phải cầm súng nhìn thấy được.
+  </div>
+
+  <hr>
+  <p class="foot">
+    Bản tiếng Anh cho AI đọc: <code>plans/dev-c-replication/handoff/dev-a-checklist.md</code>.
+    Các vòng 1–7 nằm trong lịch sử git của chính file đó; mọi mục đã đóng ở đấy vẫn đóng.
+  </p>
 
 </div>
