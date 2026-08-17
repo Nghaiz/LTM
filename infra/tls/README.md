@@ -18,6 +18,37 @@ The game servers dial the master over the internal `master` service name but mus
 validate against the certificate's hostname, so they set
 `IRONFRONT_GAMESERVER_MASTER_TLS_TARGET_HOST = IRONFRONT_DOMAIN` (compose does this for you).
 
+## IP-only (self-signed) mode — master only
+
+The deployment on `20.214.142.73` has **no domain**, so Let's Encrypt cannot issue for it and
+`issue-cert.sh` / `renew-hook.sh` (ACME) do **not** apply — and the game-server images are not
+built yet, so only the `master` runs (`deploy.sh up` would try to start the whole stack and
+fail). The self-signed cert **and** that master-only start are folded into one script,
+[`infra/compose/deploy-selfsigned.sh`](../compose/deploy-selfsigned.sh), run on the VM from
+`/opt/ironfront`:
+
+```bash
+sudo ./deploy-selfsigned.sh                                   # already logged in to GHCR
+sudo GHCR_USER=<user> GHCR_TOKEN=<pat> ./deploy-selfsigned.sh # one-shot GHCR login
+sudo ./deploy-selfsigned.sh --reissue-cert                    # force a NEW cert (changes the pin!)
+```
+
+To copy `compose.yaml` + `.env` + that script up and run it in one go from your workstation,
+use [`infra/compose/push-and-run.sh`](../compose/push-and-run.sh) (your IP must be inside the
+VM's `ssh_source_cidrs`):
+
+```bash
+GHCR_USER=<user> GHCR_TOKEN=<pat> infra/compose/push-and-run.sh
+```
+
+It self-signs a cert with `SAN=IP:<host>` and packs `master.pfx` (owned by UID 1654, same as
+the ACME path) **only when one is missing** — a plain re-deploy keeps the existing cert so the
+fingerprint (and every client pin) stays stable; pass `--reissue-cert` to replace it. A
+self-signed cert has no chain to validate, so the client **must pin that fingerprint**
+(`IRONFRONT_GAMESERVER_MASTER_TLS_PINNED_FINGERPRINT_SHA256` plus the game client's pin field),
+which the script prints at the end. The rest of this README is the domain + Let's Encrypt path
+— ignore it in this mode.
+
 ## Prerequisites
 
 - DNS **A record** for `IRONFRONT_DOMAIN` already points at the VM's static IP, propagated
