@@ -232,6 +232,14 @@ namespace Ironfront.MasterServer.Net
                     // so running them at request frequency would turn a 50 ms latency floor
                     // into a stream of garbage, which is the trade conventions.md section 3.2
                     // spends its whole length telling us not to make.
+                    //
+                    // Environment.TickCount64, deliberately, and NOT _options.Clock: this is
+                    // how often the loop wakes, and it is paired with a real semaphore wait
+                    // below. Reading a held test clock here would make the condition true on
+                    // every pass and spin the thread at 100% instead of ticking at 20 Hz. The
+                    // substitutable clock governs WHETHER a connection has expired
+                    // (CheckTimeouts); real time governs HOW OFTEN we look. Swapping either way
+                    // breaks something quiet — see TcpListenerHostOptions.Clock.
                     long now = Environment.TickCount64;
                     if (now >= nextHousekeepingAt)
                     {
@@ -396,7 +404,7 @@ namespace Ironfront.MasterServer.Net
             int id = ++_nextConnectionId;
             var connection = new ClientConnection(
                 id, socket, ipKey, address, endPoint, PostToLogicThread, HandleFrame, HandleClosed,
-                _options.ServerCertificate);
+                _options.Clock, _options.ServerCertificate);
 
             _connections[id] = connection;
             _connectionsPerIp[ipKey] = ConnectionsForIpUnsafe(ipKey) + 1;
@@ -451,7 +459,9 @@ namespace Ironfront.MasterServer.Net
         {
             if (_connections.Count == 0) return;
 
-            long now = Environment.TickCount64;
+            // The substitutable clock, not Environment.TickCount64 — this comparison is the one
+            // thing the tests need to hold still. See TcpListenerHostOptions.Clock.
+            long now = _options.Clock.NowMs();
 
             _timeoutScratch.Clear();
             foreach (ClientConnection connection in _connections.Values)
