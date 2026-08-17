@@ -18,8 +18,8 @@ lane, one objectives lane) say this instead:
 
 | System | Believed | Actual |
 |---|---|---|
-| Hitscan combat | not synced | **Done.** Server authority, `LagCompensator`, `HitboxHistory`, ammo, reload, respawn gating — phase-05 shipped |
-| Capture points | not synced | **Built, and duplicated.** Two capture systems run simultaneously and disagree — see § 2.1 |
+| Hitscan combat | not synced | **Server half done, client half never built.** Authority, `LagCompensator`, `HitboxHistory`, ammo, reload and respawn gating all shipped in phase-05 — and nothing on the client consumes the events. See § 2.4 |
+| Capture points | not synced | **Built, duplicated, and invisible.** Two capture systems run simultaneously and disagree (§ 2.1), and the client renders neither (§ 2.4) |
 | Explosions | not synced | **Wired end-to-end at the protocol layer and dead at both ends** — see § 2.2 |
 | Per-weapon behaviour | assumed working | **Every weapon behaves as a rifle** — see § 2.3 |
 | Vehicles | not synced | **Correct. Zero wiring.** |
@@ -102,6 +102,37 @@ right model — and it then shoots like a rifle. A sniper, an SMG and a shotgun 
 indistinguishable to the server. Damage drop-off over distance and balance/stagger damage are
 absent from `WeaponConfig` entirely, though the original game has both
 (`Projectile.cs:175-178`, `ActorManager.cs:353`).
+
+### 2.4. The client subscribes to almost nothing
+
+**Added 2026-08-17, after approval.** Surfaced by the V1/V2 planning lane while auditing § 2.2, then
+verified independently. It is larger than the explosion gap, and it corrects § 1 of this document's
+first draft.
+
+`ClientMessageRouter` raises nine events. Exactly **two** have a production Unity subscriber —
+`OnSpawnActor` and `OnDespawnActor`, both at
+[`RemoteActorRegistry.cs:77-78`](../../Ironfront_Reborn/Assets/Scripts/Net/Client/RemoteActorRegistry.cs#L77).
+`CapturePointMessage`, `MatchStateMessage`, `DeathMessage`, `WeaponFireMessage` and
+`HitConfirmMessage` appear **only** in server-side files, and `Client/CombatFeed.cs` has zero Unity
+consumers.
+
+What a player experiences in multiplayer today:
+
+| Behaviour | State |
+|---|---|
+| Other players and bots move | works |
+| Other players shooting | silent and invisible — no `S_WEAPON_FIRE` consumer |
+| Anyone dying | no feedback — no `S_DEATH` consumer |
+| Your own hitmarker | absent — no `S_HIT_CONFIRM` consumer |
+| Score, tickets, match phase, timer | no HUD — no `S_MATCH_STATE` consumer |
+| Capture points | render nothing — no `S_CAPTURE_POINT` consumer |
+
+So the answer to "what about capture points" is sharper than § 2.1 alone suggests: the server
+computes capture correctly, the wire carries it, and the client draws nothing. The same holds for
+every combat event phase-05 shipped.
+
+This is `rules/wired-not-just-present.md` at scale. It is why phase **V10** exists, and why it runs
+early rather than last.
 
 ---
 
@@ -212,6 +243,8 @@ Unguarded dereferences that NRE in a stripped headless build:
 | `Helicopter.cs:44-45` | `rotor.GetComponent<Renderer>()`, dereferenced every `Update` at `:66-67` |
 | `Vehicle.cs:542` | `ActorManager.instance.debug` — dereferenced **before** the `Camera.main != null` guard on the same line |
 | `VehicleSpawner.cs:49` | `GameManager.instance.noVehicles` |
+| `Vehicle.cs:252` | `spawner.FirstDriverEntered(this)` — **added 2026-08-17 (A7).** Unguarded, while the sibling call at `:337` *is* guarded. A scene-placed vehicle NREs the first time anyone drives it, in the Editor as well as headless |
+| `ExplodingProjectile.cs:75-79` | `impactParticles.Play()`, `audioSource.Stop()/.pitch/.Play()` — **added 2026-08-17.** Unguarded, while `trailParticles` at `:72` *is* guarded |
 
 Plus `TankTurret.cs:66` and `MountedTurret.cs:56` read `Input.GetAxis` and `OptionsUi.GetOptions()`
 directly inside `Update`, bypassing `ActorController` entirely — there is no abstract member for
@@ -244,8 +277,8 @@ Follows the documented process in `protocol-spec.md § 15`: PR with 2 approvals,
 | `C_VEHICLE_INPUT = 0x21` | C→S | 3 | 4 axes + turret aim, sent only while seated. Uses the one free client opcode |
 | `C_SEAT_REQUEST = 0x26` | C→S | 2 | **Already reserved**, currently falls through to `UnknownMessages++`. Carries `(vehicleId, seatIndex, enter/leave)` |
 | `S_VEHICLE_SNAPSHOT = 0x4C` | S→C | 1 | Vehicle entity stream |
-| `S_VEHICLE_SPAWN / DESPAWN = 0x4D / 0x4E` | S→C | 2 | Spawner lifecycle, wreck cleanup |
-| `S_PROJECTILE_SPAWN = 0x4F` | S→C | 2 | Launch parameters per D5 |
+| `S_VEHICLE_SPAWN / DESPAWN = 0x4D / 0x4E` | S→C | 2 | Spawner lifecycle, wreck cleanup. Despawn carries a `VehicleDespawnReason { Destroyed, Wrecked, Cleanup }` — `Wrecked` is what makes the tank's turret detachment replicable as an event rather than as state |
+| `S_PROJECTILE_SPAWN = 0x4F` | S→C | 2 | Launch parameters per D5. **20 B**, not the "~16 B" this document first estimated: the field list is the phase's to fix, and V7 needs a `RemainingLifetimeDeciseconds` byte to express the Medipack's self-shortening lifetime. Reaching 16 would need a truncated `u16 spawnTick` plus wrap resolution — a bad trade, not taken |
 | `S_SEAT_CHANGE = 0x50` | S→C | 2 | Authoritative enter/leave. Required by § 3.5 — rejections currently have no path home |
 | `S_EXPLOSION = 0x4A` | S→C | 2 | **Exists.** Needs a caller and a subscriber, nothing more |
 
@@ -272,6 +305,24 @@ Plus: finish `SnapshotField.SeatInfo` on the actor entry (D2), which moves
 Rotation is a full quaternion rather than yaw+pitch because vehicles roll. Velocity is `i16`
 rather than `i8` for the reason in § 3.1.
 
+### Two vehicle constants, not one
+
+**Added 2026-08-17.** The V3 and V4 lanes proposed 16 and 32 for the same name, and both were right
+about different things — conflating them is the error.
+
+Dustbowl and Island carry **14 `VehicleSpawner` instances each** (counted by GUID in the scene
+files), and each spawner holds at most one live vehicle. The id arithmetic does not fit in 16:
+`Vehicle.Die()` invokes `Cleanup` at t=15 s and the 5 s quarantine runs to t=20 s, while
+`VehicleSpawner` respawns at `spawnTime` = 16 s — so a replacement spawns **four seconds before the
+dead id leaves quarantine**. If all 14 die together, the pool needs 28 ids for that window.
+
+| Constant | Value | What it bounds |
+|---|---|---|
+| `MAX_VEHICLES` | **32** | The id space and the quarantine window. 14 live, doubled for overlap, plus slack — the same shape as `MAX_ACTORS = 64` over 48 live |
+| `MAX_VEHICLES_PER_SNAPSHOT` | **16** | Interest-management admission, and therefore the 489 B worst-case vehicle body that protects the actor floor |
+
+Interest management already caps admission; the id pool does not need to.
+
 ### Bandwidth
 
 Measured today: **1.67 KB/s/client** shipped, against a 5–7 KB/s spec target — roughly 3–4× headroom
@@ -292,6 +343,7 @@ events, not a stream — one ~16 B message per shot.
 | # | Phase | Depends on | Wire change |
 |---|---|---|---|
 | **V0** | **Debt + seams.** `Car` `Update`→`FixedUpdate`; `Time.deltaTime` on turret slew; authoritative `yaw`/`pitch` floats driving the joint instead of accumulating into it; `Vehicle.health` setter + attacker id on `Damage`; server-side clamping for `Boat`/`Tank`; the `AutoDamage` double-schedule; `Boat`'s world/local `AddRelativeTorque` axis bug; the 6 m/9 m explosion falloff quirk; every unguarded headless NRE from § 3.6 | — | none |
+| **V10** | **Client event consumption.** Subscribe to `S_DEATH`, `S_WEAPON_FIRE`, `S_HIT_CONFIRM`, `S_MATCH_STATE`, `S_CAPTURE_POINT`, `S_EXPLOSION` (§ 2.4). Plus a regression gate asserting every router event has a production subscriber | V0 | none |
 | **V1** | **Explosions.** Connect the dead wire (§ 2.2); server-authoritative `ActorManager.Explode` | V0 | none |
 | **V2** | **Weapon configs.** `weaponId → WeaponConfig` table; damage drop-off; balance/stagger damage | — | none |
 | **V3** | **Protocol v3.** All of § 5, plus finishing `SeatInfo`; conformance tests; spec doc; `SpecChecker` | V0 | **yes** |
@@ -302,9 +354,34 @@ events, not a stream — one ~16 B message per shot.
 | **V8** | **Objectives.** Resolve § 2.1 per D6; `SpawnPoint.owner` writeback; `VehicleSpawner` lifecycle | — | — |
 | **V9** | **Integration + measurement.** Two-process harness, 16-player load, bandwidth and p99 re-measure | all | — |
 
+**Execution order is not filename order.** V10 sorts last and runs second — immediately after V0 and
+before the vehicle chain. It carries the highest gameplay value per day in the plan, because it makes
+combat and capture points that are *already shipped server-side* visible for the first time, and it
+needs no protocol change. Running it last would mean grading every intervening phase against a client
+that shows no combat feedback, which is what makes V9's integration results uninterpretable.
+
 **V1, V2 and V8 are off the vehicle critical path** and can land while V3 is in review. V0 is
 load-bearing for everything: without it, prediction cannot converge, because two peers at different
 framerates diverge from identical input.
+
+### Post-approval amendments
+
+Recorded here rather than edited silently into the sections above, so the delta from the approved
+design stays auditable.
+
+| # | Amendment | Origin |
+|---|---|---|
+| A1 | **V10 added and sequenced second.** § 2.4 was not known at approval time | User decision, 2026-08-17 |
+| A2 | **`VehicleIds` registry kept** (`Vehicle.networkId` + a `SpecChecker` gate). `S_VEHICLE_SPAWN`'s `u8 vehicleType` would otherwise have no authority outside the prefabs — the exact hole that produced spec § 4.8 and `WeaponIds` at changelog 2.0.1. Costs ~1 day and a Dev A authoring round | User decision, 2026-08-17 |
+| A3 | **Your own explosion is predicted locally** and the matching `S_EXPLOSION` suppressed by `SourceActorId`. Overrides V1's D6, which chose server-sourced cosmetics for everyone; V1 D6's fallback text becomes the primary path | User decision, 2026-08-17 |
+| A4 | **`MAX_VEHICLES` split into two constants** — see § 5 | Reconciling the V3 and V4 lanes |
+| A5 | **`S_PROJECTILE_SPAWN` is 20 B**, not ~16 B | V7 lane; § 5 |
+| A6 | **`S_VEHICLE_DESPAWN` carries a reason enum** | V4 lane needs it; V3 owns the byte |
+| A7 | **`Vehicle.cs:252` added to the § 3.6 hazard list** — `DriverEntered()` calls `spawner.FirstDriverEntered(this)` unguarded while the sibling call at `:337` is guarded, so a **scene-placed** vehicle NREs the first time anyone drives it. Found independently by two lanes; in the Editor as well as headless, so it is a live single-player bug | V0 and V8 lanes |
+| A8 | **`MatchController.WorldResetRequested` has zero subscribers** — declared at `:73`, invoked at `:256`, doc comment claims "the spawner subscribes". Match two inherits match one's vehicles, so acceptance criterion 13 cannot pass until V8 adds one | V8 lane |
+| A9 | **`SetInputSource` has zero production call sites** and `NetInputSource` is constructed only by tests. Nothing noticed because server movement bypasses the controller entirely — so the moment a networked player drives, `Driver().controller.CarInput()` reads a `LocalInputSource` in a headless build. Installing it on seat entry became a V5 deliverable | V4/V5 lane |
+| A10 | **`Vehicle.Explode()` never calls `ActorManager.Explode`** — vehicle wrecks do zero blast damage in the original game, so `ExplosionKind.Vehicle` has no caller and adding one is a gameplay change, not a wiring change | V1 lane |
+| A11 | **`Vehicle.Clamp2`/`Clamp4` were never a validation boundary** — `Mathf.Clamp(NaN, -1, 1)` returns `NaN`, so even the two vehicles that *do* clamp were open to a `NaN` axis reaching the rigidbody | V0 lane |
 
 ---
 
