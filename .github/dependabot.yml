@@ -38,6 +38,27 @@ updates:
           - 'xunit*'
           - 'Microsoft.NET.Test.Sdk'
           - 'coverlet.*'
+    ignore:
+      # Microsoft.CodeAnalysis.CSharp is not an ordinary dependency — it is the compiler,
+      # and the SDK band in global.json decides which version of it we are allowed to load.
+      #
+      # The .NET 8 SDK ships csc 4.11. Roslyn 4.12 and later drag in a
+      # Microsoft.CodeAnalysis.Analyzers built against a newer compiler, and the build stops
+      # with CS9057 ("the analyzer assembly references version 4.12.0.0 of the compiler,
+      # which is newer than the currently running version 4.11.0.0"). That is not a
+      # transient break to wait out: it holds for every major above our SDK band. PR #93
+      # (4.11.0 -> 5.6.0) failed exactly this way on both runners.
+      #
+      # Suppressing the analyzers with ExcludeAssets would silence the error, but the whole
+      # job of tools/UnitySyntaxCheck is to parse at Unity's C# level, which 4.11 already
+      # does — a newer Roslyn buys nothing and only widens what can break.
+      #
+      # So this pin is downstream of the SDK decision, not independent of it. global.json
+      # already says a move to .NET 9 changes three files in the SAME PR; make this ignore
+      # entry the fourth and let the bot propose the matching Roslyn major again.
+      - dependency-name: 'Microsoft.CodeAnalysis.CSharp'
+        update-types:
+          - 'version-update:semver-major'
 
   - package-ecosystem: github-actions
     directory: '/'
