@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using Ironfront.Net.Replication.Vehicles;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -340,14 +341,26 @@ public class ActorManager : MonoBehaviour
 
 	public static bool Explode(Vector3 point, ExplodingProjectile.ExplosionConfiguration configuration)
 	{
+		// The query radius is balanceRange (9 m) but the damage falloff was normalized against
+		// damageRange (6 m) with Mathf.Clamp01, which SATURATES rather than excludes: an actor
+		// at 8 m got t = 1.33 -> 1.0 and took exactly what one at 6.001 m took. The 6-9 m band
+		// was a flat plateau at the curve's endpoint, not a falloff, and the real damage
+		// cut-off was the wider radius. The vehicle loop below always got this right by
+		// testing the distance first; routing both through ExplosionRanges makes the cut-off
+		// impossible to skip.
+		ExplosionRanges ranges = new ExplosionRanges(configuration.damageRange, configuration.balanceRange);
 		List<Actor> list = ActorsInRange(point, configuration.balanceRange);
 		bool result = false;
 		foreach (Actor item in list)
 		{
 			Vector3 vector = item.CenterPosition() - point;
 			float magnitude = vector.magnitude;
-			float num = configuration.damageFalloff.Evaluate(Mathf.Clamp01(magnitude / configuration.damageRange));
-			float num2 = configuration.balanceFalloff.Evaluate(Mathf.Clamp01(magnitude / configuration.balanceRange));
+			float damageT;
+			// Balance disruption and knockback still reach the full balanceRange -- that is
+			// the existing and correct intent of the wider query. Only the damage term gains
+			// the cut-off.
+			float num = (ranges.TryGetDamageT(magnitude, out damageT) ? configuration.damageFalloff.Evaluate(damageT) : 0f);
+			float num2 = configuration.balanceFalloff.Evaluate(ranges.GetBalanceT(magnitude));
 			if (!item.dead)
 			{
 				item.Damage(configuration.damage * num, configuration.balanceDamage * num2, false, item.CenterPosition(), vector.normalized, vector.normalized * configuration.force * num2);
@@ -362,9 +375,13 @@ public class ActorManager : MonoBehaviour
 		foreach (Vehicle vehicle in array)
 		{
 			float num3 = Vector3.Distance(vehicle.transform.position, point);
-			if (num3 < configuration.damageRange)
+			float vehicleDamageT;
+			if (ranges.TryGetDamageT(num3, out vehicleDamageT))
 			{
-				float num4 = configuration.damageFalloff.Evaluate(Mathf.Clamp01(num3 / configuration.damageRange));
+				float num4 = configuration.damageFalloff.Evaluate(vehicleDamageT);
+				// The attacker slot Vehicle.Damage(float, int) opens is threaded here in V1,
+				// when Explode becomes a server-authoritative per-tick path. V0 opens the
+				// parameter; it does not thread it.
 				vehicle.Damage(configuration.damage * num4);
 				result = true;
 			}

@@ -1,8 +1,20 @@
 using System;
+using Ironfront.Net.Replication.Vehicles;
 using UnityEngine;
 
 public class Vehicle : MonoBehaviour
 {
+	/// <summary>
+	/// The attacker id meaning "nobody in particular" -- world damage, decay, a crash.
+	/// </summary>
+	/// <remarks>
+	/// A plain int, deliberately, and not the netcode's id width. Assembly-CSharp must not
+	/// gain a compile-time dependency on the replication library's actor-id type to fix a
+	/// pre-existing bug; V4's damage sink narrows it at its own seam, where the mapping
+	/// between the two already lives.
+	/// </remarks>
+	public const int NoAttacker = -1;
+
 	private const float HEAVY_DAMAGE_THRESHOLD = 900f;
 
 	private const int RAM_MASK = 256;
@@ -58,6 +70,19 @@ public class Vehicle : MonoBehaviour
 	public bool exitWhenTakingFire;
 
 	private float health;
+
+	/// <summary>
+	/// Who last took health off this vehicle, or <see cref="NoAttacker"/>. V4's death event
+	/// reads it; nothing writes it but <see cref="ApplyHealth"/>.
+	/// </summary>
+	private int _lastDamagedBy = NoAttacker;
+
+	/// <summary>
+	/// Mirrors whether <see cref="damageParticles"/> is currently emitting, so the ladder in
+	/// <see cref="ApplyHealth"/> only calls Play/Stop on the transition. The shipped code
+	/// called Play() on every damage tick below half health.
+	/// </summary>
+	private bool damageParticlesOn;
 
 	[NonSerialized]
 	public bool dead;
@@ -135,7 +160,9 @@ public class Vehicle : MonoBehaviour
 		rigidbody = GetComponent<Rigidbody>();
 		audio = GetComponent<AudioSource>();
 		ActorManager.RegisterVehicle(this);
-		health = maxHealth;
+		// Through ApplyHealth like every other write, so there is exactly one assignment to
+		// health in this file and no second copy of the ladder to drift from it.
+		ApplyHealth(maxHealth, 0f, NoAttacker);
 		colliders = GetComponentsInChildren<Collider>();
 		if (HasBlockSensor())
 		{
@@ -172,7 +199,11 @@ public class Vehicle : MonoBehaviour
 		}
 		if (burning && !dead)
 		{
-			burnTime -= Time.deltaTime;
+			// Time.deltaTime returns fixedDeltaTime inside the fixed loop, so this was correct
+			// BY ACCIDENT and would have gone silently wrong the moment V4 drives the burn
+			// countdown from the 30 Hz netcode accumulator instead. Zero behaviour change
+			// today; that is the point.
+			burnTime -= Time.fixedDeltaTime;
 			if (burnTime < 0f)
 			{
 				Die();
@@ -235,21 +266,31 @@ public class Vehicle : MonoBehaviour
 		}
 		if (IsEmpty())
 		{
-			InvokeRepeating("AutoDamage", 50f, 2f);
+			// Cancel before scheduling. InvokeRepeating STACKS, and Repair used to arm this
+			// unconditionally -- including on an occupied vehicle -- so an enter/repair/leave
+			// cycle left two pending decays, and repeating the cycle left more.
+			CancelInvoke("AutoDamage");
+			InvokeRepeating("AutoDamage", AUTO_DAMAGE_START_TIME, AUTO_DAMAGE_PERIOD);
 			ownerTeam = -1;
 		}
 	}
 
 	private void AutoDamage()
 	{
-		Damage(maxHealth * 0.07f);
+		Damage(maxHealth * AUTO_DAMAGE_PERCENT);
 	}
 
 	protected virtual void DriverEntered()
 	{
 		if (!reportedFirstDriver)
 		{
-			spawner.FirstDriverEntered(this);
+			// spawner is only set by SetSpawner, which only VehicleSpawner.SpawnCoroutine
+			// calls -- so any vehicle placed directly in a scene NREd here the first time a
+			// driver entered it. reportedFirstDriver still latches either way.
+			if (spawner != null)
+			{
+				spawner.FirstDriverEntered(this);
+			}
 			reportedFirstDriver = true;
 		}
 	}
@@ -258,10 +299,69 @@ public class Vehicle : MonoBehaviour
 	{
 	}
 
+	public float Health
+	{
+		get { return health; }
+	}
+
+	public float MaxHealth
+	{
+		get { return maxHealth; }
+	}
+
+	/// <summary>Who last damaged this vehicle, or <see cref="NoAttacker"/>.</summary>
+	public int LastDamagedBy
+	{
+		get { return _lastDamagedBy; }
+	}
+
 	public void Damage(float amount)
 	{
-		health = Mathf.Clamp(health - amount, 0f, maxHealth);
-		if (amount > 900f)
+		Damage(amount, NoAttacker);
+	}
+
+	/// <summary>
+	/// Damage with an attacker. V0 opens the parameter; V1 is what threads a real id into it
+	/// from <c>ActorManager.Explode</c>, which is the only existing caller that has one.
+	/// </summary>
+	public void Damage(float amount, int attackerActorId)
+	{
+		ApplyHealth(health - amount, amount, attackerActorId);
+	}
+
+	/// <summary>
+	/// Server/replication entry point: overwrite health outright. V4 is its only caller.
+	/// </summary>
+	/// <remarks>
+	/// Passes <c>appliedDamage = 0</c> deliberately. <see cref="HeavyDamage"/> is a local
+	/// screenshake keyed off a damage magnitude, and a corrective snapshot is not a hit --
+	/// firing it on one would make a client shake every time the server nudged its HP.
+	/// </remarks>
+	public void SetHealthAuthoritative(float value)
+	{
+		ApplyHealth(Mathf.Clamp(value, 0f, maxHealth), 0f, NoAttacker);
+	}
+
+	/// <summary>
+	/// THE only place <c>health</c> is written, and the only place the burning and particle
+	/// ladder runs.
+	/// </summary>
+	/// <remarks>
+	/// Two write paths each running their own ladder is the derived-state divergence
+	/// development-principles.md forbids, and is the same shape phase-05 already removed once
+	/// from NetServerActor.Health. The ladder below is the shipped one, moved rather than
+	/// rewritten -- with one deliberate change: the particle call is edge-triggered, so a
+	/// Repair that lifts the vehicle back over half health stops the smoke, which the shipped
+	/// Repair did separately and Damage never did at all.
+	/// </remarks>
+	private void ApplyHealth(float newHealth, float appliedDamage, int attackerActorId)
+	{
+		health = Mathf.Clamp(newHealth, 0f, maxHealth);
+		if (attackerActorId != NoAttacker)
+		{
+			_lastDamagedBy = attackerActorId;
+		}
+		if (appliedDamage > HEAVY_DAMAGE_THRESHOLD)
 		{
 			HeavyDamage();
 		}
@@ -269,9 +369,22 @@ public class Vehicle : MonoBehaviour
 		{
 			StartBurning();
 		}
-		if (health < 0.5f * maxHealth)
+		bool showDamage = health < 0.5f * maxHealth;
+		if (showDamage != damageParticlesOn)
 		{
-			damageParticles.Play();
+			damageParticlesOn = showDamage;
+			// Null on a dedicated server, which strips particle systems.
+			if (damageParticles != null)
+			{
+				if (showDamage)
+				{
+					damageParticles.Play();
+				}
+				else
+				{
+					damageParticles.Stop();
+				}
+			}
 		}
 	}
 
@@ -317,13 +430,17 @@ public class Vehicle : MonoBehaviour
 			}
 		}
 		bool result = health < maxHealth;
-		health = Mathf.Min(health + amount, maxHealth);
-		if (health >= 0.5f * maxHealth)
-		{
-			damageParticles.Stop();
-		}
+		ApplyHealth(Mathf.Min(health + amount, maxHealth), 0f, NoAttacker);
 		CancelInvoke("AutoDamage");
-		InvokeRepeating("AutoDamage", 50f, 2f);
+		// Only re-arm on an EMPTY vehicle. AutoDamage decays abandoned vehicles --
+		// OccupantEntered cancels it and OccupantLeft schedules it only when empty -- and
+		// Repair used to ignore both conditions, arming a second repeating invoke that
+		// OccupantLeft then never cancelled. On a server where bots enter, repair and leave
+		// continuously, the stacking is unbounded.
+		if (IsEmpty())
+		{
+			InvokeRepeating("AutoDamage", AUTO_DAMAGE_START_TIME, AUTO_DAMAGE_PERIOD);
+		}
 		return result;
 	}
 
@@ -371,9 +488,13 @@ public class Vehicle : MonoBehaviour
 			float amount = (num - crashDamageSpeedThrehshold) * crashDamageMultiplier;
 			Damage(amount);
 			crashDamageCooldown.Start();
-			impactAudio.transform.position = c.contacts[0].point;
-			impactAudio.pitch *= UnityEngine.Random.Range(0.9f, 1.1f);
-			impactAudio.Play();
+			// Cosmetic. The crash damage above is gameplay and stays outside the guard.
+			if (impactAudio != null)
+			{
+				impactAudio.transform.position = c.contacts[0].point;
+				impactAudio.pitch *= UnityEngine.Random.Range(0.9f, 1.1f);
+				impactAudio.Play();
+			}
 			if (burning && crashSkipsBurn && !dead)
 			{
 				Die();
@@ -383,14 +504,25 @@ public class Vehicle : MonoBehaviour
 
 	protected virtual void Explode()
 	{
+		// The impulse is gameplay -- it is what throws the wreck -- so it runs unguarded. Only
+		// the three cosmetic calls below it are optional on a stripped headless build.
 		rigidbody.WakeUp();
 		rigidbody.AddForce((UnityEngine.Random.insideUnitSphere + Vector3.up) * 2000f, ForceMode.Impulse);
 		rigidbody.AddTorque(UnityEngine.Random.insideUnitSphere * 500f, ForceMode.Impulse);
-		deathParticles.Play();
-		audio.Stop();
-		audio.pitch = 1f;
-		audio.volume = 1f;
-		explosionSound.Play();
+		if (deathParticles != null)
+		{
+			deathParticles.Play();
+		}
+		if (audio != null)
+		{
+			audio.Stop();
+			audio.pitch = 1f;
+			audio.volume = 1f;
+		}
+		if (explosionSound != null)
+		{
+			explosionSound.Play();
+		}
 	}
 
 	private void Cleanup()
@@ -413,14 +545,19 @@ public class Vehicle : MonoBehaviour
 		this.spawner = spawner;
 	}
 
+	// Both re-implemented over VehicleInputClamp.Axis so all four vehicles share ONE
+	// validation boundary. Mathf.Clamp(float.NaN, -1f, 1f) returns NaN -- both comparisons
+	// inside it are false -- so the shipped versions were range limiters a hostile client
+	// walked straight through, propagating NaN into Rigidbody.AddForce and removing the
+	// vehicle from the PhysX simulation entirely.
 	protected static Vector2 Clamp2(Vector2 v)
 	{
-		return new Vector2(Mathf.Clamp(v.x, -1f, 1f), Mathf.Clamp(v.y, -1f, 1f));
+		return new Vector2(VehicleInputClamp.Axis(v.x), VehicleInputClamp.Axis(v.y));
 	}
 
 	protected static Vector4 Clamp4(Vector4 v)
 	{
-		return new Vector4(Mathf.Clamp(v.x, -1f, 1f), Mathf.Clamp(v.y, -1f, 1f), Mathf.Clamp(v.z, -1f, 1f), Mathf.Clamp(v.w, -1f, 1f));
+		return new Vector4(VehicleInputClamp.Axis(v.x), VehicleInputClamp.Axis(v.y), VehicleInputClamp.Axis(v.z), VehicleInputClamp.Axis(v.w));
 	}
 
 	public Seat GetEmptySeat()
@@ -539,7 +676,9 @@ public class Vehicle : MonoBehaviour
 
 	private void OnGUI()
 	{
-		if (ActorManager.instance.debug && !dead && Camera.main != null)
+		// instance was dereferenced BEFORE the Camera.main guard on the same line, so a
+		// headless build with no ActorManager NREd here every OnGUI.
+		if (ActorManager.instance != null && ActorManager.instance.debug && !dead && Camera.main != null)
 		{
 			float num = Vector3.Dot(base.transform.position - Camera.main.transform.position, Camera.main.transform.forward);
 			if (num > 1f && num < 100f)
