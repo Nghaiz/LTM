@@ -465,7 +465,14 @@ namespace Ironfront.Net.Unity.Client
         /// aborts the frame with the GUI clip stack unbalanced, which shows up as a cascade of
         /// unrelated IMGUI errors rather than as the one thing that went wrong.
         /// </remarks>
-        private void Guard(Action action)
+        /// <remarks>
+        /// <c>System.Action</c> is written out in full because Assembly-CSharp carries a
+        /// global-namespace <c>Action</c> class (a timer, from the original game). A type in the
+        /// global namespace beats a <c>using</c> directive, so the bare name binds to that class
+        /// and every lambda passed here fails with CS1660. <c>MatchController</c> qualifies for
+        /// the same reason.
+        /// </remarks>
+        private void Guard(System.Action action)
         {
             try
             {
