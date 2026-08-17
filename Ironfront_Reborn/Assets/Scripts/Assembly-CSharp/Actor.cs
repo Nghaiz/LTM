@@ -1,9 +1,17 @@
 using System;
-using System.Collections;
+using Ironfront.Net.Replication.Vehicles;
 using UnityEngine;
 
 public class Actor : Hurtable
 {
+	/// <summary>
+	/// How long the actor's hitboxes stay on the vehicle layer after leaving a seat, in fixed
+	/// steps. 25 reproduces the shipped 0.5 s exactly at the project's 50 Hz fixed step; V4
+	/// retunes it against the netcode's 30 Hz accumulator, which is why it is a named constant
+	/// rather than the literal it replaced.
+	/// </summary>
+	private const int REACTIVATE_COLLISION_TICKS = 25;
+
 	public enum TargetType
 	{
 		Infantry = 0,
@@ -141,6 +149,14 @@ public class Actor : Hurtable
 
 	[NonSerialized]
 	public Seat seat;
+
+	// Replaces a 0.5 s WaitForSeconds coroutine that could not be cancelled and decided
+	// whether the actor's hitboxes came back by RE-SAMPLING the seat state when it woke -- a
+	// race against every network-driven seat change arriving inside the window, and a window
+	// whose length moved with Time.timeScale.
+	private TickTimer collisionReactivateTimer;
+
+	private Vehicle collisionReactivateTarget;
 
 	private Action cannotEnterVehicleAction = new Action(1f);
 
@@ -335,6 +351,13 @@ public class Actor : Hurtable
 
 	protected virtual void FixedUpdate()
 	{
+		// Ticked BEFORE the ragdoll gate below: an actor whose ragdoll object is inactive must
+		// still get its hitboxes back, and stalling the countdown there would leave them on
+		// the vehicle layer indefinitely.
+		if (collisionReactivateTimer.Tick())
+		{
+			ReactivateCollisions();
+		}
 		if (!ragdoll.ragdollObject.activeInHierarchy)
 		{
 			return;
@@ -944,6 +967,11 @@ public class Actor : Hurtable
 		{
 			Unholster(seat.weapon);
 		}
+		// Cancel any pending post-exit reactivation. This is the state change the shipped
+		// coroutine's 0.5-second-later re-check was approximating; acting on the change itself
+		// removes the race rather than narrowing it.
+		collisionReactivateTimer.Cancel();
+		collisionReactivateTarget = null;
 		Collider[] array = hitboxColliders;
 		foreach (Collider collider in array)
 		{
@@ -979,20 +1007,33 @@ public class Actor : Hurtable
 			SwitchToFirstAvailableWeapon();
 		}
 		cannotEnterVehicleAction.Start();
-		StartCoroutine(ReactivateCollisionsWith(vehicle));
+		collisionReactivateTarget = vehicle;
+		collisionReactivateTimer.Arm(REACTIVATE_COLLISION_TICKS);
 	}
 
-	private IEnumerator ReactivateCollisionsWith(Vehicle vehicle)
+	/// <summary>
+	/// Puts the actor's hitboxes back on the default layer once the post-exit window has
+	/// elapsed.
+	/// </summary>
+	/// <remarks>
+	/// There is no seat re-check here, and that is the fix. The shipped coroutine asked
+	/// "is this actor seated in that vehicle again?" half a second after the fact, which any
+	/// seat change arriving inside the window silently decided. Re-entering a seat now
+	/// CANCELS the timer at the moment the state changes, which is deterministic; sampling
+	/// the state later is not.
+	/// </remarks>
+	private void ReactivateCollisions()
 	{
-		yield return new WaitForSeconds(0.5f);
-		bool reenteredThatVehicle = IsSeated() && seat.vehicle == vehicle;
-		if (vehicle != null && !reenteredThatVehicle)
+		Vehicle vehicle = collisionReactivateTarget;
+		collisionReactivateTarget = null;
+		if (vehicle == null)
 		{
-			Collider[] array = hitboxColliders;
-			foreach (Collider collider in array)
-			{
-				collider.gameObject.layer = 8;
-			}
+			return;
+		}
+		Collider[] array = hitboxColliders;
+		foreach (Collider collider in array)
+		{
+			collider.gameObject.layer = 8;
 		}
 	}
 

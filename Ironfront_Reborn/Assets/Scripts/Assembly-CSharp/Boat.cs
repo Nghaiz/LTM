@@ -57,13 +57,21 @@ public class Boat : Vehicle
 		float target = ((!HasDriver()) ? 0f : 0.7f);
 		if (inWater && HasDriver())
 		{
-			Vector2 vector = Driver().controller.BoatInput();
+			// Clamped: the raw axes went straight into AddForce/AddRelativeTorque, so a client
+			// sending 10.0 got ten times the thrust and one sending NaN removed the boat from
+			// the simulation.
+			Vector2 vector = Vehicle.Clamp2(Driver().controller.BoatInput());
 			if (vector.y < 0f)
 			{
 				vector.y *= 0.15f;
 			}
 			rigidbody.AddForce(base.transform.forward.ToGround().normalized * speed * vector.y, ForceMode.Acceleration);
-			rigidbody.AddRelativeTorque(base.transform.up * turnSpeed * vector.x, ForceMode.Acceleration);
+			// Vector3.up, not transform.up. AddRelativeTorque interprets its argument in the
+			// BODY's local space, but transform.up is a WORLD-space vector -- the two coincide
+			// only while the hull is level and unrotated in yaw, so the moment the boat turned
+			// or rolled, steering torque leaked into pitch and roll. The AddForce above is
+			// correct as written because that call IS world-space.
+			rigidbody.AddRelativeTorque(Vector3.up * turnSpeed * vector.x, ForceMode.Acceleration);
 			target = 1f + Mathf.Clamp01(Mathf.Abs(vector.y) + Mathf.Abs(vector.x) * 0.5f);
 		}
 		audioPitch = Mathf.MoveTowards(audioPitch, target, Time.fixedDeltaTime);
