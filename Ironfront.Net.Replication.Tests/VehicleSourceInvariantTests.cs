@@ -96,21 +96,123 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Contains("protected virtual Vector2 GetInput()", source);
         }
 
+        /// <summary>
+        /// Acceptance criterion 3: the authoritative aim is never recovered from an engine
+        /// object.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Pinned by WHERE the aim is written rather than by banning an <c>eulerAngles</c>
+        /// substring, because the substring test is the one that passes for the wrong reason.
+        /// <c>MountedTurret.Update</c> legitimately reads <c>localEulerAngles</c> to preserve
+        /// the two components it does not own before writing the one it does; a text ban would
+        /// have to carve that out, and the carve-out is where a real read-back hides.
+        /// </para>
+        /// <para>
+        /// <b>The V0 implementation seeds <c>_aim</c> from the authored pose in <c>Awake</c>,
+        /// which the phase file does not specify.</b> Without it a turret snaps to (0, 0) on
+        /// the first fixed step. It is a one-time initialization, not a per-step round trip,
+        /// and this test is what holds it to that: the seed may exist, and it may exist only
+        /// there. The deviation is recorded in the phase file § 7.
+        /// </para>
+        /// </remarks>
         [Theory]
         [InlineData("TankTurret.cs")]
         [InlineData("MountedTurret.cs")]
-        public void TurretAimIsNotReadBackOutOfAnEngineObject(string file)
+        public void TurretAimIsWrittenOnlyBySeedSetterAndStep(string file)
         {
             // Stripped: the files' own comments name MAX_TURN_DELTA to explain what it was and
             // why 5 degrees PER FRAME was the bug. Documenting an invariant must not break it.
             string source = StripComments(ReadScript(file));
 
-            // D3: the joint/transform is an OUTPUT. Reading the angle back out round-trips
-            // through Quaternion.eulerAngles, which is not injective. The one permitted read is
-            // the Awake seed, which is why these patterns are the ACCUMULATING forms.
+            (int start, int end) awake = MethodSpan(source, file, "protected override void Awake()");
+            (int start, int end) setAim = MethodSpan(source, file, "public void SetAim(float yaw, float pitch)");
+
+            MatchCollection writes = Matches(source, @"_aim\.(Yaw|Pitch)\s*=(?!=)");
+            Assert.True(writes.Count > 0, $"{file}: nothing writes _aim at all — was the field renamed?");
+
+            foreach (System.Text.RegularExpressions.Match write in writes)
+            {
+                bool inSeed = write.Index > awake.start && write.Index < awake.end;
+                bool inSetter = write.Index > setAim.start && write.Index < setAim.end;
+                Assert.True(inSeed || inSetter,
+                    $"{file}: _aim is assigned outside Awake and SetAim at offset {write.Index}. " +
+                    "Every other write must go through TurretAimCore.Step(ref _aim, …) — a value " +
+                    "recovered from a Quaternion has already round-tripped through eulerAngles, " +
+                    "which is not injective.");
+            }
+
+            // The integration step itself must not touch the engine at all.
+            string fixedUpdate = MethodBody(source, file, "private void FixedUpdate()");
+            AssertAbsent(fixedUpdate, "eulerAngles", $"{file} FixedUpdate", "the aim integrates from the field, never from the engine");
+            AssertAbsent(fixedUpdate, "targetRotation.", $"{file} FixedUpdate", "the joint is an output of _aim");
+
             Assert.DoesNotMatch(new Regex(@"localEulerAngles\w*\.\w\s*\+="), source);
-            Assert.DoesNotContain("targetRotation.eulerAngles;", source);
-            Assert.DoesNotContain("MAX_TURN_DELTA", source);
+            Assert.DoesNotContain("MAX_TURN_DELTA;", source);
+        }
+
+        /// <summary>
+        /// The port must reproduce the shipped aim gain at the design framerate, not just be
+        /// framerate-independent at some gain.
+        /// </summary>
+        /// <remarks>
+        /// The shipped <c>Clamp(z - input.x, z - 5f, z + 5f)</c> is algebraically
+        /// <c>z -= Clamp(input.x, -5f, +5f)</c> — a 1:1 mouse-degrees mapping with a speed
+        /// limit, NOT a rate at full deflection. Feeding that raw number to a rate integrator
+        /// that normalizes to [-1, 1] first multiplies sensitivity by MAX_TURN_DELTA. Every
+        /// framerate-independence test still passes when that happens, because it compares
+        /// new-against-new; only the conversion constant catches it.
+        /// </remarks>
+        [Theory]
+        [InlineData("TankTurret.cs", "5f")]
+        [InlineData("MountedTurret.cs", "10f")]
+        public void TurretInputIsNormalizedByTheLegacyPerFrameStep(string file, string legacyStep)
+        {
+            string source = StripComments(ReadScript(file));
+
+            Assert.Contains($"LEGACY_STEP_DEG = {legacyStep}", source);
+            Assert.Contains("LEGACY_STEP_DEG * LEGACY_FRAME_RATE", source);
+
+            string getInput = MethodBody(source, file, "protected virtual Vector2 GetInput()");
+
+            // Bot facing is a STATE: divides by the constant the shipped code saturated at.
+            Assert.Contains("/ LEGACY_STEP_DEG", getInput);
+            // Mouse motion is a DISTANCE: divides by the arc this step can cover.
+            Assert.Contains("Time.fixedDeltaTime", getInput);
+        }
+
+        /// <summary>
+        /// <c>Input.GetAxis("Mouse X")</c> is the delta since the last RENDERED frame, refreshed
+        /// once per <c>Update</c>. Sampling it from a fixed step drops motion at high framerates
+        /// and double-counts it at low ones — which would reinstate, in a lossier form, exactly
+        /// the framerate dependence this phase exists to remove.
+        /// </summary>
+        [Theory]
+        [InlineData("TankTurret.cs")]
+        [InlineData("MountedTurret.cs")]
+        public void MouseDeltaIsLatchedPerFrameNotSampledPerStep(string file)
+        {
+            string source = StripComments(ReadScript(file));
+
+            string update = MethodBody(source, file, "protected override void Update()");
+            Assert.Contains("AccumulateMouseAim();", update);
+
+            string accumulate = MethodBody(source, file, "private void AccumulateMouseAim()");
+            Assert.Contains("_pendingMouseAim +=", accumulate);
+
+            // The only place the per-frame delta may be read.
+            MatchCollection reads = Matches(source, @"Input\.GetAxis\(");
+            (int start, int end) span = MethodSpan(source, file, "private void AccumulateMouseAim()");
+            foreach (System.Text.RegularExpressions.Match read in reads)
+            {
+                Assert.True(read.Index > span.start && read.Index < span.end,
+                    $"{file}: Input.GetAxis is read outside AccumulateMouseAim at offset {read.Index}. " +
+                    "A per-rendered-frame delta consumed from a fixed step is lossy.");
+            }
+
+            // And the latch drains exactly once per step, inside GetInput.
+            string getInput = MethodBody(source, file, "protected virtual Vector2 GetInput()");
+            Assert.Contains("_pendingMouseAim = Vector2.zero;", getInput);
         }
 
         // ------------------------------------------------------------------ Task 4: health
@@ -287,6 +389,7 @@ namespace Ironfront.Net.Replication.Tests
         [InlineData("Vehicle.cs", "if (damageParticles != null)", "damage smoke, play and stop")]
         [InlineData("Vehicle.cs", "if (impactAudio != null)", "collision impact audio")]
         [InlineData("Vehicle.cs", "if (deathParticles != null)", "death particles")]
+        [InlineData("Vehicle.cs", "if (audio != null)", "engine audio, stopped and reset on death")]
         [InlineData("Vehicle.cs", "if (explosionSound != null)", "explosion sound")]
         [InlineData("Vehicle.cs", "ActorManager.instance != null &&", "debug OnGUI, dereferenced before its own guard")]
         [InlineData("Vehicle.cs", "if (spawner != null)", "scene-placed vehicle has no spawner")]
@@ -295,7 +398,10 @@ namespace Ironfront.Net.Replication.Tests
         [InlineData("Helicopter.cs", "if (blurredRotor != null)", "blurred rotor renderer, dereferenced every frame")]
         public void HeadlessDereferencesAreGuarded(string file, string guard, string site)
         {
-            string source = ReadScript(file);
+            // Stripped. Several of these guards are DOCUMENTED by a comment naming the guarded
+            // field, so reading raw source would let the comment satisfy the test after someone
+            // deleted the guard itself.
+            string source = StripComments(ReadScript(file));
             Assert.True(source.Contains(guard, StringComparison.Ordinal),
                 $"{file}: the headless guard for {site} is gone. Expected to find: {guard}");
         }
@@ -318,12 +424,14 @@ namespace Ironfront.Net.Replication.Tests
                 "Vehicle.Explode's rigidbody impulse is gameplay and must run before, and outside of, the cosmetic guards.");
         }
 
-        // ------------------------------------------------------------------ criterion 14
+        // ------------------------------------------------------------------ criterion 13
 
         /// <summary>
-        /// Acceptance criterion 14 in its mechanically checkable half: no file under
-        /// <c>Vehicles/</c> may reach for the engine, allocate, or use the constructs
-        /// conventions.md § 3.2 bans on the hot path.
+        /// Acceptance criterion 13's second half: no file under <c>Vehicles/</c> may reach for
+        /// the engine, allocate, or use the constructs conventions.md § 3.2 bans on the hot
+        /// path. (Criterion <b>14</b>, zero wire change, is a property of the diff rather than
+        /// of any file, so it is checked in the PR against <c>origin/main</c> — no unit test can
+        /// see it.)
         /// </summary>
         [Fact]
         public void TheEngineFreeSeamStaysEngineFree()
@@ -386,11 +494,37 @@ namespace Ironfront.Net.Replication.Tests
                 $"No Ironfront.sln found walking up from {AppContext.BaseDirectory}.");
         }
 
-        /// <summary>
-        /// The body of one method, brace-matched from its signature. Comments and string
-        /// literals are removed first so a brace inside either cannot unbalance the scan.
-        /// </summary>
+        private static MatchCollection Matches(string source, string pattern)
+        {
+            return Regex.Matches(source, pattern);
+        }
+
+        /// <summary>The body text of one method, brace-matched from its signature.</summary>
         private static string MethodBody(string source, string file, string signature)
+        {
+            string stripped = StripComments(source);
+            (int start, int end) span = MethodSpan(stripped, file, signature);
+            return stripped.Substring(span.start, span.end - span.start);
+        }
+
+        /// <summary>
+        /// The half-open <c>[start, end)</c> offsets of one method's body within
+        /// <paramref name="source"/>, brace-matched from its signature. Offsets are into the
+        /// comment-stripped text, which <see cref="StripComments"/> keeps aligned with the
+        /// original.
+        /// </summary>
+        /// <remarks>
+        /// <b>Comments are stripped first; string literals are NOT</b> (several invariants are
+        /// literally about string literals — <c>InvokeRepeating("AutoDamage", …)</c>). A brace
+        /// inside a literal would therefore skew the depth counter: an unmatched <c>{</c>
+        /// throws, which is loud and fine, but an unmatched <c>}</c> would close the scan early
+        /// and yield a truncated body on which every absence assertion passes vacuously. Audited
+        /// 2026-08-17 across all ten scanned files: zero braces in any string or char literal,
+        /// zero verbatim/interpolated/raw strings, zero block comments, brace counts balanced
+        /// per file. Nothing enforces that going forward — if a <c>$"…{x}…"</c> log line ever
+        /// lands in one of these files, this helper is where it will surface.
+        /// </remarks>
+        private static (int start, int end) MethodSpan(string source, string file, string signature)
         {
             string stripped = StripComments(source);
             int at = stripped.IndexOf(signature, StringComparison.Ordinal);
@@ -407,7 +541,7 @@ namespace Ironfront.Net.Replication.Tests
                 {
                     depth--;
                     if (depth == 0)
-                        return stripped.Substring(open + 1, i - open - 1);
+                        return (open + 1, i);
                 }
             }
 

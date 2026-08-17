@@ -40,20 +40,28 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
-        /// The same property at the rate TankTurret actually ships with, so the constant in
-        /// the prefab default is covered and not just the mechanism. Wider tolerance because
-        /// 300 / 144 is not exactly representable; the divergence being measured here is
-        /// ~1e-5 relative, four orders below the 2.4x divergence the phase removed.
+        /// The same property at both rates the turrets actually ship with — TankTurret's 300
+        /// and MountedTurret's 600 — so the prefab defaults are covered and not just the
+        /// mechanism.
         /// </summary>
-        [Fact]
-        public void TurretSlewIsFramerateIndependentAtTheShippedRate()
+        /// <remarks>
+        /// Asserted as a RELATIVE bound rather than criterion 4's absolute 1e-4, because
+        /// neither 300/144 nor 600/144 is exactly representable and the residual here is float
+        /// summation, not framerate. 1e-6 relative is four orders below the 2.4x divergence the
+        /// phase removed. The deviation from the criterion's literal wording is recorded in the
+        /// phase file § 7.
+        /// </remarks>
+        [Theory]
+        [InlineData(300f)]
+        [InlineData(600f)]
+        public void TurretSlewIsFramerateIndependentAtTheShippedRates(float rate)
         {
-            const float Rate = 300f;
+            float low = TraverseForOneSecond(rate, 1f / 30f, 30);
+            float high = TraverseForOneSecond(rate, 1f / 144f, 144);
 
-            float low = TraverseForOneSecond(Rate, 1f / 30f, 30);
-            float high = TraverseForOneSecond(Rate, 1f / 144f, 144);
-
-            Assert.True(System.Math.Abs(low - high) < 1e-2f, $"30 Hz traversed {low}, 144 Hz traversed {high}");
+            float relative = System.Math.Abs(low - high) / rate;
+            Assert.True(relative < 1e-6f,
+                $"{rate} deg/s: 30 Hz traversed {low}, 144 Hz traversed {high} (relative {relative}).");
         }
 
         /// <summary>

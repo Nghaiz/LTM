@@ -357,7 +357,14 @@ public class Vehicle : MonoBehaviour
 	private void ApplyHealth(float newHealth, float appliedDamage, int attackerActorId)
 	{
 		health = Mathf.Clamp(newHealth, 0f, maxHealth);
-		if (attackerActorId != NoAttacker)
+		// Written on any DAMAGE, including unattributed damage, which clears it back to
+		// NoAttacker. Writing only when an attacker is known would leave the field naming a
+		// player who chipped the paint minutes before decay or a collision actually killed the
+		// vehicle -- and V4's death event reads it.
+		//
+		// A repair, a snapshot correction and the Awake seed all pass appliedDamage = 0 and
+		// leave it alone: none of them is a hit, in either direction.
+		if (appliedDamage > 0f)
 		{
 			_lastDamagedBy = attackerActorId;
 		}
