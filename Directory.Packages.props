@@ -74,9 +74,9 @@
   </ItemGroup>
 
   <ItemGroup Label="Test host">
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
     <!--
       Required by the "XPlat Code Coverage" data collector that ci.yml asks dotnet test for.
       Without this package the collector produces no coverage file and the CI step reports
