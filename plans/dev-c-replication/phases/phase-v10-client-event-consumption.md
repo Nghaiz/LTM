@@ -822,6 +822,20 @@ blocking; the rest are not.**
 `DecalManager.cs` (Task 9), with the offline-unchanged tests attached. Every change is additive or a
 deleted empty catch. One review round is assumed.
 
+### To V0 — one amendment, already applied
+
+**V0 D10 read "`Actor.cs` is opened exactly once, in this phase" and called its Task 8 "the only
+`Actor.cs` change in the whole V-track plan".** Task 3 above re-opens the file, to gate
+`Actor.cs:716-719` and `:824-829` on `IsLocalActor`. V10 was approved after V0 was written and is
+absent from the design of record's § 6 table, so this is a **count that changed, not a decision that
+was overturned** — D10's actual mitigation (open it early, announce it in the PR title before Dev A
+opens the file) applies unchanged to this phase's Dev A PR, which is the second announcement.
+
+**Amended in the same commit as this note**, in all four places V0 repeated the count: D10 itself,
+Task 8's closing line, acceptance criterion 11, and the § 6 timeline row. Recorded here for the same
+reason D14 is recorded: an amendment nobody writes down is exactly how § 1's six dead events came to
+exist.
+
 ### To V1 — one amendment
 
 **V1 Task 4 is superseded by V10 Task 10 (D14).** V1 should strike Task 4 and its
