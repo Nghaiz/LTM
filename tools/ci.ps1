@@ -62,6 +62,14 @@ try {
         dotnet run --project "$repoRoot/tools/SpecChecker" -c $Configuration --nologo -- $repoRoot
     }
 
+    # Mirrors the "Check Unity .meta files are consistent" step in ci.yml. Costs well under a
+    # second and catches the one class of breakage that only shows up on somebody ELSE's machine:
+    # an asset committed without its GUID. Runs with or without Unity installed — it reads git,
+    # not the Editor — so B, C and D get the same answer A does.
+    Invoke-Step "3b. Unity .meta consistency" {
+        & "$PSScriptRoot/check-unity-meta.ps1"
+    }
+
     # ADVISORY — mirrors the `style` job in .github/workflows/ci.yml, which is
     # continue-on-error. Deliberately NOT routed through Invoke-Step: a formatting nit must
     # not add to $failures and make this script exit 1, or people will stop running it.
