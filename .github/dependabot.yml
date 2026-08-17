@@ -42,12 +42,17 @@ updates:
       # Microsoft.CodeAnalysis.CSharp is not an ordinary dependency — it is the compiler,
       # and the SDK band in global.json decides which version of it we are allowed to load.
       #
-      # The .NET 8 SDK ships csc 4.11. Roslyn 4.12 and later drag in a
+      # The .NET 8 SDK ships csc 4.11. A Roslyn MAJOR drags in a
       # Microsoft.CodeAnalysis.Analyzers built against a newer compiler, and the build stops
       # with CS9057 ("the analyzer assembly references version 4.12.0.0 of the compiler,
       # which is newer than the currently running version 4.11.0.0"). That is not a
       # transient break to wait out: it holds for every major above our SDK band. PR #93
       # (4.11.0 -> 5.6.0) failed exactly this way on both runners.
+      #
+      # Minors inside 4.x are fine and are deliberately NOT ignored — PR #98 (4.11.0 ->
+      # 4.14.0) built and ran tools/UnitySyntaxCheck green on both runners under the 8.0.x
+      # SDK, because 4.14 still resolves Analyzers 3.x. An earlier draft of this comment
+      # said "4.12 and later" breaks; that was the 5.x major, not the 4.x line.
       #
       # Suppressing the analyzers with ExcludeAssets would silence the error, but the whole
       # job of tools/UnitySyntaxCheck is to parse at Unity's C# level, which 4.11 already
@@ -57,6 +62,37 @@ updates:
       # already says a move to .NET 9 changes three files in the SAME PR; make this ignore
       # entry the fourth and let the bot propose the matching Roslyn major again.
       - dependency-name: 'Microsoft.CodeAnalysis.CSharp'
+        update-types:
+          - 'version-update:semver-major'
+
+      # Microsoft.Data.Sqlite is versioned on the .NET release band, not on its own schedule:
+      # 8.0.x belongs to .NET 8, 10.0.x to .NET 10. So its major is the same decision
+      # global.json already made — the SDK is pinned to 8.0.100 with rollForward
+      # latestFeature, which rejects 9.x and 10.x outright, and ci.yml pins 8.0.x to match.
+      #
+      # PR #99 (8.0.12 -> 10.0.11) was green on both runners, and that green was real: the
+      # MasterServer tests open :memory:, on-disk, and the native SqliteDatabase.BackupTo
+      # path, so a provider break would have shown. It was closed anyway, because "it
+      # compiles" is not the question — the question is whether the data layer sits on the
+      # same support band as the runtime that hosts it, and the answer has to be yes.
+      #
+      # Patches and minors inside 8.0.x still come through, which is where the security
+      # fixes are. Lift this together with the Roslyn entry when the SDK band moves.
+      - dependency-name: 'Microsoft.Data.Sqlite'
+        update-types:
+          - 'version-update:semver-major'
+
+      # SQLitePCLRaw.bundle_e_sqlite3 is already an override: Microsoft.Data.Sqlite 8.0.12
+      # asks for 2.1.6 and we pin 2.1.12 to get a bundled SQLite without the CVE (see the
+      # note in Directory.Packages.props). A major would widen that override from one patch
+      # band to two majors past the consumer, and the failure mode is a native-provider
+      # mismatch at runtime rather than a build error — the least pleasant kind to inherit.
+      #
+      # PR #100 (2.1.12 -> 3.0.5) was closed on that basis. 2.1.12 already carries the
+      # patched SQLite, so holding here costs nothing in security posture. This entry is
+      # paired with the Microsoft.Data.Sqlite one above: the bundle follows whatever line
+      # the consumer was built against, so lift both in the same PR or neither.
+      - dependency-name: 'SQLitePCLRaw.bundle_e_sqlite3'
         update-types:
           - 'version-update:semver-major'
 
