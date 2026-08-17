@@ -465,7 +465,15 @@ namespace Ironfront.Net.Unity.Client
         /// aborts the frame with the GUI clip stack unbalanced, which shows up as a cascade of
         /// unrelated IMGUI errors rather than as the one thing that went wrong.
         /// </remarks>
-        private void Guard(Action action)
+        /// <param name="action">
+        /// Fully qualified as <c>System.Action</c> deliberately. <c>Assembly-CSharp</c> declares a
+        /// global <c>Action</c> class (<c>Assets/Scripts/Assembly-CSharp/Action.cs</c>, a timer),
+        /// and the global namespace is searched before <c>using</c> directives — so a bare
+        /// <c>Action</c> here binds to that timer and every call site fails with
+        /// "cannot convert lambda expression to type 'Action'". Same collision PR #44 fixed in
+        /// <c>MatchController</c>; the same fix, for the same reason.
+        /// </param>
+        private void Guard(System.Action action)
         {
             try
             {

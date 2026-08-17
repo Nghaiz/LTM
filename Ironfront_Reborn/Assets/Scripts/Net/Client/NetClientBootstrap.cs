@@ -68,7 +68,7 @@ namespace Ironfront.Net.Unity.Client
         public ushort ConnectionId { get; private set; }
 
         /// <summary>The actor this client drives, or 0 until the server names one.</summary>
-        public ushort LocalActorId { get; set; }
+        public ushort LocalActorId { get; private set; }
 
         /// <summary>Whether the link is up.</summary>
         public bool IsConnected =>
@@ -116,11 +116,17 @@ namespace Ironfront.Net.Unity.Client
 
             Current = this;
 
+            // The server marks exactly one spawn as local for this connection. Keep that
+            // identity at the bootstrap so interpolation can skip it and prediction can
+            // reconcile the actor the player actually owns.
+            Router.OnSpawnActor += OnSpawnActor;
+
             if (_connectOnStart) Connect();
         }
 
         private void OnDestroy()
         {
+            Router.OnSpawnActor -= OnSpawnActor;
             if (ReferenceEquals(Current, this)) Current = null;
             Disconnect();
         }
@@ -199,6 +205,7 @@ namespace Ironfront.Net.Unity.Client
 
             _transport = null;
             ConnectionId = 0;
+            LocalActorId = 0;
             _loggedFirstSnapshot = false;
 
             Router.Reset();
@@ -226,10 +233,19 @@ namespace Ironfront.Net.Unity.Client
             }
         }
 
+        private void OnSpawnActor(SpawnActorMessage message)
+        {
+            if (!message.IsLocalPlayer) return;
+
+            LocalActorId = message.ActorId;
+            if (Config.Verbose) Debug.Log($"[net] local actor is {LocalActorId}");
+        }
+
         private void OnConnected(ConnectResult result)
         {
             ConnectionId = result.ConnectionId;
             NetContext.CurrentTick = result.ServerTick;
+            NetPredictionClock.Current?.SeedInputTick(result.ServerTick);
 
             if (Config.Verbose)
                 Debug.Log($"[net] connected as {ConnectionId}, server tick {result.ServerTick}");
@@ -245,6 +261,7 @@ namespace Ironfront.Net.Unity.Client
             Router.Reset();
             Reconciler.Reset();
             ConnectionId = 0;
+            LocalActorId = 0;
         }
     }
 }
