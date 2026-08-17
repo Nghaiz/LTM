@@ -119,6 +119,19 @@ InitTestScene*.unity*
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
 
+# Managed-stripping link.xml that BuildPlayer merges out of the installed packages and drops into
+# Assets for the duration of a build. Normally removed when the build finishes; a build that dies in
+# its postprocess step leaves it behind. Never ours to commit — its contents are whatever packages
+# happen to be installed, so committing it would pin preserve="all" for assemblies a later build has
+# deliberately excluded.
+**/[Aa]ssets/packages-merged-link/
+**/[Aa]ssets/packages-merged-link.meta
+
+# Scratch output from tools/unity-run.py and the tools/probe-*.cs snippets it runs. The snippets are
+# tracked; what they write to the project root is not.
+/Ironfront_Reborn/harness-*.txt
+/Ironfront_Reborn/harness-*.lock
+
 # This repository keeps the Unity project in a subdirectory.
 # Ignore generated Unity folders regardless of project depth.
 **/[Ll]ibrary/
