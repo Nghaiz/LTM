@@ -105,7 +105,7 @@ jobs:
       # if: always() — the results are most valuable exactly when the previous step failed.
       - name: Upload test results and coverage
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.os }}
           path: TestResults/
@@ -266,7 +266,7 @@ jobs:
         run: ./tools/build-libs.ps1 -Configuration Release
 
       - name: Upload plugin DLLs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unity-plugins-${{ github.sha }}
           path: Ironfront_Reborn/Assets/Plugins/*.dll
