@@ -27,10 +27,17 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
 ENV_FILE=".env"
-REISSUE=0
-[ "${1:-}" = "--reissue-cert" ] && REISSUE=1
 
 die() { echo "[deploy-selfsigned] ERROR: $*" >&2; exit 1; }
+
+# An unrecognised flag must not be swallowed: `--reissue-cer` silently keeping the old cert is
+# the worst outcome of a typo, because the operator walks away believing the pin rotated.
+REISSUE=0
+case "${1:-}" in
+    "")              ;;
+    --reissue-cert)  REISSUE=1 ;;
+    *)               die "unknown argument: $1 (only --reissue-cert)" ;;
+esac
 
 # --- root + tooling -------------------------------------------------------------------
 if [ "$(id -u)" -ne 0 ]; then
@@ -152,16 +159,25 @@ docker compose up -d --remove-orphans master
 # =====================================================================================
 # STEP 4 — wait for health, then print the pin to give the client.
 # =====================================================================================
+# Falling out of this loop on the timeout must be an ERROR, not a shrug. Everything printed
+# after this point is success-shaped ("PIN THIS on the client"), and the fingerprint step
+# falls back to reading the PFX off disk — so a master that never came up would still produce
+# a confident, exit-0 transcript with a pin the operator would go and deploy.
 echo "[deploy-selfsigned] waiting for the master to report healthy..."
+healthy=0
 for _ in $(seq 1 30); do
     status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
               ironfront-master-1 2>/dev/null || echo missing)"
     case "$status" in
-        healthy)   echo "[deploy-selfsigned] master healthy"; break ;;
+        healthy)   echo "[deploy-selfsigned] master healthy"; healthy=1; break ;;
         unhealthy) die "master went unhealthy — check: docker compose logs master" ;;
     esac
     sleep 2
 done
+if [ "$healthy" -ne 1 ]; then
+    docker compose ps || true
+    die "master did not become healthy within 60s (last status: $status) — check: docker compose logs master"
+fi
 
 docker compose ps
 
