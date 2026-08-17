@@ -19,6 +19,7 @@ namespace Ironfront.MasterServer.Tests.Net
     /// <see cref="TcpListenerHostOptions"/> — the criteria are 30 s and 45 s in production,
     /// but a test that took 30 s to prove the 30 s timeout is a test nobody runs.
     /// </remarks>
+    [Collection(SocketTestCollection.Name)]
     public class TcpListenerHostTests
     {
         private static byte[] HeartbeatFrame()
@@ -51,17 +52,28 @@ namespace Ironfront.MasterServer.Tests.Net
         [Fact]
         public async Task UnauthenticatedConnectionIsClosedAfterTheTimeout()
         {
+            var clock = new HeldClock();
             await using var harness = new MasterHostHarness(o =>
             {
-                o.UnauthenticatedTimeout = TimeSpan.FromMilliseconds(200);
-                o.HeartbeatTimeout       = TimeSpan.FromSeconds(30);   // must not be what fires
+                o.Clock                  = clock;
+                o.UnauthenticatedTimeout = TimeSpan.FromSeconds(30);   // the real production value
+                o.HeartbeatTimeout       = TimeSpan.FromSeconds(45);   // must not be what fires
             });
 
             await harness.ConnectAsync();
             Assert.True(await MasterHostHarness.WaitUntilAsync(() => harness.Host.ConnectionCount == 1));
 
-            // Say nothing. Slowloris: hold the slot open in silence. The sweep must reap it.
-            bool reaped = await MasterHostHarness.WaitUntilAsync(() => harness.Host.ConnectionCount == 0, 3000);
+            // Held clock, so the production numbers are testable as written — no shrinking the
+            // deadline to something a runner can outrun, and no waiting 30 s for it either.
+            // Nothing has expired yet, and no amount of real time can change that.
+            clock.Advance(TimeSpan.FromSeconds(29));
+            Assert.Equal(1, harness.Host.ConnectionCount);
+
+            // Say nothing. Slowloris: hold the slot open in silence. Now step past the deadline;
+            // the sweep must reap it on its next tick.
+            clock.Advance(TimeSpan.FromSeconds(2));
+
+            bool reaped = await MasterHostHarness.WaitUntilAsync(() => harness.Host.ConnectionCount == 0);
 
             Assert.True(reaped, "the silent unauthenticated connection was never timed out");
             Assert.True(harness.Host.TotalTimedOut >= 1);
@@ -127,9 +139,11 @@ namespace Ironfront.MasterServer.Tests.Net
         [Fact]
         public async Task HalfOpenAuthenticatedConnectionIsReapedByTheHeartbeatTimeout()
         {
+            var clock = new HeldClock();
             await using var harness = new MasterHostHarness(o =>
             {
-                o.HeartbeatTimeout       = TimeSpan.FromMilliseconds(200);
+                o.Clock                  = clock;
+                o.HeartbeatTimeout       = TimeSpan.FromSeconds(45);
                 o.UnauthenticatedTimeout = TimeSpan.FromSeconds(30);   // ensure the heartbeat branch fires
             });
 
@@ -146,8 +160,11 @@ namespace Ironfront.MasterServer.Tests.Net
             });
 
             // Now silent past the heartbeat window. The connection must be reaped even though
-            // the socket is still "open" as far as TCP is concerned.
-            bool reaped = await MasterHostHarness.WaitUntilAsync(() => harness.Host.ConnectionCount == 0, 3000);
+            // the socket is still "open" as far as TCP is concerned — nothing is closed here,
+            // and TCP will not report a thing for hours, which is the entire point of D7.
+            clock.Advance(TimeSpan.FromSeconds(46));
+
+            bool reaped = await MasterHostHarness.WaitUntilAsync(() => harness.Host.ConnectionCount == 0);
 
             Assert.True(reaped, "the half-open authenticated connection was never detected");
             Assert.True(harness.Host.TotalTimedOut >= 1);
@@ -192,19 +209,19 @@ namespace Ironfront.MasterServer.Tests.Net
         [Fact]
         public async Task HeartbeatsAreParsedCountedAndKeepTheConnectionAlive()
         {
+            var clock = new HeldClock();
             await using var harness = new MasterHostHarness(o =>
             {
-                // Generous, because this test is not about the deadline — it is about the
-                // heartbeat window, and the connection is authenticated below.
+                o.Clock = clock;
+                // The production numbers, both of them. Under a held clock there is no reason to
+                // shrink either: this test used to run at 300 ms and then 1500 ms, chasing a
+                // window wide enough to absorb the worst `Task.Delay` overshoot on a loaded
+                // runner, and lost both times (runs 31727492322 and 31966777110) — the
+                // connection was reaped mid-loop and the remaining frames were counted against a
+                // connection that no longer existed. That quantity has no upper bound, so the
+                // fix is to stop racing it rather than to bid higher.
                 o.UnauthenticatedTimeout = TimeSpan.FromSeconds(30);
-                // 1.5 s rather than 300 ms. The reaper is a plain
-                // `now - LastActivityMs > HeartbeatTimeout` comparison, so the window has to
-                // absorb the worst single `Task.Delay` overshoot on a loaded CI runner, not the
-                // average one. At 300 ms / 80 ms the slack was 220 ms per beat, and a shared
-                // windows-latest runner overshoots that often enough to fail the job (run
-                // 31727492322): the connection got reaped mid-loop and the remaining frames were
-                // counted against a connection that no longer existed.
-                o.HeartbeatTimeout       = TimeSpan.FromMilliseconds(1500);
+                o.HeartbeatTimeout       = TimeSpan.FromSeconds(45);
             });
 
             TcpClient client = await harness.ConnectAsync();
@@ -220,17 +237,27 @@ namespace Ironfront.MasterServer.Tests.Net
             NetworkStream stream = client.GetStream();
             byte[] heartbeat = HeartbeatFrame();
 
-            // Beat every 250 ms for ~2 s — past the 1.5 s heartbeat window, so if the frames
-            // were not resetting the clock the connection would already be gone. The property
-            // under test is the ratio (total run > window), not the absolute numbers; both were
-            // scaled up together so a slow beat cannot be mistaken for a silent connection.
+            // Eight beats 30 s apart on the server's clock: 240 s in total, more than five times
+            // the 45 s window. If the frames were not resetting the activity clock the
+            // connection would be gone several beats ago.
+            //
+            // Each beat waits to be COUNTED before the clock moves on. That ordering is the
+            // whole trick — it is what a real client's timing guarantees and what `Task.Delay`
+            // could not: the gap the server measures is now exactly the 30 s stepped here, no
+            // matter how long the runner took to deliver the bytes.
             for (int i = 0; i < 8; i++)
             {
                 await stream.WriteAsync(heartbeat);
-                await Task.Delay(250);
+
+                int expected = i + 1;
+                Assert.True(
+                    await MasterHostHarness.WaitUntilAsync(() => harness.Host.TotalHeartbeats >= expected),
+                    $"heartbeat {expected} of 8 was never parsed");
+
+                clock.Advance(TimeSpan.FromSeconds(30));
             }
 
-            Assert.True(await MasterHostHarness.WaitUntilAsync(() => harness.Host.TotalHeartbeats >= 8));
+            Assert.Equal(8, harness.Host.TotalHeartbeats);
             Assert.Equal(1, harness.Host.ConnectionCount);
             Assert.Equal(0, harness.Host.TotalTimedOut);
         }

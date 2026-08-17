@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
@@ -17,6 +17,7 @@ namespace Ironfront.MasterServer.Tests
     /// Phase 03 criteria 2, 3 and 4: TLS works, framing still works over it, and a release
     /// client does not skip certificate validation.
     /// </summary>
+    [Collection(SocketTestCollection.Name)]
     public sealed class Phase03TlsTests
     {
         private const string PasswordHash =
