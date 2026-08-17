@@ -60,7 +60,7 @@ weapon configs, capture points. Those are V1–V8.
 | **D7** | **Assembly-CSharp fixes are graded by source-invariant tests, and we say plainly that these are weaker than behavioural tests.** `Assembly-CSharp` does not compile under `dotnet test`, so a behavioural assertion on `Car.FixedUpdate` requires Unity. A test that reads the `.cs` file as text and asserts the invariant (`Car` has no `Update()` driving wheels; turret slew multiplies by a delta-time; `Boat`/`Tank` input passes through a clamp) pins the regression in CI at near-zero cost. It proves the *shape*, not the *behaviour*. Behaviour is Dev A's two-client Editor run. Both are listed in § 4. |
 | **D8** | **`Vehicle` keeps `private float health`; the setter and `Damage` both route through one private `ApplyHealth`.** Two write paths that each run their own burning/particle ladder is exactly the derived-state divergence `development-principles.md` § "No Derived Fields" forbids, and it is what phase-05 D9 already removed once for `NetServerActor.Health`. |
 | **D9** | **Attacker identity is a plain `int` actor id with `-1` meaning "none", declared on `Vehicle`.** Not a `ushort`, not a netcode type: `Assembly-CSharp` must not gain a compile-time dependency on the replication library's id width to fix a pre-existing bug. V4's damage sink does the narrowing at its own seam, where the mapping already lives. |
-| **D10** | **`Actor.cs` is opened exactly once, in this phase, early.** Design-doc § 9 scores "`Actor.cs` conflicts with Dev A's branch" at 12 and its mitigation is sequencing. Task 8 is the only `Actor.cs` change in the whole V-track plan; it is announced in the PR before Dev A opens the file. |
+| **D10** | **`Actor.cs` is opened early, and every opening is announced.** Design-doc § 9 scores "`Actor.cs` conflicts with Dev A's branch" at 12 and its mitigation is sequencing. Task 8 is the only `Actor.cs` change **in this phase**; it is announced in the PR before Dev A opens the file. **Amended 2026-08-17:** this row originally read *"opened exactly once, in this phase"* and called Task 8 *"the only `Actor.cs` change in the whole V-track plan"*. That count is no longer true — **V10 Task 3** re-opens the file to gate `:716-719` and `:824-829` on `IsLocalActor` (A16). V10 was approved after this phase was written and is absent from the design-doc § 6 table, so what changed is the count, not the mitigation: two openings, each announced early in its own phase. |
 
 ---
 
@@ -411,7 +411,9 @@ Replace with a `TickTimer` field decremented in `Actor.FixedUpdate` (which alrea
   named constant, not a literal, so V4 can retune it against the netcode's 30 Hz accumulator
   without hunting for a magic number.
 
-This is the whole of `Actor.cs` for the entire V-track (D10). It is announced in the PR title.
+This is the whole of `Actor.cs` **for this phase** (D10). It is announced in the PR title. **V10 Task 3
+opens the file once more** to gate the local-only singleton touches at `:716-719` and `:824-829`; see
+D10's amendment.
 
 **Verify:** `dotnet test Ironfront.Net.Replication.Tests --filter "TickTimerFiresExactlyOnceOnTheArmedTick"` for the primitive, plus the source invariant that `Actor.cs` contains no
 `WaitForSeconds` in `ReactivateCollisionsWith`. Behavioural confirmation (leave a vehicle, re-enter
@@ -513,7 +515,8 @@ design-doc § 9's *"pin the new behaviour with a test so it does not drift again
 10. Explosion damage is zero at and beyond `damageRange`; balance damage and knockback still reach
     `balanceRange`.
 11. `Actor`'s post-exit collision reactivation is tick-counted and is cancelled by re-entry, not
-    re-sampled after a wall-clock wait. `Actor.cs` is touched exactly once in the V-track.
+    re-sampled after a wall-clock wait. `Actor.cs` is touched exactly once **in this phase** (D10;
+    V10 Task 3 opens it again).
 12. All ten headless dereference sites are guarded, and every guard protects cosmetic work only.
 13. `dotnet test` green across the solution; no `System.Linq`, no `foreach`, no allocation in any
     file under `Ironfront.Net.Replication/Vehicles/`.
@@ -561,7 +564,7 @@ V3"*, answered by a mechanical diff check rather than discipline.
 | 5 — Input clamping + `Boat` torque | S (0.5 d) | Needs Task 1 (`VehicleInputClamp`). |
 | 6 — `AutoDamage` double-schedule | S (0.25 d) | Fully independent. Smallest real bug fix in the phase. |
 | 7 — Explosion falloff range | S (0.5 d) | Needs Task 1 (`ExplosionRanges`). |
-| 8 — Tick-counted seat collision timer | S (0.5 d) | Needs Task 1 (`TickTimer`). **The only `Actor.cs` change; sequence it early** (D10). |
+| 8 — Tick-counted seat collision timer | S (0.5 d) | Needs Task 1 (`TickTimer`). **The only `Actor.cs` change in this phase; sequence it early** (D10). |
 | 9 — Headless NRE guards | M (0.75 d) | Fully independent. Do it early — nothing downstream runs headless until it lands. |
 | 10 — Tests | M (1.5 d) | Written alongside 1–9, not after. |
 | **Total** | **~9 d (≈2 weeks)** | Critical path: **1 → 3 → 10**. Tasks 2, 4, 6 and 9 are off it and parallelise cleanly. |
