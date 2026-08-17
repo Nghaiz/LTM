@@ -91,7 +91,7 @@ jobs:
 
       - name: Build and push
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: infra/docker/master.Dockerfile
@@ -190,7 +190,7 @@ jobs:
       - name: Build and push
         if: env.skip != 'true'
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: build/server
           file: infra/docker/gameserver.Dockerfile
