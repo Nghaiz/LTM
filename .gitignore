@@ -147,6 +147,10 @@ Desktop.ini
 # Unity-MCP is personal tooling: its config contains a token and its skills are generated.
 /Ironfront_Reborn/.claude/
 /Ironfront_Reborn/.mcp.json
+# Claude Code resolves project scope against the repo root, so the MCP entry lands here rather
+# than beside the Unity project. It holds an absolute path to the local server binary, which is
+# per-machine — each developer registers their own.
+/.mcp.json
 # Keep the project on the registry package declared in manifest.json. Unity may create this
 # embedded copy locally while developing or troubleshooting the package.
 /Ironfront_Reborn/Packages/com.ivanmurzak.unity.mcp/
