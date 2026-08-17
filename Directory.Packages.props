@@ -31,7 +31,7 @@
   </PropertyGroup>
 
   <ItemGroup Label="Master Server">
-    <PackageVersion Include="Microsoft.Data.Sqlite" Version="8.0.12" />
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.11" />
     <!--
       Pinned ahead of what Microsoft.Data.Sqlite 8.0.12 asks for (2.1.6). Every
       SQLitePCLRaw.lib.e_sqlite3 up to and including 2.1.11 bundles a SQLite build carrying
