@@ -40,7 +40,7 @@
       test project inherits it through the project reference. Drop this pin once
       Microsoft.Data.Sqlite ships a net8.0 build that already resolves to 2.1.12 or later.
     -->
-    <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.12" />
+    <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
     <PackageVersion Include="BCrypt.Net-Next" Version="4.2.0" />
     <PackageVersion Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
