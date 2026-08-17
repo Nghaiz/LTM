@@ -96,6 +96,27 @@ updates:
         update-types:
           - 'version-update:semver-major'
 
+      # System.IO.Pipelines is the same shape of decision as Microsoft.Data.Sqlite above,
+      # for the same reason: it is an out-of-band BCL package versioned on the .NET release
+      # band, so 8.0.x belongs to .NET 8 and 10.0.x to .NET 10. global.json pins the SDK to
+      # the 8.0.x feature band (8.0.100 floor, rollForward latestFeature, which rejects 9.x
+      # and 10.x outright) and ci.yml pins dotnet-version 8.0.x to match.
+      #
+      # PR #107 (8.0.0 -> 10.0.11) was green on both runners and that green was honest as
+      # far as it went — the package resolves and Ironfront.Tools.MspBench builds. It was
+      # closed anyway, on the #99 precedent: "it compiles" is not the question. A library
+      # from a support band two majors above the runtime hosting it is a bet that nothing
+      # in the newer band's servicing assumes the newer runtime, and the payoff for winning
+      # that bet is nothing at all. MspBench uses Pipelines to be the standard-library
+      # comparison against the hand-written MspFrameReader; the comparison is against
+      # whatever the shipped band offers, so 8.0.0 is the version that makes it honest.
+      #
+      # Minors and patches inside 8.0.x still come through. Lift this with the Roslyn and
+      # Sqlite entries when the SDK band moves — same PR, not separately.
+      - dependency-name: 'System.IO.Pipelines'
+        update-types:
+          - 'version-update:semver-major'
+
   - package-ecosystem: github-actions
     directory: '/'
     schedule:
