@@ -322,7 +322,7 @@ jobs:
           dockerfile: infra/docker/gameserver.Dockerfile
           failure-threshold: error
 
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.9.5"
 
