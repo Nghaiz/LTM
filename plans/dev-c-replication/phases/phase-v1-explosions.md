@@ -155,26 +155,20 @@ Editor, because both assert against `IActorDamageSink` and `ServerEventWriter`, 
 
 ---
 
-### Task 4 — The client subscriber (0.5 day)
+### ~~Task 4 — The client subscriber (0.5 day)~~ — **STRUCK. Superseded by V10 D14.**
 
-| File | Change |
-|---|---|
-| `Net/Client/NetClientExplosionPresenter.cs` | **New**, Dev C-owned. Subscribes `_client.Router.OnExplosion` in `OnEnable` and unsubscribes in `OnDisable`, the same lifecycle `RemoteActorRegistry.cs:77` already uses for `OnSpawnActor`. Guarded on `NetContext.IsClient`. |
+`NetClientExplosionPresenter.cs` is **owned by V10**, not V1. V10's version carries the
+local-prediction branch this one does not: per the user's decision of 2026-08-17 (design of record
+A3), a client plays **its own** explosion immediately and suppresses the matching `S_EXPLOSION` by
+`SourceActorId`. Building the presenter here and then rewriting it in V10 would be the same file
+authored twice.
 
-On each message: unpack the centre with `Quantize.UnpackPos`, the radius with
-`ExplosionEncoding.UnpackRadiusMetres`, index a serialized `ParticleSystem[]` by
-`(byte)message.Kind` for the effect, scale the effect and the camera shake by the radius, and apply
-the corpse ragdoll impulse locally per D6. **It applies no health damage** — health arrives in the
-snapshot, exactly as phase-05 D5 established for bullets.
+**V1 D6 is overridden by V10 D13** — using V1 D6's own recorded fallback clause, so no new decision
+was taken. V1 still owns everything that produces the message: the server-authoritative
+`ActorManager.Explode`, the emit, the earshot filter, and the client-role damage suppression.
 
-Guard every array index and every serialized reference: a `Kind` this build does not know must draw
-nothing rather than throw, for the same reason `WeaponIds.NameOf` returns empty rather than
-throwing — a newer server shipping a fifth explosion kind should cost one missing effect, not a
-dropped payload.
-
-**Verify:** `dotnet test Ironfront.Net.Replication.Tests --filter FullyQualifiedName~ExplosionEvent`
-green — `AnExplosionFramedByTheServerRoutesToTheClientHandler` grades the router half in CI. The
-presenter's prefab wiring is Dev A's (§ 7 handoff) and is graded in the two-client Editor test.
+V1's remaining tasks are 1, 2, 3 and 5, and its § 7 item 3 moves to V10's E6. Effort drops by
+0.5 day.
 
 ---
 
