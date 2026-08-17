@@ -85,8 +85,15 @@ Set it to your Unity Editor executable and re-run, e.g.:
     # -batchmode -nographics -quit: no window, no GPU, exit when done. -executeMethod runs
     # Dev A's build method; -buildOutput is our own argument that method reads to know where
     # to write. Unity passes every unrecognised argument through to Environment.GetCommandLineArgs.
+    #
+    # -buildTarget Linux64 does not build anything on its own (see the ownership note above),
+    # but it makes Linux the active platform during Unity's own startup. Without it the build
+    # method has to switch platforms itself, which forces a full asset reimport in the middle of
+    # the build; and on this Windows host the Server subtarget it sets would otherwise have
+    # landed on Windows, not Linux. The method still switches defensively for the menu-item path.
     & $UnityPath -batchmode -nographics -quit `
         -projectPath $projectPath `
+        -buildTarget Linux64 `
         -executeMethod $BuildMethod `
         -buildOutput $outAbsolute `
         -logFile $logFile
