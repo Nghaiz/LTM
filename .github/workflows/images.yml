@@ -69,7 +69,7 @@ jobs:
 
       - name: Docker meta
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository_owner }}/ironfront-master
           tags: |
@@ -168,7 +168,7 @@ jobs:
       - name: Docker meta
         if: env.skip != 'true'
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository_owner }}/ironfront-gameserver
           tags: |
