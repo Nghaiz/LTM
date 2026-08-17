@@ -68,6 +68,35 @@ namespace Ironfront.MasterServer.Net
         public TimeSpan LogicTickInterval { get; set; } = TimeSpan.FromMilliseconds(50);
 
         /// <summary>
+        /// The clock the timeout sweep measures against. Defaults to the real one.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This exists for the tests, and it earns its place because the alternative was
+        /// measurably worse. <see cref="UnauthenticatedTimeout"/> and
+        /// <see cref="HeartbeatTimeout"/> are 30 s and 45 s in production; a test that waited
+        /// those out is a test nobody runs, so the tests shrank them to a few hundred
+        /// milliseconds and paced themselves with <c>Task.Delay</c>. On a shared CI runner a
+        /// thread-pool continuation can be stalled for an unbounded time while the real clock
+        /// keeps moving, which drifts the test's pacing away from the server's deadline in
+        /// whichever direction the runner happens to stall — reaping a connection the test
+        /// expected to survive, and, worse, reaping one the test expected to survive for the
+        /// WRONG reason so a security test goes green without proving anything.
+        /// </para>
+        /// <para>
+        /// Substituting the clock removes the race instead of widening it: a held clock cannot
+        /// be advanced by a stall, so what the sweep sees is exactly what the test set. The
+        /// window widening in the heartbeat test (300 ms, then 1500 ms, still flaking) is the
+        /// approach this replaces.
+        /// </para>
+        /// <para>
+        /// Only the <b>expiry comparison</b> reads this. The logic loop's tick cadence stays on
+        /// the real clock on purpose — see <see cref="TcpListenerHost.RunAsync"/>.
+        /// </para>
+        /// </remarks>
+        public TimeProvider Clock { get; set; } = TimeProvider.System;
+
+        /// <summary>
         /// The certificate presented to clients. <c>null</c> means plaintext.
         /// </summary>
         /// <remarks>

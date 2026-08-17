@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -18,6 +18,7 @@ namespace Ironfront.MasterServer.Tests
     /// Phase 03 criteria 7 (metrics endpoint), 9 (durability sampling), 10 (backup and a
     /// tested restore) and 11 (no secrets in the logs).
     /// </summary>
+    [Collection(SocketTestCollection.Name)]
     public sealed class Phase03OperationsTests
     {
         private const string PasswordHash =

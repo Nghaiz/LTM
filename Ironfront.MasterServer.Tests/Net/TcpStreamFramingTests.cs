@@ -25,6 +25,7 @@ namespace Ironfront.MasterServer.Tests.Net
     /// writes, several frames in one write, and a header torn in half.
     /// </para>
     /// </remarks>
+    [Collection(SocketTestCollection.Name)]
     public sealed class TcpStreamFramingTests
     {
         private const MspMessageType Heartbeat = MspMessageType.Heartbeat;
@@ -178,33 +179,66 @@ namespace Ironfront.MasterServer.Tests.Net
             // have held it indefinitely.
             //
             // The deadline runs from accept, so dribbling cannot extend it.
-            await using var harness = new MasterHostHarness(
-                o => o.UnauthenticatedTimeout = TimeSpan.FromMilliseconds(600));
+            //
+            // Held clock, because on a real one this test could go green for the wrong reason.
+            // It asserts that a connection IS reaped, and a stalled CI runner reaps it whether
+            // the deadline works or not — so the pass would prove nothing about the defense.
+            // Stepping the clock ourselves makes the reap attributable to the 30 s deadline and
+            // to nothing else.
+            var clock = new HeldClock();
+            await using var harness = new MasterHostHarness(o =>
+            {
+                o.Clock                  = clock;
+                o.UnauthenticatedTimeout = TimeSpan.FromSeconds(30);
+            });
 
             TcpClient client = await harness.ConnectAsync();
             NetworkStream stream = client.GetStream();
 
             Assert.True(await MasterHostHarness.WaitUntilAsync(() => harness.Host.ConnectionCount == 1));
 
-            // Dribble well inside the window, repeatedly, for longer than the whole budget.
-            for (int i = 0; i < 8; i++)
-            {
-                try
-                {
-                    await stream.WriteAsync(new byte[] { 0x00 });
-                    await stream.FlushAsync();
-                }
-                catch (Exception)
-                {
-                    break;   // already closed, which is the outcome under test
-                }
+            // Open a frame that is valid and will never finish: a length prefix announcing a
+            // 64-byte body, followed by that body one byte at a time. This is the attack as
+            // described — always mid-message, never complete — and it is why the dribble cannot
+            // just be raw 0x00 bytes. Four zero bytes ARE a complete length prefix, declaring a
+            // zero-length frame, and the reader closes the connection on it as malformed. The
+            // test would then be measuring the parser, not the deadline.
+            await stream.WriteAsync(LengthPrefix(MspFrame.MsgTypeSize + 64));
+            await stream.FlushAsync();
 
-                await Task.Delay(200);
+            // Five dribbles at 5 s apart — 25 s, deliberately INSIDE the 30 s deadline, so the
+            // connection is alive for every one of them and each byte provably lands.
+            //
+            // Waiting for the server to record each byte is what makes this conclusive, and
+            // leaving it out is a trap worth naming: if the bytes are all ingested early and the
+            // clock is then stepped in one jump, the idle gap grows just as much as the deadline
+            // does, and the old buggy code reaps the connection too. The test goes green having
+            // proven nothing. Confirming each byte pins the idle gap at 5 s, so only the
+            // deadline can produce a reap.
+            for (int i = 0; i < 5; i++)
+            {
+                clock.Advance(TimeSpan.FromSeconds(5));
+
+                await stream.WriteAsync(new byte[] { 0x00 });
+                await stream.FlushAsync();
+
+                long stampedAt = clock.NowMs;
+                Assert.True(
+                    await MasterHostHarness.WaitUntilAsync(
+                        async () => await LastActivityMsAsync(harness) >= stampedAt),
+                    $"dribbled byte {i + 1} of 5 never reached the server");
             }
 
+            Assert.Equal(1, harness.Host.ConnectionCount);
+            Assert.Equal(0, harness.Host.TotalFramesReceived);   // still mid-frame, as intended
+
+            // 25 s of dribbling has reset the idle clock five times. Now cross the deadline. The
+            // idle gap is 5 s and the deadline is 30 s, so exactly one of the two can reap this.
+            clock.Advance(TimeSpan.FromSeconds(6));
+
             Assert.True(
-                await MasterHostHarness.WaitUntilAsync(() => harness.Host.ConnectionCount == 0, 3000),
-                "a client that dribbled a byte every 200 ms survived its 600 ms deadline — the "
+                await MasterHostHarness.WaitUntilAsync(() => harness.Host.ConnectionCount == 0),
+                "a client that dribbled a byte every 5 s survived its 30 s deadline — the "
                 + "unauthenticated timeout is an idle gap, not a deadline");
         }
 
@@ -215,10 +249,16 @@ namespace Ironfront.MasterServer.Tests.Net
             // everybody: once a client has logged in, HEARTBEAT is exactly how it says it is
             // still there, so its clock MUST reset on traffic. A deadline here would drop every
             // healthy session on a fixed timer.
+            // The 400 ms deadline this used to set was live between ConnectAsync and
+            // MarkAuthenticated below — a runner that stalled in that gap reaped the connection
+            // before the test had authenticated it, and the failure looked like the idle clock
+            // was broken. A held clock does not tick during that gap at all.
+            var clock = new HeldClock();
             await using var harness = new MasterHostHarness(o =>
             {
-                o.UnauthenticatedTimeout = TimeSpan.FromMilliseconds(400);
-                o.HeartbeatTimeout       = TimeSpan.FromSeconds(30);
+                o.Clock                  = clock;
+                o.UnauthenticatedTimeout = TimeSpan.FromSeconds(30);
+                o.HeartbeatTimeout       = TimeSpan.FromSeconds(45);
             });
 
             TcpClient client = await harness.ConnectAsync();
@@ -231,15 +271,26 @@ namespace Ironfront.MasterServer.Tests.Net
                 return true;
             });
 
+            // Six beats 30 s apart — 180 s in total, four times the 45 s window and six times
+            // the 30 s deadline that would apply if this connection were still unauthenticated.
+            // Each beat is counted before the clock moves, so the gap the server measures is
+            // exactly the 30 s stepped here.
             NetworkStream stream = client.GetStream();
             for (int i = 0; i < 6; i++)
             {
                 await stream.WriteAsync(Frame(Heartbeat, "{}"));
                 await stream.FlushAsync();
-                await Task.Delay(150);
+
+                int expected = i + 1;
+                Assert.True(
+                    await MasterHostHarness.WaitUntilAsync(() => harness.Host.TotalHeartbeats >= expected),
+                    $"heartbeat {expected} of 6 was never parsed");
+
+                clock.Advance(TimeSpan.FromSeconds(30));
             }
 
             Assert.Equal(1, harness.Host.ConnectionCount);
+            Assert.Equal(0, harness.Host.TotalTimedOut);
         }
 
         [Fact]
@@ -250,8 +301,16 @@ namespace Ironfront.MasterServer.Tests.Net
             // forever, and never authenticating. Every frame is valid, so nothing looks wrong;
             // if the deadline reset on traffic this connection would hold its slot for as long
             // as the attacker cared to keep beating.
-            await using var harness = new MasterHostHarness(
-                o => o.UnauthenticatedTimeout = TimeSpan.FromMilliseconds(600));
+            // Held clock, for the same reason as the dribble test: this asserts that a
+            // connection IS reaped, so on a real clock a stalled runner would reap it and the
+            // test would go green without the deadline having done anything. Stepping the clock
+            // ourselves makes the reap attributable.
+            var clock = new HeldClock();
+            await using var harness = new MasterHostHarness(o =>
+            {
+                o.Clock                  = clock;
+                o.UnauthenticatedTimeout = TimeSpan.FromSeconds(30);
+            });
 
             TcpClient client = await harness.ConnectAsync();
             Assert.True(await MasterHostHarness.WaitUntilAsync(() => harness.Host.ConnectionCount == 1));
@@ -259,26 +318,63 @@ namespace Ironfront.MasterServer.Tests.Net
             NetworkStream stream = client.GetStream();
             byte[] heartbeat = Frame(Heartbeat, "{}");
 
-            for (int i = 0; i < 10; i++)
+            // Five well-formed beats 5 s apart — 25 s, inside the 30 s deadline, each one
+            // confirmed PARSED before the clock moves. These are the exact frames that keep an
+            // authenticated connection alive; the whole question is whether they do anything for
+            // a connection that never logged in.
+            for (int i = 0; i < 5; i++)
             {
-                try
-                {
-                    await stream.WriteAsync(heartbeat);
-                    await stream.FlushAsync();
-                }
-                catch (Exception)
-                {
-                    break;   // already closed, which is the outcome under test
-                }
+                await stream.WriteAsync(heartbeat);
+                await stream.FlushAsync();
 
-                await Task.Delay(150);
+                clock.Advance(TimeSpan.FromSeconds(5));
+
+                int expected = i + 1;
+                Assert.True(
+                    await MasterHostHarness.WaitUntilAsync(() => harness.Host.TotalHeartbeats >= expected),
+                    $"heartbeat {expected} of 5 was never parsed");
             }
 
+            Assert.Equal(1, harness.Host.ConnectionCount);
+
+            // Cross the deadline. The idle gap is at most 5 s; the deadline is 30 s. A reap here
+            // is the deadline and can be nothing else.
+            clock.Advance(TimeSpan.FromSeconds(6));
+
             Assert.True(
-                await MasterHostHarness.WaitUntilAsync(() => harness.Host.ConnectionCount == 0, 3000),
+                await MasterHostHarness.WaitUntilAsync(() => harness.Host.ConnectionCount == 0),
                 "a client that never authenticated held its slot by heartbeating — the "
                 + "unauthenticated timeout is an idle gap, not a deadline");
         }
+
+        /// <summary>
+        /// A bare 4-byte MSP length prefix, big-endian, with no body behind it — the opening of
+        /// a frame that the caller intends never to finish.
+        /// </summary>
+        private static byte[] LengthPrefix(int declaredLength)
+        {
+            var prefix = new byte[MspFrame.LengthPrefixSize];
+            Endian.WriteU32BE(prefix, 0, (uint)declaredLength);
+            return prefix;
+        }
+
+        /// <summary>
+        /// The single live connection's <c>LastActivityMs</c>, read on the logic thread — the
+        /// only place a connection may be touched.
+        /// </summary>
+        /// <remarks>
+        /// Lets a test wait for "the server has actually ingested that byte" rather than assume
+        /// it. Raw bytes complete no frame, so no counter on the host moves for them and this is
+        /// the only observable that does.
+        /// </remarks>
+        private static Task<long> LastActivityMsAsync(MasterHostHarness harness)
+            => harness.Host.InvokeOnLogicThreadAsync(() =>
+            {
+                long last = long.MinValue;
+                foreach (ClientConnection connection in harness.Host.ConnectionsUnsafe)
+                    last = connection.LastActivityMs;
+                return last;
+            });
 
         private static byte[] Frame(MspMessageType msgType, string json)
         {

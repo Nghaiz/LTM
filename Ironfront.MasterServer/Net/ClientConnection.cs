@@ -82,6 +82,8 @@ namespace Ironfront.MasterServer.Net
         private Stream? _transport;
         private int _sendRunning;
 
+        private readonly TimeProvider _clock;
+
         private long _lastActivityMs;
         private int _disposed;
 
@@ -94,6 +96,7 @@ namespace Ironfront.MasterServer.Net
             Action<Action> postToLogicThread,
             MspFrameHandler onFrame,
             Action<ClientConnection, string> onClosed,
+            TimeProvider clock,
             X509Certificate2? serverCertificate = null)
         {
             Id                 = id;
@@ -104,8 +107,9 @@ namespace Ironfront.MasterServer.Net
             _postToLogicThread = postToLogicThread;
             _onFrame           = onFrame;
             _onClosed          = onClosed;
+            _clock             = clock;
             _serverCertificate = serverCertificate;
-            ConnectedAtMs      = Environment.TickCount64;
+            ConnectedAtMs      = clock.NowMs();
             _lastActivityMs    = ConnectedAtMs;
         }
 
@@ -200,8 +204,8 @@ namespace Ironfront.MasterServer.Net
         }
 
         /// <summary>
-        /// <see cref="Environment.TickCount64"/> at the last byte received. Read and written
-        /// on the logic thread only.
+        /// Milliseconds on <see cref="TcpListenerHostOptions.Clock"/> at the last byte received.
+        /// Read and written on the logic thread only.
         /// </summary>
         /// <remarks>
         /// This is an IDLE clock and it resets on any byte, including a byte that is not part
@@ -212,7 +216,7 @@ namespace Ironfront.MasterServer.Net
         public long LastActivityMs => _lastActivityMs;
 
         /// <summary>
-        /// <see cref="Environment.TickCount64"/> at accept. Never updated.
+        /// Milliseconds on <see cref="TcpListenerHostOptions.Clock"/> at accept. Never updated.
         /// </summary>
         /// <remarks>
         /// The unauthenticated timeout is a DEADLINE measured from here, not an idle gap
@@ -402,7 +406,7 @@ namespace Ironfront.MasterServer.Net
         private void Ingest(byte[] buffer, int count)
         {
             // Any byte at all is proof of life, which is what the heartbeat timeout measures.
-            _lastActivityMs = Environment.TickCount64;
+            _lastActivityMs = _clock.NowMs();
 
             _reader.Append(buffer.AsSpan(0, count));
 

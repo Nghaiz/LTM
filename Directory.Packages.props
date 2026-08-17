@@ -31,7 +31,7 @@
   </PropertyGroup>
 
   <ItemGroup Label="Master Server">
-    <PackageVersion Include="Microsoft.Data.Sqlite" Version="8.0.12" />
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="8.0.30" />
     <!--
       Pinned ahead of what Microsoft.Data.Sqlite 8.0.12 asks for (2.1.6). Every
       SQLitePCLRaw.lib.e_sqlite3 up to and including 2.1.11 bundles a SQLite build carrying
@@ -40,8 +40,8 @@
       test project inherits it through the project reference. Drop this pin once
       Microsoft.Data.Sqlite ships a net8.0 build that already resolves to 2.1.12 or later.
     -->
-    <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.12" />
-    <PackageVersion Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.13" />
+    <PackageVersion Include="BCrypt.Net-Next" Version="4.2.0" />
     <PackageVersion Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
 
@@ -70,13 +70,13 @@
 
       Dev tooling, not a netcode framework — section 3.4's hard no does not apply.
     -->
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
   </ItemGroup>
 
   <ItemGroup Label="Test host">
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
     <!--
       Required by the "XPlat Code Coverage" data collector that ci.yml asks dotnet test for.
       Without this package the collector produces no coverage file and the CI step reports

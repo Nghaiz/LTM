@@ -49,7 +49,7 @@ jobs:
         os: [ubuntu-latest, windows-latest]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-dotnet@v6
         with:
@@ -105,7 +105,7 @@ jobs:
       # if: always() — the results are most valuable exactly when the previous step failed.
       - name: Upload test results and coverage
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.os }}
           path: TestResults/
@@ -123,7 +123,7 @@ jobs:
     continue-on-error: true
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # check-commit-scope.ps1 diffs against the base branch, which a shallow clone does
           # not contain. Without this the script sees an empty commit list and silently
@@ -246,7 +246,7 @@ jobs:
     if: github.event_name == 'push'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-dotnet@v6
         with:
@@ -266,7 +266,7 @@ jobs:
         run: ./tools/build-libs.ps1 -Configuration Release
 
       - name: Upload plugin DLLs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unity-plugins-${{ github.sha }}
           path: Ironfront_Reborn/Assets/Plugins/*.dll
@@ -283,7 +283,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # `config -q` interpolates every ${...} and validates the schema without starting
       # anything. The values below are throwaway — they only have to be present and shaped
@@ -308,21 +308,21 @@ jobs:
     timeout-minutes: 8
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Hadolint (master Dockerfile)
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.4.0
         with:
           dockerfile: infra/docker/master.Dockerfile
           failure-threshold: error
 
       - name: Hadolint (game-server Dockerfile)
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.4.0
         with:
           dockerfile: infra/docker/gameserver.Dockerfile
           failure-threshold: error
 
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.9.5"
 
@@ -343,5 +343,5 @@ jobs:
   #   runs-on: [self-hosted, unity]
   #   timeout-minutes: 30
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v7
   #     - run: pwsh tools/ci.ps1 -Configuration Release
