@@ -30,7 +30,14 @@ public class VehicleSpawner : MonoBehaviour
 
 	private void Awake()
 	{
-		GetComponent<Renderer>().enabled = false;
+		// The spawner's own marker mesh. A dedicated server strips renderers, so this is null
+		// there by design -- and it was the first NRE a headless build hit, before any vehicle
+		// existed to go wrong.
+		Renderer marker = GetComponent<Renderer>();
+		if (marker != null)
+		{
+			marker.enabled = false;
+		}
 		collisionCheckRadius = prefab.GetComponent<Vehicle>().avoidanceSize.magnitude;
 	}
 
@@ -46,7 +53,9 @@ public class VehicleSpawner : MonoBehaviour
 
 	private void SpawnVehicle()
 	{
-		if (!GameManager.instance.noVehicles)
+		// No GameManager means nothing has suppressed vehicles, so spawn. Preserves the
+		// "spawn unless explicitly suppressed" intent rather than inverting it.
+		if (GameManager.instance == null || !GameManager.instance.noVehicles)
 		{
 			StartCoroutine(SpawnCoroutine());
 		}

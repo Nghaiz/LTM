@@ -41,32 +41,39 @@ public class Helicopter : Vehicle
 	protected override void Awake()
 	{
 		base.Awake();
-		solidRotor = rotor.GetComponent<Renderer>();
-		blurredRotor = rotor.GetChild(0).GetComponent<Renderer>();
+		// A dedicated server strips renderers, so both of these are null there by design and
+		// every later dereference has to survive it. rotor itself is a Transform and does
+		// survive, but guarding it keeps the null story in one place rather than two.
+		if (rotor != null)
+		{
+			solidRotor = rotor.GetComponent<Renderer>();
+			Transform blurred = ((rotor.childCount > 0) ? rotor.GetChild(0) : null);
+			if (blurred != null)
+			{
+				blurredRotor = blurred.GetComponent<Renderer>();
+			}
+		}
 		rigidbody.maxAngularVelocity = 1.5f;
 	}
 
+	// Cosmetic only. rotorSpeed is read here but never written -- see FixedUpdate.
 	private void Update()
 	{
 		audio.volume = rotorSpeed * 0.5f;
 		audio.pitch = rotorSpeed;
-		if (HasDriver())
-		{
-			rotorSpeed = Mathf.Clamp01(rotorSpeed + Time.deltaTime * 0.3f);
-			if (base.transform.up.y < 0f)
-			{
-				Damage(Time.deltaTime * 30f);
-			}
-		}
-		else
-		{
-			rotorSpeed = Mathf.Clamp01(rotorSpeed - Time.deltaTime * 0.3f);
-		}
 		bool flag = rotorSpeed > 0.8f;
-		solidRotor.enabled = !flag;
-		blurredRotor.enabled = flag;
-		rotor.Rotate(Vector3.forward * 1000f * rotorSpeed * Time.deltaTime);
-		isAirborne = !Physics.Raycast(base.transform.position, Vector3.down, 3f);
+		if (solidRotor != null)
+		{
+			solidRotor.enabled = !flag;
+		}
+		if (blurredRotor != null)
+		{
+			blurredRotor.enabled = flag;
+		}
+		if (rotor != null)
+		{
+			rotor.Rotate(Vector3.forward * 1000f * rotorSpeed * Time.deltaTime);
+		}
 	}
 
 	protected override void DriverEntered()
@@ -81,6 +88,29 @@ public class Helicopter : Vehicle
 
 	protected override void FixedUpdate()
 	{
+		// rotorSpeed multiplies EVERY force below, so integrating it at render rate made lift
+		// itself framerate-dependent -- the single largest divergence source in the vehicle
+		// set. It is integrated before base.FixedUpdate() so the forces further down read the
+		// value this step produced.
+		if (HasDriver())
+		{
+			rotorSpeed = Mathf.Clamp01(rotorSpeed + Time.fixedDeltaTime * 0.3f);
+			// Damage-per-frame, and a gameplay bug rather than only a determinism one: this
+			// was nominally 30 HP/s only because deltaTime sums to one second per second, and
+			// it fired at render rate on a client that has no damage authority. V4 makes this
+			// call server-only; the move is what reduces that to one line.
+			if (base.transform.up.y < 0f)
+			{
+				Damage(Time.fixedDeltaTime * 30f);
+			}
+		}
+		else
+		{
+			rotorSpeed = Mathf.Clamp01(rotorSpeed - Time.fixedDeltaTime * 0.3f);
+		}
+		// A physics query read by ShouldBeAvoided(), which the AI consults. It belongs at
+		// physics rate.
+		isAirborne = !Physics.Raycast(base.transform.position, Vector3.down, 3f);
 		base.FixedUpdate();
 		Vector3 normalized = (base.transform.forward + 0.15f * base.transform.up).normalized;
 		float num = Vector3.Dot(normalized, rigidbody.linearVelocity);

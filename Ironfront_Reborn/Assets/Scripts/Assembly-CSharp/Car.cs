@@ -39,6 +39,11 @@ public class Car : Vehicle
 
 	private float enginePitch;
 
+	// The one value that crosses the Update/FixedUpdate split: the drive block decides what
+	// the engine should sound like, and the audio block (still per-frame, because it is
+	// cosmetic) reads it. It was a local before the split.
+	private float enginePitchTarget;
+
 	protected override void Awake()
 	{
 		base.Awake();
@@ -85,12 +90,14 @@ public class Car : Vehicle
 		child.transform.rotation = quat;
 	}
 
-	private void Update()
+	// Every write below lands on a WheelCollider, which PhysX reads exactly once per fixed
+	// step. Driving them from Update meant a 144 Hz client fed the solver the last of ~2.4
+	// writes per step while a 30 Hz one fed it a value integrated over a step it never took,
+	// so the same input produced different motion on every peer. Nothing here is cosmetic.
+	protected override void FixedUpdate()
 	{
-		Vector3 localEulerAngles = steeringWheel.localEulerAngles;
-		localEulerAngles.z = steerAngle * wheelSteerMultiplier;
-		steeringWheel.localEulerAngles = localEulerAngles;
-		float target = ((!HasDriver()) ? 0f : 0.5f);
+		base.FixedUpdate();
+		enginePitchTarget = ((!HasDriver()) ? 0f : 0.5f);
 		if (HasDriver() && !burning)
 		{
 			Vector2 vector = Vehicle.Clamp2(Driver().controller.CarInput());
@@ -102,7 +109,7 @@ public class Car : Vehicle
 			}
 			num /= (float)wheels.Length;
 			float target2 = vector.x * maxSteer;
-			steerAngle = Mathf.MoveTowards(steerAngle, target2, 5f * maxSteer * Time.deltaTime);
+			steerAngle = Mathf.MoveTowards(steerAngle, target2, 5f * maxSteer * Time.fixedDeltaTime);
 			WheelConfiguration[] array2 = wheels;
 			foreach (WheelConfiguration wheelConfiguration2 in array2)
 			{
@@ -112,12 +119,12 @@ public class Car : Vehicle
 					if ((vector.y < 0f && wheelConfiguration2.collider.rpm > 10f) || (vector.y > 0f && wheelConfiguration2.collider.rpm < -10f))
 					{
 						wheelConfiguration2.collider.brakeTorque = 300f;
-						target = 0.5f;
+						enginePitchTarget = 0.5f;
 					}
 					else
 					{
 						wheelConfiguration2.collider.brakeTorque = 0f;
-						target = ((!(vector.y > 0f)) ? (0.5f + Mathf.Abs(vector.y) * 0.2f) : (0.5f + Mathf.Abs(vector.y) * 0.6f));
+						enginePitchTarget = ((!(vector.y > 0f)) ? (0.5f + Mathf.Abs(vector.y) * 0.2f) : (0.5f + Mathf.Abs(vector.y) * 0.6f));
 					}
 				}
 				if (wheelConfiguration2.steer)
@@ -126,7 +133,16 @@ public class Car : Vehicle
 				}
 			}
 		}
-		enginePitch = Mathf.MoveTowards(enginePitch, target, Time.deltaTime);
+	}
+
+	// Cosmetic only: the steering-wheel prop reads the steerAngle the fixed step integrated,
+	// and the engine note chases the target the fixed step decided. Neither feeds physics.
+	private void Update()
+	{
+		Vector3 localEulerAngles = steeringWheel.localEulerAngles;
+		localEulerAngles.z = steerAngle * wheelSteerMultiplier;
+		steeringWheel.localEulerAngles = localEulerAngles;
+		enginePitch = Mathf.MoveTowards(enginePitch, enginePitchTarget, Time.deltaTime);
 		audio.pitch = enginePitch;
 		if (audio.isPlaying && enginePitch == 0f)
 		{

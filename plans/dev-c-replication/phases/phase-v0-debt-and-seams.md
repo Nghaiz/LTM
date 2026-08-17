@@ -593,7 +593,7 @@ phase-05 Task 6: **PR plus a Dev A review round**, not silent editing.
 | Item | Why it cannot be done outside the Editor |
 |---|---|
 | `.meta` files for the new `Ironfront.Net.Replication/Vehicles/` types, if any are referenced from a `MonoBehaviour` | Unity generates and owns GUIDs |
-| Serializing `aimLimits` on every turret prefab — `YawRateDegPerSec`, `PitchRateDegPerSec`, `PitchMin`, `PitchMax` (Task 3) | New serialized field; existing prefabs have no value for it |
+| Serializing `aimLimits` on every turret prefab — `YawRateDegPerSec` and `PitchRateDegPerSec` on both turrets, plus `PitchMin`/`PitchMax` on **`MountedTurret` only** (Task 3) | New serialized field; existing prefabs have no value for it. **`TankTurret`'s stops are not prefab data** — `Awake` reads them from `cannonJoint.limits`, which is the joint's own truth; a serialized copy would be a second source that drifts. Tuning a tank's elevation means editing the joint, as it always did. |
 | Confirming `damageParticles`, `deathParticles`, `impactAudio`, `explosionSound`, `fireAlarm` assignments on every vehicle prefab (Task 9) | The guards make a missing reference silent; someone must confirm which are *intentionally* empty |
 | The two-client Editor behavioural pass (below) | Needs the running game |
 | The Profiler run | Editor-only tooling |
@@ -615,6 +615,53 @@ Each pairs with a source-invariant test that pins the shape but cannot prove the
 6. Enter, repair while seated, leave, repeat five times — the vehicle decays at one rate, not five
    (Task 6).
 
+### Deviations from this plan, found in implementation review
+
+Seven, all inside D6 (nothing reaches the wire). Recorded here rather than fixed silently, because
+four of them are places where following the plan literally would have shipped a regression.
+
+1. **`GetInput()` returns a normalized demand in `[-1, 1]`, not raw per-frame degrees.** Task 3
+   says its "body is unchanged in V0". Following that literally is a **5× (tank) / 10× (mounted)
+   sensitivity increase at the design framerate**, because this plan mis-reads the shipped line.
+   `Mathf.Clamp(z - input.x, z - 5f, z + 5f)` has bounds derived from the value being clamped, so
+   it is algebraically `z -= Mathf.Clamp(input.x, -5f, +5f)`: a **1:1 mouse-degrees mapping with a
+   speed limit**, *not* a rate at full deflection. `MAX_TURN_DELTA` is a ceiling, and § 3 Task 3's
+   "5 °/frame × 60 fps = the rate the original exhibits" is true only while saturating. Feeding the
+   raw number to a rate integrator that normalizes it first therefore multiplies the gain by the
+   ceiling — and turns the bots' proportional aim controller into bang-bang, since their input is an
+   error term that only saturates near `|err| ≥ 0.33`. The two sources now convert by different
+   constants because they are different quantities: mouse motion is a **distance** (divide by the
+   arc the step can cover), bot facing is a **state** (divide by `LEGACY_STEP_DEG`). Both reduce to
+   the shipped behaviour exactly at 60 fps.
+2. **The mouse delta is latched in `Update` and drained in `FixedUpdate`.** `Input.GetAxis("Mouse X")`
+   is the delta since the last *rendered* frame and refreshes once per `Update`. Moving the caller
+   into `FixedUpdate` — which this phase requires — makes it lossy: at 144 fps ~65% of the player's
+   motion is never read, at 30 fps most frames are read twice. That would have replaced one
+   framerate dependence with a worse one and defeated criterion 4 for the player while every CI
+   test stayed green.
+3. **Both turrets seed `_aim` from the authored pose in `Awake`.** Not specified here. Without it a
+   turret snaps to (0, 0) on its first fixed step. These are the only engine-angle reads left in
+   either file, and `TurretAimIsWrittenOnlyBySeedSetterAndStep` pins them to `Awake` — criterion 3's
+   "no read-back" is about the per-step round trip, and a one-time initialization is held to that.
+   For the same reason `Mathf.DeltaAngle` survives in `MountedTurret.Awake`, against Task 3's text:
+   `localEulerAngles` reports `[0, 360)` and the stops are signed. It runs once, not every frame.
+4. **`MountedTurret.Update` keeps its `user != null` guard** on the transform write. Applying
+   unconditionally would snap a turret authored outside its stops to the clamped seed on the first
+   frame of the level, and hold it there. V4 widens this when a server aims unmanned turrets.
+5. **`_lastDamagedBy` is written on any damage, including unattributed damage.** Writing it only
+   when an attacker is known leaves it naming a player who chipped the paint minutes before decay
+   or a collision actually killed the vehicle — and V4's death event reads it.
+6. **The `damageParticles` call is edge-triggered.** The shipped `Damage` called `Play()` on every
+   tick below half health and never `Stop()`; `Repair` did the reverse. One ladder cannot do both
+   without an edge. Verified indistinguishable on the shipped prefabs: `tank`, `jeep` and
+   `helicopter` all carry `looping: 1, playOnAwake: 0` smoke, on which repeated `Play()` and a
+   single `Play()` are the same, and `Stop()` on a stopped system is a no-op.
+7. **Criterion 4's 1e-4 is graded at 90 °/s; the shipped 300 and 600 °/s are graded at 1e-6
+   *relative*.** Neither `300/144` nor `600/144` is exactly representable, so an absolute 1e-4 at
+   those rates would be measuring float summation rather than the integrator. 90 °/s was chosen
+   because its per-step delta is exact at both framerates. The relative bound is four orders below
+   the 2.4× divergence this phase removes.
+
 ### Accepted cost, stated plainly
 
 **Offline single-player handling changes.** Design-doc D8 chose this explicitly and § 7 recorded it
@@ -624,7 +671,8 @@ single-player:
 - `Car` handling at high framerates (Task 2) — the largest of the three.
 - `Boat` steering (Task 5b) — steering torque now stays in yaw.
 - Turret traverse rate away from 60 fps (Task 3) — slower above 60, faster below, relative to the
-  original.
+  original. **At** 60 fps the traverse is unchanged; see deviation 1 above for why that took a
+  conversion constant rather than falling out of the port.
 
 The original game is not the target; a game that behaves the same on every peer is. These are not
 regressions to be filed, and a bug report saying "the car feels different" should be closed citing

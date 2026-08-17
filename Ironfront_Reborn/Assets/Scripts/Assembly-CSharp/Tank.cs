@@ -83,7 +83,9 @@ public class Tank : Vehicle
 		float target = 0f;
 		if (HasDriver() && !burning)
 		{
-			Vector2 vector = Driver().controller.CarInput();
+			// Clamped: the raw axes went straight into motorTorque via Mathf.Clamp against
+			// maxTorque, which bounds the magnitude but passes NaN through unchanged.
+			Vector2 vector = Vehicle.Clamp2(Driver().controller.CarInput());
 			if (vector != Vector2.zero)
 			{
 				flag = false;
