@@ -1,5 +1,7 @@
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Client;
+using Ironfront.Net.Replication.Match;
+using Ironfront.Net.Unity.Server;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -13,9 +15,15 @@ namespace Ironfront.Net.Unity.Client
     /// <para>
     /// <b>One of D3's three presenters.</b> <c>NetClientCombatPresenter</c> owns death, weapon
     /// fire and hit confirm; <c>NetClientExplosionPresenter</c> owns explosions; this one owns
-    /// <c>OnMatchState</c> only. <b>It does not subscribe <c>OnCapturePoint</c></b> -- that half
-    /// of the objective presenter is task 8, hard-blocked on V8 task 1 (D15), and is added later
-    /// in the same file rather than here.
+    /// <c>OnMatchState</c> (task 7) and <c>OnCapturePoint</c> (task 8).
+    /// </para>
+    /// <para>
+    /// <b>Task 8 was severed from V10 and landed afterwards.</b> D15 blocked it on V8 task 1 for
+    /// two reasons: <c>ApplyAuthoritativeOwner</c> did not exist, and <c>CapturePoint.UpdateOwner</c>
+    /// still ran its own 1 Hz arithmetic on clients, so replicating ownership beside it would have
+    /// made two client-side writers. V8 shipped both halves -- the method, and the
+    /// <c>NetContext.IsOffline</c> gate on the arithmetic -- and the blocker cleared without
+    /// anything picking the task back up. This is that pick-up.
     /// </para>
     /// <para>
     /// <b>The <see cref="MatchPhase.Playing"/> timer rule.</b>
@@ -51,6 +59,7 @@ namespace Ironfront.Net.Unity.Client
 
         private NetClientBootstrap _client;
         private readonly MatchStateModel _model = new MatchStateModel();
+        private readonly CapturePointView _view = new CapturePointView();
         private bool _isDimmed;
 
         private void Awake()
@@ -71,12 +80,14 @@ namespace Ironfront.Net.Unity.Client
         {
             if (_client == null) return;
             _client.Router.OnMatchState += OnMatchState;
+            _client.Router.OnCapturePoint += OnCapturePoint;
         }
 
         private void OnDisable()
         {
             if (_client == null) return;
             _client.Router.OnMatchState -= OnMatchState;
+            _client.Router.OnCapturePoint -= OnCapturePoint;
         }
 
         // Never throws (D22) -- ClientMessageRouter.Route counts malformed input rather than
@@ -84,6 +95,51 @@ namespace Ironfront.Net.Unity.Client
         private void OnMatchState(MatchStateMessage message)
         {
             _model.Apply(in message, Time.time);
+        }
+
+        /// <summary>
+        /// Task 8. Latches the point into the engine-free view, then writes the change through
+        /// <c>CapturePoint.ApplyAuthoritativeOwner</c> -- V8 D3's single write path, and the
+        /// second of the two callers V8 anticipated.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Only dirty points are written.</b> The view returns false for a repeat, and
+        /// <c>ApplyAuthoritativeOwner</c> is not free: it calls <c>SetOwner</c> on a change of
+        /// hands, which drives <c>ScoreUi.AddFlag</c> and <c>MinimapUi.UpdateSpawnPointButtons</c>.
+        /// Writing unconditionally at message rate would add a scoreboard flag repeatedly for a
+        /// point nobody touched -- the failure ApplyAuthoritativeOwner's own remarks describe.
+        /// </para>
+        /// <para>
+        /// <b>The second writer this used to race is gone.</b> D15 severed this task because
+        /// <c>CapturePoint.UpdateOwner</c> still ran its own 1 Hz arithmetic on clients. V8 D2
+        /// gated that behind <c>NetContext.IsOffline</c>, so replicated ownership is now the only
+        /// writer while a match is networked, and this is safe to land.
+        /// </para>
+        /// <para>
+        /// <b>Neutral is passed as -1 explicitly</b>, via the same
+        /// <c>CapturePointOwnership</c> helpers <c>CapturePointSlave.Apply</c> uses on the server,
+        /// so the two sides cannot drift on the mapping. Casting an ownership value to a team and
+        /// letting neutral fall out as team 0 is the mistake the wire's 255 exists to prevent.
+        /// </para>
+        /// <para>
+        /// <b>Contested is the wire's sense</b> -- both teams inside the radius -- which is the
+        /// only one a client can know; the spawning sense is computed from presence the client
+        /// does not have. A point may be owned AND contested (task 4 trap 5).
+        /// </para>
+        /// </remarks>
+        private void OnCapturePoint(CapturePointMessage message)
+        {
+            if (!_view.Apply(in message)) return;
+
+            ICapturePointDirectory points = NetServerBindings.CapturePoints;
+            if (points == null) return;
+
+            points.ApplyAuthoritativeOwner(
+                message.PointId,
+                CapturePointOwnership.ToSpawnPointOwner(message.OwningTeam),
+                CapturePointOwnership.ToControl(message.Owner),
+                message.IsContested);
         }
 
         private void Update()

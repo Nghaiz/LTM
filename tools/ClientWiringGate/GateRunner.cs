@@ -50,12 +50,18 @@ namespace Ironfront.Tools.ClientWiringGate
         /// bug the objectives work exists to remove, one process over.
         /// </para>
         /// </remarks>
+        /// <para>
+        /// <b>Empty since task 8 landed.</b> The <c>OnCapturePoint</c> entry above was the only
+        /// one, and it is worth recording how it aged: V8 shipped both halves it named — the
+        /// method, and the <c>NetContext.IsOffline</c> gate on the client's own arithmetic — so
+        /// the exemption's stated reason ("does not exist yet") became false while the exemption
+        /// itself stayed correct, because nothing had subscribed. It retires on SUBSCRIPTION, not
+        /// on UNBLOCKING, so it sat stale-but-green and the gate went on reporting a blocker that
+        /// no longer existed. A reason string is not checked by anything; if a future entry names
+        /// a blocker, whoever clears that blocker has to come back here by hand.
+        /// </para>
         private static readonly (string EventName, string Reason)[] KnownUnwiredEvents =
-        {
-            ("OnCapturePoint",
-                "phase-V10 task 8, hard-blocked on V8 task 1 (D15): ApplyAuthoritativeOwner is "
-                + "the single write path for capture-point ownership and does not exist yet."),
-        };
+            System.Array.Empty<(string, string)>();
 
         /// <summary>
         /// Every event <c>ClientMessageRouter</c> raises, read off the type itself.
@@ -190,7 +196,9 @@ namespace Ironfront.Tools.ClientWiringGate
             output.WriteLine(
                 $"[client-wiring] {routerEventNames.Count - dead.Count} of "
                 + $"{routerEventNames.Count} ClientMessageRouter events have a production "
-                + $"subscriber and the rest are named gaps above; G2-G5 clean across {scanned} "
+                + "subscriber"
+                + (KnownUnwiredEvents.Length == 0 ? "" : " and the rest are named gaps above")
+                + $"; G2-G5 clean across {scanned} "
                 + "file(s). No types were resolved - this says something subscribes, not that it "
                 + "renders correctly.");
             return 0;
