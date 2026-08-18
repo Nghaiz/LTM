@@ -77,6 +77,66 @@ namespace Ironfront.Net.Protocol
             => vehicleTypeId != NONE && vehicleTypeId <= MAX_ASSIGNED;
 
         /// <summary>
+        /// The physics family each id belongs to, indexed by id. Mirrors the third column of
+        /// protocol-spec.md section 4.9.
+        /// </summary>
+        /// <remarks>
+        /// Index 0 is <see cref="NONE"/> and holds a value nothing reads —
+        /// <see cref="TryGetKind"/> refuses that id rather than returning the slot, because
+        /// <see cref="VehicleKind.Car"/> is the zero value and a table lookup that answers
+        /// "Car" for "no vehicle" is a wrong answer dressed as a correct one.
+        /// </remarks>
+        private static readonly VehicleKind[] Kinds =
+        {
+            default,                // NONE — never read; see TryGetKind.
+            VehicleKind.Car,        // jeep
+            VehicleKind.Car,        // quadbike
+            VehicleKind.Boat,       // rhib
+            VehicleKind.Helicopter, // helicopter
+            VehicleKind.Tank,       // tank
+        };
+
+        /// <summary>
+        /// The <see cref="VehicleKind"/> for an id, per protocol-spec.md section 4.9.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Two type fields, and only one of them is authored on the prefab.</b>
+        /// <c>S_VEHICLE_SPAWN</c> carries both the kind and the id, and the prefab carries only
+        /// <c>networkId</c> — so the sender has to get the kind from somewhere. Deriving it here
+        /// keeps the correspondence in the one file the spec is checked against, instead of
+        /// adding a second serialized byte to every vehicle prefab that could be authored wrong
+        /// with nothing to compare it to.
+        /// </para>
+        /// <para>
+        /// <b>This does not collapse the two fields.</b> A second tank model takes a new id and
+        /// a new row here pointing at the same kind, which is the arrangement section 4.9
+        /// describes and the reason adding one is not a wire change.
+        /// </para>
+        /// <para>
+        /// <c>tools/SpecChecker</c> compares this table against section 4.9's own third column
+        /// on every CI run, so a row added here and forgotten in the document — or the reverse —
+        /// fails the build rather than shipping a kind the client decodes a tail with.
+        /// </para>
+        /// </remarks>
+        /// <returns>
+        /// <c>false</c> for <see cref="NONE"/> and for any id this build does not know, in which
+        /// case <paramref name="kind"/> is <c>default</c> and must not be sent. A sender that
+        /// gets <c>false</c> has a misconfigured prefab and should say so, not guess.
+        /// </returns>
+        public static bool TryGetKind(byte vehicleTypeId, out VehicleKind kind)
+        {
+            if (!IsKnown(vehicleTypeId))
+            {
+                kind = default;
+                return false;
+            }
+
+            kind = Kinds[vehicleTypeId];
+            return true;
+        }
+
+        /// <summary>
         /// The prefab name for an id, or an empty string for <see cref="NONE"/> and for any id
         /// this build does not know.
         /// </summary>

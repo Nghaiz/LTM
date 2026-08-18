@@ -1,4 +1,5 @@
 using System;
+using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.World;
 using Ironfront.Net.Unity.Server;
 using UnityEngine;
@@ -50,6 +51,26 @@ public class VehicleSpawner : MonoBehaviour
 
 	private VehicleSpawnScheduler scheduler;
 
+	/// <summary>
+	/// Names this pad in a log line. Not on the wire -- <c>S_VEHICLE_SPAWN</c> carries no
+	/// spawner field -- so it exists only so "this vehicle was not replicated" can say which
+	/// of the map's fourteen pads to go and look at.
+	/// </summary>
+	private ushort spawnerId;
+
+	/// <summary>
+	/// The network id of <see cref="lastSpawnedVehicle"/>, or 0 when it was not replicated:
+	/// offline, on a client, on an unauthored prefab, or with every vehicle id in use.
+	/// </summary>
+	/// <remarks>
+	/// Held here rather than on <see cref="Vehicle"/> because the despawn has to be reportable
+	/// after the GameObject is destroyed, and a field on a destroyed component is not readable.
+	/// </remarks>
+	private ushort lastSpawnedVehicleNetId;
+
+	/// <summary>So a pad that cannot replicate says so once, not once per respawn forever.</summary>
+	private bool warnedAboutUnreplicatedSpawn;
+
 	// Cached once. A fresh lambda per Update would allocate one delegate per frame per spawner,
 	// which on a map with thirty spawners is thirty allocations every frame for a predicate
 	// that never changes.
@@ -69,6 +90,7 @@ public class VehicleSpawner : MonoBehaviour
 
 		spawnIsBlocked = SpawnIsBlocked;
 		scheduler = new VehicleSpawnScheduler((VehicleRespawnType)respawnType, spawnTime);
+		spawnerId = NetVehicleLifecycle.RegisterSpawner();
 	}
 
 	private void OnEnable()
@@ -136,6 +158,43 @@ public class VehicleSpawner : MonoBehaviour
 		lastSpawnedVehicle.SetSpawner(this);
 		lastSpawnedVehicleHasBeenUsed = false;
 		scheduler.ReportSpawned();
+		AnnounceSpawn();
+	}
+
+	/// <summary>
+	/// Tells the netcode a vehicle now exists here, and remembers the id it was given.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Reported from the transform this spawner instantiated at, not from the vehicle's own
+	/// transform: a rigidbody can have been stepped by physics before this line runs, and the
+	/// position on the wire should be the pad, which is what every client will interpolate
+	/// away from.
+	/// </para>
+	/// <para>
+	/// <b>Id 0 is a real answer, not a failure.</b> Offline and on a client the sink is the
+	/// null object and 0 means "there is no network" -- so this method is silent there. It is
+	/// only worth a line when the server IS replicating and this particular pad still got
+	/// nothing, which means an unauthored prefab or an exhausted id pool.
+	/// </para>
+	/// </remarks>
+	private void AnnounceSpawn()
+	{
+		lastSpawnedVehicleNetId = NetVehicleLifecycle.ReportSpawned(
+			spawnerId,
+			lastSpawnedVehicle.NetworkId,
+			lastSpawnedVehicle.seats != null ? lastSpawnedVehicle.seats.Length : 0,
+			base.transform.position,
+			base.transform.rotation);
+
+		if (lastSpawnedVehicleNetId != 0 || !NetVehicleLifecycle.IsReplicating) return;
+		if (warnedAboutUnreplicatedSpawn) return;
+
+		warnedAboutUnreplicatedSpawn = true;
+		Debug.LogError(
+			$"[net] vehicle spawner '{name}' produced '{prefab.name}' with no network id, so no "
+			+ "client will ever see it. Either the prefab's networkId is unauthored (author it "
+			+ "against protocol-spec.md section 4.9) or every vehicle id is in use.");
 	}
 
 	private bool SpawnIsBlocked()
@@ -145,6 +204,16 @@ public class VehicleSpawner : MonoBehaviour
 
 	public void VehicleDied(Vehicle vehicle)
 	{
+		if (vehicle == lastSpawnedVehicle)
+		{
+			// Before the scheduler, because ReportVehicleDied is what may schedule the
+			// replacement -- and a replacement announced before this despawn would tell every
+			// client to remove the vehicle that had just arrived.
+			NetVehicleLifecycle.ReportDespawned(
+				lastSpawnedVehicleNetId, VehicleDespawnReason.Destroyed);
+			lastSpawnedVehicleNetId = 0;
+		}
+
 		scheduler.ReportVehicleDied(vehicle == lastSpawnedVehicle, lastSpawnedVehicleHasBeenUsed);
 	}
 
@@ -185,6 +254,13 @@ public class VehicleSpawner : MonoBehaviour
 			UnityEngine.Object.Destroy(lastSpawnedVehicle.gameObject);
 		}
 
+		// Reported whether or not the GameObject was still alive: a vehicle destroyed by
+		// something other than its own death path (a scene teardown, a Destroy from anywhere)
+		// leaves the id held and the client's copy standing. Reason WorldReset rather than Destroyed
+		// so a client can tear the round down without playing fourteen explosions.
+		NetVehicleLifecycle.ReportDespawned(lastSpawnedVehicleNetId, VehicleDespawnReason.WorldReset);
+
+		lastSpawnedVehicleNetId = 0;
 		lastSpawnedVehicle = null;
 		lastSpawnedVehicleHasBeenUsed = false;
 

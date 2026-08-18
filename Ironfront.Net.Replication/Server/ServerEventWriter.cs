@@ -167,6 +167,39 @@ namespace Ironfront.Net.Replication.Server
         }
 
         /// <summary>
+        /// Writes S_VEHICLE_SPAWN as a channel-2 payload. Broadcast. Phase-V8 task 6.
+        /// </summary>
+        /// <remarks>
+        /// Reliable and unfiltered, unlike an explosion. A vehicle spawn is not a cue — it is
+        /// what creates the object every later <c>S_VEHICLE_SNAPSHOT</c> entry addresses, so a
+        /// client that misses it has nothing to apply those entries to and no second chance to
+        /// learn the vehicle exists. Earshot filtering would make that permanent for anyone who
+        /// happened to be across the map when a jeep respawned.
+        /// </remarks>
+        public static int WriteVehicleSpawn(Span<byte> destination, in VehicleSpawnMessage message)
+        {
+            Span<byte> body = stackalloc byte[VehicleSpawnMessage.Size];
+            return message.Write(body) < 0
+                ? -1
+                : Frame(destination, ReliableChannel, ServerMessageType.VehicleSpawn, body);
+        }
+
+        /// <summary>Writes S_VEHICLE_DESPAWN as a channel-2 payload. Phase-V8 task 6.</summary>
+        /// <remarks>
+        /// Reliable for the mirror of the reason above: a missed despawn leaves a wreck standing
+        /// on a client forever, and no snapshot removes it — the vehicle simply stops being
+        /// mentioned, which is indistinguishable from one that has not moved.
+        /// </remarks>
+        public static int WriteVehicleDespawn(
+            Span<byte> destination, in VehicleDespawnMessage message)
+        {
+            Span<byte> body = stackalloc byte[VehicleDespawnMessage.Size];
+            return message.Write(body) < 0
+                ? -1
+                : Frame(destination, ReliableChannel, ServerMessageType.VehicleDespawn, body);
+        }
+
+        /// <summary>
         /// Whether a listener at <paramref name="listenerDistanceSquared"/> should receive an
         /// event audible within <paramref name="radius"/> metres.
         /// </summary>

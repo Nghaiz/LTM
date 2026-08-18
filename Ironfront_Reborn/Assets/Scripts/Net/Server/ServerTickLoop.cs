@@ -36,7 +36,7 @@ namespace Ironfront.Net.Unity.Server
     /// </para>
     /// </remarks>
     [DisallowMultipleComponent]
-    public sealed class ServerTickLoop : MonoBehaviour, ISpawnRequestHandler
+    public sealed class ServerTickLoop : MonoBehaviour, ISpawnRequestHandler, IReliablePayloadSender
     {
         private readonly Dictionary<ushort, ServerPlayer> _byConnection =
             new Dictionary<ushort, ServerPlayer>(ProtocolConstants.MAX_ACTORS);
@@ -77,6 +77,11 @@ namespace Ironfront.Net.Unity.Server
         private readonly ServerTickScheduler _scheduler = new ServerTickScheduler();
 
         private readonly byte[] _eventPayload = new byte[ProtocolConstants.MAX_PAYLOAD];
+
+        // Built once and kept across rebinds, so the id quarantine and the counters survive a
+        // transport swap. It is the server's only vehicle-id authority; NetVehicleLifecycle
+        // publishes it to the spawners scattered across the map.
+        private ServerVehicleLifecycleSink _vehicleLifecycle;
 
         // Reused across resets rather than allocated per call. A round boundary is not the hot
         // path, but MAX_ACTORS is the known ceiling and there is no reason to hand the GC a
@@ -217,8 +222,18 @@ namespace Ironfront.Net.Unity.Server
             // advances -- every bot would sit on the same tick's LOD answer forever.
             Current = this;
 
+            // Vehicle spawners are authored assets with no reference to this loop; the static
+            // seam is how S_VEHICLE_SPAWN reaches them. Installed here rather than in Awake for
+            // Current's reason: an unbound loop has no transport to broadcast onto, and a
+            // spawner reporting into one would consume vehicle ids nobody ever hears about.
+            _vehicleLifecycle ??= new ServerVehicleLifecycleSink(this, () => _scheduler.CurrentTick);
+            NetVehicleLifecycle.Install(_vehicleLifecycle);
+
             WarnAboutPlaceholderWeapons();
         }
+
+        /// <summary>The vehicle spawn/despawn sender, for the phase report and for tests.</summary>
+        public ServerVehicleLifecycleSink VehicleLifecycle => _vehicleLifecycle;
 
         /// <summary>
         /// Names, once per server start, every weapon id still running on class-derived
@@ -245,6 +260,15 @@ namespace Ironfront.Net.Unity.Server
         public void Unbind()
         {
             _running = false;
+
+            // Ahead of the early return: a spawner holding the seam would otherwise keep
+            // framing spawns into a transport that is about to be null.
+            NetVehicleLifecycle.Uninstall();
+
+            // The sink outlives a rebind so its counters do, but its ids must not: every
+            // vehicle in the old session is gone and nothing will ever report their despawns,
+            // so without this a rebound server starts each session with fewer ids than the last.
+            _vehicleLifecycle?.Ids.ReleaseAll();
 
             if (Transport == null) return;
 
