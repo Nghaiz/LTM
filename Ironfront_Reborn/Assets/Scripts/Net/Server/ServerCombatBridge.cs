@@ -208,34 +208,22 @@ namespace Ironfront.Net.Unity.Server
         /// </para>
         /// <para>
         /// Spawn points come from the game's own <c>ActorManager</c>, filtered by team the way
-        /// <c>SpawnPoint.owner</c> already defines it. No spawn points at all (a bare test
-        /// scene) leaves the player where they were, which is the previous behaviour.
+        /// <c>SpawnPoint.owner</c> already defines it — reached through
+        /// <see cref="ISpawnPointDirectory"/>, because neither type is visible from an asmdef.
+        /// No spawn points at all (a bare test scene, or nothing registered) leaves the player
+        /// where they were, which is the previous behaviour.
         /// </para>
         /// </remarks>
         private static void MoveToSpawnPoint(ServerPlayer player)
         {
             NetServerActor actor = player.Actor;
-            ActorManager manager = ActorManager.instance;
-            if (manager == null || manager.spawnPoints == null) return;
+            ISpawnPointDirectory spawnPoints = NetServerBindings.SpawnPoints;
+            if (spawnPoints == null) return;
 
-            SpawnPoint chosen = null;
-            int candidates = 0;
+            int chosen = ChooseSpawnIndex(spawnPoints, actor.Team);
+            if (chosen < 0) return;
 
-            // Reservoir sampling over the matching points: one pass, no allocation, and an even
-            // spread rather than always the first one in the array.
-            for (int i = 0; i < manager.spawnPoints.Length; i++)
-            {
-                SpawnPoint point = manager.spawnPoints[i];
-                if (point == null) continue;
-                if (point.owner >= 0 && point.owner != actor.Team) continue;
-
-                candidates++;
-                if (UnityEngine.Random.Range(0, candidates) == 0) chosen = point;
-            }
-
-            if (chosen == null) return;
-
-            Vector3 position = chosen.GetSpawnPosition();
+            Vector3 position = spawnPoints.GetSpawnPosition(chosen);
 
             // Teleport, not a transform write: it disables the CharacterController around the
             // assignment, which otherwise fights it and lands the actor somewhere else.
@@ -246,6 +234,33 @@ namespace Ironfront.Net.Unity.Server
             player.Session.State.Position = core;
             player.Session.State.Velocity = Vec3.Zero;
             player.Session.PreviousPosition = core;
+        }
+
+        /// <summary>
+        /// Picks one spawn slot this team may use, or -1 when the scene offers none.
+        /// </summary>
+        /// <remarks>
+        /// Reservoir sampling over the matching points: one pass, no allocation, and an even
+        /// spread rather than always the first one in the array. Extracted from
+        /// <see cref="MoveToSpawnPoint"/> so the EditMode suite can drive it with a fake
+        /// directory — the team filter and the "no eligible point leaves the player where they
+        /// were" branch are both behaviours a snapshot bug would silently break.
+        /// </remarks>
+        internal static int ChooseSpawnIndex(ISpawnPointDirectory spawnPoints, int team)
+        {
+            int chosen = -1;
+            int candidates = 0;
+            int count = spawnPoints.Count;
+
+            for (int i = 0; i < count; i++)
+            {
+                if (!spawnPoints.IsEligible(i, team)) continue;
+
+                candidates++;
+                if (UnityEngine.Random.Range(0, candidates) == 0) chosen = i;
+            }
+
+            return chosen;
         }
 
         private void EmitWeaponFire(

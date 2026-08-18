@@ -78,17 +78,22 @@ namespace Ironfront.Net.Unity.Server
         /// </para>
         /// <para>
         /// <b>The fallback is for actors with no <c>Actor</c>,</b> which is every bare test rig
-        /// and any replicated prop. It is not a mirror: when <see cref="_actor"/> exists the
+        /// and any replicated prop. It is not a mirror: when <see cref="Source"/> exists the
         /// fallback is dead, and when it does not the fallback is the only copy. Exactly one is
         /// live at any moment, which is the property that matters.
         /// </para>
         /// </remarks>
         public float Health
         {
-            get => _actor != null ? _actor.health : _healthWithoutActor;
+            get
+            {
+                IGameplayActorSource source = Source;
+                return source != null ? source.Health : _healthWithoutActor;
+            }
             set
             {
-                if (_actor != null) _actor.health = value;
+                IGameplayActorSource source = Source;
+                if (source != null) source.Health = value;
                 else _healthWithoutActor = value;
             }
         }
@@ -119,9 +124,13 @@ namespace Ironfront.Net.Unity.Server
         /// </remarks>
         public byte WeaponId
         {
-            get => _actor != null && _actor.activeWeapon != null
-                ? _actor.activeWeapon.NetworkId
-                : _weaponId;
+            get
+            {
+                IGameplayActorSource source = Source;
+                return source != null && source.TryGetActiveWeaponNetworkId(out byte networkId)
+                    ? networkId
+                    : _weaponId;
+            }
             set => _weaponId = value;
         }
 
@@ -192,10 +201,15 @@ namespace Ironfront.Net.Unity.Server
         /// </remarks>
         public bool IsAlive
         {
-            get => _actor != null ? !_actor.dead : _isAliveWithoutActor;
+            get
+            {
+                IGameplayActorSource source = Source;
+                return source != null ? !source.IsDead : _isAliveWithoutActor;
+            }
             set
             {
-                if (_actor != null) _actor.dead = !value;
+                IGameplayActorSource source = Source;
+                if (source != null) source.IsDead = !value;
                 else _isAliveWithoutActor = value;
             }
         }
@@ -206,8 +220,21 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>The movement seam, when this actor has one. Bots may not.</summary>
         public NetMovementAgent Movement { get; private set; }
 
-        /// <summary>The gameplay actor whose health is the authoritative one. May be absent.</summary>
-        private Actor _actor;
+        /// <summary>
+        /// The gameplay actor whose health is the authoritative one, behind the seam that keeps
+        /// this assembly free of <c>Assembly-CSharp</c>. May be absent. See
+        /// <see cref="IGameplayActorSource"/>.
+        /// </summary>
+        private IGameplayActorSource _actorSource;
+
+        /// <summary>
+        /// <see cref="_actorSource"/> while it still refers to a live component, otherwise
+        /// <see langword="null"/> — the exact meaning the <c>_actor != null</c> this replaced
+        /// carried, since a destroyed <c>UnityEngine.Object</c> compares equal to null and a
+        /// plain interface reference does not.
+        /// </summary>
+        private IGameplayActorSource Source
+            => _actorSource != null && _actorSource.Exists ? _actorSource : null;
 
         /// <summary>Health for a replicated object that is not an <c>Actor</c>. See <see cref="Health"/>.</summary>
         private float _healthWithoutActor = 100f;
@@ -218,8 +245,23 @@ namespace Ironfront.Net.Unity.Server
         private void Awake()
         {
             Movement = GetComponent<NetMovementAgent>();
-            _actor = GetComponent<Actor>();
+            // One allocation per actor, at Awake, replacing a GetComponent<Actor>() that the
+            // adapter now performs on the other side of the seam. Nothing here runs per tick.
+            BindGameplaySource(NetServerBindings.ResolveActorSource(gameObject));
         }
+
+        /// <summary>
+        /// Attaches the gameplay actor this component reads its replicated state from.
+        /// </summary>
+        /// <remarks>
+        /// This is <c>Awake</c>'s own step, factored out because an EditMode test cannot reach
+        /// it otherwise: Unity does not run <c>Awake</c> on <c>AddComponent</c> outside play
+        /// mode (verified against this Editor, 6000.3.21f1), so a test that only added the
+        /// component would silently exercise the no-actor fallback and pass while asserting
+        /// nothing. Binding explicitly is what lets the suite pin the pass-throughs — which is
+        /// where the weapon-id-always-0 defect lived.
+        /// </remarks>
+        internal void BindGameplaySource(IGameplayActorSource source) => _actorSource = source;
 
         private void OnEnable() => ServerActorRegistry.Instance.Register(this);
 
