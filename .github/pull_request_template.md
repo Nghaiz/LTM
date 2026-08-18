@@ -1,62 +1,58 @@
 <!--
   Ironfront Reborn — pull request checklist.
 
-  This template exists because "it works on my machine" and "I'll fix the test later" are the
-  two failure modes that cost a four-person team the most during integration week. Every box
-  below maps to a rule in plans/00-shared/conventions.md.
+  Single-owner project. This template is not a gate someone else enforces; it is the record you
+  will read in six weeks when you cannot remember whether a thing was verified or assumed.
+  Every box maps to a rule in plans/00-shared/conventions.md.
 
-  Delete any section that genuinely does not apply, but do not delete an unchecked box just
-  because it is inconvenient — an unchecked box is information for the reviewer.
+  Delete a section that genuinely does not apply. Do not delete an unchecked box because it is
+  inconvenient — an unchecked box is the most useful thing in the file.
 -->
 
 ## What this changes
 
 <!-- One paragraph. What it does and why, not a list of the files you touched. -->
 
-## Definition of Done (conventions.md section 9)
-
-All five must hold before this can merge.
+## Definition of Done (conventions.md section 8)
 
 - [ ] The code has actually been run and the output was inspected — not "it probably runs"
 - [ ] This area's tests are green; `dotnet test` was run and the result was read
-- [ ] The full suite is green — this does not break anyone else's tests
-- [ ] Target branch is `develop` (or this is a milestone merge `develop` -> `main`)
-- [ ] The phase report is written in `plans/dev-X-*/reports/` — including what failed, not
-      only what worked
+- [ ] The full suite is green — this did not break an unrelated area
+- [ ] Unity compiles clean — `tools/ci.ps1` step 4, or a batch-mode compile with `UNITY_PATH` set.
+      Zero `error CS`, and the log was read rather than the exit code trusted
+- [ ] Target branch is `develop` (or this is a milestone merge `develop` → `main`)
+- [ ] The phase report is written in the subsystem's `reports/` — including what failed
 
-## Ownership (conventions.md section 7)
+## What this does NOT verify
 
-- [ ] Every file in this diff is mine to edit, **or** the owner asked for the change / approved it
-- [ ] I did not edit someone else's file "and mention it afterwards" (the only exception is a
-      typo in a comment)
-
-Files touched outside my own area, and who agreed:
-
-<!-- e.g. "none" / "Ironfront.Net.Protocol/ProtocolConstants.cs — agreed with B and C on 12/08" -->
+<!--
+  The most valuable section. Name what is still assumed: a fix that compiles but was never run
+  in play mode, a measurement taken under conditions that do not transfer, a path only exercised
+  by a test double. "Nothing" is a valid answer, but it is rarely the true one.
+-->
 
 ## Protocol change? (conventions.md section 2)
 
 - [ ] **No** — this PR does not touch the wire format
-- [ ] **Yes** — and then all of the following:
-  - [ ] `plans/00-shared/protocol-spec.md` updated in this same PR
+- [ ] **Yes** — and then all of the following, in this same PR:
+  - [ ] `plans/00-shared/protocol-spec.md` updated
   - [ ] `ProtocolConstants.cs` updated to match, and `SpecChecker` passes
   - [ ] A conformance test covering the change was added or updated
   - [ ] `PROTOCOL_VERSION` bumped and recorded in the section 15 table
-  - [ ] **2 approvals**, including everyone the change affects
-  - [ ] All four people know to pull on the same day this lands
+  - [ ] `tools/build-libs.ps1` rerun — Unity reads the vendored DLLs, so an unrebuilt protocol
+        change is not actually in the game
 
 ## Hot-path rules (conventions.md section 3.2)
 
-Skip this section only if the diff touches no per-tick code.
+Skip only if the diff touches no per-tick code.
 
 - [ ] No allocation inside a tick loop — buffers come from a pool
 - [ ] No LINQ in the hot path
 - [ ] Corrupt input returns `false` from a `TryParse`; it does not throw
 - [ ] `NetLog.Debug` calls in the hot path are behind an `if (NetLog.DebugEnabled)` guard
 
-## Notes for the reviewer
+## CI
 
-<!--
-  Optional, and the most useful part of the template when it is filled in. What you were
-  unsure about, what you tried that did not work, where you want a second opinion.
--->
+GitHub Actions is currently blocked repo-wide by a billing limit — jobs fail in 3–5 seconds
+without starting. While that holds, the Definition of Done is satisfied locally and merging over
+red checks is expected. Say so here, so the record does not read as "the tests were ignored".

@@ -141,7 +141,7 @@ namespace Ironfront.Net.Protocol
     /// </summary>
     /// <remarks>
     /// Declared in the protocol rather than in the replication library because two parties
-    /// outside Dev C read it: the client renders a different HUD per phase, and the master
+    /// outside the replication track read it: the client renders a different HUD per phase, and the master
     /// server decides whether a server is joinable from the heartbeat's copy of it. A second
     /// enum on either side is the duplicate source of truth the conventions forbid.
     /// </remarks>

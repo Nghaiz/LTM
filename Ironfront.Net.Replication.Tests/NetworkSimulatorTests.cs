@@ -8,7 +8,7 @@ using Xunit;
 namespace Ironfront.Net.Replication.Tests
 {
     /// <summary>
-    /// Dev B phase-00 acceptance criteria 5 (reproducible with the same seed) and 6 (all five
+    /// the transport track phase-00 acceptance criteria 5 (reproducible with the same seed) and 6 (all five
     /// impairments, each verified statistically over 10,000 packets).
     /// </summary>
     public sealed class NetworkSimulatorTests

@@ -14,7 +14,7 @@ namespace Ironfront.Net.Unity.Client
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C. This is the piece M1 criterion 7 was waiting on — the server layer, the
+    /// This is the piece M1 criterion 7 was waiting on — the server layer, the
     /// transport and the encoder have all been ready; nothing was reading the other end of the
     /// wire.
     /// </para>

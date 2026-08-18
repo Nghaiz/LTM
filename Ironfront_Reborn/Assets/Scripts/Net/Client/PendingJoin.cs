@@ -10,8 +10,8 @@ namespace Ironfront.Net.Unity.Client
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev A. Written by the lead's assist track
-    /// (plans/assist-dev-a/step-06-master-connection.md).
+    /// Written by the lead's assist track
+    /// (plans/unity-client/study/step-06-master-connection.md).
     /// </para>
     /// <para>
     /// This is the junction between the two protocols, and it is deliberately a value with no

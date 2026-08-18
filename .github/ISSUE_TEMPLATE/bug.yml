@@ -15,12 +15,12 @@ body:
       label: Area
       description: Which owner does this land on? (conventions.md section 7)
       options:
-        - client (Dev A — Unity)
-        - transport (Dev B — UDP reliability)
-        - replication (Dev C — snapshots, prediction)
-        - master (Dev D — TCP master server)
+        - client (the client track — Unity)
+        - transport (the transport track — UDP reliability)
+        - replication (the replication track — snapshots, prediction)
+        - master (the master-server track — TCP master server)
         - protocol (shared — wire format)
-        - tools / ci (Dev D)
+        - tools / ci (the master-server track)
         - not sure
     validations:
       required: true

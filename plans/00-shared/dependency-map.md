@@ -19,10 +19,10 @@ flowchart LR
         CS["C: ProtocolConstants<br/>+ conformance test"]
     end
     subgraph W314["WEEKS 3-14 — parallel, asynchronous"]
-        A2["Dev A: client"]
-        B2["Dev B: transport"]
-        C2["Dev C: replication"]
-        D2["Dev D: master server"]
+        A2["the client track: client"]
+        B2["the transport track: transport"]
+        C2["the replication track: replication"]
+        D2["the master-server track: master server"]
     end
     P --> BS & DS & AS & CS
     BS --> A2 & C2
@@ -61,12 +61,12 @@ After week 2, everyone has enough stubs/loopback to run independently through th
 
 | Role | Blocked by (after week 2) | Blocks | Must open Unity |
 |---|---|---|---|
-| **Dev A** — Unity Client | **Nobody** (3 stubs) | Dev C (headless build, week 2) | Yes |
-| **Dev B** — Transport | **Nobody** | A, C (transport, week 2) | No |
-| **Dev C** — Replication (you) | A (headless build, week 2)<br/>B (transport, week 2) | Dev A (snapshot reader, week 2) | Yes |
-| **Dev D** — Master server | **Nobody** | All 3 (CI + build script, week 2) | No |
+| **The client track** — Unity Client | **Nobody** (3 stubs) | the replication track (headless build, week 2) | Yes |
+| **The transport track** — Transport | **Nobody** | A, C (transport, week 2) | No |
+| **The replication track** — Replication (you) | A (headless build, week 2)<br/>B (transport, week 2) | the client track (snapshot reader, week 2) | Yes |
+| **The master-server track** — Master server | **Nobody** | All 3 (CI + build script, week 2) | No |
 
-**Important correction:** Dev A is **not blocked by the backend**. The opposite is true — A is the
+**Important correction:** the client track is **not blocked by the backend**. The opposite is true — A is the
 **integration bottleneck**, because A is the sole owner of the Unity project. That's why A's
 phase-00 states explicitly: *"Prioritize opening up APIs for B/C over finishing your own features."*
 
@@ -107,8 +107,8 @@ Outside those 4 sessions, work whenever you like.
 
 | Who is late | Who is affected | Fallback |
 |---|---|---|
-| **Dev A** late on the headless build | C can't test the tick loop | C uses Unity Editor Play Mode instead of the headless build. Slower, but it works |
-| **Dev B** late on transport | A and C can't integrate | Both continue with stubs/loopback. Only milestone M1 slips, not individual progress |
-| **Dev C** late on snapshots | A has no real data | A uses `FakeSnapshotReader`, generating data from the spec |
-| **Dev D** late on the master server | A can't build the lobby UI | A uses `FakeMasterClient`; the game server runs standalone and the client enters the IP manually |
-| **Dev D** late on CI/build script | **All 3 others are blocked** | This is why it has a week-2 deadline and is D's highest priority |
+| **The client track** late on the headless build | C can't test the tick loop | C uses Unity Editor Play Mode instead of the headless build. Slower, but it works |
+| **The transport track** late on transport | A and C can't integrate | Both continue with stubs/loopback. Only milestone M1 slips, not individual progress |
+| **The replication track** late on snapshots | A has no real data | A uses `FakeSnapshotReader`, generating data from the spec |
+| **The master-server track** late on the master server | A can't build the lobby UI | A uses `FakeMasterClient`; the game server runs standalone and the client enters the IP manually |
+| **The master-server track** late on CI/build script | **All 3 others are blocked** | This is why it has a week-2 deadline and is D's highest priority |

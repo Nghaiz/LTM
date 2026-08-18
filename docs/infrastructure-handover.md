@@ -1,9 +1,9 @@
 # Infrastructure handover
 
-Dev D owns CI, the build scripts, the load test and the deployment infrastructure. The other
-three depend on all of it. This document exists so that none of it stops working when Dev D is
+The master-server track owns CI, the build scripts, the load test and the deployment infrastructure. The other
+three depend on all of it. This document exists so that none of it stops working when the master-server track is
 unavailable — which is the whole point of the bus-factor table in
-[conventions.md § 8](../plans/00-shared/conventions.md), where **Dev B is the master server's
+[conventions.md § 8](../plans/00-shared/conventions.md), where **The transport track is the master server's
 backup**.
 
 Read [`operations.md`](operations.md) first for how to run the system. This is about who holds
@@ -47,7 +47,7 @@ sequence of `scp` commands.
 
 ---
 
-## 2. What Dev D owns
+## 2. What the master-server track owns
 
 | Area | Path | Notes |
 |---|---|---|
@@ -62,7 +62,7 @@ sequence of `scp` commands.
 
 ---
 
-## 3. How to do each job without Dev D
+## 3. How to do each job without the master-server track
 
 ### Publish a new master image
 
@@ -160,13 +160,13 @@ advisory.
 | What happened? | `docker compose logs master`; `journalctl -u ironfront-backup` / `-u ironfront-alert` |
 | Is it leaking? | `tools/chart-durability.ps1` over the durability CSV |
 | Why is this slow / why does this fail? | [`report-chapter-master-server.md`](report-chapter-master-server.md) has the measured limits and their causes |
-| What was decided and why? | [`plans/dev-d-master-server/reports/`](../plans/dev-d-master-server/reports/) — one report per phase, including what failed |
+| What was decided and why? | [`plans/master-server/reports/`](../plans/master-server/reports/) — one report per phase, including what failed |
 
 ---
 
 ## 5. Open handover items
 
-| Item | Blocked on | Impact if Dev D disappears today |
+| Item | Blocked on | Impact if the master-server track disappears today |
 |---|---|---|
 | Azure subscription + 2-person access | nobody has an Azure Student subscription wired up | M3 cannot be demonstrated on a real network; everything else still works on a LAN |
 | `terraform apply` run end to end by someone | the subscription | the config validates (`fmt`/`init`/`validate` pass locally) but has never been applied against real Azure |

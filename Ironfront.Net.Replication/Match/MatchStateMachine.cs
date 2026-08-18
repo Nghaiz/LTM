@@ -33,7 +33,7 @@ namespace Ironfront.Net.Replication.Match
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C. Engine-free for the reason every server rule in this library is
+    /// Engine-free for the reason every server rule in this library is
     /// (decision C-01-6): a MonoBehaviour cannot be reached from CI, so "does the match end
     /// when a team runs out of tickets" and "is the world clean after five rounds" are
     /// answerable from <c>dotnet test</c> instead of from somebody watching a build.

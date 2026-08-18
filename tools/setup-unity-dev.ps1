@@ -1,5 +1,4 @@
 # tools/setup-unity-dev.ps1 — one-shot, per-developer Unity + git setup for this clone.
-# OWNER: Dev D (tools/ and CI, plans/00-shared/conventions.md section 7).
 #
 # WHY THIS SCRIPT EXISTS
 #

@@ -4,7 +4,7 @@
 
 **Goal:** Make the A3 shadow harness compare the sprint state actually consumed by the legacy Unity controller and ignore inactive pre-deployment ticks.
 
-**Architecture:** Keep `MovementCore` and production networking behavior unchanged. `MovementShadowCompare`, which already runs after legacy movement, will read `FirstPersonController.sprinting` for the same physics tick and will only prime/score while both legacy input and character movement are active. The Dev A checklist will request the focused rerun needed to close A3.
+**Architecture:** Keep `MovementCore` and production networking behavior unchanged. `MovementShadowCompare`, which already runs after legacy movement, will read `FirstPersonController.sprinting` for the same physics tick and will only prime/score while both legacy input and character movement are active. The client track checklist will request the focused rerun needed to close A3.
 
 **Tech Stack:** C# 7.3, Unity 6.3 LTS, Unity Standard Assets `FirstPersonController`, .NET 8/xUnit solution tests, PowerShell build tooling.
 
@@ -12,8 +12,8 @@
 
 - Do not modify `MovementCore`, protocol wire formats, or network tick semantics.
 - Do not exclude transition-edge ticks from scoring.
-- Do not edit Dev A-owned legacy controller files; consume their existing public state.
-- A3 remains open until Dev A completes the focused Editor rerun.
+- Do not edit the client track-owned legacy controller files; consume their existing public state.
+- A3 remains open until the client track completes the focused Editor rerun.
 - Work on `codex/fix-a3-shadow-input-alignment`, based on `develop` at `722ba6c`.
 
 ---
@@ -107,7 +107,7 @@ Expected: no whitespace errors; only harness input alignment, readiness gating, 
 ### Task 2: Publish the rerun handoff
 
 **Files:**
-- Modify: `plans/dev-c-replication/handoff/dev-a-checklist.md`
+- Modify: `plans/replication/integration-checklist.md`
 
 **Interfaces:**
 - Consumes: PR #42 evidence and the Task 1 behavior.
@@ -126,7 +126,7 @@ Insert after Round 6:
 > both legacy input and the `CharacterController` are active, removing the pre-deploy airborne
 > noise too. After this PR merges, repeat A3 on flat ground with several walk↔sprint transitions
 > and send the grounded summary plus any flat-ground warnings. **A3 and A4 remain open until that
-> focused rerun is clean.** Evidence: [Dev A's rerun](https://github.com/Sagitoaz/LTM/pull/42).
+> focused rerun is clean.** Evidence: [the client track's rerun](https://github.com/Sagitoaz/LTM/pull/42).
 ```
 
 - [ ] **Step 2: Validate Markdown and scope**
@@ -135,7 +135,7 @@ Run:
 
 ```powershell
 git diff --check
-git diff -- plans/dev-c-replication/handoff/dev-a-checklist.md
+git diff -- plans/replication/integration-checklist.md
 ```
 
 Expected: no whitespace errors and no A3 closure claim.
@@ -179,7 +179,7 @@ Discover `Unity.exe` from Unity Hub installations and run:
 Unity.exe -batchmode -nographics -quit -projectPath Ironfront_Reborn -logFile unity-a3-compile.log
 ```
 
-Expected: exit code 0 and no C# compiler errors. If no Editor executable exists on this machine, record that limitation and rely on the focused source assertion plus Dev A's required Editor rerun.
+Expected: exit code 0 and no C# compiler errors. If no Editor executable exists on this machine, record that limitation and rely on the focused source assertion plus the client track's required Editor rerun.
 
 - [ ] **Step 4: Verify repository scope**
 
@@ -192,12 +192,12 @@ git diff --stat develop...HEAD
 git diff --name-only develop...HEAD
 ```
 
-Expected: only the design, plan, harness, and Dev A checklist are changed; generated logs and unrelated files are absent.
+Expected: only the design, plan, harness, and the client track checklist are changed; generated logs and unrelated files are absent.
 
 - [ ] **Step 5: Commit implementation files**
 
 ```powershell
-git add Ironfront_Reborn/Assets/Scripts/Net/Shared/MovementShadowCompare.cs plans/dev-c-replication/handoff/dev-a-checklist.md docs/superpowers/plans/2026-08-14-a3-shadow-input-alignment.md
+git add Ironfront_Reborn/Assets/Scripts/Net/Shared/MovementShadowCompare.cs plans/replication/integration-checklist.md docs/superpowers/plans/2026-08-14-a3-shadow-input-alignment.md
 git commit -m "fix(replication): align A3 shadow sprint sampling"
 ```
 
@@ -217,7 +217,7 @@ git push -u origin codex/fix-a3-shadow-input-alignment
 
 - [ ] **Step 2: Open a draft PR**
 
-Create a draft PR titled `fix(replication): align A3 shadow sprint sampling` targeting `develop`. The body must summarize the root cause, harness-only fix, readiness gate, verification commands, and the remaining Dev A rerun; it must reference PR #42.
+Create a draft PR titled `fix(replication): align A3 shadow sprint sampling` targeting `develop`. The body must summarize the root cause, harness-only fix, readiness gate, verification commands, and the remaining the client track rerun; it must reference PR #42.
 
 - [ ] **Step 3: Verify the published PR**
 

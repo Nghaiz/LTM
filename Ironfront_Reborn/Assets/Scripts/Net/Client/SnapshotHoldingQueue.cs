@@ -18,8 +18,8 @@ namespace Ironfront.Net.Unity.Client
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev A. Written by the lead's assist track
-    /// (plans/assist-dev-a/step-06-master-connection.md).
+    /// Written by the lead's assist track
+    /// (plans/unity-client/study/step-06-master-connection.md).
     /// </para>
     /// <para>
     /// The problem is phase-03 trap 3: scene loading takes 2-5 seconds and the server is

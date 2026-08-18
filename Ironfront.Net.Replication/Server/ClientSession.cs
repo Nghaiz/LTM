@@ -104,7 +104,7 @@ namespace Ironfront.Net.Replication.Server
         /// The server's copy of this player's weapon numbers. Never accepted from the client.
         /// </summary>
         /// <remarks>
-        /// <see cref="WeaponConfig.Rifle"/> until a loadout message or Dev A's weapon assets
+        /// <see cref="WeaponConfig.Rifle"/> until a loadout message or the client track's weapon assets
         /// say otherwise — the placeholder the phase-05 risk table names. Because the seam
         /// takes a config rather than hardcoding one, swapping in the real numbers is data.
         /// </remarks>

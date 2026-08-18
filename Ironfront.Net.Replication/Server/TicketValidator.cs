@@ -32,9 +32,6 @@ namespace Ironfront.Net.Replication.Server
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// <b>The HMAC comparison is not written here.</b> It is
     /// <see cref="JoinTicket.Verify"/>, which lives beside
     /// <see cref="JoinTicket.Issue"/> in the protocol library precisely so the two halves of

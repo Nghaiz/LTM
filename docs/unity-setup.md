@@ -1,7 +1,7 @@
 # Unity setup — installing, and not breaking everyone else's checkout
 
-Who this is for: anyone on the team who is **not** Dev A and is about to install the Unity Editor
-for the first time. Dev A has had a working Editor since the project started and already lives with
+Who this is for: anyone on the team who is **not** the client track and is about to install the Unity Editor
+for the first time. The client track has had a working Editor since the project started and already lives with
 most of what is below; B, C and D have been authoring `Assets/Scripts/Net/**` without one, which is
 exactly why some of the hazards here exist in the repo today.
 
@@ -98,7 +98,7 @@ which.
 
 ---
 
-## 4. Working without colliding with Dev A
+## 4. Working without colliding with the client track
 
 The repo is already set up correctly for multi-developer Unity work, and it is worth knowing *why*
 each piece is there rather than treating it as background:
@@ -109,7 +109,7 @@ each piece is there rather than treating it as background:
 | 1856 `.meta` committed | ✅ | GUIDs are stable across machines |
 | `merge=unityyamlmerge` routing | ✅ in repo, **manual per clone** | § 2 |
 | `**/[Ll]ibrary/` etc. ignored | ✅ | The first open does not bury your `git status` |
-| `CODEOWNERS`: `/Ironfront_Reborn/` → `@Sagitoaz` | ✅ | Every change under the Unity folder requests Dev A's review before it can merge |
+| `CODEOWNERS`: `/Ironfront_Reborn/` → `` | ✅ | Every change under the Unity folder requests the client track's review before it can merge |
 | `tools/check-unity-meta.ps1` in CI | ✅ | An asset committed without its GUID fails the build instead of breaking a teammate silently |
 
 ### The part no tool can solve
@@ -120,9 +120,9 @@ four scenes in this project and everybody touches them, so the mitigation is sch
 tooling: say so in chat before you open a scene, and keep scene edits in short-lived branches that
 merge the same day.
 
-`conventions.md` § 7 gives `Ironfront_Reborn/Assets/**` to Dev A with "who else may edit: **nobody**",
+`conventions.md` § 7 gives `Ironfront_Reborn/Assets/**` to the client track with "who else may edit: **nobody**",
 and the V-track phases departed from that only for `.cs` files — deliberately. `phase-v0` § 7 states
-it outright: **"No prefab or scene file is edited by Dev C in this phase."** That line is not
+it outright: **"No prefab or scene file is edited by the replication track in this phase."** That line is not
 bureaucracy; it is this section.
 
 ### Reading a prefab is free
@@ -142,7 +142,7 @@ having the gate rather than the guidance:
 
 - **`ServerActorDamageSink.cs`, `ServerCombatBridge.cs`, `ServerCombatEvents.cs` had no `.meta`** —
   from phase-05 until the gate landed. `phase-v10` § 7 item **E2** had already noticed and assigned
-  it to Dev A; it was fixed at the source instead. All three are plain C# classes, not
+  it to the client track; it was fixed at the source instead. All three are plain C# classes, not
   `MonoBehaviour`s, so no prefab or scene could reference them by GUID and the GUIDs could safely be
   generated outside the Editor.
 - **`Assets/Scenes/Splash.meta` was orphaned** — a folder `.meta` for a folder that no longer
@@ -156,4 +156,4 @@ having the gate rather than the guidance:
 - `tools/check-unity-meta.ps1` — the `.meta` gate, wired into `ci.yml` and `tools/ci.ps1`
 - `.gitattributes` — merge routing and line-ending policy
 - `CODEOWNERS` / `plans/00-shared/conventions.md` § 7 — file ownership
-- `plans/dev-c-replication/phases/phase-v10-client-event-consumption.md` § 7 — the E1–E12 Editor items
+- `plans/replication/phases/phase-v10-client-event-consumption.md` § 7 — the E1–E12 Editor items

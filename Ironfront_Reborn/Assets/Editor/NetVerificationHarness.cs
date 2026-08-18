@@ -23,7 +23,7 @@ namespace Ironfront.Editor.Verification
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev A. Verification scaffolding, not shipping code — it lives under
+    /// Verification scaffolding, not shipping code — it lives under
     /// <c>Assets/Editor/</c> so it compiles into <c>Assembly-CSharp-Editor</c> and cannot reach a
     /// player build.
     /// </para>
@@ -748,7 +748,7 @@ namespace Ironfront.Editor.Verification
         /// </summary>
         /// <remarks>
         /// Used instead of naming the counters: the diagnostic surfaces on
-        /// <c>ServerTickScheduler</c>, <c>TickTimeStats</c> and <c>BotLodScheduler</c> are Dev C's
+        /// <c>ServerTickScheduler</c>, <c>TickTimeStats</c> and <c>BotLodScheduler</c> are the replication track's
         /// and change between rounds, and a harness that hardcoded their names would stop
         /// compiling for a reason that has nothing to do with the thing being measured.
         /// </remarks>

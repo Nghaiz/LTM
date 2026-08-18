@@ -8,7 +8,7 @@ namespace Ironfront.Net.Unity
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev A (assist track). The whole point of phase-00 task 3: a controller reading
+    /// The whole point of phase-00 task 3: a controller reading
     /// this instead of <c>UnityEngine.Input</c> is a networked controller, and nothing else
     /// about it has to change.
     /// </para>

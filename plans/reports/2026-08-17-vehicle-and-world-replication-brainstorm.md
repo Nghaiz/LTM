@@ -1,6 +1,6 @@
 # Brainstorm — completing multiplayer: vehicles, mounted weapons, projectiles, objectives
 
-**Written:** 2026-08-17 · **Author:** Dev C · **Status:** design approved, plan pending
+**Written:** 2026-08-17 · **Author:** the replication track · **Status:** design approved, plan pending
 **Audited against:** the repository at `1544e8f`. Every line number below came from a read, not a
 recollection. Reproduce with the greps in § 10.
 
@@ -93,7 +93,7 @@ run. It is also the cheapest real win available, because the transport half alre
 
 `ClientSession` hardcodes `WeaponConfig.Rifle`
 ([`ClientSession.cs:111`](../../Ironfront.Net.Replication/Server/ClientSession.cs#L111)) with no
-assignment path — the in-file comment says *"until a loadout message or Dev A's weapon assets"*.
+assignment path — the in-file comment says *"until a loadout message or the client track's weapon assets"*.
 So all 17 weapons in `WeaponIds` share cooldown 0.1 s, damage 25, range 300 m, clip 30
 (`WeaponModel.cs:52-54`).
 
@@ -326,7 +326,7 @@ Interest management already caps admission; the id pool does not need to.
 ### Bandwidth
 
 Measured today: **1.67 KB/s/client** shipped, against a 5–7 KB/s spec target — roughly 3–4× headroom
-(`plans/dev-c-replication/reports/2026-08-13-phase-04-report.md:57-72`).
+(`plans/replication/reports/2026-08-13-phase-04-report.md:57-72`).
 
 Vehicles ride the existing interest bands (Near 20 Hz, Mid 10 Hz, Far 4 Hz). A realistic
 8-vehicles-visible distribution of 2 Near / 3 Mid / 3 Far gives 82 entries/s; at a ~20 B typical
@@ -372,7 +372,7 @@ design stays auditable.
 | # | Amendment | Origin |
 |---|---|---|
 | A1 | **V10 added and sequenced second.** § 2.4 was not known at approval time | User decision, 2026-08-17 |
-| A2 | **`VehicleIds` registry kept** (`Vehicle.networkId` + a `SpecChecker` gate). `S_VEHICLE_SPAWN`'s `u8 vehicleType` would otherwise have no authority outside the prefabs — the exact hole that produced spec § 4.8 and `WeaponIds` at changelog 2.0.1. Costs ~1 day and a Dev A authoring round | User decision, 2026-08-17 |
+| A2 | **`VehicleIds` registry kept** (`Vehicle.networkId` + a `SpecChecker` gate). `S_VEHICLE_SPAWN`'s `u8 vehicleType` would otherwise have no authority outside the prefabs — the exact hole that produced spec § 4.8 and `WeaponIds` at changelog 2.0.1. Costs ~1 day and a the client track authoring round | User decision, 2026-08-17 |
 | A3 | **Your own explosion is predicted locally** and the matching `S_EXPLOSION` suppressed by `SourceActorId`. Overrides V1's D6, which chose server-sourced cosmetics for everyone; V1 D6's fallback text becomes the primary path | User decision, 2026-08-17 |
 | A4 | **`MAX_VEHICLES` split into two constants** — see § 5 | Reconciling the V3 and V4 lanes |
 | A5 | **`S_PROJECTILE_SPAWN` is 20 B**, not ~16 B | V7 lane; § 5 |
@@ -395,9 +395,9 @@ design stays auditable.
 Per the consumer decision on 2026-08-17: **all code is written here, including files under
 `Assets/Scripts/Assembly-CSharp/`** (`Vehicle.cs`, `Car.cs`, `Tank.cs`, `TankTurret.cs`,
 `Actor.cs`). This is a deliberate, recorded departure from `conventions.md § 7`, on the same
-precedent as phase-05 Task 6 — PR plus a Dev A review round.
+precedent as phase-05 Task 6 — PR plus a the client track review round.
 
-**Dev A owns only what requires the Unity Editor:**
+**The client track owns only what requires the Unity Editor:**
 
 - `.meta` files for new scripts
 - Prefab field wiring (turret references, `NetVehicle` component attachment)
@@ -444,13 +444,13 @@ explicitly; it is recorded here so it is not discovered later as a regression.
 |---|---|---|---|---|
 | Bandwidth exceeds budget once vehicles stream | 3 | 4 | **12** | Criterion 9 grades it rather than assuming it. Fallbacks in priority order: drop angular velocity at Mid/Far, widen the Far band, cut the vehicle snapshot to 10 Hz |
 | Prediction never converges because PhysX diverges faster than the blend corrects | 3 | 5 | **15** | V0 removes the framerate coupling *first*. If it still diverges, D3 degrades to no-prediction behind one flag — the remote-interpolation path is shared, so this is a config change, not a re-architecture |
-| `Actor.cs` conflicts with Dev A's branch | 4 | 3 | **12** | V0 touches it once, early. Sequence V0 before Dev A opens the file; announce it in the PR |
+| `Actor.cs` conflicts with the client track's branch | 4 | 3 | **12** | V0 touches it once, early. Sequence V0 before the client track opens the file; announce it in the PR |
 | Fixing `Car` `Update`→`FixedUpdate` changes single-player feel | 5 | 2 | 10 | Accepted and recorded (§ 7). Pin the new behaviour with a test so it does not drift again |
 | Both capture systems write ownership during the transition | 3 | 4 | 12 | D6 slaves the scene component rather than deleting it; a test asserts `SpawnPoint.owner == CapturePointState.OwningTeam` every tick |
 | Seat-change race against `ReactivateCollisionsWith`'s 0.5 s coroutine | 3 | 3 | 9 | V0 replaces the coroutine with a tick-counted timer owned by the server; the re-check at `Actor.cs:988` becomes an authoritative read |
 | `Tank` turret detachment (destroyed joint + free second body) is not expressible as value sync | 2 | 3 | 6 | Replicate it as an **event** (`S_VEHICLE_DESPAWN` with a wreck flag), not as state. The wreck is cosmetic after death |
 | Protocol v3 review round blocks V4–V7 | 3 | 3 | 9 | V1, V2 and V8 are severable and land during the review |
-| Per-weapon `Configuration` values live only in `_Managers.prefab` | 4 | 2 | 8 | V2 defines the table shape and ships placeholder values; Dev A fills them. The seam takes a `WeaponConfig`, so swapping numbers is data, not code |
+| Per-weapon `Configuration` values live only in `_Managers.prefab` | 4 | 2 | 8 | V2 defines the table shape and ships placeholder values; the client track fills them. The seam takes a `WeaponConfig`, so swapping numbers is data, not code |
 
 Two scores reach 12+ and one reaches 15. The 15 (prediction convergence) has a stated fallback that
 costs one flag; that fallback existing is a precondition of starting V5.
@@ -503,9 +503,9 @@ grep -rln "Vehicle\|Seat\|Tank\|Helicopter" Ironfront_Reborn/Assets/Scripts/Net/
   and the wire-change process
 - [`plans/00-shared/conventions.md`](../00-shared/conventions.md) § 7 — the ownership boundary this
   track departs from, with consent
-- [`plans/dev-c-replication/phases/phase-03-match.md`](../dev-c-replication/phases/phase-03-match.md)
+- [`plans/replication/phases/phase-03-match.md`](../replication/phases/phase-03-match.md)
   — the capture-point plan whose Task 2 § 2.1 shows was only half-executed
-- [`plans/dev-c-replication/phases/phase-05-combat-authority.md`](../dev-c-replication/phases/phase-05-combat-authority.md)
-  — the precedent for editing a Dev A file by PR, and the combat authority this track extends
+- [`plans/replication/phases/phase-05-combat-authority.md`](../replication/phases/phase-05-combat-authority.md)
+  — the precedent for editing a the client track file by PR, and the combat authority this track extends
 - [`docs/codebase-map.md`](../../docs/codebase-map.md) — the original game's shooting flow; § 6 of
   that document explicitly deferred vehicles, which is what this track picks up

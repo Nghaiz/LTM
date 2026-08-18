@@ -14,9 +14,6 @@ namespace Ironfront.Net.Unity.Client
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C. The client end of phase-02 task 2.
-    /// </para>
-    /// <para>
     /// Put this on the same GameObject as <c>NetPredictionClock</c> and
     /// <c>NetMovementAgent</c> — the player prefab. The clock owns the 30 Hz stepping; this
     /// component only listens to it.

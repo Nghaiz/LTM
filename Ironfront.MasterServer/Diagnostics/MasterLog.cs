@@ -30,8 +30,8 @@ namespace Ironfront.MasterServer.Diagnostics
     /// <remarks>
     /// <para>
     /// conventions.md section 3.3 names <c>NetLog</c>, but no such class exists in the
-    /// repository yet and it would belong in Dev B's <c>Ironfront.Net.Transport</c>, which
-    /// Dev D may not edit (section 7). So the master server carries its own equivalent with
+    /// repository yet and it would belong in the transport track's <c>Ironfront.Net.Transport</c>, which
+    /// the master-server track may not edit (section 7). So the master server carries its own equivalent with
     /// the same three levels and the same <see cref="DebugEnabled"/> guard. If a shared
     /// <c>NetLog</c> ever lands in <c>Ironfront.Net.Protocol</c>, this becomes a thin
     /// forwarder.

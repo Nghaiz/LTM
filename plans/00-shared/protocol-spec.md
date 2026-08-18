@@ -587,7 +587,7 @@ Reading the channel out of the application frame would mean the transport could 
 it had already finished reassembling, which is circular. The cost is one byte per datagram, 0.08%
 of `MTU_SAFE`.
 
-**Ownership:** the envelope is written and read by the transport (Dev B). Nothing above the
+**Ownership:** the envelope is written and read by the transport (the transport track). Nothing above the
 transport ever sees it — `ITransportServer.Send` takes a channel id and a payload, and the frame in
 § 4 is what the payload contains.
 
@@ -900,7 +900,7 @@ run by `dotnet test` and by CI on every push.
 > error codes, `buttons` bits, `stateFlags` bits and `changeMask` bits. A renumbering that the other
 > three people do not pick up routes every message to the wrong handler with nothing to point at.
 >
-> **Owner:** written by Dev C (the verifier), against a serializer implemented by Dev B. Keep that
+> **Owner:** written by the replication track (the verifier), against a serializer implemented by the transport track. Keep that
 > split whatever happens to the file locations — see
 > [conventions.md § 7](conventions.md#7-file-ownership-boundaries).
 
@@ -911,10 +911,10 @@ run by `dotnet test` and by CI on every push.
 | Version | Date | Author | Change | Wire change? | PR |
 |---|---|---|---|---|---|
 | 1.0.0-draft | Week 1 | Whole team | Initial version | — | — |
-| **1.0.0** | Week 1 | Dev C (chair) | **Freeze.** Corrected the `PackPos(100f)` worked example (1600 → 1599); pinned MSP `msgType` to little-endian; recorded the `actorId` allocation and 5-second quarantine rules; verified `POS_RANGE` against `LevelBounds` | **No** — `PROTOCOL_VERSION` stays 1 | #3 |
-| **2.0.0** | Week 2 | Dev B + Dev C | **Documented the channel envelope (new § 5.1)**, which the transport had been writing since the UDP layer landed but which no section described — so a decoder written from the spec read `channelSequence` as `messageCount`. Added `CHANNEL_ENVELOPE_SIZE` and `MAX_CHANNEL_PAYLOAD`. **Widened `CONNECT_RESPONSE` 8 → 80 bytes** (echoed `clientSalt` + repeated `joinTicket`) so the server can answer a handshake without storing per-address state — see § 3.1 | **Yes** | (this PR) |
+| **1.0.0** | Week 1 | the replication track (chair) | **Freeze.** Corrected the `PackPos(100f)` worked example (1600 → 1599); pinned MSP `msgType` to little-endian; recorded the `actorId` allocation and 5-second quarantine rules; verified `POS_RANGE` against `LevelBounds` | **No** — `PROTOCOL_VERSION` stays 1 | #3 |
+| **2.0.0** | Week 2 | the transport track + the replication track | **Documented the channel envelope (new § 5.1)**, which the transport had been writing since the UDP layer landed but which no section described — so a decoder written from the spec read `channelSequence` as `messageCount`. Added `CHANNEL_ENVELOPE_SIZE` and `MAX_CHANNEL_PAYLOAD`. **Widened `CONNECT_RESPONSE` 8 → 80 bytes** (echoed `clientSalt` + repeated `joinTicket`) so the server can answer a handshake without storing per-address state — see § 3.1 | **Yes** | (this PR) |
 
-| **2.0.1** | Week 2 | Dev A + Dev D | **Documented the `weaponId` value space (new § 4.8)**, which was a `u8` in three messages from the freeze onward with no section saying what any value meant — the mapping existed only inside `_Managers.prefab`, which the server cannot read. Added `WeaponIds`; SpecChecker now gates spec ↔ code ↔ prefab | **No** — no byte changed | #34 |
+| **2.0.1** | Week 2 | the client track + the master-server track | **Documented the `weaponId` value space (new § 4.8)**, which was a `u8` in three messages from the freeze onward with no section saying what any value meant — the mapping existed only inside `_Managers.prefab`, which the server cannot read. Added `WeaponIds`; SpecChecker now gates spec ↔ code ↔ prefab | **No** — no byte changed | #34 |
 
 > Every change after the freeze must add a row to this table and land via a PR with 2 approvals.
 > **Bump `PROTOCOL_VERSION` only when the bytes on the wire change** — a client and server with
@@ -923,7 +923,7 @@ run by `dotnet test` and by CI on every push.
 
 ### 15.1. Questions settled at the freeze
 
-Each row was an open checkbox in Dev C's phase-00 Task 1. Recorded here so nobody re-argues them.
+Each row was an open checkbox in the replication track's phase-00 Task 1. Recorded here so nobody re-argues them.
 
 | Question | Decision | Recorded in |
 |---|---|---|
@@ -934,4 +934,4 @@ Each row was an open checkbox in Dev C's phase-00 Task 1. Recorded here so nobod
 | Is an `actorId` reused immediately when an actor dies? | **No — 5-second quarantine** | [§ 4.3.1](#431-actorid--allocation-and-lifetime) |
 | Is an 8-bit `changeMask` enough for the future? | Yes for v1 — 7 used, 1 spare. A ninth field is a wire change | [§ 4.3.1](#431-actorid--allocation-and-lifetime) |
 | MSP `msgType` byte order (raised during implementation, not on the original list) | **Little-endian**, per the § 0 default | [§ 10](#10-framing) |
-| The `Serialization/` ownership boundary between Dev B and Dev C | `Quantize` is shared protocol and lives in `Ironfront.Net.Protocol`; `BitWriter`/`BitReader` stay Dev B's in `Ironfront.Net.Replication/Serialization/` | [conventions.md § 7](conventions.md#7-file-ownership-boundaries) |
+| The `Serialization/` ownership boundary between the transport track and the replication track | `Quantize` is shared protocol and lives in `Ironfront.Net.Protocol`; `BitWriter`/`BitReader` stay the transport track's in `Ironfront.Net.Replication/Serialization/` | [conventions.md § 7](conventions.md#7-file-ownership-boundaries) |

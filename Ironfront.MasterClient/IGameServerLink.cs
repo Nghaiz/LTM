@@ -69,8 +69,8 @@ namespace Ironfront.MasterClient
     /// <remarks>
     /// <para>
     /// The counterpart to <see cref="IMasterClient"/>, which is the <i>player's</i> side of
-    /// the same protocol. Both live here, in Dev D's library, because they speak Dev D's
-    /// wire format to Dev D's server; Dev C consumes this interface and owns none of it.
+    /// the same protocol. Both live here, in the master-server track's library, because they speak the master-server track's
+    /// wire format to the master-server track's server; the replication track consumes this interface and owns none of it.
     /// </para>
     /// <para>
     /// <b>Every method is fire-and-forget except registration.</b> A heartbeat that fails to

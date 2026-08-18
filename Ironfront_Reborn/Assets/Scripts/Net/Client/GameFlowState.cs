@@ -5,8 +5,8 @@ namespace Ironfront.Net.Unity.Client
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev A. Written by the lead's assist track
-    /// (plans/assist-dev-a/step-05-game-flow.md).
+    /// Written by the lead's assist track
+    /// (plans/unity-client/study/step-05-game-flow.md).
     /// </para>
     /// <para>
     /// The values are contiguous from zero and are indexed as such by

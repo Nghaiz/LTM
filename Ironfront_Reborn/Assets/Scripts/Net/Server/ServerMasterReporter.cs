@@ -12,9 +12,6 @@ namespace Ironfront.Net.Unity.Server
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// <b>It talks to a port, not to a socket.</b> The component holds an
     /// <see cref="IMatchReporter"/> and defaults to <see cref="NullMatchReporter"/>, which is
     /// standalone mode: the server plays complete matches and is simply not advertised, with
@@ -24,7 +21,7 @@ namespace Ironfront.Net.Unity.Server
     /// </para>
     /// <para>
     /// <b>Wiring the real link is a two-line change and a plugin drop — both landed 2026-08-15,
-    /// closing A11.</b> <c>Ironfront.Net.MasterLink.GameServerMatchReporter</c> adapts Dev D's
+    /// closing A11.</b> <c>Ironfront.Net.MasterLink.GameServerMatchReporter</c> adapts the master-server track's
     /// TCP client onto this port, and <see cref="MasterLinkBootstrap"/> is the boot script that
     /// builds one and hands it to <see cref="SetReporter"/>. It is still not referenced from
     /// this file, and deliberately so: keeping the transport-facing half in its own component is

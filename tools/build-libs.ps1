@@ -1,7 +1,7 @@
 # tools/build-libs.ps1 — builds the pure-.NET libraries and drops the DLLs where Unity
-# can load them. OWNER: Dev D (plans/00-shared/conventions.md section 7).
+# can load them.md section 7).
 #
-# This is the script A, B and C are blocked on: without it, nothing Dev B or Dev C writes
+# This is the script A, B and C are blocked on: without it, nothing the transport track or the replication track writes
 # reaches the Unity project at all. It has a week-2 deadline for that reason.
 #
 # Usage:  pwsh tools/build-libs.ps1 [-Configuration Release]
@@ -93,7 +93,7 @@ try {
     #
     # A missing assembly is the cheaper failure of the two: it surfaces as a TypeLoadException
     # on the one code path that touches it, and the remedy is -IncludeBclFacades. A duplicate
-    # stops Dev A's Editor dead. So the default excludes them.
+    # stops the client track's Editor dead. So the default excludes them.
     #
     # ValueTask lives in netstandard2.1's System.Runtime facade, and IAsyncDisposable /
     # IAsyncEnumerable came in with netstandard2.1 as well -- which is exactly what these two

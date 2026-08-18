@@ -1,7 +1,6 @@
 # tools/run-integration.ps1 — the 2-process integration test.
-# OWNER: Dev C (plans/00-shared/conventions.md section 7). Scaffolded by Dev D because
 # section 4 already names this script as the integration-day gate while the file did not
-# exist; Dev C owns the scenarios that go in it.
+# exist; the replication track owns the scenarios that go in it.
 #
 # conventions.md section 4:
 #     | 2-process integration | All 4 | tools/run-integration.ps1 script | Run every integration day |
@@ -57,7 +56,7 @@ $clientProject = Join-Path $repoRoot "Ironfront.Tools.LoadTest/Ironfront.Tools.L
 # like a regression and is not one.
 #
 # The question that actually distinguishes a stub from an implementation is whether the code
-# touches a socket at all. When Dev D writes the listener, this guard opens by itself — there
+# touches a socket at all. When the master-server track writes the listener, this guard opens by itself — there
 # is no flag to remember to flip.
 # ---------------------------------------------------------------------------------------
 function Test-HasNetworking {
@@ -85,11 +84,11 @@ if (-not $serverReady -or -not $clientReady) {
     Write-Host "Not run, because there is nothing to integrate yet:" -ForegroundColor Yellow
     if (-not $serverReady) {
         Write-Host "  - Ironfront.MasterServer opens no socket — still the Program.cs stub." -ForegroundColor Yellow
-        Write-Host "    Dev D, plans/dev-d-master-server/phases/phase-01-auth-lobby.md" -ForegroundColor Yellow
+        Write-Host "    the master-server track, plans/master-server/phases/phase-01-auth-lobby.md" -ForegroundColor Yellow
     }
     if (-not $clientReady) {
         Write-Host "  - Ironfront.Tools.LoadTest opens no socket — still the Program.cs stub." -ForegroundColor Yellow
-        Write-Host "    Dev D, from M3 onward" -ForegroundColor Yellow
+        Write-Host "    the master-server track, from M3 onward" -ForegroundColor Yellow
     }
     Write-Host ""
     Write-Host "This is a SKIP, not a PASS. Nothing was verified." -ForegroundColor Yellow
@@ -180,7 +179,7 @@ try {
 
     Write-Host ""
     Write-Host "=== 3. Run the load-test client against it ===" -ForegroundColor Cyan
-    # SCENARIOS GO HERE — Dev C owns this list (conventions.md section 7).
+    # SCENARIOS GO HERE — the replication track owns this list (conventions.md section 7).
     # The first one should be the cheapest meaningful assertion: connect, authenticate,
     # receive one lobby message, disconnect cleanly. Add scenarios one at a time; an
     # integration script that tests eight things at once tells you nothing when it goes red.

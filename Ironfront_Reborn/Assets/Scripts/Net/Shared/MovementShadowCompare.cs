@@ -10,7 +10,7 @@ namespace Ironfront.Net.Unity
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C. Closes dev-c-replication phase-00 acceptance criterion 8 (task 5.2 steps
+    /// Closes replication phase-00 acceptance criterion 8 (task 5.2 steps
     /// 1-2), and is the safety strategy for risk C7 — replacing 1188 lines of someone else's
     /// working movement code in one commit is how you break gameplay in a way nobody can
     /// bisect.
@@ -30,7 +30,7 @@ namespace Ironfront.Net.Unity
     /// </para>
     /// <para>
     /// <b>What this harness compares, and what it deliberately does not.</b> Round 5 of the
-    /// Dev A playtest (plans/reports/2026-08-13-unity-a3-shadow-harness.md) reported 87.4 % of
+    /// the client track playtest (plans/reports/2026-08-13-unity-a3-shadow-harness.md) reported 87.4 % of
     /// ticks as divergent and the measurement was not usable, because the harness was comparing
     /// two quantities that are not the same kind of thing:
     /// </para>

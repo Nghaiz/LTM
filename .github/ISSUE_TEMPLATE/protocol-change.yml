@@ -41,10 +41,10 @@ body:
       label: Who is affected
       description: Everyone ticked here must approve the PR (conventions.md section 2).
       options:
-        - label: Dev A — Unity client
-        - label: Dev B — Transport
-        - label: Dev C — Replication
-        - label: Dev D — Master server
+        - label: The client track — Unity client
+        - label: The transport track — Transport
+        - label: The replication track — Replication
+        - label: The master-server track — Master server
     validations:
       required: true
 

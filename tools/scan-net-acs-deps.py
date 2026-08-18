@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Which Assembly-CSharp types does Assets/Scripts/Net/** actually reference in code?
 
-Written for checklist item F (the asmdef split, GitHub issue #83): Dev C's handoff lists
+Written for checklist item F (the asmdef split, GitHub issue #83): The replication track's handoff lists
 three types, and the cost of the split is exactly the size of that list. A grep over the
 raw files answers the wrong question, because every one of these files carries a long
 <remarks> block naming the same types in prose. This strips comments and string literals

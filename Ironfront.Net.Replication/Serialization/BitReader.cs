@@ -8,9 +8,6 @@ namespace Ironfront.Net.Replication.Serialization
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev B (conventions.md section 7).
-    /// </para>
-    /// <para>
     /// Every field read here comes off the network, so running past the end of the buffer is
     /// a routine event, not an exceptional one: a truncated or hostile packet latches
     /// <see cref="Ok"/> false and every later read returns 0. Check <see cref="Ok"/> once

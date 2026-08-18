@@ -83,9 +83,6 @@ namespace Ironfront.Net.Replication.Server
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// <b>Why this is not a <c>Debug.Assert</c>.</b> The sketch's version fires only in a
     /// development build and only on the machine running it, which is exactly the case where
     /// somebody is watching. The leak it is looking for shows up on the second and third round

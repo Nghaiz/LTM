@@ -17,7 +17,7 @@
 > | I5 | Roughly half of all deaths skipped the respawn delay | #71 |
 > | M1-M6 | Null ticket on `PendingJoin.None`, "OK." as an error message, `ApplyDeath` ignoring its message, killfeed prune truncating, null table row | #69, #71 |
 >
-> **Two findings are open and belong to Dev C**, both recorded in code comments rather than only here:
+> **Two findings are open and belong to the replication track**, both recorded in code comments rather than only here:
 > the server implements no reload at all (`InputButtons.Reload` is sent and never read), and
 > `NetClientBootstrap`'s UDP path had never been exercised because every test covering it uses a
 > loopback transport with no ticket-length check.

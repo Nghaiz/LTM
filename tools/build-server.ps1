@@ -1,12 +1,12 @@
 # tools/build-server.ps1 — produces the Unity headless (dedicated-server) build that A and C
-# need to test the game without a full client. OWNER: Dev D (conventions.md section 7).
+# need to test the game without a full client.md section 7).
 #
 # WHY THIS EXISTS: A and C cannot test server-side gameplay against a real headless build
 # without a one-command way to produce one. It is a week-2 handoff item alongside
 # build-libs.ps1 for that reason (dev-d phase-00-foundation.md section 5).
 #
-# THE OWNERSHIP SPLIT. Dev D owns this script; the Editor-side build method it invokes lives
-# under Ironfront_Reborn/Assets/Editor and belongs to Dev A (plan.md section 2 — Dev D does
+# THE OWNERSHIP SPLIT. The master-server track owns this script; the Editor-side build method it invokes lives
+# under Ironfront_Reborn/Assets/Editor and belongs to the client track (plan.md section 2 — the master-server track does
 # not edit the Unity project). Unity cannot produce a player from CLI flags alone: -buildTarget
 # only switches the active target, it does not call BuildPipeline.BuildPlayer. So a dedicated
 # server build genuinely needs an [MenuItem]/static method on the Unity side. The contract is:
@@ -16,7 +16,7 @@
 # reading its output directory from the -buildOutput command-line argument this script passes,
 # building StandaloneLinux64 with the Server subtarget, and calling EditorApplication.Exit with
 # a non-zero code on failure. If that method is absent Unity exits non-zero and this script
-# prints exactly what Dev A needs to add.
+# prints exactly what the client track needs to add.
 #
 # Like the Unity step in ci.ps1, this is OPT-IN via UNITY_PATH: B, C and the CI runner are
 # never blocked by not having an Editor installed.
@@ -38,7 +38,7 @@ param(
     # Where the headless build lands, relative to the repo root unless absolute.
     [string]$OutputPath = "build/server",
 
-    # The static Editor method that actually calls BuildPipeline.BuildPlayer. Dev A's contract.
+    # The static Editor method that actually calls BuildPipeline.BuildPlayer. The client track's contract.
     [string]$BuildMethod = "Ironfront.EditorBuild.BuildDedicatedServer",
 
     # The tarball images.yml consumes. The filename is matched literally by the workflow, so it is
@@ -92,7 +92,7 @@ Set it to your Unity Editor executable and re-run, e.g.:
     Write-Host ""
 
     # -batchmode -nographics -quit: no window, no GPU, exit when done. -executeMethod runs
-    # Dev A's build method; -buildOutput is our own argument that method reads to know where
+    # the client track's build method; -buildOutput is our own argument that method reads to know where
     # to write. Unity passes every unrecognised argument through to Environment.GetCommandLineArgs.
     #
     # -buildTarget Linux64 does not build anything on its own (see the ownership note above),
@@ -114,7 +114,7 @@ Set it to your Unity Editor executable and re-run, e.g.:
         Write-Warning "Unity exited with code $unityExit. See $logFile."
         Write-Warning @"
 If the log says the method '$BuildMethod' could not be found, the Editor-side build script is
-not in the project yet. That script is Dev A's (Ironfront_Reborn/Assets/Editor); it must expose:
+not in the project yet. That script is the client track's (Ironfront_Reborn/Assets/Editor); it must expose:
 
     public static void $BuildMethod()   // reads -buildOutput, builds StandaloneLinux64 (Server
                                          // subtarget), and EditorApplication.Exit(1) on failure.

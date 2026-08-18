@@ -10,8 +10,8 @@ namespace Ironfront.Net.Unity
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev A (assist track). <b>Temporary.</b> Delete this file, and the two lines in
-    /// <c>FpsActorController.Awake</c> that install it, once Dev A has played a session and the
+    /// <b>Temporary.</b> Delete this file, and the two lines in
+    /// <c>FpsActorController.Awake</c> that install it, once the client track has played a session and the
     /// Console stayed quiet. It is written to be deleted — nothing depends on it.
     /// </para>
     /// <para>
