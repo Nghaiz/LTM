@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Ironfront.Net.Unity.Client;
 using UnityEngine;
 
 public class DecalManager : MonoBehaviour
@@ -142,6 +143,17 @@ public class DecalManager : MonoBehaviour
 		// pure cost when nothing will be drawn.
 		if (instance == null)
 		{
+			return;
+		}
+		// decalMeshData and vertexIndex are built in StartGame() -> InitMeshes(), not Awake(),
+		// so instance can be non-null with both still unset (V10 Task 9 defect 4, same shape
+		// as MinimapUi defect 2).
+		if (instance.decalMeshData == null || instance.vertexIndex == null)
+		{
+			NetClientPresenterGuard.WarnOnce(
+				"decal-manager-not-ready",
+				"[net] DecalManager.AddDecal ran before StartGame() built the decal mesh data. "
+				+ "Skipping this decal.");
 			return;
 		}
 		Vector3 vector = Vector3.Cross(normal, UnityEngine.Random.insideUnitSphere).normalized * (size / 2f);

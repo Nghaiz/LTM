@@ -46,6 +46,13 @@
     -->
     <ProjectReference Include="..\Ironfront.MasterClient\Ironfront.MasterClient.csproj" />
     <ProjectReference Include="..\Ironfront.Net.MasterLink\Ironfront.Net.MasterLink.csproj" />
+    <!--
+      phase-V10 task 11. The client-wiring gate's detectors are pure functions over a parsed
+      syntax tree precisely so their RED paths can be exercised here: a gate nobody has watched
+      fail is unproven, and this one exists because six router events reached production unwired.
+      Referencing the tool from the test project is what makes that possible.
+    -->
+    <ProjectReference Include="..\tools\ClientWiringGate\ClientWiringGate.csproj" />
   </ItemGroup>
 
 </Project>

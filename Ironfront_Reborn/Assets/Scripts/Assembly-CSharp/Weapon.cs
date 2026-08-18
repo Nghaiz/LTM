@@ -337,10 +337,6 @@ public class Weapon : MonoBehaviour
 		{
 			SpawnProjectile(direction);
 		}
-		if (configuration.muzzleFlash != null)
-		{
-			configuration.muzzleFlash.Play(true);
-		}
 		if (ammo != -1)
 		{
 			ammo--;
@@ -351,15 +347,58 @@ public class Weapon : MonoBehaviour
 		{
 			configuration.casing.Play(false);
 		}
-		if (!configuration.auto)
-		{
-			audio.Play();
-		}
-		else if (ammo == 0)
+		if (configuration.auto && ammo == 0)
 		{
 			StopFireLoop();
 		}
-		if (!user.aiControlled && reverbAudio != null)
+		// An automatic weapon's report is a LOOP started from Fire(), not a per-shot clip, so
+		// the local path must not also fire one here. See PlayFireCosmetics for why the
+		// networked path passes true instead.
+		PlayFireCosmetics(!configuration.auto);
+	}
+
+	/// <summary>
+	/// The visible and audible half of one shot: the muzzle flash and the report. Nothing else.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Extracted so the networked cosmetic path and <see cref="Shoot"/> run the SAME code
+	/// (phase-V10 D7). There is one copy, so a weapon that flashes offline flashes over the
+	/// network, and offline single-player is unchanged.
+	/// </para>
+	/// <para>
+	/// <b>Two things are outside this method by construction, and must stay outside it.</b>
+	/// <see cref="SpawnProjectile"/> sets <c>component.source = user</c> and would do REAL
+	/// DAMAGE from a client that is only meant to be drawing a flash. <c>user.ApplyRecoil</c>
+	/// chains through to <c>FpsActorController</c>'s <c>fpParent</c> — the LOCAL camera rig — so
+	/// running it for a remote shooter kicks your own view. A CI gate asserts that no file under
+	/// <c>Net/Client/</c> references either name.
+	/// </para>
+	/// <para>
+	/// <paramref name="playReport"/> exists because the full-auto report is a loop owned by
+	/// <c>Fire()</c>, which the networked path never enters: each <c>S_WEAPON_FIRE</c> is one
+	/// shot, so it plays one report per message and the loop stays a local-player optimisation
+	/// (V10 D8). Calling <see cref="Shoot"/> alone on an automatic weapon would be SILENT, which
+	/// reads as "network audio is flaky" rather than "wrong entry point".
+	/// </para>
+	/// </remarks>
+	public void PlayFireCosmetics()
+	{
+		PlayFireCosmetics(true);
+	}
+
+	/// <inheritdoc cref="PlayFireCosmetics()"/>
+	public void PlayFireCosmetics(bool playReport)
+	{
+		if (configuration.muzzleFlash != null)
+		{
+			configuration.muzzleFlash.Play(true);
+		}
+		if (playReport)
+		{
+			audio.Play();
+		}
+		if (user != null && !user.aiControlled && reverbAudio != null)
 		{
 			PlayReverbAudio();
 		}

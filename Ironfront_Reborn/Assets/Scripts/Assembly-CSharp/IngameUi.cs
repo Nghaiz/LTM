@@ -62,7 +62,32 @@ public class IngameUi : MonoBehaviour
 
 	private Coroutine flashVehicleBarCoroutine;
 
+	/// <summary>Marks a hit at normal severity. Every pre-V10 caller lands here unchanged.</summary>
 	public static void Hit()
+	{
+		Hit(0);
+	}
+
+	/// <summary>
+	/// Marks a hit, loud in proportion to what it was: 0 normal, 1 headshot, 2 kill.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The parameterless form could not express the severity the networked hitmarker model
+	/// computes, and a kill outranks a headshot when both are true. This overload is additive —
+	/// <see cref="Hit()"/> delegates here with 0, so no existing caller changes behaviour.
+	/// </para>
+	/// <para>
+	/// <c>int</c> rather than the <c>HitmarkerSeverity</c> enum on purpose: Assembly-CSharp
+	/// takes no dependency on Ironfront.Net.Replication for a cosmetic. The mapping is the
+	/// enum's own numeric order, which is why that enum is documented as ordered by loudness.
+	/// </para>
+	/// <para>
+	/// Not to be confused with <c>Hit(Ray, RaycastHit)</c> on the projectile hierarchy — a
+	/// different method on a different type.
+	/// </para>
+	/// </remarks>
+	public static void Hit(int severity)
 	{
 		// Reached from every projectile, melee and explosion impact, so it runs on a dedicated
 		// server for every bot-versus-bot hit. There is no HUD there to mark.
@@ -72,7 +97,7 @@ public class IngameUi : MonoBehaviour
 		}
 		if (OptionsUi.GetOptions().hitmarkers)
 		{
-			instance.ShowHitmarker();
+			instance.ShowHitmarker(severity);
 		}
 	}
 
@@ -169,11 +194,15 @@ public class IngameUi : MonoBehaviour
 		canvas.enabled = true;
 	}
 
-	private void ShowHitmarker()
+	private void ShowHitmarker(int severity)
 	{
 		if (hitmarkerAction.Done())
 		{
 			hitmarkerAction.Start();
+			// Severity rides the pitch rather than a second clip: a headshot ticks higher and a
+			// kill higher still, off the one authored sound. The colour is client-track work
+			// (E7) -- the audio is what the shipped component can already express.
+			hitmarkerSound.pitch = 1f + 0.15f * Mathf.Clamp(severity, 0, 2);
 			hitmarkerSound.Play();
 		}
 	}
