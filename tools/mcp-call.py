@@ -2,9 +2,12 @@
 """Minimal MCP Streamable-HTTP client for the Unity gamedev-mcp-server.
 
 The Unity Editor's MCP server (Library/mcp-server/win-x64/gamedev-mcp-server.exe) listens on
-127.0.0.1:<port> with client-transport=streamableHttp and auth=none, but it is not registered as
-an MCP server in this Claude Code session. This script speaks the transport directly so Editor
-work can be driven from a shell.
+127.0.0.1:<port> with client-transport=streamableHttp and auth=none, but its tools may be absent
+from a given Claude Code session. Precisely: the server is registered and still appears in the
+session's available-server roster, yet a session that bound while the Editor was down carries zero
+`mcp__ai-game-developer__*` tools for its whole life (verified 2026-08-18 — the client never re-dials
+the port, so starting Unity afterwards does not help that session). This script speaks the transport
+directly so Editor work can be driven from a shell.
 
 Usage:
     python tools/mcp-call.py list
