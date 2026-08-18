@@ -523,6 +523,64 @@ namespace Ironfront.Net.Unity.Server
             ReportDeathToMatch(victimActorId);
         }
 
+        /// <summary>
+        /// Sends S_EXPLOSION to every client within earshot of the blast. phase-V1 task 2.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Filtered, not broadcast</b> — the one place this differs from
+        /// <see cref="EmitDeath"/>, and the difference is the whole point. A death is a killfeed
+        /// entry and the killfeed is global; an explosion 900 m away is a sound nobody can hear
+        /// and a flash nobody can see. <c>ExplosionAudibleRadius</c> and
+        /// <see cref="SendToListenersInEarshot"/> have both existed since phase-02 and phase-05
+        /// respectively, each waiting for the other.
+        /// </para>
+        /// <para>
+        /// <b>Reliable, unlike a gunshot.</b> <c>ServerEventWriter.WriteExplosion</c> already
+        /// argues it: a missed muzzle flash is invisible, a missed explosion is a player dying
+        /// to nothing.
+        /// </para>
+        /// <para>
+        /// <b>No <c>MarkDeath</c> and no match report.</b> An explosion is not a death. The
+        /// deaths it causes arrive separately through <c>Actor.Damage</c> and phase-05's
+        /// existing path, which is what keeps one blast that kills four people from producing
+        /// four explosions or one death.
+        /// </para>
+        /// <para>
+        /// Allocation-free: frames into the shared <c>_eventPayload</c>, and the earshot test
+        /// compares squared distance so no square root runs per (event, client) pair.
+        /// </para>
+        /// </remarks>
+        /// <param name="sourceActorId">
+        /// Who set it off, or <c>DeathMessage.EnvironmentKiller</c> for the world. Carried so a
+        /// client can attribute — and, at V10, suppress — its own blast.
+        /// </param>
+        /// <param name="radiusMetres">
+        /// The radius the damage loop actually selected on, passed in rather than re-read, so
+        /// the radius on the wire and the radius that hurt somebody cannot drift apart (D4).
+        /// </param>
+        public void EmitExplosion(
+            ushort sourceActorId, in Vec3 centre, float radiusMetres, ExplosionKind kind)
+        {
+            var message = new ExplosionMessage(
+                sourceActorId,
+                Quantize.PackPos(centre.X),
+                Quantize.PackPos(centre.Y),
+                Quantize.PackPos(centre.Z),
+                ExplosionEncoding.PackRadiusMetres(radiusMetres),
+                kind);
+
+            int written = ServerEventWriter.WriteExplosion(_eventPayload, in message);
+            if (written < 0) return;
+
+            SendToListenersInEarshot(
+                centre,
+                ServerEventWriter.ExplosionAudibleRadius,
+                new ReadOnlySpan<byte>(_eventPayload, 0, written),
+                (byte)ServerEventWriter.ReliableChannel,
+                reliable: true);
+        }
+
         /// <summary>Reports a death to the match, once, for the score and the win condition.</summary>
         /// <remarks>
         /// Resolved through the registry rather than taken as a team argument so the caller
