@@ -317,7 +317,7 @@ namespace Ironfront.Net.Replication.Tests
 
             if (isClient) return;
 
-            sink.ApplyDamage(victimId, 100f, attackerId: 99);
+            sink.ApplyDamage(victimId, 100f, balanceDamage: 0f, attackerId: 99);
             outcome.ActorsDamaged++;
         }
 
@@ -333,7 +333,8 @@ namespace Ironfront.Net.Replication.Tests
             public readonly List<(ushort Victim, float Amount, ushort Attacker)> Calls =
                 new List<(ushort, float, ushort)>();
 
-            public DamageOutcome ApplyDamage(ushort victimId, float amount, ushort attackerId)
+            public DamageOutcome ApplyDamage(
+                ushort victimId, float amount, float balanceDamage, ushort attackerId)
             {
                 Calls.Add((victimId, amount, attackerId));
                 return new DamageOutcome(0f, died: true);

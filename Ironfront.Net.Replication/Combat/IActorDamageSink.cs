@@ -45,12 +45,29 @@ namespace Ironfront.Net.Replication.Combat
     public interface IActorDamageSink
     {
         /// <summary>
-        /// Applies <paramref name="amount"/> damage to <paramref name="victimId"/>.
+        /// Applies <paramref name="healthDamage"/> and <paramref name="balanceDamage"/> to
+        /// <paramref name="victimId"/>.
         /// </summary>
+        /// <param name="balanceDamage">
+        /// Stagger, subtracted from the victim's balance. phase-V2 D6.
+        /// <c>Actor.Damage(healthDamage, balanceDamage, ...)</c> has taken this number since
+        /// before the netcode existed and the server has always passed zero, so no weapon has
+        /// ever staggered anyone on a dedicated server. Widening the interface rather than
+        /// adding an overload is deliberate: two signatures for one concept is the SSOT
+        /// violation <c>development-principles.md</c> forbids, and the compiler enumerates every
+        /// call site for free.
+        /// <para>
+        /// <b>Applied server-side and not replicated</b> (D7). The authoritative view and the
+        /// bots stagger correctly; a remote client sees none of it, because there is no wire
+        /// field for stagger and <c>ActorStateFlags</c> is 8/8 full. That is a V3 decision, not
+        /// something this seam can smuggle in.
+        /// </para>
+        /// </param>
         /// <param name="attackerId">
         /// For the killfeed and for friendly-fire rules. Never used to decide whether the
         /// damage lands — that was settled before this call.
         /// </param>
-        DamageOutcome ApplyDamage(ushort victimId, float amount, ushort attackerId);
+        DamageOutcome ApplyDamage(
+            ushort victimId, float healthDamage, float balanceDamage, ushort attackerId);
     }
 }

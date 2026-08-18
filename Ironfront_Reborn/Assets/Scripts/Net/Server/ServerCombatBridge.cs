@@ -85,9 +85,16 @@ namespace Ironfront.Net.Unity.Server
 
             BuildTargets(tick);
 
+            // Hoisted to a local because WeaponConfig is a property since phase-V2 (D9) and an
+            // explicit `in` argument needs an lvalue. This IS the struct copy that decision
+            // priced: ~48 bytes once per accepted frame per player, no allocation. The escape
+            // hatch it named -- caching the config for the duration of a tick -- is exactly this
+            // local, and deliberately not a second stored field.
+            WeaponConfig weapon = session.WeaponConfig;
+
             CombatTickResult result = _authority.Step(
                 ref session.Weapon,
-                in session.WeaponConfig,
+                in weapon,
                 session.ActorId,
                 in frame,
                 in session.State,
@@ -136,6 +143,12 @@ namespace Ironfront.Net.Unity.Server
             actor.IsAlive = true;
 
             MoveToSpawnPoint(player);
+
+            // BEFORE ResetWeapon, always. The clip size comes from the config, the config is
+            // derived from this id (phase-V2 D9), and re-arming an unassigned id loads a clip of
+            // zero — which presents as FireRejection.NoAmmo forever and reads exactly like the
+            // ammo bug phase-05 closed.
+            session.WeaponId = actor.WeaponId;
 
             session.ResetWeapon();
             actor.AmmoInClip = session.Weapon.AmmoInClip;
@@ -293,7 +306,8 @@ namespace Ironfront.Net.Unity.Server
             {
                 ref readonly HitResult hit = ref _hits[i];
 
-                float damage = ServerFireResolver.DamageFor(in shooter.WeaponConfig, hit.HitboxType);
+                WeaponConfig config = shooter.WeaponConfig;
+                float damage = ServerFireResolver.DamageFor(in config, hit.HitboxType, hit.Distance);
 
                 HitFlags flags = HitFlags.None;
                 if (hit.IsHeadshot) flags |= HitFlags.Headshot;

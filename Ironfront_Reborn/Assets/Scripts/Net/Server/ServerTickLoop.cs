@@ -92,6 +92,9 @@ namespace Ironfront.Net.Unity.Server
         private double _lastPumpMs;
         private bool _running;
 
+        /// <summary>So a rebind does not repeat the phase-V2 placeholder-weapon warning.</summary>
+        private bool _warnedAboutPlaceholderWeapons;
+
         public ServerTickLoop()
         {
             _lagCompensator = new LagCompensator(_hitboxHistory);
@@ -213,6 +216,29 @@ namespace Ironfront.Net.Unity.Server
             // and no tick, so advertising it would hand BotLodGate a CurrentTick that never
             // advances -- every bot would sit on the same tick's LOD answer forever.
             Current = this;
+
+            WarnAboutPlaceholderWeapons();
+        }
+
+        /// <summary>
+        /// Names, once per server start, every weapon id still running on class-derived
+        /// placeholder numbers.
+        /// </summary>
+        /// <remarks>
+        /// phase-V2 D3. A catalog whose placeholder status is only a comment is a worse artifact
+        /// than no catalog: "every weapon is a rifle" is visible inside one match, while "every
+        /// weapon is a plausible-looking wrong number" is visible to nobody. A line in every
+        /// server log is the cheapest thing that keeps it from decaying into folklore. Guarded so
+        /// a rebind does not repeat it.
+        /// </remarks>
+        private void WarnAboutPlaceholderWeapons()
+        {
+            if (_warnedAboutPlaceholderWeapons) return;
+            _warnedAboutPlaceholderWeapons = true;
+
+            if (WeaponCatalog.PlaceholderCount == 0) return;
+
+            NetLog.Warn(WeaponCatalog.DescribeUnauthored());
         }
 
         /// <summary>Detaches from the transport. Safe to call when never bound.</summary>
@@ -685,7 +711,11 @@ namespace Ironfront.Net.Unity.Server
 
                 // Re-armed with the round, so a player who ended the previous one mid-reload
                 // does not start this one with the old clock still running and a clip that
-                // refills a second in.
+                // refills a second in. The id goes first: the clip size is derived from it
+                // (phase-V2 D9), so re-arming an unassigned id loads a clip of zero.
+                NetServerActor roundActor = _players[i].Actor;
+                if (roundActor != null) _players[i].Session.WeaponId = roundActor.WeaponId;
+
                 _players[i].Session.ResetWeapon();
             }
         }
@@ -742,7 +772,10 @@ namespace Ironfront.Net.Unity.Server
             player.SyncFromActor();
 
             // The session's clip and the actor's must agree from the first snapshot, or the
-            // client's first reload reconciles against a number nobody ever set.
+            // client's first reload reconciles against a number nobody ever set. The weapon id
+            // is assigned first for the same reason it is at the other two ResetWeapon sites
+            // (phase-V2 D9): the clip size is derived from it.
+            player.Session.WeaponId = actor.WeaponId;
             player.Session.ResetWeapon();
             actor.AmmoInClip = player.Session.Weapon.AmmoInClip;
 

@@ -195,9 +195,13 @@ namespace Ironfront.Editor.Verification
         /// </para>
         /// <para>
         /// Spread is forced to zero for the duration so a miss is a miss rather than an unlucky
-        /// cone roll, and the shooter's original <see cref="WeaponConfig"/> is restored before
-        /// returning. Cooldown is zeroed for the same reason: at 0.1 s every shot after the first
-        /// would be swallowed by the rate limiter and score as a silent miss.
+        /// cone roll, and the resolver's original scale is restored before returning. Since
+        /// phase-V2 the weapon config is derived from the weapon id and cannot be overwritten
+        /// (D9), so the zeroing goes through
+        /// <see cref="ServerFireResolver.DiagnosticSpreadScale"/> rather than through a
+        /// substitute <see cref="WeaponConfig"/> — which is the better seam anyway: it perturbs
+        /// one cone instead of replacing every number the shot is graded on. The rate limiter is
+        /// handled per shot by stamping <c>LastFiredTime</c> back, which this loop already did.
         /// </para>
         /// </remarks>
         /// <param name="reviveTargets">
@@ -239,10 +243,11 @@ namespace Ironfront.Editor.Verification
             uint tick = loop.CurrentTick;
             uint rewindTick = LagCompensator.ResolveTargetTick(tick, rtt);
 
-            WeaponConfig restore = session.WeaponConfig;
-            session.WeaponConfig = new WeaponConfig(
-                cooldown: 0f, spread: 0f, projectilesPerShot: 1, range: restore.Range,
-                damage: restore.Damage, force: restore.Force, clipSize: restore.ClipSize);
+            WeaponConfig weapon = session.WeaponConfig;
+
+            ServerFireResolver resolver = loop.CombatAuthority.FireResolver;
+            float restoreSpreadScale = resolver.DiagnosticSpreadScale;
+            resolver.DiagnosticSpreadScale = 0f;
 
             LagCompensator lag = loop.LagCompensator;
             int wallShots = 0, wallHits = 0, wallOccluded = 0;
@@ -275,7 +280,7 @@ namespace Ironfront.Editor.Verification
                 var aimPoint = new Vector3(centre.X, centre.Y, centre.Z);
                 Vector3 toTarget = aimPoint - origin;
                 float distance = toTarget.magnitude;
-                if (distance < 4f || distance > restore.Range) continue;
+                if (distance < 4f || distance > weapon.Range) continue;
 
                 bool blocked = Physics.Linecast(origin, aimPoint, BulletBlockingLayers);
 
@@ -286,7 +291,7 @@ namespace Ironfront.Editor.Verification
                 float pitch = -Mathf.Asin(Mathf.Clamp(toTarget.y / distance, -1f, 1f)) * Mathf.Rad2Deg;
 
                 session.Weapon.LastFiredTime = -1000f;
-                session.Weapon.AmmoInClip = restore.ClipSize;
+                session.Weapon.AmmoInClip = weapon.ClipSize;
                 session.Weapon.Reloading = false;
 
                 long resolvedBefore = lag.ShotsResolved;
@@ -320,7 +325,7 @@ namespace Ironfront.Editor.Verification
                     .Append("->").Append(target.Health.ToString("0", CultureInfo.InvariantCulture));
             }
 
-            session.WeaponConfig = restore;
+            resolver.DiagnosticSpreadScale = restoreSpreadScale;
 
             return "shooter actor " + session.ActorId
                    + " origin " + origin.ToString("0.0")

@@ -26,6 +26,16 @@ namespace Ironfront.Net.Protocol
     /// <c>tools/SpecChecker</c> verifies this file against the spec document AND against the
     /// prefab on every CI run, so the three copies cannot drift apart in silence.
     /// </para>
+    /// <para>
+    /// <b>There is a FOURTH copy of this id space:</b>
+    /// <c>Ironfront.Net.Replication.Combat.WeaponCatalog</c>, which maps each id to the server's
+    /// weapon numbers (phase-V2). It is deliberately NOT behind SpecChecker — the id is a wire
+    /// contract, the numbers are not, and gating a balance tweak on two protocol approvals is how
+    /// balance work stops happening. Its gate is the unit test
+    /// <c>EveryAssignedWeaponIdHasACatalogEntry</c> instead, which fails the build just as hard.
+    /// <b>Adding an id here without adding a catalog row makes that test red</b>, which is the
+    /// intended way to find out.
+    /// </para>
     /// </remarks>
     public static class WeaponIds
     {

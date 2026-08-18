@@ -24,6 +24,11 @@ namespace Ironfront.Net.Unity.Server.Tests
             public float Health { get; set; } = 100f;
             public bool IsDead { get; set; }
 
+            /// <summary>Stagger the seam carried since phase-V2. Recorded, not simulated.</summary>
+            internal float BalanceDamageTaken;
+
+            public void ApplyBalanceDamage(float balanceDamage) => BalanceDamageTaken += balanceDamage;
+
             public bool TryGetActiveWeaponNetworkId(out byte networkId)
             {
                 networkId = HoldsAWeapon ? HeldWeaponNetworkId : (byte)0;

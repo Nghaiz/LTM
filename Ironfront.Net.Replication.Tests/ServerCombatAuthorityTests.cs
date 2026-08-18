@@ -557,7 +557,8 @@ namespace Ironfront.Net.Replication.Tests
             public float HealthOf(ushort actorId)
                 => _health.TryGetValue(actorId, out float h) ? h : 0f;
 
-            public DamageOutcome ApplyDamage(ushort victimId, float amount, ushort attackerId)
+            public DamageOutcome ApplyDamage(
+                ushort victimId, float amount, float balanceDamage, ushort attackerId)
             {
                 if (_dead.Contains(victimId)) return new DamageOutcome(0f, died: false);
                 if (!_health.TryGetValue(victimId, out float health)) return DamageOutcome.NoOp;
