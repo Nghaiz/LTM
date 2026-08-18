@@ -102,6 +102,18 @@ jobs:
       - name: Check Unity scripts parse at Unity's C# version
         run: dotnet run --project tools/UnitySyntaxCheck --configuration Release --no-build
 
+      # A .meta carries the asset's GUID, and every prefab/scene reference is stored as that GUID
+      # rather than as a path. An asset committed without its .meta gets a DIFFERENT GUID on every
+      # machine that imports it, so references break for everyone except whoever committed first —
+      # and the symptom ("the script is missing") names neither the file nor the cause.
+      #
+      # This is a HARD gate because the people who create files without a .meta are exactly the
+      # ones who cannot notice: B, C and D author under Assets/Scripts/Net/ without ever opening
+      # the Editor. Three files sat broken this way from phase-05 until the gate landed.
+      - name: Check Unity .meta files are consistent
+        shell: pwsh
+        run: pwsh tools/check-unity-meta.ps1
+
       # if: always() — the results are most valuable exactly when the previous step failed.
       - name: Upload test results and coverage
         if: always()
