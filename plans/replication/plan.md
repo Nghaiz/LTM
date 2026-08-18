@@ -62,7 +62,7 @@ bot AI (it already exists; you just run it — see [AD-10](../00-shared/algorith
 | `Ironfront_Reborn/Assets/Scripts/Net/Shared/**` | Owner, read by A |
 | `Ironfront_Reborn/Assets/Scripts/Net/Shared/MovementSimulation.cs` | **Owner — newly taken from the client track.** Nobody else may edit it |
 | `tools/run-integration.ps1` + integration scenarios | **Owner — newly taken from the transport track** |
-| `Ironfront.Net.Protocol/**` | PR + 2 approvals (shared) |
+| `Ironfront.Net.Protocol/**` | PR clearing `protocol-spec.md` § 15's wire gate |
 | `Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/**` | **Read-only.** Need a change → ask A |
 
 ### 2.1. You verify, the transport track implements

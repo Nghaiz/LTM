@@ -16,11 +16,39 @@ a Mcp-Session-Id we must echo on every later request, so each invocation re-init
 than caching a session that may have expired between calls.
 """
 import json
+import os
+import pathlib
+import re
 import sys
 import urllib.request
 
-PORT = 29639
-URL = f"http://127.0.0.1:{PORT}/mcp"
+_REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+
+def _resolve_url():
+    """The bridge URL, resolved from data rather than a hardcoded literal.
+
+    The port moves whenever the Unity plugin re-allocates it, and a stale constant here fails
+    as a connection refusal that looks like "the Editor is down" rather than "this file drifted".
+    Order: T1K_UNITY_MCP_URL -> the repo's .mcp.json -> the plugin default.
+    """
+    override = os.environ.get("T1K_UNITY_MCP_URL")
+    if override:
+        return override
+    cfg = _REPO_ROOT / ".mcp.json"
+    if cfg.is_file():
+        try:
+            servers = json.loads(cfg.read_text(encoding="utf-8")).get("mcpServers", {})
+        except (OSError, ValueError):
+            servers = {}
+        for entry in servers.values():
+            url = entry.get("url")
+            if url and re.search(r"/mcp/?$", url):
+                return url
+    return "http://127.0.0.1:21471/mcp"
+
+
+URL = _resolve_url()
 
 
 def _post(payload, session=None):

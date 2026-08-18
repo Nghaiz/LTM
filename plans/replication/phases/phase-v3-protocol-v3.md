@@ -6,7 +6,8 @@
 > paraphrases it, or improves it.
 >
 > Binding process: [`../../00-shared/protocol-spec.md`](../../00-shared/protocol-spec.md) § 15 — a
-> wire change lands via a PR with **2 approvals**, a changelog row, a `SpecChecker` update, and a
+> wire change clears the **wire gate**: a changelog row, a `SpecChecker` update, a hex-sample
+> conformance test per new opcode, and a
 > `PROTOCOL_VERSION` bump when the bytes change. They do.
 >
 > Binding conventions: [`../../00-shared/conventions.md`](../../00-shared/conventions.md) § 3.2 —
@@ -47,7 +48,7 @@ consume this contract; they do not negotiate it. This phase ships **bytes and th
 
 **Depends on:** V0 (debt + seams). V0 opens `Vehicle.cs` for the health setter and the attacker id;
 Task 7 below opens the same file for `networkId`. V0 lands first so the two do not collide — the
-design of record § 9 already scores `Actor.cs`/the client track branch conflict at 12 for exactly this reason.
+design of record § 9 already scores the `Actor.cs` conflict at 12 for exactly this reason.
 
 ---
 
@@ -124,9 +125,23 @@ budget rule are this phase's to settle.
 | **V3-4** | **The subtype tail is a fixed 2 bytes for every vehicle type**, discriminated by the type the client learned from `S_VEHICLE_SPAWN`. | A variable-width tail would make the stream unparseable by any decoder that missed the spawn — one lost type mapping and every *subsequent* entry in the datagram misaligns. Fixed width means an unknown type costs 2 skipped bytes and nothing else. This is the same property that makes `changeMask` safe. |
 | **V3-5** | **The vehicle snapshot is a separate message in the same channel-1 payload batch, written FIRST; the actor snapshot gets the remainder of the budget.** | The vehicle body is bounded (V3-3: ≤ 489 B); the actor body is elastic and already has a shedding mechanism (phase-05 Task 4). Sizing the elastic one against what the bounded one actually consumed is exact. Reserving a slice instead would need unused-reserve-return logic for no gain, and two datagrams would cost a second 16-byte GSP header at 20 Hz (~320 B/s) to solve a problem neither stream has. |
 | **V3-6** | **V3 declares the co-residency rule and the constants; V4 implements the budget split.** This phase ships `VehicleSnapshotMessage.MaxBodySize`, the documented rule, and a test that the worst case fits one datagram. | The seam this repo already draws: `SnapshotMessage` (shared protocol) decides how bytes lie; `SnapshotBuilder`/`InterestManager` (the replication track, replication) decide which entities and which fields go in at all — `SnapshotBuilder.cs:11-16` states it. Putting shedding policy in the protocol assembly would break it. |
-| **V3-7** | **`S_EXPLOSION` (0x4A) is not touched.** Its 10-byte layout (`Messages/ActorLifecycleMessages.cs:152-200`) is already correct and already round-trip tested. V3 only documents it in the new spec section as part of the world stream. | § 5 says it "needs a caller and a subscriber, nothing more". A caller and a subscriber are V1 and V7. Changing bytes that do not need changing would put a working codec into the 2-approval queue for nothing. |
+| **V3-7** | **`S_EXPLOSION` (0x4A) is not touched.** Its 10-byte layout (`Messages/ActorLifecycleMessages.cs:152-200`) is already correct and already round-trip tested. V3 only documents it in the new spec section as part of the world stream. | § 5 says it "needs a caller and a subscriber, nothing more". A caller and a subscriber are V1 and V7. Changing bytes that do not need changing would put a working codec through the wire gate for nothing. |
 | **V3-8** | **A vehicle-type id registry (`VehicleIds`) ships in this phase**, with a spec section and a `SpecChecker` gate against a new serialized `Vehicle.networkId`. | `S_VEHICLE_SPAWN` carries a `u8 vehicleType` and the client instantiates a prefab from it. This is `weaponId` again exactly: `protocol-spec.md § 4.8` and `WeaponIds` exist *because* "the mapping existed only inside `_Managers.prefab`, which the server cannot read" (§ 15 changelog, 2.0.1). Shipping the same hole twice, knowing it is a hole, is not a defensible call. |
 | **V3-9** | **`C_VEHICLE_INPUT` carries no redundancy and no frame batching**, unlike `C_INPUT`. | `C_INPUT` repeats 3 frames because a lost frame costs a tick of movement *and* a button edge. Vehicle axes are continuous and level-triggered — a lost throttle frame is corrected by the next one 33 ms later. The one genuinely edge-triggered vehicle action (leaving a seat) travels on `C_SEAT_REQUEST`, which is channel 2 and reliable. |
+
+### 3.1. Four items handed to V3 by phases that have already shipped
+
+Added 2026-08-18 during the pre-V3 sweep. Each was handed to this phase in another phase's § 7 and
+named nowhere in this document, so cooking V3 as it stood would have dropped all four silently.
+This is the phase where they are answered, because three of them are wire decisions and this is the
+only wire phase.
+
+| # | Decision | Why |
+|---|---|---|
+| **V3-10** | **Stagger does NOT go on the wire in v3.0.0.** V2 D7 deferred replicating stagger and handed the cost here, correctly: `ActorStateFlags` is a `u8` with 8 of 8 bits allocated (`Enums/GameplayEnums.cs:34-46`, `IsAlive`…`IsSeated`), so a stagger bit means widening the flags field. **Declined, and recorded rather than left silent.** | Widening `ActorStateFlags` to `u16` costs a byte per actor per flags change, and it lands in the one phase that is *already* moving `MaxEntrySize` 20 → 23 for `SeatInfo` — two independent changes to shedding behaviour in a single phase, when § 8 grades shedding as a criterion. Stagger is also cosmetic: the server already applies it (V2), it just is not drawn on remote actors. Paying a permanent per-actor wire cost for a remote animation, in the phase whose bandwidth headroom is being measured, is the wrong trade. **What would reopen it:** a gameplay effect that depends on a remote client knowing another actor is staggered. There is none today. If a later wire phase widens the flags field for another reason, stagger rides along free — that is the moment to revisit. |
+| **V3-11** | **`ServerMessageType.PlayerList = 0x4B` gets its struct, its writer and its router case in this phase.** V10 § 7 gap 1 handed it here: the opcode is declared (`Enums/MessageTypes.cs:54`) with no message type, no writer and no router case anywhere, so **killfeed lines have no names** — the client knows an actor id died and has nothing to render. | It is a declared opcode with no implementation, sitting inside the block this phase is extending (`0x4A`…`0x50`). Adding `0x4C`–`0x50` around it while leaving the hole in the middle is how the hole survives another four phases. It is also the cheapest item in the phase: a name table is a `u8 count` followed by `(u8 actorId, u8 len, utf8 name)` triples, on channel 2, sent on join and on change. |
+| **V3-12** | **`ClientCombatState` ownership is NOT taken by V3.** V10 § 7 recorded that `ClientCombatState` is instantiated by nothing and assigned it to "V3 or a client-flow phase". V3 declines it. | This phase ships **bytes and their meaning** (§ 1) and adds no `MonoBehaviour` and no client lifecycle. Ownership of a client-side state object is a client-flow concern, and taking it here would be the first time this phase touched a presenter. **It stays open with a named owner instead of a shrug**: the client-flow phase that also closes V10's E5 (`ScoreUi` has no phase/timer/human-count `Text`), because both are the same shape — a client object with no owner wiring it up. Recorded in § 8. |
+| **V3-13** | **The `2-approval` review gate is replaced by `protocol-spec.md` § 15's wire gate.** Task 11 and acceptance criterion 1 both required a PR with two approvals. The project has had one owner since `899e75d`, so that could never be satisfied. | A criterion nobody can clear is not a high bar, it is a dead one — the phase can never honestly pass, so the habit becomes waving it through, and every later phase inherits the same dead clause. § 15 now states machine-checkable conditions (SpecChecker green, a hex-sample conformance test per new opcode, a changelog row, and the version bumped in both places it is written). Those are what the approvals were a proxy for. |
 
 ---
 
@@ -365,7 +380,7 @@ ceiling is 50 with vehicles absent, so the number is pinned rather than drifting
 
 ---
 
-### Task 7 — `VehicleIds` registry and the asset side (S, 1 day + a the client track review round)
+### Task 7 — `VehicleIds` registry and the asset side (S, 1 day + prefab authoring)
 
 Per V3-8. Three copies, gated against each other by Task 10, exactly as `WeaponIds` is:
 
@@ -375,8 +390,9 @@ Per V3-8. Three copies, gated against each other by Task 10, exactly as `WeaponI
 | `plans/00-shared/protocol-spec.md § 4.9` **(new)** | The value table, in a fenced `csharp` block declaring `class VehicleIds` — `SpecChecker.ExtractClassBlock` matches on the class declaration inside a fence (`Program.cs:273-284`), so the block must be shaped that way or the checker silently finds nothing. |
 | `Assembly-CSharp/Vehicle.cs` | A `[SerializeField] private byte networkId;` with a public getter. |
 
-`Vehicle.cs` is a the client track file. Per the design of record § 7 the code is written here, with a PR and
-a the client track review round; **The client track authors the per-prefab values**, the same way the per-weapon
+`Vehicle.cs` is a Unity scene file, so the code is written here and the per-prefab values are
+authored in the Editor afterwards — **authoring every vehicle prefab's `networkId` is part of this
+task, not a handoff** (see § 8). The same shape as the per-weapon
 `Configuration` values are theirs. V0 has already opened this file for the health setter and the
 attacker id, so this edit rides on top of V0's, not beside it.
 
@@ -463,7 +479,7 @@ disagree (which is what makes Task 11 unskippable).
 
 ---
 
-### Task 11 — `PROTOCOL_VERSION` 2 → 3 and the PR (S, 0.5 day + a 2-approval review round)
+### Task 11 — `PROTOCOL_VERSION` 2 → 3 and the PR (S, 0.5 day)
 
 **Last, and deliberately so.** Every task above is additive to a v2 wire: new opcodes a v2 peer
 counts as unknown, new codecs nothing calls yet, a spec section, a checker. The moment
@@ -473,8 +489,11 @@ half-landed one.
 
 - `ProtocolConstants.PROTOCOL_VERSION = 3`, and the same number in the spec's § 1 fenced block —
   `SpecChecker` fails the build if only one moves.
-- `Ironfront.Net.Protocol/**` is **shared ownership**: PR with **2 approvals** (`protocol-spec.md`
-  § 15, `conventions.md` § 2). Budget a full review round; § 7 does.
+- `Ironfront.Net.Protocol/**` changes clear `protocol-spec.md` § 15's **wire gate** (V3-13):
+  SpecChecker green, a hex-sample conformance test per new opcode, a changelog row with the
+  "Wire change?" column filled in, and the version bumped in **both** § 1's fenced block and this
+  document's header line. The gate used to read "2 approvals", which a single-owner project cannot
+  clear; the conditions above are what those approvals were standing in for.
 - No test breaks on the bump. `PacketHexSampleTests.ConnectRequestHex` is built from the constant
   precisely so a version bump does not silently keep asserting the previous protocol
   (`:27-33`).
@@ -495,8 +514,10 @@ handshake tests, which read the constant).
 
 ## 5. Acceptance criteria
 
-1. `PROTOCOL_VERSION == 3` in `ProtocolConstants.cs` **and** in `protocol-spec.md § 1`, with a
-   § 15 changelog row marked `Wire change? Yes`, landed by a PR with 2 approvals.
+1. `PROTOCOL_VERSION == 3` in `ProtocolConstants.cs`, in `protocol-spec.md § 1`'s fenced block
+   **and** in that document's header line, with a § 15 changelog row marked `Wire change? Yes`,
+   clearing § 15's wire gate (V3-13). The header line is called out separately because
+   `SpecChecker` does not read it, and it had already been wrong for the whole of v2.
 2. `VehicleSnapshotMessage.EntrySize(VehicleField.Full) == 30`, matching § 2.2 field by field, and
    a stationary vehicle's delta is exactly 4 bytes.
 3. `SnapshotMessage.EntrySize(SnapshotField.Full) == 23`, `InterestManager.MaxEntrySize == 23`, and
@@ -529,10 +550,10 @@ handshake tests, which read the constant).
 | Risk | L | I | Score | Mitigation |
 |---|---|---|---|---|
 | Finishing `SeatInfo` narrows the shedding budget and a bandwidth regression only surfaces at load | 4 | 4 | **16** | Task 6 computes the 58 → 50 → 43 → 29 ladder up front and criterion 3 pins the ceiling as a number in `InterestManagementTests`. The viewer's own actor is already never shed (phase-05 D6); V3-5 keeps the vehicle body bounded at 489 B so the actor floor can never fall below 29. If it still bites, the § 9 fallback ladder from the design of record applies — drop angular velocity at Mid/Far first. |
-| The vehicle entry as specified does not survive first contact with V4's real capture, and the change costs a second 2-approval round | 3 | 5 | **15** | The § 2.2 table is reproduced verbatim and Task 3 arrives at 30 by **addition**, so a mismatch fails a test rather than shipping. `VehicleField` keeps 8 of 16 bits spare, so a *new* field is an additive change to an existing `u16` mask, not a mask widening — the failure mode that made `SnapshotField` unextendable is designed out here. |
+| The vehicle entry as specified does not survive first contact with V4's real capture, and the change costs a second wire-gate round | 3 | 5 | **15** | The § 2.2 table is reproduced verbatim and Task 3 arrives at 30 by **addition**, so a mismatch fails a test rather than shipping. `VehicleField` keeps 8 of 16 bits spare, so a *new* field is an additive change to an existing `u16` mask, not a mask widening — the failure mode that made `SnapshotField` unextendable is designed out here. |
 | A vehicle-type id is reassigned in the Inspector; server and client disagree about which prefab id 4 is, at runtime, for every player | 3 | 5 | **15** | This is the `weaponId` incident (§ 15 changelog, 2.0.1) with the serial numbers filed off. V3-8 + Task 10 gate it on every CI run *before* it can ship. Precondition for starting V4: the vehicle prefab gate must be green, not merely present. |
-| The 2-approval review round blocks V4–V7 | 3 | 3 | 9 | Design of record § 6: V1, V2 and V8 are off the vehicle critical path and land during the review. Task 11 is last, so the review is on a complete green change set. |
-| `Vehicle.cs` conflicts with V0's edits or the client track's branch | 3 | 3 | 9 | V3 depends on V0 (§ 6 of the design of record), so V0's `Vehicle.cs` edits land first and Task 7 rides on top. Task 7 is one serialized field and is severable — it can land in its own PR after the protocol PR. |
+| The wire-gate round blocks V4–V7 | 2 | 3 | 6 | Design of record § 6: V1, V2 and V8 are off the vehicle critical path. Task 11 is last, so the gate is cleared against a complete green change set. Likelihood dropped from 3 to 2 once the gate stopped requiring a second person (V3-13). |
+| `Vehicle.cs` conflicts with V0's edits | 2 | 3 | 6 | V3 depends on V0 (§ 6 of the design of record), so V0's `Vehicle.cs` edits land first and Task 7 rides on top. Task 7 is one serialized field and is severable — it can land in its own PR after the protocol PR. |
 | The subtype tail's per-kind meaning drifts between server and client | 3 | 4 | 12 | V3-4's fixed 2-byte width makes a wrong *interpretation* a wrong number, never a misaligned stream. The per-kind table lives in § 4.10 (one place) and the hex samples pin one entry per kind. |
 | Smallest-three sign or clamp bug ships silently — half of all rotations mirrored, or a `NaN` transform | 3 | 4 | 12 | Task 2 names the three failure modes explicitly and Task 8 tests each as a separate assertion, including the hostile `0xFFFFFFFF` input. A round-trip-only test would pass with the sign bug present, which is why the sign case is its own test. |
 | `SpecChecker`'s shape-matching prefab parse silently finds 0 vehicle entries after a field reorder | 2 | 4 | 8 | The existing weapon check already treats a 0-entry parse as a **failure** (`Program.cs:199-206`); Task 10 copies that, and criterion 9 drives it with a broken fixture rather than trusting it. |
@@ -554,11 +575,11 @@ rather than asserted, and the prefab gate must be green before V4 begins.
 | 4 — Vehicle delta encoder/decoder | M (2d) | Needs 3. |
 | 5 — The five event messages | M (2d) | Needs 1. Independent of 3 and 4 — parallel-safe. |
 | 6 — Finish `SnapshotField.SeatInfo` | S (1d) | Needs 1 only. **Touches `InterestManager`** — do not run this in parallel with any other actor-snapshot work. |
-| 7 — `VehicleIds` + `Vehicle.networkId` | S (1d) + the client track review | Needs V0 merged. Severable; can land in its own PR. |
+| 7 — `VehicleIds` + `Vehicle.networkId` | S (1d) + prefab authoring | Needs V0 merged. Severable; can land in its own PR. |
 | 8 — Conformance tests + hex samples | M (2d) | Written **alongside** 2–6, not after. |
 | 9 — `protocol-spec.md` | S (1d) | Needs 1–7 settled. Must land in the same PR as the code. |
 | 10 — `tools/SpecChecker` | S (1d) | Needs 7 and 9. Gates them both. |
-| 11 — `PROTOCOL_VERSION` bump + PR | S (0.5d) + **2-approval review round** | Last. The review round is scheduled time, not slack. |
+| 11 — `PROTOCOL_VERSION` bump + PR | S (0.5d) | Last, against a complete green change set. |
 | **Total** | **~2 weeks** incl. one review round | Critical path: **1 → 3 → 4 → 8 → 9 → 10 → 11**. Tasks 5, 6 and 7 are off it. |
 
 **File ownership within the phase.** No two tasks write the same file:
@@ -575,11 +596,11 @@ Task 11 owns it; Task 1 leaves it at 2.
 
 ## 8. Handoff
 
-**To the protocol reviewers (2 approvals, shared ownership of `Ironfront.Net.Protocol/**`).** One
-PR carrying Tasks 1–6 and 8–11: the codecs, the tests, the spec section, the changelog row, the
-checker, and the version bump together. Reviewing them separately would put a spec section in front
-of a reviewer before the bytes it describes exist. Task 7's `Vehicle.cs` edit is severable and may
-be split into a second PR if the client track round runs long.
+**The PR shape.** One PR carrying Tasks 1–6 and 8–11: the codecs, the tests, the spec section, the
+changelog row, the checker, and the version bump together. Splitting them would put a spec section
+in front of review before the bytes it describes exist. Task 7's `Vehicle.cs` edit plus its prefab
+authoring is severable and may be a second PR. Both clear `protocol-spec.md` § 15's wire gate
+(V3-13), not a review headcount.
 
 **To V4 (vehicle server authority).** This phase hands over:
 
@@ -601,7 +622,27 @@ writing code against the assumption.
 **To V7 (projectiles).** `ProjectileSpawnMessage` at 19 B, no projectile id, detonation via the
 existing `S_EXPLOSION`. V1 supplies `S_EXPLOSION`'s caller and subscriber; V3 changed neither.
 
-**To the client track.** One field: `[SerializeField] private byte networkId` on `Vehicle`, plus authoring the
-per-prefab values against `protocol-spec.md § 4.9`. Same shape as the per-weapon `Configuration`
-values already owned there. Nothing else in this phase touches a the client track file, and nothing in it needs
-the Editor.
+**The Editor work, which is this phase's and not a handoff.** One field —
+`[SerializeField] private byte networkId` on `Vehicle` — plus authoring a value on every vehicle
+prefab against `protocol-spec.md § 4.9`. This used to be handed to "the client track"; there is no
+such track, so leaving it addressed to one is how it would not get done. It is Task 7, and Task 10's
+`CheckVehiclePrefabs` fails until every id the registry declares is carried by a prefab.
+
+Precedent worth heeding: the per-weapon `Configuration` values were handed the same way by V2 and
+sat unauthored, with `WeaponCatalog.AuthoredCount == 0` pinned green by a test, until a sweep found
+that four weapons had the wrong *class* entirely. Values nobody owns do not get authored.
+
+**Still open, with owners rather than a shrug (added 2026-08-18):**
+
+- **`ClientCombatState` has no owner and no instantiator** — V10 § 7 assigned it to "V3 or a
+  client-flow phase" and V3 declines it (V3-12). It belongs with V10's E5 (`ScoreUi` has no phase,
+  timer or human-count `Text`): both are a client object nothing wires up. Whichever phase takes one
+  should take both.
+- **V8 Task 6 unblocks the moment this phase merges.** `S_VEHICLE_SPAWN (0x4D)` and
+  `S_VEHICLE_DESPAWN (0x4E)` are the only reason it shipped deliberately unbuilt. It is the one
+  piece of an already-cooked phase waiting on V3, so it is the first thing to pick up afterwards.
+- **`Ironfront.Net.Replication/World/VehicleLifecycle.cs` carries rotation as euler angles** and
+  says so in its own comments, explicitly deferring to "the phase that puts the value on the wire".
+  That is this phase: Task 2 lands `PackQuat`. V8 shipped `Vehicles/*` and `World/*` after V3 was
+  planned, so § 6's file-ownership table predates them — converting that euler to the packed
+  quaternion is a follow-up this phase creates and does not itself perform.

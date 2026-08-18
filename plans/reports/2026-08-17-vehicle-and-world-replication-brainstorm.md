@@ -269,7 +269,7 @@ turret aim.
 
 ## 5. Protocol v3.0.0
 
-Follows the documented process in `protocol-spec.md § 15`: PR with 2 approvals, a changelog row, a
+Follows the documented process in `protocol-spec.md § 15`: a PR clearing the wire gate, a changelog row, a
 `SpecChecker` update, and `PROTOCOL_VERSION` 2 → 3 because the bytes on the wire change.
 
 | Opcode | Dir | Ch | Purpose |

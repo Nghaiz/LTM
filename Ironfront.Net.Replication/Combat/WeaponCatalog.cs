@@ -8,15 +8,28 @@ namespace Ironfront.Net.Replication.Combat
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Every number in here is a placeholder, and shipping the placeholders is the point.</b>
-    /// The real per-weapon values exist only as serialized fields inside
-    /// <c>Ironfront_Reborn/Assets/Resources/_Managers.prefab</c>, which this library cannot read:
-    /// it is a Unity YAML asset and this is a netstandard assembly. Before this file existed the
-    /// server gave every one of the seventeen ids <see cref="WeaponConfig.Rifle"/>, so a sniper,
-    /// an SMG, a shotgun and a medipack were the same gun. This ships the SHAPE - a per-id entry
-    /// derived from the weapon's class - and leaves the numbers to the client track, which can
-    /// open the prefab. Because the seam takes a <see cref="WeaponConfig"/>, swapping in the real
-    /// values is data rather than code.
+    /// <b>These are the numbers the game assets actually carry.</b> Phase V2 shipped this table
+    /// with class-derived PLACEHOLDERS because the values were thought to live inside
+    /// <c>Resources/_Managers.prefab</c>, which a netstandard assembly cannot read. They do not
+    /// live there. That prefab is only a REGISTRY - id, display name, and a GUID pointing at a
+    /// weapon prefab - and the numbers are two hops out: <c>Weapon.Configuration</c> on the
+    /// weapon prefab (cooldown, spread, projectilesPerShot, ammo, effectiveRange) and
+    /// <c>Projectile.Configuration</c> on the projectile prefab it references (damage,
+    /// balanceDamage, impactForce, dropoffEnd, damageDropOff). <c>tools/extract_weapon_registry.py</c>
+    /// walks both hops and emits them as JSON; every literal below came from that output.
+    /// </para>
+    /// <para>
+    /// <b>The placeholders were not merely imprecise - they had the weapon CLASS wrong.</b> Half
+    /// the registry entries do not use the <c>Weapon</c> script at all but a subclass, so a scan
+    /// keyed on <c>Weapon</c> alone silently resolved 4 of 17 and guessed the rest from the id's
+    /// name. The guesses that were wrong: <see cref="WeaponIds.BEU_AW1"/> is an SMAW rocket
+    /// launcher (1000 damage, one shell), catalogued as an 8-pellet shotgun;
+    /// <see cref="WeaponIds.BIL_SCALPEL"/> is a Javelin guided missile (2000 damage), catalogued
+    /// as a marksman rifle; <see cref="WeaponIds.SL_DEFENDER"/> is a sniper (80 damage, 1.5 s),
+    /// catalogued as an automatic (25 damage, 0.1 s); <see cref="WeaponIds.EAGLE_76"/> is a
+    /// 20-pellet shotgun, catalogued as a marksman rifle. This is precisely the failure the
+    /// paragraph below predicted - "a plausible-looking wrong number is visible to nobody" - and
+    /// it survived a full phase.
     /// </para>
     /// <para>
     /// <b>"Placeholder" is a fact this type can be asked about, not a comment.</b>
@@ -63,12 +76,13 @@ namespace Ironfront.Net.Replication.Combat
         private static readonly WeaponConfig[] Configs = BuildConfigs();
 
         /// <summary>
-        /// Whether the entry at the same index carries values read from the weapon registry
-        /// rather than derived from its class. All false today, by construction.
+        /// Whether the entry at the same index carries values read from the weapon assets rather
+        /// than derived from its class. Fifteen of seventeen today; see <see cref="BuildAuthored"/>
+        /// for the two that are not and why.
         /// </summary>
-        private static readonly bool[] Authored = new bool[WeaponIds.MAX_ASSIGNED + 1];
+        private static readonly bool[] Authored = BuildAuthored();
 
-        /// <summary>Entries filled in from the real weapon registry. Zero today.</summary>
+        /// <summary>Entries filled in from the real weapon assets. Fifteen of seventeen.</summary>
         public static int AuthoredCount => CountAuthored(true);
 
         /// <summary>Assigned ids still carrying class-derived placeholder numbers.</summary>
@@ -135,84 +149,148 @@ namespace Ironfront.Net.Replication.Combat
         }
 
         /// <summary>
-        /// Builds the table. Grouped by the class each placeholder is derived from; the ids come
-        /// from <see cref="WeaponIds"/> and nothing here invents one.
+        /// Builds the table from the values in the weapon assets. Every literal is output of
+        /// <c>tools/extract_weapon_registry.py</c>; the ids come from <see cref="WeaponIds"/> and
+        /// nothing here invents one.
         /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Drop-off translation.</b> The assets carry an <c>AnimationCurve</c> over a
+        /// normalized 0..1 distance scaled by <c>dropoffEnd</c>;
+        /// <see cref="WeaponModel.DamageMultiplierAtRange"/> is a straight line between
+        /// <c>DropoffStartMetres</c> (x1) and <c>DropoffEndMetres</c> (x min). The translation is
+        /// therefore: end = <c>dropoffEnd</c>, start = the last keyframe still at 1.0 scaled by
+        /// it, min = the final keyframe's value. Every shipped curve except
+        /// <see cref="WeaponIds.RECON_LRR"/>'s is exactly two segments, so for those the line is
+        /// the curve rather than a fit; RECON_LRR has one extra knee and the line runs under it.
+        /// </para>
+        /// <para>
+        /// <b>Launchers and thrown weapons carry Damage = 0 on purpose.</b> Their payload is a
+        /// projectile and V7 owns it, so the hitscan half is what this table can state. The real
+        /// payload numbers are recorded inline beside each so V7 does not have to re-derive them.
+        /// </para>
+        /// </remarks>
         private static WeaponConfig[] BuildConfigs()
         {
             var configs = new WeaponConfig[WeaponIds.MAX_ASSIGNED + 1];
 
             for (int i = 0; i < configs.Length; i++) configs[i] = Inert;
 
-            // Automatic rifle / SMG - short cooldown, medium range, drop-off starting early and
-            // falling hard.
-            WeaponConfig automatic = new WeaponConfig(
-                cooldown: 0.1f, spread: 0.02f, projectilesPerShot: 1, range: 300f,
-                damage: 25f, force: 200f, clipSize: 30,
+            // ak.prefab -> AK Tracer.prefab. The service rifle.
+            configs[WeaponIds.RK44] = new WeaponConfig(
+                cooldown: 0.095f, spread: 0.003f, projectilesPerShot: 1, range: 400f,
+                damage: 35f, force: 80f, clipSize: 30,
+                balanceDamage: 55f,
+                dropoffStartMetres: 149f, dropoffEndMetres: 300f, dropoffMinMultiplier: 0.75f);
+
+            // smg.prefab. Fires twice as fast as the rifle and carries less than half the clip -
+            // the placeholder had it at the rifle's 30 rounds and the rifle's cadence.
+            configs[WeaponIds.SIND7] = new WeaponConfig(
+                cooldown: 0.05f, spread: 0.008f, projectilesPerShot: 1, range: 200f,
+                damage: 30f, force: 50f, clipSize: 12,
+                balanceDamage: 50f,
+                dropoffStartMetres: 99.3f, dropoffEndMetres: 200f, dropoffMinMultiplier: 0.75f);
+
+            // The suppressed variant is NOT a copy: it loses range sooner and floors lower.
+            configs[WeaponIds.SIND7_SUPPRESSED] = new WeaponConfig(
+                cooldown: 0.05f, spread: 0.008f, projectilesPerShot: 1, range: 200f,
+                damage: 30f, force: 50f, clipSize: 12,
+                balanceDamage: 50f,
+                dropoffStartMetres: 30f, dropoffEndMetres: 150f, dropoffMinMultiplier: 0.6f);
+
+            // shotgun.prefab (ShellLoadedWeapon). TWENTY pellets at 15, not one round at 40.
+            configs[WeaponIds.EAGLE_76] = new WeaponConfig(
+                cooldown: 1.1f, spread: 0.03f, projectilesPerShot: 20, range: 80f,
+                damage: 15f, force: 30f, clipSize: 6,
                 balanceDamage: 20f,
-                dropoffStartMetres: 40f, dropoffEndMetres: 200f, dropoffMinMultiplier: 0.4f);
+                dropoffStartMetres: 0f, dropoffEndMetres: 150f, dropoffMinMultiplier: 0.1f);
 
-            configs[WeaponIds.RK44] = automatic;
-            configs[WeaponIds.SIND7] = automatic;
-            configs[WeaponIds.SIND7_SUPPRESSED] = automatic;
-            configs[WeaponIds.SL_DEFENDER] = automatic;
+            // sniper.prefab (ScopedWeapon). The placeholder had this as an automatic.
+            configs[WeaponIds.SL_DEFENDER] = new WeaponConfig(
+                cooldown: 1.5f, spread: 0f, projectilesPerShot: 1, range: 1000f,
+                damage: 80f, force: 130f, clipSize: 8,
+                balanceDamage: 130f,
+                dropoffStartMetres: 248.3f, dropoffEndMetres: 500f, dropoffMinMultiplier: 0.9f);
 
-            // Semi-auto / marksman - longer cooldown, higher per-shot damage, drop-off starting
-            // late.
-            WeaponConfig marksman = new WeaponConfig(
-                cooldown: 0.25f, spread: 0.008f, projectilesPerShot: 1, range: 400f,
-                damage: 40f, force: 250f, clipSize: 12,
-                balanceDamage: 30f,
-                dropoffStartMetres: 120f, dropoffEndMetres: 350f, dropoffMinMultiplier: 0.6f);
-
-            configs[WeaponIds.EAGLE_76] = marksman;
-            configs[WeaponIds.BIL_SCALPEL] = marksman;
-
-            // Shotgun - many pellets, wide cone, short drop-off ending in a low floor.
-            configs[WeaponIds.BEU_AW1] = new WeaponConfig(
-                cooldown: 0.9f, spread: 0.06f, projectilesPerShot: 8, range: 80f,
-                damage: 12f, force: 400f, clipSize: 6,
-                balanceDamage: 45f,
-                dropoffStartMetres: 15f, dropoffEndMetres: 60f, dropoffMinMultiplier: 0.15f);
-
-            // DMR - between the marksman rifle and the sniper on every axis.
+            // dmr.prefab. Semi-auto, 20-round magazine.
             configs[WeaponIds.SIGNAL_DMR] = new WeaponConfig(
-                cooldown: 0.4f, spread: 0.004f, projectilesPerShot: 1, range: 600f,
-                damage: 55f, force: 350f, clipSize: 10,
-                balanceDamage: 40f,
-                dropoffStartMetres: 250f, dropoffEndMetres: 600f, dropoffMinMultiplier: 0.85f);
-
-            // Sniper - the weapon the drop-off ramp exists to tell apart from an SMG at range.
-            configs[WeaponIds.RECON_LRR] = new WeaponConfig(
-                cooldown: 1.5f, spread: 0.001f, projectilesPerShot: 1, range: 1000f,
-                damage: 95f, force: 600f, clipSize: 5,
+                cooldown: 0.14f, spread: 0.0012f, projectilesPerShot: 1, range: 800f,
+                damage: 38f, force: 100f, clipSize: 20,
                 balanceDamage: 60f,
-                dropoffStartMetres: 500f, dropoffEndMetres: 1000f, dropoffMinMultiplier: 0.95f);
+                dropoffStartMetres: 149f, dropoffEndMetres: 300f, dropoffMinMultiplier: 0.75f);
 
-            // Thrown / launched - a real throw rate and a real count carried, and zero damage,
-            // because their damage belongs to a projectile and V7 owns it.
-            // WeaponCatalog.For(FRAG).Damage == 0 is a statement about hitscan, not about the
-            // grenade.
-            configs[WeaponIds.FRAG] = new WeaponConfig(
-                cooldown: 1.0f, spread: 0f, projectilesPerShot: 1, range: 0f,
-                damage: 0f, force: 0f, clipSize: 2);
+            // RFB.prefab (ScopedWeapon). A fast-firing marksman rifle, not the bolt-action the
+            // placeholder assumed - 0.1 s and 14 rounds against the guessed 1.5 s and 5.
+            configs[WeaponIds.RECON_LRR] = new WeaponConfig(
+                cooldown: 0.1f, spread: 0.0003f, projectilesPerShot: 1, range: 1000f,
+                damage: 52f, force: 110f, clipSize: 14,
+                balanceDamage: 85f,
+                dropoffStartMetres: 36f, dropoffEndMetres: 400f, dropoffMinMultiplier: 0.8f);
 
-            configs[WeaponIds.SPEARHEAD] = new WeaponConfig(
-                cooldown: 1.5f, spread: 0f, projectilesPerShot: 1, range: 0f,
+            // Launched. smaw.prefab -> rocket.prefab (Rocket): damage 1000, balanceDamage 400.
+            // The placeholder had this as an 8-pellet shotgun doing 12 a pellet.
+            configs[WeaponIds.BEU_AW1] = new WeaponConfig(
+                cooldown: 0.05f, spread: 0f, projectilesPerShot: 1, range: 300f,
                 damage: 0f, force: 0f, clipSize: 1);
 
-            // Not weapons. An explicit inert entry rather than a gap: a gap that fell through to a
-            // default is exactly how a medipack became a rifle. These never went through
-            // ServerFireResolver in the first place, so Damage = 0 changes nothing about the code
-            // that actually drives them.
+            // javelin.prefab -> javelin missile.prefab (JavelinMissile): damage 2000,
+            // balanceDamage 300. The placeholder had this as a marksman rifle doing 40.
+            configs[WeaponIds.BIL_SCALPEL] = new WeaponConfig(
+                cooldown: 0.2f, spread: 0f, projectilesPerShot: 1, range: 1000f,
+                damage: 0f, force: 0f, clipSize: 1);
+
+            // Thrown. Both -> GrenadeProjectile, impact damage 70, balanceDamage 60; the blast is
+            // separate and V7's. One carried, not the two the placeholder assumed.
+            configs[WeaponIds.FRAG] = new WeaponConfig(
+                cooldown: 1.3f, spread: 0.01f, projectilesPerShot: 1, range: 40f,
+                damage: 0f, force: 0f, clipSize: 1);
+
+            configs[WeaponIds.SPEARHEAD] = new WeaponConfig(
+                cooldown: 1.3f, spread: 0.01f, projectilesPerShot: 1, range: 40f,
+                damage: 0f, force: 0f, clipSize: 1);
+
+            // Not weapons, and the assets agree rather than the class name doing the arguing.
+            // AMMO_BAG and MEDIPACK resolve a projectile whose damage is literally 0. BINOCS
+            // still points at the rifle's tracer prefab, but Binoculars overrides firing so the
+            // reference is vestigial - reading its 35 damage would arm a pair of binoculars.
+            // NV_GOGGLES (ToggleableItem) has no projectile at all.
             configs[WeaponIds.BINOCS] = Inert;
             configs[WeaponIds.AMMO_BAG] = Inert;
             configs[WeaponIds.MEDIPACK] = Inert;
             configs[WeaponIds.NV_GOGGLES] = Inert;
+
+            // Melee. Real numbers exist - WRENCH 60 damage / 150 balance / 300 force, SUPER_WRENCH
+            // 200 / 200 / 2000, both 3 m over a 0.15 s swing - but this table models a hitscan
+            // shot, and a swing is not one. Writing 60 damage at 3 m range here would let
+            // ServerFireResolver resolve a wrench as a very short rifle. They stay Inert and stay
+            // UNAUTHORED so DescribeUnauthored keeps naming them; see BuildAuthored.
             configs[WeaponIds.WRENCH] = Inert;
             configs[WeaponIds.SUPER_WRENCH] = Inert;
 
             return configs;
+        }
+
+        /// <summary>
+        /// Which entries reflect what the assets say, rather than a guess from the id's name.
+        /// </summary>
+        /// <remarks>
+        /// Fifteen of seventeen. The two exceptions are the melee weapons: their numbers are
+        /// known and recorded in <see cref="BuildConfigs"/>, but a hitscan
+        /// <see cref="WeaponConfig"/> cannot express a swing, and <c>ClipSize</c> is a
+        /// <see cref="byte"/> so the prefabs' -1 (infinite) has no representation either. Marking
+        /// them authored would claim this table describes them. It does not, so they stay in
+        /// <see cref="DescribeUnauthored"/> where the startup log names them every session.
+        /// </remarks>
+        private static bool[] BuildAuthored()
+        {
+            var authored = new bool[WeaponIds.MAX_ASSIGNED + 1];
+
+            for (byte id = 1; id <= WeaponIds.MAX_ASSIGNED; id++) authored[id] = true;
+
+            authored[WeaponIds.WRENCH] = false;
+            authored[WeaponIds.SUPER_WRENCH] = false;
+
+            return authored;
         }
     }
 }

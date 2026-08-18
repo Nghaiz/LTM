@@ -208,7 +208,7 @@ governs **gameplay-affecting** rolls; this one is cosmetic and is exempt, stated
 decision rather than an omission.
 
 **Detonation.** `Explode()` (`:56-80`) calls `ActorManager.Explode` — server-only, per V1. Its
-`IngameUi.Hit()` (`:60`) becomes `S_HIT_CONFIRM`-driven, like Task 3's. The `Invoke("Cleanup", 10f)`
+`IngameUi.Hit()` (`:66`) becomes `S_HIT_CONFIRM`-driven, like Task 3's. The `Invoke("Cleanup", 10f)`
 (`:79`) folds into Task 8's cleanup policy.
 
 **Verify:** `AGrenadeDetonatesOnTheSameTickOnBothSides`;
@@ -508,7 +508,7 @@ Editor-only work that stays with the client track:
 - The authored `damageDropOff` curves that the build step samples into `ProjectileConfig`.
 - The two-client grenade-parity check and the Profiler run behind criteria 8 and 9.
 
-Shared-file PR (`Ironfront.Net.Protocol` + `plans/00-shared/protocol-spec.md`, 2 approvals): the
+Shared-file PR (`Ironfront.Net.Protocol` + `plans/00-shared/protocol-spec.md`, clearing § 15's wire gate): the
 `S_PROJECTILE_SPAWN` field table in § 5 of the spec, and the `ThrowGrenade` → `Reserved7` row in
 § 4.2. Neither bumps `PROTOCOL_VERSION` beyond V3's single bump (brainstorm D7).
 

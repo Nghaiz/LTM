@@ -215,7 +215,7 @@ breaks when joined, and it presents as "garbage packets that won't parse" — da
 3. **A conformance test suite** (C's phase-01): build sample packets from hard-coded hex in the
    test, then assert the parser reads them correctly. This suite is the referee whenever two people
    disagree.
-4. Changing the protocol = PR + 2 approvals + version bump. See [conventions.md](conventions.md).
+4. Changing the protocol = a PR clearing `protocol-spec.md` § 15's wire gate + a version bump.
 
 ### R6 — CPU load on the headless server exceeds budget
 

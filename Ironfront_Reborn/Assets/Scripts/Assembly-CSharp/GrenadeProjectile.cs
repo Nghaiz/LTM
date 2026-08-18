@@ -75,10 +75,25 @@ public class GrenadeProjectile : Projectile
 		{
 			renderer.enabled = false;
 		}
-		GetComponent<ParticleSystem>().Play(true);
+		// V1 handed these to V0's headless list and V0 closed without absorbing them. A dedicated
+		// server builds this prefab with neither component, and the blast above has already been
+		// applied, so everything here is cosmetic.
+		//
+		// The pitch roll deliberately does NOT use UnityEngine.Random: that stream is shared with
+		// gameplay, and advancing it for a sound means a headless server (which now skips the
+		// roll) and a client (which does not) walk it at different rates. A cosmetic must not be
+		// able to move a gameplay stream at all.
+		ParticleSystem burst = GetComponent<ParticleSystem>();
+		if (burst != null)
+		{
+			burst.Play(true);
+		}
 		AudioSource component = GetComponent<AudioSource>();
-		component.pitch = Random.Range(0.9f, 1.1f);
-		component.Play();
+		if (component != null)
+		{
+			component.pitch = CosmeticRandom.Range(0.9f, 1.1f);
+			component.Play();
+		}
 		Invoke("Cleanup", 10f);
 	}
 
