@@ -69,6 +69,15 @@ try {
         & "$PSScriptRoot/check-unity-meta.ps1"
     }
 
+    # Reads .dll.meta importer settings, not the Editor, so it costs a second and gives the same
+    # answer on every machine. Catches a duplicate managed assembly present at two versions, which
+    # breaks type identity across the boundary and reports it as something else entirely — the
+    # System.Text.Json 10.0.0.0/8.0.0.0 split surfaced as "JsonStringEnumConverter does not derive
+    # from JsonConverter". Nothing else here would have gone red for it.
+    Invoke-Step "3c. No duplicate managed assemblies" {
+        & "$PSScriptRoot/check-duplicate-assemblies.ps1"
+    }
+
     # ADVISORY — mirrors the `style` job in .github/workflows/ci.yml, which is
     # continue-on-error. Deliberately NOT routed through Invoke-Step: a formatting nit must
     # not add to $failures and make this script exit 1, or people will stop running it.
