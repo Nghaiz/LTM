@@ -114,6 +114,20 @@ try {
     # it surfaces as a TypeLoadException on the one code path that touches it, and the remedy
     # is -IncludeBclFacades. A duplicate stops the Editor dead. So the default still excludes
     # what the player genuinely provides, and now ships what it does not.
+    #
+    # System.Text.Json 10.0.11 added System.IO.Pipelines to this closure (8.0.5 had no such
+    # dependency; 9.0 introduced it). Searched with the same method in 6000.3.21f1, it lands
+    # in the SAME category as Microsoft.Bcl.AsyncInterfaces -- present only under
+    # Tools/BuildPipeline/Compilation/{ApiUpdater,Unity.ILPP.Runner}, which are Editor build
+    # tooling, and absent from every Variations/* player profile and from the mono Facades.
+    # NOT provided to a player, so it ships, and is deliberately not listed below.
+    #
+    # The same bump DROPPED System.Threading.Tasks.Extensions from the publish output: at
+    # netstandard2.1 that package (like System.Memory and System.Buffers) resolves to an
+    # empty lib/netstandard2.1/_._ placeholder because the framework has the types inbox, so
+    # publish emits no DLL for it. The entry below is therefore inert today. It stays because
+    # it is a statement about what the PLAYER provides, which has not changed, and it becomes
+    # load-bearing again the moment anything here targets netstandard2.0.
     $unityProvided = @("System.Threading.Tasks.Extensions.dll")
 
     $libDlls = $libs | ForEach-Object { "$_.dll" }
