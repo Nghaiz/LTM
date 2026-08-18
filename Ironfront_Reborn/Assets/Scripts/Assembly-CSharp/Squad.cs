@@ -61,7 +61,10 @@ public class Squad
 		members.Remove(a);
 		if (squadVehicle != null)
 		{
-			squadVehicle.DropSeatClaim();
+			// Named, so the claim that is released is THIS bot's. The no-argument form takes
+			// one off an anonymous pile, which is why two bots claiming and one leaving used to
+			// leave the vehicle reporting itself full with a seat empty (V4-D10).
+			squadVehicle.DropSeatClaim(a != null ? a.actor : null);
 		}
 		if (members.Count == 0)
 		{
@@ -228,7 +231,8 @@ public class Squad
 	public void SetAlreadyInVehicle(Vehicle vehicle)
 	{
 		squadVehicle = vehicle;
-		squadVehicle.ClaimSeat();
+		AiActorController leader = Leader();
+		squadVehicle.ClaimSeat(leader != null ? leader.actor : null);
 	}
 
 	public void EnterVehicle(Vehicle vehicle)
@@ -245,7 +249,7 @@ public class Squad
 		for (int i = 0; i < members.Count; i++)
 		{
 			members[i].GotoAndEnterVehicle(vehicle);
-			vehicle.ClaimSeat();
+			vehicle.ClaimSeat(members[i] != null ? members[i].actor : null);
 			if (members[i].squadLeader)
 			{
 				members[i].EmoteMoveOrder(vehicle.transform.position);

@@ -30,6 +30,12 @@ namespace Ironfront.Net.Unity.Server
         /// </summary>
         public static Func<GameObject, IGameplayActorSource> ActorSourceResolver { get; set; }
 
+        /// <summary>
+        /// Produces the gameplay source for a vehicle GameObject, or <see langword="null"/> when
+        /// it has none. Called once per vehicle, at spawn. V4 task 2.
+        /// </summary>
+        public static Func<GameObject, IGameplayVehicleSource> VehicleSourceResolver { get; set; }
+
         /// <summary>The scene's spawn points, or <see langword="null"/> when unavailable.</summary>
         public static ISpawnPointDirectory SpawnPoints { get; set; }
 
@@ -47,10 +53,18 @@ namespace Ironfront.Net.Unity.Server
         public static IGameplayActorSource ResolveActorSource(GameObject gameObject)
             => ActorSourceResolver?.Invoke(gameObject);
 
+        /// <summary>
+        /// Resolves the gameplay source for a vehicle, or <see langword="null"/> when nothing is
+        /// registered or the object is not a vehicle.
+        /// </summary>
+        public static IGameplayVehicleSource ResolveVehicleSource(GameObject gameObject)
+            => VehicleSourceResolver?.Invoke(gameObject);
+
         /// <summary>Clears every seam. For tests, and for a clean re-install.</summary>
         public static void Clear()
         {
             ActorSourceResolver = null;
+            VehicleSourceResolver = null;
             SpawnPoints = null;
             CapturePoints = null;
         }

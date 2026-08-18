@@ -69,5 +69,85 @@ namespace Ironfront.Net.Replication.Server
 
             return writer.TryFinish(out int total) ? total : -1;
         }
+
+        /// <summary>
+        /// Bytes available to the ACTOR snapshot body once a vehicle body of
+        /// <paramref name="vehicleBodyLength"/> has been written into the same batch.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The vehicle snapshot is written FIRST and the actor snapshot takes the
+        /// remainder</b> — protocol-spec.md § 4.10 "Co-residency", declared at the v3 freeze.
+        /// The phase plan said the reverse, and V3 is what shipped: the vehicle body is bounded
+        /// (16 x 30 + 9 = 489 B worst case) and the actor body is elastic and already sheds, so
+        /// sizing the elastic one against what the bounded one actually consumed is exact.
+        /// Reserving a fixed slice for vehicles instead would need unused-reserve-return logic
+        /// to avoid starving actors on a map with two jeeps, for no gain.
+        /// </para>
+        /// <para>
+        /// A second <see cref="PayloadFrame.MessageHeaderSize"/> comes off because
+        /// <see cref="MaxSnapshotBodySize"/> already accounts for exactly one message header,
+        /// and this batch carries two. Forgetting it overruns by 3 bytes — which fits inside
+        /// the MTU margin and so fails only on the fullest datagrams, i.e. the ones under load.
+        /// </para>
+        /// </remarks>
+        public static int ActorBodyBudget(int vehicleBodyLength)
+        {
+            if (vehicleBodyLength <= 0) return MaxSnapshotBodySize;
+
+            return MaxSnapshotBodySize - PayloadFrame.MessageHeaderSize - vehicleBodyLength;
+        }
+
+        /// <summary>
+        /// Frames a vehicle snapshot and an actor snapshot into one channel-1 payload batch.
+        /// </summary>
+        /// <param name="vehicleBody">
+        /// An already-encoded <c>S_VEHICLE_SNAPSHOT</c> body, or empty when this client has no
+        /// vehicles in view. Encoded by the caller rather than here because
+        /// <see cref="ActorBodyBudget"/> needs its length <i>before</i> the actor view is built.
+        /// </param>
+        /// <returns>Bytes written, or -1 when nothing was sent.</returns>
+        /// <remarks>
+        /// <b>The actor body is encoded last, and that ordering is load-bearing.</b>
+        /// <c>DeltaEncoder.Write</c> files the snapshot into its baseline history as a side
+        /// effect of succeeding — so a framing failure discovered afterwards would leave the
+        /// server believing it had sent a snapshot the client never saw, and a later ack could
+        /// then select a baseline the two sides do not share. Every delta measured from it would
+        /// decode into a plausible-looking, wrong world. The vehicle body is already encoded on
+        /// entry, so a failure here can strand ITS baseline the same way — which is why the
+        /// capacity check below happens before either is written and covers both.
+        /// </remarks>
+        public static int WriteSnapshotBatch(
+            Span<byte> destination,
+            ReadOnlySpan<byte> vehicleBody,
+            Span<byte> actorBodyScratch,
+            DeltaEncoder encoder,
+            WorldSnapshot world,
+            uint lastProcessedInputTick)
+        {
+            if (encoder == null) throw new ArgumentNullException(nameof(encoder));
+            if (world == null) throw new ArgumentNullException(nameof(world));
+
+            if (vehicleBody.Length == 0)
+                return WriteSnapshot(
+                    destination, actorBodyScratch, encoder, world, lastProcessedInputTick);
+
+            int envelope = PayloadFrame.HeaderSize + 2 * PayloadFrame.MessageHeaderSize;
+            if (destination.Length < envelope + vehicleBody.Length + actorBodyScratch.Length)
+                return -1;
+
+            var writer = new PayloadFrameWriter(destination, ChannelId.SnapshotSequenced);
+
+            if (!writer.WriteMessage(ServerMessageType.VehicleSnapshot, vehicleBody)) return -1;
+
+            int actorLength = encoder.Write(actorBodyScratch, world, lastProcessedInputTick);
+            if (actorLength < 0) return -1;
+
+            if (!writer.WriteMessage(
+                    ServerMessageType.Snapshot, actorBodyScratch.Slice(0, actorLength)))
+                return -1;
+
+            return writer.TryFinish(out int total) ? total : -1;
+        }
     }
 }

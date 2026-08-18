@@ -199,6 +199,35 @@ namespace Ironfront.Net.Replication.Server
                 : Frame(destination, ReliableChannel, ServerMessageType.VehicleDespawn, body);
         }
 
+        /// <summary>Writes S_SEAT_CHANGE as a channel-2 payload. V4 task 4.</summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Reliable, and it has to be.</b> Leaving a seat is the one edge-triggered vehicle
+        /// action (protocol-spec.md § 4.10) — a dropped answer strands the player welded into a
+        /// vehicle with no second chance to ask, because the request that would have asked again
+        /// was already consumed.
+        /// </para>
+        /// <para>
+        /// <b>Who receives it is the decision's, not this method's.</b> An accept is broadcast —
+        /// everyone must see who is driving — and a refusal is addressed to the requester alone
+        /// (V4-D7). <see cref="Vehicles.SeatDecision.Broadcast"/> carries that so it is decided
+        /// once rather than re-derived at every send site.
+        /// </para>
+        /// <para>
+        /// <b>The transition, not the state.</b> Occupancy that clients render comes from
+        /// <c>SnapshotField.SeatInfo</c> on the <b>actor</b> entry, which V3 finished. This
+        /// message is the change and the refusal; there is deliberately one source of truth for
+        /// "who is in what seat", and it is the actor entry.
+        /// </para>
+        /// </remarks>
+        public static int WriteSeatChange(Span<byte> destination, in SeatChangeMessage message)
+        {
+            Span<byte> body = stackalloc byte[SeatChangeMessage.Size];
+            return message.Write(body) < 0
+                ? -1
+                : Frame(destination, ReliableChannel, ServerMessageType.SeatChange, body);
+        }
+
         /// <summary>
         /// Whether a listener at <paramref name="listenerDistanceSquared"/> should receive an
         /// event audible within <paramref name="radius"/> metres.

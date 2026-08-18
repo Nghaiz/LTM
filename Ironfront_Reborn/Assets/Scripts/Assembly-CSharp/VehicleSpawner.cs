@@ -181,6 +181,7 @@ public class VehicleSpawner : MonoBehaviour
 	private void AnnounceSpawn()
 	{
 		lastSpawnedVehicleNetId = NetVehicleLifecycle.ReportSpawned(
+			lastSpawnedVehicle.gameObject,
 			spawnerId,
 			lastSpawnedVehicle.NetworkId,
 			lastSpawnedVehicle.seats != null ? lastSpawnedVehicle.seats.Length : 0,

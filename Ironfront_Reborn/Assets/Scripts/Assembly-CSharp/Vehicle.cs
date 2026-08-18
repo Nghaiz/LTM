@@ -1,5 +1,6 @@
 using System;
 using Ironfront.Net.Replication.Vehicles;
+using Ironfront.Net.Unity.Server;
 using UnityEngine;
 
 public class Vehicle : MonoBehaviour
@@ -232,6 +233,10 @@ public class Vehicle : MonoBehaviour
 				Die();
 			}
 		}
+		// Per-claim expiry at server role, per-vehicle drain offline. The shipped drain takes
+		// one claim off an anonymous pile every ten seconds, which is exactly why the count
+		// cannot be trusted (V4-D10); with identities the deadline belongs to the claim.
+		NetVehicleAuthority.ReleaseExpiredClaims();
 		if (drainClaimAction.TrueDone() && seatsClaimedByBots > 0)
 		{
 			DropSeatClaim();
@@ -257,20 +262,106 @@ public class Vehicle : MonoBehaviour
 		CancelInvoke("AutoDamage");
 	}
 
+	/// <summary>
+	/// Reserves a seat for a bot that has no identity to give. Offline only.
+	/// </summary>
+	/// <remarks>
+	/// Kept so the shipped call sites compile unchanged, and it is the honest offline
+	/// behaviour: with no netcode there is no actor id to key a claim on, and the counter is
+	/// correct as long as nothing dies -- which offline, with one squad, it does not.
+	/// </remarks>
 	public void ClaimSeat()
 	{
+		ClaimSeat(null);
+	}
+
+	/// <summary>
+	/// Reserves a seat for a named bot. V4-D10.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>The identity is the whole fix.</b> The counter this replaces names nobody, so two bots
+	/// claiming and one dying leaves it permanently wrong: nothing decrements, and the 10-second
+	/// <c>drainClaimAction</c> then takes one off an anonymous pile. The vehicle reports itself
+	/// full to the AI while a seat sits empty, and no client could reconcile it because there is
+	/// nothing to reconcile against.
+	/// </para>
+	/// <para>
+	/// A null bot, or a build with no netcode installed, falls through to the counter -- which
+	/// is what keeps single-player byte-for-byte unchanged.
+	/// </para>
+	/// </remarks>
+	public void ClaimSeat(Actor bot)
+	{
+		if (bot != null && NetVehicleAuthority.TryClaimSeat(base.gameObject, bot.gameObject))
+		{
+			return;
+		}
 		seatsClaimedByBots = Mathf.Min(seatsClaimedByBots + 1, seats.Length);
 		drainClaimAction.Start();
 	}
 
+	/// <summary>Releases an anonymous claim. Offline only -- see <see cref="ClaimSeat()"/>.</summary>
 	public void DropSeatClaim()
 	{
+		DropSeatClaim(null);
+	}
+
+	/// <summary>Releases the claim held by a named bot. V4-D10.</summary>
+	public void DropSeatClaim(Actor bot)
+	{
+		if (bot != null && NetVehicleAuthority.TryDropSeatClaim(base.gameObject, bot.gameObject))
+		{
+			return;
+		}
 		seatsClaimedByBots = Mathf.Max(seatsClaimedByBots - 1, 0);
+	}
+
+	/// <summary>
+	/// Live bot claims on this vehicle. <b>Computed at server role, never stored</b>
+	/// (code-conventions.md "No Derived Fields").
+	/// </summary>
+	/// <remarks>
+	/// <see cref="seatsClaimedByBots"/> remains the offline field and is the fallback whenever
+	/// the netcode is not installed or this vehicle was never replicated. There is no second
+	/// stored copy: at server role the field is simply not read.
+	/// </remarks>
+	public int ClaimedSeatCount
+	{
+		get
+		{
+			int authoritative = NetVehicleAuthority.ClaimCount(base.gameObject);
+			return authoritative >= 0 ? authoritative : seatsClaimedByBots;
+		}
 	}
 
 	public bool HasUnclaimedSeats()
 	{
-		return seatsClaimedByBots < seats.Length;
+		return ClaimedSeatCount < seats.Length;
+	}
+
+	/// <summary>
+	/// The two subtype-tail bytes this vehicle contributes to its snapshot entry
+	/// (protocol-spec.md section 4.10).
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Virtual and zero by default, because the base <c>Vehicle</c> has neither a steering angle
+	/// nor a rotor. <c>Car</c> and <c>Helicopter</c> override it; <c>Tank</c> and <c>Boat</c>
+	/// carry no field the tail names, so their two bytes are honestly zero rather than a
+	/// plausible-looking number derived from something else.
+	/// </para>
+	/// <para>
+	/// <b>The encoding is not decided here.</b> <c>VehicleSubtypeTail</c> owns it, is engine-free,
+	/// and has a test -- which matters most for the helicopter's rotor speed, a normalized u16
+	/// split across two bytes whose byte order going backwards would produce a rotor that reads
+	/// as spinning at some other entirely plausible speed.
+	/// </para>
+	/// </remarks>
+	public virtual void ReadNetworkSubtypeTail(out byte subtypeA, out byte subtypeB)
+	{
+		subtypeA = 0;
+		subtypeB = 0;
 	}
 
 	public void OccupantLeft(Seat seat, Actor leaver)
@@ -347,8 +438,46 @@ public class Vehicle : MonoBehaviour
 	/// Damage with an attacker. V0 opens the parameter; V1 is what threads a real id into it
 	/// from <c>ActorManager.Explode</c>, which is the only existing caller that has one.
 	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>The role guard, V4 task 5.</b> This is the choke point every vehicle damage source in
+	/// the game already passes through -- the ram check, <c>AutoDamage</c>, explosions, bullets
+	/// -- which is why the guard is here and not replicated across each of them.
+	/// </para>
+	/// <para>
+	/// <b>Server:</b> the health change is routed through <c>ServerVehicleDamageSink</c>, which
+	/// writes back through <see cref="SetHealthAuthoritative"/> and therefore runs this file's
+	/// one health ladder exactly once. It does NOT fall through afterwards -- doing so would
+	/// subtract the same damage a second time.
+	/// </para>
+	/// <para>
+	/// <b>Client:</b> the local screenshake runs and nothing else. Health, burning and death all
+	/// arrive from the server -- the snapshot's health byte and Burning flag, and
+	/// <c>S_VEHICLE_DESPAWN</c> -- so a client that subtracted health here would render a wreck
+	/// the server does not have, and would then be corrected in a visible jump.
+	/// </para>
+	/// <para>
+	/// <b>Offline:</b> literally unchanged. <c>NetVehicleAuthority</c> is uninstalled, so
+	/// <c>TryApplyDamage</c> is false and <c>IsClientSuppressed</c> is false, and the line below
+	/// is the one this method shipped with. That is acceptance criterion 12, and it is a
+	/// property of there being one branch rather than a role switch with an offline case
+	/// somebody could get wrong.
+	/// </para>
+	/// </remarks>
 	public void Damage(float amount, int attackerActorId)
 	{
+		if (NetVehicleAuthority.TryApplyDamage(base.gameObject, amount, attackerActorId))
+		{
+			return;
+		}
+		if (NetVehicleAuthority.IsClientSuppressed)
+		{
+			if (amount > HEAVY_DAMAGE_THRESHOLD)
+			{
+				HeavyDamage();
+			}
+			return;
+		}
 		ApplyHealth(health - amount, amount, attackerActorId);
 	}
 
@@ -715,7 +844,7 @@ public class Vehicle : MonoBehaviour
 			{
 				Vector3 vector = Camera.main.WorldToScreenPoint(base.transform.position + Vector3.up * ramSize.y * 4f);
 				GUI.skin.label.alignment = TextAnchor.UpperCenter;
-				GUI.Label(new Rect(vector.x - 100f, (float)Screen.height - vector.y, 200f, 50f), "AI Claimed seats: " + seatsClaimedByBots + "/" + seats.Length);
+				GUI.Label(new Rect(vector.x - 100f, (float)Screen.height - vector.y, 200f, 50f), "AI Claimed seats: " + ClaimedSeatCount + "/" + seats.Length);
 				GUI.Label(new Rect(vector.x - 100f, (float)Screen.height - vector.y + 20f, 200f, 50f), "Stuck: " + stuck);
 				GUI.Label(new Rect(vector.x - 100f, (float)Screen.height - vector.y + 40f, 200f, 50f), "Taking fire: " + !takingFireAction.TrueDone());
 				GUI.Label(new Rect(vector.x - 100f, (float)Screen.height - vector.y + 60f, 200f, 50f), "AI should enter? " + AiShouldEnter());

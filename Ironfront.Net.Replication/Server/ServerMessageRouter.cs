@@ -1,5 +1,6 @@
 using System;
 using Ironfront.Net.Protocol;
+using Ironfront.Net.Replication.Vehicles;
 
 namespace Ironfront.Net.Replication.Server
 {
@@ -45,6 +46,29 @@ namespace Ironfront.Net.Replication.Server
 
         /// <summary>C_SPAWN_REQUEST messages received, whether or not the gate granted them.</summary>
         public long SpawnRequestsReceived { get; private set; }
+
+        /// <summary>
+        /// Where an accepted C_SEAT_REQUEST goes. Null leaves the message counted and otherwise
+        /// ignored. V4 task 4.
+        /// </summary>
+        /// <remarks>
+        /// Before V4 this opcode fell through to <see cref="UnknownMessages"/> — reserved at the
+        /// v3 freeze with nothing on the server that could answer it, so a client asking to
+        /// leave a vehicle was counted as junk.
+        /// </remarks>
+        public ISeatRequestHandler? SeatRequests { get; set; }
+
+        /// <summary>
+        /// Where a decoded and clamped C_VEHICLE_INPUT goes. Null leaves it counted and dropped,
+        /// which is V4's shipped state — see <see cref="IVehicleInputHandler"/>.
+        /// </summary>
+        public IVehicleInputHandler? VehicleInputs { get; set; }
+
+        /// <summary>C_SEAT_REQUEST messages received, whether accepted or refused.</summary>
+        public long SeatRequestsReceived { get; private set; }
+
+        /// <summary>C_VEHICLE_INPUT messages that parsed and were clamped.</summary>
+        public long VehicleInputsAccepted { get; private set; }
 
         /// <summary>Input frames that were new to the session and were buffered.</summary>
         public long InputFramesAccepted { get; private set; }
@@ -106,6 +130,13 @@ namespace Ironfront.Net.Replication.Server
                             // cannot move the baseline backwards onto a state the client is no
                             // longer holding.
                             session.Encoder.OnClientAck(ackedTick);
+
+                            // Both streams, from one ack. The actor and vehicle snapshots ride
+                            // the same channel-1 datagram at the same server tick, so a tick the
+                            // client acknowledges names a state of both — and an ack applied to
+                            // only one leaves the vehicle encoder sending full snapshots
+                            // forever, which costs bandwidth and breaks nothing visibly.
+                            session.VehicleEncoder.OnClientAck(ackedTick);
                             AcksApplied++;
                             handled++;
                         }
@@ -125,6 +156,41 @@ namespace Ironfront.Net.Replication.Server
                         SpawnRequestsReceived++;
                         SpawnRequests?.OnSpawnRequested(session);
                         handled++;
+                        break;
+
+                    case ClientMessageType.SeatRequest:
+                        if (SeatRequestMessage.TryParse(body, out SeatRequestMessage seat))
+                        {
+                            SeatRequestsReceived++;
+                            SeatRequests?.OnSeatRequested(session, in seat);
+                            handled++;
+                        }
+                        else
+                        {
+                            MalformedMessages++;
+                        }
+
+                        break;
+
+                    case ClientMessageType.VehicleInput:
+                        if (VehicleInputMessage.TryParse(body, out VehicleInputMessage vehicle))
+                        {
+                            // Clamped HERE, at the decode, so an out-of-range axis never reaches
+                            // Unity at all (V4-D13, acceptance criterion 10). An sbyte can carry
+                            // -128, which unpacks to -1.0079 at MOVE_AXIS_SCALE — a permanent
+                            // 0.8% advantage on every axis for a client that writes the one
+                            // value the encoder never produces.
+                            ClampedVehicleInput clamped = ClampedVehicleInput.From(in vehicle);
+
+                            VehicleInputsAccepted++;
+                            VehicleInputs?.OnVehicleInput(session, in clamped);
+                            handled++;
+                        }
+                        else
+                        {
+                            MalformedMessages++;
+                        }
+
                         break;
 
                     default:

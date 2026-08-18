@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Interest;
+using Ironfront.Net.Replication.Vehicles;
 
 namespace Ironfront.Net.Replication.Server
 {
@@ -19,9 +20,23 @@ namespace Ironfront.Net.Replication.Server
         public readonly int SpawnAckPairs;
         public readonly int Sessions;
 
+        /// <summary>Vehicle ids held by a live vehicle. V4, design § 8 criterion 13.</summary>
+        public readonly int VehicleIdsInUse;
+
+        /// <summary>Vehicle ids cooling down. Non-zero mid-round is legitimate.</summary>
+        public readonly int VehicleIdsQuarantined;
+
+        /// <summary>(viewer, vehicle) rate-table pairs. The trap-2 leak, one dictionary over.</summary>
+        public readonly int VehicleInterestPairs;
+
+        /// <summary>Vehicles still registered. Zero after a world reset.</summary>
+        public readonly int VehiclesRegistered;
+
         public ServerStateSnapshot(
             int actorIdsInUse, int actorIdsFree, int actorIdsQuarantined,
-            int hitboxHistoryActors, int interestPairs, int spawnAckPairs, int sessions)
+            int hitboxHistoryActors, int interestPairs, int spawnAckPairs, int sessions,
+            int vehicleIdsInUse = 0, int vehicleIdsQuarantined = 0,
+            int vehicleInterestPairs = 0, int vehiclesRegistered = 0)
         {
             ActorIdsInUse       = actorIdsInUse;
             ActorIdsFree        = actorIdsFree;
@@ -30,6 +45,11 @@ namespace Ironfront.Net.Replication.Server
             InterestPairs       = interestPairs;
             SpawnAckPairs       = spawnAckPairs;
             Sessions            = sessions;
+
+            VehicleIdsInUse       = vehicleIdsInUse;
+            VehicleIdsQuarantined = vehicleIdsQuarantined;
+            VehicleInterestPairs  = vehicleInterestPairs;
+            VehiclesRegistered    = vehiclesRegistered;
         }
 
         /// <summary>
@@ -61,7 +81,24 @@ namespace Ironfront.Net.Replication.Server
             ActorIdsInUse == 0
             && HitboxHistoryActors == 0
             && InterestPairs == 0
-            && SpawnAckPairs == 0;
+            && SpawnAckPairs == 0
+            && IsCleanOfVehicleState;
+
+        /// <summary>
+        /// The vehicle half of the same question. V4, design § 8 criterion 13.
+        /// </summary>
+        /// <remarks>
+        /// <b>Quarantined vehicle ids are NOT required to be zero here</b>, for the reason the
+        /// actor pool's are not: a reset returns every id at once, but a server audited
+        /// mid-round legitimately has ids cooling. What must be zero is anything keyed on a
+        /// vehicle that no longer exists — the pair table above all, because that is the
+        /// dictionary that grows for the life of the process if <c>Forget</c> is not called on
+        /// despawn.
+        /// </remarks>
+        public bool IsCleanOfVehicleState =>
+            VehicleIdsInUse == 0
+            && VehicleInterestPairs == 0
+            && VehiclesRegistered == 0;
 
         public override string ToString()
         {
@@ -72,7 +109,11 @@ namespace Ironfront.Net.Replication.Server
               .Append(" | hitboxHistory=").Append(HitboxHistoryActors)
               .Append(" interestPairs=").Append(InterestPairs)
               .Append(" spawnAckPairs=").Append(SpawnAckPairs)
-              .Append(" sessions=").Append(Sessions);
+              .Append(" sessions=").Append(Sessions)
+              .Append(" | vehicles=").Append(VehiclesRegistered)
+              .Append(" vehicleIds in-use=").Append(VehicleIdsInUse)
+              .Append(" quarantined=").Append(VehicleIdsQuarantined)
+              .Append(" vehicleInterestPairs=").Append(VehicleInterestPairs);
             return sb.ToString();
         }
     }
@@ -104,13 +145,28 @@ namespace Ironfront.Net.Replication.Server
         private readonly SpawnAckTracker _spawnAcks;
         private readonly Func<int> _sessionCount;
 
+        // Optional, because the audit predates vehicles by five phases and the phase-03 load
+        // tests construct it with four arguments. A null one reports zeros, which reads as
+        // clean — correct for a server that has no vehicle subsystem at all, and the reason
+        // ServerTickLoop passes them rather than leaving the defaults.
+        private readonly VehicleIdPool? _vehicleIds;
+        private readonly VehicleInterestTracker? _vehicleInterest;
+        private readonly VehicleRegistry? _vehicles;
+
         public ServerStateAudit(
             ActorIdPool ids,
             HitboxHistory hitboxHistory,
             InterestManager interest,
             SpawnAckTracker spawnAcks,
-            Func<int>? sessionCount = null)
+            Func<int>? sessionCount = null,
+            VehicleIdPool? vehicleIds = null,
+            VehicleInterestTracker? vehicleInterest = null,
+            VehicleRegistry? vehicles = null)
         {
+            _vehicleIds      = vehicleIds;
+            _vehicleInterest = vehicleInterest;
+            _vehicles        = vehicles;
+
             _ids           = ids ?? throw new ArgumentNullException(nameof(ids));
             _hitboxHistory = hitboxHistory ?? throw new ArgumentNullException(nameof(hitboxHistory));
             _interest      = interest ?? throw new ArgumentNullException(nameof(interest));
@@ -127,7 +183,11 @@ namespace Ironfront.Net.Replication.Server
                 _hitboxHistory.TrackedActorCount,
                 _interest.TrackedPairCount,
                 _spawnAcks.TrackedPairCount,
-                _sessionCount());
+                _sessionCount(),
+                _vehicleIds?.InUseCount ?? 0,
+                _vehicleIds?.QuarantinedCount ?? 0,
+                _vehicleInterest?.TrackedPairCount ?? 0,
+                _vehicles?.LiveCount ?? 0);
 
         /// <summary>
         /// Empties every per-actor and per-pair table. The host still has to despawn the actors
@@ -148,6 +208,14 @@ namespace Ironfront.Net.Replication.Server
             _interest.Reset();
             _spawnAcks.Clear();
             _ids.ResetAll(retainedActorIds);
+
+            // Vehicles have no "retained" case. Actors survive a round on the shipping Dustbowl
+            // map — 41 bots persist across the match cycle — but every vehicle is destroyed at
+            // the boundary and the client tears its whole vehicle table down with the match
+            // phase, so there is nothing left for a stale packet to be applied to.
+            _vehicles?.Clear();
+            _vehicleInterest?.Reset();
+            _vehicleIds?.ReleaseAll();
         }
     }
 }

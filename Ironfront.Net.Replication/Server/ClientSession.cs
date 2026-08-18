@@ -37,7 +37,8 @@ namespace Ironfront.Net.Replication.Server
         {
             ConnectionId = connectionId;
             ActorId      = actorId;
-            Encoder      = new DeltaEncoder();
+            Encoder        = new DeltaEncoder();
+            VehicleEncoder = new VehicleDeltaEncoder();
         }
 
         public ushort ConnectionId { get; }
@@ -47,6 +48,25 @@ namespace Ironfront.Net.Replication.Server
 
         /// <summary>Per-client delta state. Never shared — baselines are per client by definition.</summary>
         public DeltaEncoder Encoder { get; }
+
+        /// <summary>
+        /// Per-client delta state for the vehicle stream. V4 task 7.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A second encoder, not a second use of the first.</b> Actors and vehicles are
+        /// separate messages with separate entry layouts and separate id spaces; one encoder
+        /// cannot hold both baselines, and the baseline is the thing a delta is measured from.
+        /// </para>
+        /// <para>
+        /// <b>Both are acked by one <c>C_ACK_BASELINE</c>.</b> The two snapshots ride the same
+        /// channel-1 datagram and are built at the same server tick, so a tick the client
+        /// acknowledges names a state of both streams — one ack, routed to both encoders.
+        /// A second ack message would be 7 bytes at 20 Hz carrying a number the client already
+        /// sent.
+        /// </para>
+        /// </remarks>
+        public VehicleDeltaEncoder VehicleEncoder { get; }
 
         /// <summary>Authoritative movement state. The server's copy is the truth.</summary>
         public MoveState State;
@@ -150,6 +170,17 @@ namespace Ironfront.Net.Replication.Server
         /// instead of needing its own entry in the trap-2 forget path.
         /// </remarks>
         public int ShedCursor;
+
+        /// <summary>
+        /// The same rotation for the vehicle stream, and deliberately a <b>separate</b> cursor.
+        /// </summary>
+        /// <remarks>
+        /// One shared cursor would rotate the vehicle admission order because the <i>actor</i>
+        /// view shed, and vice versa — coupling two orders that have nothing to do with each
+        /// other, and re-ordering a vehicle view that fit comfortably for no reason. Each stream
+        /// rotates only when it is the one that ran out of room.
+        /// </remarks>
+        public int VehicleShedCursor;
 
         /// <summary>Re-arms the weapon with a full clip. Called on spawn and respawn.</summary>
         /// <remarks>
