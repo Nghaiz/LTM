@@ -393,7 +393,10 @@ namespace Ironfront.Net.Replication.Tests
         [Theory]
         // file,             required guard,                                      site
         [InlineData("VehicleSpawner.cs", "Renderer marker = GetComponent<Renderer>();", "spawner marker mesh")]
-        [InlineData("VehicleSpawner.cs", "GameManager.instance == null ||", "noVehicles suppression")]
+        // Phase-V8 inverted this guard when the spawn path stopped being a coroutine: the check is
+    // now a named predicate (VehiclesAreSuppressed) consulted at both request sites rather than
+    // an inline disjunction inside SpawnVehicle. Same invariant, positive spelling.
+    [InlineData("VehicleSpawner.cs", "GameManager.instance != null && GameManager.instance.noVehicles", "noVehicles suppression")]
         [InlineData("Vehicle.cs", "if (damageParticles != null)", "damage smoke, play and stop")]
         [InlineData("Vehicle.cs", "if (impactAudio != null)", "collision impact audio")]
         [InlineData("Vehicle.cs", "if (deathParticles != null)", "death particles")]

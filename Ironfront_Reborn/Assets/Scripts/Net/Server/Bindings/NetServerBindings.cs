@@ -34,17 +34,25 @@ namespace Ironfront.Net.Unity.Server
         public static ISpawnPointDirectory SpawnPoints { get; set; }
 
         /// <summary>
+        /// The scene's capture points, or <see langword="null"/> when unavailable — which
+        /// <see cref="MatchController"/> reads as "this map has no objectives", the same
+        /// deathmatch branch an empty authored array already produced.
+        /// </summary>
+        public static ICapturePointDirectory CapturePoints { get; set; }
+
+        /// <summary>
         /// Resolves the gameplay source for <paramref name="gameObject"/>, or
         /// <see langword="null"/> when nothing is registered or the object has no actor.
         /// </summary>
         public static IGameplayActorSource ResolveActorSource(GameObject gameObject)
             => ActorSourceResolver?.Invoke(gameObject);
 
-        /// <summary>Clears both seams. For tests, and for a clean re-install.</summary>
+        /// <summary>Clears every seam. For tests, and for a clean re-install.</summary>
         public static void Clear()
         {
             ActorSourceResolver = null;
             SpawnPoints = null;
+            CapturePoints = null;
         }
     }
 }
