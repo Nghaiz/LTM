@@ -86,9 +86,9 @@ arithmetic is being taken away.
 | **new** `RefreshPresence(ReadOnlySpan<ActorPresence> actors)` | Recomputes `isContested` and `contestedSpawnpointIsSafe[]` from a caller-owned span. No allocation, no `foreach`, no `Dictionary`. Returns `(int team0Count, int team1Count)` so the offline path can keep using it for its own arithmetic. |
 | **new** `ApplyAuthoritativeOwner(int team, float control, bool contested)` | D3's single write path. Sets `isContested`, sets `control`, and calls the existing `SetOwner(team)` (`:234-269`) only when `team != owner`, so `ScoreUi.AddFlag` and `MinimapUi.UpdateSpawnPointButtons` still fire exactly once per flip and no more. |
 | **new** `public float CaptureSpeed = 0.2f` | The per-point authored capture speed D6 needs. Default matches `MatchController._captureSpeed`, so an unedited prefab behaves exactly as it does today. |
-| `Update()` (`:105-110`) | Unchanged. The flag-pole lerp is cosmetic and is driven by `control`, which now arrives authoritatively. |
-| `flagRenderer.enabled` (`:204`) | Moves into `ApplyAuthoritativeOwner`, because it was the one line of rendering trapped inside the arithmetic. Null-guarded — a headless server has no `flagRenderer` when `lqFlag`/`hqFlag` are stripped. |
-| `IngameUi` calls (`:192-203`) | Stay in the offline/client presentation path only. They are `IngameUi.instance` dereferences with no null guard and they are on the server's path today. |
+| `Update()` (`:153-158`) | Unchanged. The flag-pole lerp is cosmetic and is driven by `control`, which now arrives authoritatively. |
+| `flagRenderer.enabled` (`:363`) | Moves into `ApplyAuthoritativeOwner`, because it was the one line of rendering trapped inside the arithmetic. Null-guarded — a headless server has no `flagRenderer` when `lqFlag`/`hqFlag` are stripped. |
+| `IngameUi` calls (`:240-251`) | Stay in the offline/client presentation path only. They are `IngameUi.instance` dereferences with no null guard and they are on the server's path today. |
 
 **Why the arithmetic is not merely deleted.** The offline game is a shipping product. D2 promises it
 is unchanged, and the only way to keep that promise cheaply is to leave the code that produces it in

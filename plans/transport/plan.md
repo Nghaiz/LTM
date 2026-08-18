@@ -33,7 +33,7 @@ message.
 | `Ironfront.Net.Transport.Tests/**` | Owner |
 | `Ironfront.Net.Replication/Serialization/**` | **Owner** (`BitWriter`, `BitReader`) — newly assigned |
 | `Ironfront.Net.Protocol.Tests/Conformance/**` | **Read-only** — the replication track owns it; it's the referee that verifies your code |
-| `Ironfront.Net.Protocol/**` | PR + 2 approvals (shared) |
+| `Ironfront.Net.Protocol/**` | PR clearing `protocol-spec.md` § 15's wire gate |
 | Everything else | Read-only |
 
 > **Changed at the week-1 protocol freeze.** `Quantize` is **no longer yours** — it moved to

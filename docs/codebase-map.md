@@ -50,24 +50,24 @@ flowchart TD
 
 | # | Where | What happens |
 |---|---|---|
-| 1 | [`Actor.Update():433`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L433) | Per frame, if `activeWeapon != null` → `UpdateWeapon()` |
-| 2 | [`Actor.UpdateWeapon():443`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L443) | `controller.Fire()` && not `fallenOver` && seat allows it |
-| 3 | [`Actor.UpdateWeapon():446`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L446) | `activeWeapon.Fire(controller.FacingDirection(), controller.UseMuzzleDirection())` |
+| 1 | [`Actor.Update():467`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L467) | Per frame, if `activeWeapon != null` → `UpdateWeapon()` |
+| 2 | [`Actor.UpdateWeapon():475`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L475) | `controller.Fire()` && not `fallenOver` && seat allows it |
+| 3 | [`Actor.UpdateWeapon():480`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L480) | `activeWeapon.Fire(controller.FacingDirection(), controller.UseMuzzleDirection())` |
 | 4 | [`Weapon.CanFire():306`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs#L306) | unholstered · not reloading · has ammo · auto-or-not-held · not cooling down |
 | 5 | [`Weapon.Shoot():321`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs#L321) | `projectilesPerShot` × `SpawnProjectile`, then `ammo--`, `user.ApplyRecoil(...)` |
 | 6 | [`Weapon.SpawnProjectile():388`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs#L388) | `Quaternion.LookRotation(direction + Random.insideUnitSphere * configuration.spread)` |
 | 7 | [`Projectile.Travel():92`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Projectile.cs#L92) | Raycast forward `delta.magnitude * 2f`, mask `-2049` |
 | 8 | [`Projectile.Hit():125`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Projectile.cs#L125) | `Hitbox.IsHitboxLayer(layer)` → `component.ProjectileHit(this, point)` |
 | 9 | [`Hitbox.ProjectileHit():22`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Hitbox.cs#L22) | `parent.Damage(p.Damage() * multiplier, p.BalanceDamage(), piercing, …)` |
-| 10 | [`Actor.Damage():761`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L761) | `health -=`, `balance -=`, blood decals, then knock-over / ragdoll / hurt |
-| 11 | [`Actor.Die():691`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L691) | drop weapons, ragdoll, `ActorManager.SetDead`, `PathfindingManager.RegisterDeath`, `ScoreUi.AddScore` |
+| 10 | [`Actor.Damage():813`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L813) | `health -=`, `balance -=`, blood decals, then knock-over / ragdoll / hurt |
+| 11 | [`Actor.Die():725`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L725) | drop weapons, ragdoll, `ActorManager.SetDead`, `PathfindingManager.RegisterDeath`, `ScoreUi.AddScore` |
 
 ### Five facts worth knowing before you touch any of it
 
 1. **Damage is randomised at three points**, all `UnityEngine.Random`: spread
    ([`Weapon.cs:390`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs#L390)), recoil
    kick ([`Weapon.cs:348`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs#L348)) and
-   the hurt animation ([`Actor.cs:797`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L797)).
+   the hurt animation ([`Actor.cs:857`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L857)).
    A shot is not reproducible from its inputs, so client-side prediction of a hit is not possible
    without seeding — which is why
    [`ServerFireResolver`](../Ironfront.Net.Replication/Combat/ServerFireResolver.cs) exists on the
@@ -83,7 +83,7 @@ flowchart TD
    vehicle armour.
 4. **`Actor.Update` throttles itself.** `IsLowQuality()` returns true for AI actors that are
    off-screen or beyond `12000 / fov` metres, and those actors run `UpdateFacing`/`UpdateMovement`
-   at 5 Hz instead of per frame ([`Actor.cs:402-421`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L402)).
+   at 5 Hz instead of per frame ([`Actor.cs:403-422`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L403)).
    `Camera.main` is dereferenced unconditionally inside `IsLowQuality`, which is a headless
    landmine — see § 4.
 5. **`AiActorController` consumes the same 30-method `ActorController` surface and reads no input at
@@ -107,16 +107,16 @@ The right-hand column is
 | facing yaw | `transform.eulerAngles.y` | ✅ | `Yaw` (u16) |
 | aim pitch | camera, not on `Actor` | ✅ | `Pitch` (i8) |
 | velocity | `controller.Velocity()` | ✅ | `VelX/Y/Z` (i8) |
-| `health` | [`Actor.cs:72`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L72) | ✅ | `Health` (u8, 0–100) |
-| `dead` | [`Actor.cs:78`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L78) | ✅ | `IsAlive` flag (inverted) |
-| `fallenOver` / ragdoll | [`Actor.cs:81`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L81) | ✅ | `IsRagdoll` flag |
+| `health` | [`Actor.cs:89`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L89) | ✅ | `Health` (u8, 0–100) |
+| `dead` | [`Actor.cs:95`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L95) | ✅ | `IsAlive` flag (inverted) |
+| `fallenOver` / ragdoll | [`Actor.cs:98`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L98) | ✅ | `IsRagdoll` flag |
 | crouching | `FpsActorController.crouching` | ✅ | `IsCrouching` flag |
 | sprinting | `controller.IsSprinting()` | ✅ | `IsSprinting` flag |
-| aiming | [`Actor.cs:120`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L120) | ✅ | `IsAiming` flag |
-| `inWater` | [`Actor.cs:106`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L106) | ✅ | `IsInWater` flag |
-| `seat` occupancy | [`Actor.cs:143`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L143) | ✅ | `IsSeated` flag + `SeatInfo` (stretch) |
+| aiming | [`Actor.cs:137`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L137) | ✅ | `IsAiming` flag |
+| `inWater` | [`Actor.cs:123`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L123) | ✅ | `IsInWater` flag |
+| `seat` occupancy | [`Actor.cs:160`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L160) | ✅ | `IsSeated` flag + `SeatInfo` (stretch) |
 | `team` | `Hurtable.team` | ✅ | `Team` (u8) |
-| active weapon | [`Actor.cs:109`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L109) | ✅ | `WeaponId` (u8, via `WeaponManager.NetworkIdOf`) |
+| active weapon | [`Actor.cs:126`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L126) | ✅ | `WeaponId` (u8, via `WeaponManager.NetworkIdOf`) |
 | `activeWeapon.ammo` | `Weapon.ammo` | ✅ | `AmmoInClip` (u8) |
 
 ### The gap list
@@ -125,7 +125,7 @@ Phase-00 asks for the table; the gap under it is the part that changes anyone's 
 
 | Missing from the snapshot | Where it lives | Does it matter? |
 |---|---|---|
-| **`balance`** (the stagger meter, 100 → −100) | [`Actor.cs:75`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L75) | **Yes.** `balance < 0` is what triggers `KnockOver` ([`Actor.cs:791`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L791)). It regenerates at 10/s and is decremented by every hit, so a client that does not have it cannot predict a knock-down and will show a player standing who is on the floor on the server. It is not derivable from `health` — a stun grenade does 0 health and 200 balance. |
+| **`balance`** (the stagger meter, 100 → −100) | [`Actor.cs:92`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L92) | **Yes.** `balance < 0` is what triggers `KnockOver` ([`Actor.cs:853`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L853)). It regenerates at 10/s and is decremented by every hit, so a client that does not have it cannot predict a knock-down and will show a player standing who is on the floor on the server. It is not derivable from `health` — a stun grenade does 0 health and 200 balance. |
 | **`spareAmmo[5]`** and the other four weapon slots | [`Actor.cs:112,116`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L112) | Own-player only. The HUD reads it via `Actor.UpdateAmmoUi`; other players never see it. A dedicated `S_LOADOUT`-style message or an own-player-only field, not a per-actor snapshot field. |
 | **`prone`** | *does not exist in the game* | `ActorStateFlags.IsProne` is defined in the protocol and has no source. Either the protocol carries a bit nothing will ever set, or prone is a planned feature. Worth deciding rather than discovering. |
 | **`hasAmmoBox` / `hasMedipack` / `needsResupply`** | [`Actor.cs:125-140`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L125) | AI-only inputs (`AiActorController` resupply behaviour) and server-side. No replication needed. |

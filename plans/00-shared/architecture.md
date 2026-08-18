@@ -311,7 +311,7 @@ build stays lean:
 
 ```csharp
 #if !UNITY_SERVER
-    IngameUi.instance.ShowHitmarker();
+    IngameUi.Hit();
 #endif
 ```
 

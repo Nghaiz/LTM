@@ -33,7 +33,7 @@ master server (D). You consume their APIs.
 | `Ironfront_Reborn/Assets/Scripts/Net/Client/**` | Owner | Client-side net code |
 | `Ironfront_Reborn/Assets/Scripts/Net/Shared/**` | Read + edit with C's consent | C is the owner |
 | `Ironfront_Reborn/Assets/Scripts/Net/Server/**` | Read-only | C is the owner |
-| `Ironfront.Net.Protocol/**` | PR + 2 approvals | Shared |
+| `Ironfront.Net.Protocol/**` | PR clearing `protocol-spec.md` § 15's wire gate | Shared |
 | `Ironfront_Reborn/ProjectSettings/**` | Owner | Build profiles, layers, physics |
 | `tools/build-*.ps1` | Read, propose changes via D | D is the owner |
 

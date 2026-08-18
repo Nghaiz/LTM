@@ -32,7 +32,7 @@ the VPS, the load-test harness. The other three depend on all of it.
 | `Ironfront.Tools.LoadTest/**` | Owner |
 | `tools/**` (CI, build scripts) | Owner |
 | `.github/workflows/**` | Owner |
-| `Ironfront.Net.Protocol/**` | PR + 2 approvals (shared) |
+| `Ironfront.Net.Protocol/**` | PR clearing `protocol-spec.md` § 15's wire gate |
 
 **Don't open the Unity Editor.**
 

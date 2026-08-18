@@ -14,8 +14,9 @@
 > **The single source of these constants in code:** `Ironfront.Net.Protocol/ProtocolConstants.cs`.
 > Re-hardcoding any number from this document anywhere else is forbidden.
 >
-> **Frozen means:** every change from here on goes through a PR with 2 approvals, adds a row to
-> [§ 15](#15-protocol-changelog-and-freeze-record), and bumps `PROTOCOL_VERSION` **if the bytes on
+> **Frozen means:** every change from here on clears the wire gate in
+> [§ 15](#15-protocol-changelog-and-freeze-record), adds a row to that section's changelog, and
+> bumps `PROTOCOL_VERSION` **if the bytes on
 > the wire change**. A correction that leaves the wire format untouched (a fixed typo, a clarified
 > ambiguity) still needs the PR and the changelog row, but does **not** bump `PROTOCOL_VERSION` —
 > bumping it would reject every client for a documentation edit.
@@ -337,7 +338,7 @@ Settled at the freeze; these three rules are the contract, not suggestions.
 
 **Is an 8-bit `changeMask` enough?** Yes for v1 — 7 bits used, 1 spare (bit 7, `seatInfo`, is the
 stretch-goal vehicle field). A ninth field would need a `changeMask` widened to `u16`, which is a
-wire-format change: PR, 2 approvals, and a `PROTOCOL_VERSION` bump.
+wire-format change: a PR clearing § 15's wire gate, and a `PROTOCOL_VERSION` bump.
 
 **`stateFlags` (u8)**
 
