@@ -90,18 +90,77 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
-        public void EveryCatalogEntryIsMarkedUnauthored()
+        public void OnlyTheMeleeWeaponsRemainUnauthored()
         {
-            // D3. This test is MEANT to fail when the client track fills in the real numbers from
-            // _Managers.prefab — that is the point. Filling them must be a conscious act, so
-            // delete or invert this assertion in the same commit that flips the last flag.
-            Assert.Equal(0, WeaponCatalog.AuthoredCount);
-            Assert.Equal(WeaponIds.MAX_ASSIGNED, WeaponCatalog.PlaceholderCount);
-            Assert.False(WeaponCatalog.IsAuthored(WeaponIds.RK44));
+            // The inversion V2's D3 asked for, performed in the commit that filled the numbers.
+            // Fifteen entries now carry values from the weapon assets. The two that do not are
+            // the melee weapons, and they are excluded for a modelling reason rather than a
+            // missing-data one: WeaponConfig describes a hitscan shot and a wrench swing is not
+            // one. If a later phase teaches this table about melee, this assertion is the thing
+            // that must change with it.
+            Assert.Equal(WeaponIds.MAX_ASSIGNED - 2, WeaponCatalog.AuthoredCount);
+            Assert.Equal(2, WeaponCatalog.PlaceholderCount);
+
+            Assert.True(WeaponCatalog.IsAuthored(WeaponIds.RK44));
+            Assert.True(WeaponCatalog.IsAuthored(WeaponIds.RECON_LRR));
+            Assert.False(WeaponCatalog.IsAuthored(WeaponIds.WRENCH));
+            Assert.False(WeaponCatalog.IsAuthored(WeaponIds.SUPER_WRENCH));
 
             string warning = WeaponCatalog.DescribeUnauthored();
             Assert.Contains("PLACEHOLDER", warning);
-            Assert.Contains(WeaponIds.NameOf(WeaponIds.RECON_LRR), warning);
+            Assert.Contains(WeaponIds.NameOf(WeaponIds.WRENCH), warning);
+            Assert.DoesNotContain(WeaponIds.NameOf(WeaponIds.RECON_LRR), warning);
+        }
+
+        [Fact]
+        public void TheWeaponsWhoseCLASSWasGuessedWrongAreNowRight()
+        {
+            // Every id below was catalogued as the wrong KIND of weapon, not merely with loose
+            // numbers, and each passed every other test in this file while doing so. Pinning the
+            // distinguishing property of each is what would catch a regression to a class guess.
+
+            // An SMAW rocket launcher, once an 8-pellet shotgun. One shell, and the payload is
+            // the rocket's, so hitscan damage is zero rather than 8 x 12.
+            Assert.Equal(1, WeaponCatalog.For(WeaponIds.BEU_AW1).ClipSize);
+            Assert.Equal(1, WeaponCatalog.For(WeaponIds.BEU_AW1).ProjectilesPerShot);
+            Assert.Equal(0f, WeaponCatalog.For(WeaponIds.BEU_AW1).Damage);
+
+            // A Javelin guided missile, once a marksman rifle doing 40 a shot.
+            Assert.Equal(1, WeaponCatalog.For(WeaponIds.BIL_SCALPEL).ClipSize);
+            Assert.Equal(0f, WeaponCatalog.For(WeaponIds.BIL_SCALPEL).Damage);
+
+            // A sniper, once an automatic. The cadence is the tell: 1.5 s, not 0.1 s.
+            Assert.True(WeaponCatalog.For(WeaponIds.SL_DEFENDER).Cooldown >= 1f);
+            Assert.True(WeaponCatalog.For(WeaponIds.SL_DEFENDER).Damage >= 60f);
+
+            // A 20-pellet shotgun, once a single-projectile marksman rifle.
+            Assert.Equal(20, WeaponCatalog.For(WeaponIds.EAGLE_76).ProjectilesPerShot);
+            Assert.True(WeaponCatalog.For(WeaponIds.EAGLE_76).Range <= 100f);
+
+            // No two ids share an identical config any more. The bug this phase exists to close
+            // was seventeen ids resolving to one gun; four still shared the "automatic" literal
+            // after V2, which is the same defect one order smaller.
+            for (byte a = 1; a <= WeaponIds.MAX_ASSIGNED; a++)
+            {
+                if (!WeaponCatalog.IsAuthored(a) || WeaponCatalog.For(a).Damage == 0f) continue;
+
+                for (byte b = (byte)(a + 1); b <= WeaponIds.MAX_ASSIGNED; b++)
+                {
+                    if (!WeaponCatalog.IsAuthored(b) || WeaponCatalog.For(b).Damage == 0f) continue;
+
+                    WeaponConfig left = WeaponCatalog.For(a);
+                    WeaponConfig right = WeaponCatalog.For(b);
+                    bool identical =
+                        left.Damage == right.Damage &&
+                        left.Cooldown == right.Cooldown &&
+                        left.ClipSize == right.ClipSize &&
+                        left.Range == right.Range &&
+                        left.DropoffEndMetres == right.DropoffEndMetres;
+
+                    Assert.False(identical,
+                        WeaponIds.NameOf(a) + " and " + WeaponIds.NameOf(b) + " are the same gun");
+                }
+            }
         }
 
         // ------------------------------------------------------------------ the drop-off ramp
@@ -218,8 +277,14 @@ namespace Ironfront.Net.Replication.Tests
         [Fact]
         public void ANonRifleBehavesDifferentlyFromARifleOnTheServer()
         {
+            // The sniper is SL_DEFENDER (sniper.prefab, 80 damage over a 1.5 s cycle), not
+            // RECON_LRR — that one is RFB.prefab, a 0.1 s marksman rifle whose ramp starts at
+            // 36 m. This test used to name RECON_LRR and passed, because the placeholder numbers
+            // made it a bolt-action doing 95. Against the real assets that comparison inverts:
+            // RECON_LRR's ramp starts EARLIER than the rifle's, so the gap narrows with range
+            // rather than widening, and the assertion below is what catches it.
             WeaponConfig smg = WeaponCatalog.For(WeaponIds.RK44);
-            WeaponConfig sniper = WeaponCatalog.For(WeaponIds.RECON_LRR);
+            WeaponConfig sniper = WeaponCatalog.For(WeaponIds.SL_DEFENDER);
 
             float smgClose = ServerFireResolver.DamageFor(in smg, HitboxType.Body, 10f);
             float sniperClose = ServerFireResolver.DamageFor(in sniper, HitboxType.Body, 10f);
@@ -241,7 +306,11 @@ namespace Ironfront.Net.Replication.Tests
         [Fact]
         public void AShotgunFiresMoreProjectilesThanARifle()
         {
-            WeaponConfig shotgun = WeaponCatalog.For(WeaponIds.BEU_AW1);
+            // The shotgun is EAGLE_76 (shotgun.prefab, a ShellLoadedWeapon firing 20 pellets),
+            // not BEU_AW1 — that one is smaw.prefab, a rocket launcher with a single shell whose
+            // damage belongs to the rocket. This test used to name BEU_AW1 and passed, because
+            // the placeholder had invented an 8-pellet spread for it.
+            WeaponConfig shotgun = WeaponCatalog.For(WeaponIds.EAGLE_76);
             WeaponConfig rifle = WeaponCatalog.For(WeaponIds.RK44);
 
             Assert.True(shotgun.ProjectilesPerShot > rifle.ProjectilesPerShot);
