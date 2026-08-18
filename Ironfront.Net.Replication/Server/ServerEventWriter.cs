@@ -138,6 +138,35 @@ namespace Ironfront.Net.Replication.Server
         }
 
         /// <summary>
+        /// Writes S_PLAYER_LIST as a channel-2 payload. Broadcast, on join and on change.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The opcode was declared at the freeze and had no writer for four phases, which is why
+        /// the killfeed rendered an actor id and no name. Reliable, because a client that misses
+        /// it has no second chance to learn who anybody is — nothing re-sends names on a timer.
+        /// </para>
+        /// <para>
+        /// <paramref name="bodyScratch"/> is the caller's, not a <c>stackalloc</c>: the body is
+        /// variable-length and its worst case is
+        /// <see cref="PlayerListMessage.MaxBodySize"/> (1153 B), which is not a size to put on
+        /// the stack of a 30 Hz tick loop. Size it once and reuse it.
+        /// </para>
+        /// </remarks>
+        public static int WritePlayerList(
+            Span<byte> destination,
+            Span<byte> bodyScratch,
+            ReadOnlySpan<PlayerListEntry> entries)
+        {
+            int bodyLength = PlayerListMessage.Write(bodyScratch, entries);
+            return bodyLength < 0
+                ? -1
+                : Frame(
+                    destination, ReliableChannel, ServerMessageType.PlayerList,
+                    bodyScratch.Slice(0, bodyLength));
+        }
+
+        /// <summary>
         /// Whether a listener at <paramref name="listenerDistanceSquared"/> should receive an
         /// event audible within <paramref name="radius"/> metres.
         /// </summary>

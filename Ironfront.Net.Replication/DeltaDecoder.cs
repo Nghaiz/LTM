@@ -157,8 +157,11 @@ namespace Ironfront.Net.Replication
                         : incoming;
 
                 // The stored entry carries every field, not the sparse wire mask, so it can
-                // serve as a baseline itself next tick.
-                resolved.ChangeMask = SnapshotField.FullNoSeat;
+                // serve as a baseline itself next tick. Full for a seated actor, so the mask
+                // describes the entry it is attached to rather than a fixed assumption.
+                resolved.ChangeMask = resolved.VehicleId != 0
+                    ? SnapshotField.Full
+                    : SnapshotField.FullNoSeat;
                 Current.Add(in resolved);
             }
         }

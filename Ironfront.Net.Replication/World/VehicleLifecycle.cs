@@ -1,16 +1,12 @@
+using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Movement;
 
 namespace Ironfront.Net.Replication.World
 {
-    /// <summary>Why a vehicle left the world.</summary>
-    public enum VehicleDespawnReason : byte
-    {
-        /// <summary>Destroyed by damage. The wreck, if any, is the engine's business.</summary>
-        Destroyed = 0,
-
-        /// <summary>Torn down between rounds, with the rest of the world.</summary>
-        WorldReset = 1,
-    }
+    // VehicleDespawnReason used to be declared here, because phase-V8 shipped this sink before
+    // the wire existed and needed a reason code with nowhere to put it. Protocol v3 gives it a
+    // home in Ironfront.Net.Protocol with the same two values, so the local copy is gone rather
+    // than left to drift against the one that actually goes on the wire.
 
     /// <summary>
     /// Where the spawner reports what it just did, so that something else can put it on the

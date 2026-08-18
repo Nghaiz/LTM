@@ -8,6 +8,12 @@ namespace Ironfront.Net.Protocol
     {
         /// <summary>Input frames. Channel 3 (unreliable-sequenced).</summary>
         Input         = 0x20,
+        /// <summary>
+        /// Vehicle axes plus turret aim, sent only while seated. Channel 3
+        /// (unreliable-sequenced), and unlike <see cref="Input"/> it carries no frame
+        /// redundancy — see protocol-spec.md section 4.10.
+        /// </summary>
+        VehicleInput  = 0x21,
         /// <summary>Weapon selection before spawning. Channel 2.</summary>
         LoadoutSelect = 0x22,
         /// <summary>Requests a respawn at a spawn point. Channel 2.</summary>
@@ -16,7 +22,11 @@ namespace Ironfront.Net.Protocol
         Chat          = 0x24,
         /// <summary>RTT measurement, carries a client timestamp. Channel 0.</summary>
         Ping          = 0x25,
-        /// <summary>Enter/exit a vehicle seat (stretch goal). Channel 2.</summary>
+        /// <summary>
+        /// Asks to enter or leave a vehicle seat. Channel 2 (reliable-ordered), because
+        /// leaving is the one edge-triggered vehicle action and losing it strands the player.
+        /// The server answers with <see cref="ServerMessageType.SeatChange"/> either way.
+        /// </summary>
         SeatRequest   = 0x26,
         /// <summary>Confirms snapshot tick N was received, for delta encoding. Channel 2.</summary>
         AckBaseline   = 0x27,
@@ -52,6 +62,16 @@ namespace Ironfront.Net.Protocol
         Explosion     = 0x4A,
         /// <summary>Player list and scores, for the scoreboard. Channel 2.</summary>
         PlayerList    = 0x4B,
+        /// <summary>Vehicle entity stream. Channel 1, alongside <see cref="Snapshot"/>.</summary>
+        VehicleSnapshot = 0x4C,
+        /// <summary>A vehicle appeared. Channel 2.</summary>
+        VehicleSpawn    = 0x4D,
+        /// <summary>A vehicle left the world. Channel 2.</summary>
+        VehicleDespawn  = 0x4E,
+        /// <summary>A projectile was launched, with the parameters to simulate it. Channel 2.</summary>
+        ProjectileSpawn = 0x4F,
+        /// <summary>Authoritative seat enter/leave, including a rejection. Channel 2.</summary>
+        SeatChange      = 0x50,
     }
 
     /// <summary>

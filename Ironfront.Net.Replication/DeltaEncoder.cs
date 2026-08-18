@@ -151,9 +151,16 @@ namespace Ironfront.Net.Replication
                 {
                     // Not in the baseline: the client has never seen this actor, so a mask of
                     // changed-fields-only would leave it with garbage for everything else.
-                    // FullNoSeat rather than 0xFF — 0xFF would also claim a seatInfo field
-                    // that v1 does not populate, adding 3 junk bytes per new actor.
-                    entries[i].ChangeMask = SnapshotField.FullNoSeat;
+                    //
+                    // Full or FullNoSeat by whether the actor is actually in a vehicle. This
+                    // used to be FullNoSeat unconditionally, because v1 never populated the
+                    // seat field; v3 does, and sending a new actor without it would introduce
+                    // the passenger-standing-in-the-road bug on the interest-set path instead
+                    // of the join path. Still not a blanket 0xFF: for an actor on foot that
+                    // would spend 3 bytes per new actor saying "no vehicle".
+                    entries[i].ChangeMask = entries[i].VehicleId != 0
+                        ? SnapshotField.Full
+                        : SnapshotField.FullNoSeat;
                 }
             }
 
@@ -202,6 +209,13 @@ namespace Ironfront.Net.Replication
                 mask |= SnapshotField.Weapon;
 
             if (baseline.Team != current.Team) mask |= SnapshotField.Team;
+
+            // Seat changes include LEAVING one, which is a change to vehicleId 0. That is the
+            // whole reason 0 is a reserved sentinel rather than just an unused value: a field
+            // sent only on change has no other way to say "no longer seated".
+            if (baseline.VehicleId != current.VehicleId
+                || baseline.SeatIndex != current.SeatIndex)
+                mask |= SnapshotField.SeatInfo;
 
             return mask;
         }

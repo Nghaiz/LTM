@@ -53,6 +53,29 @@ public class Vehicle : MonoBehaviour
 
 	private Action takingFireAction = new Action(20f);
 
+	/// <summary>
+	/// This prefab's <c>Ironfront.Net.Protocol.VehicleIds</c> value, carried by
+	/// <c>S_VEHICLE_SPAWN</c> so the receiving client instantiates the right prefab.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Authored per prefab in the Inspector, and gated by <c>tools/SpecChecker</c> against
+	/// <c>VehicleIds.cs</c> and <c>protocol-spec.md § 4.9</c> on every CI run. This is the
+	/// <c>weaponId</c> arrangement exactly: the mapping has to exist somewhere the server can
+	/// read, and a Unity YAML asset is not that place.
+	/// </para>
+	/// <para>
+	/// A plain <c>byte</c> rather than the protocol's type, for the same reason
+	/// <see cref="NoAttacker"/> is a plain int: Assembly-CSharp does not take a compile-time
+	/// dependency on the netcode's id types to carry one serialized number.
+	/// </para>
+	/// </remarks>
+	[SerializeField]
+	private byte networkId;
+
+	/// <summary>This prefab's vehicle-type id. 0 means unauthored, and never ships.</summary>
+	public byte NetworkId => networkId;
+
 	public float maxHealth = 1000f;
 
 	public float crashDamageSpeedThrehshold = 2f;
