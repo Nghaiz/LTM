@@ -87,18 +87,34 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $lib" }
     }
 
-    # Assemblies Unity's own .NET Standard 2.1 profile ALREADY provides. Shipping these is not
-    # a harmless duplicate -- Unity fails the whole compile with a duplicate-assembly error,
-    # which blocks every script in the project rather than just the feature that needed them.
+    # Assemblies Unity's own profile ALREADY provides. Shipping one of these is not a harmless
+    # duplicate -- Unity fails the whole compile with a duplicate-assembly error, which blocks
+    # every script in the project rather than just the feature that needed them.
     #
-    # A missing assembly is the cheaper failure of the two: it surfaces as a TypeLoadException
-    # on the one code path that touches it, and the remedy is -IncludeBclFacades. A duplicate
-    # stops the client track's Editor dead. So the default excludes them.
+    # WHICH ONES QUALIFY IS MEASURED, NOT ASSUMED, AND THE PLAYER IS THE PROFILE THAT DECIDES.
+    # This list used to hold Microsoft.Bcl.AsyncInterfaces.dll as well, on the reasoning that
+    # netstandard2.1 supplies IAsyncDisposable / IAsyncEnumerable so Unity would not need the
+    # backfill. That is true of the EDITOR and false of a player. Searched in 6000.3.21f1:
     #
-    # ValueTask lives in netstandard2.1's System.Runtime facade, and IAsyncDisposable /
-    # IAsyncEnumerable came in with netstandard2.1 as well -- which is exactly what these two
-    # packages exist to backfill for netstandard2.0 consumers. Unity does not need either.
-    $unityProvided = @("System.Threading.Tasks.Extensions.dll", "Microsoft.Bcl.AsyncInterfaces.dll")
+    #   System.Threading.Tasks.Extensions.dll  MonoBleedingEdge/lib/mono/unityjit-linux/Facades
+    #                                          -- a UnityLinker --include-directory. Provided.
+    #   Microsoft.Bcl.AsyncInterfaces.dll      Data/NetStandard/EditorExtensions ONLY. Absent
+    #                                          from every Variations/* player profile and from
+    #                                          the mono Facades. NOT provided to a player.
+    #
+    # Leaving it out did not produce the "cheap" TypeLoadException the note below predicts. It
+    # killed the build outright: System.Text.Json.dll references it, so UnityLinker could not
+    # close the reference graph and failed the Linux dedicated-server build with
+    # `ILLink: error IL1010 ... Failed to resolve assembly: Microsoft.Bcl.AsyncInterfaces`,
+    # which the Editor log then reported as the unrelated-sounding "UnityEditor.dll assembly
+    # is referenced by user code, but this is not allowed." That is the whole reason no server
+    # artifact had ever been produced (#80).
+    #
+    # A missing assembly is still the cheaper failure for anything the linker CAN resolve --
+    # it surfaces as a TypeLoadException on the one code path that touches it, and the remedy
+    # is -IncludeBclFacades. A duplicate stops the Editor dead. So the default still excludes
+    # what the player genuinely provides, and now ships what it does not.
+    $unityProvided = @("System.Threading.Tasks.Extensions.dll")
 
     $libDlls = $libs | ForEach-Object { "$_.dll" }
     $copiedDeps = @()
