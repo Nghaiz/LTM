@@ -208,6 +208,40 @@ namespace Ironfront.Net.Replication.Tests
                 StringComparison.Ordinal);
         }
 
+        [Fact]
+        public void TheVehicleStageIsInstalledByTheBootstrapRatherThanAuthored()
+        {
+            // wired-not-just-present: a component that has to be dragged onto a GameObject on
+            // every map is a component that is missing on one of them, and the symptom --
+            // vehicles that never move for this client while every other client sees them fine
+            // -- reads as a netcode fault rather than an authoring one. Neither of these needs a
+            // serialized reference, so there is nothing for an inspector to hold.
+            string bootstrap = ReadScript("Net", "Client", "NetClientBootstrap.cs");
+
+            Assert.Contains("EnsureVehicleStage();", bootstrap, StringComparison.Ordinal);
+            Assert.Contains("AddComponent<RemoteVehicleRegistry>()", bootstrap, StringComparison.Ordinal);
+            Assert.Contains("AddComponent<ClientVehicleStage>()", bootstrap, StringComparison.Ordinal);
+
+            // And the fallback reaches the stage from configuration, not only from the
+            // inspector -- otherwise a headless run has no way to flip it.
+            Assert.Contains(
+                "stage.ApplyConfiguration(Config.PredictLocalVehicle)",
+                bootstrap, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void TheStageDoesNotOverwriteAConfigurationItWasAlreadyGiven()
+        {
+            // NetClientBootstrap runs at a much earlier execution order, so for a stage AUTHORED
+            // into a scene it configures the component before that component's own Awake runs.
+            // Re-applying the serialized default there would silently undo the environment
+            // override on exactly the builds that have no Editor to set the field in.
+            string stage = ReadScript("Net", "Client", "ClientVehicleStage.cs");
+
+            Assert.Matches(
+                new Regex(@"if\s*\(\s*!\s*_configured\s*\)\s*ApplyConfiguration"), stage);
+        }
+
         // ------------------------------------------------------------------ helpers
 
         private static string ReadScript(params string[] relativeParts)
