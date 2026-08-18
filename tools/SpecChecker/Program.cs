@@ -271,7 +271,11 @@ namespace Ironfront.Tools.SpecChecker
             return count;
         }
 
-        private const string VehiclePrefabDirectory = "Ironfront_Reborn/Assets/Prefab";
+        /// <summary>
+        /// Scanned recursively, and rooted at Assets rather than at Assets/Prefab: a vehicle
+        /// prefab moved into a subfolder must not fall out of the gate by being moved.
+        /// </summary>
+        private const string VehiclePrefabDirectory = "Ironfront_Reborn/Assets";
 
         /// <summary>
         /// Compares the serialized <c>networkId</c> on every vehicle prefab against
@@ -318,7 +322,8 @@ namespace Ironfront.Tools.SpecChecker
 
             var records = new List<VehiclePrefabRecord>();
 
-            foreach (string prefabPath in Directory.GetFiles(prefabDirectory, "*.prefab"))
+            foreach (string prefabPath in Directory.GetFiles(
+                         prefabDirectory, "*.prefab", SearchOption.AllDirectories))
             {
                 string text = File.ReadAllText(prefabPath);
 
@@ -449,12 +454,20 @@ namespace Ironfront.Tools.SpecChecker
         }
 
         /// <summary>
-        /// The .meta GUIDs of <c>Vehicle</c> and every class that derives from it.
+        /// The .meta GUIDs of <c>Vehicle</c> and every class that derives from it, at any depth.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// Derived from the source rather than hardcoded, so adding a fifth <c>Vehicle</c>
         /// subclass does not need an edit here — the same data-driven rule the id table itself
         /// follows.
+        /// </para>
+        /// <para>
+        /// <b>Transitive, not direct-subclass-only.</b> A first pass over the sources collects
+        /// every <c>class X : Y</c> edge, then the set is closed over it. Matching only
+        /// <c>: Vehicle</c> would silently drop a <c>class ArmouredCar : Car</c> out of the gate
+        /// — which is the same shape as the failure the gate exists to catch, one level up.
+        /// </para>
         /// </remarks>
         private static HashSet<string> FindVehicleScriptGuids(string repoRoot)
         {
@@ -467,20 +480,43 @@ namespace Ironfront.Tools.SpecChecker
 
             if (!Directory.Exists(scriptDirectory)) return guids;
 
-            foreach (string sourcePath in Directory.GetFiles(scriptDirectory, "*.cs"))
-            {
-                string source = File.ReadAllText(sourcePath);
+            // className -> (base name, .meta guid)
+            var classes = new Dictionary<string, (string BaseName, string? Guid)>(StringComparer.Ordinal);
 
-                bool isVehicle = Regex.IsMatch(source, @"class\s+Vehicle\s*:")
-                              || Regex.IsMatch(source, @"class\s+\w+\s*:\s*Vehicle\b");
-                if (!isVehicle) continue;
+            foreach (string sourcePath in Directory.GetFiles(
+                         scriptDirectory, "*.cs", SearchOption.AllDirectories))
+            {
+                Match declaration = Regex.Match(
+                    File.ReadAllText(sourcePath), @"class\s+(?<name>\w+)\s*:\s*(?<base>\w+)");
+                if (!declaration.Success) continue;
 
                 string metaPath = sourcePath + ".meta";
-                if (!File.Exists(metaPath)) continue;
+                string? guid = null;
+                if (File.Exists(metaPath))
+                {
+                    Match match = Regex.Match(
+                        File.ReadAllText(metaPath), @"guid:\s*(?<guid>[0-9a-f]{32})");
+                    if (match.Success) guid = match.Groups["guid"].Value;
+                }
 
-                Match guid = Regex.Match(File.ReadAllText(metaPath), @"guid:\s*(?<guid>[0-9a-f]{32})");
-                if (guid.Success) guids.Add(guid.Groups["guid"].Value);
+                classes[declaration.Groups["name"].Value] =
+                    (declaration.Groups["base"].Value, guid);
             }
+
+            // Close the "derives from Vehicle" set. Bounded by the class count, so the fixed
+            // point is reached in at most that many passes even with a pathological hierarchy.
+            var derived = new HashSet<string>(StringComparer.Ordinal) { "Vehicle" };
+            bool grew = true;
+            while (grew)
+            {
+                grew = false;
+                foreach ((string name, (string baseName, string? _)) in classes)
+                    if (derived.Contains(baseName) && derived.Add(name)) grew = true;
+            }
+
+            foreach (string name in derived)
+                if (classes.TryGetValue(name, out (string _, string? Guid) entry) && entry.Guid != null)
+                    guids.Add(entry.Guid);
 
             return guids;
         }

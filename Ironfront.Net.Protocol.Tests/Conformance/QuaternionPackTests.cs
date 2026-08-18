@@ -18,7 +18,7 @@ namespace Ironfront.Net.Protocol.Tests
     /// <para>
     /// <b>And the accuracy assertion itself was nearly one of those greens.</b> A 10,000-sample
     /// random sweep reports ~0.19° and agreed with a budget that had been derived wrongly. The
-    /// real worst case is 0.268°, at the four-way tie, and only a deliberate search finds it —
+    /// real worst case is 0.271°, at the four-way tie, and only a deliberate search finds it —
     /// see <c>TheWorstCaseIsSearchedForRatherThanSampledFor</c>.
     /// </para>
     /// </remarks>
@@ -27,7 +27,7 @@ namespace Ironfront.Net.Protocol.Tests
         /// <summary>Deterministic, so a failure is reproducible from the test name alone.</summary>
         private const int SweepSeed = 20260818;
 
-        /// <summary>The § 4.4 budget. The worst case actually measured is 0.268°.</summary>
+        /// <summary>The § 4.4 budget. The worst case actually measured is 0.271°.</summary>
         private const double BudgetDegrees = 0.3;
 
         [Fact]
@@ -58,7 +58,7 @@ namespace Ironfront.Net.Protocol.Tests
             //
             // This matters more than it looks. The budget was originally written as 0.2° from
             // the step size alone, and the 10,000-sample sweep above AGREED with it — it reports
-            // ~0.19° and reads as a clean pass. The corner is 0.268°. A green that only ever saw
+            // ~0.19° and reads as a clean pass. The corner is 0.271°. A green that only ever saw
             // the easy part of the space is the failure mode this test exists to remove.
             var random = new Random(SweepSeed);
             double worstDegrees = 0;
@@ -182,14 +182,62 @@ namespace Ironfront.Net.Protocol.Tests
         [Fact]
         public void TheLayoutIsTwoBitsOfIndexAndThreeTenBitFields()
         {
-            // Asserted against the bit positions section 4.10 states, not against whatever the
-            // implementation happens to shift by.
-            uint packed = Quantize.PackQuat(0.1f, 0.2f, 0.3f, 0.9f);
+            // Asserted against the bit positions section 4.4 states, with the three 10-bit fields
+            // computed here by hand from the quantization formula rather than read back through a
+            // mask.
+            //
+            // This test used to mask with & 0x3FF and then assert the result was <= 1023, which
+            // is arithmetically incapable of failing — it was the one assertion claiming to guard
+            // against a field bleeding into its neighbour, and it could not have caught one.
+            float x = 0.1f, y = 0.2f, z = 0.3f, w = 0.9f;
+            Normalize(ref x, ref y, ref z, ref w);
 
-            Assert.Equal(3u, packed >> 30);                       // w is largest
-            Assert.True(((packed >> 20) & 0x3FFu) <= 1023u);
-            Assert.True(((packed >> 10) & 0x3FFu) <= 1023u);
-            Assert.True((packed & 0x3FFu) <= 1023u);
+            uint packed = Quantize.PackQuat(x, y, z, w);
+
+            Assert.Equal(3u, packed >> 30);   // w is largest, so x, y, z are transmitted
+
+            Assert.Equal(ExpectedField(x), (packed >> 20) & 0x3FFu);
+            Assert.Equal(ExpectedField(y), (packed >> 10) & 0x3FFu);
+            Assert.Equal(ExpectedField(z), packed & 0x3FFu);
+        }
+
+        [Fact]
+        public void NoComponentEverFillsMoreThanItsTenBits()
+        {
+            // The real guard against a field bleeding into its neighbour: pack the extremes of
+            // the representable range and assert the field maxes out at 1023 rather than 1024.
+            // At 1024 the value carries into the next field and every rotation behind it in the
+            // word decodes as something else.
+            const float limit = 0.70710678f;
+
+            foreach (uint field in new[]
+                     {
+                         ExpectedField(limit), ExpectedField(-limit),
+                         ExpectedField(limit * 2f), ExpectedField(-limit * 2f),   // out of range
+                         ExpectedField(0f),
+                     })
+            {
+                Assert.InRange(field, 0u, 1023u);
+            }
+
+            // And through the real codec, at the corner where all three transmitted components
+            // are simultaneously extreme.
+            uint packed = Quantize.PackQuat(limit, limit, 0f, 0f);
+            Assert.InRange((packed >> 20) & 0x3FFu, 0u, 1023u);
+            Assert.InRange((packed >> 10) & 0x3FFu, 0u, 1023u);
+            Assert.InRange(packed & 0x3FFu, 0u, 1023u);
+        }
+
+        /// <summary>
+        /// The 10-bit field a component quantizes to, computed from section 4.4's formula rather
+        /// than from the implementation.
+        /// </summary>
+        private static uint ExpectedField(float value)
+        {
+            double t = (value - Quantize.QUAT_MIN) / Quantize.QUAT_RANGE;
+            if (t < 0.0) t = 0.0;
+            if (t > 1.0) t = 1.0;
+            return (uint)(t * Quantize.QUAT_LEVELS + 0.5);
         }
 
         // ------------------------------------------------------------------ helpers

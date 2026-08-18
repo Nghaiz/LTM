@@ -229,6 +229,36 @@ namespace Ironfront.Net.Protocol.Tests
         }
 
         [Fact]
+        public void AnOffsetAndLengthThatOverflowAreRefusedRatherThanThrown()
+        {
+            // `offset + length > src.Length` is int arithmetic and WRAPS: offset 2 with length
+            // int.MaxValue sums to -2147483647, which passes any `>` test, and the Span
+            // constructor behind it then throws. A TryParse that throws is the one thing this
+            // whole IO layer is built to avoid — conventions.md § 3.2, exceptions are not for
+            // routine conditions, and a truncated packet on a UDP socket is routine.
+            var src = new byte[100];
+            var entries = new PlayerListEntry[8];
+
+            Assert.False(PlayerListMessage.TryParse(src, 2, int.MaxValue, entries, out int a));
+            Assert.Equal(0, a);
+
+            Assert.False(PlayerListMessage.TryParse(src, int.MaxValue, 2, entries, out int b));
+            Assert.Equal(0, b);
+
+            Assert.False(PlayerListMessage.TryParse(src, -1, 10, entries, out int c));
+            Assert.Equal(0, c);
+
+            Assert.False(PlayerListMessage.TryParse(src, 10, -1, entries, out int d));
+            Assert.Equal(0, d);
+
+            Assert.False(PlayerListMessage.TryParse(src, 99, 2, entries, out int e));
+            Assert.Equal(0, e);
+
+            Assert.False(PlayerListMessage.TryParse(null!, 0, 0, entries, out int f));
+            Assert.Equal(0, f);
+        }
+
+        [Fact]
         public void TheWorstCasePlayerListFitsOneUnfragmentedPayload()
         {
             Assert.Equal(1 + 64 * 18, PlayerListMessage.MaxBodySize);

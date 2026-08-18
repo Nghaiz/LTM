@@ -210,13 +210,24 @@ Three properties the implementation must have, each because getting it wrong is 
 `Quantize` must not reference `UnityEngine` (`Quantize.cs:16-19`), so this is plain `System.Math`.
 No allocation: both signatures are value-in, value-out.
 
-**Resolution.** 10 bits over `2/√2` is 1.38 × 10⁻³ per step, i.e. **< 0.16° of angular error** —
-finer than the 0.5 m/s velocity resolution the same stream already accepts.
+**Resolution.** 10 bits over `2/√2` is 1.38 × 10⁻³ per step.
 
-**Verify:** `QuaternionPackTests` (Task 8) — round-trip angular error < 0.2° over a deterministic
-sweep of 10⁴ rotations covering all four largest-component branches; `PackQuat(q)` ==
-`PackQuat(-q)`; unpacked length within 10⁻³ of 1; no `NaN` for any 32-bit input, including the
-`0xFFFFFFFF` an attacker sends.
+> **Corrected during implementation, 2026-08-18.** This paragraph originally continued "i.e.
+> **< 0.16° of angular error**", which reads the step size as if it were the whole error. The
+> dropped component is *reconstructed*, and its error is `−(a·δa + b·δb + c·δc)/m`, which grows as
+> `m` shrinks — worst at the four-way tie, where the true figure is **0.271°**. See § 5
+> criterion 5 for the derivation and the measurements. Still finer than the 0.5 m/s velocity
+> resolution the same stream already accepts, which was the point being made.
+
+**Verify:** `QuaternionPackTests` (Task 8) — round-trip angular error **< 0.3°** over a
+deterministic sweep of 10⁴ rotations covering all four largest-component branches **and a
+deliberate search of the four-way tie**; `PackQuat(q)` == `PackQuat(-q)`; unpacked length within
+10⁻³ of 1; no `NaN` for any 32-bit input, including the `0xFFFFFFFF` an attacker sends.
+
+> The corner search is not belt-and-braces. The 10⁴ random sweep reports ~0.19° and **agreed with
+> the wrong budget** — it never reached the part of the space where this codec is worst. It now
+> asserts its own result is *above* 0.2° as well as below 0.3°, so a change that stops it reaching
+> the corner fails loudly rather than quietly reporting 0.19° again.
 
 ---
 
@@ -412,7 +423,7 @@ All in `Ironfront.Net.Protocol.Tests/Conformance/`, all under `dotnet test`, no 
 
 | File | Asserts |
 |---|---|
-| `QuaternionPackTests.cs` **(new)** | Task 2's four properties: < 0.2° round-trip over a deterministic 10⁴ sweep, all four largest-component branches exercised, `PackQuat(q) == PackQuat(-q)`, unit length within 10⁻³, and **no `NaN` for any input including `0xFFFFFFFF`**. |
+| `QuaternionPackTests.cs` **(new)** | Task 2's four properties: **< 0.3°** round-trip over a deterministic 10⁴ sweep **plus a deliberate four-way-tie search** (see criterion 5), all four largest-component branches exercised, `PackQuat(q) == PackQuat(-q)`, unit length within 10⁻³, and **no `NaN` for any input including `0xFFFFFFFF`**. |
 | `VehicleSnapshotTests.cs` **(new)** | `EntrySize` per bit against the § 2.2 table row by row; `EntrySize(Full) == 30`; `EntrySize(None) == 4`; header is 9; a 16-vehicle full body is 489 and fits `MaxSnapshotBodySize`; `TryParse` rejects `vehicleCount` beyond the caller's span; a mask with only `Position` set yields a 10-byte entry and touches no other field. |
 | `VehicleMessageTests.cs` **(new)** | Every `Size` in Task 5's table; round-trip each; short-body `TryParse` returns `false`. |
 | `PacketHexSampleTests.cs` (edit) | Hand-written hex, both directions, for: `C_VEHICLE_INPUT`, `C_SEAT_REQUEST`, `S_VEHICLE_SNAPSHOT` (**one 30-byte full entry followed by one 4-byte stationary entry** — the mixed case is the one that catches a mis-sized `EntrySize`), `S_VEHICLE_SPAWN`, `S_VEHICLE_DESPAWN`, `S_PROJECTILE_SPAWN`, `S_SEAT_CHANGE`, and an **`ActorSnapshotEntry` with `SeatInfo` set, asserted at 23 bytes**. Extend the existing enum-pinning block (`:261` already pins `SeatRequest = 0x26`) with `0x21` and `0x4C`–`0x50`. |
@@ -535,7 +546,8 @@ handshake tests, which read the constant).
    > reconstructed as `sqrt(1 − a² − b² − c²)`, so its error is `−(a·δa + b·δb + c·δc)/m` and
    > grows as `m` shrinks — worst at the four-way tie `(0.5, 0.5, 0.5, 0.5)`, giving
    > `≈ 2 × 2.394e-3 rad = 0.274°`. Measured: 0.243° over a 2 × 10⁶ uniform sweep, 0.241° over a
-   > dense grid, **0.268°** once the tie corner is searched deliberately. 10-bit smallest-three
+   > dense grid, **0.271°** once the tie corner is searched deliberately (at
+   > `(0.5004, 0.5014, 0.4991, 0.4991)`). 10-bit smallest-three
    > cannot meet 0.2° in 32 bits; 12-bit components would, at 5 bytes, which moves the § 2.2
    > 30-byte entry this phase is forbidden from re-deriving. 0.27° on a vehicle at 20 Hz is
    > invisible and finer than the 0.5 m/s velocity resolution the same stream already accepts.

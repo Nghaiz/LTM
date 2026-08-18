@@ -59,9 +59,9 @@ namespace Ironfront.Net.Protocol
         //     |dq|   ~  sqrt(3 * (6.912e-4)^2 + (2.074e-3)^2) = 2.394e-3
         //     angle  ~  2 * |dq| = 4.79e-3 rad = 0.274 degrees
         //
-        // Measured worst case is 0.268 degrees, against a 0.3 degree budget: a 2-million-sample
+        // Measured worst case is 0.271 degrees, against a 0.3 degree budget: a 2-million-sample
         // uniform sweep finds 0.243, a dense grid over the three transmitted components finds
-        // 0.241, and only a deliberate search of the tie corner finds 0.268. A random sweep of
+        // 0.241, and only a deliberate search of the tie corner finds 0.271. A random sweep of
         // 10^4 rotations reports about 0.19 and looks like a pass — which is exactly why the
         // conformance test searches the corner instead of sampling and hoping.
         //

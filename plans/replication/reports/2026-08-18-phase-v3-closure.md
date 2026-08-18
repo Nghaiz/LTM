@@ -4,7 +4,9 @@
 - **Date:** 2026-08-18
 - **Phase:** [`phases/phase-v3-protocol-v3.md`](../phases/phase-v3-protocol-v3.md)
 - **Design of record:** [`2026-08-17-vehicle-and-world-replication-brainstorm.md`](2026-08-17-vehicle-and-world-replication-brainstorm.md) § 5
-- **Status:** ☑ **Done** — 11 of 11 criteria met, one of them after correcting the criterion itself
+- **Status:** ☑ **Done** — 10 of 11 criteria met outright; criterion 5 met after correcting the
+  criterion itself, and criterion 7's second half is V4's by the plan's own V3-6 (§ 4a)
+- **Reviewed by:** an independent `t1k-code-reviewer` pass — findings and dispositions in § 4a
 
 ---
 
@@ -18,7 +20,7 @@ is **30** by addition rather than by assertion, a stationary vehicle's delta is 
 interesting result is not any of that; it is that **the phase's own accuracy criterion was wrong,
 and the test written to enforce it agreed with it.** A 10,000-sample random sweep of the quaternion
 codec reported ~0.19° against a 0.2° budget and read as a clean pass; the real worst case is
-**0.268°**, at the four-way tie where the reconstructed component's error is most amplified, and
+**0.271°**, at the four-way tie where the reconstructed component's error is most amplified, and
 only a deliberate search finds it. The budget is now 0.3° with the derivation written out, the test
 searches the corner, and it asserts the result is *above* 0.2° as well as below 0.3° so that a
 future change which stops it reaching the corner fails loudly instead of quietly reporting 0.19°
@@ -36,13 +38,13 @@ client-wiring gate needed its event count raised with `OnPlayerList` recorded as
 | 2 | `EntrySize(VehicleField.Full) == 30` matching § 2.2 field by field; stationary delta is 4 B | ☑ | `VehicleSnapshotTests.EachFieldCostsWhatSection410Says` asserts every bit's cost separately; `FullEntrySize` is a sum, not a literal |
 | 3 | `EntrySize(SnapshotField.Full) == 23`, `InterestManager.MaxEntrySize == 23`, admitted-actor ceiling pinned at 50 | ☑ | `SeatInfoReplicationTests.TheAdmittedActorCeilingIsFiftyWithVehiclesAbsent` — asserted as a number *and* driven through a real `BuildView` with 64 actors |
 | 4 | Seated actor carries `vehicleId`/`seatIndex`; leaving produces `SeatInfo` + `vehicleId == 0`; unchanged seat produces no bit | ☑ | `SeatInfoReplicationTests`, six cases including driver→gunner within one vehicle (which diffing on `vehicleId` alone would miss) |
-| 5 | Quaternion round-trips within budget, sign-canonical, unit-normalized, no `NaN` for any 32-bit input | ☑ | **Criterion corrected 0.2° → 0.3° first — see § 4.** `QuaternionPackTests`, seven cases |
+| 5 | Quaternion round-trips within budget, sign-canonical, unit-normalized, no `NaN` for any 32-bit input | ☑ | **Criterion corrected 0.2° → 0.3° first — see § 4.** `QuaternionPackTests`, eight cases |
 | 6 | Hand-written hex both directions for all six new messages, a mixed vehicle snapshot, and a 23-byte seated actor entry | ☑ | `PacketHexSampleTests`, 16 new tests. Every string derived from the byte tables by hand; all passed on first run, which is the only evidence that they were not back-fitted |
-| 7 | 16 full vehicle entries (489 B) plus an actor snapshot fits one datagram, actor budget reduced by exactly what the vehicle body consumed | ☑ | `TheWorstCaseBodyIsFourHundredAndEightyNineAndFitsOneDatagram`; the 689 B remainder and the 29-actor floor are both asserted |
+| 7 | 16 full vehicle entries (489 B) plus an actor snapshot fits one datagram, actor budget reduced by exactly what the vehicle body consumed | ◪ | First half ☑ (`TheWorstCaseBodyIsFourHundredAndEightyNineAndFitsOneDatagram`). **Second half is V4's, per the plan's own V3-6** — and the test for it is arithmetic over three compile-time constants, not a live budget. Downgraded from ☑ after review; see § 4a |
 | 8 | `MAX_ACTORS` still 64 and `ActorCount` still `u8`; vehicles in a separate `u16` space capped at 16, from 1, quarantined 150 ticks | ☑ | Untouched; `MAX_VEHICLES` and `VEHICLE_ID_QUARANTINE_TICKS` are new constants gated by `SpecChecker` |
-| 9 | `SpecChecker` gates `VehicleIds` against the spec **and** the prefabs, failing on each failure class when driven with a broken fixture | ☑ | The judgement is now a pure function; **`VehicleRegistryGateTests` drives all four classes plus the unauthored case on every CI run** rather than by hand once |
+| 9 | `SpecChecker` gates `VehicleIds` against the spec **and** the prefabs, failing on each failure class when driven with a broken fixture | ☑ | The judgement is now a pure function; **`VehicleRegistryGateTests` drives all four classes plus the unauthored case on every CI run** rather than by hand once. The prefab scan is recursive from `Assets/` and the subclass set is transitive, both after review |
 | 10 | § 4.3.1's "7 bits used, 1 spare" claim and its 20-byte Full row corrected | ☑ | Both rewritten; § 15.1's settled-question row marked reopened-and-answered |
-| 11 | `dotnet test` green; no `System.Linq`, no `foreach`, no allocation in new logic; hand-written `Write` + `TryParse` | ☑ | **1267 tests, 0 failures.** Every new codec is a `readonly struct` (or a mutable parse-in-place entry); no `Linq` or `foreach` in any new protocol/replication file |
+| 11 | `dotnet test` green; no `System.Linq`, no `foreach`, no allocation in new logic; hand-written `Write` + `TryParse` | ☑ | **1269 tests, 0 failures.** Every new codec is a `readonly struct` (or a mutable parse-in-place entry); no `Linq` or `foreach` in any new protocol/replication file |
 
 ---
 
@@ -107,7 +109,7 @@ Measured three ways, which is what turns that from an argument into a number:
 |---|---|
 | Uniform sweep, 2 × 10⁶ Shoemake-uniform rotations | 0.2430° |
 | Dense grid over the three transmitted components | 0.2412° |
-| **Deliberate search of the four-way tie** | **0.2680°** |
+| **Deliberate search of the four-way tie** | **0.2712°**, at `(0.5004, 0.5014, 0.4991, 0.4991)` |
 | 20,000 `UnityEngine.Quaternion` rotations, in the Editor | 0.2105° |
 | **The 10⁴-sample sweep this phase originally shipped** | **~0.19° — a clean pass** |
 
@@ -124,7 +126,8 @@ session had the same shape and are worth recording beside it:
   proves nothing about whether it can go red, which is why its four failure classes are now driven
   from a fixture on every CI run rather than exercised by hand once.
 
-**Resolution** (owner's decision, 2026-08-18): budget widened to **0.3°**, derivation written into
+**Resolution** (owner's decision, 2026-08-18): budget widened to **0.3°** — 0.029° of headroom —
+derivation written into
 `Quantize.cs` and `protocol-spec.md § 4.4`, criterion 5 amended in the phase file with the reason.
 Meeting 0.2° needs 12-bit components at 5 bytes, which moves the § 2.2 30-byte entry this phase is
 forbidden from re-deriving; 0.27° on a vehicle at 20 Hz is invisible and finer than the 0.5 m/s
@@ -133,6 +136,53 @@ velocity resolution the same stream already accepts.
 `QuaternionPackTests.TheWorstCaseIsSearchedForRatherThanSampledFor` now searches the corner and
 asserts the result is **above 0.2° as well as below 0.3°** — so a change that stops it reaching the
 corner fails there rather than quietly reporting 0.19° again.
+
+---
+
+## 4a. What the review found
+
+An independent adversarial review ran over the three commits before the PR. It found **no codec
+defect** — it hand-checked all nine vehicle-entry fields and all six event messages against the
+byte tables rather than against the constants or the tests, and confirmed the delta encoder/decoder
+pair copied the ring-slot tick verification, the ack ordering and the file-after-success rule from
+their actor originals without copying the stale `FullNoSeat` reasoning Task 4 warned about. It also
+re-derived the shedding overrun independently (`13 + 50 × 23 = 1163 ≤ 1178`) and searched the whole
+solution — Unity tree included — for surviving assumptions that an actor entry is 20 bytes, and
+found none.
+
+What it did find, and what happened to each:
+
+| # | Finding | Disposition |
+|---|---|---|
+| **C1** | `PlayerListMessage.TryParse`'s bounds check was `offset + length > src.Length` — **int arithmetic that wraps**. `offset 2, length int.MaxValue` sums to −2147483647, passes the guard, and throws out of the `Span` constructor. A `TryParse` that throws, in the one parser doing its own offset maths. Not reachable from the only production caller today | **Fixed** — rewritten as a subtraction, plus a regression test that was **watched go red on the old form** before being kept |
+| **I1** | The `SeatInfo` *cost* is live and the *benefit* is not | **Accepted and recorded** — see below |
+| **I2** | Criterion 7 was marked ☑ while its second half is handed to V4 in the same document | **Criterion downgraded to ◪** in § 2 |
+| **I3** | The claim "a ninth vehicle field is an additive change" was **false** — an old decoder cannot skip a field of unknown width, so everything behind it misaligns | **Fixed** in `VehicleEnums.cs` and § 4.10: the spare bits buy a smaller diff, not backward compatibility |
+| **I4** | Every parse-in-place `TryParse` leaves partial writes in the caller's buffer on failure | **Documented** rather than changed — it is the v1 convention `SnapshotMessage` already has, and buffering to avoid it would cost the allocation-free property that is the whole point |
+| **I5** | The phase plan still said 0.16° / 0.2° in three places after criterion 5 was corrected | **Fixed** — all three carry the correction and the reason |
+| **I6** | "0.268°" was understated; the true corner is **0.271°** at `(0.5004, 0.5014, 0.4991, 0.4991)` | **Fixed** in all four documents. Headroom is 0.029°, not 0.032° |
+| **I7** | `C_ACK_BASELINE` carries one tick for both streams. If V4 ever splits the datagrams, a lost vehicle snapshot pins the client in `UnknownBaseline` **permanently** | **Recorded as a precondition** on `VehicleDeltaDecoder.AckTick`, where a V5/V4 author will meet it, and in § 7 below |
+| **I8** | `ServerEventWriter.WritePlayerList` has zero callers, so a killfeed line still has no name | **Recorded** below alongside `OnPlayerList` |
+| minor | The one assertion claiming to guard against a 10-bit field bleeding into its neighbour was `& 0x3FF` then `<= 1023` — arithmetically incapable of failing | **Fixed** — the expected fields are now computed by hand from § 4.4's formula, plus a second test that packs the range extremes |
+| minor | The prefab gate's directory scan was non-recursive and its subclass set direct-only | **Fixed** — recursive from `Assets/`, and the derives-from-`Vehicle` set is closed transitively |
+
+### I1, which is the one worth reading
+
+`SnapshotBuilder.Capture` gained optional `vehicleId`/`seatIndex`. The only production caller,
+`NetServerActor.Capture()`, passes neither — so **every entry the server actually ships is still
+20 bytes**, while `InterestManager.MaxEntrySize` moved to 23 and the admitted-actor ceiling fell
+58 → 50. This branch's own test says it out loud: `SnapshotSheddingTests` changed "22 must go" to
+"31 must go". Nine actor slots per snapshot, currently bought for nothing.
+
+**It cannot be closed here, and the reason is structural rather than an excuse.** Reporting a seat
+needs a `vehicleId`, and vehicle ids come from `VehicleIdPool` — which the plan's § 8 hands to V4
+explicitly. There is no id to report yet.
+
+**Keeping `MaxEntrySize` at 20 until then would be worse.** The projection has to be pessimistic
+about what an entry *can* be, not what it currently is; V4 can land the producer without touching
+`InterestManager`, and the first snapshot with a seated actor in it would then overrun and be
+discarded whole — the exact failure shedding exists to remove. The cost is paid early on purpose.
+It is listed in § 7 with V4's name on it rather than left for a bandwidth report to find.
 
 ---
 
@@ -201,10 +251,24 @@ only reason it shipped deliberately unbuilt. It is the first thing to pick up.
 
 ### Still open, with owners
 
-- **`ClientCombatState`, `ScoreUi`, and now `OnPlayerList`** — three client objects nothing wires
-  up. V3-12 declined the first two on the grounds that this phase adds no presenter; `OnPlayerList`
-  joins them for the same reason and by the same mechanism (`KnownUnwiredEvents`). Whichever
-  client-flow phase takes one should take all three.
+- **The `SeatInfo` shedding cost is live and its benefit is not — V4's to close.** Nine actor
+  slots per snapshot, from the moment this merges until `VehicleIdPool` exists and
+  `NetServerActor.Capture()` can pass a real `vehicleId`. Full reasoning in § 4a; the short
+  version is that there is no vehicle id to report yet, and paying the projection cost early is
+  cheaper than a discarded snapshot later.
+- **The two streams share one ack tick, and that is a correctness constraint on V4, not a
+  preference.** `C_ACK_BASELINE` carries one tick, taken from `DeltaDecoder.AckTick`, and both
+  encoders key their baseline history off it — sound only while the two snapshots ride the same
+  datagram. Split them without adding a second ack tick to the wire first and a lost vehicle
+  snapshot pins that client in `UnknownBaseline` **permanently**, because the server believes it
+  has a baseline the client never applied. Recorded on `VehicleDeltaDecoder.AckTick` too.
+- **`ClientCombatState`, `ScoreUi`, `OnPlayerList`, and `ServerEventWriter.WritePlayerList`** —
+  four things nothing wires up. V3-12 declined the first two on the grounds that this phase adds no
+  presenter; the two `PlayerList` halves join them for the same reason. Note the asymmetry: the
+  client half is declared in `ClientWiringGate`'s `KnownUnwiredEvents` and reported every run, and
+  **the server half has no gate at all**, because that tool only inspects router events. Until
+  something calls the writer, a killfeed line still has no name. Whichever client-flow phase takes
+  one should take all four.
 - **`World/VehicleLifecycle.cs` still carries rotation as euler degrees**, deferring to "the phase
   that puts the value on the wire". That is this phase, and `PackQuat` now exists — but the
   conversion is a change to V8's sink signature, not to the codec, so it is a follow-up this phase

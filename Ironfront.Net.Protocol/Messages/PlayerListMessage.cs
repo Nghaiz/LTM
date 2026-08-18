@@ -109,8 +109,15 @@ namespace Ironfront.Net.Protocol
         /// count — size it to <see cref="ProtocolConstants.MAX_ACTORS"/> and reuse it.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// The parsed names point into <paramref name="src"/>, so they are only valid while
         /// that buffer is. A caller that keeps them past the current message copies first.
+        /// </para>
+        /// <para>
+        /// <b>On failure, <paramref name="entries"/> has already been partially overwritten</b> —
+        /// the same contract every parse-in-place codec here has. Treat the buffer as undefined
+        /// unless this returned <c>true</c>.
+        /// </para>
         /// </remarks>
         public static bool TryParse(
             byte[] src, int offset, int length,
@@ -119,7 +126,14 @@ namespace Ironfront.Net.Protocol
         {
             entryCount = 0;
             if (src == null) return false;
-            if (offset < 0 || length < 0 || offset + length > src.Length) return false;
+
+            // Written as a subtraction, not as `offset + length > src.Length`. That form is int
+            // arithmetic and wraps: offset 2 with length int.MaxValue sums to -2147483647, passes
+            // the guard, and then throws out of the Span constructor — a TryParse that throws, in
+            // the one parser here doing its own offset maths, in a library whose IO layer exists
+            // precisely so that a truncated packet is routine rather than exceptional.
+            if (offset < 0 || length < 0) return false;
+            if (offset > src.Length || length > src.Length - offset) return false;
 
             var r = new SpanReader(new ReadOnlySpan<byte>(src, offset, length));
             byte count = r.ReadU8();

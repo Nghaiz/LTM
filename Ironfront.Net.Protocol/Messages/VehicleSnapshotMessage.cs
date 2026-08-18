@@ -218,6 +218,14 @@ namespace Ironfront.Net.Protocol
         /// encoded vehicle count — size it to
         /// <see cref="ProtocolConstants.MAX_VEHICLES"/> and reuse it across ticks.
         /// </summary>
+        /// <remarks>
+        /// <b>On failure, <paramref name="entries"/> has already been partially overwritten.</b>
+        /// Parsing writes each entry in place as it goes — that is what makes the reuse
+        /// allocation-free — so a body truncated at entry 3 leaves entries 0..2 populated and
+        /// <c>false</c> returned. Callers must treat the buffer as undefined unless this returned
+        /// <c>true</c>, never as "the entries that made it". <see cref="SnapshotMessage.TryParse"/>
+        /// has behaved this way since v1; it is stated here rather than left to be discovered.
+        /// </remarks>
         public static bool TryParse(
             ReadOnlySpan<byte> src,
             Span<VehicleSnapshotEntry> entries,

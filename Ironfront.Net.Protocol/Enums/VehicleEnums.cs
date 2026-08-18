@@ -10,9 +10,17 @@ namespace Ironfront.Net.Protocol
     /// <para>
     /// A <c>u16</c> rather than the actor entry's <c>u8</c>, and deliberately only half used.
     /// <see cref="SnapshotField"/> allocated all 8 of its bits before the first vehicle
-    /// existed, so a ninth actor field is a mask widening — a wire-format change with a
-    /// version bump attached. Starting at 8 of 16 means a new vehicle field is an additive
-    /// change to a mask that is already the right width.
+    /// existed, so a ninth actor field needs the mask itself widened. Starting at 8 of 16 means a
+    /// new vehicle field takes a spare bit in a mask that is already the right width.
+    /// </para>
+    /// <para>
+    /// <b>That is cheaper, not free.</b> Adding a field is still a wire change and still bumps
+    /// <see cref="ProtocolConstants.PROTOCOL_VERSION"/>: an old decoder reaching an unknown bit
+    /// does not know the new field's width, so it cannot skip it, and every later field — and
+    /// every later entry in the datagram — misaligns behind it. The spare bits buy a smaller
+    /// diff and no re-layout of the mask; they do not buy backward compatibility. The only thing
+    /// here an old decoder genuinely survives is an unknown <see cref="VehicleKind"/>, because
+    /// the subtype tail is a fixed 2 bytes whatever the kind turns out to be.
     /// </para>
     /// <para>
     /// The bit order mirrors the field order on the wire, so a reader walking the bits

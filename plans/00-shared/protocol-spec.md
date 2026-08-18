@@ -432,7 +432,7 @@ public static class Quantize
     public const float QUAT_MIN    = -0.70710678f;     // -1/√2
     public const float QUAT_RANGE  =  1.41421356f;     //  2/√2
     public const int   QUAT_LEVELS = 1023;             // 10 bits, endpoints exact
-    // Step = 1.41421356 / 1023 = 1.38e-3. Worst-case angular error is 0.268° — see below;
+    // Step = 1.41421356 / 1023 = 1.38e-3. Worst-case angular error is 0.271° — see below;
     // it is NOT the step size, because the reconstructed component amplifies it.
 
     // ===== HEALTH =====
@@ -471,7 +471,7 @@ angle ≈ 2 × |δq| = 4.79e-3 rad              = 0.274°
 |---|---|
 | Uniform sweep, 2 × 10⁶ rotations | 0.243° |
 | Dense grid over the three transmitted components | 0.241° |
-| **Deliberate search of the four-way tie** | **0.268°** |
+| **Deliberate search of the four-way tie** | **0.271°**, at `(0.5004, 0.5014, 0.4991, 0.4991)` |
 | A 10⁴-sample random sweep | ~0.19° — reads as a pass |
 
 The last row is the point: this budget was written as 0.2° from the step size alone, and a
@@ -699,8 +699,15 @@ input replay — the client never re-runs a vehicle tick, so it has nothing to r
 the field would be 4 B at 20 Hz that nobody reads.
 
 **`changeMask` is a `u16` with 8 bits spare, deliberately.** `SnapshotField` spent all 8 of its bits
-before the first vehicle existed, so a ninth actor field is a mask widening and a version bump. A
-ninth *vehicle* field is an additive change to a mask that is already the right width.
+before the first vehicle existed, so a ninth actor field needs the mask itself widened; a ninth
+*vehicle* field takes a spare bit in a mask that is already the right width.
+
+**Cheaper is not free.** Adding a vehicle field is still a wire change and still bumps
+`PROTOCOL_VERSION`. An old decoder reaching an unknown mask bit does not know the new field's
+width, so it cannot skip it, and every later field — and every later entry in the datagram —
+misaligns behind it. The spare bits buy a smaller diff, not backward compatibility. The one thing
+an old decoder genuinely survives is an unknown `VehicleKind`, because the subtype tail is a fixed
+2 bytes whatever the kind is.
 
 **`flags` (u8)**
 

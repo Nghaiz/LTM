@@ -41,6 +41,25 @@ namespace Ironfront.Net.Replication
         public VehicleWorldSnapshot Current { get; }
 
         /// <summary>The newest vehicle-snapshot tick applied. 0 until the first one lands.</summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Nothing consumes this yet, and that is a precondition rather than an oversight.</b>
+        /// <c>C_ACK_BASELINE</c> carries ONE tick, taken from <see cref="DeltaDecoder.AckTick"/>,
+        /// and both encoders key their baseline history off it. That is only sound while the two
+        /// snapshots travel in the same datagram (protocol-spec.md § 4.10, co-residency): they are
+        /// then applied together or lost together, so one acked tick describes both.
+        /// </para>
+        /// <para>
+        /// <b>If they are ever split, this becomes a correctness bug, not a tuning question.</b> A
+        /// lost vehicle snapshot whose actor twin arrived would have the client ack a tick it never
+        /// applied on this stream, and the server would delta every later vehicle snapshot against
+        /// a baseline the client does not hold — <see cref="SnapshotReadResult.UnknownBaseline"/>
+        /// forever, with no full snapshot to recover from, because the server believes it has one.
+        /// Splitting the streams therefore requires a second ack tick on the wire first. This
+        /// property is exposed so that a split has something to wire up rather than something to
+        /// discover.
+        /// </para>
+        /// </remarks>
         public uint AckTick => _hasApplied ? Current.ServerTick : 0u;
 
         public long AppliedCount { get; private set; }
