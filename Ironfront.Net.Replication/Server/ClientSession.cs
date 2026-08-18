@@ -59,11 +59,30 @@ namespace Ironfront.Net.Replication.Server
         /// cannot hold both baselines, and the baseline is the thing a delta is measured from.
         /// </para>
         /// <para>
-        /// <b>Both are acked by one <c>C_ACK_BASELINE</c>.</b> The two snapshots ride the same
-        /// channel-1 datagram and are built at the same server tick, so a tick the client
-        /// acknowledges names a state of both streams — one ack, routed to both encoders.
-        /// A second ack message would be 7 bytes at 20 Hz carrying a number the client already
-        /// sent.
+        /// <b>Both are acked by one <c>C_ACK_BASELINE</c>, and that ack does NOT name a state of
+        /// both streams.</b> The actor snapshot is in every datagram a client can ack; the vehicle
+        /// body is independently rate-limited and is absent from most of them. So when the client
+        /// acks tick N and no vehicle body shipped at N, <see cref="VehicleDeltaEncoder"/>'s
+        /// history holds no entry for N, <c>TryFindBaseline</c> fails, and the next vehicle body
+        /// is written FULL rather than as a delta.
+        /// </para>
+        /// <para>
+        /// <b>That is correct, and it is not free.</b> A full body is written over the per-viewer
+        /// VIEW — only the vehicles that were due — so the cost is roughly 30 bytes per entry
+        /// instead of ~10, not a whole world. It falls on viewers whose best band is not Near:
+        /// Mid sends every 2nd snapshot so about half its bodies go full, Far every 5th so about
+        /// four in five do. A viewer with any Near-band vehicle sees a body every tick and never
+        /// falls back.
+        /// </para>
+        /// <para>
+        /// <b>Why it is not simply fixed here.</b> Accepting the ack anyway and reaching for an
+        /// older recorded baseline would be unsound: the server cannot know the client received
+        /// that older datagram, and a delta against a baseline the client lacks is discarded by
+        /// its decoder with no way to recover — a deadlock, where the present behaviour is merely
+        /// fatter. Sending an empty vehicle body on every snapshot is also unavailable, because a
+        /// vehicle absent from a delta is DESPAWNED by the decoder, not held. A real fix needs
+        /// either a second ack field or per-stream ack state on the wire, and the wire is frozen
+        /// at v3.
         /// </para>
         /// </remarks>
         public VehicleDeltaEncoder VehicleEncoder { get; }

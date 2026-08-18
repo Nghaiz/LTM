@@ -336,6 +336,21 @@ namespace Ironfront.Net.Replication.Interest
 
                 ref VehicleSnapshotEntry target = ref world.Vehicles[index];
 
+                // A not-due entry is SKIPPED, not stopped at, and it consumes no budget. That is
+                // load-bearing and is easy to "optimise" away.
+                //
+                // A review flagged the shared cursor as starving a bucket: the cursor advances by
+                // the TOTAL admitted across all three buckets but is applied modulo each bucket's
+                // own length, so with 6 Near and 4 Mid it returns 8 every round, 8 % 4 == 0, and
+                // Mid restarts at the same two entries forever. The arithmetic is right and the
+                // conclusion is wrong, because of this line: those two entries are not due on the
+                // next snapshot (Mid is every 2nd), so the scan walks past them and reaches the
+                // ones behind. Rate limiting rotates the window for free.
+                //
+                // Near is the one band with period 1, where everything is always due — and Near
+                // cannot starve either, because it is admitted first, so if it sheds then no
+                // lower bucket gets any budget and the total advance IS Near's own admitted
+                // count. Break here instead of continuing and both arguments collapse.
                 if (!IsDue(viewerActorId, target.VehicleId, level, snapshotIndex))
                 {
                     EntriesHeld++;

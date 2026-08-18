@@ -6,8 +6,8 @@
 > it does not re-derive them.
 >
 > Binding conventions: [`../../00-shared/conventions.md`](../../00-shared/conventions.md) § 3.2
-> (no allocation on the hot path, no `System.Linq`, no `foreach` in logic files, `Span<byte>` over
-> `byte[]`) and § 7 (file ownership — with the recorded departure in design § 7, which lets this
+> (no allocation inside hot loops, no LINQ **in the hot path**, no exceptions for normal control
+> flow, `Span<byte>` over `byte[]`) and § 7 (file ownership — with the recorded departure in design § 7, which lets this
 > track edit `Assembly-CSharp/` files by PR plus a the client track review round).
 >
 > **Depends on:** V3 (protocol v3 — `S_VEHICLE_SNAPSHOT` 0x4C, `S_VEHICLE_SPAWN/DESPAWN`
@@ -441,6 +441,40 @@ working: `TurretYaw` / `TurretPitch` are 0 (V6 owns the aim seam — design § 3
 `WheelCollider` and a helicopter has no wheels. Both are wire fields that exist and are honest
 zeros rather than synthesised guesses. `Car`'s `surfaceFriction` tail byte is 1.0 for the same
 reason: friction is per-wheel and averaging four of them into a byte would name nothing.
+
+**This file's own header misquoted its binding convention, and the header is corrected above.**
+It summarised `conventions.md` § 3.2 as "no allocation on the hot path, no `System.Linq`, no
+`foreach` in logic files". § 3.2 contains no such clauses: it bans allocation inside hot loops and
+LINQ **in the hot path**, and says nothing about `foreach` or about a category called "logic
+files" — that phrase appears nowhere in the document. The overstatement propagated into a code
+comment in `SeatArbiter.cs` before it was caught, and it costs real budget: a reviewer audits
+against a rule that does not exist, and either burns the pass proving conformance to nothing or
+"fixes" code that was already correct. A `foreach` over a concrete `Dictionary` or array binds a
+struct enumerator by pattern and boxes nothing; iterating through an `IEnumerable<T>` interface is
+the thing that actually allocates.
+
+## 10. What adversarial review found after the first commit
+
+Three review passes ran against the branch. What they caught is recorded here rather than only in
+commit messages, because the pattern matters more than the count: **five of the findings were
+places where a comment asserted an invariant the code did not deliver.** That is more expensive
+than an ordinary bug — the next reader stops checking.
+
+| Finding | Verdict |
+|---|---|
+| `Vehicle.Repair` never got the role guard `Damage` did | **Real, and the worst.** The scene's health rose while the authoritative record did not, so the snapshot shipped a stale byte and the next hit subtracted from a stale value — one more shot killed a fully repaired vehicle. Worse, `StopBurning()` cleared the scene flag while `BurnEndsAtTick` stayed armed, so the burn clock despawned a repaired, drivable, possibly occupied vehicle on schedule. Fixed: `IVehicleDamageSink.ApplyRepair` + `VehicleBurnClock.CancelBurn`. |
+| Two racing death authorities | **Real.** `Vehicle.FixedUpdate` counted `burnTime` on the wall clock at 60 Hz and called `Die()` independently of `VehicleBurnClock`. V4-D11 says the server owns when a burn ends; it did not. Fixed: both scene-side `Die()` triggers guard on `NetVehicleAuthority.ServerOwnsVehicleDeath`, and the clock kills through `IGameplayVehicleSource.Kill`. |
+| A dead vehicle shipped one last snapshot entry | **Real.** Capture ran BEFORE the burn advance and the per-viewer view read that buffer, so criterion 9's second half never held — and the comment four lines above claimed it did. Fixed by moving `AdvanceVehicleBurn` ahead of the capture. The test the plan named for it did not exist and now does. |
+| `SnapshotField.SeatInfo` was never populated | **Real, and nobody had noticed.** Design D2 makes the actor entry the single source of truth for occupancy and V3 finished its codec, but no server code ever passed `vehicleId`/`seatIndex` to `SnapshotBuilder.Capture`. Every actor reported as on foot, so `S_SEAT_CHANGE` — which only fires on a client request — was the only carrier. Fixed in `NetServerActor.Capture`, reading the arbiter's record. |
+| The idempotent seat accept was broadcast | **Real.** `C_SEAT_REQUEST` has no rate limit, so a client repeating "enter the seat I am already in" multiplied into N-players × request-rate reliable sends. Now addressed, via `SeatDecision.ChangedNothing`. |
+| `ReleaseExpiredClaims` ran per vehicle per physics step | **Real.** A global table sweep with a per-instance trigger: 16× redundant at a full map, and never at all on a map with no vehicles. Moved to one call per step in the tick loop. |
+| The audit's vehicle args default to null and read as clean | **Real risk.** `Bind` and `BindMatch` are called by different components with no defined order, so the id pool could be null and criterion 14 would grade nothing, silently. The sink is now constructed in the tick loop's constructor, with a loud check behind it. |
+| An out-of-range `SeatAction` byte was a silent Enter | **Real.** Every byte except 1 parsed as Enter and counted as well-formed, blinding `MalformedMessages`. Now range-checked. |
+| The shed cursor starves a bucket | **NOT REAL — rejected after checking.** The arithmetic is right (the cursor advances by the total and is applied modulo each bucket's length) and the conclusion is wrong: a not-due entry is skipped with `continue` and consumes no budget, so the scan reaches the entries behind it, and rate limiting rotates the window for free. Near is the one band where everything is always due, and it cannot starve because if it sheds, no lower bucket gets budget and the total advance IS Near's own count. A first attempt at "fixing" this added per-bucket cursors; the guard written for it passed with and without them, which is what exposed the error. Reverted, reasoning documented at the `continue`, and the test now pins the mechanism that actually provides the guarantee. |
+| One ack cannot serve two independently-rated streams | **Real, not fixed, and not fixable at v3.** When the acked tick carried no vehicle body the encoder writes a full body instead of a delta — ~30 B per entry instead of ~10, over the already rate-limited view. It falls on viewers whose best band is not Near (about half of a Mid viewer's bodies, four in five of a Far-only viewer's). Accepting the ack anyway would be unsound: the server cannot know the client received an older datagram, and a delta against a baseline the client lacks is discarded with no recovery. A real fix needs per-stream ack state on the wire. `ClientSession` now says so instead of claiming the opposite. |
+
+**Every new guard above was watched go RED against its own bug before being taken green.** That is
+how the shed-cursor finding was rejected rather than "fixed": its guard was green either way.
 
 **One graded criterion is met by an existing suite rather than a new one.** Criterion 1 (the
 5-second id quarantine) is covered by `VehicleLifecycleWireTests.ARetiredIdIsNotReissuedUntil` `ItsQuarantineExpires`

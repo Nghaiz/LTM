@@ -36,6 +36,30 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>True when a server is authoritative over vehicle health and seat claims.</summary>
         public static bool IsInstalled => _damageSink != null && _vehicles != null;
 
+        /// <summary>
+        /// True when the server decides WHEN a burning vehicle dies, and the scene must not.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>V4-D11 says the server owns when the burn ends, and without this guard it did
+        /// not.</b> <c>Vehicle.FixedUpdate</c> counts <c>burnTime</c> down on the wall clock at
+        /// the physics rate and calls <c>Die()</c>, which reaches <c>VehicleSpawner.VehicleDied</c>
+        /// and announces <c>S_VEHICLE_DESPAWN</c>. <c>VehicleBurnClock</c> counts the SAME burn in
+        /// ticks. Two authorities over one event, deduplicated only by the id pool's
+        /// <c>IsInUse</c> check — so whichever fires first wins, they disagree by up to a snapshot
+        /// interval, and the wall-clock one usually wins because it runs at 60 Hz against the
+        /// tick clock's 20. The tick-counted clock the phase exists to install was decorative on
+        /// the death path.
+        /// </para>
+        /// <para>
+        /// A separate name from <see cref="IsInstalled"/> even though the value is the same,
+        /// because the two gameplay call sites in <c>Vehicle</c> are asking a different question
+        /// — "may I kill this?" — and a bare <c>IsInstalled</c> there would read as an
+        /// implementation detail rather than a rule.
+        /// </para>
+        /// </remarks>
+        public static bool ServerOwnsVehicleDeath => IsInstalled;
+
         /// <summary>Installs the server's sinks. Called from <c>ServerTickLoop.Bind</c>.</summary>
         public static void Install(
             IVehicleDamageSink damageSink,
@@ -76,6 +100,49 @@ namespace Ironfront.Net.Unity.Server
 
             _damageSink.ApplyDamage(vehicleId, amount, attacker);
             return true;
+        }
+
+        /// <summary>
+        /// Routes a repair through the authoritative health record.
+        /// </summary>
+        /// <returns>
+        /// True when the server handled it, in which case the caller must NOT add health itself.
+        /// </returns>
+        /// <remarks>
+        /// <b><c>Damage</c> got a role guard and <c>Repair</c> did not, and the asymmetry was the
+        /// worst defect in this phase.</b> The scene's health rose while the authoritative record
+        /// did not, so the snapshot shipped a stale byte and the next hit subtracted from a stale
+        /// value — one more shot killed a fully repaired vehicle. Anything that writes
+        /// <c>Vehicle.health</c> has to come through here.
+        /// </remarks>
+        public static bool TryApplyRepair(GameObject vehicle, float amount)
+        {
+            if (!IsInstalled) return false;
+
+            ushort vehicleId = _vehicles.NetworkIdOf(vehicle);
+            if (vehicleId == 0) return false;
+
+            _damageSink.ApplyRepair(vehicleId, amount);
+            return true;
+        }
+
+        /// <summary>
+        /// Tells the burn clock a repair has put the fire out.
+        /// </summary>
+        /// <remarks>
+        /// Separate from <see cref="TryApplyRepair"/> because the SCENE decides when a burn stops
+        /// — <c>Vehicle.Repair</c> needs three of them (<c>stopBurningRepairs</c>) — and that is a
+        /// gameplay rule, not a netcode one. Without this call the tick-counted clock kept its
+        /// countdown armed and despawned a repaired, drivable vehicle on schedule.
+        /// </remarks>
+        public static void ExtinguishBurn(GameObject vehicle)
+        {
+            if (!IsInstalled) return;
+
+            ushort vehicleId = _vehicles.NetworkIdOf(vehicle);
+            if (vehicleId == 0) return;
+
+            (_damageSink as ServerVehicleDamageSink)?.ExtinguishBurn(vehicleId);
         }
 
         /// <summary>

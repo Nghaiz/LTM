@@ -54,7 +54,17 @@ namespace Ironfront.Net.Replication.Vehicles
         /// <summary>Held button states. No edge-triggered bit exists on this message.</summary>
         public readonly ushort Buttons;
 
-        public ClampedVehicleInput(
+        /// <summary>
+        /// Private, so <see cref="From"/> really is the only route in.
+        /// </summary>
+        /// <remarks>
+        /// This was public while the remarks below claimed there was "no route that skips
+        /// <see cref="VehicleInputClamp.Axis"/>" — a guarantee asserted in prose and not by the
+        /// type. The shipped decode path did clamp, so nothing was wrong today; what was wrong is
+        /// that a future caller could construct one with raw floats and every comment here would
+        /// still read as if they could not.
+        /// </remarks>
+        private ClampedVehicleInput(
             uint tick, ushort vehicleId,
             float throttle, float steer, float pitchAxis, float auxAxis,
             float turretYaw, float turretPitch, ushort buttons)

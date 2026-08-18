@@ -695,7 +695,7 @@ repeat vehicleCount times:
     [bit1] rotation        u32       Smallest-three quaternion, see § 4.4
     [bit2] linearVelocity  i16 × 3   Quantized at VEL_SCALE (PackVel16)
     [bit3] angularVelocity i8  × 3
-    [bit4] health          u8        Normalized against the vehicle's own maxHealth
+    [bit4] health          u8        0..100 (Quantize.HEALTH_MAX), scaled by maxHealth
     [bit5] flags           u8        See below
     [bit6] turret          u16 yaw + i8 pitch
     [bit7] subtype         u8 × 2    Fixed 2-byte tail, read per VehicleKind
@@ -716,6 +716,11 @@ width, so it cannot skip it, and every later field — and every later entry in 
 misaligns behind it. The spare bits buy a smaller diff, not backward compatibility. The one thing
 an old decoder genuinely survives is an unknown `VehicleKind`, because the subtype tail is a fixed
 2 bytes whatever the kind is.
+
+**`health` runs 0..100, NOT 0..255.** It shares `Quantize.HEALTH_MAX` with the actor entry
+(section 4.3.1), so one decoder constant serves both streams. A client dividing by 255
+renders every vehicle at 39% health and nothing anywhere goes red — the value is in range,
+the bar just lies.
 
 **`flags` (u8)**
 
@@ -765,6 +770,14 @@ property that makes `changeMask` safe.
 
 Both messages go in the **same channel-1 payload batch**, the vehicle snapshot written **first**;
 the actor snapshot gets the remainder of the datagram budget.
+
+**The remainder is less one extra message header.** A batch carries two messages where the
+snapshot budget constant accounts for one, so the actor body gets
+`MaxSnapshotBodySize - MessageHeaderSize - vehicleBodyLength` = `1178 - 3 - 489` = **686 B**
+at a full vehicle body, not 689. Derived actor capacity is unchanged at 29
+(`floor((686 - 13) / 23)`), so the earlier figure was benign — but it was 3 bytes
+optimistic, and a reader sizing a buffer from it would be over by exactly the header the
+second message needs.
 
 | | Actors only | With a worst-case vehicle body |
 |---|---|---|

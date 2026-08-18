@@ -159,9 +159,18 @@ namespace Ironfront.Net.Replication.Tests
         // ------------------------------------------------------------------- shedding
 
         /// <summary>
-        /// design section 8 criterion 9 — at the shipped load nothing sheds. <b>Non-zero here is
-        /// a failure, not a statistic.</b>
+        /// Acceptance criterion 5 — at the shipped load the VEHICLE tracker sheds nothing.
+        /// <b>Non-zero here is a failure, not a statistic.</b>
         /// </summary>
+        /// <remarks>
+        /// <b>Read the sibling below before trusting this one.</b> On its own this assertion is
+        /// close to vacuous: departure 3 gives the vehicle body its own bound
+        /// (<see cref="VehicleSnapshotMessage.MaxBodySize"/>), so 12 vehicles cannot be shed by
+        /// actor pressure no matter how many actors there are — criterion 5 is structurally true
+        /// rather than earned. What the criterion was reaching for is that the shipped load fits
+        /// in one datagram, and that question moved to the ACTOR stream when the budget order was
+        /// reversed. The sibling measures it.
+        /// </remarks>
         [Fact]
         public void TwelveVehiclesInViewShedNothing()
         {
@@ -180,6 +189,53 @@ namespace Ironfront.Net.Replication.Tests
 
             Assert.Equal(12, view.VehicleCount);
             Assert.Equal(0, tracker.EntriesShed);
+        }
+
+        /// <summary>
+        /// What criterion 5 costs the ACTOR stream, measured rather than assumed.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Departure 3 writes the bounded vehicle body first and gives actors the remainder, so
+        /// the co-residency pressure lands entirely on the elastic stream. At the shipped load —
+        /// 12 vehicles beside 16 players and 32 bots — the actor budget admits fewer than the 48
+        /// actors the criterion names, so some actor entries ARE shed.
+        /// </para>
+        /// <para>
+        /// <b>That is degradation working, not breaking.</b> The actor tracker rotates its
+        /// admission window on every shed (phase-05 D6), so a shed actor leads the next snapshot
+        /// and every actor still arrives within a bounded number of them. protocol-spec.md § 4.10
+        /// already states the worst case as 29 actors. This test exists so the number is a fact
+        /// somebody chose rather than a surprise found in a playtest, and so a future change that
+        /// makes it materially worse fails here.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public void TwelveVehiclesLeaveTheActorStreamAMeasuredBudget()
+        {
+            const int Vehicles = 12;
+
+            int vehicleBody = Vehicles * VehicleSnapshotMessage.FullEntrySize
+                            + VehicleSnapshotHeader.Size;
+
+            int actorBudget = Server.ServerPayloadWriter.ActorBodyBudget(vehicleBody);
+            int actorsAdmitted = (actorBudget - SnapshotHeader.Size) / InterestManager.MaxEntrySize;
+
+            // Pinned as a RANGE, not a single number: the point is the order of magnitude and the
+            // direction, and an exact figure would go red on any harmless entry-width change
+            // without telling anybody anything.
+            Assert.InRange(actorsAdmitted, 30, 40);
+
+            // The honest half — this is BELOW the 48 the criterion names, and the shortfall is
+            // real. Asserting it rather than hiding it is the difference between a known cost and
+            // a bandwidth regression nobody attributed.
+            Assert.True(
+                actorsAdmitted < 48,
+                $"actor budget admits {actorsAdmitted}; if this now covers 48 the co-residency "
+                + "note in protocol-spec.md section 4.10 is stale and should be corrected.");
+
+            // And vehicles never pay: their body is bounded, so it always fits whole.
+            Assert.True(vehicleBody <= VehicleSnapshotMessage.MaxBodySize);
         }
 
         /// <summary>
@@ -254,6 +310,60 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         // ----------------------------------------------------------------- trap 2
+
+        /// <summary>
+        /// A not-due vehicle is SKIPPED, not stopped at, so the scan reaches the entries behind
+        /// it — and that is what makes the shared shed cursor safe.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This pins the reasoning, because the arithmetic alone points the other way.</b> The
+        /// cursor advances by the TOTAL admitted across all three buckets and is then applied
+        /// modulo each bucket's own length, so with 6 Near and 4 Mid it returns 8 every round,
+        /// <c>8 % 4 == 0</c>, and Mid appears to restart at the same two entries forever. A review
+        /// concluded exactly that, and so did a first attempt at fixing it.
+        /// </para>
+        /// <para>
+        /// It does not happen, because Mid sends every 2nd snapshot: the two entries admitted last
+        /// round are not due this round, the scan walks past them <b>without spending budget</b>,
+        /// and the ones behind them go out. Change that <c>continue</c> to a <c>break</c> — the
+        /// obvious "stop when we hit a not-due entry" optimisation — and the starvation becomes
+        /// real, silently, with every counter still adding up.
+        /// </para>
+        /// <para>
+        /// Near is the one band where everything is always due, and it cannot starve either: it is
+        /// admitted first, so if Near sheds then no lower bucket gets any budget and the total
+        /// advance IS Near's own admitted count.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public void ANotDueVehicleIsSkippedSoTheOnesBehindItStillGetThrough()
+        {
+            var tracker = new VehicleInterestTracker();
+            var world = new VehicleWorldSnapshot();
+
+            // 6 Near (inside 60 m) and 4 Mid (60..150 m) — the exact shape that made the shared
+            // cursor's advance a multiple of the Mid bucket's length.
+            for (ushort id = 1; id <= 6; id++) world.Add(VehicleEntry(id, x: 10f + id));
+            for (ushort id = 7; id <= 10; id++) world.Add(VehicleEntry(id, x: 100f + id));
+
+            InterestSubject viewer = Actor(id: 1, x: 0f);
+            var view = new VehicleWorldSnapshot();
+
+            int budget = VehicleSnapshotHeader.Size + 8 * VehicleInterestTracker.MaxEntrySize;
+
+            var seen = new System.Collections.Generic.HashSet<ushort>();
+            int cursor = 0;
+
+            for (uint snapshot = 1; snapshot <= 12; snapshot++)
+            {
+                cursor = tracker.BuildView(in viewer, world, snapshot, view, budget, cursor);
+                for (int i = 0; i < view.VehicleCount; i++) seen.Add(view.Vehicles[i].VehicleId);
+            }
+
+            for (ushort id = 1; id <= 10; id++)
+                Assert.True(seen.Contains(id), $"vehicle {id} was never delivered in 12 snapshots");
+        }
 
         /// <summary>
         /// The trap-2 leak, one dictionary over: 16 viewers x every vehicle id ever issued,

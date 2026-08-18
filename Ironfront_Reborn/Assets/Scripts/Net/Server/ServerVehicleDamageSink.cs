@@ -101,6 +101,45 @@ namespace Ironfront.Net.Unity.Server
             return new VehicleDamageOutcome(0f, startedBurning: true, died: false);
         }
 
+        /// <inheritdoc />
+        public float ApplyRepair(ushort vehicleId, float amount)
+        {
+            VehicleRegistry registry = _vehicles.Registry;
+
+            if (!registry.TryGetState(vehicleId, out VehicleState state))
+            {
+                UnknownVehicles++;
+                return 0f;
+            }
+
+            // A wreck is not repairable, matching Vehicle.Repair's own `if (dead) return false`.
+            if (state.Dead) return 0f;
+
+            float repaired = state.Health + amount;
+            if (repaired > state.MaxHealth) repaired = state.MaxHealth;
+
+            state.Health = repaired;
+            registry.TrySetState(vehicleId, in state);
+
+            // Both copies, in one call, exactly as ApplyDamage does. The scene's health has to
+            // move too or the AI, the ram check and the particle ladder keep reading a wreck.
+            if (_vehicles.TryFind(vehicleId, out IGameplayVehicleSource source))
+                source.SetHealthAuthoritative(repaired);
+
+            RepairsApplied++;
+            return repaired;
+        }
+
+        /// <summary>
+        /// Puts the burn out. Separate from <see cref="ApplyRepair"/> because the scene decides
+        /// WHEN a burn stops — <c>Vehicle.Repair</c> requires three repairs
+        /// (<c>stopBurningRepairs</c>) — and that rule is gameplay, not netcode.
+        /// </summary>
+        internal void ExtinguishBurn(ushort vehicleId) => _burnClock.CancelBurn(vehicleId);
+
+        /// <summary>Repairs routed through the authoritative health record.</summary>
+        public long RepairsApplied { get; private set; }
+
         /// <summary>
         /// The prefab's authored burn time, or a floor when it authored none.
         /// </summary>

@@ -136,6 +136,16 @@ namespace Ironfront.Net.Unity.Server
 
             // V4. Order matters: the arbiter and the burn clock both close over the registry, and
             // the damage sink closes over the burn clock.
+            // Constructed HERE, not in Bind, so it can never be null when BindMatch reads its id
+            // pool for the state audit. Bind and BindMatch are called by two different components
+            // (NetServerBootstrap and MatchController), so their relative order is a Unity
+            // lifecycle question nothing in this code pins — and ServerStateAudit's vehicle
+            // arguments are nullable and DEFAULT TO ZERO, which reads as clean. A null pool there
+            // would leave criterion 14 asserting nothing, silently, on whichever startup order
+            // happened to win. Installing it into the static seam still waits for Bind: an unbound
+            // loop has no transport to broadcast onto.
+            _vehicleLifecycle = new ServerVehicleLifecycleSink(this, () => _scheduler.CurrentTick);
+
             _seatArbiter = new SeatArbiter(ServerVehicleRegistry.Instance.Registry);
             _burnClock = new VehicleBurnClock(ServerVehicleRegistry.Instance.Registry);
             _vehicleDamageSink = new ServerVehicleDamageSink(
@@ -264,7 +274,6 @@ namespace Ironfront.Net.Unity.Server
             // seam is how S_VEHICLE_SPAWN reaches them. Installed here rather than in Awake for
             // Current's reason: an unbound loop has no transport to broadcast onto, and a
             // spawner reporting into one would consume vehicle ids nobody ever hears about.
-            _vehicleLifecycle ??= new ServerVehicleLifecycleSink(this, () => _scheduler.CurrentTick);
             NetVehicleLifecycle.Install(_vehicleLifecycle);
 
             // V4. Same reasoning as the sink above: Vehicle's role guards reach the damage sink
@@ -356,6 +365,14 @@ namespace Ironfront.Net.Unity.Server
             // Raises OnMessage synchronously, which fills the sessions' input rings.
             Transport.Poll();
 
+            // Once per step, and this is the ONLY caller. BotSeatClaims.ReleaseExpired sweeps the
+            // whole (MAX_VEHICLES + 1) x MaxSeats table, so it is a global operation and needs a
+            // global trigger — it used to be called from Vehicle.FixedUpdate, which ran one full
+            // sweep per vehicle per physics step and skipped it entirely on a map with no
+            // vehicles. The deadline it enforces is wall-clock, so a step is the right grain: it
+            // does not need to run per owed tick, and 10-second claims do not care about 33 ms.
+            NetVehicleAuthority.ReleaseExpiredClaims();
+
             _ticksOwedThisStep = _scheduler.Advance(_stepStartMs);
 
             for (int tick = 0; tick < _ticksOwedThisStep; tick++)
@@ -437,15 +454,28 @@ namespace Ironfront.Net.Unity.Server
             _world.ServerTick = _scheduler.CurrentTick;
             ServerActorRegistry.Instance.CaptureInto(_world);
 
-            // V4. Reads each vehicle's Rigidbody once per snapshot, not once per viewer —
-            // quantizing here is what makes change detection mean anything, because a vehicle
-            // idling on a slope whose float position jitters below the 6.25 cm quantum produces
-            // identical bytes and keeps its Position bit clear.
-            ServerVehicleRegistry.Instance.CaptureInto(_vehicleWorld, _scheduler.CurrentTick);
-
-            // Burn expiry BEFORE the views are built, so a vehicle that died this tick is
-            // despawned rather than appearing in one last snapshot behind its own despawn.
+            // V4. Deaths are resolved BEFORE the capture, and that ordering is the whole of
+            // acceptance criterion 9.
+            //
+            // This used to run after it, on the reasoning that "burn expiry before the VIEWS are
+            // built" was enough. It is not, and the comment that said so was worse than the bug:
+            // BuildVehicleBody reads _vehicleWorld, which the capture had ALREADY filled, so a
+            // vehicle that died this tick shipped one last snapshot entry to every viewer —
+            // racing its own S_VEHICLE_DESPAWN, which travels reliable-ordered on channel 2 while
+            // the snapshot travels unreliable-sequenced on channel 1 with no ordering guarantee
+            // between them. VehicleInterestTracker.Forget made it certain rather than likely: it
+            // wipes the rate rows, so IsDue reads "never sent" and the stale entry is admitted
+            // every time instead of being rate-limited out some of the time.
+            //
+            // Killing first means the despawn unregisters the vehicle, so the capture below
+            // simply does not see it. No filter, no dead-entry special case.
             AdvanceVehicleBurn();
+
+            // Reads each vehicle's Rigidbody once per snapshot, not once per viewer — quantizing
+            // here is what makes change detection mean anything, because a vehicle idling on a
+            // slope whose float position jitters below the 6.25 cm quantum produces identical
+            // bytes and keeps its Position bit clear.
+            ServerVehicleRegistry.Instance.CaptureInto(_vehicleWorld, _scheduler.CurrentTick);
 
             _snapshotIndex++;
 
@@ -585,6 +615,23 @@ namespace Ironfront.Net.Unity.Server
                 // makes the ordering easy to get right and easy to get silently wrong.
                 _vehicleInterest.Forget(vehicleId);
 
+                // Killing the SCENE vehicle is what announces the despawn: Die() reaches
+                // VehicleSpawner.VehicleDied, which calls ReportDespawned. Announcing here as
+                // well would be the second authority this whole guard exists to remove.
+                //
+                // Die() is also the only thing that ejects the occupants, damages the ones in
+                // enclosed seats, schedules the replacement, and — in Tank's override — destroys
+                // towerJoint. None of that is expressible in the value stream, which is why
+                // V4-D12 makes death an event.
+                if (ServerVehicleRegistry.Instance.TryFind(
+                        vehicleId, out IGameplayVehicleSource vehicle))
+                {
+                    vehicle.Kill();
+                    continue;
+                }
+
+                // No scene object behind the id — a vehicle destroyed out from under us, or a
+                // headless rig with no prefab. Announce it ourselves, or the clients keep it.
                 NetVehicleLifecycle.ReportDespawned(vehicleId, VehicleDespawnReason.Destroyed);
             }
 
@@ -871,6 +918,21 @@ namespace Ironfront.Net.Unity.Server
             // that sink allocates the ids and is the only thing that can honour the quarantine
             // relative to what was actually announced. Passing a second pool would give the audit
             // a view of an id space nothing uses.
+            //
+            // Loud rather than nullable-and-quiet. ServerStateAudit's vehicle arguments default to
+            // null and a null one reports ZERO, which reads as clean — so an audit built without
+            // them grades criterion 14 against nothing and says PASS. The sink is constructed in
+            // this class's constructor precisely so this cannot happen; the check is here because
+            // "it cannot happen" is the claim, and a claim that nothing verifies is how it stops
+            // being true.
+            if (_vehicleLifecycle == null)
+            {
+                Debug.LogError(
+                    "[net] BindMatch found no vehicle lifecycle sink. The clean-state audit will "
+                    + "report the vehicle id pool as empty whether or not it is, so a leak there "
+                    + "will not be detected this match.");
+            }
+
             _stateAudit = new ServerStateAudit(
                 actorIds, _hitboxHistory, _interest, _spawnAcks, () => _players.Count,
                 _vehicleLifecycle?.Ids, _vehicleInterest,

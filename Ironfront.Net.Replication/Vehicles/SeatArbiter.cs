@@ -12,9 +12,19 @@ namespace Ironfront.Net.Replication.Vehicles
     /// <b>Two clients reaching for the same driver seat is the highest-scored risk in this
     /// phase</b> (15 = likelihood 3 x impact 5), and the mitigation is structural rather than
     /// careful: every seat mutation goes through <see cref="Decide"/>, <see cref="Decide"/> runs
-    /// inside the tick, and requests arriving in one tick are drained in arrival order with ties
-    /// broken by ascending connection id. Two clients cannot both be granted a seat because the
-    /// first grant is visible to the second decision — there is no window between them to lose.
+    /// inside the tick, and the grant is booked into the registry BEFORE the method returns. Two
+    /// clients cannot both be granted a seat because the first grant is visible to the second
+    /// decision — there is no window between them to lose.
+    /// </para>
+    /// <para>
+    /// <b>The ordering is the CALLER's, and V4-D9's ascending-connection-id tie-break is not
+    /// implemented here.</b> Saying otherwise would be a guarantee this class cannot make: it
+    /// answers one request per call and never sees a batch, so "arrival order" is simply the
+    /// order <c>ServerSeatBridge</c> invokes it in — which today is the order
+    /// <c>ServerMessageRouter</c> walks one payload's messages, and is therefore always defined.
+    /// The tie-break exists for the case where several requests are drained from a queue with no
+    /// inherent order, and nothing builds such a queue. If one is ever added, the sort belongs at
+    /// that queue and this remark should stop being true.
     /// </para>
     /// <para>
     /// <b>Never from a coroutine</b> (V4-D9). The shipped
@@ -33,8 +43,18 @@ namespace Ironfront.Net.Replication.Vehicles
     /// trip on a rare action.
     /// </para>
     /// <para>
-    /// <b>No allocation, no <c>System.Linq</c>, no <c>foreach</c></b> (conventions § 3.2). The
-    /// lockout table is an array indexed by actor id.
+    /// <b>No allocation and no LINQ on the hot path</b> — what conventions § 3.2 actually says.
+    /// The lockout table is an array indexed by actor id.
+    /// </para>
+    /// <para>
+    /// <b>§ 3.2 does NOT ban <c>foreach</c>, and it bans LINQ IN THE HOT PATH rather than the
+    /// <c>System.Linq</c> namespace.</b> Said here because this file's own comment claimed
+    /// otherwise, and so does the phase plan's header — a citation that overstates its source is
+    /// worse than none, because the next reader audits against a rule that does not exist and
+    /// either wastes the pass or "fixes" conforming code. A <c>foreach</c> over a concrete
+    /// <c>Dictionary</c> or array binds a struct enumerator by pattern and boxes nothing; the
+    /// thing genuinely worth avoiding is iterating through an <c>IEnumerable&lt;T&gt;</c>
+    /// interface, which does box.
     /// </para>
     /// </remarks>
     public sealed class SeatArbiter
@@ -187,7 +207,7 @@ namespace Ironfront.Net.Replication.Vehicles
                 // a client whose S_SEAT_CHANGE was lost converges instead of being told it is
                 // somewhere it is not.
                 if (seatedIn == request.VehicleId && seatedAt == request.SeatIndex)
-                    return Accept(in request, SeatChangeResult.Entered);
+                    return Accept(in request, SeatChangeResult.Entered, changedNothing: true);
 
                 // Seated elsewhere. V4-D8: the network path has no atomic switch, so this is
                 // refused and the client sends Leave then Enter — two independently arbitrated
@@ -231,9 +251,10 @@ namespace Ironfront.Net.Replication.Vehicles
                 vehicleId, seatIndex);
         }
 
-        private static SeatDecision Accept(in SeatRequest request, SeatChangeResult result)
+        private static SeatDecision Accept(
+            in SeatRequest request, SeatChangeResult result, bool changedNothing = false)
             => new SeatDecision(
                 result, request.ConnectionId, request.ActorId,
-                request.VehicleId, request.SeatIndex);
+                request.VehicleId, request.SeatIndex, changedNothing);
     }
 }

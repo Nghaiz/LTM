@@ -111,6 +111,34 @@ namespace Ironfront.Net.Replication.Vehicles
         }
 
         /// <summary>
+        /// Puts a burn out, for a vehicle that has been repaired back above zero.
+        /// </summary>
+        /// <remarks>
+        /// <b>Without this the burn clock kills a repaired vehicle.</b> <c>Vehicle.Repair</c>
+        /// reaches <c>StopBurning()</c> after three repairs, which clears the scene's
+        /// <c>burning</c> flag and knows nothing about <see cref="VehicleState"/> — so
+        /// <see cref="Tick"/> still found <c>Burning</c> true with <c>BurnEndsAtTick</c> armed,
+        /// and despawned a drivable, occupied vehicle on schedule while the GameObject stayed
+        /// solid in the world.
+        /// </remarks>
+        /// <returns>False when the vehicle is unknown, dead, or was not burning.</returns>
+        public bool CancelBurn(ushort vehicleId)
+        {
+            if (!_registry.TryGetState(vehicleId, out VehicleState state)) return false;
+            if (state.Dead || !state.Burning) return false;
+
+            state.Burning        = false;
+            state.BurnEndsAtTick = 0;
+            _registry.TrySetState(vehicleId, in state);
+
+            BurnsExtinguished++;
+            return true;
+        }
+
+        /// <summary>Burns put out by repair rather than by reaching their end.</summary>
+        public long BurnsExtinguished { get; private set; }
+
+        /// <summary>
         /// Kills a vehicle immediately, skipping the burn.
         /// </summary>
         /// <remarks>

@@ -145,6 +145,50 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
+        /// A repair that puts the fire out must stop the countdown, or the clock despawns a
+        /// vehicle that is drivable and possibly occupied.
+        /// </summary>
+        /// <remarks>
+        /// The scene's <c>Vehicle.Repair</c> reaches <c>StopBurning()</c> after three repairs,
+        /// which clears its own <c>burning</c> flag and knows nothing about
+        /// <see cref="VehicleState"/>. Without <see cref="VehicleBurnClock.CancelBurn"/> the
+        /// tick-counted clock kept <c>BurnEndsAtTick</c> armed and killed the repaired vehicle on
+        /// schedule — telling every client it was gone while the GameObject stayed solid in the
+        /// world. Nothing about the repair itself would have looked wrong.
+        /// </remarks>
+        [Fact]
+        public void ExtinguishingABurnStopsTheCountdown()
+        {
+            (VehicleRegistry registry, VehicleBurnClock clock) = Fixture();
+
+            clock.StartBurning(Tank, burnTicks: 60, nowTick: 10);
+            Assert.True(clock.CancelBurn(Tank));
+
+            registry.TryGetState(Tank, out VehicleState state);
+            Assert.False(state.Burning);
+            Assert.False(state.Dead);
+
+            // Well past where the burn would have expired.
+            clock.Tick(200);
+
+            Assert.Equal(0, clock.PendingDeathCount);
+            Assert.Equal(0, clock.DeathsAnnounced);
+            Assert.Equal(1, clock.BurnsExtinguished);
+        }
+
+        /// <summary>A vehicle that is not burning, or already dead, cannot be extinguished.</summary>
+        [Fact]
+        public void ExtinguishingRefusesAVehicleThatIsNotBurning()
+        {
+            (_, VehicleBurnClock clock) = Fixture();
+
+            Assert.False(clock.CancelBurn(Tank));
+
+            clock.KillImmediately(Tank);
+            Assert.False(clock.CancelBurn(Tank));
+        }
+
+        /// <summary>
         /// A zero-tick burn dies on the tick it starts, rather than never — a prefab that authored
         /// no burn time must still produce a despawn.
         /// </summary>
@@ -157,6 +201,49 @@ namespace Ironfront.Net.Replication.Tests
             clock.Tick(50);
 
             Assert.Equal(1, clock.PendingDeathCount);
+        }
+
+        /// <summary>
+        /// Acceptance criterion 9's second half, which the plan named
+        /// (<c>ATankDeathEmitsWreckedAndStopsSnapshotting</c>) and nothing graded: <b>no snapshot
+        /// entry for a vehicle follows its death.</b>
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The ordering this pins is <c>ServerTickLoop.BuildAndSendSnapshots</c>'s: deaths are
+        /// resolved, and the despawn unregisters the vehicle, BEFORE the capture runs. Capturing
+        /// first and killing afterwards also compiles, also passes every other test in this file,
+        /// and ships one final entry for a vehicle whose <c>S_VEHICLE_DESPAWN</c> is already in
+        /// flight on a different channel with no ordering guarantee between them.
+        /// </para>
+        /// <para>
+        /// <b>This is the engine-free half.</b> It proves that an unregistered vehicle produces no
+        /// entry; that the tick loop unregisters in the right order is a Unity-side fact and is on
+        /// the client track's Editor list.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public void NoSnapshotEntryFollowsAVehiclesDeath()
+        {
+            (VehicleRegistry registry, VehicleBurnClock clock) = Fixture();
+            var world = new VehicleWorldSnapshot();
+
+            // Alive: it is captured.
+            registry.CaptureInto(world, serverTick: 1);
+            Assert.Equal(1, world.VehicleCount);
+            Assert.True(world.TryFind(Tank, out _));
+
+            // Dead, and the despawn has unregistered it — which is what the tick loop does before
+            // it captures.
+            clock.KillImmediately(Tank);
+            Assert.Equal(1, clock.PendingDeathCount);
+            Assert.True(registry.Remove(Tank));
+
+            registry.CaptureInto(world, serverTick: 2);
+
+            Assert.Equal(0, world.VehicleCount);
+            Assert.False(world.TryFind(Tank, out _));
+            Assert.Equal(-1, world.IndexOf(Tank));
         }
 
         /// <summary>
@@ -396,6 +483,48 @@ namespace Ironfront.Net.Replication.Tests
                     audit.Capture().IsCleanOfVehicleState,
                     $"round {round} left vehicle state behind: {audit.Capture()}");
             }
+        }
+
+        /// <summary>
+        /// The id quarantine must outlast the delta encoder's baseline history, and nothing said
+        /// so until now.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A despawned vehicle id stays in every client's <see cref="VehicleDeltaEncoder"/>
+        /// baseline — the encoder has no per-id forget, only a whole-encoder <c>Reset</c> at match
+        /// reset. So if an id were reissued while a baseline still named it, a delta measured
+        /// against that baseline would apply the wreck's health, flags and turret angle to the
+        /// live replacement. That is precisely the hazard <c>VehicleIdPool</c>'s own doc comment
+        /// warns about, and it is closed today only because 32 snapshots at 20 Hz is 1.6 s against
+        /// a 5 s quarantine.
+        /// </para>
+        /// <para>
+        /// <b>Nothing related the two constants.</b> Raise <c>BaselineHistory</c> to 128, or move
+        /// <c>SIM_TICK_RATE</c> to 60 (which halves the quarantine in seconds while leaving the
+        /// tick count untouched), and the hazard silently reopens with every test still green.
+        /// This is the guard that goes red instead.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public void TheIdQuarantineOutlastsTheDeltaBaselineHistory()
+        {
+            float quarantineSeconds =
+                ProtocolConstants.VEHICLE_ID_QUARANTINE_TICKS
+                / (float)ProtocolConstants.SIM_TICK_RATE;
+
+            float baselineSeconds =
+                VehicleDeltaEncoder.BaselineHistory / (float)ProtocolConstants.SNAPSHOT_RATE;
+
+            Assert.True(
+                quarantineSeconds > baselineSeconds,
+                $"quarantine is {quarantineSeconds:0.00}s but a client can still hold a baseline "
+                + $"naming a released id for {baselineSeconds:0.00}s. Reissuing inside that window "
+                + "applies a wreck's state to its replacement, silently.");
+
+            // And with real margin, not by a hair -- the point is that a modest change to either
+            // constant must not be able to cross it unnoticed.
+            Assert.True(quarantineSeconds >= 2f * baselineSeconds);
         }
 
         private static (VehicleRegistry, VehicleBurnClock) Fixture()

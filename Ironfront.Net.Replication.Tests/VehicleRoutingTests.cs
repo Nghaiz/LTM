@@ -60,6 +60,61 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
+        /// An out-of-range <c>SeatAction</c> byte is malformed, not a silent Enter.
+        /// </summary>
+        /// <remarks>
+        /// An unchecked cast makes every byte except 1 an <c>Enter</c>, and counts it as a
+        /// well-formed message — so the counter that exists to surface protocol abuse cannot see
+        /// it. No authority is bypassed either way (the arbiter still runs every check); what is
+        /// lost is the ability to know it happened.
+        /// </remarks>
+        [Theory]
+        [InlineData((byte)2)]
+        [InlineData((byte)255)]
+        public void AnOutOfRangeSeatActionIsMalformedRatherThanASilentEnter(byte action)
+        {
+            var router = new ServerMessageRouter();
+            var handler = new RecordingSeatHandler();
+            router.SeatRequests = handler;
+
+            var session = new ClientSession(ConnectionId, ActorId);
+
+            // Hand-built, because SeatRequestMessage.Write cannot express an invalid action.
+            var body = new byte[SeatRequestMessage.Size];
+            body[0] = 9;        // vehicleId low
+            body[1] = 0;        // vehicleId high
+            body[2] = 0;        // seatIndex
+            body[3] = action;
+
+            Assert.Equal(0, router.Route(BuildPayload((byte)ClientMessageType.SeatRequest, body), session));
+
+            Assert.Equal(1, router.MalformedMessages);
+            Assert.Equal(0, router.SeatRequestsReceived);
+            Assert.Empty(handler.Requests);
+        }
+
+        /// <summary>
+        /// The two well-formed actions still parse, so the guard above cannot pass by rejecting
+        /// everything.
+        /// </summary>
+        [Theory]
+        [InlineData(SeatAction.Enter)]
+        [InlineData(SeatAction.Leave)]
+        public void TheTwoValidSeatActionsStillParse(SeatAction action)
+        {
+            var router = new ServerMessageRouter();
+            var handler = new RecordingSeatHandler();
+            router.SeatRequests = handler;
+
+            var session = new ClientSession(ConnectionId, ActorId);
+            var request = new SeatRequestMessage(vehicleId: 9, seatIndex: 0, action);
+
+            Assert.Equal(1, router.Route(Payload(ClientMessageType.SeatRequest, request), session));
+            Assert.Equal(0, router.MalformedMessages);
+            Assert.Equal(action, handler.Requests[0].Action);
+        }
+
+        /// <summary>
         /// Acceptance criterion 10 / V4-D13 — an out-of-range axis is refused at the decode and
         /// gains the sender no advantage.
         /// </summary>

@@ -280,6 +280,34 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
+        /// The idempotent accept is ADDRESSED, not broadcast — it changed nothing.
+        /// </summary>
+        /// <remarks>
+        /// <c>C_SEAT_REQUEST</c> has no rate limit anywhere, so treating this as a normal accept
+        /// let one seated client repeating "enter the seat I am already in" multiply into
+        /// N-players x request-rate reliable broadcasts, each retransmitted until acked. The
+        /// first, real accept still reaches everyone — a tank gaining a driver is everyone's
+        /// business.
+        /// </remarks>
+        [Fact]
+        public void AnIdempotentAcceptIsAddressedRatherThanBroadcast()
+        {
+            (SeatArbiter arbiter, _) = Fixture();
+
+            SeatDecision real = arbiter.Decide(Enter(conn: 10, actor: 1), nowTick: 100);
+            Assert.True(real.Broadcast);
+            Assert.False(real.ChangedNothing);
+
+            SeatDecision repeat = arbiter.Decide(Enter(conn: 10, actor: 1), nowTick: 101);
+
+            Assert.Equal(SeatChangeResult.Entered, repeat.Result);
+            Assert.True(repeat.Accepted);
+            Assert.True(repeat.ChangedNothing);
+            Assert.False(repeat.Broadcast);
+            Assert.Equal((ushort)10, repeat.ConnectionId);
+        }
+
+        /// <summary>
         /// V4-D7's rollback. <c>Actor.EnterSeat</c> re-reads the live scene, so a <c>false</c> is
         /// a condition the arbiter could not see — and the booking must not survive it.
         /// </summary>

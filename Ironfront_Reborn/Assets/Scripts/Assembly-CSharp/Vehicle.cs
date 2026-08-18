@@ -221,7 +221,12 @@ public class Vehicle : MonoBehaviour
 		{
 			CheckRam();
 		}
-		if (burning && !dead)
+		// NOT at server role. VehicleBurnClock counts the same burn in ticks and is the only
+		// thing allowed to end it (V4-D11) -- leaving this running made two authorities race one
+		// death, deduplicated only by the id pool, and this one usually won because FixedUpdate
+		// runs at 60 Hz against the tick clock's 20. The server calls Die() through
+		// IGameplayVehicleSource.Kill when its own clock expires.
+		if (burning && !dead && !NetVehicleAuthority.ServerOwnsVehicleDeath)
 		{
 			// Time.deltaTime returns fixedDeltaTime inside the fixed loop, so this was correct
 			// BY ACCIDENT and would have gone silently wrong the moment V4 drives the burn
@@ -233,10 +238,12 @@ public class Vehicle : MonoBehaviour
 				Die();
 			}
 		}
-		// Per-claim expiry at server role, per-vehicle drain offline. The shipped drain takes
-		// one claim off an anonymous pile every ten seconds, which is exactly why the count
-		// cannot be trusted (V4-D10); with identities the deadline belongs to the claim.
-		NetVehicleAuthority.ReleaseExpiredClaims();
+		// The offline drain, unchanged. Its server-role counterpart is per-CLAIM expiry, and it
+		// deliberately does NOT run here: BotSeatClaims.ReleaseExpired sweeps the whole global
+		// table, so calling it from a per-vehicle FixedUpdate ran one global sweep per vehicle
+		// per physics step -- sixteen times the necessary work at a full map, and none at all on
+		// a map with no vehicles, because the trigger was coupled to the instance count rather
+		// than to the clock it is actually measuring. ServerTickLoop owns it now, once a tick.
 		if (drainClaimAction.TrueDone() && seatsClaimedByBots > 0)
 		{
 			DropSeatClaim();
@@ -594,10 +601,26 @@ public class Vehicle : MonoBehaviour
 			if (stopBurningRepairs == 0)
 			{
 				StopBurning();
+				// The server's burn clock counts the SAME burn in ticks and knows nothing about
+				// stopBurningRepairs. Without this it kept its countdown armed and despawned a
+				// repaired, drivable, possibly occupied vehicle on schedule -- telling every
+				// client it was gone while the GameObject stayed solid in the world.
+				NetVehicleAuthority.ExtinguishBurn(base.gameObject);
 			}
 		}
 		bool result = health < maxHealth;
-		ApplyHealth(Mathf.Min(health + amount, maxHealth), 0f, NoAttacker);
+		// Repair is a health write and needs the guard Damage has. Without it the scene's health
+		// rose while the authoritative VehicleState.Health stayed where the last hit left it: the
+		// snapshot kept shipping the stale byte, and the next ApplyDamage subtracted from the
+		// stale value, so one more hit killed a fully repaired vehicle.
+		//
+		// The sink writes BOTH copies -- the record and, through SetHealthAuthoritative, the
+		// scene -- exactly as the damage path does, so there is one writer and one ladder run.
+		// Offline and on a client TryApplyRepair is false and the original line runs unchanged.
+		if (!NetVehicleAuthority.TryApplyRepair(base.gameObject, amount))
+		{
+			ApplyHealth(Mathf.Min(health + amount, maxHealth), 0f, NoAttacker);
+		}
 		CancelInvoke("AutoDamage");
 		// Only re-arm on an EMPTY vehicle. AutoDamage decays abandoned vehicles --
 		// OccupantEntered cancels it and OccupantLeft schedules it only when empty -- and
@@ -662,7 +685,10 @@ public class Vehicle : MonoBehaviour
 				impactAudio.pitch *= UnityEngine.Random.Range(0.9f, 1.1f);
 				impactAudio.Play();
 			}
-			if (burning && crashSkipsBurn && !dead)
+			// Same guard, same reason. At server role ServerVehicleDamageSink already routed the
+			// crash through VehicleBurnClock.KillImmediately, so letting the scene ALSO kill here
+			// would announce the despawn from two places on two different clocks.
+			if (burning && crashSkipsBurn && !dead && !NetVehicleAuthority.ServerOwnsVehicleDeath)
 			{
 				Die();
 			}

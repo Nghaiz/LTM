@@ -106,6 +106,32 @@ namespace Ironfront.Net.Unity.Server
         /// </summary>
         void SetHealthAuthoritative(float value);
 
+        /// <summary>
+        /// Destroys the vehicle. Maps to <c>Vehicle.Die()</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The server's half of V4-D11.</b> <c>Vehicle</c>'s own two death triggers — the
+        /// wall-clock <c>burnTime</c> countdown in <c>FixedUpdate</c> and the
+        /// <c>crashSkipsBurn</c> branch in the collision handler — are switched OFF at server
+        /// role, because they raced <c>VehicleBurnClock</c> for the same death and usually won.
+        /// This is how the tick-counted clock ends a burn it decided is over.
+        /// </para>
+        /// <para>
+        /// <b>It must still be the scene's <c>Die()</c>, not a cheaper substitute.</b> That method
+        /// ejects every occupant (damaging the ones in enclosed seats), notifies the spawner so a
+        /// replacement is scheduled, and in <c>Tank</c>'s override destroys <c>towerJoint</c> —
+        /// a topology change no value stream can express, which is exactly why V4-D12 replicates
+        /// death as an event.
+        /// </para>
+        /// <para>
+        /// <b>This announces its own despawn.</b> <c>Die()</c> reaches
+        /// <c>VehicleSpawner.VehicleDied</c>, which already calls
+        /// <c>NetVehicleLifecycle.ReportDespawned</c>. The caller must not announce again.
+        /// </para>
+        /// </remarks>
+        void Kill();
+
         /// <summary>World position of one seat, for the arbiter's reach check.</summary>
         Vector3 GetSeatPosition(int seatIndex);
 

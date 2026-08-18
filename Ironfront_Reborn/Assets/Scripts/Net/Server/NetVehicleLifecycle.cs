@@ -92,11 +92,14 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>Reports that a replicated vehicle left the world. Ignored for id 0.</summary>
         public static void ReportDespawned(ushort vehicleId, VehicleDespawnReason reason)
         {
-            // Unregistered BEFORE the despawn goes out, so no capture between the two can put
-            // an entry for this id in a snapshot that arrives after the client has been told to
-            // remove it. Ordering the other way leaves the client holding a vehicle nothing will
-            // ever despawn again, because the sink drops a second despawn for an id it has
-            // already quarantined.
+            // Unregistered BEFORE the despawn goes out, so no capture between the two can put an
+            // entry for this id in a snapshot. Ordering the other way leaves the client holding a
+            // vehicle nothing will ever despawn again, because the sink drops a second despawn
+            // for an id it has already quarantined.
+            //
+            // This is NOT on its own what keeps a dead vehicle out of the snapshot — the capture
+            // that matters is the one that already ran. ServerTickLoop resolves deaths BEFORE it
+            // captures, for exactly that reason; see BuildAndSendSnapshots.
             if (vehicleId != 0) ServerVehicleRegistry.Instance.Unregister(vehicleId);
 
             _sink.OnVehicleDespawned(vehicleId, reason);

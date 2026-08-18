@@ -296,6 +296,22 @@ namespace Ironfront.Net.Unity.Server
             // the snapshot and in S_SPAWN even after the property was correct.
             float yaw = float.IsNaN(YawDegrees) ? transform.eulerAngles.y : YawDegrees;
 
+            // Seat state, from the server's OWN occupancy record rather than the scene's.
+            //
+            // This is the field that makes "who is in what seat" answerable at all. Design D2
+            // names the actor entry as the single source of truth for occupancy and V3 finished
+            // its codec — but nothing ever populated it, so every actor reported as on foot and
+            // S_SEAT_CHANGE was the only carrier. That message is the TRANSITION and only fires
+            // on a client request, so a client that joined mid-match, or missed one datagram, or
+            // watched a vehicle die and eject its occupants, had no way to learn who was aboard.
+            //
+            // Read from SeatArbiter's record via the registry, not from Actor.seat: the arbiter's
+            // record is what the server decided, and the two are only equal because the bridge
+            // keeps them so. Taking the scene's copy here would make the snapshot agree with
+            // whichever of the two happened to be wrong.
+            ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(
+                _actorId, out ushort vehicleId, out byte seatIndex);
+
             return SnapshotBuilder.Capture(
                 _actorId,
                 position,
@@ -306,7 +322,9 @@ namespace Ironfront.Net.Unity.Server
                 Health,
                 WeaponId,
                 _ammoInClip,
-                _team);
+                _team,
+                vehicleId,
+                seatIndex);
         }
 
         /// <summary>Packs the gameplay booleans the snapshot carries as one byte.</summary>

@@ -180,6 +180,17 @@ namespace Ironfront.Net.Unity.Bindings
             if (_vehicle != null) _vehicle.SetHealthAuthoritative(value);
         }
 
+        /// <inheritdoc />
+        public void Kill()
+        {
+            // Guarded on the vehicle's OWN dead flag rather than the registry's, because this is
+            // the scene's notion of already-destroyed and Die() is not idempotent -- it ejects
+            // occupants and notifies the spawner.
+            if (_vehicle == null || _vehicle.dead) return;
+
+            _vehicle.Die();
+        }
+
         public Vector3 GetSeatPosition(int seatIndex)
         {
             Seat seat = SeatAt(seatIndex);

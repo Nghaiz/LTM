@@ -41,15 +41,31 @@ namespace Ironfront.Net.Replication.Vehicles
         /// <summary>The seat, meaningless when <see cref="VehicleId"/> is 0.</summary>
         public readonly byte SeatIndex;
 
+        /// <summary>
+        /// True when this answer changed nothing about the world — the actor was already exactly
+        /// where it asked to be.
+        /// </summary>
+        /// <remarks>
+        /// <b>An accept that changed nothing must not be broadcast.</b> The idempotent branch
+        /// exists so a client whose <c>S_SEAT_CHANGE</c> was lost converges instead of being told
+        /// it is somewhere it is not — but treating it as a normal accept made it a reliable
+        /// broadcast to every player, and <c>C_SEAT_REQUEST</c> has no rate limit anywhere. One
+        /// seated client repeating "enter the seat I am already in" then multiplies into
+        /// N-players x request-rate reliable sends, each retransmitted until acked, from a
+        /// message a client is free to send as fast as it likes.
+        /// </remarks>
+        public readonly bool ChangedNothing;
+
         public SeatDecision(
             SeatChangeResult result, ushort connectionId, ushort actorId,
-            ushort vehicleId, byte seatIndex)
+            ushort vehicleId, byte seatIndex, bool changedNothing = false)
         {
-            Result       = result;
-            ConnectionId = connectionId;
-            ActorId      = actorId;
-            VehicleId    = vehicleId;
-            SeatIndex    = seatIndex;
+            Result         = result;
+            ConnectionId   = connectionId;
+            ActorId        = actorId;
+            VehicleId      = vehicleId;
+            SeatIndex      = seatIndex;
+            ChangedNothing = changedNothing;
         }
 
         /// <summary>True when the request was granted.</summary>
@@ -60,7 +76,12 @@ namespace Ironfront.Net.Replication.Vehicles
         /// True when every client needs this answer; false when it belongs to the requester
         /// alone.
         /// </summary>
-        public bool Broadcast => Accepted;
+        /// <remarks>
+        /// An accept that moved somebody is everyone's business. A refusal, and an accept that
+        /// changed nothing, concern one client — see <see cref="ChangedNothing"/> for why the
+        /// second case is not merely tidiness.
+        /// </remarks>
+        public bool Broadcast => Accepted && !ChangedNothing;
 
         /// <summary>Builds the message this decision becomes.</summary>
         public SeatChangeMessage ToMessage()

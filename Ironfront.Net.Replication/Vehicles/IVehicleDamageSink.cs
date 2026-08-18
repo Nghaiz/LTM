@@ -65,5 +65,28 @@ namespace Ironfront.Net.Replication.Vehicles
         /// <c>Vehicle.Damage(float)</c> had no attacker parameter at all before V0 opened one.
         /// </param>
         VehicleDamageOutcome ApplyDamage(ushort vehicleId, float amount, ushort attackerId);
+
+        /// <summary>
+        /// Puts health back on, and cancels a burn the repair has put out.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Repair is a health write and therefore has to come through here too.</b> It did not,
+        /// and the omission was worse than the missing number: <c>Vehicle.Repair</c> reaches
+        /// <c>ApplyHealth</c> directly, so the scene's health rose while
+        /// <see cref="VehicleState.Health"/> stayed where the last hit left it. The snapshot kept
+        /// shipping the stale byte, and the next <see cref="ApplyDamage"/> subtracted from the
+        /// stale value — so one more hit killed a fully repaired vehicle.
+        /// </para>
+        /// <para>
+        /// <b>The burn half is the one that destroys a live vehicle.</b> Three repairs while
+        /// burning reach <c>StopBurning()</c>, which clears <c>Vehicle.burning</c> and knows
+        /// nothing about <see cref="VehicleState"/>. With <c>BurnEndsAtTick</c> still armed, the
+        /// burn clock despawned a drivable, occupied vehicle on schedule and told every client it
+        /// was gone, while the GameObject stayed solid in the world.
+        /// </para>
+        /// </remarks>
+        /// <returns>Health after the repair, or 0 for an unknown or dead vehicle.</returns>
+        float ApplyRepair(ushort vehicleId, float amount);
     }
 }
