@@ -6,11 +6,20 @@ public class Actor : Hurtable
 {
 	/// <summary>
 	/// How long the actor's hitboxes stay on the vehicle layer after leaving a seat, in fixed
-	/// steps. 25 reproduces the shipped 0.5 s exactly at the project's 50 Hz fixed step; V4
-	/// retunes it against the netcode's 30 Hz accumulator, which is why it is a named constant
-	/// rather than the literal it replaced.
+	/// steps. 30 reproduces the shipped 0.5 s exactly; V4 retunes it against the netcode's 30 Hz
+	/// accumulator, which is why it is a named constant rather than the literal it replaced.
 	/// </summary>
-	private const int REACTIVATE_COLLISION_TICKS = 25;
+	/// <remarks>
+	/// <b>The rate is 60 Hz at runtime, not the project setting's 50.</b> V0 shipped 25 on the
+	/// strength of TimeManager's <c>Fixed Timestep: 0.02</c>, but both
+	/// <see cref="FpsActorController"/> and <see cref="IngameMenuUi"/> assign
+	/// <c>Time.fixedDeltaTime = Time.timeScale / 60f</c> at runtime, and the server deliberately
+	/// does not fight them (NetServerBootstrap decision A5). So the project setting is the value
+	/// physics runs at for as long as it takes those two to wake up, and 25 ticks was 0.417 s in
+	/// every real session — a 17% shortening of a window Task 8 said it was preserving. Found by
+	/// the Editor behavioural pass, confirmed against the Profiler at 16.667 ms.
+	/// </remarks>
+	private const int REACTIVATE_COLLISION_TICKS = 30;
 
 	public enum TargetType
 	{

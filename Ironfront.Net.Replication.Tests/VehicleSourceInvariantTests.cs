@@ -373,6 +373,14 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Contains("REACTIVATE_COLLISION_TICKS", source);
             Assert.Contains("collisionReactivateTimer.Cancel();", source);
             Assert.Contains("collisionReactivateTimer.Tick()", source);
+
+            // The VALUE, not just the name. V0 shipped 25 from TimeManager's 0.02 fixed step,
+            // but FpsActorController and IngameMenuUi both assign Time.fixedDeltaTime =
+            // Time.timeScale / 60f at runtime, so the window was 0.417 s in every real session
+            // rather than the 0.5 s Task 8 said it preserved. Asserting only that the constant
+            // EXISTS is what let a wrong value through: the shape was right and the number was
+            // not. 30 / 60 Hz = 0.500 s.
+            Assert.Contains("private const int REACTIVATE_COLLISION_TICKS = 30;", source);
         }
 
         // ------------------------------------------------------------------ Task 9: headless
