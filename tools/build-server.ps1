@@ -100,14 +100,29 @@ Set it to your Unity Editor executable and re-run, e.g.:
     # method has to switch platforms itself, which forces a full asset reimport in the middle of
     # the build; and on this Windows host the Server subtarget it sets would otherwise have
     # landed on Windows, not Linux. The method still switches defensively for the menu-item path.
-    & $UnityPath -batchmode -nographics -quit `
-        -projectPath $projectPath `
-        -buildTarget Linux64 `
-        -executeMethod $BuildMethod `
-        -buildOutput $outAbsolute `
-        -logFile $logFile
+    # Start-Process -Wait, NOT the call operator. Unity.exe is a WINDOWS_GUI subsystem binary
+    # (PE Optional Header Subsystem = 2, checked against 6000.3.21f1), and PowerShell does not
+    # wait for one: `& $UnityPath ...` returns the instant the process is spawned and leaves
+    # $LASTEXITCODE unset. Every line below then ran against a build that had not happened —
+    # $unityExit was $null, `$null -ne 0` is true, and this script threw
+    # "Headless server build failed (Unity exit )" on EVERY run including the successful ones.
+    # The empty slot where the code should be is the tell. It also meant the tar step would
+    # have packaged a half-written directory, had the throw not pre-empted it.
+    #
+    # Note it only LOOKS like it waits when run from a shell that pipes stdout: the orphaned
+    # Unity inherits the pipe and the parent shell blocks on it until Unity exits, so the
+    # script's own failure is reported minutes later, exactly as though it had waited.
+    $unityArgs = @(
+        '-batchmode', '-nographics', '-quit',
+        '-projectPath', $projectPath,
+        '-buildTarget', 'Linux64',
+        '-executeMethod', $BuildMethod,
+        '-buildOutput', $outAbsolute,
+        '-logFile', $logFile
+    )
 
-    $unityExit = $LASTEXITCODE
+    $unityProcess = Start-Process -FilePath $UnityPath -ArgumentList $unityArgs -Wait -PassThru
+    $unityExit = $unityProcess.ExitCode
 
     if ($unityExit -ne 0) {
         Write-Host ""
