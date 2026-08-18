@@ -407,6 +407,13 @@ namespace Ironfront.Net.Replication.Tests
         [InlineData("Helicopter.cs", "if (rotor != null)", "rotor transform and its renderers")]
         [InlineData("Helicopter.cs", "if (solidRotor != null)", "solid rotor renderer, dereferenced every frame")]
         [InlineData("Helicopter.cs", "if (blurredRotor != null)", "blurred rotor renderer, dereferenced every frame")]
+        // V1 § 7 handed these two files to V0's headless list. V0 closed (#122) without absorbing
+        // them and no test named either file, so the guards were simply absent for a phase while
+        // trailParticles three lines above WAS guarded. That asymmetry is what a pin prevents.
+        [InlineData("ExplodingProjectile.cs", "if (impactParticles != null)", "impact particles, played on explode and stopped on the invoke")]
+        [InlineData("ExplodingProjectile.cs", "if (audioSource != null)", "explosion audio")]
+        [InlineData("GrenadeProjectile.cs", "if (burst != null)", "grenade burst particles")]
+        [InlineData("GrenadeProjectile.cs", "if (component != null)", "grenade audio")]
         public void HeadlessDereferencesAreGuarded(string file, string guard, string site)
         {
             // Stripped. Several of these guards are DOCUMENTED by a comment naming the guarded
@@ -415,6 +422,26 @@ namespace Ironfront.Net.Replication.Tests
             string source = StripComments(ReadScript(file));
             Assert.True(source.Contains(guard, StringComparison.Ordinal),
                 $"{file}: the headless guard for {site} is gone. Expected to find: {guard}");
+        }
+
+        [Theory]
+        [InlineData("ExplodingProjectile.cs")]
+        [InlineData("GrenadeProjectile.cs")]
+        public void CosmeticPitchDoesNotDrawFromTheGameplayRandomStream(string file)
+        {
+            // The other half of V1's handoff. Guarding the audio behind a null check is correct,
+            // and on its own it makes the stream problem worse: a headless server then skips a
+            // draw the client still makes, so a shared UnityEngine.Random walks at two different
+            // rates. Cosmetics draw from CosmeticRandom precisely so they cannot.
+            string source = StripComments(ReadScript(file));
+
+            Assert.Contains("CosmeticRandom.Range(0.9f, 1.1f)", source);
+
+            // The lookbehind matters: "CosmeticRandom.Range" ends with the literal
+            // "Random.Range", so a naive pattern matches the fix and the test can never pass.
+            Assert.DoesNotMatch(
+                new Regex(@"(?<![A-Za-z0-9_])(UnityEngine\.)?Random\.Range\(0\.9f, 1\.1f\)"),
+                source);
         }
 
         [Fact]
