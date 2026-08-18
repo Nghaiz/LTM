@@ -66,8 +66,27 @@ no body, but actor snapshots ship and the client acks `tick_104`. Snapshot 105: 
 delta. Repeats indefinitely. Only a viewer with at least one **Near** vehicle (every-snapshot band)
 escapes it.
 
+**Blast radius, per band** (`InterestManager.cs:66`, `SendEveryN = { 0, 5, 2, 1 }` ⇒ Far every 5th,
+Mid every 2nd, Near every snapshot). A body is recorded only on a tick where something was due, so
+the share of *sends* that fall back to full is the share of acked ticks that carried no body:
+
+| viewer's best band | ticks with a body | sends that fall back to `WriteFull` |
+|---|---|---|
+| any Near vehicle | every tick | none — baselines resolve normally |
+| Mid, no Near | 1 in 2 | ~1 in 2 |
+| Far only | 1 in 5 | ~4 in 5 |
+
+Exact rate depends on ack phase: `_ackedBaselineTick` is whatever the client last acked, so an ack in
+flight from an older tick can occasionally name a tick that *was* recorded. It is not literally every
+send — it is every send whose most recent acked tick carried no vehicle body, which for a Far-only
+viewer is most of them. There is **no** cost on ticks with nothing due: those ship no vehicle body at
+all.
+
 Second-order: an inflated `vehicleLength` shrinks `ActorBodyBudget` (1175 − vehicleLength), so the
-actor stream sheds more — this leaks into criterion 5 / 9 territory. The
+actor stream sheds more — this leaks into criterion 5 / 9 territory. **This is not a criterion-11
+finding**: criterion 11 is `seatsClaimedByBots` reflecting the actual claiming set (`BotSeatClaims`,
+`NetVehicleAuthority`, `ServerVehicleRegistry.OnActorUnregistered`), which this defect does not touch
+and which is correct as shipped. The
 `FullSnapshotCount` / `DeltaSnapshotCount` counters on the encoder are the evidence; expect full to
 dominate.
 
