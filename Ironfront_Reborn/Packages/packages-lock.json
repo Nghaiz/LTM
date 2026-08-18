@@ -11,6 +11,16 @@
       },
       "url": "https://package.openupm.com"
     },
+    "com.ivanmurzak.unity.mcp.timeline": {
+      "version": "1.0.16",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {
+        "com.ivanmurzak.unity.mcp": "0.86.3",
+        "com.unity.timeline": "1.8.12"
+      },
+      "url": "https://package.openupm.com"
+    },
     "com.unity.2d.sprite": {
       "version": "1.0.0",
       "depth": 0,
