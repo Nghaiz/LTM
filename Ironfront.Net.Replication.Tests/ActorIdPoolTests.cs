@@ -149,6 +149,75 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void ResetAllKeepsIdsStillHeldByLiveActorsMarkedInUse()
+        {
+            var pool = new ActorIdPool(capacity: 4, quarantineSeconds: 5f);
+            pool.TryAcquire(0f, out ushort held);
+            pool.TryAcquire(0f, out ushort gone);
+            pool.Release(gone, 0f);
+
+            // Dustbowl's bots are scene-resident: the match cycles round to round while they
+            // keep existing, and keep holding their ids.
+            pool.ResetAll(new[] { held });
+
+            Assert.True(pool.IsInUse(held));
+            Assert.Equal(1, pool.InUseCount);
+            Assert.False(pool.IsFullyReleased);
+
+            // Quarantine still cleared -- that part of the reset was never the defect.
+            Assert.Equal(0, pool.QuarantinedCount);
+            Assert.Equal(3, pool.FreeCount);
+        }
+
+        [Fact]
+        public void ResetAllNeverReissuesAnIdALiveActorStillHolds()
+        {
+            var pool = new ActorIdPool(capacity: 4, quarantineSeconds: 5f);
+            pool.TryAcquire(0f, out ushort held);
+
+            pool.ResetAll(new[] { held });
+
+            // Drain the pool. Before this fix the reset re-enqueued the whole id space, so the
+            // very first acquire could hand `held` to a second actor -- the duplicate-id state
+            // the quarantine and Register's guard exist to prevent.
+            var issued = new List<ushort>();
+            while (pool.TryAcquire(0f, out ushort id)) issued.Add(id);
+
+            Assert.DoesNotContain(held, issued);
+            Assert.Equal(3, issued.Count);
+        }
+
+        [Fact]
+        public void ResetAllIgnoresRetainedIdsOutsideThePoolRatherThanThrowing()
+        {
+            var pool = new ActorIdPool(capacity: 4, quarantineSeconds: 5f);
+
+            // 0 is "unassigned" everywhere in the protocol; 99 was never issued by this pool.
+            // A caller enumerating a live scene should not have to pre-filter either.
+            pool.ResetAll(new ushort[] { 0, 99 });
+
+            Assert.Equal(4, pool.FreeCount);
+            Assert.True(pool.IsFullyReleased);
+        }
+
+        [Fact]
+        public void ResetAllWithNoRetainedIdsMatchesTheParameterlessForm()
+        {
+            var withNull = new ActorIdPool(capacity: 4, quarantineSeconds: 5f);
+            var bare     = new ActorIdPool(capacity: 4, quarantineSeconds: 5f);
+
+            withNull.TryAcquire(0f, out ushort _);
+            bare.TryAcquire(0f, out ushort _);
+
+            withNull.ResetAll(null);
+            bare.ResetAll();
+
+            Assert.Equal(bare.FreeCount, withNull.FreeCount);
+            Assert.Equal(bare.InUseCount, withNull.InUseCount);
+            Assert.Equal(bare.QuarantinedCount, withNull.QuarantinedCount);
+        }
+
+        [Fact]
         public void AZeroQuarantineHandsIdsStraightBack()
         {
             var pool = new ActorIdPool(capacity: 1, quarantineSeconds: 0f);

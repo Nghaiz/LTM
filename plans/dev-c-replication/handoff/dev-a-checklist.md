@@ -111,7 +111,7 @@ Each row is a specific thing to look at, with what "correct" looks like.
 |---|---|---|---|
 | E1 | `NetServerActor.WeaponId` now reads `Actor.activeWeapon.NetworkId` | Join with a second client, look at the other player | They hold a visible weapon, and switching weapons changes what you see |
 | E2 | Yaw now written from the input frame, not the transform | Have the other player spin on the spot | Their body turns. Before this, they faced their spawn heading forever |
-| E3 | `LagCompensator.Occlusion` now assigned to `Physics.Linecast` with mask `-2049` | Aim through a solid wall at a target and fire | No hit, no kill. Check `ShotsOccluded` is no longer 0 |
+| E3 | `LagCompensator.Occlusion` now assigned to `Physics.Linecast` with mask `-2049` | Aim through a solid wall at a target and fire | No hit, no kill, and `ShotsResolved > 0 && ShotsHit + ShotsOccluded == ShotsResolved`. **Amended round 9** — the original wording ("check `ShotsOccluded` is no longer 0") fails closed: with an empty candidate span both `ShotsHit` and `ShotsOccluded` are structurally 0, so it cannot tell "occlusion works" from "nothing was ever tested". It read as a failure while masking defect 4 instead |
 | E4 | Input drain is metered by a per-tick budget | Play normally, then play over a lossy link | Movement feels unchanged. `SpeedViolations` and `InputThrottleEvents` stay at 0 for an honest client |
 | E5 | `S_DESPAWN_ACTOR` sent on disconnect; slot health/alive reset on claim | Have a player leave, then rejoin | No frozen body left standing. The rejoining player is alive at full health, not a corpse |
 | E6 | Respawn teleports to an `ActorManager` spawn point | Die at a chokepoint, respawn | You appear at a spawn point, not where you died, and no speed violation is logged for the teleport |
@@ -182,8 +182,21 @@ coroutines and does `Time.deltaTime`-driven work in `Update`, so toggling the Mo
 splits paused `Update` state from independently paced coroutine state. `BotLodGate` is the seam
 that gates the intended work without that split.
 
-**Reply with:** 32-bot tick p99 with `AlwaysOn`, and with `Scheduler`, plus the AI cost in both.
-This closes the last two M2 criteria no test can reach.
+**Reply with:** ~~32-bot tick p99 with `AlwaysOn`, and with `Scheduler`~~ — **amended round 9.**
+Server tick p99 cannot separate the arms and never could: `AiActorController` runs in `Update`, and
+no stage of `ServerTickLoop` contains it, so no LOD setting can move that number. Dev A measured
+4.830 / 4.694 / 4.602 ms across `Scheduler` / `AlwaysOn` / `AlwaysOff` — flat, structurally.
+
+Reply instead with the **AI-cost pair above the `AlwaysOff` floor**, at 40 bots: AI ms/frame under
+`AlwaysOn` and under `Scheduler`, plus `granted` / `skipped` from `BotLodScheduler`. That is the
+pair the M2 criterion is actually asking about. Take the samples interleaved in blocks rather than
+arm-after-arm — a back-to-back run loads Editor settling and cold A* caches onto whichever arm went
+first and reported `Scheduler` as the slower one.
+
+Sample all nine workloads, not `AiActorController.Update()` alone: eight of the nine guards sit in
+coroutines whose time is not in `BehaviourUpdate`, and `Recorder.Get` returns `isValid == true` for
+a marker that does not exist because it creates one — so the obvious single recorder reads 0.000 ms
+in both arms and says nothing is wrong.
 
 ---
 
@@ -298,7 +311,7 @@ In this order. D1 blocks the deployment; E blocks trusting eleven fixes; A3 bloc
 | **E1–E8** | Verify the eight Unity-side fixes | 30 min | one line per row |
 | **A3** | Focused shadow-comparison rerun | 35 min | grounded summary + flat-ground warnings |
 | **A4** | Prefab wiring, clock disabled | 10 min | prefab path + clock disabled |
-| **S5/A9** | Bot LOD profiling — unblocked | 25 min | two p99 numbers, LOD on and off |
+| **S5/A9** | Bot LOD profiling — unblocked | 25 min | AI ms/frame under `AlwaysOn` and `Scheduler`, plus granted/skipped (amended round 9 — tick p99 cannot separate the arms) |
 | **A11** | Master-link DLLs | 10 min | done, or after Dev D confirms |
 | **D2** | Sign off on `EditorBuild.cs` | 10 min | keep or move |
 | **A7** | Reachable past ±2048 m? | 10 min | yes / no |

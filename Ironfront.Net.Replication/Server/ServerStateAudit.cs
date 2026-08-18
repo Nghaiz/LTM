@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Interest;
@@ -135,12 +136,21 @@ namespace Ironfront.Net.Replication.Server
         /// Empties every per-actor and per-pair table. The host still has to despawn the actors
         /// themselves — this drops what the netcode remembers ABOUT them.
         /// </summary>
-        public void ResetForNewMatch()
+        /// <param name="retainedActorIds">
+        /// Ids belonging to actors that survive the reset, and so must stay marked in-use in the
+        /// id pool. Null means "the whole world is going away", which is what a lobby-driven
+        /// round teardown does. A scene whose actors outlive the round — the shipping Dustbowl
+        /// map, where 41 bots persist across the match cycle — MUST pass them, or the pool
+        /// re-offers ids those actors still hold and <c>ActorIdsInUse</c> reads 0 while 41 are
+        /// in use. See <see cref="ActorIdPool.ResetAll(IEnumerable{ushort})"/> for the round-9
+        /// measurement behind this.
+        /// </param>
+        public void ResetForNewMatch(IEnumerable<ushort>? retainedActorIds = null)
         {
             _hitboxHistory.Clear();
             _interest.Reset();
             _spawnAcks.Clear();
-            _ids.ResetAll();
+            _ids.ResetAll(retainedActorIds);
         }
     }
 }

@@ -372,6 +372,24 @@ public class AiActorController : ActorController
 		return lodGate == null || lodGate.AllowAiWork;
 	}
 
+	// What a gated-off coroutine parks on. One shared instance because WaitForSeconds is
+	// immutable and stateless once constructed -- allocating one per skipped iteration, at
+	// eight coroutines x 40 bots, is the allocation this whole seam exists to avoid.
+	//
+	// 0.05f, not `yield return null`, and not the 0.1f Dev A suggested comparing against.
+	// Round 9 measured the skip path re-polling every frame at 0.404 ms/frame across 40 bots
+	// doing no work -- 326 AI marker calls per frame with everything skipped against 103 with
+	// everything working, so a skipped bot was entered three times as often as a busy one.
+	// That polling ate roughly half the saving: 38.6 % of bot-ticks skipped bought only an
+	// 18.5 % drop in AI cost. At 60 fps this cuts coroutine re-entry by ~2/3.
+	//
+	// The cost is resume latency, and 0.05f is where it stops mattering: worst case ~1.5 ticks
+	// at 30 Hz before a bot re-entering interest thinks again. 0.1f is cheaper still but is
+	// three full ticks, which is long enough to read as a bot standing frozen when a player
+	// comes around a corner -- and a bot is only ever gated off while no human can see it, so
+	// the frame it becomes visible is exactly the frame the latency is on show.
+	private static readonly WaitForSeconds LodSkipWait = new WaitForSeconds(0.05f);
+
 	private void Awake()
 	{
 		lodGate = GetComponent<BotLodGate>();
@@ -419,12 +437,11 @@ public class AiActorController : ActorController
 		Collider[] colliders = new Collider[128];
 		while (true)
 		{
-			// LOD gate, 1 of 8. `yield return null` rather than a longer wait so the bot
-			// resumes on the frame it re-enters interest instead of up to a WaitForSeconds
-			// later, and so the skipped iteration costs one bool read.
+			// LOD gate, 1 of 8. Parks on LodSkipWait rather than `yield return null`: see the
+			// field for why a per-frame re-poll cost about half of what the gate saved.
 			if (!AiWorkAllowed())
 			{
-				yield return null;
+				yield return LodSkipWait;
 				continue;
 			}
 			if (hasPath)
@@ -513,7 +530,7 @@ public class AiActorController : ActorController
 			// LOD gate, 2 of 8.
 			if (!AiWorkAllowed())
 			{
-				yield return null;
+				yield return LodSkipWait;
 				continue;
 			}
 			if (actor.IsSeated() && actor.seat.vehicle != null && actor.IsDriver())
@@ -643,7 +660,7 @@ public class AiActorController : ActorController
 			// LOD gate, 3 of 8.
 			if (!AiWorkAllowed())
 			{
-				yield return null;
+				yield return LodSkipWait;
 				continue;
 			}
 			if (!hasPath && ShouldHavePath() && moveTimeoutAction.TrueDone())
@@ -757,7 +774,7 @@ public class AiActorController : ActorController
 			// the actor list -- and therefore the one the LOD saving mostly comes from.
 			if (!AiWorkAllowed())
 			{
-				yield return null;
+				yield return LodSkipWait;
 				continue;
 			}
 			List<Actor> potentialTargets = FindPotentialTargets();
@@ -848,7 +865,7 @@ public class AiActorController : ActorController
 			// being cleared: releasing the gate must not double as a cease-fire order.
 			if (!AiWorkAllowed())
 			{
-				yield return null;
+				yield return LodSkipWait;
 				continue;
 			}
 			fire = false;
@@ -971,7 +988,7 @@ public class AiActorController : ActorController
 			// LOD gate, 6 of 8.
 			if (!AiWorkAllowed())
 			{
-				yield return null;
+				yield return LodSkipWait;
 				continue;
 			}
 			if (HasTarget())
@@ -1003,7 +1020,7 @@ public class AiActorController : ActorController
 			// holds a scan timer that fires the instant it comes back.
 			if (!AiWorkAllowed())
 			{
-				yield return null;
+				yield return LodSkipWait;
 				continue;
 			}
 			yield return new WaitForSeconds(UnityEngine.Random.Range(0.8f, 3f));
@@ -1070,7 +1087,7 @@ public class AiActorController : ActorController
 			// LOD gate, 8 of 8.
 			if (!AiWorkAllowed())
 			{
-				yield return null;
+				yield return LodSkipWait;
 				continue;
 			}
 			closeActors = ActorManager.AliveActorsInRange(base.transform.position, 10f);
