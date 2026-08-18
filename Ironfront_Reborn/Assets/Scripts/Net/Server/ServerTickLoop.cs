@@ -100,6 +100,8 @@ namespace Ironfront.Net.Unity.Server
         private readonly VehicleBurnClock _burnClock;
         private readonly ServerVehicleDamageSink _vehicleDamageSink;
         private readonly ServerSeatBridge _seatBridge;
+        private readonly VehicleInputAuthority _vehicleInputAuthority;
+        private readonly ServerVehicleInputBridge _vehicleInputBridge;
 
         // Reused across resets rather than allocated per call. A round boundary is not the hot
         // path, but MAX_ACTORS is the known ceiling and there is no reason to hand the GC a
@@ -157,8 +159,18 @@ namespace Ironfront.Net.Unity.Server
             // Wired in the constructor, not in Bind: the router is a field initializer too, and
             // an accepted C_SPAWN_REQUEST arriving before Bind ran would otherwise be counted
             // and dropped rather than gated.
+            // V5 task 5. The authority owns the driver check and the hold window and is
+            // engine-free; the bridge is the part that has to touch a MonoBehaviour.
+            _vehicleInputAuthority = new VehicleInputAuthority(ServerVehicleRegistry.Instance.Registry);
+            _vehicleInputBridge = new ServerVehicleInputBridge(
+                _vehicleInputAuthority, ServerActorRegistry.Instance, () => _scheduler.CurrentTick);
+
             _router.SpawnRequests = this;
             _router.SeatRequests = _seatBridge;
+
+            // Before V5 this stayed null and every C_VEHICLE_INPUT was counted and dropped --
+            // which was V4's honest shipped state, because nothing could drive a vehicle yet.
+            _router.VehicleInputs = _vehicleInputBridge;
         }
 
         /// <summary>Who sees which vehicles, and how often. V4-D3.</summary>
@@ -169,6 +181,11 @@ namespace Ironfront.Net.Unity.Server
 
         /// <summary>The two-stage vehicle death machine. V4-D11.</summary>
         public VehicleBurnClock BurnClock => _burnClock;
+
+        /// <summary>
+        /// Who may steer what, and for how long after their last packet. V5-D5 and V5-D11.
+        /// </summary>
+        public VehicleInputAuthority VehicleInputAuthority => _vehicleInputAuthority;
 
         /// <summary>The transport this loop is bound to. Null until <see cref="Bind"/>.</summary>
         public ITransportServer Transport { get; private set; }
@@ -337,6 +354,7 @@ namespace Ironfront.Net.Unity.Server
             _vehicleInterest.Reset();
             _seatArbiter.Reset();
             _burnClock.Reset();
+            _vehicleInputBridge.Reset();
 
             if (Transport == null) return;
 
@@ -378,6 +396,10 @@ namespace Ironfront.Net.Unity.Server
             for (int tick = 0; tick < _ticksOwedThisStep; tick++)
             {
                 NetContext.CurrentTick = _scheduler.BeginTick();
+
+                // Before the players step, so a vehicle reading its driver's controller from
+                // FixedUpdate this tick sees this tick's axes rather than the previous one's.
+                _vehicleInputBridge.PumpTick(NetContext.CurrentTick);
 
                 for (int i = 0; i < _players.Count; i++)
                     _players[i].Tick(_scheduler.FixedDeltaTime);
@@ -644,6 +666,11 @@ namespace Ironfront.Net.Unity.Server
         /// </summary>
         private void SendSeatChange(SeatDecision decision)
         {
+            // Before the send, so the input source is installed by the time the client's first
+            // C_VEHICLE_INPUT can arrive. The other order leaves a window in which the driver's
+            // opening axes are accepted by the authority and read by nobody.
+            _vehicleInputBridge.OnSeatDecision(in decision);
+
             SeatChangeMessage message = decision.ToMessage();
 
             int written = ServerEventWriter.WriteSeatChange(_eventPayload, in message);
@@ -1044,6 +1071,11 @@ namespace Ironfront.Net.Unity.Server
             // incarnation's re-entry cooldown and be refused a seat it never left.
             _vehicleInterest.ForgetViewer(actorId);
             _seatArbiter.Forget(actorId);
+
+            // Both halves: the installed input source, and the axes it was last handed. An id
+            // that is reissued would otherwise inherit the previous occupant's throttle for the
+            // length of the hold window, on whatever vehicle they were last in.
+            _vehicleInputBridge.Forget(actorId);
         }
 
         private void OnTransportMessage(ushort connectionId, ReadOnlyMemory<byte> payload)

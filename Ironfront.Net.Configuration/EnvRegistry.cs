@@ -195,6 +195,15 @@ namespace Ironfront.Net.Configuration
             "Log the first snapshot and every connection state change.",
             "1");
 
+        /// <summary>The V5-D6 driver-prediction fallback, as one flag.</summary>
+        public static readonly EnvVar ClientPredictLocalVehicle = new EnvVar(
+            "IRONFRONT_CLIENT_PREDICT_VEHICLE", "Game client", "game client",
+            "Whether the client predicts the vehicle it is driving. Set to 0 for the\n" +
+            "no-prediction fallback: the driven vehicle is interpolated like every other\n" +
+            "one, correct but a round trip behind. Flip it when the net-debug overlay\n" +
+            "shows the snap count rising under a healthy network.",
+            "1");
+
         // ---- Logging -------------------------------------------------------------------
 
         /// <summary>Master server verbosity.</summary>
@@ -390,7 +399,7 @@ namespace Ironfront.Net.Configuration
             GameServerMasterTlsPinnedFingerprint, DatabasePath,
             GameServerUdpPort, GameServerTransport, GameServerMaxConnections, GameServerMaxPlayers,
             GameServerPublicIp, GameServerMapIds, GameServerAcceptUnsignedTickets,
-            ClientHost, ClientPort, ClientVerbose,
+            ClientHost, ClientPort, ClientVerbose, ClientPredictLocalVehicle,
             LogLevel, StructuredLog,
             TlsCertificatePath, TlsCertificatePassword,
             MetricsPort, MetricsBind, MetricsHost, MetricsCsvPath, MetricsCsvIntervalSeconds,

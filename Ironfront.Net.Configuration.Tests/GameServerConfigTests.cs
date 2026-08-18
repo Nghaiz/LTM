@@ -169,5 +169,23 @@ namespace Ironfront.Net.Configuration.Tests
             Assert.Equal(28000, config.Port);
             Assert.False(config.Verbose);
         }
+
+        [Fact]
+        public void DriverPredictionDefaultsOnAndTurnsOffFromTheEnvironment()
+        {
+            // V5-D6. The fallback has to be reachable from a headless two-process run and from a
+            // QA build, not only from an inspector checkbox somebody has to find first.
+            Assert.True(new GameClientConfig().PredictLocalVehicle);
+
+            var off = new GameClientConfig()
+                .ApplyEnvironment(Env((EnvRegistry.ClientPredictLocalVehicle.Name, "0")));
+
+            Assert.False(off.PredictLocalVehicle);
+
+            var backOn = new GameClientConfig { PredictLocalVehicle = false }
+                .ApplyEnvironment(Env((EnvRegistry.ClientPredictLocalVehicle.Name, "1")));
+
+            Assert.True(backOn.PredictLocalVehicle);
+        }
     }
 }

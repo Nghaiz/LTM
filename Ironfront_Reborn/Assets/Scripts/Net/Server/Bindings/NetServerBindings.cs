@@ -36,6 +36,18 @@ namespace Ironfront.Net.Unity.Server
         /// </summary>
         public static Func<GameObject, IGameplayVehicleSource> VehicleSourceResolver { get; set; }
 
+        /// <summary>
+        /// Installs a network input source on a driver's controller and returns the handle, or
+        /// <see langword="null"/> when that GameObject has no controller. V5 task 5.
+        /// </summary>
+        /// <remarks>
+        /// Installing rather than merely resolving: the call it has to make
+        /// (<c>FpsActorController.SetInputSource</c>) and the type it has to pass
+        /// (<c>NetInputSource</c>) both live in <c>Assembly-CSharp</c>, which no asmdef can
+        /// reference. See <see cref="IDriverInputSink"/>.
+        /// </remarks>
+        public static Func<GameObject, IDriverInputSink> DriverInputSinkResolver { get; set; }
+
         /// <summary>The scene's spawn points, or <see langword="null"/> when unavailable.</summary>
         public static ISpawnPointDirectory SpawnPoints { get; set; }
 
@@ -60,11 +72,19 @@ namespace Ironfront.Net.Unity.Server
         public static IGameplayVehicleSource ResolveVehicleSource(GameObject gameObject)
             => VehicleSourceResolver?.Invoke(gameObject);
 
+        /// <summary>
+        /// Installs a network input source on a driver, or returns <see langword="null"/> when
+        /// nothing is registered or the actor has no controller.
+        /// </summary>
+        public static IDriverInputSink AttachDriverInput(GameObject gameObject)
+            => DriverInputSinkResolver?.Invoke(gameObject);
+
         /// <summary>Clears every seam. For tests, and for a clean re-install.</summary>
         public static void Clear()
         {
             ActorSourceResolver = null;
             VehicleSourceResolver = null;
+            DriverInputSinkResolver = null;
             SpawnPoints = null;
             CapturePoints = null;
         }

@@ -81,6 +81,17 @@ namespace Ironfront.Net.Unity.Client
         public ITransportClient ExternalTransport { get; set; }
 
         /// <summary>
+        /// The connection's smoothed round-trip time, in milliseconds. Zero before connect.
+        /// </summary>
+        /// <remarks>
+        /// <b>The one RTT estimate on this client, deliberately.</b> Vehicle correction extrapolates
+        /// the server pose forward by half of it (V5-D4), and lag compensation rewinds by it on the
+        /// far end. A second estimator here would drift away from the transport's, and the two would
+        /// then disagree about how stale a snapshot is with nothing to say which was right.
+        /// </remarks>
+        public float SmoothedRttMs => _transport != null ? _transport.SmoothedRttMs : 0f;
+
+        /// <summary>
         /// The client this process is running, or null on a dedicated server.
         /// </summary>
         /// <remarks>
@@ -120,6 +131,8 @@ namespace Ironfront.Net.Unity.Client
             // identity at the bootstrap so interpolation can skip it and prediction can
             // reconcile the actor the player actually owns.
             Router.OnSpawnActor += OnSpawnActor;
+
+            EnsureVehicleStage();
 
             if (_connectOnStart) Connect();
         }
@@ -231,6 +244,35 @@ namespace Ironfront.Net.Unity.Client
                 _loggedFirstSnapshot = true;
                 Debug.Log($"[net] first snapshot applied at server tick {Router.Decoder.Current.ServerTick}");
             }
+        }
+
+        /// <summary>
+        /// Makes sure the vehicle replication components exist and are running.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Added in code rather than authored onto a scene object.</b> A component that has
+        /// to be dragged onto a GameObject on every map is a component that is missing on one of
+        /// them, and the symptom — vehicles that never move for this client while every other
+        /// client sees them fine — looks like a netcode fault rather than an authoring one.
+        /// Neither of these needs a serialized reference: <c>RemoteVehicleRegistry</c> reads its
+        /// prefab directory off the scene's own spawners, and <c>ClientVehicleStage</c> takes the
+        /// prediction flag from <see cref="Config"/>. So there is nothing for an inspector to
+        /// hold, and nothing to forget.
+        /// </para>
+        /// <para>
+        /// An authored instance wins: <c>GetComponent</c> first, and the serialized flag it
+        /// carries is only overridden when the environment explicitly says so.
+        /// </para>
+        /// </remarks>
+        private void EnsureVehicleStage()
+        {
+            if (GetComponent<RemoteVehicleRegistry>() == null) gameObject.AddComponent<RemoteVehicleRegistry>();
+
+            ClientVehicleStage stage = GetComponent<ClientVehicleStage>();
+            if (stage == null) stage = gameObject.AddComponent<ClientVehicleStage>();
+
+            if (Config != null) stage.ApplyConfiguration(Config.PredictLocalVehicle);
         }
 
         private void OnSpawnActor(SpawnActorMessage message)

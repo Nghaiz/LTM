@@ -23,5 +23,9 @@ namespace Ironfront.Net.Unity
         public float LookDeltaX => 0f;
         public float LookDeltaY => 0f;
         public ushort Buttons => 0;
+        public float HeliYaw => 0f;
+        public float HeliCollective => 0f;
+        public float HeliRoll => 0f;
+        public float HeliPitch => 0f;
     }
 }

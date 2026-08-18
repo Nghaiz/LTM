@@ -74,6 +74,12 @@ public class Tank : Vehicle
 
 	private void UpdateMovement()
 	{
+		// V5-D3: kinematic here, so every torque below is discarded by the solver. The track
+		// UV scroll and the turret are driven elsewhere and keep running.
+		if (NetworkDriven)
+		{
+			return;
+		}
 		bool flag = true;
 		float motorTorque = 0f;
 		float motorTorque2 = 0f;

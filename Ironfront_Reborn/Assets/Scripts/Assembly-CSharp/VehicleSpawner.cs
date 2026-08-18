@@ -147,13 +147,36 @@ public class VehicleSpawner : MonoBehaviour
 		scheduler.RequestSpawnNow();
 	}
 
+	/// <summary>
+	/// Whether this pad should stand down.
+	/// </summary>
+	/// <remarks>
+	/// <b>A client never spawns its own vehicles (V5).</b> Every vehicle in a networked world
+	/// arrives from <c>S_VEHICLE_SPAWN</c> and is instantiated by <c>RemoteVehicleRegistry</c>,
+	/// with the id the server gave it. Letting the local pad run too would put two vehicles here
+	/// — one replicated, one simulated locally from a spawn timer with no reason to agree with
+	/// the server's — and neither would look wrong on its own. Offline and on the server this is
+	/// exactly the check it always was.
+	/// </remarks>
 	private static bool VehiclesAreSuppressed()
 	{
+		if (Ironfront.Net.Unity.NetContext.IsClient)
+		{
+			return true;
+		}
+
 		return GameManager.instance != null && GameManager.instance.noVehicles;
 	}
 
 	private void SpawnVehicle()
 	{
+		// Re-checked here and not only in RequestFirstSpawn: the scheduler keeps asking, and the
+		// role can be declared after this component's Awake if the map scene loaded first.
+		if (VehiclesAreSuppressed())
+		{
+			return;
+		}
+
 		lastSpawnedVehicle = ((GameObject)UnityEngine.Object.Instantiate(prefab, base.transform.position, base.transform.rotation)).GetComponent<Vehicle>();
 		lastSpawnedVehicle.SetSpawner(this);
 		lastSpawnedVehicleHasBeenUsed = false;
