@@ -567,10 +567,14 @@ namespace Ironfront.Net.Unity.Server
         {
             _burnClock.Tick(_scheduler.CurrentTick);
 
-            int died = _burnClock.DiedThisTickCount;
+            // Drained, not read-and-forgotten. A crash resolving inside Vehicle.Damage during the
+            // INPUT stage kills a vehicle through KillImmediately, and that death is still pending
+            // when this runs — so the queue spans both stages and is cleared only once every id in
+            // it has actually been announced.
+            int died = _burnClock.PendingDeathCount;
             if (died == 0) return;
 
-            ushort[] ids = _burnClock.DiedThisTick;
+            ushort[] ids = _burnClock.PendingDeaths;
             for (int i = 0; i < died; i++)
             {
                 ushort vehicleId = ids[i];
@@ -583,6 +587,8 @@ namespace Ironfront.Net.Unity.Server
 
                 NetVehicleLifecycle.ReportDespawned(vehicleId, VehicleDespawnReason.Destroyed);
             }
+
+            _burnClock.ClearPendingDeaths();
         }
 
         /// <summary>

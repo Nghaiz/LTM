@@ -31,22 +31,31 @@ namespace Ironfront.Net.Replication.Vehicles
     /// server owns when it ends and announces the end as <c>S_VEHICLE_DESPAWN</c>.
     /// </para>
     /// <para>
-    /// <b>Deaths are drained, not raised as events.</b> An event on the tick path is an
-    /// invocation list this class would own and a re-entrancy question at every subscriber;
-    /// draining into a caller-supplied buffer keeps the ordering the caller's and allocates
-    /// nothing.
+    /// <b>Deaths accumulate into a pending queue that the caller drains; they are not raised as
+    /// events and they are NOT scoped to one call.</b> An event on the tick path is an invocation
+    /// list this class would own and a re-entrancy question at every subscriber. But the reason
+    /// the queue outlives a single call is sharper: deaths arrive from <b>two stages</b>.
+    /// <see cref="KillImmediately"/> fires from the input stage, when a crash resolves inside
+    /// <c>Vehicle.Damage</c>; <see cref="Tick"/> fires from the snapshot stage. A buffer that each
+    /// of them reset on entry would have the snapshot stage silently discard every crash death
+    /// that happened earlier in the same frame — the vehicle would be marked dead in the registry,
+    /// stop appearing in snapshots, and never be despawned, so every client would hold a wreck
+    /// forever with nothing anywhere to say why.
     /// </para>
     /// </remarks>
     public sealed class VehicleBurnClock
     {
         private readonly VehicleRegistry _registry;
-        private readonly ushort[] _diedThisTick;
-        private int _diedCount;
+        private readonly ushort[] _pendingDeaths;
+        private int _pendingCount;
 
         public VehicleBurnClock(VehicleRegistry registry)
         {
-            _registry     = registry ?? throw new ArgumentNullException(nameof(registry));
-            _diedThisTick = new ushort[registry.Capacity];
+            _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+
+            // Capacity is the true bound: at most that many vehicles exist, and MarkDead refuses
+            // a second death for an id, so no id can occupy two slots.
+            _pendingDeaths = new ushort[registry.Capacity];
         }
 
         /// <summary>Vehicles that started burning since construction.</summary>
@@ -56,13 +65,20 @@ namespace Ironfront.Net.Replication.Vehicles
         public long DeathsAnnounced { get; private set; }
 
         /// <summary>
-        /// Ids that died on the most recent <see cref="Tick"/>. Valid for
-        /// <see cref="DiedThisTickCount"/> entries, and overwritten by the next call.
+        /// Ids that have died and not yet been announced. Valid for
+        /// <see cref="PendingDeathCount"/> entries; cleared by
+        /// <see cref="ClearPendingDeaths"/> and by nothing else.
         /// </summary>
-        public ushort[] DiedThisTick => _diedThisTick;
+        public ushort[] PendingDeaths => _pendingDeaths;
 
-        /// <summary>How many of <see cref="DiedThisTick"/> are live.</summary>
-        public int DiedThisTickCount => _diedCount;
+        /// <summary>How many of <see cref="PendingDeaths"/> are live.</summary>
+        public int PendingDeathCount => _pendingCount;
+
+        /// <summary>
+        /// Drops the pending list. <b>Call this only after every id in it has been announced</b> —
+        /// a death dropped here is a wreck no client will ever be told to remove.
+        /// </summary>
+        public void ClearPendingDeaths() => _pendingCount = 0;
 
         /// <summary>
         /// Lights the fire on a vehicle whose health has just reached zero.
@@ -104,11 +120,9 @@ namespace Ironfront.Net.Replication.Vehicles
         /// </remarks>
         public bool KillImmediately(ushort vehicleId)
         {
-            _diedCount = 0;
-
             if (!MarkDead(vehicleId)) return false;
 
-            _diedThisTick[_diedCount++] = vehicleId;
+            Enqueue(vehicleId);
             return true;
         }
 
@@ -124,8 +138,6 @@ namespace Ironfront.Net.Replication.Vehicles
         /// </remarks>
         public void Tick(uint nowTick)
         {
-            _diedCount = 0;
-
             ushort[] liveIds = _registry.LiveIds;
 
             // A copy of the count taken up front: MarkDead does not remove from the registry
@@ -145,16 +157,32 @@ namespace Ironfront.Net.Replication.Vehicles
                 // two-billion-tick overdue burn on every vehicle at once.
                 if (SequenceMath.Distance32(nowTick, state.BurnEndsAtTick) < 0) continue;
 
-                if (MarkDead(id)) _diedThisTick[_diedCount++] = id;
+                if (MarkDead(id)) Enqueue(id);
             }
         }
 
-        /// <summary>Resets the counters. The registry owns the vehicles.</summary>
+        /// <summary>Resets the counters and drops any pending death. The registry owns the vehicles.</summary>
         public void Reset()
         {
-            _diedCount      = 0;
+            _pendingCount   = 0;
             BurnsStarted    = 0;
             DeathsAnnounced = 0;
+        }
+
+        /// <summary>
+        /// Appends a death, refusing to overflow rather than throwing.
+        /// </summary>
+        /// <remarks>
+        /// The bound cannot be reached — <see cref="MarkDead"/> admits each id once and there are
+        /// at most <c>Capacity</c> of them — so this guard exists to make that reasoning
+        /// falsifiable rather than to handle a case. An <c>IndexOutOfRangeException</c> here would
+        /// come out of the snapshot stage and take the tick loop down for every client.
+        /// </remarks>
+        private void Enqueue(ushort vehicleId)
+        {
+            if (_pendingCount >= _pendingDeaths.Length) return;
+
+            _pendingDeaths[_pendingCount++] = vehicleId;
         }
 
         private bool MarkDead(ushort vehicleId)

@@ -81,14 +81,21 @@ namespace Ironfront.Net.Unity.Server
             if (remaining > 0f || state.Burning)
                 return new VehicleDamageOutcome(remaining, startedBurning: false, died: false);
 
-            // A crash on a crashSkipsBurn vehicle has no burn stage at all. Routed through the
-            // burn clock either way so the despawn is announced from one place — two death paths
-            // is how a wreck ends up either announced twice or not at all.
-            bool skipsBurn = source != null && source.CrashSkipsBurn;
-            int burnTicks = skipsBurn
-                ? 0
-                : (int)(BurnSeconds(source) * ProtocolConstants.SIM_TICK_RATE);
+            // A crashSkipsBurn vehicle has no burn stage at all, and it dies HERE rather than on
+            // the next snapshot tick. Expressing it as a zero-tick burn would compile and behave
+            // almost right: the vehicle would carry the Burning flag for one tick and die up to
+            // 50 ms later, which is a flicker no designer asked for on the one vehicle class
+            // whose whole point is that it does not burn.
+            //
+            // Both paths still go through the burn clock, so the despawn is announced from one
+            // place — two death paths is how a wreck ends up announced twice or not at all.
+            if (source != null && source.CrashSkipsBurn)
+            {
+                _burnClock.KillImmediately(vehicleId);
+                return new VehicleDamageOutcome(0f, startedBurning: false, died: true);
+            }
 
+            int burnTicks = (int)(BurnSeconds(source) * ProtocolConstants.SIM_TICK_RATE);
             _burnClock.StartBurning(vehicleId, burnTicks, _currentTick());
 
             return new VehicleDamageOutcome(0f, startedBurning: true, died: false);

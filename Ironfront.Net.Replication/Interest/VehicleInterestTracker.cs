@@ -345,7 +345,17 @@ namespace Ironfront.Net.Replication.Interest
                 // A copy, because one viewer's decisions must not be written back into the
                 // shared world buffer. The actor path learned this when a client standing next
                 // to an actor lost its velocity because somebody else was far from it.
-                if (!destination.Add(in target)) return admitted;   // full; MAX_VEHICLES is the fence
+                if (!destination.Add(in target))
+                {
+                    // Unreachable while the destination is sized to MAX_VEHICLES like the world
+                    // is — but counted rather than returned silently, because a shed that does
+                    // not reach EntriesShed makes criterion 9 pass by not looking. A "0 shed"
+                    // that is really "0 shed we bothered to count" is the exact shape of green
+                    // that proves nothing.
+                    LastViewShedCount += count - k;
+                    EntriesShed += count - k;
+                    return admitted;
+                }
 
                 RecordSend(viewerActorId, target.VehicleId, snapshotIndex);
                 remaining -= MaxEntrySize;

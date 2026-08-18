@@ -32,7 +32,7 @@ namespace Ironfront.Net.Replication.Tests
             registry.TryGetState(Tank, out VehicleState state);
             Assert.True(state.Burning);
             Assert.False(state.Dead);
-            Assert.Equal(0, clock.DiedThisTickCount);
+            Assert.Equal(0, clock.PendingDeathCount);
         }
 
         /// <summary>
@@ -51,16 +51,19 @@ namespace Ironfront.Net.Replication.Tests
 
             // One tick early: still burning.
             clock.Tick(Start + BurnTicks - 1);
-            Assert.Equal(0, clock.DiedThisTickCount);
+            Assert.Equal(0, clock.PendingDeathCount);
 
             // On the tick it expires.
             clock.Tick(Start + BurnTicks);
-            Assert.Equal(1, clock.DiedThisTickCount);
-            Assert.Equal(Tank, clock.DiedThisTick[0]);
+            Assert.Equal(1, clock.PendingDeathCount);
+            Assert.Equal(Tank, clock.PendingDeaths[0]);
 
-            // And never again.
+            // And never again. The queue is drained by the caller, so it is cleared here the way
+            // the snapshot stage clears it — a Tick that reset it itself would discard a crash
+            // death that arrived from the input stage earlier in the same frame.
+            clock.ClearPendingDeaths();
             clock.Tick(Start + BurnTicks + 1);
-            Assert.Equal(0, clock.DiedThisTickCount);
+            Assert.Equal(0, clock.PendingDeathCount);
             Assert.Equal(1, clock.DeathsAnnounced);
 
             registry.TryGetState(Tank, out VehicleState state);
@@ -81,7 +84,7 @@ namespace Ironfront.Net.Replication.Tests
             Assert.False(clock.StartBurning(Tank, burnTicks: 60, nowTick: 40));
 
             clock.Tick(70);
-            Assert.Equal(1, clock.DiedThisTickCount);
+            Assert.Equal(1, clock.PendingDeathCount);
         }
 
         /// <summary>
@@ -94,10 +97,51 @@ namespace Ironfront.Net.Replication.Tests
             (_, VehicleBurnClock clock) = Fixture();
 
             Assert.True(clock.KillImmediately(Tank));
-            Assert.Equal(1, clock.DiedThisTickCount);
+            Assert.Equal(1, clock.PendingDeathCount);
 
             Assert.False(clock.KillImmediately(Tank));
             Assert.Equal(1, clock.DeathsAnnounced);
+            Assert.Equal(1, clock.PendingDeathCount);
+        }
+
+        /// <summary>
+        /// The two-stage hazard: a crash death from the INPUT stage must survive the snapshot
+        /// stage's <c>Tick</c>.
+        /// </summary>
+        /// <remarks>
+        /// <c>KillImmediately</c> fires from <c>Vehicle.Damage</c> during input; <c>Tick</c> fires
+        /// from the snapshot stage. A buffer that either of them reset on entry would have the
+        /// second discard the first, and the vehicle would be marked dead in the registry, stop
+        /// appearing in snapshots, and never be despawned — every client holding a wreck forever
+        /// with nothing anywhere to say why. Nothing else in the suite would notice, because both
+        /// halves individually behave correctly.
+        /// </remarks>
+        [Fact]
+        public void ACrashDeathFromTheInputStageSurvivesTheSnapshotStagesTick()
+        {
+            var registry = new VehicleRegistry();
+            registry.Add(
+                VehicleState.Spawned(1, 0, VehicleKind.Car, 2, 100f, 0),
+                new VehicleCaptureTests.FakePose());
+            registry.Add(
+                VehicleState.Spawned(2, 0, VehicleKind.Car, 2, 100f, 0),
+                new VehicleCaptureTests.FakePose());
+
+            var clock = new VehicleBurnClock(registry);
+
+            // Vehicle 2 is burning and will expire on tick 40.
+            clock.StartBurning(2, burnTicks: 30, nowTick: 10);
+
+            // Vehicle 1 crashes during the input stage of the same frame.
+            Assert.True(clock.KillImmediately(1));
+            Assert.Equal(1, clock.PendingDeathCount);
+
+            // The snapshot stage runs. BOTH must be pending.
+            clock.Tick(40);
+
+            Assert.Equal(2, clock.PendingDeathCount);
+            Assert.Contains((ushort)1, new[] { clock.PendingDeaths[0], clock.PendingDeaths[1] });
+            Assert.Contains((ushort)2, new[] { clock.PendingDeaths[0], clock.PendingDeaths[1] });
         }
 
         /// <summary>
@@ -112,7 +156,7 @@ namespace Ironfront.Net.Replication.Tests
             clock.StartBurning(Tank, burnTicks: 0, nowTick: 50);
             clock.Tick(50);
 
-            Assert.Equal(1, clock.DiedThisTickCount);
+            Assert.Equal(1, clock.PendingDeathCount);
         }
 
         /// <summary>
