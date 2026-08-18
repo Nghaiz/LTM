@@ -489,3 +489,74 @@ phase, which is how it was noticed.
 Fixed with `Start-Process -Wait -PassThru`, which also surfaces the `error CS` lines instead of
 only an exit code. Proved red by breaking a script on purpose and watching the gate fail, then
 restoring it.
+
+---
+
+## 9. Amendments — task 6, as built (2026-08-18)
+
+A4 left task 6 blocked on protocol v3. V3 merged as #135 with `S_VEHICLE_SPAWN (0x4D)`,
+`S_VEHICLE_DESPAWN (0x4E)`, their codecs and their hex-sample conformance tests — and, as
+V3 shipped them, no sender. This closes that, and three things in § 3's task 6 turned out to be
+wrong.
+
+### A6 — the seam had to widen, and one of the fields it needed does not exist in the scene
+
+`IVehicleLifecycleSink` as V8 shipped it carried a spawner id, a vehicle id, a position and
+euler degrees. `S_VEHICLE_SPAWN` needs a `VehicleKind`, a `networkTypeId`, a seat count and a
+smallest-three-packed quaternion, so three of the four had to change.
+
+- **The report carries `networkTypeId` and `SeatCount`.** The alternative was a sink that
+  reaches back into the scene for the component it was handed an id for — a lookup that can
+  fail, on a path whose entire job is to report a fact that already happened.
+- **It does NOT carry the kind.** Nothing in the scene authors one: the prefab has
+  `networkId` and that is all. `VehicleIds.TryGetKind` derives it against § 4.9 instead, so a
+  caller cannot supply a kind that disagrees with the id beside it — a disagreement nothing
+  downstream could have adjudicated. The kind column had no copy in code before this and no
+  gate; `SpecChecker.CheckVehicleKindTable` now compares the two on every CI run, in both
+  directions, and was watched failing on a deliberately flipped row before being trusted.
+- **Rotation is four quaternion components, not euler degrees.** A4 reserved the encoding
+  choice for this phase on the grounds that the library has no quaternion type. It still has
+  none, and `Quantize.PackQuat` takes components — so the answer is to pass what the packer
+  wants. Euler could not have been packed here at all without importing trigonometry.
+- **`OnVehicleSpawned` returns the id rather than taking one.** Ids belong to the wire, and
+  only the wire's owner can honour a quarantine. Letting `Assembly-CSharp` pick would put
+  allocation where nothing knows what is still in flight. The null sink returning 0 is then
+  exactly right off the server: no network id, because there is no network.
+
+### A7 — the plan's id fallback would have failed on the process this phase exists to keep alive
+
+Task 6 said that with no `VehicleIdPool` from V4, "the sink allocates from a local monotonic
+counter and the swap is one line". At fourteen spawners replacing a vehicle every 16 s, a
+`ushort` wraps in about ten hours. A dedicated server runs for days, and the wrap reissues a
+live id with no quarantine at all — the collision the quarantine exists to prevent, arriving
+silently on the machines that stay up longest.
+
+So `VehicleIdPool` ships here rather than waiting for V4. It is `ActorIdPool`'s argument one
+value space over, and it consumes `ProtocolConstants.VEHICLE_ID_QUARANTINE_TICKS`, which V3
+declared at the freeze with nothing reading it. Capacity is `MAX_VEHICLES` (16) because that is
+what the vehicle snapshot body is sized against — a seventeenth live vehicle has nowhere on the
+wire to go, so handing out a seventeenth id would move the failure somewhere harder to see.
+Both shipped maps author fourteen spawners, so the ceiling has two spare and the 150-tick
+quarantine clears well inside a 16 s respawn.
+
+Exhaustion returns id 0 and the spawner logs once, naming the pad — a vehicle that exists on
+the server and reaches no client is not something to discover from a bug report.
+
+### A8 — `NetVehicleSpawner.cs` was never built, and did not need to be
+
+Task 5 named a new `NetVehicleSpawner` Unity seam. A3 folded the scheduler straight into
+`VehicleSpawner` instead, and that decision holds here: the wire reaches the spawner through a
+static `NetVehicleLifecycle`, for exactly A3's reason. Vehicle spawners are authored assets
+scattered across a map — fourteen per scene — and a serialized reference on each is a per-map
+manual step that gets forgotten on the map nobody re-opened. The symptom would have been a map
+whose vehicles are invisible to every client, with nothing in the log.
+
+`ServerTickLoop` installs the sink in `Bind` and uninstalls in `Unbind`, so a client and an
+offline build keep the null object and the spawner's code path is identical in every role — the
+same promise tasks 1-3 made about capture points. The loop implements
+`IReliablePayloadSender` directly; its existing `BroadcastReliable` already had the signature.
+
+**Still not covered, and deliberately:** a `Vehicle` placed directly in a scene rather than by a
+spawner is not replicated. The seam is the spawner's, the scheduler's state is per-spawner, and
+a scene-placed vehicle has no lifecycle to report. V4 owns snapshots and will need its own
+answer for those; recorded here so it is a known gap rather than a discovery.

@@ -67,6 +67,11 @@ namespace Ironfront.Tools.SpecChecker
             // serialized networkId on each vehicle prefab, which no compiler reads either.
             checkedCount += CheckVehiclePrefabs(repoRoot, failures);
 
+            // And the kind column of the same table, which no constant carries and no prefab
+            // authors -- VehicleIds.TryGetKind is the only copy in code, and S_VEHICLE_SPAWN
+            // sends what it returns.
+            checkedCount += CheckVehicleKindTable(spec, failures);
+
             if (checkedCount == 0)
             {
                 Console.Error.WriteLine(
@@ -269,6 +274,101 @@ namespace Ironfront.Tools.SpecChecker
             }
 
             return count;
+        }
+
+        /// <summary>
+        /// Compares <see cref="VehicleIds.TryGetKind"/> against the third column of
+        /// protocol-spec.md § 4.9. Returns how many rows it judged.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The kind is the one part of the vehicle registry with no second copy anywhere: it is
+        /// not a constant, so <c>Check</c> cannot see it, and it is not on the prefab, so
+        /// <c>CheckVehiclePrefabs</c> cannot either. It IS on the wire, and a decoder that reads
+        /// the wrong kind reads the wrong 2-byte subtype tail and then misaligns every later
+        /// entry in the datagram — so a drift here corrupts vehicles that have nothing to do
+        /// with the one whose row was wrong.
+        /// </para>
+        /// <para>
+        /// A zero-row parse is a FAILURE, for the reason the vehicle-prefab scan already
+        /// records: a checker that goes green because it found nothing to check has replaced a
+        /// silent bug with a quieter one.
+        /// </para>
+        /// </remarks>
+        public static int CheckVehicleKindTable(string spec, List<string> failures)
+        {
+            // | 3 | `rhib` | `Boat` |
+            var row = new Regex(
+                @"^\|\s*(\d+)\s*\|\s*`(?<name>[A-Za-z0-9_]+)`\s*\|\s*`(?<kind>[A-Za-z]+)`\s*\|",
+                RegexOptions.Multiline);
+
+            int judged = 0;
+            var seen = new HashSet<byte>();
+
+            foreach (Match match in row.Matches(spec))
+            {
+                if (!byte.TryParse(match.Groups[1].Value, NumberStyles.Integer,
+                        CultureInfo.InvariantCulture, out byte id))
+                    continue;
+
+                string name = match.Groups["name"].Value;
+                string kindText = match.Groups["kind"].Value;
+
+                // § 4.9 is not the only id/name/backtick table in the document. A row only
+                // belongs to the vehicle registry if VehicleIds agrees that id is that prefab —
+                // which is exactly what CheckVehiclePrefabs has already pinned against the
+                // assets, so this cannot be fooled into reading a table it does not own.
+                if (!string.Equals(VehicleIds.NameOf(id), name, StringComparison.Ordinal))
+                    continue;
+
+                if (!Enum.TryParse(kindText, ignoreCase: false, out VehicleKind expected))
+                {
+                    failures.Add(
+                        $"vehicle kinds: § 4.9 gives id {id} ('{name}') the kind '{kindText}', " +
+                        "which is not a VehicleKind value. One of the two was renamed.");
+                    continue;
+                }
+
+                judged++;
+                seen.Add(id);
+
+                if (!VehicleIds.TryGetKind(id, out VehicleKind actual))
+                {
+                    failures.Add(
+                        $"vehicle kinds: § 4.9 declares id {id} ('{name}') but VehicleIds does " +
+                        "not know it. Add it to VehicleIds.cs.");
+                    continue;
+                }
+
+                if (actual != expected)
+                {
+                    failures.Add(
+                        $"vehicle kinds: id {id} ('{name}') is '{expected}' in § 4.9 and " +
+                        $"'{actual}' in VehicleIds.Kinds. A client decoding the wrong kind reads " +
+                        "the wrong subtype tail and misaligns every entry behind it.");
+                }
+            }
+
+            // The reverse direction: a kind the code claims and the document never granted.
+            for (byte id = 1; id <= VehicleIds.MAX_ASSIGNED; id++)
+            {
+                if (!seen.Contains(id))
+                {
+                    failures.Add(
+                        $"vehicle kinds: VehicleIds knows id {id} " +
+                        $"('{VehicleIds.NameOf(id)}') but § 4.9's table has no kind for it. " +
+                        "Add the row.");
+                }
+            }
+
+            if (judged == 0)
+            {
+                failures.Add(
+                    "vehicle kinds: parsed 0 rows out of protocol-spec.md § 4.9. The table's " +
+                    "shape changed — update tools/SpecChecker to match.");
+            }
+
+            return judged;
         }
 
         /// <summary>
