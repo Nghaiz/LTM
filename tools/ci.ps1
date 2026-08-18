@@ -110,10 +110,31 @@ try {
         Write-Host "=== 4. Unity compile check === SKIPPED (UNITY_PATH not set)" -ForegroundColor Yellow
     }
     else {
+        # Start-Process -Wait, NOT the call operator. Unity.exe is a GUI-subsystem binary, so
+        # PowerShell does not wait for it and does not set $LASTEXITCODE from it -- the call
+        # operator returned instantly, Invoke-Step read the PREVIOUS command's exit code, and
+        # this step printed PASS on every run it has ever had. It went green on a real
+        # "Aborting batchmode due to failure: Scripts have compiler errors" on 2026-08-18,
+        # which is when it was noticed. A gate that cannot go red is worse than no gate.
         Invoke-Step "4. Unity compile check" {
-            & $env:UNITY_PATH -batchmode -nographics -quit `
-                -projectPath "$repoRoot/Ironfront_Reborn" `
-                -logFile "$repoRoot/unity-compile.log"
+            $unityLog = "$repoRoot/unity-compile.log"
+            $unity = Start-Process -FilePath $env:UNITY_PATH -Wait -PassThru -NoNewWindow `
+                -ArgumentList @(
+                    '-batchmode', '-nographics', '-quit',
+                    '-projectPath', "$repoRoot/Ironfront_Reborn",
+                    '-logFile', $unityLog)
+
+            if ($unity.ExitCode -ne 0) {
+                # The exit code alone says nothing about WHICH script failed, and the log is
+                # thousands of lines. Surface the compiler errors themselves.
+                if (Test-Path $unityLog) {
+                    Select-String -Path $unityLog -Pattern 'error CS' `
+                        | Select-Object -ExpandProperty Line -Unique | Out-Host
+                }
+                throw "Unity exited with code $($unity.ExitCode) — see $unityLog"
+            }
+
+            $global:LASTEXITCODE = 0
         }
     }
 

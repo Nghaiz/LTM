@@ -398,3 +398,94 @@ adds, without which vehicles leak across rounds.
 **Not in this phase and not the client track's either:** the `ScoreUi` redesign (D9). It is recorded in the
 `MatchStateMachine` class doc as a divergence with a reason, and it is a product decision rather
 than a netcode defect.
+
+---
+
+## 8. Amendments — as built (2026-08-18)
+
+Five things the plan got wrong or that the tree had already moved past. Each is recorded here
+rather than silently absorbed, because every one of them changes what a later phase inherits.
+
+### A1 — D6's type change is impossible, and not doing it retires D7's score-20 risk
+
+`_capturePoints : Transform[] → CapturePoint[]` cannot be written. `MatchController` lives in the
+`Ironfront.Net.Unity.Server` assembly definition and `CapturePoint` compiles into
+`Assembly-CSharp`, which is compiled last and which **no** asmdef may reference — the same
+constraint that produced `ISpawnPointDirectory` and `IGameplayActorSource`, and which
+`IronfrontNetBindings` documents at length.
+
+D6's *content* ships unchanged: radius and capture speed are authored per point, and the id is
+still the array index. It arrives through a new `ICapturePointDirectory` seam, implemented by
+`SceneCapturePoints` in `Assembly-CSharp`, bound once in `Awake`.
+
+**This deletes the phase's only score-20 risk rather than mitigating it.** That risk existed
+*because* a serialized field would change type and Unity would drop its references. No field
+changes type, so nothing is dropped. Verified against the shipped scene: `Dustbowl.unity` authors
+all six slots and all six carry real `CapturePoint` components (Bridge, Fortress, Mine, Oasis,
+Outpost, Town). D7's logged name-ordinal fallback still ships, for the different and pre-existing
+case of a scene that never authored the array at all.
+
+**§ 7's handoff item "rebind `MatchController._capturePoints`" is therefore void**, and V9 is not
+blocked on it.
+
+**One real gameplay change comes with it.** The server had been capturing on a flat
+`_captureRadius: 15` that nobody authored; the six points author 20, 25, 27, 30, 30 and 34, which
+is what the offline game has always used. The networked match now agrees with the map and with
+single-player. Capture speed is unaffected — the new per-point default matches the controller's
+`0.2`.
+
+### A2 — the contested flag has two meanings, and the plan conflated them
+
+Task 3 said to pass `state.IsContested` into `ApplyAuthoritativeOwner`. That is the **wire's**
+sense — `CaptureFlags.Contested` means *both teams are present*. The scene component's
+`isContested` drives `GetSpawnPosition()`'s safe-spawn branch and means *somebody hostile to the
+owner is present*.
+
+They differ exactly when an owned point is attacked by one team and defended by nobody: not
+contested on the wire, and precisely the moment a defender most needs to spawn away from the
+attackers. Passing the wire value would have quietly disabled safe spawning in the case it exists
+for.
+
+So the server feeds `ApplyAuthoritativeOwner` the value `RefreshPresence` computed, cached by
+`CapturePointSlave` across the ticks between refreshes. D3 holds — one write path — and D4's
+presence-versus-arithmetic split holds. The client, when V10 task 8 subscribes `OnCapturePoint`,
+passes the wire flag, which is correct there: the client does not select spawns.
+
+### A3 — three of task 5's five defects were already fixed
+
+Defects 3 (`GameManager.instance` deref), 4 (`GetComponent<Renderer>()` deref) and 5
+(`Vehicle.cs:252`'s unguarded `spawner` call) were closed by phase-V0's headless audit and are
+pinned by `VehicleSourceInvariantTests.HeadlessDereferencesAreGuarded`. Only 1 (unbounded retry)
+and 2 (missing re-entrancy guard) remained; both are closed here, and the guard tests were
+extended rather than duplicated.
+
+`VehicleSpawnScheduler` is **one instance per spawner**, not an array indexed by spawner id.
+Every input it needs arrives from one `MonoBehaviour` about itself, so a central array would be a
+table each spawner writes exactly one row of. It allocates once in `Awake` and nothing on the
+tick path allocates — asserted.
+
+The world-reset subscriber reaches `Assembly-CSharp` through a new static
+`NetWorldLifecycle.ResetRequested` rather than through `MatchController`'s instance event. Vehicle
+spawners are authored assets scattered across a map; a per-spawner serialized reference is a
+manual step that gets forgotten on exactly the map nobody re-opened, which is the failure mode
+this task exists to remove. The instance event is left in place and unchanged.
+
+### A4 — task 6 is not in this PR
+
+Severable and last, per D8, and genuinely blocked: `S_VEHICLE_SPAWN (0x4D)` and
+`S_VEHICLE_DESPAWN (0x4E)` do not exist in `Ironfront.Net.Protocol` — V3 has not merged.
+`IVehicleLifecycleSink` and `NullVehicleLifecycleSink` ship, so V4 has a seam to implement.
+Rotation is carried as euler degrees because this library has no quaternion type, and the phase
+that puts the value on the wire should choose its encoding.
+
+### A5 — found on the way: the Unity CI gate could never fail
+
+`tools/ci.ps1` step 4 invoked `Unity.exe` with the call operator. Unity is a GUI-subsystem binary,
+so PowerShell does not wait for it and does not set `$LASTEXITCODE` from it — `Invoke-Step` read
+the *previous* command's exit code and printed `PASS` on every run it has ever had. It printed
+`PASS` over a real `Aborting batchmode due to failure: Scripts have compiler errors` during this
+phase, which is how it was noticed.
+
+Fixed with `Start-Process -Wait -PassThru`, which also surfaces the `error CS` lines instead of
+only an exit code. Proved red by breaking a script on purpose and watching the gate fail, then
+restoring it.

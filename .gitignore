@@ -229,3 +229,4 @@ ironfront.db-shm
 
 # Ignore Claude context
 CLAUDE.md
+unity-editmode-results.xml

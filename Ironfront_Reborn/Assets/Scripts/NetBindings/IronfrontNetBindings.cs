@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using Ironfront.Net.Replication.Match;
 using Ironfront.Net.Unity.Server;
 using UnityEngine;
 
@@ -32,6 +35,7 @@ namespace Ironfront.Net.Unity.Bindings
         {
             NetServerBindings.ActorSourceResolver = ResolveActorSource;
             NetServerBindings.SpawnPoints = new ActorManagerSpawnPoints();
+            NetServerBindings.CapturePoints = new SceneCapturePoints();
         }
 
         /// <summary>
@@ -151,5 +155,110 @@ namespace Ironfront.Net.Unity.Bindings
             if (points == null || index < 0 || index >= points.Length) return null;
             return points[index];
         }
+    }
+
+    /// <summary>Adapts the scene's <c>CapturePoint</c> components to <see cref="ICapturePointDirectory"/>.</summary>
+    /// <remarks>
+    /// <para>
+    /// Phase-V8 tasks 2 and 3. The array is captured once at <see cref="Bind"/> — unlike
+    /// <see cref="ActorManagerSpawnPoints"/>, which re-reads per call — because these indices
+    /// ARE the wire ids and re-resolving them mid-match would renumber the flags underneath
+    /// every connected client. A map change tears the server down and rebuilds it, which is
+    /// where the rebind belongs.
+    /// </para>
+    /// </remarks>
+    internal sealed class SceneCapturePoints : ICapturePointDirectory
+    {
+        private CapturePoint[] _points = Array.Empty<CapturePoint>();
+
+        public int Count => _points.Length;
+
+        public int Bind(Transform[] authored, out bool discovered, out int skipped)
+        {
+            discovered = false;
+            skipped = 0;
+
+            if (authored != null && authored.Length > 0)
+            {
+                var resolved = new List<CapturePoint>(authored.Length);
+                for (int i = 0; i < authored.Length; i++)
+                {
+                    Transform slot = authored[i];
+                    CapturePoint point = slot != null ? slot.GetComponent<CapturePoint>() : null;
+                    if (point == null)
+                    {
+                        skipped++;
+                        continue;
+                    }
+
+                    resolved.Add(point);
+                }
+
+                _points = resolved.ToArray();
+                return _points.Length;
+            }
+
+            // D7's fallback. Ordered by name, ordinal: FindObjectsOfType makes no ordering
+            // promise at all, and an id order that changes between two runs of the same build
+            // is a client/server flag mismatch nobody can reproduce.
+            CapturePoint[] found = UnityEngine.Object.FindObjectsOfType<CapturePoint>();
+            Array.Sort(found, CompareByName);
+
+            _points = found;
+            discovered = found.Length > 0;
+            return found.Length;
+        }
+
+        public CapturePointDefinition GetDefinition(int index)
+        {
+            CapturePoint point = _points[index];
+
+            // canBeCaptured == false is an HQ: capture speed of zero, so CapturePointState.Tick
+            // moves it nowhere while it still counts for spawning, bleed and elimination.
+            float speed = point.canBeCaptured ? point.captureSpeed : 0f;
+
+            return new CapturePointDefinition(
+                point.transform.position, point.captureRange, speed, point.name);
+        }
+
+        public void ApplyAuthoritativeOwner(int index, int spawnPointOwner, float control, bool contested)
+        {
+            CapturePoint point = _points[index];
+            if (point == null) return;
+
+            point.ApplyAuthoritativeOwner(spawnPointOwner, control, contested);
+        }
+
+        public bool RefreshPresence(int index, ReadOnlySpan<ActorPresence> actors)
+        {
+            CapturePoint point = _points[index];
+            if (point == null) return false;
+
+            return point.RefreshPresence(actors);
+        }
+
+        /// <summary>
+        /// Every scene spawn point owned by <paramref name="team"/>, counted exactly the way
+        /// <c>ActorManager.HasSpawnPoint</c> counts them (D10) — including uncapturable HQs,
+        /// which is what keeps a team with a base alive.
+        /// </summary>
+        public int CountSpawnPointsOwnedBy(int team)
+        {
+            ActorManager manager = ActorManager.instance;
+            SpawnPoint[] points = manager != null ? manager.spawnPoints : null;
+            if (points == null) return 0;
+
+            int count = 0;
+            for (int i = 0; i < points.Length; i++)
+            {
+                SpawnPoint point = points[i];
+                if (point != null && point.owner == team) count++;
+            }
+
+            return count;
+        }
+
+        private static int CompareByName(CapturePoint a, CapturePoint b)
+            => string.CompareOrdinal(a != null ? a.name : string.Empty, b != null ? b.name : string.Empty);
     }
 }

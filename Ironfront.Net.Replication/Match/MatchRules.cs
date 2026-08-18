@@ -66,6 +66,17 @@ namespace Ironfront.Net.Replication.Match
         /// </summary>
         public int MaxCaptureHeadcount { get; set; } = 4;
 
+        /// <summary>
+        /// Seconds after a round opens before losing every spawn point can end it.
+        /// </summary>
+        /// <remarks>
+        /// Mirrors the original's <c>ElapsedGameTime() &gt; 1f</c> guard in
+        /// <c>ScoreUi.AddFlag</c>. Without it a map whose points all start neutral has both
+        /// teams at zero owned spawn points on tick one and the round ends as a draw before
+        /// anybody has moved.
+        /// </remarks>
+        public float EliminationGraceSeconds { get; set; } = 1f;
+
         /// <summary>The shipped ruleset. Mutating this is a global change; prefer a new instance.</summary>
         public static MatchRules Default => new MatchRules();
     }
