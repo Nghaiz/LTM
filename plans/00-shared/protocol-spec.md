@@ -1,9 +1,14 @@
 # Protocol Specification — Ironfront Reborn
 
-**Version: 1.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 1`
+**Version: 2.0.1** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 2`
 
-> This is the shared contract for all 4 people. Every offset, every enum value and every
-> quantization constant in this document is **mandatory**. Nobody may interpret them differently.
+> This is the contract every side of the wire is written against. Every offset, every enum value
+> and every quantization constant in this document is **mandatory**. Client and server may not
+> interpret them differently.
+>
+> The header above had said `1.0.0` / `PROTOCOL_VERSION = 1` since the v2 bump, because
+> `tools/SpecChecker` parses the fenced constants block in § 1 and never reads this line. See
+> § 15's wire gate, condition 4.
 > See [conventions.md](conventions.md) for the protocol change process.
 >
 > **The single source of these constants in code:** `Ironfront.Net.Protocol/ProtocolConstants.cs`.
@@ -916,10 +921,30 @@ run by `dotnet test` and by CI on every push.
 
 | **2.0.1** | Week 2 | the client track + the master-server track | **Documented the `weaponId` value space (new § 4.8)**, which was a `u8` in three messages from the freeze onward with no section saying what any value meant — the mapping existed only inside `_Managers.prefab`, which the server cannot read. Added `WeaponIds`; SpecChecker now gates spec ↔ code ↔ prefab | **No** — no byte changed | #34 |
 
-> Every change after the freeze must add a row to this table and land via a PR with 2 approvals.
+> Every change after the freeze must add a row to this table and clear the gate below.
 > **Bump `PROTOCOL_VERSION` only when the bytes on the wire change** — a client and server with
 > different `PROTOCOL_VERSION` get `CONNECT_DENIED` code 2, so bumping it for a documentation fix
 > would lock out every client for nothing. Record the answer in the "Wire change?" column either way.
+
+#### The wire gate
+
+This used to read "a PR with 2 approvals". Since [`899e75d`](../../) the project has one owner, so
+that gate could not be cleared by anybody — which makes it worse than no gate: a phase whose
+acceptance criteria cite it can never honestly pass, and the habit that forms is to wave it through.
+A gate nobody can satisfy teaches people to ignore gates.
+
+Replaced with conditions a machine checks, which is what the approvals were a proxy for anyway:
+
+| # | Condition | Checked by |
+|---|---|---|
+| 1 | `tools/SpecChecker` green — every constant in this document matches the code | `dotnet run --project tools/SpecChecker` |
+| 2 | Each new or changed opcode has a **hex-sample conformance test** pinning its exact bytes | `dotnet test`, and the sample is in the test, not the doc |
+| 3 | A changelog row above, with the "Wire change?" column filled in | review of this file's diff |
+| 4 | If the bytes changed, `PROTOCOL_VERSION` bumped in **both** the fenced block in § 1 **and** the header line at the top of this file | condition 1 covers the fenced block only — the header is prose, so check it by eye |
+
+Condition 4 is spelled out because the header and the fenced block had already drifted: the header
+said `PROTOCOL_VERSION = 1` for the whole of v2's life while the code and the fenced block said 2.
+`SpecChecker` parses only the fenced block and so reported green throughout.
 
 ### 15.1. Questions settled at the freeze
 
