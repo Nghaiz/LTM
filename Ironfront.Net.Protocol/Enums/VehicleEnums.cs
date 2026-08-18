@@ -148,6 +148,37 @@ namespace Ironfront.Net.Protocol
         RejectedTooFar     = 5,
         /// <summary>No such vehicle, or no such seat index on it.</summary>
         RejectedNoSuchSeat = 6,
+
+        /// <summary>
+        /// The actor left a seat too recently to get back in — <c>Actor.cannotEnterVehicleAction</c>
+        /// has not elapsed.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Added in V4, and it is the only refusal whose remedy is "ask again shortly".</b>
+        /// The other six are terminal for the request as stated: a different seat, a different
+        /// vehicle, or nothing. A client that cannot tell this one apart re-sends immediately
+        /// and is refused again, or gives up on a seat it could have had 900 ms later.
+        /// </para>
+        /// <para>
+        /// <b>Why the existing codes could not carry it.</b>
+        /// <c>Actor.CanEnterSeat()</c> is literally <c>!IsSeated() &amp;&amp;
+        /// cannotEnterVehicleAction.TrueDone()</c> — two conditions behind one predicate — so
+        /// <see cref="RejectedAlreadySeated"/> is the tempting home for it and is a lie
+        /// whenever the actor is standing on the ground. <see cref="RejectedTooFar"/> at least
+        /// implies "retry", and is a distance code being used for a timer, which is what
+        /// misleads whoever debugs this in V5.
+        /// </para>
+        /// <para>
+        /// <b>Appending a value is not a wire change.</b> <c>S_SEAT_CHANGE</c> stays 6 bytes
+        /// and <c>result</c> stays a <c>u8</c>, so no layout moves and nothing behind it
+        /// misaligns — unlike a new <see cref="VehicleField"/> bit, whose width an old decoder
+        /// cannot know and therefore cannot skip. A decoder that has never heard of 7 reads it
+        /// as a value that is not <see cref="Entered"/> or <see cref="Left"/>, which is exactly
+        /// what it is. <see cref="ProtocolConstants.PROTOCOL_VERSION"/> is therefore unchanged.
+        /// </para>
+        /// </remarks>
+        RejectedLockedOut  = 7,
     }
 
     /// <summary>What is being launched, carried by <c>S_PROJECTILE_SPAWN</c>.</summary>

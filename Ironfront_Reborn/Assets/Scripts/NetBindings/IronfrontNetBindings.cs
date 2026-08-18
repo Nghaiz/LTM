@@ -34,6 +34,7 @@ namespace Ironfront.Net.Unity.Bindings
         private static void Install()
         {
             NetServerBindings.ActorSourceResolver = ResolveActorSource;
+            NetServerBindings.VehicleSourceResolver = ResolveVehicleSource;
             NetServerBindings.SpawnPoints = new ActorManagerSpawnPoints();
             NetServerBindings.CapturePoints = new SceneCapturePoints();
         }
@@ -49,6 +50,193 @@ namespace Ironfront.Net.Unity.Bindings
 
             Actor actor = gameObject.GetComponent<Actor>();
             return actor != null ? new ActorGameplaySource(actor) : null;
+        }
+
+        /// <summary>
+        /// The <c>GetComponent&lt;Vehicle&gt;()</c> the vehicle registry cannot do itself. Null
+        /// for a GameObject that is not a vehicle, which the caller reads as "not replicated".
+        /// </summary>
+        private static IGameplayVehicleSource ResolveVehicleSource(GameObject gameObject)
+        {
+            if (gameObject == null) return null;
+
+            Vehicle vehicle = gameObject.GetComponent<Vehicle>();
+            return vehicle != null ? new VehicleGameplaySource(vehicle) : null;
+        }
+    }
+
+    /// <summary>Adapts one <c>Vehicle</c> to <see cref="IGameplayVehicleSource"/>. V4 task 2.</summary>
+    /// <remarks>
+    /// The <see cref="ActorGameplaySource"/> arrangement, one entity type over. Everything the
+    /// netcode decides about a vehicle is engine-free and tested in CI; what is left on this
+    /// side of the seam is reading a <c>Rigidbody</c> and calling two <c>MonoBehaviour</c>
+    /// methods, which design section 3.2 says cannot be ported.
+    /// </remarks>
+    internal sealed class VehicleGameplaySource : IGameplayVehicleSource
+    {
+        private readonly Vehicle _vehicle;
+
+        internal VehicleGameplaySource(Vehicle vehicle) => _vehicle = vehicle;
+
+        /// <summary>
+        /// The <c>UnityEngine.Object</c> null check, kept on this side of the seam where it
+        /// still means "the native half is alive".
+        /// </summary>
+        public bool Exists => _vehicle != null;
+
+        public byte NetworkTypeId => _vehicle.NetworkId;
+
+        public int SeatCount => _vehicle.seats != null ? _vehicle.seats.Length : 0;
+
+        public float Health => _vehicle.Health;
+
+        public float MaxHealth => _vehicle.maxHealth;
+
+        public float BurnTimeSeconds => _vehicle.burnTime;
+
+        public bool CrashSkipsBurn => _vehicle.crashSkipsBurn;
+
+        public bool IsBurning => _vehicle.burning;
+
+        public bool IsDead => _vehicle.dead;
+
+        public int OwnerTeam => _vehicle.ownerTeam;
+
+        /// <summary>
+        /// Reads the <c>Rigidbody</c>, never the <c>Transform</c> (V4-D14).
+        /// </summary>
+        /// <remarks>
+        /// <c>Vehicle.rigidbody</c> is cached in <c>Awake</c> and is the body PhysX integrates.
+        /// The transform lags it by up to one substep, and that lag is CONSTANT rather than
+        /// noisy -- so it does not average out, and shipping it would put a fixed interpolation
+        /// error into every client for free. The null branch is for a vehicle torn down between
+        /// registration and capture.
+        /// </remarks>
+        public void ReadPose(
+            out Vector3 position, out Quaternion rotation,
+            out Vector3 linearVelocity, out Vector3 angularVelocity)
+        {
+            Rigidbody body = _vehicle != null ? _vehicle.rigidbody : null;
+
+            if (body == null)
+            {
+                position        = _vehicle != null ? _vehicle.transform.position : Vector3.zero;
+                rotation        = _vehicle != null ? _vehicle.transform.rotation : Quaternion.identity;
+                linearVelocity  = Vector3.zero;
+                angularVelocity = Vector3.zero;
+                return;
+            }
+
+            position        = body.position;
+            rotation        = body.rotation;
+            linearVelocity  = body.linearVelocity;
+            angularVelocity = body.angularVelocity;   // rad/s, which is what Quantize expects
+        }
+
+        /// <summary>
+        /// Turret aim. Zero until V6 owns it.
+        /// </summary>
+        /// <remarks>
+        /// <c>TankTurret</c> and <c>MountedTurret</c> read <c>Input.GetAxis</c> and
+        /// <c>OptionsUi.GetOptions()</c> directly inside <c>Update</c>, and there is no abstract
+        /// <c>ActorController</c> member for turret aim (design section 3.6). Building that seam
+        /// is V6's; the wire fields exist from V3, so V6 needs no protocol change and this
+        /// becomes a two-line read when it lands.
+        /// </remarks>
+        public float TurretYaw => 0f;
+
+        /// <summary>See <see cref="TurretYaw"/>.</summary>
+        public float TurretPitch => 0f;
+
+        public void ReadSubtypeTail(out byte subtypeA, out byte subtypeB)
+        {
+            if (_vehicle == null)
+            {
+                subtypeA = 0;
+                subtypeB = 0;
+                return;
+            }
+
+            _vehicle.ReadNetworkSubtypeTail(out subtypeA, out subtypeB);
+        }
+
+        public bool IsInWater
+            => _vehicle != null && WaterLevel.InWater(_vehicle.transform.position);
+
+        /// <summary>
+        /// Airborne. Always false, and honestly so.
+        /// </summary>
+        /// <remarks>
+        /// <c>Vehicle</c> keeps no grounded flag: <c>Car</c> asks each <c>WheelCollider</c>
+        /// whether it is touching, and a helicopter has no wheels at all. Synthesising one here
+        /// from a raycast would be a second, differently-wrong answer to a question the vehicle
+        /// already answers per wheel -- so the flag bit ships clear until a vehicle exposes the
+        /// state it actually has. The bit is reserved on the wire either way.
+        /// </remarks>
+        public bool IsAirborne => false;
+
+        public void SetHealthAuthoritative(float value)
+        {
+            if (_vehicle != null) _vehicle.SetHealthAuthoritative(value);
+        }
+
+        /// <inheritdoc />
+        public void Kill()
+        {
+            // Guarded on the vehicle's OWN dead flag rather than the registry's, because this is
+            // the scene's notion of already-destroyed and Die() is not idempotent -- it ejects
+            // occupants and notifies the spawner.
+            if (_vehicle == null || _vehicle.dead) return;
+
+            _vehicle.Die();
+        }
+
+        public Vector3 GetSeatPosition(int seatIndex)
+        {
+            Seat seat = SeatAt(seatIndex);
+            return seat != null ? seat.transform.position : Vector3.positiveInfinity;
+        }
+
+        /// <inheritdoc />
+        public bool TryEnterSeat(GameObject actorObject, int seatIndex)
+        {
+            Seat seat = SeatAt(seatIndex);
+            if (seat == null || actorObject == null) return false;
+
+            Actor actor = actorObject.GetComponent<Actor>();
+            if (actor == null) return false;
+
+            // THE call site that checks EnterSeat's bool (V4-D7). The three shipped ones discard
+            // it -- FpsActorController, AiActorController and Actor.SwitchSeat, all offline or AI
+            // paths. EnterSeat re-reads seat.vehicle.dead and seat.IsOccupied() against the live
+            // scene, so a false here is a condition the arbiter could not see, and the bridge
+            // turns it into a refusal rather than a silent divergence.
+            return actor.EnterSeat(seat);
+        }
+
+        /// <inheritdoc />
+        public bool TryLeaveSeat(GameObject actorObject)
+        {
+            if (actorObject == null) return false;
+
+            Actor actor = actorObject.GetComponent<Actor>();
+            if (actor == null || !actor.IsSeated()) return false;
+
+            // Only from a seat on THIS vehicle. An actor sitting in a different one would
+            // otherwise be ejected by a request naming a vehicle it is nowhere near -- which is
+            // precisely the client claim the arbiter refuses to honour by id.
+            if (actor.seat == null || actor.seat.vehicle != _vehicle) return false;
+
+            actor.LeaveSeat();
+            return true;
+        }
+
+        private Seat SeatAt(int seatIndex)
+        {
+            if (_vehicle == null || _vehicle.seats == null) return null;
+            if (seatIndex < 0 || seatIndex >= _vehicle.seats.Length) return null;
+
+            return _vehicle.seats[seatIndex];
         }
     }
 

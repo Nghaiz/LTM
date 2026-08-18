@@ -1,3 +1,4 @@
+using Ironfront.Net.Replication.Vehicles;
 using UnityEngine;
 
 public class Helicopter : Vehicle
@@ -33,6 +34,22 @@ public class Helicopter : Vehicle
 	public float counterForceMultiplier = 0.3f;
 
 	private float rotorSpeed;
+
+	/// <summary>
+	/// The helicopter's subtype tail: <c>rotorSpeed</c> as a normalized u16, low byte then high
+	/// (protocol-spec.md section 4.10).
+	/// </summary>
+	/// <remarks>
+	/// <b>The one subtype value that is not cosmetic.</b> <c>rotorSpeed</c> spins up and down
+	/// over several seconds and multiplies every force this vehicle applies, so a client with no
+	/// value for it either renders a stationary rotor on a flying helicopter or guesses -- and a
+	/// guess that is wrong on the way up is wrong for the whole spin-up. Two bytes at the
+	/// vehicle's band rate is the cheapest way to make it right.
+	/// </remarks>
+	public override void ReadNetworkSubtypeTail(out byte subtypeA, out byte subtypeB)
+	{
+		VehicleSubtypeTail.PackHelicopter(rotorSpeed, out subtypeA, out subtypeB);
+	}
 
 	private bool isAirborne;
 

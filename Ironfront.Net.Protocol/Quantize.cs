@@ -36,6 +36,11 @@ namespace Ironfront.Net.Protocol
         // ===== VELOCITY =====
         public const float VEL_MAX   = 64f;                // m/s, enough for everything but aircraft
         public const float VEL_SCALE = 127f / VEL_MAX;     // i8
+
+        /// <summary>Angular-velocity saturation, rad/s. ~1.3 rev/s. Added v3 for vehicles.</summary>
+        public const float ANGVEL_MAX   = 8f;
+        /// <summary>i8 scale for angular velocity. Resolution = 8/127 = 0.063 rad/s.</summary>
+        public const float ANGVEL_SCALE = 127f / ANGVEL_MAX;
         // Resolution = 64/127 = 0.5 m/s — only used for extrapolation, which is fine
 
         // ===== ROTATION (full, smallest-three) =====
@@ -158,6 +163,38 @@ namespace Ironfront.Net.Protocol
 
         /// <summary>Inverse of <see cref="PackVel16"/>.</summary>
         public static float UnpackVel16(short q) => q / VEL_SCALE;
+
+        // ---------------------------------------------------------- angular velocity
+
+        /// <summary>
+        /// Packs a body angular velocity component, in radians per second, into the i8 slot the
+        /// vehicle snapshot entry gives it (protocol-spec.md § 4.10, mask bit 3).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A separate scale from <see cref="VEL_SCALE"/>, because the units are different.</b>
+        /// Sharing the linear scale would put the saturation point at 64 rad/s — ten revolutions
+        /// a second — so every real rotation a vehicle performs would live in the bottom two or
+        /// three codes and quantize to nothing. <see cref="ANGVEL_MAX"/> = 8 rad/s is about
+        /// 1.3 rev/s, past anything a car spinning out or a helicopter yawing hard produces, and
+        /// leaves 0.063 rad/s of resolution.
+        /// </para>
+        /// <para>
+        /// <b>Saturating rather than wrapping.</b> A cast of an out-of-range float to
+        /// <c>sbyte</c> is implementation-defined and in practice wraps, which turns a violent
+        /// spin into a slow counter-rotation on every client — the one failure mode that looks
+        /// like a physics bug rather than a codec bug. The clamp is the same shape
+        /// <see cref="PackVel"/> uses.
+        /// </para>
+        /// </remarks>
+        public static sbyte PackAngVel(float radiansPerSecond)
+        {
+            float clamped = Clamp(radiansPerSecond, -ANGVEL_MAX, ANGVEL_MAX);
+            return (sbyte)(clamped * ANGVEL_SCALE);
+        }
+
+        /// <summary>Inverse of <see cref="PackAngVel"/>.</summary>
+        public static float UnpackAngVel(sbyte q) => q / ANGVEL_SCALE;
 
         // -------------------------------------------------------------- input axis
 

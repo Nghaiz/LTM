@@ -72,6 +72,7 @@ namespace Ironfront.Net.Unity.Server
         /// smallest-three or that a position is quantized.
         /// </remarks>
         public static ushort ReportSpawned(
+            GameObject vehicle,
             ushort spawnerId, byte networkTypeId, int seatCount,
             Vector3 position, Quaternion rotation)
         {
@@ -82,12 +83,56 @@ namespace Ironfront.Net.Unity.Server
                 new Vec3(position.x, position.y, position.z),
                 rotation.x, rotation.y, rotation.z, rotation.w);
 
-            return _sink.OnVehicleSpawned(in report);
+            ushort vehicleId = _sink.OnVehicleSpawned(in report);
+            if (vehicleId != 0) RegisterForCapture(vehicle, vehicleId);
+
+            return vehicleId;
         }
 
         /// <summary>Reports that a replicated vehicle left the world. Ignored for id 0.</summary>
         public static void ReportDespawned(ushort vehicleId, VehicleDespawnReason reason)
-            => _sink.OnVehicleDespawned(vehicleId, reason);
+        {
+            // Unregistered BEFORE the despawn goes out, so no capture between the two can put an
+            // entry for this id in a snapshot. Ordering the other way leaves the client holding a
+            // vehicle nothing will ever despawn again, because the sink drops a second despawn
+            // for an id it has already quarantined.
+            //
+            // This is NOT on its own what keeps a dead vehicle out of the snapshot — the capture
+            // that matters is the one that already ran. ServerTickLoop resolves deaths BEFORE it
+            // captures, for exactly that reason; see BuildAndSendSnapshots.
+            if (vehicleId != 0) ServerVehicleRegistry.Instance.Unregister(vehicleId);
+
+            _sink.OnVehicleDespawned(vehicleId, reason);
+        }
+
+        /// <summary>
+        /// Puts a freshly spawned vehicle into the capture registry, so it starts appearing in
+        /// <c>S_VEHICLE_SNAPSHOT</c>. V4 task 2.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Driven from here rather than from a component on the prefab.</b> The phase plan had
+        /// a <c>NetServerVehicle</c> <c>MonoBehaviour</c> registering in <c>OnEnable</c> — but
+        /// attaching it to every vehicle prefab is prefab authoring, which the plan's own § 4
+        /// hands to the client track. A registry that stays empty until fourteen prefabs on two
+        /// maps are re-saved, with nothing anywhere reporting that it is empty, is the failure
+        /// that arrangement would ship. This method runs on the one path that already knows both
+        /// the vehicle and the id it was just given.
+        /// </para>
+        /// <para>
+        /// <b>A missing resolver is silent, and correct.</b> Offline and on a client no sink is
+        /// installed, so this is never reached; on a server with no binding installed it means
+        /// the game half was never wired, which the caller's own "no network id" error already
+        /// covers.
+        /// </para>
+        /// </remarks>
+        private static void RegisterForCapture(GameObject vehicle, ushort vehicleId)
+        {
+            IGameplayVehicleSource source = NetServerBindings.ResolveVehicleSource(vehicle);
+            if (source == null) return;
+
+            ServerVehicleRegistry.Instance.Register(vehicleId, vehicle, source);
+        }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetOnLoad()

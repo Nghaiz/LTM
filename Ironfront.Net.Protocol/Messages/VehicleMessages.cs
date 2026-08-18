@@ -148,6 +148,13 @@ namespace Ironfront.Net.Protocol
             byte action      = r.ReadU8();
             if (!r.Ok) return false;
 
+            // Range-checked rather than cast. An unchecked cast makes EVERY byte except 1 an
+            // Enter — so a corrupt or hostile action byte becomes a seat-entry request and is
+            // counted as a well-formed message, blinding MalformedMessages, which exists to
+            // surface exactly this. No authority is bypassed (the arbiter still runs every
+            // check); what is lost is the ability to see that it happened.
+            if (action > (byte)SeatAction.Leave) return false;
+
             message = new SeatRequestMessage(vehicleId, seatIndex, (SeatAction)action);
             return true;
         }

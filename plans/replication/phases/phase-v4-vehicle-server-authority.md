@@ -6,8 +6,8 @@
 > it does not re-derive them.
 >
 > Binding conventions: [`../../00-shared/conventions.md`](../../00-shared/conventions.md) § 3.2
-> (no allocation on the hot path, no `System.Linq`, no `foreach` in logic files, `Span<byte>` over
-> `byte[]`) and § 7 (file ownership — with the recorded departure in design § 7, which lets this
+> (no allocation inside hot loops, no LINQ **in the hot path**, no exceptions for normal control
+> flow, `Span<byte>` over `byte[]`) and § 7 (file ownership — with the recorded departure in design § 7, which lets this
 > track edit `Assembly-CSharp/` files by PR plus a the client track review round).
 >
 > **Depends on:** V3 (protocol v3 — `S_VEHICLE_SNAPSHOT` 0x4C, `S_VEHICLE_SPAWN/DESPAWN`
@@ -412,3 +412,71 @@ Plus the five Editor-only checks tabulated in § 4.
 
 **Still outside V4.** `VehicleSpawner`'s match lifecycle and the `GameManager.instance.noVehicles`
 dereference at `VehicleSpawner.cs:49` belong to V8; the headless NRE guards themselves belong to V0.
+
+---
+
+## 9. Departures from this plan, as built
+
+This plan was written before V3 and V8 task 6 merged. Both shipped pieces V4 had reserved for
+itself, and where the merged code and this document disagree the merged code won — a plan is
+intent, and re-deriving a decision that is already on `develop` is how two answers to one question
+get shipped. Each departure is recorded here rather than left as a silent difference between § 3
+and the diff.
+
+| # | Plan said | As built | Why |
+|---|---|---|---|
+| 1 | Task 1: extract `QuarantinedIdPool`; `ActorIdPool` and `VehicleIdPool` become thin wrappers (V4-D2). | **Skipped.** Both pools stay as they are. | V8 task 6 had already shipped `VehicleIdPool` standalone, and it quarantines in **ticks** (`VEHICLE_ID_QUARANTINE_TICKS = 150`) where `ActorIdPool` quarantines in wall-clock **seconds**. Their surfaces had also diverged (`ReleaseAll` / `ReturnUnused` vs `ResetAll` / `ReleaseExpired`). Unifying them now means reconciling two clocks behind one mechanism and putting a refactor under `ActorIdPool`, whose **unedited** suite is acceptance criterion 2 — for zero behaviour gain. Task 1's budget went to tasks 2–8. |
+| 2 | `VehicleRegistry` owns the `VehicleIdPool`. | The registry owns **no** pool; `ServerVehicleLifecycleSink` (V8) keeps allocating, and a vehicle is registered *with* the id it was already given. | Two allocators over one id space is the duplicate SSOT `development-principles.md` forbids, and only the thing that puts `S_VEHICLE_SPAWN` on the wire can honour a quarantine relative to what was actually announced. |
+| 3 | Task 3: the vehicle byte budget is what remains **after** the actor snapshot is built. | Reversed: the vehicle body is written **first**, and the actor body takes the remainder. | protocol-spec.md § 4.10 "Co-residency" fixed this at the v3 freeze — the vehicle body is bounded (16 × 30 + 9 = 489 B) and the actor body is elastic and already sheds, so sizing the elastic one against what the bounded one consumed is exact. `ServerPayloadWriter.ActorBodyBudget` implements it. |
+| 4 | `SeatArbiter` refusal reasons include `WrongTeam` and `LockedOut`. | `WrongTeam` **dropped**; `LockedOut` **added to the wire** as `SeatChangeResult.RejectedLockedOut = 7`. | `Actor.CanEnterSeat()` is `!IsSeated() && cannotEnterVehicleAction.TrueDone()` — there is no team check anywhere in the shipped seat path, so `WrongTeam` would be a code nothing can produce. `LockedOut` is real and had no wire code; appending a value moves no byte (`S_SEAT_CHANGE` stays 6 B, `result` stays `u8`), so `PROTOCOL_VERSION` is unchanged. It is the only refusal whose remedy is *ask again shortly*, and mapping it onto `RejectedAlreadySeated` would be a lie whenever the actor is on foot. |
+| 5 | `S_VEHICLE_DESPAWN` carries `Destroyed` / `Wrecked` / `Cleanup` (V4-D12). | The frozen v3 pair, `Destroyed` / `WorldReset`. A burnt-out vehicle despawns as `Destroyed`. | V4 consumes the wire rather than redefining it, and a wreck *is* destroyed by damage. No client behaviour currently turns on the distinction, so splitting it would be a wire change for nothing. |
+| 6 | `NetServerVehicle` is a `MonoBehaviour` registering in `OnEnable`. | A plain class; registration is driven from `NetVehicleLifecycle.ReportSpawned`. | § 4 of this plan hands "`NetServerVehicle` attached to every vehicle prefab, and its `.meta`" to the client track as prefab authoring. A component form would therefore ship a registry that stays empty until fourteen prefabs on two maps are re-saved, with nothing reporting that it is empty. |
+| 7 | `VehicleState` carries `ushort[] SeatOccupants` and `SeatClaims`. | Scalars only. Occupancy lives in `VehicleRegistry`'s record; claims live in `BotSeatClaims`. | An array field on a struct is a shared reference that survives every copy, so two "copies" of a vehicle's state would silently share one seat table. Claims on the struct would also be a second copy of what `BotSeatClaims` owns. |
+| 8 | Tasks 5 and 6 batch into **one** `Assembly-CSharp` PR, one file (`Vehicle.cs`). | **Five** `Assembly-CSharp` files: `Vehicle.cs`, `Car.cs`, `Helicopter.cs`, `Squad.cs`, `VehicleSpawner.cs`. | Each follows from a requirement the plan itself set. V4-D10 needs claims to *name a bot*, and the identity is only available at `Squad`'s call sites (`ClaimSeat()` takes no argument). § 8 promises V5 the subtype tail, and `steerAngle` / `rotorSpeed` are `private` on `Car` / `Helicopter`. And registration needs the vehicle's `GameObject`, which only `VehicleSpawner.AnnounceSpawn` holds beside the id. All five edits are additive; the no-argument `ClaimSeat()` / `DropSeatClaim()` remain and are the offline path. |
+| 9 | Interest classification reads id, position, team, yaw (V4-D4). | Plus an `InterestSpace` discriminator. | `Evaluate` short-circuits `viewer.Id == target.Id` to Near. Once one method sees both kinds, actor 7 looking at vehicle 7 matches that test and the vehicle is pinned to 20 Hz from anywhere on the map. V4-D3 names this hazard for the rate *table*; the discriminator puts the same fact where the *comparison* is. |
+
+**Two things V4 captures but does not yet populate**, stated here so they are not mistaken for
+working: `TurretYaw` / `TurretPitch` are 0 (V6 owns the aim seam — design § 3.6), and the
+`Airborne` flag bit ships clear because `Vehicle` keeps no grounded state — `Car` asks each
+`WheelCollider` and a helicopter has no wheels. Both are wire fields that exist and are honest
+zeros rather than synthesised guesses. `Car`'s `surfaceFriction` tail byte is 1.0 for the same
+reason: friction is per-wheel and averaging four of them into a byte would name nothing.
+
+**This file's own header misquoted its binding convention, and the header is corrected above.**
+It summarised `conventions.md` § 3.2 as "no allocation on the hot path, no `System.Linq`, no
+`foreach` in logic files". § 3.2 contains no such clauses: it bans allocation inside hot loops and
+LINQ **in the hot path**, and says nothing about `foreach` or about a category called "logic
+files" — that phrase appears nowhere in the document. The overstatement propagated into a code
+comment in `SeatArbiter.cs` before it was caught, and it costs real budget: a reviewer audits
+against a rule that does not exist, and either burns the pass proving conformance to nothing or
+"fixes" code that was already correct. A `foreach` over a concrete `Dictionary` or array binds a
+struct enumerator by pattern and boxes nothing; iterating through an `IEnumerable<T>` interface is
+the thing that actually allocates.
+
+## 10. What adversarial review found after the first commit
+
+Three review passes ran against the branch. What they caught is recorded here rather than only in
+commit messages, because the pattern matters more than the count: **five of the findings were
+places where a comment asserted an invariant the code did not deliver.** That is more expensive
+than an ordinary bug — the next reader stops checking.
+
+| Finding | Verdict |
+|---|---|
+| `Vehicle.Repair` never got the role guard `Damage` did | **Real, and the worst.** The scene's health rose while the authoritative record did not, so the snapshot shipped a stale byte and the next hit subtracted from a stale value — one more shot killed a fully repaired vehicle. Worse, `StopBurning()` cleared the scene flag while `BurnEndsAtTick` stayed armed, so the burn clock despawned a repaired, drivable, possibly occupied vehicle on schedule. Fixed: `IVehicleDamageSink.ApplyRepair` + `VehicleBurnClock.CancelBurn`. |
+| Two racing death authorities | **Real.** `Vehicle.FixedUpdate` counted `burnTime` on the wall clock at 60 Hz and called `Die()` independently of `VehicleBurnClock`. V4-D11 says the server owns when a burn ends; it did not. Fixed: both scene-side `Die()` triggers guard on `NetVehicleAuthority.ServerOwnsVehicleDeath`, and the clock kills through `IGameplayVehicleSource.Kill`. |
+| A dead vehicle shipped one last snapshot entry | **Real.** Capture ran BEFORE the burn advance and the per-viewer view read that buffer, so criterion 9's second half never held — and the comment four lines above claimed it did. Fixed by moving `AdvanceVehicleBurn` ahead of the capture. The test the plan named for it did not exist and now does. |
+| `SnapshotField.SeatInfo` was never populated | **Real, and nobody had noticed.** Design D2 makes the actor entry the single source of truth for occupancy and V3 finished its codec, but no server code ever passed `vehicleId`/`seatIndex` to `SnapshotBuilder.Capture`. Every actor reported as on foot, so `S_SEAT_CHANGE` — which only fires on a client request — was the only carrier. Fixed in `NetServerActor.Capture`, reading the arbiter's record. |
+| The idempotent seat accept was broadcast | **Real.** `C_SEAT_REQUEST` has no rate limit, so a client repeating "enter the seat I am already in" multiplied into N-players × request-rate reliable sends. Now addressed, via `SeatDecision.ChangedNothing`. |
+| `ReleaseExpiredClaims` ran per vehicle per physics step | **Real.** A global table sweep with a per-instance trigger: 16× redundant at a full map, and never at all on a map with no vehicles. Moved to one call per step in the tick loop. |
+| The audit's vehicle args default to null and read as clean | **Real risk.** `Bind` and `BindMatch` are called by different components with no defined order, so the id pool could be null and criterion 14 would grade nothing, silently. The sink is now constructed in the tick loop's constructor, with a loud check behind it. |
+| An out-of-range `SeatAction` byte was a silent Enter | **Real.** Every byte except 1 parsed as Enter and counted as well-formed, blinding `MalformedMessages`. Now range-checked. |
+| The shed cursor starves a bucket | **NOT REAL — rejected after checking.** The arithmetic is right (the cursor advances by the total and is applied modulo each bucket's length) and the conclusion is wrong: a not-due entry is skipped with `continue` and consumes no budget, so the scan reaches the entries behind it, and rate limiting rotates the window for free. Near is the one band where everything is always due, and it cannot starve because if it sheds, no lower bucket gets budget and the total advance IS Near's own count. A first attempt at "fixing" this added per-bucket cursors; the guard written for it passed with and without them, which is what exposed the error. Reverted, reasoning documented at the `continue`, and the test now pins the mechanism that actually provides the guarantee. |
+| One ack cannot serve two independently-rated streams | **Real, not fixed, and not fixable at v3.** When the acked tick carried no vehicle body the encoder writes a full body instead of a delta — ~30 B per entry instead of ~10, over the already rate-limited view. It falls on viewers whose best band is not Near (about half of a Mid viewer's bodies, four in five of a Far-only viewer's). Accepting the ack anyway would be unsound: the server cannot know the client received an older datagram, and a delta against a baseline the client lacks is discarded with no recovery. A real fix needs per-stream ack state on the wire. `ClientSession` now says so instead of claiming the opposite. |
+
+**Every new guard above was watched go RED against its own bug before being taken green.** That is
+how the shed-cursor finding was rejected rather than "fixed": its guard was green either way.
+
+**One graded criterion is met by an existing suite rather than a new one.** Criterion 1 (the
+5-second id quarantine) is covered by `VehicleLifecycleWireTests.ARetiredIdIsNotReissuedUntil` `ItsQuarantineExpires`
+and friends, shipped with V8 task 6. A second suite over the same class would be the duplicate
+`development-principles.md` forbids, and it would be the copy that goes stale.

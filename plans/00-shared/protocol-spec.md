@@ -425,6 +425,14 @@ public static class Quantize
     public const float VEL_SCALE = 127f / VEL_MAX;     // i8
     // Resolution = 64/127 = 0.5 m/s — only used for extrapolation, which is fine
 
+    // ===== ANGULAR VELOCITY — added v3.0.0 for vehicles (§ 4.10, mask bit 3) =====
+    // rad/s, NOT sharing VEL_SCALE: at 64 rad/s (10 rev/s) every rotation a vehicle
+    // actually performs would quantize to the bottom two or three codes.
+    public const float ANGVEL_MAX = 8f;                // ~1.3 rev/s
+    public const float ANGVEL_SCALE = 127f / ANGVEL_MAX;  // i8
+    // Resolution = 8/127 = 0.063 rad/s. Saturates rather than wraps: a wrapped cast turns
+    // a violent spin into a slow counter-rotation on every client.
+
     // ===== ROTATION (full, smallest-three) — added v3.0.0 for vehicles =====
     // A unit quaternion's largest component is at least 0.5, so the other three are each
     // inside ±1/√2. Sending only those three at 10 bits apiece, plus a 2-bit index of the
@@ -687,7 +695,7 @@ repeat vehicleCount times:
     [bit1] rotation        u32       Smallest-three quaternion, see § 4.4
     [bit2] linearVelocity  i16 × 3   Quantized at VEL_SCALE (PackVel16)
     [bit3] angularVelocity i8  × 3
-    [bit4] health          u8        Normalized against the vehicle's own maxHealth
+    [bit4] health          u8        0..100 (Quantize.HEALTH_MAX), scaled by maxHealth
     [bit5] flags           u8        See below
     [bit6] turret          u16 yaw + i8 pitch
     [bit7] subtype         u8 × 2    Fixed 2-byte tail, read per VehicleKind
@@ -708,6 +716,11 @@ width, so it cannot skip it, and every later field — and every later entry in 
 misaligns behind it. The spare bits buy a smaller diff, not backward compatibility. The one thing
 an old decoder genuinely survives is an unknown `VehicleKind`, because the subtype tail is a fixed
 2 bytes whatever the kind is.
+
+**`health` runs 0..100, NOT 0..255.** It shares `Quantize.HEALTH_MAX` with the actor entry
+(section 4.3.1), so one decoder constant serves both streams. A client dividing by 255
+renders every vehicle at 39% health and nothing anywhere goes red — the value is in range,
+the bar just lies.
 
 **`flags` (u8)**
 
@@ -758,6 +771,14 @@ property that makes `changeMask` safe.
 Both messages go in the **same channel-1 payload batch**, the vehicle snapshot written **first**;
 the actor snapshot gets the remainder of the datagram budget.
 
+**The remainder is less one extra message header.** A batch carries two messages where the
+snapshot budget constant accounts for one, so the actor body gets
+`MaxSnapshotBodySize - MessageHeaderSize - vehicleBodyLength` = `1178 - 3 - 489` = **686 B**
+at a full vehicle body, not 689. Derived actor capacity is unchanged at 29
+(`floor((686 - 13) / 23)`), so the earlier figure was benign — but it was 3 bytes
+optimistic, and a reader sizing a buffer from it would be over by exactly the header the
+second message needs.
+
 | | Actors only | With a worst-case vehicle body |
 |---|---|---|
 | Snapshot body budget | 1178 | 1178 − 489 = **689** |
@@ -782,7 +803,8 @@ second 16-byte GSP header at 20 Hz (~320 B/s) to solve a problem neither stream 
 
 **Enums.** `SeatAction`: `Enter` = 0, `Leave` = 1. `SeatChangeResult`: `Entered` = 0, `Left` = 1,
 `RejectedOccupied` = 2, `RejectedVehicleDead` = 3, `RejectedAlreadySeated` = 4, `RejectedTooFar` = 5,
-`RejectedNoSuchSeat` = 6. `VehicleDespawnReason`: `Destroyed` = 0, `WorldReset` = 1.
+`RejectedNoSuchSeat` = 6, `RejectedLockedOut` = 7. `VehicleDespawnReason`: `Destroyed` = 0,
+`WorldReset` = 1.
 `ProjectileKind`: `Shell` = 0, `Rocket` = 1, `GuidedMissile` = 2, `Grenade` = 3, `Supply` = 4.
 
 The load-bearing notes, none of them colour:
@@ -795,6 +817,13 @@ The load-bearing notes, none of them colour:
 - **`vehicleId` in `C_VEHICLE_INPUT` is not redundant**, even though the server knows which seat the
   sender occupies. It lets the server discard input addressed at a vehicle the client has already
   left — precisely the window a same-frame leave-then-enter opens.
+- **`RejectedLockedOut` = 7 was appended in V4, and appending it is not a wire change.**
+  `S_SEAT_CHANGE` stays 6 bytes and `result` stays a `u8`, so nothing behind it misaligns — unlike
+  a new `changeMask` bit, whose width an old decoder cannot know and therefore cannot skip.
+  `PROTOCOL_VERSION` is unchanged. It exists because it is the only refusal whose remedy is *ask
+  again shortly*: `Actor.CanEnterSeat()` is `!IsSeated() && cannotEnterVehicleAction.TrueDone()`,
+  two conditions behind one predicate, so `RejectedAlreadySeated` would be a lie whenever the actor
+  is standing on the ground and `RejectedTooFar` would be a distance code reporting a timer.
 - **`turretPitch` is an `i16` in the input and an `i8` in the snapshot entry.** Input is what the
   player asked for and deserves full `PackPitch` precision; the snapshot is what the world looks
   like. `C_INPUT` already carries the same asymmetry against the actor rotation field.

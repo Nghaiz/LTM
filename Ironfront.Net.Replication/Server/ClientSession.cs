@@ -37,7 +37,8 @@ namespace Ironfront.Net.Replication.Server
         {
             ConnectionId = connectionId;
             ActorId      = actorId;
-            Encoder      = new DeltaEncoder();
+            Encoder        = new DeltaEncoder();
+            VehicleEncoder = new VehicleDeltaEncoder();
         }
 
         public ushort ConnectionId { get; }
@@ -47,6 +48,44 @@ namespace Ironfront.Net.Replication.Server
 
         /// <summary>Per-client delta state. Never shared — baselines are per client by definition.</summary>
         public DeltaEncoder Encoder { get; }
+
+        /// <summary>
+        /// Per-client delta state for the vehicle stream. V4 task 7.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A second encoder, not a second use of the first.</b> Actors and vehicles are
+        /// separate messages with separate entry layouts and separate id spaces; one encoder
+        /// cannot hold both baselines, and the baseline is the thing a delta is measured from.
+        /// </para>
+        /// <para>
+        /// <b>Both are acked by one <c>C_ACK_BASELINE</c>, and that ack does NOT name a state of
+        /// both streams.</b> The actor snapshot is in every datagram a client can ack; the vehicle
+        /// body is independently rate-limited and is absent from most of them. So when the client
+        /// acks tick N and no vehicle body shipped at N, <see cref="VehicleDeltaEncoder"/>'s
+        /// history holds no entry for N, <c>TryFindBaseline</c> fails, and the next vehicle body
+        /// is written FULL rather than as a delta.
+        /// </para>
+        /// <para>
+        /// <b>That is correct, and it is not free.</b> A full body is written over the per-viewer
+        /// VIEW — only the vehicles that were due — so the cost is roughly 30 bytes per entry
+        /// instead of ~10, not a whole world. It falls on viewers whose best band is not Near:
+        /// Mid sends every 2nd snapshot so about half its bodies go full, Far every 5th so about
+        /// four in five do. A viewer with any Near-band vehicle sees a body every tick and never
+        /// falls back.
+        /// </para>
+        /// <para>
+        /// <b>Why it is not simply fixed here.</b> Accepting the ack anyway and reaching for an
+        /// older recorded baseline would be unsound: the server cannot know the client received
+        /// that older datagram, and a delta against a baseline the client lacks is discarded by
+        /// its decoder with no way to recover — a deadlock, where the present behaviour is merely
+        /// fatter. Sending an empty vehicle body on every snapshot is also unavailable, because a
+        /// vehicle absent from a delta is DESPAWNED by the decoder, not held. A real fix needs
+        /// either a second ack field or per-stream ack state on the wire, and the wire is frozen
+        /// at v3.
+        /// </para>
+        /// </remarks>
+        public VehicleDeltaEncoder VehicleEncoder { get; }
 
         /// <summary>Authoritative movement state. The server's copy is the truth.</summary>
         public MoveState State;
@@ -150,6 +189,17 @@ namespace Ironfront.Net.Replication.Server
         /// instead of needing its own entry in the trap-2 forget path.
         /// </remarks>
         public int ShedCursor;
+
+        /// <summary>
+        /// The same rotation for the vehicle stream, and deliberately a <b>separate</b> cursor.
+        /// </summary>
+        /// <remarks>
+        /// One shared cursor would rotate the vehicle admission order because the <i>actor</i>
+        /// view shed, and vice versa — coupling two orders that have nothing to do with each
+        /// other, and re-ordering a vehicle view that fit comfortably for no reason. Each stream
+        /// rotates only when it is the one that ran out of room.
+        /// </remarks>
+        public int VehicleShedCursor;
 
         /// <summary>Re-arms the weapon with a full clip. Called on spawn and respawn.</summary>
         /// <remarks>
