@@ -293,7 +293,13 @@ public class Vehicle : MonoBehaviour
 	/// </remarks>
 	public void ClaimSeat(Actor bot)
 	{
-		if (bot != null && NetVehicleAuthority.TryClaimSeat(base.gameObject, bot.gameObject))
+		// Asked even when there is no bot to name. The authority answers "is this vehicle mine
+		// to account for", NOT "did the claim land" -- and on a replicated vehicle
+		// seatsClaimedByBots is not the source of truth, so incrementing it here because a
+		// caller happened to pass null would put the claim somewhere ClaimedSeatCount does not
+		// read. The count would then under-report and the vehicle would keep offering seats it
+		// does not have.
+		if (NetVehicleAuthority.TryClaimSeat(base.gameObject, (bot != null) ? bot.gameObject : null))
 		{
 			return;
 		}
@@ -310,7 +316,9 @@ public class Vehicle : MonoBehaviour
 	/// <summary>Releases the claim held by a named bot. V4-D10.</summary>
 	public void DropSeatClaim(Actor bot)
 	{
-		if (bot != null && NetVehicleAuthority.TryDropSeatClaim(base.gameObject, bot.gameObject))
+		// The mirror of ClaimSeat's reasoning: a fall-through here would DECREMENT a counter
+		// nothing reads while the claims table keeps holding the claim.
+		if (NetVehicleAuthority.TryDropSeatClaim(base.gameObject, (bot != null) ? bot.gameObject : null))
 		{
 			return;
 		}

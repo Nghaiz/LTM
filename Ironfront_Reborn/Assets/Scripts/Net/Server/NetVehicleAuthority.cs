@@ -93,44 +93,80 @@ namespace Ironfront.Net.Unity.Server
         // ------------------------------------------------------------------- seat claims
 
         /// <summary>
+        /// Claims a bot could not record against the claims table — an unresolvable bot, or a
+        /// vehicle whose every seat was already spoken for.
+        /// </summary>
+        /// <remarks>
+        /// Expected to be near zero, and non-zero is worth looking at rather than absorbing: it
+        /// means the AI asked for a seat on a vehicle that had none, or asked on behalf of an
+        /// actor with no <c>NetServerActor</c>. Counted here because the alternative — silently
+        /// falling back to the offline counter — is what makes the derived count wrong.
+        /// </remarks>
+        public static long UnrecordedClaims { get; private set; }
+
+        /// <summary>
         /// Reserves a seat for a bot by identity. V4-D10.
         /// </summary>
-        /// <returns>False when not replicating, so the caller falls back to its counter.</returns>
+        /// <returns>
+        /// <b>Whether this vehicle's claims are the server's to account for</b> — NOT whether a
+        /// claim was recorded. The two are different questions and conflating them is a real bug:
+        /// the caller reads <c>false</c> as "fall back to <c>seatsClaimedByBots</c>", and on a
+        /// replicated vehicle that field is not the source of truth. <c>Vehicle.ClaimedSeatCount</c>
+        /// reads the claims TABLE there, so an increment into the counter is invisible — and the
+        /// case where it matters most is a vehicle whose seats are all claimed, which is exactly
+        /// when the count must say "full" and would instead keep reporting room.
+        /// </returns>
         public static bool TryClaimSeat(GameObject vehicle, GameObject botActor)
         {
-            if (!TryResolveClaim(vehicle, botActor, out ushort vehicleId, out ushort botId))
-                return false;
+            if (!IsInstalled) return false;
 
-            // Seat index 0 is a placeholder: the shipped ClaimSeat() reserves "a seat", not a
-            // particular one, and the AI picks which on arrival. What matters for the count is
-            // that the claim names the bot — the first free index is claimed so two bots take
-            // two slots rather than overwriting one.
-            VehicleRegistry registry = _vehicles.Registry;
-            if (!registry.TryGetState(vehicleId, out VehicleState state)) return false;
+            ushort vehicleId = _vehicles.NetworkIdOf(vehicle);
+            if (vehicleId == 0) return false;   // genuinely not replicated; the counter is right
 
+            // From here the answer is true whatever happens below: this vehicle IS ours.
+            if (!TryResolveBot(botActor, out ushort botId)
+                || !_vehicles.Registry.TryGetState(vehicleId, out VehicleState state))
+            {
+                UnrecordedClaims++;
+                return true;
+            }
+
+            // The shipped ClaimSeat() reserves "a seat", not a particular one, and the AI picks
+            // which on arrival. What matters for the count is that the claim NAMES the bot, so
+            // the first free index is taken and two bots occupy two slots rather than one.
             for (byte seat = 0; seat < state.SeatCount; seat++)
             {
                 ushort held = _vehicles.Claims.ClaimantOf(vehicleId, seat);
                 if (held != 0 && held != botId) continue;
 
-                return _vehicles.Claims.TryClaim(vehicleId, seat, botId, Time.time);
+                _vehicles.Claims.TryClaim(vehicleId, seat, botId, Time.time);
+                return true;
             }
 
-            return false;
+            // Every seat spoken for. Nothing to record, and nothing to fall back to.
+            UnrecordedClaims++;
+            return true;
         }
 
         /// <summary>Releases every claim this bot holds on this vehicle.</summary>
-        /// <returns>False when not replicating.</returns>
+        /// <returns>
+        /// Whether this vehicle's claims are the server's to account for. See
+        /// <see cref="TryClaimSeat"/> — releasing has the mirror hazard, where a fall-through
+        /// would DECREMENT a counter nothing reads and leave the table holding a claim forever.
+        /// </returns>
         public static bool TryDropSeatClaim(GameObject vehicle, GameObject botActor)
         {
-            if (!TryResolveClaim(vehicle, botActor, out ushort vehicleId, out ushort botId))
-                return false;
+            if (!IsInstalled) return false;
 
-            VehicleRegistry registry = _vehicles.Registry;
-            if (!registry.TryGetState(vehicleId, out VehicleState state)) return false;
+            ushort vehicleId = _vehicles.NetworkIdOf(vehicle);
+            if (vehicleId == 0) return false;
+
+            if (!TryResolveBot(botActor, out ushort botId)
+                || !_vehicles.Registry.TryGetState(vehicleId, out VehicleState state))
+                return true;
 
             for (byte seat = 0; seat < state.SeatCount; seat++)
-                if (_vehicles.Claims.Release(vehicleId, seat, botId)) return true;
+                if (_vehicles.Claims.Release(vehicleId, seat, botId)) break;
 
             return true;
         }
@@ -164,16 +200,11 @@ namespace Ironfront.Net.Unity.Server
             _vehicles.Claims.ReleaseExpired(Time.time);
         }
 
-        private static bool TryResolveClaim(
-            GameObject vehicle, GameObject botActor, out ushort vehicleId, out ushort botId)
+        private static bool TryResolveBot(GameObject botActor, out ushort botId)
         {
-            vehicleId = 0;
-            botId     = 0;
+            botId = 0;
 
-            if (!IsInstalled || _actors == null || botActor == null) return false;
-
-            vehicleId = _vehicles.NetworkIdOf(vehicle);
-            if (vehicleId == 0) return false;
+            if (_actors == null || botActor == null) return false;
 
             NetServerActor actor = botActor.GetComponent<NetServerActor>();
             if (actor == null || actor.ActorId == 0) return false;

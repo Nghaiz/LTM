@@ -214,6 +214,33 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
+        /// A vehicle whose every seat is claimed refuses a new bot on every index, and
+        /// <c>HasUnclaimedSeats</c> agrees.
+        /// </summary>
+        /// <remarks>
+        /// This is the state the Unity-side <c>NetVehicleAuthority.TryClaimSeat</c> must NOT
+        /// answer with "not mine". Reading that as "fall back to <c>seatsClaimedByBots</c>" would
+        /// put the claim in a counter that <c>Vehicle.ClaimedSeatCount</c> does not read on a
+        /// replicated vehicle — so the count would under-report at exactly the moment it must say
+        /// "full", and the AI would keep sending bots to a vehicle with no room.
+        /// </remarks>
+        [Fact]
+        public void AFullyClaimedVehicleRefusesEverySeat()
+        {
+            var claims = new BotSeatClaims();
+            const int Seats = 2;
+
+            Assert.True(claims.TryClaim(Tank, 0, 11, 0f));
+            Assert.True(claims.TryClaim(Tank, 1, 12, 0f));
+
+            for (byte seat = 0; seat < Seats; seat++)
+                Assert.False(claims.TryClaim(Tank, seat, botActorId: 13, nowSeconds: 0f));
+
+            Assert.Equal(Seats, claims.ClaimCount(Tank));
+            Assert.False(claims.HasUnclaimedSeats(Tank, Seats));
+        }
+
+        /// <summary>
         /// A bot re-claiming its own seat renews the deadline — which is how a bot on a long walk
         /// keeps its reservation without a second mechanism.
         /// </summary>
