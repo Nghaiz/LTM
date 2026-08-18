@@ -55,7 +55,10 @@ public class GrenadeProjectile : Projectile
 
 	protected virtual void Explode()
 	{
-		if (ActorManager.Explode(base.transform.position, explosionConfiguration) && !source.aiControlled)
+		// V1 task 3. See ExplodingProjectile.Explode for why the two extra arguments exist.
+		if (ActorManager.Explode(
+				base.transform.position, explosionConfiguration, source,
+				Ironfront.Net.Protocol.ExplosionKind.Grenade) && !source.aiControlled)
 		{
 			IngameUi.Hit();
 		}

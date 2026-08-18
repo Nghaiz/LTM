@@ -287,6 +287,22 @@ public class ActorManager : MonoBehaviour
 		return list;
 	}
 
+	// V1 task 3. The allocating overload above is left exactly as it was for its existing
+	// callers; only Explode moves to this one. A grenade volley is precisely when a GC spike is
+	// least welcome, and the fix costs one reusable field at the call site.
+	public static void ActorsInRange(Vector3 point, float range, List<Actor> into)
+	{
+		into.Clear();
+		for (int i = 0; i < instance.actors.Count; i++)
+		{
+			Actor actor = instance.actors[i];
+			if (Vector3.Distance(point, actor.Position()) < range)
+			{
+				into.Add(actor);
+			}
+		}
+	}
+
 	public static void RegisterProjectile(Projectile p)
 	{
 		Ray ray = new Ray(p.transform.position, p.transform.forward);
@@ -339,7 +355,47 @@ public class ActorManager : MonoBehaviour
 		instance.vehicles.Remove(vehicle);
 	}
 
-	public static bool Explode(Vector3 point, ExplodingProjectile.ExplosionConfiguration configuration)
+	// V1 task 3. Reused across blasts so ActorsInRange stops allocating a List per explosion.
+	// Static because Explode is; single-threaded, like everything else on the Unity main loop.
+	//
+	// Load-bearing precondition: Explode is NOT re-entrant. Nothing it calls explodes again
+	// synchronously -- Actor.Damage ends in Die() and a ragdoll, and Vehicle.Damage ends in
+	// Vehicle.Explode(), which is an impulse plus particles and does not route back here (D5).
+	// If a future chain-detonation does call Explode from inside Explode, this buffer is the
+	// thing that breaks, silently, by having its contents replaced mid-loop -- give that caller
+	// its own list rather than making this one deeper.
+	private static readonly List<Actor> _explosionVictims = new List<Actor>();
+
+	// V1 task 3. The three-way role split, on the ONE choke point rather than on each of the
+	// callers that funnel into it -- the identical argument that put phase-05's guard on
+	// Actor.Damage rather than on its six damage sources (D1). V7 adds more callers; none of
+	// them will need to know about any of this.
+	//
+	//   Offline -- unchanged, byte for byte. The single-player game does exactly what it did.
+	//   Server  -- decides everything. Actor damage already routes through the authoritative
+	//              sink via phase-05 task 6's guard inside Actor.Damage, so this method adds no
+	//              second damage path for actors (D2); what it adds is the attacker id on the
+	//              vehicle loop and one S_EXPLOSION at the end.
+	//   Client  -- applies NO health damage to actors or vehicles. Health arrives in snapshots.
+	//              Corpse ragdoll impulse is KEPT, because corpses are never replicated (AD-4)
+	//              and their ragdoll is legitimately local. The cosmetic is predicted for the
+	//              local player's own blast (V10 D13) and otherwise waits for S_EXPLOSION.
+	//
+	// The return value goes false on a client, and that is correct rather than a lost hitmarker:
+	// both callers use it only to fire IngameUi.Hit(), and V10 already drives the client's
+	// hitmarker from S_HIT_CONFIRM in NetClientCombatPresenter. Returning true here would draw a
+	// second, locally-guessed one the server never agreed to.
+	//
+	// The client vehicle guard changes nothing visible today -- vehicle health is not replicated
+	// until V4. It is one branch bought now so that when V4 starts streaming that health, the
+	// client is not subtracting damage locally AND receiving the authoritative value; the
+	// symptom would be a stuttering health bar blamed on V4's interpolation rather than on a
+	// line written here.
+	public static bool Explode(
+		Vector3 point,
+		ExplodingProjectile.ExplosionConfiguration configuration,
+		Actor source,
+		Ironfront.Net.Protocol.ExplosionKind kind)
 	{
 		// The query radius is balanceRange (9 m) but the damage falloff was normalized against
 		// damageRange (6 m) with Mathf.Clamp01, which SATURATES rather than excludes: an actor
@@ -348,11 +404,13 @@ public class ActorManager : MonoBehaviour
 		// cut-off was the wider radius. The vehicle loop below always got this right by
 		// testing the distance first; routing both through ExplosionRanges makes the cut-off
 		// impossible to skip.
+		bool isClient = Ironfront.Net.Unity.NetContext.IsClient;
 		ExplosionRanges ranges = new ExplosionRanges(configuration.damageRange, configuration.balanceRange);
-		List<Actor> list = ActorsInRange(point, configuration.balanceRange);
+		ActorsInRange(point, configuration.balanceRange, _explosionVictims);
 		bool result = false;
-		foreach (Actor item in list)
+		for (int i = 0; i < _explosionVictims.Count; i++)
 		{
+			Actor item = _explosionVictims[i];
 			Vector3 vector = item.CenterPosition() - point;
 			float magnitude = vector.magnitude;
 			float damageT;
@@ -363,30 +421,69 @@ public class ActorManager : MonoBehaviour
 			float num2 = configuration.balanceFalloff.Evaluate(ranges.GetBalanceT(magnitude));
 			if (!item.dead)
 			{
-				item.Damage(configuration.damage * num, configuration.balanceDamage * num2, false, item.CenterPosition(), vector.normalized, vector.normalized * configuration.force * num2);
-				result = true;
+				// Skipped wholesale on a client rather than relying on Actor.Damage's own
+				// ownsHealth guard. That guard would already refuse the health subtraction, but
+				// it would still run the hit feedback -- blood decals, knockback, a stagger --
+				// for a blast the server may not agree reached this actor at all. A remote
+				// actor's reaction is the snapshot's to describe.
+				if (!isClient)
+				{
+					item.Damage(configuration.damage * num, configuration.balanceDamage * num2, false, item.CenterPosition(), vector.normalized, vector.normalized * configuration.force * num2);
+					result = true;
+				}
 			}
 			else
 			{
+				// Kept at every role. Corpses are never replicated (AD-4), so a client's
+				// ragdoll is the only ragdoll that corpse will ever have.
 				item.ApplyRigidbodyForce(vector.normalized * configuration.force * num2);
 			}
 		}
-		Vehicle[] array = instance.vehicles.ToArray();
-		foreach (Vehicle vehicle in array)
+		// Indexed rather than instance.vehicles.ToArray(), which allocated a second array per
+		// blast. Safe because neither branch below adds to or removes from the list -- only
+		// Vehicle.Explode does that, and it does not call this method (D5).
+		for (int i = 0; i < instance.vehicles.Count; i++)
 		{
+			Vehicle vehicle = instance.vehicles[i];
 			float num3 = Vector3.Distance(vehicle.transform.position, point);
 			float vehicleDamageT;
 			if (ranges.TryGetDamageT(num3, out vehicleDamageT))
 			{
 				float num4 = configuration.damageFalloff.Evaluate(vehicleDamageT);
-				// The attacker slot Vehicle.Damage(float, int) opens is threaded here in V1,
-				// when Explode becomes a server-authoritative per-tick path. V0 opens the
-				// parameter; it does not thread it.
-				vehicle.Damage(configuration.damage * num4);
-				result = true;
+				if (!isClient)
+				{
+					// The attacker slot Vehicle.Damage(float, int) opens is threaded here in V1,
+					// now that Explode is a server-authoritative path. V0 opened the parameter;
+					// this is what fills it.
+					vehicle.Damage(configuration.damage * num4, ResolveAttackerId(source));
+					result = true;
+				}
 			}
 		}
+		// Once per blast, after both loops -- never once per victim. One grenade among four
+		// people is one explosion and four deaths, and the deaths travel separately through
+		// Actor.Damage and phase-05's existing path.
+		Ironfront.Net.Unity.Server.ServerCombatEvents.ReportExplosion(
+			source, point, configuration.damageRange, kind);
+
+		// Client only, and only for this client's own blast: draw it now rather than a
+		// round-trip late, and suppress the confirming S_EXPLOSION when it lands (V10 D13,
+		// taking V1 D6's own recorded fallback clause).
+		Ironfront.Net.Unity.Client.ClientCombatEvents.PredictExplosion(
+			source, point, configuration.damageRange, kind);
+
 		return result;
+	}
+
+	// Vehicle.Damage takes an int attacker slot with a NoAttacker sentinel, so an unattributed
+	// blast -- a world explosive, or a source with no network identity -- is recorded as having
+	// no attacker rather than as actor 0, which is a real id.
+	private static int ResolveAttackerId(Actor source)
+	{
+		if (source == null) return Vehicle.NoAttacker;
+
+		var replicated = source.GetComponent<Ironfront.Net.Unity.Server.NetServerActor>();
+		return replicated != null ? replicated.ActorId : Vehicle.NoAttacker;
 	}
 
 	private void OnLevelLoaded(Scene arg0, LoadSceneMode arg1)

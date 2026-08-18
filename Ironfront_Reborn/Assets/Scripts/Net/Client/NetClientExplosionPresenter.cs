@@ -1,5 +1,6 @@
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Client;
+using Ironfront.Net.Replication.Combat;
 using UnityEngine;
 
 namespace Ironfront.Net.Unity.Client
@@ -82,6 +83,21 @@ namespace Ironfront.Net.Unity.Client
         // static: a fresh connection should not inherit a previous match's live predictions.
         private readonly ExplosionSuppressor _suppressor = new ExplosionSuppressor();
 
+        /// <summary>
+        /// The presenter this client is running, or null off a client. phase-V1 task 3.
+        /// </summary>
+        /// <remarks>
+        /// Exists so <c>ClientCombatEvents.PredictExplosion</c> can reach it from
+        /// <c>ActorManager.Explode</c> without a serialized reference wired in every level.
+        /// Same shape as <c>ServerTickLoop.Current</c>, including the reset below, which matters
+        /// when Play mode runs with domain reload disabled and statics survive from the previous
+        /// session.
+        /// </remarks>
+        public static NetClientExplosionPresenter Current { get; private set; }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetCurrentOnLoad() => Current = null;
+
         private void Awake()
         {
             if (!NetClientPresenterGuard.IsPresentable)
@@ -99,11 +115,17 @@ namespace Ironfront.Net.Unity.Client
         private void OnEnable()
         {
             if (_client == null) return;
+
+            Current = this;
             _client.Router.OnExplosion += OnExplosion;
         }
 
         private void OnDisable()
         {
+            // Cleared before the unsubscribe so a disabled presenter cannot be handed a
+            // prediction it will never draw.
+            if (ReferenceEquals(Current, this)) Current = null;
+
             if (_client == null) return;
             _client.Router.OnExplosion -= OnExplosion;
         }
@@ -145,10 +167,12 @@ namespace Ironfront.Net.Unity.Client
                 Quantize.UnpackPos(message.PosY),
                 Quantize.UnpackPos(message.PosZ));
 
-            // RadiusMetres is a plain whole-metre byte on the wire -- there is no
-            // ExplosionEncoding.UnpackRadiusMetres helper in this tree, unlike PosX/Y/Z which do
-            // go through Quantize.UnpackPos.
-            RenderExplosion(position, message.RadiusMetres, message.Kind);
+            // Through ExplosionEncoding rather than an implicit byte->float widening, for the
+            // same reason PosX/Y/Z go through Quantize.UnpackPos: the packing and its inverse
+            // are one decision, and V1 task 1 gave it one home. The emitter rounds UP, so this
+            // radius is never smaller than the blast that did the damage.
+            RenderExplosion(
+                position, ExplosionEncoding.UnpackRadiusMetres(message.RadiusMetres), message.Kind);
         }
 
         private void RenderExplosion(Vector3 position, float radiusMetres, ExplosionKind kind)

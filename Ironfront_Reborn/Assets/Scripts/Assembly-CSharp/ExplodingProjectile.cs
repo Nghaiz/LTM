@@ -63,7 +63,11 @@ public class ExplodingProjectile : Projectile
 
 	protected virtual bool Explode(Vector3 position, Vector3 up)
 	{
-		bool result = ActorManager.Explode(position, explosionConfiguration);
+		// V1 task 3: Explode now needs to know WHO set it off and WHAT KIND it is, so the
+		// server can attribute the S_EXPLOSION and a client can recognise its own blast.
+		// Rocket covers every ExplodingProjectile in scope -- rockets and tank shells alike.
+		bool result = ActorManager.Explode(
+			position, explosionConfiguration, source, Ironfront.Net.Protocol.ExplosionKind.Rocket);
 		base.transform.rotation = Quaternion.LookRotation(up);
 		base.enabled = false;
 		Renderer[] array = renderers;
