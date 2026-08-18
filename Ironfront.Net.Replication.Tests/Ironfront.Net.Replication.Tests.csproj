@@ -53,6 +53,14 @@
       Referencing the tool from the test project is what makes that possible.
     -->
     <ProjectReference Include="..\tools\ClientWiringGate\ClientWiringGate.csproj" />
+    <!--
+      phase-V3 task 10, same reasoning one gate over. SpecChecker's vehicle-registry judgement is
+      a pure function over (prefab name, id) records precisely so its four failure classes — a
+      reassigned id, an id the registry does not know, an id no prefab carries, an unauthored
+      prefab — are driven from a fixture on every CI run. All four are silent on both sides of
+      the wire, which is what makes watching them go red the point.
+    -->
+    <ProjectReference Include="..\tools\SpecChecker\SpecChecker.csproj" />
   </ItemGroup>
 
 </Project>
