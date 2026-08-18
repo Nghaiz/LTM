@@ -103,7 +103,7 @@ public class FpsActorController : ActorController
 	// Phase-00 task 3: every gameplay input below arrives through this, so a networked
 	// controller can supply one. UI and debug keys keep reading Input directly -- criterion 6
 	// permits it, and widening the seam to cover them buys nothing and risks the loadout screen.
-	// See plans/assist-dev-a/step-02-input-source.md and docs/codebase-map.md section 4.
+	// See plans/unity-client/study/step-02-input-source.md and docs/codebase-map.md section 4.
 	// Starts as the null object rather than null: MoveX, Lean and LookDelta* are plain property
 	// reads with no extension-method guard behind them, and they sit on per-frame paths. A field
 	// that can be null turns one ordering mistake into an exception every frame forever.

@@ -1,5 +1,4 @@
 # tools/check-unity-meta.ps1 — every imported asset has a .meta, and every .meta has its asset.
-# OWNER: Dev D (tools/ and CI, plans/00-shared/conventions.md section 7).
 #
 # WHY THIS GATE EXISTS
 #
@@ -19,7 +18,7 @@
 #      Scenes/Splash.meta was one, for a folder that no longer exists.
 #
 # Both are mechanical, so they belong in a gate rather than in a reviewer's memory. Files created
-# by anyone working WITHOUT the Unity Editor — which on this project is Dev B, C and D — are the
+# by anyone working WITHOUT the Unity Editor — which on this project is the transport track, C and D — are the
 # ones that land without a .meta, and they cannot notice locally because nothing they run opens
 # Unity.
 #

@@ -9,7 +9,7 @@ using Xunit;
 namespace Ironfront.Net.Replication.Tests
 {
     /// <summary>
-    /// Dev B phase-00 criterion 9: a working LoopbackTransport that A and C can build on
+    /// the transport track phase-00 criterion 9: a working LoopbackTransport that A and C can build on
     /// before the reliability layer exists.
     /// </summary>
     public sealed class LoopbackTransportTests

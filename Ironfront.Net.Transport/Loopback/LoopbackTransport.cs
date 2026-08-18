@@ -11,8 +11,8 @@ namespace Ironfront.Net.Transport.Loopback
     /// </summary>
     /// <remarks>
     /// <para>
-    /// This exists so Dev A and Dev C are not blocked on the reliability layer
-    /// (dev-b-transport/phase-00 § Task 7, risk B6). A can exercise client-side prediction
+    /// This exists so the client track and the replication track are not blocked on the reliability layer
+    /// (transport/phase-00 § Task 7, risk B6). A can exercise client-side prediction
     /// against 200 ms of latency inside a single Editor process, and C can run a full server
     /// tick loop against a fake client in a unit test, with no socket and no second process.
     /// </para>
@@ -127,7 +127,7 @@ namespace Ironfront.Net.Transport.Loopback
             _server = new LoopbackServer(this);
         }
 
-        /// <summary>The client endpoint. Hand this to Dev A's client code.</summary>
+        /// <summary>The client endpoint. Hand this to the client track's client code.</summary>
         public ITransportClient Client => _client;
 
         /// <summary>The server endpoint. Hand this to the server tick loop.</summary>

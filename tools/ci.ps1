@@ -1,5 +1,4 @@
 # tools/ci.ps1 — the local mirror of the GitHub Actions pipeline.
-# OWNER: Dev D (plans/00-shared/conventions.md section 7).
 #
 # conventions.md section 5 requires this to finish in under 5 minutes and to cover:
 #   1. dotnet build across every .NET project, warnings as errors
@@ -100,7 +99,7 @@ try {
         Write-Warning "Some commit subjects do not match conventions.md section 1.2 (advisory)."
     }
 
-    # Step 4 is opt-in: only Dev A's machine and a Unity-equipped runner can do this, and
+    # Step 4 is opt-in: only the client track's machine and a Unity-equipped runner can do this, and
     # the other three must not be blocked by its absence.
     if ($SkipUnity) {
         Write-Host ""

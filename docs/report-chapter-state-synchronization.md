@@ -1,6 +1,6 @@
 # Chapter Y — State synchronization and server-authoritative simulation
 
-Author: Dev C (Replication & Simulation). Every figure in this chapter is printed by a
+Author: The replication track (Replication & Simulation). Every figure in this chapter is printed by a
 test in `Ironfront.Net.Replication.Tests`; the reproducing command is given beneath each
 table. Nothing here was measured by hand.
 

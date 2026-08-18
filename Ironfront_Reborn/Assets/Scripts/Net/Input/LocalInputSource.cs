@@ -8,9 +8,6 @@ namespace Ironfront.Net.Unity
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev A (assist track, plans/assist-dev-a/step-02-input-source.md).
-    /// </para>
-    /// <para>
     /// <b>Every read is live, and that is what makes the refactor safe.</b> The obvious design
     /// is to latch a frame's input in a <c>Sample()</c> and serve it from fields. It is also the
     /// design that changes behaviour: <c>Actor.FixedUpdate</c> reads <c>SwimInput</c> and

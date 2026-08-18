@@ -14,8 +14,8 @@ A multiplayer FPS networking stack written from scratch on raw TCP and UDP socke
 Mirror, no Photon, no Netcode for GameObjects, no KCP, no gRPC. The netcode *is* the project;
 using a framework would remove the thing being built.
 
-Four developers, one Unity 6 client, four .NET libraries, one wire protocol frozen in week 1
-and enforced by a build gate ever since.
+One Unity 6 client, four .NET libraries, one wire protocol frozen in week 1 and enforced by a
+build gate ever since.
 
 ---
 
@@ -44,12 +44,12 @@ they can be benchmarked against the standard library, is in
 flowchart TD
     P["Ironfront.Net.Protocol<br/><i>netstandard2.1 · SHARED</i><br/>wire format, constants, quantization"]
 
-    T["Ironfront.Net.Transport<br/><i>netstandard2.1 · Dev B</i><br/>UDP reliability, acks, channels, fragmentation"]
-    R["Ironfront.Net.Replication<br/><i>netstandard2.1 · Dev C</i><br/>snapshots, delta encoding, interest management"]
-    M["Ironfront.MasterServer<br/><i>net8.0 exe · Dev D</i><br/>auth, lobby, rooms, matchmaking over TCP"]
-    L["Ironfront.Tools.LoadTest<br/><i>net8.0 exe · Dev D</i><br/>headless bot clients"]
-    U["Ironfront_Reborn<br/><i>Unity 6 · Dev A</i><br/>client, rendering, prediction"]
-    C["Ironfront.Net.Protocol.Tests<br/><i>net8.0 · Dev C</i><br/>conformance suite — the referee"]
+    T["Ironfront.Net.Transport<br/><i>netstandard2.1 · the transport track</i><br/>UDP reliability, acks, channels, fragmentation"]
+    R["Ironfront.Net.Replication<br/><i>netstandard2.1 · the replication track</i><br/>snapshots, delta encoding, interest management"]
+    M["Ironfront.MasterServer<br/><i>net8.0 exe · the master-server track</i><br/>auth, lobby, rooms, matchmaking over TCP"]
+    L["Ironfront.Tools.LoadTest<br/><i>net8.0 exe · the master-server track</i><br/>headless bot clients"]
+    U["Ironfront_Reborn<br/><i>Unity 6 · the client track</i><br/>client, rendering, prediction"]
+    C["Ironfront.Net.Protocol.Tests<br/><i>net8.0 · the replication track</i><br/>conformance suite — the referee"]
     S["tools/SpecChecker<br/><i>net8.0 exe</i><br/>fails the build on spec drift"]
 
     P --> T
@@ -128,30 +128,31 @@ pwsh tools/ci.ps1
 | `pwsh tools/check-commit-scope.ps1` | check your commit subjects against the conventions |
 | `dotnet run --project tools/SpecChecker` | check `ProtocolConstants.cs` against `protocol-spec.md` |
 
-Unity: only Dev A opens the Editor. Everyone else builds with `dotnet build`. The reason is in
-[conventions.md § 1.3](plans/00-shared/conventions.md) — two people opening the Editor produces
-unresolvable conflicts in thousand-line YAML scenes.
+Unity: `UNITY_PATH` is set locally, so `tools/ci.ps1` step 4 runs a real batch-mode compile —
+the only check that resolves types. `tools/UnitySyntaxCheck` parses but resolves nothing, so it
+cannot catch a CS0246. Do not trust it alone before merging Unity-side code.
 
 ---
 
-## Who owns what
+## The four subsystems
 
-| Area | Owner | Backup |
+| Subsystem | Where | What it owns |
 |---|---|---|
-| Unity client — `Ironfront_Reborn/` | Dev A | Dev C |
-| Transport — `Ironfront.Net.Transport/` | Dev B | Dev C |
-| Replication — `Ironfront.Net.Replication/` | Dev C | Dev A |
-| Master server — `Ironfront.MasterServer/` | Dev D | Dev B |
-| Wire protocol — `Ironfront.Net.Protocol/` | shared, PR + 2 approvals | — |
-| Tooling and CI — `tools/`, `.github/` | Dev D | — |
+| Unity client | `Ironfront_Reborn/` | rendering, prediction, reconciliation, the shipping scene |
+| Transport | `Ironfront.Net.Transport/` | UDP reliability, acks, channels, fragmentation |
+| Replication | `Ironfront.Net.Replication/` | snapshots, delta encoding, interest, lag compensation |
+| Master server | `Ironfront.MasterServer/` | auth, lobby, rooms, matchmaking over TCP |
+| Wire protocol | `Ironfront.Net.Protocol/` | the one contract both sides must agree on |
 
-Two cross-cutting exceptions worth knowing before you open a PR:
+The split is by subsystem, not by person — one owner, four codebases with different constraints.
+The boundaries still matter because they are where the bugs live:
 
-- **`Ironfront.Net.Replication/Serialization/` belongs to B**, not C, even though it sits in
-  C's project. B implements the bit-packing; C writes the conformance tests that verify it.
-  If one person did both, the tests would only prove the code agrees with itself.
-- **`Ironfront_Reborn/Assets/Scripts/Net/Shared/` belongs to C**, not A, even though it sits in
-  A's Unity project. `MovementSimulation.cs` in particular is the single source of truth for
+- **`Ironfront.Net.Replication/Serialization/` is transport's concern**, not replication's, even
+  though it sits in replication's project. The bit-packing and the conformance suite that checks
+  it are deliberately written against the spec rather than against each other — a test derived
+  from the implementation only proves the code agrees with itself.
+- **`Ironfront_Reborn/Assets/Scripts/Net/Shared/` is replication's**, not the client's, even
+  though it sits inside the Unity project. `MovementSimulation.cs` in particular is the single source of truth for
   client-side prediction and server-side simulation; if the two ever diverge, every player
   rubber-bands.
 
@@ -172,9 +173,9 @@ CI on every push and fails the build if `ProtocolConstants.cs` drifts from the s
 the two cannot silently disagree.
 
 Changing the wire format after the freeze means: a
-[protocol-change issue](.github/ISSUE_TEMPLATE/protocol-change.yml) → discussion → one PR
-carrying the spec text, the constants, a conformance test and a `PROTOCOL_VERSION` bump
-together → 2 approvals including everyone affected → all four pull the same day.
+[protocol-change issue](.github/ISSUE_TEMPLATE/protocol-change.yml) → one PR carrying the spec
+text, the constants, a conformance test and a `PROTOCOL_VERSION` bump together → rebuild the
+vendored DLLs with `tools/build-libs.ps1`, because Unity reads those and not the source.
 
 Changing a constant in your own code and telling people later is the single largest risk in
 the project. It has an ID: R5.
@@ -192,7 +193,7 @@ the project. It has an ID: R5.
 
 The matrix is not decoration: this code indexes byte buffers, parses lengths taken off the
 wire, and opens sockets. Path handling, line endings and dual-stack socket behaviour all
-differ between Linux and Windows, and the team develops on Windows while CI's default is
+differ between Linux and Windows, and development happens on Windows while CI's default is
 Linux. A single-OS pipeline would let half of those differences through.
 
 Test results and coverage are uploaded as artifacts on every run, including failed ones —

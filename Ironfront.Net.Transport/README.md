@@ -90,7 +90,7 @@ The local Phase 4 behaviour report can be generated with:
 
 ```powershell
 dotnet run --project Ironfront.Net.Transport.Bench -c Release -- --seconds 1 --connections 1 --idle `
-  --phase4-report plans/dev-b-transport/reports/2026-08-14-phase-04-local-experiments.csv
+  --phase4-report plans/transport/reports/2026-08-14-phase-04-local-experiments.csv
 ```
 
 That CSV covers ACK history, per-channel head-of-line behaviour and congestion hysteresis. It is
@@ -106,5 +106,5 @@ deterministic local evidence; it does not replace packet-loss, VPS/NAT or long-s
   leaves a reliable-ordered channel silently stalled.
 
 See [`docs/transport-troubleshooting.md`](../docs/transport-troubleshooting.md) for incident
-triage and [`plans/dev-b-transport/phases/phase-03-operations.md`](../plans/dev-b-transport/phases/phase-03-operations.md)
+triage and [`plans/transport/phases/phase-03-operations.md`](../plans/transport/phases/phase-03-operations.md)
 for the VPS runbook.

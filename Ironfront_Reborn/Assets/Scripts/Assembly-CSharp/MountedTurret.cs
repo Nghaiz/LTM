@@ -20,7 +20,7 @@ public class MountedTurret : MountedWeapon
 
 	// LEGACY_STEP_DEG x 60, and the -40/15 elevation stops that were inline literals at the
 	// old :23. Serialized, so per-prefab tuning is data rather than a rebuild. Unlike
-	// TankTurret these stops have no joint to read them from, so Dev A owns them.
+	// TankTurret these stops have no joint to read them from, so the client track owns them.
 	public TurretAimLimits aimLimits = new TurretAimLimits
 	{
 		YawRateDegPerSec = LEGACY_STEP_DEG * LEGACY_FRAME_RATE,

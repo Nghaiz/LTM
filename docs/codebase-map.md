@@ -1,7 +1,7 @@
 # Codebase map — the original single-player game
 
 **Audience:** anyone about to edit `Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/`.
-**Closes** Dev A [phase-00 task 1](../plans/dev-a-unity-client/phases/phase-00-foundation.md#task-1--read-and-understand-the-codebase-2-days).
+**Closes** the client track [phase-00 task 1](../plans/unity-client/phases/phase-00-foundation.md#task-1--read-and-understand-the-codebase-2-days).
 **Audited** 2026-08-15 against the repository at `3676c6e`. Every line number below was read, not
 recalled; re-run the greps in § 7 if the files have moved since.
 
@@ -142,7 +142,7 @@ shipping neither is not.
 ## 3. Where `Actor` reaches for a singleton
 
 Phase-00 task 1 deliverable 3, and the direct input to
-[assist step 03](../plans/assist-dev-a/step-03-singleton-guards.md).
+`assist step 03`.
 
 | Line | Call | Present on a server? |
 |---|---|---|
@@ -183,7 +183,7 @@ Note the shape they share: **all five are static methods that dereference `insta
 `ScoreUi.AddScore`, `DecalManager.CreateBloodDrop`, `DecalManager.AddDecal`,
 `MinimapUi.AddActorBlip` and `IngameUi.Hit` are all `public static void X(...) { instance.Y(); }`.
 That is a single choke point per singleton, not forty call sites — which is the fact that decides
-how [step 03](../plans/assist-dev-a/step-03-singleton-guards.md) should be written.
+how `step 03` should be written.
 
 `Camera.main` is the odd one out and the one nobody would have predicted: it is not on the task-5
 list of 21 singletons at all, and it will throw before any of them, because `Actor.Update` runs for
@@ -194,13 +194,13 @@ all 32 bots from the first frame.
 ## 4. Every `Input.*` site in `FpsActorController`, and its surrounding condition
 
 Added by the assist track for
-[step 02](../plans/assist-dev-a/step-02-input-source.md); gathering it while reading is nearly free
+`step 02`; gathering it while reading is nearly free
 and it is the exact substitution list that step needs.
 
 37 lines, 44 individual `Input.*` expressions — the anchored count; see the correction at the end of
 this section. Read the middle column as "this read only matters when…".
 
-> **This table describes the file before [step 02](../plans/assist-dev-a/step-02-input-source.md).**
+> **This table describes the file before `step 02`.**
 > It is kept in that form because it is the substitution list step 02 was built from, and because
 > `InputShadowCompare` names its sites by these line numbers. After step 02, 11 of the 37 lines read
 > `inputSource` instead and 26 remain: the 4 helicopter axes (phase-00 § 5 debt) and 22 edge-triggered
@@ -251,7 +251,7 @@ this section. Read the middle column as "this read only matters when…".
 
 2. **There is a 38th gameplay `Input.*` read outside `Assembly-CSharp/`.**
    [`MovementSimulation.FromUnityInput`](../Ironfront_Reborn/Assets/Scripts/Net/Shared/MovementSimulation.cs#L70)
-   reads `Horizontal`, `Vertical`, `Jump`, `Sprint` and `Crouch` directly. That file is Dev C's and
+   reads `Horizontal`, `Vertical`, `Jump`, `Sprint` and `Crouch` directly. That file is the replication track's and
    marked "nobody else may edit" in
    [conventions.md § 7](../plans/00-shared/conventions.md), so it is named here rather than changed.
    It is the natural second consumer of `IInputSource` once the interface exists.
@@ -265,7 +265,7 @@ this section. Read the middle column as "this read only matters when…".
 The other 43 `Input.*` lines, in 16 files (`SpectatorCamera` 9, `PathTypesDemo` 9,
 `ObjectPlacer`/`GroupController`/`CommandRoomCamera` 4 each, `WeaponManager`/`ScoreUi` 2 each, and
 nine files with one apiece), are spectator, level-editor tooling and menus.
-[Phase-00 criterion 6](../plans/dev-a-unity-client/phases/phase-00-foundation.md#3-acceptance-criteria)
+[Phase-00 criterion 6](../plans/unity-client/phases/phase-00-foundation.md#3-acceptance-criteria)
 explicitly permits them to keep calling `Input` directly.
 
 > **Count correction.** Both phase-00 ("59 `Input.*` call sites, ~40 in `FpsActorController`") and
@@ -377,7 +377,7 @@ grep -rl "NetContext\|NetMovementAgent\|MovementSimulation" *.cs | wc -l   # 0
 
 ## 8. Related
 
-- [`plans/dev-a-unity-client/phases/phase-00-foundation.md`](../plans/dev-a-unity-client/phases/phase-00-foundation.md) — the task this closes
-- [`plans/assist-dev-a/`](../plans/assist-dev-a/) — the assist track; steps 02 and 03 consume § 4 and § 3 respectively
+- [`plans/unity-client/phases/phase-00-foundation.md`](../plans/unity-client/phases/phase-00-foundation.md) — the task this closes
+- `plans/unity-client/study/` — the assist track; steps 02 and 03 consume § 4 and § 3 respectively
 - [`docs/movement-analysis.md`](movement-analysis.md) — the movement port, in the depth this document does not go into
 - [`plans/00-shared/conventions.md`](../plans/00-shared/conventions.md) § 7 — who may edit what

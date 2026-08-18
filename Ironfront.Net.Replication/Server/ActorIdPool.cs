@@ -10,9 +10,6 @@ namespace Ironfront.Net.Replication.Server
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// <b>Why a quarantine at all.</b> Actor 7 dies and disconnects; a new player joins a
     /// frame later and is given id 7. A snapshot for the old actor 7 is still in flight, and
     /// unreliable-sequenced delivery means it can arrive after the new actor's spawn. The
@@ -165,7 +162,7 @@ namespace Ironfront.Net.Replication.Server
         /// the whole world down, and for a lobby-driven round that is true. In the shipping
         /// Dustbowl scene it is not: the match cycles
         /// <c>Playing -> Ended -> Resetting -> WaitingForPlayers -> Warmup</c> on its own while
-        /// the 41 scene-resident bot actors keep existing, and keep holding their ids. Dev A
+        /// the 41 scene-resident bot actors keep existing, and keep holding their ids. The client track
         /// measured the result in round 9 -- <c>ids in-use=41</c> mid-round, <c>in-use=0
         /// free=64</c> immediately after an auto-reset, with the registry still reporting 41.
         /// </para>

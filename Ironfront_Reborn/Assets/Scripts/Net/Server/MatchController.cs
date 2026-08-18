@@ -14,9 +14,6 @@ namespace Ironfront.Net.Unity.Server
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// <b>This class coordinates; it does not decide.</b> Every rule — when warmup ends, how
     /// fast a point is taken, when a message is worth sending, what a reset clears — lives in
     /// <see cref="MatchStateMachine"/>, <see cref="CapturePointState"/> and

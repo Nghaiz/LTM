@@ -21,9 +21,6 @@ namespace Ironfront.Editor.Verification
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev A. Editor-only; nothing here can reach a player build.
-    /// </para>
-    /// <para>
     /// <b>Why these exist at all.</b> Both E3 and E6 ask for something that cannot be produced
     /// from a keyboard in this scene. E3 wants a shot aimed through a wall at a live target, and
     /// a yaw sweep cannot deliver one — a 0.5 m torso subtends a quarter of a degree at 110 m

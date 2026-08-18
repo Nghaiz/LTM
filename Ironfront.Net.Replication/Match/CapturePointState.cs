@@ -11,7 +11,7 @@ namespace Ironfront.Net.Replication.Match
     /// <remarks>
     /// Engine-free. The Unity wrapper reads position and radius off the existing
     /// <c>CapturePoint</c> component in the original codebase and copies them in — the
-    /// gameplay object stays Dev A's, and the authority over its value stays here.
+    /// gameplay object stays the client track's, and the authority over its value stays here.
     /// </remarks>
     public sealed class CapturePointState
     {

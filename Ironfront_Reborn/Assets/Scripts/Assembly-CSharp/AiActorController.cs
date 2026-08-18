@@ -376,7 +376,7 @@ public class AiActorController : ActorController
 	// immutable and stateless once constructed -- allocating one per skipped iteration, at
 	// eight coroutines x 40 bots, is the allocation this whole seam exists to avoid.
 	//
-	// 0.05f, not `yield return null`, and not the 0.1f Dev A suggested comparing against.
+	// 0.05f, not `yield return null`, and not the 0.1f the client track suggested comparing against.
 	// Round 9 measured the skip path re-polling every frame at 0.404 ms/frame across 40 bots
 	// doing no work -- 326 AI marker calls per frame with everything skipped against 103 with
 	// everything working, so a skipped bot was entered three times as often as a busy one.

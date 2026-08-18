@@ -3,9 +3,9 @@
 The authoritative game server's brain, as a plain .NET library.
 
 Snapshots, delta encoding, interest management, lag compensation, the movement
-simulation shared with the client, and the match lifecycle. **Owner: Dev C.**
+simulation shared with the client, and the match lifecycle. **Owner: The replication track.**
 
-> `Serialization/` (`BitWriter`, `BitReader`) is **Dev B's**. Dev C writes the conformance
+> `Serialization/` (`BitWriter`, `BitReader`) is **The transport track's**. The replication track writes the conformance
 > tests that verify it and does not edit it — if the same person writes and tests a codec,
 > the tests only prove it agrees with itself.
 
@@ -41,7 +41,7 @@ If you add something here, wire it in `ServerTickLoop` in the same change.
 | `Movement/` | `MovementCore` — the shared truth of client and server |
 | `Match/` | Match lifecycle, capture points, tickets |
 | `Server/` | Tick pacing, input authority, framing, id allocation, ticket validation |
-| `Serialization/` | **Dev B's.** Bit-level primitives |
+| `Serialization/` | **The transport track's.** Bit-level primitives |
 
 ---
 

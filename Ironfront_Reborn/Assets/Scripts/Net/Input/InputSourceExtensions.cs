@@ -7,7 +7,7 @@ namespace Ironfront.Net.Unity
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev A (assist track). The read half of the bitfield;
+    /// The read half of the bitfield;
     /// <see cref="InputButtonPacker"/> is the write half, and the two are covered by the same
     /// round-trip test.
     /// </para>
@@ -15,7 +15,7 @@ namespace Ironfront.Net.Unity
     /// <b>Extension methods rather than default interface members.</b> The phase-00 sketch put
     /// these on the interface as C# 8 default implementations. Unity 6000.3 compiles C# 9, so
     /// that would probably work — "probably" being the problem, since the failure mode is a
-    /// compile error at Dev A's desk that no gate in this repository can catch (CI builds no
+    /// compile error at the client track's desk that no gate in this repository can catch (CI builds no
     /// Unity code; .github/workflows/ci.yml says so in its own comment). Extension methods have
     /// worked since C# 3.0 and cost one <c>()</c> at the call site.
     /// </para>

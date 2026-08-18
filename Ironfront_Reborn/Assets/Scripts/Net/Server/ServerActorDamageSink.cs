@@ -7,9 +7,6 @@ namespace Ironfront.Net.Unity.Server
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// <b>Every damage source funnels through here.</b> Hitscan from
     /// <see cref="ServerCombatAuthority"/> arrives directly; bot bullets, melee, explosions and
     /// vehicle collisions arrive via the <c>Actor.Damage</c> guard (task 6), which is the one

@@ -1,6 +1,5 @@
 # tools/strip-removed-components.ps1 — deletes component blocks whose Unity class no longer
 # exists from serialized scenes and prefabs.
-# OWNER: Dev D (tools/, plans/00-shared/conventions.md section 7).
 #
 # WHY THIS EXISTS
 #

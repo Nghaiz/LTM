@@ -12,9 +12,6 @@ namespace Ironfront.Net.Unity.Server
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// The two <see cref="Func{T, TResult}"/> fields are built once in the constructor rather
     /// than passed as lambdas at the call site. A lambda that closes over <c>this</c> allocates
     /// a delegate on every call, and this one is called once per player per tick — 16 players

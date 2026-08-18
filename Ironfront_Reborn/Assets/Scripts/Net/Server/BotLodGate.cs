@@ -26,11 +26,8 @@ namespace Ironfront.Net.Unity.Server
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// <b>Why a component and a guard rather than toggling <c>enabled</c>.</b> Toggling the
-    /// MonoBehaviour is what the task sketch proposes, and Dev A declined it on PR #47 for a
+    /// MonoBehaviour is what the task sketch proposes, and the client track declined it on PR #47 for a
     /// reason that holds up: <c>AiActorController</c> runs eight coroutines alongside
     /// <c>Update</c>. Unity does pause a behaviour's coroutines when it is disabled, so the work
     /// genuinely stops — but every one of those coroutines is parked on a

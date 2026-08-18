@@ -6,8 +6,8 @@ namespace Ironfront.Net.Unity
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev A. Closes phase-00 task 3 — the seam a networked controller needs in order to
-    /// exist. Written by the lead's assist track (plans/assist-dev-a/step-02-input-source.md).
+    /// Closes phase-00 task 3 — the seam a networked controller needs in order to
+    /// exist. Written by the lead's assist track (plans/unity-client/study/step-02-input-source.md).
     /// </para>
     /// <para>
     /// <b>No UnityEngine here, on purpose.</b> This file and its pure siblings

@@ -6,9 +6,6 @@ namespace Ironfront.Net.Replication
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C. Phase-04 task 1.
-    /// </para>
-    /// <para>
     /// <b>Two of these flags are not honoured by the shipped encoder, on purpose.</b> The v1
     /// wire format froze byte-aligned (protocol-spec.md section 4.3), so
     /// <see cref="UseBitPacking"/> and <see cref="UseCompactHeight"/> describe formats the

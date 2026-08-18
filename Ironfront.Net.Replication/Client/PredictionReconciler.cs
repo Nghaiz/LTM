@@ -30,9 +30,6 @@ namespace Ironfront.Net.Replication.Client
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C. phase-02 task 2 on the client side.
-    /// </para>
-    /// <para>
     /// <b>The problem this solves.</b> The local player moves the instant a key is pressed,
     /// because waiting a round trip to see yourself move is unplayable. The server simulates the
     /// same input ~RTT/2 later and is the authority. Wherever they disagree — a collision the

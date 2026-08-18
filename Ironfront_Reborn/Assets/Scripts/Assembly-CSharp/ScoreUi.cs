@@ -53,7 +53,7 @@ public class ScoreUi : MonoBehaviour
 	/// That is a deliberate, surfaced limitation and not a silent fallback. The networked match
 	/// is scored by <c>Ironfront.Net.Replication.Match.MatchStateMachine</c>, which is where
 	/// authoritative match state belongs; separating this component's state from its rendering
-	/// is a redesign, not a guard, and it is Dev A's call to make.
+	/// is a redesign, not a guard, and it is the client track's call to make.
 	/// </remarks>
 	public static void AddScore(int blue, int red)
 	{

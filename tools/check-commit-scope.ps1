@@ -1,5 +1,4 @@
 # tools/check-commit-scope.ps1 — validates commit subjects against conventions.md section 1.2.
-# OWNER: Dev D (plans/00-shared/conventions.md section 7).
 #
 # This is an ADVISORY check. It runs in the `style` job of .github/workflows/ci.yml, which is
 # marked continue-on-error, so a non-zero exit here reports on the PR and never blocks a

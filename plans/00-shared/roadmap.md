@@ -1,7 +1,7 @@
 # Roadmap — the route to M1
 
-**Written:** 2026-08-13 · **Author:** Dev C · **Supersedes:** the ordering advice scattered across
-the four `plan.md` files and the Dev A handoff. Those stay authoritative for *what* each task is;
+**Written:** 2026-08-13 · **Author:** the replication track · **Supersedes:** the ordering advice scattered across
+the four `plan.md` files and the client track handoff. Those stay authoritative for *what* each task is;
 this page is authoritative for *what happens next and in what order*.
 
 M1 is the make-or-break milestone: **two clients seeing each other move smoothly at 100 ms RTT and
@@ -20,12 +20,12 @@ Measured, not estimated. Every number here comes from a test run or a merged PR.
 | Replication phase-01 | **6 of 10 M1 criteria met**, 3 met in code awaiting an Editor run, 1 blocked on transport |
 | Delta encoding | **44.7%** saving over full snapshots, measured on 595 real snapshots at 48 actors |
 | Bandwidth | **10.94 KB/s/client** including GSP header and framing, against a 12 KB/s budget |
-| Transport | `ITransport` frozen · `LoopbackTransport`, `BufferPool`, `NetworkSimulator` shipped · **UDP in progress with Dev B** |
+| Transport | `ITransport` frozen · `LoopbackTransport`, `BufferPool`, `NetworkSimulator` shipped · **UDP in progress with the transport track** |
 | Unity client | Server-layer scripts landed · MCP install settled (#17, #21) · plugin DLLs now match source |
 | Master server | Skeleton only. `MspFrame` shipped with the protocol, so the framing half is lighter than planned |
 | CI | Green on Ubuntu and Windows. **Branch protection is not configured on either `main` or `develop`** |
 
-**M0 is 3 of 4.** The one open item is *headless build runs*, owned by Dev A, gated on the Unity
+**M0 is 3 of 4.** The one open item is *headless build runs*, owned by the client track, gated on the Unity
 Editor. Nobody else can pull it forward — that is the whole reason it is still open.
 
 ---
@@ -33,10 +33,10 @@ Editor. Nobody else can pull it forward — that is the whole reason it is still
 ## 2. The critical path, and it is one thing
 
 ```
-Dev B: UdpTransport  ──►  M1 criterion 7 (two clients in sync)  ──►  M1
+The transport track: UdpTransport  ──►  M1 criterion 7 (two clients in sync)  ──►  M1
 ```
 
-Every other M1 criterion is either met, or waiting on one Editor session from Dev A. Criterion 7
+Every other M1 criterion is either met, or waiting on one Editor session from the client track. Criterion 7
 is the only one that no amount of work from A, C or D can close.
 
 **The integration is already a one-line change, and that is deliberate.** The Unity server binds
@@ -60,7 +60,7 @@ afterwards and no one is blocked on it.
 
 ---
 
-## 3. Dev A — one Editor session, in this exact order
+## 3. The client track — one Editor session, in this exact order
 
 Roughly 110 minutes. The order is not preference, it is a dependency chain, and two of the links
 are easy to get backwards.
@@ -86,11 +86,11 @@ for it.
 Afterwards, unblocked and no longer urgent: **A6** (weapon id registry, 30 min, blocks the snapshot
 weapon field) and **A7** (confirm the map bounding box, 10 min).
 
-Step-by-step with the exact clicks: [`dev-a-gate-board.html`](../dev-c-replication/handoff/dev-a-gate-board.html).
+Step-by-step with the exact clicks: [`integration-gate-board.html`](../replication/integration-gate-board.html).
 
 ---
 
-## 4. Dev B — you are the critical path
+## 4. The transport track — you are the critical path
 
 Phase-00 Task 6 and phase-01 Tasks 1–2 are in progress. Priority order, and it is deliberately not
 the plan's order:
@@ -110,7 +110,7 @@ than writing a second one. Same for `BufferPool` and `BitWriter` / `BitReader`.
 
 ---
 
-## 5. Dev C — phase-02, plus the harness that catches B
+## 5. The replication track — phase-02, plus the harness that catches B
 
 Nothing here needs the Editor, so none of it is blocked.
 
@@ -126,7 +126,7 @@ Nothing here needs the Editor, so none of it is blocked.
 
 ---
 
-## 6. Dev D — two ten-minute items are currently unguarded
+## 6. The master-server track — two ten-minute items are currently unguarded
 
 Both of these are already written up in [`docs/branch-protection.md`](../../docs/branch-protection.md),
 and neither has been done. They matter more than any code this week because four people are now
@@ -136,12 +136,12 @@ merging into one repository.
    404 was not "nobody got round to it" — it is what GitHub returns to a **non-admin** on an
    admin-only endpoint. No collaborator account has admin here, and the repository is private
    under a personal free plan, where branch protection is a paid feature regardless of role.
-   Only @Sagitoaz can move this, by going public or upgrading. Written up with the three
+   Only  can move this, by going public or upgrading. Written up with the three
    options in [`docs/branch-protection.md`](../../docs/branch-protection.md) § Status; it now
    belongs in the report's limitations, not on a to-do list.
 2. ~~**`.github/CODEOWNERS` still ships the placeholder handles.**~~ **Done, 2026-08-15.** The
-   four handles are mapped from merged-PR authorship — @Sagitoaz (A), @MinhToan4 (B), @Nghaiz
-   (C), @ngtukien (D) — and all four already hold Write. Note the file only becomes *binding*
+   four handles are mapped from merged-PR authorship —  (A), @MinhToan4 (B), 
+   (C),  (D) — and all four already hold Write. Note the file only becomes *binding*
    once "Require review from Code Owners" is on, which is item 1's blocker.
 3. ~~**New — the plugin-DLL drift gate.**~~ **Done, 2026-08-15.** Advisory step in the `style`
    job of `ci.yml`. It discovers the libraries from the DLLs actually present in
@@ -153,7 +153,7 @@ merging into one repository.
    lighter), then phase-01, prioritising **Task 5 `Ironfront.Tools.LoadTest`** because both B and C
    need it to produce numbers for the report.
 
-Dev D is off the M1 critical path entirely. That is what makes items 1–3 worth doing now rather
+The master-server track is off the M1 critical path entirely. That is what makes items 1–3 worth doing now rather
 than later.
 
 ---

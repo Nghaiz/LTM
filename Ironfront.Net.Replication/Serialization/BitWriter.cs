@@ -7,7 +7,7 @@ namespace Ironfront.Net.Replication.Serialization
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev B (conventions.md section 7). Dev C writes the conformance tests that judge
+    ///md section 7). The replication track writes the conformance tests that judge
     /// it and does not edit this file.
     /// </para>
     /// <para>

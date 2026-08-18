@@ -9,7 +9,7 @@ namespace Ironfront.Net.Unity.Server
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C. <c>Actor.cs</c> is Dev A's file, so the guard that lives there is kept to
+    /// <c>Actor.cs</c> is the client track's file, so the guard that lives there is kept to
     /// a shape a reviewer can read in one sitting: a role check and a call to this class.
     /// Everything the netcode actually does on a death is here, on this side of the line, where
     /// changing it does not need another review round.

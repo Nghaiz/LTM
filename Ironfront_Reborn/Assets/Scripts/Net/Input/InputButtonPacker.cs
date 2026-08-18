@@ -7,7 +7,7 @@ namespace Ironfront.Net.Unity
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev A (assist track). The write half of the bitfield;
+    /// The write half of the bitfield;
     /// <see cref="InputSourceExtensions"/> is the read half.
     /// </para>
     /// <para>

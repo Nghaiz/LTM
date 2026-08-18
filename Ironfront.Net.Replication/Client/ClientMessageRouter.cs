@@ -9,9 +9,6 @@ namespace Ironfront.Net.Replication.Client
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// <b>It decodes and dispatches; it does not act.</b> Snapshots go into the
     /// <see cref="Decoder"/> and then into the <see cref="Interpolator"/>; everything else is
     /// raised as an event for the Unity layer to turn into a spawned prefab, a killfeed line or

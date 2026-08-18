@@ -11,7 +11,7 @@ namespace Ironfront.Net.Replication
     /// <para>
     /// The split against <see cref="SnapshotMessage"/> is deliberate and is the seam between
     /// two owners: <see cref="SnapshotMessage"/> (Ironfront.Net.Protocol, shared) decides how
-    /// bytes are laid out; this class (Dev C) decides which actors and which fields go in at
+    /// bytes are laid out; this class (the replication track) decides which actors and which fields go in at
     /// all. Nothing here may invent a wire layout.
     /// </para>
     /// <para>

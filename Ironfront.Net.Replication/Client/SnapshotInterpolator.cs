@@ -35,7 +35,7 @@ namespace Ironfront.Net.Replication.Client
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C. The client half of phase-01; M1 criterion 7 is graded on what this
+    /// The client half of phase-01; M1 criterion 7 is graded on what this
     /// produces at 100 ms RTT and 5% loss.
     /// </para>
     /// <para>

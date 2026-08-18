@@ -18,7 +18,7 @@ namespace Ironfront.Net.Replication.Tests
     /// per-frame form during an unrelated edit, months later, with nobody watching.
     /// </para>
     /// <para>
-    /// Every test here is paired with a behavioural check on Dev A's Editor list
+    /// Every test here is paired with a behavioural check on the client track's Editor list
     /// (phase-v0 § 7). Neither half is sufficient alone.
     /// </para>
     /// <para>

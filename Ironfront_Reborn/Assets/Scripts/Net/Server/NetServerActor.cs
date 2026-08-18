@@ -12,9 +12,6 @@ namespace Ironfront.Net.Unity.Server
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// It reads gameplay state and never writes it, which is what makes it safe to attach to
     /// an existing prefab: with the server role inactive, nothing on this component runs at
     /// all.
@@ -77,7 +74,7 @@ namespace Ironfront.Net.Unity.Server
         /// <b>The serialized field's removal is safe because nothing had authored a meaningful
         /// value into it.</b> The three prefabs carrying a <c>NetServerActor</c> all stored
         /// <c>_health: 100</c>, which is also <c>Actor.health</c>'s declared default — so no
-        /// authored value is lost. This is called out in the task-6 PR so Dev A sees it.
+        /// authored value is lost. This is called out in the task-6 PR so the client track sees it.
         /// </para>
         /// <para>
         /// <b>The fallback is for actors with no <c>Actor</c>,</b> which is every bare test rig
@@ -290,7 +287,7 @@ namespace Ironfront.Net.Unity.Server
         /// put back. See <c>LagCompensator</c>.
         /// </para>
         /// <para>
-        /// <b>The boxes are a placeholder built from the actor's position.</b> Dev A's rig has
+        /// <b>The boxes are a placeholder built from the actor's position.</b> the client track's rig has
         /// the real ones, and swapping them in is a change to this method and nothing else —
         /// the resolution path does not care where the numbers came from. Until then, hit
         /// geometry is a plausible humanoid rather than this character.

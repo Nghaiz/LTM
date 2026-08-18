@@ -35,8 +35,8 @@ namespace Ironfront.Net.Configuration
         /// <summary>The HMAC key that signs join tickets. No default, on purpose.</summary>
         public static readonly EnvVar SharedSecret = new EnvVar(
             "IRONFRONT_SHARED_SECRET", "Identity and secrets", "master server, game server",
-            "The HMAC key that signs joinTickets. The master server (Dev D) issues tickets with\n" +
-            "it and the game server (Dev C) verifies them with it — both processes must be\n" +
+            "The HMAC key that signs joinTickets. The master server (the master-server track) issues tickets with\n" +
+            "it and the game server (the replication track) verifies them with it — both processes must be\n" +
             "configured with the SAME value, or every CONNECT_REQUEST is rejected with\n" +
             "CONNECT_DENIED reason 3.\n" +
             "\n" +

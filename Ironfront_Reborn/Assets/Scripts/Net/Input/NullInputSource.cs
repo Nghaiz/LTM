@@ -5,7 +5,7 @@ namespace Ironfront.Net.Unity
     /// dedicated server, which has no keyboard.
     /// </summary>
     /// <remarks>
-    /// OWNER: Dev A (assist track). A null object rather than a null reference: every
+    /// A null object rather than a null reference: every
     /// <c>ActorController</c> read is on a per-frame path, so a source that can be null turns
     /// one missed assignment into a <c>NullReferenceException</c> every frame for the rest of
     /// the session. Nothing pressed is always a safe answer.

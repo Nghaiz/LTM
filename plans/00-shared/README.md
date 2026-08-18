@@ -4,7 +4,7 @@ Project: convert the Ravenfield Beta 5 codebase (Unity 6000.3.21f1, single-playe
 server-authoritative multiplayer FPS, with **the entire TCP/UDP networking layer written from
 scratch** — no WebSocket, no Mirror/Netcode-for-GameObjects/Photon.
 
-- **Team**: 4 people (1 Unity core, 3 backend)
+- **Owner**: one developer, four subsystems
 - **Timeline**: 14 weeks (one-semester capstone)
 - **Target scale**: 16 real players + 32 AI bots per match
 - **Deployment**: LAN first, public VPS at M3
@@ -13,32 +13,38 @@ scratch** — no WebSocket, no Mirror/Netcode-for-GameObjects/Photon.
 
 ## Read in this order
 
-| # | Document | Who must read | When |
+| # | Document | Why | When |
 |---|---|---|---|
-| 1 | [feasibility-study.md](feasibility-study.md) | All 4 | Before starting |
-| 2 | [architecture.md](architecture.md) | All 4 | Before starting |
-| 3 | [algorithm-decisions.md](algorithm-decisions.md) | All 4 | Before starting |
-| 4 | [protocol-spec.md](protocol-spec.md) | **All 4, know it by heart** | Week 1, and keep referring back |
-| 5 | [dependency-map.md](dependency-map.md) | All 4 | Week 1 — know who you block and who blocks you |
-| 6 | [conventions.md](conventions.md) | All 4 | Before the first commit |
-| 7 | `../dev-X-*/plan.md` | The owner | Before every phase |
+| 1 | [feasibility-study.md](feasibility-study.md) | Foundational | Before starting |
+| 2 | [architecture.md](architecture.md) | Foundational | Before starting |
+| 3 | [algorithm-decisions.md](algorithm-decisions.md) | Foundational | Before starting |
+| 4 | [protocol-spec.md](protocol-spec.md) | **Know it by heart** | Week 1, and keep referring back |
+| 5 | [dependency-map.md](dependency-map.md) | Foundational | Week 1 — the ordering constraints are still real |
+| 6 | [conventions.md](conventions.md) | Foundational | Before the first commit |
+| 7 | `../<subsystem>/plan.md` | The track you are about to touch | Before every phase |
 
 ---
 
-## The 4 individual plans
+## The four subsystem plans
 
-> **Restructured:** high risk and cross-dependencies have been concentrated on Dev C. Dev B and
-> Dev D have **zero dependencies** on anyone else after week 2. Details:
-> [dependency-map.md](dependency-map.md).
+Originally four parallel tracks, now four codebases with one owner. The split still earns its
+keep: each has different constraints, and the dependency order between them is real regardless of
+who is typing.
 
-| Folder | Person | Role | Core deliverable | Budget |
-|---|---|---|---|---|
-| [`../dev-a-unity-client/`](../dev-a-unity-client/plan.md) | A | Unity Client Core | Refactor seam, `NetworkActorController`, interpolation, prediction glue, HUD/lobby UI, headless build | 11.5 pw |
-| [`../dev-b-transport/`](../dev-b-transport/plan.md) | B | Transport Layer | Pure-C# UDP reliability: seq/ack/bitfield, channels, fragmentation, congestion control, network simulator, **+ bit-packing serializer** | 13.0 pw |
-| [`../dev-c-replication/`](../dev-c-replication/plan.md) | **C** | Replication & Simulation | Snapshot + delta, interest management, server tick loop, **lag compensation**, **`MovementSimulation`**, **conformance test (the referee)**, **integration harness** | 13.0 pw |
-| [`../dev-d-master-server/`](../dev-d-master-server/plan.md) | D | Master Server & Services | .NET TCP master server: auth, lobby, matchmaking, room registry, chat, SQLite, load-test harness, CI + build script | 12.5 pw |
+| Folder | Subsystem | Core deliverable |
+|---|---|---|
+| [`../unity-client/`](../unity-client/plan.md) | Unity client | Refactor seam, `NetworkActorController`, interpolation, prediction glue, HUD/lobby UI, headless build |
+| [`../transport/`](../transport/plan.md) | Transport | Pure-C# UDP reliability: seq/ack/bitfield, channels, fragmentation, congestion control, network simulator, bit-packing serializer |
+| [`../replication/`](../replication/plan.md) | Replication & simulation | Snapshot + delta, interest management, server tick loop, lag compensation, `MovementSimulation`, conformance suite, integration harness |
+| [`../master-server/`](../master-server/plan.md) | Master server | .NET TCP master server: auth, lobby, matchmaking, room registry, chat, SQLite, load-test harness, CI + build script |
 
-**Difficulty (scored on 7 axes, see [dependency-map.md](dependency-map.md)):** C = 47/70 · B = 37/70 · D = 23/70.
+Replication remains the highest-risk surface — most dependencies in, most invariants to hold, and
+the only place where a bug is invisible until two machines disagree.
+
+**Delivered phase specs have been removed** (transport 00–02/04, replication 00–02/04,
+master-server 01/02/04, and the client-onboarding study track). Their reports are kept — those
+carry the measurements and the failures. The specs describe work that now exists as code and
+tests; `git log` has them if a decision needs re-reading.
 
 ---
 

@@ -17,9 +17,6 @@ namespace Ironfront.Net.Unity.Server
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// <b>This class coordinates; it does not decide.</b> Pacing lives in
     /// <see cref="ServerTickScheduler"/>, anti-cheat in <see cref="InputAuthority"/>, decoding
     /// in <see cref="ServerMessageRouter"/>, framing in <see cref="ServerPayloadWriter"/> —
@@ -612,7 +609,7 @@ namespace Ironfront.Net.Unity.Server
             // The ids of actors that survive the reset. Dustbowl's 41 bots are scene-resident
             // and outlive the match cycle, so a bare ResetAll would re-offer ids they still
             // hold -- and ActorIdsInUse would read 0 while 41 were in use, blinding the audit
-            // to exactly the leak it exists to catch (Dev A, round 9 defect 7).
+            // to exactly the leak it exists to catch (the client track, round 9 defect 7).
             _retainedIds.Clear();
             IReadOnlyList<NetServerActor> live = ServerActorRegistry.Instance.Actors;
             for (int i = 0; i < live.Count; i++)

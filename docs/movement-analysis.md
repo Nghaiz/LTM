@@ -1,6 +1,6 @@
 # Movement analysis — where character movement actually lives
 
-**Author:** Dev C · **Date:** 2026-08-12 · **Closes:** dev-c-replication phase-00 acceptance
+**Author:** the replication track · **Date:** 2026-08-12 · **Closes:** replication phase-00 acceptance
 criterion 7 (task 5.1, "the 4-question note")
 
 > Read this before touching `MovementSimulation`, `MovementCore`, or anything that predicts or
@@ -39,7 +39,7 @@ public override Vector3 Velocity()  => controller.Velocity();   // controller is
 public override bool    OnGround()  => controller.OnGround();
 ```
 
-**Consequence for the plan.** Task 5.1's 2-day budget and the 60-minute session with Dev A were
+**Consequence for the plan.** Task 5.1's 2-day budget and the 60-minute session with the client track were
 scoped against the wrong file. The actual movement code is 326 lines of stock Unity Standard
 Assets, publicly documented and already understood by anyone who has used it. The risk the plan
 called C8 ("the cost of learning `Actor.cs` is underestimated") did not materialise, because
@@ -175,8 +175,8 @@ private void ForceEndCrouch()
 ```
 
 The lift is hard-coded to `1.3/2` rather than derived from the height difference, so changing
-either height in the prefab silently desynchronises the two. Left alone (it is Dev A's file and
-outside this milestone's scope) but flagged in the Dev A checklist.
+either height in the prefab silently desynchronises the two. Left alone (it is the client track's file and
+outside this milestone's scope) but flagged in the client track checklist.
 
 ---
 
@@ -283,7 +283,7 @@ Divergence 3 is worth stating plainly: at 0.02 the original applies gravity 50 t
 but the *discrete* positions differ, and client prediction compares discrete positions. The
 client must run prediction at `1/SIM_TICK_RATE`, not at the project's fixed timestep.
 
-**How it was closed, and the thing that makes it worth reading twice.** Dev A chose option B —
+**How it was closed, and the thing that makes it worth reading twice.** the client track chose option B —
 keep the physics rate, give prediction its own accumulator
 (`Assets/Scripts/Net/Shared/NetPredictionClock.cs`). Option A, which this document's checklist
 originally recommended, would not have worked at all: `Time.fixedDeltaTime` is *assigned at
@@ -302,7 +302,7 @@ mispredictions would have looked like a bug in the simulation rather than in the
 
 ---
 
-## 6. What Dev A needs to expose (task 6, revised)
+## 6. What the client track needs to expose (task 6, revised)
 
 The plan asks A for six members on `Actor`. Given § 0 — that `Actor` does not own movement —
 **five of the six are the wrong request**, and asking for them would mean A adding pass-throughs
@@ -319,7 +319,7 @@ on `Actor` that forward to a controller that forwards to a `CharacterController`
 
 Rather than six edits to a 1188-line file A owns, the checklist asks for **one new component**
 that owns the seam. See
-[`plans/dev-c-replication/handoff/dev-a-checklist.md`](../plans/dev-c-replication/handoff/dev-a-checklist.md).
+[`plans/replication/integration-checklist.md`](../plans/replication/integration-checklist.md).
 
 ---
 

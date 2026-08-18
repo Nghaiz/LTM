@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-13
 
-**Reporter:** Dev A
+**Reporter:** the client track
 
 **Branch:** `fix/unity-v1-v5-verification`
 
@@ -75,9 +75,9 @@ motion generated from current input. There is no declared execution order betwee
 original `FirstPersonController.FixedUpdate`. Depending on Unity's ordering, the harness may compare
 the real delta from one tick with shadow motion from another tick.
 
-## Requested action for Dev C
+## Requested action for the replication track
 
-Please repair the harness before asking Dev A to repeat A3. A valid repair should, at minimum:
+Please repair the harness before asking the client track to repeat A3. A valid repair should, at minimum:
 
 1. Compare like with like around `CharacterController` collision. For the flat-ground criterion,
    compare horizontal delta separately or otherwise exclude the expected grounded vertical
@@ -88,5 +88,5 @@ Please repair the harness before asking Dev A to repeat A3. A valid repair shoul
 4. Report enough category counts to distinguish flat movement, airborne motion and skipped
    collision/discontinuity samples.
 
-Dev A will repeat the A3 playtest after the corrected harness is merged. A4 remains intentionally
+The client track will repeat the A3 playtest after the corrected harness is merged. A4 remains intentionally
 unstarted because the gate board requires a valid A3 measurement first.

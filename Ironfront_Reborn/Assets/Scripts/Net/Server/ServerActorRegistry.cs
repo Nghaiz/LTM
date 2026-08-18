@@ -13,9 +13,6 @@ namespace Ironfront.Net.Unity.Server
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// A registry rather than a scene scan: <c>FindObjectsOfType</c> allocates an array on
     /// every call, which at 20 Hz is a garbage source in the one loop that must not have one
     /// (M1 criterion 9). Actors add themselves in <c>OnEnable</c> and remove themselves in
@@ -212,7 +209,7 @@ namespace Ironfront.Net.Unity.Server
         /// scene deserialisation, which is <i>before</i> <c>SubsystemRegistration</c>. Anything
         /// that captured <c>Instance</c> that early held a reference this method used to throw
         /// away: actors then registered from <c>OnEnable</c> into a second, freshly-created
-        /// registry, and the early capture kept scanning an empty one forever. Dev A reproduced
+        /// registry, and the early capture kept scanning an empty one forever. The client track reproduced
         /// exactly that 3x from cold starts in round 9 -- <c>ServerTickLoop</c>'s constructor
         /// handed <c>ServerCombatBridge</c> and <c>ServerActorDamageSink</c> a registry with 0
         /// actors while 41 registered elsewhere, so <c>BuildTargets</c> handed

@@ -14,9 +14,6 @@ namespace Ironfront.Net.Unity.Client
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// At execution order -50: after <c>NetClientBootstrap</c> has pumped the transport at
     /// -1000, so the snapshot drawn this frame is the newest that arrived, and before anything
     /// at the default order reads a transform.

@@ -17,12 +17,12 @@ body:
     attributes:
       label: Area / owner
       options:
-        - client (Dev A)
-        - transport (Dev B)
-        - replication (Dev C)
-        - master (Dev D)
+        - client (the client track)
+        - transport (the transport track)
+        - replication (the replication track)
+        - master (the master-server track)
         - protocol (shared — needs PR + 2 approvals)
-        - tools / ci (Dev D)
+        - tools / ci (the master-server track)
     validations:
       required: true
 
@@ -31,7 +31,7 @@ body:
     attributes:
       label: Phase
       description: Which plan file this belongs to, if any.
-      placeholder: plans/dev-b-transport/phases/phase-01-reliability.md
+      placeholder: plans/transport/phases/phase-01-reliability.md
     validations:
       required: false
 

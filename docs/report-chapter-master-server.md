@@ -1,11 +1,11 @@
 # Chapter Z — The master server: lobby services over TCP
 
-**Author:** Dev D · **Milestone:** M4 · **Phase:** [phase-04-report.md](../plans/dev-d-master-server/phases/phase-04-report.md)
+**Author:** the master-server track · **Milestone:** M4 · **Phase:** `phase-04-report.md`
 
 Every number in this chapter was measured by
 [`Ironfront.Tools.MspBench`](../Ironfront.Tools.MspBench) or
 [`Ironfront.Tools.LoadTest`](../Ironfront.Tools.LoadTest), and the raw output is committed
-under [`plans/dev-d-master-server/reports/data/`](../plans/dev-d-master-server/reports/data/).
+under [`plans/master-server/reports/data/`](../plans/master-server/reports/data/).
 Anything not measured is labelled as an argument rather than dressed up as a result.
 
 **Measurement environment:** one Windows 11 machine, 16 logical cores, .NET 8.0, master
@@ -624,11 +624,11 @@ correctly said exactly that — memory went 41 MB → 73 MB while connections we
 ### Z.8.5 TCP versus UDP for the lobby (experiment 3)
 
 **This is an argument supported by measurement, not a second implementation.** The phase plan
-called for building the lobby a second time over Dev B's UDP transport purely to measure it.
+called for building the lobby a second time over the transport track's UDP transport purely to measure it.
 That is a multi-week build for something explicitly never shipped, and it was not done. What
 follows is labelled accordingly.
 
-What a UDP lobby would have to reimplement is not hypothetical — Dev B built it, for gameplay,
+What a UDP lobby would have to reimplement is not hypothetical — the transport track built it, for gameplay,
 and it can be counted:
 
 | Capability TCP provides | What the UDP side had to write |
@@ -719,12 +719,12 @@ reliability when it is needed. The master server proves the team knows when it i
 
 | Result | Raw data |
 |---|---|
-| Experiment 1 — framing | [`experiment-framing.json`](../plans/dev-d-master-server/reports/data/experiment-framing.json) |
-| Experiment 2 — Nagle | [`experiment-nagle.json`](../plans/dev-d-master-server/reports/data/experiment-nagle.json) |
-| Experiment 4 — Pipelines | [`experiment-pipelines.json`](../plans/dev-d-master-server/reports/data/experiment-pipelines.json) |
-| Experiment 5 — capacity | [`experiment-capacity.json`](../plans/dev-d-master-server/reports/data/experiment-capacity.json) |
-| Load-test scenarios | [`16-random-walk.json`](../plans/dev-d-master-server/reports/data/16-random-walk.json) and siblings |
-| Phase reports | [`reports/`](../plans/dev-d-master-server/reports/) |
+| Experiment 1 — framing | [`experiment-framing.json`](../plans/master-server/reports/data/experiment-framing.json) |
+| Experiment 2 — Nagle | [`experiment-nagle.json`](../plans/master-server/reports/data/experiment-nagle.json) |
+| Experiment 4 — Pipelines | [`experiment-pipelines.json`](../plans/master-server/reports/data/experiment-pipelines.json) |
+| Experiment 5 — capacity | [`experiment-capacity.json`](../plans/master-server/reports/data/experiment-capacity.json) |
+| Load-test scenarios | [`16-random-walk.json`](../plans/master-server/reports/data/16-random-walk.json) and siblings |
+| Phase reports | [`reports/`](../plans/master-server/reports/) |
 
 Reproduce with:
 

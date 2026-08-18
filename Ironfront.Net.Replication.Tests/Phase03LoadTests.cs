@@ -202,7 +202,7 @@ namespace Ironfront.Net.Replication.Tests
         [Fact]
         public void AResetKeepsActorIdsInUseHonestForActorsThatSurviveTheRound()
         {
-            // Dev A, round 9 defect 7: the shipping Dustbowl scene cycles
+            // the client track, round 9 defect 7: the shipping Dustbowl scene cycles
             // Playing -> Ended -> Resetting -> WaitingForPlayers -> Warmup on its own while its
             // 41 bots keep existing. Measured mid-round: ids in-use=41, registry 41. Measured
             // immediately after the auto-reset: ids in-use=0, free=64, registry still 41. The

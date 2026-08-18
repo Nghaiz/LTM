@@ -5,7 +5,7 @@ using Xunit;
 namespace Ironfront.Net.Replication.Tests.Conformance
 {
     /// <summary>
-    /// Verifies DEV B's <see cref="BitWriter"/> and <see cref="BitReader"/>.
+    /// Verifies the transport track's <see cref="BitWriter"/> and <see cref="BitReader"/>.
     /// </summary>
     /// <remarks>
     /// Closes phase-00 acceptance criterion 4, which sat at half-done because the bit stream
@@ -24,7 +24,7 @@ namespace Ironfront.Net.Replication.Tests.Conformance
         [Fact]
         public void WritesLsbFirst_MatchesHandWrittenHex()
         {
-            // The worked example from dev-c-replication/phase-00 § Task 3.
+            // The worked example from replication/phase-00 § Task 3.
             // 0b101 into 3 bits fills bits 0..2; 0b11 into 2 bits fills bits 3..4.
             // bit0=1 bit1=0 bit2=1 bit3=1 bit4=1  ->  1 + 4 + 8 + 16 = 29 = 0b00011101.
             Span<byte> buffer = stackalloc byte[4];

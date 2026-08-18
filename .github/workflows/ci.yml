@@ -1,6 +1,5 @@
 name: CI
 
-# OWNER: Dev D (plans/00-shared/conventions.md section 7).
 # The referee: push, and you immediately know whether you broke someone else's build
 # without having to ask them.
 #
@@ -94,7 +93,7 @@ jobs:
       # Nothing else in this pipeline compiles Unity code — the unity-compile job below needs a
       # licensed Editor and is commented out for that reason. So an unbalanced brace or a piece
       # of C# 10 syntax in Ironfront_Reborn/Assets/Scripts/ reaches develop green and is found
-      # by Dev A opening the Editor, which is the slowest possible feedback loop in the project.
+      # by the client track opening the Editor, which is the slowest possible feedback loop in the project.
       #
       # This parses those files with Roslyn at Unity's language version (C# 9). It resolves no
       # types, so it is a syntax gate and not a compiler — but a file that does not parse is a
@@ -188,7 +187,7 @@ jobs:
       # adding a library to build-libs.ps1 extends the check with no edit here.
       #
       # Advisory, and deliberately so: a stale DLL never breaks the .NET build or the tests
-      # (they compile from source), it breaks Unity at Dev A's desk. Blocking a merge on it
+      # (they compile from source), it breaks Unity at the client track's desk. Blocking a merge on it
       # would stop work that is provably correct on every gate that can measure it.
       - name: Plugin DLL drift check
         if: always()
@@ -247,7 +246,7 @@ jobs:
           echo "No vulnerable packages."
 
   # =======================================================================================
-  # Publishes the DLLs Dev A needs in Unity, so nobody has to build them by hand or ask B
+  # Publishes the DLLs the client track needs in Unity, so nobody has to build them by hand or ask B
   # and C to send them over chat. Runs only after a green build on an integration branch.
   # =======================================================================================
   unity-libs:
@@ -287,7 +286,7 @@ jobs:
 
   # =======================================================================================
   # Infra syntax gate (phase 03). A compose file that does not render is a deploy that does
-  # not start, so this blocks like build-test does — but it only fails on Dev D's infra/,
+  # not start, so this blocks like build-test does — but it only fails on the master-server track's infra/,
   # never on app code. No Unity licence, no cloud credentials, no network beyond Docker.
   # =======================================================================================
   infra-validate:
@@ -348,7 +347,7 @@ jobs:
           terraform -chdir=infra/terraform validate
 
   # Unity compilation needs a licensed Editor on the runner, which the free tier does not
-  # provide. Dev A runs `pwsh tools/ci.ps1` locally with UNITY_PATH set instead. Enable
+  # provide. The client track runs `pwsh tools/ci.ps1` locally with UNITY_PATH set instead. Enable
   # this job once a self-hosted runner with Unity 6000.3.21f1 exists.
   #
   # unity-compile:

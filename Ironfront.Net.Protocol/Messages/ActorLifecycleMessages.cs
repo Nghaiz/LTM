@@ -16,7 +16,7 @@ namespace Ironfront.Net.Protocol
     /// rather than *changing* a specified one, so it does not bump
     /// <see cref="ProtocolConstants.PROTOCOL_VERSION"/>. It does still need the section 2
     /// review to become normative — it is flagged here, in the phase-02 report, and in the
-    /// Dev A checklist.
+    /// the client track checklist.
     /// </para>
     /// <para>
     /// The fields are the minimum a client needs to instantiate an actor before any snapshot

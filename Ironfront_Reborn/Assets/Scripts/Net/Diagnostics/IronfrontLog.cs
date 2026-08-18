@@ -15,9 +15,6 @@ namespace Ironfront.Net.Diagnostics
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// <b>Why this exists.</b> Nothing in this project wrote a log anywhere. The console is
     /// the only sink, the console is cleared on every Play, and a build has no console at all
     /// — so "no logs" was the accurate description of the state of the project rather than a

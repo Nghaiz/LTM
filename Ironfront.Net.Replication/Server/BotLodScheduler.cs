@@ -24,7 +24,7 @@ namespace Ironfront.Net.Replication.Server
     /// <c>AiActorController.enabled</c> is what task 5 sketches, and trap 7 then warns that
     /// coroutines and <c>Time.deltaTime</c> timers inside the controller can misbehave when it
     /// is toggled repeatedly. The clean fix is an <c>updateInterval</c> field inside
-    /// <c>AiActorController</c>, which is Dev A's file — filed on the Dev A checklist rather
+    /// <c>AiActorController</c>, which is the client track's file — filed on the client track checklist rather
     /// than changed here. Keeping the policy separate from the mechanism means that answer,
     /// whenever it lands, does not touch this logic or its tests.
     /// </para>

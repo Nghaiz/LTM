@@ -6,11 +6,11 @@ namespace Ironfront.Net.Unity
 {
     /// <summary>
     /// The Unity-facing face of the shared movement simulation. Runs on BOTH the client (Dev
-    /// A's prediction) and the server (Dev C's authoritative simulation).
+    /// A's prediction) and the server (the replication track's authoritative simulation).
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C. conventions.md section 7 marks this file "Nobody else may edit" — it is
+    /// conventions.md section 7 marks this file "Nobody else may edit" — it is
     /// the shared source of truth for client and server, and the moment the two sides disagree
     /// about one line of it, every predicted tick mispredicts and the player rubber-bands.
     /// </para>

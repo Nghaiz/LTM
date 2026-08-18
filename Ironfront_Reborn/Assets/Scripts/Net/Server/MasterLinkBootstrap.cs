@@ -14,9 +14,6 @@ namespace Ironfront.Net.Unity.Server
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// <b>This is the boot script <see cref="ServerMasterReporter"/> was written to expect.</b>
     /// That component holds an <see cref="IMatchReporter"/> port and defaults to
     /// <see cref="NullMatchReporter"/> — standalone mode, where the server plays complete
@@ -227,7 +224,7 @@ namespace Ironfront.Net.Unity.Server
             };
         }
 
-        // The Poll() contract from Dev D's plan section 5: every event and Task continuation
+        // The Poll() contract from the master-server track's plan section 5: every event and Task continuation
         // fires on the thread that calls this, so Unity API use stays on the main thread and the
         // whole off-main-thread bug class disappears. One frame of latency, on a lobby link.
         private void Update() => _link?.Poll();

@@ -2,9 +2,9 @@
 
 **Date:** 2026-08-14
 
-**Owner:** Dev C — Replication and Simulation
+**Owner:** the replication track — Replication and Simulation
 
-**Evidence:** Dev A's A3 rerun in PR #42 (`952c2f2`)
+**Evidence:** the client track's A3 rerun in PR #42 (`952c2f2`)
 
 ## Problem
 
@@ -70,13 +70,13 @@ will be skipped silently; verbose mode may report that the harness is waiting fo
 - Review the final diff to confirm `MovementCore`, wire formats, and unrelated Unity client files
   are unchanged.
 
-The local checks prove compilation and preserve the deterministic core. A3 remains open until Dev A
+The local checks prove compilation and preserve the deterministic core. A3 remains open until the client track
 performs the focused Editor rerun because only the interactive playtest can supply the acceptance
 evidence requested by the checklist.
 
 ## Documentation and PR workflow
 
-Update the Dev C to Dev A checklist with a new rerun round that identifies the input-alignment fix,
+Update the replication-to-client checklist with a new rerun round that identifies the input-alignment fix,
 requests a focused flat-ground sprint-transition run, and keeps A4 blocked until A3 produces a clean
-grounded verdict. The implementation PR will reference PR #42 rather than copy Dev A's report into
+grounded verdict. The implementation PR will reference PR #42 rather than copy the client track's report into
 the new branch.

@@ -16,9 +16,6 @@ namespace Ironfront.Net.Unity.Server
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// <b>This class decides nothing.</b> Whether the shot was legal, what it hit, how much it
     /// did and whether that killed anyone are all <see cref="ServerCombatAuthority"/>'s answers,
     /// arrived at in a library CI can run. What is left here is the three things a library

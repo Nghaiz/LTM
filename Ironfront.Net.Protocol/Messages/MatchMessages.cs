@@ -13,7 +13,7 @@ namespace Ironfront.Net.Protocol
     /// but does not describe <i>documents</i> an unspecified message rather than <i>changes</i>
     /// a specified one, so it does not bump
     /// <see cref="ProtocolConstants.PROTOCOL_VERSION"/>. It still needs the section 2 review
-    /// to become normative, and is flagged in code, in the phase-03 report, and on the Dev A
+    /// to become normative, and is flagged in code, in the phase-03 report, and on the client track
     /// checklist.
     /// </para>
     /// <para>

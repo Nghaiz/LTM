@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-13
 
-**Reviews:** `feat(client): add stable weapon network ids` (#33, Dev A) — merged
+**Reviews:** `feat(client): add stable weapon network ids` (#33, the client track) — merged
 
 **Follow-up:** #34
 
@@ -23,7 +23,7 @@ why they are worth closing now rather than after M1.
 `weaponId` was a `u8` on the wire from the freeze onward with **no section saying what any value
 meant**. After #33 the mapping existed, but only as serialized `NetworkId` fields inside
 `Ironfront_Reborn/Assets/Resources/_Managers.prefab` — a Unity YAML asset. The server is a
-netstandard library with no Unity reference and cannot open it. Dev C's `WeaponConfig` has no
+netstandard library with no Unity reference and cannot open it. The replication track's `WeaponConfig` has no
 registry keyed by id at all; the only weapon it knows is the placeholder `WeaponConfig.Rifle`.
 
 This is the same defect the channel envelope had for a whole milestone (§ 5.1, closed by #30): a
@@ -73,10 +73,10 @@ A null guard on `weapons` and on individual entries was added while in there.
 - `dotnet test` — 590/590 across all four suites (197 protocol, 284 replication, 34 master
   server, 75 transport).
 - `tools/SpecChecker` — OK, 65 constants. Fault-injection confirmed it fails on drift.
-- **`WeaponManager.cs` is compiled by Unity, not by the solution.** The Editor half is Dev A's
+- **`WeaponManager.cs` is compiled by Unity, not by the solution.** The Editor half is the client track's
   step, same as the harness in #32.
 
-## Next for Dev C
+## Next for the replication track
 
 The server still has no id → `WeaponConfig` table; `WeaponConfig.Rifle` is the only entry and is
 described in its own summary as the placeholder loadout. `WeaponIds` gives that table its keys.

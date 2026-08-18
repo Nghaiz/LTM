@@ -15,8 +15,8 @@ namespace Ironfront.Net.Protocol
     /// <b>Byte order.</b> The <c>length</c> prefix is big-endian, called out explicitly in
     /// section 10 as the network standard. <c>msgType</c> is NOT called out, so it follows
     /// the section 0 default of little-endian. That mixed-endian frame is what this class
-    /// implements. It is worth a second look during integration — if Dev A's client and
-    /// Dev D's master server disagree on msgType's byte order, every message routes to the
+    /// implements. It is worth a second look during integration — if the client track's client and
+    /// the master-server track's master server disagree on msgType's byte order, every message routes to the
     /// wrong handler while the length prefix still parses perfectly, which is a
     /// particularly confusing failure. Resolve it via the section 2 protocol-change
     /// process if the team wants both fields big-endian.
@@ -94,7 +94,7 @@ namespace Ironfront.Net.Protocol
     /// body that will never arrive.
     /// </para>
     /// <para>
-    /// One instance per connection. Not thread-safe — in Dev D's design all logic runs on
+    /// One instance per connection. Not thread-safe — in the master-server track's design all logic runs on
     /// a single thread, so no locking is needed.
     /// </para>
     /// <para>

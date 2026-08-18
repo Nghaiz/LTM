@@ -11,8 +11,8 @@ namespace Ironfront.Net.Unity.Client
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev A. Written by the lead's assist track
-    /// (plans/assist-dev-a/step-06-master-connection.md).
+    /// Written by the lead's assist track
+    /// (plans/unity-client/study/step-06-master-connection.md).
     /// </para>
     /// <para>
     /// <b>This is not password storage, and it must not be mistaken for it.</b> What the master

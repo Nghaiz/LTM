@@ -13,13 +13,13 @@ namespace Ironfront.Net.Unity.Client
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev A. Written by the lead's assist track
-    /// (plans/assist-dev-a/step-07-imgui-shell.md).
+    /// Written by the lead's assist track
+    /// (plans/unity-client/study/step-07-imgui-shell.md).
     /// </para>
     /// <para>
     /// <b>It is ugly on purpose and should stay ugly.</b> This is not a replacement for the
     /// Canvas UI — its job is to prove the flow works and to unblock the ten-run login handoff
-    /// with Dev D, and looking finished would only invite someone to ship it.
+    /// with the master-server track, and looking finished would only invite someone to ship it.
     /// </para>
     /// <para>
     /// <b>The precedent is <c>TransportDebugOverlay</c>,</b> which draws its whole panel from
