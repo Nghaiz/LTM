@@ -67,6 +67,10 @@ namespace Ironfront.Net.Unity.Client
                  + "vehicle heavy-damage and player-damage screenshake.")]
         [SerializeField] private int _shakeIterations = 3;
 
+        [Tooltip("How many blast radii away the screenshake still reaches. Past this the shake "
+                 + "is zero, so a distant explosion is seen and not felt.")]
+        [SerializeField] private float _shakeRadiusMultiplier = 3f;
+
         [Tooltip("Scorch decal size per metre of blast radius. There is no scorch DecalType "
                  + "(client-track V7 gap); this reuses Impact the same way a grenade's direct "
                  + "hit does today.")]
@@ -150,7 +154,7 @@ namespace Ironfront.Net.Unity.Client
         private void RenderExplosion(Vector3 position, float radiusMetres, ExplosionKind kind)
         {
             PlayEffect(position, radiusMetres, kind);
-            ApplyScreenshake(radiusMetres);
+            ApplyScreenshake(position, radiusMetres);
 
             // No scorch DecalType exists (the enum is Impact / BloodBlue / BloodRed), so this
             // reuses Impact -- the same choice GrenadeProjectile's own direct-hit decal already
@@ -194,12 +198,32 @@ namespace Ironfront.Net.Unity.Client
             effect.Play();
         }
 
-        private void ApplyScreenshake(float radiusMetres)
+        /// <summary>
+        /// Shakes the local camera in proportion to the blast and how close it was.
+        /// </summary>
+        /// <remarks>
+        /// <b>The distance term is not decoration.</b> The server broadcasts an explosion to
+        /// every client that could plausibly witness it, which is a far wider set than the ones
+        /// standing in it. Scaling by radius alone would kick the camera of a player half the
+        /// map away every time a grenade went off — a bug that reads as "the netcode is
+        /// shaking my screen at random" rather than as a missing falloff.
+        /// </remarks>
+        private void ApplyScreenshake(Vector3 position, float radiusMetres)
         {
             FpsActorController local = FpsActorController.instance;
             if (local == null || local.fpParent == null) return;
 
-            local.fpParent.ApplyScreenshake(radiusMetres * _shakeMagnitudePerMetre, _shakeIterations);
+            float audible = radiusMetres * _shakeRadiusMultiplier;
+            if (audible <= 0f) return;
+
+            float distance = Vector3.Distance(local.transform.position, position);
+            if (distance >= audible) return;
+
+            float falloff = 1f - distance / audible;
+            float magnitude = radiusMetres * _shakeMagnitudePerMetre * falloff;
+            if (magnitude <= 0f) return;
+
+            local.fpParent.ApplyScreenshake(magnitude, _shakeIterations);
         }
     }
 }

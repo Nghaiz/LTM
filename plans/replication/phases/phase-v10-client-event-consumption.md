@@ -912,3 +912,57 @@ test and should run first.
   branch is in a presenter, never in a model.
 
 **Still outside the replication track:** nothing in this phase.
+
+---
+
+## 8. Implementation record — 2026-08-18
+
+Tasks 1-7 and 9-12 landed. **Task 8 did not**, and is the only part of the phase outstanding.
+
+### Task 8 is severed, and the gate says so out loud
+
+`ApplyAuthoritativeOwner` does not exist on `develop` — V8 Task 1 has not landed — so per **D15**
+the capture-point handler was not written. `OnCapturePoint` is therefore still the one router event
+with no production subscriber, which would leave G1 red forever.
+
+It is **not** suppressed. `GateRunner.KnownUnwiredEvents` carries one entry naming the event, the
+blocking work and the reason, printed on every CI run as `KNOWN GAP`. The list is **self-retiring**:
+an event listed there that turns out to *be* subscribed **fails** the gate, so the exemption cannot
+outlive the gap it describes. Landing V8 Task 1 then V10 Task 8 means deleting that entry, and
+forgetting to delete it is a build failure rather than a quiet false green.
+
+### Corrections to this document, found at the source
+
+| § | Claim | Actual |
+|---|---|---|
+| **D21**, Task 11 | "`Ironfront_Reborn/Assets` contains **zero** `.asmdef` files" | **Three**: `Net/Server/`, `Net/Shared/`, and `Assets/Tests/EditMode/`. **The conclusion survives for a different reason:** none of them covers `Net/Client/` or `Assembly-CSharp/`, which compile into `Assembly-CSharp` — and that needs an Editor. Roslyn-over-source is still the only mechanism. It also means `Net/Client/` and `Assembly-CSharp/` are **one assembly**, which is what lets `Actor.cs` call `NetClientPresenterGuard` directly. |
+| Task 11 exclusions | "today's tests would supply **four** false positives" | **Three** events — `OnHitConfirm`, `OnDeath`, `OnWeaponFire`. The exclusion is kept regardless. |
+| Task 10 | radius unpacks via "V1's `ExplosionEncoding.UnpackRadiusMetres`" | **No such helper exists.** `ExplosionMessage.RadiusMetres` is a plain whole-metre `byte`, used directly. Only the centre goes through `Quantize.UnpackPos`. |
+| Task 10 | "camera shake" | No API of that name. The mechanism is `PlayerFpParent.ApplyScreenshake(magnitude, iterations)` via `FpsActorController.instance.fpParent`, as `Vehicle.cs` already calls it. |
+| **D17**, Task 9 | an unresolved local team is naturally expressed as `-1`, since `owner == -1` is never true | **`-1` is a live value.** `SpawnPoint.owner` defaults to it and a neutral `CapturePoint` stays there outside assault mode, so `-1` would have made every neutral point's button **interactable** for an unresolved player — the exact inversion of D17's intent. `TeamId.None` (255) is used instead; it can never equal a real `owner`. |
+| § 1.5, Task 3 | eight `!aiControlled` sites at `:223, :716, :824, :853, :1124, :1139, :1166, :1181` | The **count is right**; every line number had drifted. Actual pre-edit: `:248, :748, :856, :885, :1174, :1189, :1216, :1231`. `:292`/`:304` (weapon instantiation) and `:1241` (`IsLowQuality`) were audited and left — genuinely AI-vs-human, not local-vs-remote. |
+| § 1.1 | router events at `:66, :69, :79, :89, :98, :101, :104, :107, :114` | Drifted ~3 lines: `:63, :66, :76, :86, :95, :98, :101, :104, :111`. Nine events, as stated. |
+
+### Two gaps this phase opened rather than closed, named per V1 D5's rule
+
+- **`ClientCombatState` is instantiated by nothing.** D19 reads as though the local player's death,
+  respawn timer and ammo prediction are already wired on the client; the *model* is shipped and
+  tested, but **no Unity component owns one** — a grep for `ClientCombatState` across
+  `Assets/Scripts/` returns zero. So V10 correctly does not duplicate it, and the local player's
+  death *state* still has no owner. `NetClientCombatPresenter.KnockOverLocalActor` fells the body
+  (without it the local player takes hits, staggers and stands there dead, because `ownsHealth` is
+  false at the client role) but does not disable input or drive a respawn screen. **Owner: V3 or a
+  client-flow phase.**
+- **`ScoreUi` has no phase, timer or human-count `Text`.** Two optional fields — `phaseText` and
+  `phaseTimerText` — were added and are preferred when assigned; until the client track assigns
+  them the HUD borrows the flag labels and `WarnOnce` says so, naming **E5**. That borrowing
+  **collides with capture points the moment Task 8 lands**, which is why the dedicated fields exist
+  now rather than later.
+
+### A gate rule the phase implied but did not enumerate
+
+Task 7's *Verify* asks for "a grep gate: the objective presenter references neither `AddScore` nor
+`AddFlag`". That is implemented as **G5**, alongside G1-G4, with both a red and a green fixture —
+rather than as a one-off assertion, because D11's failure mode is a *refactor that reads as tidying
+up* ("`ScoreUi` already has `AddScore`, just call that"), and those are caught by builds, not by
+reviews.

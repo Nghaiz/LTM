@@ -101,6 +101,21 @@ jobs:
       - name: Check Unity scripts parse at Unity's C# version
         run: dotnet run --project tools/UnitySyntaxCheck --configuration Release --no-build
 
+      # ClientMessageRouter raises nine events. Six of them spent months with no subscriber at
+      # all: the server framed the message, the wire carried it, the client decoded it, the
+      # router raised it, and the delegate was null. Every layer had passing tests, because the
+      # defect lives in the gap between them where no test was looking, and it presents as
+      # "deaths do not render" rather than as anything a stack trace names.
+      #
+      # This is the only check in the pipeline that can see that gap: it reads the event list off
+      # the type by reflection and asks Roslyn whether anything under Assets/Scripts subscribes.
+      # HARD, because a dead event is a feature that silently does not exist. It also carries
+      # three narrower guards documented in tools/ClientWiringGate — a cosmetics presenter
+      # reaching a damage path, an empty catch on the capture-point path, and a per-actor path
+      # touching a local-player singleton without the IsLocalActor guard (finding A16).
+      - name: Check every ClientMessageRouter event still has a subscriber
+        run: dotnet run --project tools/ClientWiringGate --configuration Release --no-build
+
       # A .meta carries the asset's GUID, and every prefab/scene reference is stored as that GUID
       # rather than as a path. An asset committed without its .meta gets a DIFFERENT GUID on every
       # machine that imports it, so references break for everyone except whoever committed first —

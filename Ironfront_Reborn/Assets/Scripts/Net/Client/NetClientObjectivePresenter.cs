@@ -124,6 +124,12 @@ namespace Ironfront.Net.Unity.Client
             SetAlpha(ScoreUi.instance.redScoreText, alpha);
             SetAlpha(ScoreUi.instance.blueFlagsText, alpha);
             SetAlpha(ScoreUi.instance.redFlagsText, alpha);
+
+            // The dedicated phase/timer elements too, when the prefab has them. Dimming only
+            // the four legacy fields would leave the timer reading as live while the numbers
+            // beside it are flagged stale -- worse than not dimming at all.
+            SetAlpha(ScoreUi.instance.phaseText, alpha);
+            SetAlpha(ScoreUi.instance.phaseTimerText, alpha);
         }
 
         private static void SetAlpha(Text text, float alpha)
