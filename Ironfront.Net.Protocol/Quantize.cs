@@ -46,9 +46,27 @@ namespace Ironfront.Net.Protocol
         public const float QUAT_RANGE  =  1.41421356f;          // 2/sqrt(2)
         /// <summary>Steps in the 10-bit component field. 1023, so both endpoints are exact.</summary>
         public const int   QUAT_LEVELS = 1023;
-        // Resolution = 1.41421356 / 1023 = 1.38e-3 per step, i.e. under 0.16 degrees of
-        // angular error once all three components are accounted for — finer than the 0.5 m/s
-        // the same stream already accepts for velocity.
+        // Step = 1.41421356 / 1023 = 1.38e-3, so each transmitted component is off by at most
+        // half a step. That is NOT the whole error, and reading it as though it were is how the
+        // 0.16 degrees this comment used to claim was arrived at.
+        //
+        // The dropped component is reconstructed as m = sqrt(1 - a^2 - b^2 - c^2), so its error
+        // is dm = -(a*da + b*db + c*dc) / m and it grows as m shrinks. m is smallest at the
+        // four-way tie (0.5, 0.5, 0.5, 0.5), where it is exactly 0.5 and the three transmitted
+        // components are at their largest simultaneously:
+        //
+        //     |dm|   <= 3 * 0.5 * 6.912e-4 / 0.5 = 2.074e-3
+        //     |dq|   ~  sqrt(3 * (6.912e-4)^2 + (2.074e-3)^2) = 2.394e-3
+        //     angle  ~  2 * |dq| = 4.79e-3 rad = 0.274 degrees
+        //
+        // Measured worst case is 0.268 degrees, against a 0.3 degree budget: a 2-million-sample
+        // uniform sweep finds 0.243, a dense grid over the three transmitted components finds
+        // 0.241, and only a deliberate search of the tie corner finds 0.268. A random sweep of
+        // 10^4 rotations reports about 0.19 and looks like a pass — which is exactly why the
+        // conformance test searches the corner instead of sampling and hoping.
+        //
+        // 0.27 degrees on a vehicle at 20 Hz is well below anything visible, and finer than the
+        // 0.5 m/s the same stream already accepts for velocity.
 
         // ===== HEALTH =====
         // health is a u8 directly in 0..100, no scaling needed

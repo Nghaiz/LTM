@@ -432,7 +432,8 @@ public static class Quantize
     public const float QUAT_MIN    = -0.70710678f;     // -1/√2
     public const float QUAT_RANGE  =  1.41421356f;     //  2/√2
     public const int   QUAT_LEVELS = 1023;             // 10 bits, endpoints exact
-    // Resolution = 1.41421356 / 1023 = 1.38e-3 per step → under 0.16° of angular error.
+    // Step = 1.41421356 / 1023 = 1.38e-3. Worst-case angular error is 0.268° — see below;
+    // it is NOT the step size, because the reconstructed component amplifies it.
 
     // ===== HEALTH =====
     // health is a u8 directly in 0..100, no scaling needed
@@ -453,6 +454,30 @@ unsigned quantization of `QUAT_MIN … −QUAT_MIN`. The dropped component is re
 | **Renormalize on unpack** | 10-bit quantization leaves the length off unit by ~0.1%. One frame tolerates it; interpolated blending across three does not |
 
 A round-trip-only test passes with the sign bug present, which is why § 14 lists each separately.
+
+**The angular budget is 0.3°, and the step size is not where it comes from.** Each transmitted
+component is off by at most half a step (6.912e-4). The dropped component is reconstructed as
+`m = sqrt(1 − a² − b² − c²)`, so its error is `δm = −(a·δa + b·δb + c·δc) / m` and **grows as `m`
+shrinks**. `m` is smallest at the four-way tie `(0.5, 0.5, 0.5, 0.5)`, where it is exactly 0.5 and
+the three transmitted components are simultaneously at their largest:
+
+```
+|δm|  ≤ 3 × 0.5 × 6.912e-4 / 0.5           = 2.074e-3
+|δq|  ≈ sqrt(3 × (6.912e-4)² + (2.074e-3)²) = 2.394e-3
+angle ≈ 2 × |δq| = 4.79e-3 rad              = 0.274°
+```
+
+| Search | Worst error found |
+|---|---|
+| Uniform sweep, 2 × 10⁶ rotations | 0.243° |
+| Dense grid over the three transmitted components | 0.241° |
+| **Deliberate search of the four-way tie** | **0.268°** |
+| A 10⁴-sample random sweep | ~0.19° — reads as a pass |
+
+The last row is the point: this budget was written as 0.2° from the step size alone, and a
+10⁴-sample test agreed with it. The conformance test therefore **searches the tie corner** rather
+than sampling and hoping. Meeting 0.2° would need 12-bit components (5 bytes), which moves the
+pinned 30-byte vehicle entry — not worth 0.07° nobody can see.
 
 **Mandatory verification (conformance test):**
 ```
@@ -1160,7 +1185,9 @@ run by `dotnet test` and by CI on every push.
 
 Added at v3.0.0:
 
-- [x] `PackQuat`/`UnpackQuat` round-trip error < 0.2° across all four largest-component branches
+- [x] `PackQuat`/`UnpackQuat` round-trip error < 0.3° across all four largest-component branches,
+      **including a deliberate search of the four-way tie** where the reconstructed component's
+      error is worst (§ 4.4) — a random sweep alone reports ~0.19° and proves nothing
 - [x] `PackQuat(q)` == `PackQuat(-q)`, unpacked length within 1e-3 of unit, and **no `NaN` for any
       32-bit input** — the three properties a round-trip-only test cannot see (§ 4.4)
 - [x] A full vehicle entry is exactly 30 bytes, field by field against § 4.10, and a stationary

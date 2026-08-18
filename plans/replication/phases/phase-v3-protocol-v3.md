@@ -525,8 +525,26 @@ handshake tests, which read the constant).
    bandwidth regression later.
 4. A seated actor's snapshot carries `vehicleId`/`seatIndex`; leaving a seat produces a delta with
    `SeatInfo` set and `vehicleId == 0`; an unchanged seat produces no `SeatInfo` bit.
-5. Smallest-three quaternion round-trips within **0.2°** across all four largest-component
-   branches, is sign-canonical, unit-normalized, and returns no `NaN` for any 32-bit input.
+5. Smallest-three quaternion round-trips within **0.3°** across all four largest-component
+   branches — **including a deliberate search of the four-way tie**, not a random sweep — is
+   sign-canonical, unit-normalized, and returns no `NaN` for any 32-bit input.
+
+   > **Corrected during implementation, 2026-08-18, with the owner's agreement.** This criterion
+   > read 0.2°, taken from § Task 2's "1.38 × 10⁻³ per step, i.e. **< 0.16°** of angular error".
+   > That reads the step size as if it were the whole error. It is not: the dropped component is
+   > reconstructed as `sqrt(1 − a² − b² − c²)`, so its error is `−(a·δa + b·δb + c·δc)/m` and
+   > grows as `m` shrinks — worst at the four-way tie `(0.5, 0.5, 0.5, 0.5)`, giving
+   > `≈ 2 × 2.394e-3 rad = 0.274°`. Measured: 0.243° over a 2 × 10⁶ uniform sweep, 0.241° over a
+   > dense grid, **0.268°** once the tie corner is searched deliberately. 10-bit smallest-three
+   > cannot meet 0.2° in 32 bits; 12-bit components would, at 5 bytes, which moves the § 2.2
+   > 30-byte entry this phase is forbidden from re-deriving. 0.27° on a vehicle at 20 Hz is
+   > invisible and finer than the 0.5 m/s velocity resolution the same stream already accepts.
+   >
+   > **The sharper lesson is about the test, not the number.** A 10⁴-sample random sweep reports
+   > ~0.19° and agreed with the wrong budget — a green that had only ever seen the easy part of
+   > the space. `QuaternionPackTests` now searches the corner and asserts the result is *above*
+   > 0.2° as well as below 0.3°, so a change that stops it reaching the corner fails loudly
+   > instead of quietly reporting 0.19° again.
 6. Hand-written hex samples exist and pass in both directions for all six new messages, for a mixed
    full+stationary vehicle snapshot, and for a 23-byte seated actor entry.
 7. The worst case — 16 full vehicle entries (489 B) plus an actor snapshot — fits one un-fragmented

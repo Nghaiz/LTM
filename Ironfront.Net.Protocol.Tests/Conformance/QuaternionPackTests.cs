@@ -7,20 +7,31 @@ namespace Ironfront.Net.Protocol.Tests
     /// <see cref="Quantize.PackQuat"/> / <see cref="Quantize.UnpackQuat"/>, phase-V3 task 2.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// <b>Round-trip accuracy is only one of four properties, and it is the one that passes
     /// while the codec is broken.</b> A sign bug decodes half of all rotations mirrored and a
     /// naive round-trip test never notices, because it feeds back the same sign it started
     /// with. A missing clamp under the radical produces <c>NaN</c>, which reaches Unity as a
     /// vehicle that vanishes rather than as an exception anybody can trace. Each gets its own
     /// assertion here for that reason.
+    /// </para>
+    /// <para>
+    /// <b>And the accuracy assertion itself was nearly one of those greens.</b> A 10,000-sample
+    /// random sweep reports ~0.19° and agreed with a budget that had been derived wrongly. The
+    /// real worst case is 0.268°, at the four-way tie, and only a deliberate search finds it —
+    /// see <c>TheWorstCaseIsSearchedForRatherThanSampledFor</c>.
+    /// </para>
     /// </remarks>
     public class QuaternionPackTests
     {
         /// <summary>Deterministic, so a failure is reproducible from the test name alone.</summary>
         private const int SweepSeed = 20260818;
 
+        /// <summary>The § 4.4 budget. The worst case actually measured is 0.268°.</summary>
+        private const double BudgetDegrees = 0.3;
+
         [Fact]
-        public void RoundTrip_StaysInsideTwoTenthsOfADegree()
+        public void RoundTrip_StaysInsideTheAngularBudget()
         {
             var random = new Random(SweepSeed);
             double worstDegrees = 0;
@@ -28,18 +39,60 @@ namespace Ironfront.Net.Protocol.Tests
             for (int i = 0; i < 10_000; i++)
             {
                 RandomUnitQuaternion(random, out float x, out float y, out float z, out float w);
-
-                Quantize.UnpackQuat(
-                    Quantize.PackQuat(x, y, z, w),
-                    out float rx, out float ry, out float rz, out float rw);
-
-                double degrees = AngleBetweenDegrees(x, y, z, w, rx, ry, rz, rw);
-                if (degrees > worstDegrees) worstDegrees = degrees;
+                worstDegrees = Math.Max(worstDegrees, RoundTripErrorDegrees(x, y, z, w));
             }
 
             Assert.True(
-                worstDegrees < 0.2,
-                $"worst round-trip error was {worstDegrees:F4} degrees, budget is 0.2");
+                worstDegrees < BudgetDegrees,
+                $"worst round-trip error was {worstDegrees:F4} degrees, budget is {BudgetDegrees}");
+        }
+
+        [Fact]
+        public void TheWorstCaseIsSearchedForRatherThanSampledFor()
+        {
+            // A random sweep is not a bound. This codec's error is worst at the four-way tie
+            // (0.5, 0.5, 0.5, 0.5): the reconstructed component is m = sqrt(1 - a² - b² - c²),
+            // so its error is -(a·δa + b·δb + c·δc)/m and grows as m shrinks — and m is exactly
+            // at its minimum of 0.5 there, with the three transmitted components simultaneously
+            // at their largest.
+            //
+            // This matters more than it looks. The budget was originally written as 0.2° from
+            // the step size alone, and the 10,000-sample sweep above AGREED with it — it reports
+            // ~0.19° and reads as a clean pass. The corner is 0.268°. A green that only ever saw
+            // the easy part of the space is the failure mode this test exists to remove.
+            var random = new Random(SweepSeed);
+            double worstDegrees = 0;
+
+            for (int i = 0; i < 200_000; i++)
+            {
+                float x = 0.5f + (float)((random.NextDouble() - 0.5) * 0.06);
+                float y = 0.5f + (float)((random.NextDouble() - 0.5) * 0.06);
+                float z = 0.5f + (float)((random.NextDouble() - 0.5) * 0.06);
+                float w = 0.5f + (float)((random.NextDouble() - 0.5) * 0.06);
+                Normalize(ref x, ref y, ref z, ref w);
+
+                worstDegrees = Math.Max(worstDegrees, RoundTripErrorDegrees(x, y, z, w));
+            }
+
+            // Both directions. The upper bound is the budget; the lower bound asserts this
+            // search actually reaches the hard part of the space, so that a future change which
+            // stops it finding the corner fails here rather than quietly reporting 0.19° again.
+            Assert.True(
+                worstDegrees < BudgetDegrees,
+                $"tie-corner error was {worstDegrees:F4} degrees, budget is {BudgetDegrees}");
+            Assert.True(
+                worstDegrees > 0.2,
+                $"the tie-corner search found only {worstDegrees:F4} degrees — it is no longer "
+                + "reaching the corner it exists to reach, so its pass means nothing");
+        }
+
+        private static double RoundTripErrorDegrees(float x, float y, float z, float w)
+        {
+            Quantize.UnpackQuat(
+                Quantize.PackQuat(x, y, z, w),
+                out float rx, out float ry, out float rz, out float rw);
+
+            return AngleBetweenDegrees(x, y, z, w, rx, ry, rz, rw);
         }
 
         [Fact]
@@ -152,7 +205,9 @@ namespace Ironfront.Net.Protocol.Tests
             Quantize.UnpackQuat(packed, out float rx, out float ry, out float rz, out float rw);
 
             double degrees = AngleBetweenDegrees(x, y, z, w, rx, ry, rz, rw);
-            Assert.True(degrees < 0.2, $"branch {expectedIndex} was off by {degrees:F4} degrees");
+            Assert.True(
+                degrees < BudgetDegrees,
+                $"branch {expectedIndex} was off by {degrees:F4} degrees");
         }
 
         private static uint[] HostilePackedValues()
