@@ -32,6 +32,11 @@ namespace Ironfront.Net.Protocol.Tests
             // "Full (every field)": 2 + 1 + 6 + 3 + 3 + 1 + 1 + 2 + 1 = 20
             Assert.Equal(20, SnapshotMessage.EntrySize(SnapshotField.FullNoSeat));
 
+            // The seated case, which is what InterestManager now projects against. 3 bytes
+            // wider, and the 8 bytes of shedding headroom that costs are the reason it is
+            // pinned here rather than left to a bandwidth regression to discover.
+            Assert.Equal(23, SnapshotMessage.EntrySize(SnapshotField.Full));
+
             // "Typical delta (pos + rot only)": 2 + 1 + 6 + 3 = 12
             Assert.Equal(12, SnapshotMessage.EntrySize(
                 SnapshotField.Position | SnapshotField.Rotation));
@@ -51,6 +56,10 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(1 << 5, (byte)SnapshotField.Weapon);
             Assert.Equal(1 << 6, (byte)SnapshotField.Team);
             Assert.Equal(1 << 7, (byte)SnapshotField.SeatInfo);
+
+            // All 8 bits, now that the seat field is populated rather than reserved.
+            Assert.Equal(0xFF, (byte)SnapshotField.Full);
+            Assert.Equal(0x7F, (byte)SnapshotField.FullNoSeat);
         }
 
         [Fact]

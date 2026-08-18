@@ -141,8 +141,8 @@ namespace Ironfront.Net.Replication.Tests
             var session = new ClientSession(connectionId: 1, actorId: Viewer);
             var view = new WorldSnapshot();
 
-            // 40 close (Near), 40 distant (Far). Only 58 fit, so 22 must go — and every one of
-            // them has to come out of the distant group.
+            // 40 close (Near), 40 distant (Far). Only 50 fit now that MaxEntrySize is 23, so
+            // 31 must go — and every one of them has to come out of the distant group.
             var world = new WorldSnapshot { ServerTick = 1 };
             world.Add(Actor(Viewer, Vec3.Zero));
 

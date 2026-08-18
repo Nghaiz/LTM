@@ -84,6 +84,7 @@ MonoBehaviour:
   seats:
   - {fileID: 114539345050348057}
   - {fileID: 114309529824738912}
+  networkId: 2
   maxHealth: 400
   crashDamageSpeedThrehshold: 2
   crashDamageMultiplier: 15

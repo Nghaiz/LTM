@@ -67,15 +67,26 @@ namespace Ironfront.Net.Protocol
         Weapon     = 1 << 5,
         /// <summary>u8. Only sent on change (rare). 1 byte.</summary>
         Team       = 1 << 6,
-        /// <summary>u16 vehicleId + u8 seatIndex (stretch goal). 3 bytes.</summary>
+        /// <summary>
+        /// u16 vehicleId + u8 seatIndex. 3 bytes. <b>vehicleId 0 means "not seated"</b>, which
+        /// is how leaving a vehicle is expressed on a field that is only sent on change.
+        /// </summary>
         SeatInfo   = 1 << 7,
 
         /// <summary>
-        /// Every field a v1 actor actually uses — bits 0..6, excluding the stretch-goal
-        /// seat field. This is the "full snapshot" mask, and it encodes to the 20 bytes
-        /// per actor that protocol-spec.md section 4.3 budgets for.
+        /// Bits 0..6 — every field an actor on foot has. Still the right mask for an unseated
+        /// actor: <see cref="SeatInfo"/> describes a relationship such an actor does not have,
+        /// and claiming it would spend 3 bytes saying "no vehicle" on every actor in the game.
+        /// Encodes to 20 bytes.
         /// </summary>
         FullNoSeat = Position | Rotation | Velocity | StateFlags | Health | Weapon | Team,
+
+        /// <summary>
+        /// All 8 bits — every field a SEATED actor has. Encodes to 23 bytes, which is the width
+        /// <c>InterestManager</c> must project against, because the projection has to be the
+        /// worst case rather than the common one.
+        /// </summary>
+        Full = FullNoSeat | SeatInfo,
     }
 
     /// <summary>S_HIT_CONFIRM hitboxType. protocol-spec.md section 4.5.</summary>

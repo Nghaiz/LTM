@@ -56,11 +56,16 @@ namespace Ironfront.Tools.SpecChecker
             checkedCount += Check(spec, "ProtocolConstants", typeof(ProtocolConstants), failures);
             checkedCount += Check(spec, "Quantize", typeof(Quantize), failures);
             checkedCount += Check(spec, "WeaponIds", typeof(WeaponIds), failures);
+            checkedCount += Check(spec, "VehicleIds", typeof(VehicleIds), failures);
 
             // The weapon registry has a third copy that is not a constant anywhere: the
             // serialized NetworkId fields in the Unity prefab. Nothing else in the build can see
             // it — the server has no Unity reference and the prefab is not compiled.
             checkedCount += CheckWeaponPrefab(repoRoot, failures);
+
+            // Same arrangement one value space over: the vehicleType mapping's third copy is the
+            // serialized networkId on each vehicle prefab, which no compiler reads either.
+            checkedCount += CheckVehiclePrefabs(repoRoot, failures);
 
             if (checkedCount == 0)
             {
@@ -79,8 +84,9 @@ namespace Ironfront.Tools.SpecChecker
                 Console.Error.WriteLine(
                     "  Either the code changed without the spec, or the spec changed without the code.");
                 Console.Error.WriteLine(
-                    "  Protocol changes go through conventions.md section 2: PR, 2 approvals, " +
-                    "PROTOCOL_VERSION bump, changelog row.");
+                    "  Protocol changes clear protocol-spec.md § 15's wire gate: this checker " +
+                    "green, a hex-sample conformance test per changed opcode, a changelog row, " +
+                    "and PROTOCOL_VERSION bumped in both places if the bytes moved.");
                 return 1;
             }
 
@@ -263,6 +269,264 @@ namespace Ironfront.Tools.SpecChecker
             }
 
             return count;
+        }
+
+        /// <summary>
+        /// Scanned recursively, and rooted at Assets rather than at Assets/Prefab: a vehicle
+        /// prefab moved into a subfolder must not fall out of the gate by being moved.
+        /// </summary>
+        private const string VehiclePrefabDirectory = "Ironfront_Reborn/Assets";
+
+        /// <summary>
+        /// Compares the serialized <c>networkId</c> on every vehicle prefab against
+        /// <see cref="VehicleIds"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The vehicle counterpart of <see cref="CheckWeaponPrefab"/>, and it exists for the same
+        /// reason: an id reassigned in the Inspector produces a green build, a green test suite,
+        /// and a server and client that disagree about which vehicle type 4 is — at runtime, for
+        /// every player.
+        /// </para>
+        /// <para>
+        /// <b>Scanned by script GUID rather than by field name.</b> The weapon check matches on
+        /// shape (a <c>NetworkId:</c> line followed immediately by <c>name:</c>) and concedes in
+        /// its own comment that reordering the serialized fields silently drops the parse to
+        /// zero. Here the anchor is the <c>m_Script</c> GUID of a <c>Vehicle</c> subclass, which
+        /// does not move when fields are reordered, and the identity is the prefab's own file
+        /// name. A prefab carrying a Vehicle script with no <c>networkId</c> at all is reported
+        /// as unauthored rather than skipped — that is the state every one of these was in
+        /// before phase-V3, and skipping it is how it would have stayed that way.
+        /// </para>
+        /// </remarks>
+        private static int CheckVehiclePrefabs(string repoRoot, List<string> failures)
+        {
+            string prefabDirectory = Path.Combine(
+                repoRoot, VehiclePrefabDirectory.Replace('/', Path.DirectorySeparatorChar));
+
+            if (!Directory.Exists(prefabDirectory))
+            {
+                failures.Add($"vehicle registry: prefab directory not found at {VehiclePrefabDirectory}.");
+                return 0;
+            }
+
+            HashSet<string> vehicleScriptGuids = FindVehicleScriptGuids(repoRoot);
+            if (vehicleScriptGuids.Count == 0)
+            {
+                failures.Add(
+                    "vehicle registry: found no Vehicle subclass .meta GUIDs under " +
+                    "Assets/Scripts/Assembly-CSharp. Either the class hierarchy changed or this " +
+                    "checker can no longer find it — update the checker rather than the ids.");
+                return 0;
+            }
+
+            var records = new List<VehiclePrefabRecord>();
+
+            foreach (string prefabPath in Directory.GetFiles(
+                         prefabDirectory, "*.prefab", SearchOption.AllDirectories))
+            {
+                string text = File.ReadAllText(prefabPath);
+
+                if (!ReferencesAVehicleScript(text, vehicleScriptGuids)) continue;
+
+                Match id = Regex.Match(
+                    text, @"^\s+networkId:\s*(?<id>-?\d+)\s*$", RegexOptions.Multiline);
+
+                records.Add(new VehiclePrefabRecord(
+                    Path.GetFileNameWithoutExtension(prefabPath),
+                    id.Success
+                        ? int.Parse(id.Groups["id"].Value, CultureInfo.InvariantCulture)
+                        : (int?)null));
+            }
+
+            return ValidateVehicleRegistry(records, failures);
+        }
+
+        /// <summary>One vehicle prefab as the registry check sees it: a name and an id, or none.</summary>
+        public readonly struct VehiclePrefabRecord
+        {
+            public VehiclePrefabRecord(string name, int? networkId)
+            {
+                Name = name;
+                NetworkId = networkId;
+            }
+
+            public string Name { get; }
+            /// <summary>Null when the prefab carries a Vehicle script but no serialized id.</summary>
+            public int? NetworkId { get; }
+        }
+
+        /// <summary>
+        /// Judges a set of vehicle-prefab records against <see cref="VehicleIds"/>. Returns how
+        /// many authored ids it saw.
+        /// </summary>
+        /// <remarks>
+        /// <b>Pure, and separated from the file scan on purpose.</b> A gate nobody has watched
+        /// fail is unproven, and the failure classes here — a reassigned id, an id the registry
+        /// does not know, an id no prefab carries — are all silent on both sides of the wire.
+        /// Keeping the judgement free of IO is what lets every one of them be driven from a
+        /// fixture on every CI run rather than exercised by hand once.
+        /// </remarks>
+        public static int ValidateVehicleRegistry(
+            IReadOnlyList<VehiclePrefabRecord> prefabs, List<string> failures)
+        {
+            var seen = new Dictionary<int, string>();
+            int count = 0;
+
+            foreach (VehiclePrefabRecord prefab in prefabs)
+            {
+                string name = prefab.Name;
+
+                if (!prefab.NetworkId.HasValue)
+                {
+                    failures.Add(
+                        $"vehicle registry: prefab '{name}' carries a Vehicle script but has no " +
+                        "serialized networkId. Author it in the Inspector against " +
+                        "protocol-spec.md § 4.9 — an unauthored vehicle spawns as type 0 and the " +
+                        "client instantiates nothing.");
+                    continue;
+                }
+
+                count++;
+                int value = prefab.NetworkId.Value;
+
+                if (seen.TryGetValue(value, out string? owner))
+                {
+                    failures.Add(
+                        $"vehicle registry: id {value} is on both '{owner}' and '{name}'. Ids are " +
+                        "unique and permanent — give the new vehicle the next free id.");
+                    continue;
+                }
+                seen[value] = name;
+
+                if (value <= 0 || value > byte.MaxValue)
+                {
+                    failures.Add(
+                        $"vehicle registry: '{name}' has id {value}. Valid ids are 1..255; " +
+                        "0 is reserved for no/unknown vehicle.");
+                    continue;
+                }
+
+                string expected = VehicleIds.NameOf((byte)value);
+                if (expected.Length == 0)
+                {
+                    failures.Add(
+                        $"vehicle registry: the prefab '{name}' has id {value}, which VehicleIds " +
+                        $"does not know (MAX_ASSIGNED is {VehicleIds.MAX_ASSIGNED}). Add it to " +
+                        "VehicleIds.cs and to protocol-spec.md § 4.9.");
+                    continue;
+                }
+
+                if (!string.Equals(expected, name, StringComparison.Ordinal))
+                {
+                    failures.Add(
+                        $"vehicle registry: id {value} is '{name}' in the prefabs and " +
+                        $"'{expected}' in VehicleIds. One of the two was renamed or reassigned.");
+                }
+            }
+
+            if (count == 0)
+            {
+                // A zero-entry parse is a FAILURE, never a pass. The weapon check learned this
+                // first: a checker that reports green because it found nothing to check has
+                // replaced a silent bug with a louder silence.
+                failures.Add(
+                    "vehicle registry: parsed 0 authored vehicle prefabs. Either no prefab " +
+                    "carries a Vehicle script any more, or the GUID scan no longer finds them — " +
+                    "update this checker to match.");
+                return 0;
+            }
+
+            // The reverse direction: an id the code claims exists but no prefab carries. Left
+            // alone, the server would keep spawning a type no client can ever instantiate.
+            for (byte id = 1; id <= VehicleIds.MAX_ASSIGNED; id++)
+            {
+                if (!seen.ContainsKey(id))
+                {
+                    failures.Add(
+                        $"vehicle registry: VehicleIds declares id {id} " +
+                        $"('{VehicleIds.NameOf(id)}') but no prefab carries it. Ids are " +
+                        "permanent — a removed vehicle keeps its id rather than freeing it.");
+                }
+            }
+
+            return count;
+        }
+
+        /// <summary>
+        /// The .meta GUIDs of <c>Vehicle</c> and every class that derives from it, at any depth.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Derived from the source rather than hardcoded, so adding a fifth <c>Vehicle</c>
+        /// subclass does not need an edit here — the same data-driven rule the id table itself
+        /// follows.
+        /// </para>
+        /// <para>
+        /// <b>Transitive, not direct-subclass-only.</b> A first pass over the sources collects
+        /// every <c>class X : Y</c> edge, then the set is closed over it. Matching only
+        /// <c>: Vehicle</c> would silently drop a <c>class ArmouredCar : Car</c> out of the gate
+        /// — which is the same shape as the failure the gate exists to catch, one level up.
+        /// </para>
+        /// </remarks>
+        private static HashSet<string> FindVehicleScriptGuids(string repoRoot)
+        {
+            var guids = new HashSet<string>(StringComparer.Ordinal);
+
+            string scriptDirectory = Path.Combine(
+                repoRoot,
+                "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp"
+                    .Replace('/', Path.DirectorySeparatorChar));
+
+            if (!Directory.Exists(scriptDirectory)) return guids;
+
+            // className -> (base name, .meta guid)
+            var classes = new Dictionary<string, (string BaseName, string? Guid)>(StringComparer.Ordinal);
+
+            foreach (string sourcePath in Directory.GetFiles(
+                         scriptDirectory, "*.cs", SearchOption.AllDirectories))
+            {
+                Match declaration = Regex.Match(
+                    File.ReadAllText(sourcePath), @"class\s+(?<name>\w+)\s*:\s*(?<base>\w+)");
+                if (!declaration.Success) continue;
+
+                string metaPath = sourcePath + ".meta";
+                string? guid = null;
+                if (File.Exists(metaPath))
+                {
+                    Match match = Regex.Match(
+                        File.ReadAllText(metaPath), @"guid:\s*(?<guid>[0-9a-f]{32})");
+                    if (match.Success) guid = match.Groups["guid"].Value;
+                }
+
+                classes[declaration.Groups["name"].Value] =
+                    (declaration.Groups["base"].Value, guid);
+            }
+
+            // Close the "derives from Vehicle" set. Bounded by the class count, so the fixed
+            // point is reached in at most that many passes even with a pathological hierarchy.
+            var derived = new HashSet<string>(StringComparer.Ordinal) { "Vehicle" };
+            bool grew = true;
+            while (grew)
+            {
+                grew = false;
+                foreach ((string name, (string baseName, string? _)) in classes)
+                    if (derived.Contains(baseName) && derived.Add(name)) grew = true;
+            }
+
+            foreach (string name in derived)
+                if (classes.TryGetValue(name, out (string _, string? Guid) entry) && entry.Guid != null)
+                    guids.Add(entry.Guid);
+
+            return guids;
+        }
+
+        private static bool ReferencesAVehicleScript(string prefabText, HashSet<string> guids)
+        {
+            foreach (Match script in Regex.Matches(prefabText, @"m_Script:.*?guid:\s*(?<guid>[0-9a-f]{32})"))
+                if (guids.Contains(script.Groups["guid"].Value)) return true;
+
+            return false;
         }
 
         /// <summary>

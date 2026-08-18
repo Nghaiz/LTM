@@ -38,6 +38,36 @@ namespace Ironfront.Net.Protocol
         public const float VEL_SCALE = 127f / VEL_MAX;     // i8
         // Resolution = 64/127 = 0.5 m/s — only used for extrapolation, which is fine
 
+        // ===== ROTATION (full, smallest-three) =====
+        // A unit quaternion's largest component is at least 0.5, so the other three are each
+        // inside +/-1/sqrt(2). Sending only those three at 10 bits apiece, plus a 2-bit index
+        // of the one that was dropped, is a full rotation in 32 bits.
+        public const float QUAT_MIN    = -0.70710678f;          // -1/sqrt(2)
+        public const float QUAT_RANGE  =  1.41421356f;          // 2/sqrt(2)
+        /// <summary>Steps in the 10-bit component field. 1023, so both endpoints are exact.</summary>
+        public const int   QUAT_LEVELS = 1023;
+        // Step = 1.41421356 / 1023 = 1.38e-3, so each transmitted component is off by at most
+        // half a step. That is NOT the whole error, and reading it as though it were is how the
+        // 0.16 degrees this comment used to claim was arrived at.
+        //
+        // The dropped component is reconstructed as m = sqrt(1 - a^2 - b^2 - c^2), so its error
+        // is dm = -(a*da + b*db + c*dc) / m and it grows as m shrinks. m is smallest at the
+        // four-way tie (0.5, 0.5, 0.5, 0.5), where it is exactly 0.5 and the three transmitted
+        // components are at their largest simultaneously:
+        //
+        //     |dm|   <= 3 * 0.5 * 6.912e-4 / 0.5 = 2.074e-3
+        //     |dq|   ~  sqrt(3 * (6.912e-4)^2 + (2.074e-3)^2) = 2.394e-3
+        //     angle  ~  2 * |dq| = 4.79e-3 rad = 0.274 degrees
+        //
+        // Measured worst case is 0.271 degrees, against a 0.3 degree budget: a 2-million-sample
+        // uniform sweep finds 0.243, a dense grid over the three transmitted components finds
+        // 0.241, and only a deliberate search of the tie corner finds 0.271. A random sweep of
+        // 10^4 rotations reports about 0.19 and looks like a pass — which is exactly why the
+        // conformance test searches the corner instead of sampling and hoping.
+        //
+        // 0.27 degrees on a vehicle at 20 Hz is well below anything visible, and finer than the
+        // 0.5 m/s the same stream already accepts for velocity.
+
         // ===== HEALTH =====
         // health is a u8 directly in 0..100, no scaling needed
         public const byte HEALTH_MAX = 100;
@@ -139,6 +169,119 @@ namespace Ironfront.Net.Protocol
         }
 
         public static float UnpackMoveAxis(sbyte q) => q / MOVE_AXIS_SCALE;
+
+        // ------------------------------------------------------------------ rotation
+
+        /// <summary>
+        /// Packs a unit quaternion into 32 bits: the 2-bit index of its largest-magnitude
+        /// component, then the other three in source order at 10 bits each.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Layout, high bits first: <c>[31:30]</c> largest index (0=x, 1=y, 2=z, 3=w),
+        /// <c>[29:20]</c>, <c>[19:10]</c>, <c>[9:0]</c> the remaining three, each an unsigned
+        /// quantization of <see cref="QUAT_MIN"/>..<c>-QUAT_MIN</c>. The dropped component is
+        /// rebuilt on unpack as <c>sqrt(1 - a^2 - b^2 - c^2)</c>.
+        /// </para>
+        /// <para>
+        /// <b>The sign is canonicalized before packing.</b> <c>q</c> and <c>-q</c> are the same
+        /// rotation, so the largest component is forced positive and the reconstructed sign is
+        /// therefore always <c>+</c>. Without this, half of all rotations would decode
+        /// mirrored — and they would decode as perfectly valid quaternions while doing it,
+        /// which is why it is done here rather than checked for later.
+        /// </para>
+        /// </remarks>
+        public static uint PackQuat(float x, float y, float z, float w)
+        {
+            float ax = x < 0f ? -x : x;
+            float ay = y < 0f ? -y : y;
+            float az = z < 0f ? -z : z;
+            float aw = w < 0f ? -w : w;
+
+            int largest = 0;
+            float largestMagnitude = ax;
+            if (ay > largestMagnitude) { largest = 1; largestMagnitude = ay; }
+            if (az > largestMagnitude) { largest = 2; largestMagnitude = az; }
+            if (aw > largestMagnitude) { largest = 3; largestMagnitude = aw; }
+
+            float largestValue = largest == 0 ? x : largest == 1 ? y : largest == 2 ? z : w;
+            if (largestValue < 0f) { x = -x; y = -y; z = -z; w = -w; }
+
+            float a, b, c;
+            switch (largest)
+            {
+                case 0:  a = y; b = z; c = w; break;
+                case 1:  a = x; b = z; c = w; break;
+                case 2:  a = x; b = y; c = w; break;
+                default: a = x; b = y; c = z; break;
+            }
+
+            return ((uint)largest << 30)
+                 | (PackQuatComponent(a) << 20)
+                 | (PackQuatComponent(b) << 10)
+                 |  PackQuatComponent(c);
+        }
+
+        /// <summary>
+        /// Reverses <see cref="PackQuat"/>. Defined for every 32-bit input, including ones no
+        /// encoder would ever produce.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The radical is clamped at zero.</b> 10-bit round-off — and any hostile input,
+        /// <c>0xFFFFFFFF</c> being the obvious one — can push <c>1 - a^2 - b^2 - c^2</c>
+        /// fractionally or wildly negative. <c>sqrt</c> of that is <c>NaN</c>, and a
+        /// <c>NaN</c> quaternion assigned to a Unity transform is a vehicle that silently
+        /// vanishes rather than an exception anybody can trace.
+        /// </para>
+        /// <para>
+        /// <b>The result is renormalized.</b> Quantization leaves the length off unit by up to
+        /// ~0.1%. Unity tolerates that; three frames of interpolated blending against it drift.
+        /// </para>
+        /// </remarks>
+        public static void UnpackQuat(
+            uint packed, out float x, out float y, out float z, out float w)
+        {
+            int largest = (int)(packed >> 30);
+
+            float a = UnpackQuatComponent((packed >> 20) & 0x3FFu);
+            float b = UnpackQuatComponent((packed >> 10) & 0x3FFu);
+            float c = UnpackQuatComponent(packed & 0x3FFu);
+
+            float remainder = 1f - (a * a + b * b + c * c);
+            if (remainder < 0f) remainder = 0f;
+            float largestValue = (float)Math.Sqrt(remainder);
+
+            switch (largest)
+            {
+                case 0:  x = largestValue; y = a; z = b; w = c; break;
+                case 1:  x = a; y = largestValue; z = b; w = c; break;
+                case 2:  x = a; y = b; z = largestValue; w = c; break;
+                default: x = a; y = b; z = c; w = largestValue; break;
+            }
+
+            float length = (float)Math.Sqrt(x * x + y * y + z * z + w * w);
+            if (length > 1e-6f)
+            {
+                float inverse = 1f / length;
+                x *= inverse; y *= inverse; z *= inverse; w *= inverse;
+            }
+            else
+            {
+                // Only reachable from bytes no encoder produces. Identity is the one answer
+                // that is always a legal rotation.
+                x = 0f; y = 0f; z = 0f; w = 1f;
+            }
+        }
+
+        private static uint PackQuatComponent(float v)
+        {
+            float t = Clamp01((v - QUAT_MIN) / QUAT_RANGE);
+            return (uint)(t * QUAT_LEVELS + 0.5f);
+        }
+
+        private static float UnpackQuatComponent(uint q)
+            => (q / (float)QUAT_LEVELS) * QUAT_RANGE + QUAT_MIN;
 
         // ------------------------------------------------------------------ helpers
 

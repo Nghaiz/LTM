@@ -36,6 +36,13 @@ namespace Ironfront.Net.Replication.Client
         /// <summary>Applies snapshot deltas. Its <c>Current</c> is the newest world state.</summary>
         public DeltaDecoder Decoder { get; } = new DeltaDecoder();
 
+        // Allocated once and reused, like every other buffer on this path: S_PLAYER_LIST is
+        // rare, but a router that allocates per message is one that allocates per packet as
+        // soon as somebody sends it per tick.
+        private readonly byte[] _playerListBody = new byte[PlayerListMessage.MaxBodySize];
+        private readonly PlayerListEntry[] _playerListEntries =
+            new PlayerListEntry[ProtocolConstants.MAX_ACTORS];
+
         /// <summary>Buffers snapshots so remote actors can be drawn between them.</summary>
         public SnapshotInterpolator Interpolator { get; } = new SnapshotInterpolator();
 
@@ -102,6 +109,17 @@ namespace Ironfront.Net.Replication.Client
 
         /// <summary>An explosion to render. Cosmetic — damage is the server's.</summary>
         public event Action<ExplosionMessage>? OnExplosion;
+
+        /// <summary>
+        /// The actor-id-to-name table changed. Raised with the parsed rows and their count.
+        /// </summary>
+        /// <remarks>
+        /// <b>The names point into the receive buffer this call was made from</b>, so a handler
+        /// that keeps one past the callback copies it — <see cref="PlayerListMessage.NameOf"/>
+        /// is the allocating decode for exactly that moment. Handing out the slices rather than
+        /// strings keeps a broadcast of 64 names from allocating 64 strings on every join.
+        /// </remarks>
+        public event Action<PlayerListEntry[], int>? OnPlayerList;
 
         /// <summary>
         /// A snapshot was applied. Carries the server tick and the newest input tick the server
@@ -214,6 +232,10 @@ namespace Ironfront.Net.Replication.Client
                         else MalformedMessages++;
                         break;
 
+                    case ServerMessageType.PlayerList:
+                        if (RoutePlayerList(body)) handled++;
+                        break;
+
                     default:
                         UnknownMessages++;
                         break;
@@ -221,6 +243,38 @@ namespace Ironfront.Net.Replication.Client
             }
 
             return handled;
+        }
+
+        /// <summary>
+        /// Parses a player list into the reusable row buffer and raises
+        /// <see cref="OnPlayerList"/>.
+        /// </summary>
+        /// <remarks>
+        /// The body is copied into <see cref="_playerListBody"/> first. The parsed rows are
+        /// slices of the buffer they were read from, and the one this method is handed is a
+        /// slice of a transport frame that will be recycled the moment this call returns — so
+        /// pointing the rows at it would hand every subscriber a name that is about to become
+        /// somebody else's packet.
+        /// </remarks>
+        private bool RoutePlayerList(ReadOnlySpan<byte> body)
+        {
+            if (body.Length > _playerListBody.Length)
+            {
+                MalformedMessages++;
+                return false;
+            }
+
+            body.CopyTo(_playerListBody);
+
+            if (!PlayerListMessage.TryParse(
+                    _playerListBody, 0, body.Length, _playerListEntries, out int count))
+            {
+                MalformedMessages++;
+                return false;
+            }
+
+            OnPlayerList?.Invoke(_playerListEntries, count);
+            return true;
         }
 
         private bool RouteSnapshot(ReadOnlySpan<byte> body)

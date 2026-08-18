@@ -13,7 +13,7 @@ namespace Ironfront.Net.Protocol
     public static class ProtocolConstants
     {
         public const ushort PROTOCOL_ID       = 0x4946;  // 'IF' — filters out junk packets
-        public const byte   PROTOCOL_VERSION  = 2;
+        public const byte   PROTOCOL_VERSION  = 3;
 
         public const int    MTU_SAFE          = 1200;    // safe through any router
         public const int    GSP_HEADER_SIZE   = 16;
@@ -53,6 +53,30 @@ namespace Ironfront.Net.Protocol
         public const int    MAX_PLAYERS       = 16;
         public const int    MAX_BOTS          = 32;
         public const int    MAX_ACTORS        = 64;      // = MAX_PLAYERS + MAX_BOTS + headroom
+
+        /// <summary>
+        /// Concurrent vehicles the world may hold. A SEPARATE u16 id space from
+        /// <see cref="MAX_ACTORS"/> — a vehicle is not an actor and never occupies an actorId.
+        /// </summary>
+        /// <remarks>
+        /// 16 rather than "as many as fit": it bounds the vehicle snapshot body at
+        /// <c>16 x 30 + 9 = 489</c> bytes, which is what lets the elastic actor body be sized
+        /// against whatever the vehicle body actually consumed (protocol-spec.md section 4.10,
+        /// co-residency). It also leaves the id quarantine below room to hold ids while a
+        /// spawner replaces a wreck.
+        /// </remarks>
+        public const int    MAX_VEHICLES      = 16;
+
+        /// <summary>
+        /// Ticks a retired vehicleId is held before it may be reissued. 150 ticks = 5 s at
+        /// <see cref="SIM_TICK_RATE"/>, the same quarantine actorIds get (section 4.3.1).
+        /// </summary>
+        /// <remarks>
+        /// For the same reason: snapshots and events naming a destroyed vehicle are in flight
+        /// for up to one interpolation buffer plus retransmits, and reissuing the id
+        /// immediately makes the client apply a wreck's tail packets to its replacement.
+        /// </remarks>
+        public const int    VEHICLE_ID_QUARANTINE_TICKS = 150;
 
         // ===== Derived values — computed here so nobody recomputes them inline =====
 

@@ -84,19 +84,35 @@ namespace Ironfront.Net.Replication.Interest
         private int _farCount;
 
         /// <summary>
-        /// The widest one actor can encode to: every v1 field present.
+        /// The widest one actor can encode to: every field present, seat info included.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// <b>Deliberately the worst case rather than the real one.</b> The actual width depends
         /// on the change mask, which <see cref="DeltaEncoder"/> computes later against a
         /// baseline this class has never seen. Projecting optimistically and being wrong means
         /// the encode overruns and the whole snapshot is discarded — the exact failure this
-        /// shedding exists to remove. Projecting pessimistically costs a handful of actor slots
-        /// at extreme densities: the budget admits 58 actors where 64 might have fitted, and
-        /// the 48-actor case the game actually ships never sheds at all.
+        /// shedding exists to remove.
+        /// </para>
+        /// <para>
+        /// <b>This moved 20 → 23 when the seat field was finished, and the cost is real.</b> Any
+        /// actor may now be seated, so the pessimistic width has to include the 3-byte seat
+        /// field or the projection stops being pessimistic. The budget admits <b>50</b> actors
+        /// where it used to admit 58 (<c>(1178 − 13) / 23 = 50</c>), and the vehicle snapshot
+        /// riding in the same datagram takes that as low as 29 in the worst case. The 48-actor
+        /// case the game actually ships still never sheds; the margin above it is gone, which
+        /// is why <c>InterestManagementTests</c> pins the ceiling as a number rather than
+        /// leaving a bandwidth regression to find it.
+        /// </para>
         /// </remarks>
-        private static readonly int MaxEntrySize =
-            SnapshotMessage.EntrySize(SnapshotField.FullNoSeat);
+        /// <remarks>
+        /// Public because it is the number V4's budget split has to hit and the number the
+        /// shedding tests pin. A private copy would leave both of those restating the formula,
+        /// which is how the 20 in this class and the 20 in the spec drifted apart in the first
+        /// place.
+        /// </remarks>
+        public static readonly int MaxEntrySize =
+            SnapshotMessage.EntrySize(SnapshotField.Full);
 
         private static readonly float CosViewConeHalfAngle =
             (float)Math.Cos(ViewConeHalfAngleDegrees * Math.PI / 180.0);

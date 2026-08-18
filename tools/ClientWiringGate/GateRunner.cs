@@ -27,7 +27,7 @@ namespace Ironfront.Tools.ClientWiringGate
         /// question "did its subscriber go with it" needs a human. Bump this in the same commit
         /// that changes the router, having answered that question.
         /// </remarks>
-        public const int ExpectedRouterEventCount = 9;
+        public const int ExpectedRouterEventCount = 10;
 
         /// <summary>
         /// Events knowingly unwired, each with the reason and the work that unblocks it. An entry
@@ -61,7 +61,21 @@ namespace Ironfront.Tools.ClientWiringGate
         /// a blocker, whoever clears that blocker has to come back here by hand.
         /// </para>
         private static readonly (string EventName, string Reason)[] KnownUnwiredEvents =
-            System.Array.Empty<(string, string)>();
+        {
+            // Phase-V3 gave S_PLAYER_LIST the struct, the writer and the router case it had been
+            // missing since the freeze — the opcode was declared with no implementation anywhere,
+            // which is why a killfeed line knew an actor id had died and had nothing to render.
+            // The presenter that turns the table into names on screen is client-flow work and V3
+            // adds no MonoBehaviour, so the event ships raised-but-unsubscribed on purpose rather
+            // than by oversight.
+            //
+            // Retires when the client-flow phase that also adopts ClientCombatState and ScoreUi
+            // subscribes it — the same phase, because all three are a client object nothing wires
+            // up. Per the note above this list, it retires on SUBSCRIPTION, not on unblocking.
+            ("OnPlayerList",
+             "V3 ships the codec and the router case; the name table has no presenter until the "
+             + "client-flow phase that also adopts ClientCombatState and ScoreUi."),
+        };
 
         /// <summary>
         /// Every event <c>ClientMessageRouter</c> raises, read off the type itself.
