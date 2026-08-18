@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace Ironfront.Net.Unity
@@ -34,15 +35,24 @@ namespace Ironfront.Net.Unity
     public sealed class LocalInputSource : IInputSource
     {
         private readonly Transform _lookTransform;
+        private readonly Func<bool> _aiming;
 
         /// <param name="lookTransform">
         /// The transform whose rotation IS the player's aim — the first-person camera or its
         /// parent. Null is tolerated: <see cref="Yaw"/> and <see cref="Pitch"/> then report 0,
         /// which is wrong but harmless, since nothing in single-player reads them.
         /// </param>
-        public LocalInputSource(Transform lookTransform)
+        /// <param name="aiming">
+        /// Whether the player is aiming. Helicopter cyclic is suppressed while aiming, and that
+        /// state is the controller's — <c>FpsActorController.Aiming()</c> folds in
+        /// <c>toggleAim</c> and a latch this class cannot see. A delegate rather than a latched
+        /// bool, so the read stays live like every other member here; null means never aiming,
+        /// which is what a source with no controller behind it should report.
+        /// </param>
+        public LocalInputSource(Transform lookTransform, Func<bool> aiming = null)
         {
             _lookTransform = lookTransform;
+            _aiming = aiming;
         }
 
         public float MoveX => Input.GetAxis("Horizontal");
@@ -96,6 +106,87 @@ namespace Ironfront.Net.Unity
                     crouch: Input.GetButton("Crouch"),
                     sprint: Input.GetButton("Sprint"),
                     use:    Input.GetButton("Use"));
+            }
+        }
+
+        /// <summary>Helicopter tail rotor. See <see cref="HelicopterControls"/>.</summary>
+        public float HeliYaw => HelicopterControls.Yaw;
+
+        /// <summary>Helicopter lift. See <see cref="HelicopterControls"/>.</summary>
+        public float HeliCollective => HelicopterControls.Collective;
+
+        /// <summary>Helicopter bank. See <see cref="HelicopterControls"/>.</summary>
+        public float HeliRoll => HelicopterControls.Roll;
+
+        /// <summary>Helicopter nose pitch. See <see cref="HelicopterControls"/>.</summary>
+        public float HeliPitch => HelicopterControls.Pitch;
+
+        /// <summary>
+        /// The four helicopter controls, scaled and inverted per this user's options (V5-D9).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A transcription of <c>FpsActorController.HelicopterInput()</c>, moved here
+        /// unchanged</b> — including the <c>helicopterType == 2</c> branch, whose raw
+        /// <c>Input.GetAxis</c> reads were booked as accepted debt by an in-file comment there
+        /// because <c>IInputSource</c> had no member for them. It does now, and this is the
+        /// place UnityEngine.Input is allowed to be read.
+        /// </para>
+        /// <para>
+        /// <b>The scaling happens here, on the sender, and that is the decision.</b>
+        /// <c>OptionsUi.GetOptions()</c> is a client-local setting the server does not have —
+        /// reaching it at server role is an authority hole and a headless
+        /// <c>NullReferenceException</c> at once. So a finished control vector crosses the wire
+        /// and the server treats it as opaque, bounded by <c>Vehicle.Clamp4</c> exactly as it
+        /// already is offline. Nothing is lost by that bound: the offline path has always run
+        /// <c>Clamp4</c> over these same values, so deflection past full stick has never had an
+        /// effect.
+        /// </para>
+        /// <para>
+        /// Evaluated live on every read, like everything else here. Four reads per frame of the
+        /// same axes costs nothing measurable, and latching would reintroduce the one-frame
+        /// staleness the whole class is shaped to avoid.
+        /// </para>
+        /// </remarks>
+        private HelicopterAxes HelicopterControls
+        {
+            get
+            {
+                OptionsUi.Options options = OptionsUi.GetOptions();
+                float sensitivity = options.mouseSensitivity * options.helicopterSensitivity;
+
+                if (options.helicopterType == OptionsUi.Options.HELICOPTER_TYPE_CUSTOM)
+                {
+                    float stickPitch = Input.GetAxis("Helicopter Pitch") * (options.heliInvertPitch ? -1f : 1f);
+                    float stickYaw = Input.GetAxis("Helicopter Yaw") * (options.heliInvertYaw ? -1f : 1f);
+                    float stickRoll = Input.GetAxis("Helicopter Roll") * (options.heliInvertRoll ? -1f : 1f);
+                    float stickCollective = Input.GetAxis("Helicopter Throttle") * (options.heliInvertThrottle ? -1f : 1f);
+
+                    return new HelicopterAxes(
+                        stickYaw * 30f * sensitivity,
+                        stickCollective,
+                        stickRoll * 20f * sensitivity,
+                        stickPitch * 30f * sensitivity);
+                }
+
+                // LookDelta*, not Yaw/Pitch: helicopter control integrates a per-frame mouse
+                // delta, and an absolute angle is a different quantity. Substituting one for the
+                // other is a silent handling change, which is why IInputSource carries both.
+                float mouseX = sensitivity * LookDeltaX;
+                float mouseY = sensitivity * LookDeltaY;
+
+                if (!options.heliInvertPitch) mouseY = -mouseY;
+
+                if (_aiming != null && _aiming())
+                {
+                    mouseX = 0f;
+                    mouseY = 0f;
+                }
+
+                if (options.helicopterType == OptionsUi.Options.HELICOPTER_TYPE_BATTLEFIELD)
+                    return new HelicopterAxes(MoveX, MoveZ, mouseX * 20f, mouseY * 30f);
+
+                return new HelicopterAxes(mouseX * 30f, MoveZ, MoveX * 20f, mouseY * 30f);
             }
         }
     }

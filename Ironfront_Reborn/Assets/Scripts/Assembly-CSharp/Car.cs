@@ -58,6 +58,22 @@ public class Car : Vehicle
 		VehicleSubtypeTail.PackSteered(steerAngle, 1f, out subtypeA, out subtypeB);
 	}
 
+	/// <summary>
+	/// Drives the steering-wheel prop and the engine note from the replicated steer angle.
+	/// V5-D3.
+	/// </summary>
+	/// <remarks>
+	/// <c>Update()</c> reads <c>steerAngle</c> to rotate the wheel prop, and on a replicated
+	/// car nothing integrates it any more -- so without this every remote car drives past with
+	/// its steering wheel dead centre through every corner. The engine note follows the same
+	/// value because the throttle it used to chase is not local either.
+	/// </remarks>
+	public override void ApplyReplicatedSubtypeTail(byte subtypeA, byte subtypeB)
+	{
+		steerAngle = VehicleSubtypeTail.UnpackSteerAngle(subtypeA);
+		enginePitchTarget = HasDriver() ? 0.5f : 0f;
+	}
+
 	public Transform steeringWheel;
 
 	public WheelConfiguration[] wheels;
@@ -122,6 +138,15 @@ public class Car : Vehicle
 	protected override void FixedUpdate()
 	{
 		base.FixedUpdate();
+		// V5-D3. The body is kinematic on a replicated client, so every WheelCollider write
+		// below steers something PhysX will not move -- and steerAngle would be integrated
+		// from an input this peer does not have, which is exactly what the subtype tail
+		// replaces. Update() and LateUpdate() keep running: the steering-wheel prop, the
+		// engine note and the wheel meshes all read values, not forces.
+		if (NetworkDriven)
+		{
+			return;
+		}
 		enginePitchTarget = ((!HasDriver()) ? 0f : 0.5f);
 		if (HasDriver() && !burning)
 		{

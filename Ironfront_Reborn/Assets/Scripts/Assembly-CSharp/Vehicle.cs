@@ -379,6 +379,80 @@ public class Vehicle : MonoBehaviour
 		subtypeB = 0;
 	}
 
+	/// <summary>
+	/// True when this vehicle's transform is written from the snapshot stream rather than
+	/// simulated here. V5-D3.
+	/// </summary>
+	/// <remarks>
+	/// Always false offline and on the server, so single-player and the authority behave
+	/// exactly as they did before any of this existed.
+	/// </remarks>
+	public bool NetworkDriven { get; private set; }
+
+	/// <summary>
+	/// Hands this vehicle over to the replication layer, or takes it back.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>The body goes kinematic, and that is the point (V5-D3).</b> A replicated vehicle whose
+	/// <c>Rigidbody</c> is still dynamic runs local PhysX <i>against</i> the incoming snapshots:
+	/// the solver pushes it one way, the next snapshot writes it back, and the result is jitter
+	/// that looks exactly like a network problem and is not. Nothing above this layer can
+	/// diagnose that, because every number on the wire is correct.
+	/// </para>
+	/// <para>
+	/// <b>The drive path is disabled separately from the body</b> — each subtype's
+	/// <c>FixedUpdate</c> returns early on <see cref="NetworkDriven"/> — because a kinematic body
+	/// silently ignores <c>AddForce</c> but a <c>WheelCollider</c> does not, and a car whose
+	/// wheels are still being torqued burns CPU steering a body it cannot move.
+	/// </para>
+	/// <para>
+	/// Cosmetics that used to read local physics are driven from
+	/// <see cref="ApplyReplicatedSubtypeTail"/> instead. That is why the snapshot entry carries
+	/// a subtype tail at all.
+	/// </para>
+	/// </remarks>
+	public void SetNetworkDriven(bool value)
+	{
+		if (NetworkDriven == value)
+		{
+			return;
+		}
+
+		NetworkDriven = value;
+
+		if (rigidbody != null)
+		{
+			rigidbody.isKinematic = value;
+		}
+	}
+
+	/// <summary>
+	/// Writes the replicated cosmetic values a kinematic vehicle can no longer integrate for
+	/// itself. The inverse of <see cref="ReadNetworkSubtypeTail"/>.
+	/// </summary>
+	/// <remarks>
+	/// Base does nothing: a vehicle with no subtype tail has no cosmetic that depended on the
+	/// simulation. Overridden where one did — <c>Car.steerAngle</c> and
+	/// <c>Helicopter.rotorSpeed</c>, the two design section 5 reserved the tail for.
+	/// </remarks>
+	public virtual void ApplyReplicatedSubtypeTail(byte subtypeA, byte subtypeB)
+	{
+	}
+
+	/// <summary>
+	/// Writes the replicated state flags a kinematic vehicle can no longer sense for itself.
+	/// </summary>
+	/// <remarks>
+	/// <c>Boat.inWater</c> is the one that matters — it is set from a buoyancy sample the remote
+	/// path no longer takes, and the engine note and wake read it. <c>Helicopter.isAirborne</c>
+	/// comes from a downward raycast, which a client can still afford to do locally against its
+	/// own copy of the map; it is left alone rather than replicated for the sake of it.
+	/// </remarks>
+	public virtual void ApplyReplicatedFlags(bool inWater, bool airborne)
+	{
+	}
+
 	public void OccupantLeft(Seat seat, Actor leaver)
 	{
 		if (seat == seats[0])

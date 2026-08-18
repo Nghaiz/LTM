@@ -35,6 +35,7 @@ namespace Ironfront.Net.Unity.Bindings
         {
             NetServerBindings.ActorSourceResolver = ResolveActorSource;
             NetServerBindings.VehicleSourceResolver = ResolveVehicleSource;
+            NetServerBindings.DriverInputSinkResolver = NetDriverInputSink.Attach;
             NetServerBindings.SpawnPoints = new ActorManagerSpawnPoints();
             NetServerBindings.CapturePoints = new SceneCapturePoints();
         }

@@ -132,12 +132,22 @@ public class FpsActorController : ActorController
 		fpCameraParentOffset = fpCameraParent.transform.localPosition;
 		fpNoise = fpCamera.GetComponent<NoiseAndGrain>();
 		tpNoise = tpCamera.GetComponent<NoiseAndGrain>();
-		if (inputSource == NullInputSource.Instance)
+		if (inputSource == NullInputSource.Instance && !Ironfront.Net.Unity.NetContext.IsServer)
 		{
 			// Default to local input, so single-player runs exactly as it did before any
 			// networking exists to override it. Anything that called SetInputSource before
 			// Awake keeps what it set.
-			inputSource = new LocalInputSource(fpCamera.transform);
+			//
+			// NOT at server role (V5-D9). LocalInputSource reads OptionsUi.GetOptions() for the
+			// helicopter axes -- per-user sensitivity and four invert flags that are a client's
+			// business and that a headless process has no PlayerPrefs for. Reaching them from
+			// the authority would be both an authority hole and an NRE waiting for the first
+			// networked helicopter; the null object is the honest answer, and
+			// ServerVehicleInputBridge replaces it with a NetInputSource the moment somebody
+			// actually drives.
+			// Aiming() folds in toggleAim and a latch LocalInputSource cannot see, so it is
+			// handed over as a live delegate rather than duplicated there.
+			inputSource = new LocalInputSource(fpCamera.transform, Aiming);
 			// Temporary, and deliberately unconditional: the harness that says whether the
 			// substitution above was correct. Delete both this line and InputShadowCompare.cs
 			// once a playtest has come back quiet.
@@ -226,35 +236,21 @@ public class FpsActorController : ActorController
 
 	public override Vector4 HelicopterInput()
 	{
-		float num = OptionsUi.GetOptions().mouseSensitivity * OptionsUi.GetOptions().helicopterSensitivity;
-		if (OptionsUi.GetOptions().helicopterType == 2)
-		{
-			// The four helicopter axes stay on Input: phase-00 section 5 books vehicle input as
-			// accepted debt, IInputSource has no member for them, and inventing four is
-			// speculative work for a channel outside the 14-week scope.
-			float num2 = Input.GetAxis("Helicopter Pitch") * ((!OptionsUi.GetOptions().heliInvertPitch) ? 1f : (-1f));
-			float num3 = Input.GetAxis("Helicopter Yaw") * ((!OptionsUi.GetOptions().heliInvertYaw) ? 1f : (-1f));
-			float num4 = Input.GetAxis("Helicopter Roll") * ((!OptionsUi.GetOptions().heliInvertRoll) ? 1f : (-1f));
-			float y = Input.GetAxis("Helicopter Throttle") * ((!OptionsUi.GetOptions().heliInvertThrottle) ? 1f : (-1f));
-			return new Vector4(num3 * 30f * num, y, num4 * 20f * num, num2 * 30f * num);
-		}
-		// LookDelta*, not Yaw/Pitch: helicopter control integrates a per-frame mouse delta and
-		// an absolute angle is a different quantity. Substituting one for the other would change
-		// handling silently, which is why IInputSource carries both.
-		Vector2 vector = new Vector2(num * inputSource.LookDeltaX, num * inputSource.LookDeltaY);
-		if (!OptionsUi.GetOptions().heliInvertPitch)
-		{
-			vector.y = 0f - vector.y;
-		}
-		if (Aiming())
-		{
-			vector = Vector2.zero;
-		}
-		if (OptionsUi.GetOptions().helicopterType == 0)
-		{
-			return new Vector4(inputSource.MoveX, inputSource.MoveZ, vector.x * 20f, vector.y * 30f);
-		}
-		return new Vector4(vector.x * 30f, inputSource.MoveZ, inputSource.MoveX * 20f, vector.y * 30f);
+		// V5-D8: assembled from the four IInputSource members rather than computed here, so a
+		// networked helicopter is expressible at all. LookDeltaX/Y is a per-frame mouse delta and
+		// C_INPUT carries an absolute angle -- an absolute-angle protocol cannot express a delta,
+		// so NetInputSource returns 0 for it and always will. The helicopterType == 2 branch was
+		// worse still: it read UnityEngine.Input directly, past the seam entirely, booked as
+		// accepted debt by a comment that lived here. Both now live in LocalInputSource, which is
+		// where reading a keyboard is allowed, and this method is component order and nothing else.
+		//
+		// The component order is Helicopter.cs's contract and is pinned by HelicopterAxes:
+		//   x = yaw, y = collective, z = roll (the vehicle negates it), w = pitch.
+		return new Vector4(
+			inputSource.HeliYaw,
+			inputSource.HeliCollective,
+			inputSource.HeliRoll,
+			inputSource.HeliPitch);
 	}
 
 	public override bool UseMuzzleDirection()

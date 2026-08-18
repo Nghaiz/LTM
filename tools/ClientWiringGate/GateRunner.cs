@@ -27,7 +27,11 @@ namespace Ironfront.Tools.ClientWiringGate
         /// question "did its subscriber go with it" needs a human. Bump this in the same commit
         /// that changes the router, having answered that question.
         /// </remarks>
-        public const int ExpectedRouterEventCount = 10;
+        // 14 since V5: OnVehicleSpawn, OnVehicleDespawn and OnSeatChange are subscribed by
+        // RemoteVehicleRegistry and ClientVehicleStage, and OnVehicleSnapshotApplied is what
+        // drives the driver-prediction correction. All four have production subscribers, so
+        // none of them belongs in KnownUnwiredEvents.
+        public const int ExpectedRouterEventCount = 14;
 
         /// <summary>
         /// Events knowingly unwired, each with the reason and the work that unblocks it. An entry

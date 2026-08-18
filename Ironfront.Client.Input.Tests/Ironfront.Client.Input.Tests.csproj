@@ -64,6 +64,8 @@
              Link="Linked\InputButtonPacker.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Input\InputSourceExtensions.cs"
              Link="Linked\InputSourceExtensions.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Input\HelicopterAxisMap.cs"
+             Link="Linked\HelicopterAxisMap.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Input\NetInputSource.cs"
              Link="Linked\NetInputSource.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Input\NullInputSource.cs"

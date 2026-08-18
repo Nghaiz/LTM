@@ -1,5 +1,13 @@
 # the replication track — Phase V5: Client vehicle replication
 
+> **Status: ☑ Done (2026-08-19).** Closure report:
+> [`../reports/2026-08-19-phase-v5-closure.md`](../reports/2026-08-19-phase-v5-closure.md).
+> All 12 CI-gradable criteria met under **both** config presets; the six Editor-only checks
+> in § 4 remain the client track's and are not claimed. Four recorded departures — the
+> subtype tail is stepped rather than blended, the hold window lives with the seat table,
+> the server bridge reaches the controller through a binding seam, and the phase ships with
+> no authored-asset change at all — are argued in the report's § 4.
+
 > Design of record: [`../../reports/2026-08-17-vehicle-and-world-replication-brainstorm.md`](../../reports/2026-08-17-vehicle-and-world-replication-brainstorm.md).
 > Read **D3** carefully (§ 4) — driver prediction here is *error-corrected simulation*, not input
 > replay, and the difference is the whole phase. Also § 3.2 (PhysX cannot be ported), § 3.3 (the
