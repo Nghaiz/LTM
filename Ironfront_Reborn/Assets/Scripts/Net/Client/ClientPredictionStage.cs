@@ -72,6 +72,11 @@ namespace Ironfront.Net.Unity.Client
 
         private void OnEnable()
         {
+            // Covers the inverse startup order from NetClientBootstrap.OnConnected: if the
+            // player prefab appears after the transport connected, seed its input clock here.
+            if (_clock != null && _client != null && _client.IsConnected)
+                _clock.SeedInputTick(NetContext.CurrentTick);
+
             if (_clock != null) _clock.OnTickSimulated += OnTickSimulated;
             if (_client != null) _client.Router.OnSnapshotApplied += OnSnapshotApplied;
         }

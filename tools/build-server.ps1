@@ -24,6 +24,11 @@
 # Usage:
 #   $env:UNITY_PATH = "C:\Program Files\Unity\Hub\Editor\6000.0.x\Editor\Unity.exe"
 #   pwsh tools/build-server.ps1 [-OutputPath build/server] [-BuildMethod Ironfront.EditorBuild.BuildDedicatedServer]
+#                               [-TarballPath build/gameserver-linux.tar.gz]
+#
+# OUTPUT: the player tree in -OutputPath, and the tarball in -TarballPath that images.yml consumes.
+# The archive holds the tree's contents at its root, because the workflow extracts with
+# `tar -xzf ... -C build/server` and then asserts build/server/Ironfront.Server.x86_64 exists.
 
 [CmdletBinding()]
 param(
@@ -34,7 +39,11 @@ param(
     [string]$OutputPath = "build/server",
 
     # The static Editor method that actually calls BuildPipeline.BuildPlayer. Dev A's contract.
-    [string]$BuildMethod = "Ironfront.EditorBuild.BuildDedicatedServer"
+    [string]$BuildMethod = "Ironfront.EditorBuild.BuildDedicatedServer",
+
+    # The tarball images.yml consumes. The filename is matched literally by the workflow, so it is
+    # part of the contract rather than a preference; the directory is not.
+    [string]$TarballPath = "build/gameserver-linux.tar.gz"
 )
 
 $ErrorActionPreference = "Stop"
@@ -85,8 +94,15 @@ Set it to your Unity Editor executable and re-run, e.g.:
     # -batchmode -nographics -quit: no window, no GPU, exit when done. -executeMethod runs
     # Dev A's build method; -buildOutput is our own argument that method reads to know where
     # to write. Unity passes every unrecognised argument through to Environment.GetCommandLineArgs.
+    #
+    # -buildTarget Linux64 does not build anything on its own (see the ownership note above),
+    # but it makes Linux the active platform during Unity's own startup. Without it the build
+    # method has to switch platforms itself, which forces a full asset reimport in the middle of
+    # the build; and on this Windows host the Server subtarget it sets would otherwise have
+    # landed on Windows, not Linux. The method still switches defensively for the menu-item path.
     & $UnityPath -batchmode -nographics -quit `
         -projectPath $projectPath `
+        -buildTarget Linux64 `
         -executeMethod $BuildMethod `
         -buildOutput $outAbsolute `
         -logFile $logFile
@@ -107,7 +123,97 @@ not in the project yet. That script is Dev A's (Ironfront_Reborn/Assets/Editor);
     }
 
     Write-Host ""
+    # A zero exit is not evidence that a player was written. Unity's BuildPipeline can return
+    # BuildResult.Succeeded, report a nonzero total size, and write nothing at all: it does that when
+    # UnityEditor.PostprocessBuildPlayer.Postprocess throws, which is the step that installs the
+    # compiled player into the output directory. EditorBuild.cs now checks its own output for exactly
+    # this reason and exits non-zero, but the check that matters to the pipeline belongs here too —
+    # everything downstream keys on this one file existing.
+    $executable = Join-Path $outAbsolute "Ironfront.Server.x86_64"
+    if (-not (Test-Path $executable)) {
+        Write-Warning "Unity exited 0 but $executable does not exist. See $logFile — look for"
+        Write-Warning "`"not supported`" thrown out of PostprocessBuildPlayer.Postprocess. If the"
+        Write-Warning "Linux Dedicated Server Build Support module was installed while an Editor was"
+        Write-Warning "already open, that Editor never loaded it: Unity registers platform support"
+        Write-Warning "modules only at startup, so it has to be restarted."
+        throw "Headless server build produced no player at $executable."
+    }
+
     Write-Host "Headless server build complete -> $outAbsolute"
+
+    # Package it. images.yml downloads the release asset named exactly gameserver-linux.tar.gz,
+    # extracts it with `tar -xzf ... -C build/server`, and then asserts
+    # build/server/Ironfront.Server.x86_64 exists — so the executable has to sit at the ROOT of the
+    # archive, which is what -C $outAbsolute . gives and what `tar -czf x.tar.gz build/server` would
+    # not. Producing the tarball here rather than leaving it to the person running the script is the
+    # difference between this script satisfying the runbook and only half-satisfying it; the D1.2
+    # instructions say "produces gameserver-linux.tar.gz" and two rounds of client reports have
+    # recorded that it produced a directory instead.
+    $tarAbsolute = if ([System.IO.Path]::IsPathRooted($TarballPath)) {
+        $TarballPath
+    } else {
+        Join-Path $repoRoot $TarballPath
+    }
+
+    $tarParent = Split-Path -Parent $tarAbsolute
+    if ($tarParent -and -not (Test-Path $tarParent)) {
+        New-Item -ItemType Directory -Path $tarParent -Force | Out-Null
+    }
+
+    # bsdtar ships with Windows 10 1803+ and every Linux runner has GNU tar; both accept these flags.
+    # Absent on an older host, in which case the build is still there and the operator can pack it.
+    $tar = Get-Command tar -ErrorAction SilentlyContinue
+    if (-not $tar) {
+        Write-Warning "tar was not found on PATH, so $tarAbsolute was not created. Pack it yourself:"
+        Write-Warning "    tar -czf `"$tarAbsolute`" -C `"$outAbsolute`" ."
+        return
+    }
+
+    if (Test-Path $tarAbsolute) { Remove-Item $tarAbsolute -Force }
+
+    Write-Host "Packaging -> $tarAbsolute"
+
+    # Chdir to the destination and pass a BARE filename to -f. GNU tar parses the archive argument
+    # as host:path, so `tar -czf E:\...\x.tar.gz` fails on a Windows host with "Cannot connect to E:
+    # resolve failed" — and Git for Windows ships GNU tar on PATH ahead of the bsdtar in System32,
+    # so that is the common case, not the exotic one. Only -f is parsed that way; -C keeps its
+    # absolute path. --force-local would also fix it for GNU tar and is unrecognised by bsdtar.
+    $tarName = Split-Path -Leaf $tarAbsolute
+    Push-Location $tarParent
+    try {
+        # `-C $outAbsolute .` puts the tree's CONTENTS at the archive root. `tar -czf x build/server`
+        # would nest them under build/server/, and images.yml extracts with -C build/server and then
+        # tests build/server/Ironfront.Server.x86_64, so the nested shape fails there.
+        & tar -czf $tarName -C $outAbsolute .
+        if ($LASTEXITCODE -ne 0) {
+            throw "tar failed with exit code $LASTEXITCODE packaging $outAbsolute."
+        }
+
+        # Assert what images.yml asserts, here, where the failure is cheap to read — otherwise the
+        # archive fails its check in the workflow, several manual steps and one release later.
+        # Anchored to the archive root on purpose: a pattern like (^|/)Ironfront\.Server\.x86_64$
+        # also matches server/Ironfront.Server.x86_64, so it would pass the exact wrong-shape archive
+        # this check exists to catch.
+        $listed = & tar -tzf $tarName
+        if ($LASTEXITCODE -ne 0) {
+            throw "tar could not list $tarAbsolute back."
+        }
+        if (-not ($listed -match '^(\./)?Ironfront\.Server\.x86_64$')) {
+            throw @"
+$tarAbsolute does not have Ironfront.Server.x86_64 at its root. images.yml extracts with
+`tar -xzf ... -C build/server` and then tests build/server/Ironfront.Server.x86_64, so a
+nested layout fails there. Archive contents:
+$($listed -join "`n")
+"@
+        }
+    }
+    finally { Pop-Location }
+
+    $sizeMb = [math]::Round((Get-Item $tarAbsolute).Length / 1MB, 1)
+    Write-Host ""
+    Write-Host "Packaged $tarAbsolute ($sizeMb MB)"
+    Write-Host "Next: attach it to a GitHub Release as gameserver-linux.tar.gz, then run the"
+    Write-Host "      'images' workflow with gameserver_release_tag set to that tag."
 }
 finally {
     Pop-Location

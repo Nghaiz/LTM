@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication;
+using Ironfront.Net.Replication.Server;
 using UnityEngine;
 
 namespace Ironfront.Net.Unity.Server
