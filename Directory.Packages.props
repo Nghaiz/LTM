@@ -42,14 +42,15 @@
     -->
     <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.13" />
     <PackageVersion Include="BCrypt.Net-Next" Version="4.2.0" />
-    <PackageVersion Include="System.Text.Json" Version="8.0.5" />
+    <PackageVersion Include="System.Text.Json" Version="10.0.11" />
   </ItemGroup>
 
   <ItemGroup Label="Benchmarks">
     <!--
-      Used ONLY by Ironfront.Tools.MspBench, for the phase-04 experiment that compares the
+      Added for Ironfront.Tools.MspBench, for the phase-04 experiment that compares the
       hand-written MspFrameReader against the standard-library answer to the same problem
-      (conventions.md section 3.4 names this comparison explicitly).
+      (conventions.md section 3.4 names this comparison explicitly). It is no longer only
+      that benchmark's — see the version note at the bottom of this block.
 
       This is a BCL primitive, not a netcode framework — it is a buffer abstraction, in the
       same category as ArrayPool<T> and System.Threading.Channels, both of which section 3.4
@@ -58,8 +59,21 @@
 
       It needs a PackageReference despite looking like part of the BCL: System.IO.Pipelines
       ships in the ASP.NET Core shared framework, not in Microsoft.NETCore.App.
+
+      NO LONGER ONLY MspBench, AND THE VERSION IS NOT FREE. System.Text.Json takes a hard
+      dependency on this package from 9.0 onward (8.0.5 did not), so it now also arrives
+      transitively through Ironfront.MasterClient and is SHIPPED into the Unity player — see
+      tools/build-libs.ps1. Because MspBench references it directly while MasterClient pulls a
+      newer one transitively, the two must move together: leaving this at 8.0.0 while
+      System.Text.Json went to 10.0.11 fails restore outright with
+
+        error NU1605: Detected package downgrade: System.IO.Pipelines from 10.0.11 to 8.0.0
+
+      which is warn-as-error here, so it stops the whole solution rather than one benchmark.
+      When you next bump System.Text.Json, bump this line to the same version in the SAME
+      commit.
     -->
-    <PackageVersion Include="System.IO.Pipelines" Version="8.0.0" />
+    <PackageVersion Include="System.IO.Pipelines" Version="10.0.11" />
   </ItemGroup>
 
   <ItemGroup Label="Build tooling">
