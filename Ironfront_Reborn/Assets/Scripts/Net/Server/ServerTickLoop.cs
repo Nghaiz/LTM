@@ -81,6 +81,11 @@ namespace Ironfront.Net.Unity.Server
 
         private readonly byte[] _eventPayload = new byte[ProtocolConstants.MAX_PAYLOAD];
 
+        // Reused across resets rather than allocated per call. A round boundary is not the hot
+        // path, but MAX_ACTORS is the known ceiling and there is no reason to hand the GC a
+        // fresh list every round.
+        private readonly List<ushort> _retainedIds = new List<ushort>(ProtocolConstants.MAX_ACTORS);
+
         /// <summary>Layers a bullet cannot pass through. Mirrors <c>Projectile.cs</c>'s mask.</summary>
         private const int BulletBlockingLayers = -2049;
 
@@ -604,7 +609,19 @@ namespace Ironfront.Net.Unity.Server
                 return;
             }
 
-            _stateAudit.ResetForNewMatch();
+            // The ids of actors that survive the reset. Dustbowl's 41 bots are scene-resident
+            // and outlive the match cycle, so a bare ResetAll would re-offer ids they still
+            // hold -- and ActorIdsInUse would read 0 while 41 were in use, blinding the audit
+            // to exactly the leak it exists to catch (Dev A, round 9 defect 7).
+            _retainedIds.Clear();
+            IReadOnlyList<NetServerActor> live = ServerActorRegistry.Instance.Actors;
+            for (int i = 0; i < live.Count; i++)
+            {
+                NetServerActor actor = live[i];
+                if (actor != null && actor.ActorId != 0) _retainedIds.Add(actor.ActorId);
+            }
+
+            _stateAudit.ResetForNewMatch(_retainedIds);
             _respawnGate.Reset();
 
             for (int i = 0; i < _players.Count; i++)
