@@ -29,15 +29,15 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(0.75f, ServerFireResolver.HitboxMultiplier(HitboxType.Limb), 4);
 
             Assert.Equal(
-                4f * ServerFireResolver.DamageFor(in rifle, HitboxType.Body),
-                ServerFireResolver.DamageFor(in rifle, HitboxType.Head), 4);
+                4f * ServerFireResolver.DamageFor(in rifle, HitboxType.Body, 0f),
+                ServerFireResolver.DamageFor(in rifle, HitboxType.Head, 0f), 4);
         }
 
         [Fact]
         public void AHeadshotKillsAFullHealthTargetWithOneRifleRound()
         {
             // 25 damage x 4 = 100. The number the criterion is really about.
-            Assert.Equal(100f, ServerFireResolver.DamageFor(WeaponConfig.Rifle, HitboxType.Head), 3);
+            Assert.Equal(100f, ServerFireResolver.DamageFor(WeaponConfig.Rifle, HitboxType.Head, 0f), 3);
         }
 
         [Fact]
@@ -45,7 +45,7 @@ namespace Ironfront.Net.Replication.Tests
         {
             // S_HIT_CONFIRM carries damage as x10 fixed point, so a limb hit's 18.75 has to
             // still be 18.75 when the client draws the number.
-            float damage = ServerFireResolver.DamageFor(WeaponConfig.Rifle, HitboxType.Limb);
+            float damage = ServerFireResolver.DamageFor(WeaponConfig.Rifle, HitboxType.Limb, 0f);
             ushort packed = HitConfirmMessage.PackDamage(damage);
 
             var message = new HitConfirmMessage(Target, packed, HitboxType.Limb, HitFlags.None);

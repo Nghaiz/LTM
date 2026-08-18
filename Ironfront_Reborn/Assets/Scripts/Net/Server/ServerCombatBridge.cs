@@ -137,6 +137,12 @@ namespace Ironfront.Net.Unity.Server
 
             MoveToSpawnPoint(player);
 
+            // BEFORE ResetWeapon, always. The clip size comes from the config, the config is
+            // derived from this id (phase-V2 D9), and re-arming an unassigned id loads a clip of
+            // zero — which presents as FireRejection.NoAmmo forever and reads exactly like the
+            // ammo bug phase-05 closed.
+            session.WeaponId = actor.WeaponId;
+
             session.ResetWeapon();
             actor.AmmoInClip = session.Weapon.AmmoInClip;
 
@@ -293,7 +299,8 @@ namespace Ironfront.Net.Unity.Server
             {
                 ref readonly HitResult hit = ref _hits[i];
 
-                float damage = ServerFireResolver.DamageFor(in shooter.WeaponConfig, hit.HitboxType);
+                WeaponConfig config = shooter.WeaponConfig;
+                float damage = ServerFireResolver.DamageFor(in config, hit.HitboxType, hit.Distance);
 
                 HitFlags flags = HitFlags.None;
                 if (hit.IsHeadshot) flags |= HitFlags.Headshot;

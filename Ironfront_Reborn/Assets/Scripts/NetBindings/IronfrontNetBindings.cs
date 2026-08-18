@@ -74,6 +74,24 @@ namespace Ironfront.Net.Unity.Bindings
         }
 
         /// <summary>
+        /// The stagger half of <c>Actor.Damage</c>, without its health or death half.
+        /// </summary>
+        /// <remarks>
+        /// The clamp and the knock-over threshold are copied from <c>Actor.Damage</c> deliberately
+        /// -- they are the game's rules, and this is the game's side of the seam. A seated actor
+        /// in an enclosed vehicle does not stagger, for the same reason it does not there.
+        /// </remarks>
+        public void ApplyBalanceDamage(float balanceDamage)
+        {
+            if (_actor == null || _actor.dead) return;
+            if (_actor.IsSeated() && _actor.seat.enclosed) return;
+
+            _actor.balance = Mathf.Max(_actor.balance - balanceDamage, -100f);
+
+            if (_actor.balance < 0f) _actor.KnockOver(Vector3.up * 100f);
+        }
+
+        /// <summary>
         /// <c>Actor.SpawnWeapon</c> stamps <c>WeaponManager.NetworkIdOf(entry)</c> onto
         /// <c>Weapon.NetworkId</c> at spawn, and <c>activeWeapon</c> is whichever one is
         /// unholstered. Holstered-everything reports false, not zero.

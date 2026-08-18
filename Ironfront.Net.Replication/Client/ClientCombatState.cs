@@ -68,8 +68,13 @@ namespace Ironfront.Net.Replication.Client
         /// </remarks>
         public const float DefaultReloadSeconds = ProtocolConstants.RELOAD_SECONDS;
 
-        private WeaponConfig _weapon = WeaponConfig.Rifle;
-        private WeaponRuntimeState _runtime = WeaponRuntimeState.Loaded(WeaponConfig.Rifle);
+        // Inert, not a rifle, until a snapshot or a loadout names the weapon. Predicting with
+        // rifle numbers for a weapon that is not a rifle is the client half of the bug phase-V2
+        // closes on the server: every shot would reconcile against a different clip size and
+        // SnapshotAmmoCorrections would climb at the rate of PredictedShots, which is precisely
+        // what that counter documents as "client and server disagreeing about the weapon".
+        private WeaponConfig _weapon = WeaponCatalog.Inert;
+        private WeaponRuntimeState _runtime = WeaponRuntimeState.Loaded(WeaponCatalog.Inert);
 
         /// <summary>Set by a reload, cleared by the first snapshot that carries an ammo count.</summary>
         private bool _reloadPending;
@@ -141,11 +146,16 @@ namespace Ironfront.Net.Replication.Client
         public event Action? OnRespawned;
 
         /// <summary>Swaps the weapon and loads a full clip. Call on loadout selection.</summary>
-        public void EquipWeapon(byte weaponId, in WeaponConfig config)
+        /// <remarks>
+        /// Takes the id alone: the numbers come from <see cref="WeaponCatalog"/>, which is the
+        /// same table the server resolves against, so the two sides cannot be handed different
+        /// configs for the same weapon.
+        /// </remarks>
+        public void EquipWeapon(byte weaponId)
         {
             WeaponId = weaponId;
-            _weapon = config;
-            _runtime = WeaponRuntimeState.Loaded(config);
+            _weapon = WeaponCatalog.For(weaponId);
+            _runtime = WeaponRuntimeState.Loaded(_weapon);
             _reloadStartedAt = float.NaN;
 
             // A weapon swap resyncs on the next snapshot rather than trusting the fresh clip:
@@ -248,7 +258,16 @@ namespace Ironfront.Net.Replication.Client
 
             if (!entry.Has(SnapshotField.Weapon)) return;
 
-            WeaponId = entry.WeaponId;
+            if (entry.WeaponId != WeaponId)
+            {
+                WeaponId = entry.WeaponId;
+
+                // The clip size the ammo below is reconciled against belongs to the NEW weapon.
+                // Re-resolving here rather than only in EquipWeapon is what keeps a server-side
+                // weapon swap — a respawn with a different loadout, a pickup — from leaving this
+                // side predicting with the previous gun's numbers.
+                _weapon = WeaponCatalog.For(WeaponId);
+            }
 
             byte reconciled = ReconcileAmmo(_runtime.AmmoInClip, entry.AmmoInClip, _reloadPending);
             if (reconciled != _runtime.AmmoInClip) SnapshotAmmoCorrections++;
@@ -309,8 +328,8 @@ namespace Ironfront.Net.Replication.Client
         /// <summary>Drops everything. Call on disconnect or when leaving a match.</summary>
         public void Reset()
         {
-            _weapon = WeaponConfig.Rifle;
-            _runtime = WeaponRuntimeState.Loaded(WeaponConfig.Rifle);
+            _weapon = WeaponCatalog.Inert;
+            _runtime = WeaponRuntimeState.Loaded(WeaponCatalog.Inert);
             _reloadPending = false;
             _reloadStartedAt = float.NaN;
             _diedAtSeconds = float.NegativeInfinity;

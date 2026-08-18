@@ -45,6 +45,21 @@ namespace Ironfront.Net.Replication.Combat
         public long ShotsFired { get; private set; }
 
         /// <summary>
+        /// Scales every weapon's spread cone. <c>1f</c> — the shipped value — is identity.
+        /// </summary>
+        /// <remarks>
+        /// <b>A diagnostic knob, not a weapon number.</b> The Editor's occlusion sweep needs a
+        /// shot to go exactly where it was aimed, so a miss is a miss rather than an unlucky cone
+        /// roll; before phase-V2 it got that by overwriting the session's whole
+        /// <see cref="WeaponConfig"/>, which is no longer possible now that the config is derived
+        /// from the weapon id (D9) — and reintroducing a settable config would recreate exactly
+        /// the second weapon-numbers source that decision removed. This lives on the resolver
+        /// instead, where it multiplies a cone rather than describing a gun, has no production
+        /// writer, and cannot be mistaken for balance data.
+        /// </remarks>
+        public float DiagnosticSpreadScale { get; set; } = 1f;
+
+        /// <summary>
         /// Damage multiplier by hitbox. protocol-spec.md section 4.5's three classes; a
         /// headshot is 4x, matching phase-02 criterion 9.
         /// </summary>
@@ -56,9 +71,33 @@ namespace Ironfront.Net.Replication.Combat
             _ => 1.0f,
         };
 
-        /// <summary>Damage a projectile does when it lands on this hitbox.</summary>
-        public static float DamageFor(in WeaponConfig config, HitboxType type)
-            => config.Damage * HitboxMultiplier(type);
+        /// <summary>
+        /// Damage a projectile does when it lands on this hitbox at this distance.
+        /// </summary>
+        /// <remarks>
+        /// <b>The order of the two multipliers does not matter</b> (phase-V2 D8):
+        /// <c>Damage x HitboxMultiplier x DropoffMultiplier</c> is commutative, so "headshot then
+        /// drop-off" and "drop-off then headshot" are bit-identical. Stated here because it is
+        /// otherwise asked in every review, and pinned by <c>HeadshotAndDropoffCommute</c>.
+        /// <paramref name="distanceMetres"/> comes from <see cref="HitResult.Distance"/>, which
+        /// has always been measured — this is a signature widening over an existing value, not
+        /// new plumbing.
+        /// </remarks>
+        public static float DamageFor(in WeaponConfig config, HitboxType type, float distanceMetres)
+            => config.Damage * HitboxMultiplier(type)
+               * WeaponConfig.DropoffMultiplier(in config, distanceMetres);
+
+        /// <summary>
+        /// Stagger a projectile applies at this distance.
+        /// </summary>
+        /// <remarks>
+        /// Drop-off applies to stagger too, matching the original's <c>Projectile</c>, which
+        /// shares one <c>DamageDropOff()</c> between its damage and its balance damage. No
+        /// hitbox multiplier: a headshot does not stagger four times harder in the original
+        /// either.
+        /// </remarks>
+        public static float BalanceDamageFor(in WeaponConfig config, float distanceMetres)
+            => config.BalanceDamage * WeaponConfig.DropoffMultiplier(in config, distanceMetres);
 
         /// <summary>
         /// Resolves one trigger pull.
@@ -103,7 +142,7 @@ namespace Ironfront.Net.Replication.Combat
 
             for (int projectile = 0; projectile < config.ProjectilesPerShot; projectile++)
             {
-                Vec3 direction = ApplySpread(in aim, config.Spread);
+                Vec3 direction = ApplySpread(in aim, config.Spread * DiagnosticSpreadScale);
 
                 HitResult hit = _lagCompensator.ResolveHitscan(
                     targets, shooterActorId, in origin, in direction,

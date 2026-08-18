@@ -36,7 +36,15 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>Damage applied to actors that were already dead. Free; nothing happens.</summary>
         public long DamageToCorpses { get; private set; }
 
-        public DamageOutcome ApplyDamage(ushort victimId, float amount, ushort attackerId)
+        /// <summary>
+        /// Hits that carried stagger. Zero across a whole match means either every weapon in play
+        /// is inert or the phase-V2 balance number is not reaching the actor -- which is the exact
+        /// failure this counter exists to make visible rather than inferable.
+        /// </summary>
+        public long BalanceDamageApplied { get; private set; }
+
+        public DamageOutcome ApplyDamage(
+            ushort victimId, float healthDamage, float balanceDamage, ushort attackerId)
         {
             if (!_registry.TryFind(victimId, out NetServerActor victim) || victim == null)
             {
@@ -50,7 +58,17 @@ namespace Ironfront.Net.Unity.Server
                 return new DamageOutcome(0f, died: false);
             }
 
-            float remaining = victim.Health - amount;
+            // Stagger before health, so a hit that kills has already knocked the victim over by
+            // the time IsAlive flips -- the original's Actor.Damage subtracts balance before it
+            // decides whether to Die() for the same reason. Non-zero here for the first time in
+            // this build: the server has always passed zero (phase-V2 D6).
+            if (balanceDamage > 0f)
+            {
+                victim.ApplyBalanceDamage(balanceDamage);
+                BalanceDamageApplied++;
+            }
+
+            float remaining = victim.Health - healthDamage;
             if (remaining < 0f) remaining = 0f;
 
             victim.Health = remaining;

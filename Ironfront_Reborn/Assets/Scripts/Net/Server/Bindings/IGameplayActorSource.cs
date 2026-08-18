@@ -40,6 +40,27 @@ namespace Ironfront.Net.Unity.Server
         bool IsDead { get; set; }
 
         /// <summary>
+        /// Staggers the actor by <paramref name="balanceDamage"/>. phase-V2 D6.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A method, not a <c>Balance { get; set; }</c> pair,</b> because the clamp and the
+        /// knock-over threshold are the game's rules and belong on the game's side of the seam.
+        /// Exposing the raw field would put <c>Mathf.Max(balance - x, -100f)</c> in the netcode,
+        /// where it would silently drift from whatever <c>Actor.Damage</c> does next.
+        /// </para>
+        /// <para>
+        /// <b>Why the damage sink does not simply call <c>Actor.Damage</c>.</b> That method also
+        /// subtracts health and calls the private <c>Die()</c>, and the server's hitscan path
+        /// deliberately owns health itself — <c>Die()</c> reaches for <c>IngameUi</c> and
+        /// <c>ScoreUi</c>, neither of which exists headless. Routing stagger through its own
+        /// entry point applies the one number the sink was dropping without re-opening that
+        /// decision.
+        /// </para>
+        /// </remarks>
+        void ApplyBalanceDamage(float balanceDamage);
+
+        /// <summary>
         /// The network id of the weapon currently held, when one is held at all.
         /// </summary>
         /// <remarks>

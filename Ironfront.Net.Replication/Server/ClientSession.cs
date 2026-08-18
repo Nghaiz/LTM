@@ -98,17 +98,47 @@ namespace Ironfront.Net.Replication.Server
         /// <c>ref</c>. Passing a property's value would step a copy and throw the result away,
         /// which compiles, runs, and leaves the ammo count frozen forever.
         /// </remarks>
-        public WeaponRuntimeState Weapon = WeaponRuntimeState.Loaded(WeaponConfig.Rifle);
+        public WeaponRuntimeState Weapon = WeaponRuntimeState.Loaded(WeaponCatalog.Inert);
+
+        /// <summary>
+        /// Which weapon this player is holding, as <c>NetServerActor.WeaponId</c> reports it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The id has existed server-side the whole time — <c>Actor.SpawnWeapon</c> stamps it
+        /// onto <c>Weapon.NetworkId</c> and <c>NetServerActor.WeaponId</c> reads it back — and it
+        /// is already on the wire in the snapshot, in <c>S_SPAWN</c> and in
+        /// <c>S_WEAPON_FIRE</c>. Nobody had plumbed it into the session, so the session kept
+        /// answering "rifle" for all seventeen weapons. <b>This is what makes phase-V2 a
+        /// no-wire-change phase</b>: a loadout message would be a new opcode and a
+        /// <c>PROTOCOL_VERSION</c> bump, and V3 is carrying the only bump this track gets.
+        /// </para>
+        /// <para>
+        /// <b>Assign this BEFORE calling <see cref="ResetWeapon"/>.</b> See that method.
+        /// </para>
+        /// </remarks>
+        public byte WeaponId;
 
         /// <summary>
         /// The server's copy of this player's weapon numbers. Never accepted from the client.
         /// </summary>
         /// <remarks>
-        /// <see cref="WeaponConfig.Rifle"/> until a loadout message or the client track's weapon assets
-        /// say otherwise — the placeholder the phase-05 risk table names. Because the seam
-        /// takes a config rather than hardcoding one, swapping in the real numbers is data.
+        /// <para>
+        /// <b>Derived from <see cref="WeaponId"/>, not stored beside it</b> (phase-V2 D9). Two
+        /// fields synchronised by a setter is the derived-field divergence phase-05 D9 already
+        /// ruled on for health, and the failure mode is the same: one of them is read by the
+        /// snapshot and the other by the damage path, and nothing reports the disagreement.
+        /// </para>
+        /// <para>
+        /// <b>Cost, measured and accepted:</b> a ~48-byte readonly-struct copy per accepted input
+        /// frame per player when passed by <c>in</c> — at 16 players x 30 Hz, under 25 KB/s of
+        /// stack traffic and zero allocation. If a profiler ever disagrees, the escape hatch is
+        /// caching the config in a local for the duration of one tick, never a second stored
+        /// field. <see cref="Weapon"/> stays a field for the opposite reason: it is stepped by
+        /// <c>ref</c>, and a property there would step a copy.
+        /// </para>
         /// </remarks>
-        public WeaponConfig WeaponConfig = WeaponConfig.Rifle;
+        public WeaponConfig WeaponConfig => WeaponCatalog.For(WeaponId);
 
         /// <summary>
         /// Where this client's snapshot last stopped shedding actors, so the next one resumes
@@ -122,6 +152,15 @@ namespace Ironfront.Net.Replication.Server
         public int ShedCursor;
 
         /// <summary>Re-arms the weapon with a full clip. Called on spawn and respawn.</summary>
+        /// <remarks>
+        /// <b><see cref="WeaponId"/> must already be assigned when this runs.</b> The clip size
+        /// comes from <see cref="WeaponConfig"/>, which is now derived from the id, so calling
+        /// this first loads a clip of ZERO and the player cannot fire — and the symptom
+        /// (<see cref="FireRejection.NoAmmo"/>, forever) looks exactly like the ammo bug
+        /// phase-05 closed. All three call sites — respawn, round reset and join — assign the id
+        /// first, and <c>ASpawnAssignsTheWeaponIdBeforeLoadingTheClip</c> is what keeps them
+        /// doing so.
+        /// </remarks>
         public void ResetWeapon()
         {
             Weapon = WeaponRuntimeState.Loaded(WeaponConfig);

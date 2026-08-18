@@ -140,6 +140,21 @@ namespace Ironfront.Net.Unity.Server
             set => _ammoInClip = value;
         }
 
+        /// <summary>
+        /// Staggers the underlying gameplay actor. A no-op for a replicated object that has none
+        /// -- a prop or a bare test rig has no balance to lose.
+        /// </summary>
+        /// <remarks>
+        /// phase-V2 D6/D7. Applied server-side and NOT replicated: there is no wire field for
+        /// stagger and <c>ActorStateFlags</c> is 8/8 full, so the authoritative view and the bots
+        /// stagger while a remote client sees nothing until V3 buys a bit for it.
+        /// </remarks>
+        public void ApplyBalanceDamage(float balanceDamage)
+        {
+            IGameplayActorSource source = Source;
+            if (source != null) source.ApplyBalanceDamage(balanceDamage);
+        }
+
         /// <summary>Whether a joining connection may be given this actor.</summary>
         public bool AvailableForPlayers => _availableForPlayers;
 
