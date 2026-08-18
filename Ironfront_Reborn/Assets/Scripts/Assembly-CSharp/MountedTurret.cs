@@ -122,7 +122,9 @@ public class MountedTurret : MountedWeapon
 	{
 		base.Unholster();
 		_pendingMouseAim = Vector2.zero;
-		if (!user.aiControlled)
+		// V10 task 3 (A16): was `!user.aiControlled`, so a remote human entering this turret
+		// disabled the LOCAL player's cameras.
+		if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(user))
 		{
 			FpsActorController.instance.DisableCameras();
 			camera.enabled = true;
@@ -134,7 +136,8 @@ public class MountedTurret : MountedWeapon
 		base.Holster();
 		_pendingMouseAim = Vector2.zero;
 		camera.enabled = false;
-		if (!user.aiControlled)
+		// V10 task 3 (A16): the mirror of Unholster's guard above.
+		if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(user))
 		{
 			FpsActorController.instance.EnableCameras();
 		}

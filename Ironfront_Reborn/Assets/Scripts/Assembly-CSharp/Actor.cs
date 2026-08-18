@@ -245,7 +245,9 @@ public class Actor : Hurtable
 		needsResupply = false;
 		animator.SetBool("dead", false);
 		animator.SetBool("seated", false);
-		if (!aiControlled)
+		// V10 task 3: local-only HUD, not bot-only. A remote human spawning must not touch this
+		// client's IngameUi.
+		if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this))
 		{
 			IngameUi.instance.Show();
 			IngameUi.instance.SetHealth(Mathf.Max(0f, health));
@@ -745,7 +747,8 @@ public class Actor : Hurtable
 		ragdoll.Ragdoll(controller.Velocity());
 		ApplyRigidbodyForce(impactForce);
 		dead = true;
-		if (!aiControlled)
+		// V10 task 3: a remote actor's death must not hide the local player's HUD.
+		if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this))
 		{
 			IngameUi.instance.Hide();
 		}
@@ -853,7 +856,9 @@ public class Actor : Hurtable
 		{
 			Hurt(UnityEngine.Random.Range(-2f, 2f));
 		}
-		if (!aiControlled)
+		// V10 task 3 (A16): was `!aiControlled`, so a remote human taking damage wrote THIS
+		// client's health bar from THEIR health. Gated on IsLocalActor instead.
+		if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this))
 		{
 			IngameUi.instance.SetHealth(Mathf.Max(0f, health));
 			float intensity = Mathf.Clamp01(0.3f + (1f - health / 100f));
@@ -882,7 +887,8 @@ public class Actor : Hurtable
 		{
 			activeWeapon.Hide();
 		}
-		if (!aiControlled)
+		// V10 task 3: local-only weapon HUD.
+		if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this))
 		{
 			IngameUi.instance.SetWeapon(weapon);
 			UpdateAmmoUi();
@@ -1171,7 +1177,8 @@ public class Actor : Hurtable
 			int num = spareAmmo[slot];
 			int num2 = Mathf.Max(0, num - howmuch);
 			spareAmmo[slot] = num2;
-			if (!aiControlled)
+			// V10 task 3: local-only ammo HUD.
+			if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this))
 			{
 				UpdateAmmoUi();
 			}
@@ -1186,7 +1193,8 @@ public class Actor : Hurtable
 		{
 			needsResupply = true;
 		}
-		if (!aiControlled)
+		// V10 task 3: local-only ammo HUD.
+		if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this))
 		{
 			UpdateAmmoUi();
 		}
@@ -1213,7 +1221,8 @@ public class Actor : Hurtable
 		if (flag)
 		{
 			AmmoChanged();
-			if (!aiControlled)
+			// V10 task 3: local-only resupply HUD.
+			if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this))
 			{
 				IngameUi.instance.Resupply();
 			}
@@ -1228,7 +1237,8 @@ public class Actor : Hurtable
 		}
 		float num = health;
 		health = Mathf.Min(health + 30f, 100f);
-		if (!aiControlled && num != health)
+		// V10 task 3: local-only heal HUD.
+		if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this) && num != health)
 		{
 			UpdateHealthUi();
 			IngameUi.instance.Heal();

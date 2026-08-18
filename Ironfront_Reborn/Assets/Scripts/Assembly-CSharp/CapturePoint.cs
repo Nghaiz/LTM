@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -259,13 +258,7 @@ public class CapturePoint : SpawnPoint
 		pendingOwner = team;
 		flagRenderer.material.color = Color.Lerp(ColorScheme.TeamColor(team), Color.black, 0.2f);
 		ScoreUi.AddFlag(num2, num);
-		try
-		{
-			MinimapUi.UpdateSpawnPointButtons();
-		}
-		catch (Exception)
-		{
-		}
+		MinimapUi.UpdateSpawnPointButtons();
 	}
 
 	public override float GotoRadius()

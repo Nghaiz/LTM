@@ -1,10 +1,19 @@
 using System.Collections.Generic;
+using Ironfront.Net.Protocol;
+using Ironfront.Net.Unity;
+using Ironfront.Net.Unity.Client;
 using UnityEngine;
 using UnityEngine.UI;
 
 public class MinimapUi : MonoBehaviour
 {
 	private const float MINIMAP_SCALE = 1.3f;
+
+	// Not -1: SpawnPoint.owner defaults to -1 and a CapturePoint can stay there (neutral,
+	// uncaptured, non-assault mode -- CapturePoint.cs:91-100), so -1 would make a neutral
+	// point's button interactable instead of leaving every button disabled (V10 D17).
+	// TeamId.None can never equal a real owner value.
+	private const int UNRESOLVED_TEAM = TeamId.None;
 
 	public static MinimapUi instance;
 
@@ -121,12 +130,42 @@ public class MinimapUi : MonoBehaviour
 
 	public static void UpdateSpawnPointButtons()
 	{
-		// Reached from CapturePoint whenever a flag changes hands, which happens on a server.
+		// The human is always team 0 offline, so this literal keeps offline single-player
+		// byte-for-byte unchanged (V10 D16). Otherwise the local team comes from the
+		// replicated snapshot, never from FpsActorController.playerTeam (V10 D17).
+		int localTeam;
+		if (NetContext.IsOffline)
+		{
+			localTeam = 0;
+		}
+		else if (NetClientPresenterGuard.TryResolveLocalTeam(out byte team))
+		{
+			localTeam = team;
+		}
+		else
+		{
+			localTeam = UNRESOLVED_TEAM;
+		}
+		UpdateSpawnPointButtons(localTeam);
+	}
+
+	public static void UpdateSpawnPointButtons(int localTeam)
+	{
+		// Reached from CapturePoint whenever a flag changes hands, which happens on a server,
+		// and network messages arrive before Start() has run SetupMinimap() -- guard the
+		// button map too, not just instance (V10 Task 9 defect 2).
 		if (instance == null)
 		{
 			return;
 		}
-		int num = 0;
+		if (instance.minimapSpawnPointButton == null)
+		{
+			NetClientPresenterGuard.WarnOnce(
+				"minimap-spawn-buttons-not-ready",
+				"[net] MinimapUi.UpdateSpawnPointButtons ran before SetupMinimap built its "
+				+ "button map. Skipping this update.");
+			return;
+		}
 		foreach (SpawnPoint key in instance.minimapSpawnPointButton.Keys)
 		{
 			int owner = key.owner;
@@ -137,7 +176,7 @@ public class MinimapUi : MonoBehaviour
 			colors.disabledColor = color2 * new Color(0.5f, 0.5f, 0.5f);
 			colors.pressedColor = Color.white;
 			button.colors = colors;
-			button.interactable = owner == num;
+			button.interactable = owner == localTeam;
 		}
 	}
 
