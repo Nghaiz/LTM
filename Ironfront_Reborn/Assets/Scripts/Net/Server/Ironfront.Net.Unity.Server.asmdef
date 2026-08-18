@@ -1,0 +1,16 @@
+{
+    "name": "Ironfront.Net.Unity.Server",
+    "rootNamespace": "Ironfront.Net.Unity.Server",
+    "references": [
+        "Ironfront.Net.Unity.Shared"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

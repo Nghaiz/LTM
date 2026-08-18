@@ -1,0 +1,23 @@
+{
+    "name": "Ironfront.Net.Unity.Server.Tests",
+    "rootNamespace": "Ironfront.Net.Unity.Server.Tests",
+    "references": [
+        "Ironfront.Net.Unity.Server",
+        "Ironfront.Net.Unity.Shared",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
