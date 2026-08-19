@@ -9,9 +9,6 @@ namespace Ironfront.Net.Replication.Client
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// <b>It decodes and dispatches; it does not act.</b> Snapshots go into the
     /// <see cref="Decoder"/> and then into the <see cref="Interpolator"/>; everything else is
     /// raised as an event for the Unity layer to turn into a spawned prefab, a killfeed line or
@@ -39,8 +36,38 @@ namespace Ironfront.Net.Replication.Client
         /// <summary>Applies snapshot deltas. Its <c>Current</c> is the newest world state.</summary>
         public DeltaDecoder Decoder { get; } = new DeltaDecoder();
 
+        // Allocated once and reused, like every other buffer on this path: S_PLAYER_LIST is
+        // rare, but a router that allocates per message is one that allocates per packet as
+        // soon as somebody sends it per tick.
+        private readonly byte[] _playerListBody = new byte[PlayerListMessage.MaxBodySize];
+        private readonly PlayerListEntry[] _playerListEntries =
+            new PlayerListEntry[ProtocolConstants.MAX_ACTORS];
+
         /// <summary>Buffers snapshots so remote actors can be drawn between them.</summary>
         public SnapshotInterpolator Interpolator { get; } = new SnapshotInterpolator();
+
+        /// <summary>Applies vehicle snapshot deltas. Its <c>Current</c> is the newest vehicle world.</summary>
+        public VehicleDeltaDecoder VehicleDecoder { get; } = new VehicleDeltaDecoder();
+
+        /// <summary>
+        /// Buffers vehicle snapshots so replicated vehicles can be drawn between them.
+        /// </summary>
+        /// <remarks>
+        /// A second interpolator rather than a second stream through the first: a vehicle's
+        /// rotation is a full quaternion and an actor's is a yaw, so the sampled quantity
+        /// differs even though the timing discipline is identical. See
+        /// <see cref="VehicleSnapshotInterpolator"/> (V5-D1).
+        /// </remarks>
+        public VehicleSnapshotInterpolator VehicleInterpolator { get; } = new VehicleSnapshotInterpolator();
+
+        /// <summary>Vehicle snapshots applied to the vehicle world state.</summary>
+        public long VehicleSnapshotsApplied { get; private set; }
+
+        /// <summary>
+        /// Vehicle snapshots dropped because their baseline is a tick this client no longer
+        /// holds. See <see cref="UnknownBaselines"/>; the same recovery applies.
+        /// </summary>
+        public long UnknownVehicleBaselines { get; private set; }
 
         /// <summary>Snapshots applied to the world state.</summary>
         public long SnapshotsApplied { get; private set; }
@@ -67,6 +94,33 @@ namespace Ironfront.Net.Replication.Client
 
         /// <summary>An actor left it, or died out of view.</summary>
         public event Action<DespawnActorMessage>? OnDespawnActor;
+
+        /// <summary>
+        /// A vehicle entered this client's interest set. Carries the kind and the network type
+        /// id the client needs to bind the id to a scene vehicle.
+        /// </summary>
+        public event Action<VehicleSpawnMessage>? OnVehicleSpawn;
+
+        /// <summary>
+        /// A vehicle left it, or was destroyed.
+        /// </summary>
+        /// <remarks>
+        /// The handler must stop applying snapshots for that id on the frame this arrives
+        /// (V4-D12): the server has already stopped sending them, so anything still sampling
+        /// the interpolator for it holds a stale pose forever.
+        /// </remarks>
+        public event Action<VehicleDespawnMessage>? OnVehicleDespawn;
+
+        /// <summary>
+        /// Someone entered or left a seat, or was refused.
+        /// </summary>
+        /// <remarks>
+        /// <b>This, and the actor entry's <c>SnapshotField.SeatInfo</c>, are the only things
+        /// that decide which vehicle is "mine".</b> A client that concludes locally that it is
+        /// driving — because it pressed Use next to a car — keeps predicting a vehicle the
+        /// server refused it, and nothing ever tells it otherwise.
+        /// </remarks>
+        public event Action<SeatChangeMessage>? OnSeatChange;
 
         /// <summary>
         /// A shot this client fired connected. Drives the hitmarker and its audio.
@@ -107,19 +161,57 @@ namespace Ironfront.Net.Replication.Client
         public event Action<ExplosionMessage>? OnExplosion;
 
         /// <summary>
+        /// A projectile was launched, or an already-live one was re-parameterized.
+        /// </summary>
+        /// <remarks>
+        /// <b>A repeat of a live id is a correction, not a second projectile</b> (V7-D6, V7-D8).
+        /// The handler is expected to route through
+        /// <see cref="Projectiles.ClientProjectileTracker"/>, which answers "spawn or re-seat"
+        /// once rather than at every subscriber.
+        /// </remarks>
+        public event Action<ProjectileSpawnMessage>? OnProjectileSpawn;
+
+        /// <summary>
+        /// The actor-id-to-name table changed. Raised with the parsed rows and their count.
+        /// </summary>
+        /// <remarks>
+        /// <b>The names point into the receive buffer this call was made from</b>, so a handler
+        /// that keeps one past the callback copies it — <see cref="PlayerListMessage.NameOf"/>
+        /// is the allocating decode for exactly that moment. Handing out the slices rather than
+        /// strings keeps a broadcast of 64 names from allocating 64 strings on every join.
+        /// </remarks>
+        public event Action<PlayerListEntry[], int>? OnPlayerList;
+
+        /// <summary>
         /// A snapshot was applied. Carries the server tick and the newest input tick the server
         /// had processed, which is exactly what <see cref="PredictionReconciler.Reconcile"/>
         /// needs.
         /// </summary>
         public event Action<uint, uint>? OnSnapshotApplied;
 
+        /// <summary>
+        /// A vehicle snapshot was applied. Carries the server tick it was built at.
+        /// </summary>
+        /// <remarks>
+        /// Separate from <see cref="OnSnapshotApplied"/> and carrying no
+        /// <c>lastProcessedInputTick</c>, because vehicle prediction has nothing to reconcile
+        /// against: it is error-corrected simulation, never input replay, so there is no
+        /// acknowledged input tick to replay from (<c>VehicleSnapshotHeader</c> records the same
+        /// decision on the wire).
+        /// </remarks>
+        public event Action<uint>? OnVehicleSnapshotApplied;
+
         /// <summary>Drops all decoded state. Call on disconnect or when rejoining.</summary>
         public void Reset()
         {
             Decoder.Reset();
             Interpolator.Reset();
+            VehicleDecoder.Reset();
+            VehicleInterpolator.Reset();
             SnapshotsApplied = 0;
             UnknownBaselines = 0;
+            VehicleSnapshotsApplied = 0;
+            UnknownVehicleBaselines = 0;
             MalformedMessages = 0;
             UnknownMessages = 0;
         }
@@ -158,6 +250,37 @@ namespace Ironfront.Net.Replication.Client
                         if (DespawnActorMessage.TryParse(body, out DespawnActorMessage despawn))
                         {
                             OnDespawnActor?.Invoke(despawn);
+                            handled++;
+                        }
+                        else MalformedMessages++;
+                        break;
+
+                    case ServerMessageType.VehicleSnapshot:
+                        if (RouteVehicleSnapshot(body)) handled++;
+                        break;
+
+                    case ServerMessageType.VehicleSpawn:
+                        if (VehicleSpawnMessage.TryParse(body, out VehicleSpawnMessage vehicleSpawn))
+                        {
+                            OnVehicleSpawn?.Invoke(vehicleSpawn);
+                            handled++;
+                        }
+                        else MalformedMessages++;
+                        break;
+
+                    case ServerMessageType.VehicleDespawn:
+                        if (VehicleDespawnMessage.TryParse(body, out VehicleDespawnMessage vehicleDespawn))
+                        {
+                            OnVehicleDespawn?.Invoke(vehicleDespawn);
+                            handled++;
+                        }
+                        else MalformedMessages++;
+                        break;
+
+                    case ServerMessageType.SeatChange:
+                        if (SeatChangeMessage.TryParse(body, out SeatChangeMessage seatChange))
+                        {
+                            OnSeatChange?.Invoke(seatChange);
                             handled++;
                         }
                         else MalformedMessages++;
@@ -217,6 +340,20 @@ namespace Ironfront.Net.Replication.Client
                         else MalformedMessages++;
                         break;
 
+                    case ServerMessageType.ProjectileSpawn:
+                        if (ProjectileSpawnMessage.TryParse(
+                                body, out ProjectileSpawnMessage projectile))
+                        {
+                            OnProjectileSpawn?.Invoke(projectile);
+                            handled++;
+                        }
+                        else MalformedMessages++;
+                        break;
+
+                    case ServerMessageType.PlayerList:
+                        if (RoutePlayerList(body)) handled++;
+                        break;
+
                     default:
                         UnknownMessages++;
                         break;
@@ -224,6 +361,71 @@ namespace Ironfront.Net.Replication.Client
             }
 
             return handled;
+        }
+
+        /// <summary>
+        /// Parses a player list into the reusable row buffer and raises
+        /// <see cref="OnPlayerList"/>.
+        /// </summary>
+        /// <remarks>
+        /// The body is copied into <see cref="_playerListBody"/> first. The parsed rows are
+        /// slices of the buffer they were read from, and the one this method is handed is a
+        /// slice of a transport frame that will be recycled the moment this call returns — so
+        /// pointing the rows at it would hand every subscriber a name that is about to become
+        /// somebody else's packet.
+        /// </remarks>
+        private bool RoutePlayerList(ReadOnlySpan<byte> body)
+        {
+            if (body.Length > _playerListBody.Length)
+            {
+                MalformedMessages++;
+                return false;
+            }
+
+            body.CopyTo(_playerListBody);
+
+            if (!PlayerListMessage.TryParse(
+                    _playerListBody, 0, body.Length, _playerListEntries, out int count))
+            {
+                MalformedMessages++;
+                return false;
+            }
+
+            OnPlayerList?.Invoke(_playerListEntries, count);
+            return true;
+        }
+
+        /// <summary>
+        /// Decodes an <c>S_VEHICLE_SNAPSHOT</c> and buffers the resulting vehicle world.
+        /// </summary>
+        /// <remarks>
+        /// Pushed AFTER the decoder applied it, for the same reason the actor path is: a delta
+        /// carries only what changed, so pushing the message would buffer a world containing two
+        /// vehicles and nothing else.
+        /// </remarks>
+        private bool RouteVehicleSnapshot(ReadOnlySpan<byte> body)
+        {
+            switch (VehicleDecoder.Read(body))
+            {
+                case SnapshotReadResult.Applied:
+                    VehicleSnapshotsApplied++;
+                    VehicleInterpolator.Push(VehicleDecoder.Current);
+                    OnVehicleSnapshotApplied?.Invoke(VehicleDecoder.Current.ServerTick);
+                    return true;
+
+                case SnapshotReadResult.UnknownBaseline:
+                    UnknownVehicleBaselines++;
+                    return false;
+
+                case SnapshotReadResult.Stale:
+                    // Not malformed. An older snapshot than the one already applied is what UDP
+                    // reordering looks like, and it is why the decoder checks at all.
+                    return false;
+
+                default:
+                    MalformedMessages++;
+                    return false;
+            }
         }
 
         private bool RouteSnapshot(ReadOnlySpan<byte> body)

@@ -39,9 +39,25 @@ public class Boat : Vehicle
 		base.DriverExited();
 	}
 
+	/// <summary>
+	/// Takes <c>inWater</c> from the snapshot, because the buoyancy sample that used to set it
+	/// does not run on a replicated hull. V5-D3.
+	/// </summary>
+	public override void ApplyReplicatedFlags(bool inWaterFlag, bool airborne)
+	{
+		inWater = inWaterFlag;
+	}
+
 	protected override void FixedUpdate()
 	{
 		base.FixedUpdate();
+		// V5-D3: the hull is kinematic here, so buoyancy and thrust are forces nothing reads.
+		// inWater comes from the replicated flag instead -- see ApplyReplicatedFlags, and note
+		// that the sampler loop below is what used to set it.
+		if (NetworkDriven)
+		{
+			return;
+		}
 		int num = 0;
 		Transform[] array = floatingSamplers;
 		foreach (Transform transform in array)

@@ -6,8 +6,8 @@ namespace Ironfront.Net.Unity
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev A. Closes phase-00 task 3 — the seam a networked controller needs in order to
-    /// exist. Written by the lead's assist track (plans/assist-dev-a/step-02-input-source.md).
+    /// Closes phase-00 task 3 — the seam a networked controller needs in order to
+    /// exist. Written by the lead's assist track (plans/unity-client/study/step-02-input-source.md).
     /// </para>
     /// <para>
     /// <b>No UnityEngine here, on purpose.</b> This file and its pure siblings
@@ -70,5 +70,41 @@ namespace Ironfront.Net.Unity
         /// <see cref="InputSourceExtensions"/> rather than by masking inline.
         /// </summary>
         ushort Buttons { get; }
+
+        /// <summary>Helicopter tail rotor. The <c>Vector4.x</c> of <c>HelicopterInput</c>.</summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why four helicopter members exist here when <see cref="LookDeltaX"/> already
+        /// carries a mouse delta (V5-D8).</b> A networked helicopter is structurally
+        /// unreachable through the existing members. <c>NetInputSource.LookDeltaX</c> returns 0
+        /// and correctly so — <c>C_INPUT</c> carries an absolute yaw, and a per-frame mouse
+        /// delta is a different quantity an absolute-angle protocol cannot express. And the
+        /// <c>helicopterType == 2</c> branch never read the seam at all: it read
+        /// <c>Input.GetAxis</c> directly, booked as accepted debt in an in-file comment. Both
+        /// roads end here.
+        /// </para>
+        /// <para>
+        /// <b>These are post-scaling, post-inversion (V5-D9).</b> Sensitivity and the four
+        /// invert flags are client-local settings from <c>OptionsUi</c>, which the server does
+        /// not have and must never reach for — doing so at server role is an authority hole and
+        /// a headless <c>NullReferenceException</c> at once. So the sender applies them and what
+        /// crosses the seam is a finished control vector, bounded by <c>Vehicle.Clamp4</c> at
+        /// the vehicle exactly as it already is offline.
+        /// </para>
+        /// <para>
+        /// Which slot each of these occupies on the wire is <see cref="HelicopterAxes"/>'s to
+        /// say, and nothing else's.
+        /// </para>
+        /// </remarks>
+        float HeliYaw { get; }
+
+        /// <summary>Helicopter lift. The <c>Vector4.y</c>. See <see cref="HeliYaw"/>.</summary>
+        float HeliCollective { get; }
+
+        /// <summary>Helicopter bank. The <c>Vector4.z</c>. See <see cref="HeliYaw"/>.</summary>
+        float HeliRoll { get; }
+
+        /// <summary>Helicopter nose pitch. The <c>Vector4.w</c>. See <see cref="HeliYaw"/>.</summary>
+        float HeliPitch { get; }
     }
 }

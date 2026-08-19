@@ -1,7 +1,7 @@
 # Codebase map — the original single-player game
 
 **Audience:** anyone about to edit `Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/`.
-**Closes** Dev A [phase-00 task 1](../plans/dev-a-unity-client/phases/phase-00-foundation.md#task-1--read-and-understand-the-codebase-2-days).
+**Closes** the client track [phase-00 task 1](../plans/unity-client/phases/phase-00-foundation.md#task-1--read-and-understand-the-codebase-2-days).
 **Audited** 2026-08-15 against the repository at `3676c6e`. Every line number below was read, not
 recalled; re-run the greps in § 7 if the files have moved since.
 
@@ -50,24 +50,24 @@ flowchart TD
 
 | # | Where | What happens |
 |---|---|---|
-| 1 | [`Actor.Update():433`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L433) | Per frame, if `activeWeapon != null` → `UpdateWeapon()` |
-| 2 | [`Actor.UpdateWeapon():443`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L443) | `controller.Fire()` && not `fallenOver` && seat allows it |
-| 3 | [`Actor.UpdateWeapon():446`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L446) | `activeWeapon.Fire(controller.FacingDirection(), controller.UseMuzzleDirection())` |
+| 1 | [`Actor.Update():467`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L467) | Per frame, if `activeWeapon != null` → `UpdateWeapon()` |
+| 2 | [`Actor.UpdateWeapon():475`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L475) | `controller.Fire()` && not `fallenOver` && seat allows it |
+| 3 | [`Actor.UpdateWeapon():480`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L480) | `activeWeapon.Fire(controller.FacingDirection(), controller.UseMuzzleDirection())` |
 | 4 | [`Weapon.CanFire():306`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs#L306) | unholstered · not reloading · has ammo · auto-or-not-held · not cooling down |
 | 5 | [`Weapon.Shoot():321`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs#L321) | `projectilesPerShot` × `SpawnProjectile`, then `ammo--`, `user.ApplyRecoil(...)` |
 | 6 | [`Weapon.SpawnProjectile():388`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs#L388) | `Quaternion.LookRotation(direction + Random.insideUnitSphere * configuration.spread)` |
 | 7 | [`Projectile.Travel():92`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Projectile.cs#L92) | Raycast forward `delta.magnitude * 2f`, mask `-2049` |
 | 8 | [`Projectile.Hit():125`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Projectile.cs#L125) | `Hitbox.IsHitboxLayer(layer)` → `component.ProjectileHit(this, point)` |
 | 9 | [`Hitbox.ProjectileHit():22`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Hitbox.cs#L22) | `parent.Damage(p.Damage() * multiplier, p.BalanceDamage(), piercing, …)` |
-| 10 | [`Actor.Damage():761`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L761) | `health -=`, `balance -=`, blood decals, then knock-over / ragdoll / hurt |
-| 11 | [`Actor.Die():691`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L691) | drop weapons, ragdoll, `ActorManager.SetDead`, `PathfindingManager.RegisterDeath`, `ScoreUi.AddScore` |
+| 10 | [`Actor.Damage():813`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L813) | `health -=`, `balance -=`, blood decals, then knock-over / ragdoll / hurt |
+| 11 | [`Actor.Die():725`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L725) | drop weapons, ragdoll, `ActorManager.SetDead`, `PathfindingManager.RegisterDeath`, `ScoreUi.AddScore` |
 
 ### Five facts worth knowing before you touch any of it
 
 1. **Damage is randomised at three points**, all `UnityEngine.Random`: spread
    ([`Weapon.cs:390`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs#L390)), recoil
    kick ([`Weapon.cs:348`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs#L348)) and
-   the hurt animation ([`Actor.cs:797`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L797)).
+   the hurt animation ([`Actor.cs:857`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L857)).
    A shot is not reproducible from its inputs, so client-side prediction of a hit is not possible
    without seeding — which is why
    [`ServerFireResolver`](../Ironfront.Net.Replication/Combat/ServerFireResolver.cs) exists on the
@@ -83,7 +83,7 @@ flowchart TD
    vehicle armour.
 4. **`Actor.Update` throttles itself.** `IsLowQuality()` returns true for AI actors that are
    off-screen or beyond `12000 / fov` metres, and those actors run `UpdateFacing`/`UpdateMovement`
-   at 5 Hz instead of per frame ([`Actor.cs:402-421`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L402)).
+   at 5 Hz instead of per frame ([`Actor.cs:403-422`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L403)).
    `Camera.main` is dereferenced unconditionally inside `IsLowQuality`, which is a headless
    landmine — see § 4.
 5. **`AiActorController` consumes the same 30-method `ActorController` surface and reads no input at
@@ -107,16 +107,16 @@ The right-hand column is
 | facing yaw | `transform.eulerAngles.y` | ✅ | `Yaw` (u16) |
 | aim pitch | camera, not on `Actor` | ✅ | `Pitch` (i8) |
 | velocity | `controller.Velocity()` | ✅ | `VelX/Y/Z` (i8) |
-| `health` | [`Actor.cs:72`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L72) | ✅ | `Health` (u8, 0–100) |
-| `dead` | [`Actor.cs:78`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L78) | ✅ | `IsAlive` flag (inverted) |
-| `fallenOver` / ragdoll | [`Actor.cs:81`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L81) | ✅ | `IsRagdoll` flag |
+| `health` | [`Actor.cs:89`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L89) | ✅ | `Health` (u8, 0–100) |
+| `dead` | [`Actor.cs:95`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L95) | ✅ | `IsAlive` flag (inverted) |
+| `fallenOver` / ragdoll | [`Actor.cs:98`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L98) | ✅ | `IsRagdoll` flag |
 | crouching | `FpsActorController.crouching` | ✅ | `IsCrouching` flag |
 | sprinting | `controller.IsSprinting()` | ✅ | `IsSprinting` flag |
-| aiming | [`Actor.cs:120`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L120) | ✅ | `IsAiming` flag |
-| `inWater` | [`Actor.cs:106`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L106) | ✅ | `IsInWater` flag |
-| `seat` occupancy | [`Actor.cs:143`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L143) | ✅ | `IsSeated` flag + `SeatInfo` (stretch) |
+| aiming | [`Actor.cs:137`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L137) | ✅ | `IsAiming` flag |
+| `inWater` | [`Actor.cs:123`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L123) | ✅ | `IsInWater` flag |
+| `seat` occupancy | [`Actor.cs:160`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L160) | ✅ | `IsSeated` flag + `SeatInfo` (stretch) |
 | `team` | `Hurtable.team` | ✅ | `Team` (u8) |
-| active weapon | [`Actor.cs:109`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L109) | ✅ | `WeaponId` (u8, via `WeaponManager.NetworkIdOf`) |
+| active weapon | [`Actor.cs:126`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L126) | ✅ | `WeaponId` (u8, via `WeaponManager.NetworkIdOf`) |
 | `activeWeapon.ammo` | `Weapon.ammo` | ✅ | `AmmoInClip` (u8) |
 
 ### The gap list
@@ -125,7 +125,7 @@ Phase-00 asks for the table; the gap under it is the part that changes anyone's 
 
 | Missing from the snapshot | Where it lives | Does it matter? |
 |---|---|---|
-| **`balance`** (the stagger meter, 100 → −100) | [`Actor.cs:75`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L75) | **Yes.** `balance < 0` is what triggers `KnockOver` ([`Actor.cs:791`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L791)). It regenerates at 10/s and is decremented by every hit, so a client that does not have it cannot predict a knock-down and will show a player standing who is on the floor on the server. It is not derivable from `health` — a stun grenade does 0 health and 200 balance. |
+| **`balance`** (the stagger meter, 100 → −100) | [`Actor.cs:92`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L92) | **Yes.** `balance < 0` is what triggers `KnockOver` ([`Actor.cs:853`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L853)). It regenerates at 10/s and is decremented by every hit, so a client that does not have it cannot predict a knock-down and will show a player standing who is on the floor on the server. It is not derivable from `health` — a stun grenade does 0 health and 200 balance. |
 | **`spareAmmo[5]`** and the other four weapon slots | [`Actor.cs:112,116`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L112) | Own-player only. The HUD reads it via `Actor.UpdateAmmoUi`; other players never see it. A dedicated `S_LOADOUT`-style message or an own-player-only field, not a per-actor snapshot field. |
 | **`prone`** | *does not exist in the game* | `ActorStateFlags.IsProne` is defined in the protocol and has no source. Either the protocol carries a bit nothing will ever set, or prone is a planned feature. Worth deciding rather than discovering. |
 | **`hasAmmoBox` / `hasMedipack` / `needsResupply`** | [`Actor.cs:125-140`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L125) | AI-only inputs (`AiActorController` resupply behaviour) and server-side. No replication needed. |
@@ -142,7 +142,7 @@ shipping neither is not.
 ## 3. Where `Actor` reaches for a singleton
 
 Phase-00 task 1 deliverable 3, and the direct input to
-[assist step 03](../plans/assist-dev-a/step-03-singleton-guards.md).
+`assist step 03`.
 
 | Line | Call | Present on a server? |
 |---|---|---|
@@ -183,7 +183,7 @@ Note the shape they share: **all five are static methods that dereference `insta
 `ScoreUi.AddScore`, `DecalManager.CreateBloodDrop`, `DecalManager.AddDecal`,
 `MinimapUi.AddActorBlip` and `IngameUi.Hit` are all `public static void X(...) { instance.Y(); }`.
 That is a single choke point per singleton, not forty call sites — which is the fact that decides
-how [step 03](../plans/assist-dev-a/step-03-singleton-guards.md) should be written.
+how `step 03` should be written.
 
 `Camera.main` is the odd one out and the one nobody would have predicted: it is not on the task-5
 list of 21 singletons at all, and it will throw before any of them, because `Actor.Update` runs for
@@ -194,13 +194,13 @@ all 32 bots from the first frame.
 ## 4. Every `Input.*` site in `FpsActorController`, and its surrounding condition
 
 Added by the assist track for
-[step 02](../plans/assist-dev-a/step-02-input-source.md); gathering it while reading is nearly free
+`step 02`; gathering it while reading is nearly free
 and it is the exact substitution list that step needs.
 
 37 lines, 44 individual `Input.*` expressions — the anchored count; see the correction at the end of
 this section. Read the middle column as "this read only matters when…".
 
-> **This table describes the file before [step 02](../plans/assist-dev-a/step-02-input-source.md).**
+> **This table describes the file before `step 02`.**
 > It is kept in that form because it is the substitution list step 02 was built from, and because
 > `InputShadowCompare` names its sites by these line numbers. After step 02, 11 of the 37 lines read
 > `inputSource` instead and 26 remain: the 4 helicopter axes (phase-00 § 5 debt) and 22 edge-triggered
@@ -251,7 +251,7 @@ this section. Read the middle column as "this read only matters when…".
 
 2. **There is a 38th gameplay `Input.*` read outside `Assembly-CSharp/`.**
    [`MovementSimulation.FromUnityInput`](../Ironfront_Reborn/Assets/Scripts/Net/Shared/MovementSimulation.cs#L70)
-   reads `Horizontal`, `Vertical`, `Jump`, `Sprint` and `Crouch` directly. That file is Dev C's and
+   reads `Horizontal`, `Vertical`, `Jump`, `Sprint` and `Crouch` directly. That file is the replication track's and
    marked "nobody else may edit" in
    [conventions.md § 7](../plans/00-shared/conventions.md), so it is named here rather than changed.
    It is the natural second consumer of `IInputSource` once the interface exists.
@@ -265,7 +265,7 @@ this section. Read the middle column as "this read only matters when…".
 The other 43 `Input.*` lines, in 16 files (`SpectatorCamera` 9, `PathTypesDemo` 9,
 `ObjectPlacer`/`GroupController`/`CommandRoomCamera` 4 each, `WeaponManager`/`ScoreUi` 2 each, and
 nine files with one apiece), are spectator, level-editor tooling and menus.
-[Phase-00 criterion 6](../plans/dev-a-unity-client/phases/phase-00-foundation.md#3-acceptance-criteria)
+[Phase-00 criterion 6](../plans/unity-client/phases/phase-00-foundation.md#3-acceptance-criteria)
 explicitly permits them to keep calling `Input` directly.
 
 > **Count correction.** Both phase-00 ("59 `Input.*` call sites, ~40 in `FpsActorController`") and
@@ -377,7 +377,7 @@ grep -rl "NetContext\|NetMovementAgent\|MovementSimulation" *.cs | wc -l   # 0
 
 ## 8. Related
 
-- [`plans/dev-a-unity-client/phases/phase-00-foundation.md`](../plans/dev-a-unity-client/phases/phase-00-foundation.md) — the task this closes
-- [`plans/assist-dev-a/`](../plans/assist-dev-a/) — the assist track; steps 02 and 03 consume § 4 and § 3 respectively
+- [`plans/unity-client/phases/phase-00-foundation.md`](../plans/unity-client/phases/phase-00-foundation.md) — the task this closes
+- `plans/unity-client/study/` — the assist track; steps 02 and 03 consume § 4 and § 3 respectively
 - [`docs/movement-analysis.md`](movement-analysis.md) — the movement port, in the depth this document does not go into
 - [`plans/00-shared/conventions.md`](../plans/00-shared/conventions.md) § 7 — who may edit what

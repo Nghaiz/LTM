@@ -1,6 +1,6 @@
 # Working conventions — Ironfront Reborn
 
-Applies to all 4 people. Read before your first commit.
+Single-owner project. These are the rules that survive contact with your own memory.
 
 ---
 
@@ -51,7 +51,7 @@ Required in `.gitattributes`:
 *.asset   merge=unityyamlmerge eol=lf
 ```
 
-If two people absolutely must touch a scene: **announce it in the group chat first, lock the file,
+If a scene must be touched alongside other work: **finish and commit the scene edit on its own,
 and release it when you're done**.
 
 ### 1.4. Absolutely forbidden
@@ -65,20 +65,25 @@ and release it when you're done**.
 
 ## 2. Protocol change process
 
-`protocol-spec.md` is frozen at the end of week 1. After that:
+`protocol-spec.md` was frozen at the end of week 1. It stays the source of truth: the wire format
+is the one thing a running client and a running server have to agree on without being able to ask
+each other.
 
 ```mermaid
 flowchart LR
-    A[Change identified as necessary] --> B[Raise it in the group chat<br/>with reason + impact]
-    B --> C{Who is affected?}
-    C --> D[PR editing protocol-spec.md<br/>+ ProtocolConstants.cs<br/>+ conformance test]
-    D --> E[2 mandatory approvals<br/>including the affected person]
-    E --> F[Bump PROTOCOL_VERSION<br/>Record it in the § 15 table]
-    F --> G[All 4 pull the same day]
+    A[Change identified as necessary] --> B[Write down the reason and the blast radius]
+    B --> C[One commit: protocol-spec.md<br/>+ ProtocolConstants.cs<br/>+ conformance test]
+    C --> D[Bump PROTOCOL_VERSION<br/>record it in the § 15 table]
+    D --> E[Rebuild the plugin DLLs<br/>tools/build-libs.ps1]
 ```
 
-**Never** change a protocol constant directly in your own code and "tell people later". That is the
-number-one cause of risk R5.
+**The three parts move together or not at all** — spec, constant, conformance test. Changing a
+protocol constant in one place and fixing the other side "in a minute" is what produces a
+version-skew bug that survives the session that caused it, and the symptom shows up as a client
+that connects and then silently misreads every snapshot.
+
+The DLL rebuild is part of the change, not follow-up work: Unity consumes
+`Assets/Plugins/Ironfront.Net.*.dll`, so a protocol edit that is not rebuilt is not in the game.
 
 ---
 
@@ -108,7 +113,7 @@ Splitting the row makes the casing carry information instead of being a formalit
 
 > **SCREAMING_SNAKE means "this value is part of the wire contract".** It lives in
 > `ProtocolConstants.cs`, it appears in the `protocol-spec.md` table, and changing it needs a
-> PR with 2 approvals and a `PROTOCOL_VERSION` bump (section 2).
+> a `PROTOCOL_VERSION` bump and a conformance test in the same commit (section 2).
 
 That distinction is already enforced, and not by a style rule: `tools/SpecChecker` looks each
 spec-listed constant up on the compiled type **by name**, so renaming `PROTOCOL_VERSION` to
@@ -242,8 +247,8 @@ optimize where the benchmark points.**
 | Kind | Written by | Run with | Requirement |
 |---|---|---|---|
 | .NET library unit tests | B, C, D | `dotnet test` (xUnit) | Mandatory for all protocol logic |
-| Conformance tests | Written by C, run by all 4 | `dotnet test` | The referee when there's a dispute |
-| 2-process integration | All 4 | `tools/run-integration.ps1` script | Run every integration day |
+| Conformance tests | Written against the spec, not the implementation | `dotnet test` | The referee when the two sides disagree |
+| 2-process integration | Client + server in one run | `tools/run-integration.ps1` | Run before any milestone merge |
 | Unity Play Mode tests | A | Unity Test Runner | Client-only logic |
 | Load tests | D | `Ironfront.Tools.LoadTest` | From M3 onward |
 
@@ -263,114 +268,53 @@ red tests, no "I'll fix it later".
 
 ---
 
-## 6. Reports — write into your own `reports/`
+## 6. Reports
 
-After **every phase**, the owner writes a file following `reports/_TEMPLATE.md`.
-Naming: `YYYY-MM-DD-phase-NN-<slug>.md`.
+After every phase, write a file following `reports/_TEMPLATE.md` into that subsystem's
+`reports/` directory. Naming: `YYYY-MM-DD-phase-NN-<slug>.md`.
 
-Reports are not for showcasing achievements. Their purpose is:
-1. So others can read where your area currently stands
-2. To record technical decisions and their reasons (nobody remembers 3 months later)
-3. To record what was tried and **failed** — more valuable than what succeeded
+Reports are not a showcase. They exist so that:
 
-**Honesty is mandatory:** if a test is red, write that it's red, with the output. If you skipped
-something, say exactly what you skipped and why. A rose-tinted report hurts the whole team during
-integration week.
+1. A subsystem's current state can be read without re-deriving it from the code
+2. Technical decisions keep their reasons attached (nobody remembers three months later)
+3. What was **tried and failed** is recorded — more valuable than what worked
 
----
-
-## 7. File ownership boundaries
-
-| Area | Owner | Who else may read | Who else may edit |
-|---|---|---|---|
-| `Ironfront_Reborn/Assets/**` | A | Everyone | Nobody |
-| `Ironfront_Reborn/Assets/Scripts/Net/Server/**` | C | Everyone | A (only with C's consent) |
-| `Ironfront_Reborn/Assets/Scripts/Net/Shared/**` | **C** | Everyone | Nobody |
-| `Ironfront_Reborn/Assets/Scripts/Net/Shared/MovementSimulation.cs` | **C** | Everyone | **Nobody** — this file is the shared source of truth for client and server |
-| `Ironfront.Net.Transport/**` | B | Everyone | Nobody |
-| `Ironfront.Net.Replication/**` | C | Everyone | Nobody |
-| `Ironfront.Net.Replication/Serialization/**` (`BitWriter`, `BitReader`) | **B** | Everyone | Nobody |
-| `Ironfront.Net.Protocol.Tests/Conformance/**` | **C** | Everyone | Nobody — C is the referee, B is the implementer |
-| `Ironfront.MasterServer/**` | D | Everyone | Nobody |
-| `Ironfront.Net.Protocol/**` | **Shared** | Everyone | PR + 2 approvals |
-| `tools/run-integration.ps1` + integration scenarios | **C** | Everyone | PR |
-| `plans/00-shared/**` | **Shared** | Everyone | PR + 2 approvals |
-| `plans/dev-X-*/**` | Person X | Everyone | Nobody |
-| `tools/**` (the rest: CI, build scripts) | D | Everyone | PR |
-
-### Separating the implementer from the verifier
-
-The most important seam in the project: **B writes the serializer, C writes the tests that verify
-it.**
-
-| | Who does it | Files |
-|---|---|---|
-| Implementing bit-packing | **B** | `Ironfront.Net.Replication/Serialization/` |
-| Conformance tests with hard-coded hex | **C** | `Ironfront.Net.Protocol.Tests/Conformance/` |
-
-Reason: if the same person writes and tests it, the tests only prove the code is consistent with
-itself, not that it matches the spec. Splitting them makes C's conformance tests a **genuine
-referee** when there's a dispute about the format. This is also why C may not edit B's files and
-vice versa.
-
-> **Two corrections made at the week-1 protocol freeze.**
->
-> **`Quantize` moved out of B's `Serialization/` folder into `Ironfront.Net.Protocol`.** This table
-> previously listed it under B alongside `BitWriter`/`BitReader`, which contradicted
-> [protocol-spec.md § 4.4](protocol-spec.md#44-quantization--mandatory-shared-constants) — the spec
-> declares the quantization constants shared and forbids re-hardcoding them anywhere else. Two
-> owners for one SSOT is exactly the drift the freeze exists to prevent, so the spec wins:
-> `Quantize` is shared (PR + 2 approvals), `BitWriter`/`BitReader` remain B's alone.
->
-> **The conformance suite lives in `Ironfront.Net.Protocol.Tests/Conformance/`,** not
-> `Ironfront.Net.Replication.Tests/`. It verifies the shared protocol library, which exists and is
-> frozen, whereas `Ironfront.Net.Replication` is still a skeleton. Ownership is unchanged — the
-> suite is **C's**, and the implementer/verifier split matters far more than the folder it sits in.
-
-**If you need a change in someone else's file:** open an issue or message them, describe what you
-need, let them make it. Don't edit it yourself and mention it afterwards. The only exception: fixing
-a typo in a comment.
+**Honesty is mandatory.** A red test is written down as red, with the output. A skipped step names
+what was skipped and why. A report that reads better than the code is a report that will mislead
+the person who trusts it — and on a single-owner project, that person is you in six weeks.
 
 ---
 
-## 8. Bus factor — who backs up whom
+## 7. Scope discipline
 
-| Area | Primary | Backup | How the backup stays current |
-|---|---|---|---|
-| Unity client | A | C | C reviews client PRs weekly |
-| Transport | B | C | B and C cross-review every PR |
-| **Replication (the highest-risk role)** | C | **A** | **A spends 1 slack week in W7–10 reading C's code.** Rationale below |
-| Master server | D | B | B reviews master PRs every 2 weeks |
+There is one owner, so there are no ownership boundaries to negotiate — but the reason the old
+boundary table existed still applies: **a change that reaches outside what the task needs is a
+change nobody reviewed.** The discipline that replaces the table:
 
-If someone is away for more than a week, the backup takes over. That's why reports and code comments
-have to be good enough for someone else to follow.
-
-### Why C's backup changed from B to A
-
-C is the highest-risk role (47/70 difficulty, 3 dependencies, blocks A). If C is away, the project
-stalls.
-
-| | Dev B as backup | **Dev A as backup** |
-|---|---|---|
-| Has slack? | No — B is fully booked at 13.0 pw | **Yes — 2.5 weeks in W7–10** |
-| Knows Unity? | No, and isn't allowed to open the Editor | **Yes, owns the entire Unity project** |
-| Understands `Actor.cs`? | No | **Yes, read it closely in phase-00** |
-| Understands `MovementSimulation`? | No | **Yes, A calls it every frame** |
-| Understands the byte level? | Very well | Well enough |
-
-A wins on 4 of 5 axes. What A concretely does in that week: read `Net/Server/**`, get the server
-tick loop running solo, and understand the snapshot flow end to end. No new code.
+- Every changed line traces to the task at hand. Adjacent cleanup goes in its own commit.
+- `Ironfront.Net.Protocol/**` still moves under section 2's process. The wire format is the one
+  place where "I'll fix the other side in a minute" produces a version-skew bug that outlives the
+  session that caused it.
+- `MovementSimulation.cs` is still the shared source of truth for client and server. Changing it
+  changes both, whether or not both were tested.
+- Generated artifacts (`Assets/Plugins/*.dll`) are never hand-edited — rerun `tools/build-libs.ps1`.
 
 ---
 
-## 9. Definition of Done
+## 8. Definition of Done
 
-A phase is only marked done when **all 5** hold:
+A phase is done when **all five** hold:
 
-1. The code runs, has actually been run, and the output was inspected (not "it probably runs")
-2. That part's tests are green — `dotnet test` was actually run and the result was read
-3. It doesn't break anyone else's tests — the full suite was run
-4. It's merged into `develop` and `develop` is still green
-5. The report has been written into `reports/`
+1. The code has actually been run and the output was inspected — not "it probably runs"
+2. That area's tests are green; `dotnet test` was run and the result was read
+3. The full suite is green — the change did not break an unrelated area
+4. Unity compiles clean: `tools/ci.ps1` step 4, or a direct batch-mode compile with `UNITY_PATH`
+   set. Zero `error CS`, and the log was actually read rather than the exit code trusted
+5. It is merged into `develop`, and the report is written into the subsystem's `reports/`
 
-Miss any one of them and the phase isn't done, however much code has been written.
+Miss one and the phase is not done, however much code was written.
+
+**On CI:** GitHub Actions is currently blocked repo-wide by a billing limit — every job fails in
+3–5 seconds without starting. Until that is lifted, criteria 2–4 are satisfied locally, and a PR
+merged over red checks is expected rather than a shortcut. Say so in the PR body so the record
+does not read as "the tests were ignored".

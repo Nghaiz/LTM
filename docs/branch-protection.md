@@ -5,11 +5,11 @@ this page are **not** — they live in the GitHub UI and someone with admin righ
 them on by hand, once. Until then, `CODEOWNERS` requests reviewers that nobody is obliged to
 wait for, and the CI job that says "required" is not actually required.
 
-Owner: Dev D. Estimated time: about ten minutes.
+Owner: The master-server track. Estimated time: about ten minutes.
 
 ---
 
-## Status, 2026-08-15 — §0 done, §1 and §2 blocked on someone who is not Dev D
+## Status, 2026-08-15 — §0 done, §1 and §2 blocked on someone who is not the master-server track
 
 Read this before spending time on the rest of the page.
 
@@ -17,7 +17,7 @@ Read this before spending time on the rest of the page.
 authorship rather than from anyone's recollection — see the header of `.github/CODEOWNERS`.
 All four are already collaborators, so the Write-access requirement in step 3 is satisfied.
 
-**§1 and §2 cannot be done by Dev D, or by anyone else on the team.** Two separate walls,
+**§1 and §2 cannot be done by the master-server track, or by anyone else on the team.** Two separate walls,
 and the second one survives fixing the first:
 
 1. **Nobody but the repository owner has admin.** `GET /repos/Sagitoaz/LTM` reports
@@ -30,7 +30,7 @@ and the second one survives fixing the first:
    Granting a teammate admin does not lift this; the plan does.
 
 So there are exactly three ways forward, and all three belong to the repository owner
-(@Sagitoaz), not to Dev D:
+(), not to the master-server track:
 
 | Option | What it costs | What it buys |
 |---|---|---|
@@ -204,7 +204,7 @@ Do not assume — check. Open a throwaway PR against `develop` and confirm:
 
 1. The three required checks appear and the merge button is blocked until they are green.
 2. The correct code owner is requested for review — a PR touching
-   `Ironfront.Net.Transport/` should request Dev B, not the whole team.
+   `Ironfront.Net.Transport/` should request the transport track, not the whole team.
 3. `git push --force origin develop` is rejected.
 4. Merging is blocked with zero approvals.
 5. The PR body is pre-filled with the Definition of Done checklist.
@@ -218,4 +218,4 @@ discards an unnamed ruleset.
 
 - [`plans/00-shared/conventions.md`](../plans/00-shared/conventions.md) — the rules this page enforces
 - [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) — where the check names come from
-- [`.github/CODEOWNERS`](../.github/CODEOWNERS) — the ownership table
+- `.github/CODEOWNERS` — the ownership table

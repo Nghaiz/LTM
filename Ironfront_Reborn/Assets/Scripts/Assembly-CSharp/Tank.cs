@@ -1,4 +1,5 @@
 using System.Collections;
+using Ironfront.Net.Replication.Vehicles;
 using UnityEngine;
 
 public class Tank : Vehicle
@@ -60,6 +61,69 @@ public class Tank : Vehicle
 		}
 	}
 
+	/// <summary>
+	/// Tank tail: a steering angle it does not have, and the alternating muzzle index. V6 task 4.
+	/// </summary>
+	/// <remarks>
+	/// <b>The steer byte is honestly zero.</b> A tank steers by differential track torque and
+	/// carries no steering angle at all — <c>Car</c> has the field, <c>Tank</c> does not — so
+	/// writing a plausible number derived from the torque split would be inventing one. The muzzle
+	/// index is the byte that matters here (V6-D3's slot is the turret pose; this is the tail).
+	/// </remarks>
+	public override void ReadNetworkSubtypeTail(out byte subtypeA, out byte subtypeB)
+	{
+		VehicleSubtypeTail.PackTank(0f, CurrentMuzzleIndex(), out subtypeA, out subtypeB);
+	}
+
+	/// <inheritdoc />
+	public override void ApplyReplicatedSubtypeTail(byte subtypeA, byte subtypeB)
+	{
+		AlternatingMountedWeapon alternating = FindAlternatingWeapon();
+		if (alternating != null)
+		{
+			// Folded by the receiver, never by the sender: muzzles.Length is per-prefab, so a
+			// client running a revision with fewer barrels than the server would otherwise index
+			// past the end and throw inside the render path.
+			alternating.ApplyReplicatedMuzzle(subtypeB);
+		}
+	}
+
+	private byte CurrentMuzzleIndex()
+	{
+		AlternatingMountedWeapon alternating = FindAlternatingWeapon();
+		return alternating != null ? alternating.currentMuzzle : (byte)0;
+	}
+
+	/// <summary>
+	/// The first alternating mounted weapon on this tank's seats, or null.
+	/// </summary>
+	/// <remarks>
+	/// Scanned rather than cached in a field: <c>seats</c> holds at most eight entries, this runs
+	/// once per capture, and a cached reference would be one more thing to invalidate when
+	/// <c>Explode()</c> destroys the turret.
+	/// </remarks>
+	private AlternatingMountedWeapon FindAlternatingWeapon()
+	{
+		if (seats == null)
+		{
+			return null;
+		}
+		for (int i = 0; i < seats.Length; i++)
+		{
+			Seat seat = seats[i];
+			if (seat == null)
+			{
+				continue;
+			}
+			AlternatingMountedWeapon alternating = seat.weapon as AlternatingMountedWeapon;
+			if (alternating != null)
+			{
+				return alternating;
+			}
+		}
+		return null;
+	}
+
 	protected override void DriverEntered()
 	{
 		base.DriverEntered();
@@ -74,6 +138,12 @@ public class Tank : Vehicle
 
 	private void UpdateMovement()
 	{
+		// V5-D3: kinematic here, so every torque below is discarded by the solver. The track
+		// UV scroll and the turret are driven elsewhere and keep running.
+		if (NetworkDriven)
+		{
+			return;
+		}
 		bool flag = true;
 		float motorTorque = 0f;
 		float motorTorque2 = 0f;

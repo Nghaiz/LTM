@@ -1,16 +1,23 @@
 # Protocol Specification — Ironfront Reborn
 
-**Version: 1.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 1`
+**Version: 3.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 3`
 
-> This is the shared contract for all 4 people. Every offset, every enum value and every
-> quantization constant in this document is **mandatory**. Nobody may interpret them differently.
+> This is the contract every side of the wire is written against. Every offset, every enum value
+> and every quantization constant in this document is **mandatory**. Client and server may not
+> interpret them differently.
+>
+> The header above had said `1.0.0` / `PROTOCOL_VERSION = 1` for the whole of v2's life, because
+> `tools/SpecChecker` parses the fenced constants block in § 1 and never reads this line. That is
+> why § 15's wire gate calls out condition 4 separately — the header is prose, and prose is the
+> half no machine checks.
 > See [conventions.md](conventions.md) for the protocol change process.
 >
 > **The single source of these constants in code:** `Ironfront.Net.Protocol/ProtocolConstants.cs`.
 > Re-hardcoding any number from this document anywhere else is forbidden.
 >
-> **Frozen means:** every change from here on goes through a PR with 2 approvals, adds a row to
-> [§ 15](#15-protocol-changelog-and-freeze-record), and bumps `PROTOCOL_VERSION` **if the bytes on
+> **Frozen means:** every change from here on clears the wire gate in
+> [§ 15](#15-protocol-changelog-and-freeze-record), adds a row to that section's changelog, and
+> bumps `PROTOCOL_VERSION` **if the bytes on
 > the wire change**. A correction that leaves the wire format untouched (a fixed typo, a clarified
 > ambiguity) still needs the PR and the changelog row, but does **not** bump `PROTOCOL_VERSION` —
 > bumping it would reject every client for a documentation edit.
@@ -40,7 +47,7 @@
 public static class ProtocolConstants
 {
     public const ushort PROTOCOL_ID       = 0x4946;  // 'IF' — filters out junk packets
-    public const byte   PROTOCOL_VERSION  = 2;
+    public const byte   PROTOCOL_VERSION  = 3;
 
     public const int    MTU_SAFE          = 1200;    // safe through any router
     public const int    GSP_HEADER_SIZE   = 16;
@@ -67,6 +74,9 @@ public static class ProtocolConstants
     public const int    MAX_PLAYERS       = 16;
     public const int    MAX_BOTS          = 32;
     public const int    MAX_ACTORS        = 64;      // = MAX_PLAYERS + MAX_BOTS + headroom
+
+    public const int    MAX_VEHICLES      = 16;     // separate u16 id space, see § 4.10
+    public const int    VEHICLE_ID_QUARANTINE_TICKS = 150;   // 5 s, same rule as actorId
 }
 ```
 
@@ -236,11 +246,12 @@ repeat messageCount times:
 | Value | Name | Channel | Description |
 |---|---|---|---|
 | `0x20` | `C_INPUT` | 3 (unreliable-seq) | Input frames, see § 4.2 |
+| `0x21` | `C_VEHICLE_INPUT` | 3 (unreliable-seq) | Vehicle axes + turret aim while seated, see § 4.10 |
 | `0x22` | `C_LOADOUT_SELECT` | 2 (reliable-ord) | Weapon selection before spawning |
 | `0x23` | `C_SPAWN_REQUEST` | 2 | Requests a respawn at a spawn point |
 | `0x24` | `C_CHAT` | 2 | In-match chat |
 | `0x25` | `C_PING` | 0 (unreliable) | RTT measurement, carries a client timestamp |
-| `0x26` | `C_SEAT_REQUEST` | 2 | Enter/exit a vehicle seat (stretch goal) |
+| `0x26` | `C_SEAT_REQUEST` | 2 | Enter/exit a vehicle seat, see § 4.10 |
 | `0x27` | `C_ACK_BASELINE` | 2 | Confirms snapshot tick N was received (for delta) |
 
 **Server → Client (0x40–0x5F)**
@@ -258,7 +269,12 @@ repeat messageCount times:
 | `0x48` | `S_PONG` | 0 | Ping reply, echoes the client timestamp |
 | `0x49` | `S_WEAPON_FIRE` | 1 | Another actor just fired (for effects and audio) |
 | `0x4A` | `S_EXPLOSION` | 2 | An explosion at a position, for effects + screen shake |
-| `0x4B` | `S_PLAYER_LIST` | 2 | Player list + scores (for the scoreboard) |
+| `0x4B` | `S_PLAYER_LIST` | 2 | actorId → display-name table, see § 4.11 |
+| `0x4C` | `S_VEHICLE_SNAPSHOT` | 1 (unreliable-seq) | Vehicle entity stream, see § 4.10 |
+| `0x4D` | `S_VEHICLE_SPAWN` | 2 | A vehicle appeared |
+| `0x4E` | `S_VEHICLE_DESPAWN` | 2 | A vehicle left the world |
+| `0x4F` | `S_PROJECTILE_SPAWN` | 2 | A projectile was launched, with its flight parameters |
+| `0x50` | `S_SEAT_CHANGE` | 2 | Authoritative seat enter/leave, including a rejection |
 
 ### 4.2. `C_INPUT` (0x20) — byte layout
 
@@ -287,7 +303,16 @@ At 30 Hz: `29 × 30 = 870 B/s` upstream. Negligible.
 | 4 | Crouch | 12 | SwitchWeapon1 |
 | 5 | Sprint | 13 | SwitchWeapon2 |
 | 6 | Prone | 14 | SwitchWeapon3 |
-| 7 | ThrowGrenade | 15 | reserved |
+| 7 | Reserved7 | 15 | reserved |
+
+**Bit 7 was `ThrowGrenade`, and V7-D10 retired it rather than implementing it.** It was declared
+at the freeze and never gained a producer or a gameplay consumer. The game has no dedicated
+grenade input and never did: throwing is *switch to the gear slot, then Fire*, which routes
+through `Actor.SwitchWeapon` and `ThrowableWeapon.Fire` — a path V6 already made
+server-authoritative. Wiring the bit would add a **second route to firing** that does not pass
+`Weapon.CanFire()`, and a second route is the one nobody writes the rapid-fire test for. The
+value is kept rather than deleted so the neighbouring bits do not renumber; **no wire change**,
+because no producer ever set it.
 
 **Why we repeat 3 frames:** input is critical data but is sent unreliably. Without redundancy, one
 lost packet costs the server an entire tick of input → the character stalls. With a redundancy of 3,
@@ -314,7 +339,7 @@ repeat actorCount times:
     [bit4] health      u8        0..100
     [bit5] weapon      u8 weaponId + u8 ammoInClip
     [bit6] team        u8        Only sent on change (rare)
-    [bit7] seatInfo    u16 vehicleId + u8 seatIndex  (stretch goal)
+    [bit7] seatInfo    u16 vehicleId + u8 seatIndex   (vehicleId 0 = not seated)
 ```
 
 **`changeMask`**: bit i = 1 ⇔ field i is present in this packet. In a full snapshot, every needed
@@ -330,9 +355,17 @@ Settled at the freeze; these three rules are the contract, not suggestions.
 | **Is an id reused as soon as an actor dies?** | **No — quarantine for 5 seconds** (150 ticks) before an id returns to the pool | Snapshots and events for the dead actor are still in flight for up to one interpolation buffer plus retransmits. Reusing the id immediately makes the client apply a dead actor's tail packets to the new one: a freshly spawned player briefly teleports to where the corpse was, or takes damage attributed to the wrong actor. 5 s is far beyond `TIMEOUT_MS`-scale in-flight time |
 | **Is `MAX_ACTORS = 64` enough?** | **Yes.** 16 players + 32 bots = 48 concurrent, with 16 spare | The spare 16 absorbs the quarantine window above: at worst every one of 48 actors dies at once and their ids are still cooling while replacements spawn. 64 also keeps `actorCount` inside its `u8` and the full snapshot inside 2 fragments |
 
-**Is an 8-bit `changeMask` enough?** Yes for v1 — 7 bits used, 1 spare (bit 7, `seatInfo`, is the
-stretch-goal vehicle field). A ninth field would need a `changeMask` widened to `u16`, which is a
-wire-format change: PR, 2 approvals, and a `PROTOCOL_VERSION` bump.
+**Is an 8-bit `changeMask` enough?** **No longer — all 8 bits are used and populated as of
+v3.0.0.** Bit 7 (`seatInfo`) was described here as a spare through the whole of v1 and v2 because
+nothing set it; v3 finished it (both producers now populate it, see § 4.10). A ninth actor field
+therefore needs the `changeMask` widened to `u16`, which is a wire-format change: § 15's wire gate
+and a `PROTOCOL_VERSION` bump. The vehicle entry's mask is already a `u16` with 8 bits spare
+precisely so that the same wall is not hit twice.
+
+**`seatInfo` and the sentinel.** `vehicleId` is allocated from 1 and **0 means "not seated"**. The
+field is only sent on change, and leaving a vehicle *is* a change — a sentinel is the only way to
+express it. Vehicle ids live in their own `u16` space, capped at `MAX_VEHICLES` and quarantined for
+the same 150 ticks (§ 4.10); they never collide with an `actorId`.
 
 **`stateFlags` (u8)**
 
@@ -351,9 +384,16 @@ wire-format change: PR, 2 approvals, and a `PROTOCOL_VERSION` bump.
 
 | Case | Bytes/actor |
 |---|---|
-| Full (every field) | 2 + 1 + 6 + 3 + 3 + 1 + 1 + 2 + 1 = **20** |
+| Full, actor on foot (bits 0–6) | 2 + 1 + 6 + 3 + 3 + 1 + 1 + 2 + 1 = **20** |
+| Full, actor seated (bits 0–7) | 20 + 3 = **23** |
 | Typical delta (pos + rot only) | 2 + 1 + 6 + 3 = **12** |
 | Delta for a stationary actor | 2 + 1 = **3** |
+
+**23 is the number interest management projects against**, not 20: any actor may be seated, and a
+budget projection that is optimistic overruns the datagram and discards the whole snapshot. The
+admitted-actor ceiling is therefore `(1178 − 13) / 23 = 50`, down from 58 at v2. The 48-actor case
+the game ships still never sheds; the margin above it is gone. See § 4.10 § co-residency for what
+the vehicle stream takes off the top.
 
 With 48 actors averaging ~12 B: `48 × 12 = 576 B/snapshot`.
 Plus the GSP header and framing: ~600 B × 20 Hz = **~12 KB/s** downstream.
@@ -394,10 +434,67 @@ public static class Quantize
     public const float VEL_SCALE = 127f / VEL_MAX;     // i8
     // Resolution = 64/127 = 0.5 m/s — only used for extrapolation, which is fine
 
+    // ===== ANGULAR VELOCITY — added v3.0.0 for vehicles (§ 4.10, mask bit 3) =====
+    // rad/s, NOT sharing VEL_SCALE: at 64 rad/s (10 rev/s) every rotation a vehicle
+    // actually performs would quantize to the bottom two or three codes.
+    public const float ANGVEL_MAX = 8f;                // ~1.3 rev/s
+    public const float ANGVEL_SCALE = 127f / ANGVEL_MAX;  // i8
+    // Resolution = 8/127 = 0.063 rad/s. Saturates rather than wraps: a wrapped cast turns
+    // a violent spin into a slow counter-rotation on every client.
+
+    // ===== ROTATION (full, smallest-three) — added v3.0.0 for vehicles =====
+    // A unit quaternion's largest component is at least 0.5, so the other three are each
+    // inside ±1/√2. Sending only those three at 10 bits apiece, plus a 2-bit index of the
+    // one that was dropped, is a full rotation in 32 bits.
+    public const float QUAT_MIN    = -0.70710678f;     // -1/√2
+    public const float QUAT_RANGE  =  1.41421356f;     //  2/√2
+    public const int   QUAT_LEVELS = 1023;             // 10 bits, endpoints exact
+    // Step = 1.41421356 / 1023 = 1.38e-3. Worst-case angular error is 0.271° — see below;
+    // it is NOT the step size, because the reconstructed component amplifies it.
+
     // ===== HEALTH =====
     // health is a u8 directly in 0..100, no scaling needed
 }
 ```
+
+**`PackQuat` / `UnpackQuat` — the three properties that fail silently.** The actor entry's
+`u16 yaw + i8 pitch` cannot express roll, and vehicles roll, so the vehicle entry carries a full
+quaternion. Bit layout, high bits first: `[31:30]` index of the largest-magnitude component
+(0=x, 1=y, 2=z, 3=w); `[29:20]`, `[19:10]`, `[9:0]` the remaining three **in source order**, each an
+unsigned quantization of `QUAT_MIN … −QUAT_MIN`. The dropped component is rebuilt as
+`sqrt(1 − a² − b² − c²)`.
+
+| Property | What goes wrong without it |
+|---|---|
+| **Sign canonicalization** — the largest component is forced positive before packing | `q` and `−q` are the same rotation, so the reconstructed sign is always `+`. Half of all rotations decode **mirrored**, as perfectly valid unit quaternions |
+| **Clamp the radical at 0** before `sqrt` | Round-off (and any hostile input, `0xFFFFFFFF` being the obvious one) pushes it negative; `sqrt` returns `NaN`, and a `NaN` quaternion reaches a transform as an object that vanishes rather than as an exception |
+| **Renormalize on unpack** | 10-bit quantization leaves the length off unit by ~0.1%. One frame tolerates it; interpolated blending across three does not |
+
+A round-trip-only test passes with the sign bug present, which is why § 14 lists each separately.
+
+**The angular budget is 0.3°, and the step size is not where it comes from.** Each transmitted
+component is off by at most half a step (6.912e-4). The dropped component is reconstructed as
+`m = sqrt(1 − a² − b² − c²)`, so its error is `δm = −(a·δa + b·δb + c·δc) / m` and **grows as `m`
+shrinks**. `m` is smallest at the four-way tie `(0.5, 0.5, 0.5, 0.5)`, where it is exactly 0.5 and
+the three transmitted components are simultaneously at their largest:
+
+```
+|δm|  ≤ 3 × 0.5 × 6.912e-4 / 0.5           = 2.074e-3
+|δq|  ≈ sqrt(3 × (6.912e-4)² + (2.074e-3)²) = 2.394e-3
+angle ≈ 2 × |δq| = 4.79e-3 rad              = 0.274°
+```
+
+| Search | Worst error found |
+|---|---|
+| Uniform sweep, 2 × 10⁶ rotations | 0.243° |
+| Dense grid over the three transmitted components | 0.241° |
+| **Deliberate search of the four-way tie** | **0.271°**, at `(0.5004, 0.5014, 0.4991, 0.4991)` |
+| A 10⁴-sample random sweep | ~0.19° — reads as a pass |
+
+The last row is the point: this budget was written as 0.2° from the step size alone, and a
+10⁴-sample test agreed with it. The conformance test therefore **searches the tie corner** rather
+than sampling and hoping. Meeting 0.2° would need 12-bit components (5 bytes), which moves the
+pinned 30-byte vehicle entry — not worth 0.07° nobody can see.
 
 **Mandatory verification (conformance test):**
 ```
@@ -502,8 +599,9 @@ public static class WeaponIds
     public const byte RECON_LRR         = 15;
     public const byte WRENCH            = 16;
     public const byte SUPER_WRENCH      = 17;
+    public const byte CAR_HORN          = 18;     // not a loadout weapon -- see below
 
-    public const byte MAX_ASSIGNED      = 17;     // the next new weapon takes 18
+    public const byte MAX_ASSIGNED      = 18;     // the next new weapon takes 19
 }
 ```
 
@@ -518,6 +616,7 @@ public static class WeaponIds
 | 6 | SL-DEFENDER | 15 | RECON LRR |
 | 7 | FRAG | 16 | WRENCH |
 | 8 | SPEARHEAD | 17 | SUPER WRENCH |
+|  |  | 18 | CAR HORN |
 
 **Ids are permanent and append-only.** Reassigning one breaks no build and no test — it makes a
 server that says "shot with 4" and a client that draws weapon 4 disagree about which gun that is,
@@ -531,9 +630,298 @@ and it is what a sender emits for a registry entry whose id is missing or duplic
 misconfigured weapon transmits "unknown" rather than impersonating whichever weapon legitimately
 owns that number.
 
+**Not every id is a loadout weapon.** `CAR_HORN` = 18 (added in V6) is a `MountedWeapon` bolted to
+a vehicle: it spends no ammo, spawns no projectile, and does one gameplay thing --
+`user.Highlight()`, which reveals the occupant to AI -- so it needs a wire id to travel as
+`S_WEAPON_FIRE`, and needs no inventory sprite, no weapon prefab and no `WeaponSlot`. It therefore
+has **no row** in the `_Managers.prefab` registry, which is a *loadout* table; a placeholder row
+with a null prefab would surface a horn in `LoadoutUi` the moment `ShowAllWeapons()` cleared the
+hidden flag. `WeaponIds.IsLoadoutRegistered` carries the exemption and `tools/SpecChecker` enforces
+it **in both directions** -- an exempt id is skipped by the every-id-has-a-row sweep, and fails
+outright if a row for it ever appears, because at that point the exemption has stopped describing
+the world.
+
 Three copies of this mapping exist: this section, `WeaponIds.cs`, and the `NetworkId` fields in
 `_Managers.prefab`. `tools/SpecChecker` compares all three on every CI run, because the failure
 mode of drift here is silent on both sides.
+
+---
+
+### 4.9. `vehicleType` — the value space
+
+`vehicleType` is a `u8` in `S_VEHICLE_SPAWN` (§ 4.10) and the client instantiates a prefab from it.
+This section is that mapping, written **with** the field rather than four phases after it —
+§ 15's 2.0.1 row records what happens otherwise.
+
+```csharp
+// Ironfront.Net.Protocol/VehicleIds.cs
+public static class VehicleIds
+{
+    public const byte NONE       = 0;      // no vehicle, or one this build does not know
+
+    public const byte JEEP       = 1;
+    public const byte QUADBIKE   = 2;
+    public const byte RHIB       = 3;
+    public const byte HELICOPTER = 4;
+    public const byte TANK       = 5;
+
+    public const byte MAX_ASSIGNED = 5;    // the next new vehicle takes 6
+}
+```
+
+| Id | Prefab | `VehicleKind` (§ 4.10) |
+|---|---|---|
+| 0 | *(none / unknown)* | — |
+| 1 | `jeep` | `Car` |
+| 2 | `quadbike` | `Car` |
+| 3 | `rhib` | `Boat` |
+| 4 | `helicopter` | `Helicopter` |
+| 5 | `tank` | `Tank` |
+
+**This is not `VehicleKind`.** The kind is the four-way physics family a decoder needs in order to
+read a snapshot entry's subtype tail; the id here is which prefab to instantiate. Two tank models
+would share a kind and never share an id — which is exactly why `S_VEHICLE_SPAWN` carries both, and
+why adding a second tank is not a wire change.
+
+**Ids are permanent and append-only**, on the same terms as § 4.8: reassigning one breaks no build
+and no test, it makes the two sides disagree about which vehicle type 4 is, at runtime, for
+everyone. **0 is reserved and never assigned** — a receiver that reads it instantiates nothing, and
+a sender emits it for a prefab whose id is missing or duplicated, so a misconfigured vehicle
+transmits "unknown" rather than impersonating whichever vehicle legitimately owns that number.
+Adding an id is **not** a wire change and does not bump `PROTOCOL_VERSION`.
+
+Three copies exist: this section, `VehicleIds.cs`, and the serialized `networkId` on each vehicle
+prefab. `tools/SpecChecker` compares all three every CI run, anchored on the `m_Script` GUID of a
+`Vehicle` subclass rather than on field order — and it reports a prefab that carries a `Vehicle`
+script with **no** `networkId` as a failure, because unauthored is the state every one of them was
+in before v3.
+
+---
+
+### 4.10. The vehicle stream
+
+Added in v3.0.0. A vehicle is not expressible as an actor entry: `changeMask` had all 8 bits spent
+(§ 4.3.1), quantized actor velocity saturates at `VEL_MAX` = 64 m/s, and the actor rotation field is
+yaw + pitch with no roll.
+
+#### `S_VEHICLE_SNAPSHOT` (0x4C) — byte layout
+
+```
+u32  serverTick                Tick at which the server built this snapshot
+u32  baselineTick              0 = full snapshot; non-zero = delta against that snapshot tick
+u8   vehicleCount
+repeat vehicleCount times:
+    u16  vehicleId
+    u16  changeMask            Bitfield, see below
+    [bit0] position        i16 × 3   Quantized, see § 4.4
+    [bit1] rotation        u32       Smallest-three quaternion, see § 4.4
+    [bit2] linearVelocity  i16 × 3   Quantized at VEL_SCALE (PackVel16)
+    [bit3] angularVelocity i8  × 3
+    [bit4] health          u8        0..100 (Quantize.HEALTH_MAX), scaled by maxHealth
+    [bit5] flags           u8        See below
+    [bit6] turret          u16 yaw + i8 pitch
+    [bit7] subtype         u8 × 2    Fixed 2-byte tail, read per VehicleKind
+```
+
+**There is no `lastProcessedInputTick`.** The actor header carries one because the actor path
+replays unacked inputs through reconciliation. Driver prediction is error-corrected simulation, not
+input replay — the client never re-runs a vehicle tick, so it has nothing to reconcile against, and
+the field would be 4 B at 20 Hz that nobody reads.
+
+**`changeMask` is a `u16` with 8 bits spare, deliberately.** `SnapshotField` spent all 8 of its bits
+before the first vehicle existed, so a ninth actor field needs the mask itself widened; a ninth
+*vehicle* field takes a spare bit in a mask that is already the right width.
+
+**Cheaper is not free.** Adding a vehicle field is still a wire change and still bumps
+`PROTOCOL_VERSION`. An old decoder reaching an unknown mask bit does not know the new field's
+width, so it cannot skip it, and every later field — and every later entry in the datagram —
+misaligns behind it. The spare bits buy a smaller diff, not backward compatibility. The one thing
+an old decoder genuinely survives is an unknown `VehicleKind`, because the subtype tail is a fixed
+2 bytes whatever the kind is.
+
+**`health` runs 0..100, NOT 0..255.** It shares `Quantize.HEALTH_MAX` with the actor entry
+(section 4.3.1), so one decoder constant serves both streams. A client dividing by 255
+renders every vehicle at 39% health and nothing anywhere goes red — the value is in range,
+the bar just lies.
+
+**`flags` (u8)**
+
+| Bit | Meaning |
+|---|---|
+| 0 | Dead |
+| 1 | Burning |
+| 2 | InWater |
+| 3 | Airborne |
+| 4–7 | reserved |
+
+**Size**
+
+| Case | Bytes/vehicle |
+|---|---|
+| Full (every field) | 2 + 2 + 6 + 4 + 6 + 3 + 1 + 1 + 3 + 2 = **30** |
+| Delta for a stationary vehicle | 2 + 2 = **4** |
+
+#### The subtype tail
+
+Two bytes for **every** vehicle type, discriminated by the `VehicleKind` the client learned from
+`S_VEHICLE_SPAWN`.
+
+| `VehicleKind` | `subtypeA` | `subtypeB` |
+|---|---|---|
+| `Car` = 0 | `steerAngle`, i8, degrees | `surfaceFriction`, u8, 0..255 → 0..1 |
+| `Tank` = 1 | `steerAngle`, i8, degrees | `currentMuzzle`, u8 index |
+| `Helicopter` = 2 | `rotorSpeed` low byte | `rotorSpeed` high byte (u16 → 0..1 normalized) |
+| `Boat` = 3 | `steerAngle`, i8, degrees | `surfaceFriction`, u8 |
+| unknown | opaque — 2 bytes, skipped | opaque |
+
+**Fixed width is the whole point.** A variable-width tail would make the stream unparseable by any
+decoder that missed the spawn: one lost type mapping and every *subsequent* entry in the datagram
+misaligns. Fixed width means an unknown kind costs 2 skipped bytes and nothing else — the same
+property that makes `changeMask` safe.
+
+#### `vehicleId` — allocation and lifetime
+
+| Rule | Decision | Why |
+|---|---|---|
+| **Does it share the `actorId` space?** | **No.** A separate `u16` space, allocated **from 1** | A vehicle is not an actor and never occupies an actorId. `MAX_ACTORS` and `SnapshotHeader.actorCount` are untouched by this section |
+| **What does 0 mean?** | **"No vehicle."** Never assigned | `seatInfo` (§ 4.3.1) must be able to say *left the vehicle*, and it is sent only on change. A sentinel is the only way to express that in a `u16` field |
+| **Is an id reused as soon as a vehicle dies?** | **No — quarantine for 5 seconds** (`VEHICLE_ID_QUARANTINE_TICKS` = 150) | The same reason as § 4.3.1: snapshots and events naming a destroyed vehicle are in flight for up to one interpolation buffer plus retransmits, so reissuing immediately applies a wreck's tail packets to its replacement |
+| **Is `MAX_VEHICLES = 16` enough?** | **Yes**, and the cap is load-bearing | It bounds the vehicle body at `16 × 30 + 9 = 489 B`, which is what lets the elastic actor body be sized against what the bounded one consumed. It also leaves the quarantine window room while a spawner replaces a wreck |
+
+#### Co-residency with `S_SNAPSHOT`
+
+Both messages go in the **same channel-1 payload batch**, the vehicle snapshot written **first**;
+the actor snapshot gets the remainder of the datagram budget.
+
+**The remainder is less one extra message header.** A batch carries two messages where the
+snapshot budget constant accounts for one, so the actor body gets
+`MaxSnapshotBodySize - MessageHeaderSize - vehicleBodyLength` = `1178 - 3 - 489` = **686 B**
+at a full vehicle body, not 689. Derived actor capacity is unchanged at 29
+(`floor((686 - 13) / 23)`), so the earlier figure was benign — but it was 3 bytes
+optimistic, and a reader sizing a buffer from it would be over by exactly the header the
+second message needs.
+
+| | Actors only | With a worst-case vehicle body |
+|---|---|---|
+| Snapshot body budget | 1178 | 1178 − 489 = **689** |
+| less `SnapshotHeader` (13) | 1165 | 676 |
+| ÷ 23 B/actor (§ 4.3.1) | **50** | **29** |
+
+The vehicle body is bounded; the actor body is elastic and already sheds. Sizing the elastic one
+against what the bounded one actually consumed is exact — reserving a fixed slice instead would
+need unused-reserve-return logic for no gain, and splitting them into two datagrams would cost a
+second 16-byte GSP header at 20 Hz (~320 B/s) to solve a problem neither stream has.
+
+#### The event messages
+
+| Message | Opcode | Ch | Layout | Size |
+|---|---|---|---|---|
+| `C_VEHICLE_INPUT` | 0x21 | 3 | `u32 tick` + `u16 vehicleId` + `i8 throttle` + `i8 steer` + `i8 pitchAxis` + `i8 auxAxis` + `u16 turretYaw` + `i16 turretPitch` + `u16 buttons` | **16** |
+| `C_SEAT_REQUEST` | 0x26 | 2 | `u16 vehicleId` + `u8 seatIndex` + `u8 action` | **4** |
+| `S_VEHICLE_SPAWN` | 0x4D | 2 | `u16 vehicleId` + `u8 kind` + `u8 networkTypeId` + `i16 posX/Y/Z` + `u32 rotation` + `u8 seatCount` + `u8 flags` | **16** |
+| `S_VEHICLE_DESPAWN` | 0x4E | 2 | `u16 vehicleId` + `u8 reason` | **3** |
+| `S_PROJECTILE_SPAWN` | 0x4F | 2 | `u16 projectileId` + `u16 ownerActorId` + `u8 kind` + `i16 originX/Y/Z` + `i16 velX/Y/Z` + `u16 spawnTick` + `u8 remainingLifetimeDeciseconds` | **20** |
+| `S_SEAT_CHANGE` | 0x50 | 2 | `u16 actorId` + `u16 vehicleId` + `u8 seatIndex` + `u8 result` | **6** |
+
+**Enums.** `SeatAction`: `Enter` = 0, `Leave` = 1. `SeatChangeResult`: `Entered` = 0, `Left` = 1,
+`RejectedOccupied` = 2, `RejectedVehicleDead` = 3, `RejectedAlreadySeated` = 4, `RejectedTooFar` = 5,
+`RejectedNoSuchSeat` = 6, `RejectedLockedOut` = 7. `VehicleDespawnReason`: `Destroyed` = 0,
+`WorldReset` = 1.
+`ProjectileKind`: `Shell` = 0, `Rocket` = 1, `GuidedMissile` = 2, `Grenade` = 3,
+`AmmoBag` = 4, `Medipack` = 5, `Bullet` = 6.
+
+The load-bearing notes, none of them colour:
+
+- **`C_VEHICLE_INPUT` carries no frame redundancy**, unlike `C_INPUT`. `C_INPUT` repeats 3 frames
+  because a lost frame costs a tick of movement *and* a button edge. Vehicle axes are continuous and
+  level-triggered — a lost throttle frame is corrected by the next one 33 ms later. The one
+  genuinely edge-triggered vehicle action, leaving a seat, travels on `C_SEAT_REQUEST`, which is
+  reliable.
+- **`vehicleId` in `C_VEHICLE_INPUT` is not redundant**, even though the server knows which seat the
+  sender occupies. It lets the server discard input addressed at a vehicle the client has already
+  left — precisely the window a same-frame leave-then-enter opens.
+- **`RejectedLockedOut` = 7 was appended in V4, and appending it is not a wire change.**
+  `S_SEAT_CHANGE` stays 6 bytes and `result` stays a `u8`, so nothing behind it misaligns — unlike
+  a new `changeMask` bit, whose width an old decoder cannot know and therefore cannot skip.
+  `PROTOCOL_VERSION` is unchanged. It exists because it is the only refusal whose remedy is *ask
+  again shortly*: `Actor.CanEnterSeat()` is `!IsSeated() && cannotEnterVehicleAction.TrueDone()`,
+  two conditions behind one predicate, so `RejectedAlreadySeated` would be a lie whenever the actor
+  is standing on the ground and `RejectedTooFar` would be a distance code reporting a timer.
+- **`turretPitch` is an `i16` in the input and an `i8` in the snapshot entry.** Input is what the
+  player asked for and deserves full `PackPitch` precision; the snapshot is what the world looks
+  like. `C_INPUT` already carries the same asymmetry against the actor rotation field.
+- **`S_VEHICLE_SPAWN` carries both `kind` and `networkTypeId`** — see § 4.9.
+- **`S_PROJECTILE_SPAWN` carries a projectile id, and V7 is why.** v3 declared it without one,
+  reasoning that clients simulate flight from the parameters and the server owns the hit, so
+  nothing needed to correlate a launch with anything. That held for the only projectile in view
+  at the time — a tank shell, launched once and never spoken of again. It is false for the two
+  V7 adds: a guided missile is **re-parameterized** at 5 Hz (V7-D6) and a deployable
+  re-announces while it tumbles (V7-D8). Without an id every re-announce is a second projectile
+  and a Javelin becomes ten missiles over a two-second flight. The id is what makes a repeat a
+  correction rather than a duplicate. Detonation still replicates separately as `S_EXPLOSION`
+  (0x4A), which carries its own position — the id does not change that.
+- **`remainingLifetimeDeciseconds` exists for exactly one projectile.** Every other lifetime is
+  derivable from `spawnTick` plus an authored constant. A `Medipack` subtracts five seconds from
+  its own life per successful heal, which no client can predict, so the server has to say so.
+  0.1 s resolution, and **255 is a sentinel meaning "at least 25.5 s", not a literal 25.5 s** —
+  a medipack is authored at thirty. A receiver reading it literally would despawn every
+  deployable in the game early, which is the one direction this field promises never happens;
+  on 255 it falls back to the kind's own authored lifetime, and the byte only becomes
+  load-bearing once the remaining life drops inside the range it can represent, which is exactly
+  where a medipack's self-shortening matters. A client that misses a
+  re-announce despawns **late**, never never, because its own countdown is monotonic.
+- **`spawnTick` is the low 16 bits of the server tick, not the full 32.** The only thing a
+  receiver computes from it is the projectile's age, and at `SIM_TICK_RATE` a `u16` spans 36
+  minutes — three orders of magnitude past the longest flight. Reconstruct with
+  `SequenceMath.Distance(nowTick16, spawnTick)`, which is wrap-correct for any age under 18
+  minutes.
+- **The projectile id space needs no quarantine, and channel 2 is why — but only half of
+  why.** `actorId` and `vehicleId` cool down before reuse because they also appear in snapshot
+  entries on the unreliable-sequenced channel, where a message about the dead id can land after
+  the replacement's spawn. A projectile id appears only here, on channel 2, where ordering
+  guarantees every message naming the old projectile is delivered first. **Moving
+  `S_PROJECTILE_SPAWN` off channel 2 reintroduces the need for a quarantine.**
+- **Ordering is necessary but NOT sufficient, and the residual gap is server-vs-client
+  lifetime.** The server frees an id the moment a projectile terminates; a client only learns of
+  a termination when a message tells it, and for a bullet or a world impact there is no terminal
+  message at all — `S_EXPLOSION` carries a position and no projectile id. So a rocket that hits
+  a wall one second into a six-second life has its id reusable five seconds before the client
+  stops holding it. Ordering does nothing about that, because both messages are correctly
+  ordered. **The receiver therefore matches on `(projectileId, kind)`, not on the id alone**, so
+  a recycled id naming a different kind spawns a new projectile instead of teleporting the old
+  one onto its arc. Within a kind the collision is benign — a stale grenade prop is re-seated
+  onto a new grenade's path and then behaves as the new grenade.
+- **`S_EXPLOSION` is unchanged by v3.** Its 10-byte layout has been correct since v1 and needs a
+  caller and a subscriber, not new bytes.
+
+---
+
+### 4.11. `S_PLAYER_LIST` (0x4B) — byte layout
+
+Declared at the freeze with no implementation anywhere, which is why a killfeed line knew an actor
+id had died and had nothing to render. Sent on join and on change — names do not move.
+
+```
+u8   playerCount
+repeat playerCount times:
+    u8   actorId
+    u8   nameLength           ≤ 16 bytes
+    utf8 name                 nameLength bytes, not NUL-terminated
+```
+
+**`actorId` is a `u8` here** and a `u16` everywhere else. Safe because actorIds are allocated from
+`0 … MAX_ACTORS − 1` (§ 4.3.1) and `MAX_ACTORS` is 64 — and pinned by a conformance test rather than
+by this sentence, because raising `MAX_ACTORS` past 256 would truncate ids silently and the symptom
+would be a scoreboard naming the wrong player.
+
+**Names only, no scores**, despite what the § 4.1 row used to promise. Score and match time already
+travel in `S_MATCH_STATE` (0x45); a second copy here would be a second source of truth for the
+number that changes most often. Worst case is `1 + 64 × 18 = 1153 B`, inside one un-fragmented
+channel-2 payload.
+
+An over-long name is **refused, not truncated**: cutting UTF-8 at a fixed byte count splits
+multi-byte code points and renders as replacement characters. The caller clips at a character
+boundary, where it still knows what the characters are.
 
 ---
 
@@ -587,7 +975,7 @@ Reading the channel out of the application frame would mean the transport could 
 it had already finished reassembling, which is circular. The cost is one byte per datagram, 0.08%
 of `MTU_SAFE`.
 
-**Ownership:** the envelope is written and read by the transport (Dev B). Nothing above the
+**Ownership:** the envelope is written and read by the transport (the transport track). Nothing above the
 transport ever sees it — `ITransportServer.Send` takes a channel id and a payload, and the frame in
 § 4 is what the payload contains.
 
@@ -872,7 +1260,7 @@ expires after 60 seconds and only works for one specific server.
 
 This test suite is the **referee** whenever two people disagree about the protocol.
 
-**Status: all 15 items implemented and green** — 160 tests in `Ironfront.Net.Protocol.Tests/Conformance/`,
+**Status: all 21 items implemented and green** — 247 tests in `Ironfront.Net.Protocol.Tests/Conformance/`,
 run by `dotnet test` and by CI on every push.
 
 - [x] The GSP header is exactly 16 bytes, with `protocolId` at offset 0 = `0x4946`
@@ -891,6 +1279,21 @@ run by `dotnet test` and by CI on every push.
 - [x] joinTicket with a bad HMAC → `CONNECT_DENIED` code 3
 - [x] Expired joinTicket → `CONNECT_DENIED` code 3
 
+Added at v3.0.0:
+
+- [x] `PackQuat`/`UnpackQuat` round-trip error < 0.3° across all four largest-component branches,
+      **including a deliberate search of the four-way tie** where the reconstructed component's
+      error is worst (§ 4.4) — a random sweep alone reports ~0.19° and proves nothing
+- [x] `PackQuat(q)` == `PackQuat(-q)`, unpacked length within 1e-3 of unit, and **no `NaN` for any
+      32-bit input** — the three properties a round-trip-only test cannot see (§ 4.4)
+- [x] A full vehicle entry is exactly 30 bytes, field by field against § 4.10, and a stationary
+      one is 4
+- [x] A seated actor entry is exactly 23 bytes, and `SnapshotField.Full` is `0xFF`
+- [x] 16 full vehicle entries plus the header is 489 B and leaves 689 B of the snapshot budget
+      for actors, inside one un-fragmented datagram
+- [x] A mixed vehicle snapshot — one 30-byte full entry followed by one 4-byte stationary entry —
+      parses both, which a body of uniform entries would not prove
+
 > **Every expected hex string in the suite was written out from the byte tables in this document by
 > hand, not captured from the implementation's own output.** That distinction is the entire value of
 > the suite: a test that records what the code currently does proves only that the code agrees with
@@ -900,7 +1303,7 @@ run by `dotnet test` and by CI on every push.
 > error codes, `buttons` bits, `stateFlags` bits and `changeMask` bits. A renumbering that the other
 > three people do not pick up routes every message to the wrong handler with nothing to point at.
 >
-> **Owner:** written by Dev C (the verifier), against a serializer implemented by Dev B. Keep that
+> **Owner:** written by the replication track (the verifier), against a serializer implemented by the transport track. Keep that
 > split whatever happens to the file locations — see
 > [conventions.md § 7](conventions.md#7-file-ownership-boundaries).
 
@@ -911,19 +1314,42 @@ run by `dotnet test` and by CI on every push.
 | Version | Date | Author | Change | Wire change? | PR |
 |---|---|---|---|---|---|
 | 1.0.0-draft | Week 1 | Whole team | Initial version | — | — |
-| **1.0.0** | Week 1 | Dev C (chair) | **Freeze.** Corrected the `PackPos(100f)` worked example (1600 → 1599); pinned MSP `msgType` to little-endian; recorded the `actorId` allocation and 5-second quarantine rules; verified `POS_RANGE` against `LevelBounds` | **No** — `PROTOCOL_VERSION` stays 1 | #3 |
-| **2.0.0** | Week 2 | Dev B + Dev C | **Documented the channel envelope (new § 5.1)**, which the transport had been writing since the UDP layer landed but which no section described — so a decoder written from the spec read `channelSequence` as `messageCount`. Added `CHANNEL_ENVELOPE_SIZE` and `MAX_CHANNEL_PAYLOAD`. **Widened `CONNECT_RESPONSE` 8 → 80 bytes** (echoed `clientSalt` + repeated `joinTicket`) so the server can answer a handshake without storing per-address state — see § 3.1 | **Yes** | (this PR) |
+| **1.0.0** | Week 1 | the replication track (chair) | **Freeze.** Corrected the `PackPos(100f)` worked example (1600 → 1599); pinned MSP `msgType` to little-endian; recorded the `actorId` allocation and 5-second quarantine rules; verified `POS_RANGE` against `LevelBounds` | **No** — `PROTOCOL_VERSION` stays 1 | #3 |
+| **2.0.0** | Week 2 | the transport track + the replication track | **Documented the channel envelope (new § 5.1)**, which the transport had been writing since the UDP layer landed but which no section described — so a decoder written from the spec read `channelSequence` as `messageCount`. Added `CHANNEL_ENVELOPE_SIZE` and `MAX_CHANNEL_PAYLOAD`. **Widened `CONNECT_RESPONSE` 8 → 80 bytes** (echoed `clientSalt` + repeated `joinTicket`) so the server can answer a handshake without storing per-address state — see § 3.1 | **Yes** | (this PR) |
 
-| **2.0.1** | Week 2 | Dev A + Dev D | **Documented the `weaponId` value space (new § 4.8)**, which was a `u8` in three messages from the freeze onward with no section saying what any value meant — the mapping existed only inside `_Managers.prefab`, which the server cannot read. Added `WeaponIds`; SpecChecker now gates spec ↔ code ↔ prefab | **No** — no byte changed | #34 |
+| **2.0.1** | Week 2 | the client track + the master-server track | **Documented the `weaponId` value space (new § 4.8)**, which was a `u8` in three messages from the freeze onward with no section saying what any value meant — the mapping existed only inside `_Managers.prefab`, which the server cannot read. Added `WeaponIds`; SpecChecker now gates spec ↔ code ↔ prefab | **No** — no byte changed | #34 |
 
-> Every change after the freeze must add a row to this table and land via a PR with 2 approvals.
+| **3.0.0** | Week 3 | the replication track | **The vehicle wire.** Six new opcodes (0x21, 0x4C–0x50) and 0x26 promoted from reserved; new `VehicleSnapshotEntry` with its own `u16` change mask (new § 4.10); smallest-three quaternion packing in `Quantize` (§ 4.4); `SnapshotField.SeatInfo` finished on the actor entry, moving the full seated entry 20 → 23 B and the admitted-actor ceiling 58 → 50; new `VehicleIds` value space (new § 4.9), SpecChecker now gates spec ↔ code ↔ vehicle prefab; `S_PLAYER_LIST` (0x4B) given the struct, writer and router case it was declared without (new § 4.11) | **Yes** | (this PR) |
+| **3.0.0** (amended, Week 3) | Week 3 | the replication track | **The projectile wire, finished by V7.** `S_PROJECTILE_SPAWN` 19 → 20 bytes: gained `u16 projectileId` and `u8 remainingLifetimeDeciseconds`, and narrowed `spawnTick` from `u32` to its low 16 bits (§ 4.10). `ProjectileKind` renamed `Supply` → `AmmoBag` and appended `Medipack` = 5, `Bullet` = 6. `InputButtons` bit 7 `ThrowGrenade` → `Reserved7` (§ 4.2), no byte moved. **Amends the v3.0.0 row above rather than opening a 4.0.0**, per brainstorm D7: one protocol bump covers the whole vehicle-and-world track, the client and server ship together, and v3 has not been released to anything. The bytes did change relative to the row above, which is why this row exists rather than the edit being silent | **Yes** (inside v3) | (this PR) |
+
+> Every change after the freeze must add a row to this table and clear the gate below.
 > **Bump `PROTOCOL_VERSION` only when the bytes on the wire change** — a client and server with
 > different `PROTOCOL_VERSION` get `CONNECT_DENIED` code 2, so bumping it for a documentation fix
 > would lock out every client for nothing. Record the answer in the "Wire change?" column either way.
 
+#### The wire gate
+
+This used to read "a PR with 2 approvals". Since [`899e75d`](../../) the project has one owner, so
+that gate could not be cleared by anybody — which makes it worse than no gate: a phase whose
+acceptance criteria cite it can never honestly pass, and the habit that forms is to wave it through.
+A gate nobody can satisfy teaches people to ignore gates.
+
+Replaced with conditions a machine checks, which is what the approvals were a proxy for anyway:
+
+| # | Condition | Checked by |
+|---|---|---|
+| 1 | `tools/SpecChecker` green — every constant in this document matches the code | `dotnet run --project tools/SpecChecker` |
+| 2 | Each new or changed opcode has a **hex-sample conformance test** pinning its exact bytes | `dotnet test`, and the sample is in the test, not the doc |
+| 3 | A changelog row above, with the "Wire change?" column filled in | review of this file's diff |
+| 4 | If the bytes changed, `PROTOCOL_VERSION` bumped in **both** the fenced block in § 1 **and** the header line at the top of this file | condition 1 covers the fenced block only — the header is prose, so check it by eye |
+
+Condition 4 is spelled out because the header and the fenced block had already drifted: the header
+said `PROTOCOL_VERSION = 1` for the whole of v2's life while the code and the fenced block said 2.
+`SpecChecker` parses only the fenced block and so reported green throughout.
+
 ### 15.1. Questions settled at the freeze
 
-Each row was an open checkbox in Dev C's phase-00 Task 1. Recorded here so nobody re-argues them.
+Each row was an open checkbox in the replication track's phase-00 Task 1. Recorded here so nobody re-argues them.
 
 | Question | Decision | Recorded in |
 |---|---|---|
@@ -932,6 +1358,6 @@ Each row was an open checkbox in Dev C's phase-00 Task 1. Recorded here so nobod
 | Is `MAX_ACTORS = 64` enough? | Yes — 48 concurrent, 16 spare to absorb the id quarantine | [§ 4.3.1](#431-actorid--allocation-and-lifetime) |
 | Do bots share the `actorId` space with players? | **Yes**, one space, no partition | [§ 4.3.1](#431-actorid--allocation-and-lifetime) |
 | Is an `actorId` reused immediately when an actor dies? | **No — 5-second quarantine** | [§ 4.3.1](#431-actorid--allocation-and-lifetime) |
-| Is an 8-bit `changeMask` enough for the future? | Yes for v1 — 7 used, 1 spare. A ninth field is a wire change | [§ 4.3.1](#431-actorid--allocation-and-lifetime) |
+| Is an 8-bit `changeMask` enough for the future? | Yes for v1 — 7 used, 1 spare. **Reopened and answered at v3.0.0: all 8 are now used and populated**, so a ninth actor field is a wire change. The vehicle mask is a `u16` from the start for exactly this reason | [§ 4.3.1](#431-actorid--allocation-and-lifetime), [§ 4.10](#410-the-vehicle-stream) |
 | MSP `msgType` byte order (raised during implementation, not on the original list) | **Little-endian**, per the § 0 default | [§ 10](#10-framing) |
-| The `Serialization/` ownership boundary between Dev B and Dev C | `Quantize` is shared protocol and lives in `Ironfront.Net.Protocol`; `BitWriter`/`BitReader` stay Dev B's in `Ironfront.Net.Replication/Serialization/` | [conventions.md § 7](conventions.md#7-file-ownership-boundaries) |
+| The `Serialization/` ownership boundary between the transport track and the replication track | `Quantize` is shared protocol and lives in `Ironfront.Net.Protocol`; `BitWriter`/`BitReader` stay the transport track's in `Ironfront.Net.Replication/Serialization/` | [conventions.md § 7](conventions.md#7-file-ownership-boundaries) |

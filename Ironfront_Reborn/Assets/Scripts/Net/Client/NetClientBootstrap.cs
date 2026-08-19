@@ -14,7 +14,7 @@ namespace Ironfront.Net.Unity.Client
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C. This is the piece M1 criterion 7 was waiting on — the server layer, the
+    /// This is the piece M1 criterion 7 was waiting on — the server layer, the
     /// transport and the encoder have all been ready; nothing was reading the other end of the
     /// wire.
     /// </para>
@@ -68,7 +68,7 @@ namespace Ironfront.Net.Unity.Client
         public ushort ConnectionId { get; private set; }
 
         /// <summary>The actor this client drives, or 0 until the server names one.</summary>
-        public ushort LocalActorId { get; set; }
+        public ushort LocalActorId { get; private set; }
 
         /// <summary>Whether the link is up.</summary>
         public bool IsConnected =>
@@ -79,6 +79,17 @@ namespace Ironfront.Net.Unity.Client
         /// <c>Awake</c> — from a loopback server in the same process, or from a test.
         /// </summary>
         public ITransportClient ExternalTransport { get; set; }
+
+        /// <summary>
+        /// The connection's smoothed round-trip time, in milliseconds. Zero before connect.
+        /// </summary>
+        /// <remarks>
+        /// <b>The one RTT estimate on this client, deliberately.</b> Vehicle correction extrapolates
+        /// the server pose forward by half of it (V5-D4), and lag compensation rewinds by it on the
+        /// far end. A second estimator here would drift away from the transport's, and the two would
+        /// then disagree about how stale a snapshot is with nothing to say which was right.
+        /// </remarks>
+        public float SmoothedRttMs => _transport != null ? _transport.SmoothedRttMs : 0f;
 
         /// <summary>
         /// The client this process is running, or null on a dedicated server.
@@ -116,11 +127,19 @@ namespace Ironfront.Net.Unity.Client
 
             Current = this;
 
+            // The server marks exactly one spawn as local for this connection. Keep that
+            // identity at the bootstrap so interpolation can skip it and prediction can
+            // reconcile the actor the player actually owns.
+            Router.OnSpawnActor += OnSpawnActor;
+
+            EnsureVehicleStage();
+
             if (_connectOnStart) Connect();
         }
 
         private void OnDestroy()
         {
+            Router.OnSpawnActor -= OnSpawnActor;
             if (ReferenceEquals(Current, this)) Current = null;
             Disconnect();
         }
@@ -199,6 +218,7 @@ namespace Ironfront.Net.Unity.Client
 
             _transport = null;
             ConnectionId = 0;
+            LocalActorId = 0;
             _loggedFirstSnapshot = false;
 
             Router.Reset();
@@ -226,10 +246,48 @@ namespace Ironfront.Net.Unity.Client
             }
         }
 
+        /// <summary>
+        /// Makes sure the vehicle replication components exist and are running.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Added in code rather than authored onto a scene object.</b> A component that has
+        /// to be dragged onto a GameObject on every map is a component that is missing on one of
+        /// them, and the symptom — vehicles that never move for this client while every other
+        /// client sees them fine — looks like a netcode fault rather than an authoring one.
+        /// Neither of these needs a serialized reference: <c>RemoteVehicleRegistry</c> reads its
+        /// prefab directory off the scene's own spawners, and <c>ClientVehicleStage</c> takes the
+        /// prediction flag from <see cref="Config"/>. So there is nothing for an inspector to
+        /// hold, and nothing to forget.
+        /// </para>
+        /// <para>
+        /// An authored instance wins: <c>GetComponent</c> first, and the serialized flag it
+        /// carries is only overridden when the environment explicitly says so.
+        /// </para>
+        /// </remarks>
+        private void EnsureVehicleStage()
+        {
+            if (GetComponent<RemoteVehicleRegistry>() == null) gameObject.AddComponent<RemoteVehicleRegistry>();
+
+            ClientVehicleStage stage = GetComponent<ClientVehicleStage>();
+            if (stage == null) stage = gameObject.AddComponent<ClientVehicleStage>();
+
+            if (Config != null) stage.ApplyConfiguration(Config.PredictLocalVehicle);
+        }
+
+        private void OnSpawnActor(SpawnActorMessage message)
+        {
+            if (!message.IsLocalPlayer) return;
+
+            LocalActorId = message.ActorId;
+            if (Config.Verbose) Debug.Log($"[net] local actor is {LocalActorId}");
+        }
+
         private void OnConnected(ConnectResult result)
         {
             ConnectionId = result.ConnectionId;
             NetContext.CurrentTick = result.ServerTick;
+            NetPredictionClock.Current?.SeedInputTick(result.ServerTick);
 
             if (Config.Verbose)
                 Debug.Log($"[net] connected as {ConnectionId}, server tick {result.ServerTick}");
@@ -245,6 +303,7 @@ namespace Ironfront.Net.Unity.Client
             Router.Reset();
             Reconciler.Reset();
             ConnectionId = 0;
+            LocalActorId = 0;
         }
     }
 }

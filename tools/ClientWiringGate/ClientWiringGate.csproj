@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    OWNER: the replication track, maintained with tools/ by Dev D.
+
+    WHY IT EXISTS
+
+    ClientMessageRouter raises nine events. For most of the project's life THREE of them had a
+    production subscriber, and nothing said so: the server framed a death, the client decoded it
+    correctly, the router raised OnDeath, and the delegate was null. Every layer passed its own
+    tests. The bug lives in the gap between them, where no test was looking.
+
+    This gate closes that gap by asking a question no unit test can ask: does anything in the
+    Unity tree actually subscribe? It is the answer to "how do we stop the seventh dead event",
+    and the reason it is a tools/ console check rather than an xunit test is plans/replication/
+    phases/phase-v10-client-event-consumption.md decision D21 — Assets/Scripts/Net/Client and
+    Assets/Scripts/Assembly-CSharp compile into Assembly-CSharp, which has no .asmdef, and CI has
+    no licensed Editor, so there is no Unity assembly for dotnet test to reflect over.
+
+    HOW IT WORKS — two halves, deliberately different mechanisms (D21)
+
+      Enumerate the events   reflection over ClientMessageRouter, an engine-free type. Renaming
+                             an event changes the gate's input automatically; there is no second
+                             list to keep in sync.
+      Detect the subscribers Roslyn parse of Ironfront_Reborn/Assets/Scripts. Roslyn rather than a
+                             grep for "+=" because Roslyn ignores comments and #if blocks, and a
+                             commented-out subscription reporting green is exactly the failure
+                             this gate exists to prevent.
+
+    WHAT IT DOES NOT DO
+
+    It resolves no types. "OnDeath += Handler" counts as a subscription to OnDeath whatever the
+    receiver's static type is. That is a deliberate over-acceptance: the cost is a missed
+    diagnosis on a hypothetical unrelated type that happens to declare an identically-named
+    event, and the alternative is a full Unity compilation this repository cannot perform.
+
+    A REGISTRATION MANIFEST WAS REJECTED (D21). A test asserting every event has a manifest entry
+    proves the manifest is complete, not that anything is wired.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Ironfront.Tools.ClientWiringGate</RootNamespace>
+    <AssemblyName>ClientWiringGate</AssemblyName>
+    <Description>Fails the build when a ClientMessageRouter event loses its last production subscriber.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- No Version: Central Package Management (Directory.Packages.props) owns it. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The event list comes from the real type, not from a copy of it. -->
+    <ProjectReference Include="..\..\Ironfront.Net.Replication\Ironfront.Net.Replication.csproj" />
+  </ItemGroup>
+
+</Project>

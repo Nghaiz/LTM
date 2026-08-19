@@ -35,10 +35,103 @@ namespace Ironfront.Net.Replication.Combat
         /// <summary>Rounds in a full clip.</summary>
         public readonly byte ClipSize;
 
+        /// <summary>
+        /// Rounds held outside the clip, or one of the two sentinels. Mirrors
+        /// <c>Weapon.Configuration.spareAmmo</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A <c>short</c> and not a <c>byte</c>, because of the sentinels.</b>
+        /// <see cref="NoResupplySpareAmmo"/> (<c>-1</c>) and <see cref="InfiniteSpareAmmo"/>
+        /// (<c>-2</c>) have been part of the shipped weapon data since before the netcode existed
+        /// — <c>Weapon.AllowsResupply</c> and <c>Weapon.HasInfiniteSpareAmmo</c> are the two
+        /// readers — and a <c>byte</c> would fold both onto 254 and 255, which are also valid
+        /// round counts.
+        /// </para>
+        /// <para>
+        /// <b>Defaults to infinite, which is what every caller written before V6 already got.</b>
+        /// The server has never modelled spare ammo at all: <c>ServerReloadPolicy</c> refilled to
+        /// <see cref="ClipSize"/> unconditionally. Defaulting to anything finite would hand every
+        /// phase-05 weapon a magazine limit it did not have yesterday, so the field arrives inert
+        /// and only the mounted path opts into it.
+        /// </para>
+        /// </remarks>
+        public readonly short SpareAmmo;
+
+        /// <summary>
+        /// False for a weapon whose trigger costs nothing. V6 task 5.
+        /// </summary>
+        /// <remarks>
+        /// <b>One weapon in the game, and it is not a rounding error.</b> <c>CarHorn.Shoot</c>
+        /// overrides the base and never reaches <c>ammo--</c> or <c>AmmoChanged()</c>, so its
+        /// authored clip of 1 is a permanent 1. A server that decremented it would leave the horn
+        /// silent after one honk with <see cref="FireRejection.NoAmmo"/> — a divergence from
+        /// offline play with no error anywhere. Modelled as a property of the weapon rather than
+        /// as a special case keyed on the id, because the next weapon like it should not need the
+        /// authority to be edited again.
+        /// </remarks>
+        public readonly bool SpendsAmmo;
+
+        /// <summary>No ammo bag may refill this weapon. <c>Weapon.AllowsResupply</c>.</summary>
+        public const short NoResupplySpareAmmo = -1;
+
+        /// <summary>Never runs out. <c>Weapon.HasInfiniteSpareAmmo</c>.</summary>
+        public const short InfiniteSpareAmmo = -2;
+
+        /// <summary>
+        /// Stagger damage, subtracted from the victim's balance. Zero for everything that is
+        /// not a gun.
+        /// </summary>
+        /// <remarks>
+        /// A separate number from <see cref="Damage"/> because the original game has always
+        /// carried it separately — <c>Actor.Damage(healthDamage, balanceDamage, ...)</c> has
+        /// taken it since before the netcode existed and the server has always passed zero.
+        /// Applied server-side and deliberately NOT replicated (phase-V2 D7): there is no wire
+        /// field for stagger and <c>ActorStateFlags</c> is 8/8 full, so a remote client sees no
+        /// stagger until V3 buys a bit for it.
+        /// </remarks>
+        public readonly float BalanceDamage;
+
+        /// <summary>Distance at or below which the weapon does full damage, in metres.</summary>
+        public readonly float DropoffStartMetres;
+
+        /// <summary>Distance at or beyond which damage is floored at <see cref="DropoffMinMultiplier"/>.</summary>
+        public readonly float DropoffEndMetres;
+
+        /// <summary>
+        /// The multiplier at and beyond <see cref="DropoffEndMetres"/>, clamped to [0, 1].
+        /// </summary>
+        /// <remarks>
+        /// A weapon with no drop-off is expressed as <c>1f</c> here, not as a magic sentinel
+        /// distance. That is what makes the default constructor arguments safe: a config built
+        /// with the original seven numbers ramps from 1 to 1 and behaves exactly as it did
+        /// before this phase.
+        /// </remarks>
+        public readonly float DropoffMinMultiplier;
+
+        /// <param name="balanceDamage">
+        /// Defaults to zero so every call site written before phase-V2 keeps its old behaviour
+        /// rather than acquiring a stagger nobody asked for.
+        /// </param>
+        /// <param name="dropoffMinMultiplier">
+        /// Defaults to <c>1f</c> — no drop-off — for the same reason.
+        /// </param>
+        /// <param name="spareAmmo">
+        /// Defaults to <see cref="InfiniteSpareAmmo"/>, which is the behaviour every pre-V6
+        /// caller already had: the server refilled a clip unconditionally.
+        /// </param>
         public WeaponConfig(
             float cooldown, float spread, int projectilesPerShot, float range,
-            float damage, float force, byte clipSize)
+            float damage, float force, byte clipSize,
+            float balanceDamage = 0f,
+            float dropoffStartMetres = 0f,
+            float dropoffEndMetres = 0f,
+            float dropoffMinMultiplier = 1f,
+            short spareAmmo = InfiniteSpareAmmo,
+            bool spendsAmmo = true)
         {
+            SpareAmmo = spareAmmo;
+            SpendsAmmo = spendsAmmo;
             Cooldown = cooldown;
             Spread = spread;
             ProjectilesPerShot = projectilesPerShot < 1 ? 1 : projectilesPerShot;
@@ -46,12 +139,63 @@ namespace Ironfront.Net.Replication.Combat
             Damage = damage;
             Force = force;
             ClipSize = clipSize;
+            BalanceDamage = balanceDamage;
+            DropoffStartMetres = dropoffStartMetres;
+            DropoffEndMetres = dropoffEndMetres;
+
+            // Clamped in the constructor rather than at the use site, so a mistyped 10f cannot
+            // turn distance into a damage BONUS. Every reader of this field is then free to
+            // assume the invariant instead of re-establishing it per call.
+            DropoffMinMultiplier =
+                dropoffMinMultiplier < 0f ? 0f :
+                dropoffMinMultiplier > 1f ? 1f : dropoffMinMultiplier;
         }
 
-        /// <summary>A plain automatic rifle. Used by tests and as the placeholder loadout.</summary>
+        /// <summary>
+        /// The damage multiplier this weapon applies at <paramref name="distanceMetres"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A clamped two-point linear ramp: full damage at or below
+        /// <see cref="DropoffStartMetres"/>, <see cref="DropoffMinMultiplier"/> at or beyond
+        /// <see cref="DropoffEndMetres"/>, linear between. The original's authored
+        /// <c>AnimationCurve</c> is a Unity type this library cannot hold; three numbers are
+        /// the smallest thing that makes a sniper and an SMG differ at 200 m, which is the
+        /// acceptance criterion. Upgrade path if the shape ever genuinely needs it: these same
+        /// three numbers plus a <c>float[]</c> sample table on this struct.
+        /// </para>
+        /// <para>
+        /// <b>An inverted or degenerate range returns a finite number rather than dividing by
+        /// zero.</b> A NaN multiplier makes every subsequent damage comparison false, which is
+        /// the same shape of bug as a NaN sentinel — silent, and wrong in a direction nothing
+        /// reports.
+        /// </para>
+        /// </remarks>
+        public static float DropoffMultiplier(in WeaponConfig config, float distanceMetres)
+        {
+            if (distanceMetres <= config.DropoffStartMetres) return 1f;
+
+            float span = config.DropoffEndMetres - config.DropoffStartMetres;
+            if (span <= 0f) return config.DropoffMinMultiplier;
+
+            if (distanceMetres >= config.DropoffEndMetres) return config.DropoffMinMultiplier;
+
+            float t = (distanceMetres - config.DropoffStartMetres) / span;
+            return 1f + (config.DropoffMinMultiplier - 1f) * t;
+        }
+
+        /// <summary>A plain automatic rifle. The shape every test measures against.</summary>
+        /// <remarks>
+        /// Its original seven numbers are unchanged, so every combat test written before
+        /// phase-V2 still measures the same weapon. <b>It is no longer anybody's loadout</b> —
+        /// <see cref="WeaponCatalog"/> is where a session's numbers come from, and an unknown id
+        /// resolves to <see cref="WeaponCatalog.Inert"/> rather than to this.
+        /// </remarks>
         public static WeaponConfig Rifle => new WeaponConfig(
             cooldown: 0.1f, spread: 0.01f, projectilesPerShot: 1, range: 300f,
-            damage: 25f, force: 200f, clipSize: 30);
+            damage: 25f, force: 200f, clipSize: 30,
+            balanceDamage: 20f,
+            dropoffStartMetres: 50f, dropoffEndMetres: 250f, dropoffMinMultiplier: 0.5f);
     }
 
     /// <summary>Mutable per-actor weapon state the server owns.</summary>
@@ -80,6 +224,21 @@ namespace Ironfront.Net.Replication.Combat
         /// </remarks>
         public float ReloadStartedAt;
 
+        /// <summary>
+        /// Rounds this weapon holds outside its clip, or one of
+        /// <see cref="WeaponConfig.NoResupplySpareAmmo"/> / <see cref="WeaponConfig.InfiniteSpareAmmo"/>.
+        /// V6-D6.
+        /// </summary>
+        /// <remarks>
+        /// <b>Meaningful only for an owner whose pool is the weapon</b> — a mounted turret, whose
+        /// spare rounds live on the gun the way <c>MountedWeapon.spareAmmo</c> does.
+        /// <see cref="ActorSpareAmmoPool"/> keeps its own five-slot table per actor and ignores
+        /// this field entirely. One struct with a pool seam rather than two near-identical runtime
+        /// structs, because two would drift; a single struct with no seam would force one of the
+        /// two owners to be wrong.
+        /// </remarks>
+        public short SpareAmmo;
+
         public static WeaponRuntimeState Loaded(in WeaponConfig config) => new WeaponRuntimeState
         {
             LastFiredTime = float.NegativeInfinity,
@@ -87,6 +246,7 @@ namespace Ironfront.Net.Replication.Combat
             Reloading = false,
             Unholstered = true,
             ReloadStartedAt = float.NegativeInfinity,
+            SpareAmmo = config.SpareAmmo,
         };
     }
 

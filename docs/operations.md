@@ -2,9 +2,9 @@
 
 Runbook for the master server and the game servers. Written so that somebody who has never
 touched this system can provision it, start it, watch it, back it up and fix the four things
-that routinely go wrong — without asking Dev D.
+that routinely go wrong — without asking the master-server track.
 
-Ownership: `Ironfront.MasterServer/**`, `tools/**` and `infra/**` are Dev D's
+Ownership: `Ironfront.MasterServer/**`, `tools/**` and `infra/**` are the master-server track's
 ([conventions.md § 7](../plans/00-shared/conventions.md)). The Unity headless build the game
 server runs comes from A and C; this document covers deploying and operating it, not building
 it.
@@ -404,5 +404,5 @@ to bind `2705` and quietly binding `27015` keeps receiving players who cannot re
   over
 - [`report-chapter-master-server.md`](report-chapter-master-server.md) — why the system is
   built this way, with the measurements
-- [`../plans/dev-d-master-server/phases/phase-03-operations.md`](../plans/dev-d-master-server/phases/phase-03-operations.md)
+- [`../plans/master-server/phases/phase-03-operations.md`](../plans/master-server/phases/phase-03-operations.md)
   — the phase this runbook closes

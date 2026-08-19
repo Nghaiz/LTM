@@ -11,7 +11,7 @@ using Xunit;
 namespace Ironfront.Net.Replication.Tests
 {
     /// <summary>
-    /// Phase-01 Task 5 step 1: the server, Dev B's LoopbackTransport and a fake client, wired
+    /// Phase-01 Task 5 step 1: the server, the transport track's LoopbackTransport and a fake client, wired
     /// end to end — input goes up, snapshots come down, the client's world converges on the
     /// server's, over an impaired network.
     /// </summary>

@@ -13,9 +13,6 @@ namespace Ironfront.Tools.UnitySyntaxCheck
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: shared, maintained with <c>tools/</c> by Dev D.
-    /// </para>
-    /// <para>
     /// Usage:
     /// </para>
     /// <code>

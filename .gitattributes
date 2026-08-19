@@ -31,6 +31,11 @@ Ironfront_Reborn/Assets/TerrainData/*.asset binary
 *.yml      text eol=lf
 *.yaml     text eol=lf
 *.json     text eol=lf
+# Shell scripts MUST be LF even when checked out on Windows. They were safe while they only
+# ever reached the VM via a Linux `git clone` (cloud-init), but infra/compose/push-and-run.sh
+# scp's one straight from the Windows working tree — and a CRLF shebang makes the Linux kernel
+# hunt for an interpreter literally named `bash\r`: "bad interpreter: no such file or directory".
+*.sh       text eol=lf
 
 # Dotfiles and extensionless config. Without these, core.autocrlf checks them out as CRLF on
 # Windows while .editorconfig declares `end_of_line = lf` for the same files — the two then

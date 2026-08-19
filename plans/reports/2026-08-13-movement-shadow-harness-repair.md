@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-13
 
-**Responds to:** [Unity A3 shadow-comparison verification](2026-08-13-unity-a3-shadow-harness.md) (Dev A, PR #31)
+**Responds to:** [Unity A3 shadow-comparison verification](2026-08-13-unity-a3-shadow-harness.md) (the client track, PR #31)
 
 **File:** `Ironfront_Reborn/Assets/Scripts/Net/Shared/MovementShadowCompare.cs`
 
@@ -75,11 +75,11 @@ grounded.
 ## Verification status
 
 - `dotnet test` — 19/19 in `MovementCoreTests`, including the new invariant. Full suite green in CI.
-- **The Editor half is unverified and is Dev A's step.** This file lives under `Assets/` and is
+- **The Editor half is unverified and is the client track's step.** This file lives under `Assets/` and is
   compiled by Unity, not by the .NET solution, so CI cannot compile it. A3 should be re-run before
   this is treated as closed, and A4 stays unstarted until A3 produces a valid grounded verdict.
 
-## Requested action for Dev A
+## Requested action for the client track
 
 Re-run A3 exactly as the checklist describes. Send the summary line plus any `MOVEMENT DIVERGED`
 warnings with `grounded=True` and a non-trivial `dH`. Those are now the only ones that mean anything.

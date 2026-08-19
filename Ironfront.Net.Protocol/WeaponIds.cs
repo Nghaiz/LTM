@@ -26,6 +26,16 @@ namespace Ironfront.Net.Protocol
     /// <c>tools/SpecChecker</c> verifies this file against the spec document AND against the
     /// prefab on every CI run, so the three copies cannot drift apart in silence.
     /// </para>
+    /// <para>
+    /// <b>There is a FOURTH copy of this id space:</b>
+    /// <c>Ironfront.Net.Replication.Combat.WeaponCatalog</c>, which maps each id to the server's
+    /// weapon numbers (phase-V2). It is deliberately NOT behind SpecChecker — the id is a wire
+    /// contract, the numbers are not, and gating a balance tweak on two protocol approvals is how
+    /// balance work stops happening. Its gate is the unit test
+    /// <c>EveryAssignedWeaponIdHasACatalogEntry</c> instead, which fails the build just as hard.
+    /// <b>Adding an id here without adding a catalog row makes that test red</b>, which is the
+    /// intended way to find out.
+    /// </para>
     /// </remarks>
     public static class WeaponIds
     {
@@ -61,8 +71,32 @@ namespace Ironfront.Net.Protocol
         public const byte WRENCH            = 16;
         public const byte SUPER_WRENCH      = 17;
 
-        /// <summary>The highest id currently assigned. The next new weapon takes 18.</summary>
-        public const byte MAX_ASSIGNED      = 17;
+        /// <summary>
+        /// The vehicle horn. V6-D8, and the first id that is NOT a loadout weapon.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>CarHorn : MountedWeapon</c> spends no ammo and spawns no projectile — its
+        /// <c>Shoot</c> override skips both. What it does is <c>user.Highlight()</c>, which
+        /// reveals the occupant to AI, so it is a gameplay event that needs a server and a wire
+        /// id: it replicates as <c>S_WEAPON_FIRE</c> on the cosmetic channel, filtered by
+        /// <c>ServerEventWriter.WeaponFireAudibleRadius</c>.
+        /// </para>
+        /// <para>
+        /// <b>It has no row in the <c>_Managers.prefab</c> weapon registry, and must not get
+        /// one.</b> That registry is a LOADOUT table — every row carries an inventory sprite, a
+        /// weapon prefab GUID and a <c>WeaponSlot</c> — and a horn bolted to a car has none of the
+        /// three. A placeholder row with a null prefab would put a horn in
+        /// <c>WeaponManager.GetWeaponEntriesOfSlot</c>, which <c>ShowAllWeapons()</c> un-hides,
+        /// which <c>LoadoutUi</c> would then offer the player. <c>tools/SpecChecker</c> carries
+        /// this id in an explicit not-in-loadout-registry exemption instead, with a companion
+        /// check that fails if a row ever DOES appear — so the gate still cannot go quietly stale.
+        /// </para>
+        /// </remarks>
+        public const byte CAR_HORN          = 18;
+
+        /// <summary>The highest id currently assigned. The next new weapon takes 19.</summary>
+        public const byte MAX_ASSIGNED      = 18;
 
         /// <summary>
         /// Display names, indexed by id, exactly as they appear in the weapon registry. Index 0
@@ -93,7 +127,22 @@ namespace Ironfront.Net.Protocol
             "RECON LRR",
             "WRENCH",
             "SUPER WRENCH",
+            "CAR HORN",
         };
+
+        /// <summary>
+        /// Ids that are real weapons on the wire but carry no row in the <c>_Managers.prefab</c>
+        /// loadout registry. V6-D8.
+        /// </summary>
+        /// <remarks>
+        /// <b>An exemption list, so it owes both directions.</b> <c>tools/SpecChecker</c> skips
+        /// these ids when it checks that every declared id has a prefab row — and separately fails
+        /// when one of them turns up in the prefab after all, because at that point the exemption
+        /// has stopped describing the world and is just a hole. A one-directional skip would let
+        /// this list quietly become a graveyard nobody re-checks.
+        /// </remarks>
+        public static bool IsLoadoutRegistered(byte weaponId)
+            => IsKnown(weaponId) && weaponId != CAR_HORN;
 
         /// <summary>True when the id names a weapon this build knows.</summary>
         public static bool IsKnown(byte weaponId)

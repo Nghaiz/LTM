@@ -220,7 +220,7 @@ Options:
   --steps 16,50,100      capacity: connection counts to measure
 
 Experiment 3 (TCP vs UDP for the lobby) is not here. It is a written comparison
-against Dev B's existing reliability layer rather than a second lobby built to be
+against the transport track's existing reliability layer rather than a second lobby built to be
 thrown away — see the report chapter for what is measured and what is argued.";
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication;
+using Ironfront.Net.Replication.Server;
 using UnityEngine;
 
 namespace Ironfront.Net.Unity.Server
@@ -11,9 +12,6 @@ namespace Ironfront.Net.Unity.Server
     /// set a snapshot is built from.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// OWNER: Dev C.
-    /// </para>
     /// <para>
     /// A registry rather than a scene scan: <c>FindObjectsOfType</c> allocates an array on
     /// every call, which at 20 Hz is a garbage source in the one loop that must not have one
@@ -197,7 +195,49 @@ namespace Ironfront.Net.Unity.Server
 
         private static float NowSeconds() => (float)Time.realtimeSinceStartupAsDouble;
 
+        /// <summary>
+        /// Drops every actor and every id-allocation decision, in place.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Called at <c>SubsystemRegistration</c> so a play session started with domain reload
+        /// disabled does not inherit the previous session's actors.
+        /// </para>
+        /// <para>
+        /// <b>It clears the instance rather than nulling the reference, and that distinction is
+        /// the whole point.</b> A MonoBehaviour's field initializers and constructor run during
+        /// scene deserialisation, which is <i>before</i> <c>SubsystemRegistration</c>. Anything
+        /// that captured <c>Instance</c> that early held a reference this method used to throw
+        /// away: actors then registered from <c>OnEnable</c> into a second, freshly-created
+        /// registry, and the early capture kept scanning an empty one forever. The client track reproduced
+        /// exactly that 3x from cold starts in round 9 -- <c>ServerTickLoop</c>'s constructor
+        /// handed <c>ServerCombatBridge</c> and <c>ServerActorDamageSink</c> a registry with 0
+        /// actors while 41 registered elsewhere, so <c>BuildTargets</c> handed
+        /// <c>LagCompensator</c> an empty candidate span and no bullet in the game could hit
+        /// anything (ShotsResolved 507, ShotsHit 0, over ~31 000 ticks).
+        /// </para>
+        /// <para>
+        /// Fixing it at the capture site would have fixed those two call sites. Clearing in
+        /// place fixes the shape: reference identity is now stable for the process lifetime, so
+        /// no future early capture can split the registry again. There is nothing to gain from
+        /// a fresh object -- nothing compares registry instances, and every field it owns is
+        /// reset below.
+        /// </para>
+        /// </remarks>
+        /// <para>
+        /// Private on purpose. Mid-session this would drop live <see cref="ActorUnregistered"/>
+        /// subscribers and orphan every registered actor; the only caller that should ever
+        /// exist is the reset below, which runs before any scene object awakes.
+        /// </para>
+        private void Clear()
+        {
+            _actors.Clear();
+            _nextAutoId = 1;
+            _idPool = null;
+            ActorUnregistered = null;
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetOnLoad() => _instance = null;
+        private static void ResetOnLoad() => _instance?.Clear();
     }
 }

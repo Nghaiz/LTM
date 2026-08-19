@@ -8,7 +8,7 @@ namespace Ironfront.Net.Unity
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev A. The runtime half of phase-00 task 5 (assist step 03): one place that
+    /// The runtime half of phase-00 task 5 (assist step 03): one place that
     /// answers "is there a client here", so that every guard in the original game asks the same
     /// question the same way instead of inventing an answer locally.
     /// </para>

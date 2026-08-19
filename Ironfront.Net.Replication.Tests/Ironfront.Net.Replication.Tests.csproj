@@ -46,6 +46,21 @@
     -->
     <ProjectReference Include="..\Ironfront.MasterClient\Ironfront.MasterClient.csproj" />
     <ProjectReference Include="..\Ironfront.Net.MasterLink\Ironfront.Net.MasterLink.csproj" />
+    <!--
+      phase-V10 task 11. The client-wiring gate's detectors are pure functions over a parsed
+      syntax tree precisely so their RED paths can be exercised here: a gate nobody has watched
+      fail is unproven, and this one exists because six router events reached production unwired.
+      Referencing the tool from the test project is what makes that possible.
+    -->
+    <ProjectReference Include="..\tools\ClientWiringGate\ClientWiringGate.csproj" />
+    <!--
+      phase-V3 task 10, same reasoning one gate over. SpecChecker's vehicle-registry judgement is
+      a pure function over (prefab name, id) records precisely so its four failure classes — a
+      reassigned id, an id the registry does not know, an id no prefab carries, an unauthored
+      prefab — are driven from a fixture on every CI run. All four are silent on both sides of
+      the wire, which is what makes watching them go red the point.
+    -->
+    <ProjectReference Include="..\tools\SpecChecker\SpecChecker.csproj" />
   </ItemGroup>
 
 </Project>

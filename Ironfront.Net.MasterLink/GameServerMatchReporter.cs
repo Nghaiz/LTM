@@ -8,13 +8,10 @@ using Ironfront.Net.Replication.Server;
 namespace Ironfront.Net.MasterLink
 {
     /// <summary>
-    /// Adapts Dev D's <see cref="IGameServerLink"/> onto the game server's
+    /// Adapts the master-server track's <see cref="IGameServerLink"/> onto the game server's
     /// <see cref="IMatchReporter"/> port. Phase-03 task 4.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// OWNER: Dev C. The only place in the solution that knows both types exist.
-    /// </para>
     /// <para>
     /// <b>It degrades to standalone instead of throwing.</b> When the link is disconnected,
     /// every report is counted and dropped, exactly as

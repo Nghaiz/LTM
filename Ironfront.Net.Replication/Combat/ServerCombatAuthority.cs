@@ -112,6 +112,12 @@ namespace Ironfront.Net.Replication.Combat
         public long KillsResolved { get; private set; }
 
         /// <summary>
+        /// The resolver this authority steps, for diagnostics that need to reach
+        /// <see cref="ServerFireResolver.DiagnosticSpreadScale"/> or the shot counters.
+        /// </summary>
+        public ServerFireResolver FireResolver => _fireResolver;
+
+        /// <summary>
         /// Steps one actor's combat for one accepted input frame.
         /// </summary>
         /// <param name="weapon">The actor's weapon state. Mutated by a reload or a shot.</param>
@@ -194,9 +200,15 @@ namespace Ironfront.Net.Replication.Combat
             {
                 ref readonly HitResult hit = ref hits[i];
 
-                float damage = ServerFireResolver.DamageFor(in config, hit.HitboxType);
-                DamageOutcome outcome =
-                    _damageSink.ApplyDamage(hit.TargetActorId, damage, shooterActorId);
+                // Distance comes straight off the hit — HitResult has always carried it, so
+                // drop-off costs no new plumbing. Balance damage rides the same ramp (phase-V2
+                // D5, D6): a sniper round that has lost half its damage at range has lost half
+                // its stagger too, which is what the original's shared DamageDropOff() does.
+                float damage = ServerFireResolver.DamageFor(in config, hit.HitboxType, hit.Distance);
+                float balanceDamage = ServerFireResolver.BalanceDamageFor(in config, hit.Distance);
+
+                DamageOutcome outcome = _damageSink.ApplyDamage(
+                    hit.TargetActorId, damage, balanceDamage, shooterActorId);
 
                 if (!outcome.Died) continue;
 

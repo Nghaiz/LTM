@@ -1,4 +1,5 @@
 using Ironfront.Net.Replication.Vehicles;
+using Ironfront.Net.Unity;
 using UnityEngine;
 
 public class TankTurret : MountedWeapon
@@ -105,23 +106,93 @@ public class TankTurret : MountedWeapon
 		{
 			return;
 		}
-		Vector2 demand = GetInput();
-		// Signs match the shipped code, which subtracted the input from the accumulated angle.
-		TurretAimCore.Step(ref _aim, 0f - demand.x, 0f - demand.y, aimLimits, Time.fixedDeltaTime);
+		StepNetAim();
+		// The joint and the spring are OUTPUTS of _aim, and remain so at every role -- this is
+		// D5-local, and it is what makes the replicated quantity a PhysX input rather than a
+		// PhysX output. A remote peer that wrote the resulting transform instead would be
+		// replicating a value the solver produced from state it does not have.
 		towerJoint.targetRotation = Quaternion.Euler(0f, 0f, _aim.Yaw);
 		JointSpring spring = cannonJoint.spring;
 		spring.targetPosition = _aim.Pitch;
 		cannonJoint.spring = spring;
 	}
 
+	/// <summary>
+	/// Advances the aim for one fixed step, from whichever source this role owns. V6 task 2.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The three cases, and the one rule that ties them together — <b>the integration never
+	/// moves</b>. Offline and the local gunner run <c>TurretAimCore.Step</c> over their own
+	/// demand; the server runs <c>StepToward</c> over the occupant's requested pose at the same
+	/// slew rate; a remote client takes the decoded pose outright because it is drawing a result
+	/// rather than deciding one. Nothing here reads an angle back out of a joint, which is the
+	/// invariant V0 established and the reason a turret can be replicated at all.
+	/// </para>
+	/// <para>
+	/// <b>The local gunner publishes what it integrated.</b> That value becomes the turret half of
+	/// the next <c>C_VEHICLE_INPUT</c>, which the server then walks toward — so a client that
+	/// writes a snap into it buys one step's arc, not a snap (acceptance criterion 2).
+	/// </para>
+	/// </remarks>
+	private void StepNetAim()
+	{
+		ResolveNetSeat();
+
+		if (netVehicleId != 0)
+		{
+			NetTurretAim.Declare(netVehicleId, netSeatIndex, aimLimits, _aim.Yaw, _aim.Pitch);
+		}
+
+		if (NetTurretAim.TryResolve(
+				netVehicleId, netSeatIndex, netLocallyOccupied,
+				out TurretAimSource source, out float yaw, out float pitch))
+		{
+			if (source == TurretAimSource.RemotePose)
+			{
+				// Applied, not integrated. Running the policy here would integrate a second time
+				// from an input this peer does not have.
+				SetAim(yaw, pitch);
+				return;
+			}
+
+			if (source == TurretAimSource.ServerTarget)
+			{
+				TurretAimCore.StepToward(ref _aim, yaw, pitch, aimLimits, Time.fixedDeltaTime);
+				return;
+			}
+		}
+
+		StepLocalAim();
+
+		if (netLocallyOccupied)
+		{
+			NetTurretAim.PublishLocal(_aim.Yaw, _aim.Pitch);
+		}
+	}
+
+	/// <summary>The shipped integration, unchanged: offline, and the local gunner (D9).</summary>
+	private void StepLocalAim()
+	{
+		Vector2 demand = GetInput();
+		// Signs match the shipped code, which subtracted the input from the accumulated angle.
+		TurretAimCore.Step(ref _aim, 0f - demand.x, 0f - demand.y, aimLimits, Time.fixedDeltaTime);
+	}
+
 	public override void Unholster()
 	{
 		base.Unholster();
 		_pendingMouseAim = Vector2.zero;
-		if (!user.aiControlled)
+		// V10 task 3 (A16): was `!user.aiControlled`, so a remote human entering this turret
+		// disabled the LOCAL player's cameras.
+		if (NetWeaponAuthority.CosmeticHalfRunsHere
+			&& Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(user))
 		{
 			FpsActorController.instance.DisableCameras();
-			camera.enabled = true;
+			if (camera != null)
+			{
+				camera.enabled = true;
+			}
 		}
 	}
 
@@ -130,8 +201,17 @@ public class TankTurret : MountedWeapon
 		base.Holster();
 		// Drop motion the player made before letting go, so it cannot be applied on remount.
 		_pendingMouseAim = Vector2.zero;
-		camera.enabled = false;
-		if (!user.aiControlled)
+		// V6 task 2: `camera` is a serialized reference a stripped headless prefab need not
+		// carry, and FpsActorController.instance does not exist on a headless build at all.
+		// Both are cosmetics, and this closes two of the section 3.6 NREs without changing what
+		// a client or an offline build does.
+		if (camera != null)
+		{
+			camera.enabled = false;
+		}
+		// V10 task 3 (A16): the mirror of Unholster's guard above.
+		if (NetWeaponAuthority.CosmeticHalfRunsHere
+			&& Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(user))
 		{
 			FpsActorController.instance.EnableCameras();
 		}
@@ -197,9 +277,29 @@ public class TankTurret : MountedWeapon
 		return new Vector2((yawArc > 0f) ? (drained.x / yawArc) : 0f, (pitchArc > 0f) ? (drained.y / pitchArc) : 0f);
 	}
 
+	/// <summary>
+	/// Spawns the shell and kicks the tank, the second of which is server-side only. V6 task 3.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>The impulse is a gameplay effect on a replicated body, so exactly one peer may apply
+	/// it.</b> Remote clients receive the resulting motion through the vehicle entry's velocity
+	/// fields; applying it locally as well would double it on the one client that is predicting
+	/// this vehicle, and produce a recoil nobody else sees on the ones that are not.
+	/// </para>
+	/// <para>
+	/// <b>The randomized component is drawn on the server</b> (brainstorm D4). It cannot be
+	/// seeded: the same <c>UnityEngine.Random</c> stream also carries the cosmetic audio-pitch
+	/// draws in <c>Weapon.Start</c>, so any two peers consume it at different rates from the first
+	/// frame. A server draw is the only one both sides can agree on.
+	/// </para>
+	/// </remarks>
 	protected override Projectile SpawnProjectile(Vector3 direction)
 	{
-		rigidbody.AddForceAtPosition(-configuration.muzzle.forward * configuration.kickback + Random.insideUnitSphere * configuration.randomKick, configuration.muzzle.position, ForceMode.Impulse);
+		if (NetWeaponAuthority.GameplayHalfRunsHere)
+		{
+			rigidbody.AddForceAtPosition(-configuration.muzzle.forward * configuration.kickback + Random.insideUnitSphere * configuration.randomKick, configuration.muzzle.position, ForceMode.Impulse);
+		}
 		return base.SpawnProjectile(direction);
 	}
 }

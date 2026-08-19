@@ -14,9 +14,6 @@ namespace Ironfront.Net.Unity.Client
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// At execution order -50: after <c>NetClientBootstrap</c> has pumped the transport at
     /// -1000, so the snapshot drawn this frame is the newest that arrived, and before anything
     /// at the default order reads a transform.
@@ -51,11 +48,60 @@ namespace Ironfront.Net.Unity.Client
 
         private readonly Stack<Transform> _pool = new Stack<Transform>();
 
+        // Resolved once per spawn, never per snapshot. GetComponent at 30 Hz x 48 actors is the
+        // allocation-free-but-slow trap: it costs nothing the profiler flags as garbage and
+        // shows up as a flat frame-time tax instead.
+        private readonly Dictionary<ushort, RemoteActorView> _views =
+            new Dictionary<ushort, RemoteActorView>(ProtocolConstants.MAX_ACTORS);
+
         /// <summary>Actors currently drawn.</summary>
         public int LiveCount => _live.Count;
 
         /// <summary>Actors held in the pool, ready to reuse.</summary>
         public int PooledCount => _pool.Count;
+
+        /// <summary>
+        /// Resolves a network actor id to the transform drawing it, if this client is drawing
+        /// one. phase-V10 task 1.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The local player is never here.</b> It is excluded from <c>_live</c> on purpose —
+        /// it is predicted, not interpolated — so a caller asking about its own actor gets a
+        /// miss. Check <c>NetClientPresenterGuard.IsLocalActor</c> first, always.
+        /// </para>
+        /// <para>
+        /// <b>A miss is a normal outcome, not an error.</b> Interest management means an actor
+        /// that died outside this client's view was never spawned here at all. Do not log one.
+        /// </para>
+        /// <para>
+        /// <b>Do not cache the result across a despawn.</b> Transforms return to a pool and are
+        /// handed to whichever actor spawns next, so a held reference silently starts pointing
+        /// at a different player.
+        /// </para>
+        /// <para>
+        /// Named for symmetry with <c>ServerActorRegistry.TryFind</c>, so both sides of the wire
+        /// read alike.
+        /// </para>
+        /// </remarks>
+        public bool TryFind(ushort actorId, out Transform t) => _live.TryGetValue(actorId, out t);
+
+        /// <summary>
+        /// Resolves a network actor id to the <see cref=RemoteActorView/> presenting it. Same
+        /// three caveats as <see cref=TryFind/>.
+        /// </summary>
+        /// <remarks>
+        /// The view is resolved once, on spawn, into the pooled entry. A
+        /// <c>GetComponent</c> per snapshot would be 48 lookups at 30 Hz for a value that
+        /// cannot change while the transform is live.
+        /// </remarks>
+        public bool TryFindView(ushort actorId, out RemoteActorView view)
+        {
+            if (_views.TryGetValue(actorId, out view)) return view != null;
+
+            view = null;
+            return false;
+        }
 
         private void Awake()
         {
@@ -109,6 +155,12 @@ namespace Ironfront.Net.Unity.Client
 
                 if (SnapshotInterpolator.TryLerpYaw(from, to, alpha, pair.Key, out float yaw))
                     pair.Value.rotation = Quaternion.Euler(0f, yaw, 0f);
+
+                // Everything past position and yaw -- pitch, stance, aim, ragdoll, weapon, team
+                // -- was decoded and discarded until phase-V10. It is read from `to` rather than
+                // interpolated: these are discrete states, and lerping a crouch is meaningless.
+                if (!_views.TryGetValue(pair.Key, out RemoteActorView view) || view == null) continue;
+                if (to.TryFind(pair.Key, out ActorSnapshotEntry entry)) view.Apply(in entry);
             }
         }
 
@@ -121,6 +173,22 @@ namespace Ironfront.Net.Unity.Client
             Transform t = _pool.Count > 0 ? _pool.Pop() : NewPooled();
             t.gameObject.SetActive(true);
             _live[message.ActorId] = t;
+
+            RemoteActorView view = t.GetComponent<RemoteActorView>();
+            if (view != null)
+            {
+                view.Bind(message.ActorId);
+                _views[message.ActorId] = view;
+            }
+            else
+            {
+                _views.Remove(message.ActorId);
+                NetClientPresenterGuard.WarnOnce(
+                    "no-remote-actor-view",
+                    "[net] the remote actor prefab carries no RemoteActorView, so remote players "
+                    + "will slide at a fixed pose: no stance, no aim, no weapon, no ragdoll. This "
+                    + "is client-track item E1 -- add the component to the prefab.");
+            }
         }
 
         private void OnDespawn(DespawnActorMessage message)
@@ -128,6 +196,7 @@ namespace Ironfront.Net.Unity.Client
             if (!_live.TryGetValue(message.ActorId, out Transform t)) return;
 
             _live.Remove(message.ActorId);
+            _views.Remove(message.ActorId);
             t.gameObject.SetActive(false);
             _pool.Push(t);
         }

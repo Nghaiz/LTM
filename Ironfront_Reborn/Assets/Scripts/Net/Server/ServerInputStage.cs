@@ -7,9 +7,6 @@ namespace Ironfront.Net.Unity.Server
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// <b>Why this is a separate component (phase-01 trap 1).</b> The tick has to straddle
     /// Unity's own simulation: input must land <i>before</i> <c>Actor</c> and
     /// <c>AiActorController</c> run, and the snapshot must be captured <i>after</i>. Unity
@@ -19,7 +16,7 @@ namespace Ironfront.Net.Unity.Server
     /// </para>
     /// <para>
     /// The order is declared in the attribute rather than in
-    /// <c>ProjectSettings/ScriptExecutionOrder</c>. The project settings file is Dev A's, so
+    /// <c>ProjectSettings/ScriptExecutionOrder</c>. The project settings file is the client track's, so
     /// the alternative was a cross-owner dependency for a value that never changes — and one
     /// that would be invisible in a diff and silently absent for anyone who dropped these
     /// scripts into a different project.

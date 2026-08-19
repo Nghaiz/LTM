@@ -35,8 +35,8 @@ namespace Ironfront.Net.Configuration
         /// <summary>The HMAC key that signs join tickets. No default, on purpose.</summary>
         public static readonly EnvVar SharedSecret = new EnvVar(
             "IRONFRONT_SHARED_SECRET", "Identity and secrets", "master server, game server",
-            "The HMAC key that signs joinTickets. The master server (Dev D) issues tickets with\n" +
-            "it and the game server (Dev C) verifies them with it — both processes must be\n" +
+            "The HMAC key that signs joinTickets. The master server (the master-server track) issues tickets with\n" +
+            "it and the game server (the replication track) verifies them with it — both processes must be\n" +
             "configured with the SAME value, or every CONNECT_REQUEST is rejected with\n" +
             "CONNECT_DENIED reason 3.\n" +
             "\n" +
@@ -193,6 +193,15 @@ namespace Ironfront.Net.Configuration
         public static readonly EnvVar ClientVerbose = new EnvVar(
             "IRONFRONT_CLIENT_VERBOSE", "Game client", "game client",
             "Log the first snapshot and every connection state change.",
+            "1");
+
+        /// <summary>The V5-D6 driver-prediction fallback, as one flag.</summary>
+        public static readonly EnvVar ClientPredictLocalVehicle = new EnvVar(
+            "IRONFRONT_CLIENT_PREDICT_VEHICLE", "Game client", "game client",
+            "Whether the client predicts the vehicle it is driving. Set to 0 for the\n" +
+            "no-prediction fallback: the driven vehicle is interpolated like every other\n" +
+            "one, correct but a round trip behind. Flip it when the net-debug overlay\n" +
+            "shows the snap count rising under a healthy network.",
             "1");
 
         // ---- Logging -------------------------------------------------------------------
@@ -390,7 +399,7 @@ namespace Ironfront.Net.Configuration
             GameServerMasterTlsPinnedFingerprint, DatabasePath,
             GameServerUdpPort, GameServerTransport, GameServerMaxConnections, GameServerMaxPlayers,
             GameServerPublicIp, GameServerMapIds, GameServerAcceptUnsignedTickets,
-            ClientHost, ClientPort, ClientVerbose,
+            ClientHost, ClientPort, ClientVerbose, ClientPredictLocalVehicle,
             LogLevel, StructuredLog,
             TlsCertificatePath, TlsCertificatePassword,
             MetricsPort, MetricsBind, MetricsHost, MetricsCsvPath, MetricsCsvIntervalSeconds,

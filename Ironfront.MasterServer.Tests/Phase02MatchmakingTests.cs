@@ -17,7 +17,7 @@ namespace Ironfront.MasterServer.Tests
     /// The joinTicket criteria (4 to 7) are deliberately not here. Issue and Verify live together
     /// in Ironfront.Net.Protocol so that both sides share one implementation, which is where their
     /// tests live too — Conformance/JoinTicketTests covers the bad HMAC, the expired ticket and the
-    /// Vietnamese display name, and Dev C's TicketValidationTests covers the accept path.
+    /// Vietnamese display name, and the replication track's TicketValidationTests covers the accept path.
     /// Duplicating them here would create a second copy that can drift.
     /// </summary>
     public sealed class Phase02MatchmakingTests

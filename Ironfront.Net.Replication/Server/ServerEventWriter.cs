@@ -138,6 +138,125 @@ namespace Ironfront.Net.Replication.Server
         }
 
         /// <summary>
+        /// Writes S_PLAYER_LIST as a channel-2 payload. Broadcast, on join and on change.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The opcode was declared at the freeze and had no writer for four phases, which is why
+        /// the killfeed rendered an actor id and no name. Reliable, because a client that misses
+        /// it has no second chance to learn who anybody is — nothing re-sends names on a timer.
+        /// </para>
+        /// <para>
+        /// <paramref name="bodyScratch"/> is the caller's, not a <c>stackalloc</c>: the body is
+        /// variable-length and its worst case is
+        /// <see cref="PlayerListMessage.MaxBodySize"/> (1153 B), which is not a size to put on
+        /// the stack of a 30 Hz tick loop. Size it once and reuse it.
+        /// </para>
+        /// </remarks>
+        public static int WritePlayerList(
+            Span<byte> destination,
+            Span<byte> bodyScratch,
+            ReadOnlySpan<PlayerListEntry> entries)
+        {
+            int bodyLength = PlayerListMessage.Write(bodyScratch, entries);
+            return bodyLength < 0
+                ? -1
+                : Frame(
+                    destination, ReliableChannel, ServerMessageType.PlayerList,
+                    bodyScratch.Slice(0, bodyLength));
+        }
+
+        /// <summary>
+        /// Writes S_VEHICLE_SPAWN as a channel-2 payload. Broadcast. Phase-V8 task 6.
+        /// </summary>
+        /// <remarks>
+        /// Reliable and unfiltered, unlike an explosion. A vehicle spawn is not a cue — it is
+        /// what creates the object every later <c>S_VEHICLE_SNAPSHOT</c> entry addresses, so a
+        /// client that misses it has nothing to apply those entries to and no second chance to
+        /// learn the vehicle exists. Earshot filtering would make that permanent for anyone who
+        /// happened to be across the map when a jeep respawned.
+        /// </remarks>
+        public static int WriteVehicleSpawn(Span<byte> destination, in VehicleSpawnMessage message)
+        {
+            Span<byte> body = stackalloc byte[VehicleSpawnMessage.Size];
+            return message.Write(body) < 0
+                ? -1
+                : Frame(destination, ReliableChannel, ServerMessageType.VehicleSpawn, body);
+        }
+
+        /// <summary>Writes S_VEHICLE_DESPAWN as a channel-2 payload. Phase-V8 task 6.</summary>
+        /// <remarks>
+        /// Reliable for the mirror of the reason above: a missed despawn leaves a wreck standing
+        /// on a client forever, and no snapshot removes it — the vehicle simply stops being
+        /// mentioned, which is indistinguishable from one that has not moved.
+        /// </remarks>
+        public static int WriteVehicleDespawn(
+            Span<byte> destination, in VehicleDespawnMessage message)
+        {
+            Span<byte> body = stackalloc byte[VehicleDespawnMessage.Size];
+            return message.Write(body) < 0
+                ? -1
+                : Frame(destination, ReliableChannel, ServerMessageType.VehicleDespawn, body);
+        }
+
+        /// <summary>Writes S_SEAT_CHANGE as a channel-2 payload. V4 task 4.</summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Reliable, and it has to be.</b> Leaving a seat is the one edge-triggered vehicle
+        /// action (protocol-spec.md § 4.10) — a dropped answer strands the player welded into a
+        /// vehicle with no second chance to ask, because the request that would have asked again
+        /// was already consumed.
+        /// </para>
+        /// <para>
+        /// <b>Who receives it is the decision's, not this method's.</b> An accept is broadcast —
+        /// everyone must see who is driving — and a refusal is addressed to the requester alone
+        /// (V4-D7). <see cref="Vehicles.SeatDecision.Broadcast"/> carries that so it is decided
+        /// once rather than re-derived at every send site.
+        /// </para>
+        /// <para>
+        /// <b>The transition, not the state.</b> Occupancy that clients render comes from
+        /// <c>SnapshotField.SeatInfo</c> on the <b>actor</b> entry, which V3 finished. This
+        /// message is the change and the refusal; there is deliberately one source of truth for
+        /// "who is in what seat", and it is the actor entry.
+        /// </para>
+        /// </remarks>
+        public static int WriteSeatChange(Span<byte> destination, in SeatChangeMessage message)
+        {
+            Span<byte> body = stackalloc byte[SeatChangeMessage.Size];
+            return message.Write(body) < 0
+                ? -1
+                : Frame(destination, ReliableChannel, ServerMessageType.SeatChange, body);
+        }
+
+        /// <summary>Writes S_PROJECTILE_SPAWN as a channel-2 payload. Phase-V7 task 3.</summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Reliable, and unusually load-bearing for a per-shot event.</b> A dropped launch is
+        /// not a missing tracer — it is a projectile that exists on the server, damages someone,
+        /// and was never visible to the person it killed. It also carries the re-announces of
+        /// V7-D6 and V7-D8, where reliable ORDERING is what makes id reuse safe:
+        /// <see cref="Projectiles.ProjectileIdPool"/> runs without a quarantine precisely because
+        /// nothing on this channel can arrive out of order.
+        /// </para>
+        /// <para>
+        /// <b>Not earshot-filtered here, and the fallback ladder knows it.</b> V7 section 5 lists
+        /// a visible/audible-radius filter as the third bandwidth fallback, after halving the
+        /// guided and deployable re-announce rates. It is not applied by default because a
+        /// projectile is a thing you can watch cross the whole map, unlike the fire report
+        /// <see cref="WeaponFireAudibleRadius"/> governs, and cutting it at a radius makes long
+        /// shots arrive from nowhere.
+        /// </para>
+        /// </remarks>
+        public static int WriteProjectileSpawn(
+            Span<byte> destination, in ProjectileSpawnMessage message)
+        {
+            Span<byte> body = stackalloc byte[ProjectileSpawnMessage.Size];
+            return message.Write(body) < 0
+                ? -1
+                : Frame(destination, ReliableChannel, ServerMessageType.ProjectileSpawn, body);
+        }
+
+        /// <summary>
         /// Whether a listener at <paramref name="listenerDistanceSquared"/> should receive an
         /// event audible within <paramref name="radius"/> metres.
         /// </summary>

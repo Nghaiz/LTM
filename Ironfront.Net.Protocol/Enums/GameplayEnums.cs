@@ -16,7 +16,27 @@ namespace Ironfront.Net.Protocol
         Crouch        = 1 << 4,
         Sprint        = 1 << 5,
         Prone         = 1 << 6,
-        ThrowGrenade  = 1 << 7,
+        /// <summary>
+        /// Deliberately unassigned. Was <c>ThrowGrenade</c>, declared at the freeze with zero
+        /// producers and zero consumers repo-wide, and retired by phase-V7 D10 rather than
+        /// implemented.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The game has no dedicated grenade input and never did: throwing is <i>switch to the
+        /// gear slot, then Fire</i>, which routes through <c>Actor.SwitchWeapon</c> and
+        /// <c>ThrowableWeapon.Fire</c> — a path V6 already made server-authoritative. Wiring
+        /// this bit would add a <b>second route to firing</b> that does not pass
+        /// <c>Weapon.CanFire()</c>, and a second route is the one nobody writes the rapid-fire
+        /// test for.
+        /// </para>
+        /// <para>
+        /// <b>Renaming is not a wire change.</b> No producer ever set the bit, so no packet's
+        /// bytes move and <see cref="ProtocolConstants.PROTOCOL_VERSION"/> is unchanged. The
+        /// value is kept rather than deleted so the neighbouring bits do not renumber.
+        /// </para>
+        /// </remarks>
+        Reserved7     = 1 << 7,
         LeanLeft      = 1 << 8,
         LeanRight     = 1 << 9,
         Use           = 1 << 10,
@@ -67,15 +87,26 @@ namespace Ironfront.Net.Protocol
         Weapon     = 1 << 5,
         /// <summary>u8. Only sent on change (rare). 1 byte.</summary>
         Team       = 1 << 6,
-        /// <summary>u16 vehicleId + u8 seatIndex (stretch goal). 3 bytes.</summary>
+        /// <summary>
+        /// u16 vehicleId + u8 seatIndex. 3 bytes. <b>vehicleId 0 means "not seated"</b>, which
+        /// is how leaving a vehicle is expressed on a field that is only sent on change.
+        /// </summary>
         SeatInfo   = 1 << 7,
 
         /// <summary>
-        /// Every field a v1 actor actually uses — bits 0..6, excluding the stretch-goal
-        /// seat field. This is the "full snapshot" mask, and it encodes to the 20 bytes
-        /// per actor that protocol-spec.md section 4.3 budgets for.
+        /// Bits 0..6 — every field an actor on foot has. Still the right mask for an unseated
+        /// actor: <see cref="SeatInfo"/> describes a relationship such an actor does not have,
+        /// and claiming it would spend 3 bytes saying "no vehicle" on every actor in the game.
+        /// Encodes to 20 bytes.
         /// </summary>
         FullNoSeat = Position | Rotation | Velocity | StateFlags | Health | Weapon | Team,
+
+        /// <summary>
+        /// All 8 bits — every field a SEATED actor has. Encodes to 23 bytes, which is the width
+        /// <c>InterestManager</c> must project against, because the projection has to be the
+        /// worst case rather than the common one.
+        /// </summary>
+        Full = FullNoSeat | SeatInfo,
     }
 
     /// <summary>S_HIT_CONFIRM hitboxType. protocol-spec.md section 4.5.</summary>
@@ -141,7 +172,7 @@ namespace Ironfront.Net.Protocol
     /// </summary>
     /// <remarks>
     /// Declared in the protocol rather than in the replication library because two parties
-    /// outside Dev C read it: the client renders a different HUD per phase, and the master
+    /// outside the replication track read it: the client renders a different HUD per phase, and the master
     /// server decides whether a server is joinable from the heartbeat's copy of it. A second
     /// enum on either side is the duplicate source of truth the conventions forbid.
     /// </remarks>

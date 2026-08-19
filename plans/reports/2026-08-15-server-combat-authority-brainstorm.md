@@ -1,6 +1,6 @@
 # Brainstorm — Server combat authority, and the debt cleared before the Unity phase
 
-**Date** 2026-08-15 · **Scope** Dev C (+ one guard in a Dev A file) · **Trigger** the open finding
+**Date** 2026-08-15 · **Scope** the replication track (+ one guard in a the client track file) · **Trigger** the open finding
 carried out of the assist-track review: *"the server implements no reload"*
 
 ---
@@ -34,7 +34,7 @@ Decrementing ammo on fire is what actually closes the reported bug; the reload c
 
 `phase-02` report § 9: *"the tick loop does not yet feed `SmoothedRttMs` into `LagCompensator`,
 because nothing calls `ResolveHitscan` from gameplay yet — that lands with the weapon integration in
-phase 03."* Phase 03 was match flow. Phase 04 concluded *"everything engine-free in Dev C's five
+phase 03."* Phase 03 was match flow. Phase 04 concluded *"everything engine-free in the replication track's five
 phases is written, measured and merged"* — true, and the weapon **integration** was neither
 engine-free nor written. Nobody owned the sentence.
 
@@ -88,10 +88,10 @@ virtual and every damage source in the original game — bot bullets, `Hitbox`, 
 
 One guard at the top of that method routes all damage through `IActorDamageSink` when the net role
 is server, and drops it locally when the role is client (the server tells you). That is **one
-virtual method in a Dev A file**, needing a PR and their approval — not a change to the
+virtual method in a the client track file**, needing a PR and their approval — not a change to the
 eight-coroutine AI controller that was declined on PR #47.
 
-### 3.5 Unity wiring (Dev C-owned files)
+### 3.5 Unity wiring (the replication track-owned files)
 
 ```
 ServerPlayer.Tick
@@ -142,8 +142,8 @@ Engine-free, CI, no Editor:
 
 | Risk | Note |
 |---|---|
-| `Actor.Damage` guard is in a Dev A-owned file | Needs a PR and their approval. Small surface (one method), but it is a cross-owner dependency and the schedule should assume a review round. |
-| `WeaponConfig.Rifle` is a placeholder | The server's numbers stand in for Dev A's real weapon assets until supplied. Not blocking. |
+| `Actor.Damage` guard is in a the client track-owned file | Needs a PR and their approval. Small surface (one method), but it is a cross-owner dependency and the schedule should assume a review round. |
+| `WeaponConfig.Rifle` is a placeholder | The server's numbers stand in for the client track's real weapon assets until supplied. Not blocking. |
 | `HitboxSet.Humanoid` is a placeholder for the real rig | Recorded since phase-02; unchanged by this pass. |
 | Client predicts a 2 s reload, the server confirms one RTT later | Acceptable: the client already reconciles, and both sides now read one constant. |
 
@@ -151,10 +151,10 @@ Engine-free, CI, no Editor:
 
 ## 7. Explicitly not in scope
 
-No Editor session, no Profiler run. **S5** (32-bot p99) remains Dev A's and remains the only
+No Editor session, no Profiler run. **S5** (32-bot p99) remains the client track's and remains the only
 outstanding criterion that can still *fail* rather than merely be unmeasured — `BotLodGate` has
 unblocked it. S4 and S7 closed in the 2026-08-15 report. B7 (a player id on `ConnectionInfo`) and
-confirming the server appears in the master's list stay with Dev B and Dev D.
+confirming the server appears in the master's list stay with the transport track and the master-server track.
 
 ---
 

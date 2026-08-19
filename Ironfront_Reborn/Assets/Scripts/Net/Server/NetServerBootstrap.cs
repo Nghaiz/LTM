@@ -15,9 +15,6 @@ namespace Ironfront.Net.Unity.Server
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// At execution order -1000 so the role is set before any component's <c>Awake</c> can
     /// read it. Anything that must not run on a headless server checks
     /// <see cref="NetContext.IsServer"/>, and a check that runs before the role is assigned
@@ -123,7 +120,7 @@ namespace Ironfront.Net.Unity.Server
             NetContext.SetRole(NetRole.Server);
             Time.maximumDeltaTime = MaxDeltaTime;
 
-            // Only in a real headless run. Capping the Editor to 30 fps would make Dev A's
+            // Only in a real headless run. Capping the Editor to 30 fps would make the client track's
             // two-client test miserable to watch for no benefit, and vSync is meaningless
             // without a display.
             if (Application.isBatchMode)
@@ -235,7 +232,7 @@ namespace Ironfront.Net.Unity.Server
         /// </para>
         /// <para>
         /// The transport deliberately does not know the shared secret. Validating the HMAC
-        /// belongs to whoever holds it — the master-server integration, which is Dev D's and is
+        /// belongs to whoever holds it — the master-server integration, which is the master-server track's and is
         /// not built yet. Until then <see cref="_acceptUnsignedTickets"/> accepts any ticket and
         /// says so loudly on every start, because a development shortcut that goes quiet is one
         /// that ships.

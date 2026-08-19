@@ -1,0 +1,13 @@
+{
+  "highRisk": true,
+  "autoStopRequired": true,
+  "humanApproved": false,
+  "largeDiff": true,
+  "reasons": [
+    "Changes a wire message layout already shipped by V3 (S_PROJECTILE_SPAWN 19 to 20 bytes) inside protocol v3 rather than bumping to v4, on the authority of brainstorm D7",
+    "Changes offline single-player ballistics: the integrator gained the half-acceleration term, a third deliberate departure beyond V7-D11's two recorded offline changes",
+    "Two breaking interface changes (IActorDamageSink.ApplyHeal, ISpareAmmoPool.Give) across all implementors",
+    "About 30 files across the netstandard libraries and the Unity tree",
+    "The launch call site is not wired: nothing calls ServerProjectileBridge.Launch from the fire path, and the prefab catalog is unauthored, so projectile replication is plumbed but inert until the Editor work lands"
+  ]
+}

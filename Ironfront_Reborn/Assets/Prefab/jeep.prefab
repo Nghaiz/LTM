@@ -91,6 +91,7 @@ MonoBehaviour:
   - {fileID: 114805951630156475}
   - {fileID: 114223746399435365}
   - {fileID: 114056091671688905}
+  networkId: 1
   maxHealth: 1000
   crashDamageSpeedThrehshold: 2.5
   crashDamageMultiplier: 20

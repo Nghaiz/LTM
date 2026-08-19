@@ -15,7 +15,7 @@ namespace Ironfront.Net.Protocol
     /// The class produces the GSP <em>payload</em> region only — a
     /// <see cref="FragmentHeader"/> followed by the data slice. Assigning sequence
     /// numbers and prepending the <see cref="GspHeader"/> belongs to the transport layer
-    /// (Ironfront.Net.Transport, Dev B), which also owns the requirement that every
+    /// (Ironfront.Net.Transport, the transport track), which also owns the requirement that every
     /// fragment is sent reliably: lose one and the whole group is useless.
     /// </para>
     /// </remarks>

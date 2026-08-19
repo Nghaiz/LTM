@@ -73,7 +73,7 @@ namespace Ironfront.Client.Input.Tests
         [Fact]
         public void Bits_with_no_producer_in_FpsActorController_stay_clear()
         {
-            const InputButtons unused = InputButtons.Prone | InputButtons.ThrowGrenade
+            const InputButtons unused = InputButtons.Prone | InputButtons.Reserved7
                                         | InputButtons.LeanLeft | InputButtons.LeanRight
                                         | InputButtons.SwitchWeapon0 | InputButtons.SwitchWeapon1
                                         | InputButtons.SwitchWeapon2 | InputButtons.SwitchWeapon3;
@@ -102,6 +102,10 @@ namespace Ironfront.Client.Input.Tests
             public float LookDeltaX => 0f;
             public float LookDeltaY => 0f;
             public ushort Buttons { get; }
+            public float HeliYaw => 0f;
+            public float HeliCollective => 0f;
+            public float HeliRoll => 0f;
+            public float HeliPitch => 0f;
         }
 
         [Fact]

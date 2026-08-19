@@ -5,7 +5,9 @@ using Ironfront.Net.Replication;
 using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Interest;
 using Ironfront.Net.Replication.Movement;
+using Ironfront.Net.Replication.Projectiles;
 using Ironfront.Net.Replication.Server;
+using Ironfront.Net.Replication.Vehicles;
 using Ironfront.Net.Transport;
 using UnityEngine;
 
@@ -16,9 +18,6 @@ namespace Ironfront.Net.Unity.Server
     /// connection.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// OWNER: Dev C.
-    /// </para>
     /// <para>
     /// <b>This class coordinates; it does not decide.</b> Pacing lives in
     /// <see cref="ServerTickScheduler"/>, anti-cheat in <see cref="InputAuthority"/>, decoding
@@ -39,7 +38,7 @@ namespace Ironfront.Net.Unity.Server
     /// </para>
     /// </remarks>
     [DisallowMultipleComponent]
-    public sealed class ServerTickLoop : MonoBehaviour, ISpawnRequestHandler
+    public sealed class ServerTickLoop : MonoBehaviour, ISpawnRequestHandler, IReliablePayloadSender
     {
         private readonly Dictionary<ushort, ServerPlayer> _byConnection =
             new Dictionary<ushort, ServerPlayer>(ProtocolConstants.MAX_ACTORS);
@@ -58,6 +57,20 @@ namespace Ironfront.Net.Unity.Server
 
         private readonly InterestManager _interest = new InterestManager();
         private readonly HitboxHistory _hitboxHistory = new HitboxHistory();
+
+        // V7. The pool every ammo bag resupplies through, and the bridge that steps every live
+        // projectile and deployable. Both constructed here rather than in Bind, for the reason
+        // the vehicle lifecycle sink states below: a null one reads as clean to the state audit.
+        private readonly ActorSpareAmmoPool _spareAmmo = new ActorSpareAmmoPool();
+        private ServerProjectileBridge _projectiles;
+
+        // Present-time hitboxes for the projectile stepper, rebuilt once per owed tick. Separate
+        // from ServerCombatBridge's identical-looking buffer on purpose: that one is rebuilt per
+        // ACCEPTED INPUT FRAME and memoized by tick, and sharing it would couple the projectile
+        // step to whether any player happened to send input this tick.
+        private readonly HitscanTarget[] _projectileTargets =
+            new HitscanTarget[ProtocolConstants.MAX_ACTORS];
+        private int _projectileTargetCount;
         private readonly SpawnAckTracker _spawnAcks = new SpawnAckTracker();
         private readonly LagCompensator _lagCompensator;
 
@@ -81,6 +94,43 @@ namespace Ironfront.Net.Unity.Server
 
         private readonly byte[] _eventPayload = new byte[ProtocolConstants.MAX_PAYLOAD];
 
+        // Built once and kept across rebinds, so the id quarantine and the counters survive a
+        // transport swap. It is the server's only vehicle-id authority; NetVehicleLifecycle
+        // publishes it to the spawners scattered across the map.
+        private ServerVehicleLifecycleSink _vehicleLifecycle;
+
+        // ---- V4: the vehicle stream. Every one of these is constructed ONCE, in the
+        // constructor or in Bind, because the snapshot stage runs 20 times a second and
+        // conventions section 3.2 forbids allocating on it.
+        private readonly VehicleWorldSnapshot _vehicleWorld = new VehicleWorldSnapshot();
+
+        /// <summary>The per-viewer scratch view. Reused across every client in one snapshot.</summary>
+        private readonly VehicleWorldSnapshot _vehicleView = new VehicleWorldSnapshot();
+
+        private readonly VehicleInterestTracker _vehicleInterest = new VehicleInterestTracker();
+
+        private readonly byte[] _vehicleBody = new byte[VehicleSnapshotMessage.MaxBodySize];
+
+        private readonly SeatArbiter _seatArbiter;
+        private readonly VehicleBurnClock _burnClock;
+        private readonly ServerVehicleDamageSink _vehicleDamageSink;
+        private readonly ServerSeatBridge _seatBridge;
+        private readonly VehicleInputAuthority _vehicleInputAuthority;
+        private readonly ServerVehicleInputBridge _vehicleInputBridge;
+
+        // V6. The authoritative turret pose and the mounted-weapon clips, both engine-free and
+        // both keyed on (vehicleId, seatIndex) rather than on an actor -- a mounted weapon's clip
+        // survives the gunner getting out, and must, or two players swapping seats on a
+        // half-empty coaxial would each find a full one.
+        private readonly ServerTurretAuthority _turretAuthority = new ServerTurretAuthority();
+        private readonly MountedWeaponRegistry _mountedWeapons = new MountedWeaponRegistry();
+        private readonly MountedWeaponAuthority _mountedWeaponAuthority;
+
+        // Reused across resets rather than allocated per call. A round boundary is not the hot
+        // path, but MAX_ACTORS is the known ceiling and there is no reason to hand the GC a
+        // fresh list every round.
+        private readonly List<ushort> _retainedIds = new List<ushort>(ProtocolConstants.MAX_ACTORS);
+
         /// <summary>Layers a bullet cannot pass through. Mirrors <c>Projectile.cs</c>'s mask.</summary>
         private const int BulletBlockingLayers = -2049;
 
@@ -89,6 +139,9 @@ namespace Ironfront.Net.Unity.Server
         private double _stepStartMs;
         private double _lastPumpMs;
         private bool _running;
+
+        /// <summary>So a rebind does not repeat the phase-V2 placeholder-weapon warning.</summary>
+        private bool _warnedAboutPlaceholderWeapons;
 
         public ServerTickLoop()
         {
@@ -104,13 +157,83 @@ namespace Ironfront.Net.Unity.Server
             _damageSink = new ServerActorDamageSink(ServerActorRegistry.Instance);
             _combatAuthority = new ServerCombatAuthority(_fireResolver, _damageSink, _respawnGate);
             _combat = new ServerCombatBridge(
-                this, ServerActorRegistry.Instance, _combatAuthority, _respawnGate);
+                this, ServerActorRegistry.Instance, _combatAuthority, _respawnGate,
+                _mountedWeapons, _mountedWeaponAuthority);
+
+            // V7. The catalog starts EMPTY and is installed from Assembly-CSharp, which is the
+            // only assembly that can read a Projectile.Configuration off a prefab -- see
+            // ProjectileCatalogBuilder for why that boundary cannot be crossed the other way.
+            // An empty catalog steps nothing and announces nothing, so an un-installed server
+            // behaves exactly as it did before V7 rather than throwing at the first shot.
+            _projectiles = new ServerProjectileBridge(
+                this, _damageSink, _spareAmmo, new ProjectileCatalog());
+
+            // V4. Order matters: the arbiter and the burn clock both close over the registry, and
+            // the damage sink closes over the burn clock.
+            // Constructed HERE, not in Bind, so it can never be null when BindMatch reads its id
+            // pool for the state audit. Bind and BindMatch are called by two different components
+            // (NetServerBootstrap and MatchController), so their relative order is a Unity
+            // lifecycle question nothing in this code pins — and ServerStateAudit's vehicle
+            // arguments are nullable and DEFAULT TO ZERO, which reads as clean. A null pool there
+            // would leave criterion 14 asserting nothing, silently, on whichever startup order
+            // happened to win. Installing it into the static seam still waits for Bind: an unbound
+            // loop has no transport to broadcast onto.
+            _vehicleLifecycle = new ServerVehicleLifecycleSink(this, () => _scheduler.CurrentTick);
+
+            _seatArbiter = new SeatArbiter(ServerVehicleRegistry.Instance.Registry);
+            _burnClock = new VehicleBurnClock(ServerVehicleRegistry.Instance.Registry);
+            _vehicleDamageSink = new ServerVehicleDamageSink(
+                ServerVehicleRegistry.Instance, _burnClock, () => _scheduler.CurrentTick);
+            _seatBridge = new ServerSeatBridge(
+                _seatArbiter, ServerVehicleRegistry.Instance, ServerActorRegistry.Instance,
+                () => _scheduler.CurrentTick, SendSeatChange);
 
             // Wired in the constructor, not in Bind: the router is a field initializer too, and
             // an accepted C_SPAWN_REQUEST arriving before Bind ran would otherwise be counted
             // and dropped rather than gated.
+            // V5 task 5. The authority owns the driver check and the hold window and is
+            // engine-free; the bridge is the part that has to touch a MonoBehaviour.
+            _vehicleInputAuthority = new VehicleInputAuthority(ServerVehicleRegistry.Instance.Registry);
+            _vehicleInputBridge = new ServerVehicleInputBridge(
+                _vehicleInputAuthority, ServerActorRegistry.Instance, () => _scheduler.CurrentTick,
+                _turretAuthority);
+
+            // V6 tasks 2 and 3. MountedSpareAmmoPool, never ActorSpareAmmoPool: a mounted
+            // weapon's spare rounds live on the weapon (V6-D6), and handing this the infantry
+            // pool would drain the gunner's rifle magazines to refill a coaxial.
+            _mountedWeaponAuthority = new MountedWeaponAuthority(
+                _mountedWeapons, MountedSpareAmmoPool.Instance);
+
             _router.SpawnRequests = this;
+            _router.SeatRequests = _seatBridge;
+
+            // Before V5 this stayed null and every C_VEHICLE_INPUT was counted and dropped --
+            // which was V4's honest shipped state, because nothing could drive a vehicle yet.
+            _router.VehicleInputs = _vehicleInputBridge;
         }
+
+        /// <summary>Who sees which vehicles, and how often. V4-D3.</summary>
+        public VehicleInterestTracker VehicleInterest => _vehicleInterest;
+
+        /// <summary>The seat decision machine. Its counters are the seat-race evidence.</summary>
+        public SeatArbiter SeatArbiter => _seatArbiter;
+
+        /// <summary>The two-stage vehicle death machine. V4-D11.</summary>
+        public VehicleBurnClock BurnClock => _burnClock;
+
+        /// <summary>
+        /// Who may steer what, and for how long after their last packet. V5-D5 and V5-D11.
+        /// </summary>
+        public VehicleInputAuthority VehicleInputAuthority => _vehicleInputAuthority;
+
+        /// <summary>Where every turret is actually pointing. V6-D2.</summary>
+        public ServerTurretAuthority TurretAuthority => _turretAuthority;
+
+        /// <summary>Every mounted weapon's clip, cooldown and spare rounds. V6 task 3.</summary>
+        public MountedWeaponRegistry MountedWeapons => _mountedWeapons;
+
+        /// <summary>The ammo, cooldown and reload gate for mounted weapons. V6 task 3.</summary>
+        public MountedWeaponAuthority MountedWeaponAuthority => _mountedWeaponAuthority;
 
         /// <summary>The transport this loop is bound to. Null until <see cref="Bind"/>.</summary>
         public ITransportServer Transport { get; private set; }
@@ -130,6 +253,40 @@ namespace Ironfront.Net.Unity.Server
 
         /// <summary>One second of past hitbox poses, for rewinding. Phase-02 task 2.</summary>
         public HitboxHistory HitboxHistory => _hitboxHistory;
+
+        /// <summary>The projectile and deployable authority this server is stepping. V7.</summary>
+        public ServerProjectileBridge Projectiles => _projectiles;
+
+        /// <summary>Where an ammo bag puts the rounds it hands out. V7-D9.</summary>
+        public ActorSpareAmmoPool SpareAmmo => _spareAmmo;
+
+        /// <summary>
+        /// Hands the server the authored projectile configurations. Phase-V7 task 1.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>An install seam rather than a constructor argument, because of an assembly
+        /// boundary.</b> The catalog is built by sampling <c>Projectile.Configuration</c> off
+        /// prefabs, which only <c>Assembly-CSharp</c> can see; this loop lives in the
+        /// <c>Ironfront.Net.Unity.Server</c> asmdef, which compiles first and can never
+        /// reference it. Same shape as <c>Net/Server/Bindings/</c>.
+        /// </para>
+        /// <para>
+        /// <b>Until this is called the server steps nothing and announces nothing.</b> That is
+        /// deliberate: an empty catalog degrades to pre-V7 behaviour rather than throwing at the
+        /// first shot. It also means a server that never installs one is silently without
+        /// projectile replication, so <see cref="ServerProjectileBridge.LiveCount"/> staying at
+        /// zero across a match with rockets in it is the symptom to look for.
+        /// </para>
+        /// </remarks>
+        public void InstallProjectileCatalog(
+            ProjectileCatalog catalog, IProjectileWorldSweep worldSweep = null)
+        {
+            if (catalog == null) return;
+
+            _projectiles = new ServerProjectileBridge(
+                this, _damageSink, _spareAmmo, catalog, worldSweep);
+        }
 
         /// <summary>Resolves hitscan against the world the shooter saw. Phase-02 task 3.</summary>
         public LagCompensator LagCompensator => _lagCompensator;
@@ -211,12 +368,97 @@ namespace Ironfront.Net.Unity.Server
             // and no tick, so advertising it would hand BotLodGate a CurrentTick that never
             // advances -- every bot would sit on the same tick's LOD answer forever.
             Current = this;
+
+            // Vehicle spawners are authored assets with no reference to this loop; the static
+            // seam is how S_VEHICLE_SPAWN reaches them. Installed here rather than in Awake for
+            // Current's reason: an unbound loop has no transport to broadcast onto, and a
+            // spawner reporting into one would consume vehicle ids nobody ever hears about.
+            NetVehicleLifecycle.Install(_vehicleLifecycle);
+
+            // V4. Same reasoning as the sink above: Vehicle's role guards reach the damage sink
+            // through a static seam because a Vehicle is an authored prefab with no reference to
+            // this loop, and installing it in Awake would route damage into a loop with no
+            // transport. Uninstalled in Unbind, so a client and an offline build never see it.
+            NetVehicleAuthority.Install(
+                _vehicleDamageSink, ServerVehicleRegistry.Instance, ServerActorRegistry.Instance);
+
+            // The claims table needs to hear about a bot dying to release its seat on the tick it
+            // dies rather than up to ten seconds later — the whole V4-D10 fix.
+            ServerVehicleRegistry.Instance.SubscribeTo(ServerActorRegistry.Instance);
+
+            // V6, and installed here for NetVehicleAuthority's reason exactly: a turret and a
+            // mounted weapon are components on an authored prefab with no reference to this loop,
+            // and a serialized one per prefab would be a manual step forgotten on the one nobody
+            // re-opened. Both seams report "no opinion" until this runs, which is the offline
+            // behaviour and is what keeps a client and a single-player build untouched (V6-D9).
+            // Before the directories, so a vehicle despawning between here and the first
+            // declaration still has somewhere to be cleaned up from.
+            ServerVehicleRegistry.Instance.InstallMountedTables(_turretAuthority, _mountedWeapons);
+
+            NetTurretAim.Directory = new ServerTurretDirectory(_turretAuthority);
+            NetTurretAim.VehicleIdResolver =
+                ServerVehicleRegistry.Instance.NetworkIdOf;
+
+            NetWeaponAuthority.Directory = new ServerMountedWeaponDirectory(
+                _mountedWeapons,
+                () => _scheduler.CurrentTick / (float)ProtocolConstants.SIM_TICK_RATE);
+
+            WarnAboutPlaceholderWeapons();
+        }
+
+        /// <summary>The vehicle spawn/despawn sender, for the phase report and for tests.</summary>
+        public ServerVehicleLifecycleSink VehicleLifecycle => _vehicleLifecycle;
+
+        /// <summary>
+        /// Names, once per server start, every weapon id still running on class-derived
+        /// placeholder numbers.
+        /// </summary>
+        /// <remarks>
+        /// phase-V2 D3. A catalog whose placeholder status is only a comment is a worse artifact
+        /// than no catalog: "every weapon is a rifle" is visible inside one match, while "every
+        /// weapon is a plausible-looking wrong number" is visible to nobody. A line in every
+        /// server log is the cheapest thing that keeps it from decaying into folklore. Guarded so
+        /// a rebind does not repeat it.
+        /// </remarks>
+        private void WarnAboutPlaceholderWeapons()
+        {
+            if (_warnedAboutPlaceholderWeapons) return;
+            _warnedAboutPlaceholderWeapons = true;
+
+            if (WeaponCatalog.PlaceholderCount == 0) return;
+
+            NetLog.Warn(WeaponCatalog.DescribeUnauthored());
         }
 
         /// <summary>Detaches from the transport. Safe to call when never bound.</summary>
         public void Unbind()
         {
             _running = false;
+
+            // Ahead of the early return: a spawner holding the seam would otherwise keep
+            // framing spawns into a transport that is about to be null.
+            NetVehicleLifecycle.Uninstall();
+            NetVehicleAuthority.Uninstall();
+
+            // The sink outlives a rebind so its counters do, but its ids must not: every
+            // vehicle in the old session is gone and nothing will ever report their despawns,
+            // so without this a rebound server starts each session with fewer ids than the last.
+            _vehicleLifecycle?.Ids.ReleaseAll();
+
+            // V7, and for the identical reason: every projectile and deployable in the old
+            // session is gone and no terminal event will ever be resolved for them, so without
+            // this a rebound server starts each session with fewer projectile ids than the last.
+            _projectiles?.Reset();
+
+            // For the same reason, and one table further: the registry holds MonoBehaviour
+            // references from the old session and the pair table holds (viewer, vehicle) rows
+            // for clients that are about to be gone. Both are the trap-2 leak.
+            ServerVehicleRegistry.Instance.Unsubscribe();
+            ServerVehicleRegistry.Instance.Clear();
+            _vehicleInterest.Reset();
+            _seatArbiter.Reset();
+            _burnClock.Reset();
+            _vehicleInputBridge.Reset();
 
             if (Transport == null) return;
 
@@ -227,6 +469,12 @@ namespace Ironfront.Net.Unity.Server
             Transport.OnClientDisconnected -= OnClientDisconnected;
             Transport = null;
             _clockPump = null;
+
+            // Both seams are static, and with domain reload disabled a static field survives
+            // leaving play mode -- so the next run's turrets would aim from the previous run's
+            // authority. NetVehicleAuthority.Uninstall exists for the same reason.
+            NetTurretAim.Clear();
+            NetWeaponAuthority.Clear();
         }
 
         /// <summary>Stage 1, at execution order -200. Receive, then apply input.</summary>
@@ -245,11 +493,31 @@ namespace Ironfront.Net.Unity.Server
             // Raises OnMessage synchronously, which fills the sessions' input rings.
             Transport.Poll();
 
+            // Once per step, and this is the ONLY caller. BotSeatClaims.ReleaseExpired sweeps the
+            // whole (MAX_VEHICLES + 1) x MaxSeats table, so it is a global operation and needs a
+            // global trigger — it used to be called from Vehicle.FixedUpdate, which ran one full
+            // sweep per vehicle per physics step and skipped it entirely on a map with no
+            // vehicles. The deadline it enforces is wall-clock, so a step is the right grain: it
+            // does not need to run per owed tick, and 10-second claims do not care about 33 ms.
+            NetVehicleAuthority.ReleaseExpiredClaims();
+
             _ticksOwedThisStep = _scheduler.Advance(_stepStartMs);
 
             for (int tick = 0; tick < _ticksOwedThisStep; tick++)
             {
                 NetContext.CurrentTick = _scheduler.BeginTick();
+
+                // Before the players step, so a vehicle reading its driver's controller from
+                // FixedUpdate this tick sees this tick's axes rather than the previous one's.
+                _vehicleInputBridge.PumpTick(NetContext.CurrentTick);
+
+                // AND before fire resolution, which is the load-bearing half (V6 task 3).
+                // Weapon.SpawnProjectile reads configuration.muzzle.position -- the transform the
+                // turret components write from this pose on their own fixed step. Stepping the
+                // aim after the trigger would leave every shot departing from where the turret
+                // pointed one tick ago: 33 ms of lag, invisible on a static target and
+                // systematically wrong on a traversing one.
+                _turretAuthority.Step(_scheduler.FixedDeltaTime);
 
                 for (int i = 0; i < _players.Count; i++)
                     _players[i].Tick(_scheduler.FixedDeltaTime);
@@ -281,6 +549,12 @@ namespace Ironfront.Net.Unity.Server
                 // same for every owed tick. Writing that one pose under each tick number is
                 // what makes a rewind into the middle of a catch-up find something to hit.
                 CaptureHitboxHistory(firstTick + (uint)tick);
+
+                // V7. After the capture, because a projectile resolves against PRESENT-time
+                // hitboxes (V7-D2 lag-compensates the launch and not the flight) and those are
+                // the poses just recorded. Before the snapshot, so a detonation this tick is
+                // already reflected in the health the snapshot carries.
+                StepProjectiles(firstTick + (uint)tick);
 
                 if (_scheduler.ShouldSendSnapshot()) BuildAndSendSnapshots();
             }
@@ -321,10 +595,68 @@ namespace Ironfront.Net.Unity.Server
             }
         }
 
+        /// <summary>
+        /// Advances every live projectile and deployable by one tick. Phase-V7 tasks 2 and 7.
+        /// </summary>
+        /// <remarks>
+        /// Rebuilds the present-time target set first. That is an O(actors) sweep per tick on
+        /// top of the capture above, which is the price of the stepper -- and is why V7 section
+        /// 5 ships the per-shooter cap and the bullet hitscan fallback with the task rather than
+        /// after a measurement goes red.
+        /// </remarks>
+        private void StepProjectiles(uint tick)
+        {
+            if (_projectiles == null) return;
+
+            BuildProjectileTargets();
+            _projectiles.Step(
+                tick, new ReadOnlySpan<HitscanTarget>(_projectileTargets, 0, _projectileTargetCount));
+        }
+
+        private void BuildProjectileTargets()
+        {
+            _projectileTargetCount = 0;
+            IReadOnlyList<NetServerActor> actors = ServerActorRegistry.Instance.Actors;
+
+            for (int i = 0; i < actors.Count; i++)
+            {
+                if (_projectileTargetCount >= _projectileTargets.Length) break;
+
+                NetServerActor actor = actors[i];
+                if (actor == null || !actor.isActiveAndEnabled || !actor.IsAlive) continue;
+
+                _projectileTargets[_projectileTargetCount++] =
+                    new HitscanTarget(actor.ActorId, isAlive: true, actor.CaptureHitboxes());
+            }
+        }
+
         private void BuildAndSendSnapshots()
         {
             _world.ServerTick = _scheduler.CurrentTick;
             ServerActorRegistry.Instance.CaptureInto(_world);
+
+            // V4. Deaths are resolved BEFORE the capture, and that ordering is the whole of
+            // acceptance criterion 9.
+            //
+            // This used to run after it, on the reasoning that "burn expiry before the VIEWS are
+            // built" was enough. It is not, and the comment that said so was worse than the bug:
+            // BuildVehicleBody reads _vehicleWorld, which the capture had ALREADY filled, so a
+            // vehicle that died this tick shipped one last snapshot entry to every viewer —
+            // racing its own S_VEHICLE_DESPAWN, which travels reliable-ordered on channel 2 while
+            // the snapshot travels unreliable-sequenced on channel 1 with no ordering guarantee
+            // between them. VehicleInterestTracker.Forget made it certain rather than likely: it
+            // wipes the rate rows, so IsDue reads "never sent" and the stale entry is admitted
+            // every time instead of being rate-limited out some of the time.
+            //
+            // Killing first means the despawn unregisters the vehicle, so the capture below
+            // simply does not see it. No filter, no dead-entry special case.
+            AdvanceVehicleBurn();
+
+            // Reads each vehicle's Rigidbody once per snapshot, not once per viewer — quantizing
+            // here is what makes change detection mean anything, because a vehicle idling on a
+            // slope whose float position jitters below the 6.25 cm quantum produces identical
+            // bytes and keeps its Position bit clear.
+            ServerVehicleRegistry.Instance.CaptureInto(_vehicleWorld, _scheduler.CurrentTick);
 
             _snapshotIndex++;
 
@@ -345,16 +677,26 @@ namespace Ironfront.Net.Unity.Server
                 // Budgeted, so an over-dense world sheds its least interesting actors instead of
                 // producing a snapshot that does not fit and is thrown away whole. Phase-05
                 // task 4.
+                // V4. The vehicle body is built FIRST and the actor body takes the remainder —
+                // protocol-spec.md section 4.10 "Co-residency", declared at the v3 freeze. The
+                // vehicle body is bounded at 489 bytes; the actor body is elastic and already
+                // sheds, so sizing the elastic one against what the bounded one actually consumed
+                // is exact. (The phase plan said the reverse; V3 is what shipped.)
+                int vehicleLength = BuildVehicleBody(session);
+                int actorBudget = ServerPayloadWriter.ActorBodyBudget(vehicleLength);
+
                 if (!_interest.BuildView(
-                        session, _world, _snapshotIndex, _view, _spawnAcks,
-                        ServerPayloadWriter.MaxSnapshotBodySize))
+                        session, _world, _snapshotIndex, _view, _spawnAcks, actorBudget))
                     continue;
 
                 // Each client is encoded against its own acked baseline, so the change masks are
                 // recomputed per client. Reusing one scratch view across all of them is safe
                 // because the encoder overwrites every mask it reads and copies what it keeps.
-                int total = ServerPayloadWriter.WriteSnapshot(
-                    _payload, _snapshotBody, session.Encoder, _view, session.LastProcessedInputTick);
+                int total = ServerPayloadWriter.WriteSnapshotBatch(
+                    _payload,
+                    new ReadOnlySpan<byte>(_vehicleBody, 0, Math.Max(vehicleLength, 0)),
+                    new Span<byte>(_snapshotBody, 0, Math.Max(actorBudget, 0)),
+                    session.Encoder, _view, session.LastProcessedInputTick);
 
                 if (total < 0)
                 {
@@ -376,6 +718,142 @@ namespace Ironfront.Net.Unity.Server
                     new ReadOnlySpan<byte>(_payload, 0, total),
                     reliable: false);
             }
+        }
+
+        /// <summary>
+        /// Builds one client's vehicle snapshot body into <c>_vehicleBody</c>.
+        /// </summary>
+        /// <returns>Bytes written, or 0 when this client has no vehicles in view.</returns>
+        /// <remarks>
+        /// <para>
+        /// <b>The viewer is the client's own actor entry.</b> A vehicle is never a viewer
+        /// (V4-D5), and this is where that holds: the subject handed to the tracker always comes
+        /// from <c>_world</c>, so the view cone is reached with a real facing and the teammate
+        /// floor cannot fire for a vehicle.
+        /// </para>
+        /// <para>
+        /// <b>A viewer not in the actor world gets no vehicle snapshot at all</b> — not an empty
+        /// one. Its position is unknown, so every classification would be measured from the
+        /// origin, which is a specific wrong answer rather than an absent one.
+        /// </para>
+        /// </remarks>
+        private int BuildVehicleBody(ClientSession session)
+        {
+            if (_vehicleWorld.VehicleCount == 0) return 0;
+
+            int viewerIndex = _world.IndexOf(session.ActorId);
+            if (viewerIndex < 0) return 0;
+
+            InterestSubject viewer = InterestSubject.From(in _world.Actors[viewerIndex]);
+
+            session.VehicleShedCursor = _vehicleInterest.BuildView(
+                in viewer, _vehicleWorld, _snapshotIndex, _vehicleView,
+                VehicleSnapshotMessage.MaxBodySize, session.VehicleShedCursor);
+
+            if (_vehicleView.VehicleCount == 0) return 0;
+
+            int written = session.VehicleEncoder.Write(_vehicleBody, _vehicleView);
+            return written > 0 ? written : 0;
+        }
+
+        /// <summary>
+        /// Advances every burning vehicle and announces the ones that died. V4-D11 / D12.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Death replicates as an event, not as a health threshold</b> (V4-D12).
+        /// <c>Tank.Die</c> destroys <c>towerJoint</c> and leaves a second free rigidbody — a
+        /// topology change no value stream can express — so the client plays its own destruction
+        /// and stops applying snapshots for that id from the moment the despawn lands.
+        /// </para>
+        /// <para>
+        /// <b>The reason is <c>Destroyed</c>, not the plan's <c>Wrecked</c>.</b> Protocol v3
+        /// froze <c>VehicleDespawnReason</c> at <c>Destroyed</c> / <c>WorldReset</c>, and V4
+        /// consumes the wire rather than redefining it — a wreck IS destroyed by damage, which is
+        /// what <c>Destroyed</c> means. Splitting the two would be a wire change for a
+        /// distinction no client behaviour currently turns on.
+        /// </para>
+        /// </remarks>
+        private void AdvanceVehicleBurn()
+        {
+            _burnClock.Tick(_scheduler.CurrentTick);
+
+            // Drained, not read-and-forgotten. A crash resolving inside Vehicle.Damage during the
+            // INPUT stage kills a vehicle through KillImmediately, and that death is still pending
+            // when this runs — so the queue spans both stages and is cleared only once every id in
+            // it has actually been announced.
+            int died = _burnClock.PendingDeathCount;
+            if (died == 0) return;
+
+            ushort[] ids = _burnClock.PendingDeaths;
+            for (int i = 0; i < died; i++)
+            {
+                ushort vehicleId = ids[i];
+
+                // Forget BEFORE the despawn, so the rate-table rows for this id are gone by the
+                // time its replacement can be issued the same number. The quarantine makes that
+                // five seconds away rather than immediate, which is exactly the margin that
+                // makes the ordering easy to get right and easy to get silently wrong.
+                _vehicleInterest.Forget(vehicleId);
+
+                // Killing the SCENE vehicle is what announces the despawn: Die() reaches
+                // VehicleSpawner.VehicleDied, which calls ReportDespawned. Announcing here as
+                // well would be the second authority this whole guard exists to remove.
+                //
+                // Die() is also the only thing that ejects the occupants, damages the ones in
+                // enclosed seats, schedules the replacement, and — in Tank's override — destroys
+                // towerJoint. None of that is expressible in the value stream, which is why
+                // V4-D12 makes death an event.
+                if (ServerVehicleRegistry.Instance.TryFind(
+                        vehicleId, out IGameplayVehicleSource vehicle))
+                {
+                    vehicle.Kill();
+                    continue;
+                }
+
+                // No scene object behind the id — a vehicle destroyed out from under us, or a
+                // headless rig with no prefab. Announce it ourselves, or the clients keep it.
+                NetVehicleLifecycle.ReportDespawned(vehicleId, VehicleDespawnReason.Destroyed);
+            }
+
+            _burnClock.ClearPendingDeaths();
+        }
+
+        /// <summary>
+        /// Puts one seat decision on the wire: an accept to everyone, a refusal to the requester
+        /// alone (V4-D7).
+        /// </summary>
+        private void SendSeatChange(SeatDecision decision)
+        {
+            // Before the send, so the input source is installed by the time the client's first
+            // C_VEHICLE_INPUT can arrive. The other order leaves a window in which the driver's
+            // opening axes are accepted by the authority and read by nobody.
+            _vehicleInputBridge.OnSeatDecision(in decision);
+
+            SeatChangeMessage message = decision.ToMessage();
+
+            int written = ServerEventWriter.WriteSeatChange(_eventPayload, in message);
+            if (written < 0)
+            {
+                Debug.LogError(
+                    "[net] S_SEAT_CHANGE did not frame. The seat request is answered by nobody, "
+                    + "so the requesting client will sit waiting for a reply that never arrives.");
+                return;
+            }
+
+            var payload = new ReadOnlySpan<byte>(_eventPayload, 0, written);
+            byte channel = (byte)ServerEventWriter.ReliableChannel;
+
+            if (decision.Broadcast)
+            {
+                BroadcastReliable(payload, channel);
+                return;
+            }
+
+            // Addressed. A refusal changes nothing about the world and concerns one client, and
+            // broadcasting it would tell fifteen others about a seat they never asked for.
+            if (Transport != null)
+                Transport.Send(decision.ConnectionId, channel, payload, reliable: true);
         }
 
         /// <summary>
@@ -521,6 +999,64 @@ namespace Ironfront.Net.Unity.Server
             ReportDeathToMatch(victimActorId);
         }
 
+        /// <summary>
+        /// Sends S_EXPLOSION to every client within earshot of the blast. phase-V1 task 2.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Filtered, not broadcast</b> — the one place this differs from
+        /// <see cref="EmitDeath"/>, and the difference is the whole point. A death is a killfeed
+        /// entry and the killfeed is global; an explosion 900 m away is a sound nobody can hear
+        /// and a flash nobody can see. <c>ExplosionAudibleRadius</c> and
+        /// <see cref="SendToListenersInEarshot"/> have both existed since phase-02 and phase-05
+        /// respectively, each waiting for the other.
+        /// </para>
+        /// <para>
+        /// <b>Reliable, unlike a gunshot.</b> <c>ServerEventWriter.WriteExplosion</c> already
+        /// argues it: a missed muzzle flash is invisible, a missed explosion is a player dying
+        /// to nothing.
+        /// </para>
+        /// <para>
+        /// <b>No <c>MarkDeath</c> and no match report.</b> An explosion is not a death. The
+        /// deaths it causes arrive separately through <c>Actor.Damage</c> and phase-05's
+        /// existing path, which is what keeps one blast that kills four people from producing
+        /// four explosions or one death.
+        /// </para>
+        /// <para>
+        /// Allocation-free: frames into the shared <c>_eventPayload</c>, and the earshot test
+        /// compares squared distance so no square root runs per (event, client) pair.
+        /// </para>
+        /// </remarks>
+        /// <param name="sourceActorId">
+        /// Who set it off, or <c>DeathMessage.EnvironmentKiller</c> for the world. Carried so a
+        /// client can attribute — and, at V10, suppress — its own blast.
+        /// </param>
+        /// <param name="radiusMetres">
+        /// The radius the damage loop actually selected on, passed in rather than re-read, so
+        /// the radius on the wire and the radius that hurt somebody cannot drift apart (D4).
+        /// </param>
+        public void EmitExplosion(
+            ushort sourceActorId, in Vec3 centre, float radiusMetres, ExplosionKind kind)
+        {
+            var message = new ExplosionMessage(
+                sourceActorId,
+                Quantize.PackPos(centre.X),
+                Quantize.PackPos(centre.Y),
+                Quantize.PackPos(centre.Z),
+                ExplosionEncoding.PackRadiusMetres(radiusMetres),
+                kind);
+
+            int written = ServerEventWriter.WriteExplosion(_eventPayload, in message);
+            if (written < 0) return;
+
+            SendToListenersInEarshot(
+                centre,
+                ServerEventWriter.ExplosionAudibleRadius,
+                new ReadOnlySpan<byte>(_eventPayload, 0, written),
+                (byte)ServerEventWriter.ReliableChannel,
+                reliable: true);
+        }
+
         /// <summary>Reports a death to the match, once, for the score and the win condition.</summary>
         /// <remarks>
         /// Resolved through the registry rather than taken as a team argument so the caller
@@ -561,9 +1097,42 @@ namespace Ironfront.Net.Unity.Server
         /// the one loop that is graded on allocating nothing.
         /// </remarks>
         public void BindMatch(ActorIdPool actorIds)
-            => _stateAudit = new ServerStateAudit(
-                actorIds ?? throw new ArgumentNullException(nameof(actorIds)),
-                _hitboxHistory, _interest, _spawnAcks, () => _players.Count);
+        {
+            if (actorIds == null) throw new ArgumentNullException(nameof(actorIds));
+
+            // The vehicle pool comes from the lifecycle sink rather than being constructed here:
+            // that sink allocates the ids and is the only thing that can honour the quarantine
+            // relative to what was actually announced. Passing a second pool would give the audit
+            // a view of an id space nothing uses.
+            //
+            // Loud rather than nullable-and-quiet. ServerStateAudit's vehicle arguments default to
+            // null and a null one reports ZERO, which reads as clean — so an audit built without
+            // them grades criterion 14 against nothing and says PASS. The sink is constructed in
+            // this class's constructor precisely so this cannot happen; the check is here because
+            // "it cannot happen" is the claim, and a claim that nothing verifies is how it stops
+            // being true.
+            if (_vehicleLifecycle == null)
+            {
+                Debug.LogError(
+                    "[net] BindMatch found no vehicle lifecycle sink. The clean-state audit will "
+                    + "report the vehicle id pool as empty whether or not it is, so a leak there "
+                    + "will not be detected this match.");
+            }
+
+            _stateAudit = new ServerStateAudit(
+                actorIds, _hitboxHistory, _interest, _spawnAcks, () => _players.Count,
+                _vehicleLifecycle?.Ids, _vehicleInterest,
+                ServerVehicleRegistry.Instance.Registry,
+                // V6, criterion 13. Both are keyed on (vehicleId, seatIndex), so both leak the
+                // way the pair tables do -- on the second and third round of a server nobody is
+                // watching -- and both are emptied by ResetForNewMatch.
+                _mountedWeapons, _turretAuthority,
+                // V7, criterion 7. The third id space to join the audit, and it leaks
+                // differently from the other two: a projectile releases its OWN id, so a prefab
+                // destroyed by a path that skips its teardown keeps the id forever. Five
+                // back-to-back matches is what surfaces that.
+                _projectiles?.IdPool);
+        }
 
         /// <summary>
         /// Attaches the match controller, so an authoritative death reaches the scoreboard.
@@ -604,16 +1173,45 @@ namespace Ironfront.Net.Unity.Server
                 return;
             }
 
-            _stateAudit.ResetForNewMatch();
+            // The ids of actors that survive the reset. Dustbowl's 41 bots are scene-resident
+            // and outlive the match cycle, so a bare ResetAll would re-offer ids they still
+            // hold -- and ActorIdsInUse would read 0 while 41 were in use, blinding the audit
+            // to exactly the leak it exists to catch (the client track, round 9 defect 7).
+            _retainedIds.Clear();
+            IReadOnlyList<NetServerActor> live = ServerActorRegistry.Instance.Actors;
+            for (int i = 0; i < live.Count; i++)
+            {
+                NetServerActor actor = live[i];
+                if (actor != null && actor.ActorId != 0) _retainedIds.Add(actor.ActorId);
+            }
+
+            // Clears the vehicle registry, the vehicle pair table and the vehicle id pool too —
+            // the audit owns the reset next to the check for it, so the two cannot drift.
+            _stateAudit.ResetForNewMatch(_retainedIds);
             _respawnGate.Reset();
+
+            // Not the audit's, because neither is a per-pair table: the lockouts are per actor
+            // and the burn counters are cumulative. A lockout surviving into the next round would
+            // refuse the opening seat entry of whoever left a vehicle as the last one ended.
+            _seatArbiter.Reset();
+            _burnClock.Reset();
 
             for (int i = 0; i < _players.Count; i++)
             {
                 _players[i].Session.Encoder.Reset();
 
+                // The vehicle stream's baseline goes with it, so the round's first vehicle
+                // snapshot is full rather than a delta against a world that no longer exists.
+                _players[i].Session.VehicleEncoder.Reset();
+                _players[i].Session.VehicleShedCursor = 0;
+
                 // Re-armed with the round, so a player who ended the previous one mid-reload
                 // does not start this one with the old clock still running and a clip that
-                // refills a second in.
+                // refills a second in. The id goes first: the clip size is derived from it
+                // (phase-V2 D9), so re-arming an unassigned id loads a clip of zero.
+                NetServerActor roundActor = _players[i].Actor;
+                if (roundActor != null) _players[i].Session.WeaponId = roundActor.WeaponId;
+
                 _players[i].Session.ResetWeapon();
             }
         }
@@ -634,6 +1232,18 @@ namespace Ironfront.Net.Unity.Server
             _interest.Forget(actorId);
             _spawnAcks.Forget(actorId);
             _hitboxHistory.Forget(actorId);
+
+            // The vehicle pair table is keyed on (viewer, vehicle), so a departing VIEWER leaks
+            // one row per vehicle it ever saw — the same trap-2 leak, one dictionary over. The
+            // lockout goes too: an id that is reissued would otherwise inherit the previous
+            // incarnation's re-entry cooldown and be refused a seat it never left.
+            _vehicleInterest.ForgetViewer(actorId);
+            _seatArbiter.Forget(actorId);
+
+            // Both halves: the installed input source, and the axes it was last handed. An id
+            // that is reissued would otherwise inherit the previous occupant's throttle for the
+            // length of the hold window, on whatever vehicle they were last in.
+            _vehicleInputBridge.Forget(actorId);
         }
 
         private void OnTransportMessage(ushort connectionId, ReadOnlyMemory<byte> payload)
@@ -670,7 +1280,10 @@ namespace Ironfront.Net.Unity.Server
             player.SyncFromActor();
 
             // The session's clip and the actor's must agree from the first snapshot, or the
-            // client's first reload reconciles against a number nobody ever set.
+            // client's first reload reconciles against a number nobody ever set. The weapon id
+            // is assigned first for the same reason it is at the other two ResetWeapon sites
+            // (phase-V2 D9): the clip size is derived from it.
+            player.Session.WeaponId = actor.WeaponId;
             player.Session.ResetWeapon();
             actor.AmmoInClip = player.Session.Weapon.AmmoInClip;
 

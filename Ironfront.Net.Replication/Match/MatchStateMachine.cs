@@ -33,7 +33,7 @@ namespace Ironfront.Net.Replication.Match
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C. Engine-free for the reason every server rule in this library is
+    /// Engine-free for the reason every server rule in this library is
     /// (decision C-01-6): a MonoBehaviour cannot be reached from CI, so "does the match end
     /// when a team runs out of tickets" and "is the world clean after five rounds" are
     /// answerable from <c>dotnet test</c> instead of from somebody watching a build.
@@ -50,9 +50,45 @@ namespace Ironfront.Net.Replication.Match
     /// construction and the broadcast queue is a pre-sized list that is cleared, never
     /// reallocated.
     /// </para>
+    /// <para>
+    /// <b>What this machine deliberately does NOT own, and why</b> (phase-V8 D9). The original
+    /// game keeps its match state in <c>ScoreUi</c>, a UI component that a headless server
+    /// never instantiates, so on a dedicated server the original neither scores nor ends.
+    /// V8 moved the one piece that is a <i>loss condition</i> — elimination by losing every
+    /// spawn point (<see cref="SetSpawnPointCounts"/>) — into this class, and left the rest
+    /// where it is:
+    /// </para>
+    /// <list type="bullet">
+    /// <item><description>
+    /// <b>Score and the <c>victoryPoints</c> race.</b> <c>ScoreUi.AddScore</c> accumulates per
+    /// kill and declares a winner at a score gap. The networked match is decided by tickets
+    /// instead, so there is nothing here to port to — porting it would give the server two
+    /// competing win conditions, which is the shape of the bug V8 exists to close.
+    /// </description></item>
+    /// <item><description>
+    /// <b><c>ScoreMultiplier(flags)</c> returns the flag count</b>, so a team holding no flags
+    /// scores zero for every kill and a team being eliminated cannot score its way out.
+    /// Faithful to the original, and irrelevant to a ticket-based match.
+    /// </description></item>
+    /// <item><description>
+    /// <b><c>GameManager</c>'s modes are five loose booleans</b> (<c>reverseMode</c>,
+    /// <c>assaultMode</c>, <c>nightMode</c>, <c>noVehicles</c>) plus <c>victoryPoints</c>, not
+    /// an enum, so there is no single value to replicate as "the mode". The two that change
+    /// gameplay state — <c>reverseMode</c> and <c>assaultMode</c> — are consumed once in
+    /// <c>CapturePoint.Start()</c> and decide the <i>opening</i> ownership, which the server
+    /// then adopts as its own initial value. They are therefore already covered.
+    /// </description></item>
+    /// </list>
+    /// <para>
+    /// Closing those is a rendering-and-rules redesign for the client track, not a netcode
+    /// defect. Recorded here so the next reader does not go looking for the port.
+    /// </para>
     /// </remarks>
     public sealed class MatchStateMachine
     {
+        /// <summary>Spawn-point counts have not been reported; elimination stays inert.</summary>
+        private const int CountsNotReported = -1;
+
         private readonly MatchRules _rules;
         private readonly CapturePointState[] _points;
         private readonly List<byte> _dirtyPoints;
@@ -62,6 +98,9 @@ namespace Ironfront.Net.Replication.Match
         private float _ticketsFloat1;
         private float _sinceLastBroadcast;
         private byte _lastBroadcastHumans;
+        private int _spawnPoints0 = CountsNotReported;
+        private int _spawnPoints1 = CountsNotReported;
+        private float _playingElapsed;
 
         /// <summary>
         /// Seconds between unsolicited <c>S_MATCH_STATE</c> messages while nothing changes.
@@ -144,6 +183,31 @@ namespace Ironfront.Net.Replication.Match
         }
 
         /// <summary>
+        /// Reports how many spawn points each team currently holds. Call before
+        /// <see cref="Tick"/>; until it is called, elimination cannot fire.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Spawn points, not capture points</b> (phase-V8 D10). The faithful port of
+        /// <c>ScoreUi.AddFlag</c>'s condition is <c>ActorManager.HasSpawnPoint(team)</c>, which
+        /// counts every <c>SpawnPoint</c> whose <c>owner</c> is that team — including
+        /// uncapturable HQs. Counting only capture points would end the match on a map where a
+        /// team still holds its base, and never end it on a map whose HQ cannot be taken.
+        /// </para>
+        /// <para>
+        /// <b>Not reported is not zero.</b> A host that never calls this leaves the counts at
+        /// <see cref="CountsNotReported"/> and elimination stays off, because the alternative —
+        /// treating "I have no idea" as "both teams are wiped out" — ends every round on the
+        /// first tick past the grace window, on exactly the deployments that forgot to wire it.
+        /// </para>
+        /// </remarks>
+        public void SetSpawnPointCounts(int team0, int team1)
+        {
+            _spawnPoints0 = team0 < 0 ? 0 : team0;
+            _spawnPoints1 = team1 < 0 ? 0 : team1;
+        }
+
+        /// <summary>
         /// Advances the match by one server tick.
         /// </summary>
         /// <param name="deltaSeconds">Elapsed simulated time.</param>
@@ -182,8 +246,10 @@ namespace Ironfront.Net.Replication.Match
                     break;
 
                 case MatchPhase.Playing:
+                    _playingElapsed += deltaSeconds;
                     UpdateCapturePoints(actors, deltaSeconds);
                     DrainTickets(deltaSeconds);
+                    ApplyElimination();
                     // A live round is NOT abandoned when the humans leave. The bots are still
                     // fighting, the match still resolves, and the master still gets its
                     // GS_MATCH_ENDED — which is what keeps the server's advertised state honest
@@ -310,6 +376,43 @@ namespace Ironfront.Net.Replication.Match
             if (Tickets0 != before0 || Tickets1 != before1) MatchStateIsDirty = true;
         }
 
+        /// <summary>
+        /// A team holding no spawn points has lost. Phase-V8 task 4.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Expressed as zeroing the loser's tickets, not as a separate end path.</b> The
+        /// round then ends through the line immediately below the call site, so the phase
+        /// change, <see cref="MatchEnded"/>, the broadcast and the reset all behave exactly as
+        /// they do for ticket exhaustion — there is no second way for a match to end that a
+        /// handler could have been written against and forgotten.
+        /// </para>
+        /// <para>
+        /// It also keeps <c>MatchStateMessage.WinningTeam</c> honest without a wire change.
+        /// The winner is derived from the two ticket counts, so an eliminated team that still
+        /// had 180 tickets would otherwise be broadcast as the <i>winner</i> of the round it
+        /// just lost.
+        /// </para>
+        /// <para>
+        /// Both teams at zero — a degenerate map, or a mid-match teardown — zeroes both, which
+        /// reads as a draw rather than awarding the round to whichever index is tested first.
+        /// </para>
+        /// </remarks>
+        private void ApplyElimination()
+        {
+            if (_playingElapsed <= _rules.EliminationGraceSeconds) return;
+            if (_spawnPoints0 == CountsNotReported || _spawnPoints1 == CountsNotReported) return;
+
+            bool eliminated0 = _spawnPoints0 == 0;
+            bool eliminated1 = _spawnPoints1 == 0;
+            if (!eliminated0 && !eliminated1) return;
+
+            if (eliminated0) _ticketsFloat0 = 0f;
+            if (eliminated1) _ticketsFloat1 = 0f;
+
+            MatchStateIsDirty = true;
+        }
+
         private void ClampTickets()
         {
             if (_ticketsFloat0 < 0f) _ticketsFloat0 = 0f;
@@ -326,6 +429,12 @@ namespace Ironfront.Net.Replication.Match
                 MatchPhase.Ended  => _rules.PostMatchSeconds,
                 _                 => 0f,
             };
+
+            // Reset on ENTRY to Playing, not in PerformReset: ForceReset can drop a live round
+            // straight back to WaitingForPlayers without ever passing through PerformReset's
+            // caller, and a grace window left running from the previous round would let the
+            // next one end on its own first tick.
+            if (phase == MatchPhase.Playing) _playingElapsed = 0f;
 
             MatchStateIsDirty = true;
 

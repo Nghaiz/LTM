@@ -3,7 +3,7 @@ using Ironfront.Net.Protocol;
 
 namespace Ironfront.Net.Transport
 {
-    // NOTE: dev-b-transport/plan.md section 4 sketches a ConnectionState enum in this
+    // NOTE: transport/plan.md section 4 sketches a ConnectionState enum in this
     // namespace. It is deliberately not declared here. Ironfront.Net.Protocol already ships
     // ConnectionState as the transcription of the protocol-spec.md section 9 state machine,
     // and two enums for one state machine is exactly the duplicate source of truth the
@@ -94,8 +94,8 @@ namespace Ironfront.Net.Transport
     }
 
     /// <summary>
-    /// The client half of the transport. Frozen in week 1 — Dev A and Dev C write against
-    /// this and nothing else (dev-b-transport/plan.md section 4).
+    /// The client half of the transport. Frozen in week 1 — the client track and the replication track write against
+    /// this and nothing else (transport/plan.md section 4).
     /// </summary>
     /// <remarks>
     /// <para>

@@ -549,6 +549,7 @@ GameObject:
   - component: {fileID: 114492971821435384}
   - component: {fileID: 54473911296138705}
   - component: {fileID: 900000000001002}
+  - component: {fileID: 900000000001005}
   m_Layer: 0
   m_Name: Ai Character Optimizations
   m_TagString: Untagged
@@ -2601,6 +2602,18 @@ MonoBehaviour:
   _health: 100
   _weaponId: 0
   _ammoInClip: 0
+--- !u!114 &900000000001005
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1576652965907357}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8c0cca4c5ccbe71886549b7451c35c78, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  _mode: 0
 --- !u!153 &153206167433609560
 ConfigurableJoint:
   m_ObjectHideFlags: 0

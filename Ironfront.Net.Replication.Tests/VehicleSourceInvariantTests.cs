@@ -18,7 +18,7 @@ namespace Ironfront.Net.Replication.Tests
     /// per-frame form during an unrelated edit, months later, with nobody watching.
     /// </para>
     /// <para>
-    /// Every test here is paired with a behavioural check on Dev A's Editor list
+    /// Every test here is paired with a behavioural check on the client track's Editor list
     /// (phase-v0 § 7). Neither half is sufficient alone.
     /// </para>
     /// <para>
@@ -373,6 +373,14 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Contains("REACTIVATE_COLLISION_TICKS", source);
             Assert.Contains("collisionReactivateTimer.Cancel();", source);
             Assert.Contains("collisionReactivateTimer.Tick()", source);
+
+            // The VALUE, not just the name. V0 shipped 25 from TimeManager's 0.02 fixed step,
+            // but FpsActorController and IngameMenuUi both assign Time.fixedDeltaTime =
+            // Time.timeScale / 60f at runtime, so the window was 0.417 s in every real session
+            // rather than the 0.5 s Task 8 said it preserved. Asserting only that the constant
+            // EXISTS is what let a wrong value through: the shape was right and the number was
+            // not. 30 / 60 Hz = 0.500 s.
+            Assert.Contains("private const int REACTIVATE_COLLISION_TICKS = 30;", source);
         }
 
         // ------------------------------------------------------------------ Task 9: headless
@@ -385,7 +393,10 @@ namespace Ironfront.Net.Replication.Tests
         [Theory]
         // file,             required guard,                                      site
         [InlineData("VehicleSpawner.cs", "Renderer marker = GetComponent<Renderer>();", "spawner marker mesh")]
-        [InlineData("VehicleSpawner.cs", "GameManager.instance == null ||", "noVehicles suppression")]
+        // Phase-V8 inverted this guard when the spawn path stopped being a coroutine: the check is
+    // now a named predicate (VehiclesAreSuppressed) consulted at both request sites rather than
+    // an inline disjunction inside SpawnVehicle. Same invariant, positive spelling.
+    [InlineData("VehicleSpawner.cs", "GameManager.instance != null && GameManager.instance.noVehicles", "noVehicles suppression")]
         [InlineData("Vehicle.cs", "if (damageParticles != null)", "damage smoke, play and stop")]
         [InlineData("Vehicle.cs", "if (impactAudio != null)", "collision impact audio")]
         [InlineData("Vehicle.cs", "if (deathParticles != null)", "death particles")]
@@ -396,6 +407,13 @@ namespace Ironfront.Net.Replication.Tests
         [InlineData("Helicopter.cs", "if (rotor != null)", "rotor transform and its renderers")]
         [InlineData("Helicopter.cs", "if (solidRotor != null)", "solid rotor renderer, dereferenced every frame")]
         [InlineData("Helicopter.cs", "if (blurredRotor != null)", "blurred rotor renderer, dereferenced every frame")]
+        // V1 § 7 handed these two files to V0's headless list. V0 closed (#122) without absorbing
+        // them and no test named either file, so the guards were simply absent for a phase while
+        // trailParticles three lines above WAS guarded. That asymmetry is what a pin prevents.
+        [InlineData("ExplodingProjectile.cs", "if (impactParticles != null)", "impact particles, played on explode and stopped on the invoke")]
+        [InlineData("ExplodingProjectile.cs", "if (audioSource != null)", "explosion audio")]
+        [InlineData("GrenadeProjectile.cs", "if (burst != null)", "grenade burst particles")]
+        [InlineData("GrenadeProjectile.cs", "if (component != null)", "grenade audio")]
         public void HeadlessDereferencesAreGuarded(string file, string guard, string site)
         {
             // Stripped. Several of these guards are DOCUMENTED by a comment naming the guarded
@@ -404,6 +422,26 @@ namespace Ironfront.Net.Replication.Tests
             string source = StripComments(ReadScript(file));
             Assert.True(source.Contains(guard, StringComparison.Ordinal),
                 $"{file}: the headless guard for {site} is gone. Expected to find: {guard}");
+        }
+
+        [Theory]
+        [InlineData("ExplodingProjectile.cs")]
+        [InlineData("GrenadeProjectile.cs")]
+        public void CosmeticPitchDoesNotDrawFromTheGameplayRandomStream(string file)
+        {
+            // The other half of V1's handoff. Guarding the audio behind a null check is correct,
+            // and on its own it makes the stream problem worse: a headless server then skips a
+            // draw the client still makes, so a shared UnityEngine.Random walks at two different
+            // rates. Cosmetics draw from CosmeticRandom precisely so they cannot.
+            string source = StripComments(ReadScript(file));
+
+            Assert.Contains("CosmeticRandom.Range(0.9f, 1.1f)", source);
+
+            // The lookbehind matters: "CosmeticRandom.Range" ends with the literal
+            // "Random.Range", so a naive pattern matches the fix and the test can never pass.
+            Assert.DoesNotMatch(
+                new Regex(@"(?<![A-Za-z0-9_])(UnityEngine\.)?Random\.Range\(0\.9f, 1\.1f\)"),
+                source);
         }
 
         [Fact]

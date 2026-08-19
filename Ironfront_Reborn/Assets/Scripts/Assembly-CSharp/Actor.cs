@@ -6,11 +6,20 @@ public class Actor : Hurtable
 {
 	/// <summary>
 	/// How long the actor's hitboxes stay on the vehicle layer after leaving a seat, in fixed
-	/// steps. 25 reproduces the shipped 0.5 s exactly at the project's 50 Hz fixed step; V4
-	/// retunes it against the netcode's 30 Hz accumulator, which is why it is a named constant
-	/// rather than the literal it replaced.
+	/// steps. 30 reproduces the shipped 0.5 s exactly; V4 retunes it against the netcode's 30 Hz
+	/// accumulator, which is why it is a named constant rather than the literal it replaced.
 	/// </summary>
-	private const int REACTIVATE_COLLISION_TICKS = 25;
+	/// <remarks>
+	/// <b>The rate is 60 Hz at runtime, not the project setting's 50.</b> V0 shipped 25 on the
+	/// strength of TimeManager's <c>Fixed Timestep: 0.02</c>, but both
+	/// <see cref="FpsActorController"/> and <see cref="IngameMenuUi"/> assign
+	/// <c>Time.fixedDeltaTime = Time.timeScale / 60f</c> at runtime, and the server deliberately
+	/// does not fight them (NetServerBootstrap decision A5). So the project setting is the value
+	/// physics runs at for as long as it takes those two to wake up, and 25 ticks was 0.417 s in
+	/// every real session — a 17% shortening of a window Task 8 said it was preserving. Found by
+	/// the Editor behavioural pass, confirmed against the Profiler at 16.667 ms.
+	/// </remarks>
+	private const int REACTIVATE_COLLISION_TICKS = 30;
 
 	public enum TargetType
 	{
@@ -236,7 +245,9 @@ public class Actor : Hurtable
 		needsResupply = false;
 		animator.SetBool("dead", false);
 		animator.SetBool("seated", false);
-		if (!aiControlled)
+		// V10 task 3: local-only HUD, not bot-only. A remote human spawning must not touch this
+		// client's IngameUi.
+		if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this))
 		{
 			IngameUi.instance.Show();
 			IngameUi.instance.SetHealth(Mathf.Max(0f, health));
@@ -463,7 +474,7 @@ public class Actor : Hurtable
 
 	private void UpdateWeapon()
 	{
-		bool flag = !fallenOver && controller.Fire() && (!IsSeated() || seat.CanUseWeapon() || seat.HasMountedWeapon());
+		bool flag = !fallenOver && controller.Fire() && (!IsSeated() || seat.CanUseCarriedWeapon() || seat.HasMountedWeapon());
 		if (flag)
 		{
 			activeWeapon.Fire(controller.FacingDirection(), controller.UseMuzzleDirection());
@@ -736,7 +747,8 @@ public class Actor : Hurtable
 		ragdoll.Ragdoll(controller.Velocity());
 		ApplyRigidbodyForce(impactForce);
 		dead = true;
-		if (!aiControlled)
+		// V10 task 3: a remote actor's death must not hide the local player's HUD.
+		if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this))
 		{
 			IngameUi.instance.Hide();
 		}
@@ -844,7 +856,9 @@ public class Actor : Hurtable
 		{
 			Hurt(UnityEngine.Random.Range(-2f, 2f));
 		}
-		if (!aiControlled)
+		// V10 task 3 (A16): was `!aiControlled`, so a remote human taking damage wrote THIS
+		// client's health bar from THEIR health. Gated on IsLocalActor instead.
+		if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this))
 		{
 			IngameUi.instance.SetHealth(Mathf.Max(0f, health));
 			float intensity = Mathf.Clamp01(0.3f + (1f - health / 100f));
@@ -873,7 +887,8 @@ public class Actor : Hurtable
 		{
 			activeWeapon.Hide();
 		}
-		if (!aiControlled)
+		// V10 task 3: local-only weapon HUD.
+		if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this))
 		{
 			IngameUi.instance.SetWeapon(weapon);
 			UpdateAmmoUi();
@@ -957,7 +972,7 @@ public class Actor : Hurtable
 		controller.StartSeated(seat);
 		this.seat = seat;
 		animator.SetLayerWeight(2, 0f);
-		if (!seat.CanUseWeapon())
+		if (!seat.CanUseCarriedWeapon())
 		{
 			animator.SetLayerWeight(1, 0f);
 			HolsterActiveWeapon();
@@ -1039,7 +1054,7 @@ public class Actor : Hurtable
 
 	public void NextWeapon()
 	{
-		if (dead || fallenOver || (IsSeated() && !seat.CanUseWeapon()))
+		if (dead || fallenOver || (IsSeated() && !seat.CanUseCarriedWeapon()))
 		{
 			return;
 		}
@@ -1056,7 +1071,7 @@ public class Actor : Hurtable
 
 	public void PreviousWeapon()
 	{
-		if (dead || fallenOver || (IsSeated() && !seat.CanUseWeapon()))
+		if (dead || fallenOver || (IsSeated() && !seat.CanUseCarriedWeapon()))
 		{
 			return;
 		}
@@ -1073,7 +1088,7 @@ public class Actor : Hurtable
 
 	public void SwitchWeapon(int slot)
 	{
-		if (dead || fallenOver || (IsSeated() && !seat.CanUseWeapon()))
+		if (dead || fallenOver || (IsSeated() && !seat.CanUseCarriedWeapon()))
 		{
 			return;
 		}
@@ -1130,7 +1145,7 @@ public class Actor : Hurtable
 
 	private bool ControllingVehicle()
 	{
-		return IsSeated() && !seat.CanUseWeapon();
+		return IsSeated() && !seat.CanUseCarriedWeapon();
 	}
 
 	public int RemainingSpareAmmoFor(Weapon weapon)
@@ -1162,7 +1177,8 @@ public class Actor : Hurtable
 			int num = spareAmmo[slot];
 			int num2 = Mathf.Max(0, num - howmuch);
 			spareAmmo[slot] = num2;
-			if (!aiControlled)
+			// V10 task 3: local-only ammo HUD.
+			if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this))
 			{
 				UpdateAmmoUi();
 			}
@@ -1177,7 +1193,8 @@ public class Actor : Hurtable
 		{
 			needsResupply = true;
 		}
-		if (!aiControlled)
+		// V10 task 3: local-only ammo HUD.
+		if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this))
 		{
 			UpdateAmmoUi();
 		}
@@ -1204,7 +1221,8 @@ public class Actor : Hurtable
 		if (flag)
 		{
 			AmmoChanged();
-			if (!aiControlled)
+			// V10 task 3: local-only resupply HUD.
+			if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this))
 			{
 				IngameUi.instance.Resupply();
 			}
@@ -1219,7 +1237,8 @@ public class Actor : Hurtable
 		}
 		float num = health;
 		health = Mathf.Min(health + 30f, 100f);
-		if (!aiControlled && num != health)
+		// V10 task 3: local-only heal HUD.
+		if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(this) && num != health)
 		{
 			UpdateHealthUi();
 			IngameUi.instance.Heal();

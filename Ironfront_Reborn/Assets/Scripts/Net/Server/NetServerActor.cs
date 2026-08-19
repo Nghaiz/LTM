@@ -12,9 +12,6 @@ namespace Ironfront.Net.Unity.Server
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// It reads gameplay state and never writes it, which is what makes it safe to attach to
     /// an existing prefab: with the server role inactive, nothing on this component runs at
     /// all.
@@ -77,21 +74,26 @@ namespace Ironfront.Net.Unity.Server
         /// <b>The serialized field's removal is safe because nothing had authored a meaningful
         /// value into it.</b> The three prefabs carrying a <c>NetServerActor</c> all stored
         /// <c>_health: 100</c>, which is also <c>Actor.health</c>'s declared default — so no
-        /// authored value is lost. This is called out in the task-6 PR so Dev A sees it.
+        /// authored value is lost. This is called out in the task-6 PR so the client track sees it.
         /// </para>
         /// <para>
         /// <b>The fallback is for actors with no <c>Actor</c>,</b> which is every bare test rig
-        /// and any replicated prop. It is not a mirror: when <see cref="_actor"/> exists the
+        /// and any replicated prop. It is not a mirror: when <see cref="Source"/> exists the
         /// fallback is dead, and when it does not the fallback is the only copy. Exactly one is
         /// live at any moment, which is the property that matters.
         /// </para>
         /// </remarks>
         public float Health
         {
-            get => _actor != null ? _actor.health : _healthWithoutActor;
+            get
+            {
+                IGameplayActorSource source = Source;
+                return source != null ? source.Health : _healthWithoutActor;
+            }
             set
             {
-                if (_actor != null) _actor.health = value;
+                IGameplayActorSource source = Source;
+                if (source != null) source.Health = value;
                 else _healthWithoutActor = value;
             }
         }
@@ -122,9 +124,13 @@ namespace Ironfront.Net.Unity.Server
         /// </remarks>
         public byte WeaponId
         {
-            get => _actor != null && _actor.activeWeapon != null
-                ? _actor.activeWeapon.NetworkId
-                : _weaponId;
+            get
+            {
+                IGameplayActorSource source = Source;
+                return source != null && source.TryGetActiveWeaponNetworkId(out byte networkId)
+                    ? networkId
+                    : _weaponId;
+            }
             set => _weaponId = value;
         }
 
@@ -132,6 +138,21 @@ namespace Ironfront.Net.Unity.Server
         {
             get => _ammoInClip;
             set => _ammoInClip = value;
+        }
+
+        /// <summary>
+        /// Staggers the underlying gameplay actor. A no-op for a replicated object that has none
+        /// -- a prop or a bare test rig has no balance to lose.
+        /// </summary>
+        /// <remarks>
+        /// phase-V2 D6/D7. Applied server-side and NOT replicated: there is no wire field for
+        /// stagger and <c>ActorStateFlags</c> is 8/8 full, so the authoritative view and the bots
+        /// stagger while a remote client sees nothing until V3 buys a bit for it.
+        /// </remarks>
+        public void ApplyBalanceDamage(float balanceDamage)
+        {
+            IGameplayActorSource source = Source;
+            if (source != null) source.ApplyBalanceDamage(balanceDamage);
         }
 
         /// <summary>Whether a joining connection may be given this actor.</summary>
@@ -195,10 +216,15 @@ namespace Ironfront.Net.Unity.Server
         /// </remarks>
         public bool IsAlive
         {
-            get => _actor != null ? !_actor.dead : _isAliveWithoutActor;
+            get
+            {
+                IGameplayActorSource source = Source;
+                return source != null ? !source.IsDead : _isAliveWithoutActor;
+            }
             set
             {
-                if (_actor != null) _actor.dead = !value;
+                IGameplayActorSource source = Source;
+                if (source != null) source.IsDead = !value;
                 else _isAliveWithoutActor = value;
             }
         }
@@ -209,8 +235,21 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>The movement seam, when this actor has one. Bots may not.</summary>
         public NetMovementAgent Movement { get; private set; }
 
-        /// <summary>The gameplay actor whose health is the authoritative one. May be absent.</summary>
-        private Actor _actor;
+        /// <summary>
+        /// The gameplay actor whose health is the authoritative one, behind the seam that keeps
+        /// this assembly free of <c>Assembly-CSharp</c>. May be absent. See
+        /// <see cref="IGameplayActorSource"/>.
+        /// </summary>
+        private IGameplayActorSource _actorSource;
+
+        /// <summary>
+        /// <see cref="_actorSource"/> while it still refers to a live component, otherwise
+        /// <see langword="null"/> — the exact meaning the <c>_actor != null</c> this replaced
+        /// carried, since a destroyed <c>UnityEngine.Object</c> compares equal to null and a
+        /// plain interface reference does not.
+        /// </summary>
+        private IGameplayActorSource Source
+            => _actorSource != null && _actorSource.Exists ? _actorSource : null;
 
         /// <summary>Health for a replicated object that is not an <c>Actor</c>. See <see cref="Health"/>.</summary>
         private float _healthWithoutActor = 100f;
@@ -221,8 +260,23 @@ namespace Ironfront.Net.Unity.Server
         private void Awake()
         {
             Movement = GetComponent<NetMovementAgent>();
-            _actor = GetComponent<Actor>();
+            // One allocation per actor, at Awake, replacing a GetComponent<Actor>() that the
+            // adapter now performs on the other side of the seam. Nothing here runs per tick.
+            BindGameplaySource(NetServerBindings.ResolveActorSource(gameObject));
         }
+
+        /// <summary>
+        /// Attaches the gameplay actor this component reads its replicated state from.
+        /// </summary>
+        /// <remarks>
+        /// This is <c>Awake</c>'s own step, factored out because an EditMode test cannot reach
+        /// it otherwise: Unity does not run <c>Awake</c> on <c>AddComponent</c> outside play
+        /// mode (verified against this Editor, 6000.3.21f1), so a test that only added the
+        /// component would silently exercise the no-actor fallback and pass while asserting
+        /// nothing. Binding explicitly is what lets the suite pin the pass-throughs — which is
+        /// where the weapon-id-always-0 defect lived.
+        /// </remarks>
+        internal void BindGameplaySource(IGameplayActorSource source) => _actorSource = source;
 
         private void OnEnable() => ServerActorRegistry.Instance.Register(this);
 
@@ -242,6 +296,22 @@ namespace Ironfront.Net.Unity.Server
             // the snapshot and in S_SPAWN even after the property was correct.
             float yaw = float.IsNaN(YawDegrees) ? transform.eulerAngles.y : YawDegrees;
 
+            // Seat state, from the server's OWN occupancy record rather than the scene's.
+            //
+            // This is the field that makes "who is in what seat" answerable at all. Design D2
+            // names the actor entry as the single source of truth for occupancy and V3 finished
+            // its codec — but nothing ever populated it, so every actor reported as on foot and
+            // S_SEAT_CHANGE was the only carrier. That message is the TRANSITION and only fires
+            // on a client request, so a client that joined mid-match, or missed one datagram, or
+            // watched a vehicle die and eject its occupants, had no way to learn who was aboard.
+            //
+            // Read from SeatArbiter's record via the registry, not from Actor.seat: the arbiter's
+            // record is what the server decided, and the two are only equal because the bridge
+            // keeps them so. Taking the scene's copy here would make the snapshot agree with
+            // whichever of the two happened to be wrong.
+            ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(
+                _actorId, out ushort vehicleId, out byte seatIndex);
+
             return SnapshotBuilder.Capture(
                 _actorId,
                 position,
@@ -252,7 +322,9 @@ namespace Ironfront.Net.Unity.Server
                 Health,
                 WeaponId,
                 _ammoInClip,
-                _team);
+                _team,
+                vehicleId,
+                seatIndex);
         }
 
         /// <summary>Packs the gameplay booleans the snapshot carries as one byte.</summary>
@@ -290,7 +362,7 @@ namespace Ironfront.Net.Unity.Server
         /// put back. See <c>LagCompensator</c>.
         /// </para>
         /// <para>
-        /// <b>The boxes are a placeholder built from the actor's position.</b> Dev A's rig has
+        /// <b>The boxes are a placeholder built from the actor's position.</b> the client track's rig has
         /// the real ones, and swapping them in is a change to this method and nothing else —
         /// the resolution path does not care where the numbers came from. Until then, hit
         /// geometry is a plausible humanoid rather than this character.

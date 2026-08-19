@@ -45,6 +45,77 @@ namespace Ironfront.Net.Replication.Vehicles
         }
 
         /// <summary>
+        /// Advances the aim toward a requested absolute pose, by at most one step's arc.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This is the server's entry point, and it exists because the wire carries a pose
+        /// rather than an axis.</b> <c>C_VEHICLE_INPUT</c>'s turret field is a <c>u16</c> yaw and
+        /// an <c>i16</c> pitch in degrees — protocol-spec.md § 4.10 calls it "what the player
+        /// asked for" — and that shape was frozen at v3.0.0. Writing it straight into
+        /// <see cref="TurretAimState"/> would hand every client an infinite slew rate: a 180°
+        /// snap in one tick, which is the traverse advantage V6's acceptance criterion 2 exists
+        /// to deny. So the request is a TARGET and this walks toward it at the turret's own rate.
+        /// </para>
+        /// <para>
+        /// <b>The client runs this too, against the same target it just sent</b>, which is what
+        /// makes the two sides converge without a correction channel: identical policy, identical
+        /// limits, identical target, so the steady-state disagreement is one quantization step.
+        /// That is D5-local restated — the replicated quantity is a joint <i>target</i>, a PhysX
+        /// input, never a PhysX output.
+        /// </para>
+        /// <para>
+        /// <b>Yaw takes the short way round.</b> A turret at 359° asked for 1° traverses 2°, not
+        /// 358°. Subtracting the raw values instead would spin the tower a full turn for a
+        /// two-degree correction every time the aim crossed north — visible, wrong, and the sort
+        /// of thing that only ever reproduces at one heading.
+        /// </para>
+        /// <para>
+        /// A non-finite target holds the current pose rather than propagating <c>NaN</c> into a
+        /// joint target, which is how a turret leaves the PhysX simulation outright.
+        /// </para>
+        /// </remarks>
+        /// <param name="state">Updated in place. This is the authoritative value.</param>
+        /// <param name="targetYaw">Requested traverse, degrees. Wrapped before use.</param>
+        /// <param name="targetPitch">Requested elevation, degrees. Clamped to the stops.</param>
+        /// <param name="limits">Rates and stops for this turret.</param>
+        /// <param name="dt">Seconds. A fixed step, for the reason <see cref="Step"/> gives.</param>
+        public static void StepToward(
+            ref TurretAimState state, float targetYaw, float targetPitch,
+            in TurretAimLimits limits, float dt)
+        {
+            if (!IsFinite(targetYaw) || !IsFinite(targetPitch) || !IsFinite(dt)) return;
+
+            float yawArc = limits.YawRateDegPerSec * dt;
+            if (yawArc < 0f) yawArc = 0f;
+
+            float yawError = ShortestDelta(state.Yaw, WrapDegrees(targetYaw));
+            if (yawError > yawArc) yawError = yawArc;
+            else if (yawError < -yawArc) yawError = -yawArc;
+
+            state.Yaw = WrapDegrees(state.Yaw + yawError);
+
+            float pitchArc = limits.PitchRateDegPerSec * dt;
+            if (pitchArc < 0f) pitchArc = 0f;
+
+            float pitchError = ClampPitch(targetPitch, in limits) - state.Pitch;
+            if (pitchError > pitchArc) pitchError = pitchArc;
+            else if (pitchError < -pitchArc) pitchError = -pitchArc;
+
+            state.Pitch = ClampPitch(state.Pitch + pitchError, in limits);
+        }
+
+        /// <summary>
+        /// The signed traverse from <paramref name="from"/> to <paramref name="to"/>, in
+        /// <c>(-180, 180]</c>. Both are assumed already wrapped.
+        /// </summary>
+        public static float ShortestDelta(float from, float to)
+        {
+            float delta = WrapDegrees(to - from);
+            return delta > 180f ? delta - 360f : delta;
+        }
+
+        /// <summary>
         /// Clamps an elevation to a turret's stops. Exposed so a caller seeding
         /// <see cref="TurretAimState.Pitch"/> from a prefab's transform lands inside the same
         /// range <see cref="Step"/> would keep it in.
@@ -72,5 +143,15 @@ namespace Ironfront.Net.Replication.Vehicles
             if (degrees >= 360f) degrees = 0f;
             return degrees;
         }
+
+        /// <summary>
+        /// Neither <c>NaN</c> nor an infinity.
+        /// </summary>
+        /// <remarks>
+        /// Written out rather than taken from <c>float.IsFinite</c> because this assembly targets
+        /// netstandard2.1 for Unity, where that helper does not exist.
+        /// </remarks>
+        private static bool IsFinite(float v)
+            => !float.IsNaN(v) && !float.IsInfinity(v);
     }
 }

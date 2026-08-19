@@ -16,9 +16,6 @@ namespace Ironfront.Net.Unity.Server
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// <b>This class decides nothing.</b> Whether the shot was legal, what it hit, how much it
     /// did and whether that killed anyone are all <see cref="ServerCombatAuthority"/>'s answers,
     /// arrived at in a library CI can run. What is left here is the three things a library
@@ -47,6 +44,11 @@ namespace Ironfront.Net.Unity.Server
         private readonly ServerCombatAuthority _authority;
         private readonly ServerRespawnGate _respawnGate;
 
+        // V6 task 3. Null on a loop with no mounted-weapon subsystem, which is what every
+        // pre-V6 construction of this class looks like.
+        private readonly MountedWeaponRegistry _mountedWeapons;
+        private readonly MountedWeaponAuthority _mountedWeaponAuthority;
+
         private readonly HitscanTarget[] _targets = new HitscanTarget[ProtocolConstants.MAX_ACTORS];
         private int _targetCount;
         private uint _targetsBuiltForTick = uint.MaxValue;
@@ -58,13 +60,21 @@ namespace Ironfront.Net.Unity.Server
             ServerTickLoop loop,
             ServerActorRegistry registry,
             ServerCombatAuthority authority,
-            ServerRespawnGate respawnGate)
+            ServerRespawnGate respawnGate,
+            MountedWeaponRegistry mountedWeapons = null,
+            MountedWeaponAuthority mountedWeaponAuthority = null)
         {
             _loop = loop ?? throw new ArgumentNullException(nameof(loop));
             _registry = registry ?? throw new ArgumentNullException(nameof(registry));
             _authority = authority ?? throw new ArgumentNullException(nameof(authority));
             _respawnGate = respawnGate ?? throw new ArgumentNullException(nameof(respawnGate));
+
+            _mountedWeapons = mountedWeapons;
+            _mountedWeaponAuthority = mountedWeaponAuthority;
         }
+
+        /// <summary>Mounted shots this bridge resolved and announced. V6 task 3.</summary>
+        public long MountedShotsFired { get; private set; }
 
         /// <summary>Deaths this bridge reported to the match. The killfeed's denominator.</summary>
         public long DeathsReported { get; private set; }
@@ -86,11 +96,25 @@ namespace Ironfront.Net.Unity.Server
             // shows up as a reload that occasionally takes an extra tick on a loaded server.
             float now = tick / (float)ProtocolConstants.SIM_TICK_RATE;
 
+            // V6 task 3, and it RETURNS: a gunner operating a mounted weapon is not also firing
+            // the rifle on their back. That is exactly what Seat.CanUseCarriedWeapon() has always
+            // meant (V6-D7) -- a Gunner fires through the HasMountedWeapon() clause and never
+            // through the carried one -- and letting both run would have one trigger pull spend a
+            // turret round AND hitscan from the gunner's chest.
+            if (StepMountedWeapon(session, actor, in frame, now)) return;
+
             BuildTargets(tick);
+
+            // Hoisted to a local because WeaponConfig is a property since phase-V2 (D9) and an
+            // explicit `in` argument needs an lvalue. This IS the struct copy that decision
+            // priced: ~48 bytes once per accepted frame per player, no allocation. The escape
+            // hatch it named -- caching the config for the duration of a tick -- is exactly this
+            // local, and deliberately not a second stored field.
+            WeaponConfig weapon = session.WeaponConfig;
 
             CombatTickResult result = _authority.Step(
                 ref session.Weapon,
-                in session.WeaponConfig,
+                in weapon,
                 session.ActorId,
                 in frame,
                 in session.State,
@@ -112,6 +136,75 @@ namespace Ironfront.Net.Unity.Server
             EmitHitConfirms(session, in result);
 
             if (result.VictimDied) EmitDeath(session, in result);
+        }
+
+        /// <summary>
+        /// Resolves one accepted frame against the mounted weapon this actor is sitting behind.
+        /// V6 task 3.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The muzzle it fires from was settled earlier in this same tick</b> by
+        /// <c>ServerTurretAuthority.Step</c>, which runs in the input stage before any player
+        /// steps. Getting that order backwards is silent: every shot leaves from where the turret
+        /// pointed one tick ago, which is invisible against a static target and systematically
+        /// wrong against a traversing one.
+        /// </para>
+        /// <para>
+        /// <b>No hitscan and no damage here.</b> A mounted weapon launches a projectile, and
+        /// projectile flight is V7. This spends the server's ammo, honours the server's cooldown,
+        /// and announces the shot so remote clients can draw it.
+        /// </para>
+        /// </remarks>
+        /// <returns>True when this actor's fire intent belonged to a mounted weapon.</returns>
+        private bool StepMountedWeapon(
+            ClientSession session, NetServerActor actor, in InputFrame frame, float now)
+        {
+            if (_mountedWeaponAuthority == null || _mountedWeapons == null) return false;
+
+            if (!ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(
+                    session.ActorId, out ushort vehicleId, out byte seatIndex))
+                return false;
+
+            // Tracked, not merely seated. A passenger in a seat with no mounted weapon keeps
+            // their own rifle and takes the infantry path, which is the shipped behaviour.
+            if (!_mountedWeapons.IsTracked(vehicleId, seatIndex)) return false;
+
+            MountedFireResult result = _mountedWeaponAuthority.Step(
+                vehicleId, seatIndex, in frame, actor.IsAlive, now);
+
+            if (!result.Fired) return true;
+
+            MountedShotsFired++;
+            EmitMountedFire(session, vehicleId, seatIndex);
+            return true;
+        }
+
+        /// <summary>
+        /// Announces a mounted shot on the cosmetic channel, filtered by earshot.
+        /// </summary>
+        /// <remarks>
+        /// The aim direction is zero and honestly so: <c>S_WEAPON_FIRE</c>'s direction field
+        /// drives a hitscan TRACER, and a mounted weapon fires a projectile whose flight V7
+        /// replicates in its own message with a server-computed origin. Writing the turret's
+        /// heading here would draw a tracer that the shell does not follow.
+        /// </remarks>
+        private void EmitMountedFire(ClientSession shooter, ushort vehicleId, byte seatIndex)
+        {
+            var message = new WeaponFireMessage(
+                shooter.ActorId,
+                _mountedWeapons.WeaponIdOf(vehicleId, seatIndex),
+                0, 0, 0);
+
+            int written = ServerEventWriter.WriteWeaponFire(_eventPayload, in message);
+            if (written < 0) return;
+
+            _loop.SendToListenersInEarshot(
+                shooter.State.Position,
+                ServerEventWriter.WeaponFireAudibleRadius,
+                new ReadOnlySpan<byte>(_eventPayload, 0, written),
+                (byte)ServerEventWriter.CosmeticChannel,
+                reliable: false);
         }
 
         /// <summary>
@@ -139,6 +232,12 @@ namespace Ironfront.Net.Unity.Server
             actor.IsAlive = true;
 
             MoveToSpawnPoint(player);
+
+            // BEFORE ResetWeapon, always. The clip size comes from the config, the config is
+            // derived from this id (phase-V2 D9), and re-arming an unassigned id loads a clip of
+            // zero — which presents as FireRejection.NoAmmo forever and reads exactly like the
+            // ammo bug phase-05 closed.
+            session.WeaponId = actor.WeaponId;
 
             session.ResetWeapon();
             actor.AmmoInClip = session.Weapon.AmmoInClip;
@@ -211,34 +310,22 @@ namespace Ironfront.Net.Unity.Server
         /// </para>
         /// <para>
         /// Spawn points come from the game's own <c>ActorManager</c>, filtered by team the way
-        /// <c>SpawnPoint.owner</c> already defines it. No spawn points at all (a bare test
-        /// scene) leaves the player where they were, which is the previous behaviour.
+        /// <c>SpawnPoint.owner</c> already defines it — reached through
+        /// <see cref="ISpawnPointDirectory"/>, because neither type is visible from an asmdef.
+        /// No spawn points at all (a bare test scene, or nothing registered) leaves the player
+        /// where they were, which is the previous behaviour.
         /// </para>
         /// </remarks>
         private static void MoveToSpawnPoint(ServerPlayer player)
         {
             NetServerActor actor = player.Actor;
-            ActorManager manager = ActorManager.instance;
-            if (manager == null || manager.spawnPoints == null) return;
+            ISpawnPointDirectory spawnPoints = NetServerBindings.SpawnPoints;
+            if (spawnPoints == null) return;
 
-            SpawnPoint chosen = null;
-            int candidates = 0;
+            int chosen = ChooseSpawnIndex(spawnPoints, actor.Team);
+            if (chosen < 0) return;
 
-            // Reservoir sampling over the matching points: one pass, no allocation, and an even
-            // spread rather than always the first one in the array.
-            for (int i = 0; i < manager.spawnPoints.Length; i++)
-            {
-                SpawnPoint point = manager.spawnPoints[i];
-                if (point == null) continue;
-                if (point.owner >= 0 && point.owner != actor.Team) continue;
-
-                candidates++;
-                if (UnityEngine.Random.Range(0, candidates) == 0) chosen = point;
-            }
-
-            if (chosen == null) return;
-
-            Vector3 position = chosen.GetSpawnPosition();
+            Vector3 position = spawnPoints.GetSpawnPosition(chosen);
 
             // Teleport, not a transform write: it disables the CharacterController around the
             // assignment, which otherwise fights it and lands the actor somewhere else.
@@ -249,6 +336,33 @@ namespace Ironfront.Net.Unity.Server
             player.Session.State.Position = core;
             player.Session.State.Velocity = Vec3.Zero;
             player.Session.PreviousPosition = core;
+        }
+
+        /// <summary>
+        /// Picks one spawn slot this team may use, or -1 when the scene offers none.
+        /// </summary>
+        /// <remarks>
+        /// Reservoir sampling over the matching points: one pass, no allocation, and an even
+        /// spread rather than always the first one in the array. Extracted from
+        /// <see cref="MoveToSpawnPoint"/> so the EditMode suite can drive it with a fake
+        /// directory — the team filter and the "no eligible point leaves the player where they
+        /// were" branch are both behaviours a snapshot bug would silently break.
+        /// </remarks>
+        internal static int ChooseSpawnIndex(ISpawnPointDirectory spawnPoints, int team)
+        {
+            int chosen = -1;
+            int candidates = 0;
+            int count = spawnPoints.Count;
+
+            for (int i = 0; i < count; i++)
+            {
+                if (!spawnPoints.IsEligible(i, team)) continue;
+
+                candidates++;
+                if (UnityEngine.Random.Range(0, candidates) == 0) chosen = i;
+            }
+
+            return chosen;
         }
 
         private void EmitWeaponFire(
@@ -281,7 +395,8 @@ namespace Ironfront.Net.Unity.Server
             {
                 ref readonly HitResult hit = ref _hits[i];
 
-                float damage = ServerFireResolver.DamageFor(in shooter.WeaponConfig, hit.HitboxType);
+                WeaponConfig config = shooter.WeaponConfig;
+                float damage = ServerFireResolver.DamageFor(in config, hit.HitboxType, hit.Distance);
 
                 HitFlags flags = HitFlags.None;
                 if (hit.IsHeadshot) flags |= HitFlags.Headshot;

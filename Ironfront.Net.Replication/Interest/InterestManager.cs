@@ -84,19 +84,35 @@ namespace Ironfront.Net.Replication.Interest
         private int _farCount;
 
         /// <summary>
-        /// The widest one actor can encode to: every v1 field present.
+        /// The widest one actor can encode to: every field present, seat info included.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// <b>Deliberately the worst case rather than the real one.</b> The actual width depends
         /// on the change mask, which <see cref="DeltaEncoder"/> computes later against a
         /// baseline this class has never seen. Projecting optimistically and being wrong means
         /// the encode overruns and the whole snapshot is discarded — the exact failure this
-        /// shedding exists to remove. Projecting pessimistically costs a handful of actor slots
-        /// at extreme densities: the budget admits 58 actors where 64 might have fitted, and
-        /// the 48-actor case the game actually ships never sheds at all.
+        /// shedding exists to remove.
+        /// </para>
+        /// <para>
+        /// <b>This moved 20 → 23 when the seat field was finished, and the cost is real.</b> Any
+        /// actor may now be seated, so the pessimistic width has to include the 3-byte seat
+        /// field or the projection stops being pessimistic. The budget admits <b>50</b> actors
+        /// where it used to admit 58 (<c>(1178 − 13) / 23 = 50</c>), and the vehicle snapshot
+        /// riding in the same datagram takes that as low as 29 in the worst case. The 48-actor
+        /// case the game actually ships still never sheds; the margin above it is gone, which
+        /// is why <c>InterestManagementTests</c> pins the ceiling as a number rather than
+        /// leaving a bandwidth regression to find it.
+        /// </para>
         /// </remarks>
-        private static readonly int MaxEntrySize =
-            SnapshotMessage.EntrySize(SnapshotField.FullNoSeat);
+        /// <remarks>
+        /// Public because it is the number V4's budget split has to hit and the number the
+        /// shedding tests pin. A private copy would leave both of those restating the formula,
+        /// which is how the 20 in this class and the 20 in the spec drifted apart in the first
+        /// place.
+        /// </remarks>
+        public static readonly int MaxEntrySize =
+            SnapshotMessage.EntrySize(SnapshotField.Full);
 
         private static readonly float CosViewConeHalfAngle =
             (float)Math.Cos(ViewConeHalfAngleDegrees * Math.PI / 180.0);
@@ -195,11 +211,32 @@ namespace Ironfront.Net.Replication.Interest
         /// </remarks>
         public InterestLevel Evaluate(
             in ActorSnapshotEntry viewer, in ActorSnapshotEntry target)
-        {
-            if (viewer.ActorId == target.ActorId) return InterestLevel.Near;   // yourself
+            => Evaluate(InterestSubject.From(in viewer), InterestSubject.From(in target));
 
-            Vec3 viewerPos = SnapshotBuilder.UnpackPosition(in viewer);
-            Vec3 targetPos = SnapshotBuilder.UnpackPosition(in target);
+        /// <summary>
+        /// Classifies <paramref name="target"/> from <paramref name="viewer"/>'s point of view,
+        /// for entities of any kind. V4-D4.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This is the real implementation; the actor overload above is a forwarder whose
+        /// signature did not change.</b> Four merged phases call that overload and its tests are
+        /// the gate on this refactor — <c>InterestManagementTests</c> from phases 02/03/05 pass
+        /// unedited or the extraction is wrong. The whole diff is one method becoming two, with
+        /// the arithmetic moved and not rewritten.
+        /// </para>
+        /// <para>
+        /// <b>The viewer is always an actor.</b> A vehicle is never a viewer (V4-D5), so the
+        /// view cone below is only ever reached with a real facing. A vehicle subject carries
+        /// <see cref="TeamId.None"/>, which is what keeps the teammate floor from firing for one.
+        /// </para>
+        /// </remarks>
+        public InterestLevel Evaluate(in InterestSubject viewer, in InterestSubject target)
+        {
+            if (viewer.IsSameEntityAs(in target)) return InterestLevel.Near;   // yourself
+
+            Vec3 viewerPos = UnpackPosition(in viewer);
+            Vec3 targetPos = UnpackPosition(in target);
             float d2 = (targetPos - viewerPos).SqrMagnitude;
 
             InterestLevel level;
@@ -221,7 +258,15 @@ namespace Ironfront.Net.Replication.Interest
             // to write it and it quietly demotes a teammate standing next to you from Near
             // (20 Hz) to Mid (10 Hz): the people whose movement you can see most precisely
             // would be the ones updating least often.
-            if (viewer.Team == target.Team
+            //
+            // The space test is new in V4 and is a no-op on the actor path, where both sides are
+            // always Actor. It is here because a vehicle carries TeamId.None (V4-D5) and a
+            // viewer that also carried None would otherwise match it and promote every vehicle
+            // within 300 m to Mid on team grounds. Asserting the space is stronger than
+            // asserting the value: it cannot be defeated by whatever a future neutral actor's
+            // team byte turns out to be.
+            if (target.Space == InterestSpace.Actor
+                && viewer.Team == target.Team
                 && level < InterestLevel.Mid
                 && d2 < FarRadius * FarRadius)
                 level = InterestLevel.Mid;
@@ -702,8 +747,8 @@ namespace Ironfront.Net.Replication.Interest
             _maxHumanLevel[actorId] = level;
         }
 
-        private static bool IsInViewCone(
-            in ActorSnapshotEntry viewer, in Vec3 viewerPos, in Vec3 targetPos)
+        internal static bool IsInViewCone(
+            in InterestSubject viewer, in Vec3 viewerPos, in Vec3 targetPos)
         {
             Vec3 toTarget = (targetPos - viewerPos).Normalized;
             if (toTarget.SqrMagnitude < 1e-6f) return true;   // co-located; not a cone question
@@ -731,5 +776,35 @@ namespace Ironfront.Net.Replication.Interest
         /// </remarks>
         private static uint PackPair(ushort viewer, ushort target)
             => ((uint)viewer << 16) | target;
+
+        /// <summary>Reverses the position quantization on a subject.</summary>
+        internal static Vec3 UnpackPosition(in InterestSubject subject)
+            => new Vec3(
+                Quantize.UnpackPos(subject.PosX),
+                Quantize.UnpackPos(subject.PosY),
+                Quantize.UnpackPos(subject.PosZ));
+
+        /// <summary>
+        /// Snapshots between sends for one interest level. <b>The one definition of the rate
+        /// table</b> — <see cref="VehicleInterestTracker"/> reads it rather than declaring its
+        /// own.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Internal, not public. The vehicle tracker ships in this assembly, so internal is
+        /// enough, and the band rates are not something a consumer should be able to read and
+        /// then re-implement against. V4-D3 splits the two rate <i>tables</i> precisely because
+        /// vehicle 7 and actor 7 collide in one; it does not split the rate <i>policy</i>, and a
+        /// second copy of "Near is every snapshot, Mid every second, Far every fifth" is how the
+        /// two silently stop agreeing.
+        /// </para>
+        /// <para>
+        /// A method rather than exposing the array: an exposed array is writable by anyone
+        /// holding it, and a caller that flipped Far from 5 to 1 would quadruple the vehicle
+        /// stream's bandwidth with nothing to point at.
+        /// </para>
+        /// </remarks>
+        internal static int SnapshotsBetweenSends(InterestLevel level)
+            => SendEveryN[(int)level];
     }
 }

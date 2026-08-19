@@ -1,6 +1,5 @@
 name: CodeQL
 
-# OWNER: Dev D (tools/ and CI, plans/00-shared/conventions.md section 7).
 #
 # Static security analysis. Deliberately a SEPARATE workflow from ci.yml, not an extra job
 # inside it, for two reasons:

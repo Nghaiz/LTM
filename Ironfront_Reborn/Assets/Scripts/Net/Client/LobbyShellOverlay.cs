@@ -13,13 +13,13 @@ namespace Ironfront.Net.Unity.Client
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev A. Written by the lead's assist track
-    /// (plans/assist-dev-a/step-07-imgui-shell.md).
+    /// Written by the lead's assist track
+    /// (plans/unity-client/study/step-07-imgui-shell.md).
     /// </para>
     /// <para>
     /// <b>It is ugly on purpose and should stay ugly.</b> This is not a replacement for the
     /// Canvas UI — its job is to prove the flow works and to unblock the ten-run login handoff
-    /// with Dev D, and looking finished would only invite someone to ship it.
+    /// with the master-server track, and looking finished would only invite someone to ship it.
     /// </para>
     /// <para>
     /// <b>The precedent is <c>TransportDebugOverlay</c>,</b> which draws its whole panel from
@@ -465,7 +465,15 @@ namespace Ironfront.Net.Unity.Client
         /// aborts the frame with the GUI clip stack unbalanced, which shows up as a cascade of
         /// unrelated IMGUI errors rather than as the one thing that went wrong.
         /// </remarks>
-        private void Guard(Action action)
+        /// <param name="action">
+        /// Fully qualified as <c>System.Action</c> deliberately. <c>Assembly-CSharp</c> declares a
+        /// global <c>Action</c> class (<c>Assets/Scripts/Assembly-CSharp/Action.cs</c>, a timer),
+        /// and the global namespace is searched before <c>using</c> directives — so a bare
+        /// <c>Action</c> here binds to that timer and every call site fails with
+        /// "cannot convert lambda expression to type 'Action'". Same collision PR #44 fixed in
+        /// <c>MatchController</c>; the same fix, for the same reason.
+        /// </param>
+        private void Guard(System.Action action)
         {
             try
             {

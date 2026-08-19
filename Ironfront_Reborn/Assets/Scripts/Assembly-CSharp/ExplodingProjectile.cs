@@ -63,7 +63,11 @@ public class ExplodingProjectile : Projectile
 
 	protected virtual bool Explode(Vector3 position, Vector3 up)
 	{
-		bool result = ActorManager.Explode(position, explosionConfiguration);
+		// V1 task 3: Explode now needs to know WHO set it off and WHAT KIND it is, so the
+		// server can attribute the S_EXPLOSION and a client can recognise its own blast.
+		// Rocket covers every ExplodingProjectile in scope -- rockets and tank shells alike.
+		bool result = ActorManager.Explode(
+			position, explosionConfiguration, source, Ironfront.Net.Protocol.ExplosionKind.Rocket);
 		base.transform.rotation = Quaternion.LookRotation(up);
 		base.enabled = false;
 		Renderer[] array = renderers;
@@ -75,19 +79,47 @@ public class ExplodingProjectile : Projectile
 		{
 			trailParticles.Stop(true);
 		}
-		impactParticles.Play(true);
-		audioSource.Stop();
-		audioSource.pitch = UnityEngine.Random.Range(0.9f, 1.1f);
-		audioSource.volume = 1f;
-		audioSource.Play();
-		Invoke("StopSmoke", smokeTime);
+		// V1 handed these two sites to V0's headless list and V0 closed without absorbing them,
+		// so they stayed unguarded a phase longer than the guard three lines above. A dedicated
+		// server builds these prefabs with no particle system and no audio source; the blast
+		// itself is gameplay and already happened in ActorManager.Explode above, so everything
+		// from here down is cosmetic and skipping it changes nothing a client can observe.
+		if (impactParticles != null)
+		{
+			impactParticles.Play(true);
+		}
+		if (audioSource != null)
+		{
+			audioSource.Stop();
+			// Not UnityEngine.Random -- see CosmeticRandom. A sound must not be able to advance
+			// a stream gameplay reads, least of all at a different rate on server and client.
+			audioSource.pitch = CosmeticRandom.Range(0.9f, 1.1f);
+			audioSource.volume = 1f;
+			audioSource.Play();
+		}
+		// V7 task 8: on a server this chain existed only to hold a dead GameObject alive for
+		// eighteen seconds so particles nobody can see could finish. Both timers now go through
+		// one policy, and nameof() makes them greppable -- the string forms were two names no
+		// search could find.
+		if (ProjectileCleanupPolicy.PlaysCosmetics)
+		{
+			Invoke(nameof(StopSmoke), ProjectileCleanupPolicy.HoldSeconds(smokeTime));
+		}
+		else
+		{
+			Invoke(nameof(Cleanup), 0f);
+		}
 		return result;
 	}
 
 	private void StopSmoke()
 	{
-		impactParticles.Stop(true);
-		Invoke("Cleanup", 10f);
+		// Reached on a client and offline only -- a server takes the direct Cleanup branch above.
+		if (impactParticles != null)
+		{
+			impactParticles.Stop(true);
+		}
+		Invoke(nameof(Cleanup), ProjectileCleanupPolicy.HoldSeconds(CLEANUP_TIME));
 	}
 
 	private void Cleanup()

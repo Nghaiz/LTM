@@ -28,7 +28,7 @@ Swapping A* Pathfinding for Unity AI Navigation = **repackaging the same algorit
 smarter. A* was proven optimal back in 1968; what has advanced in the last 10 years is engine
 integration convenience and Burst/Jobs performance, not path quality.
 
-Cost of replacing it: 1–2 weeks of Dev A's time (re-bake the navmesh, fix every `Seeker` call in
+Cost of replacing it: 1–2 weeks of client time (re-bake the navmesh, fix every `Seeker` call in
 the 2153-line `AiActorController`), plus the risk of bots changing behavior. Gameplay benefit:
 **zero**.
 
@@ -44,7 +44,7 @@ if (scanOnStartup && (!astarData.cacheStartup || astarData.file_cachedStartup ==
 | Case | Headless behavior | Handling |
 |---|---|---|
 | Scene **has** a graph cache | Deserialize, starts instantly | Nothing to do |
-| Scene has **no** cache | The server voxelizes the map at boot, taking 10–60 seconds. **Still runs**, just slowly | Bake + cache in the Editor (~15 minutes of Dev A's time) |
+| Scene has **no** cache | The server voxelizes the map at boot, taking 10–60 seconds. **Still runs**, just slowly | Bake + cache in the Editor (~15 minutes of client time) |
 
 This is a 30-minute check, not a project-blocking risk.
 
@@ -53,7 +53,7 @@ This is a 30-minute check, not a project-blocking risk.
 From **High** to **Low**. Reason: the worker threads never touch the Unity API (the key condition
 for headless), and the worst case is a slow boot, not a failure to run.
 
-Dev A's phase-00 still keeps the verification task — but it is no longer a "could sink the project"
+The client's phase-00 still keeps the verification task — but it is no longer a "could sink the project"
 risk.
 
 ---
@@ -137,7 +137,7 @@ Building the master server as a second headless Unity build:
 | Runtime RAM | ~50–80 MB | ~500–1500 MB |
 | `dotnet test` (xUnit) | Yes, a few seconds | No — goes through Unity Test Runner, much slower |
 | Edit-run loop | 2–5 seconds | 20–60 seconds (domain reload) |
-| Git conflicts on `.meta`/scenes | No | Yes — breaks the "only Dev A opens the Editor" rule |
+| Git conflicts on `.meta`/scenes | No | Yes — breaks the "only the client opens the Editor" rule |
 
 Rejected on operational cost and iteration speed, not on language grounds.
 

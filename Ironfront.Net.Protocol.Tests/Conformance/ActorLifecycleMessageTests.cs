@@ -213,10 +213,14 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
         {
             // Documenting an unspecified message is not changing a specified one, so these three
             // layouts did not move the version — the phase-01 precedent for C_ACK_BASELINE,
-            // applied again on purpose. The version is 2 because of two OTHER changes: the
-            // channel envelope (protocol-spec section 5.1) and the widened CONNECT_RESPONSE,
-            // both genuine wire changes. Pinned so a future bump has to be deliberate.
-            Assert.Equal(2, ProtocolConstants.PROTOCOL_VERSION);
+            // applied again on purpose. Pinned so a future bump has to be deliberate; each one
+            // that lands is recorded here with what actually caused it.
+            //
+            //   v2  the channel envelope (protocol-spec § 5.1) and the widened CONNECT_RESPONSE.
+            //   v3  the vehicle wire (§ 4.10): six new opcodes, a second entity stream, and
+            //       SnapshotField.SeatInfo finished on the actor entry. S_EXPLOSION's layout was
+            //       not touched by any of it and still is not what moved the number.
+            Assert.Equal(3, ProtocolConstants.PROTOCOL_VERSION);
         }
     }
 }

@@ -258,6 +258,7 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(0x23, (byte)ClientMessageType.SpawnRequest);
             Assert.Equal(0x24, (byte)ClientMessageType.Chat);
             Assert.Equal(0x25, (byte)ClientMessageType.Ping);
+            Assert.Equal(0x21, (byte)ClientMessageType.VehicleInput);
             Assert.Equal(0x26, (byte)ClientMessageType.SeatRequest);
             Assert.Equal(0x27, (byte)ClientMessageType.AckBaseline);
 
@@ -273,6 +274,11 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(0x49, (byte)ServerMessageType.WeaponFire);
             Assert.Equal(0x4A, (byte)ServerMessageType.Explosion);
             Assert.Equal(0x4B, (byte)ServerMessageType.PlayerList);
+            Assert.Equal(0x4C, (byte)ServerMessageType.VehicleSnapshot);
+            Assert.Equal(0x4D, (byte)ServerMessageType.VehicleSpawn);
+            Assert.Equal(0x4E, (byte)ServerMessageType.VehicleDespawn);
+            Assert.Equal(0x4F, (byte)ServerMessageType.ProjectileSpawn);
+            Assert.Equal(0x50, (byte)ServerMessageType.SeatChange);
         }
 
         [Fact]
@@ -308,5 +314,428 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(9000, (ushort)ErrorCode.InternalServerError);
             Assert.Equal(9001, (ushort)ErrorCode.RateLimited);
         }
+
+        // ==================================================================== phase-V3
+        //
+        // Every string below was written out from the byte tables in protocol-spec.md
+        // section 4.10 by hand, little-endian, field by field. None of it was captured from
+        // the implementation's output — a sample recorded from the code proves only that the
+        // code agrees with itself, and a mis-sized field would be baked into the "expected"
+        // value along with everything else.
+
+        // ------------------------------------------------- C_VEHICLE_INPUT 0x21 (16 B)
+        //   u32 tick        1234       = 0x000004D2 -> D2 04 00 00
+        //   u16 vehicleId   7                       -> 07 00
+        //   i8  throttle    127                     -> 7F
+        //   i8  steer       -64                     -> C0
+        //   i8  pitchAxis   0                       -> 00
+        //   i8  auxAxis     -1                      -> FF
+        //   u16 turretYaw   32768      = 0x8000     -> 00 80
+        //   i16 turretPitch -4096      = 0xF000     -> 00 F0
+        //   u16 buttons     0x0001                  -> 01 00
+        private const string VehicleInputHex =
+            "D2 04 00 00 07 00 7F C0 00 FF 00 80 00 F0 01 00";
+
+        [Fact]
+        public void VehicleInput_Serializes_ToTheExpectedBytes()
+        {
+            var message = new VehicleInputMessage(
+                tick: 1234, vehicleId: 7,
+                throttle: 127, steer: -64, pitchAxis: 0, auxAxis: -1,
+                turretYaw: 32768, turretPitch: -4096, buttons: 1);
+
+            Span<byte> buffer = stackalloc byte[VehicleInputMessage.Size];
+            Assert.Equal(VehicleInputMessage.Size, message.Write(buffer));
+            Assert.Equal(VehicleInputHex, Hex.ToHex(buffer));
+        }
+
+        [Fact]
+        public void VehicleInput_Parses_FromTheExpectedBytes()
+        {
+            Assert.True(VehicleInputMessage.TryParse(
+                Hex.FromHex(VehicleInputHex), out VehicleInputMessage message));
+
+            Assert.Equal(1234u, message.Tick);
+            Assert.Equal(7, message.VehicleId);
+            Assert.Equal(127, message.Throttle);
+            Assert.Equal(-64, message.Steer);
+            Assert.Equal(0, message.PitchAxis);
+            Assert.Equal(-1, message.AuxAxis);
+            Assert.Equal(32768, message.TurretYaw);
+            Assert.Equal(-4096, message.TurretPitch);
+            Assert.Equal(1, message.Buttons);
+        }
+
+        // -------------------------------------------------- C_SEAT_REQUEST 0x26 (4 B)
+        //   u16 vehicleId 7 -> 07 00 · u8 seatIndex 2 -> 02 · u8 action Enter(0) -> 00
+        private const string SeatRequestHex = "07 00 02 00";
+
+        [Fact]
+        public void SeatRequest_Serializes_ToTheExpectedBytes()
+        {
+            var message = new SeatRequestMessage(7, 2, SeatAction.Enter);
+
+            Span<byte> buffer = stackalloc byte[SeatRequestMessage.Size];
+            Assert.Equal(SeatRequestMessage.Size, message.Write(buffer));
+            Assert.Equal(SeatRequestHex, Hex.ToHex(buffer));
+        }
+
+        [Fact]
+        public void SeatRequest_Parses_FromTheExpectedBytes()
+        {
+            Assert.True(SeatRequestMessage.TryParse(
+                Hex.FromHex(SeatRequestHex), out SeatRequestMessage message));
+
+            Assert.Equal(7, message.VehicleId);
+            Assert.Equal(2, message.SeatIndex);
+            Assert.Equal(SeatAction.Enter, message.Action);
+        }
+
+        // ------------------------------------------------- S_VEHICLE_SPAWN 0x4D (16 B)
+        //   u16 vehicleId     7                  -> 07 00
+        //   u8  kind          Tank(1)            -> 01
+        //   u8  networkTypeId VehicleIds.TANK(5) -> 05
+        //   i16 posX          256   = 0x0100     -> 00 01
+        //   i16 posY          -256  = 0xFF00     -> 00 FF
+        //   i16 posZ          0                  -> 00 00
+        //   u32 rotation      0xC0000000         -> 00 00 00 C0
+        //   u8  seatCount     3                  -> 03
+        //   u8  flags         0                  -> 00
+        private const string VehicleSpawnHex =
+            "07 00 01 05 00 01 00 FF 00 00 00 00 00 C0 03 00";
+
+        [Fact]
+        public void VehicleSpawn_Serializes_ToTheExpectedBytes()
+        {
+            var message = new VehicleSpawnMessage(
+                vehicleId: 7, kind: VehicleKind.Tank, networkTypeId: VehicleIds.TANK,
+                posX: 256, posY: -256, posZ: 0, rotation: 0xC0000000u,
+                seatCount: 3, flags: 0);
+
+            Span<byte> buffer = stackalloc byte[VehicleSpawnMessage.Size];
+            Assert.Equal(VehicleSpawnMessage.Size, message.Write(buffer));
+            Assert.Equal(VehicleSpawnHex, Hex.ToHex(buffer));
+        }
+
+        [Fact]
+        public void VehicleSpawn_Parses_FromTheExpectedBytes()
+        {
+            Assert.True(VehicleSpawnMessage.TryParse(
+                Hex.FromHex(VehicleSpawnHex), out VehicleSpawnMessage message));
+
+            Assert.Equal(7, message.VehicleId);
+            Assert.Equal(VehicleKind.Tank, message.Kind);
+            Assert.Equal(VehicleIds.TANK, message.NetworkTypeId);
+            Assert.Equal(256, message.PosX);
+            Assert.Equal(-256, message.PosY);
+            Assert.Equal(0, message.PosZ);
+            Assert.Equal(0xC0000000u, message.Rotation);
+            Assert.Equal(3, message.SeatCount);
+        }
+
+        // ----------------------------------------------- S_VEHICLE_DESPAWN 0x4E (3 B)
+        //   u16 vehicleId 7 -> 07 00 · u8 reason WorldReset(1) -> 01
+        private const string VehicleDespawnHex = "07 00 01";
+
+        [Fact]
+        public void VehicleDespawn_Serializes_ToTheExpectedBytes()
+        {
+            var message = new VehicleDespawnMessage(7, VehicleDespawnReason.WorldReset);
+
+            Span<byte> buffer = stackalloc byte[VehicleDespawnMessage.Size];
+            Assert.Equal(VehicleDespawnMessage.Size, message.Write(buffer));
+            Assert.Equal(VehicleDespawnHex, Hex.ToHex(buffer));
+        }
+
+        [Fact]
+        public void VehicleDespawn_Parses_FromTheExpectedBytes()
+        {
+            Assert.True(VehicleDespawnMessage.TryParse(
+                Hex.FromHex(VehicleDespawnHex), out VehicleDespawnMessage message));
+
+            Assert.Equal(7, message.VehicleId);
+            Assert.Equal(VehicleDespawnReason.WorldReset, message.Reason);
+        }
+
+        // ---------------------------------------------- S_PROJECTILE_SPAWN 0x4F (20 B)
+        //   u16 projectileId 7              -> 07 00
+        //   u16 ownerActorId 9              -> 09 00
+        //   u8  kind         Rocket(1)      -> 01
+        //   i16 originX/Y/Z  16 / 32 / 48   -> 10 00 · 20 00 · 30 00
+        //   i16 velX/Y/Z     256 / -128 / 0 -> 00 01 · 80 FF · 00 00
+        //   u16 spawnTick    1234           -> D2 04
+        //   u8  remainingDs  20 (2.0 s)     -> 14
+        private const string ProjectileSpawnHex =
+            "07 00 09 00 01 10 00 20 00 30 00 00 01 80 FF 00 00 D2 04 14";
+
+        [Fact]
+        public void ProjectileSpawn_Serializes_ToTheExpectedBytes()
+        {
+            var message = new ProjectileSpawnMessage(
+                projectileId: 7, ownerActorId: 9, kind: ProjectileKind.Rocket,
+                originX: 16, originY: 32, originZ: 48,
+                velX: 256, velY: -128, velZ: 0, spawnTick: 1234,
+                remainingLifetimeDeciseconds: 20);
+
+            Span<byte> buffer = stackalloc byte[ProjectileSpawnMessage.Size];
+            Assert.Equal(ProjectileSpawnMessage.Size, message.Write(buffer));
+            Assert.Equal(ProjectileSpawnHex, Hex.ToHex(buffer));
+        }
+
+        [Fact]
+        public void ProjectileSpawn_Parses_FromTheExpectedBytes()
+        {
+            Assert.True(ProjectileSpawnMessage.TryParse(
+                Hex.FromHex(ProjectileSpawnHex), out ProjectileSpawnMessage message));
+
+            Assert.Equal(7, message.ProjectileId);
+            Assert.Equal(20, message.RemainingLifetimeDeciseconds);
+            Assert.Equal(9, message.OwnerActorId);
+            Assert.Equal(ProjectileKind.Rocket, message.Kind);
+            Assert.Equal(16, message.OriginX);
+            Assert.Equal(32, message.OriginY);
+            Assert.Equal(48, message.OriginZ);
+            Assert.Equal(256, message.VelX);
+            Assert.Equal(-128, message.VelY);
+            Assert.Equal(0, message.VelZ);
+            Assert.Equal(1234u, message.SpawnTick);
+        }
+
+        // -------------------------------------------------- S_SEAT_CHANGE 0x50 (6 B)
+        //   u16 actorId 12 -> 0C 00 · u16 vehicleId 7 -> 07 00
+        //   u8  seatIndex 1 -> 01 · u8 result Entered(0) -> 00
+        private const string SeatChangeHex = "0C 00 07 00 01 00";
+
+        [Fact]
+        public void SeatChange_Serializes_ToTheExpectedBytes()
+        {
+            var message = new SeatChangeMessage(12, 7, 1, SeatChangeResult.Entered);
+
+            Span<byte> buffer = stackalloc byte[SeatChangeMessage.Size];
+            Assert.Equal(SeatChangeMessage.Size, message.Write(buffer));
+            Assert.Equal(SeatChangeHex, Hex.ToHex(buffer));
+        }
+
+        [Fact]
+        public void SeatChange_Parses_FromTheExpectedBytes()
+        {
+            Assert.True(SeatChangeMessage.TryParse(
+                Hex.FromHex(SeatChangeHex), out SeatChangeMessage message));
+
+            Assert.Equal(12, message.ActorId);
+            Assert.Equal(7, message.VehicleId);
+            Assert.Equal(1, message.SeatIndex);
+            Assert.Equal(SeatChangeResult.Entered, message.Result);
+        }
+
+        // ---------------------------------------------- S_VEHICLE_SNAPSHOT 0x4C (43 B)
+        //
+        // Deliberately MIXED: one 30-byte full entry followed by one 4-byte stationary one.
+        // A body of uniform entries would still decode correctly with EntrySize off by a
+        // constant; only a mixed body forces the parser to land on the second entry at the
+        // right offset.
+        //
+        //   header    u32 serverTick   100 -> 64 00 00 00
+        //             u32 baselineTick  99 -> 63 00 00 00
+        //             u8  vehicleCount   2 -> 02
+        //   entry 1   u16 vehicleId      1 -> 01 00
+        //             u16 changeMask  Full = 0x00FF -> FF 00
+        //             pos      i16 x3  256 / 512 / 768   -> 00 01 · 00 02 · 00 03
+        //             rotation u32     0x3FF00000        -> 00 00 F0 3F
+        //             linVel   i16 x3  100 / -100 / 0    -> 64 00 · 9C FF · 00 00
+        //             angVel   i8  x3  1 / -1 / 0        -> 01 FF 00
+        //             health   u8      200               -> C8
+        //             flags    u8      Burning|Airborne = 0x0A -> 0A
+        //             turret   u16+i8  16384 / -32       -> 00 40 · E0
+        //             subtype  u8 x2   0x11 / 0x22       -> 11 22
+        //   entry 2   u16 vehicleId      2 -> 02 00
+        //             u16 changeMask  None -> 00 00        (a vehicle that has not moved)
+        private const string VehicleSnapshotHex =
+            "64 00 00 00 63 00 00 00 02 "
+            + "01 00 FF 00 00 01 00 02 00 03 00 00 F0 3F 64 00 9C FF 00 00 "
+            + "01 FF 00 C8 0A 00 40 E0 11 22 "
+            + "02 00 00 00";
+
+        private static VehicleSnapshotEntry[] MixedVehicleEntries() => new[]
+        {
+            new VehicleSnapshotEntry
+            {
+                VehicleId   = 1,
+                ChangeMask  = VehicleField.Full,
+                PosX = 256, PosY = 512, PosZ = 768,
+                Rotation    = 0x3FF00000u,
+                VelX = 100, VelY = -100, VelZ = 0,
+                AngVelX = 1, AngVelY = -1, AngVelZ = 0,
+                Health      = 200,
+                Flags       = VehicleStateFlags.Burning | VehicleStateFlags.Airborne,
+                TurretYaw   = 16384,
+                TurretPitch = -32,
+                SubtypeA    = 0x11,
+                SubtypeB    = 0x22,
+            },
+            new VehicleSnapshotEntry { VehicleId = 2, ChangeMask = VehicleField.None },
+        };
+
+        [Fact]
+        public void VehicleSnapshot_Serializes_ToTheExpectedBytes()
+        {
+            VehicleSnapshotEntry[] entries = MixedVehicleEntries();
+            var header = new VehicleSnapshotHeader(100, 99, 2);
+
+            Span<byte> buffer = stackalloc byte[128];
+            int written = VehicleSnapshotMessage.Write(buffer, in header, entries);
+
+            Assert.Equal(9 + 30 + 4, written);
+            Assert.Equal(VehicleSnapshotHex, Hex.ToHex(buffer.Slice(0, written)));
+        }
+
+        [Fact]
+        public void VehicleSnapshot_Parses_FromTheExpectedBytes()
+        {
+            byte[] bytes = Hex.FromHex(VehicleSnapshotHex);
+            var parsed = new VehicleSnapshotEntry[ProtocolConstants.MAX_VEHICLES];
+
+            Assert.True(VehicleSnapshotMessage.TryParse(
+                bytes, parsed, out VehicleSnapshotHeader header, out int count));
+
+            Assert.Equal(100u, header.ServerTick);
+            Assert.Equal(99u, header.BaselineTick);
+            Assert.False(header.IsFullSnapshot);
+            Assert.Equal(2, count);
+
+            Assert.Equal(1, parsed[0].VehicleId);
+            Assert.Equal(VehicleField.Full, parsed[0].ChangeMask);
+            Assert.Equal(256, parsed[0].PosX);
+            Assert.Equal(512, parsed[0].PosY);
+            Assert.Equal(768, parsed[0].PosZ);
+            Assert.Equal(0x3FF00000u, parsed[0].Rotation);
+            Assert.Equal(100, parsed[0].VelX);
+            Assert.Equal(-100, parsed[0].VelY);
+            Assert.Equal(1, parsed[0].AngVelX);
+            Assert.Equal(-1, parsed[0].AngVelY);
+            Assert.Equal(200, parsed[0].Health);
+            Assert.Equal(
+                VehicleStateFlags.Burning | VehicleStateFlags.Airborne, parsed[0].Flags);
+            Assert.Equal(16384, parsed[0].TurretYaw);
+            Assert.Equal(-32, parsed[0].TurretPitch);
+            Assert.Equal(0x11, parsed[0].SubtypeA);
+            Assert.Equal(0x22, parsed[0].SubtypeB);
+
+            // The second entry landing here at all is the assertion: a mis-sized full entry
+            // would have consumed the wrong number of bytes and read this id out of the middle
+            // of the first one.
+            Assert.Equal(2, parsed[1].VehicleId);
+            Assert.Equal(VehicleField.None, parsed[1].ChangeMask);
+        }
+
+        // ------------------------------------- S_SNAPSHOT with SeatInfo, 23-byte entry
+        //
+        //   header  u32 serverTick 100 -> 64 00 00 00
+        //           u32 lastInput   99 -> 63 00 00 00
+        //           u32 baselineTick 0 -> 00 00 00 00   (full snapshot)
+        //           u8  actorCount   1 -> 01
+        //   entry   u16 actorId      5 -> 05 00
+        //           u8  changeMask Full = 0xFF -> FF
+        //           pos    i16 x3  256 / 512 / 768 -> 00 01 · 00 02 · 00 03
+        //           rot    u16+i8  32768 / 10      -> 00 80 · 0A
+        //           vel    i8  x3  1 / -1 / 0      -> 01 FF 00
+        //           flags  u8      IsAlive|IsSeated = 0x81 -> 81
+        //           health u8      100             -> 64
+        //           weapon u8+u8   1 / 30          -> 01 1E
+        //           team   u8      0               -> 00
+        //           seat   u16+u8  vehicleId 7 / seatIndex 2 -> 07 00 · 02
+        private const string SeatedActorSnapshotHex =
+            "64 00 00 00 63 00 00 00 00 00 00 00 01 "
+            + "05 00 FF 00 01 00 02 00 03 00 80 0A 01 FF 00 81 64 01 1E 00 07 00 02";
+
+        [Fact]
+        public void SeatedActorEntry_Serializes_ToTwentyThreeBytes()
+        {
+            var entry = new ActorSnapshotEntry
+            {
+                ActorId    = 5,
+                ChangeMask = SnapshotField.Full,
+                PosX = 256, PosY = 512, PosZ = 768,
+                Yaw = 32768, Pitch = 10,
+                VelX = 1, VelY = -1, VelZ = 0,
+                StateFlags = ActorStateFlags.IsAlive | ActorStateFlags.IsSeated,
+                Health = 100,
+                WeaponId = 1, AmmoInClip = 30,
+                Team = 0,
+                VehicleId = 7, SeatIndex = 2,
+            };
+
+            Assert.Equal(23, SnapshotMessage.EntrySize(SnapshotField.Full));
+
+            var header = new SnapshotHeader(100, 99, 0, 1);
+            Span<byte> buffer = stackalloc byte[64];
+            int written = SnapshotMessage.Write(buffer, in header, new[] { entry });
+
+            Assert.Equal(SnapshotHeader.Size + 23, written);
+            Assert.Equal(SeatedActorSnapshotHex, Hex.ToHex(buffer.Slice(0, written)));
+        }
+
+        [Fact]
+        public void SeatedActorEntry_Parses_FromTheExpectedBytes()
+        {
+            byte[] bytes = Hex.FromHex(SeatedActorSnapshotHex);
+            var parsed = new ActorSnapshotEntry[ProtocolConstants.MAX_ACTORS];
+
+            Assert.True(SnapshotMessage.TryParse(
+                bytes, parsed, out SnapshotHeader header, out int count));
+
+            Assert.Equal(1, count);
+            Assert.True(header.IsFullSnapshot);
+
+            Assert.True(parsed[0].Has(SnapshotField.SeatInfo));
+            Assert.Equal(7, parsed[0].VehicleId);
+            Assert.Equal(2, parsed[0].SeatIndex);
+            Assert.True((parsed[0].StateFlags & ActorStateFlags.IsSeated) != 0);
+        }
+
+        // ---------------------------------------------------- S_PLAYER_LIST 0x4B (12 B)
+        //   u8 count 2
+        //   row 1  u8 actorId 5 · u8 len 3 · "Bob"  -> 05 03 42 6F 62
+        //   row 2  u8 actorId 9 · u8 len 4 · "Anna" -> 09 04 41 6E 6E 61
+        private const string PlayerListHex = "02 05 03 42 6F 62 09 04 41 6E 6E 61";
+
+        [Fact]
+        public void PlayerList_Serializes_ToTheExpectedBytes()
+        {
+            var entries = new[]
+            {
+                new PlayerListEntry
+                {
+                    ActorId = 5, Name = System.Text.Encoding.UTF8.GetBytes("Bob"),
+                },
+                new PlayerListEntry
+                {
+                    ActorId = 9, Name = System.Text.Encoding.UTF8.GetBytes("Anna"),
+                },
+            };
+
+            var buffer = new byte[PlayerListMessage.MaxBodySize];
+            int written = PlayerListMessage.Write(buffer, entries);
+
+            Assert.Equal(12, written);
+            Assert.Equal(PlayerListHex, Hex.ToHex(buffer.AsSpan(0, written)));
+        }
+
+        [Fact]
+        public void PlayerList_Parses_FromTheExpectedBytes()
+        {
+            byte[] bytes = Hex.FromHex(PlayerListHex);
+            var parsed = new PlayerListEntry[ProtocolConstants.MAX_ACTORS];
+
+            Assert.True(PlayerListMessage.TryParse(
+                bytes, 0, bytes.Length, parsed, out int count));
+
+            Assert.Equal(2, count);
+            Assert.Equal(5, parsed[0].ActorId);
+            Assert.Equal("Bob", PlayerListMessage.NameOf(in parsed[0]));
+            Assert.Equal(9, parsed[1].ActorId);
+            Assert.Equal("Anna", PlayerListMessage.NameOf(in parsed[1]));
+        }
+
     }
 }

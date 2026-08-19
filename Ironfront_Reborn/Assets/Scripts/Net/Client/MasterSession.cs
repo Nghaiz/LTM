@@ -15,8 +15,8 @@ namespace Ironfront.Net.Unity.Client
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev A. Written by the lead's assist track
-    /// (plans/assist-dev-a/step-06-master-connection.md).
+    /// Written by the lead's assist track
+    /// (plans/unity-client/study/step-06-master-connection.md).
     /// </para>
     /// <para>
     /// <b>This is the half of the online flow that did not exist.</b> The server side has been
@@ -28,7 +28,7 @@ namespace Ironfront.Net.Unity.Client
     /// </para>
     /// <para>
     /// <b>No thread marshaller, and the reason is not optimism.</b> phase-03 trap 1 says to
-    /// settle with Dev D whether <see cref="IMasterClient"/> callbacks arrive on the main
+    /// settle with the master-server track whether <see cref="IMasterClient"/> callbacks arrive on the main
     /// thread, and to keep a <c>ConcurrentQueue</c> ready in case they do not. Reading the code
     /// settles it: the client is poll-driven. <c>MasterClient</c> queues every response and
     /// every push internally and runs them from <c>Poll()</c>, so they fire on whichever thread
@@ -339,7 +339,7 @@ namespace Ironfront.Net.Unity.Client
         /// edge here and put the table out of sync with its specification, this path reports
         /// through <see cref="OnGameServerConnected"/> and <see cref="OnGameServerFailed"/> and
         /// leaves the flow where it was. Whether the diagram should grow a direct-connect edge
-        /// is Dev A's call.
+        /// is the client track's call.
         /// </para>
         /// </remarks>
         public void ConnectDirect(string host, int port)

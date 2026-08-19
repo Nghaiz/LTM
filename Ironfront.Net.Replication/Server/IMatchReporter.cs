@@ -45,12 +45,12 @@ namespace Ironfront.Net.Replication.Server
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C — the <i>interface</i>. The implementation that actually speaks TCP is
-    /// Dev D's <c>IGameServerLink</c>, adapted onto this by
+    /// The implementation that actually speaks TCP is
+    /// the master-server track's <c>IGameServerLink</c>, adapted onto this by
     /// <c>Ironfront.Net.MasterLink</c>.
     /// </para>
     /// <para>
-    /// <b>Why a port rather than referencing Dev D's client directly.</b>
+    /// <b>Why a port rather than referencing the master-server track's client directly.</b>
     /// <c>Ironfront.Net.Replication.dll</c> ships into the Unity project as a plugin, so every
     /// assembly it references has to ship there too. Referencing the master client would drag
     /// a TCP socket, <c>System.Text.Json</c> and their transitive closure into the Editor for

@@ -10,9 +10,6 @@ namespace Ironfront.Net.Replication.Server
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// <b>Why a quarantine at all.</b> Actor 7 dies and disconnects; a new player joins a
     /// frame later and is given id 7. A snapshot for the old actor 7 is still in flight, and
     /// unreliable-sequenced delivery means it can arrive after the new actor's spawn. The
@@ -147,12 +144,68 @@ namespace Ironfront.Net.Replication.Server
         /// rounds back to back with a 5 s cooldown each would leave the pool starved at the top
         /// of a round rather than merely thin.
         /// </remarks>
-        public void ResetAll()
+        public void ResetAll() => ResetAll(null);
+
+        /// <summary>
+        /// Returns every id except those still held by a live actor.
+        /// </summary>
+        /// <param name="retainInUse">
+        /// Ids that survive the reset. Each stays marked in-use and is kept out of the free
+        /// list. Null or empty behaves exactly like <see cref="ResetAll()"/>. Ids outside
+        /// <c>[FirstId, FirstId + Capacity)</c> are ignored rather than throwing -- a caller
+        /// enumerating a live scene should not have to pre-filter actors that were never
+        /// issued from this pool.
+        /// </param>
+        /// <remarks>
+        /// <para>
+        /// <b>Why the parameterless form is not enough.</b> Its docs above assume a reset tears
+        /// the whole world down, and for a lobby-driven round that is true. In the shipping
+        /// Dustbowl scene it is not: the match cycles
+        /// <c>Playing -> Ended -> Resetting -> WaitingForPlayers -> Warmup</c> on its own while
+        /// the 41 scene-resident bot actors keep existing, and keep holding their ids. The client track
+        /// measured the result in round 9 -- <c>ids in-use=41</c> mid-round, <c>in-use=0
+        /// free=64</c> immediately after an auto-reset, with the registry still reporting 41.
+        /// </para>
+        /// <para>
+        /// Two things broke at once. <c>ActorIdsInUse</c> read 0 while 41 ids were in use, so
+        /// the audit's leak check was structurally blind from the second round on -- the same
+        /// "the counter could not have detected anything" shape documented in
+        /// <c>ServerActorRegistry.UseIdPool</c>, one layer up. And <c>_free</c> offered ids
+        /// 1..41 again, so the next <c>TryAcquire</c> could hand a live actor's id to a second
+        /// actor: precisely the duplicate-id state the quarantine and <c>Register</c>'s guard
+        /// exist to prevent.
+        /// </para>
+        /// <para>
+        /// Emptying the <i>quarantine</i> on reset stays deliberate and unchanged -- after a
+        /// reset every client is being told to drop every actor it knows, so no in-flight
+        /// packet naming an old id is still meaningful. Clearing <c>_inUse</c> was the defect,
+        /// because those ids are still in use.
+        /// </para>
+        /// <para>
+        /// The parameter is a plain id sequence rather than an actor list on purpose: this
+        /// assembly must not know what a <c>NetServerActor</c> is. The Unity side reads the
+        /// live registry and passes ushorts.
+        /// </para>
+        /// </remarks>
+        public void ResetAll(IEnumerable<ushort>? retainInUse)
         {
             _inUse.Clear();
             _quarantine.Clear();
             _free.Clear();
-            for (ushort id = FirstId; id < FirstId + _capacity; id++) _free.Enqueue(id);
+
+            if (retainInUse != null)
+            {
+                foreach (ushort id in retainInUse)
+                {
+                    if (id < FirstId || id >= FirstId + _capacity) continue;
+                    _inUse.Add(id);
+                }
+            }
+
+            for (ushort id = FirstId; id < FirstId + _capacity; id++)
+            {
+                if (!_inUse.Contains(id)) _free.Enqueue(id);
+            }
         }
 
         private readonly struct QuarantinedId

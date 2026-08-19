@@ -1,7 +1,7 @@
 # Replication troubleshooting
 
 Symptoms you will actually see, what usually causes them, and how to confirm it before
-changing anything. Owner: Dev C.
+changing anything. Owner: The replication track.
 
 Almost every entry here describes a bug with **no error message**. That is the character
 of netcode faults: the code runs, the packets arrive, the numbers look plausible, and
@@ -63,7 +63,7 @@ guess.
 |---|---|---|
 | The server starts cleanly, logs nothing, and rejects every connection | **No ticket validator registered.** The transport is fail-closed by design | `NetServerBootstrap` registers one on start. If `IRONFRONT_SHARED_SECRET` is unset and unsigned tickets are disabled, this is the intended refusal |
 | Every join is rejected with a valid-looking ticket | The shared secret differs from the master's, or the ticket was issued for another server | `TicketValidator.RejectionsByReason` distinguishes `BadSignature` from `WrongServer`. The client is told neither, deliberately — a handshake that names the failing check is an oracle for forging a ticket |
-| A player who crashed cannot rejoin for about a minute | Their claim was not released, so it is lapsing on the ticket's own 60 s expiry | The disconnect path must call `TicketValidator.Release`. The connection→player pairing is positional at connect time; see `TryTakePendingAdmission` for why, and Dev B item **B7** for the clean fix |
+| A player who crashed cannot rejoin for about a minute | Their claim was not released, so it is lapsing on the ticket's own 60 s expiry | The disconnect path must call `TicketValidator.Release`. The connection→player pairing is positional at connect time; see `TryTakePendingAdmission` for why, and the transport track item **B7** for the clean fix |
 
 ---
 

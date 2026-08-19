@@ -8,9 +8,6 @@ namespace Ironfront.Net.Unity.Server
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// At +200 this runs after the default-order <c>Actor</c> and <c>AiActorController</c>
     /// <c>FixedUpdate</c>s and after the physics step, so the snapshot describes the world at
     /// the end of the tick it is labelled with. Capturing before the simulation instead is the

@@ -1,5 +1,4 @@
 # tools/ci.ps1 — the local mirror of the GitHub Actions pipeline.
-# OWNER: Dev D (plans/00-shared/conventions.md section 7).
 #
 # conventions.md section 5 requires this to finish in under 5 minutes and to cover:
 #   1. dotnet build across every .NET project, warnings as errors
@@ -62,6 +61,23 @@ try {
         dotnet run --project "$repoRoot/tools/SpecChecker" -c $Configuration --nologo -- $repoRoot
     }
 
+    # Mirrors the "Check Unity .meta files are consistent" step in ci.yml. Costs well under a
+    # second and catches the one class of breakage that only shows up on somebody ELSE's machine:
+    # an asset committed without its GUID. Runs with or without Unity installed — it reads git,
+    # not the Editor — so B, C and D get the same answer A does.
+    Invoke-Step "3b. Unity .meta consistency" {
+        & "$PSScriptRoot/check-unity-meta.ps1"
+    }
+
+    # Reads .dll.meta importer settings, not the Editor, so it costs a second and gives the same
+    # answer on every machine. Catches a duplicate managed assembly present at two versions, which
+    # breaks type identity across the boundary and reports it as something else entirely — the
+    # System.Text.Json 10.0.0.0/8.0.0.0 split surfaced as "JsonStringEnumConverter does not derive
+    # from JsonConverter". Nothing else here would have gone red for it.
+    Invoke-Step "3c. No duplicate managed assemblies" {
+        & "$PSScriptRoot/check-duplicate-assemblies.ps1"
+    }
+
     # ADVISORY — mirrors the `style` job in .github/workflows/ci.yml, which is
     # continue-on-error. Deliberately NOT routed through Invoke-Step: a formatting nit must
     # not add to $failures and make this script exit 1, or people will stop running it.
@@ -92,7 +108,7 @@ try {
         Write-Warning "Some commit subjects do not match conventions.md section 1.2 (advisory)."
     }
 
-    # Step 4 is opt-in: only Dev A's machine and a Unity-equipped runner can do this, and
+    # Step 4 is opt-in: only the client track's machine and a Unity-equipped runner can do this, and
     # the other three must not be blocked by its absence.
     if ($SkipUnity) {
         Write-Host ""
@@ -103,10 +119,31 @@ try {
         Write-Host "=== 4. Unity compile check === SKIPPED (UNITY_PATH not set)" -ForegroundColor Yellow
     }
     else {
+        # Start-Process -Wait, NOT the call operator. Unity.exe is a GUI-subsystem binary, so
+        # PowerShell does not wait for it and does not set $LASTEXITCODE from it -- the call
+        # operator returned instantly, Invoke-Step read the PREVIOUS command's exit code, and
+        # this step printed PASS on every run it has ever had. It went green on a real
+        # "Aborting batchmode due to failure: Scripts have compiler errors" on 2026-08-18,
+        # which is when it was noticed. A gate that cannot go red is worse than no gate.
         Invoke-Step "4. Unity compile check" {
-            & $env:UNITY_PATH -batchmode -nographics -quit `
-                -projectPath "$repoRoot/Ironfront_Reborn" `
-                -logFile "$repoRoot/unity-compile.log"
+            $unityLog = "$repoRoot/unity-compile.log"
+            $unity = Start-Process -FilePath $env:UNITY_PATH -Wait -PassThru -NoNewWindow `
+                -ArgumentList @(
+                    '-batchmode', '-nographics', '-quit',
+                    '-projectPath', "$repoRoot/Ironfront_Reborn",
+                    '-logFile', $unityLog)
+
+            if ($unity.ExitCode -ne 0) {
+                # The exit code alone says nothing about WHICH script failed, and the log is
+                # thousands of lines. Surface the compiler errors themselves.
+                if (Test-Path $unityLog) {
+                    Select-String -Path $unityLog -Pattern 'error CS' `
+                        | Select-Object -ExpandProperty Line -Unique | Out-Host
+                }
+                throw "Unity exited with code $($unity.ExitCode) — see $unityLog"
+            }
+
+            $global:LASTEXITCODE = 0
         }
     }
 

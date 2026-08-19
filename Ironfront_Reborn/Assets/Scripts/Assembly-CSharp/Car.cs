@@ -1,4 +1,5 @@
 using System;
+using Ironfront.Net.Replication.Vehicles;
 using UnityEngine;
 
 public class Car : Vehicle
@@ -32,6 +33,46 @@ public class Car : Vehicle
 	public float turningRadius = 5f;
 
 	private float steerAngle;
+
+	/// <summary>
+	/// The car's subtype tail: <c>steerAngle</c> in degrees and a placeholder friction byte
+	/// (protocol-spec.md section 4.10).
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>V5 needs this because a remote car is not locally simulated.</b> Its wheels are
+	/// wherever the last snapshot put them, and there is nothing on the client that could derive
+	/// a steering angle from a position and a velocity -- so without the tail every replicated
+	/// car drives with its front wheels pointing dead ahead through every corner.
+	/// </para>
+	/// <para>
+	/// <b><c>surfaceFriction</c> is 1 rather than measured.</b> The shipped <c>Car</c> keeps no
+	/// single friction value -- it is per <c>WheelCollider</c> and changes with the surface
+	/// under each one -- and averaging four of them into a byte would put a number on the wire
+	/// that names nothing. A full 1.0 is the honest "no friction modifier reported"; measuring
+	/// it belongs with whoever gives the client a use for it.
+	/// </para>
+	/// </remarks>
+	public override void ReadNetworkSubtypeTail(out byte subtypeA, out byte subtypeB)
+	{
+		VehicleSubtypeTail.PackSteered(steerAngle, 1f, out subtypeA, out subtypeB);
+	}
+
+	/// <summary>
+	/// Drives the steering-wheel prop and the engine note from the replicated steer angle.
+	/// V5-D3.
+	/// </summary>
+	/// <remarks>
+	/// <c>Update()</c> reads <c>steerAngle</c> to rotate the wheel prop, and on a replicated
+	/// car nothing integrates it any more -- so without this every remote car drives past with
+	/// its steering wheel dead centre through every corner. The engine note follows the same
+	/// value because the throttle it used to chase is not local either.
+	/// </remarks>
+	public override void ApplyReplicatedSubtypeTail(byte subtypeA, byte subtypeB)
+	{
+		steerAngle = VehicleSubtypeTail.UnpackSteerAngle(subtypeA);
+		enginePitchTarget = HasDriver() ? 0.5f : 0f;
+	}
 
 	public Transform steeringWheel;
 
@@ -97,6 +138,15 @@ public class Car : Vehicle
 	protected override void FixedUpdate()
 	{
 		base.FixedUpdate();
+		// V5-D3. The body is kinematic on a replicated client, so every WheelCollider write
+		// below steers something PhysX will not move -- and steerAngle would be integrated
+		// from an input this peer does not have, which is exactly what the subtype tail
+		// replaces. Update() and LateUpdate() keep running: the steering-wheel prop, the
+		// engine note and the wheel meshes all read values, not forces.
+		if (NetworkDriven)
+		{
+			return;
+		}
 		enginePitchTarget = ((!HasDriver()) ? 0f : 0.5f);
 		if (HasDriver() && !burning)
 		{

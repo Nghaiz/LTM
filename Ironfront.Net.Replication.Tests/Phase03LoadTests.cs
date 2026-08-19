@@ -200,6 +200,37 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void AResetKeepsActorIdsInUseHonestForActorsThatSurviveTheRound()
+        {
+            // the client track, round 9 defect 7: the shipping Dustbowl scene cycles
+            // Playing -> Ended -> Resetting -> WaitingForPlayers -> Warmup on its own while its
+            // 41 bots keep existing. Measured mid-round: ids in-use=41, registry 41. Measured
+            // immediately after the auto-reset: ids in-use=0, free=64, registry still 41. The
+            // audit's leak check was structurally blind from the second round on -- the counter
+            // could not have detected anything -- and _free was re-offering ids 1..41 that live
+            // actors still held.
+            var pool = new ActorIdPool(8);
+            var audit = new ServerStateAudit(
+                pool, new HitboxHistory(), new InterestManager(), new SpawnAckTracker(), () => 0);
+
+            pool.TryAcquire(0f, out ushort survivor);
+            pool.TryAcquire(0f, out ushort despawned);
+
+            audit.ResetForNewMatch(new[] { survivor });
+
+            ServerStateSnapshot state = audit.Capture();
+
+            Assert.Equal(1, state.ActorIdsInUse);
+            Assert.True(pool.IsInUse(survivor));
+            Assert.False(pool.IsInUse(despawned));
+
+            // And the survivor's id is not back on offer.
+            var issued = new System.Collections.Generic.List<ushort>();
+            while (pool.TryAcquire(0f, out ushort id)) issued.Add(id);
+            Assert.DoesNotContain(survivor, issued);
+        }
+
+        [Fact]
         public void TheAuditReportsWhatIsActuallyLeftRatherThanJustPassOrFail()
         {
             var manager = new InterestManager();

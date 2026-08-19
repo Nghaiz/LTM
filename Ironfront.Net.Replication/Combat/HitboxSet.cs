@@ -67,7 +67,7 @@ namespace Ironfront.Net.Replication.Combat
         /// </summary>
         /// <remarks>
         /// Exists so tests and the bootstrap have one definition of "roughly a person" instead
-        /// of each inventing their own. Real actors override it with boxes read from Dev A's
+        /// of each inventing their own. Real actors override it with boxes read from the client track's
         /// rig; nothing in the resolution path depends on these numbers being the real ones.
         /// </remarks>
         public static HitboxSet Humanoid(in Vec3 feetPosition, float scale = 1f)

@@ -9,11 +9,8 @@ namespace Ironfront.Net.Unity
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// <b>Why this component exists instead of six new members on <c>Actor</c>.</b> The
-    /// phase-00 plan asks Dev A to expose <c>NetVelocity</c>, <c>IsGrounded</c> and
+    /// phase-00 plan asks the client track to expose <c>NetVelocity</c>, <c>IsGrounded</c> and
     /// <c>CharacterMove</c> on <c>Actor.cs</c>. That request was written on the assumption
     /// that <c>Actor</c> owns movement. It does not — see docs/movement-analysis.md § 0. All
     /// three would be pass-throughs on a 1188-line file A owns, forwarding to a controller

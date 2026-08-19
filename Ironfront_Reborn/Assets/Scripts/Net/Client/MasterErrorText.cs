@@ -10,8 +10,8 @@ namespace Ironfront.Net.Unity.Client
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev A. Written by the lead's assist track
-    /// (plans/assist-dev-a/step-06-master-connection.md). phase-03 handoff item 2 — "send D the
+    /// Written by the lead's assist track
+    /// (plans/unity-client/study/step-06-master-connection.md). phase-03 handoff item 2 — "send D the
     /// list of error codes the client needs to display, cross-checked against the table in
     /// protocol-spec.md § 13" — is this file, and every code in that table is covered below.
     /// </para>

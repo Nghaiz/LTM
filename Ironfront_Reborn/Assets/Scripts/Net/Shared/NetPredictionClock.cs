@@ -11,7 +11,7 @@ namespace Ironfront.Net.Unity
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C. Implements the decision recorded for checklist item A5 — <b>option B</b>:
+    /// Implements the decision recorded for checklist item A5 — <b>option B</b>:
     /// the project keeps its physics timestep, and prediction stops riding
     /// <see cref="MonoBehaviour"/>'s <c>FixedUpdate</c>.
     /// </para>

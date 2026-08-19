@@ -11,7 +11,7 @@ namespace Ironfront.Net.Replication
     /// <para>
     /// The split against <see cref="SnapshotMessage"/> is deliberate and is the seam between
     /// two owners: <see cref="SnapshotMessage"/> (Ironfront.Net.Protocol, shared) decides how
-    /// bytes are laid out; this class (Dev C) decides which actors and which fields go in at
+    /// bytes are laid out; this class (the replication track) decides which actors and which fields go in at
     /// all. Nothing here may invent a wire layout.
     /// </para>
     /// <para>
@@ -23,14 +23,23 @@ namespace Ironfront.Net.Replication
     public static class SnapshotBuilder
     {
         /// <summary>
-        /// Quantizes one actor's gameplay state into a snapshot entry with every v1 field
-        /// present (<see cref="SnapshotField.FullNoSeat"/>).
+        /// Quantizes one actor's gameplay state into a snapshot entry with every field the
+        /// actor actually has present.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// <paramref name="health"/> is clamped to <see cref="Quantize.HEALTH_MAX"/> rather
         /// than trusted: it arrives as a float from gameplay, and a medkit overshoot or a
         /// negative from an overkill hit would otherwise wrap the byte and hand the client a
         /// player at 250 HP.
+        /// </para>
+        /// <para>
+        /// <paramref name="vehicleId"/> and <paramref name="seatIndex"/> are optional so that
+        /// the fourteen existing call sites that capture actors on foot keep compiling
+        /// unchanged. A zero <paramref name="vehicleId"/> means on foot and produces
+        /// <see cref="SnapshotField.FullNoSeat"/>; anything else produces
+        /// <see cref="SnapshotField.Full"/>, which is 3 bytes wider.
+        /// </para>
         /// </remarks>
         public static ActorSnapshotEntry Capture(
             ushort actorId,
@@ -42,12 +51,16 @@ namespace Ironfront.Net.Replication
             float health,
             byte weaponId,
             byte ammoInClip,
-            byte team)
+            byte team,
+            ushort vehicleId = 0,
+            byte seatIndex = 0)
         {
             return new ActorSnapshotEntry
             {
                 ActorId    = actorId,
-                ChangeMask = SnapshotField.FullNoSeat,
+                ChangeMask = vehicleId != 0
+                    ? SnapshotField.Full
+                    : SnapshotField.FullNoSeat,
 
                 PosX = Quantize.PackPos(position.X),
                 PosY = Quantize.PackPos(position.Y),
@@ -65,6 +78,9 @@ namespace Ironfront.Net.Replication
                 WeaponId   = weaponId,
                 AmmoInClip = ammoInClip,
                 Team       = team,
+
+                VehicleId  = vehicleId,
+                SeatIndex  = seatIndex,
             };
         }
 
@@ -106,8 +122,15 @@ namespace Ironfront.Net.Replication
             // A full snapshot forces every field on regardless of what the caller left in the
             // mask. A "full" snapshot that inherited a delta's sparse mask would be
             // undecodable by a client with no baseline, and would do it silently.
+            //
+            // The seat bit is preserved rather than cleared. Forcing FullNoSeat here — which is
+            // what this loop used to do unconditionally — means a full snapshot never carries
+            // seat state at all, so a joining client sees every passenger standing in the road
+            // until each of them happens to change seats.
             for (int i = 0; i < entries.Length; i++)
-                entries[i].ChangeMask = SnapshotField.FullNoSeat;
+                entries[i].ChangeMask = entries[i].VehicleId != 0
+                    ? SnapshotField.Full
+                    : SnapshotField.FullNoSeat;
 
             var header = new SnapshotHeader(
                 snapshot.ServerTick,
@@ -119,10 +142,14 @@ namespace Ironfront.Net.Replication
         }
 
         /// <summary>
-        /// Encoded size of a full snapshot with this many actors: the 13-byte header plus 20
-        /// bytes per actor. 64 actors is 1293 bytes, past the 1184-byte payload limit, so a
-        /// full server's join snapshot fragments. That is expected, not an error.
+        /// Encoded size of a full snapshot with this many actors on foot: the 13-byte header
+        /// plus 20 bytes per actor. 64 actors is 1293 bytes, past the 1184-byte payload limit,
+        /// so a full server's join snapshot fragments. That is expected, not an error.
         /// </summary>
+        /// <remarks>
+        /// Seated actors are 3 bytes wider each. This is a floor for planning, not the width of
+        /// any particular snapshot — <see cref="SnapshotMessage.SizeFor"/> is the exact answer.
+        /// </remarks>
         public static int FullSizeFor(int actorCount)
             => SnapshotHeader.Size + actorCount * SnapshotMessage.EntrySize(SnapshotField.FullNoSeat);
     }

@@ -13,10 +13,11 @@ PluginImporter:
   validateReferences: 1
   platformData:
     Any:
-      enabled: 0
-      settings: {}
-    Editor:
       enabled: 1
+      settings:
+        Exclude Editor: 1
+    Editor:
+      enabled: 0
       settings:
         DefaultValueInitialized: true
     WindowsStoreApps:

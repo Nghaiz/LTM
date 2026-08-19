@@ -15,7 +15,7 @@ namespace Ironfront.Net.Transport.Simulation
     /// found in a unit test at seed 12345, not during integration week.
     /// </para>
     /// <para>
-    /// <b>Deviation from dev-b-transport/phase-00 § Task 5, deliberate.</b> The sketch there
+    /// <b>Deviation from transport/phase-00 § Task 5, deliberate.</b> The sketch there
     /// types the destination as <c>System.Net.EndPoint</c>. This class is generic over the
     /// destination instead, so the same simulator serves both the UDP peer
     /// (<c>NetworkSimulator&lt;EndPoint&gt;</c>) and <see cref="Loopback.LoopbackTransport"/>

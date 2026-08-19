@@ -145,7 +145,7 @@ prefabs, and the script keyed off `!u!92` rather than the name, which is correct
 - GUILayer only ever serviced `GUIText`/`GUITexture` raycasting, so with neither present nothing
   can observe its absence.
 
-### `Player Fps Actor.prefab` is intact for Dev A's work
+### `Player Fps Actor.prefab` is intact for the client track's work
 
 The two removed components belonged to the two camera GameObjects:
 
@@ -225,7 +225,7 @@ console wave, both clean:
   `m_PrefabParentObject`). Unity 6 reads these but rewrites them to `PrefabInstance` on first
   save. Not an error — but it is where the unavoidable multi-thousand-line diff will come from
   the first time anyone saves a scene or prefab. Worth deciding deliberately (a one-shot
-  "open and save everything" upgrade commit) rather than letting it land inside Dev A's
+  "open and save everything" upgrade commit) rather than letting it land inside the client track's
   netcode PR.
 
 ---

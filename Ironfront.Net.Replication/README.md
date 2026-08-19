@@ -3,9 +3,9 @@
 The authoritative game server's brain, as a plain .NET library.
 
 Snapshots, delta encoding, interest management, lag compensation, the movement
-simulation shared with the client, and the match lifecycle. **Owner: Dev C.**
+simulation shared with the client, and the match lifecycle. **Owner: The replication track.**
 
-> `Serialization/` (`BitWriter`, `BitReader`) is **Dev B's**. Dev C writes the conformance
+> `Serialization/` (`BitWriter`, `BitReader`) is **The transport track's**. The replication track writes the conformance
 > tests that verify it and does not edit it — if the same person writes and tests a codec,
 > the tests only prove it agrees with itself.
 
@@ -39,9 +39,10 @@ If you add something here, wire it in `ServerTickLoop` in the same change.
 | `Interest/` | Who sees whom, and how often |
 | `Combat/` | Hitbox history, rewind, ray/box maths, authoritative fire resolution |
 | `Movement/` | `MovementCore` — the shared truth of client and server |
+| `Projectiles/` | Ballistics, the server projectile and deployable authorities, the client's flight. Projectiles replicate **by parameter, not by state** (V7-D5): one `S_PROJECTILE_SPAWN` carries `(id, origin, velocity, spawnTick, remainingLifetime)`, clients simulate, the server owns every hit |
 | `Match/` | Match lifecycle, capture points, tickets |
 | `Server/` | Tick pacing, input authority, framing, id allocation, ticket validation |
-| `Serialization/` | **Dev B's.** Bit-level primitives |
+| `Serialization/` | **The transport track's.** Bit-level primitives |
 
 ---
 

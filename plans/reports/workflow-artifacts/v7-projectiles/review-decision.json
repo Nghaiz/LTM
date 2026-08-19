@@ -1,0 +1,25 @@
+{
+  "decision": "PASS_WITH_RISK",
+  "score": 7,
+  "criticalCount": 0,
+  "acceptanceCoverage": [
+    "MET criterion 2 (timestep-invariant arc) — pinned by ABulletFollowsTheSameArcAtAnyTimestep at 30 Hz vs 144 Hz within one quantization step",
+    "MET criterion 3 (damage server-only) — ClientProjectileTracker has no damage API; enforced structurally and asserted by reflection",
+    "MET criterion 7 (clean state) — the projectile id pool joined ServerStateAudit and is graded across five simulated matches",
+    "MET criterion 12 (dotnet test green, no Linq/foreach/allocation) — 1515 tests pass; AResupplySweepAllocatesNothing measures zero with a counter-liveness guard",
+    "MET criterion 13 (ThrowGrenade retired) — grep finds only the Reserved7 declaration and its comment",
+    "PARTIAL criterion 4 (throw release) — the shared constant and the tick scheduling ship and the release is cancelled on holster/drop, but the Unity release path has no EditMode test",
+    "PARTIAL criterion 10 (S_EXPLOSION has a caller) — V1's caller is intact and the bridge adds one for stepped projectiles, but stepped projectiles are off by default",
+    "NOT MET criterion 1 (grenade parity), 5 (guided missile end-to-end), 6 (deployable resupply end-to-end), 8/9 (bandwidth and tick budget ungraded), 11 (headless zero-NRE unverified) — all require a running two-client session, which needs the client prefab array authored in the Editor"
+  ],
+  "regressionProof": [
+    "1515 tests pass across 7 suites, up from 1487 on develop; zero failures",
+    "SpecChecker green — 90 constants match the spec after the section 4.10, 4.2 and changelog edits",
+    "The whole Unity project compiles with zero errors, verified through the Editor rather than the parse-only gate",
+    "ClientWiringGate green with the router event count raised 14 to 15 and a real production subscriber for the new event",
+    "The medipack re-announce regression I introduced was found by self-review and pinned by AMotionlessMedipackDoesNotReAnnounceItsOrdinaryCountdown, which asserts silence while the heal test asserts a message — both directions",
+    "The grenade double-model the review found is closed by ABouncingOrRigidbodyProjectileIsNotBallisticallyStepped, and the double-damage hazard by AuthoritativeFlight defaulting off"
+  ],
+  "blockingReasons": [],
+  "contractStatus": "CHANGED"
+}

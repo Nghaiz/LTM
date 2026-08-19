@@ -29,7 +29,13 @@ namespace Ironfront.Net.Replication.Tests
     {
         private const float ClipSize = 30f;
 
-        private static WeaponConfig Rifle => WeaponConfig.Rifle;
+        /// <summary>
+        /// The weapon every test in this file equips. Since phase-V2 the client resolves its
+        /// numbers from <see cref="WeaponCatalog"/> — the same table the server reads — instead
+        /// of assuming a rifle, so the fixture names a real id rather than a loose config. RK-44
+        /// carries the 0.1 s cooldown and 30-round clip these tests were written against.
+        /// </summary>
+        private static WeaponConfig Rifle => WeaponCatalog.For(WeaponIds.RK44);
 
         /// <summary>A clock reading for the calls that need one but are not testing timing.</summary>
         private const float Now = 10f;
@@ -38,7 +44,7 @@ namespace Ironfront.Net.Replication.Tests
         private static float ShotTime(int index) => 10f + index * (Rifle.Cooldown + 0.01f);
 
         private static ActorSnapshotEntry LocalEntry(
-            byte health = 100, byte ammo = 30, bool alive = true, byte weaponId = 0)
+            byte health = 100, byte ammo = 30, bool alive = true, byte weaponId = WeaponIds.RK44)
             => new ActorSnapshotEntry
             {
                 ActorId = 1,
@@ -77,6 +83,7 @@ namespace Ironfront.Net.Replication.Tests
             // ServerFireResolver.CheckCanFire tests Reloading before ammo — so every later shot
             // was refused and the player could not fire again for the rest of that life.
             var state = new ClientCombatState { LocalActorId = 1 };
+            state.EquipWeapon(WeaponIds.RK44);
             state.ApplySnapshot(LocalEntry(ammo: 30), Now);   // clears the equip resync
 
             state.PredictFire(Now);
@@ -110,6 +117,7 @@ namespace Ironfront.Net.Replication.Tests
             // server actually reloads, SnapshotField.Weapon moves and the snapshot's count is
             // taken verbatim rather than reconciled against the prediction.
             var state = new ClientCombatState { LocalActorId = 1 };
+            state.EquipWeapon(WeaponIds.RK44);
             state.ApplySnapshot(LocalEntry(ammo: 30), Now);
 
             for (int i = 0; i < 5; i++) state.PredictFire(ShotTime(i));
@@ -151,6 +159,9 @@ namespace Ironfront.Net.Replication.Tests
             // The failure this rule exists to stop, driven end to end: the client fires, the
             // snapshot is always one shot behind, and the displayed number must never go back up.
             var state = new ClientCombatState();
+            state.EquipWeapon(WeaponIds.RK44);
+            state.ApplySnapshot(LocalEntry(ammo: 30), Now);   // clears the equip resync
+
             var seen = new List<byte>();
 
             for (int shot = 0; shot < 8; shot++)
@@ -172,6 +183,7 @@ namespace Ironfront.Net.Replication.Tests
         public void ASnapshotFurtherOutThanTheThresholdIsCountedAsACorrection()
         {
             var state = new ClientCombatState();
+            state.EquipWeapon(WeaponIds.RK44);
             state.ApplySnapshot(LocalEntry(ammo: 30), Now);   // clears the equip resync
 
             state.ApplySnapshot(LocalEntry(ammo: 12), Now);
@@ -186,6 +198,7 @@ namespace Ironfront.Net.Replication.Tests
         public void FirePredictionUsesTheServersOwnPreConditions()
         {
             var state = new ClientCombatState();
+            state.EquipWeapon(WeaponIds.RK44);
 
             Assert.Equal(FireRejection.None, state.PredictFire(ShotTime(0)));
             Assert.Equal(29, state.AmmoInClip);
@@ -199,6 +212,7 @@ namespace Ironfront.Net.Replication.Tests
         public void ARejectedShotConsumesNothing()
         {
             var state = new ClientCombatState();
+            state.EquipWeapon(WeaponIds.RK44);
             for (int shot = 0; shot < 30; shot++)
                 Assert.Equal(FireRejection.None, state.PredictFire(ShotTime(shot)));
 
@@ -211,6 +225,7 @@ namespace Ironfront.Net.Replication.Tests
         public void ACorpseDoesNotFire()
         {
             var state = new ClientCombatState();
+            state.EquipWeapon(WeaponIds.RK44);
             state.ApplySnapshot(LocalEntry(health: 0, alive: false), Now);
 
             Assert.Equal(FireRejection.ShooterDead, state.PredictFire(ShotTime(0)));
@@ -222,6 +237,7 @@ namespace Ironfront.Net.Replication.Tests
         public void HealthComesOnlyFromTheSnapshotAndReportsTheDrop()
         {
             var state = new ClientCombatState();
+            state.EquipWeapon(WeaponIds.RK44);
             byte previous = 0, current = 0;
             state.OnHealthChanged += (from, to) => { previous = from; current = to; };
 
@@ -241,6 +257,7 @@ namespace Ironfront.Net.Replication.Tests
         public void DeathStampsTheRespawnClockAndTheDelayHasToElapse()
         {
             var state = new ClientCombatState { RespawnDelaySeconds = 3f, LocalActorId = 1 };
+            state.EquipWeapon(WeaponIds.RK44);
             int died = 0;
             state.OnDied += () => died++;
 
@@ -259,6 +276,7 @@ namespace Ironfront.Net.Replication.Tests
         {
             // S_DEATH and the snapshot's IsAlive bit say the same thing a fraction apart.
             var state = new ClientCombatState { LocalActorId = 1 };
+            state.EquipWeapon(WeaponIds.RK44);
             int died = 0;
             state.OnDied += () => died++;
 
@@ -272,6 +290,7 @@ namespace Ironfront.Net.Replication.Tests
         public void RespawnRefillsTheClipAndResyncsFromTheNextSnapshot()
         {
             var state = new ClientCombatState();
+            state.EquipWeapon(WeaponIds.RK44);
             int respawned = 0;
             state.OnRespawned += () => respawned++;
 
@@ -290,6 +309,7 @@ namespace Ironfront.Net.Replication.Tests
         public void AReloadResyncsOnceAndThenGoesBackToTrustingTheClient()
         {
             var state = new ClientCombatState();
+            state.EquipWeapon(WeaponIds.RK44);
             state.ApplySnapshot(LocalEntry(ammo: 30), Now);
             for (int shot = 0; shot < 20; shot++) state.PredictFire(ShotTime(shot));
             Assert.Equal(10, state.AmmoInClip);
@@ -318,6 +338,7 @@ namespace Ironfront.Net.Replication.Tests
             // waits forever -- and CheckCanFire tests Reloading BEFORE ammo, so every later
             // shot is rejected and the player cannot fire again for the rest of that life.
             var state = new ClientCombatState { ReloadSeconds = 2f };
+            state.EquipWeapon(WeaponIds.RK44);
             for (int shot = 0; shot < 20; shot++) state.PredictFire(ShotTime(shot));
             Assert.Equal(10, state.AmmoInClip);
 
@@ -341,6 +362,7 @@ namespace Ironfront.Net.Replication.Tests
             // PredictFire runs the same check first, so a caller that never calls Tick still
             // recovers rather than locking up.
             var state = new ClientCombatState { ReloadSeconds = 2f };
+            state.EquipWeapon(WeaponIds.RK44);
             for (int shot = 0; shot < 30; shot++) state.PredictFire(ShotTime(shot));
             state.BeginReload(100f);
 
@@ -356,6 +378,7 @@ namespace Ironfront.Net.Replication.Tests
             // stamped only on the S_DEATH path, leaving the other at negative infinity and
             // making the respawn available instantly for roughly half of all deaths.
             var state = new ClientCombatState { RespawnDelaySeconds = 3f, LocalActorId = 1 };
+            state.EquipWeapon(WeaponIds.RK44);
 
             state.ApplySnapshot(LocalEntry(health: 0, alive: false), 100f);
 
@@ -368,6 +391,7 @@ namespace Ironfront.Net.Replication.Tests
         public void TheSecondNotificationOfADeathDoesNotMoveTheRespawnClock()
         {
             var state = new ClientCombatState { RespawnDelaySeconds = 3f, LocalActorId = 1 };
+            state.EquipWeapon(WeaponIds.RK44);
 
             state.ApplySnapshot(LocalEntry(health: 0, alive: false), 100f);
             state.ApplyDeath(new DeathMessage(1, 2, CauseOfDeath.Bullet, 0, 0, 0, 0), 100.4f);
@@ -383,6 +407,7 @@ namespace Ironfront.Net.Replication.Tests
             // ClientMessageRouter.OnDeath is a broadcast, because the killfeed is global. Wiring
             // it straight to ApplyDeath used to kill the local player on every death in the match.
             var state = new ClientCombatState { LocalActorId = 7 };
+            state.EquipWeapon(WeaponIds.RK44);
             int died = 0;
             state.OnDied += () => died++;
 

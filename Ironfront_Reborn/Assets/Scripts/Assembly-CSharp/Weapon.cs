@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Ironfront.Net.Unity;
 using UnityEngine;
 
 public class Weapon : MonoBehaviour
@@ -27,6 +28,37 @@ public class Weapon : MonoBehaviour
 		public float cooldown = 0.2f;
 
 		public float unholsterTime = 1.2f;
+
+		/// <summary>
+		/// Seconds between a throw being ordered and the projectile leaving the hand. V7-D7.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Matches the throw clip's animation-event time, and it is the one number in this
+		/// phase that nothing in CI can discover.</b> <c>ThrowableWeapon.Fire</c> does not shoot
+		/// -- it sets an Animator trigger, and an animation event calls
+		/// <c>ThrowableWeapon.SpawnThrowable</c>. A headless server has no active Animator
+		/// (<c>Weapon.HasActiveAnimator</c> already returns false there, and on a stripped prefab
+		/// <c>GetComponent&lt;Animator&gt;()</c> returns null outright), so <b>today the server
+		/// throws instantly and the client about 0.6 s later</b>. That divergence is not
+		/// introduced by the network; the network is what makes it visible.
+		/// </para>
+		/// <para>
+		/// <b>Why not run an Animator on the server.</b> A headless build strips the renderers
+		/// the clip drives, the clip is authored for visuals rather than simulation, and it would
+		/// make the release time an Editor-only fact no test can grade. <b>Why not trust the
+		/// client's animation event.</b> It would make a client the author of the authoritative
+		/// release tick, and a modified client throws instantly with nothing to check it against.
+		/// A single authored constant is checkable by both sides.
+		/// </para>
+		/// <para>
+		/// <b>Cost, stated plainly:</b> if this drifts from the clip's event time, the grenade
+		/// leaves the hand at a visibly wrong point in the animation. That is a cosmetic error
+		/// with a loud symptom, which is the right failure mode to trade a silent authority hole
+		/// for.
+		/// </para>
+		/// </remarks>
+		public float releaseDelay = 0.6f;
 
 		public float aimFov = 50f;
 
@@ -147,14 +179,28 @@ public class Weapon : MonoBehaviour
 
 	protected virtual void Start()
 	{
-		weaponVolume = audio.volume;
-		audio.loop = configuration.auto;
+		// V6 task 3: one of the section 3.6 headless NREs. Weapon.Awake assigns `audio` from
+		// GetComponent<AudioSource>(), which is null on a prefab whose audio was stripped for a
+		// dedicated server -- and every branch below it then dies on the first weapon spawned.
+		// Guarded rather than early-returned, because `ammo` below is GAMEPLAY and the server
+		// needs it.
+		if (audio != null)
+		{
+			weaponVolume = audio.volume;
+			audio.loop = configuration.auto;
+		}
 		ammo = configuration.ammo;
 		if (user != null)
 		{
 			if (user.aiControlled)
 			{
-				audio.pitch *= UnityEngine.Random.Range(0.97f, 1.02f);
+				// The pitch draw is COSMETIC and is deliberately not taken on a server. It shares
+				// UnityEngine.Random with TankTurret's recoil impulse, which is a server draw per
+				// D4 -- taking a cosmetic draw here would advance that stream on one side only.
+				if (audio != null)
+				{
+					audio.pitch *= UnityEngine.Random.Range(0.97f, 1.02f);
+				}
 				reverbAudio = null;
 			}
 			else if (reverbAudio != null)
@@ -178,7 +224,7 @@ public class Weapon : MonoBehaviour
 
 	protected virtual void Update()
 	{
-		if (!stopFireLoop.Done())
+		if (!stopFireLoop.Done() && audio != null)
 		{
 			float num = 1f - stopFireLoop.Ratio();
 			audio.volume = num * weaponVolume;
@@ -197,7 +243,7 @@ public class Weapon : MonoBehaviour
 	{
 		if (CanFire())
 		{
-			if (configuration.auto && (!audio.isPlaying || !stopFireLoop.Done()))
+			if (configuration.auto && audio != null && (!audio.isPlaying || !stopFireLoop.Done()))
 			{
 				StartFireLoop();
 			}
@@ -208,6 +254,10 @@ public class Weapon : MonoBehaviour
 
 	private void StartFireLoop()
 	{
+		if (audio == null)
+		{
+			return;
+		}
 		audio.volume = weaponVolume;
 		audio.Play();
 		stopFireLoop.Stop();
@@ -281,7 +331,13 @@ public class Weapon : MonoBehaviour
 		{
 			animator.SetBool("no ammo", !HasAnyAmmo());
 		}
-		if (!HasLoadedAmmo() && HasSpareAmmo() && !reloading && (configuration.forceAutoReload || OptionsUi.GetOptions().autoReload))
+		// OptionsUi.GetOptions() is a client-only singleton and the third of the section 3.6
+		// headless NREs. forceAutoReload is a prefab fact and stays authoritative everywhere; the
+		// player's auto-reload PREFERENCE is only a question a client can answer, so a server
+		// asking it is asking the wrong machine.
+		bool autoReload = configuration.forceAutoReload
+			|| (NetWeaponAuthority.CosmeticHalfRunsHere && OptionsUi.GetOptions().autoReload);
+		if (!HasLoadedAmmo() && HasSpareAmmo() && !reloading && autoReload)
 		{
 			Reload();
 		}
@@ -337,29 +393,80 @@ public class Weapon : MonoBehaviour
 		{
 			SpawnProjectile(direction);
 		}
-		if (configuration.muzzleFlash != null)
-		{
-			configuration.muzzleFlash.Play(true);
-		}
 		if (ammo != -1)
 		{
 			ammo--;
 		}
-		user.ApplyRecoil(configuration.kickback * Vector3.back + UnityEngine.Random.insideUnitSphere * configuration.randomKick);
+		// V6-D4-local. Recoil is client-local for a human: the kick's consequence is already
+		// inside the NEXT C_INPUT frame's yaw and pitch, which the server accepts as the aim, so
+		// applying it server-side too would apply it twice. An AI actor has no input frame, so
+		// its recoil is a server effect and its Random draw is a server draw (D4). The call also
+		// chains through FpsActorController's fpParent -- the LOCAL camera rig -- which does not
+		// exist on a headless build at all.
+		if (user.aiControlled ? NetWeaponAuthority.GameplayHalfRunsHere : NetWeaponAuthority.CosmeticHalfRunsHere)
+		{
+			user.ApplyRecoil(configuration.kickback * Vector3.back + UnityEngine.Random.insideUnitSphere * configuration.randomKick);
+		}
 		AmmoChanged();
-		if (!user.aiControlled && configuration.casing != null)
+		if (!user.aiControlled && configuration.casing != null && NetWeaponAuthority.CosmeticHalfRunsHere)
 		{
 			configuration.casing.Play(false);
 		}
-		if (!configuration.auto)
-		{
-			audio.Play();
-		}
-		else if (ammo == 0)
+		if (configuration.auto && ammo == 0)
 		{
 			StopFireLoop();
 		}
-		if (!user.aiControlled && reverbAudio != null)
+		// An automatic weapon's report is a LOOP started from Fire(), not a per-shot clip, so
+		// the local path must not also fire one here. See PlayFireCosmetics for why the
+		// networked path passes true instead.
+		if (NetWeaponAuthority.CosmeticHalfRunsHere)
+		{
+			PlayFireCosmetics(!configuration.auto);
+		}
+	}
+
+	/// <summary>
+	/// The visible and audible half of one shot: the muzzle flash and the report. Nothing else.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Extracted so the networked cosmetic path and <see cref="Shoot"/> run the SAME code
+	/// (phase-V10 D7). There is one copy, so a weapon that flashes offline flashes over the
+	/// network, and offline single-player is unchanged.
+	/// </para>
+	/// <para>
+	/// <b>Two things are outside this method by construction, and must stay outside it.</b>
+	/// <see cref="SpawnProjectile"/> sets <c>component.source = user</c> and would do REAL
+	/// DAMAGE from a client that is only meant to be drawing a flash. <c>user.ApplyRecoil</c>
+	/// chains through to <c>FpsActorController</c>'s <c>fpParent</c> — the LOCAL camera rig — so
+	/// running it for a remote shooter kicks your own view. A CI gate asserts that no file under
+	/// <c>Net/Client/</c> references either name.
+	/// </para>
+	/// <para>
+	/// <paramref name="playReport"/> exists because the full-auto report is a loop owned by
+	/// <c>Fire()</c>, which the networked path never enters: each <c>S_WEAPON_FIRE</c> is one
+	/// shot, so it plays one report per message and the loop stays a local-player optimisation
+	/// (V10 D8). Calling <see cref="Shoot"/> alone on an automatic weapon would be SILENT, which
+	/// reads as "network audio is flaky" rather than "wrong entry point".
+	/// </para>
+	/// </remarks>
+	public void PlayFireCosmetics()
+	{
+		PlayFireCosmetics(true);
+	}
+
+	/// <inheritdoc cref="PlayFireCosmetics()"/>
+	public void PlayFireCosmetics(bool playReport)
+	{
+		if (configuration.muzzleFlash != null)
+		{
+			configuration.muzzleFlash.Play(true);
+		}
+		if (playReport && audio != null)
+		{
+			audio.Play();
+		}
+		if (user != null && !user.aiControlled && reverbAudio != null)
 		{
 			PlayReverbAudio();
 		}
@@ -390,6 +497,11 @@ public class Weapon : MonoBehaviour
 		Quaternion rotation = Quaternion.LookRotation(direction + UnityEngine.Random.insideUnitSphere * configuration.spread);
 		Projectile component = ((GameObject)UnityEngine.Object.Instantiate(configuration.projectilePrefab, configuration.muzzle.position, rotation)).GetComponent<Projectile>();
 		component.source = user;
+		// V7 tasks 2 and 3. The single point every weapon's projectile passes through, and the
+		// point AFTER the spread roll above -- which is V7-D4's server roll, resolved once, so
+		// the direction announced is the direction fired. A no-op off the server.
+		ProjectileNetAnnouncer.AnnounceLaunch(
+			component, configuration.muzzle.position, rotation * Vector3.forward, user);
 		return component;
 	}
 
@@ -446,7 +558,23 @@ public class Weapon : MonoBehaviour
 		holdingFire = false;
 		reloading = false;
 		CancelInvoke();
+		CancelPendingActions();
 		UnityEngine.Object.Destroy(base.gameObject);
+	}
+
+	/// <summary>
+	/// Cancels anything this weapon has scheduled that <c>CancelInvoke()</c> cannot reach.
+	/// V7-D7.
+	/// </summary>
+	/// <remarks>
+	/// <c>CancelInvoke()</c> only clears <c>Invoke</c> timers. V7 replaced the throwable's
+	/// animation-event release with a scheduled TICK held in a plain field, which no
+	/// <c>CancelInvoke</c> can see — so a throw ordered and then holstered, dropped or
+	/// interrupted by death inside the release delay would still fire <c>Shoot()</c> and
+	/// <c>Reload()</c>, spending a grenade the player no longer has out.
+	/// </remarks>
+	protected virtual void CancelPendingActions()
+	{
 	}
 
 	public virtual void Unholster()
@@ -475,6 +603,7 @@ public class Weapon : MonoBehaviour
 		reloading = false;
 		aiming = false;
 		CancelInvoke();
+		CancelPendingActions();
 		base.gameObject.SetActive(false);
 	}
 
@@ -545,6 +674,10 @@ public class Weapon : MonoBehaviour
 
 	public void AssignFpAudioMix()
 	{
+		if (audio == null)
+		{
+			return;
+		}
 		audio.spatialBlend = 0.4f;
 		if (!configuration.forceWorldAudioOutput)
 		{

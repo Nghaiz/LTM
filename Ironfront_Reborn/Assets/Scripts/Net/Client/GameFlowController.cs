@@ -45,8 +45,8 @@ namespace Ironfront.Net.Unity.Client
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev A. Written by the lead's assist track
-    /// (plans/assist-dev-a/step-05-game-flow.md). Closes phase-03 acceptance criterion 9.
+    /// Written by the lead's assist track
+    /// (plans/unity-client/study/step-05-game-flow.md). Closes phase-03 acceptance criterion 9.
     /// </para>
     /// <para>
     /// <b>It is a plain class, and it has to be.</b> phase-03 sketches

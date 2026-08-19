@@ -1,3 +1,4 @@
+using Ironfront.Net.Replication.Vehicles;
 using UnityEngine;
 
 public class Helicopter : Vehicle
@@ -33,6 +34,36 @@ public class Helicopter : Vehicle
 	public float counterForceMultiplier = 0.3f;
 
 	private float rotorSpeed;
+
+	/// <summary>
+	/// The helicopter's subtype tail: <c>rotorSpeed</c> as a normalized u16, low byte then high
+	/// (protocol-spec.md section 4.10).
+	/// </summary>
+	/// <remarks>
+	/// <b>The one subtype value that is not cosmetic.</b> <c>rotorSpeed</c> spins up and down
+	/// over several seconds and multiplies every force this vehicle applies, so a client with no
+	/// value for it either renders a stationary rotor on a flying helicopter or guesses -- and a
+	/// guess that is wrong on the way up is wrong for the whole spin-up. Two bytes at the
+	/// vehicle's band rate is the cheapest way to make it right.
+	/// </remarks>
+	public override void ReadNetworkSubtypeTail(out byte subtypeA, out byte subtypeB)
+	{
+		VehicleSubtypeTail.PackHelicopter(rotorSpeed, out subtypeA, out subtypeB);
+	}
+
+	/// <summary>
+	/// Takes <c>rotorSpeed</c> from the snapshot. V5-D3, and the reason design section 5
+	/// reserved a subtype tail at all.
+	/// </summary>
+	/// <remarks>
+	/// <c>Update()</c> reads <c>rotorSpeed</c> for the audio pitch, the solid/blurred rotor
+	/// swap and the rotor's own spin. A replicated helicopter integrates none of it, so without
+	/// this every remote helicopter flies past with a stationary, solid rotor and silence.
+	/// </remarks>
+	public override void ApplyReplicatedSubtypeTail(byte subtypeA, byte subtypeB)
+	{
+		rotorSpeed = VehicleSubtypeTail.UnpackHelicopter(subtypeA, subtypeB);
+	}
 
 	private bool isAirborne;
 
@@ -88,6 +119,19 @@ public class Helicopter : Vehicle
 
 	protected override void FixedUpdate()
 	{
+		// V5-D3. Everything past base.FixedUpdate() is force, and rotorSpeed is integrated from
+		// a driver input this peer does not have -- so on a replicated helicopter both are
+		// wrong and the rotor speed arrives on the wire instead (ApplyReplicatedSubtypeTail).
+		// The base call still runs: the ram check and the seat-claim drain are not drive path.
+		if (NetworkDriven)
+		{
+			// isAirborne stays local. It is a downward raycast against this client's own copy
+			// of the map, which is cheap and correct here, and spending a wire bit on it would
+			// buy nothing.
+			isAirborne = !Physics.Raycast(base.transform.position, Vector3.down, 3f);
+			base.FixedUpdate();
+			return;
+		}
 		// rotorSpeed multiplies EVERY force below, so integrating it at render rate made lift
 		// itself framerate-dependent -- the single largest divergence source in the vehicle
 		// set. It is integrated before base.FixedUpdate() so the forces further down read the

@@ -14,9 +14,6 @@ namespace Ironfront.Net.Unity.Client
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C. The client end of phase-02 task 2.
-    /// </para>
-    /// <para>
     /// Put this on the same GameObject as <c>NetPredictionClock</c> and
     /// <c>NetMovementAgent</c> — the player prefab. The clock owns the 30 Hz stepping; this
     /// component only listens to it.
@@ -72,6 +69,11 @@ namespace Ironfront.Net.Unity.Client
 
         private void OnEnable()
         {
+            // Covers the inverse startup order from NetClientBootstrap.OnConnected: if the
+            // player prefab appears after the transport connected, seed its input clock here.
+            if (_clock != null && _client != null && _client.IsConnected)
+                _clock.SeedInputTick(NetContext.CurrentTick);
+
             if (_clock != null) _clock.OnTickSimulated += OnTickSimulated;
             if (_client != null) _client.Router.OnSnapshotApplied += OnSnapshotApplied;
         }

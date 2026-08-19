@@ -8,7 +8,7 @@ namespace Ironfront.Net.Protocol
     /// Writing <c>if (seq &gt; lastSeq)</c> works perfectly for ~36 minutes at 30 Hz and
     /// then breaks when the counter wraps 65535 -> 0. Every sequence comparison in the
     /// solution must go through this class; a raw <c>&gt;</c> on a sequence number is a
-    /// review-blocking defect (see dev-b-transport/plan.md risk B2).
+    /// review-blocking defect (see transport/plan.md risk B2).
     /// </remarks>
     public static class SequenceMath
     {

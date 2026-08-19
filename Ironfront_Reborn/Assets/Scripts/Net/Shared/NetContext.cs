@@ -20,9 +20,6 @@ namespace Ironfront.Net.Unity
     /// </summary>
     /// <remarks>
     /// <para>
-    /// OWNER: Dev C.
-    /// </para>
-    /// <para>
     /// The role exists so that shared components can be attached to the same prefab on both
     /// sides and decide at runtime whether to run. <see cref="MovementSimulation"/> itself must
     /// never consult it — a branch on the role inside the shared simulation is exactly the

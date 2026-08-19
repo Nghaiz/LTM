@@ -43,9 +43,9 @@ namespace Ironfront.Net.Protocol
     /// </para>
     /// <para>
     /// <b>Issue and Verify live together on purpose.</b> They are the two halves of one
-    /// algorithm; splitting them across Dev D's and Dev C's projects is how the two sides
+    /// algorithm; splitting them across the master-server track's and the replication track's projects is how the two sides
     /// end up disagreeing about which bytes are signed, with every single ticket rejected
-    /// and nothing to point at. See dev-d-master-server/phases/phase-02-matchmaking.md.
+    /// and nothing to point at. See master-server/phases/phase-02-matchmaking.md.
     /// </para>
     /// </remarks>
     public static class JoinTicket
