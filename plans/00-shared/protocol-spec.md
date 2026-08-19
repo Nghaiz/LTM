@@ -590,8 +590,9 @@ public static class WeaponIds
     public const byte RECON_LRR         = 15;
     public const byte WRENCH            = 16;
     public const byte SUPER_WRENCH      = 17;
+    public const byte CAR_HORN          = 18;     // not a loadout weapon -- see below
 
-    public const byte MAX_ASSIGNED      = 17;     // the next new weapon takes 18
+    public const byte MAX_ASSIGNED      = 18;     // the next new weapon takes 19
 }
 ```
 
@@ -606,6 +607,7 @@ public static class WeaponIds
 | 6 | SL-DEFENDER | 15 | RECON LRR |
 | 7 | FRAG | 16 | WRENCH |
 | 8 | SPEARHEAD | 17 | SUPER WRENCH |
+|  |  | 18 | CAR HORN |
 
 **Ids are permanent and append-only.** Reassigning one breaks no build and no test — it makes a
 server that says "shot with 4" and a client that draws weapon 4 disagree about which gun that is,
@@ -618,6 +620,17 @@ draws no weapon, and keeps the snapshot.
 and it is what a sender emits for a registry entry whose id is missing or duplicated — so a
 misconfigured weapon transmits "unknown" rather than impersonating whichever weapon legitimately
 owns that number.
+
+**Not every id is a loadout weapon.** `CAR_HORN` = 18 (added in V6) is a `MountedWeapon` bolted to
+a vehicle: it spends no ammo, spawns no projectile, and does one gameplay thing --
+`user.Highlight()`, which reveals the occupant to AI -- so it needs a wire id to travel as
+`S_WEAPON_FIRE`, and needs no inventory sprite, no weapon prefab and no `WeaponSlot`. It therefore
+has **no row** in the `_Managers.prefab` registry, which is a *loadout* table; a placeholder row
+with a null prefab would surface a horn in `LoadoutUi` the moment `ShowAllWeapons()` cleared the
+hidden flag. `WeaponIds.IsLoadoutRegistered` carries the exemption and `tools/SpecChecker` enforces
+it **in both directions** -- an exempt id is skipped by the every-id-has-a-row sweep, and fails
+outright if a row for it ever appears, because at that point the exemption has stopped describing
+the world.
 
 Three copies of this mapping exist: this section, `WeaponIds.cs`, and the `NetworkId` fields in
 `_Managers.prefab`. `tools/SpecChecker` compares all three on every CI run, because the failure

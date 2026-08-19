@@ -216,13 +216,58 @@ namespace Ironfront.Tools.SpecChecker
                 return 0;
             }
 
+            var records = new List<WeaponPrefabRecord>();
+            foreach (Match entry in entries)
+            {
+                records.Add(new WeaponPrefabRecord(
+                    entry.Groups["name"].Value.Trim(),
+                    int.Parse(entry.Groups["id"].Value, CultureInfo.InvariantCulture)));
+            }
+
+            return ValidateWeaponRegistry(records, failures);
+        }
+
+        /// <summary>One weapon-registry row as the check sees it: a name and an id.</summary>
+        public readonly struct WeaponPrefabRecord
+        {
+            public WeaponPrefabRecord(string name, int networkId)
+            {
+                Name = name;
+                NetworkId = networkId;
+            }
+
+            public string Name { get; }
+            public int NetworkId { get; }
+        }
+
+        /// <summary>
+        /// Judges a set of weapon-registry rows against <see cref="WeaponIds"/>. Returns how many
+        /// rows it judged.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Pure, and separated from the file scan on purpose</b> — the same reason
+        /// <see cref="ValidateVehicleRegistry"/> is. Every failure class here is silent on both
+        /// sides of the wire, so a gate nobody has watched go red is a gate nobody has proven.
+        /// </para>
+        /// <para>
+        /// <b>The not-in-loadout-registry exemption is checked in BOTH directions</b> (V6-D8). An
+        /// exempt id is skipped by the "every declared id has a row" sweep, AND fails outright if
+        /// it turns up in the prefab after all — because at that point the exemption has stopped
+        /// describing the world and has become a hole in the gate. One direction alone would let
+        /// this list quietly become a graveyard.
+        /// </para>
+        /// </remarks>
+        public static int ValidateWeaponRegistry(
+            IReadOnlyList<WeaponPrefabRecord> rows, List<string> failures)
+        {
             var seen = new Dictionary<int, string>();
             int count = 0;
 
-            foreach (Match entry in entries)
+            foreach (WeaponPrefabRecord row in rows)
             {
-                int id = int.Parse(entry.Groups["id"].Value, CultureInfo.InvariantCulture);
-                string name = entry.Groups["name"].Value.Trim();
+                int id = row.NetworkId;
+                string name = row.Name;
                 count++;
 
                 if (seen.TryGetValue(id, out string? owner))
@@ -239,6 +284,19 @@ namespace Ironfront.Tools.SpecChecker
                     failures.Add(
                         $"weapon registry: '{name}' has id {id}. Valid ids are 1..255; " +
                         "0 is reserved for no/unknown weapon.");
+                    continue;
+                }
+
+                // The stale half of the exemption. An exempt id in the loadout registry means the
+                // weapon became equippable and WeaponIds.IsLoadoutRegistered has to say so — or
+                // that somebody reused the number, which is worse.
+                if (WeaponIds.IsKnown((byte)id) && !WeaponIds.IsLoadoutRegistered((byte)id))
+                {
+                    failures.Add(
+                        $"weapon registry: id {id} ('{name}') has a prefab row, but WeaponIds " +
+                        "exempts it from the loadout registry. Either the weapon is now " +
+                        "equippable — remove it from WeaponIds.IsLoadoutRegistered — or the id " +
+                        "was reused. Do not delete this check to make the build green.");
                     continue;
                 }
 
@@ -264,6 +322,8 @@ namespace Ironfront.Tools.SpecChecker
             // Left alone, the server would keep resolving an id no client can ever equip.
             for (byte id = 1; id <= WeaponIds.MAX_ASSIGNED; id++)
             {
+                if (!WeaponIds.IsLoadoutRegistered(id)) continue;
+
                 if (!seen.ContainsKey(id))
                 {
                     failures.Add(

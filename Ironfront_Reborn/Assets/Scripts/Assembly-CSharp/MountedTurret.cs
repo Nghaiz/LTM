@@ -1,4 +1,5 @@
 using Ironfront.Net.Replication.Vehicles;
+using Ironfront.Net.Unity;
 using UnityEngine;
 
 public class MountedTurret : MountedWeapon
@@ -109,6 +110,66 @@ public class MountedTurret : MountedWeapon
 		{
 			return;
 		}
+		StepNetAim();
+	}
+
+	/// <summary>
+	/// Advances the aim for one fixed step, from whichever source this role owns. V6 task 2.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The three cases, and the one rule that ties them together — <b>the integration never
+	/// moves</b>. Offline and the local gunner run <c>TurretAimCore.Step</c> over their own
+	/// demand; the server runs <c>StepToward</c> over the occupant's requested pose at the same
+	/// slew rate; a remote client takes the decoded pose outright because it is drawing a result
+	/// rather than deciding one. Nothing here reads an angle back out of a joint, which is the
+	/// invariant V0 established and the reason a turret can be replicated at all.
+	/// </para>
+	/// <para>
+	/// <b>The local gunner publishes what it integrated.</b> That value becomes the turret half of
+	/// the next <c>C_VEHICLE_INPUT</c>, which the server then walks toward — so a client that
+	/// writes a snap into it buys one step's arc, not a snap (acceptance criterion 2).
+	/// </para>
+	/// </remarks>
+	private void StepNetAim()
+	{
+		ResolveNetSeat();
+
+		if (netVehicleId != 0)
+		{
+			NetTurretAim.Declare(netVehicleId, netSeatIndex, aimLimits, _aim.Yaw, _aim.Pitch);
+		}
+
+		if (NetTurretAim.TryResolve(
+				netVehicleId, netSeatIndex, netLocallyOccupied,
+				out TurretAimSource source, out float yaw, out float pitch))
+		{
+			if (source == TurretAimSource.RemotePose)
+			{
+				// Applied, not integrated. Running the policy here would integrate a second time
+				// from an input this peer does not have.
+				SetAim(yaw, pitch);
+				return;
+			}
+
+			if (source == TurretAimSource.ServerTarget)
+			{
+				TurretAimCore.StepToward(ref _aim, yaw, pitch, aimLimits, Time.fixedDeltaTime);
+				return;
+			}
+		}
+
+		StepLocalAim();
+
+		if (netLocallyOccupied)
+		{
+			NetTurretAim.PublishLocal(_aim.Yaw, _aim.Pitch);
+		}
+	}
+
+	/// <summary>The shipped integration, unchanged: offline, and the local gunner (D9).</summary>
+	private void StepLocalAim()
+	{
 		Vector2 raw = GetInput();
 		// The shipped code bounded the PAIR's magnitude, not each axis, so a diagonal drag
 		// could not exceed the cap either. Normalized, that bound is 1.
@@ -124,10 +185,14 @@ public class MountedTurret : MountedWeapon
 		_pendingMouseAim = Vector2.zero;
 		// V10 task 3 (A16): was `!user.aiControlled`, so a remote human entering this turret
 		// disabled the LOCAL player's cameras.
-		if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(user))
+		if (NetWeaponAuthority.CosmeticHalfRunsHere
+			&& Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(user))
 		{
 			FpsActorController.instance.DisableCameras();
-			camera.enabled = true;
+			if (camera != null)
+			{
+				camera.enabled = true;
+			}
 		}
 	}
 
@@ -135,9 +200,17 @@ public class MountedTurret : MountedWeapon
 	{
 		base.Holster();
 		_pendingMouseAim = Vector2.zero;
-		camera.enabled = false;
+		// V6 task 2: `camera` is a serialized reference a stripped headless prefab need not
+		// carry, and FpsActorController.instance does not exist on a headless build at all.
+		// Both are cosmetics, and this closes two of the section 3.6 NREs without changing what
+		// a client or an offline build does.
+		if (camera != null)
+		{
+			camera.enabled = false;
+		}
 		// V10 task 3 (A16): the mirror of Unholster's guard above.
-		if (Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(user))
+		if (NetWeaponAuthority.CosmeticHalfRunsHere
+			&& Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(user))
 		{
 			FpsActorController.instance.EnableCameras();
 		}

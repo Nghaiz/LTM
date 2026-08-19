@@ -69,6 +69,28 @@ namespace Ironfront.Net.Replication.Vehicles
             b = (byte)(packed >> 8);
         }
 
+        /// <summary>
+        /// Folds a received muzzle index into the range this peer's prefab actually has. V6 task 4.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The receiver folds; the sender never does.</b> <c>muzzles.Length</c> is a per-prefab
+        /// authored value, so a client running a revision with fewer barrels than the server's
+        /// would index past the end of the array and throw <i>inside the render path</i> — a
+        /// content mismatch presenting as a crash. Folding costs one modulo and turns it into a
+        /// wrong-but-harmless muzzle choice, which is a thing somebody can notice and report.
+        /// </para>
+        /// <para>
+        /// Here rather than in the Unity component because it is protocol business — the same
+        /// argument this class makes for owning the helicopter's byte order — and because a fold
+        /// living in a <c>MonoBehaviour</c> is a fold no test in CI can reach.
+        /// </para>
+        /// </remarks>
+        /// <param name="index">The index as received.</param>
+        /// <param name="muzzleCount">Barrels this peer's prefab has. Zero or negative yields 0.</param>
+        public static byte FoldMuzzleIndex(byte index, int muzzleCount)
+            => muzzleCount > 0 ? (byte)(index % muzzleCount) : (byte)0;
+
         /// <summary>Reverses <see cref="PackSteered"/> / <see cref="PackTank"/>'s first byte.</summary>
         public static float UnpackSteerAngle(byte a) => unchecked((sbyte)a);
 

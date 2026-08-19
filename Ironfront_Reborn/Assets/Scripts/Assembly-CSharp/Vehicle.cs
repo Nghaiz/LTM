@@ -174,6 +174,30 @@ public class Vehicle : MonoBehaviour
 		return seats[0].occupant;
 	}
 
+	/// <summary>
+	/// This seat's index in <see cref="seats"/>, or -1 when it belongs to another vehicle.
+	/// </summary>
+	/// <remarks>
+	/// A hand-rolled scan rather than <c>Array.IndexOf</c>: <c>seats</c> holds at most eight
+	/// entries and this runs on the fixed-step aim path, where the generic helper's type checks
+	/// buy nothing.
+	/// </remarks>
+	public int SeatIndexOf(Seat seat)
+	{
+		if (seat == null || seats == null)
+		{
+			return -1;
+		}
+		for (int i = 0; i < seats.Length; i++)
+		{
+			if (seats[i] == seat)
+			{
+				return i;
+			}
+		}
+		return -1;
+	}
+
 	public void MarkTakingFire()
 	{
 		takingFireAction.Start();

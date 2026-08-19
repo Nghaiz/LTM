@@ -474,7 +474,7 @@ public class Actor : Hurtable
 
 	private void UpdateWeapon()
 	{
-		bool flag = !fallenOver && controller.Fire() && (!IsSeated() || seat.CanUseWeapon() || seat.HasMountedWeapon());
+		bool flag = !fallenOver && controller.Fire() && (!IsSeated() || seat.CanUseCarriedWeapon() || seat.HasMountedWeapon());
 		if (flag)
 		{
 			activeWeapon.Fire(controller.FacingDirection(), controller.UseMuzzleDirection());
@@ -972,7 +972,7 @@ public class Actor : Hurtable
 		controller.StartSeated(seat);
 		this.seat = seat;
 		animator.SetLayerWeight(2, 0f);
-		if (!seat.CanUseWeapon())
+		if (!seat.CanUseCarriedWeapon())
 		{
 			animator.SetLayerWeight(1, 0f);
 			HolsterActiveWeapon();
@@ -1054,7 +1054,7 @@ public class Actor : Hurtable
 
 	public void NextWeapon()
 	{
-		if (dead || fallenOver || (IsSeated() && !seat.CanUseWeapon()))
+		if (dead || fallenOver || (IsSeated() && !seat.CanUseCarriedWeapon()))
 		{
 			return;
 		}
@@ -1071,7 +1071,7 @@ public class Actor : Hurtable
 
 	public void PreviousWeapon()
 	{
-		if (dead || fallenOver || (IsSeated() && !seat.CanUseWeapon()))
+		if (dead || fallenOver || (IsSeated() && !seat.CanUseCarriedWeapon()))
 		{
 			return;
 		}
@@ -1088,7 +1088,7 @@ public class Actor : Hurtable
 
 	public void SwitchWeapon(int slot)
 	{
-		if (dead || fallenOver || (IsSeated() && !seat.CanUseWeapon()))
+		if (dead || fallenOver || (IsSeated() && !seat.CanUseCarriedWeapon()))
 		{
 			return;
 		}
@@ -1145,7 +1145,7 @@ public class Actor : Hurtable
 
 	private bool ControllingVehicle()
 	{
-		return IsSeated() && !seat.CanUseWeapon();
+		return IsSeated() && !seat.CanUseCarriedWeapon();
 	}
 
 	public int RemainingSpareAmmoFor(Weapon weapon)

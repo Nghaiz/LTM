@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication;
+using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Vehicles;
 using UnityEngine;
 
@@ -42,6 +43,22 @@ namespace Ironfront.Net.Unity.Server
 
         private ServerActorRegistry _actorRegistrySubscribedTo;
 
+        // V6. Held so despawn can drop this vehicle's turrets and mounted weapons; null until
+        // the tick loop installs them, which is what a pre-V6 or test-only registry looks like.
+        private ServerTurretAuthority _turrets;
+        private MountedWeaponRegistry _mountedWeapons;
+
+        /// <summary>
+        /// Gives this registry the V6 tables to clean up on despawn. Called from
+        /// <c>ServerTickLoop.Bind</c>.
+        /// </summary>
+        public void InstallMountedTables(
+            ServerTurretAuthority turrets, MountedWeaponRegistry mountedWeapons)
+        {
+            _turrets        = turrets;
+            _mountedWeapons = mountedWeapons;
+        }
+
         public static ServerVehicleRegistry Instance
             => _instance ?? (_instance = new ServerVehicleRegistry());
 
@@ -73,7 +90,10 @@ namespace Ironfront.Net.Unity.Server
             if (!VehicleIds.TryGetKind(source.NetworkTypeId, out VehicleKind kind))
                 return false;
 
-            var pose = new NetServerVehicle(vehicleId, source);
+            // V6 task 2: the pose source reads its turret from the authority rather than from
+            // the scene, so the value on the wire is the one the server decided rather than the
+            // one PhysX produced from it.
+            var pose = new NetServerVehicle(vehicleId, source, _turrets);
 
             VehicleState state = VehicleState.Spawned(
                 vehicleId,
@@ -118,6 +138,12 @@ namespace Ironfront.Net.Unity.Server
 
             _claims.ReleaseVehicle(vehicleId);
             _registry.Remove(vehicleId);
+
+            // V6, criterion 13. Both tables are keyed on this vehicle id and neither is reachable
+            // from anywhere else once it is gone -- a turret or a mounted weapon that outlives its
+            // vehicle is a leak visible only on the second or third round.
+            _turrets?.UnregisterVehicle(vehicleId);
+            _mountedWeapons?.UnregisterVehicle(vehicleId);
             return true;
         }
 

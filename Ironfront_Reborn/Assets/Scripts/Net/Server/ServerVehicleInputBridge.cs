@@ -52,6 +52,12 @@ namespace Ironfront.Net.Unity.Server
         private readonly ServerActorRegistry _actors;
         private readonly Func<uint> _currentTick;
 
+        // V6 task 2. The turret half of C_VEHICLE_INPUT lands here rather than in the per-tick
+        // pump because it is a TARGET, not a value to apply: recording it at accept time and
+        // walking toward it on the fixed step is what keeps traverse a property of the turret
+        // instead of a property of how often the client sends.
+        private readonly ServerTurretAuthority _turrets;
+
         // Allocated once per driver and reused across their seat entries. A player getting in
         // and out of vehicles for a whole match would otherwise leave one dead source per
         // entry for the GC to sweep, on a path that runs at 30 Hz.
@@ -63,11 +69,17 @@ namespace Ironfront.Net.Unity.Server
         private readonly List<ushort> _drivers = new List<ushort>(16);
 
         internal ServerVehicleInputBridge(
-            VehicleInputAuthority authority, ServerActorRegistry actors, Func<uint> currentTick)
+            VehicleInputAuthority authority, ServerActorRegistry actors, Func<uint> currentTick,
+            ServerTurretAuthority turrets = null)
         {
             _authority   = authority ?? throw new ArgumentNullException(nameof(authority));
             _actors      = actors ?? throw new ArgumentNullException(nameof(actors));
             _currentTick = currentTick ?? throw new ArgumentNullException(nameof(currentTick));
+
+            // Optional so every V5 test that builds this with three arguments keeps working. A
+            // null one means "nobody is tracking turrets", which is what a loop with no
+            // mounted-weapon subsystem looks like -- not a silent failure to aim.
+            _turrets = turrets;
         }
 
         /// <summary>The decode-and-authority half, for the overlay and the phase report.</summary>
@@ -86,7 +98,24 @@ namespace Ironfront.Net.Unity.Server
         /// <inheritdoc />
         public void OnVehicleInput(ClientSession session, in ClampedVehicleInput input)
         {
-            _authority.TryAccept(session.ActorId, in input, _currentTick());
+            // Accept, not TryAccept: the driver's axes go through the unchanged V5-D5 rule while
+            // a gunner's turret aim is recorded from whatever seat they are in (V6 task 2).
+            // TryAccept alone threw a gunner's whole message away as RefusedNotDriver, which is
+            // why no turret aim ever reached a server before this phase.
+            VehicleInputAuthority.Acceptance acceptance =
+                _authority.Accept(session.ActorId, in input, _currentTick());
+
+            if (acceptance == VehicleInputAuthority.Acceptance.Refused) return;
+            if (_turrets == null) return;
+
+            if (!_authority.TryGetTurretTarget(
+                    session.ActorId, out ushort vehicleId, out byte seatIndex,
+                    out float yaw, out float pitch))
+                return;
+
+            // Recorded, never applied. ServerTurretAuthority.Step walks toward it at the turret's
+            // own slew rate, so a client asking for a 180-degree snap buys one step's arc.
+            _turrets.SetTarget(vehicleId, seatIndex, yaw, pitch);
         }
 
         /// <summary>
@@ -108,12 +137,27 @@ namespace Ironfront.Net.Unity.Server
                 return;
             }
 
-            if (decision.Result == SeatChangeResult.Left) Remove(decision.ActorId);
+            if (decision.Result == SeatChangeResult.Left)
+            {
+                Remove(decision.ActorId);
+
+                // The turret holds its pose but stops chasing a target nobody is asking for. Left
+                // standing, a gunner's last request would keep the gun traversing after they got
+                // out -- and would resume mid-swing for whoever climbed in next.
+                _turrets?.ClearTarget(decision.VehicleId, decision.SeatIndex);
+            }
         }
 
         /// <summary>Removes an actor's source and forgets its axes. Disconnect and death.</summary>
         internal void Forget(ushort actorId)
         {
+            // The turret target is dropped BEFORE the record that names its seat, or there is
+            // nothing left to say which turret to stop.
+            if (_turrets != null
+                && _authority.TryGetTurretTarget(
+                       actorId, out ushort vehicleId, out byte seatIndex, out _, out _))
+                _turrets.ClearTarget(vehicleId, seatIndex);
+
             Remove(actorId);
             _authority.Forget(actorId);
         }
@@ -126,6 +170,7 @@ namespace Ironfront.Net.Unity.Server
             _drivers.Clear();
             _seated.Clear();
             _authority.Reset();
+            _turrets?.Reset();
             UnreachableControllers = 0;
         }
 

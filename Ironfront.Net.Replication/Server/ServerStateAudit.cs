@@ -32,12 +32,29 @@ namespace Ironfront.Net.Replication.Server
         /// <summary>Vehicles still registered. Zero after a world reset.</summary>
         public readonly int VehiclesRegistered;
 
+        /// <summary>
+        /// Mounted weapons still tracked. Zero after a world reset. V6, criterion 13.
+        /// </summary>
+        /// <remarks>
+        /// A new id space keyed on <c>(vehicleId, seatIndex)</c>, so it leaks the same way the
+        /// pair tables above do — silently, on the second and third round of a server nobody is
+        /// watching. It joins the audit for exactly that reason.
+        /// </remarks>
+        public readonly int MountedWeaponsTracked;
+
+        /// <summary>Turrets still tracked. Zero after a world reset. V6, criterion 13.</summary>
+        public readonly int TurretsTracked;
+
         public ServerStateSnapshot(
             int actorIdsInUse, int actorIdsFree, int actorIdsQuarantined,
             int hitboxHistoryActors, int interestPairs, int spawnAckPairs, int sessions,
             int vehicleIdsInUse = 0, int vehicleIdsQuarantined = 0,
-            int vehicleInterestPairs = 0, int vehiclesRegistered = 0)
+            int vehicleInterestPairs = 0, int vehiclesRegistered = 0,
+            int mountedWeaponsTracked = 0, int turretsTracked = 0)
         {
+            MountedWeaponsTracked = mountedWeaponsTracked;
+            TurretsTracked        = turretsTracked;
+
             ActorIdsInUse       = actorIdsInUse;
             ActorIdsFree        = actorIdsFree;
             ActorIdsQuarantined = actorIdsQuarantined;
@@ -98,7 +115,9 @@ namespace Ironfront.Net.Replication.Server
         public bool IsCleanOfVehicleState =>
             VehicleIdsInUse == 0
             && VehicleInterestPairs == 0
-            && VehiclesRegistered == 0;
+            && VehiclesRegistered == 0
+            && MountedWeaponsTracked == 0
+            && TurretsTracked == 0;
 
         public override string ToString()
         {
@@ -113,7 +132,9 @@ namespace Ironfront.Net.Replication.Server
               .Append(" | vehicles=").Append(VehiclesRegistered)
               .Append(" vehicleIds in-use=").Append(VehicleIdsInUse)
               .Append(" quarantined=").Append(VehicleIdsQuarantined)
-              .Append(" vehicleInterestPairs=").Append(VehicleInterestPairs);
+              .Append(" vehicleInterestPairs=").Append(VehicleInterestPairs)
+              .Append(" | mountedWeapons=").Append(MountedWeaponsTracked)
+              .Append(" turrets=").Append(TurretsTracked);
             return sb.ToString();
         }
     }
@@ -153,6 +174,12 @@ namespace Ironfront.Net.Replication.Server
         private readonly VehicleInterestTracker? _vehicleInterest;
         private readonly VehicleRegistry? _vehicles;
 
+        // Optional for the same reason the three above are: V6 postdates every load test that
+        // constructs this with four arguments, and a null one reporting zero reads as clean --
+        // correct for a server with no mounted-weapon subsystem at all.
+        private readonly MountedWeaponRegistry? _mountedWeapons;
+        private readonly ServerTurretAuthority? _turrets;
+
         public ServerStateAudit(
             ActorIdPool ids,
             HitboxHistory hitboxHistory,
@@ -161,11 +188,15 @@ namespace Ironfront.Net.Replication.Server
             Func<int>? sessionCount = null,
             VehicleIdPool? vehicleIds = null,
             VehicleInterestTracker? vehicleInterest = null,
-            VehicleRegistry? vehicles = null)
+            VehicleRegistry? vehicles = null,
+            MountedWeaponRegistry? mountedWeapons = null,
+            ServerTurretAuthority? turrets = null)
         {
             _vehicleIds      = vehicleIds;
             _vehicleInterest = vehicleInterest;
             _vehicles        = vehicles;
+            _mountedWeapons  = mountedWeapons;
+            _turrets         = turrets;
 
             _ids           = ids ?? throw new ArgumentNullException(nameof(ids));
             _hitboxHistory = hitboxHistory ?? throw new ArgumentNullException(nameof(hitboxHistory));
@@ -187,7 +218,9 @@ namespace Ironfront.Net.Replication.Server
                 _vehicleIds?.InUseCount ?? 0,
                 _vehicleIds?.QuarantinedCount ?? 0,
                 _vehicleInterest?.TrackedPairCount ?? 0,
-                _vehicles?.LiveCount ?? 0);
+                _vehicles?.LiveCount ?? 0,
+                _mountedWeapons?.TrackedCount ?? 0,
+                _turrets?.TrackedCount ?? 0);
 
         /// <summary>
         /// Empties every per-actor and per-pair table. The host still has to despawn the actors
@@ -216,6 +249,13 @@ namespace Ironfront.Net.Replication.Server
             _vehicles?.Clear();
             _vehicleInterest?.Reset();
             _vehicleIds?.ReleaseAll();
+
+            // Both are keyed on a vehicle that has just been destroyed, so neither has a
+            // "retained" case either. Cleared here rather than from the tick loop for the reason
+            // this whole class exists: a cleanup written next to the check for it cannot drift
+            // from that check, and a cleanup spread across five MonoBehaviour call sites will.
+            _mountedWeapons?.Reset();
+            _turrets?.Reset();
         }
     }
 }

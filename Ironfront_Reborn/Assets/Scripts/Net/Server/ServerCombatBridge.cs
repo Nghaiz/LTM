@@ -44,6 +44,11 @@ namespace Ironfront.Net.Unity.Server
         private readonly ServerCombatAuthority _authority;
         private readonly ServerRespawnGate _respawnGate;
 
+        // V6 task 3. Null on a loop with no mounted-weapon subsystem, which is what every
+        // pre-V6 construction of this class looks like.
+        private readonly MountedWeaponRegistry _mountedWeapons;
+        private readonly MountedWeaponAuthority _mountedWeaponAuthority;
+
         private readonly HitscanTarget[] _targets = new HitscanTarget[ProtocolConstants.MAX_ACTORS];
         private int _targetCount;
         private uint _targetsBuiltForTick = uint.MaxValue;
@@ -55,13 +60,21 @@ namespace Ironfront.Net.Unity.Server
             ServerTickLoop loop,
             ServerActorRegistry registry,
             ServerCombatAuthority authority,
-            ServerRespawnGate respawnGate)
+            ServerRespawnGate respawnGate,
+            MountedWeaponRegistry mountedWeapons = null,
+            MountedWeaponAuthority mountedWeaponAuthority = null)
         {
             _loop = loop ?? throw new ArgumentNullException(nameof(loop));
             _registry = registry ?? throw new ArgumentNullException(nameof(registry));
             _authority = authority ?? throw new ArgumentNullException(nameof(authority));
             _respawnGate = respawnGate ?? throw new ArgumentNullException(nameof(respawnGate));
+
+            _mountedWeapons = mountedWeapons;
+            _mountedWeaponAuthority = mountedWeaponAuthority;
         }
+
+        /// <summary>Mounted shots this bridge resolved and announced. V6 task 3.</summary>
+        public long MountedShotsFired { get; private set; }
 
         /// <summary>Deaths this bridge reported to the match. The killfeed's denominator.</summary>
         public long DeathsReported { get; private set; }
@@ -82,6 +95,13 @@ namespace Ironfront.Net.Unity.Server
             // rate happened to line up with the tick, which is the sort of difference that
             // shows up as a reload that occasionally takes an extra tick on a loaded server.
             float now = tick / (float)ProtocolConstants.SIM_TICK_RATE;
+
+            // V6 task 3, and it RETURNS: a gunner operating a mounted weapon is not also firing
+            // the rifle on their back. That is exactly what Seat.CanUseCarriedWeapon() has always
+            // meant (V6-D7) -- a Gunner fires through the HasMountedWeapon() clause and never
+            // through the carried one -- and letting both run would have one trigger pull spend a
+            // turret round AND hitscan from the gunner's chest.
+            if (StepMountedWeapon(session, actor, in frame, now)) return;
 
             BuildTargets(tick);
 
@@ -116,6 +136,75 @@ namespace Ironfront.Net.Unity.Server
             EmitHitConfirms(session, in result);
 
             if (result.VictimDied) EmitDeath(session, in result);
+        }
+
+        /// <summary>
+        /// Resolves one accepted frame against the mounted weapon this actor is sitting behind.
+        /// V6 task 3.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The muzzle it fires from was settled earlier in this same tick</b> by
+        /// <c>ServerTurretAuthority.Step</c>, which runs in the input stage before any player
+        /// steps. Getting that order backwards is silent: every shot leaves from where the turret
+        /// pointed one tick ago, which is invisible against a static target and systematically
+        /// wrong against a traversing one.
+        /// </para>
+        /// <para>
+        /// <b>No hitscan and no damage here.</b> A mounted weapon launches a projectile, and
+        /// projectile flight is V7. This spends the server's ammo, honours the server's cooldown,
+        /// and announces the shot so remote clients can draw it.
+        /// </para>
+        /// </remarks>
+        /// <returns>True when this actor's fire intent belonged to a mounted weapon.</returns>
+        private bool StepMountedWeapon(
+            ClientSession session, NetServerActor actor, in InputFrame frame, float now)
+        {
+            if (_mountedWeaponAuthority == null || _mountedWeapons == null) return false;
+
+            if (!ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(
+                    session.ActorId, out ushort vehicleId, out byte seatIndex))
+                return false;
+
+            // Tracked, not merely seated. A passenger in a seat with no mounted weapon keeps
+            // their own rifle and takes the infantry path, which is the shipped behaviour.
+            if (!_mountedWeapons.IsTracked(vehicleId, seatIndex)) return false;
+
+            MountedFireResult result = _mountedWeaponAuthority.Step(
+                vehicleId, seatIndex, in frame, actor.IsAlive, now);
+
+            if (!result.Fired) return true;
+
+            MountedShotsFired++;
+            EmitMountedFire(session, vehicleId, seatIndex);
+            return true;
+        }
+
+        /// <summary>
+        /// Announces a mounted shot on the cosmetic channel, filtered by earshot.
+        /// </summary>
+        /// <remarks>
+        /// The aim direction is zero and honestly so: <c>S_WEAPON_FIRE</c>'s direction field
+        /// drives a hitscan TRACER, and a mounted weapon fires a projectile whose flight V7
+        /// replicates in its own message with a server-computed origin. Writing the turret's
+        /// heading here would draw a tracer that the shell does not follow.
+        /// </remarks>
+        private void EmitMountedFire(ClientSession shooter, ushort vehicleId, byte seatIndex)
+        {
+            var message = new WeaponFireMessage(
+                shooter.ActorId,
+                _mountedWeapons.WeaponIdOf(vehicleId, seatIndex),
+                0, 0, 0);
+
+            int written = ServerEventWriter.WriteWeaponFire(_eventPayload, in message);
+            if (written < 0) return;
+
+            _loop.SendToListenersInEarshot(
+                shooter.State.Position,
+                ServerEventWriter.WeaponFireAudibleRadius,
+                new ReadOnlySpan<byte>(_eventPayload, 0, written),
+                (byte)ServerEventWriter.CosmeticChannel,
+                reliable: false);
         }
 
         /// <summary>

@@ -50,6 +50,12 @@ namespace Ironfront.Net.Unity.Client
         // enumerator per pass; a parallel id list does not, and MAX_VEHICLES is 16.
         private readonly List<ushort> _liveIds = new List<ushort>(ProtocolConstants.MAX_VEHICLES);
 
+        // GameObject -> id, the mirror of ServerVehicleRegistry's. A turret in Assembly-CSharp
+        // cannot see into this assembly, so it hands over the vehicle GameObject it already has
+        // and gets the id back through NetTurretAim's resolver (V6 task 2).
+        private readonly Dictionary<GameObject, ushort> _byGameObject =
+            new Dictionary<GameObject, ushort>(ProtocolConstants.MAX_VEHICLES);
+
         private readonly Dictionary<byte, GameObject> _prefabsByNetworkId =
             new Dictionary<byte, GameObject>(8);
 
@@ -79,6 +85,39 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         internal bool TryFind(ushort vehicleId, out NetClientVehicle vehicle)
             => _live.TryGetValue(vehicleId, out vehicle);
+
+        /// <summary>
+        /// The network id of a vehicle GameObject, or 0 when it is not replicated here.
+        /// </summary>
+        /// <remarks>
+        /// The client's half of the resolver <c>NetTurretAim.VehicleIdOf</c> installs, mirroring
+        /// <c>ServerVehicleRegistry.NetworkIdOf</c>. A turret bolted to one of this vehicle's
+        /// seats needs the id to name itself in <c>C_VEHICLE_INPUT</c>, and cannot see into this
+        /// assembly to get it any other way.
+        /// </remarks>
+        public ushort NetworkIdOf(GameObject vehicle)
+            => vehicle != null && _byGameObject.TryGetValue(vehicle, out ushort id) ? id : (ushort)0;
+
+        /// <summary>
+        /// The turret aim from the last applied snapshot for a vehicle, degrees. V6 task 2.
+        /// </summary>
+        /// <remarks>
+        /// False until a pose has actually been applied. Answering zeroes before the first
+        /// snapshot would swing every remote turret to due north for one frame on spawn, which
+        /// reads as a network glitch rather than as "no data yet".
+        /// </remarks>
+        internal bool TryGetTurretPose(ushort vehicleId, out float yawDegrees, out float pitchDegrees)
+        {
+            yawDegrees   = 0f;
+            pitchDegrees = 0f;
+
+            if (!_live.TryGetValue(vehicleId, out NetClientVehicle vehicle)) return false;
+            if (vehicle == null || !vehicle.HasPose) return false;
+
+            yawDegrees   = vehicle.TurretYaw;
+            pitchDegrees = vehicle.TurretPitch;
+            return true;
+        }
 
         private void Awake()
         {
@@ -115,6 +154,7 @@ namespace Ironfront.Net.Unity.Client
 
             _live.Clear();
             _liveIds.Clear();
+            _byGameObject.Clear();
         }
 
         private void OnVehicleSpawn(VehicleSpawnMessage message)
@@ -157,6 +197,7 @@ namespace Ironfront.Net.Unity.Client
 
             _live[message.VehicleId] = bound;
             _liveIds.Add(message.VehicleId);
+            _byGameObject[spawned] = message.VehicleId;
         }
 
         private void OnVehicleDespawn(VehicleDespawnMessage message)
@@ -168,6 +209,11 @@ namespace Ironfront.Net.Unity.Client
             // snapshot stream for this id has already stopped.
             _live.Remove(message.VehicleId);
             _liveIds.Remove(message.VehicleId);
+
+            // Dropped BEFORE the GameObject is destroyed. A destroyed object is not a usable
+            // dictionary key on Unity's Mono runtime, so a stale entry here would be one nothing
+            // could ever remove -- ServerVehicleRegistry.Unregister scans for exactly that reason.
+            if (vehicle.Exists) _byGameObject.Remove(vehicle.Vehicle.gameObject);
 
             if (!vehicle.Exists) return;
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Ironfront.Net.Unity;
 using UnityEngine;
 
 public class Weapon : MonoBehaviour
@@ -147,14 +148,28 @@ public class Weapon : MonoBehaviour
 
 	protected virtual void Start()
 	{
-		weaponVolume = audio.volume;
-		audio.loop = configuration.auto;
+		// V6 task 3: one of the section 3.6 headless NREs. Weapon.Awake assigns `audio` from
+		// GetComponent<AudioSource>(), which is null on a prefab whose audio was stripped for a
+		// dedicated server -- and every branch below it then dies on the first weapon spawned.
+		// Guarded rather than early-returned, because `ammo` below is GAMEPLAY and the server
+		// needs it.
+		if (audio != null)
+		{
+			weaponVolume = audio.volume;
+			audio.loop = configuration.auto;
+		}
 		ammo = configuration.ammo;
 		if (user != null)
 		{
 			if (user.aiControlled)
 			{
-				audio.pitch *= UnityEngine.Random.Range(0.97f, 1.02f);
+				// The pitch draw is COSMETIC and is deliberately not taken on a server. It shares
+				// UnityEngine.Random with TankTurret's recoil impulse, which is a server draw per
+				// D4 -- taking a cosmetic draw here would advance that stream on one side only.
+				if (audio != null)
+				{
+					audio.pitch *= UnityEngine.Random.Range(0.97f, 1.02f);
+				}
 				reverbAudio = null;
 			}
 			else if (reverbAudio != null)
@@ -178,7 +193,7 @@ public class Weapon : MonoBehaviour
 
 	protected virtual void Update()
 	{
-		if (!stopFireLoop.Done())
+		if (!stopFireLoop.Done() && audio != null)
 		{
 			float num = 1f - stopFireLoop.Ratio();
 			audio.volume = num * weaponVolume;
@@ -197,7 +212,7 @@ public class Weapon : MonoBehaviour
 	{
 		if (CanFire())
 		{
-			if (configuration.auto && (!audio.isPlaying || !stopFireLoop.Done()))
+			if (configuration.auto && audio != null && (!audio.isPlaying || !stopFireLoop.Done()))
 			{
 				StartFireLoop();
 			}
@@ -208,6 +223,10 @@ public class Weapon : MonoBehaviour
 
 	private void StartFireLoop()
 	{
+		if (audio == null)
+		{
+			return;
+		}
 		audio.volume = weaponVolume;
 		audio.Play();
 		stopFireLoop.Stop();
@@ -281,7 +300,13 @@ public class Weapon : MonoBehaviour
 		{
 			animator.SetBool("no ammo", !HasAnyAmmo());
 		}
-		if (!HasLoadedAmmo() && HasSpareAmmo() && !reloading && (configuration.forceAutoReload || OptionsUi.GetOptions().autoReload))
+		// OptionsUi.GetOptions() is a client-only singleton and the third of the section 3.6
+		// headless NREs. forceAutoReload is a prefab fact and stays authoritative everywhere; the
+		// player's auto-reload PREFERENCE is only a question a client can answer, so a server
+		// asking it is asking the wrong machine.
+		bool autoReload = configuration.forceAutoReload
+			|| (NetWeaponAuthority.CosmeticHalfRunsHere && OptionsUi.GetOptions().autoReload);
+		if (!HasLoadedAmmo() && HasSpareAmmo() && !reloading && autoReload)
 		{
 			Reload();
 		}
@@ -341,9 +366,18 @@ public class Weapon : MonoBehaviour
 		{
 			ammo--;
 		}
-		user.ApplyRecoil(configuration.kickback * Vector3.back + UnityEngine.Random.insideUnitSphere * configuration.randomKick);
+		// V6-D4-local. Recoil is client-local for a human: the kick's consequence is already
+		// inside the NEXT C_INPUT frame's yaw and pitch, which the server accepts as the aim, so
+		// applying it server-side too would apply it twice. An AI actor has no input frame, so
+		// its recoil is a server effect and its Random draw is a server draw (D4). The call also
+		// chains through FpsActorController's fpParent -- the LOCAL camera rig -- which does not
+		// exist on a headless build at all.
+		if (user.aiControlled ? NetWeaponAuthority.GameplayHalfRunsHere : NetWeaponAuthority.CosmeticHalfRunsHere)
+		{
+			user.ApplyRecoil(configuration.kickback * Vector3.back + UnityEngine.Random.insideUnitSphere * configuration.randomKick);
+		}
 		AmmoChanged();
-		if (!user.aiControlled && configuration.casing != null)
+		if (!user.aiControlled && configuration.casing != null && NetWeaponAuthority.CosmeticHalfRunsHere)
 		{
 			configuration.casing.Play(false);
 		}
@@ -354,7 +388,10 @@ public class Weapon : MonoBehaviour
 		// An automatic weapon's report is a LOOP started from Fire(), not a per-shot clip, so
 		// the local path must not also fire one here. See PlayFireCosmetics for why the
 		// networked path passes true instead.
-		PlayFireCosmetics(!configuration.auto);
+		if (NetWeaponAuthority.CosmeticHalfRunsHere)
+		{
+			PlayFireCosmetics(!configuration.auto);
+		}
 	}
 
 	/// <summary>
@@ -394,7 +431,7 @@ public class Weapon : MonoBehaviour
 		{
 			configuration.muzzleFlash.Play(true);
 		}
-		if (playReport)
+		if (playReport && audio != null)
 		{
 			audio.Play();
 		}
@@ -584,6 +621,10 @@ public class Weapon : MonoBehaviour
 
 	public void AssignFpAudioMix()
 	{
+		if (audio == null)
+		{
+			return;
+		}
 		audio.spatialBlend = 0.4f;
 		if (!configuration.forceWorldAudioOutput)
 		{
