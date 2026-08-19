@@ -151,58 +151,16 @@ namespace Ironfront.Editor.Verification
         }
 
         // =====================================================================================
-        // Step 3 — a second player slot for the synthetic client to claim.
+        // Step 3 — retired. The server builds its own player slots.
         // =====================================================================================
-
-        /// <summary>
-        /// Marks one bot actor as claimable by a player and stops its AI driving it.
-        /// </summary>
-        /// <remarks>
-        /// Exactly one prefab in the scene has <c>_availableForPlayers = true</c>
-        /// (<c>Player Fps Actor</c>), so a second connection is refused with
-        /// <c>DisconnectReason.ServerFull</c> before it can claim anything. Re-badging a live bot
-        /// is cheaper and less invasive than instantiating a second player prefab and stripping
-        /// its camera, controller and prediction stack — and the row under test is what the
-        /// server does with a claimed slot, which does not care where the slot came from.
-        /// </remarks>
-        public static string OpenSecondSlot()
-        {
-            IReadOnlyList<NetServerActor> actors = ServerActorRegistry.Instance.Actors;
-            FieldInfo available = typeof(NetServerActor).GetField(
-                "_availableForPlayers", BindingFlags.Instance | BindingFlags.NonPublic);
-
-            if (available == null) return "NetServerActor._availableForPlayers not found";
-
-            for (int i = 0; i < actors.Count; i++)
-            {
-                NetServerActor actor = actors[i];
-                if (actor == null || actor.AvailableForPlayers || actor.IsClaimed) continue;
-
-                available.SetValue(actor, true);
-
-                // The AI would otherwise keep steering a slot a player now owns, and every
-                // authoritative move would be fighting a CharacterController the controller is
-                // also driving.
-                MonoBehaviour ai = FindAiController(actor.gameObject);
-                if (ai != null) ai.enabled = false;
-
-                return $"opened slot on '{actor.name}' actor={actor.ActorId} team={actor.Team} "
-                       + $"ai={(ai != null ? ai.GetType().Name + " disabled" : "none")}";
-            }
-
-            return "no unclaimed bot actor to re-badge";
-        }
-
-        private static MonoBehaviour FindAiController(GameObject go)
-        {
-            MonoBehaviour[] all = go.GetComponents<MonoBehaviour>();
-            for (int i = 0; i < all.Length; i++)
-            {
-                if (all[i] != null && all[i].GetType().Name == "AiActorController") return all[i];
-            }
-
-            return null;
-        }
+        //
+        // OpenSecondSlot() re-badged a live bot by reflecting NetServerActor._availableForPlayers
+        // and disabling whatever component was named "AiActorController", because exactly one
+        // body in the project was claimable and connection two was refused ServerFull. Phase-3A
+        // moved both halves into shipping code: ServerPlayerSlotPool builds Config.MaxConnections
+        // claimable bodies at server start, and NetServerActor.Claim() suspends the bot brain
+        // through the typed IAiDriver seam. A harness that opened a slot by hand would now be
+        // measuring itself against a server that already has sixteen.
 
         // =====================================================================================
         // Step 4 — the synthetic client.

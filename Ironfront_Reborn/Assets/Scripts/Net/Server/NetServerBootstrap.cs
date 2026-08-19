@@ -106,6 +106,12 @@ namespace Ironfront.Net.Unity.Server
         public ServerTickLoop TickLoop { get; private set; }
 
         /// <summary>
+        /// The claimable bodies this server hands to joining connections, one per transport
+        /// slot. Phase-3A.
+        /// </summary>
+        public ServerPlayerSlotPool SlotPool { get; } = new ServerPlayerSlotPool();
+
+        /// <summary>
         /// The join-ticket validator, or null when running with unsigned tickets. The
         /// connection lifecycle needs it to confirm and release player claims.
         /// </summary>
@@ -138,7 +144,89 @@ namespace Ironfront.Net.Unity.Server
             if (_startOnAwake) StartServer();
         }
 
+        /// <summary>
+        /// Builds the player slots, once every other component in the scene has awoken.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Start, not Awake, and the execution order is why.</b> This component runs at
+        /// -1000 so the role is set before anything can read it, which puts its <c>Awake</c>
+        /// ahead of <c>LevelTester</c>'s — and <c>LevelTester</c> is what instantiates the
+        /// <c>_Managers</c> prefab that <c>ActorManager.instance</c> comes from. The body
+        /// factory needs that instance to reach the AI character prefab, so filling in
+        /// <c>Awake</c> would find nothing and build zero slots on a server that starts
+        /// perfectly cleanly.
+        /// </para>
+        /// <para>
+        /// Nothing can connect before this runs. The transport is bound in <c>Awake</c>, but
+        /// connections are only admitted when the tick loop polls it, and that is
+        /// <c>FixedUpdate</c> — after every <c>Start</c>.
+        /// </para>
+        /// </remarks>
+        private void Start()
+        {
+            if (_misconfigured || TickLoop == null || TickLoop.Transport == null) return;
+
+            FillPlayerSlots();
+        }
+
         private void OnDestroy() => StopServer();
+
+        /// <summary>
+        /// Creates one claimable body per admitted connection and reports what actually exists.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The count is read back from the registry, not restated from configuration.</b>
+        /// This line used to print <c>Config.MaxConnections</c> — sixteen — beside a world that
+        /// contained exactly one claimable body, and no code anywhere compared the two.
+        /// <c>ServerActorRegistry.ClaimableCount</c> is what <c>TryClaimPlayerSlot</c> will
+        /// actually walk, so a disagreement between the log and the world is now a disagreement
+        /// this method reports rather than one it prints.
+        /// </para>
+        /// </remarks>
+        private void FillPlayerSlots()
+        {
+            SlotPool.Fill(Config.MaxConnections, CreatePlayerBody);
+
+            int claimable = ServerActorRegistry.Instance.ClaimableCount;
+
+            if (claimable != Config.MaxConnections)
+            {
+                Debug.LogError(
+                    $"[net] {claimable} claimable player bodies against {Config.MaxConnections} "
+                    + "admitted connections. The server will refuse the difference with "
+                    + "ServerFull. This is the phase-3A defect, not a warning about one.");
+                return;
+            }
+
+            Debug.Log($"[net] {claimable} player slots ready");
+        }
+
+        /// <summary>
+        /// One player-slot body, built by the game's own spawn path on the far side of the seam.
+        /// </summary>
+        private static NetServerActor CreatePlayerBody(byte team)
+        {
+            GameObject body = NetServerBindings.CreatePlayerBody(team);
+            if (body == null) return null;
+
+            NetServerActor actor = body.GetComponent<NetServerActor>();
+
+            if (actor == null)
+            {
+                // Loud, and cleaned up: a body with no NetServerActor is invisible to the
+                // registry, so leaving it standing would put an unreplicated character in the
+                // map that no client ever sees and every bot can shoot.
+                Debug.LogError(
+                    $"[net] player body '{body.name}' carries no NetServerActor, so it can "
+                    + "never be claimed. Add the component to the AI character prefab.");
+                Destroy(body);
+                return null;
+            }
+
+            return actor;
+        }
 
         /// <summary>
         /// Loads a <c>.env</c> if one is reachable, then layers the environment over the
@@ -199,7 +287,7 @@ namespace Ironfront.Net.Unity.Server
                 // Null clock pump: a real socket runs on the wall clock and needs no advancing.
                 TickLoop.Bind(udp, null);
 
-                Debug.Log($"[net] server up on UDP :{Config.UdpPort}, {Config.MaxConnections} slots");
+                Debug.Log($"[net] server up on UDP :{Config.UdpPort}, {Config.MaxConnections} connections");
                 return;
             }
 
@@ -214,7 +302,7 @@ namespace Ironfront.Net.Unity.Server
             // feeds it the real elapsed milliseconds once per fixed step.
             TickLoop.Bind(server, Loopback.Advance);
 
-            Debug.Log($"[net] server up on the loopback wire, {Config.MaxConnections} slots");
+            Debug.Log($"[net] server up on the loopback wire, {Config.MaxConnections} connections");
         }
 
         /// <summary>
@@ -329,6 +417,8 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>Unbinds the loop and disposes a transport this component created.</summary>
         public void StopServer()
         {
+            SlotPool.Clear();
+
             if (TickLoop != null) TickLoop.Unbind();
 
             if (_ownsTransport)

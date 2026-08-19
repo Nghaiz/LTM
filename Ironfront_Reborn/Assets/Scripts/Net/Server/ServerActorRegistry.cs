@@ -43,6 +43,37 @@ namespace Ironfront.Net.Unity.Server
         public int Count => _actors.Count;
 
         /// <summary>
+        /// How many registered bodies a joining connection could be given, claimed or not.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The number <c>NetServerBootstrap</c> reports at startup, so what it prints is what
+        /// <see cref="TryClaimPlayerSlot"/> will actually find. It used to print
+        /// <c>Config.MaxConnections</c> — 16 — while exactly one body in the whole project had
+        /// <c>_availableForPlayers</c> set, so the server advertised sixteen slots, admitted
+        /// one, and refused connection two with <c>ServerFull</c>. Two numbers, nothing
+        /// comparing them (phase-3A § 2).
+        /// </para>
+        /// <para>
+        /// Counted rather than cached. A cached total is a third number that can disagree with
+        /// the other two, which is the defect this property exists to close.
+        /// </para>
+        /// </remarks>
+        public int ClaimableCount
+        {
+            get
+            {
+                int claimable = 0;
+                for (int i = 0; i < _actors.Count; i++)
+                {
+                    if (_actors[i] != null && _actors[i].AvailableForPlayers) claimable++;
+                }
+
+                return claimable;
+            }
+        }
+
+        /// <summary>
         /// Adds an actor, assigning an id when it does not have one.
         /// </summary>
         /// <remarks>

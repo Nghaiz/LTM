@@ -36,8 +36,81 @@ namespace Ironfront.Net.Unity.Bindings
             NetServerBindings.ActorSourceResolver = ResolveActorSource;
             NetServerBindings.VehicleSourceResolver = ResolveVehicleSource;
             NetServerBindings.DriverInputSinkResolver = NetDriverInputSink.Attach;
+            NetServerBindings.AiDriverResolver = ResolveAiDriver;
+            NetServerBindings.PlayerBodyFactory = CreatePlayerBody;
             NetServerBindings.SpawnPoints = new ActorManagerSpawnPoints();
             NetServerBindings.CapturePoints = new SceneCapturePoints();
+        }
+
+        /// <summary>
+        /// The <c>GetComponent&lt;AiActorController&gt;()</c> the server assembly cannot do
+        /// itself. Null for a body that is not bot-driven — the local player's own avatar, a
+        /// bare test rig — which the caller reads as "nothing to suspend". Phase-3A.
+        /// </summary>
+        private static IAiDriver ResolveAiDriver(GameObject gameObject)
+        {
+            if (gameObject == null) return null;
+
+            AiActorController ai = gameObject.GetComponent<AiActorController>();
+            return ai != null ? new AiActorControllerDriver(ai) : null;
+        }
+
+        /// <summary>
+        /// Builds one player-slot body from the same AI character prefab, and by the same steps,
+        /// that <c>ActorManager.CreateAIActor</c> uses for a bot. Phase-3A.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The same prefab as a bot, deliberately.</b> The alternative was
+        /// <c>Player Fps Actor</c>, and it carries a camera, an <c>FpsActorController</c> and
+        /// the whole client-side prediction stack — stripping those on a server is the fragile
+        /// step, and <c>NetVerificationHarness.OpenSecondSlot</c>'s own remark said so before
+        /// this existed. The AI character already carries <c>NetServerActor</c> and none of
+        /// that.
+        /// </para>
+        /// <para>
+        /// <b><c>SetTeam</c> is not optional and cannot be done on the far side of the seam.</b>
+        /// It colours the renderer and the ragdoll's renderer from <c>ColorScheme.TeamColor</c>;
+        /// a body that skipped it would be on team 0 wearing the wrong colours, which no test
+        /// and no log would report. It also has to run after <c>Awake</c>, which
+        /// <c>Instantiate</c> guarantees, because it dereferences fields <c>Awake</c> assigns.
+        /// </para>
+        /// <para>
+        /// <b>The death stamp is what puts the body on the ground.</b> <c>Actor.Awake</c> leaves
+        /// every fresh actor <c>dead</c>, and <c>ActorManager.SpawnWave</c> is what places a
+        /// dead actor at a spawn point. Stamping the current time makes a pool body eligible for
+        /// the first wave, exactly as a bot is; without it the whole pool would stand at the
+        /// prefab's origin waiting for a wave that never selects them.
+        /// </para>
+        /// </remarks>
+        private static GameObject CreatePlayerBody(byte team)
+        {
+            ActorManager manager = ActorManager.instance;
+
+            if (manager == null || manager.actorPrefab == null)
+            {
+                Debug.LogError(
+                    "[net] no ActorManager or no actorPrefab, so no player-slot body can be "
+                    + "built. A scene that runs a server needs the _Managers prefab in it.");
+                return null;
+            }
+
+            GameObject body = UnityEngine.Object.Instantiate(manager.actorPrefab);
+            Actor actor = body.GetComponent<Actor>();
+
+            if (actor == null)
+            {
+                Debug.LogError(
+                    $"[net] '{manager.actorPrefab.name}' has no Actor component, so it cannot "
+                    + "be a player-slot body.");
+                UnityEngine.Object.Destroy(body);
+                return null;
+            }
+
+            actor.SetTeam(team);
+            actor.deathTimestamp = Time.time;
+
+            return body;
         }
 
         /// <summary>
@@ -449,5 +522,44 @@ namespace Ironfront.Net.Unity.Bindings
 
         private static int CompareByName(CapturePoint a, CapturePoint b)
             => string.CompareOrdinal(a != null ? a.name : string.Empty, b != null ? b.name : string.Empty);
+    }
+
+    /// <summary>Adapts one <c>AiActorController</c> to <see cref="IAiDriver"/>. Phase-3A.</summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Enabled, not destroyed, and not replaced.</b> <c>Actor.aiControlled</c> is frozen in
+    /// <c>Awake</c> from <c>controller.GetType() == typeof(AiActorController)</c> and then read
+    /// by <c>ActorManager.Register</c>, the minimap, LOD, weapon culling and <c>Binoculars</c>.
+    /// Swapping the controller out would flip that flag's meaning under all of them at once —
+    /// the same argument <c>NetDriverInputSink</c>'s remark makes for not subclassing
+    /// <c>ActorController</c> (V5-D7), one layer over.
+    /// </para>
+    /// <para>
+    /// <b>The eight coroutines stop with the component.</b> Disabling a <c>MonoBehaviour</c>
+    /// halts its running coroutines, which is what actually stops the bot steering; a flag the
+    /// controller checked itself would leave every coroutine running and merely idle.
+    /// </para>
+    /// </remarks>
+    internal sealed class AiActorControllerDriver : IAiDriver
+    {
+        private readonly AiActorController _ai;
+
+        internal AiActorControllerDriver(AiActorController ai) => _ai = ai;
+
+        /// <summary>
+        /// The <c>UnityEngine.Object</c> null check, kept on this side of the seam where it
+        /// still means "the native half is alive".
+        /// </summary>
+        public bool Exists => _ai != null;
+
+        public void Suspend()
+        {
+            if (_ai != null) _ai.enabled = false;
+        }
+
+        public void Resume()
+        {
+            if (_ai != null) _ai.enabled = true;
+        }
     }
 }
