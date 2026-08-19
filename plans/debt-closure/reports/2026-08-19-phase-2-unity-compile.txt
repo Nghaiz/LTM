@@ -1,0 +1,40 @@
+Unity compile proof — debt-closure phase 2 (task 2a-2f)
+Editor: Unity 6000.3.21f1, D:/Coding/LTM/Ironfront_Reborn, driven over MCP.
+Captured 2026-08-19 ~22:19 (+07:00).
+
+Three compile passes were needed; each error and its cause is recorded rather than
+only the final green, because two of the three are traps a later phase will hit again.
+
+PASS 1 — FAILED
+  NetProjectileAuthority.cs(58,13): CS0103 'ProjectileDamageOwnership' does not exist
+  NetProjectileAuthority.cs(76,13): CS0103
+  Cause: Unity references the PREBUILT DLLs in Assets/Plugins, not the .csproj. A new
+  type in Ironfront.Net.Replication is invisible to Assembly-CSharp until
+  tools/build-libs.ps1 re-copies them. `dotnet build` on the solution passes throughout
+  and says nothing about this.
+  Fix: tools/build-libs.ps1 (6 library DLLs + 5 dependencies re-copied).
+
+PASS 2 — FAILED
+  MatchScoreboard.cs(83,22): CS0066 'MatchScoreboard.Changed': event must be of a
+  delegate type
+  Cause: Assembly-CSharp declares its OWN `Action` class -- a countdown timer, see
+  ScoreUi.bluePulse -- which shadows System.Action. `using System;` does not win.
+  Fix: fully qualified System.Action / System.Action<bool> / System.Action<bool,bool>.
+
+PASS 3 — FAILED
+  NetClientLocalCombatDriver.cs(142,54): CS0117 ProtocolConstants has no
+  'MTU_SAFE_PAYLOAD'
+  Cause: the constant is MAX_PAYLOAD (MTU_SAFE - GSP_HEADER_SIZE = 1184).
+  Fix: MAX_PAYLOAD, hoisted to a reused field like every other client send buffer.
+
+PASS 4 — CLEAN
+  assets-refresh -> [Success] Assets refresh completed: AssetDatabase
+  editor-application-get-state -> IsCompiling: false
+  Errors in the window after the final compile (22:18:46): none.
+  Warnings in that window: pre-existing only, all under Assembly-CSharp/Pathfinding/
+  (CS0618 FindObjectOfType obsolescence) plus Squad.hasSquadVehicle CS0414. None from
+  any file this phase touched.
+
+NOT claimed here: that anything RENDERS or BEHAVES correctly. This is a compile, and
+the killfeed names, the death screen and the wreck blast are Play Mode observations
+that belong to Phase 3's two-client harness.

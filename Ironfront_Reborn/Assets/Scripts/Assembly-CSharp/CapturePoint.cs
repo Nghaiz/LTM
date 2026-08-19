@@ -264,7 +264,7 @@ public class CapturePoint : SpawnPoint
 	/// <remarks>
 	/// <para>
 	/// <see cref="SetOwner"/> is called only on an actual change of hands, so
-	/// <c>ScoreUi.AddFlag</c> and <c>MinimapUi.UpdateSpawnPointButtons</c> still fire exactly
+	/// <c>MatchScoreboard.AddFlag</c> and <c>MinimapUi.UpdateSpawnPointButtons</c> still fire exactly
 	/// once per flip and no more — at 30 Hz an unconditional call would add a flag to the
 	/// scoreboard thirty times a second for a point nobody touched.
 	/// </para>
@@ -437,8 +437,13 @@ public class CapturePoint : SpawnPoint
 		{
 			flagRenderer.material.color = Color.Lerp(ColorScheme.TeamColor(team), Color.black, 0.2f);
 		}
-		ScoreUi.AddFlag(num2, num);
+		// debt-closure phase 2 task 2c. See Actor.Die for why this is no longer the HUD's call.
+		MatchScoreboard.Current.AddFlag(num2, num);
 		MinimapUi.UpdateSpawnPointButtons();
+		// debt-closure phase 2 task 2d, ledger C-6: the point now carries a minimap marker that
+		// recolours as it flips. SetMarker is idempotent by subject, so calling it on every flip
+		// recolours rather than stacking a second icon per capture.
+		MinimapUi.SetMarker(base.transform, ColorScheme.TeamColor(team));
 	}
 
 	public override float GotoRadius()

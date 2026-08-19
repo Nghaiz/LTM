@@ -1,6 +1,26 @@
 using UnityEngine;
 using UnityEngine.UI;
 
+/// <summary>
+/// Draws the scoreboard. Holds no match state.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>V8 D9 is closed.</b> This class used to own the score, the flag count, the multiplier and
+/// the victory check, all behind <c>if (instance == null) return;</c> — so a headless server,
+/// which instantiates no HUD, ran a match that neither scored nor ended. V10 task 7 closed the
+/// rendering half by adding <see cref="SetAuthoritativeState"/>; debt-closure phase 2 task 2c
+/// moved the state itself to <see cref="MatchScoreboard"/>, which is a plain class and therefore
+/// exists on every build. What is left here is drawing.
+/// </para>
+/// <para>
+/// Two sources feed it and they never mix. Offline, <see cref="MatchScoreboard"/> raises
+/// <c>Changed</c> and <see cref="UpdateUi"/> redraws. On a networked client,
+/// <see cref="SetAuthoritativeState"/> writes the server's totals straight to the text fields
+/// and never touches the offline scoreboard — routing them through it would re-enter the
+/// multiplier and double-drive the win check (V10 D11).
+/// </para>
+/// </remarks>
 public class ScoreUi : MonoBehaviour
 {
 	public static ScoreUi instance;
@@ -34,14 +54,6 @@ public class ScoreUi : MonoBehaviour
 
 	private Canvas canvas;
 
-	private int blueScore;
-
-	private int redScore;
-
-	private int blueFlags;
-
-	private int redFlags;
-
 	private Color blue;
 
 	private Color red;
@@ -49,8 +61,6 @@ public class ScoreUi : MonoBehaviour
 	private Action bluePulse = new Action(0.5f);
 
 	private Action redPulse = new Action(0.5f);
-
-	private bool gameEnded;
 
 	// V10 task 7 (D11): last values rendered by SetAuthoritativeState, so a networked client
 	// rebuilds its Text strings only when the server's numbers actually change rather than once
@@ -69,96 +79,39 @@ public class ScoreUi : MonoBehaviour
 	private int lastHumanPlayerCount = -1;
 
 	/// <summary>
-	/// Awards a kill. Does nothing where there is no scoreboard.
+	/// Draws the victory banner. Driven by <see cref="MatchScoreboard.Ended"/>.
 	/// </summary>
 	/// <remarks>
-	/// <b>This class holds match state, not just its rendering</b> — the score, the flag count
-	/// and the win condition all live here, in a UI component. So on a headless server this
-	/// guard does not merely skip a redraw: the original game's match neither scores nor ends.
-	/// That is a deliberate, surfaced limitation and not a silent fallback. The networked match
-	/// is scored by <c>Ironfront.Net.Replication.Match.MatchStateMachine</c>, which is where
-	/// authoritative match state belongs. <b>V10 D12 closes only the rendering half of that
-	/// divergence</b> — <see cref="SetAuthoritativeState"/> below draws the server's numbers on
-	/// a networked client. This class still holds match state that does not run headless, and
-	/// that remains V8 D9's recorded divergence; moving the state itself out of this UI
-	/// component is a separate redesign, not done here.
+	/// The banner is UI and stays here; the DECISION that a team won is not, and moved to
+	/// <see cref="MatchScoreboard"/> in debt-closure phase 2 (ledger C-4, closing V8 D9).
 	/// </remarks>
-	public static void AddScore(int blue, int red)
+	private void OnMatchEnded(bool blue)
 	{
-		if (instance == null)
+		if (victoryScreen == null)
 		{
 			return;
 		}
-		instance.blueScore += blue * ScoreMultiplier(instance.blueFlags);
-		instance.redScore += red * ScoreMultiplier(instance.redFlags);
-		if (blue > 0)
+		victoryScreen.gameObject.SetActive(true);
+		Color color = ((!blue) ? red : this.blue);
+		color.a = 0.8f;
+		victoryScreen.color = color;
+		if (victoryText != null)
 		{
-			instance.bluePulse.Start();
+			victoryText.text = blue ? "BLUE TEAM IS" : "RED TEAM IS";
 		}
-		if (red > 0)
-		{
-			instance.redPulse.Start();
-		}
-		instance.UpdateUi();
-		if (!instance.gameEnded)
-		{
-			if (instance.blueScore >= instance.redScore + GameManager.instance.victoryPoints)
-			{
-				Win(true);
-			}
-			else if (instance.redScore >= instance.blueScore + GameManager.instance.victoryPoints)
-			{
-				Win(false);
-			}
-		}
+		Invoke("HideVictoryScreen", 5f);
 	}
 
-	/// <summary>Records a capture. See <see cref="AddScore"/> for the headless caveat.</summary>
-	public static void AddFlag(int blue, int red)
+	/// <summary>Pulses a team's bar on a kill. Purely cosmetic.</summary>
+	private void OnScored(bool blueScored, bool redScored)
 	{
-		if (instance == null)
+		if (blueScored)
 		{
-			return;
+			bluePulse.Start();
 		}
-		instance.blueFlags += blue;
-		instance.redFlags += red;
-		instance.UpdateUi();
-		if (!instance.gameEnded && GameManager.instance.ElapsedGameTime() > 1f)
+		if (redScored)
 		{
-			if (!ActorManager.HasSpawnPoint(0))
-			{
-				Win(false);
-			}
-			else if (!ActorManager.HasSpawnPoint(1))
-			{
-				Win(true);
-			}
-		}
-	}
-
-	/// <summary>Ends the match. See <see cref="AddScore"/> for the headless caveat.</summary>
-	public static void Win(bool blue)
-	{
-		if (instance == null)
-		{
-			return;
-		}
-		if (!instance.gameEnded)
-		{
-			instance.gameEnded = true;
-			instance.victoryScreen.gameObject.SetActive(true);
-			Color color = ((!blue) ? instance.red : instance.blue);
-			color.a = 0.8f;
-			instance.victoryScreen.color = color;
-			if (blue)
-			{
-				instance.victoryText.text = "BLUE TEAM IS";
-			}
-			else
-			{
-				instance.victoryText.text = "RED TEAM IS";
-			}
-			instance.Invoke("HideVictoryScreen", 5f);
+			redPulse.Start();
 		}
 	}
 
@@ -167,17 +120,22 @@ public class ScoreUi : MonoBehaviour
 		victoryScreen.gameObject.SetActive(false);
 	}
 
+	/// <summary>Kept as a forwarder so existing callers do not have to move.</summary>
+	/// <remarks>
+	/// The rule itself lives on <see cref="MatchScoreboard"/> now. One implementation, two names
+	/// — never two implementations.
+	/// </remarks>
 	public static int ScoreMultiplier(int flags)
 	{
-		return flags;
+		return MatchScoreboard.ScoreMultiplier(flags);
 	}
 
 	/// <summary>
 	/// Renders the server's authoritative match state and returns. V10 D11: never re-enters
-	/// <see cref="AddScore"/> or <see cref="AddFlag"/> (both are delta-only with no getters,
+	/// <c>MatchScoreboard.AddScore</c> or <c>AddFlag</c> (both are delta-only with no getters,
 	/// while this method's inputs are already totals — feeding them through those mutators
-	/// would re-enter <see cref="ScoreMultiplier"/> and double-drive the win check below), and
-	/// never touches <c>victoryPoints</c> itself.
+	/// would re-enter <see cref="ScoreMultiplier"/> and double-drive the win check), and never
+	/// touches <c>victoryPoints</c> itself.
 	/// </summary>
 	/// <param name="phase">
 	/// <c>Ironfront.Net.Protocol.MatchPhase</c> as a plain <c>int</c> — this file takes no
@@ -196,7 +154,7 @@ public class ScoreUi : MonoBehaviour
 	/// human-count element. <see cref="blueScoreText"/> / <see cref="redScoreText"/> take the
 	/// tickets (the networked equivalent of the score they already show). <see cref="blueFlagsText"/>
 	/// / <see cref="redFlagsText"/> are repurposed for the phase label and the phase timer — they
-	/// are otherwise idle on a networked client, because <see cref="AddFlag"/> never runs there
+	/// are otherwise idle on a networked client, because <c>MatchScoreboard.AddFlag</c> never runs there
 	/// (capture points are V10 task 8, blocked on V8 task 1). <b>The client track still has to
 	/// add real phase/timer/human-count elements to this prefab</b> and this mapping should be
 	/// deleted once that lands.
@@ -291,35 +249,55 @@ public class ScoreUi : MonoBehaviour
 	private void Awake()
 	{
 		instance = this;
-		blueScore = 0;
-		redScore = 0;
-		blueFlags = 0;
-		redFlags = 0;
 		blue = blueBar.color;
 		red = redBar.color;
 		canvas = GetComponent<Canvas>();
 		victoryScreen.gameObject.SetActive(false);
+
+		// The scoreboard outlives any one HUD: a match that started before this canvas woke has
+		// already scored, and Reset() here would throw those points away. Resetting belongs to
+		// whatever starts a match, not to whatever draws it.
+		MatchScoreboard board = MatchScoreboard.Current;
+		board.Changed += UpdateUi;
+		board.Ended += OnMatchEnded;
+		board.Scored += OnScored;
 		UpdateUi();
+	}
+
+	private void OnDestroy()
+	{
+		if (instance == this)
+		{
+			instance = null;
+		}
+		MatchScoreboard board = MatchScoreboard.Current;
+		board.Changed -= UpdateUi;
+		board.Ended -= OnMatchEnded;
+		board.Scored -= OnScored;
 	}
 
 	private void UpdateUi()
 	{
+		MatchScoreboard board = MatchScoreboard.Current;
+		int blueScore = board.BlueScore;
+		int redScore = board.RedScore;
+		int victoryPoints = board.VictoryPoints;
 		blueScoreText.text = blueScore.ToString();
 		redScoreText.text = redScore.ToString();
-		blueFlagsText.text = blueFlags.ToString();
-		redFlagsText.text = redFlags.ToString();
-		bool flag = blueScore + redScore >= GameManager.instance.victoryPoints;
+		blueFlagsText.text = board.BlueFlags.ToString();
+		redFlagsText.text = board.RedFlags.ToString();
+		bool flag = blueScore + redScore >= victoryPoints;
 		intercept.enabled = flag;
 		if (!flag)
 		{
-			float x = (float)blueScore / (float)GameManager.instance.victoryPoints;
-			float x2 = 1f - (float)redScore / (float)GameManager.instance.victoryPoints;
+			float x = (float)blueScore / (float)victoryPoints;
+			float x2 = 1f - (float)redScore / (float)victoryPoints;
 			blueBar.rectTransform.anchorMax = new Vector2(x, 1f);
 			redBar.rectTransform.anchorMin = new Vector2(x2, 0f);
 		}
 		else
 		{
-			float x3 = Mathf.Clamp01((float)(blueScore - redScore + GameManager.instance.victoryPoints) / (float)(2 * GameManager.instance.victoryPoints));
+			float x3 = Mathf.Clamp01((float)(blueScore - redScore + victoryPoints) / (float)(2 * victoryPoints));
 			blueBar.rectTransform.anchorMax = new Vector2(x3, 1f);
 			redBar.rectTransform.anchorMin = new Vector2(x3, 0f);
 			intercept.rectTransform.anchorMin = new Vector2(x3, 0f);

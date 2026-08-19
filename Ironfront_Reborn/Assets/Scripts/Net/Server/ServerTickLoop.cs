@@ -40,6 +40,13 @@ namespace Ironfront.Net.Unity.Server
     [DisallowMultipleComponent]
     public sealed class ServerTickLoop : MonoBehaviour, ISpawnRequestHandler, IReliablePayloadSender
     {
+        /// <summary>Rows for the next S_PLAYER_LIST. Reused; sized to the protocol ceiling.</summary>
+        private readonly PlayerListEntry[] _playerListEntries =
+            new PlayerListEntry[ProtocolConstants.MAX_ACTORS];
+
+        /// <summary>The variable-length body S_PLAYER_LIST is framed from. Never a stackalloc.</summary>
+        private readonly byte[] _playerListBody = new byte[PlayerListMessage.MaxBodySize];
+
         private readonly Dictionary<ushort, ServerPlayer> _byConnection =
             new Dictionary<ushort, ServerPlayer>(ProtocolConstants.MAX_ACTORS);
 
@@ -1276,7 +1283,9 @@ namespace Ironfront.Net.Unity.Server
             actor.Health  = NetServerActor.DefaultSpawnHealth;
             actor.IsAlive = true;
 
-            var player = new ServerPlayer(connectionId, actor.ActorId, _combat) { Actor = actor };
+            var player = new ServerPlayer(
+                connectionId, actor.ActorId, _combat, DisplayNameFor(in info, actor.ActorId))
+            { Actor = actor };
             player.SyncFromActor();
 
             // The session's clip and the actor's must agree from the first snapshot, or the
@@ -1289,6 +1298,9 @@ namespace Ironfront.Net.Unity.Server
 
             _byConnection.Add(connectionId, player);
             _players.Add(player);
+
+            // After the tables, so the joiner is in the table it is about to be sent.
+            EmitPlayerList();
 
             Debug.Log($"[net] conn {connectionId} joined as actor {actor.ActorId} ({info.RemoteAddress})");
         }
@@ -1322,8 +1334,104 @@ namespace Ironfront.Net.Unity.Server
             _byConnection.Remove(connectionId);
             _players.Remove(player);
 
+            // After the removal, so the table no longer names the leaver. Sending the stale one
+            // would leave every remaining client able to render a name for an actor that has
+            // just been despawned.
+            EmitPlayerList();
+
             Debug.Log($"[net] conn {connectionId} left ({reason})");
         }
+
+        /// <summary>
+        /// Broadcasts S_PLAYER_LIST. On join and on change, never per tick — names do not move.
+        /// debt-closure phase 2 task 2a, ledger C-3.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This is the caller the opcode never had.</b> V3 shipped
+        /// <c>PlayerListMessage</c>, <c>ServerEventWriter.WritePlayerList</c> and the client
+        /// router case, and the writer had zero callers in the entire repository for four phases
+        /// — so a killfeed line knew an actor id had died and had nothing to render. The client
+        /// half was reported by <c>ClientWiringGate</c> on every run; the server half had no gate
+        /// at all, which is why this one survived. <c>WriterCoverageRunner</c>'s G6 is that gate.
+        /// </para>
+        /// <para>
+        /// <b>Reliable and unfiltered.</b> A client that misses this has no second chance to
+        /// learn who anybody is — nothing re-sends names on a timer, and the next broadcast is
+        /// whenever somebody else joins or leaves.
+        /// </para>
+        /// <para>
+        /// The two buffers are fields, not locals: the body's worst case is
+        /// <c>PlayerListMessage.MaxBodySize</c> (1153 B) and this runs on a join, which is
+        /// exactly when the server is already doing the most work per frame.
+        /// </para>
+        /// </remarks>
+        private void EmitPlayerList()
+        {
+            if (Transport == null) return;
+
+            int count = 0;
+            for (int i = 0; i < _players.Count && count < _playerListEntries.Length; i++)
+            {
+                ServerPlayer player = _players[i];
+                ushort actorId = player.Session.ActorId;
+
+                // PlayerListEntry.ActorId is a u8 where the rest of the protocol uses a u16 --
+                // safe while MAX_ACTORS is 64, and pinned by a test rather than by this comment
+                // (PlayerListVersionPinTests). Skipping rather than truncating, because a
+                // truncated id names the WRONG player, which is worse than naming none.
+                if (actorId > byte.MaxValue) continue;
+
+                _playerListEntries[count].ActorId = (byte)actorId;
+                _playerListEntries[count].Name = NameBytes(player.DisplayName);
+                count++;
+            }
+
+            int written = ServerEventWriter.WritePlayerList(
+                _eventPayload,
+                _playerListBody,
+                new ReadOnlySpan<PlayerListEntry>(_playerListEntries, 0, count));
+
+            if (written < 0)
+            {
+                Debug.LogError(
+                    $"[net] S_PLAYER_LIST with {count} row(s) did not frame. The killfeed will "
+                    + "keep rendering actor ids.");
+                return;
+            }
+
+            BroadcastReliable(
+                new ReadOnlySpan<byte>(_eventPayload, 0, written),
+                (byte)ServerEventWriter.ReliableChannel);
+        }
+
+        /// <summary>
+        /// UTF-8 for one name, truncated to what the wire carries.
+        /// </summary>
+        /// <remarks>
+        /// Truncated on a BYTE boundary, which can split a multi-byte character — accepted,
+        /// because the alternative is refusing to name the player at all and the source of these
+        /// strings is currently ASCII by construction (see <c>ServerPlayer.DisplayName</c>).
+        /// Revisit when a real username reaches this side.
+        /// </remarks>
+        private static ReadOnlyMemory<byte> NameBytes(string displayName)
+        {
+            byte[] utf8 = System.Text.Encoding.UTF8.GetBytes(displayName ?? string.Empty);
+
+            return utf8.Length <= PlayerListMessage.MaxNameBytes
+                ? new ReadOnlyMemory<byte>(utf8)
+                : new ReadOnlyMemory<byte>(utf8, 0, PlayerListMessage.MaxNameBytes);
+        }
+
+        /// <summary>
+        /// The best name this side actually holds for a joining connection.
+        /// </summary>
+        /// <remarks>
+        /// The transport's <c>PlayerId</c> when the master issued one, and the actor id
+        /// otherwise. See <c>ServerPlayer.DisplayName</c> for why this is not the username.
+        /// </remarks>
+        private static string DisplayNameFor(in ConnectionInfo info, ushort actorId)
+            => info.PlayerId != 0 ? "#" + info.PlayerId : "Player " + actorId;
 
         /// <summary>
         /// True when world geometry stands between the shooter and the point that was hit.

@@ -53,21 +53,21 @@ flowchart TD
 | 1 | [`Actor.Update():467`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L467) | Per frame, if `activeWeapon != null` → `UpdateWeapon()` |
 | 2 | [`Actor.UpdateWeapon():475`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L475) | `controller.Fire()` && not `fallenOver` && seat allows it |
 | 3 | [`Actor.UpdateWeapon():480`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L480) | `activeWeapon.Fire(controller.FacingDirection(), controller.UseMuzzleDirection())` |
-| 4 | [`Weapon.CanFire():306`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs#L306) | unholstered · not reloading · has ammo · auto-or-not-held · not cooling down |
-| 5 | [`Weapon.Shoot():321`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs#L321) | `projectilesPerShot` × `SpawnProjectile`, then `ammo--`, `user.ApplyRecoil(...)` |
-| 6 | [`Weapon.SpawnProjectile():388`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs#L388) | `Quaternion.LookRotation(direction + Random.insideUnitSphere * configuration.spread)` |
-| 7 | [`Projectile.Travel():92`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Projectile.cs#L92) | Raycast forward `delta.magnitude * 2f`, mask `-2049` |
-| 8 | [`Projectile.Hit():125`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Projectile.cs#L125) | `Hitbox.IsHitboxLayer(layer)` → `component.ProjectileHit(this, point)` |
+| 4 | [`Weapon.CanFire():362`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs#L362) | unholstered · not reloading · has ammo · auto-or-not-held · not cooling down |
+| 5 | [`Weapon.Shoot():377`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs#L377) | `projectilesPerShot` × `SpawnProjectile`, then `ammo--`, `user.ApplyRecoil(...)` |
+| 6 | [`Weapon.SpawnProjectile():495`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs#L495) | `Quaternion.LookRotation(direction + Random.insideUnitSphere * configuration.spread)` |
+| 7 | [`Projectile.Travel():153`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Projectile.cs#L153) | Raycast forward `delta.magnitude * 2f`, mask `-2049` |
+| 8 | [`Projectile.Hit():178`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Projectile.cs#L178) | `Hitbox.IsHitboxLayer(layer)` → `component.ProjectileHit(this, point)` |
 | 9 | [`Hitbox.ProjectileHit():22`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Hitbox.cs#L22) | `parent.Damage(p.Damage() * multiplier, p.BalanceDamage(), piercing, …)` |
-| 10 | [`Actor.Damage():813`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L813) | `health -=`, `balance -=`, blood decals, then knock-over / ragdoll / hurt |
-| 11 | [`Actor.Die():725`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L725) | drop weapons, ragdoll, `ActorManager.SetDead`, `PathfindingManager.RegisterDeath`, `ScoreUi.AddScore` |
+| 10 | [`Actor.Damage():861`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L861) | `health -=`, `balance -=`, blood decals, then knock-over / ragdoll / hurt |
+| 11 | [`Actor.Die():770`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L770) | drop weapons, ragdoll, `ActorManager.SetDead`, `PathfindingManager.RegisterDeath`, `MatchScoreboard.AddScore` |
 
 ### Five facts worth knowing before you touch any of it
 
 1. **Damage is randomised at three points**, all `UnityEngine.Random`: spread
    ([`Weapon.cs:390`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs#L390)), recoil
-   kick ([`Weapon.cs:348`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs#L348)) and
-   the hurt animation ([`Actor.cs:857`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L857)).
+   kick ([`Weapon.cs:356`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs#L356)) and
+   the hurt animation ([`Actor.cs:1181`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L1181)).
    A shot is not reproducible from its inputs, so client-side prediction of a hit is not possible
    without seeding — which is why
    [`ServerFireResolver`](../Ironfront.Net.Replication/Combat/ServerFireResolver.cs) exists on the
@@ -125,7 +125,7 @@ Phase-00 asks for the table; the gap under it is the part that changes anyone's 
 
 | Missing from the snapshot | Where it lives | Does it matter? |
 |---|---|---|
-| **`balance`** (the stagger meter, 100 → −100) | [`Actor.cs:92`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L92) | **Yes.** `balance < 0` is what triggers `KnockOver` ([`Actor.cs:853`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L853)). It regenerates at 10/s and is decremented by every hit, so a client that does not have it cannot predict a knock-down and will show a player standing who is on the floor on the server. It is not derivable from `health` — a stun grenade does 0 health and 200 balance. |
+| **`balance`** (the stagger meter, 100 → −100) | [`Actor.cs:92`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L92) | **Yes.** `balance < 0` is what triggers `KnockOver` ([`Actor.cs:899`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L899)). It regenerates at 10/s and is decremented by every hit, so a client that does not have it cannot predict a knock-down and will show a player standing who is on the floor on the server. It is not derivable from `health` — a stun grenade does 0 health and 200 balance. |
 | **`spareAmmo[5]`** and the other four weapon slots | [`Actor.cs:112,116`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L112) | Own-player only. The HUD reads it via `Actor.UpdateAmmoUi`; other players never see it. A dedicated `S_LOADOUT`-style message or an own-player-only field, not a per-actor snapshot field. |
 | **`prone`** | *does not exist in the game* | `ActorStateFlags.IsProne` is defined in the protocol and has no source. Either the protocol carries a bit nothing will ever set, or prone is a planned feature. Worth deciding rather than discovering. |
 | **`hasAmmoBox` / `hasMedipack` / `needsResupply`** | [`Actor.cs:125-140`](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L125) | AI-only inputs (`AiActorController` resupply behaviour) and server-side. No replication needed. |
@@ -146,24 +146,24 @@ Phase-00 task 1 deliverable 3, and the direct input to
 
 | Line | Call | Present on a server? |
 |---|---|---|
-| [186](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L186) | `ActorManager.Register(this)` | ✅ — but it calls `MinimapUi.AddActorBlip` internally (see below) |
-| [225](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L225) | `IngameUi.instance.Show()` | ❌ guarded by `if (!aiControlled)` |
-| [226](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L226) | `IngameUi.instance.SetHealth(...)` | ❌ guarded by `if (!aiControlled)` |
-| [228](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L228) | `ActorManager.SetAlive(this)` | ✅ |
-| [235](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L235) | `controller.GetLoadout()` → `LoadoutUi.instance.loadout` on the player path | ❌ **unguarded, via the controller** |
-| [534](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L534) | `IngameMenuUi.IsOpen()` | ❌ **unguarded** |
-| [718](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L718) | `IngameUi.instance.Hide()` | ❌ guarded by `if (!aiControlled)` |
-| [720](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L720) | `ActorManager.SetDead(this)` | ✅ |
-| [721](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L721) | `PathfindingManager.RegisterDeath(point)` | ✅ |
-| [722](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L722) | `ScoreUi.AddScore(...)` | ❌ **unguarded — runs on every death, including bot-vs-bot** |
-| [781](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L781) | `DecalManager.CreateBloodDrop(...)` | ❌ **unguarded — runs on every hit, in a loop of `ceil(damage/10)`** |
-| [801,803](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L801) | `IngameUi.instance.SetHealth` / `ShowVignette` | ❌ guarded by `if (!aiControlled)` |
-| [830](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L830) | `IngameUi.instance.SetWeapon(weapon)` | ❌ guarded by `if (!aiControlled)` |
-| [1084](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L1084) | `IngameUi.instance.SetAmmoText(...)` | ❌ reached only from guarded callers |
-| [1089](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L1089) | `IngameUi.instance.SetHealth(health)` | ❌ reached only from guarded callers |
-| [1143](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L1143) | `IngameUi.instance.Resupply()` | ❌ guarded by `if (!aiControlled)` |
-| [1159](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L1159) | `IngameUi.instance.Heal()` | ❌ guarded by `if (!aiControlled)` |
-| [1172,1174](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L1172) | `Camera.main` inside `IsLowQuality()` | ❌ **unguarded — reached from `Update` on every AI actor** |
+| [211](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L211) | `ActorManager.Register(this)` | ✅ — but it calls `MinimapUi.AddActorBlip` internally (see below) |
+| [252](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L252) | `IngameUi.instance.Show()` | ❌ guarded by `if (!aiControlled)` |
+| [253](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L253) | `IngameUi.instance.SetHealth(...)` | ❌ guarded by `if (!aiControlled)` |
+| [255](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L255) | `ActorManager.SetAlive(this)` | ✅ |
+| [262](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L262) | `controller.GetLoadout()` → `LoadoutUi.instance.loadout` on the player path | ❌ **unguarded, via the controller** |
+| [568](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L568) | `IngameMenuUi.IsOpen()` | ❌ **unguarded** |
+| [798](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L798) | `IngameUi.instance.Hide()` | ❌ guarded by `if (!aiControlled)` |
+| [800](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L800) | `ActorManager.SetDead(this)` | ✅ |
+| [801](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L801) | `PathfindingManager.RegisterDeath(point)` | ✅ |
+| [805](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L805) | `MatchScoreboard.Current.AddScore(...)` | ✅ — **was `ScoreUi.AddScore`, which scored nothing headless.** debt-closure phase 2 task 2c moved the state off the HUD (ledger C-4) |
+| [885](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L885) | `DecalManager.CreateBloodDrop(...)` | ❌ **unguarded — runs on every hit, in a loop of `ceil(damage/10)`** |
+| [911,913](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L911) | `IngameUi.instance.SetHealth` / `ShowVignette` | ❌ guarded by `if (!aiControlled)` |
+| [941](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L941) | `IngameUi.instance.SetWeapon(weapon)` | ❌ guarded by `if (!aiControlled)` |
+| [1213](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L1213) | `IngameUi.instance.SetAmmoText(...)` | ❌ reached only from guarded callers |
+| [1218](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L1218) | `IngameUi.instance.SetHealth(health)` | ❌ reached only from guarded callers |
+| [1275](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L1275) | `IngameUi.instance.Resupply()` | ❌ guarded by `if (!aiControlled)` |
+| [1292](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L1292) | `IngameUi.instance.Heal()` | ❌ guarded by `if (!aiControlled)` |
+| [1311,1313](../Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs#L1311) | `Camera.main` inside `IsLowQuality()` | ❌ **unguarded — reached from `Update` on every AI actor** |
 
 ### What this list is really saying
 

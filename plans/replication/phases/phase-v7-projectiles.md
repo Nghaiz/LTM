@@ -207,9 +207,11 @@ damage and no trajectory — the bounce reads `velocity` and `hitInfo.normal`, n
 governs **gameplay-affecting** rolls; this one is cosmetic and is exempt, stated here so it is a
 decision rather than an omission.
 
-**Detonation.** `Explode()` (`:56-80`) calls `ActorManager.Explode` — server-only, per V1. Its
-`IngameUi.Hit()` (`:66`) becomes `S_HIT_CONFIRM`-driven, like Task 3's. The `Invoke("Cleanup", 10f)`
-(`:79`) folds into Task 8's cleanup policy.
+**Detonation.** `Explode()` (`:108`) calls `ActorManager.Explode` — server-only, per V1. Its
+`IngameUi.Hit()` (`:139`) becomes `S_HIT_CONFIRM`-driven, like Task 3's. The cleanup `Invoke`
+(`:156`, `:186`) folds into Task 8's cleanup policy. *(Re-resolved by debt-closure phase 2 task 2f;
+ledger C-16 recorded these as drifted. Task 8 has since landed, so the cleanup call this paragraph
+described as `Invoke("Cleanup", 10f)` is now the two `ProjectileCleanupPolicy`-driven calls cited.)*
 
 **Verify:** `AGrenadeDetonatesOnTheSameTickOnBothSides`;
 `AGrenadeDetonationPositionComesFromTheServerNotThePrediction`;

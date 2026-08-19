@@ -66,8 +66,16 @@ public class ExplodingProjectile : Projectile
 		// V1 task 3: Explode now needs to know WHO set it off and WHAT KIND it is, so the
 		// server can attribute the S_EXPLOSION and a client can recognise its own blast.
 		// Rocket covers every ExplodingProjectile in scope -- rockets and tank shells alike.
-		bool result = ActorManager.Explode(
-			position, explosionConfiguration, source, Ironfront.Net.Protocol.ExplosionKind.Rocket);
+		// debt-closure phase 2 task 2e. LibraryOwnsProjectileDamage, NOT the negation of
+		// EngineAppliesProjectileDamage: this call also applies the corpse ragdoll impulse, which
+		// is kept at every role because corpses are never replicated (AD-4), so gating it on
+		// "does the engine apply damage" would switch corpses off on every client. The narrower
+		// question is false offline and on a client, so both are byte-for-byte unchanged; it goes
+		// true only on a server that has handed flight to the library stepper (ledger C-1).
+		bool result = !Ironfront.Net.Unity.Server.NetProjectileAuthority.LibraryOwnsProjectileDamage
+			&& ActorManager.Explode(
+				position, explosionConfiguration, source,
+				Ironfront.Net.Protocol.ExplosionKind.Rocket);
 		base.transform.rotation = Quaternion.LookRotation(up);
 		base.enabled = false;
 		Renderer[] array = renderers;

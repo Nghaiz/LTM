@@ -133,6 +133,7 @@ namespace Ironfront.Net.Unity.Client
             Router.OnSpawnActor += OnSpawnActor;
 
             EnsureVehicleStage();
+            EnsureLocalCombatDriver();
 
             if (_connectOnStart) Connect();
         }
@@ -273,6 +274,34 @@ namespace Ironfront.Net.Unity.Client
             if (stage == null) stage = gameObject.AddComponent<ClientVehicleStage>();
 
             if (Config != null) stage.ApplyConfiguration(Config.PredictLocalVehicle);
+        }
+
+        /// <summary>
+        /// Makes sure the local player has a combat driver. debt-closure phase 2 task 2b.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Added in code for exactly <see cref="EnsureVehicleStage"/>'s reason, and with a
+        /// sharper version of its symptom: without a driver the local player dies, keeps input,
+        /// is shown nothing, and can never respawn — a fault that reads as the server refusing
+        /// respawns rather than as a missing component. It needs no serialized reference either;
+        /// it reads the actor id off this bootstrap and the respawn constant off the protocol.
+        /// </para>
+        /// <para>
+        /// This is also what makes the component WIRED rather than merely present. Phase 2 owns
+        /// no scenes or prefabs (those are Phase 1's), so authoring it onto the NetClient object
+        /// was not available — and a driver in no scene would have closed ledger C-2 on paper
+        /// while a dead player still stood there holding a live controller.
+        /// </para>
+        /// <para>
+        /// An authored instance wins, so Phase 1 or a later scene pass can place it explicitly
+        /// and this call becomes a no-op rather than a duplicate.
+        /// </para>
+        /// </remarks>
+        private void EnsureLocalCombatDriver()
+        {
+            if (GetComponent<NetClientLocalCombatDriver>() == null)
+                gameObject.AddComponent<NetClientLocalCombatDriver>();
         }
 
         private void OnSpawnActor(SpawnActorMessage message)

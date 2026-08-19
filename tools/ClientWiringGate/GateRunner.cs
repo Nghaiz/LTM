@@ -71,19 +71,13 @@ namespace Ironfront.Tools.ClientWiringGate
         /// </para>
         private static readonly (string EventName, string Reason)[] KnownUnwiredEvents =
         {
-            // Phase-V3 gave S_PLAYER_LIST the struct, the writer and the router case it had been
-            // missing since the freeze — the opcode was declared with no implementation anywhere,
-            // which is why a killfeed line knew an actor id had died and had nothing to render.
-            // The presenter that turns the table into names on screen is client-flow work and V3
-            // adds no MonoBehaviour, so the event ships raised-but-unsubscribed on purpose rather
-            // than by oversight.
-            //
-            // Retires when the client-flow phase that also adopts ClientCombatState and ScoreUi
-            // subscribes it — the same phase, because all three are a client object nothing wires
-            // up. Per the note above this list, it retires on SUBSCRIPTION, not on unblocking.
-            ("OnPlayerList",
-             "V3 ships the codec and the router case; the name table has no presenter until the "
-             + "client-flow phase that also adopts ClientCombatState and ScoreUi."),
+            // EMPTY AGAIN, and for the second time in this list's life it is worth recording how
+            // the entry left. V3's OnPlayerList exemption named its own retirement condition --
+            // "the client-flow phase that also adopts ClientCombatState and ScoreUi" -- and
+            // debt-closure phase 2 is that phase. NetClientCombatPresenter now subscribes it into
+            // a PlayerNameTable, so the entry retired on SUBSCRIPTION exactly as the note above
+            // this list requires, rather than sitting stale-but-green the way OnCapturePoint's
+            // did. If you are adding an entry here, read that note first.
         };
 
         /// <summary>
@@ -164,6 +158,7 @@ namespace Ironfront.Tools.ClientWiringGate
                 findings.AddRange(ClientWiringDetectors.FindEmptyCatchClauses(tree, path));
                 findings.AddRange(ClientWiringDetectors.FindUnguardedLocalSingletonTouches(tree, path));
                 findings.AddRange(ClientWiringDetectors.FindDeltaScoreReferences(tree, path));
+                findings.AddRange(ClientWiringDetectors.FindUnguardedEngineProjectileDamage(tree, path));
             }
 
             var dead = routerEventNames.Where(name => !subscribed.ContainsKey(name)).ToList();
@@ -221,7 +216,7 @@ namespace Ironfront.Tools.ClientWiringGate
                 + $"{routerEventNames.Count} ClientMessageRouter events have a production "
                 + "subscriber"
                 + (KnownUnwiredEvents.Length == 0 ? "" : " and the rest are named gaps above")
-                + $"; G2-G5 clean across {scanned} "
+                + $"; G2-G5 and G7 clean across {scanned} "
                 + "file(s). No types were resolved - this says something subscribes, not that it "
                 + "renders correctly.");
             return 0;

@@ -44,11 +44,21 @@ namespace Ironfront.Net.Unity.Client
 
         private NetClientBootstrap _client;
 
+        [Tooltip("Draw the killfeed with IMGUI. A stopgap until a real HUD element reads it.")]
+        [SerializeField] private bool _drawKillfeed = true;
+
         private readonly KillfeedModel _killfeed = new KillfeedModel();
         private readonly HitmarkerModel _hitmarker = new HitmarkerModel();
+        private readonly PlayerNameTable _names = new PlayerNameTable();
 
         /// <summary>The last few kills, newest first. Drawn by the HUD; pruned here.</summary>
         public KillfeedModel Killfeed => _killfeed;
+
+        /// <summary>
+        /// Actor id to display name, rebuilt from every S_PLAYER_LIST.
+        /// debt-closure phase 2 task 2a.
+        /// </summary>
+        public PlayerNameTable Names => _names;
 
         /// <summary>The newest confirmed hit and how long it stays up.</summary>
         public HitmarkerModel Hitmarker => _hitmarker;
@@ -86,6 +96,12 @@ namespace Ironfront.Net.Unity.Client
             _client.Router.OnDeath += OnDeath;
             _client.Router.OnWeaponFire += OnWeaponFire;
             _client.Router.OnHitConfirm += OnHitConfirm;
+
+            // debt-closure phase 2 task 2a. This subscription is what retires OnPlayerList from
+            // ClientWiringGate's KnownUnwiredEvents: the exemption retires on SUBSCRIPTION, and
+            // this presenter is the killfeed's owner, so the name table belongs beside it rather
+            // than on a component of its own that the scene would then have to carry.
+            _client.Router.OnPlayerList += _names.Apply;
         }
 
         private void OnDisable()
@@ -94,6 +110,8 @@ namespace Ironfront.Net.Unity.Client
             _client.Router.OnDeath -= OnDeath;
             _client.Router.OnWeaponFire -= OnWeaponFire;
             _client.Router.OnHitConfirm -= OnHitConfirm;
+            _client.Router.OnPlayerList -= _names.Apply;
+            _names.Reset();
         }
 
         private void Update()
@@ -102,6 +120,60 @@ namespace Ironfront.Net.Unity.Client
             // run. Once a frame, before anything reads it.
             _killfeed.Prune(Time.time);
         }
+
+        /// <summary>
+        /// Draws the killfeed with names. debt-closure phase 2 task 2a, acceptance criterion 3.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>IMGUI, and deliberately a stopgap.</b> <c>KillfeedModel</c> shipped in phase-02 and
+        /// has had no consumer in the entire repository since — the model is exercised by tests
+        /// and drawn by nothing, so "the killfeed" has never actually appeared on screen. A real
+        /// HUD element belongs on <c>Ingame UI Container.prefab</c>, and phase 2 owns no prefabs
+        /// or scenes (they are Phase 1's), so this draws from the presenter that already holds
+        /// the model and already sits on the <c>NetClient</c> object. Delete it when a HUD
+        /// element reads <see cref="Killfeed"/> and <see cref="Names"/> instead.
+        /// </para>
+        /// <para>
+        /// <b>Nothing here is allocated per frame except the strings IMGUI needs.</b> That is the
+        /// honest cost of the stopgap and the second reason it is one; five lines at 60 Hz is
+        /// not a per-tick path, and the replacement does not have this problem.
+        /// </para>
+        /// </remarks>
+        private void OnGUI()
+        {
+            if (!_drawKillfeed) return;
+            if (_killfeed.Count == 0) return;
+
+            const float width = 420f;
+            const float lineHeight = 20f;
+
+            for (int i = 0; i < _killfeed.Count; i++)
+            {
+                KillfeedEntry entry = _killfeed[i];
+
+                string killer = entry.KilledByEnvironment
+                    ? "The world"
+                    : NameFor(entry.KillerActorId);
+
+                string line = killer + (entry.Headshot ? " ▸ " : " → ") + NameFor(entry.VictimActorId);
+
+                GUI.Label(
+                    new Rect(Screen.width - width - 12f, 12f + i * lineHeight, width, lineHeight),
+                    line);
+            }
+        }
+
+        /// <summary>
+        /// The name S_PLAYER_LIST gave this actor, or the id when no broadcast named it.
+        /// </summary>
+        /// <remarks>
+        /// The fallback is HERE and not in <c>PlayerNameTable</c>, which returns null: only the
+        /// caller knows what an unnamed actor should read as, and manufacturing it in the table
+        /// would make a genuinely missing name indistinguishable from a real one. "actor 7" is
+        /// exactly what this feed rendered for every line before this phase.
+        /// </remarks>
+        private string NameFor(ushort actorId) => _names.NameOr(actorId, "actor " + actorId);
 
         /// <summary>
         /// One death message, two consumers: the feed takes the line, the ragdoll takes the
@@ -122,9 +194,11 @@ namespace Ironfront.Net.Unity.Client
             // The local player is deliberately absent from the remote registry — it is
             // predicted, not interpolated — so its own death must be resolved first or it
             // looks like an actor this client never heard of.
+            var hitbox = (HitboxType)message.HitboxHit;
+
             if (NetClientPresenterGuard.IsLocalActor(message.VictimActorId))
             {
-                KnockOverLocalActor(force);
+                KnockOverLocalActor(force, hitbox);
                 return;
             }
 
@@ -135,7 +209,7 @@ namespace Ironfront.Net.Unity.Client
             // simply no body to fell. This must not log.
             if (!_registry.TryFindView(message.VictimActorId, out RemoteActorView view)) return;
 
-            FellBody(view, force);
+            FellBody(view, force, hitbox);
         }
 
         /// <summary>
@@ -154,20 +228,20 @@ namespace Ironfront.Net.Unity.Client
         /// documents that the netcode deliberately does not call it.
         /// </para>
         /// <para>
-        /// <b>The impulse goes to the main rigidbody only.</b> <c>ApplyRigidbodyForce</c> is
-        /// hardcoded to <c>MainRigidbody()</c> and there is no per-bone API. V10 does not add
-        /// one: the bone map depends on rig naming authored in the Editor. <c>HitboxHit</c> is
-        /// still consumed — <c>KillfeedEntry.From</c> reads it for the headshot icon — so the
-        /// byte is not orphaned; per-bone ragdoll targeting is the recorded, unowned gap.
+        /// <b>The impulse goes to the bone that was hit.</b> debt-closure phase 2 task 2d closed
+        /// ledger C-8: <c>ActiveRaggy.RigidbodyForBone</c> resolves through the animator's
+        /// humanoid bone map, so it does not depend on rig NAMING the way V10 assumed when it
+        /// left this open — a humanoid avatar has already normalised that. A bone the rig does
+        /// not simulate falls back to the main body, which is what every corpse used to get.
         /// </para>
         /// </remarks>
-        private static void FellBody(RemoteActorView view, Vector3 force)
+        private static void FellBody(RemoteActorView view, Vector3 force, HitboxType hitbox)
         {
             if (view == null) return;
 
             if (view.Actor != null && view.HasRagdollRig)
             {
-                view.Actor.KnockOver(force);
+                view.Actor.KnockOver(force, BoneFor(hitbox));
                 return;
             }
 
@@ -180,7 +254,28 @@ namespace Ironfront.Net.Unity.Client
             view.gameObject.SetActive(false);
         }
 
-        private static void KnockOverLocalActor(Vector3 force)
+        /// <summary>
+        /// Which bone an impulse lands on, from the hitbox S_DEATH carries.
+        /// </summary>
+        /// <remarks>
+        /// <b>Three hitboxes, not a skeleton.</b> The wire carries Body/Head/Limb and nothing
+        /// finer, so this maps to three bones and stops. <c>Limb</c> resolves to the right upper
+        /// leg rather than to the limb that was actually hit — the byte does not say which — and
+        /// that is a visible improvement over the pelvis without pretending to information the
+        /// protocol does not carry. Widening it means widening <c>HitboxType</c>, which is a
+        /// PROTOCOL_VERSION decision.
+        /// </remarks>
+        private static HumanBodyBones BoneFor(HitboxType hitbox)
+        {
+            switch (hitbox)
+            {
+                case HitboxType.Head: return HumanBodyBones.Head;
+                case HitboxType.Limb: return HumanBodyBones.RightUpperLeg;
+                default: return HumanBodyBones.Hips;
+            }
+        }
+
+        private static void KnockOverLocalActor(Vector3 force, HitboxType hitbox)
         {
             // ClientCombatState owns the local player's death STATE — respawn timer, ammo,
             // health — and V10 does not duplicate it. It is a pure model and no Unity component
@@ -192,7 +287,7 @@ namespace Ironfront.Net.Unity.Client
             if (local == null || local.actor == null) return;
             if (local.actor.ragdoll == null) return;
 
-            local.actor.KnockOver(force);
+            local.actor.KnockOver(force, BoneFor(hitbox));
         }
 
         /// <summary>

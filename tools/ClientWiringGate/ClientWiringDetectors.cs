@@ -190,6 +190,64 @@ namespace Ironfront.Tools.ClientWiringGate
         /// </summary>
         private static readonly string[] EmptyCatchScope = { "/CapturePoint.cs" };
 
+        /// <summary>
+        /// The engine-side projectile damage call sites G7 governs — the three files ledger C-1
+        /// names as the ones that still apply a projectile's damage from the scene.
+        /// </summary>
+        private static readonly string[] EngineProjectileDamageScope =
+        {
+            "/Projectile.cs",
+            "/ExplodingProjectile.cs",
+            "/GrenadeProjectile.cs",
+        };
+
+        /// <summary>
+        /// The calls that APPLY a projectile's damage, as (required receiver, method) pairs. A
+        /// null receiver matches any.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>ProjectileHit</c> subtracts health through a <c>Hitbox</c> resolved into a local,
+        /// so its receiver is a variable and cannot be pinned. <c>ActorManager.Explode</c> runs
+        /// the blast loop and MUST be pinned to its type, because <c>Explode</c> is also the name
+        /// of the two overridable wrappers that CONTAIN it — <c>ExplodingProjectile.Explode</c>
+        /// and <c>GrenadeProjectile.Explode</c>. An unqualified match reported both wrappers'
+        /// own call sites, which are not damage and would have had to be guarded twice or
+        /// exempted; observed on the rule's first run against the real tree.
+        /// </para>
+        /// </remarks>
+        private static readonly (string? Receiver, string Method)[] EngineProjectileDamageCalls =
+        {
+            (null, "ProjectileHit"),
+            ("ActorManager", "Explode"),
+        };
+
+        /// <summary>
+        /// The properties a guarded call site may consult, either of which satisfies the rule.
+        /// </summary>
+        /// <remarks>
+        /// <b>Two, not one, because the sites are asking different questions.</b>
+        /// <c>Projectile.Travel</c>'s sweep asks "should I apply damage at all"
+        /// (<c>EngineAppliesProjectileDamage</c>). The two <c>ActorManager.Explode</c> sites ask
+        /// the narrower "is somebody else about to" (<c>LibraryOwnsProjectileDamage</c>), because
+        /// that same call also applies the corpse ragdoll impulse a client must keep (AD-4).
+        /// Accepting only the first would have forced those two to switch the client's corpses
+        /// off to satisfy a gate.
+        /// </remarks>
+        /// <remarks>
+        /// <b>This is the half the library test cannot prove.</b>
+        /// <c>ProjectileDamageOwnershipTests</c> proves the partition — that engine and library
+        /// are never both the owner — but nothing in a netstandard assembly can see whether
+        /// <c>Assembly-CSharp</c> actually asks. Without this rule the flag could be flipped in
+        /// Phase 5 against three unguarded call sites and every hit would do double damage, with
+        /// a fully green test suite. Ledger C-1, debt-closure phase 2 task 2e.
+        /// </remarks>
+        private static readonly string[] ProjectileDamageGuardMembers =
+        {
+            "EngineAppliesProjectileDamage",
+            "LibraryOwnsProjectileDamage",
+        };
+
         /// <summary>Parses at the language version Unity uses, so fixtures and the real tree agree.</summary>
         public static SyntaxTree Parse(string source, string path) =>
             CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(UnityLanguageVersion), path);
@@ -368,6 +426,72 @@ namespace Ironfront.Tools.ClientWiringGate
             return findings;
         }
 
+        /// <summary>
+        /// G7 - an engine-side projectile damage call that does not consult
+        /// <c>NetProjectileAuthority.EngineAppliesProjectileDamage</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The rule exists for one flag. <c>ServerProjectileBridge.AuthoritativeFlight</c> turns
+        /// on the library's ballistic stepper, which applies damage through
+        /// <c>IActorDamageSink</c>. These three files apply the SAME damage from the scene. Turn
+        /// the flag on with any of them unguarded and every hit lands twice — and every test in
+        /// the solution still passes, because no netstandard assembly can see a Unity file.
+        /// </para>
+        /// <para>
+        /// Scoped to the three files by name rather than to a directory: most of
+        /// <c>Assembly-CSharp</c> legitimately calls <c>Explode</c> (<c>Vehicle</c>,
+        /// <c>ExplosiveProp</c>, the AI), and those are not projectile damage. Widening this
+        /// would produce findings that are all correct code, and a gate people learn to ignore is
+        /// worse than no gate.
+        /// </para>
+        /// </remarks>
+        public static IReadOnlyList<GateFinding> FindUnguardedEngineProjectileDamage(
+            SyntaxTree tree, string path)
+        {
+            var findings = new List<GateFinding>();
+
+            if (IsExcludedFromScan(path)) return findings;
+            if (!IsInScope(path, EngineProjectileDamageScope)) return findings;
+
+            foreach (InvocationExpressionSyntax invocation in tree.GetRoot()
+                         .DescendantNodes()
+                         .OfType<InvocationExpressionSyntax>())
+            {
+                string? invoked = NameOfInvoked(invocation);
+                if (invoked == null) continue;
+                if (!IsEngineProjectileDamageCall(invocation, invoked)) continue;
+                if (HasGuardAbove(invocation, MentionsProjectileDamageGuard)) continue;
+
+                findings.Add(new GateFinding(
+                    "G7", path, LineOf(invocation),
+                    $"'{invoked}(...)' applies a projectile's damage from the engine with no "
+                    + "NetProjectileAuthority."
+                    + string.Join("/", ProjectileDamageGuardMembers) + " guard. Flipping "
+                    + "ServerProjectileBridge.AuthoritativeFlight would then run the library "
+                    + "stepper AND this call, and every hit would do double damage (ledger C-1)."));
+            }
+
+            return findings;
+        }
+
+        /// <summary>Whether this invocation is one of the damage calls, receiver included.</summary>
+        private static bool IsEngineProjectileDamageCall(
+            InvocationExpressionSyntax invocation, string invoked)
+        {
+            foreach ((string? receiver, string method) in EngineProjectileDamageCalls)
+            {
+                if (method != invoked) continue;
+                if (receiver == null) return true;
+
+                if (invocation.Expression is MemberAccessExpressionSyntax member
+                    && member.Expression is IdentifierNameSyntax type
+                    && type.Identifier.ValueText == receiver) return true;
+            }
+
+            return false;
+        }
+
         /// <summary>Whether G4 governs this file at all. See <see cref="PerActorGuardScope"/>.</summary>
         public static bool IsPerActorGuardScoped(string path)
         {
@@ -398,6 +522,18 @@ namespace Ironfront.Tools.ClientWiringGate
         }
 
         private static bool HasLocalActorGuard(SyntaxNode touch)
+            => HasGuardAbove(touch, MentionsLocalActorGuard);
+
+        /// <summary>
+        /// Whether any enclosing condition, short-circuit, or earlier early-return in the same
+        /// member satisfies <paramref name="mentionsGuard"/>.
+        /// </summary>
+        /// <remarks>
+        /// Extracted from G4 when G7 needed the identical walk over a different predicate. Like
+        /// G4 it deliberately does NOT model polarity: it answers "is there a guard at all", and
+        /// claiming to catch an inverted one would be a green that proves nothing.
+        /// </remarks>
+        private static bool HasGuardAbove(SyntaxNode touch, Func<SyntaxNode, bool> mentionsGuard)
         {
             SyntaxNode? node = touch;
             SyntaxNode? child = null;
@@ -407,23 +543,23 @@ namespace Ironfront.Tools.ClientWiringGate
                 if (node is IfStatementSyntax ifStatement)
                 {
                     if (child != null && child != ifStatement.Condition
-                        && MentionsGuard(ifStatement.Condition)) return true;
+                        && mentionsGuard(ifStatement.Condition)) return true;
                 }
                 else if (node is ConditionalExpressionSyntax conditional)
                 {
                     if (child != null && child != conditional.Condition
-                        && MentionsGuard(conditional.Condition)) return true;
+                        && mentionsGuard(conditional.Condition)) return true;
                 }
                 else if (node is BinaryExpressionSyntax binary)
                 {
                     // guard && Touch(...) - the short circuit is the guard.
                     bool shortCircuit = binary.IsKind(SyntaxKind.LogicalAndExpression)
                                         || binary.IsKind(SyntaxKind.LogicalOrExpression);
-                    if (shortCircuit && child == binary.Right && MentionsGuard(binary.Left)) return true;
+                    if (shortCircuit && child == binary.Right && mentionsGuard(binary.Left)) return true;
                 }
                 else if (node is MemberDeclarationSyntax member)
                 {
-                    return HasEarlyReturnGuardBefore(member, touch.SpanStart);
+                    return HasEarlyReturnGuardBefore(member, touch.SpanStart, mentionsGuard);
                 }
 
                 child = node;
@@ -436,13 +572,14 @@ namespace Ironfront.Tools.ClientWiringGate
         /// <summary>
         /// <c>if (!IsLocalActor(x)) return;</c> at the top of a method guards everything after it.
         /// </summary>
-        private static bool HasEarlyReturnGuardBefore(SyntaxNode member, int touchPosition)
+        private static bool HasEarlyReturnGuardBefore(
+            SyntaxNode member, int touchPosition, Func<SyntaxNode, bool> mentionsGuard)
         {
             foreach (IfStatementSyntax ifStatement in member.DescendantNodes().OfType<IfStatementSyntax>())
             {
                 if (ifStatement.SpanStart >= touchPosition) continue;
                 if (ifStatement.Else != null) continue;
-                if (!MentionsGuard(ifStatement.Condition)) continue;
+                if (!mentionsGuard(ifStatement.Condition)) continue;
 
                 StatementSyntax body = ifStatement.Statement;
                 if (body is BlockSyntax block && block.Statements.Count == 1) body = block.Statements[0];
@@ -453,10 +590,21 @@ namespace Ironfront.Tools.ClientWiringGate
             return false;
         }
 
-        private static bool MentionsGuard(SyntaxNode condition) =>
+        /// <summary>G4's predicate: a call to <c>IsLocalActor(...)</c>.</summary>
+        private static bool MentionsLocalActorGuard(SyntaxNode condition) =>
             condition.DescendantNodesAndSelf()
                 .OfType<InvocationExpressionSyntax>()
                 .Any(invocation => NameOfInvoked(invocation) == LocalActorGuardMethod);
+
+        /// <summary>
+        /// G7's predicate: the ownership property by NAME, matched as a plain identifier rather
+        /// than an invocation because it is a property and not a method.
+        /// </summary>
+        private static bool MentionsProjectileDamageGuard(SyntaxNode condition) =>
+            condition.DescendantNodesAndSelf()
+                .OfType<SimpleNameSyntax>()
+                .Any(name => Array.IndexOf(
+                    ProjectileDamageGuardMembers, name.Identifier.ValueText) >= 0);
 
         private static string? NameOfInvoked(InvocationExpressionSyntax invocation) =>
             invocation.Expression switch

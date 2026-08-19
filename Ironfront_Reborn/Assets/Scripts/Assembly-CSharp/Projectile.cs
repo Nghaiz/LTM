@@ -200,7 +200,12 @@ public class Projectile : MonoBehaviour
 			// accumulator. Two peers with different frame times accumulate different distances,
 			// so a client-computed number is a different number -- and a modified client's is
 			// whatever it likes. A networked client's projectile is a thing you watch.
-			else if (!NetContext.IsClient && component.ProjectileHit(this, hitInfo.point)
+			// debt-closure phase 2 task 2e: NetProjectileAuthority.EngineAppliesProjectileDamage
+			// subsumes the !NetContext.IsClient this line carried -- a client already applied no
+			// damage here, and now a SERVER running the library stepper does not either. Without
+			// it, flipping AuthoritativeFlight would apply this hit twice (ledger C-1).
+			else if (Ironfront.Net.Unity.Server.NetProjectileAuthority.EngineAppliesProjectileDamage
+				&& component.ProjectileHit(this, hitInfo.point)
 				&& !source.aiControlled)
 			{
 				// V7 task 3: offline only. On a server the hitmarker travels to the shooter as
@@ -210,6 +215,18 @@ public class Projectile : MonoBehaviour
 				{
 					IngameUi.Hit();
 				}
+			}
+		}
+		// debt-closure phase 2 task 2f (ledger C-11): a shot fuel drum goes off. Behind the same
+		// ownership question as the hitbox damage above -- a client neither decides that a prop
+		// was destroyed nor applies the resulting blast; the server does, and announces it as
+		// S_EXPLOSION with ExplosionKind.Environment.
+		if (Ironfront.Net.Unity.Server.NetProjectileAuthority.EngineAppliesProjectileDamage)
+		{
+			ExplosiveProp prop = hitInfo.collider.gameObject.GetComponentInParent<ExplosiveProp>();
+			if (prop != null)
+			{
+				prop.Damage(Damage());
 			}
 		}
 		Rigidbody attachedRigidbody = hitInfo.collider.attachedRigidbody;
