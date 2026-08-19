@@ -557,6 +557,7 @@ namespace Ironfront.Tools.ClientWiringGate
             foreach ((UnityAssetDocument scoreUi, string path) in Instances(index, ScoreUiGuid))
             {
                 seen++;
+                findings.AddRange(RenderedLabelsAreStillFields(index, scoreUi, path));
 
                 foreach ((string field, string what) in OwedPhaseLabels)
                 {
@@ -584,12 +585,23 @@ namespace Ironfront.Tools.ClientWiringGate
                             + "in the tree carries. The reference is dangling; this check cannot "
                             + "grade it.");
 
-                    if (!index.Documents(target).Any(d => d.AnchorId == assigned.FileId))
+                    UnityAssetDocument? resolved = index.Documents(target)
+                        .FirstOrDefault(d => d.AnchorId == assigned.FileId);
+
+                    if (resolved == null)
                         findings.Add(new GateFinding(
                             "A8", Rel(index, path), 0,
                             $"ScoreUi.{field} names fileID {assigned.FileId}, which no object in "
                             + $"{Rel(index, target)} carries. Unity loads that as null, so this "
                             + "reads exactly like the unassigned case at runtime (ledger A-9)."));
+                    else if (!IsTextLike(index, scoreUi, path, resolved))
+                        findings.Add(new GateFinding(
+                            "A8", Rel(index, path), 0,
+                            $"ScoreUi.{field} names fileID {assigned.FileId}, which exists but is "
+                            + $"a class-{resolved.ClassId} object, not the component type the "
+                            + "other labels on this ScoreUi point at. Unity loads a type "
+                            + "mismatch as null, so an anchor that resolves is still the "
+                            + "unassigned case at runtime (ledger A-9)."));
 
                     foreach (string other in RenderedLabels)
                     {
@@ -620,6 +632,89 @@ namespace Ironfront.Tools.ClientWiringGate
                     + "all (ledger A-9, X-1)."));
 
             return findings;
+        }
+
+        /// <summary>
+        /// Is <paramref name="candidate"/> the same component type as the labels this
+        /// <c>ScoreUi</c> already drives?
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The expected script guid is read off a sibling label, never hardcoded.</b> uGUI's
+        /// <c>Text</c> carries one guid in the legacy DLL form and another in the package form,
+        /// and this tree is mid-migration — 61 files are still on the old one — so a pinned guid
+        /// would be wrong on whichever half it was not written for. A label in the SAME document
+        /// is necessarily in the same form, which makes it a better oracle than any constant.
+        /// </para>
+        /// <para>
+        /// Falls back to "is it a MonoBehaviour at all" when no sibling resolves. Weaker, and
+        /// still enough for the case that motivated this: a ref pointing at a
+        /// <c>RectTransform</c> or a <c>GameObject</c> resolves to a real anchor, loads as null,
+        /// and was reported clean until this clause existed.
+        /// </para>
+        /// </remarks>
+        private static bool IsTextLike(
+            UnityAssetIndex index, UnityAssetDocument scoreUi, string path, UnityAssetDocument candidate)
+        {
+            if (!candidate.IsMonoBehaviour) return false;
+
+            string? expected = null;
+
+            foreach (string donor in RenderedLabels)
+            {
+                if (donor == "phaseText" || donor == "phaseTimerText") continue;
+
+                UnityObjectRef? held = scoreUi.Reference(donor);
+                if (held == null || held.Value.IsNull || held.Value.Guid != null) continue;
+
+                UnityAssetDocument? document = index.Documents(path)
+                    .FirstOrDefault(d => d.AnchorId == held.Value.FileId);
+
+                if (document == null || !document.IsMonoBehaviour || document.ScriptGuid == null) continue;
+
+                expected = document.ScriptGuid;
+                break;
+            }
+
+            return expected == null
+                || string.Equals(candidate.ScriptGuid, expected, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// <b>The companion to <see cref="RenderedLabels"/>.</b> A listed field the serialized
+        /// block does not carry means the comparison silently stopped working.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>Reference()</c> returns null for a field that was renamed in C# exactly as it does
+        /// for one that is merely unassigned, and the distinctness loop skips both — so a rename
+        /// would retire that comparison with nothing going red. Every other hand-written
+        /// expectation in this file reads itself off its source (<see cref="ProjectileKindCount"/>
+        /// off the enum); reflection is unavailable here by D21's premise, so the list has to be
+        /// hand-written and this is what stands in for that discipline.
+        /// </para>
+        /// <para>
+        /// <b>Only sound because A-9 closed.</b> Before the authoring, an absent key was the
+        /// normal state — the shipped block predated <c>phaseText</c> and omitted it — so this
+        /// guard would have fired on a correct tree. It is safe now that all eleven fields are
+        /// written, and it becomes wrong again if a field is ever deliberately left unserialized.
+        /// </para>
+        /// </remarks>
+        private static IEnumerable<GateFinding> RenderedLabelsAreStillFields(
+            UnityAssetIndex index, UnityAssetDocument scoreUi, string path)
+        {
+            foreach (string label in RenderedLabels)
+            {
+                if (scoreUi.HasField(label)) continue;
+
+                yield return new GateFinding(
+                    "A8", Rel(index, path), 0,
+                    $"AssetWiringDetectors.RenderedLabels lists ScoreUi.{label}, and the "
+                    + "serialized block has no such key. Either the field was renamed in C# — in "
+                    + "which case the distinctness comparison against it silently stopped working "
+                    + "— or it is deliberately unserialized, in which case remove it from the "
+                    + "list rather than leaving a name that matches nothing (ledger A-9).");
+            }
         }
 
         /// <summary>

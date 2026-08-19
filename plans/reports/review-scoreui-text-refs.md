@@ -312,3 +312,114 @@ three most likely wrong authorings produce exactly that. A check that is 60% of 
 own stated contract is more dangerous than one that is honest about being a null check, because
 the docstring is what the next reader will trust.
 
+
+
+---
+
+# Follow-up review — merged state `4a6cb55` (PR #146)
+
+Re-verified independently: the merged code was re-read, both original mutations re-run against
+the real prefab, one **new** mutation added, the registration guard deliberately broken, and the
+suite re-counted. Prefab md5 `1caf3516c83b8263e6d4f7d9fc917ed7` — byte-identical to the revision
+originally reviewed, before and after all mutation runs. `git status` clean at exit.
+
+## All five Important findings verified closed
+
+| # | Fix | Independently re-derived |
+|---|---|---|
+| I-1 | `RenderedLabels` = all 7 labels; `other == field` self-skip; both owed fields in the set (`AssetWiringDetectors.cs:150-161`) | **Mutation A re-run → exit 1**, two findings naming `redFlagsText` / `blueFlagsText` correctly |
+| I-2 | Anchor resolution: local fileID must name a document; non-null unresolvable guid throws | **Mutation B re-run → exit 1**, 4 findings (2 resolution + 2 both-fields-same-object) |
+| I-3 | Zero instances is now a finding; docstring states the anchor-vs-subject rule explicitly | Test **inverted**, not deleted or re-pinned: `ATreeWithNoScoreUiIsUnknownRatherThanClean` → `ATreeWithNoScoreUiIsReportedRatherThanVacuouslyClean`. Exactly `pinned-baseline-test-companion.md`'s required move |
+| I-4 | Both comment blocks in `ScoreUi.cs` corrected, and the human-count residue named in the source itself | Read the diff; accurate, and it now points forward at the detector that pins it |
+| I-5 | A-6 names both remaining clauses and records the scope caveat verbatim | Read `debt-ledger.md:47` |
+| M-1 | `EveryDetectorIsRegisteredWithTheRunner` with `Assert.NotEmpty(declared)` | **Deliberately unregistered `ScoreUiTextRefsAreAssigned` → RED**: `Assert.All() Failure: 1 out of 8 items`. Non-vacuous, and the "8" confirms reflection finds every detector |
+
+Suite: **1592 passed, 0 failed** (re-counted across all four assemblies). Asset-gate fixtures: 40
+passed. Gate on the restored tree: exit 0, 8 checks clean.
+
+The fixture bug the coordinator caught — anchors 901-905 now carrying real documents — was the
+right catch and would otherwise have made all four new red-path tests pass for the wrong reason.
+
+## New finding (Minor) — an existing anchor of the WRONG TYPE still reads clean
+
+`tools/ClientWiringGate/AssetWiringDetectors.cs` — the resolution clause
+`index.Documents(target).Any(d => d.AnchorId == assigned.FileId)`.
+
+**Mutation C**, run against the real prefab: point `phaseText` at `{fileID: 3454051964927800542}`
+— the `Phase Row` **RectTransform** (`!u!224`), an anchor that genuinely exists in the file.
+
+```
+[asset-wiring] 8 authoring check(s) clean across 4 scene(s) and 62 prefab(s)
+EXIT=0
+```
+
+Unity deserializes a `Text` field naming a `RectTransform` fileID as `null` → the fallback runs →
+the exact state A-9 closed, gate green. The resolution clause closed the *dangling* half of I-2
+but not the *type* half.
+
+Narrower than the original hole — Editor drag-and-drop cannot produce it. But this project does
+not author that way: `debt-ledger.md:50` records the authoring was done programmatically via
+`PrefabUtility.LoadPrefabContents` / `SaveAsPrefabAsset` over MCP, and a programmatic pass is
+exactly what can set a structurally-valid wrong fileID.
+
+**One-line fix**, deliberately guid-agnostic so it dodges the half-finished uGUI guid migration
+(M-2): add `&& d.ClassId == 114` to the resolution predicate. That rejects transforms,
+GameObjects and renderers — the realistic programmatic mis-set — without pinning either
+`UnityEngine.UI.Text` guid.
+
+## New finding (Minor) — `RenderedLabels` is a hand-written list with no staleness guard
+
+`AssetWiringDetectors.cs:150-154`. Rename `blueFlagsText` in `ScoreUi.cs` and
+`scoreUi.Reference("blueFlagsText")` returns `null` → `continue` → the distinctness comparison
+against that label silently stops working, with nothing red.
+
+This is the one place the check departs from its own file's house style: `ProjectileKindCount`
+reads its number off the enum precisely so a hand-written copy cannot drift, and the
+`RenderedLabels` docstring explains *why* all seven are listed but not *what keeps the list true*.
+
+The gate cannot load Unity assemblies (decision D21), so reflection is not available and a
+hand-written list is the only option — that part is unavoidable and worth saying in the remark.
+What is avoidable is the silence: `UnityAssetDocument.HasField` already exists for exactly this
+("True when the key is written at all — distinct from written-as-null"), so a listed field absent
+from a saved `ScoreUi` block could be reported.
+
+**Honest caveat, which is why this is a suggestion and not a defect:** absence used to be normal
+here. The pre-authoring block omitted `phaseText` / `phaseTimerText` because the asset was last
+saved by a Unity that predated those C# fields — so a `HasField` guard would have false-positived
+before task 1.6. It is safe only now that all eleven are written, and that precondition belongs in
+the remark beside it.
+
+## Nit
+
+`debt-ledger.md:47` opens "**The authoring half is done; what is left is not authoring**", then
+clause (a) is a new serialized field plus a new prefab element. The row clarifies itself two
+sentences later, so it no longer misleads — but the opening sentence is true of clause (b) only.
+
+## On M-4 — yes, give it a ledger row
+
+Sharper now than when I first raised it. This change takes the gate to **four throw sites across
+eight checks**, and `AssetGateRunner.Run` still returns 2 at the first one, discarding every
+finding after it.
+
+`ScoreUiTextRefsAreAssigned` cannot silence anything *today* only because it happens to be
+registered last — that ordering is incidental and nothing pins it. The concrete cost: an
+unresolvable guid in `RemoteActorPrefabIsAuthored` (check 5 of 8) discards checks 6-8 entirely,
+and the operator reads "could not reach a verdict" for one check with no signal that three others
+never ran. That is `green-that-proves-nothing.md`'s "aggregates past the problem" wearing a red
+hat — the run failed, so nobody looks for what it did not say.
+
+The fix preserves the exit contract exactly: collect `AssetGateUnknownException`s alongside
+findings, run every check, report both lists, return 2 if any Unknown occurred (2 dominating 1)
+else 1 if any finding did. Small, self-contained, testable, and it makes the "Every check runs
+even after one has produced findings" comment true for Unknowns as well as findings.
+
+Agreed it should not have been folded into an authoring commit. A row of its own, sized 1.
+
+## Revised score: 9/10
+
+The two demonstrated holes are closed and closed correctly — distinctness rather than a wider
+pairwise check, the test inverted rather than re-pinned, and the docstring now carries the
+anchor-vs-subject rule so the next person does not re-derive it. Both new findings are one-line
+narrowings of a check that is now doing real work, not gaps in its premise. The point deducted is
+Mutation C: the same class of miss as I-2, found the same way, which suggests the resolution
+clause was written to the two mutations rather than to the invariant.
