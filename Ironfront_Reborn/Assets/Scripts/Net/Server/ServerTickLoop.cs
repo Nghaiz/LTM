@@ -5,6 +5,7 @@ using Ironfront.Net.Replication;
 using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Interest;
 using Ironfront.Net.Replication.Movement;
+using Ironfront.Net.Replication.Projectiles;
 using Ironfront.Net.Replication.Server;
 using Ironfront.Net.Replication.Vehicles;
 using Ironfront.Net.Transport;
@@ -56,6 +57,20 @@ namespace Ironfront.Net.Unity.Server
 
         private readonly InterestManager _interest = new InterestManager();
         private readonly HitboxHistory _hitboxHistory = new HitboxHistory();
+
+        // V7. The pool every ammo bag resupplies through, and the bridge that steps every live
+        // projectile and deployable. Both constructed here rather than in Bind, for the reason
+        // the vehicle lifecycle sink states below: a null one reads as clean to the state audit.
+        private readonly ActorSpareAmmoPool _spareAmmo = new ActorSpareAmmoPool();
+        private ServerProjectileBridge _projectiles;
+
+        // Present-time hitboxes for the projectile stepper, rebuilt once per owed tick. Separate
+        // from ServerCombatBridge's identical-looking buffer on purpose: that one is rebuilt per
+        // ACCEPTED INPUT FRAME and memoized by tick, and sharing it would couple the projectile
+        // step to whether any player happened to send input this tick.
+        private readonly HitscanTarget[] _projectileTargets =
+            new HitscanTarget[ProtocolConstants.MAX_ACTORS];
+        private int _projectileTargetCount;
         private readonly SpawnAckTracker _spawnAcks = new SpawnAckTracker();
         private readonly LagCompensator _lagCompensator;
 
@@ -145,6 +160,14 @@ namespace Ironfront.Net.Unity.Server
                 this, ServerActorRegistry.Instance, _combatAuthority, _respawnGate,
                 _mountedWeapons, _mountedWeaponAuthority);
 
+            // V7. The catalog starts EMPTY and is installed from Assembly-CSharp, which is the
+            // only assembly that can read a Projectile.Configuration off a prefab -- see
+            // ProjectileCatalogBuilder for why that boundary cannot be crossed the other way.
+            // An empty catalog steps nothing and announces nothing, so an un-installed server
+            // behaves exactly as it did before V7 rather than throwing at the first shot.
+            _projectiles = new ServerProjectileBridge(
+                this, _damageSink, _spareAmmo, new ProjectileCatalog());
+
             // V4. Order matters: the arbiter and the burn clock both close over the registry, and
             // the damage sink closes over the burn clock.
             // Constructed HERE, not in Bind, so it can never be null when BindMatch reads its id
@@ -230,6 +253,40 @@ namespace Ironfront.Net.Unity.Server
 
         /// <summary>One second of past hitbox poses, for rewinding. Phase-02 task 2.</summary>
         public HitboxHistory HitboxHistory => _hitboxHistory;
+
+        /// <summary>The projectile and deployable authority this server is stepping. V7.</summary>
+        public ServerProjectileBridge Projectiles => _projectiles;
+
+        /// <summary>Where an ammo bag puts the rounds it hands out. V7-D9.</summary>
+        public ActorSpareAmmoPool SpareAmmo => _spareAmmo;
+
+        /// <summary>
+        /// Hands the server the authored projectile configurations. Phase-V7 task 1.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>An install seam rather than a constructor argument, because of an assembly
+        /// boundary.</b> The catalog is built by sampling <c>Projectile.Configuration</c> off
+        /// prefabs, which only <c>Assembly-CSharp</c> can see; this loop lives in the
+        /// <c>Ironfront.Net.Unity.Server</c> asmdef, which compiles first and can never
+        /// reference it. Same shape as <c>Net/Server/Bindings/</c>.
+        /// </para>
+        /// <para>
+        /// <b>Until this is called the server steps nothing and announces nothing.</b> That is
+        /// deliberate: an empty catalog degrades to pre-V7 behaviour rather than throwing at the
+        /// first shot. It also means a server that never installs one is silently without
+        /// projectile replication, so <see cref="ServerProjectileBridge.LiveCount"/> staying at
+        /// zero across a match with rockets in it is the symptom to look for.
+        /// </para>
+        /// </remarks>
+        public void InstallProjectileCatalog(
+            ProjectileCatalog catalog, IProjectileWorldSweep worldSweep = null)
+        {
+            if (catalog == null) return;
+
+            _projectiles = new ServerProjectileBridge(
+                this, _damageSink, _spareAmmo, catalog, worldSweep);
+        }
 
         /// <summary>Resolves hitscan against the world the shooter saw. Phase-02 task 3.</summary>
         public LagCompensator LagCompensator => _lagCompensator;
@@ -388,6 +445,11 @@ namespace Ironfront.Net.Unity.Server
             // so without this a rebound server starts each session with fewer ids than the last.
             _vehicleLifecycle?.Ids.ReleaseAll();
 
+            // V7, and for the identical reason: every projectile and deployable in the old
+            // session is gone and no terminal event will ever be resolved for them, so without
+            // this a rebound server starts each session with fewer projectile ids than the last.
+            _projectiles?.Reset();
+
             // For the same reason, and one table further: the registry holds MonoBehaviour
             // references from the old session and the pair table holds (viewer, vehicle) rows
             // for clients that are about to be gone. Both are the trap-2 leak.
@@ -488,6 +550,12 @@ namespace Ironfront.Net.Unity.Server
                 // what makes a rewind into the middle of a catch-up find something to hit.
                 CaptureHitboxHistory(firstTick + (uint)tick);
 
+                // V7. After the capture, because a projectile resolves against PRESENT-time
+                // hitboxes (V7-D2 lag-compensates the launch and not the flight) and those are
+                // the poses just recorded. Before the snapshot, so a detonation this tick is
+                // already reflected in the health the snapshot carries.
+                StepProjectiles(firstTick + (uint)tick);
+
                 if (_scheduler.ShouldSendSnapshot()) BuildAndSendSnapshots();
             }
 
@@ -524,6 +592,41 @@ namespace Ironfront.Net.Unity.Server
                 if (!_interest.IsShootable(actor.ActorId)) continue;
 
                 _hitboxHistory.Capture(tick, actor.ActorId, actor.CaptureHitboxes());
+            }
+        }
+
+        /// <summary>
+        /// Advances every live projectile and deployable by one tick. Phase-V7 tasks 2 and 7.
+        /// </summary>
+        /// <remarks>
+        /// Rebuilds the present-time target set first. That is an O(actors) sweep per tick on
+        /// top of the capture above, which is the price of the stepper -- and is why V7 section
+        /// 5 ships the per-shooter cap and the bullet hitscan fallback with the task rather than
+        /// after a measurement goes red.
+        /// </remarks>
+        private void StepProjectiles(uint tick)
+        {
+            if (_projectiles == null) return;
+
+            BuildProjectileTargets();
+            _projectiles.Step(
+                tick, new ReadOnlySpan<HitscanTarget>(_projectileTargets, 0, _projectileTargetCount));
+        }
+
+        private void BuildProjectileTargets()
+        {
+            _projectileTargetCount = 0;
+            IReadOnlyList<NetServerActor> actors = ServerActorRegistry.Instance.Actors;
+
+            for (int i = 0; i < actors.Count; i++)
+            {
+                if (_projectileTargetCount >= _projectileTargets.Length) break;
+
+                NetServerActor actor = actors[i];
+                if (actor == null || !actor.isActiveAndEnabled || !actor.IsAlive) continue;
+
+                _projectileTargets[_projectileTargetCount++] =
+                    new HitscanTarget(actor.ActorId, isAlive: true, actor.CaptureHitboxes());
             }
         }
 
