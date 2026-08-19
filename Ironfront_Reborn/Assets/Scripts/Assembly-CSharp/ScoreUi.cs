@@ -35,11 +35,13 @@ public class ScoreUi : MonoBehaviour
 
 	public Text victoryText;
 
-	// V10 task 7, checklist row E5. Optional and unset on the shipped prefab: when the client
-	// track adds real elements they are assigned here and SetAuthoritativeState uses them. Until
-	// then it falls back to the flag texts, which are idle on a networked client only while
-	// capture points are unimplemented -- so the fallback has to retire when task 8 lands, and
-	// preferring these fields is what makes that a one-line prefab change rather than an edit here.
+	// V10 task 7, checklist row E5. Authored on the shipped prefab since 2026-08-19 (debt
+	// closure phase 1 task 1.6, ledger A-9): Score UI Canvas/Phase Row/Phase Label and
+	// /Phase Timer. The flag-text fallback below is now dead on the shipped prefab and is kept
+	// only for a prefab that predates the authoring; it has to retire when task 8 lands,
+	// because capture points start writing to those same labels. Pinned by
+	// AssetWiringDetectors.ScoreUiTextRefsAreAssigned, which fails if either field is unset,
+	// names no object, or points at a label something else already drives.
 	public Text phaseText;
 
 	public Text phaseTimerText;
@@ -149,15 +151,17 @@ public class ScoreUi : MonoBehaviour
 	/// </param>
 	/// <remarks>
 	/// <para>
-	/// <b>Checklist E5 — stopgap field mapping, not the finished layout.</b> <see cref="ScoreUi"/>
-	/// has exactly four <see cref="Text"/> fields and none of them is a dedicated phase, timer or
-	/// human-count element. <see cref="blueScoreText"/> / <see cref="redScoreText"/> take the
-	/// tickets (the networked equivalent of the score they already show). <see cref="blueFlagsText"/>
-	/// / <see cref="redFlagsText"/> are repurposed for the phase label and the phase timer — they
-	/// are otherwise idle on a networked client, because <c>MatchScoreboard.AddFlag</c> never runs there
-	/// (capture points are V10 task 8, blocked on V8 task 1). <b>The client track still has to
-	/// add real phase/timer/human-count elements to this prefab</b> and this mapping should be
-	/// deleted once that lands.
+	/// <b>Checklist E5 — the phase and timer elements are authored; the human count is not.</b>
+	/// <see cref="phaseText"/> and <see cref="phaseTimerText"/> are dedicated elements on the
+	/// shipped prefab as of 2026-08-19 (ledger A-9), so the flag-text fallback below no longer
+	/// runs there. <see cref="blueScoreText"/> / <see cref="redScoreText"/> take the tickets (the
+	/// networked equivalent of the score they already show). The fallback to
+	/// <see cref="blueFlagsText"/> / <see cref="redFlagsText"/> survives only for a prefab that
+	/// predates the authoring, and must be deleted when capture points land (V10 task 8, blocked
+	/// on V8 task 1) — from then on those labels are live and borrowing them collides.
+	/// <b>Still owed: a dedicated human-count element.</b> The count is concatenated into the
+	/// phase label below rather than rendered on its own, which is why E5 stays open (ledger
+	/// A-6) even though both fields here are now assigned.
 	/// </para>
 	/// <para>
 	/// Staleness is not a parameter here — that decision belongs to the presenter, which has the
