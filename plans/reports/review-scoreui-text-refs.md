@@ -423,3 +423,117 @@ anchor-vs-subject rule so the next person does not re-derive it. Both new findin
 narrowings of a check that is now doing real work, not gaps in its premise. The point deducted is
 Mutation C: the same class of miss as I-2, found the same way, which suggests the resolution
 clause was written to the two mutations rather than to the invariant.
+
+
+---
+
+# Follow-up review 2 — merged state `a209d99` (PR #147)
+
+Re-verified with four fresh probes against the real prefab. Restored byte-identical after each
+(md5 `1caf3516c83b8263e6d4f7d9fc917ed7`); `git status` clean at exit; gate exit 0; suite
+re-counted at **1594 passed, 0 failed**.
+
+## The type oracle: you were right to go past my suggestion
+
+**Probe D** — `phaseText` → `{fileID: 114277198876679649}`, which is `blueBar`'s target: an
+**`Image`**, also class 114.
+
+```
+[A8] ScoreUi.phaseText names fileID 114277198876679649, which exists but is a class-114
+     object, not the component type the other labels on this ScoreUi point at.
+EXIT=1
+```
+
+My proposed `&& d.ClassId == 114` would have passed that. Reading the expected guid off a sibling
+label in the same document is strictly stronger *and* keeps the guid-agnostic property I actually
+wanted, because a sibling is necessarily in the same uGUI form. The fallback to bare
+`IsMonoBehaviour` when no sibling resolves is documented and unreachable on the real prefab
+(`blueScoreText` resolves first), so it costs nothing.
+
+`IsTextLike` and `RenderedLabelsAreStillFields` are both `private`, so the M-1 reflection guard
+correctly does not demand their registration, and it still reports 8 detectors.
+
+**Probe F** — deleted the `victoryText:` key outright:
+
+```
+[A8] AssetWiringDetectors.RenderedLabels lists ScoreUi.victoryText, and the serialized block
+     has no such key. Either the field was renamed in C# … EXIT=1
+```
+
+The staleness companion works, and the precondition caveat survived into the remark rather than
+being dropped — which was the point of raising it.
+
+Ledger verified: A-6 now opens "Nothing here is owed by Phase 1 any more", and A-9 records all
+three mutations with why each clause exists.
+
+## New finding (Minor) — a test was deleted, and it was the canonical one
+
+`Ironfront.Net.Replication.Tests/AssetWiringGateTests.cs`
+
+The count did not move 40 → 42 because two tests were absorbed. Three were added
+(`AnAnchorOfTheWrongTypeIsReported`, `AMonoBehaviourOfADifferentScriptIsReported`,
+`RenderedLabels_HasNoStaleEntries`) and **one was deleted**:
+`AssigningTheFlagLabelsDoesNotSatisfyTheCheck`. 40 + 3 − 1 = 42.
+
+That test pinned the **direct own-fallback** case — `phaseText` = `blueFlagsText`,
+`phaseTimerText` = `redFlagsText` — and nothing covers it now:
+
+```
+$ grep -n "phaseText: {fileID: 901}" AssetWiringGateTests.cs
+NO TEST assigns phaseText to blueFlagsText's own object
+```
+
+That case is not an exotic one. It is the case the A-9 row describes, the case `ScoreUi.cs`'s
+`WarnOnce` text describes, and the case the detector's own docstring opens with ("assigning those
+same two objects renders exactly what the fallback rendered"). The suite now pins the cross-swap,
+the dangling anchor, the wrong type, the foreign script, the ticket-label reuse and the
+both-fields-same-object — and not the plain one.
+
+**Behaviour is intact** — Probe G, `phaseTimerText` → `redFlagsText`'s own object, still exits 1
+with the right message. So this is coverage, not correctness, and the fix is four lines: restore
+the test under its old name. Under `pinned-baseline-test-companion.md`'s discipline the test that
+pins the original failure is not made redundant by a broader one that happens to subsume it
+today.
+
+## New finding (Minor, and I am not asking for it) — an unrelated real `Text` still passes
+
+**Probe E** — `phaseText` → `{fileID: 114563844256878000}`, the `< DEPLOY >` menu button's `Text`.
+A genuine `Text`, in the same prefab, driven by no other `ScoreUi` field:
+
+```
+[asset-wiring] 8 authoring check(s) clean across 4 scene(s) and 62 prefab(s)
+EXIT=0
+```
+
+The phase string would overwrite a menu caption on every state change and the phase would appear
+nowhere on the HUD.
+
+The derivable invariant is one step further out: the target's GameObject must be a **descendant of
+the `ScoreUi`'s own transform**. Walkable from YAML — component → `m_GameObject` → the transform
+whose `m_GameObject` matches → up `m_Father` — at maybe fifteen lines.
+
+**I am flagging this, not asking for it.** Unlike A/B/C this one IS producible by drag-and-drop
+(there are ~33 `Text` components in this prefab), so it is arguably the most realistic of the
+four — but a YAML check cannot grade layout, and past a point the honest answer is that E5's
+"does it actually render" clause is Phase 3 observational work, which the ledger already says. If
+you decline it, the move that pays is the one you already made twice: record the limit in the
+docstring, so the next reviewer reads "descendant-of-canvas is deliberately not checked, because
+X" instead of re-deriving it with a fourth mutation.
+
+## M-4 — your process call was right and I withdraw the push
+
+You are correct that my agreeing with my own finding is not the user's answer, and I should not
+have written "yes, own row" as though it were a decision. That is `always-ask-on-unresolved`
+applied properly: the ledger row is a scope commitment on someone else's plan, and offering it
+then waiting is the right shape. Recording it in #147's "deliberately not here" section with the
+reasoning attached is better containment than a row would have been anyway — it cannot evaporate,
+and it does not pre-commit the user.
+
+Nothing further from me on M-4 unless the user opens it.
+
+## Revised score: 9/10 (held)
+
+Both demonstrated holes are closed, one of them better than I proposed. The score does not rise
+because of the deleted test: the suite now covers five exotic failure modes and not the plain one,
+and that shape reads as an oversight to whoever opens the file next — which is the same failure
+class as everything else in this review, just pointed at the tests instead of the detector.
