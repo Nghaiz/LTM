@@ -69,5 +69,34 @@ namespace Ironfront.Net.Replication.Combat
         /// </param>
         DamageOutcome ApplyDamage(
             ushort victimId, float healthDamage, float balanceDamage, ushort attackerId);
+
+        /// <summary>
+        /// Adds health back, clamped at the actor's ceiling, and reports how much actually
+        /// landed. Phase-V7 task 7.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A heal is damage inverted, and it goes through the same door.</b> phase-05 D9
+        /// established that there is exactly one place health is written on the server; a
+        /// medipack that wrote <c>Actor.health</c> directly (<c>Actor.cs:1173-1187</c> does
+        /// exactly that today) would recreate the two-numbers-out-of-sync problem D9 removed —
+        /// the snapshot reading one health and the death check reading another, with nothing
+        /// reporting the disagreement.
+        /// </para>
+        /// <para>
+        /// <b>The return value is the amount applied, not the resulting health</b>, because the
+        /// caller's question is "did this heal do anything". A <c>Medipack</c> subtracts five
+        /// seconds from its own life per <i>successful</i> heal (<c>Medipack.cs:26-29</c>), and
+        /// a full-health actor standing on it must not shorten it. Returning the new health
+        /// would make every caller compare against a ceiling it does not know.
+        /// </para>
+        /// <para>
+        /// <b>A dead actor is never healed.</b> Reviving by walking a corpse over a medipack is
+        /// not a mechanic this game has, and the resupply sweep does not filter for it — this
+        /// does.
+        /// </para>
+        /// </remarks>
+        /// <returns>Health actually restored, in <c>[0, amount]</c>. Zero means nothing happened.</returns>
+        float ApplyHeal(ushort actorId, float amount);
     }
 }

@@ -278,37 +278,70 @@ namespace Ironfront.Net.Protocol
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>There is no projectile id.</b> Clients simulate flight from these parameters and the
-    /// server owns the hit; detonation replicates as <c>S_EXPLOSION</c>, which carries its own
-    /// position. Nothing needs to correlate the two, so an id would be a field with no reader.
+    /// <b>V7 gave this message a projectile id, a remaining-lifetime byte and a narrower
+    /// tick.</b> V3 declared it 19 bytes with no id, reasoning that clients simulate flight
+    /// from the parameters and detonation arrives separately in <c>S_EXPLOSION</c>, so nothing
+    /// needed to correlate the two. That was true for the only projectile V3 had in view — a
+    /// tank shell, launched once and never spoken of again. It is false for the two V7 adds:
+    /// a guided missile is <b>re-parameterized</b> at 5 Hz (V7-D6) and a deployable
+    /// re-announces while it tumbles (V7-D8), and without an id every re-announce is a second
+    /// projectile. The id is what makes a repeat a correction instead of a duplicate.
     /// </para>
     /// <para>
-    /// 19 bytes, where the bandwidth estimate in the design of record said "~16 B". The
-    /// estimate is not the pinned table, and three extra bytes on a per-shot event move nothing
-    /// measurable — recorded here so a later reader comparing the two numbers finds the answer
-    /// instead of a discrepancy.
+    /// <b><see cref="RemainingLifetimeDeciseconds"/> exists for exactly one projectile.</b>
+    /// Every other lifetime is derivable from <see cref="SpawnTick"/> plus an authored
+    /// constant. A <c>Medipack</c> subtracts five seconds from its own life per successful
+    /// heal (<c>Medipack.cs:26-29</c>), which no client can predict, so the server has to say
+    /// so. 0.1 s resolution, 25.5 s ceiling — comfortably above the longest authored lifetime.
+    /// </para>
+    /// <para>
+    /// <b><see cref="SpawnTick"/> is the low 16 bits of the server tick, not the full 32.</b>
+    /// The only thing a receiver computes from it is the projectile's age, and at
+    /// <see cref="ProtocolConstants.SIM_TICK_RATE"/> a <c>u16</c> spans 36 minutes — three
+    /// orders of magnitude past the longest flight. Reconstruct with
+    /// <c>SequenceMath.Distance(nowTick16, SpawnTick)</c>, which is wrap-correct for any age
+    /// under 18 minutes. Two bytes on a message that fires per shot, per re-announce and per
+    /// missile update is worth more than range nothing reads.
+    /// </para>
+    /// <para>
+    /// 20 bytes. The design of record estimated "~16 B"; the estimate is not the pinned table,
+    /// and the difference is graded by the bandwidth criterion rather than argued here.
     /// </para>
     /// </remarks>
     public readonly struct ProjectileSpawnMessage
     {
-        /// <summary>u16 + u8 + i16 x 3 + i16 x 3 + u32 = 19 bytes.</summary>
-        public const int Size = 19;
+        /// <summary>u16 + u16 + u8 + i16 x 3 + i16 x 3 + u16 + u8 = 20 bytes.</summary>
+        public const int Size = 20;
 
-        /// <summary>Who fired it, for attribution in the killfeed.</summary>
+        /// <summary>
+        /// Correlates a re-announce with the projectile it corrects (V7-D6, V7-D8). A receiver
+        /// that already holds this id re-seats that projectile instead of spawning a second.
+        /// </summary>
+        public readonly ushort ProjectileId;
+
+        /// <summary>Who fired it, for attribution in the killfeed and for self-hit exclusion.</summary>
         public readonly ushort OwnerActorId;
         public readonly ProjectileKind Kind;
         /// <summary>Launch point (<see cref="Quantize.PackPos"/>).</summary>
         public readonly short OriginX, OriginY, OriginZ;
         /// <summary>Launch velocity (<see cref="Quantize.PackVel16"/>).</summary>
         public readonly short VelX, VelY, VelZ;
-        /// <summary>Server tick of the launch, so a late receiver can advance the flight.</summary>
-        public readonly uint SpawnTick;
+        /// <summary>Low 16 bits of the server tick of the launch, so a late receiver can advance the flight.</summary>
+        public readonly ushort SpawnTick;
+
+        /// <summary>
+        /// Life left at send time, in tenths of a second, saturating at 25.5 s. Zero means the
+        /// projectile is expiring on this tick.
+        /// </summary>
+        public readonly byte RemainingLifetimeDeciseconds;
 
         public ProjectileSpawnMessage(
-            ushort ownerActorId, ProjectileKind kind,
+            ushort projectileId, ushort ownerActorId, ProjectileKind kind,
             short originX, short originY, short originZ,
-            short velX, short velY, short velZ, uint spawnTick)
+            short velX, short velY, short velZ,
+            ushort spawnTick, byte remainingLifetimeDeciseconds)
         {
+            ProjectileId = projectileId;
             OwnerActorId = ownerActorId;
             Kind         = kind;
             OriginX      = originX;
@@ -318,11 +351,29 @@ namespace Ironfront.Net.Protocol
             VelY         = velY;
             VelZ         = velZ;
             SpawnTick    = spawnTick;
+            RemainingLifetimeDeciseconds = remainingLifetimeDeciseconds;
         }
+
+        /// <summary>
+        /// Deciseconds for a remaining lifetime in seconds, clamped into the byte. Shared so
+        /// the writer and every test round-trip through one conversion rather than each
+        /// rediscovering the saturation rule.
+        /// </summary>
+        public static byte PackRemainingLifetime(float seconds)
+        {
+            if (seconds <= 0f) return 0;
+
+            float tenths = seconds * 10f;
+            return tenths >= 255f ? (byte)255 : (byte)tenths;
+        }
+
+        /// <summary>Inverse of <see cref="PackRemainingLifetime"/>.</summary>
+        public static float UnpackRemainingLifetime(byte deciseconds) => deciseconds * 0.1f;
 
         public int Write(Span<byte> dst)
         {
             var w = new SpanWriter(dst);
+            w.WriteU16(ProjectileId);
             w.WriteU16(OwnerActorId);
             w.WriteU8((byte)Kind);
             w.WriteI16(OriginX);
@@ -331,7 +382,8 @@ namespace Ironfront.Net.Protocol
             w.WriteI16(VelX);
             w.WriteI16(VelY);
             w.WriteI16(VelZ);
-            w.WriteU32(SpawnTick);
+            w.WriteU16(SpawnTick);
+            w.WriteU8(RemainingLifetimeDeciseconds);
             return w.Ok ? w.Position : -1;
         }
 
@@ -339,15 +391,18 @@ namespace Ironfront.Net.Protocol
         {
             message = default;
             var r = new SpanReader(src);
+            ushort projectileId = r.ReadU16();
             ushort owner = r.ReadU16();
             byte kind    = r.ReadU8();
             short ox = r.ReadI16(), oy = r.ReadI16(), oz = r.ReadI16();
             short vx = r.ReadI16(), vy = r.ReadI16(), vz = r.ReadI16();
-            uint spawnTick = r.ReadU32();
+            ushort spawnTick = r.ReadU16();
+            byte remainingLifetime = r.ReadU8();
             if (!r.Ok) return false;
 
             message = new ProjectileSpawnMessage(
-                owner, (ProjectileKind)kind, ox, oy, oz, vx, vy, vz, spawnTick);
+                projectileId, owner, (ProjectileKind)kind, ox, oy, oz, vx, vy, vz,
+                spawnTick, remainingLifetime);
             return true;
         }
     }

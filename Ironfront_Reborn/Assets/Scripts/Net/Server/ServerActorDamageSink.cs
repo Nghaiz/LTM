@@ -43,6 +43,9 @@ namespace Ironfront.Net.Unity.Server
         /// </summary>
         public long BalanceDamageApplied { get; private set; }
 
+        /// <summary>Health handed back by medipacks. Phase-V7 task 7.</summary>
+        public float HealthRestored { get; private set; }
+
         public DamageOutcome ApplyDamage(
             ushort victimId, float healthDamage, float balanceDamage, ushort attackerId)
         {
@@ -89,5 +92,50 @@ namespace Ironfront.Net.Unity.Server
             victim.IsAlive = false;
             return new DamageOutcome(0f, died: true);
         }
+
+        /// <summary>
+        /// The medipack path. Phase-V7 task 7.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Mirrors <c>Actor.ResupplyHealth()</c> (<c>Actor.cs:1232-1247</c>): 30 health, clamped
+        /// at 100, refused outright on a corpse. It lives here rather than on the medipack for
+        /// phase-05 D9's reason -- there is exactly one place health is written on the server,
+        /// and a heal is a negative hit, not a different kind of event.
+        /// </para>
+        /// <para>
+        /// <b>Returns the amount applied, so a full-health actor cannot shorten a medipack.</b>
+        /// The pack subtracts five seconds per SUCCESSFUL heal (Medipack.cs:26-29); a squad
+        /// standing on it at full health must cost it nothing.
+        /// </para>
+        /// </remarks>
+        public float ApplyHeal(ushort actorId, float amount)
+        {
+            if (amount <= 0f) return 0f;
+
+            if (!_registry.TryFind(actorId, out NetServerActor actor) || actor == null)
+            {
+                UnknownVictims++;
+                return 0f;
+            }
+
+            if (!actor.IsAlive) return 0f;
+
+            float before = actor.Health;
+            float after  = before + amount;
+            if (after > MaxHealth) after = MaxHealth;
+            if (after <= before) return 0f;
+
+            actor.Health = after;
+            HealthRestored += after - before;
+            return after - before;
+        }
+
+        /// <summary>
+        /// The ceiling <c>Actor.ResupplyHealth</c> clamps to (<c>Actor.cs:1239</c>). Named here
+        /// rather than inlined because it is the same 100 the snapshot's health byte is scaled
+        /// against, and a second literal is how the two drift.
+        /// </summary>
+        private const float MaxHealth = 100f;
     }
 }

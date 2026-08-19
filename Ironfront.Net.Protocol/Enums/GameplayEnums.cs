@@ -16,7 +16,27 @@ namespace Ironfront.Net.Protocol
         Crouch        = 1 << 4,
         Sprint        = 1 << 5,
         Prone         = 1 << 6,
-        ThrowGrenade  = 1 << 7,
+        /// <summary>
+        /// Deliberately unassigned. Was <c>ThrowGrenade</c>, declared at the freeze with zero
+        /// producers and zero consumers repo-wide, and retired by phase-V7 D10 rather than
+        /// implemented.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The game has no dedicated grenade input and never did: throwing is <i>switch to the
+        /// gear slot, then Fire</i>, which routes through <c>Actor.SwitchWeapon</c> and
+        /// <c>ThrowableWeapon.Fire</c> — a path V6 already made server-authoritative. Wiring
+        /// this bit would add a <b>second route to firing</b> that does not pass
+        /// <c>Weapon.CanFire()</c>, and a second route is the one nobody writes the rapid-fire
+        /// test for.
+        /// </para>
+        /// <para>
+        /// <b>Renaming is not a wire change.</b> No producer ever set the bit, so no packet's
+        /// bytes move and <see cref="ProtocolConstants.PROTOCOL_VERSION"/> is unchanged. The
+        /// value is kept rather than deleted so the neighbouring bits do not renumber.
+        /// </para>
+        /// </remarks>
+        Reserved7     = 1 << 7,
         LeanLeft      = 1 << 8,
         LeanRight     = 1 << 9,
         Use           = 1 << 10,

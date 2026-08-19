@@ -22,7 +22,7 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(2 + 1 + 1,                         SeatRequestMessage.Size);    // 4
             Assert.Equal(2 + 1 + 1 + 6 + 4 + 1 + 1,         VehicleSpawnMessage.Size);   // 16
             Assert.Equal(2 + 1,                             VehicleDespawnMessage.Size); // 3
-            Assert.Equal(2 + 1 + 6 + 6 + 4,                 ProjectileSpawnMessage.Size);// 19
+            Assert.Equal(2 + 2 + 1 + 6 + 6 + 2 + 1,         ProjectileSpawnMessage.Size);// 20
             Assert.Equal(2 + 2 + 1 + 1,                     SeatChangeMessage.Size);     // 6
         }
 
@@ -103,14 +103,17 @@ namespace Ironfront.Net.Protocol.Tests
         public void ProjectileSpawnRoundTrips()
         {
             var message = new ProjectileSpawnMessage(
-                ownerActorId: 9, kind: ProjectileKind.Rocket,
+                projectileId: 7, ownerActorId: 9, kind: ProjectileKind.Rocket,
                 originX: 16, originY: 32, originZ: 48,
-                velX: 256, velY: -128, velZ: 0, spawnTick: 1234);
+                velX: 256, velY: -128, velZ: 0, spawnTick: 1234,
+                remainingLifetimeDeciseconds: 20);
 
             Span<byte> buffer = stackalloc byte[ProjectileSpawnMessage.Size];
             Assert.Equal(ProjectileSpawnMessage.Size, message.Write(buffer));
 
             Assert.True(ProjectileSpawnMessage.TryParse(buffer, out ProjectileSpawnMessage parsed));
+            Assert.Equal(7, parsed.ProjectileId);
+            Assert.Equal(20, parsed.RemainingLifetimeDeciseconds);
             Assert.Equal(9, parsed.OwnerActorId);
             Assert.Equal(ProjectileKind.Rocket, parsed.Kind);
             Assert.Equal(16, parsed.OriginX);
