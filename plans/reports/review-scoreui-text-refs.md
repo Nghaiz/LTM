@@ -537,3 +537,73 @@ Both demonstrated holes are closed, one of them better than I proposed. The scor
 because of the deleted test: the suite now covers five exotic failure modes and not the plain one,
 and that shape reads as an oversight to whoever opens the file next — which is the same failure
 class as everything else in this review, just pointed at the tests instead of the detector.
+
+
+---
+
+# Close-out — merged state `40b6328` (PR #148)
+
+Verified: `AssigningTheFlagLabelsDoesNotSatisfyTheCheck` restored with the correct body —
+`ScoreUiFixture("{fileID: 901}", "{fileID: 902}")`, each owed field on ITS OWN fallback — and an
+exact-count assertion, so it cannot pass vacuously. 43 `[Fact]` in the file, **1595 passed,
+0 failed** across the solution. The comment saying why a broader subsuming test is not a reason to
+drop it is the part that stops this recurring.
+
+The Probe E declination landed at `AssetWiringDetectors.cs:544-557`, names the `< DEPLOY >`
+caption specifically, gives both reasons, and closes with "if a future reviewer reaches for a
+fifth mutation, this is the one, and this paragraph is the answer." That is better containment
+than I asked for.
+
+## Last finding (Suggestion) — the declination's stated principle is narrower than the check
+
+`tools/ClientWiringGate/AssetWiringDetectors.cs:554`
+
+> "The clauses above all answer 'would Unity load null here', which is a question YAML can
+> actually answer."
+
+Four of the six clauses do. **Two do not:**
+
+- **Distinctness against `RenderedLabels`** — `phaseText` = `blueFlagsText` resolves perfectly and
+  Unity loads a real `Text`. The fault is semantic — the element is already spoken for — not a
+  load failure. That clause is the entire reason this detector is more than a null check; it is
+  finding I-1 in code form.
+- **`RenderedLabelsAreStillFields`** — asks whether the hand-written list has gone stale, which is
+  a question about the check, not about loading.
+
+The declination of Probe E is still right, but it is right for the *other* two reasons given —
+layout belongs to Phase 3, and a transform-parent rule would fire on a legitimate HUD
+reorganisation. Both are sound and neither depends on the load-null framing.
+
+The risk is small and specific: the paragraph reads as the **admission criterion** for a clause, so
+a future author applying it literally concludes either that the distinctness clause does not belong
+or that some genuinely good future clause must be declined for failing a test the current code
+already fails. One sentence fixes it — "answer either 'would Unity load null here' or 'is this
+element already claimed', both of which YAML can answer; what it cannot answer is where the label
+sits."
+
+Same class as I-3: a remark whose stated rule does not describe the code beneath it. The review
+opened on a docstring claiming more than its code delivered and closes on one claiming a narrower
+principle than its code follows.
+
+## On M-4
+
+Correction accepted, and the distinction is the useful part: raise it firmly, do not treat my own
+conviction as the decision. I withdrew the wrong half. The finding stands as written and I would
+argue it again.
+
+## On the pattern
+
+"Four holes, none found by reading" is true of the *holes*, but the sharper version is worth
+carrying: reading generated every hypothesis, running decided which were real. The `ClassId == 114`
+suggestion came from reading and was wrong; Probe D came from running and settled it. Neither half
+works alone — a mutation you never thought to write finds nothing, and a hypothesis you never run
+becomes a docstring claim like the one above.
+
+The reusable procedure, in one line: **back up the artifact, write the wrong version of it by hand,
+run the real gate, read the exit code, restore and verify the checksum.** Five of the six findings
+in this review came out of that loop, including three in things already marked verified.
+
+## Final score: 10/10
+
+Every finding closed, two of them better than proposed. The remaining suggestion is a sentence in a
+comment.
