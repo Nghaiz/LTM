@@ -158,9 +158,17 @@ namespace Ironfront.Net.Unity.Client
 
                 // A grenade's fuse counts from the launch tick, so both sides detonate on the
                 // same integer rather than on whichever frame each side's own float crossed.
+                //
+                // The subtraction is clamped because these are unsigned: early in a match
+                // CurrentTick can be smaller than the catch-up, and an underflow would wrap to
+                // roughly four billion and hand the grenade a fuse that never fires. A clamp
+                // costs one comparison and the worst case is a grenade that detonates slightly
+                // early on a client during the first two seconds of a round.
                 if (projectile is GrenadeProjectile grenade)
                 {
-                    grenade.ArmFuse(NetContext.CurrentTick - (uint)result.FastForwardedTicks);
+                    uint now = NetContext.CurrentTick;
+                    var caughtUp = (uint)result.FastForwardedTicks;
+                    grenade.ArmFuse(now >= caughtUp ? now - caughtUp : 0u);
                 }
 
                 _spawned[result.ProjectileId] = projectile;
