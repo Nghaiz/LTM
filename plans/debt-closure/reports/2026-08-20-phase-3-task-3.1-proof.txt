@@ -1,0 +1,74 @@
+Phase 3 task 3.1 — HeadlessLoadBootstrap, observed RED then GREEN
+Editor: Unity 6000.3.21f1 · Scene: Assets/Scenes/Dustbowl.unity · Play Mode
+Transport: LoopbackTransport (NetServerBootstrap default), 0 connected clients
+IRONFRONT_LOAD_SEED=4242 for both runs
+
+Both runs are an IDLE server: no client connects over loopback, so every interest
+counter is 0 and 99% of steps land in the <=1 ms bucket. That is an honest reading of
+an empty server and is exactly why lane A needs task 3.2's synthetic clients before
+any of these numbers mean anything about load.
+
+==============================================================================
+RUN 1 — before the fixes. Two defects, neither visible to a compile check.
+==============================================================================
+
+Defect 1: UTF-8 BOM ahead of record 1. Encoding.UTF8 writes a preamble, so the
+first line of the JSONL is not parseable JSON.
+
+  $ head -c 8 task31-run.jsonl | od -c
+0000000 357 273 277   {   "   t   "   :
+
+Defect 2: a phantom record for tick 0 carrying stepMicros 0 — the loop had not
+stepped yet. It then sat in the <=1 ms histogram bucket and pulled the mean down.
+
+  $ head -2 task31-run.jsonl
+  ﻿{"t":0,"nTicks":1,"stepMicros":0,"actors":40,"vehicles":0,"players":0,"conns":0,"entriesConsidered":0,"entriesSent":0,"entriesHeld":0,"entriesCulled":0,"entriesShed":0,"perConn":[],"bytesSent":0,"bytesRecv":0}
+  {"t":3,"nTicks":3,"stepMicros":19723,"actors":40,"vehicles":14,"players":0,"conns":0,"entriesConsidered":0,"entriesSent":0,"entriesHeld":0,"entriesCulled":0,"entriesShed":0,"perConn":[],"bytesSent":0,"bytesRecv":0}
+
+==============================================================================
+RUN 2 — after the fixes. Same seed, same scene.
+==============================================================================
+
+  $ head -c 8 task31-run2.jsonl | od -c        # no BOM
+0000000   {   "   t   "   :   3   ,   "
+
+  $ head -c 8 task31-run2.summary.json | od -c # no BOM
+0000000   {  \n           "   s   e   e
+
+  $ head -2 task31-run2.jsonl                  # first record is a real advance
+  {"t":3,"nTicks":3,"stepMicros":9755,"actors":40,"vehicles":14,"players":0,"conns":0,"entriesConsidered":0,"entriesSent":0,"entriesHeld":0,"entriesCulled":0,"entriesShed":0,"perConn":[],"bytesSent":0,"bytesRecv":0}
+  {"t":6,"nTicks":3,"stepMicros":465,"actors":40,"vehicles":14,"players":0,"conns":0,"entriesConsidered":0,"entriesSent":0,"entriesHeld":0,"entriesCulled":0,"entriesShed":0,"perConn":[],"bytesSent":0,"bytesRecv":0}
+
+  $ wc -l task31-run2.jsonl
+  310
+
+  $ cat task31-run2.summary.json
+  {
+    "seed": 4242,
+    "seedVariable": "IRONFRONT_LOAD_SEED",
+    "records": 310,
+    "ticksCovered": 314,
+    "connectionMismatchRecords": 0,
+    "stepMs": {"mean": 0.332, "max": 9.755},
+    "histogramMs": [
+      {"leMs": "1", "count": 309},
+      {"leMs": "2", "count": 0},
+      {"leMs": "4", "count": 0},
+      {"leMs": "8", "count": 0},
+      {"leMs": "12", "count": 1},
+      {"leMs": "16", "count": 0},
+      {"leMs": "20", "count": 0},
+      {"leMs": "25", "count": 0},
+      {"leMs": "33.3", "count": 0},
+      {"leMs": "50", "count": 0},
+      {"leMs": "100", "count": 0},
+      {"leMs": "Infinity", "count": 0}
+    ],
+    "note": "stepMicros per record is the p99 input; the histogram is indicative"
+  }
+
+==============================================================================
+Encoding fix proven at the type, not only at the file:
+==============================================================================
+  [verify] type loaded from Ironfront.Net.Unity.Server | _hasLastTick removed=True
+           | Utf8NoBom present=True | preamble bytes=0
