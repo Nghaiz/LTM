@@ -31,7 +31,12 @@ namespace Ironfront.Tools.ClientWiringGate
         // RemoteVehicleRegistry and ClientVehicleStage, and OnVehicleSnapshotApplied is what
         // drives the driver-prediction correction. All four have production subscribers, so
         // none of them belongs in KnownUnwiredEvents.
-        public const int ExpectedRouterEventCount = 14;
+        //
+        // 15 since V7: OnProjectileSpawn, subscribed by NetClientProjectilePresenter. It is a
+        // production subscriber -- it instantiates the projectile, fast-forwards it past the
+        // one-way latency and re-seats it on a re-announce -- so it does not belong in
+        // KnownUnwiredEvents either.
+        public const int ExpectedRouterEventCount = 15;
 
         /// <summary>
         /// Events knowingly unwired, each with the reason and the work that unblocks it. An entry

@@ -20,6 +20,12 @@ public class JavelinMissile : Rocket
 	[NonSerialized]
 	public Vector3 targetPoint;
 
+	/// <summary>
+	/// What the missile is chasing. Written by the launcher, and on a network that launcher is
+	/// the server -- which enemy is locked is a gameplay decision. A client never learns the
+	/// target id, because the re-parameterization already carries the consequence: the velocity
+	/// vector. V7-D6.
+	/// </summary>
 	[NonSerialized]
 	public Transform target;
 
@@ -53,6 +59,21 @@ public class JavelinMissile : Rocket
 
 	protected override void Update()
 	{
+		// V7-D6: the SERVER owns a guided flight. It re-sends S_PROJECTILE_SPAWN with this
+		// missile's id and its current (position, velocity, remainingLifetime) at 5 Hz, and a
+		// client re-seats the existing missile and coasts on plain ballistics in between -- the
+		// visible error over 200 ms of turn at 300 deg/s, on a missile usually hundreds of
+		// metres away, is bounded and small. Running the guidance locally as well would have the
+		// client steering toward a target it was never told, and every re-seat would yank it.
+		//
+		// This stays inside V7-D5: every message is still the same 20-byte parameter set going
+		// through the same decoder. There is no per-tick missile entry in the snapshot.
+		if (Ironfront.Net.Unity.NetContext.IsClient)
+		{
+			base.Update();
+			return;
+		}
+
 		if (thrustStartAction.TrueDone())
 		{
 			if (!thrustEnabled)
@@ -92,6 +113,9 @@ public class JavelinMissile : Rocket
 			{
 				velocity += Physics.gravity * Time.deltaTime;
 			}
+			// The 800 -> 1500 mutation never crosses the wire and does not need to: it is read
+			// only by Damage(), and V7-D3 already puts damage entirely on the server. A client's
+			// copy of this number is never consulted by anything.
 			bool flag = diving && Vector3.Dot(base.transform.forward, Vector3.down) > 0.8f;
 			configuration.damage = ((!flag) ? damage : divingDamage);
 			base.transform.rotation = Quaternion.RotateTowards(base.transform.rotation, Quaternion.LookRotation(velocity), 300f * Time.deltaTime);
@@ -99,8 +123,18 @@ public class JavelinMissile : Rocket
 		base.Update();
 	}
 
+	/// <summary>
+	/// Switches the missile to a direct attack. Server-side, per V7-D6.
+	/// </summary>
+	/// <remarks>
+	/// A client calling this would change only its own prediction of a flight it does not own,
+	/// and the next re-parameterization -- at most 200 ms away -- would overwrite the result.
+	/// Refusing it here means the divergence never happens rather than being corrected.
+	/// </remarks>
 	public void ForceDirectMode()
 	{
+		if (Ironfront.Net.Unity.NetContext.IsClient) return;
+
 		StartDiving();
 	}
 

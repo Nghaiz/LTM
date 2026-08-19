@@ -29,6 +29,37 @@ public class Weapon : MonoBehaviour
 
 		public float unholsterTime = 1.2f;
 
+		/// <summary>
+		/// Seconds between a throw being ordered and the projectile leaving the hand. V7-D7.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Matches the throw clip's animation-event time, and it is the one number in this
+		/// phase that nothing in CI can discover.</b> <c>ThrowableWeapon.Fire</c> does not shoot
+		/// -- it sets an Animator trigger, and an animation event calls
+		/// <c>ThrowableWeapon.SpawnThrowable</c>. A headless server has no active Animator
+		/// (<c>Weapon.HasActiveAnimator</c> already returns false there, and on a stripped prefab
+		/// <c>GetComponent&lt;Animator&gt;()</c> returns null outright), so <b>today the server
+		/// throws instantly and the client about 0.6 s later</b>. That divergence is not
+		/// introduced by the network; the network is what makes it visible.
+		/// </para>
+		/// <para>
+		/// <b>Why not run an Animator on the server.</b> A headless build strips the renderers
+		/// the clip drives, the clip is authored for visuals rather than simulation, and it would
+		/// make the release time an Editor-only fact no test can grade. <b>Why not trust the
+		/// client's animation event.</b> It would make a client the author of the authoritative
+		/// release tick, and a modified client throws instantly with nothing to check it against.
+		/// A single authored constant is checkable by both sides.
+		/// </para>
+		/// <para>
+		/// <b>Cost, stated plainly:</b> if this drifts from the clip's event time, the grenade
+		/// leaves the hand at a visibly wrong point in the animation. That is a cosmetic error
+		/// with a loud symptom, which is the right failure mode to trade a silent authority hole
+		/// for.
+		/// </para>
+		/// </remarks>
+		public float releaseDelay = 0.6f;
+
 		public float aimFov = 50f;
 
 		public bool forceAutoReload;
