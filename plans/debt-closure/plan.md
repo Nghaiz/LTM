@@ -82,8 +82,18 @@ is an owner, not the type.
 | 1 | [`phase-1-authoring.md`](phases/phase-1-authoring.md) | Group A authored **and** pinned by gates that can fail | M (3d) |
 | 2 | [`phase-2-code.md`](phases/phase-2-code.md) | Four product items, ledger cleanups, cutover prepared | L (1wk) |
 | 3 | [`phase-3-harness.md`](phases/phase-3-harness.md) | Two-process harness + scripted rendered clients | L (1.5wk) |
+| 3A | [`phase-3a-player-slots.md`](phases/phase-3a-player-slots.md) | The server admits `MaxConnections` players, not one | M (3d) |
+| 3B | [`phase-3b-handshake-residual.md`](phases/phase-3b-handshake-residual.md) | Account for `BadSignature`, correct #151 and the proof report | S (1d) |
+| 3C | [`phase-3c-client-input.md`](phases/phase-3c-client-input.md) | Fire / Aim / Reload and `C_ACK_BASELINE` reach the wire (**X-3**) | M (3d) |
+| 3D | [`phase-3d-lane-b.md`](phases/phase-3d-lane-b.md) | Lane B — two scripted rendered clients, an artifact per checkpoint | L (1wk) |
+| 3E | [`phase-3e-run-and-ledger.md`](phases/phase-3e-run-and-ledger.md) | Thirteen verdicts, and the ledger rows #150/#152 left standing | M (3d) |
 | 4 | [`phase-4-measure.md`](phases/phase-4-measure.md) | Bandwidth, tick p99, `releaseDelay` read not guessed | M (3d) |
 | 5 | [`phase-5-cutover-gate.md`](phases/phase-5-cutover-gate.md) | `AuthoritativeFlight` on with proof, or off with a reason | S (1d) |
+
+**Phase 3 is split.** Tasks 3.1/3.2 landed in #150/#152; acceptance criterion 1 stayed red on a
+defect that was never a handshake defect. 3A–3E carry the phase to its acceptance criteria —
+ordering `3A → 3B? → 3C → 3D → 3E`, where 3B runs only if `--smoke` is still red after 3A. Design and
+root cause: [`2026-08-20-brainstorm-phase-3-completion.md`](reports/2026-08-20-brainstorm-phase-3-completion.md).
 
 **Critical path:** 0 → 1 → 3 → 4 → 5. Phase 2 runs parallel to 1 and 3 with **one hard ordering
 constraint**: task 2c (extract `ScoreUi` state) lands before task 1.6 authors `ScoreUi`'s text refs,

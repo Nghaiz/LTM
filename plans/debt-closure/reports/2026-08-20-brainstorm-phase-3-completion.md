@@ -134,10 +134,12 @@ gives). The AI character prefabs already carry `NetServerActor` with the AI driv
 `_availableForPlayers: 0` — the correct shape for a server-side player body, with the driver
 disabled on claim.
 
-### 5.2 Open design question for the plan
+### 5.2 The host body — resolved in planning
 
-A listen-server host also has a body via `GameManager`. The pool must not double-count it against
-`MaxConnections`.
+A listen-server host would also hold a body via `GameManager`, which would let the first remote
+player claim it. **Resolved: the server is dedicated-only.** Nobody plays on the server process, so
+the pool is the whole of `MaxConnections` and `GameManager`'s body is not spawned on that path.
+Carried into [`phase-3a-player-slots.md`](../phases/phase-3a-player-slots.md) § 3.
 
 ---
 
@@ -157,11 +159,19 @@ Three pins, each red for its own reason (mutation-tested, one mutation per fault
 
 **Task B — `BadSignature`.** Editor log to separate the validator multicast list. Does not block A.
 
-**Task C — X-3.** `ClientMessageType` already defines `SpawnRequest = 0x23`, `LoadoutSelect`,
-`Ping`, `Chat`; what is missing is the client **send** side, plus Fire/Reload on `MoveInput`
-(`Ironfront.Net.Replication/Movement/MoveInput.cs:16-40`). Highest-risk item in the set: it is a
-wire-format change touching `PacketHexSampleTests` and the prebuilt DLLs under `Assets/Plugins/`,
-which are invisible to Unity until `tools/build-libs.ps1` runs.
+**Task C — X-3.** *Scoped down by the prior-art gate during planning; the paragraph this replaces
+called it a wire-format change and the highest risk in the set. It is neither.*
+
+The wire already carries `InputButtons.Fire | Aim | Reload` (`ClientInputMessage.cs`), and the
+server already reads them (`ServerCombatAuthority.cs:170,178`, `MountedWeaponAuthority.cs:127,132`).
+`NetClientLocalCombatDriver.cs:147` already sends `C_SPAWN_REQUEST`, contradicting X-3's second
+claim. The break is `ClientPredictionStage.cs:161-164`, which builds the button mask from
+`MoveInput` — the *gameplay* shape, which knows only Jump/Sprint/Crouch. Three bits with a place on
+the wire and a reader on the server, and no writer.
+
+So: no `PROTOCOL_VERSION` bump, no `PacketHexSampleTests` re-pin. `Ironfront.Net.Replication.dll`
+still ships prebuilt under `Assets/Plugins/`, so `tools/build-libs.ps1` is still mandatory — that
+part of the original assessment survives. `C_ACK_BASELINE` remains X-3's one true gap.
 
 **Task D — task 3.3.** Scripted rendered clients, reusing `LocalClient.cs`,
 `VehicleReplicationOverlay`, `TransportDebugOverlay`, `MovementShadowCompare`.
@@ -176,10 +186,10 @@ currently unmet because #150 and #152 moved none (`debt-ledger.md` last touched 
 
 | Risk | L | I | Score | Mitigation |
 |---|---|---|---|---|
-| Task C wire-format change breaks conformance pins | 4 | 4 | **16** | Change `MoveInput`, rebuild DLLs, re-pin `PacketHexSampleTests` in one commit; C gates D and E |
-| Stale `Assets/Plugins/*.dll` hides the new type | 4 | 3 | 12 | `tools/build-libs.ps1` in the same step, before any Editor run |
 | Lane B flaky, burns the phase | 4 | 3 | 12 | `--smoke` first; a flaky check is reported flaky, never re-run to green |
-| Pool double-counts a listen-server host | 3 | 3 | 9 | § 5.2 — resolve in the plan, pin the count |
+| Task C turns out to touch the wire after all | 2 | 4 | 8 | Phase 3C AC-3 stops the phase if `PROTOCOL_VERSION` or `PacketHexSampleTests` moves |
+| Stale `Assets/Plugins/*.dll` hides the new type | 4 | 3 | 12 | `tools/build-libs.ps1` in the same step, before any Editor run |
+| Pool double-counts a listen-server host | — | — | — | **Resolved in planning: dedicated-only.** The host body is not spawned on the server path |
 | `BadSignature` turns out to also block AC-1 | 3 | 3 | 9 | Task B runs against the Editor log as soon as A lands |
 
 ---
@@ -197,5 +207,9 @@ currently unmet because #150 and #152 moved none (`debt-ledger.md` last touched 
 
 ## 9. Next step
 
-`/t1k:plan` — split A–E into phase files with ownership globs and per-phase acceptance criteria.
-The work spans several sessions, so it belongs in files, not in a chat transcript.
+Done. A–E are [`phase-3a-player-slots.md`](../phases/phase-3a-player-slots.md),
+[`phase-3b-handshake-residual.md`](../phases/phase-3b-handshake-residual.md),
+[`phase-3c-client-input.md`](../phases/phase-3c-client-input.md),
+[`phase-3d-lane-b.md`](../phases/phase-3d-lane-b.md),
+[`phase-3e-run-and-ledger.md`](../phases/phase-3e-run-and-ledger.md), indexed from
+[`plan.md`](../plan.md).
