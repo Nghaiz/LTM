@@ -267,6 +267,21 @@ namespace Ironfront.Net.Replication.Combat
             configs[WeaponIds.WRENCH] = Inert;
             configs[WeaponIds.SUPER_WRENCH] = Inert;
 
+            // The horn (V6-D8). Numbers read off the CarHorn component on Assets/Prefab/jeep.prefab
+            // -- cooldown 0.2 s, ammo 1, spareAmmo -1 (no resupply), projectilesPerShot 0. It does
+            // no damage and launches nothing; what it DOES is user.Highlight(), which reveals the
+            // occupant to AI, and that is why it needs a server-side cooldown at all: without one,
+            // a client holding the horn key would re-Highlight its own occupant every tick.
+            //
+            // spendsAmmo: false is the load-bearing field. CarHorn.Shoot overrides the base and
+            // never reaches `ammo--`, so its clip of 1 is permanent. Decrementing it here would
+            // make the second honk NoAmmo on the server and fine offline.
+            configs[WeaponIds.CAR_HORN] = new WeaponConfig(
+                cooldown: 0.2f, spread: 0f, projectilesPerShot: 1, range: 0f,
+                damage: 0f, force: 0f, clipSize: 1,
+                spareAmmo: WeaponConfig.NoResupplySpareAmmo,
+                spendsAmmo: false);
+
             return configs;
         }
 

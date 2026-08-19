@@ -62,8 +62,35 @@ namespace Ironfront.Net.Replication.Server
             public ClampedVehicleInput Input;
         }
 
+        /// <summary>What one <c>C_VEHICLE_INPUT</c> was allowed to do. V6 task 2.</summary>
+        public enum Acceptance : byte
+        {
+            /// <summary>The sender is not in the vehicle it named. Nothing was recorded.</summary>
+            Refused = 0,
+
+            /// <summary>The sender is the driver: the axes AND the turret aim were recorded.</summary>
+            Driver = 1,
+
+            /// <summary>
+            /// The sender occupies some other seat: the turret aim was recorded and the axes were
+            /// thrown away.
+            /// </summary>
+            TurretOnly = 2,
+        }
+
+        private struct TurretRecord
+        {
+            public bool Occupied;
+            public ushort VehicleId;
+            public byte SeatIndex;
+            public uint Tick;
+            public float Yaw;
+            public float Pitch;
+        }
+
         private readonly VehicleRegistry _registry;
         private readonly Record[] _byActor;
+        private readonly TurretRecord[] _turretByActor;
 
         public VehicleInputAuthority(VehicleRegistry registry, int maxActors = ProtocolConstants.MAX_ACTORS)
         {
@@ -71,7 +98,8 @@ namespace Ironfront.Net.Replication.Server
 
             // Indexed by actorId, allocated once. Actor ids are a small dense u16 space, so a
             // flat array beats a dictionary on both lookup cost and per-tick allocation.
-            _byActor = new Record[maxActors + 1];
+            _byActor       = new Record[maxActors + 1];
+            _turretByActor = new TurretRecord[maxActors + 1];
         }
 
         /// <summary>Inputs accepted and recorded.</summary>
@@ -85,6 +113,122 @@ namespace Ironfront.Net.Replication.Server
 
         /// <summary>Reads that found the hold window expired and centred the axes.</summary>
         public long DecayedReads { get; private set; }
+
+        /// <summary>Turret aims recorded, from any seat. V6.</summary>
+        public long TurretAccepted { get; private set; }
+
+        /// <summary>
+        /// Turret aims refused: the sender occupies no seat of the vehicle it named.
+        /// </summary>
+        /// <remarks>
+        /// Distinct from <see cref="RefusedNotDriver"/> on purpose. A gunner sending turret aim is
+        /// legitimate and routine, so counting it as a driver refusal would bury the signal
+        /// <see cref="RefusedNotDriver"/> exists to carry — "either a bug or somebody probing" —
+        /// under ordinary traffic from every turret in the match.
+        /// </remarks>
+        public long TurretRefusedNotOccupant { get; private set; }
+
+        /// <summary>
+        /// Records one <c>C_VEHICLE_INPUT</c> in whichever lanes the sender's seat entitles it to.
+        /// V6 task 2.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Two lanes, because the message carries two different authorities.</b> Only the
+        /// driver may steer (V5-D5) and that rule is unchanged — the axes still go through
+        /// <see cref="TryAccept"/> verbatim. But a gunner in seat 1 has every right to aim the gun
+        /// bolted to seat 1, and before V6 their whole message was thrown away as
+        /// <see cref="RefusedNotDriver"/>. Splitting the lanes here rather than widening
+        /// <see cref="TryAccept"/> is what keeps "a passenger cannot steer" a property of the type
+        /// rather than of whoever last edited the seat check.
+        /// </para>
+        /// <para>
+        /// <b>The turret aim is a REQUEST, not a pose.</b> It is stored raw and walked toward by
+        /// <see cref="Vehicles.ServerTurretAuthority"/> at the turret's own slew rate, so a client
+        /// asking for a 180° snap gets one step's arc — see
+        /// <c>TurretAimCore.StepToward</c>. Nothing on this path may ever write a pose directly.
+        /// </para>
+        /// </remarks>
+        public Acceptance Accept(ushort actorId, in ClampedVehicleInput input, uint serverTick)
+        {
+            if (actorId == 0 || actorId >= _byActor.Length) { TurretRefusedNotOccupant++; return Acceptance.Refused; }
+
+            if (input.VehicleId == 0
+                || !_registry.TryFindSeatOf(actorId, out ushort seatedIn, out byte seatIndex)
+                || seatedIn != input.VehicleId)
+            {
+                TurretRefusedNotOccupant++;
+                return Acceptance.Refused;
+            }
+
+            // The driver's axes go through the unchanged rule, which re-resolves the seat. That
+            // second lookup is one array index and it is what lets V5-D5 keep exactly one
+            // implementation instead of a copy that can drift.
+            if (seatIndex == DriverSeatIndex)
+            {
+                if (!TryAccept(actorId, in input, serverTick)) return Acceptance.Refused;
+
+                RecordTurret(actorId, input.VehicleId, seatIndex, in input);
+                return Acceptance.Driver;
+            }
+
+            RecordTurret(actorId, input.VehicleId, seatIndex, in input);
+            return Acceptance.TurretOnly;
+        }
+
+        /// <summary>
+        /// The aim this actor last asked their turret to take, in degrees.
+        /// </summary>
+        /// <returns>False when nothing has been received since they took the seat.</returns>
+        /// <remarks>
+        /// <b>No hold window, unlike the axes, and that asymmetry is deliberate.</b> A stalled
+        /// driver must coast to a stop (V5-D11) because a held throttle drives into the sea. A
+        /// turret left alone is a turret still pointed where it was pointed; centring it on packet
+        /// loss would swing the gun off target every time a connection hiccuped, which is worse
+        /// than the thing the window protects against.
+        /// </remarks>
+        public bool TryGetTurretTarget(
+            ushort actorId, out ushort vehicleId, out byte seatIndex,
+            out float yawDegrees, out float pitchDegrees)
+        {
+            vehicleId    = 0;
+            seatIndex    = 0;
+            yawDegrees   = 0f;
+            pitchDegrees = 0f;
+
+            if (actorId == 0 || actorId >= _turretByActor.Length) return false;
+
+            ref TurretRecord record = ref _turretByActor[actorId];
+            if (!record.Occupied) return false;
+
+            vehicleId    = record.VehicleId;
+            seatIndex    = record.SeatIndex;
+            yawDegrees   = record.Yaw;
+            pitchDegrees = record.Pitch;
+            return true;
+        }
+
+        private void RecordTurret(
+            ushort actorId, ushort vehicleId, byte seatIndex, in ClampedVehicleInput input)
+        {
+            ref TurretRecord record = ref _turretByActor[actorId];
+
+            // IsNewer32 for the same reason the axes use it: the tick is a u32 that wraps, and a
+            // plain > would freeze every turret for a while after the wrap.
+            if (record.Occupied
+                && record.VehicleId == vehicleId
+                && !SequenceMath.IsNewer32(input.Tick, record.Tick))
+                return;
+
+            record.Occupied  = true;
+            record.VehicleId = vehicleId;
+            record.SeatIndex = seatIndex;
+            record.Tick      = input.Tick;
+            record.Yaw       = input.TurretYaw;
+            record.Pitch     = input.TurretPitch;
+
+            TurretAccepted++;
+        }
 
         /// <summary>
         /// Records an input, if the sender is the driver of the vehicle it names.
@@ -174,18 +318,22 @@ namespace Ironfront.Net.Replication.Server
         public void Forget(ushort actorId)
         {
             if (actorId == 0 || actorId >= _byActor.Length) return;
-            _byActor[actorId] = default;
+            _byActor[actorId]       = default;
+            _turretByActor[actorId] = default;
         }
 
         /// <summary>Drops every record and every counter. Match teardown.</summary>
         public void Reset()
         {
             for (int i = 0; i < _byActor.Length; i++) _byActor[i] = default;
+            for (int i = 0; i < _turretByActor.Length; i++) _turretByActor[i] = default;
 
             Accepted = 0;
             RefusedNotDriver = 0;
             RefusedStale = 0;
             DecayedReads = 0;
+            TurretAccepted = 0;
+            TurretRefusedNotOccupant = 0;
         }
 
         /// <summary>

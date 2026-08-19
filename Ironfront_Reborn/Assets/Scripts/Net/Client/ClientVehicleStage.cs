@@ -55,6 +55,15 @@ namespace Ironfront.Net.Unity.Client
         private ushort _drivenVehicleId;
         private uint _lastSentTick;
 
+        // The vehicle and seat this client OCCUPIES, which is not the same question as which one
+        // it DRIVES. A gunner in seat 1 sends C_VEHICLE_INPUT for its turret half and steers
+        // nothing (V6 task 2); before V6 a non-driver sent no vehicle input at all, so no turret
+        // aim ever left a client.
+        private ushort _occupiedVehicleId;
+        private byte _occupiedSeatIndex;
+
+        private ClientTurretDirectory _turretDirectory;
+
         // Resolved inside OnSeatChange's local-actor guard and held, rather than reached for
         // per frame. FpsActorController.instance is a client-only singleton, and every path
         // that touches one has to prove it is on the local player's side of the wire -- the
@@ -68,6 +77,12 @@ namespace Ironfront.Net.Unity.Client
 
         /// <summary>The vehicle this client is driving, or 0.</summary>
         public ushort DrivenVehicleId => _drivenVehicleId;
+
+        /// <summary>The vehicle this client is SEATED in, driving or not, or 0. V6.</summary>
+        public ushort OccupiedVehicleId => _occupiedVehicleId;
+
+        /// <summary>The seat this client occupies. Meaningless while <see cref="OccupiedVehicleId"/> is 0.</summary>
+        public byte OccupiedSeatIndex => _occupiedSeatIndex;
 
         /// <summary><c>C_VEHICLE_INPUT</c> messages sent. Zero while driving is the tell.</summary>
         public long InputsSent { get; private set; }
@@ -121,6 +136,23 @@ namespace Ironfront.Net.Unity.Client
             // default here would silently undo the environment override on exactly the builds
             // that have no Editor to set the field in.
             if (!_configured) ApplyConfiguration(_predictLocalVehicle);
+
+            // Installed here rather than from a bootstrap so the seam is wired by the same
+            // component that owns the registry it reads. A turret asking before this runs gets
+            // no directory and aims locally, which is the offline behaviour and is safe.
+            _turretDirectory = new ClientTurretDirectory(_registry);
+            NetTurretAim.Directory = _turretDirectory;
+            NetTurretAim.VehicleIdResolver = ResolveVehicleId;
+        }
+
+        private ushort ResolveVehicleId(GameObject vehicle)
+            => _registry != null ? _registry.NetworkIdOf(vehicle) : (ushort)0;
+
+        private void OnDestroy()
+        {
+            // Only if it is still ours. Two stages in one scene is a misconfiguration, but
+            // tearing down the other one's seam on the way out would be a real bug on top of it.
+            if (ReferenceEquals(NetTurretAim.Directory, _turretDirectory)) NetTurretAim.Clear();
         }
 
         private void OnEnable()
@@ -140,7 +172,7 @@ namespace Ironfront.Net.Unity.Client
         private void Update()
         {
             DrawRemoteVehicles();
-            SendDriverInput();
+            SendVehicleInput();
         }
 
         /// <summary>
@@ -228,14 +260,15 @@ namespace Ironfront.Net.Unity.Client
         /// both readings and lets the vehicle pick.
         /// </para>
         /// <para>
-        /// <b>Turret aim is sent as zero and that is V6's, not an omission.</b> The fields exist
-        /// on the wire from V3 and a test pins their round trip, so V6 adds turret aim without a
-        /// protocol change.
+        /// <b>Turret aim rides the same message, from any seat (V6 task 2).</b> The fields have
+        /// been on the wire since V3, so this needed no protocol change — what it needed was for
+        /// a non-driver to send the message at all, which before V6 nothing did. The axes stay
+        /// driver-only; only the turret half widens.
         /// </para>
         /// </remarks>
-        private void SendDriverInput()
+        private void SendVehicleInput()
         {
-            if (_drivenVehicleId == 0 || _client == null || !_client.IsConnected) return;
+            if (_occupiedVehicleId == 0 || _client == null || !_client.IsConnected) return;
 
             NetPredictionClock clock = NetPredictionClock.Current;
             uint tick = clock != null ? clock.InputTick : NetContext.CurrentTick;
@@ -250,39 +283,50 @@ namespace Ironfront.Net.Unity.Client
             IInputSource input = _localController.InputSource;
             if (input == null) return;
 
-            bool helicopter =
-                _registry != null
-                && _registry.TryFind(_drivenVehicleId, out NetClientVehicle vehicle)
-                && vehicle.Kind == VehicleKind.Helicopter;
+            float slot1 = 0f, slot2 = 0f, slot3 = 0f, slot4 = 0f;
 
-            float slot1, slot2, slot3, slot4;
+            // A passenger's axes are zeroed here, not merely ignored there. The server refuses
+            // them anyway (V5-D5), but sending a throttle this client is not entitled to would
+            // make VehicleInputAuthority.RefusedNotDriver rise on ordinary gunner traffic and
+            // bury the signal that counter exists to carry.
+            if (_occupiedSeatIndex == DriverSeatIndex)
+            {
+                bool helicopter =
+                    _registry != null
+                    && _registry.TryFind(_drivenVehicleId, out NetClientVehicle vehicle)
+                    && vehicle.Kind == VehicleKind.Helicopter;
 
-            if (helicopter)
-            {
-                HelicopterAxes axes = HelicopterAxes.From(input);
-                slot1 = axes.ThrottleSlot;
-                slot2 = axes.SteerSlot;
-                slot3 = axes.PitchAxisSlot;
-                slot4 = axes.AuxAxisSlot;
+                if (helicopter)
+                {
+                    HelicopterAxes axes = HelicopterAxes.From(input);
+                    slot1 = axes.ThrottleSlot;
+                    slot2 = axes.SteerSlot;
+                    slot3 = axes.PitchAxisSlot;
+                    slot4 = axes.AuxAxisSlot;
+                }
+                else
+                {
+                    // CarInput() is (MoveX, MoveZ) and Car reads .x as steer, .y as throttle.
+                    slot1 = input.MoveZ;
+                    slot2 = input.MoveX;
+                }
             }
-            else
-            {
-                // CarInput() is (MoveX, MoveZ) and Car reads .x as steer, .y as throttle.
-                slot1 = input.MoveZ;
-                slot2 = input.MoveX;
-                slot3 = 0f;
-                slot4 = 0f;
-            }
+
+            // The aim the local turret integrated this step, which the server then walks toward
+            // at the turret's own slew rate (TurretAimCore.StepToward). It is a REQUEST: a client
+            // writing a 180-degree snap here buys one step's arc, which is acceptance criterion 2.
+            // Absent when this seat has no turret, and zero is then honest rather than a guess.
+            NetTurretAim.TryGetLocal(out float turretYaw, out float turretPitch);
 
             var message = new VehicleInputMessage(
                 tick,
-                _drivenVehicleId,
+                _occupiedVehicleId,
                 Quantize.PackMoveAxis(slot1),
                 Quantize.PackMoveAxis(slot2),
                 Quantize.PackMoveAxis(slot3),
                 Quantize.PackMoveAxis(slot4),
-                turretYaw: 0,
-                turretPitch: 0,
+                Quantize.PackYaw(turretYaw),
+                Quantize.PackPitch(turretPitch),
                 buttons: input.Buttons);
 
             int bodyLength = message.Write(_body);
@@ -309,19 +353,36 @@ namespace Ironfront.Net.Unity.Client
             if (_client == null) return;
             if (!NetClientPresenterGuard.IsLocalActor(message.ActorId)) return;
 
-            if (message.Result == SeatChangeResult.Entered
-                && message.SeatIndex == DriverSeatIndex)
+            if (message.Result == SeatChangeResult.Entered)
             {
-                // Resolved here and not in SendDriverInput: this is the member the local-actor
+                // Occupancy is tracked for EVERY seat; prediction stays the driver's alone. A
+                // gunner steers nothing and predicts nothing, and still has a turret to aim
+                // (V6 task 2) — before V6 a non-driver sent no vehicle input at all, so no turret
+                // aim ever left a client.
+                _occupiedVehicleId = message.VehicleId;
+                _occupiedSeatIndex = message.SeatIndex;
+
+                // Resolved here and not in SendVehicleInput: this is the member the local-actor
                 // guard is in, and the controller cannot change while seated.
                 _localController = FpsActorController.instance;
-                Register(message.VehicleId);
+
+                if (message.SeatIndex == DriverSeatIndex) Register(message.VehicleId);
                 return;
             }
 
             // Every other result — Left, and every refusal — leaves this client not driving.
             // Acting on a refusal by clearing is correct and is the point: the refusal is the
             // only thing that stops a client predicting a vehicle it never got into.
+            if (message.VehicleId == _occupiedVehicleId || message.Result == SeatChangeResult.Left)
+            {
+                _occupiedVehicleId = 0;
+                _occupiedSeatIndex = 0;
+
+                // The local aim goes with the seat. Left standing, the next C_VEHICLE_INPUT sent
+                // from a DIFFERENT turret would open with the previous one's pose.
+                NetTurretAim.ClearLocal();
+            }
+
             if (message.VehicleId == _drivenVehicleId || message.Result == SeatChangeResult.Left)
                 Release();
         }

@@ -311,7 +311,7 @@ public class FpsActorController : ActorController
 		fpCameraParent.parent = seat.transform;
 		fpCameraParent.localPosition = Vector3.up * 0.85f + Vector3.forward * 0.2f;
 		fpCameraParent.localRotation = Quaternion.identity;
-		if (!seat.CanUseWeapon())
+		if (!seat.CanUseCarriedWeapon())
 		{
 			if (seat.vehicle.GetType() == typeof(Helicopter))
 			{
@@ -322,7 +322,7 @@ public class FpsActorController : ActorController
 				fpParent.SetAimFov(45f);
 			}
 		}
-		if (!seat.CanUseWeapon())
+		if (!seat.CanUseCarriedWeapon())
 		{
 			HideFpModel();
 		}

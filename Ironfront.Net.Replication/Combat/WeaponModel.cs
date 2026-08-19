@@ -36,6 +36,49 @@ namespace Ironfront.Net.Replication.Combat
         public readonly byte ClipSize;
 
         /// <summary>
+        /// Rounds held outside the clip, or one of the two sentinels. Mirrors
+        /// <c>Weapon.Configuration.spareAmmo</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A <c>short</c> and not a <c>byte</c>, because of the sentinels.</b>
+        /// <see cref="NoResupplySpareAmmo"/> (<c>-1</c>) and <see cref="InfiniteSpareAmmo"/>
+        /// (<c>-2</c>) have been part of the shipped weapon data since before the netcode existed
+        /// — <c>Weapon.AllowsResupply</c> and <c>Weapon.HasInfiniteSpareAmmo</c> are the two
+        /// readers — and a <c>byte</c> would fold both onto 254 and 255, which are also valid
+        /// round counts.
+        /// </para>
+        /// <para>
+        /// <b>Defaults to infinite, which is what every caller written before V6 already got.</b>
+        /// The server has never modelled spare ammo at all: <c>ServerReloadPolicy</c> refilled to
+        /// <see cref="ClipSize"/> unconditionally. Defaulting to anything finite would hand every
+        /// phase-05 weapon a magazine limit it did not have yesterday, so the field arrives inert
+        /// and only the mounted path opts into it.
+        /// </para>
+        /// </remarks>
+        public readonly short SpareAmmo;
+
+        /// <summary>
+        /// False for a weapon whose trigger costs nothing. V6 task 5.
+        /// </summary>
+        /// <remarks>
+        /// <b>One weapon in the game, and it is not a rounding error.</b> <c>CarHorn.Shoot</c>
+        /// overrides the base and never reaches <c>ammo--</c> or <c>AmmoChanged()</c>, so its
+        /// authored clip of 1 is a permanent 1. A server that decremented it would leave the horn
+        /// silent after one honk with <see cref="FireRejection.NoAmmo"/> — a divergence from
+        /// offline play with no error anywhere. Modelled as a property of the weapon rather than
+        /// as a special case keyed on the id, because the next weapon like it should not need the
+        /// authority to be edited again.
+        /// </remarks>
+        public readonly bool SpendsAmmo;
+
+        /// <summary>No ammo bag may refill this weapon. <c>Weapon.AllowsResupply</c>.</summary>
+        public const short NoResupplySpareAmmo = -1;
+
+        /// <summary>Never runs out. <c>Weapon.HasInfiniteSpareAmmo</c>.</summary>
+        public const short InfiniteSpareAmmo = -2;
+
+        /// <summary>
         /// Stagger damage, subtracted from the victim's balance. Zero for everything that is
         /// not a gun.
         /// </summary>
@@ -73,14 +116,22 @@ namespace Ironfront.Net.Replication.Combat
         /// <param name="dropoffMinMultiplier">
         /// Defaults to <c>1f</c> — no drop-off — for the same reason.
         /// </param>
+        /// <param name="spareAmmo">
+        /// Defaults to <see cref="InfiniteSpareAmmo"/>, which is the behaviour every pre-V6
+        /// caller already had: the server refilled a clip unconditionally.
+        /// </param>
         public WeaponConfig(
             float cooldown, float spread, int projectilesPerShot, float range,
             float damage, float force, byte clipSize,
             float balanceDamage = 0f,
             float dropoffStartMetres = 0f,
             float dropoffEndMetres = 0f,
-            float dropoffMinMultiplier = 1f)
+            float dropoffMinMultiplier = 1f,
+            short spareAmmo = InfiniteSpareAmmo,
+            bool spendsAmmo = true)
         {
+            SpareAmmo = spareAmmo;
+            SpendsAmmo = spendsAmmo;
             Cooldown = cooldown;
             Spread = spread;
             ProjectilesPerShot = projectilesPerShot < 1 ? 1 : projectilesPerShot;
@@ -173,6 +224,21 @@ namespace Ironfront.Net.Replication.Combat
         /// </remarks>
         public float ReloadStartedAt;
 
+        /// <summary>
+        /// Rounds this weapon holds outside its clip, or one of
+        /// <see cref="WeaponConfig.NoResupplySpareAmmo"/> / <see cref="WeaponConfig.InfiniteSpareAmmo"/>.
+        /// V6-D6.
+        /// </summary>
+        /// <remarks>
+        /// <b>Meaningful only for an owner whose pool is the weapon</b> — a mounted turret, whose
+        /// spare rounds live on the gun the way <c>MountedWeapon.spareAmmo</c> does.
+        /// <see cref="ActorSpareAmmoPool"/> keeps its own five-slot table per actor and ignores
+        /// this field entirely. One struct with a pool seam rather than two near-identical runtime
+        /// structs, because two would drift; a single struct with no seam would force one of the
+        /// two owners to be wrong.
+        /// </remarks>
+        public short SpareAmmo;
+
         public static WeaponRuntimeState Loaded(in WeaponConfig config) => new WeaponRuntimeState
         {
             LastFiredTime = float.NegativeInfinity,
@@ -180,6 +246,7 @@ namespace Ironfront.Net.Replication.Combat
             Reloading = false,
             Unholstered = true,
             ReloadStartedAt = float.NegativeInfinity,
+            SpareAmmo = config.SpareAmmo,
         };
     }
 

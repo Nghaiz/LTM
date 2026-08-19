@@ -199,6 +199,21 @@ namespace Ironfront.Net.Unity.Client
         internal bool HasPose => _hasPose;
 
         /// <summary>
+        /// The turret aim from the last applied snapshot, degrees. V6 task 2.
+        /// </summary>
+        /// <remarks>
+        /// <b>Held here rather than written straight onto the turret, because this class does not
+        /// know which turret.</b> The vehicle entry carries one turret slot (V6-D3) and the
+        /// component that owns it resolves itself through <c>NetTurretAim</c> on its own fixed
+        /// step. Storing the pair is also what lets the interpolator's output arrive at whatever
+        /// rate it likes without the turret having to be subscribed to anything.
+        /// </remarks>
+        internal float TurretYaw { get; private set; }
+
+        /// <inheritdoc cref="TurretYaw"/>
+        internal float TurretPitch { get; private set; }
+
+        /// <summary>
         /// Health, burning, in-water and the subtype tail: the parts of the snapshot that are
         /// statements about the world rather than about where the vehicle is.
         /// </summary>
@@ -208,6 +223,12 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         private void ApplyAuthoritativeState(in VehiclePose pose)
         {
+            // Recorded in BOTH modes, like every other authoritative scalar here. A locally
+            // predicted vehicle still has a turret somebody else may be aiming: the driver
+            // predicts the hull, never the gunner's traverse.
+            TurretYaw   = pose.TurretYaw;
+            TurretPitch = pose.TurretPitch;
+
             _vehicle.SetHealthAuthoritative(pose.Health * _vehicle.MaxHealth);
 
             _vehicle.ApplyReplicatedFlags(

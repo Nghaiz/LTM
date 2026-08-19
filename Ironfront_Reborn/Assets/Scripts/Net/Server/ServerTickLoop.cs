@@ -103,6 +103,14 @@ namespace Ironfront.Net.Unity.Server
         private readonly VehicleInputAuthority _vehicleInputAuthority;
         private readonly ServerVehicleInputBridge _vehicleInputBridge;
 
+        // V6. The authoritative turret pose and the mounted-weapon clips, both engine-free and
+        // both keyed on (vehicleId, seatIndex) rather than on an actor -- a mounted weapon's clip
+        // survives the gunner getting out, and must, or two players swapping seats on a
+        // half-empty coaxial would each find a full one.
+        private readonly ServerTurretAuthority _turretAuthority = new ServerTurretAuthority();
+        private readonly MountedWeaponRegistry _mountedWeapons = new MountedWeaponRegistry();
+        private readonly MountedWeaponAuthority _mountedWeaponAuthority;
+
         // Reused across resets rather than allocated per call. A round boundary is not the hot
         // path, but MAX_ACTORS is the known ceiling and there is no reason to hand the GC a
         // fresh list every round.
@@ -134,7 +142,8 @@ namespace Ironfront.Net.Unity.Server
             _damageSink = new ServerActorDamageSink(ServerActorRegistry.Instance);
             _combatAuthority = new ServerCombatAuthority(_fireResolver, _damageSink, _respawnGate);
             _combat = new ServerCombatBridge(
-                this, ServerActorRegistry.Instance, _combatAuthority, _respawnGate);
+                this, ServerActorRegistry.Instance, _combatAuthority, _respawnGate,
+                _mountedWeapons, _mountedWeaponAuthority);
 
             // V4. Order matters: the arbiter and the burn clock both close over the registry, and
             // the damage sink closes over the burn clock.
@@ -163,7 +172,14 @@ namespace Ironfront.Net.Unity.Server
             // engine-free; the bridge is the part that has to touch a MonoBehaviour.
             _vehicleInputAuthority = new VehicleInputAuthority(ServerVehicleRegistry.Instance.Registry);
             _vehicleInputBridge = new ServerVehicleInputBridge(
-                _vehicleInputAuthority, ServerActorRegistry.Instance, () => _scheduler.CurrentTick);
+                _vehicleInputAuthority, ServerActorRegistry.Instance, () => _scheduler.CurrentTick,
+                _turretAuthority);
+
+            // V6 tasks 2 and 3. MountedSpareAmmoPool, never ActorSpareAmmoPool: a mounted
+            // weapon's spare rounds live on the weapon (V6-D6), and handing this the infantry
+            // pool would drain the gunner's rifle magazines to refill a coaxial.
+            _mountedWeaponAuthority = new MountedWeaponAuthority(
+                _mountedWeapons, MountedSpareAmmoPool.Instance);
 
             _router.SpawnRequests = this;
             _router.SeatRequests = _seatBridge;
@@ -186,6 +202,15 @@ namespace Ironfront.Net.Unity.Server
         /// Who may steer what, and for how long after their last packet. V5-D5 and V5-D11.
         /// </summary>
         public VehicleInputAuthority VehicleInputAuthority => _vehicleInputAuthority;
+
+        /// <summary>Where every turret is actually pointing. V6-D2.</summary>
+        public ServerTurretAuthority TurretAuthority => _turretAuthority;
+
+        /// <summary>Every mounted weapon's clip, cooldown and spare rounds. V6 task 3.</summary>
+        public MountedWeaponRegistry MountedWeapons => _mountedWeapons;
+
+        /// <summary>The ammo, cooldown and reload gate for mounted weapons. V6 task 3.</summary>
+        public MountedWeaponAuthority MountedWeaponAuthority => _mountedWeaponAuthority;
 
         /// <summary>The transport this loop is bound to. Null until <see cref="Bind"/>.</summary>
         public ITransportServer Transport { get; private set; }
@@ -304,6 +329,23 @@ namespace Ironfront.Net.Unity.Server
             // dies rather than up to ten seconds later — the whole V4-D10 fix.
             ServerVehicleRegistry.Instance.SubscribeTo(ServerActorRegistry.Instance);
 
+            // V6, and installed here for NetVehicleAuthority's reason exactly: a turret and a
+            // mounted weapon are components on an authored prefab with no reference to this loop,
+            // and a serialized one per prefab would be a manual step forgotten on the one nobody
+            // re-opened. Both seams report "no opinion" until this runs, which is the offline
+            // behaviour and is what keeps a client and a single-player build untouched (V6-D9).
+            // Before the directories, so a vehicle despawning between here and the first
+            // declaration still has somewhere to be cleaned up from.
+            ServerVehicleRegistry.Instance.InstallMountedTables(_turretAuthority, _mountedWeapons);
+
+            NetTurretAim.Directory = new ServerTurretDirectory(_turretAuthority);
+            NetTurretAim.VehicleIdResolver =
+                ServerVehicleRegistry.Instance.NetworkIdOf;
+
+            NetWeaponAuthority.Directory = new ServerMountedWeaponDirectory(
+                _mountedWeapons,
+                () => _scheduler.CurrentTick / (float)ProtocolConstants.SIM_TICK_RATE);
+
             WarnAboutPlaceholderWeapons();
         }
 
@@ -365,6 +407,12 @@ namespace Ironfront.Net.Unity.Server
             Transport.OnClientDisconnected -= OnClientDisconnected;
             Transport = null;
             _clockPump = null;
+
+            // Both seams are static, and with domain reload disabled a static field survives
+            // leaving play mode -- so the next run's turrets would aim from the previous run's
+            // authority. NetVehicleAuthority.Uninstall exists for the same reason.
+            NetTurretAim.Clear();
+            NetWeaponAuthority.Clear();
         }
 
         /// <summary>Stage 1, at execution order -200. Receive, then apply input.</summary>
@@ -400,6 +448,14 @@ namespace Ironfront.Net.Unity.Server
                 // Before the players step, so a vehicle reading its driver's controller from
                 // FixedUpdate this tick sees this tick's axes rather than the previous one's.
                 _vehicleInputBridge.PumpTick(NetContext.CurrentTick);
+
+                // AND before fire resolution, which is the load-bearing half (V6 task 3).
+                // Weapon.SpawnProjectile reads configuration.muzzle.position -- the transform the
+                // turret components write from this pose on their own fixed step. Stepping the
+                // aim after the trigger would leave every shot departing from where the turret
+                // pointed one tick ago: 33 ms of lag, invisible on a static target and
+                // systematically wrong on a traversing one.
+                _turretAuthority.Step(_scheduler.FixedDeltaTime);
 
                 for (int i = 0; i < _players.Count; i++)
                     _players[i].Tick(_scheduler.FixedDeltaTime);
@@ -963,7 +1019,11 @@ namespace Ironfront.Net.Unity.Server
             _stateAudit = new ServerStateAudit(
                 actorIds, _hitboxHistory, _interest, _spawnAcks, () => _players.Count,
                 _vehicleLifecycle?.Ids, _vehicleInterest,
-                ServerVehicleRegistry.Instance.Registry);
+                ServerVehicleRegistry.Instance.Registry,
+                // V6, criterion 13. Both are keyed on (vehicleId, seatIndex), so both leak the
+                // way the pair tables do -- on the second and third round of a server nobody is
+                // watching -- and both are emptied by ResetForNewMatch.
+                _mountedWeapons, _turretAuthority);
         }
 
         /// <summary>

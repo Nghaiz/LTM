@@ -31,11 +31,18 @@ namespace Ironfront.Net.Unity.Server
     internal sealed class NetServerVehicle : IVehiclePoseSource
     {
         private readonly IGameplayVehicleSource _source;
+        private readonly ServerTurretAuthority _turrets;
 
-        internal NetServerVehicle(ushort vehicleId, IGameplayVehicleSource source)
+        internal NetServerVehicle(
+            ushort vehicleId, IGameplayVehicleSource source,
+            ServerTurretAuthority turrets = null)
         {
             VehicleId = vehicleId;
             _source   = source;
+
+            // Optional so every pre-V6 construction keeps working. A null one reports a zero
+            // turret pose, which is exactly what this class shipped with for two phases.
+            _turrets  = turrets;
         }
 
         /// <summary>The id the lifecycle sink assigned at spawn.</summary>
@@ -47,9 +54,41 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>False once the underlying <c>Vehicle</c> has been destroyed.</summary>
         internal bool Exists => _source != null && _source.Exists;
 
-        public float TurretYaw => Exists ? _source.TurretYaw : 0f;
+        /// <summary>
+        /// The turret pose the snapshot entry carries. V6 task 2.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Read from the authority, never from the scene.</b> The turret's transform is an
+        /// OUTPUT of <see cref="ServerTurretAuthority"/>'s pose — the components write the joint
+        /// target from it and nothing reads an angle back (V0's invariant, V6-D5-local). Reading
+        /// the scene here would replicate a value PhysX produced, which is the one thing the
+        /// design says cannot be replicated; it would also round-trip through
+        /// <c>Quaternion.eulerAngles</c>, which is not injective.
+        /// </para>
+        /// <para>
+        /// <b>The vehicle's FIRST tracked turret</b>, per V6-D3: the entry has one turret slot and
+        /// it belongs to the first mounted-weapon seat in <c>Vehicle.seats</c> order. A second
+        /// turret is drawn from its occupant's already-replicated actor rotation and holds its
+        /// last pose when vacant — a cosmetic-only error, because no shot ever reads a remote
+        /// client's transform.
+        /// </para>
+        /// <para>
+        /// Zero for a vehicle with no turret at all, which is honest rather than a fallback: an
+        /// untracked vehicle's turret slot has no value to report and the entry masks the field
+        /// out on change detection anyway.
+        /// </para>
+        /// </remarks>
+        public float TurretYaw =>
+            _turrets != null && _turrets.TryGetPrimaryAim(VehicleId, out TurretAimState aim)
+                ? aim.Yaw
+                : 0f;
 
-        public float TurretPitch => Exists ? _source.TurretPitch : 0f;
+        /// <inheritdoc cref="TurretYaw"/>
+        public float TurretPitch =>
+            _turrets != null && _turrets.TryGetPrimaryAim(VehicleId, out TurretAimState aim)
+                ? aim.Pitch
+                : 0f;
 
         public bool IsInWater => Exists && _source.IsInWater;
 

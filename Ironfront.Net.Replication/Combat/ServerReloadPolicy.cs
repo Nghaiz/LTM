@@ -85,13 +85,51 @@ namespace Ironfront.Net.Replication.Combat
         /// <returns>True when this call completed a reload — i.e. the ammo count just changed.</returns>
         public static bool CompleteReloadIfElapsed(
             ref WeaponRuntimeState state, in WeaponConfig config, float nowSeconds)
+            => CompleteReloadIfElapsed(
+                ref state, in config, nowSeconds,
+                UnlimitedSpareAmmoPool.Instance, ownerId: 0, slot: 0);
+
+        /// <summary>
+        /// Fills the clip from <paramref name="pool"/> once <see cref="ReloadSeconds"/> has
+        /// elapsed on the server clock. V6-D6.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The overload above refilled to <see cref="WeaponConfig.ClipSize"/> unconditionally,
+        /// which is correct only for an infinite pool</b> — and until V6 that was every weapon the
+        /// server modelled, so the shortcut was invisible. It is preserved verbatim as
+        /// <see cref="UnlimitedSpareAmmoPool"/> rather than deleted, so no phase-05 behaviour
+        /// moves; the mounted path passes a real pool instead.
+        /// </para>
+        /// <para>
+        /// <b>The arithmetic mirrors <c>Weapon.ReloadDone()</c> exactly</b> — ask for
+        /// <c>ClipSize - AmmoInClip</c>, add back however many the pool actually granted. Rounding
+        /// it any other way is how a partially-supplied reload ends up with a full clip on one
+        /// side and a partial one on the other.
+        /// </para>
+        /// </remarks>
+        /// <param name="pool">Where the rounds come from. Never null.</param>
+        /// <param name="ownerId">Whose pool — an <c>actorId</c> for the infantry pool.</param>
+        /// <param name="slot">The loadout slot, for a pool that keeps more than one.</param>
+        public static bool CompleteReloadIfElapsed(
+            ref WeaponRuntimeState state, in WeaponConfig config, float nowSeconds,
+            ISpareAmmoPool pool, ushort ownerId, byte slot)
         {
+            if (pool == null) throw new System.ArgumentNullException(nameof(pool));
+
             if (!state.Reloading) return false;
             if (nowSeconds - state.ReloadStartedAt < ReloadSeconds) return false;
 
             state.Reloading = false;
             state.ReloadStartedAt = float.NegativeInfinity;
-            state.AmmoInClip = config.ClipSize;
+
+            int wanted = config.ClipSize - state.AmmoInClip;
+            if (wanted <= 0) return false;
+
+            int granted = pool.Take(ownerId, slot, ref state, wanted);
+            if (granted <= 0) return false;
+
+            state.AmmoInClip = (byte)(state.AmmoInClip + granted);
             return true;
         }
 
