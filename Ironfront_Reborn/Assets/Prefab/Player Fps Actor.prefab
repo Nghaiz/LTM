@@ -299,7 +299,7 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   _actorId: 0
   _team: 0
-  _availableForPlayers: 1
+  _availableForPlayers: 0
   _health: 100
   _weaponId: 0
   _ammoInClip: 0

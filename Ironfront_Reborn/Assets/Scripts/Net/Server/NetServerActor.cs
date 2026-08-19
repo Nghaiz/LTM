@@ -263,6 +263,7 @@ namespace Ironfront.Net.Unity.Server
             // One allocation per actor, at Awake, replacing a GetComponent<Actor>() that the
             // adapter now performs on the other side of the seam. Nothing here runs per tick.
             BindGameplaySource(NetServerBindings.ResolveActorSource(gameObject));
+            BindAiDriver(NetServerBindings.ResolveAiDriver(gameObject));
         }
 
         /// <summary>
@@ -277,6 +278,19 @@ namespace Ironfront.Net.Unity.Server
         /// where the weapon-id-always-0 defect lived.
         /// </remarks>
         internal void BindGameplaySource(IGameplayActorSource source) => _actorSource = source;
+
+        /// <summary>
+        /// Attaches the bot brain this body is steered by while nobody has claimed it.
+        /// </summary>
+        /// <remarks>
+        /// Factored out of <c>Awake</c> for the reason <see cref="BindGameplaySource"/> is:
+        /// Unity does not run <c>Awake</c> on <c>AddComponent</c> outside play mode, so an
+        /// EditMode test that only added the component would exercise the no-driver branch and
+        /// pass while asserting nothing.
+        /// </remarks>
+        internal void BindAiDriver(IAiDriver driver) => _aiDriver = driver;
+
+        private IAiDriver _aiDriver;
 
         private void OnEnable() => ServerActorRegistry.Instance.Register(this);
 
@@ -377,8 +391,50 @@ namespace Ironfront.Net.Unity.Server
             return HitboxSet.Humanoid(in feet);
         }
 
-        internal void Claim() => IsClaimed = true;
+        /// <summary>
+        /// Opens this body to joining connections. Phase-3A; used by
+        /// <see cref="ServerPlayerSlotPool"/> on the bodies it creates.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A method rather than a setter on <see cref="AvailableForPlayers"/>, and internal
+        /// rather than public, because there is exactly one legitimate caller. The flag is
+        /// otherwise authored on the prefab, and a public setter is an invitation for gameplay
+        /// code to open a slot mid-match on a body that is already being driven by something
+        /// else — which is the state <c>NetVerificationHarness.OpenSecondSlot</c> produced by
+        /// reflecting the private field, and the reason that method is gone.
+        /// </para>
+        /// <para>
+        /// There is deliberately no matching "close". A body whose claim was released goes back
+        /// to the pool as a claimable slot; a body that should never be claimable says so on its
+        /// prefab.
+        /// </para>
+        /// </remarks>
+        internal void MarkAvailableForPlayers() => _availableForPlayers = true;
 
-        internal void Release() => IsClaimed = false;
+        /// <summary>
+        /// Hands this body to a connection, and stops the bot brain steering it.
+        /// </summary>
+        /// <remarks>
+        /// The suspend is here rather than at the call site because there is more than one call
+        /// site and only one of them is obvious. Server movement for a claimed body runs through
+        /// <c>ServerPlayer</c> and <c>NetMovementAgent</c>; an <c>AiActorController</c> still
+        /// running is a second writer to the same <c>CharacterController</c>, and the client is
+        /// predicting against only one of the two.
+        /// </remarks>
+        internal void Claim()
+        {
+            IsClaimed = true;
+
+            if (_aiDriver != null && _aiDriver.Exists) _aiDriver.Suspend();
+        }
+
+        /// <summary>Takes the body back and returns it to the bot brain.</summary>
+        internal void Release()
+        {
+            IsClaimed = false;
+
+            if (_aiDriver != null && _aiDriver.Exists) _aiDriver.Resume();
+        }
     }
 }

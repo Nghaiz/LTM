@@ -48,6 +48,34 @@ namespace Ironfront.Net.Unity.Server
         /// </remarks>
         public static Func<GameObject, IDriverInputSink> DriverInputSinkResolver { get; set; }
 
+        /// <summary>
+        /// Produces the bot brain steering a replicated body, or <see langword="null"/> when
+        /// that body has none. Called once per actor, from <c>Awake</c>. Phase-3A.
+        /// </summary>
+        public static Func<GameObject, IAiDriver> AiDriverResolver { get; set; }
+
+        /// <summary>
+        /// Builds one player-slot body on the given team, or <see langword="null"/> when this
+        /// process cannot make one. Phase-3A.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A factory rather than a prefab reference on <see cref="NetServerBootstrap"/>. The
+        /// body is one of the game's own AI characters and creating one correctly means calling
+        /// <c>Actor.SetTeam</c> — a type this assembly cannot name, and a step that colours the
+        /// renderer and is what every other spawn path in the game does. Handing over a prefab
+        /// and instantiating it here would produce a body on team 0 with the wrong material,
+        /// which is a difference nothing would report.
+        /// </para>
+        /// <para>
+        /// It also keeps the slot count out of the scene asset. A serialized prefab field is one
+        /// more thing that can be left unwired in a scene that still starts cleanly and then
+        /// admits nobody — the exact shape of failure the fail-closed remark on
+        /// <c>NetServerBootstrap.RegisterTicketValidator</c> exists to prevent.
+        /// </para>
+        /// </remarks>
+        public static Func<byte, GameObject> PlayerBodyFactory { get; set; }
+
         /// <summary>The scene's spawn points, or <see langword="null"/> when unavailable.</summary>
         public static ISpawnPointDirectory SpawnPoints { get; set; }
 
@@ -79,12 +107,27 @@ namespace Ironfront.Net.Unity.Server
         public static IDriverInputSink AttachDriverInput(GameObject gameObject)
             => DriverInputSinkResolver?.Invoke(gameObject);
 
+        /// <summary>
+        /// Resolves the bot brain for <paramref name="gameObject"/>, or <see langword="null"/>
+        /// when nothing is registered or the body drives itself no other way.
+        /// </summary>
+        public static IAiDriver ResolveAiDriver(GameObject gameObject)
+            => AiDriverResolver?.Invoke(gameObject);
+
+        /// <summary>
+        /// Builds one player-slot body, or <see langword="null"/> when nothing is registered.
+        /// </summary>
+        public static GameObject CreatePlayerBody(byte team)
+            => PlayerBodyFactory?.Invoke(team);
+
         /// <summary>Clears every seam. For tests, and for a clean re-install.</summary>
         public static void Clear()
         {
             ActorSourceResolver = null;
             VehicleSourceResolver = null;
             DriverInputSinkResolver = null;
+            AiDriverResolver = null;
+            PlayerBodyFactory = null;
             SpawnPoints = null;
             CapturePoints = null;
         }
