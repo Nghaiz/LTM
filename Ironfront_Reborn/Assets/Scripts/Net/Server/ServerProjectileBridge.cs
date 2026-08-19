@@ -113,7 +113,25 @@ namespace Ironfront.Net.Unity.Server
         /// projectile flight while the engine quietly still did would be the harder bug to find.
         /// </para>
         /// </remarks>
-        public bool AuthoritativeFlight { get; set; }
+        /// <remarks>
+        /// <b>debt-closure phase 2 task 2e: assignment now pushes to
+        /// <see cref="NetProjectileAuthority"/>.</b> The engine-side damage call sites cannot
+        /// reach this instance — a projectile prefab has no route to the bridge — so the flag is
+        /// mirrored onto a static the moment it is set. Before this it was a bare auto-property
+        /// with zero assignments anywhere, and the only thing standing between it and double
+        /// damage was the paragraph above.
+        /// </remarks>
+        public bool AuthoritativeFlight
+        {
+            get => _authoritativeFlight;
+            set
+            {
+                _authoritativeFlight = value;
+                NetProjectileAuthority.AuthoritativeFlight = value;
+            }
+        }
+
+        private bool _authoritativeFlight;
 
         /// <summary>
         /// Registers a kind's authored configuration if it has not been seen yet, and reports

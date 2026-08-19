@@ -41,6 +41,23 @@ namespace Ironfront.Tools.ClientWiringGate
         /// </summary>
         private static readonly string AssetsRoot = Path.Combine("Ironfront_Reborn", "Assets");
 
+        /// <summary>
+        /// Where a <c>ServerEventWriter.Write*</c> call may legitimately live, for G6.
+        /// </summary>
+        /// <remarks>
+        /// Wider than <see cref="DefaultRoots"/> on purpose: two writers are called from the
+        /// library rather than from Unity (<c>ServerVehicleLifecycleSink</c> sends
+        /// S_VEHICLE_SPAWN and S_VEHICLE_DESPAWN), so a scan limited to the Unity tree would
+        /// report both as dead. It is NOT merged into <see cref="DefaultRoots"/> because that
+        /// would run every per-file client rule over the library, which is not what those rules
+        /// mean.
+        /// </remarks>
+        private static readonly string[] WriterCallerRoots =
+        {
+            Path.Combine("Ironfront_Reborn", "Assets", "Scripts"),
+            Path.Combine("Ironfront.Net.Replication", "Server"),
+        };
+
         public static int Main(string[] args)
         {
             // Explicit paths mean "grade these source files" — the caller is a test or a
@@ -61,12 +78,7 @@ namespace Ironfront.Tools.ClientWiringGate
                 return 2;
             }
 
-            List<string> files = DefaultRoots
-                .Select(root => Path.Combine(repoRoot, root))
-                .Where(Directory.Exists)
-                .SelectMany(root => Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
-                .OrderBy(p => p, StringComparer.Ordinal)
-                .ToList();
+            List<string> files = CSharpFilesUnder(repoRoot, DefaultRoots);
 
             int source = GateRunner.Run(
                 GateRunner.RouterEventNames(), files, Console.Out, Console.Error);
@@ -74,10 +86,40 @@ namespace Ironfront.Tools.ClientWiringGate
             int assets = AssetGateRunner.Run(
                 Path.Combine(repoRoot, AssetsRoot), Console.Out, Console.Error);
 
-            // Both halves always run, and the worse code wins. Short-circuiting on the source
+            int writers = WriterCoverageRunner.Run(
+                WriterCoverageRunner.WriterMethodNames(),
+                CSharpFilesUnder(repoRoot, WriterCallerRoots),
+                Console.Out,
+                Console.Error);
+
+            // Every half always runs, and the worst code wins. Short-circuiting on the source
             // half would hide every authoring gap behind one dead event, and 2 outranks 1
             // because "could not tell" must never be reported as "found nothing".
-            return Math.Max(source, assets);
+            return Math.Max(source, Math.Max(assets, writers));
+        }
+
+        /// <summary>
+        /// Every <c>.cs</c> file under these repo-relative roots, in a stable order.
+        /// </summary>
+        /// <remarks>
+        /// <c>obj/</c> and <c>bin/</c> are excluded: a generated
+        /// <c>.AssemblyAttributes.cs</c> is not production code, and on a machine that has built
+        /// the solution they would otherwise be scanned on every run.
+        /// </remarks>
+        private static List<string> CSharpFilesUnder(string repoRoot, string[] roots) =>
+            roots
+                .Select(root => Path.Combine(repoRoot, root))
+                .Where(Directory.Exists)
+                .SelectMany(root => Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+                .Where(p => !IsBuildOutput(p))
+                .OrderBy(p => p, StringComparer.Ordinal)
+                .ToList();
+
+        private static bool IsBuildOutput(string path)
+        {
+            string normalized = path.Replace('\\', '/');
+            return normalized.Contains("/obj/", StringComparison.Ordinal)
+                   || normalized.Contains("/bin/", StringComparison.Ordinal);
         }
 
         private static string? FindRepoRoot(string start)

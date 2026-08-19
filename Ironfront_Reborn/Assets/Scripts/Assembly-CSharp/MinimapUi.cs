@@ -27,11 +27,26 @@ public class MinimapUi : MonoBehaviour
 
 	public GameObject actorBlipPrefab;
 
+	/// <summary>
+	/// Drawn for a capture point. Falls back to <see cref="minimapSpawnPointPrefab"/> when
+	/// unassigned. debt-closure phase 2 task 2d, ledger C-6.
+	/// </summary>
+	/// <remarks>
+	/// Optional because phase 2 writes no prefabs or scenes — those are Phase 1's — so the
+	/// marker has to work on a <c>MinimapUi</c> that predates its authoring. The fallback is a
+	/// spawn-point icon, which is at least the right size and in the right place.
+	/// </remarks>
+	public GameObject capturePointMarkerPrefab;
+
 	public Sprite spawnPointSprite;
 
 	public Sprite spawnPointSelectedSprite;
 
 	private Dictionary<SpawnPoint, Button> minimapSpawnPointButton;
+
+	/// <summary>Live markers, keyed by the transform they follow, so one subject has one icon.</summary>
+	private readonly Dictionary<Transform, MinimapMarker> markers =
+		new Dictionary<Transform, MinimapMarker>();
 
 	private SpawnPoint selectedSpawnPoint;
 
@@ -206,6 +221,79 @@ public class MinimapUi : MonoBehaviour
 			return;
 		}
 		instance.minimap.rectTransform.SetParent(instance.ingameParent, false);
+	}
+
+	/// <summary>
+	/// Places or recolours a marker that follows a transform. debt-closure phase 2 task 2d,
+	/// ledger C-6.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Transform-based, and that is the whole gap this closes.</b> Before this the minimap
+	/// had exactly two ways to draw anything: the <see cref="SpawnPoint"/> buttons
+	/// <c>SetupMinimap</c> builds once at <c>Start</c>, and <see cref="AddActorBlip"/>, which is
+	/// add-only and takes an <see cref="Actor"/>. A capture point is neither — it is a
+	/// <c>Transform</c> whose colour changes when it flips hands — so there was no API it could
+	/// use and it drew nothing.
+	/// </para>
+	/// <para>
+	/// <b>Idempotent by subject.</b> Called again for a transform that already has a marker, it
+	/// recolours rather than stacking a second icon: a capture point calls this on every flip,
+	/// and an add-only API would leave one icon per capture by the end of a round.
+	/// </para>
+	/// </remarks>
+	public static void SetMarker(Transform subject, Color color)
+	{
+		if (instance == null || subject == null)
+		{
+			return;
+		}
+
+		MinimapMarker existing;
+		if (instance.markers.TryGetValue(subject, out existing) && existing != null)
+		{
+			existing.SetColor(color);
+			return;
+		}
+
+		GameObject prefab = instance.capturePointMarkerPrefab != null
+			? instance.capturePointMarkerPrefab
+			: instance.minimapSpawnPointPrefab;
+
+		if (prefab == null)
+		{
+			NetClientPresenterGuard.WarnOnce(
+				"minimap-no-marker-prefab",
+				"[minimap] MinimapUi has neither capturePointMarkerPrefab nor "
+				+ "minimapSpawnPointPrefab assigned, so capture points draw no marker.");
+			return;
+		}
+
+		var marker = ((GameObject)Object.Instantiate(prefab, instance.minimap.rectTransform))
+			.AddComponent<MinimapMarker>();
+		marker.Bind(subject, color);
+		instance.markers[subject] = marker;
+	}
+
+	/// <summary>Drops a marker. Safe for a subject that never had one.</summary>
+	public static void RemoveMarker(Transform subject)
+	{
+		if (instance == null || subject == null)
+		{
+			return;
+		}
+
+		MinimapMarker marker;
+		if (!instance.markers.TryGetValue(subject, out marker))
+		{
+			return;
+		}
+
+		instance.markers.Remove(subject);
+		if (marker != null)
+		{
+			Object.Destroy(marker.gameObject);
+		}
 	}
 
 	public static void AddActorBlip(Actor actor)

@@ -307,6 +307,44 @@ public class ActiveRaggy : MonoBehaviour
 		return rigidbodies[0];
 	}
 
+	/// <summary>
+	/// The rigidbody driving one bone, or null when this rig does not simulate it.
+	/// debt-closure phase 2 task 2d, ledger C-8.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Null is a normal answer, not a failure.</b> A humanoid ragdoll simulates roughly a
+	/// dozen bodies out of the skeleton's fifty-odd bones — fingers, toes and most of the spine
+	/// share a parent — so asking for a bone the rig does not break out returns null and the
+	/// caller falls back to <see cref="MainRigidbody"/>. Throwing, or silently returning the
+	/// pelvis, would both be worse: the first breaks a cosmetic path, the second makes a
+	/// mis-targeted impulse indistinguishable from a correct one.
+	/// </para>
+	/// <para>
+	/// Resolved through the animated-to-ragdoll map rather than from a bone-indexed array,
+	/// because the mapping is authored on the prefab and the array order is not: a rig with a
+	/// different bone breakdown would silently return somebody else's limb from an index.
+	/// </para>
+	/// </remarks>
+	public Rigidbody RigidbodyForBone(HumanBodyBones bone)
+	{
+		if (animator == null)
+		{
+			return null;
+		}
+		Transform animated = HumanBoneTransformAnimated(bone);
+		if (animated == null)
+		{
+			return null;
+		}
+		Transform ragdollBone;
+		if (!a2rTransforms.TryGetValue(animated, out ragdollBone) || ragdollBone == null)
+		{
+			return null;
+		}
+		return ragdollBone.GetComponent<Rigidbody>();
+	}
+
 	public Vector3 Position()
 	{
 		if (state == State.Ragdoll || state == State.PreInterpolate)

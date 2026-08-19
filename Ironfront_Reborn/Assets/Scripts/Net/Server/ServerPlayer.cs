@@ -29,13 +29,47 @@ namespace Ironfront.Net.Unity.Server
         /// Where accepted frames go for their combat half. Null leaves this player moving but
         /// unarmed, which is what a loop that was never bound to a match looks like.
         /// </param>
-        public ServerPlayer(ushort connectionId, ushort actorId, ServerCombatBridge combat = null)
+        /// <param name="displayName">
+        /// What S_PLAYER_LIST calls this player. See <see cref="DisplayName"/> for where it comes
+        /// from and what it is not.
+        /// </param>
+        public ServerPlayer(
+            ushort connectionId, ushort actorId, ServerCombatBridge combat = null,
+            string displayName = null)
         {
             Session = new ClientSession(connectionId, actorId);
             _combat = combat;
             _moveThroughCollision = MoveThroughCollision;
             _moveDetached = MoveDetached;
+            DisplayName = string.IsNullOrEmpty(displayName)
+                ? "Player " + actorId
+                : displayName;
         }
+
+        /// <summary>
+        /// What <c>S_PLAYER_LIST</c> calls this player. debt-closure phase 2 task 2a.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This is not the player's master-server username, and the difference is worth
+        /// stating rather than hiding.</b> The game server never parses a
+        /// <c>JoinTicket</c> — <c>OnClientConnected</c> receives a <c>ConnectionInfo</c> and
+        /// nothing else, and the ticket's <c>displayName</c> field is written by the master and
+        /// read by nobody on this side. So the only identity the server actually holds is the
+        /// transport's <c>PlayerId</c>, and that is what this is built from.
+        /// </para>
+        /// <para>
+        /// <b>Why phase 2 did not plumb the real name through.</b> Doing so needs a new
+        /// client-to-server message carrying the ticket, and acceptance criterion 2 forbids
+        /// moving <c>PROTOCOL_VERSION</c> — a new opcode is exactly that. Verifying the ticket
+        /// here would also need the master's shared secret on every game server, which is a
+        /// deployment decision and not a debt repayment. A killfeed that reads "#1042 killed
+        /// Player 3" is a worse name than the username and a strictly better one than a bare
+        /// actor id, which is what it rendered before; the wire, the writer, the router and the
+        /// table are all in place for the real name the moment a join handshake carries it.
+        /// </para>
+        /// </remarks>
+        public string DisplayName { get; }
 
         /// <summary>The authoritative state. This, not the transform, is the truth.</summary>
         public ClientSession Session { get; }

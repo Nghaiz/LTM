@@ -9,7 +9,19 @@ public class DecalManager : MonoBehaviour
 	{
 		Impact = 0,
 		BloodBlue = 1,
-		BloodRed = 2
+		BloodRed = 2,
+		/// <summary>
+		/// An explosion's burn mark. debt-closure phase 2 task 2d, ledger C-7.
+		/// </summary>
+		/// <remarks>
+		/// Explosions drew <see cref="Impact"/> before this — a bullet chip where a blast had
+		/// been — because the enum had no scorch member, which
+		/// <c>NetClientExplosionPresenter</c> recorded in a comment rather than as a gap.
+		/// <b>Appended, never inserted:</b> the value is the index into
+		/// <see cref="decalDrawers"/> and into the two mesh dictionaries, so renumbering the
+		/// existing three would silently repaint every blood decal in the game as an impact.
+		/// </remarks>
+		Scorch = 3
 	}
 
 	private class MeshData
@@ -128,6 +140,20 @@ public class DecalManager : MonoBehaviour
 			mesh.triangles = array4;
 			mesh.bounds = new Bounds(Vector3.zero, Vector3.one * 9999f);
 			mesh.MarkDynamic();
+			// Bounds-checked rather than indexed blind. decalDrawers is an authored array and
+			// phase 2 writes no prefabs or scenes (they are Phase 1's), so a build that predates
+			// the authoring of Scorch's drawer has three entries for four enum members. Indexing
+			// it would throw IndexOutOfRange out of StartGame and take the whole decal system
+			// down; announcing the gap once and drawing that type through its fallback does not.
+			if (decalDrawers == null || value >= decalDrawers.Length || decalDrawers[value] == null)
+			{
+				NetClientPresenterGuard.WarnOnce(
+					"decal-drawer-missing:" + value,
+					"[decals] DecalType." + (DecalType)value + " has no drawer in "
+					+ "DecalManager.decalDrawers. Decals of that type fall back to Impact. "
+					+ "Assign one on the DecalManager object.");
+				continue;
+			}
 			GameObject gameObject = decalDrawers[value];
 			MeshFilter component = gameObject.GetComponent<MeshFilter>();
 			component.mesh = mesh;
@@ -155,6 +181,13 @@ public class DecalManager : MonoBehaviour
 				"[net] DecalManager.AddDecal ran before StartGame() built the decal mesh data. "
 				+ "Skipping this decal.");
 			return;
+		}
+		// A type with no authored drawer draws as Impact rather than not at all: a blast that
+		// leaves no mark reads as the decal system being broken, where a bullet-chip-shaped one
+		// reads as the cosmetic gap it is. Impact itself is index 0 and has always been authored.
+		if (!instance.decalMeshData.ContainsKey(type))
+		{
+			type = DecalType.Impact;
 		}
 		Vector3 vector = Vector3.Cross(normal, UnityEngine.Random.insideUnitSphere).normalized * (size / 2f);
 		Vector3 vector2 = Vector3.Cross(normal, vector);
@@ -184,7 +217,12 @@ public class DecalManager : MonoBehaviour
 		}
 		foreach (int value in Enum.GetValues(typeof(DecalType)))
 		{
-			decalMeshData[(DecalType)value].UpdateMesh();
+			// A type whose drawer was never authored has no mesh data. See InitMeshes.
+			MeshData pending;
+			if (decalMeshData.TryGetValue((DecalType)value, out pending))
+			{
+				pending.UpdateMesh();
+			}
 		}
 	}
 

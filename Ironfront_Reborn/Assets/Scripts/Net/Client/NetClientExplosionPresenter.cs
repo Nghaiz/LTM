@@ -180,13 +180,14 @@ namespace Ironfront.Net.Unity.Client
             PlayEffect(position, radiusMetres, kind);
             ApplyScreenshake(position, radiusMetres);
 
-            // No scorch DecalType exists (the enum is Impact / BloodBlue / BloodRed), so this
-            // reuses Impact -- the same choice GrenadeProjectile's own direct-hit decal already
-            // makes. There is no surface normal to read off the wire, so this projects straight
-            // up rather than raycasting for one; a slightly wrong decal orientation is a cosmetic
-            // detail, not a correctness one.
+            // debt-closure phase 2 task 2d (ledger C-7): a blast now draws a scorch mark rather
+            // than the bullet chip it reused for want of an enum member. DecalManager falls back
+            // to Impact when Scorch has no authored drawer, so this is safe on a build that
+            // predates that authoring. There is still no surface normal on the wire, so this
+            // projects straight up rather than raycasting for one; a slightly wrong decal
+            // orientation is a cosmetic detail, not a correctness one.
             DecalManager.AddDecal(
-                position, Vector3.up, radiusMetres * _decalSizePerMetre, DecalManager.DecalType.Impact);
+                position, Vector3.up, radiusMetres * _decalSizePerMetre, DecalManager.DecalType.Scorch);
         }
 
         private void PlayEffect(Vector3 position, float radiusMetres, ExplosionKind kind)

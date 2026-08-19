@@ -376,13 +376,31 @@ public class ActorManager : MonoBehaviour
 	// V1 task 3. Reused across blasts so ActorsInRange stops allocating a List per explosion.
 	// Static because Explode is; single-threaded, like everything else on the Unity main loop.
 	//
-	// Load-bearing precondition: Explode is NOT re-entrant. Nothing it calls explodes again
-	// synchronously -- Actor.Damage ends in Die() and a ragdoll, and Vehicle.Damage ends in
-	// Vehicle.Explode(), which is an impulse plus particles and does not route back here (D5).
-	// If a future chain-detonation does call Explode from inside Explode, this buffer is the
+	// Load-bearing precondition: Explode is NOT re-entrant, and it is still not after
+	// debt-closure phase 2 gave Vehicle.Explode a blast of its own (ledger C-10). Vehicle.Damage
+	// ends in Die(), which reaches Explode through Invoke("Explode", 0.3f) -- a later frame and a
+	// fresh stack -- so the chain detonation this comment warned about is sequential rather than
+	// nested and this buffer is never re-entered. Actor.Damage still ends in a ragdoll.
+	// If a future caller DOES call Explode from inside Explode synchronously, this buffer is the
 	// thing that breaks, silently, by having its contents replaced mid-loop -- give that caller
 	// its own list rather than making this one deeper.
 	private static readonly List<Actor> _explosionVictims = new List<Actor>();
+
+	// debt-closure phase 2 task 2f (ledger C-10). A SNAPSHOT of instance.vehicles, because the
+	// loop below now damages vehicles that can die inside it: Vehicle.Damage -> Die() ->
+	// ActorManager.DropVehicle removes the entry mid-iteration, and an index-walked List that
+	// shrinks under you skips the next element. Before a wreck could blast, one vehicle dying to
+	// a blast was already enough to trigger this -- the claim in the comment above the loop that
+	// nothing removes from the list during it was already false -- but a wreck detonating inside
+	// a cluster of vehicles is what makes it routine.
+	//
+	// Vehicle.Explode itself is NOT re-entrant into this method: Die() reaches it through
+	// Invoke("Explode", 0.3f), so the wreck's own blast is a fresh top-level call on a later
+	// frame and _explosionVictims above is never nested.
+	private static readonly List<Vehicle> _explosionVehicles = new List<Vehicle>();
+
+	// Same snapshot discipline, for ExplosiveProp.Live (ledger C-11).
+	private static readonly List<ExplosiveProp> _explosionProps = new List<ExplosiveProp>();
 
 	// V1 task 3. The three-way role split, on the ONE choke point rather than on each of the
 	// callers that funnel into it -- the identical argument that put phase-05's guard on
@@ -457,12 +475,20 @@ public class ActorManager : MonoBehaviour
 				item.ApplyRigidbodyForce(vector.normalized * configuration.force * num2);
 			}
 		}
-		// Indexed rather than instance.vehicles.ToArray(), which allocated a second array per
-		// blast. Safe because neither branch below adds to or removes from the list -- only
-		// Vehicle.Explode does that, and it does not call this method (D5).
-		for (int i = 0; i < instance.vehicles.Count; i++)
+		// Copied into a reused buffer rather than instance.vehicles.ToArray(), which allocated a
+		// second array per blast -- and rather than indexing the live list, which this loop can
+		// now shorten under itself (see _explosionVehicles).
+		_explosionVehicles.Clear();
+		_explosionVehicles.AddRange(instance.vehicles);
+		for (int i = 0; i < _explosionVehicles.Count; i++)
 		{
-			Vehicle vehicle = instance.vehicles[i];
+			Vehicle vehicle = _explosionVehicles[i];
+			// A vehicle killed earlier in this same blast is already gone. Destroyed Unity
+			// objects compare equal to null, which is exactly what the snapshot cannot know.
+			if (vehicle == null)
+			{
+				continue;
+			}
 			float num3 = Vector3.Distance(vehicle.transform.position, point);
 			float vehicleDamageT;
 			if (ranges.TryGetDamageT(num3, out vehicleDamageT))
@@ -478,6 +504,32 @@ public class ActorManager : MonoBehaviour
 				}
 			}
 		}
+		// debt-closure phase 2 task 2f (ledger C-11): props in range take the blast too, which is
+		// what makes a row of fuel drums chain. Snapshotted for the vehicle loop's reason --
+		// ExplosiveProp.Damage lights a fuse and a detonation deregisters -- and skipped on a
+		// client, where a prop's destruction is the server's to decide and arrives as
+		// S_EXPLOSION. The detonation itself is deferred by the prop's fuse, so this never
+		// re-enters Explode.
+		if (!isClient)
+		{
+			_explosionProps.Clear();
+			_explosionProps.AddRange(ExplosiveProp.Live);
+			for (int i = 0; i < _explosionProps.Count; i++)
+			{
+				ExplosiveProp prop = _explosionProps[i];
+				if (prop == null)
+				{
+					continue;
+				}
+				float propDamageT;
+				if (ranges.TryGetDamageT(
+						Vector3.Distance(prop.transform.position, point), out propDamageT))
+				{
+					prop.Damage(configuration.damage * configuration.damageFalloff.Evaluate(propDamageT));
+				}
+			}
+		}
+
 		// Once per blast, after both loops -- never once per victim. One grenade among four
 		// people is one explosion and four deaths, and the deaths travel separately through
 		// Actor.Damage and phase-05's existing path.

@@ -672,9 +672,54 @@ public class Actor : Hurtable
 		}
 	}
 
+	/// <summary>
+	/// Fells the body and throws it from one bone. debt-closure phase 2 task 2d, ledger C-8.
+	/// </summary>
+	/// <remarks>
+	/// The same re-entrancy guard as <see cref="KnockOver(Vector3)"/>: a snapshot confirming a
+	/// death that S_DEATH already delivered must not throw the corpse a second time.
+	/// </remarks>
+	public void KnockOver(Vector3 force, HumanBodyBones bone)
+	{
+		if (!ragdoll.IsRagdoll())
+		{
+			FallOver();
+			ApplyRigidbodyForce(force, bone);
+		}
+	}
+
 	public void ApplyRigidbodyForce(Vector3 force)
 	{
 		ragdoll.MainRigidbody().AddForce(force, ForceMode.Impulse);
+	}
+
+	/// <summary>
+	/// Applies an impulse at one bone, falling back to the main body when the rig does not
+	/// simulate it. debt-closure phase 2 task 2d, ledger C-8.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Every corpse impulse in the game went to <c>MainRigidbody()</c> — the pelvis — whatever
+	/// was actually hit, so a headshot and a leg shot threw the body identically.
+	/// <c>S_DEATH</c> has been carrying the hitbox byte since phase-02 and
+	/// <c>KillfeedEntry.From</c> reads it for the headshot icon, so the information was on the
+	/// wire and only the force application ignored it.
+	/// </para>
+	/// <para>
+	/// <b>The fallback is deliberate and silent.</b> A bone this rig does not break out is the
+	/// common case, not an error (see <c>ActiveRaggy.RigidbodyForBone</c>), and warning once per
+	/// corpse would be noise on a purely cosmetic path.
+	/// </para>
+	/// </remarks>
+	public void ApplyRigidbodyForce(Vector3 force, HumanBodyBones bone)
+	{
+		Rigidbody target = ragdoll.RigidbodyForBone(bone);
+		if (target == null)
+		{
+			ApplyRigidbodyForce(force);
+			return;
+		}
+		target.AddForce(force, ForceMode.Impulse);
 	}
 
 	public void FallOver()
@@ -754,7 +799,10 @@ public class Actor : Hurtable
 		}
 		ActorManager.SetDead(this);
 		PathfindingManager.RegisterDeath(point);
-		ScoreUi.AddScore((team == 1) ? 1 : 0, (team == 0) ? 1 : 0);
+		// debt-closure phase 2 task 2c: the scoreboard, not the HUD. ScoreUi.AddScore opened
+		// with "if (instance == null) return;", so on a headless server this kill scored nothing
+		// at all -- V8 D9's recorded divergence, and the reason it was invisible.
+		MatchScoreboard.Current.AddScore((team == 1) ? 1 : 0, (team == 0) ? 1 : 0);
 	}
 
 	public virtual Vector3 Position()

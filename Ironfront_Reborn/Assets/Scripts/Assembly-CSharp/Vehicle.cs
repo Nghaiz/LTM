@@ -793,6 +793,38 @@ public class Vehicle : MonoBehaviour
 		}
 	}
 
+	/// <summary>
+	/// The wreck goes off: an impulse that throws it, and a blast that hurts what is near it.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>debt-closure phase 2 task 2f closes ledger C-10.</b> V1-D5 handed "should a wreck do
+	/// blast damage" to V4 as a gameplay decision and V4 did not take it, so
+	/// <c>ExplosionKind.Vehicle</c> shipped with zero producers — declared on the wire, mapped by
+	/// the client's effect table, and emitted by nothing. The decision is taken here: <b>a wreck
+	/// damages.</b> Taking cover behind a burning vehicle is now dangerous, which is the intended
+	/// consequence and the balance note this change owes.
+	/// </para>
+	/// <para>
+	/// <b>Unguarded, exactly like <c>ExplodingProjectile.Explode</c>.</b>
+	/// <c>ActorManager.Explode</c> owns the three-way role split at its own choke point: offline
+	/// unchanged, the server deciding and announcing <c>S_EXPLOSION</c>, and a client applying no
+	/// health damage while keeping the corpse ragdoll impulse (AD-4). A second role guard here
+	/// would be a second copy of that rule.
+	/// </para>
+	/// <para>
+	/// <b>Not a chain-detonation hazard.</b> This runs from <c>Invoke("Explode", 0.3f)</c> in
+	/// <see cref="Die"/> — a later frame on a fresh stack — so it never re-enters an
+	/// <c>ActorManager.Explode</c> that is still running. A wreck that kills a neighbour makes
+	/// that neighbour explode 0.3 s later, which is a sequence rather than a recursion.
+	/// </para>
+	/// </remarks>
+	/// <summary>
+	/// This wreck's blast. Optional: unassigned falls back to the kind's defaults.
+	/// </summary>
+	/// <remarks>debt-closure phase 2 task 2f, ledger C-10. See <c>WreckExplosion</c>.</remarks>
+	public ExplodingProjectile.ExplosionConfiguration wreckExplosion;
+
 	protected virtual void Explode()
 	{
 		// The impulse is gameplay -- it is what throws the wreck -- so it runs unguarded. Only
@@ -814,6 +846,40 @@ public class Vehicle : MonoBehaviour
 		{
 			explosionSound.Play();
 		}
+		// Last, after the impulse and the cosmetics: ActorManager.Explode can kill actors and
+		// other vehicles, and running it first would mean a wreck whose own throw and particles
+		// depended on what its blast happened to reach.
+		ActorManager.Explode(
+			base.transform.position, WreckExplosion(), null,
+			Ironfront.Net.Protocol.ExplosionKind.Vehicle);
+	}
+
+	/// <summary>
+	/// The wreck's blast, from <see cref="wreckExplosion"/> or from this kind's defaults.
+	/// </summary>
+	/// <remarks>
+	/// <b>Defaults are built in code, and that is deliberate rather than lazy.</b> Every vehicle
+	/// prefab in the game predates this field, phase 2 authors no prefabs (they are Phase 1's),
+	/// and an unauthored <c>ExplosionConfiguration</c> has null <c>AnimationCurve</c>s — so
+	/// reading it straight would throw a NullReferenceException inside every wreck. The curves
+	/// run 1 at the centre to 0 at the edge, because <c>ExplosionRanges</c> hands out
+	/// <c>t = distance / range</c>. Author <see cref="wreckExplosion"/> per prefab to tune it.
+	/// </remarks>
+	private ExplodingProjectile.ExplosionConfiguration WreckExplosion()
+	{
+		if (wreckExplosion == null)
+		{
+			wreckExplosion = new ExplodingProjectile.ExplosionConfiguration();
+		}
+		if (wreckExplosion.damageFalloff == null || wreckExplosion.damageFalloff.length == 0)
+		{
+			wreckExplosion.damageFalloff = AnimationCurve.Linear(0f, 1f, 1f, 0f);
+		}
+		if (wreckExplosion.balanceFalloff == null || wreckExplosion.balanceFalloff.length == 0)
+		{
+			wreckExplosion.balanceFalloff = AnimationCurve.Linear(0f, 1f, 1f, 0f);
+		}
+		return wreckExplosion;
 	}
 
 	private void Cleanup()

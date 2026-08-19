@@ -247,15 +247,35 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(0, router.MalformedMessages);
         }
 
+        /// <summary>
+        /// Both kinds round-trip, and both now have a producer. Ledger C-10 and C-11.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This test was inverted rather than re-pinned.</b> It shipped as
+        /// <c>VehicleAndEnvironmentKindsAreDeclaredButUncalledInV1</c>, pinning the gap: V1
+        /// declared both members with no producer and named V4 and V7 as the phases that owed
+        /// one. Neither took it — ledger X-4 recorded the two <c>// V4 owns the caller</c> /
+        /// <c>// V7 owns the caller</c> markers still standing after both phases had closed.
+        /// debt-closure phase 2 task 2f took the decisions instead: <c>Vehicle.Explode</c> emits
+        /// <c>Vehicle</c>, and the new <c>ExplosiveProp</c> emits <c>Environment</c>.
+        /// </para>
+        /// <para>
+        /// <b>What this test can and cannot see.</b> Both producers live in
+        /// <c>Assembly-CSharp</c>, which no netstandard assembly references, so the assertions
+        /// below are the round-trip only — they would have passed just as well while the gap was
+        /// open, which is precisely why the old name was doing the work and the assertions were
+        /// not. The producers are graded where they can be seen: by the phase-2 report, and by
+        /// the fact that removing them leaves <c>ExplosionKind.Vehicle</c> and
+        /// <c>Environment</c> with no writer at all.
+        /// </para>
+        /// </remarks>
         [Fact]
-        public void VehicleAndEnvironmentKindsAreDeclaredButUncalledInV1()
+        public void VehicleAndEnvironmentKindsRoundTrip()
         {
-            // Criterion 9, as an assertion rather than only as prose. Both members exist and
-            // round-trip; neither has a producer in V1, and the phases that own them are named
-            // here as well as in the report. An uncalled enum member that nobody writes down is
-            // exactly how section 2.2 came to exist.
-            Assert.Equal(2, (byte)ExplosionKind.Vehicle);       // V4 owns the caller
-            Assert.Equal(3, (byte)ExplosionKind.Environment);   // V7 owns the caller
+            // Values pinned because they are on the wire, not because the gap is still open.
+            Assert.Equal(2, (byte)ExplosionKind.Vehicle);       // Vehicle.Explode emits it
+            Assert.Equal(3, (byte)ExplosionKind.Environment);   // ExplosiveProp.Detonate emits it
 
             var router = new ClientMessageRouter();
             ExplosionMessage? received = null;

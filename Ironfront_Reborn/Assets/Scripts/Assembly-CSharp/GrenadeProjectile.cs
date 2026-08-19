@@ -124,7 +124,12 @@ public class GrenadeProjectile : Projectile
 			// V1 task 3. See ExplodingProjectile.Explode for why the two extra arguments exist.
 			// ActorManager.Explode applies no damage on a client -- that guard is V1's, and it
 			// is what makes this call safe to reach from the local prediction path.
-			if (ActorManager.Explode(
+			// debt-closure phase 2 task 2e. See ExplodingProjectile.Explode for why this asks
+			// LibraryOwnsProjectileDamage rather than !EngineAppliesProjectileDamage -- the same
+			// call carries the corpse impulse and the local player's predicted blast (V10 D13),
+			// neither of which the cutover removes (ledger C-1).
+			if (!Ironfront.Net.Unity.Server.NetProjectileAuthority.LibraryOwnsProjectileDamage
+				&& ActorManager.Explode(
 					base.transform.position, explosionConfiguration, source,
 					Ironfront.Net.Protocol.ExplosionKind.Grenade)
 				&& !source.aiControlled && NetContext.IsOffline)
