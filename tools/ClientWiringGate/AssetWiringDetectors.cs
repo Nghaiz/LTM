@@ -541,6 +541,21 @@ namespace Ironfront.Tools.ClientWiringGate
         /// (<c>ScoreUi.cs</c>, <c>SetAuthoritativeState</c>).
         /// </para>
         /// <para>
+        /// <b>What this deliberately does not check: where the label sits.</b> A ref pointing at
+        /// a genuine, unclaimed <c>Text</c> that lives somewhere else entirely — the
+        /// <c>&lt; DEPLOY &gt;</c> menu caption, say — passes every clause here and still renders
+        /// the phase nowhere near the HUD. Of the mis-authorings found against this detector it
+        /// is the only one drag-and-drop can produce, so it is not the least likely; it is
+        /// declined anyway, for two reasons. Descendant-of-the-canvas is a LAYOUT invariant, and
+        /// layout is what E5's remaining clause hands to Phase 3's observational checks (ledger
+        /// A-6) — YAML can say a reference resolves, never that a player sees it. And encoding
+        /// "must be under the ScoreUi's transform" would fail a legitimate HUD reorganisation,
+        /// which trades a check that cannot see a real fault for one that fires on correct work.
+        /// The clauses above all answer "would Unity load null here", which is a question YAML
+        /// can actually answer. If a future reviewer reaches for a fifth mutation, this is the
+        /// one, and this paragraph is the answer.
+        /// </para>
+        /// <para>
         /// <b>Zero instances is a finding, not exit 2</b> — the same call
         /// <see cref="PrefabsByKindIsComplete"/> makes, and for its reason: an absent component
         /// and an unassigned field render the same nothing, so a check satisfiable by deleting

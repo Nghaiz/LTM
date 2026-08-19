@@ -409,6 +409,21 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void AssigningTheFlagLabelsDoesNotSatisfyTheCheck()
+        {
+            // The plain case, and the one every other artefact describes: each field assigned to
+            // ITS OWN fallback. Deleted by accident during a fixture restructure and restored --
+            // the broader cross-swap and reuse tests happen to subsume it today, which is not a
+            // reason to stop pinning the original failure (pinned-baseline-test-companion.md).
+            UnityAssetIndex index = ScoreUiFixture("{fileID: 901}", "{fileID: 902}");
+
+            Assert.Equal(
+                2,
+                AssetWiringDetectors.ScoreUiTextRefsAreAssigned(index)
+                    .Count(f => f.Message.Contains("points at the same object as")));
+        }
+
+        [Fact]
         public void CrossSwappedFlagLabelsAreReported()
         {
             // Mutation A. Neither field equals ITS OWN fallback, so a pairwise check reads clean
