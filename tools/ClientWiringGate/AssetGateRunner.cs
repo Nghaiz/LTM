@@ -51,6 +51,8 @@ namespace Ironfront.Tools.ClientWiringGate
                  AssetWiringDetectors.TracerPrefabIsCosmeticOnly),
                 (nameof(AssetWiringDetectors.LobbyShellOverlayIsInAScene),
                  AssetWiringDetectors.LobbyShellOverlayIsInAScene),
+                (nameof(AssetWiringDetectors.ScoreUiTextRefsAreAssigned),
+                 AssetWiringDetectors.ScoreUiTextRefsAreAssigned),
             };
 
         /// <summary>

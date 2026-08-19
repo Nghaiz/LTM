@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using Ironfront.Net.Protocol;
 using Ironfront.Tools.ClientWiringGate;
 using Xunit;
@@ -37,10 +38,12 @@ namespace Ironfront.Net.Replication.Tests
         private const string RemoteActorView      = "076337bd4a5a4397a34c31257050ba36";
         private const string LobbyShellOverlay    = "3a9b866060cb47f1af22ca5125dd4d71";
         private const string ProjectileComponent  = "75280d5bb60068b2fabefd8e2004397e";
+        private const string ScoreUi              = "47bac8ff82521e88b577c05861af19e4";
 
         private const string ScenePath  = "fixtures/Client.unity";
         private const string PrefabPath = "fixtures/Proxy.prefab";
         private const string TracerPath = "fixtures/Tracer.prefab";
+        private const string HudPath    = "fixtures/Hud.prefab";
 
         // ---------------------------------------------------------------- the YAML reader
 
@@ -383,6 +386,143 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Empty(AssetWiringDetectors.ProjectileCatalogInstallerIsWired(index));
         }
 
+        // ----------------------------------------------------------------- A-9, the phase HUD
+
+        [Fact]
+        public void AnUnassignedPhaseTextIsReported()
+        {
+            UnityAssetIndex index = ScoreUiFixture(
+                "  blueFlagsText: {fileID: 901}\n  redFlagsText: {fileID: 902}\n"
+                + "  phaseTimerText: {fileID: 904}\n");
+
+            Assert.Contains(
+                AssetWiringDetectors.ScoreUiTextRefsAreAssigned(index),
+                f => f.Message.Contains("ScoreUi.phaseText is unassigned"));
+        }
+
+        [Fact]
+        public void AZeroFileIdTimerRefIsReported()
+        {
+            UnityAssetIndex index = ScoreUiFixture(
+                "  blueFlagsText: {fileID: 901}\n  redFlagsText: {fileID: 902}\n"
+                + "  phaseText: {fileID: 903}\n  phaseTimerText: {fileID: 0}\n");
+
+            Assert.Contains(
+                AssetWiringDetectors.ScoreUiTextRefsAreAssigned(index),
+                f => f.Message.Contains("ScoreUi.phaseTimerText is unassigned"));
+        }
+
+        [Fact]
+        public void AssigningTheFlagLabelsDoesNotSatisfyTheCheck()
+        {
+            // The direction that actually rots. Both refs are non-null, so a null-check-only
+            // gate reads clean — while the HUD renders precisely what the fallback already
+            // rendered, which is the whole reason E5 asked for dedicated elements.
+            UnityAssetIndex index = ScoreUiFixture(
+                "  blueFlagsText: {fileID: 901}\n  redFlagsText: {fileID: 902}\n"
+                + "  phaseText: {fileID: 901}\n  phaseTimerText: {fileID: 902}\n");
+
+            Assert.Equal(
+                2,
+                AssetWiringDetectors.ScoreUiTextRefsAreAssigned(index)
+                    .Count(f => f.Message.Contains("points at the same object as")));
+        }
+
+        [Fact]
+        public void DedicatedPhaseAndTimerLabelsAreClean()
+        {
+            UnityAssetIndex index = ScoreUiFixture(
+                "  blueFlagsText: {fileID: 901}\n  redFlagsText: {fileID: 902}\n"
+                + "  phaseText: {fileID: 903}\n  phaseTimerText: {fileID: 904}\n");
+
+            Assert.Empty(AssetWiringDetectors.ScoreUiTextRefsAreAssigned(index));
+        }
+
+        [Fact]
+        public void ATreeWithNoScoreUiIsReportedRatherThanVacuouslyClean()
+        {
+            // A finding, not exit 2: an absent ScoreUi and an unassigned field render the same
+            // nothing, so a check satisfiable by deleting the component is satisfiable by
+            // deleting the HUD.
+            Assert.Contains(
+                AssetWiringDetectors.ScoreUiTextRefsAreAssigned(Fixture(Scene(withPresenters: true))),
+                f => f.Message.Contains("ScoreUi is on no GameObject anywhere"));
+        }
+
+        [Fact]
+        public void CrossSwappedFlagLabelsAreReported()
+        {
+            // Mutation A. Neither field equals ITS OWN fallback, so a pairwise check reads clean
+            // while the HUD renders precisely what the null path rendered.
+            UnityAssetIndex index = ScoreUiFixture(
+                "  blueFlagsText: {fileID: 901}\n  redFlagsText: {fileID: 902}\n"
+                + "  phaseText: {fileID: 902}\n  phaseTimerText: {fileID: 901}\n");
+
+            Assert.Equal(
+                2,
+                AssetWiringDetectors.ScoreUiTextRefsAreAssigned(index)
+                    .Count(f => f.Message.Contains("points at the same object as")));
+        }
+
+        [Fact]
+        public void AFileIdNamingNoObjectIsReported()
+        {
+            // Mutation B. Non-zero, so IsNull is false; Unity still loads it as null.
+            UnityAssetIndex index = ScoreUiFixture(
+                "  blueFlagsText: {fileID: 901}\n  redFlagsText: {fileID: 902}\n"
+                + "  phaseText: {fileID: 999999999999999}\n"
+                + "  phaseTimerText: {fileID: 904}\n");
+
+            Assert.Contains(
+                AssetWiringDetectors.ScoreUiTextRefsAreAssigned(index),
+                f => f.Message.Contains("names fileID 999999999999999, which no object in"));
+        }
+
+        [Fact]
+        public void OneObjectAssignedToBothOwedFieldsIsReported()
+        {
+            // The timer would overwrite the phase every tick.
+            UnityAssetIndex index = ScoreUiFixture(
+                "  blueFlagsText: {fileID: 901}\n  redFlagsText: {fileID: 902}\n"
+                + "  phaseText: {fileID: 903}\n  phaseTimerText: {fileID: 903}\n");
+
+            Assert.Equal(
+                2,
+                AssetWiringDetectors.ScoreUiTextRefsAreAssigned(index)
+                    .Count(f => f.Message.Contains("points at the same object as")));
+        }
+
+        [Fact]
+        public void ATicketLabelReusedAsThePhaseElementIsReported()
+        {
+            // Not a fallback label, and still already spoken for.
+            UnityAssetIndex index = ScoreUiFixture(
+                "  blueScoreText: {fileID: 905}\n  blueFlagsText: {fileID: 901}\n  redFlagsText: {fileID: 902}\n"
+                + "  phaseText: {fileID: 905}\n  phaseTimerText: {fileID: 904}\n");
+
+            Assert.Contains(
+                AssetWiringDetectors.ScoreUiTextRefsAreAssigned(index),
+                f => f.Message.Contains("points at the same object as blueScoreText"));
+        }
+
+        [Fact]
+        public void EveryDetectorIsRegisteredWithTheRunner()
+        {
+            // AssetGateRunner's own remark claims this guard exists; until now it did not. A
+            // check that is a method and not a list entry is a file that runs on nobody's
+            // machine.
+            var registered = AssetGateRunner.Checks.Select(c => c.Name).ToHashSet();
+
+            var declared = typeof(AssetWiringDetectors)
+                .GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .Where(m => typeof(IEnumerable<GateFinding>).IsAssignableFrom(m.ReturnType))
+                .Select(m => m.Name)
+                .ToList();
+
+            Assert.NotEmpty(declared);
+            Assert.All(declared, name => Assert.Contains(name, registered));
+        }
+
         // --------------------------------------------------------------------------- helpers
 
         private static int ProjectileKindCount => Enum.GetValues(typeof(ProjectileKind)).Length;
@@ -442,6 +582,32 @@ namespace Ironfront.Net.Replication.Tests
             if (extraGuid != null) guids[extraGuid.Value.Guid] = extraGuid.Value.Path;
 
             return UnityAssetIndex.ForFixtures(assets, guids);
+        }
+
+        /// <summary>
+        /// A HUD prefab carrying one <c>ScoreUi</c> with the given serialized body, plus real
+        /// objects at anchors 901-905 for its refs to resolve to.
+        /// </summary>
+        /// <remarks>
+        /// The label objects have to exist, because the check grades whether a fileID names
+        /// anything — a fixture of dangling refs would report every test for the same reason and
+        /// prove nothing about the clause under test. 999999999999999 is deliberately absent.
+        /// </remarks>
+        private static UnityAssetIndex ScoreUiFixture(string body)
+        {
+            string prefab = "--- !u!1 &900\nGameObject:\n  m_Name: Score UI Canvas\n"
+                + Component(910, 900, ScoreUi, body.TrimEnd('\n'));
+
+            for (long anchor = 901; anchor <= 905; anchor++)
+                prefab += $"--- !u!114 &{anchor}\nMonoBehaviour:\n  m_GameObject: {{fileID: 900}}\n  m_Text: label\n";
+
+            return UnityAssetIndex.ForFixtures(
+                new Dictionary<string, string>
+                {
+                    [ScenePath] = Scene(withPresenters: true),
+                    [HudPath] = prefab,
+                },
+                new Dictionary<string, string>());
         }
 
         private static UnityAssetIndex RemoteActorFixture(string? viewBody)

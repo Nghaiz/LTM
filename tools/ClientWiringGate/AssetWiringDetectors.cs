@@ -53,6 +53,7 @@ namespace Ironfront.Tools.ClientWiringGate
         private const string RemoteActorRegistryGuid     = "634c065cc04a4199fe8636d1062a58c8";
         private const string RemoteActorViewGuid         = "076337bd4a5a4397a34c31257050ba36";
         private const string LobbyShellOverlayGuid       = "3a9b866060cb47f1af22ca5125dd4d71";
+        private const string ScoreUiGuid                 = "47bac8ff82521e88b577c05861af19e4";
         private const string CatalogInstallerGuid        = "1e1d8de547d73f847a33a9a802368cbe";
         /// <summary>
         /// <c>Projectile</c> and everything deriving from it. All of them, because the clause
@@ -134,6 +135,29 @@ namespace Ironfront.Tools.ClientWiringGate
              "needs an Actor component on a server-owned proxy, which registers with "
              + "ActorManager — a Phase 2 decision, not authoring. Blocks the ragdoll rig (E1) "
              + "and remote weapon models. Ledger A-2, partially open."),
+        };
+
+        /// <summary>
+        /// Every <c>Text</c> <c>ScoreUi</c> already drives, and the two E5 still owes.
+        /// </summary>
+        /// <remarks>
+        /// The distinctness set for <see cref="ScoreUiTextRefsAreAssigned"/>. It lists all seven
+        /// rather than just the two fallbacks because the failure is "this element is already
+        /// spoken for", and that is true of the ticket and victory labels exactly as much as of
+        /// the flag labels the null path happens to borrow. The two owed fields are in the same
+        /// set so they are checked against each other.
+        /// </remarks>
+        private static readonly string[] RenderedLabels =
+        {
+            "blueScoreText", "redScoreText", "blueFlagsText", "redFlagsText", "victoryText",
+            "phaseText", "phaseTimerText",
+        };
+
+        /// <summary>The two fields E5 owes, with what the fallback renders in their place.</summary>
+        private static readonly (string Field, string Consequence)[] OwedPhaseLabels =
+        {
+            ("phaseText",      "the phase label borrows the blue flag count"),
+            ("phaseTimerText", "the round clock borrows the red flag count"),
         };
 
         /// <summary>
@@ -492,6 +516,110 @@ namespace Ironfront.Tools.ClientWiringGate
                     "LobbyShellOverlay is in no scene, so the lobby shell never runs and the "
                     + "master link it drives is never opened from the UI (ledger X-5)."),
             };
+        }
+
+        /// <summary>
+        /// <b>A-9</b> — <c>ScoreUi</c>'s phase and timer labels are assigned, resolve to a real
+        /// object, and are not a label the HUD already renders somewhere else.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Non-null is not the check.</b> A first draft of this compared each field against
+        /// its own fallback by name and was proved green, by mutation, on two authorings it
+        /// exists to forbid: the two assignments <i>cross-swapped</i> onto the flag labels, and
+        /// both fields pointed at a fileID no object in the asset carries — which Unity
+        /// deserializes to null, so the fallback runs and the <c>WarnOnce</c> naming E5 fires
+        /// every match, with the gate reporting clean. So the check is distinctness against
+        /// <see cref="RenderedLabels"/> plus anchor resolution, not a pairwise comparison.
+        /// </para>
+        /// <para>
+        /// Why every rendered label and not just the two fallbacks: <c>SetAuthoritativeState</c>
+        /// writes the phase and the clock unconditionally, so aiming either at a label some
+        /// other field already drives does not add an element — it silently takes one over. The
+        /// two owed fields are also checked against each other, because one object assigned to
+        /// both means the timer overwrites the phase every tick
+        /// (<c>ScoreUi.cs</c>, <c>SetAuthoritativeState</c>).
+        /// </para>
+        /// <para>
+        /// <b>Zero instances is a finding, not exit 2</b> — the same call
+        /// <see cref="PrefabsByKindIsComplete"/> makes, and for its reason: an absent component
+        /// and an unassigned field render the same nothing, so a check satisfiable by deleting
+        /// <c>ScoreUi</c> would be satisfiable by deleting the HUD. The throw belongs to
+        /// <see cref="RemoteActorPrefabIsAuthored"/> because a missing registry is that check's
+        /// navigation ANCHOR; <c>ScoreUi</c> is this check's SUBJECT.
+        /// </para>
+        /// </remarks>
+        public static IEnumerable<GateFinding> ScoreUiTextRefsAreAssigned(UnityAssetIndex index)
+        {
+            var findings = new List<GateFinding>();
+            int seen = 0;
+
+            foreach ((UnityAssetDocument scoreUi, string path) in Instances(index, ScoreUiGuid))
+            {
+                seen++;
+
+                foreach ((string field, string what) in OwedPhaseLabels)
+                {
+                    UnityObjectRef? maybe = scoreUi.Reference(field);
+
+                    if (maybe == null || maybe.Value.IsNull)
+                    {
+                        findings.Add(new GateFinding(
+                            "A8", Rel(index, path), 0,
+                            $"ScoreUi.{field} is unassigned, so SetAuthoritativeState falls back "
+                            + $"to a flag label — {what}, and the WarnOnce naming E5 fires on "
+                            + "every networked match (ledger A-9, A-6)."));
+                        continue;
+                    }
+
+                    UnityObjectRef assigned = maybe.Value;
+
+                    // A fileID naming no object deserializes to null, which is the unassigned
+                    // case wearing a number. Nothing downstream can tell the two apart.
+                    string? target = assigned.Guid == null ? path : index.PathOf(assigned.Guid);
+
+                    if (target == null)
+                        throw new AssetGateUnknownException(
+                            $"{path}: ScoreUi.{field} names guid {assigned.Guid}, which no asset "
+                            + "in the tree carries. The reference is dangling; this check cannot "
+                            + "grade it.");
+
+                    if (!index.Documents(target).Any(d => d.AnchorId == assigned.FileId))
+                        findings.Add(new GateFinding(
+                            "A8", Rel(index, path), 0,
+                            $"ScoreUi.{field} names fileID {assigned.FileId}, which no object in "
+                            + $"{Rel(index, target)} carries. Unity loads that as null, so this "
+                            + "reads exactly like the unassigned case at runtime (ledger A-9)."));
+
+                    foreach (string other in RenderedLabels)
+                    {
+                        if (other == field) continue;
+
+                        UnityObjectRef? held = scoreUi.Reference(other);
+                        if (held == null || held.Value.IsNull) continue;
+                        if (held.Value.FileId != assigned.FileId) continue;
+                        if (!string.Equals(held.Value.Guid, assigned.Guid,
+                                           StringComparison.OrdinalIgnoreCase)) continue;
+
+                        findings.Add(new GateFinding(
+                            "A8", Rel(index, path), 0,
+                            $"ScoreUi.{field} points at the same object as {other}. E5 asks for a "
+                            + "dedicated element, and SetAuthoritativeState writes this one "
+                            + "unconditionally — so this does not add a label, it takes one over, "
+                            + "and it still collides when capture points write there (ledger "
+                            + "A-9, E5)."));
+                    }
+                }
+            }
+
+            if (seen == 0)
+                findings.Add(new GateFinding(
+                    "A8", "(nothing)", 0,
+                    "ScoreUi is on no GameObject anywhere, so phaseText and phaseTimerText are "
+                    + "unassignable by construction and the networked HUD renders no phase at "
+                    + "all (ledger A-9, X-1)."));
+
+            return findings;
         }
 
         /// <summary>
