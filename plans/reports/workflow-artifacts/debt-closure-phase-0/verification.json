@@ -1,0 +1,11 @@
+{
+  "commands": [
+    {"command": "dotnet run --project tools/SpecChecker", "status": "pass", "exitCode": 0, "timestamp": "2026-08-19T15:14:31+07:00", "summary": "OK - 90 constant(s) match protocol-spec.md. Not exit 2, so no row inherits a gate-could-not-tell verdict. Its weapon-registry half settles ledger row A-14."},
+    {"command": "dotnet run --project tools/ClientWiringGate", "status": "pass", "exitCode": 0, "timestamp": "2026-08-19T15:14:31+07:00", "summary": "14 of 15 ClientMessageRouter events have a production subscriber; OnPlayerList is the one named gap; G2-G5 clean across 406 files. Corroborates ledger row C-2."},
+    {"command": "dotnet test --nologo -v q", "status": "pass", "exitCode": 0, "timestamp": "2026-08-19T15:14:31+07:00", "summary": "1450 passed, 0 failed, 0 skipped across 5 assemblies: Protocol 250, Client.Flow 79, Transport 85, MasterServer 81, Replication 955."},
+    {"command": "git status --short", "status": "pass", "exitCode": 0, "timestamp": "2026-08-19T15:14:31+07:00", "summary": "Only the two files the phase permits, plus the workflow-artifact dir. No stray writes into source, prefabs or scenes."},
+    {"command": "per-row status tally over plans/debt-closure/debt-ledger.md", "status": "pass", "exitCode": 0, "timestamp": "2026-08-19T15:14:31+07:00", "summary": "46 VERIFIED-OPEN + 14 ALREADY-CLOSED + 7 VOID + 3 DECIDED = 70 rows, matching the roll-up table exactly. Zero rows carry unverified as a status."},
+    {"command": "relative-link existence check over the ledger and checklist header", "status": "pass", "exitCode": 0, "timestamp": "2026-08-19T15:14:31+07:00", "summary": "All six cross-referenced paths resolve on disk."}
+  ],
+  "beforeAfter": "BEFORE: five sources of truth - integration-checklist.md round 8 (2026-08-16, predating four merges), nine closure-report STILL-OPEN tables, thirteen phase docs, three adversarial reviews, and the brainstorm; roughly forty items open, ownerless, an unknown number already closed silently. AFTER: one ledger of 70 rows, each with a status and file:line or commit evidence; 14 already closed, 7 void, 3 decided, 46 open and handed to named phases."
+}

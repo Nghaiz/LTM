@@ -1,0 +1,236 @@
+# Debt ledger — every V0–V10 open item, re-verified against `develop`
+
+- **Created:** 2026-08-19 · **Verified at:** `38ac29a`, working tree clean · **Phase:** [`phase-0-ledger.md`](phases/phase-0-ledger.md)
+- **Track:** [`plans/debt-closure/plan.md`](plan.md) · **Design of record:** [`2026-08-19-v0-v10-debt-closure-brainstorm.md`](../reports/2026-08-19-v0-v10-debt-closure-brainstorm.md)
+- **Supersedes:** [`plans/replication/integration-checklist.md`](../replication/integration-checklist.md) round 8 (2026-08-16), and the STILL-OPEN tables of the nine closure reports under `plans/replication/reports/`.
+
+This file replaces five sources of truth. Every row was re-checked against today's tree; no row
+carries a status inherited from a document. **Every later phase updates the row it closes, in the
+same commit as the closing work** — that is the only thing keeping this from becoming the sixth
+stale document.
+
+## How to read a row
+
+| Status | Meaning |
+|---|---|
+| `VERIFIED-OPEN` | Still open today, confirmed by reading the tree. Ambiguity grades here, never to closed. |
+| `ALREADY-CLOSED` | Closed, with a **positive citation** — a `file:line` showing the fix, or a commit whose diff shows it. The absence of a grep match was never accepted as evidence of closure. |
+| `VOID` | The item no longer describes the world: a decision superseded it, or the thing it names does not exist. |
+| `DECIDED` | A decision, not work. The decision and its citation are recorded; nothing is owed. |
+
+Every negative claim states the paths searched. Where prefab YAML could not settle a question
+without the Editor, the row stays `VERIFIED-OPEN` and says so.
+
+---
+
+## 1. Gate runs (Task 0.1)
+
+| Gate | Command | Exit | Output |
+|---|---|---|---|
+| SpecChecker | `dotnet run --project tools/SpecChecker` | **0** | `[SpecChecker] OK — 90 constant(s) match plans/00-shared/protocol-spec.md.` |
+| ClientWiringGate | `dotnet run --project tools/ClientWiringGate` | **0** | `KNOWN GAP - ClientMessageRouter.OnPlayerList has no production subscriber…` · `14 of 15 ClientMessageRouter events have a production subscriber and the rest are named gaps above; G2-G5 clean across 406 file(s).` |
+
+Neither returned **exit 2**, so no row inherits a "the gate could not tell" verdict. The one named
+gap corroborates row **C-2**; the weapon-registry half of `SpecChecker` settles **A-14**.
+
+---
+
+## 2. Group A — Editor/authoring
+
+| id | item (source) | status | evidence | closes in |
+|---|---|---|---|---|
+| **A-1** | `NetClientProjectilePresenter._prefabsByKind` (V7) | VERIFIED-OPEN | `ProjectileKind` has **7** members (`Ironfront.Net.Protocol/Enums/VehicleEnums.cs:208-232`, Shell 0 … Bullet 6). Script guid `feedb881d60a4284c8e4425b7f3c2c46` (`NetClientProjectilePresenter.cs.meta:2`) has **zero** references outside its own `.meta`, so the component sits on no GameObject and 0 of 7 entries are authored. Not added at runtime either — the only `AddComponent<>` calls under `Assets/Scripts/Net/` are `RemoteVehicleRegistry` and `ClientVehicleStage` (`NetClientBootstrap.cs:270,273`). **Wider than the design states:** the task is *place the component, then fill the array*. Scope: zero guid refs across `Ironfront_Reborn/Assets/**` (61 prefabs, 4 scenes, all `.asset`), `ProjectSettings/**`, `Packages/**`. | 1 (see **X-1**) |
+| **A-2** | E1 — remote-actor rig: animator, ragdoll, muzzle anchor, weapon mount (V10) | VERIFIED-OPEN | `_remoteActorPrefab` → guid `6837a81a009b4af47bcb7863b2b20e21` = `Assets/Prefab/Remote Actor Proxy.prefab`, assigned at `Assets/Scenes/Dustbowl.unity:185866-185867`. That prefab holds four component classes across 941 lines: 26×GameObject, 26×Transform, 1×Animator, 1×SkinnedMeshRenderer. **Animator IS authored** (`Remote Actor Proxy.prefab:78-79`) — the only part of E1 done. **Zero MonoBehaviour blocks**, so `RemoteActorView` (guid `076337bd…`, zero refs) is absent and `_animator`/`_actor`/`_muzzleAnchor`/`_upperBody` (`RemoteActorView.cs:43,46,49,58`) are unassignable. **Zero Rigidbody/collider blocks** → no ragdoll rig. No muzzle or mount child among the 26 names. Corroborated at `plans/unity-client/reports/2026-08-18-round9.md:126`. | 1 |
+| **A-3** | E2 — `.meta` files for the new `Net/Client/` scripts and phase-05's three (V10) | ALREADY-CLOSED | Exhaustive sweep: every `.cs` under `Ironfront_Reborn/Assets/**` has a sibling `.meta`, and every directory under `Assets/Scripts/**` has a directory `.meta`; both loops printed no misses. Phase-05's three each have theirs: `Assets/Scripts/Net/Server/{ServerActorDamageSink,ServerCombatBridge,ServerCombatEvents}.cs.meta`. `Ironfront.Net.Replication/Client/` and `tools/ClientWiringGate/` live outside `Assets/`, so Unity never asks them for `.meta` — E2 named them but they were never an import concern. | — |
+| **A-4** | E3 — per-weapon muzzle-flash and report refs (V10) | ALREADY-CLOSED | **Flash:** eight firearm prefabs carry a non-zero `configuration.muzzleFlash` — `ak.prefab:77`, `mk25.prefab:77`, `mk25 suppressed.prefab:75`, `shotgun.prefab:78`, `sniper.prefab:95`, `DMR.prefab:97`, `RFB.prefab:98`, `smaw.prefab:76`. **Report:** `audio` is not an authored field — `Weapon.cs:144` declares it and `Weapon.cs:177` resolves it via `GetComponent<AudioSource>()`; every weapon prefab checked carries ≥1 AudioSource. The 14 `muzzleFlash: {fileID: 0}` entries are the deliberately-silent set E3 permits, and `Weapon.cs:461` null-guards before `.Play(true)`. **Named residue:** YAML cannot resolve the `WeaponIds` member → prefab mapping, so "every weapon in `WeaponIds`" is confirmable only in the Editor. Confirm opportunistically in Phase 1; do not re-author the eight. | 1 (confirm only) |
+| **A-5** | E4 — `CosmeticTracerPool` tracer visual (V10) | VERIFIED-OPEN | Two independent gaps. (a) Component on nothing: guid `188a29154b294b60bc5577fb9b082e01` has zero refs across `Assets/**`, so `_tracerPrefab` (`CosmeticTracerPool.cs:32`) is unassigned by construction. (b) **The asset E4 asks for does not exist.** E4 requires a streak with no collider, no `Projectile` component, no `source`; all six existing tracer prefabs are live projectiles, each carrying an authored `Projectile.Configuration` (e.g. `Assets/Prefab/AK Tracer.prefab:105-119`). Their collider count is 0, so only the `Projectile`-component clause is violated — and that is the clause that matters, since reusing them would spawn damage-dealing rounds on the client. | 1 |
+| **A-6** | E5 — HUD wiring for `ScoreUi.SetAuthoritativeState` (V10) | VERIFIED-OPEN | Partially authored, and the unauthored half is the new half. `ScoreUi` guid `47bac8ff82521e88b577c05861af19e4` appears in one asset, `Assets/Prefab/Ingame UI Container.prefab:7226`; its serialized block (`:7229-7237`) assigns nine fields, so the **ticket labels are wired**. It omits `phaseText` and `phaseTimerText` (row **A-9**). E5's second clause — the timer is hidden during `Playing` — is runtime behaviour no YAML read can grade, so it stays open on that basis too. | 1 (after **C-4**) |
+| **A-7** | E6 — `NetClientExplosionPresenter._effectsByKind` `ParticleSystem[]` (V10) | VERIFIED-OPEN | Component on no GameObject: guid `db9e52959104431aaaadf330b21686f8` has zero refs across `Assets/**`, so `_effectsByKind` (`NetClientExplosionPresenter.cs:61`) has zero authored entries where E6 requires indices 0 (`Grenade`) and 1 (`Rocket`). This is a blanket failure — see **X-1**. | 1 (see **X-1**) |
+| **A-8** | `NetTurret` + `TurretAimLimits` on every turret prefab (V6) | **VOID** | The `NetTurret` MonoBehaviour was never built and was deliberately superseded during V6. `Assets/Scripts/Net/Shared/NetTurretAim.cs:70-79`: "**A static resolver, not a component on every turret prefab.** … it would ship a seam that stays inert until fourteen prefabs are re-saved, with nothing anywhere reporting the gap. … Every id this needs is reachable at runtime from `MountedWeapon.user.seat`, so no authoring is required." `TurretAimLimits` is a plain struct (`Ironfront.Net.Replication/Vehicles/TurretAimLimits.cs:27`), not a component, so it cannot be attached at all. Scope: `class NetTurret` → zero across `Ironfront_Reborn/Assets/**` and every `Ironfront.Net.*` project. | — |
+| **A-9** | `ScoreUi.phaseText` / `phaseTimerText` (`ScoreUi.cs:23,25`) (V10 E5) | VERIFIED-OPEN | The serialized `ScoreUi` block at `Assets/Prefab/Ingame UI Container.prefab:7226-7237` enumerates nine assigned fields and **omits both keys**. An absent key leaves the field `null`, so `SetAuthoritativeState` still takes the flag-text fallback and its `WarnOnce` naming E5 still fires. `ScoreUi` exists in no other asset. Scope: all `.prefab`/`.unity`/`.asset` under `Assets/**`. | 1 (after **C-4**) |
+| **A-10** | authored `damageDropOff` curves sampled into `ProjectileConfig` (V7) | ALREADY-CLOSED | **Sampling step:** `Assets/Scripts/Assembly-CSharp/ProjectileCatalogBuilder.cs:84` passes `Sample(source.damageDropOff)` into `FromConfiguration`; `Sample` (`:95-107`) evaluates at `ProjectileConfig.DropoffSamples` points and returns an empty table for a keyless curve rather than 32 zeroes. **Source curves:** 16 projectile prefabs carry authored keyframes (e.g. `Tank Projectile.prefab:106-120` flat 1.0; `AK Tracer.prefab:105-119` 1.0 → 0.75 across range). No curve authoring is owed. **Dependency, not residual work:** the sampled table reaches a live `ProjectileConfig` only once **A-1** (client) and **X-2** (server) are wired. Do not schedule separate curve work. | — |
+| **A-11** | `aimLimits` on turret prefabs (V0 § 7) | **VOID** | V0 closure § 3.4 still holds verbatim: `aimLimits` returns nothing across `Assets/**` `.prefab`+`.unity`, the same result recorded at `plans/replication/reports/2026-08-17-phase-v0-closure.md:116-133`. With the key absent Unity leaves the C# initializers standing, and both are already the intended values — `MountedTurret.cs:24-30` (600 °/s, pitch stops −40/+15), `TankTurret.cs:35-41` (300 °/s, `PitchMin`/`PitchMax` overwritten in `Awake` from the cannon joint per `:31-33`). Optional tuning, not work; it never gated anything. | — |
+| **A-12** | `LobbyShellOverlay`'s three serialized fields (E9) | **VOID** | E9 is a scene-hygiene note, not an assignment (`integration-checklist.md:128-137`: any prefab or scene referencing the component will be marked dirty on next save). **No prefab or scene references it** — guid `3a9b866060cb47f1af22ca5125dd4d71` has zero refs across `Assets/**` — so no asset can be dirtied and there is nothing to re-save. All three fields carry the intended LAN/plaintext defaults as C# initializers (`LobbyShellOverlay.cs:62,66,70`). See **X-5** for the wiring gap this exposes. | — |
+| **A-13** | A4 — `NetMovementAgent` + `NetPredictionClock` on the player prefab | ALREADY-CLOSED | Both on `Assets/Prefab/Player Fps Actor.prefab` in exactly the state A4 specifies. `NetMovementAgent` (guid `bb446c36efee1994485a87e8b7f17466`) at `:341`, `m_Enabled: 1` (`:340`); `NetPredictionClock` (guid `5d38a7c4162b48f09e73c0aa4b16de52`) at `:352`, **`m_Enabled: 0`** (`:351`), `MaxTicksPerFrame: 5` (`:355`). A4's pass condition — both components, clock **disabled** (`integration-checklist.md:156-162`) — met on both clauses. Landed in `e7f61e3` (PR #117). Confirmed at `plans/unity-client/reports/2026-08-17-round8.md:575`. | — |
+| **A-14** | the `CAR HORN` row in `_Managers.prefab` so `SpecChecker` passes (V6) | **VOID — and inverted** | `WeaponIds.cs:96` declares `CAR_HORN = 18`; `WeaponIds.cs:144-145` `IsLoadoutRegistered => IsKnown(weaponId) && weaponId != CAR_HORN` **exempts** it. `SpecChecker` checks that exemption in both directions — the reverse sweep skips exempt ids (`Program.cs:321-333`) and the forward sweep **fails outright if one appears** (`Program.cs:291-301`). `_Managers.prefab` holds 17 `NetworkId:` rows and zero `car horn` matches, which is why the gate exits 0. Pinned by `MountedWeaponAndTurretTests.cs:694-721` (`AnExemptIdNeedsNoPrefabRow`, `TheExemptionHasNoStaleEntries`). **Authoring this row would turn `SpecChecker` RED.** Do not do it. | — |
+
+**Group A: 6 open · 4 closed · 4 void.**
+
+---
+
+## 3. Group B — verification needing two real clients
+
+Every row here shares one blocker, so the evidence is stated once. **No two-process game-server
+harness exists.** Scope searched: `tools/` (only `ClientWiringGate`, `SpecChecker`,
+`UnitySyntaxCheck` plus shell/ps1 scripts), `Ironfront.Tools.*/`, `Assets/Scripts/Net/`.
+`Ironfront.Tools.LoadTest` targets the **master** server over MSP (`LoadTestOptions.cs:144`
+`--master`), and `tools/run-integration.ps1:1-16` is a two-process integration script for the
+**master**, not the game server — prior art of the right shape, wrong target. Reusable pieces:
+`Assets/Scripts/Net/Headless/LocalClient.cs`,
+`Assets/Scripts/Net/Diagnostics/{MovementShadowCompare,TransportDebugOverlay,VehicleReplicationOverlay}.cs`.
+
+Round 9's two-client observations were produced through **one Editor** over the MCP `script-execute`
+bridge (`plans/unity-client/reports/2026-08-18-round9.md:17-18`), driving the server directly. They
+do not discharge any row below. See **X-3** for why an honest second client cannot be scripted yet.
+
+| id | item (source) | status | evidence | closes in |
+|---|---|---|---|---|
+| **B-1** | E7 — two-client combat check (V10) | VERIFIED-OPEN | No harness (above); no recorded run for any of E7–E12 (`2026-08-18-phase-v10-closure.md:53`). | 3 |
+| **B-2** | E8 — two-client HUD check (V10) | VERIFIED-OPEN | As B-1. | 3 |
+| **B-3** | E9 — two-client capture-point check (V10) | VERIFIED-OPEN | As B-1. | 3 |
+| **B-4** | E10 — two-client grenade check (V10) | VERIFIED-OPEN | As B-1. | 3 |
+| **B-5** | E11 — A16 camera-hijack check (V10) | VERIFIED-OPEN | As B-1. | 3 |
+| **B-6** | E12 — scene-ordering check (V10) | VERIFIED-OPEN | As B-1. Additionally unmet at source: `phase-v10-client-event-consumption.md:805-811` numbers E12 as the presenters being on the client bootstrap object, and none of the nine presenter scripts is referenced anywhere (**X-1**). | 3 (after **X-1**) |
+| **B-7** | V5 — two clients see the same vehicle in the same place while a third drives it, 100 ms RTT / 5 % loss | VERIFIED-OPEN | `2026-08-19-phase-v5-closure.md:136` — "**Not run.** Three real clients, real transport, real rendering." | 3 |
+| **B-8** | V5 — no perceptible input lag; convergence without visible snapping | VERIFIED-OPEN | `2026-08-19-phase-v5-closure.md:137` — "**Not run.** CI grades the numeric half." | 3 |
+| **B-9** | V5 — the kinematic remote path does not break an unlisted cosmetic | VERIFIED-OPEN | `2026-08-19-phase-v5-closure.md:138` — "**Not run.**" | 3 |
+| **B-10** | V5 — Profiler: the client vehicle stage adds no per-frame allocation | VERIFIED-OPEN | `2026-08-19-phase-v5-closure.md:139` — "**Not run.** … that is an argument, not a measurement." | 4 |
+| **B-11** | V5 — a headless server survives drive → damage → burn → death with a networked driver | VERIFIED-OPEN | `2026-08-19-phase-v5-closure.md:140` — "**Not run**." | 3 |
+| **B-12** | V5 — prefab authoring | **VOID** | `2026-08-19-phase-v5-closure.md:141` — "**Not needed.** … the phase ships with no authored-asset change." | — |
+| **B-13** | V6 — two-client turret parity | VERIFIED-OPEN | Named as the phase's last open item at `plans/replication/phases/phase-v6-mounted-weapons.md:374`; no harness. | 3 |
+| **B-14** | V7 — two-client grenade parity | VERIFIED-OPEN | `plans/replication/phases/phase-v7-projectiles.md:555`; no harness. | 3 |
+| **B-15** | V7 — Profiler run behind criteria 8 and 9 | VERIFIED-OPEN | `plans/replication/phases/phase-v7-projectiles.md:555`; no harness. | 4 |
+| **B-16** | bandwidth per client (V7 criterion 8) | VERIFIED-OPEN | **The design's "never measured at all" is refuted.** A first measurement is on record: `plans/replication/reports/2026-08-12-phase-01-snapshot.md:52-64` — 10.94 KB/s down and 0.85 KB/s up per client at 48 actors / 20 Hz / 30 s, reproducible via `MeasurementReportTests.PrintTheSnapshotAndBandwidthTable`; interest management cut 80.9 % on Dustbowl / 72.4 % on Island (`2026-08-13-phase-02-lag-comp.md:38`). It predates events, vehicles and projectiles, and `2026-08-18-phase-v3-closure.md:277` records that the pinned table does not cover projectiles — so criterion 8's own number is still owed. | 4 |
+| **B-17** | server tick p99 (V7 criterion 9) | VERIFIED-OPEN | **The design's "never measured at all" is refuted.** `plans/unity-client/reports/2026-08-18-round9.md:249-252` — 4.830 / 4.694 / 4.602 ms across `Scheduler` / `AlwaysOn` / `AlwaysOff` at 32–40 bots, in the Editor. Not taken under projectile load, so criterion 9's number is still owed. | 4 |
+
+**Group B: 16 open · 1 void.**
+
+---
+
+## 4. Group C — code follow-ups
+
+| id | item (source) | status | evidence | closes in |
+|---|---|---|---|---|
+| **C-1** | `ServerProjectileBridge.AuthoritativeFlight` cutover | VERIFIED-OPEN | Bare auto-property at `Assets/Scripts/Net/Server/ServerProjectileBridge.cs:116` — no initializer, so default `false`; the only other occurrence is the read at `:181`, so zero assignments exist. Engine-side damage still runs: `Assembly-CSharp/Projectile.cs:203`, plus `ExplodingProjectile.cs:69` and `GrenadeProjectile.cs:127` calling `ActorManager.Explode(…)`. Scope: `AuthoritativeFlight` across all `*.cs`+`*.md`. | 2 prep → 5 gate |
+| **C-2** | `ClientCombatState` instantiated by nothing | VERIFIED-OPEN | Declared `Ironfront.Net.Replication/Client/ClientCombatState.cs:34`. Every `new ClientCombatState` is a test (`ClientCombatTests.cs:85,119,…,409`; `ClientEventConsumptionTests.cs:153`; `ServerCombatAuthorityTests.cs:491`); every non-test mention is a doc comment (`ProtocolConstants.cs:127`, `ServerReloadPolicy.cs:20,82`, `ServerRespawnGate.cs:7`, `NetClientCombatPresenter.cs:185`). Corroborated by the live gate run in § 1. Scope: zero production instantiations across `Ironfront.Net.*/`, `Assets/Scripts/`, `tools/`. | 2 |
+| **C-3** | `PlayerList` (0x4B) → named killfeed | VERIFIED-OPEN (**two of three sub-parts already closed**) | **Struct — closed:** `Ironfront.Net.Protocol/Messages/PlayerListMessage.cs:15` `PlayerListEntry`, `:48` codec (`SizeFor:70`/`Write:87`/`TryParse:124`/`NameOf:169`). **Router case — closed:** `Ironfront.Net.Replication/Client/ClientMessageRouter.cs:353`. **Sender — open:** `Ironfront.Net.Replication/Server/ServerEventWriter.cs:156` is the *only* `WritePlayerList` occurrence in the repo; zero callers across `Ironfront.Net.*/`, `Assets/Scripts/`, `tools/`, tests included. **The design over-states this row** ("no message struct, no router case, no caller"). Phase 2's planned shared-file PR against `Ironfront.Net.Protocol` + protocol-spec § 5 is mostly already done, and P-D8's `PROTOCOL_VERSION` question is likely moot since the opcode and codec already ship. | 2 |
+| **C-4** | `ScoreUi` holds match state that does not run headless (V8 D9) | VERIFIED-OPEN | Still owns `blueScore`/`redScore`/`blueFlags`/`redFlags`/`gameEnded` (`Assembly-CSharp/ScoreUi.cs:36-52`), `AddScore`→`Win` (`:83-113`), `AddFlag`→spawn-point-loss win (`:116-133`), `Win` (`:136-160`). Its own remark: "V10 D12 closes only the rendering half … This class still holds match state that does not run headless." **Ordering constraint holds:** this lands before **A-6**/**A-9** author `ScoreUi`'s text refs. | 2 |
+| **C-5** | `GameManager`'s five loose booleans | VERIFIED-OPEN (out of scope) | `Assembly-CSharp/GameManager.cs:23 reverseMode`, `:25 assaultMode`, `:27 nightMode`, `:29 noVehicles`, plus `victoryPoints` — the set named at `2026-08-18-phase-v8-closure.md:68`. Excluded by `plan.md:41` (P-D10). Recorded; no phase owns it. | — (P-D10) |
+| **C-6** | capture-point minimap marker | VERIFIED-OPEN | `Assembly-CSharp/MinimapUi.cs` exposes exactly six public statics — `SelectedSpawnPoint():107`, `UpdateSpawnPointButtons():131,152`, `PinToLoadoutScreen():193`, `PinToIngameScreen():202`, `AddActorBlip(Actor):211` — none a capture-point marker; serialized prefabs are `minimapSpawnPointPrefab:26` and `actorBlipPrefab:28` only. Scope: zero marker API across `MinimapUi.cs`, `NetClientObjectivePresenter.cs`, `CapturePoint.cs`. | 2 |
+| **C-7** | scorch `DecalType` | VERIFIED-OPEN | `DecalManager.DecalType` still has exactly three members — `Impact = 0, BloodBlue = 1, BloodRed = 2` (`Assembly-CSharp/DecalManager.cs:8-13`). `NetClientExplosionPresenter.cs:183` still records "No scorch DecalType exists"; `:189` still draws the blast with `DecalType.Impact`. | 2 |
+| **C-8** | per-bone ragdoll force hardcoded to `MainRigidbody()` | VERIFIED-OPEN | `Assembly-CSharp/Actor.cs:677` is the only force application; `ActiveRaggy.MainRigidbody()` (`ActiveRaggy.cs:305`) the sole accessor with no per-bone overload; the other consumer `RemoteActorView.cs:102` also goes through it. Scope: `MainRigidbody` across all `*.cs`. | 2 |
+| **C-9** | `World/VehicleLifecycle.cs` carries rotation as euler degrees | ALREADY-CLOSED | `Ironfront.Net.Replication/World/VehicleLifecycle.cs:57-58` now declares `public readonly float RotationX, RotationY, RotationZ, RotationW;` threaded through the ctor at `:60-72`, with the reason at `:32-36` ("Euler degrees, **which the seam carried before**, cannot be packed at all"). Feeds `Ironfront.Net.Protocol/Quantize.cs:231 PackQuat`. Zero `euler` remain in the file. | — |
+| **C-10** | `Vehicle.Explode()` does no blast damage — `ExplosionKind.Vehicle` (V1-D5 → V4) | VERIFIED-OPEN | `Assembly-CSharp/Vehicle.cs:796` `protected virtual void Explode()` is `WakeUp()` + `AddForce(…2000f)` + `AddTorque(…500f)` + three cosmetic calls. No damage call. `ActorManager.cs:379-381` still documents that it "**does not route back here** (D5)". `ExplosionKind.Vehicle` has zero producers: the three construction sites are `ExplodingProjectile.cs:70` (Rocket), `GrenadeProjectile.cs:129` (Grenade), `ServerProjectileBridge.cs:347-348` (Grenade\|Rocket only). **V4 did not take it** — `git show --stat ce69391` carries no `Vehicle.cs` blast change, and `ExplosionEventTests.cs:257` still reads `// V4 owns the caller` (see **X-4**). | 2 (P-D11) |
+| **C-11** | `ExplosionKind.Environment` has no source (V1 → V7) | VERIFIED-OPEN | Member at `Ironfront.Net.Protocol/Enums/GameplayEnums.cs:161`. Zero production producers — same three construction sites as C-10, and `ServerProjectileBridge.ExplosionKindFor` is `Grenade : Rocket`, V7's own mapper, so V7 added no Environment path. Only `Environment` references are tests: `ActorLifecycleMessageTests.cs:182`, `ExplosionEventTests.cs:258` (`// V7 owns the caller`, see **X-4**). | 2 (P-D12) |
+| **C-12** | grenades and deployables never ballistically stepped | VERIFIED-OPEN (pin live, deliberate) | `ProjectileReviewFixTests.cs:85` `ABouncingOrRigidbodyProjectileIsNotBallisticallyStepped()` asserts `StepsKind(Grenade/AmmoBag/Medipack) == false` (`:92-94`), `Launch(Grenade,…) == 0` (`:96-99`), `LiveCount == 0` (`:100`), **and the companion direction** that `Rocket`/`Shell`/`GuidedMissile` are stepped (`:104-106`). Production matches at `ServerProjectileBridge.cs:180`. Out of scope by `plan.md:41` (P-D10). | — (P-D10) |
+| **C-13** | V3's `SeatInfo` shedding cost | ALREADY-CLOSED | Both preconditions from `2026-08-18-phase-v3-closure.md:254-256` are met. (a) `Ironfront.Net.Replication/Server/VehicleIdPool.cs:42`, ctor `:56`, wired at `ServerVehicleLifecycleSink.cs:37,45,49,53` and `ServerStateAudit.cs:189,206`. (b) `Assets/Scripts/Net/Server/NetServerActor.cs:312-314` `TryFindSeatOf(_actorId, out ushort vehicleId, out byte seatIndex)` feeding `SnapshotBuilder.Capture(…, vehicleId, seatIndex)` at `:316-328`. The benefit the 58→50 shedding ceiling was paid for is live. | — |
+| **C-14** | phase-05 Task 6's `Actor.Damage` balance-parameter guard | ALREADY-CLOSED | Guard present and labelled: `Assembly-CSharp/Actor.cs:797` comment, `:813` signature, `:824` `bool ownsHealth = !NetContext.IsClient;`, gating health subtraction `:826-829` and the death branch `:842-846`. `balanceDamage` threads to `controller.ReceivedDamage(…)` `:825` and `:830-833`, gated on `!flag` rather than `ownsHealth` — local hit feedback by design per `:806-812`. Closes `2026-08-18-phase-v1-closure.md:57`. **Carry this caveat:** the guard is a two-way `IsClient` check writing `health` directly, **not** the three-way `NetRole` + `IActorDamageSink` route `phase-v1-explosions.md:53` describes — `NetRole` occurs zero times in `Actor.cs`. The effect holds; that sentence in V1-D2 is inaccurate and should be corrected rather than propagated. It also owes a pin (**X-6**). | — |
+| **C-15** | `MatchController._capturePoints` | **VOID** | The item was "rebind after the type changes `Transform[]` → `CapturePoint[]`" (`phase-v8-objectives.md:62,109,381`). The type change never happened and cannot: `Net/Server/MatchController.cs:40` still reads `[SerializeField] private Transform[] _capturePoints`, and `Bindings/ICapturePointDirectory.cs:51-58` states why — `CapturePoint` compiles into `Assembly-CSharp`, which no asmdef may reference. D6's content ships through the seam. The field is alive and used (`MatchController.cs:189,198,213`); the *rebind task* is void, as recorded at `phase-v8-objectives.md:428` and `2026-08-18-phase-v8-closure.md:65`. | — |
+| **C-16** | documentation drift in four places | VERIFIED-OPEN (**2 of 4 still drift**) | The four are named at `2026-08-18-phase-v10-closure.md:57`. **(1) `plans/00-shared/architecture.md:314` — closed:** `:310-318` now shows `IngameUi.Hit()`; `ShowHitmarker` has zero occurrences across `plans/`+`docs/` except the four that describe the drift. **(2) `phase-v7-projectiles.md:211` — still drifts:** cites `Explode()` at `:56-80` and `IngameUi.Hit()` at `:66`; actual `GrenadeProjectile.cs` has `Explode()` at `:108` and its only `IngameUi` call at `:134`. **(3) `phase-v8-objectives.md:91` — closed:** every anchor resolves. **(4) `docs/codebase-map.md` — still drifts, two of eight:** `:149` claims `ActorManager.Register(this)` at `Actor.cs:186` (blank line) and `:150` claims `IngameUi.instance.Show()` at `:225` (`}`); `:53-54` imprecise. **The design over-states this row.** | 2 |
+
+**Group C: 12 open · 3 closed · 1 void.**
+
+---
+
+## 5. Group D — claims made but never verified
+
+| id | item (source) | status | evidence | closes in |
+|---|---|---|---|---|
+| **D-1** | `Weapon.Configuration.releaseDelay = 0.6f` is a guess never read from the throw clip | VERIFIED-OPEN — **and the guess is wrong** | Still a bare literal: `Assembly-CSharp/Weapon.cs:61` `public float releaseDelay = 0.6f;`, consumed at `ThrowableWeapon.cs:40`. **The clips are force-text and were readable all along:** `Assets/AnimationClip/frag_throw.anim:2248-2250` → `m_Events: - time: 1.2381772 / functionName: SpawnThrowable` (clip `m_StopTime: 1.8333335` at `:2228`); `Assets/AnimationClip/Ammobox Throw.anim:1429-1431` → `time: 0.4142947` (`m_StopTime: 0.8333334`). Neither is 0.6 s, and they differ from each other by 3×, so one constant cannot serve both. **Nothing detects the drift:** `OfflineBehaviourChangeTests.cs:74-76` hardcodes `const float releaseDelaySeconds = 0.6f` and feeds the *same* constant to both `fromServer` and `fromClient`, so it is true by construction. **Remaining before authoring:** whether an Animator state `speed` multiplier or a per-weapon `Configuration` override rescales the raw clip time — the one part still needing the Editor. **Owner decision (2026-08-19): author per-weapon values in Phase 2 and fix the test to read the clip; Phase 4 confirms only the state-speed multiplier.** | 2 |
+| **D-2** | ten plan-named Unity tests for V7 are unwritten | VERIFIED-OPEN (**count is wrong — five, not ten**) | `phase-v7-projectiles.md:394-416` names **22** tests. Checked each by name repo-wide: **15 present verbatim** (`ProjectileTests.cs:58,94,118,155,255,306,349,419,476,500,563`; `DeployableTests.cs:44,87,255,309`); **2 present renamed** (`AProjectileSpawnRoundTripsAtTwentyBytes` → `PacketHexSampleTests.cs:472,486`; `OfflineProjectileBehaviourIsUnchanged…` → `OfflineBehaviourChangeTests.cs:40`, renamed because there were three changes not two). **5 genuinely unwritten**, all grenade/throw: `AGrenadeDetonatesOnTheSameTickOnBothSides`, `AGrenadeDetonationPositionComesFromTheServerNotThePrediction`, `AGrenadeAppliesItsBlastDamageExactlyOnce`, `AThrowReleasesOnTheSameTickOnServerAndClient`, `AClientSpawnThrowableSpawnsNothing` — zero coverage under any other name. **`phase-v7-projectiles.md:517` is wrong in both directions:** its arithmetic sums to nine, and the guided-missile pair it names as missing exists at `ProjectileTests.cs:500`. | 4 (decision) |
+| **D-3** | phase-05 Task 6's `Actor.Damage` guard was assumed, not re-verified | ALREADY-CLOSED | Same citation as **C-14**; this audit is the first re-verification since `2026-08-18-phase-v1-closure.md:57` recorded "assumed closed, not re-verified here". | — |
+| **D-4** | V8's A5 CI-gate fix was recorded, not re-run | ALREADY-CLOSED | `tools/ci.ps1:130` `Start-Process -FilePath $env:UNITY_PATH -Wait -PassThru -NoNewWindow`; exit code read at `:136`; throw at `:143`. The gate can now go red; before the fix it structurally could not. Closes the "did not re-inspect `tools/ci.ps1`" caveat at `2026-08-18-phase-v8-closure.md:70`. | — |
+| **D-5** | V8's elimination-by-spawn-point-loss was recorded, not re-run | ALREADY-CLOSED | Code present: `Ironfront.Net.Replication/Match/MatchStateMachine.cs:204` `SetSpawnPointCounts`, grace gate at `:403`, rule at `MatchRules.cs:78`, Unity caller at `MatchController.cs:259-266`. **Now pinned by five tests the V8 closure did not know about:** `ObjectiveAuthorityTests.cs:135,163,183,206,228`. Upgrades `2026-08-18-phase-v8-closure.md:69` from "CLOSED, not re-verified live" to "pinned at the library level". No Unity-level run exists; that is a Phase 3 item. | — |
+
+**Group D: 2 open · 3 closed.**
+
+---
+
+## 6. Group E — ops checklist, round 8
+
+Round 8 of `integration-checklist.md` is dated 2026-08-16. **`plans/unity-client/reports/2026-08-17-round8.md`
+answers seven of its rows one day later** (summary table at `:573-584`), and the checklist was never
+updated. That report, not the checklist, is the current state for A3, A4, A7, A11, A12, A13 and D2.
+
+| id | item (source) | status | evidence | closes in |
+|---|---|---|---|---|
+| **E-1** | D1.1 — fix the build target | ALREADY-CLOSED — **and not by `c80c09e`** | All three sub-points closed. (a) `Assets/Editor/EditorBuild.cs:123-131` calls `SwitchActiveBuildTarget(BuildTargetGroup.Standalone, BuildTarget.StandaloneLinux64)` and fails loudly if it cannot, **before** the subtarget assignment at `:136`. (b) `-buildTarget Linux64` is passed at `tools/build-server.ps1:118`, carried unchanged through `c80c09e` and predating it. (c) "never restores it" is closed by `EditorBuild.cs:311-323 RestoreBuildTarget`, invoked at `:83` inside the `finally`. **Closing commit is `e7f61e3` (#117):** `git log -S SwitchActiveBuildTarget -- Assets/Editor/EditorBuild.cs` returns `e7f61e3` alone, and the file's whole history is `e7f61e3` + `355d994`. `c80c09e` fixed two *different* defects — the withheld `Microsoft.Bcl.AsyncInterfaces.dll` and `Start-Process -Wait`. | — |
+| **E-2** | D1.2a — build the tarball and publish the release | ALREADY-CLOSED | Release `gameserver-v0.1.0`, published 2026-08-18T06:06:21Z, one asset named exactly `gameserver-linux.tar.gz`, 47,295,141 bytes, `sha256:fc438f23590d13221094520c8fd84c64464e67168c9ca98ff90382afec4dda71`. Filename matches what `.github/workflows/images.yml:153` globs on. The round-8 packaging complaint is also closed: `tools/build-server.ps1:44-46` declares `[string]$TarballPath = "build/gameserver-linux.tar.gz"`. | — |
+| **E-3** | D1.2b — push the game-server image and report the digest | VERIFIED-OPEN — **this is what still blocks deployment** | Never run: `gh run list --workflow=images.yml --event=workflow_dispatch` returns **zero rows**, and the ten most recent `images` runs are all `failure` at 4–5 s (2026-08-18/19), consistent with the known Actions billing block. No image exists: `gh api users/Sagitoaz/packages/container/ironfront-gameserver/versions` → **404 Package not found**, while `ironfront-master` exists in the same account, so the 404 is a real absence and not a permissions artifact. No digest recorded: the only `IRONFRONT_GAMESERVER_IMAGE` values in-tree are the placeholder at `.github/workflows/ci.yml:320` and the unset-guard at `infra/compose/compose.yaml:20`; `infra/compose/.env.example:22` still reads `REPLACE_WITH_DIGEST`. **Blocked on CI billing, not on code.** | ops (outside phases 1–5) |
+| **E-4** | D2 — sign off on `Assets/Editor/EditorBuild.cs` | **DECIDED** | **Keep it where it is; signed off.** `2026-08-17-round8.md:578`. The gating condition is satisfied in today's tree: `EditorBuild.cs:70-84` is the `finally` — `RestoreDefines(previousDefines)` at `:76` and `RestoreBuildTarget(...)` at `:83` under `if (!Application.isBatchMode)`; `EditorApplication.Exit` moved outside the try to `:91`. Confirmed by the owner 2026-08-19. | — |
+| **E-5** | A3 — re-run the shadow comparison | **VOID** | Closed 2026-08-14, three days *before* the round-8 checklist that still calls it "🔴 blocks A4". `plans/unity-client/reports/2026-08-14-a3-shadow-rerun.md:8` — "**Passed — A3 closed; A4 unblocked**", harness line `worstH=0.0076m … threshold=0.010m`, zero grounded warnings across the requested walk↔sprint transitions (`:20-30`). Round 8 caught its own staleness: `2026-08-17-round8.md:23,574` — "Strike it from round 9." The only thing A3 gated was A4, itself closed (**A-13**) in the clock-disabled state A3 existed to protect. **Phase 0 Task 0.2's question is answered: no re-run is required.** | — |
+| **E-6** | A7 — can a player reach past ±2048 m? | VERIFIED-OPEN — **the confirmation came back YES, converting it from a question into work** | `2026-08-17-round8.md:579` — "**YES** — two respawning helicopters, `LevelBounds.IsInside` has **zero callers**, no altitude clamp. Consequence is a permanent rubber-band, not a wall, and it is silent." Detail at `:216-268`: Dustbowl has 14 `VehicleSpawner`s of which two are respawning helicopters; from the worst playable coordinate (~920 m) a helicopter needs roughly another 1,100 m of level flight to cross 2048 m, "well under a minute", and the symptom presents as "the helicopter broke" with nothing saying why. The checklist's own conditional at `:213-214` has therefore fired. **Owner decision (2026-08-19): implement the server-side `LevelBounds.IsInside` check plus a clamp counter, so the condition is observable instead of silent.** | 2 |
+| **E-7** | A11 — master-link plugin DLLs | ALREADY-CLOSED | Both DLLs are **git-tracked**, not merely on disk: `git ls-files Ironfront_Reborn/Assets/Plugins/` lists `Ironfront.MasterClient.dll`(+`.meta`) and `Ironfront.Net.MasterLink.dll`(+`.meta`), beside the other four libraries, last rebuilt into `538c4c7`. Run confirmed at `2026-08-17-round8.md:577` — "**Done.** 0 warnings / 0 errors, 6+6 copied, 1064/1064 tests green." The gotcha the checklist flags at `:226-231` is closed too: the drift check's glob is widened to `Ironfront.*.dll` at `.github/workflows/ci.yml:216`, which matches `Ironfront.MasterClient.dll` (the old `Ironfront.Net.*.dll` never did). | — |
+| **E-8** | A12 — server CPU percentage | **DECIDED** | **Leave `cpuPercent` at −1.** `2026-08-17-round8.md:580` — "Checked the alternatives; a container reads the host's CPU." Rationale on record at `integration-checklist.md:239-243`: Unity exposes no portable process-CPU counter, and a fabricated number on a matchmaking input is worse than an absent one because the master acts on it. Confirmed by the owner 2026-08-19. **Exposes a live follow-up this decision does not cover** → **X-7**. | — |
+| **E-9** | A13 — who owns the kill/death tally | **DECIDED** | **The server/protocol track owns it.** `2026-08-17-round8.md:581` answers the checklist's "yours or mine" with "**Yours.**", and names the resolve point: `ServerTickLoop.cs:497` `EmitDeath`. Confirmed by the owner 2026-08-19. **Two facts the implementation still needs**, recorded here so Phase 2 does not rediscover them: (1) the actorId→playerId mapping is unreachable — `IMatchReporter.cs:33` wants a `playerId`, `EmitDeath` holds an `actorId`, and the dictionary is `private` at `NetServerBootstrap.cs:79` with no accessor; (2) **bots have no `playerId` at all**, so whether bot kills are tallied, dropped, or given synthetic ids determines the accessor's signature. Until then `ServerMasterReporter.CollectScores` keeps returning an empty list, the deliberate choice over all-zero rows (`integration-checklist.md:251-254`). | 2 |
+| **E-10** | S5 / A9 — bot LOD profiling | ALREADY-CLOSED | Measured with exactly the pair the amended checklist asked for: `plans/unity-client/reports/2026-08-18-round9.md:245-270,484` — AI cost above the `AlwaysOff` floor **0.951 ms/frame (`AlwaysOn`) vs 0.775 (`Scheduler`)** = 18.5 % saved while skipping 38.6 % of bot-ticks (`granted=14370 skipped=9030`), at 40 bots. The seam it needed exists: `Assets/Scripts/Net/Server/BotLodGate.cs`. Tick p99 is flat across arms by construction, because `AiActorController` runs in `Update` and no `ServerTickLoop` stage contains it. | — |
+| **E-11** | F — the asmdef split | VERIFIED-OPEN (agreed, unscheduled) | Recorded "agreed, three corrections" at `2026-08-17-round8.md:489`; `integration-checklist.md:263` frames it as "a separate phase, needs your agreement, not your time today". Today's tree still carries only three asmdefs — `Assets/Scripts/Net/Server/`, `Assets/Scripts/Net/Shared/`, `Assets/Tests/EditMode/` — so `Assets/Scripts/Net/Client/` remains in `Assembly-CSharp`, which is the constraint behind P-D6 and P-D9. Scope: `find Ironfront_Reborn/Assets -name "*.asmdef"`. | — (own phase) |
+
+**Group E: 3 open · 4 closed · 1 void · 3 decided.**
+
+---
+
+## 7. Found during Phase 0 — items no group covers
+
+These came out of the verification and are on no list today. They are recorded here rather than
+left for a later phase to rediscover.
+
+| id | item | status | evidence | closes in |
+|---|---|---|---|---|
+| **X-1** | **No client presenter is instantiated anywhere.** Rows A-1, A-5, A-7 and A-12 are four symptoms of one missing scene pass | VERIFIED-OPEN | Nine scripts return **zero** references across `Ironfront_Reborn/Assets/**`, `ProjectSettings/**`, `Packages/**`: `NetClientCombatPresenter` (`bc6c11e3…`), `NetClientExplosionPresenter` (`db9e5295…`), `NetClientObjectivePresenter` (`b05689a5…`), `NetClientProjectilePresenter` (`feedb881…`), `NetClientPresenterGuard` (`cb7a6682…`), `CosmeticTracerPool` (`188a2915…`), `ClientTurretDirectory` (`1b93d860…`), `RemoteActorView` (`076337bd…`), `LobbyShellOverlay` (`3a9b8660…`). **Phase 1 should treat "put the presenters on the client bootstrap object in `Dustbowl.unity`" as one task, not four.** | 1 |
+| **X-2** | The **server** projectile catalog is unwired too | VERIFIED-OPEN | `Assets/Scripts/Assembly-CSharp/ProjectileCatalogInstaller.cs:35`, guid `1e1d8de547d73f847a33a9a802368cbe`, has zero refs across `Assets/**`. Group A names only the client array (**A-1**); this is its server sibling, with the same fix shape, and appears on no list. Together with **A-1** it is why **A-10**'s sampled curves reach nothing. | 1 |
+| **X-3** | **An honest second client cannot be scripted yet** — this blocks Phase 3 | VERIFIED-OPEN | The Unity client sends exactly two message types: `ClientMessageType.Input` (`Assets/Scripts/Net/Client/ClientPredictionStage.cs:120`) and `ClientMessageType.VehicleInput` (`ClientVehicleStage.cs:337`). (1) `MoveInput` carries `MoveX`, `MoveZ`, `YawDegrees`, `Jump`, `Sprint`, `Crouch` and **no Fire or Reload** (`Ironfront.Net.Replication/Movement/MoveInput.cs:16-40`). (2) Nothing sends `C_SPAWN_REQUEST` — every `SpawnRequest` hit is the server receive side (`ServerMessageRouter.cs:150-157`, `ISpawnRequestHandler.cs:20`, `ServerTickLoop.cs:1084`). (3) Nothing sends `C_ACK_BASELINE` — `AckBaselineMessage` has exactly one non-test caller, the server's parse at `ServerMessageRouter.cs:127`. This is why round 9 drove the server directly instead of following the E-row instructions literally (`2026-08-18-round9.md:39-47`). **Owner decision (2026-08-19): a first-class Phase 2 item with an explicit blocks-Phase-3 edge.** | 2 → blocks 3 |
+| **X-4** | Stale owner markers in tests name phases that have closed | VERIFIED-OPEN | `ExplosionEventTests.cs:257` `// V4 owns the caller` and `:258` `// V7 owns the caller` still stand, while V4 (`ce69391`) and V7 (`538c4c7`) have both merged without taking **C-10** / **C-11**. An absence pin naming a dead owner is how a gap loses its owner silently. Retire or re-point them in the same commit as C-10/C-11. | 2 |
+| **X-5** | `LobbyShellOverlay` is in no scene, so the lobby shell never runs | VERIFIED-OPEN | Guid `3a9b866060cb47f1af22ca5125dd4d71`, zero refs across `Assets/**` — the same family as **X-1**, but a distinct surface (lobby, not in-match). Not an E9 obligation; E9 is void (**A-12**). | 1 |
+| **X-6** | `Actor.Damage`'s `ownsHealth` guard has no pin | VERIFIED-OPEN | **C-14**/**D-3** confirm the guard is present, but no test asserts `ownsHealth` is false on a client. Under P-D5's author-then-pin rule this owes a pin, and it is the guard the whole `AuthoritativeFlight` cutover (**C-1**) depends on. | 2 |
+| **X-7** | `Allocate` sorts servers by `Dictionary` order, not `AverageTickMs` | VERIFIED-OPEN | Surfaced by **E-8**'s decision: with every server reporting `cpuPercent: -1`, the master's `Allocate` has no ordering signal and currently picks by `Dictionary` order (`2026-08-17-round8.md:580`). A live matchmaking defect that "leave it at −1" does not cover. Belongs to the master-server track, not this one. | master-server track |
+
+---
+
+## 8. Roll-up
+
+| Group | Open | Closed | Void | Decided | Total |
+|---|---|---|---|---|---|
+| A — authoring | 6 | 4 | 4 | — | 14 |
+| B — two clients | 16 | — | 1 | — | 17 |
+| C — code | 12 | 3 | 1 | — | 16 |
+| D — unverified claims | 2 | 3 | — | — | 5 |
+| E — ops round 8 | 3 | 4 | 1 | 3 | 11 |
+| X — found in Phase 0 | 7 | — | — | — | 7 |
+| **Total** | **46** | **14** | **7** | **3** | **70** |
+
+Fourteen rows were already closed and seven were void — twenty-one items, three of which the design
+of record had named as prime suspects and eighteen of which it had not. That is the outcome P-D1
+was bought for.
+
+---
+
+## 9. Handoff
+
+**To Phase 1** — group A rows still open: **A-1, A-2, A-5, A-6, A-7, A-9**, plus **X-1**, **X-2**,
+**X-5**. Take **X-1** as a single scene-pass task; A-1, A-5, A-7 and X-5 are its symptoms. **A-4**
+needs only an opportunistic confirmation of the `WeaponIds` → prefab map, not re-authoring. The
+A3/A4 verdict Task 0.2 asked for: **A3 is void (closed 2026-08-14), A4 is already closed** — neither
+gates anything. **Do not author A-14**; it would turn `SpecChecker` red.
+
+**To Phase 2** — group C rows still open: **C-1** (prep only), **C-2, C-3, C-4, C-6, C-7, C-8,
+C-10, C-11, C-16**, plus **D-1**, **E-6**, **E-9**, **X-3**, **X-4**, **X-6**. Three scope changes:
+C-3 is smaller than planned (sender only), C-16 is half its stated size, and **X-3 is new and blocks
+Phase 3**. The ordering constraint holds — **C-4 lands before A-6/A-9**.
+
+**To Phase 3** — group B rows **B-1 … B-9, B-11, B-13, B-14**. All blocked on the same missing
+two-process harness, and all blocked behind **X-3** for any check involving firing, respawning or
+baseline acks.
+
+**To Phase 4** — **B-10, B-15, B-16, B-17** (measurements), and **D-2**'s decision on the five
+genuinely-unwritten tests. Note that B-16 and B-17 both have a first measurement on record already;
+what is owed is the number under criterion 8/9 conditions, not a first number.
+
+**To Phase 5** — **C-1**, holding **X-6**'s pin and Phase 4's numbers.
+
+**Outside the five phases** — **E-3** (blocked on Actions billing), **E-11** (asmdef split, its own
+phase), **X-7** (master-server track), **C-5** and **C-12** (out of scope by P-D10).
+
+---
+
+## 10. What this ledger does not claim
+
+- **It did not open the Unity Editor.** Every prefab and scene fact above was read from force-text
+  YAML. Where YAML could not settle a question — E5's runtime "timer hidden during `Playing`"
+  clause (**A-6**), the `WeaponIds` → prefab map (**A-4**), and whether an Animator state `speed`
+  multiplier rescales the throw clip (**D-1**) — the row stays open and says so.
+- **It did not run the Unity test suite or a Play Mode session.** `dotnet test` was not run either;
+  the two CI gates in § 1 were, and their exit codes are recorded.
+- **It does not grade the quality of what it found closed.** A row marked `ALREADY-CLOSED` says the
+  fix is present at the cited line, not that it is well designed or covered by a test. **X-6** is
+  the one case where that distinction was material enough to record.
