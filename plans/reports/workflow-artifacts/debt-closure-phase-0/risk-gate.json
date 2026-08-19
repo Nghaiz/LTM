@@ -1,0 +1,12 @@
+{
+  "highRisk": false,
+  "autoStopRequired": false,
+  "humanApproved": true,
+  "largeDiff": false,
+  "reasons": [
+    "Documentation-only change across two tracked files plus workflow artifacts",
+    "dotnet test 1450/1450 green, SpecChecker exit 0, ClientWiringGate exit 0, all re-run after the edits",
+    "git status shows only the files the phase file's section 3 permits",
+    "Owner took four decisions via AskUserQuestion on 2026-08-19: round-8 calls stand (A12/A13/D2); A7 remedy is the server-side LevelBounds.IsInside check plus a clamp counter; releaseDelay is authored per-weapon in Phase 2; the client-send gap is a Phase 2 item blocking Phase 3"
+  ]
+}

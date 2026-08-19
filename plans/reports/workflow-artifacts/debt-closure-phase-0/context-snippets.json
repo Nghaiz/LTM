@@ -1,0 +1,27 @@
+{
+  "skill": "t1k-cook",
+  "mode": "code",
+  "task": "Phase 0 of the debt-closure track: replace five stale sources of truth with one evidence-backed ledger, re-verifying every V0-V10 open item against develop at 38ac29a.",
+  "scoutSummary": "Input was a plan path, so intent resolved to code mode. 70 items re-verified across groups A-E plus 7 found during the phase. Three read-only verification lanes fanned out (group A authoring, group C code, groups D+E ops); the lead held the gate runs, group B, the CAR HORN row, and synthesis. Both CI gates run before any grading: SpecChecker exit 0, ClientWiringGate exit 0, neither exit 2, so no row inherits a could-not-tell verdict.",
+  "acceptanceCriteria": [
+    "Every item from the design-of-record groups A-E has exactly one ledger row",
+    "Every row carries VERIFIED-OPEN / ALREADY-CLOSED / VOID plus file:line or commit evidence; zero rows read unverified",
+    "Every negative claim states the paths searched",
+    "Both gate runs recorded with exit codes; any exit-2 row stays VERIFIED-OPEN",
+    "integration-checklist.md carries a superseded header pointing at the ledger",
+    "A12, A13 and D2 are recorded as decided facts, not open questions"
+  ],
+  "touchpoints": [
+    "plans/debt-closure/debt-ledger.md (new)",
+    "plans/replication/integration-checklist.md (superseded header only)",
+    "plans/reports/workflow-artifacts/debt-closure-phase-0/ (workflow artifacts, per existing repo convention)"
+  ],
+  "publicContracts": [
+    "None changed. Read-only verification phase; no source file, protocol message, serialized field or API surface was edited."
+  ],
+  "blastRadius": [
+    "Documentation only: zero code, prefab, scene or CI changes",
+    "Downstream effect is on Phase 1-5 scope, not on runtime behaviour",
+    "Fully reversible by git revert"
+  ]
+}

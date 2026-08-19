@@ -1,5 +1,31 @@
 # the replication track → the client track — the open work list
 
+> ## ⚠ Round 8 is superseded — read [`plans/debt-closure/debt-ledger.md`](../debt-closure/debt-ledger.md) instead
+>
+> **Superseded 2026-08-19** by the debt ledger, which re-verified every row below against
+> `develop` @ `38ac29a` and carries `file:line` evidence for each verdict.
+>
+> **This file is kept, not retired.** Its round-by-round history is how "what closed since round 7"
+> stays readable, and several rows below are still the best description of *why* an item exists.
+> What it is no longer is a statement of what is open.
+>
+> **Do not action a row from this file without checking its ledger row first.** Round 8 was written
+> 2026-08-16 and predates four merges. Two things it says are now actively misleading:
+>
+> - **D1 no longer "BLOCKS THE ENTIRE DEPLOYMENT" as written.** The build target is fixed
+>   (`e7f61e3`) and the artifact is published (release `gameserver-v0.1.0`). What blocks deployment
+>   is one step later — the game-server image has never been pushed, because `images.yml` has never
+>   been dispatched. Ledger rows **E-1**, **E-2**, **E-3**.
+> - **A3 is closed and was already closed when this file was written.** It closed 2026-08-14, two
+>   days before round 8, which still lists it as 🔴 blocking A4. A4 is closed too. Ledger rows
+>   **E-5**, **A-13**.
+>
+> **Seven rows were answered the day after this file was written**, by
+> [`plans/unity-client/reports/2026-08-17-round8.md`](../unity-client/reports/2026-08-17-round8.md)
+> (summary table at `:573-584`) — A3, A4, A7, A11, A12, A13 and D2. That report, not this checklist,
+> is the source for those. **A7's answer was YES**, which turns it from a confirmation into
+> implementation work (ledger row **E-6**).
+
 **From:** the replication track (replication) · **Date:** 2026-08-16 · **Round:** 8
 **Human-readable Vietnamese version:** [`integration-gate-board.html`](integration-gate-board.html)
 **Superseded rounds 1–7:** in git history of this file. Everything closed there stays closed;
