@@ -29,6 +29,16 @@ namespace Ironfront.Net.Unity
     /// Defaulting to zero would make an un-authored weapon silently harmless, which reads as a
     /// balance decision rather than a missing asset.
     /// </para>
+    /// <para>
+    /// <b>It lives in <c>Assembly-CSharp</c> and cannot move to <c>Net/Shared/</c>, however
+    /// much it looks like shared netcode.</b> It reads the <c>Projectile</c> MonoBehaviour off a
+    /// prefab, and <c>Net/Shared/</c> is its own assembly definition
+    /// (<c>Ironfront.Net.Unity.Shared</c>) — asmdef assemblies compile BEFORE
+    /// <c>Assembly-CSharp</c> and can never reference it, in either direction. The consumer in
+    /// <c>Ironfront.Net.Unity.Server</c> therefore takes a finished
+    /// <see cref="ProjectileCatalog"/> as a constructor argument rather than building one, the
+    /// same shape as the <c>Net/Server/Bindings/</c> interfaces.
+    /// </para>
     /// </remarks>
     public static class ProjectileCatalogBuilder
     {
