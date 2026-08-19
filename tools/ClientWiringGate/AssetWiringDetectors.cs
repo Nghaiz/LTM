@@ -551,9 +551,14 @@ namespace Ironfront.Tools.ClientWiringGate
         /// A-6) — YAML can say a reference resolves, never that a player sees it. And encoding
         /// "must be under the ScoreUi's transform" would fail a legitimate HUD reorganisation,
         /// which trades a check that cannot see a real fault for one that fires on correct work.
-        /// The clauses above all answer "would Unity load null here", which is a question YAML
-        /// can actually answer. If a future reviewer reaches for a fifth mutation, this is the
-        /// one, and this paragraph is the answer.
+        /// The clauses above answer either "would Unity load null here" or "is this element
+        /// already claimed" — and the second is not a lesser question: a ref aimed at
+        /// <c>blueFlagsText</c> resolves perfectly and loads a real <c>Text</c>, so a
+        /// load-null check alone would pass the exact authoring this detector was written to
+        /// forbid. <see cref="RenderedLabelsAreStillFields"/> answers a third question, about
+        /// this check rather than about the asset. What none of them can answer is where the
+        /// label sits. If a future reviewer reaches for a fifth mutation, this is the one, and
+        /// this paragraph is the answer.
         /// </para>
         /// <para>
         /// <b>Zero instances is a finding, not exit 2</b> — the same call
