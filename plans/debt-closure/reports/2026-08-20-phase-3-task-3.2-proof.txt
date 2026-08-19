@@ -1,0 +1,122 @@
+Phase 3 task 3.2 — Ironfront.Net.LoadHarness: gate mutations GREEN, smoke run RED
+Date: 2026-08-20 · Editor: Unity 6000.3.21f1 · Scene: Dustbowl.unity
+
+==============================================================================
+PART 1 — acceptance criterion 4, and the gate that enforces it
+==============================================================================
+
+Criterion 4 asks for a grep proving no second decoder exists in the harness.
+tools/check-harness-no-decoder.ps1 is that grep, made re-runnable. It was
+mutation-tested: a gate never seen failing is not a gate.
+
+  baseline                                        PASS  exit 0
+  + a second decoder type                         FAIL  exit 1  'declares its own decoder type'
+  + a direct SnapshotMessage. call                FAIL  exit 1  'reaches for the actor snapshot byte codec directly'
+  + a direct DeltaDecoder.ApplyEntry call         FAIL  exit 1  'applies snapshot entries itself'
+  project that decodes nothing at all             FAIL  exit 1  'vacuous rather than clean'
+  csproj missing the Replication/Transport refs   FAIL  exit 1  'shipped decoder has to mean the shipped project'
+  directory with no sources                       exit 2  COULD NOT TELL
+  path that does not exist                        exit 2  COULD NOT TELL
+
+Both vacuous-pass guards matter: 'no second decoder' is trivially true of a
+project that decodes nothing, and that hollow pass is what the positive half
+rules out.
+
+  === harness carries no decoder of its own ===
+  PASS: 6 source file(s) scanned; no decoder declared, no byte codec called,
+        and the shipped ClientMessageRouter is on the receive path.
+        This says the harness does not decode for itself. It does NOT say the
+        shipped decoder is correct — nothing here could tell you that.
+
+==============================================================================
+PART 2 — the smoke run is RED. Criterion 1 is NOT met.
+==============================================================================
+
+Acceptance criterion 1 wants --smoke (2 clients, 30 s) to connect, play, and
+both processes to exit 0. It does not. Recorded here rather than deferred,
+because a harness whose own bring-up is unproven grades nothing.
+
+  $ dotnet run --project Ironfront.Net.LoadHarness -- --smoke --port 27017
+  report  -> C:\Users\Nghaiz\AppData\Local\Temp\claude\d--Coding-LTM\0bb6bb42-d8e5-4a00-85c1-6171d19ced40\scratchpad\smoke-report.json
+  capture -> C:\Users\Nghaiz\AppData\Local\Temp\claude\d--Coding-LTM\0bb6bb42-d8e5-4a00-85c1-6171d19ced40\scratchpad\smoke-capture.jsonl
+  
+  ran 35.1s, 0/2 client(s) held to the end
+  snapshots applied  0
+  bandwidth          0 B/s per client (mean; read the per-client rows)
+  malformed/unknown  0/0
+  decoded agreement  0 disagreement(s) over 0 entity comparison(s) across 0 tick(s)
+  network seed       12345 (clean)
+  
+  ERROR: client 0 did not connect within 5000 ms (state Disconnected, ServerFull)
+  ERROR: client 1 did not connect within 5000 ms (state Disconnected, ServerFull)
+  HARNESS EXIT=3
+
+------------------------------------------------------------------------------
+What the harness DID prove about itself
+------------------------------------------------------------------------------
+
+The bring-up is not a mystery at every layer — three of four are demonstrated:
+
+  * real UDP round trip      the server answers; every failure below is a
+                             CONNECT_DENIED that travelled the wire, not a timeout
+  * ticket minting works     run 1 used the unsigned 64-zero-byte ticket and was
+                             refused InvalidTicket; JoinTicketSource was added, and
+                             the refusal reason CHANGED. The server stopped saying
+                             the signature was absent
+  * the codec is not stale   JoinTicket.Issue over identical inputs produces
+                             byte-identical tickets from the source build and from
+                             Assets/Plugins/Ironfront.Net.Protocol.dll, and the
+                             secret is identical on both sides (len 44, sha256-8
+                             3E7926DF76B511E8 measured in the Editor AND in the harness)
+
+------------------------------------------------------------------------------
+The open defect, and the four hypotheses already falsified
+------------------------------------------------------------------------------
+
+SYMPTOM. Both clients are denied. The client reports ServerFull; the server
+logs '[net] join rejected: BadSignature'. Those are different reasons for the
+same handshake, and only one of them can be right.
+
+The server is healthy at the moment it denies. Read live by reflection, mid-run:
+
+  isPlaying=True
+  loop=present
+  tick=153 conns=0
+  freeIds=16
+  boundPort=27017
+
+  and during an in-flight run:
+  tick=209
+  type=UdpTransportServer ConnectionCount=0
+  _freeIds.Count=16
+  _connectionCount=0
+  _maxConnections=16
+  _byId.Length=17
+  _byEndpoint.Count=0
+  _accepted.Count=0
+  _playerIdToConnection.Count=0
+
+ConnectDenyReason.ServerFull is sent from exactly one place —
+UdpTransportServer.cs:265 — and only when
+'_connectionCount >= _maxConnections || _freeIds.Count == 0'. The probe above
+shows _freeIds at 16 and _connectionCount at 0 on the very server that is bound
+to the port under test. Both readings cannot be true of one server.
+
+FALSIFIED, each by a test rather than by argument:
+
+  1. Stale plugin DLL          — ticket bytes are identical across both builds
+  2. Mismatched shared secret  — same length and same SHA-256 prefix on both sides
+  3. Leaked slots on a reused  — a virgin port (27017) on a freshly started server
+     port                        with 16 free ids denies identically
+  4. Leaked sockets across     — after the run only 27017 is bound; 27015 and 27016
+     Play Mode sessions          were released. Nothing survives a session
+
+STILL OPEN. Something other than ServerTickLoop.Current.Transport answers on the
+port, or the deny reason is not the one the server believes it sent. Separating
+those needs packet-level capture (the transport already ships PacketLogger), not
+more reasoning.
+
+OWNERSHIP. Phase 3 section 7: 'If a check fails because of a defect, the defect is
+filed and fixed in its own commit — never patched inside the harness.' No
+workaround was added to the harness, and the smoke gate was not lowered to make
+this run pass.
