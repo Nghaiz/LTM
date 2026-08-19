@@ -1,0 +1,16 @@
+PLAY MODE smoke — Dustbowl.unity, no server listening (client connect is expected to fail)
+isPlaying=True
+console since Play began: errors=0 warnings=4 logs=23786
+
+NetClientProjectilePresenter live=True enabled=False ActiveCount=0 UnrenderableKinds=0
+NetClientExplosionPresenter  live=True enabled=False
+NetClientCombatPresenter     live=True enabled=False
+NetClientObjectivePresenter  live=True enabled=False
+CosmeticTracerPool           live=True enabled=True ActiveCount=0
+ProjectileCatalogInstaller   live=True enabled=True  (self-disables off a server, by design)
+
+NetClient children: Explosion FX (Grenade), Explosion FX (Rocket), Remote Actor Proxy(Clone), Remote Actor Proxy(Clone), Remote Actor Proxy(Clone), Remote Actor Proxy(Clone), Remote Actor Proxy(Clone), Remote Actor Proxy(Clone), Remote Actor Proxy(Clone), Remote Actor Proxy(Clone), Remote Actor Proxy(Clone), Remote Actor Proxy(Clone), Remote Actor Proxy(Clone), Remote Actor Proxy(Clone), Remote Actor Proxy(Clone), Remote Actor Proxy(Clone), Remote Actor Proxy(Clone), Remote Actor Proxy(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone), Cosmetic Tracer(Clone)
+particle systems under NetClient: 13  any playing=False
+audio sources under NetClient: 0
+AudioSources playing scene-wide: 8
+AudioListeners in scene: 0

@@ -1,0 +1,4 @@
+[client-wiring] KNOWN GAP - ClientMessageRouter.OnPlayerList has no production subscriber. V3 ships the codec and the router case; the name table has no presenter until the client-flow phase that also adopts ClientCombatState and ScoreUi.
+[client-wiring] 14 of 15 ClientMessageRouter events have a production subscriber and the rest are named gaps above; G2-G5 clean across 406 file(s). No types were resolved - this says something subscribes, not that it renders correctly.
+[asset-wiring] KNOWN GAP - RemoteActorView._actor is unauthored. needs an Actor component on a server-owned proxy, which registers with ActorManager — a Phase 2 decision, not authoring. Blocks the ragdoll rig (E1) and remote weapon models. Ledger A-2, partially open.
+[asset-wiring] 7 authoring check(s) clean across 4 scene(s) and 62 prefab(s). No types were resolved - this says the components are present and their references are non-null, not that they render correctly.
