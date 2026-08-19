@@ -45,15 +45,29 @@ namespace Ironfront.Net.Replication.Server
         /// <summary>Turrets still tracked. Zero after a world reset. V6, criterion 13.</summary>
         public readonly int TurretsTracked;
 
+        /// <summary>
+        /// Projectile ids still held — by a projectile in flight, a deployable on the ground, or
+        /// an engine-simulated grenade. Zero after a world reset. V7, criterion 7.
+        /// </summary>
+        /// <remarks>
+        /// The projectile id space is the third to join this audit, and it leaks differently
+        /// from the other two: an id is released by the projectile that holds it, so a prefab
+        /// destroyed by a path that skips its own teardown keeps the id forever. Five
+        /// back-to-back matches is what surfaces that; a single-match smoke test never would.
+        /// </remarks>
+        public readonly int ProjectileIdsInUse;
+
         public ServerStateSnapshot(
             int actorIdsInUse, int actorIdsFree, int actorIdsQuarantined,
             int hitboxHistoryActors, int interestPairs, int spawnAckPairs, int sessions,
             int vehicleIdsInUse = 0, int vehicleIdsQuarantined = 0,
             int vehicleInterestPairs = 0, int vehiclesRegistered = 0,
-            int mountedWeaponsTracked = 0, int turretsTracked = 0)
+            int mountedWeaponsTracked = 0, int turretsTracked = 0,
+            int projectileIdsInUse = 0)
         {
             MountedWeaponsTracked = mountedWeaponsTracked;
             TurretsTracked        = turretsTracked;
+            ProjectileIdsInUse    = projectileIdsInUse;
 
             ActorIdsInUse       = actorIdsInUse;
             ActorIdsFree        = actorIdsFree;
@@ -117,7 +131,8 @@ namespace Ironfront.Net.Replication.Server
             && VehicleInterestPairs == 0
             && VehiclesRegistered == 0
             && MountedWeaponsTracked == 0
-            && TurretsTracked == 0;
+            && TurretsTracked == 0
+            && ProjectileIdsInUse == 0;
 
         public override string ToString()
         {
@@ -134,7 +149,8 @@ namespace Ironfront.Net.Replication.Server
               .Append(" quarantined=").Append(VehicleIdsQuarantined)
               .Append(" vehicleInterestPairs=").Append(VehicleInterestPairs)
               .Append(" | mountedWeapons=").Append(MountedWeaponsTracked)
-              .Append(" turrets=").Append(TurretsTracked);
+              .Append(" turrets=").Append(TurretsTracked)
+              .Append(" | projectileIds=").Append(ProjectileIdsInUse);
             return sb.ToString();
         }
     }
@@ -178,6 +194,7 @@ namespace Ironfront.Net.Replication.Server
         // constructs this with four arguments, and a null one reporting zero reads as clean --
         // correct for a server with no mounted-weapon subsystem at all.
         private readonly MountedWeaponRegistry? _mountedWeapons;
+        private readonly Projectiles.ProjectileIdPool? _projectileIds;
         private readonly ServerTurretAuthority? _turrets;
 
         public ServerStateAudit(
@@ -190,8 +207,10 @@ namespace Ironfront.Net.Replication.Server
             VehicleInterestTracker? vehicleInterest = null,
             VehicleRegistry? vehicles = null,
             MountedWeaponRegistry? mountedWeapons = null,
-            ServerTurretAuthority? turrets = null)
+            ServerTurretAuthority? turrets = null,
+            Projectiles.ProjectileIdPool? projectileIds = null)
         {
+            _projectileIds   = projectileIds;
             _vehicleIds      = vehicleIds;
             _vehicleInterest = vehicleInterest;
             _vehicles        = vehicles;
@@ -220,7 +239,8 @@ namespace Ironfront.Net.Replication.Server
                 _vehicleInterest?.TrackedPairCount ?? 0,
                 _vehicles?.LiveCount ?? 0,
                 _mountedWeapons?.TrackedCount ?? 0,
-                _turrets?.TrackedCount ?? 0);
+                _turrets?.TrackedCount ?? 0,
+                _projectileIds?.InUseCount ?? 0);
 
         /// <summary>
         /// Empties every per-actor and per-pair table. The host still has to despawn the actors

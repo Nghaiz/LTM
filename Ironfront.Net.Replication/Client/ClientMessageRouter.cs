@@ -161,6 +161,17 @@ namespace Ironfront.Net.Replication.Client
         public event Action<ExplosionMessage>? OnExplosion;
 
         /// <summary>
+        /// A projectile was launched, or an already-live one was re-parameterized.
+        /// </summary>
+        /// <remarks>
+        /// <b>A repeat of a live id is a correction, not a second projectile</b> (V7-D6, V7-D8).
+        /// The handler is expected to route through
+        /// <see cref="Projectiles.ClientProjectileTracker"/>, which answers "spawn or re-seat"
+        /// once rather than at every subscriber.
+        /// </remarks>
+        public event Action<ProjectileSpawnMessage>? OnProjectileSpawn;
+
+        /// <summary>
         /// The actor-id-to-name table changed. Raised with the parsed rows and their count.
         /// </summary>
         /// <remarks>
@@ -324,6 +335,16 @@ namespace Ironfront.Net.Replication.Client
                         if (ExplosionMessage.TryParse(body, out ExplosionMessage explosion))
                         {
                             OnExplosion?.Invoke(explosion);
+                            handled++;
+                        }
+                        else MalformedMessages++;
+                        break;
+
+                    case ServerMessageType.ProjectileSpawn:
+                        if (ProjectileSpawnMessage.TryParse(
+                                body, out ProjectileSpawnMessage projectile))
+                        {
+                            OnProjectileSpawn?.Invoke(projectile);
                             handled++;
                         }
                         else MalformedMessages++;

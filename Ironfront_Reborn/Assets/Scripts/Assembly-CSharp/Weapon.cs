@@ -29,6 +29,37 @@ public class Weapon : MonoBehaviour
 
 		public float unholsterTime = 1.2f;
 
+		/// <summary>
+		/// Seconds between a throw being ordered and the projectile leaving the hand. V7-D7.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Matches the throw clip's animation-event time, and it is the one number in this
+		/// phase that nothing in CI can discover.</b> <c>ThrowableWeapon.Fire</c> does not shoot
+		/// -- it sets an Animator trigger, and an animation event calls
+		/// <c>ThrowableWeapon.SpawnThrowable</c>. A headless server has no active Animator
+		/// (<c>Weapon.HasActiveAnimator</c> already returns false there, and on a stripped prefab
+		/// <c>GetComponent&lt;Animator&gt;()</c> returns null outright), so <b>today the server
+		/// throws instantly and the client about 0.6 s later</b>. That divergence is not
+		/// introduced by the network; the network is what makes it visible.
+		/// </para>
+		/// <para>
+		/// <b>Why not run an Animator on the server.</b> A headless build strips the renderers
+		/// the clip drives, the clip is authored for visuals rather than simulation, and it would
+		/// make the release time an Editor-only fact no test can grade. <b>Why not trust the
+		/// client's animation event.</b> It would make a client the author of the authoritative
+		/// release tick, and a modified client throws instantly with nothing to check it against.
+		/// A single authored constant is checkable by both sides.
+		/// </para>
+		/// <para>
+		/// <b>Cost, stated plainly:</b> if this drifts from the clip's event time, the grenade
+		/// leaves the hand at a visibly wrong point in the animation. That is a cosmetic error
+		/// with a loud symptom, which is the right failure mode to trade a silent authority hole
+		/// for.
+		/// </para>
+		/// </remarks>
+		public float releaseDelay = 0.6f;
+
 		public float aimFov = 50f;
 
 		public bool forceAutoReload;
@@ -466,6 +497,11 @@ public class Weapon : MonoBehaviour
 		Quaternion rotation = Quaternion.LookRotation(direction + UnityEngine.Random.insideUnitSphere * configuration.spread);
 		Projectile component = ((GameObject)UnityEngine.Object.Instantiate(configuration.projectilePrefab, configuration.muzzle.position, rotation)).GetComponent<Projectile>();
 		component.source = user;
+		// V7 tasks 2 and 3. The single point every weapon's projectile passes through, and the
+		// point AFTER the spread roll above -- which is V7-D4's server roll, resolved once, so
+		// the direction announced is the direction fired. A no-op off the server.
+		ProjectileNetAnnouncer.AnnounceLaunch(
+			component, configuration.muzzle.position, rotation * Vector3.forward, user);
 		return component;
 	}
 
@@ -522,7 +558,23 @@ public class Weapon : MonoBehaviour
 		holdingFire = false;
 		reloading = false;
 		CancelInvoke();
+		CancelPendingActions();
 		UnityEngine.Object.Destroy(base.gameObject);
+	}
+
+	/// <summary>
+	/// Cancels anything this weapon has scheduled that <c>CancelInvoke()</c> cannot reach.
+	/// V7-D7.
+	/// </summary>
+	/// <remarks>
+	/// <c>CancelInvoke()</c> only clears <c>Invoke</c> timers. V7 replaced the throwable's
+	/// animation-event release with a scheduled TICK held in a plain field, which no
+	/// <c>CancelInvoke</c> can see — so a throw ordered and then holstered, dropped or
+	/// interrupted by death inside the release delay would still fire <c>Shoot()</c> and
+	/// <c>Reload()</c>, spending a grenade the player no longer has out.
+	/// </remarks>
+	protected virtual void CancelPendingActions()
+	{
 	}
 
 	public virtual void Unholster()
@@ -551,6 +603,7 @@ public class Weapon : MonoBehaviour
 		reloading = false;
 		aiming = false;
 		CancelInvoke();
+		CancelPendingActions();
 		base.gameObject.SetActive(false);
 	}
 

@@ -303,6 +303,24 @@ public class ActorManager : MonoBehaviour
 		}
 	}
 
+	// V7 task 7. The same argument as the overload above, for the resupply sweep: both
+	// Ammobox.Resupply and Medipack.Resupply ran AliveActorsInRange on a three-second repeat,
+	// per deployable, each call allocating a fresh List<Actor> that lived exactly as long as one
+	// foreach. A bag and a medipack dropped together on a busy point is a steady GC drip for the
+	// whole of their lifetimes.
+	public static void AliveActorsInRange(Vector3 point, float range, List<Actor> into)
+	{
+		into.Clear();
+		for (int i = 0; i < instance.actors.Count; i++)
+		{
+			Actor actor = instance.actors[i];
+			if (!actor.dead && Vector3.Distance(point, actor.Position()) < range)
+			{
+				into.Add(actor);
+			}
+		}
+	}
+
 	public static void RegisterProjectile(Projectile p)
 	{
 		Ray ray = new Ray(p.transform.position, p.transform.forward);

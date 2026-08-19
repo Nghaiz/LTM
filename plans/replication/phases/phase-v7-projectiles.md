@@ -485,6 +485,52 @@ ships and is already tested; that fallback existing is a precondition of startin
 
 ---
 
+## 6.1. What actually shipped, and what did not
+
+> Added on delivery, 2026-08-19. The plan above is the design of record and is unedited; this
+> section is the honest accounting against it, so that nobody reads section 4 as a description of
+> the merged state. Written after an adversarial review scored the first attempt 4/10 for
+> precisely this gap — the code was largely right and the claims were not.
+
+**Shipped and graded in CI (1515 tests green):**
+
+- The engine-free ballistics core, the projectile and deployable authorities, the id pool, the
+  client's flight tracker — `Ironfront.Net.Replication/Projectiles/`, 12 files.
+- `S_PROJECTILE_SPAWN` at 20 bytes with the id and lifetime byte D6 and D8 need, the conformance
+  hex sample, and the spec's § 4.10, § 4.2 and § 15 rows.
+- `IActorDamageSink.ApplyHeal` and `ISpareAmmoPool.Give`, so a heal and a resupply write through
+  the same seams phase-05 D9 established.
+- The Unity half: the sweep fix, the role guards, the tick-counted grenade fuse, the server-owned
+  throw release with cancellation, server-side Javelin guidance, deployables, the VFX cleanup
+  policy, and `ThrowGrenade` retired.
+- The server bridge, its tick-loop wiring, the launch hook at `Weapon.SpawnProjectile`, the pose
+  and re-announce driver, and the client presenter subscribing to the new event.
+- The projectile id pool joined `AssertCleanState()`.
+
+**Deliberately NOT shipped, with the reason:**
+
+| Gap | Why |
+|---|---|
+| **The library stepper is not the production hit path.** `ServerProjectileBridge.AuthoritativeFlight` defaults **off**. | The Unity server already simulates every projectile it spawns and applies its damage through `Hitbox.ProjectileHit` and `ActorManager.Explode` — the path phase-05 and V1 established, which works today. Running both would apply every damage number **twice**, which is the exact "exactly once" clause criterion 5 protects. Turning it on is a follow-up whose first task is deleting the engine-side damage call, not a config change. |
+| **Grenades and deployables are never ballistically stepped**, at any setting. | The stepper terminates a projectile on the first surface its segment touches. A grenade *bounces* off that surface and nothing in the library models a bounce; a deployable's pose comes from a Rigidbody. Pinned by `ABouncingOrRigidbodyProjectileIsNotBallisticallyStepped`. |
+| **The client prefab array is unauthored.** | `NetClientProjectilePresenter._prefabsByKind` has to be filled in the Editor — a client cannot instantiate a projectile it has no prefab for. Until it is, no replicated projectile renders, and `UnrenderableKinds` counts every message that arrives. The server side needs no authoring: it learns each kind's numbers from the first prefab of that kind it fires. |
+| **Ten plan-named tests are not written** — the four grenade tests, the three throwable tests, and the guided-missile end-to-end pair. | They exercise Unity `MonoBehaviour` behaviour, and this phase adds no EditMode harness. Their subjects are covered at the library level where the arithmetic lives. |
+
+**Acceptance criteria (§ 4) as merged:** 2, 3, 7, 12 and 13 are met and pinned. 4 and 10 are met in
+code with no Unity-level test. **1, 5, 6, 8, 9 and 11 are NOT met** — every one of them needs either
+the authored client prefabs or a running two-client session, and claiming them from a green
+`dotnet test` would be the overclaim this section exists to prevent.
+
+**Three changes to offline single-player, not two.** V7-D11 records the sweep length and the throw
+release. The integrator is a third: it gained the `½·g·dt²` term, because the plan's own
+`ABulletFollowsTheSameArcAtAnyTimestep` could not pass against the semi-implicit Euler D4-local
+described — Euler's error is `½·g·dt·T`, about 33 cm at 30 Hz over two seconds against a 6.25 cm
+quantization step. Offline drop was already a function of the player's framerate, so there was
+never one trajectory to preserve. `OfflineBehaviourChangeTests` pins all three at the arithmetic
+level and says in its own remarks that it cannot reach the Unity paths.
+
+---
+
 ## 7. Handoff
 
 To **The client track**, one PR per file with its pinning test attached:

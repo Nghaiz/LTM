@@ -339,6 +339,9 @@ namespace Ironfront.Net.Replication.Tests
                 Calls.Add((victimId, amount, attackerId));
                 return new DamageOutcome(0f, died: true);
             }
+
+            /// <summary>Explosions never heal; a call here would be a routing mistake.</summary>
+            public float ApplyHeal(ushort actorId, float amount) => 0f;
         }
     }
 }

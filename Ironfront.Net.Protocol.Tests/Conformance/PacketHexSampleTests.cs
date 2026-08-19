@@ -457,22 +457,25 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(VehicleDespawnReason.WorldReset, message.Reason);
         }
 
-        // ---------------------------------------------- S_PROJECTILE_SPAWN 0x4F (19 B)
+        // ---------------------------------------------- S_PROJECTILE_SPAWN 0x4F (20 B)
+        //   u16 projectileId 7              -> 07 00
         //   u16 ownerActorId 9              -> 09 00
         //   u8  kind         Rocket(1)      -> 01
         //   i16 originX/Y/Z  16 / 32 / 48   -> 10 00 · 20 00 · 30 00
         //   i16 velX/Y/Z     256 / -128 / 0 -> 00 01 · 80 FF · 00 00
-        //   u32 spawnTick    1234           -> D2 04 00 00
+        //   u16 spawnTick    1234           -> D2 04
+        //   u8  remainingDs  20 (2.0 s)     -> 14
         private const string ProjectileSpawnHex =
-            "09 00 01 10 00 20 00 30 00 00 01 80 FF 00 00 D2 04 00 00";
+            "07 00 09 00 01 10 00 20 00 30 00 00 01 80 FF 00 00 D2 04 14";
 
         [Fact]
         public void ProjectileSpawn_Serializes_ToTheExpectedBytes()
         {
             var message = new ProjectileSpawnMessage(
-                ownerActorId: 9, kind: ProjectileKind.Rocket,
+                projectileId: 7, ownerActorId: 9, kind: ProjectileKind.Rocket,
                 originX: 16, originY: 32, originZ: 48,
-                velX: 256, velY: -128, velZ: 0, spawnTick: 1234);
+                velX: 256, velY: -128, velZ: 0, spawnTick: 1234,
+                remainingLifetimeDeciseconds: 20);
 
             Span<byte> buffer = stackalloc byte[ProjectileSpawnMessage.Size];
             Assert.Equal(ProjectileSpawnMessage.Size, message.Write(buffer));
@@ -485,6 +488,8 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.True(ProjectileSpawnMessage.TryParse(
                 Hex.FromHex(ProjectileSpawnHex), out ProjectileSpawnMessage message));
 
+            Assert.Equal(7, message.ProjectileId);
+            Assert.Equal(20, message.RemainingLifetimeDeciseconds);
             Assert.Equal(9, message.OwnerActorId);
             Assert.Equal(ProjectileKind.Rocket, message.Kind);
             Assert.Equal(16, message.OriginX);

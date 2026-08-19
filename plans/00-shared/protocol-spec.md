@@ -303,7 +303,16 @@ At 30 Hz: `29 × 30 = 870 B/s` upstream. Negligible.
 | 4 | Crouch | 12 | SwitchWeapon1 |
 | 5 | Sprint | 13 | SwitchWeapon2 |
 | 6 | Prone | 14 | SwitchWeapon3 |
-| 7 | ThrowGrenade | 15 | reserved |
+| 7 | Reserved7 | 15 | reserved |
+
+**Bit 7 was `ThrowGrenade`, and V7-D10 retired it rather than implementing it.** It was declared
+at the freeze and never gained a producer or a gameplay consumer. The game has no dedicated
+grenade input and never did: throwing is *switch to the gear slot, then Fire*, which routes
+through `Actor.SwitchWeapon` and `ThrowableWeapon.Fire` — a path V6 already made
+server-authoritative. Wiring the bit would add a **second route to firing** that does not pass
+`Weapon.CanFire()`, and a second route is the one nobody writes the rapid-fire test for. The
+value is kept rather than deleted so the neighbouring bits do not renumber; **no wire change**,
+because no producer ever set it.
 
 **Why we repeat 3 frames:** input is critical data but is sent unreliably. Without redundancy, one
 lost packet costs the server an entire tick of input → the character stalls. With a redundancy of 3,
@@ -811,14 +820,15 @@ second 16-byte GSP header at 20 Hz (~320 B/s) to solve a problem neither stream 
 | `C_SEAT_REQUEST` | 0x26 | 2 | `u16 vehicleId` + `u8 seatIndex` + `u8 action` | **4** |
 | `S_VEHICLE_SPAWN` | 0x4D | 2 | `u16 vehicleId` + `u8 kind` + `u8 networkTypeId` + `i16 posX/Y/Z` + `u32 rotation` + `u8 seatCount` + `u8 flags` | **16** |
 | `S_VEHICLE_DESPAWN` | 0x4E | 2 | `u16 vehicleId` + `u8 reason` | **3** |
-| `S_PROJECTILE_SPAWN` | 0x4F | 2 | `u16 ownerActorId` + `u8 kind` + `i16 originX/Y/Z` + `i16 velX/Y/Z` + `u32 spawnTick` | **19** |
+| `S_PROJECTILE_SPAWN` | 0x4F | 2 | `u16 projectileId` + `u16 ownerActorId` + `u8 kind` + `i16 originX/Y/Z` + `i16 velX/Y/Z` + `u16 spawnTick` + `u8 remainingLifetimeDeciseconds` | **20** |
 | `S_SEAT_CHANGE` | 0x50 | 2 | `u16 actorId` + `u16 vehicleId` + `u8 seatIndex` + `u8 result` | **6** |
 
 **Enums.** `SeatAction`: `Enter` = 0, `Leave` = 1. `SeatChangeResult`: `Entered` = 0, `Left` = 1,
 `RejectedOccupied` = 2, `RejectedVehicleDead` = 3, `RejectedAlreadySeated` = 4, `RejectedTooFar` = 5,
 `RejectedNoSuchSeat` = 6, `RejectedLockedOut` = 7. `VehicleDespawnReason`: `Destroyed` = 0,
 `WorldReset` = 1.
-`ProjectileKind`: `Shell` = 0, `Rocket` = 1, `GuidedMissile` = 2, `Grenade` = 3, `Supply` = 4.
+`ProjectileKind`: `Shell` = 0, `Rocket` = 1, `GuidedMissile` = 2, `Grenade` = 3,
+`AmmoBag` = 4, `Medipack` = 5, `Bullet` = 6.
 
 The load-bearing notes, none of them colour:
 
@@ -841,9 +851,46 @@ The load-bearing notes, none of them colour:
   player asked for and deserves full `PackPitch` precision; the snapshot is what the world looks
   like. `C_INPUT` already carries the same asymmetry against the actor rotation field.
 - **`S_VEHICLE_SPAWN` carries both `kind` and `networkTypeId`** — see § 4.9.
-- **`S_PROJECTILE_SPAWN` carries no projectile id.** Clients simulate flight from the parameters and
-  the server owns the hit; detonation replicates as `S_EXPLOSION` (0x4A), which carries its own
-  position. Nothing needs to correlate the two.
+- **`S_PROJECTILE_SPAWN` carries a projectile id, and V7 is why.** v3 declared it without one,
+  reasoning that clients simulate flight from the parameters and the server owns the hit, so
+  nothing needed to correlate a launch with anything. That held for the only projectile in view
+  at the time — a tank shell, launched once and never spoken of again. It is false for the two
+  V7 adds: a guided missile is **re-parameterized** at 5 Hz (V7-D6) and a deployable
+  re-announces while it tumbles (V7-D8). Without an id every re-announce is a second projectile
+  and a Javelin becomes ten missiles over a two-second flight. The id is what makes a repeat a
+  correction rather than a duplicate. Detonation still replicates separately as `S_EXPLOSION`
+  (0x4A), which carries its own position — the id does not change that.
+- **`remainingLifetimeDeciseconds` exists for exactly one projectile.** Every other lifetime is
+  derivable from `spawnTick` plus an authored constant. A `Medipack` subtracts five seconds from
+  its own life per successful heal, which no client can predict, so the server has to say so.
+  0.1 s resolution, and **255 is a sentinel meaning "at least 25.5 s", not a literal 25.5 s** —
+  a medipack is authored at thirty. A receiver reading it literally would despawn every
+  deployable in the game early, which is the one direction this field promises never happens;
+  on 255 it falls back to the kind's own authored lifetime, and the byte only becomes
+  load-bearing once the remaining life drops inside the range it can represent, which is exactly
+  where a medipack's self-shortening matters. A client that misses a
+  re-announce despawns **late**, never never, because its own countdown is monotonic.
+- **`spawnTick` is the low 16 bits of the server tick, not the full 32.** The only thing a
+  receiver computes from it is the projectile's age, and at `SIM_TICK_RATE` a `u16` spans 36
+  minutes — three orders of magnitude past the longest flight. Reconstruct with
+  `SequenceMath.Distance(nowTick16, spawnTick)`, which is wrap-correct for any age under 18
+  minutes.
+- **The projectile id space needs no quarantine, and channel 2 is why — but only half of
+  why.** `actorId` and `vehicleId` cool down before reuse because they also appear in snapshot
+  entries on the unreliable-sequenced channel, where a message about the dead id can land after
+  the replacement's spawn. A projectile id appears only here, on channel 2, where ordering
+  guarantees every message naming the old projectile is delivered first. **Moving
+  `S_PROJECTILE_SPAWN` off channel 2 reintroduces the need for a quarantine.**
+- **Ordering is necessary but NOT sufficient, and the residual gap is server-vs-client
+  lifetime.** The server frees an id the moment a projectile terminates; a client only learns of
+  a termination when a message tells it, and for a bullet or a world impact there is no terminal
+  message at all — `S_EXPLOSION` carries a position and no projectile id. So a rocket that hits
+  a wall one second into a six-second life has its id reusable five seconds before the client
+  stops holding it. Ordering does nothing about that, because both messages are correctly
+  ordered. **The receiver therefore matches on `(projectileId, kind)`, not on the id alone**, so
+  a recycled id naming a different kind spawns a new projectile instead of teleporting the old
+  one onto its arc. Within a kind the collision is benign — a stale grenade prop is re-seated
+  onto a new grenade's path and then behaves as the new grenade.
 - **`S_EXPLOSION` is unchanged by v3.** Its 10-byte layout has been correct since v1 and needs a
   caller and a subscriber, not new bytes.
 
@@ -1273,6 +1320,7 @@ Added at v3.0.0:
 | **2.0.1** | Week 2 | the client track + the master-server track | **Documented the `weaponId` value space (new § 4.8)**, which was a `u8` in three messages from the freeze onward with no section saying what any value meant — the mapping existed only inside `_Managers.prefab`, which the server cannot read. Added `WeaponIds`; SpecChecker now gates spec ↔ code ↔ prefab | **No** — no byte changed | #34 |
 
 | **3.0.0** | Week 3 | the replication track | **The vehicle wire.** Six new opcodes (0x21, 0x4C–0x50) and 0x26 promoted from reserved; new `VehicleSnapshotEntry` with its own `u16` change mask (new § 4.10); smallest-three quaternion packing in `Quantize` (§ 4.4); `SnapshotField.SeatInfo` finished on the actor entry, moving the full seated entry 20 → 23 B and the admitted-actor ceiling 58 → 50; new `VehicleIds` value space (new § 4.9), SpecChecker now gates spec ↔ code ↔ vehicle prefab; `S_PLAYER_LIST` (0x4B) given the struct, writer and router case it was declared without (new § 4.11) | **Yes** | (this PR) |
+| **3.0.0** (amended, Week 3) | Week 3 | the replication track | **The projectile wire, finished by V7.** `S_PROJECTILE_SPAWN` 19 → 20 bytes: gained `u16 projectileId` and `u8 remainingLifetimeDeciseconds`, and narrowed `spawnTick` from `u32` to its low 16 bits (§ 4.10). `ProjectileKind` renamed `Supply` → `AmmoBag` and appended `Medipack` = 5, `Bullet` = 6. `InputButtons` bit 7 `ThrowGrenade` → `Reserved7` (§ 4.2), no byte moved. **Amends the v3.0.0 row above rather than opening a 4.0.0**, per brainstorm D7: one protocol bump covers the whole vehicle-and-world track, the client and server ship together, and v3 has not been released to anything. The bytes did change relative to the row above, which is why this row exists rather than the edit being silent | **Yes** (inside v3) | (this PR) |
 
 > Every change after the freeze must add a row to this table and clear the gate below.
 > **Bump `PROTOCOL_VERSION` only when the bytes on the wire change** — a client and server with

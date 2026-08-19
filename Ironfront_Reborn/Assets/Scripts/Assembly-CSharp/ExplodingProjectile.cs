@@ -97,18 +97,29 @@ public class ExplodingProjectile : Projectile
 			audioSource.volume = 1f;
 			audioSource.Play();
 		}
-		Invoke("StopSmoke", smokeTime);
+		// V7 task 8: on a server this chain existed only to hold a dead GameObject alive for
+		// eighteen seconds so particles nobody can see could finish. Both timers now go through
+		// one policy, and nameof() makes them greppable -- the string forms were two names no
+		// search could find.
+		if (ProjectileCleanupPolicy.PlaysCosmetics)
+		{
+			Invoke(nameof(StopSmoke), ProjectileCleanupPolicy.HoldSeconds(smokeTime));
+		}
+		else
+		{
+			Invoke(nameof(Cleanup), 0f);
+		}
 		return result;
 	}
 
 	private void StopSmoke()
 	{
-		// Invoked from Explode, so it is reached on a headless server too.
+		// Reached on a client and offline only -- a server takes the direct Cleanup branch above.
 		if (impactParticles != null)
 		{
 			impactParticles.Stop(true);
 		}
-		Invoke("Cleanup", 10f);
+		Invoke(nameof(Cleanup), ProjectileCleanupPolicy.HoldSeconds(CLEANUP_TIME));
 	}
 
 	private void Cleanup()

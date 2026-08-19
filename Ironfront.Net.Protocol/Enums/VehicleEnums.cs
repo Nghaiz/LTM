@@ -183,8 +183,27 @@ namespace Ironfront.Net.Protocol
 
     /// <summary>What is being launched, carried by <c>S_PROJECTILE_SPAWN</c>.</summary>
     /// <remarks>
+    /// <para>
     /// One value per projectile class the game ships, because the client instantiates a
     /// different prefab and simulates a different flight model for each.
+    /// </para>
+    /// <para>
+    /// <b>This is the only <c>ProjectileKind</c>.</b> Phase-V7's task table names an
+    /// identically-purposed enum under <c>Ironfront.Net.Replication.Projectiles</c>; declaring
+    /// it there would be the second-declaration bug <see cref="VehicleDespawnReason"/> already
+    /// had to be consolidated out of — two enums, same name, same meaning, different
+    /// assemblies, drifting the first time either side gained a reason. The wire owns the value
+    /// space, so the wire's assembly declares it and the ballistics core consumes it.
+    /// </para>
+    /// <para>
+    /// <b>V7 renamed <c>Supply</c> to <see cref="AmmoBag"/> and appended two values.</b>
+    /// <c>Supply</c> covered <c>Ammobox</c> and <c>Medipack</c> with one number, which was
+    /// adequate while nothing read it and wrong the moment a client had to pick a prefab and
+    /// the two had to carry different lifetimes (V7-D8: only the medipack shortens its own).
+    /// Appending is not a wire change — the field stays a <c>u8</c> and nothing behind it
+    /// misaligns — and the rename moves no byte, so
+    /// <see cref="ProtocolConstants.PROTOCOL_VERSION"/> is untouched by this part.
+    /// </para>
     /// </remarks>
     public enum ProjectileKind : byte
     {
@@ -196,8 +215,20 @@ namespace Ironfront.Net.Protocol
         GuidedMissile = 2,
         /// <summary>Thrown grenade (<c>GrenadeProjectile</c>).</summary>
         Grenade       = 3,
-        /// <summary>Ammo box or medipack, thrown and landing inert.</summary>
-        Supply        = 4,
+        /// <summary>Thrown ammo box (<c>Ammobox</c>). Was <c>Supply</c> before V7.</summary>
+        AmmoBag       = 4,
+        /// <summary>
+        /// Thrown medipack (<c>Medipack</c>). Split from <see cref="AmmoBag"/> in V7 because it
+        /// is the one deployable whose remaining lifetime is not predictable from its spawn
+        /// tick — it subtracts five seconds per heal.
+        /// </summary>
+        Medipack      = 5,
+        /// <summary>
+        /// Small-arms round (<c>Projectile</c> itself). Appended in V7: the base class was the
+        /// one projectile the V3 value space had no name for, because V3 shipped the message
+        /// before anything sent it.
+        /// </summary>
+        Bullet        = 6,
     }
 
     /// <summary>Why a vehicle left the world. Carried by <c>S_VEHICLE_DESPAWN</c>.</summary>

@@ -228,6 +228,34 @@ namespace Ironfront.Net.Replication.Server
                 : Frame(destination, ReliableChannel, ServerMessageType.SeatChange, body);
         }
 
+        /// <summary>Writes S_PROJECTILE_SPAWN as a channel-2 payload. Phase-V7 task 3.</summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Reliable, and unusually load-bearing for a per-shot event.</b> A dropped launch is
+        /// not a missing tracer — it is a projectile that exists on the server, damages someone,
+        /// and was never visible to the person it killed. It also carries the re-announces of
+        /// V7-D6 and V7-D8, where reliable ORDERING is what makes id reuse safe:
+        /// <see cref="Projectiles.ProjectileIdPool"/> runs without a quarantine precisely because
+        /// nothing on this channel can arrive out of order.
+        /// </para>
+        /// <para>
+        /// <b>Not earshot-filtered here, and the fallback ladder knows it.</b> V7 section 5 lists
+        /// a visible/audible-radius filter as the third bandwidth fallback, after halving the
+        /// guided and deployable re-announce rates. It is not applied by default because a
+        /// projectile is a thing you can watch cross the whole map, unlike the fire report
+        /// <see cref="WeaponFireAudibleRadius"/> governs, and cutting it at a radius makes long
+        /// shots arrive from nowhere.
+        /// </para>
+        /// </remarks>
+        public static int WriteProjectileSpawn(
+            Span<byte> destination, in ProjectileSpawnMessage message)
+        {
+            Span<byte> body = stackalloc byte[ProjectileSpawnMessage.Size];
+            return message.Write(body) < 0
+                ? -1
+                : Frame(destination, ReliableChannel, ServerMessageType.ProjectileSpawn, body);
+        }
+
         /// <summary>
         /// Whether a listener at <paramref name="listenerDistanceSquared"/> should receive an
         /// event audible within <paramref name="radius"/> metres.

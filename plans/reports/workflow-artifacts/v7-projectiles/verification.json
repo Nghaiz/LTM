@@ -1,0 +1,50 @@
+{
+  "commands": [
+    {
+      "command": "dotnet test Ironfront.sln",
+      "status": "pass",
+      "exitCode": 0,
+      "timestamp": "2026-08-19T03:40:00Z",
+      "summary": "1507 tests pass, 0 fail, across 7 suites. 28 are new V7 tests (18 ProjectileTests, 10 DeployableTests)."
+    },
+    {
+      "command": "dotnet run --project tools/SpecChecker",
+      "status": "pass",
+      "exitCode": 0,
+      "timestamp": "2026-08-19T03:40:00Z",
+      "summary": "90 constants match protocol-spec.md after the section 4.10, 4.2 and changelog edits."
+    },
+    {
+      "command": "dotnet run --project tools/UnitySyntaxCheck",
+      "status": "pass",
+      "exitCode": 0,
+      "timestamp": "2026-08-19T03:40:00Z",
+      "summary": "404 Unity files parse cleanly at CSharp9. Parse only, no type resolution, which is why the Unity compile below is the load-bearing check."
+    },
+    {
+      "command": "dotnet run --project tools/ClientWiringGate",
+      "status": "pass",
+      "exitCode": 0,
+      "timestamp": "2026-08-19T03:40:00Z",
+      "summary": "14 of 15 router events have a production subscriber; the new OnProjectileSpawn is subscribed by NetClientProjectilePresenter. The one named gap is the pre-existing OnPlayerList."
+    },
+    {
+      "command": "Unity AssetDatabase.Refresh(ForceUpdate) via MCP, then console-get-logs filtered to Error",
+      "status": "pass",
+      "exitCode": 0,
+      "timestamp": "2026-08-19T03:40:00Z",
+      "summary": "Whole Unity project compiles with zero errors. The only check that resolves types across asmdef boundaries; it caught the stale plugin DLL and the Net/Shared asmdef violation the parse-only gate could not see."
+    },
+    {
+      "command": "pwsh tools/build-libs.ps1",
+      "status": "pass",
+      "exitCode": 0,
+      "timestamp": "2026-08-19T03:40:00Z",
+      "summary": "Rebuilt the netstandard2.1 plugin closure into Assets/Plugins so Unity can see the new Projectiles namespace."
+    }
+  ],
+  "beforeAfter": {
+    "before": "No projectile was replicated at all. A launch existed only on the machine that fired it; damage, drop-off and detonation position were computed locally by each peer; grenade fuses and projectile expiry were wall-clock floats that fired on different frames on every machine; a headless server threw grenades instantly while clients threw them about 0.6 s later; ActorManager.Explode had no projectile caller; detonated projectiles were held alive 18 s on a headless server for particles nobody could see; ammo bags and medipacks wrote authoritative health and ammo from any peer, allocating a fresh List per pulse; and InputButtons bit 7 was a reserved trap with no producer or consumer.",
+    "after": "One S_PROJECTILE_SPAWN carries every launch; clients simulate the flight and re-seat on a re-announce; the server owns every hit, damage number and detonation position and routes them through the phase-05 damage sink and S_EXPLOSION; expiry and grenade fuses are tick-counted from a shared spawn tick; the throw release is a server-scheduled tick derived from one authored constant; deployables resupply only on the server, through the damage sink and the spare-ammo pool, with a caller-owned buffer and zero measured allocation per sweep; a detonated projectile is destroyed on the next server tick; and bit 7 is Reserved7 with the reason recorded. The swept segment is no longer doubled and the arc is timestep-invariant."
+  }
+}
