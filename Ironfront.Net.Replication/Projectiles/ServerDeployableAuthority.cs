@@ -92,6 +92,18 @@ namespace Ironfront.Net.Replication.Projectiles
         /// <summary>Ticks between re-announces while moving. 10 Hz at the sim rate.</summary>
         public const int MovingReAnnounceTicks = ProtocolConstants.SIM_TICK_RATE / 10;
 
+        /// <summary>
+        /// Ticks between guided-missile re-parameterizations. 5 Hz at the sim rate. V7-D6.
+        /// </summary>
+        /// <remarks>
+        /// Declared here rather than beside the Unity component that fires it, so that the
+        /// bandwidth test and the driver read the same number. A rate that lived only in the
+        /// engine would leave the test asserting against a literal and staying green through any
+        /// change to the actual traffic — which is the whole failure mode of a cost budget
+        /// nobody can grade.
+        /// </remarks>
+        public const int GuidedReAnnounceTicks = ProtocolConstants.SIM_TICK_RATE / 5;
+
         private readonly ProjectileIdPool _ids;
         private readonly IActorDamageSink _damageSink;
         private readonly ActorSpareAmmoPool _ammoPool;

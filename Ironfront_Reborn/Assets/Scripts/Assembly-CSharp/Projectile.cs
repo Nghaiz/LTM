@@ -82,6 +82,24 @@ public class Projectile : MonoBehaviour
 		}
 	}
 
+	/// <summary>
+	/// Re-seats this projectile's velocity from an authoritative re-parameterization.
+	/// V7-D6 and V7-D8.
+	/// </summary>
+	/// <remarks>
+	/// <c>velocity</c> is <c>protected</c>, so a presenter outside the hierarchy cannot write it
+	/// — and a re-seat that moved only the transform would leave the projectile coasting on its
+	/// launch vector between corrections. Deployables carry a Rigidbody instead, and their
+	/// velocity lives there.
+	/// </remarks>
+	public void ApplyNetVelocity(Vector3 netVelocity)
+	{
+		velocity = netVelocity;
+
+		Rigidbody body = GetComponent<Rigidbody>();
+		if (body != null) body.linearVelocity = netVelocity;
+	}
+
 	protected virtual void Update()
 	{
 		if (Time.time > expireTime)
@@ -141,7 +159,8 @@ public class Projectile : MonoBehaviour
 		// `delta.magnitude * 2f`, which swept twice as far as the projectile then advanced -- so
 		// whether a thin collider registered depended on frame time (a 144 Hz client swept ~7 mm
 		// per step, a 30 Hz one ~33 mm, and each swept double). Accepted as a deliberate change
-		// to offline behaviour under brainstorm D8; ASweptSegmentIsNotDoubleCounted pins it.
+		// to offline behaviour under brainstorm D8. ASweptSegmentIsNotDoubleCounted pins the
+		// LIBRARY's equivalent; this line is Unity's own copy and no CI test can reach it.
 		if (Physics.Raycast(ray, out hitInfo, delta.magnitude, -2049) && Hit(ray, hitInfo))
 		{
 			flag = false;

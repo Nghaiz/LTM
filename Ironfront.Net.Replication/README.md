@@ -39,6 +39,7 @@ If you add something here, wire it in `ServerTickLoop` in the same change.
 | `Interest/` | Who sees whom, and how often |
 | `Combat/` | Hitbox history, rewind, ray/box maths, authoritative fire resolution |
 | `Movement/` | `MovementCore` — the shared truth of client and server |
+| `Projectiles/` | Ballistics, the server projectile and deployable authorities, the client's flight. Projectiles replicate **by parameter, not by state** (V7-D5): one `S_PROJECTILE_SPAWN` carries `(id, origin, velocity, spawnTick, remainingLifetime)`, clients simulate, the server owns every hit |
 | `Match/` | Match lifecycle, capture points, tickets |
 | `Server/` | Tick pacing, input authority, framing, id allocation, ticket validation |
 | `Serialization/` | **The transport track's.** Bit-level primitives |

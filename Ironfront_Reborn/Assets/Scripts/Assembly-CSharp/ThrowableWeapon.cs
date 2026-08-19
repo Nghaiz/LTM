@@ -65,6 +65,21 @@ public class ThrowableWeapon : Weapon
 	}
 
 	/// <summary>
+	/// Drops a scheduled release. V7-D7.
+	/// </summary>
+	/// <remarks>
+	/// The release is a tick in a plain field, so <c>CancelInvoke()</c> — which is what
+	/// <c>Weapon.Drop</c> and <c>Weapon.Holster</c> reach for — cannot see it. Without this a
+	/// grenade ordered and then holstered inside the 0.6 s delay still leaves the hand, from a
+	/// weapon the player has already put away.
+	/// </remarks>
+	protected override void CancelPendingActions()
+	{
+		base.CancelPendingActions();
+		releaseTick = 0;
+	}
+
+	/// <summary>
 	/// Called by the throw clip's animation event. V7-D7 made it cosmetic on a networked client.
 	/// </summary>
 	/// <remarks>

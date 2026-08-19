@@ -136,6 +136,13 @@ namespace Ironfront.Net.Unity.Client
             {
                 live.transform.SetPositionAndRotation(
                     ToUnity(result.Position), RotationFor(result.Velocity));
+
+                // THE VELOCITY IS THE POINT OF THE CORRECTION, not the pose. A guided missile
+                // re-parameterizes at 5 Hz precisely because its heading changes; snapping the
+                // transform while leaving the projectile coasting on its launch vector would
+                // make it jump every 200 ms and fly the wrong way in between -- V7-D6 corrected
+                // in appearance only.
+                live.ApplyNetVelocity(ToUnity(result.Velocity));
                 return;
             }
 

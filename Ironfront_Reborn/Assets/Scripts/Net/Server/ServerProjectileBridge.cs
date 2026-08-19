@@ -48,6 +48,7 @@ namespace Ironfront.Net.Unity.Server
         private readonly ServerProjectileAuthority _projectiles;
         private readonly ServerDeployableAuthority _deployables;
         private readonly ProjectileCatalog _catalog;
+        private readonly ProjectileIdPool _idPool;
 
         /// <summary>
         /// Blast radius carried by <c>S_EXPLOSION</c>, in metres. Matches the authored
@@ -74,6 +75,7 @@ namespace Ironfront.Net.Unity.Server
             _catalog    = catalog ?? throw new ArgumentNullException(nameof(catalog));
 
             var pool = new ProjectileIdPool();
+            _idPool = pool;
             var registry = new ServerProjectileRegistry(pool);
 
             _projectiles = new ServerProjectileAuthority(registry, catalog, worldSweep)
@@ -87,7 +89,64 @@ namespace Ironfront.Net.Unity.Server
 
         public ServerProjectileAuthority Projectiles => _projectiles;
 
+        /// <summary>
+        /// Whether the engine-free stepper owns projectile flight and hit resolution. <b>Off,
+        /// and this is the honest scope line of phase V7.</b>
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The Unity server already simulates every projectile it spawns.</b>
+        /// <c>Weapon.SpawnProjectile</c> instantiates a real GameObject on the server;
+        /// <c>Projectile.Update</c> integrates it, <c>Projectile.Travel</c> sweeps it, and
+        /// <c>Hitbox.ProjectileHit</c> and <c>ActorManager.Explode</c> apply its damage — which
+        /// is the path phase-05 and V1 established and which works today. Turning this on
+        /// without first removing that would run BOTH simulations for the same projectile and
+        /// apply its damage twice, which is precisely the "exactly once" clause brainstorm
+        /// criterion 5 exists to protect.
+        /// </para>
+        /// <para>
+        /// So V7 ships the ballistics core, the id space, the wire and the deployable authority
+        /// — all tested in CI — and leaves the stepper as the design of record rather than the
+        /// production hit path. Flipping this on is a follow-up whose first task is deleting the
+        /// engine-side damage call, not a config change. <b>Stated as a gap rather than
+        /// implied by a green test suite</b>, because a phase that claimed the server owned
+        /// projectile flight while the engine quietly still did would be the harder bug to find.
+        /// </para>
+        /// </remarks>
+        public bool AuthoritativeFlight { get; set; }
+
+        /// <summary>
+        /// Registers a kind's authored configuration if it has not been seen yet, and reports
+        /// whether the catalog now knows it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Self-populating, so the server needs nothing assigned in the Editor.</b> The
+        /// alternative was an authored array indexed by kind, which is a second source of truth
+        /// for a number the projectile prefab already carries — and one that fails silently and
+        /// completely when a row is missed, because an unregistered kind gets a zero-speed,
+        /// zero-lifetime config and expires on the tick it is launched. Registering on first
+        /// sight means the config the server simulates from is, by construction, the config the
+        /// prefab that was actually spawned carries.
+        /// </para>
+        /// <para>
+        /// First-write-wins. Two prefabs of the same kind with different numbers is a content
+        /// question, and silently letting the most recent shot redefine a kind mid-match would
+        /// make damage depend on firing order.
+        /// </para>
+        /// </remarks>
+        public bool EnsureConfig(ProjectileKind kind, in ProjectileConfig config)
+        {
+            if (_catalog.IsPopulated(kind)) return true;
+
+            _catalog.Set(kind, in config);
+            return true;
+        }
+
         public ServerDeployableAuthority Deployables => _deployables;
+
+        /// <summary>The shared id space, so the state audit can grade it. V7, criterion 7.</summary>
+        public ProjectileIdPool IdPool => _idPool;
 
         /// <summary>Projectiles and deployables live right now. Zero is a clean teardown.</summary>
         public int LiveCount => _projectiles.Registry.LiveCount + _deployables.LiveCount;
@@ -111,22 +170,39 @@ namespace Ironfront.Net.Unity.Server
             ProjectileKind kind, in Vec3 origin, in Vec3 direction, ushort sourceActorId)
         {
             uint tick = _loop.CurrentTick;
-            ushort id = _projectiles.Launch(kind, in origin, in direction, sourceActorId, tick);
-
-            // A hitscan-resolved bullet gets id 0 and is still announced: the tracer is the same
-            // tracer either way, and only the hit resolution differs.
             ref readonly ProjectileConfig config = ref _catalog[kind];
 
-            // The announced velocity is the AUTHORED muzzle velocity in both cases. A
-            // hitscan-resolved bullet has no registry row to read one from, and announcing a
-            // bare direction would have every client render a tracer crawling at 1 m/s.
+            // A HITSCAN-RESOLVED BULLET IS NOT ANNOUNCED HERE. Its tracer already arrives on
+            // S_WEAPON_FIRE and is drawn by CosmeticTracerPool (V10-D10); announcing it again
+            // would draw two streaks per shot and spend twenty reliable bytes on the busiest
+            // event in the game. Returning 0 without a message is the whole of it.
+            if (kind == ProjectileKind.Bullet && !_projectiles.StepsKind(kind)) return 0;
+
+            ushort id = AuthoritativeFlight
+                ? _projectiles.Launch(kind, in origin, in direction, sourceActorId, tick)
+                : (ushort)0;
+
+            float remaining = config.Lifetime;
+
+            if (id == 0)
+            {
+                // Engine-simulated. It still needs an id -- the client has to despawn the right
+                // prefab when the blast arrives -- so one comes from the same pool and is
+                // released by the projectile itself when it ends.
+                if (!_idPool.TryAcquire(out id)) return 0;
+
+                EngineSimulated++;
+            }
+            else
+            {
+                remaining = _projectiles.RemainingLifetimeSeconds(id, tick);
+            }
+
+            // The AUTHORED muzzle velocity, so the client's simulation starts from the same
+            // vector the server's did.
             Vec3 velocity = direction.Normalized * config.Speed;
 
-            Announce(
-                id, kind, sourceActorId, in origin, in velocity,
-                id == 0 ? config.Lifetime : _projectiles.RemainingLifetimeSeconds(id, tick),
-                tick);
-
+            Announce(id, kind, sourceActorId, in origin, in velocity, remaining, tick);
             return id;
         }
 
@@ -159,13 +235,56 @@ namespace Ironfront.Net.Unity.Server
             for (int i = 0; i < deployables.ReAnnounceCount; i++) ReAnnounce(_reAnnounce[i], tick);
         }
 
+        /// <summary>
+        /// Re-sends an engine-simulated projectile's current parameters. The 5 Hz driver behind
+        /// V7-D6, called from the missile itself because the missile is where the guidance runs.
+        /// </summary>
+        /// <remarks>
+        /// Still one <c>S_PROJECTILE_SPAWN</c> with the same id, which is what keeps V7-D6
+        /// inside V7-D5: every message is a complete parameter set going through the same
+        /// decoder, and there is no per-tick projectile entry in any snapshot.
+        /// </remarks>
+        public void ReAnnounce(
+            ushort id, ProjectileKind kind, ushort ownerActorId,
+            in Vec3 position, in Vec3 velocity, float remainingLifetimeSeconds)
+        {
+            if (id == 0) return;
+
+            Announce(
+                id, kind, ownerActorId, in position, in velocity,
+                remainingLifetimeSeconds, _loop.CurrentTick);
+        }
+
+        /// <summary>
+        /// Returns the id of an engine-simulated projectile — a grenade that has detonated or
+        /// been cleaned up. A no-op for an id the ballistic registry owns, which frees its own.
+        /// </summary>
+        /// <remarks>
+        /// <b>Without a caller for this the pool leaks one id per grenade thrown</b>, and
+        /// brainstorm criterion 13's five-back-to-back-matches check is exactly what would find
+        /// it. <c>GrenadeProjectile.Cleanup</c> is the caller.
+        /// </remarks>
+        public bool ReleaseEngineSimulated(ushort id)
+        {
+            if (id == 0) return false;
+            if (_projectiles.Registry.IsLive(id)) return false;
+            if (_deployables.IsLive(id)) return false;
+
+            return _idPool.Release(id);
+        }
+
+        /// <summary>Grenades and other engine-simulated projectiles announced since reset.</summary>
+        public long EngineSimulated { get; private set; }
+
         /// <summary>Expires everything. Round teardown; feeds <c>AssertCleanState()</c>.</summary>
         public void Reset()
         {
             _projectiles.Reset();
             _deployables.Reset();
+            _idPool.Reset();
             ProjectileHitsApplied = 0;
             DetonationsAnnounced  = 0;
+            EngineSimulated       = 0;
         }
 
         /// <summary>

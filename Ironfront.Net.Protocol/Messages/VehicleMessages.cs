@@ -355,6 +355,20 @@ namespace Ironfront.Net.Protocol
         }
 
         /// <summary>
+        /// The saturated value, meaning <b>at least</b> 25.5 s rather than exactly 25.5 s.
+        /// </summary>
+        /// <remarks>
+        /// Deployable lifetimes are routinely longer than the byte can express — a medipack is
+        /// authored at thirty seconds. A receiver that read 255 as a literal 25.5 would despawn
+        /// it four and a half seconds early, and "despawns late, never never" is the one
+        /// guarantee V7-D8 makes about this field. On this value a receiver falls back to the
+        /// kind's own authored lifetime, which is what the server is counting down from anyway;
+        /// the byte only becomes load-bearing once the remaining life drops inside the range it
+        /// can represent, which is where a medipack's self-shortening actually matters.
+        /// </remarks>
+        public const byte LifetimeUnknown = 255;
+
+        /// <summary>
         /// Deciseconds for a remaining lifetime in seconds, clamped into the byte. Shared so
         /// the writer and every test round-trip through one conversion rather than each
         /// rediscovering the saturation rule.
@@ -364,7 +378,7 @@ namespace Ironfront.Net.Protocol
             if (seconds <= 0f) return 0;
 
             float tenths = seconds * 10f;
-            return tenths >= 255f ? (byte)255 : (byte)tenths;
+            return tenths >= 255f ? LifetimeUnknown : (byte)tenths;
         }
 
         /// <summary>Inverse of <see cref="PackRemainingLifetime"/>.</summary>

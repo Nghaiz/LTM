@@ -1126,7 +1126,12 @@ namespace Ironfront.Net.Unity.Server
                 // V6, criterion 13. Both are keyed on (vehicleId, seatIndex), so both leak the
                 // way the pair tables do -- on the second and third round of a server nobody is
                 // watching -- and both are emptied by ResetForNewMatch.
-                _mountedWeapons, _turretAuthority);
+                _mountedWeapons, _turretAuthority,
+                // V7, criterion 7. The third id space to join the audit, and it leaks
+                // differently from the other two: a projectile releases its OWN id, so a prefab
+                // destroyed by a path that skips its teardown keeps the id forever. Five
+                // back-to-back matches is what surfaces that.
+                _projectiles?.IdPool);
         }
 
         /// <summary>

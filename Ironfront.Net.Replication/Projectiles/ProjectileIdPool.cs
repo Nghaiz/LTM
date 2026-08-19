@@ -52,7 +52,9 @@ namespace Ironfront.Net.Replication.Projectiles
 
             _capacity = capacity;
             _free     = new Queue<ushort>(capacity);
-            _inUse    = new HashSet<ushort>();
+            // Sized up front: growing a HashSet to 512 reallocates, and it would do it on the
+            // launch path -- the one place in this phase that must not allocate.
+            _inUse    = new HashSet<ushort>(capacity);
 
             for (ushort id = FirstId; id < FirstId + capacity; id++) _free.Enqueue(id);
         }

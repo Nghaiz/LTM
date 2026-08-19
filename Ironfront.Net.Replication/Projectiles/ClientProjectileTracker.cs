@@ -132,6 +132,14 @@ namespace Ironfront.Net.Replication.Projectiles
         /// </summary>
         public long OutOfRangeIds { get; private set; }
 
+        /// <summary>
+        /// Ids that arrived naming a different <see cref="ProjectileKind"/> than the one this
+        /// client still held. Expected and benign — it is an id being recycled faster than the
+        /// client learned the previous projectile had ended — and counted because a high rate
+        /// means terminal events are not reaching clients.
+        /// </summary>
+        public long ReplacedIds { get; private set; }
+
         public bool IsLive(ushort projectileId)
             => projectileId < _live.Length && _live[projectileId];
 
@@ -171,6 +179,17 @@ namespace Ironfront.Net.Replication.Projectiles
             float remaining = ProjectileSpawnMessage.UnpackRemainingLifetime(
                 message.RemainingLifetimeDeciseconds);
 
+            // 255 means "at least 25.5 s, exact value not expressible" rather than "25.5 s" --
+            // see the message's own remarks. Treating it as a literal 25.5 makes a client
+            // despawn a 30 s medipack four and a half seconds EARLY, which is the one direction
+            // V7-D8 promises never happens. Fall back to the kind's authored lifetime, which is
+            // the number the server is counting down from anyway.
+            if (message.RemainingLifetimeDeciseconds == ProjectileSpawnMessage.LifetimeUnknown)
+            {
+                float authored = _catalog[message.Kind].Lifetime;
+                if (authored > remaining) remaining = authored;
+            }
+
             if (remaining <= 0f || age > MaxFastForwardTicks)
             {
                 Retire(id);
@@ -179,7 +198,12 @@ namespace Ironfront.Net.Replication.Projectiles
                     in position, in velocity, 0f, age);
             }
 
-            bool reSeat = _live[id];
+            // KIND IS PART OF IDENTITY, not just id. Ids are reused, and a re-seat that
+            // matched on id alone would teleport whatever prefab that id last named -- a
+            // medipack, say -- onto the new grenade's arc, and never spawn the grenade at all.
+            // Silent, and the wrong object keeps the wrong behaviour.
+            bool reSeat = _live[id] && _kind[id] == message.Kind;
+            if (_live[id] && !reSeat) ReplacedIds++;
 
             ref readonly ProjectileConfig config = ref _catalog[message.Kind];
             var state = new BallisticState(position, velocity);

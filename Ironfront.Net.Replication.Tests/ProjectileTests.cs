@@ -127,13 +127,21 @@ namespace Ironfront.Net.Replication.Tests
                 ProjectileKind.Bullet, new Vec3(0f, 0f, 0f), new Vec3(0f, 0f, 1f), ShooterId, 0);
 
             Span<ProjectileHit> hits = stackalloc ProjectileHit[4];
-            authority.StepAll(Tick, ReadOnlySpan<HitscanTarget>.Empty, 1, hits);
 
-            Assert.Equal(1, sweep.Calls);
+            // TWO steps, not one. With a single step the recorder has no previous origin to
+            // difference against and reports the advance AS the segment, so the assertion below
+            // compares a value with itself and cannot fail -- which is what the first version of
+            // this test did.
+            authority.StepAll(Tick, ReadOnlySpan<HitscanTarget>.Empty, 1, hits);
+            authority.StepAll(Tick, ReadOnlySpan<HitscanTarget>.Empty, 2, hits);
+
+            Assert.Equal(2, sweep.Calls);
+            Assert.True(sweep.HasMeasuredAdvance, "the recorder never differenced two origins.");
             Assert.True(
-                Math.Abs(sweep.LastSegmentLength - sweep.LastAdvanceLength) < 1e-4f,
-                $"swept {sweep.LastSegmentLength:F4} m but advanced {sweep.LastAdvanceLength:F4} m "
-                + "-- the sweep length has drifted away from the step again.");
+                Math.Abs(sweep.PreviousSegmentLength - sweep.LastAdvanceLength) < 1e-4f,
+                $"swept {sweep.PreviousSegmentLength:F4} m but then advanced "
+                + $"{sweep.LastAdvanceLength:F4} m -- the sweep length has drifted away from the "
+                + "step again. A ratio near 2.0 is the original bug returning.");
         }
 
         // ------------------------------------------------- task 2: authority, expiry, the cap
@@ -316,10 +324,20 @@ namespace Ironfront.Net.Replication.Tests
             // arrive in the volume that threatens the tick budget.
             Assert.True(authority.StepsKind(ProjectileKind.Rocket));
 
-            // And the two paths agree on the number at zero range.
-            float stepper = ProjectileDamage.DamageFor(in config, 0f)
-                * ServerFireResolver.HitboxMultiplier(HitboxType.Head);
-            Assert.Equal(70f * ServerFireResolver.HitboxMultiplier(HitboxType.Head), stepper, 3);
+            // And the two paths agree on the number at zero range -- computed by BOTH, rather
+            // than by one and then compared with itself. ServerFireResolver.DamageFor is the
+            // phase-05 hitscan path's damage function; ProjectileDamage.DamageFor is the
+            // stepper's. A weapon config with the same damage and no drop-off inside the range
+            // must produce the same number from each.
+            var hitscanWeapon = new WeaponConfig(
+                cooldown: 0.1f, spread: 0f, projectilesPerShot: 1, range: 300f,
+                damage: 70f, force: 200f, clipSize: 30);
+
+            float viaHitscan = ServerFireResolver.DamageFor(in hitscanWeapon, HitboxType.Body, 0f);
+            float viaStepper = ProjectileDamage.DamageFor(in config, 0f)
+                * ServerFireResolver.HitboxMultiplier(HitboxType.Body);
+
+            Assert.Equal(viaHitscan, viaStepper, 3);
         }
 
         /// <summary>
@@ -504,20 +522,36 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
-        /// Bandwidth, feeding criterion 9. A 5 Hz re-parameterization of a 20-byte message is
-        /// 100 B/s, and the budget line V7-D6 quotes is "~95 B/s per missile in flight".
+        /// Bandwidth, feeding criterion 9. V7-D6 budgeted "~95 B/s per missile in flight".
         /// </summary>
+        /// <remarks>
+        /// <b>Reads the rate constant the production driver reads</b>, rather than a literal 5.
+        /// <c>ProjectileNetSync</c> paces its re-parameterization from
+        /// <see cref="ServerDeployableAuthority.GuidedReAnnounceTicks"/>, so changing the rate
+        /// moves this number with it and the budget cannot silently be exceeded. It measures
+        /// only the payload: framing, the channel envelope and the per-recipient fan-out of a
+        /// broadcast are all on top, which is why the ceiling has headroom rather than sitting
+        /// exactly on the budget.
+        /// </remarks>
         [Fact]
-        public void AGuidedMissileCostsUnderOneHundredAndTenBytesPerSecond()
+        public void AGuidedMissileCostsAboutOneHundredBytesPerSecondOfPayload()
         {
-            const int reAnnouncesPerSecond = 5;
-            int bytesPerSecond = reAnnouncesPerSecond * ProjectileSpawnMessage.Size;
+            float perSecond = ProtocolConstants.SIM_TICK_RATE
+                / (float)ServerDeployableAuthority.GuidedReAnnounceTicks;
 
-            Assert.Equal(100, bytesPerSecond);
+            Assert.Equal(5f, perSecond, 3);
+
+            float bytesPerSecond = perSecond * ProjectileSpawnMessage.Size;
+            Assert.Equal(100f, bytesPerSecond, 3);
+
+            // The ceiling, and what to do if it is ever hit: V7 section 5 lists dropping this
+            // rate from 5 Hz to 3 Hz as the FIRST bandwidth fallback, which is a change to
+            // GuidedReAnnounceTicks and would move the number above with it.
             Assert.True(
-                bytesPerSecond <= 110,
-                $"a missile now costs {bytesPerSecond} B/s; V7-D6 budgeted about 95 and section 5's "
-                + "first bandwidth fallback is dropping the rate from 5 Hz to 3 Hz.");
+                bytesPerSecond <= 110f,
+                $"a missile now costs {bytesPerSecond} B/s of payload against a ~95 B/s budget. "
+                + "Lower ServerDeployableAuthority.GuidedReAnnounceTicks rather than raising "
+                + "this ceiling.");
         }
 
         /// <summary>
@@ -624,24 +658,37 @@ namespace Ironfront.Net.Replication.Tests
         private sealed class RecordingWorldSweep : IProjectileWorldSweep
         {
             public int Calls { get; private set; }
-            public float LastSegmentLength { get; private set; }
+
+            /// <summary>The segment handed to the PREVIOUS call — the one the advance follows.</summary>
+            public float PreviousSegmentLength { get; private set; }
+
+            /// <summary>How far the projectile actually moved between the last two calls.</summary>
             public float LastAdvanceLength { get; private set; }
 
+            /// <summary>
+            /// False until two origins have been differenced. Without this the caller cannot
+            /// tell a measured advance from the placeholder a single call leaves behind.
+            /// </summary>
+            public bool HasMeasuredAdvance { get; private set; }
+
+            private float _lastSegmentLength;
             private Vec3 _lastFrom;
             private bool _haveLastFrom;
 
             public bool Sweep(in Vec3 from, in Vec3 to, out Vec3 hitPoint)
             {
                 Calls++;
-                LastSegmentLength = (to - from).Magnitude;
 
-                // The previous call's `from` to this call's `from` is exactly how far the
-                // projectile actually advanced last step.
-                if (_haveLastFrom) LastAdvanceLength = (from - _lastFrom).Magnitude;
-                else LastAdvanceLength = LastSegmentLength;
+                if (_haveLastFrom)
+                {
+                    LastAdvanceLength     = (from - _lastFrom).Magnitude;
+                    PreviousSegmentLength = _lastSegmentLength;
+                    HasMeasuredAdvance    = true;
+                }
 
-                _lastFrom = from;
-                _haveLastFrom = true;
+                _lastSegmentLength = (to - from).Magnitude;
+                _lastFrom          = from;
+                _haveLastFrom      = true;
 
                 hitPoint = default;
                 return false;

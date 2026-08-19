@@ -76,9 +76,45 @@ namespace Ironfront.Net.Replication.Projectiles
         /// <summary>Projectiles that expired without hitting anything.</summary>
         public long Expired { get; private set; }
 
-        /// <summary>Whether this kind is stepped here, or resolved by the caller's hitscan path.</summary>
+        /// <summary>Whether this kind's flight is integrated here.</summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A grenade is not, and stepping one here would be a bug with teeth.</b> This
+        /// stepper terminates a projectile on the first thing its swept segment touches, which
+        /// is right for a bullet, a shell, a rocket and a missile — and exactly wrong for a
+        /// grenade, whose whole behaviour is to <i>bounce</i> off that surface
+        /// (<c>GrenadeProjectile.Update</c> reflects and keeps going). Nothing in this library
+        /// models a bounce, so a stepped grenade would detonate on the first wall it grazed. The
+        /// engine owns a grenade's flight on the server, and its detonation still replicates as
+        /// <c>S_EXPLOSION</c> through <c>ActorManager.Explode</c> — which is V7-D1's whole
+        /// point, and means the authoritative blast position is unaffected either way.
+        /// </para>
+        /// <para>
+        /// <b>Deployables are not either</b>, for the same shape of reason: a thrown bag is
+        /// Rigidbody-driven and its pose arrives from the engine through
+        /// <see cref="ServerDeployableAuthority.UpdatePose"/>, not from an integrator here.
+        /// </para>
+        /// <para>
+        /// <b>Bullets are excluded when <see cref="HitscanBullets"/> is set</b> — the tick-budget
+        /// precondition, which is a cost decision rather than a correctness one.
+        /// </para>
+        /// </remarks>
         public bool StepsKind(ProjectileKind kind)
-            => !(HitscanBullets && kind == ProjectileKind.Bullet);
+        {
+            switch (kind)
+            {
+                case ProjectileKind.Grenade:
+                case ProjectileKind.AmmoBag:
+                case ProjectileKind.Medipack:
+                    return false;
+
+                case ProjectileKind.Bullet:
+                    return !HitscanBullets;
+
+                default:
+                    return true;
+            }
+        }
 
         /// <summary>
         /// Registers a launch and returns its projectile id, or 0 when the kind is not stepped

@@ -7,8 +7,14 @@ namespace Ironfront.Net.Replication.Projectiles
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Shared by the server, the networked client and the offline game, so that a projectile's
-    /// arc is one arc rather than several implementations that agree until somebody edits one.
+    /// The engine-free half of it, at least — and that qualifier is load-bearing.
+    /// <c>Projectile.Update</c> and <c>GrenadeProjectile.Update</c> in <c>Assembly-CSharp</c>
+    /// each carry their own copy of this expression, because a <c>MonoBehaviour</c> stepping
+    /// itself in <c>Update</c> cannot call into a <c>netstandard</c> library for its own frame
+    /// integration without restructuring how those objects move. <b>The two copies must be kept
+    /// in step by hand</b>, and they differ in one respect already: they use
+    /// <c>Physics.gravity</c> where this hard-codes <see cref="EarthGravity"/>, so a project
+    /// that changes Unity's gravity setting silently separates them.
     /// <see cref="Step"/> is <c>static</c>, takes its state by <c>ref</c>, and allocates
     /// nothing.
     /// </para>
@@ -48,8 +54,11 @@ namespace Ironfront.Net.Replication.Projectiles
         /// change rather than folded in quietly because it moves bullet drop for the offline
         /// game too. What it does <b>not</b> do is make a defined behaviour undefined: offline
         /// drop was already a function of the player's framerate, so there was never one
-        /// trajectory to preserve. <c>OfflineProjectileBehaviourIsUnchangedExceptTheRecorded
-        /// Changes</c> pins all three.
+        /// trajectory to preserve.
+        /// <c>OfflineBehaviourChangeTests.OfflineProjectileBehaviourIsUnchangedExceptTheRecordedChanges</c>
+        /// pins all three <b>at the arithmetic level only</b> — the offline code paths are Unity
+        /// files that no CI test can reach, and that fixture says so in its own remarks rather
+        /// than implying coverage it does not have.
         /// </para>
         /// <para>
         /// <b><c>TravelDistance</c> advances by muzzle speed, not by <c>|Velocity|</c></b> —

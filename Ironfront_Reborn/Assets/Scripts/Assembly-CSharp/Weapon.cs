@@ -497,6 +497,11 @@ public class Weapon : MonoBehaviour
 		Quaternion rotation = Quaternion.LookRotation(direction + UnityEngine.Random.insideUnitSphere * configuration.spread);
 		Projectile component = ((GameObject)UnityEngine.Object.Instantiate(configuration.projectilePrefab, configuration.muzzle.position, rotation)).GetComponent<Projectile>();
 		component.source = user;
+		// V7 tasks 2 and 3. The single point every weapon's projectile passes through, and the
+		// point AFTER the spread roll above -- which is V7-D4's server roll, resolved once, so
+		// the direction announced is the direction fired. A no-op off the server.
+		ProjectileNetAnnouncer.AnnounceLaunch(
+			component, configuration.muzzle.position, rotation * Vector3.forward, user);
 		return component;
 	}
 
@@ -553,7 +558,23 @@ public class Weapon : MonoBehaviour
 		holdingFire = false;
 		reloading = false;
 		CancelInvoke();
+		CancelPendingActions();
 		UnityEngine.Object.Destroy(base.gameObject);
+	}
+
+	/// <summary>
+	/// Cancels anything this weapon has scheduled that <c>CancelInvoke()</c> cannot reach.
+	/// V7-D7.
+	/// </summary>
+	/// <remarks>
+	/// <c>CancelInvoke()</c> only clears <c>Invoke</c> timers. V7 replaced the throwable's
+	/// animation-event release with a scheduled TICK held in a plain field, which no
+	/// <c>CancelInvoke</c> can see — so a throw ordered and then holstered, dropped or
+	/// interrupted by death inside the release delay would still fire <c>Shoot()</c> and
+	/// <c>Reload()</c>, spending a grenade the player no longer has out.
+	/// </remarks>
+	protected virtual void CancelPendingActions()
+	{
 	}
 
 	public virtual void Unholster()
@@ -582,6 +603,7 @@ public class Weapon : MonoBehaviour
 		reloading = false;
 		aiming = false;
 		CancelInvoke();
+		CancelPendingActions();
 		base.gameObject.SetActive(false);
 	}
 
