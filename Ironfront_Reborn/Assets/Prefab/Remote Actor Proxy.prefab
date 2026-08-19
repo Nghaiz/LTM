@@ -211,7 +211,8 @@ Transform:
   m_LocalPosition: {x: -0.24828325, y: 0.000000019674163, z: 0.00000003627347}
   m_LocalScale: {x: 1, y: 0.99999994, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 8534193502719994857}
   m_Father: {fileID: 4078180129666934}
   m_LocalEulerAnglesHint: {x: 0.0000006066254, y: 7.461545e-14, z: -5.1273313}
 --- !u!1 &1179478085164439
@@ -755,6 +756,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4684444414135058}
+  - component: {fileID: 4421695660942680905}
   m_Layer: 9
   m_Name: Remote Actor Proxy
   m_TagString: Untagged
@@ -778,6 +780,24 @@ Transform:
   - {fileID: 4774303514459128}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: -0, z: -0}
+--- !u!114 &4421695660942680905
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1705635239785974}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 076337bd4a5a4397a34c31257050ba36, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Ironfront.Net.Unity.Client.RemoteActorView
+  _animator: {fileID: 95145038102674612}
+  _actor: {fileID: 0}
+  _muzzleAnchor: {fileID: 94907755764203769}
+  _crouchedMuzzleDrop: 0.45
+  _proneMuzzleDrop: 1.1
+  _upperBody: {fileID: 4442250865119220}
 --- !u!1 &1708956992846798
 GameObject:
   m_ObjectHideFlags: 0
@@ -939,3 +959,66 @@ Transform:
   - {fileID: 4365247660148743}
   m_Father: {fileID: 4504907853360800}
   m_LocalEulerAnglesHint: {x: -0.000017872204, y: 6.919582, z: -0.000000031738875}
+--- !u!1 &1048457180321267804
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 8534193502719994857}
+  m_Layer: 0
+  m_Name: Weapon Mount
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &8534193502719994857
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1048457180321267804}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 94907755764203769}
+  m_Father: {fileID: 4997660941922353}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &2739528556184511753
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 94907755764203769}
+  m_Layer: 0
+  m_Name: Muzzle Anchor
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &94907755764203769
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2739528556184511753}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0.55}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 8534193502719994857}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}

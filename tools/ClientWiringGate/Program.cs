@@ -36,36 +36,48 @@ namespace Ironfront.Tools.ClientWiringGate
             Path.Combine("Ironfront_Reborn", "Assets", "Scripts"),
         };
 
+        /// <summary>
+        /// The Unity asset tree the authoring half grades, relative to the repository root.
+        /// </summary>
+        private static readonly string AssetsRoot = Path.Combine("Ironfront_Reborn", "Assets");
+
         public static int Main(string[] args)
         {
-            List<string> files;
-
+            // Explicit paths mean "grade these source files" — the caller is a test or a
+            // pre-commit hook working on a diff, and it has no asset tree in mind. Running the
+            // authoring half there would grade the whole project on every touched .cs.
             if (args.Length > 0)
-            {
-                files = args.ToList();
-            }
-            else
-            {
-                string? repoRoot = FindRepoRoot(Directory.GetCurrentDirectory());
-                if (repoRoot == null)
-                {
-                    Console.Error.WriteLine(
-                        $"[client-wiring] FAIL - could not locate the repository root (no "
-                        + $"{RepoRootMarker} found walking up from "
-                        + $"{Directory.GetCurrentDirectory()}). Run from inside the repository, or "
-                        + "pass paths explicitly.");
-                    return 2;
-                }
+                return GateRunner.Run(
+                    GateRunner.RouterEventNames(), args.ToList(), Console.Out, Console.Error);
 
-                files = DefaultRoots
-                    .Select(root => Path.Combine(repoRoot, root))
-                    .Where(Directory.Exists)
-                    .SelectMany(root => Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
-                    .OrderBy(p => p, StringComparer.Ordinal)
-                    .ToList();
+            string? repoRoot = FindRepoRoot(Directory.GetCurrentDirectory());
+            if (repoRoot == null)
+            {
+                Console.Error.WriteLine(
+                    $"[client-wiring] FAIL - could not locate the repository root (no "
+                    + $"{RepoRootMarker} found walking up from "
+                    + $"{Directory.GetCurrentDirectory()}). Run from inside the repository, or "
+                    + "pass paths explicitly.");
+                return 2;
             }
 
-            return GateRunner.Run(GateRunner.RouterEventNames(), files, Console.Out, Console.Error);
+            List<string> files = DefaultRoots
+                .Select(root => Path.Combine(repoRoot, root))
+                .Where(Directory.Exists)
+                .SelectMany(root => Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+                .OrderBy(p => p, StringComparer.Ordinal)
+                .ToList();
+
+            int source = GateRunner.Run(
+                GateRunner.RouterEventNames(), files, Console.Out, Console.Error);
+
+            int assets = AssetGateRunner.Run(
+                Path.Combine(repoRoot, AssetsRoot), Console.Out, Console.Error);
+
+            // Both halves always run, and the worse code wins. Short-circuiting on the source
+            // half would hide every authoring gap behind one dead event, and 2 outranks 1
+            // because "could not tell" must never be reported as "found nothing".
+            return Math.Max(source, assets);
         }
 
         private static string? FindRepoRoot(string start)
