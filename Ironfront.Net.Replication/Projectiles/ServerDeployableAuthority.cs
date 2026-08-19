@@ -355,22 +355,50 @@ namespace Ironfront.Net.Replication.Projectiles
         /// </remarks>
         private bool ShouldReAnnounce(int slot, uint currentTick)
         {
-            byte nowDs = ProjectileSpawnMessage.PackRemainingLifetime(
-                (_expiryTick[slot] - currentTick) * _tickDurationSeconds);
-
-            if (nowDs != _lastAnnouncedLifetimeDs[slot] &&
-                _kind[slot] == ProjectileKind.Medipack &&
-                nowDs + 1 < _lastAnnouncedLifetimeDs[slot])
-            {
-                // Shortened by more than the byte's own resolution -- a real heal, not the
-                // ordinary countdown the client is already running.
-                return true;
-            }
+            if (LifetimeSurprisedTheClient(slot, currentTick)) return true;
 
             bool moving = _velocity[slot].SqrMagnitude >= RestSpeedSquared;
             if (!moving) return false;
 
             return currentTick - _lastAnnounceTick[slot] >= MovingReAnnounceTicks;
+        }
+
+        /// <summary>
+        /// Whether this deployable's remaining lifetime has diverged from what the client is
+        /// already predicting.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Compared against the client's PREDICTION, not against the last value sent.</b> The
+        /// client's countdown runs on its own from the moment it was told, so by construction
+        /// the number it holds is already lower than what was announced — comparing against the
+        /// announced value would report a divergence on every tick of an ordinary countdown and
+        /// re-announce a motionless medipack at the full tick rate for its whole life, which is
+        /// the exact opposite of what V7-D8 exists to achieve. The only thing worth a message is
+        /// life the pack lost that the client had no way to know about: a heal.
+        /// </para>
+        /// <para>
+        /// One decisecond of slack, because that is the byte's own resolution — a difference
+        /// smaller than the wire can express is not a difference. Only shortening counts: a
+        /// lifetime cannot grow, and a client whose countdown has run slightly ahead should be
+        /// left to despawn late rather than corrected upward.
+        /// </para>
+        /// </remarks>
+        private bool LifetimeSurprisedTheClient(int slot, uint currentTick)
+        {
+            if (_kind[slot] != ProjectileKind.Medipack) return false;
+
+            byte nowDs = ProjectileSpawnMessage.PackRemainingLifetime(
+                (_expiryTick[slot] - currentTick) * _tickDurationSeconds);
+
+            float elapsedSeconds = (currentTick - _lastAnnounceTick[slot]) * _tickDurationSeconds;
+            float predictedSeconds =
+                ProjectileSpawnMessage.UnpackRemainingLifetime(_lastAnnouncedLifetimeDs[slot])
+                - elapsedSeconds;
+
+            byte predictedDs = ProjectileSpawnMessage.PackRemainingLifetime(predictedSeconds);
+
+            return nowDs + 1 < predictedDs;
         }
 
         private int FindFreeSlot()

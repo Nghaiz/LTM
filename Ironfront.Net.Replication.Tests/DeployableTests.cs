@@ -141,6 +141,42 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(27f, authority.RemainingLifetimeSeconds(id, ResupplyTicks), 1);
         }
 
+        /// <summary>
+        /// The bug this test exists for: a motionless medipack must be SILENT while its ordinary
+        /// countdown runs.
+        /// </summary>
+        /// <remarks>
+        /// The first implementation compared the current remaining lifetime against the last
+        /// value it had ANNOUNCED. The client's own countdown is always already lower than that,
+        /// so the comparison reported a divergence on every tick and re-announced a stationary
+        /// pack at 30 Hz for its entire thirty-second life — roughly nine hundred messages for a
+        /// thing lying on the ground, which is precisely the traffic V7-D8 exists to avoid. It
+        /// passed every other test here, because the rest-and-silence test uses an ammo bag and
+        /// the heal test only ever asserted that a message WAS sent.
+        /// </remarks>
+        [Fact]
+        public void AMotionlessMedipackDoesNotReAnnounceItsOrdinaryCountdown()
+        {
+            (ServerDeployableAuthority authority, _, _) = Build();
+
+            authority.Deploy(
+                ProjectileKind.Medipack, OwnerId, Vec3.Zero, Vec3.Zero,
+                lifetimeSeconds: 30f, currentTick: 0);
+
+            Span<ushort> reAnnounce = stackalloc ushort[8];
+            Span<ushort> expired = stackalloc ushort[8];
+
+            int announcements = 0;
+            for (uint t = 1; t < ResupplyTicks; t++)   // the whole first interval, nobody nearby
+            {
+                announcements += authority
+                    .Step(t, ReadOnlySpan<HitscanTarget>.Empty, reAnnounce, expired)
+                    .ReAnnounceCount;
+            }
+
+            Assert.Equal(0, announcements);
+        }
+
         /// <summary>A deployable does not reach past its authored radius.</summary>
         [Fact]
         public void ADeployableDoesNotReachBeyondItsResupplyRange()
