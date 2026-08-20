@@ -134,6 +134,29 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
+        /// The default id stays out of the range the load harness numbers its clients from.
+        /// </summary>
+        /// <remarks>
+        /// It used to be 1, and <c>JoinTicketSource.Mint</c> gives its first synthetic client
+        /// <c>clientIndex + 1</c> = 1 — so the shipped default collided with the shipped harness
+        /// by construction. The first two-client run against a real server lost a client to
+        /// <c>AlreadyConnected</c> for exactly that reason, and Lane B runs three rendered
+        /// clients that would all have claimed 1 together.
+        /// </remarks>
+        [Fact]
+        public void TheDefaultPlayerIdAvoidsTheHarnessRange()
+        {
+            var config = new GameClientConfig();
+
+            Assert.True(config.PlayerId > GameClientConfig.ReservedIdCeiling,
+                $"default playerId {config.PlayerId} is inside the reserved range "
+                + $"(<= {GameClientConfig.ReservedIdCeiling}), where the load harness numbers "
+                + "its synthetic clients from. A collision there reads as a full server.");
+
+            Assert.NotEqual(0u, config.PlayerId);
+        }
+
+        /// <summary>
         /// A configured id of 0 is refused where it is read, not three layers away at the join.
         /// </summary>
         /// <remarks>

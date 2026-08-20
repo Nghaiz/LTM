@@ -41,14 +41,61 @@ namespace Ironfront.Net.Configuration
         /// The playerId this client's self-minted join ticket claims. Never 0.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// <b>Distinct per client, or the second one is turned away.</b> The server's validator
-        /// enforces one session per player once a shared secret is configured, so a scripted run
-        /// that leaves every instance on the default has its second and third joins rejected —
-        /// and the rejection reads as a capacity limit, which it is not. It is only consulted on
-        /// the path where the client mints its own ticket; a master-issued ticket carries its own
-        /// id and this is ignored.
+        /// enforces one session per player once a shared secret is configured, so instances
+        /// sharing an id have every join after the first rejected — and the rejection is
+        /// reported as a bare <c>InvalidTicket</c>, which reads as a capacity limit and is not
+        /// one. It is only consulted on the path where the client mints its own ticket; a
+        /// master-issued ticket carries its own id and this is ignored.
+        /// </para>
+        /// <para>
+        /// <b>The default is derived from the process id, because a constant collides by
+        /// construction.</b> It used to be 1. <c>JoinTicketSource.Mint</c> numbers the load
+        /// harness's synthetic clients from <c>clientIndex + 1</c>, so the very first one also
+        /// claimed 1 — and the first two-client run against a real server lost a client to
+        /// <c>AlreadyConnected</c> for exactly that reason. Lane B runs three rendered clients,
+        /// all of which would have claimed 1 together.
+        /// </para>
+        /// <para>
+        /// Offset past <see cref="ReservedIdCeiling"/> so a derived id can never land inside the
+        /// harness's range however small the process id is, and forced non-zero because 0 is the
+        /// one value the one-session-per-player claim cannot represent. The trade is
+        /// reproducibility: the id differs between runs. That is acceptable because the id is
+        /// not an input to anything simulated, and because the client logs the id it minted with
+        /// — set <c>IRONFRONT_CLIENT_PLAYER_ID</c> explicitly whenever a run needs to be
+        /// replayed against the same identities.
+        /// </para>
         /// </remarks>
-        public uint PlayerId { get; set; } = 1;
+        public uint PlayerId { get; set; } = DeriveDefaultPlayerId();
+
+        /// <summary>
+        /// Ids at or below this are left to schedulers that number from a small index — today,
+        /// the load harness's <c>clientIndex + 1</c>.
+        /// </summary>
+        /// <remarks>
+        /// 1024 rather than 64 (the harness's current client ceiling): the point is a margin
+        /// nobody has to re-check when that ceiling moves, and the id space is 32 bits.
+        /// </remarks>
+        public const uint ReservedIdCeiling = 1024;
+
+        private static uint DeriveDefaultPlayerId()
+        {
+            // Process id, not a random draw: two clients started a second apart get different
+            // ids, and the same process reports the same id for its whole life -- so a
+            // reconnect within one session does not silently become a different player.
+            //
+            // Process.GetCurrentProcess().Id rather than Environment.ProcessId, which needs
+            // .NET 5 and this assembly is netstandard2.1 because Unity consumes it as a
+            // prebuilt DLL out of Assets/Plugins.
+            uint pid;
+            using (var current = System.Diagnostics.Process.GetCurrentProcess())
+            {
+                pid = unchecked((uint)current.Id);
+            }
+
+            return ReservedIdCeiling + 1 + (pid % (uint.MaxValue - ReservedIdCeiling - 1));
+        }
 
         /// <summary>
         /// The name that self-minted ticket carries, truncated to 16 UTF-8 bytes.
