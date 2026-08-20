@@ -156,15 +156,84 @@ namespace Ironfront.Net.Replication.Tests
             string path = Path.Combine(RepoRoot(), "Ironfront_Reborn", "ProjectSettings", "TimeManager.asset");
             Assert.True(File.Exists(path), $"missing project setting: {path}");
 
-            string? line = File.ReadAllLines(path)
-                .FirstOrDefault(l => l.TrimStart().StartsWith("Fixed Timestep:", StringComparison.Ordinal));
+            Assert.Equal(60f, FixedTimestepHertz(File.ReadAllLines(path)), 1);
+        }
 
-            Assert.NotNull(line);
+        /// <summary>
+        /// The project's physics rate in hertz, read out of <c>TimeManager.asset</c> in either
+        /// serialization Unity writes.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Two shapes, because Unity 6 changed the one this gate was written against.</b> The
+        /// old form is a scalar — <c>Fixed Timestep: 0.016666668</c>. Unity 6.3 re-serializes it
+        /// on the first project save as an exact rational, so the same 60 Hz becomes a nested
+        /// <c>m_Count</c> over an <c>m_Rate</c> numerator and denominator and there is no number
+        /// on the <c>Fixed Timestep:</c> line at all.
+        /// </para>
+        /// <para>
+        /// <b>The old parser did not report that; it threw.</b> Splitting on ':' and parsing the
+        /// empty remainder made this gate go red the moment an Editor opened the project, on a
+        /// file whose VALUE had not moved — 2352000 / 141120000 is 1/60 exactly. A gate that
+        /// fails on a format change reads to whoever triages it as "#123 regressed", which is
+        /// the opposite of what happened, and the obvious remedy — deleting the assertion —
+        /// would retire the only check that the two former hard-coded call sites still agree
+        /// with the file.
+        /// </para>
+        /// <para>
+        /// Hertz rather than seconds, because the rational form states a rate directly and
+        /// converting it to a step only to invert it again loses precision for no reason.
+        /// </para>
+        /// </remarks>
+        private static float FixedTimestepHertz(string[] lines)
+        {
+            int index = Array.FindIndex(
+                lines, l => l.TrimStart().StartsWith("Fixed Timestep:", StringComparison.Ordinal));
 
-            float step = float.Parse(
-                line!.Split(':')[1].Trim(), CultureInfo.InvariantCulture);
+            Assert.True(index >= 0, "TimeManager.asset carries no 'Fixed Timestep:' key");
 
-            Assert.Equal(60f, 1f / step, 1);
+            string inline = lines[index].Split(':')[1].Trim();
+            if (inline.Length > 0)
+            {
+                return 1f / float.Parse(inline, CultureInfo.InvariantCulture);
+            }
+
+            float count = Scalar(lines, index, "m_Count");
+            float numerator = Scalar(lines, index, "m_Numerator");
+            float denominator = Scalar(lines, index, "m_Denominator");
+
+            Assert.True(count > 0f && denominator > 0f,
+                "TimeManager.asset's rational Fixed Timestep has a zero count or denominator");
+
+            return numerator / denominator / count;
+        }
+
+        /// <summary>
+        /// The value of <paramref name="key"/> in the indented block that follows
+        /// <paramref name="startIndex"/>. Bounded to that block, so a later key of the same name
+        /// under some other setting cannot answer for this one.
+        /// </summary>
+        private static float Scalar(string[] lines, int startIndex, string key)
+        {
+            int indent = lines[startIndex].Length - lines[startIndex].TrimStart().Length;
+
+            for (int i = startIndex + 1; i < lines.Length; i++)
+            {
+                string trimmed = lines[i].TrimStart();
+                int lineIndent = lines[i].Length - trimmed.Length;
+
+                // Dedented back to the parent's level: the block is over and the key was not in
+                // it. Reading on would find some unrelated setting's field.
+                if (trimmed.Length > 0 && lineIndent <= indent) break;
+
+                if (!trimmed.StartsWith(key + ":", StringComparison.Ordinal)) continue;
+
+                return float.Parse(
+                    trimmed.Substring(key.Length + 1).Trim(), CultureInfo.InvariantCulture);
+            }
+
+            Assert.Fail($"TimeManager.asset's Fixed Timestep block carries no '{key}'");
+            return 0f;
         }
 
         // ------------------------------------------------------------------------ helpers

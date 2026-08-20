@@ -3,6 +3,10 @@
 - **Track:** [`plan.md`](../plan.md) · **Parent:** [`phase-3-harness.md`](phase-3-harness.md) § 5 (task 3.3) · **Effort:** L (1wk)
 - **Depends on:** [`phase-3a-player-slots.md`](phase-3a-player-slots.md) (a second player can exist), [`phase-3c-client-input.md`](phase-3c-client-input.md) (that player can fire), #151 (a client can join a server that has a secret), #123 (server and clients agree on the physics rate)
 - **Unblocks:** [`phase-3e-run-and-ledger.md`](phase-3e-run-and-ledger.md)
+- **Status (2026-08-21): BLOCKED, 0 of 11 verdicts.** The vehicle is built and runs; every client
+  is dropped by the transport about a second after joining, so no check has a connected client to
+  observe. Report: [`2026-08-21-phase-3d-lane-b.md`](../reports/2026-08-21-phase-3d-lane-b.md).
+  Blocker: [`2026-08-21-laneb-blocker-reliable-ack.md`](../reports/2026-08-21-laneb-blocker-reliable-ack.md).
 
 ---
 
