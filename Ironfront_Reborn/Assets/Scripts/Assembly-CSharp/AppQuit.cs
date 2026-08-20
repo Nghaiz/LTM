@@ -25,7 +25,12 @@ public static class AppQuit
 		// A quit issued from a paused menu leaves timeScale at 0. Harmless in a player, but in
 		// the Editor the next Play session inherits whatever the domain was left holding when
 		// domain reloading is disabled, and a frozen game is a worse bug than the one fixed here.
-		Time.timeScale = 1f;
+		//
+		// Through PhysicsRate rather than a bare assignment, because THE SAME INHERITANCE applies
+		// to Time.fixedDeltaTime. Restoring timeScale to 1 while leaving the step at 0.2/60 hands
+		// the next session a slow-motion step at normal speed, and PhysicsRate would then recover
+		// exactly that as the project's base rate and keep it. Issue #123.
+		PhysicsRate.SetTimeScale(1f);
 
 #if UNITY_EDITOR
 		UnityEditor.EditorApplication.isPlaying = false;

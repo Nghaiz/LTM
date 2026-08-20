@@ -38,10 +38,12 @@ namespace Ironfront.Net.Unity
 
         /// <summary>The simulation timestep. Client prediction and the server MUST use this.</summary>
         /// <remarks>
-        /// Not <c>Time.fixedDeltaTime</c>. The project's fixed timestep is 0.02 (50 Hz) while
+        /// Not <c>Time.fixedDeltaTime</c>. The project's fixed timestep is 60 Hz while
         /// <see cref="ProtocolConstants.SIM_TICK_RATE"/> is 30 — feeding the project's value in
-        /// here makes the client integrate gravity 50 times a second against the server's 30,
-        /// and prediction disagrees with authority on every airborne tick.
+        /// here makes the client integrate gravity 60 times a second against the server's 30,
+        /// and prediction disagrees with authority on every airborne tick. The rate the physics
+        /// step happens to be is not the point: it is a DIFFERENT clock, and issue #123 unifying
+        /// it across peers does not make it this one.
         /// </remarks>
         public const float FixedDeltaTime = 1f / ProtocolConstants.SIM_TICK_RATE;
 

@@ -82,8 +82,8 @@ namespace Ironfront.Net.Unity
         /// </summary>
         /// <param name="dt">
         /// Use <see cref="MovementSimulation.FixedDeltaTime"/>, NOT
-        /// <c>Time.fixedDeltaTime</c> — the project's fixed timestep is 0.02 and the
-        /// simulation runs at 1/30.
+        /// <c>Time.fixedDeltaTime</c> — the project's fixed timestep is 1/60 and the
+        /// simulation runs at 1/30. Two clocks, deliberately.
         /// </param>
         public void Tick(in MoveInput input, float dt)
         {
