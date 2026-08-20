@@ -1,0 +1,16 @@
+[transport] [weapons] 2 of 18 weapon configs are class-derived PLACEHOLDERS, not registry values: WRENCH(16) SUPER WRENCH(17)
+[net] conn 1 joined as actor 41 (127.0.0.1:57774)
+[transport] reliable sequence 0 abandoned after 10 resends
+[transport] reliable sequence 2 abandoned after 10 resends
+[transport] connection 1: a reliable packet was abandoned; the ordered channel cannot recover, disconnecting
+[net] conn 1 left (TransportError)
+[net] conn 2 joined as actor 41 (127.0.0.1:53521)
+[transport] reliable sequence 0 abandoned after 10 resends
+[transport] reliable sequence 2 abandoned after 10 resends
+[transport] connection 2: a reliable packet was abandoned; the ordered channel cannot recover, disconnecting
+[net] conn 2 left (TransportError)
+[net] conn 3 joined as actor 41 (127.0.0.1:59038)
+[transport] reliable sequence 0 abandoned after 10 resends
+[transport] reliable sequence 2 abandoned after 10 resends
+[transport] connection 3: a reliable packet was abandoned; the ordered channel cannot recover, disconnecting
+[net] conn 3 left (TransportError)

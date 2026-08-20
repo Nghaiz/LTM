@@ -229,6 +229,67 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
+        /// The run summary says whether the client still had a link, and the runner fails on it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A disconnected client runs its script perfectly.</b> It advances the cursor,
+        /// captures every checkpoint, exits 0 with "programme complete", and draws both seeds
+        /// from the right place — while its body falls through an empty world. Every other row
+        /// the runner grades (exit code, checkpoint count, both seeds, the player id) is
+        /// structurally incapable of noticing, so the run reports success and the artifact is
+        /// about nothing. <c>artifacts/lane-b/combat-02/run.json</c> is that report:
+        /// <c>"passed": true</c>, <c>"failures": []</c>, and all three clients dropped with
+        /// <c>TransportError</c> seconds after joining.
+        /// </para>
+        /// <para>
+        /// Both halves are pinned because either one alone is inert: a field nothing reads
+        /// changes no verdict, and a runner check against a field no player writes would pass
+        /// vacuously on every old build — which is why the runner treats a MISSING field as a
+        /// failure rather than as a pass.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public void ALostLinkIsRecordedAndFailsTheRun()
+        {
+            string harness = UnitySource("Net/Diagnostics/LaneBHarness.cs");
+            Assert.Contains("if (live == null || !live.IsConnected) _lostConnection = true;", harness);
+            Assert.Contains("\\\"lostConnection\\\":", harness);
+
+            // The whole guard expression, not the field name: Contains("$summary.lostConnection")
+            // still matches "$summary.lostConnectionXX", so a rename of the field would leave
+            // this pin green while the gate read a property that does not exist -- and in
+            // PowerShell a missing property is $null, which is falsy, so the run would report
+            // PASS on every disconnected client. The pin was written that way first and the
+            // mutation walked straight past it.
+            string runner = RepoFile("tools/run-lane-b.ps1");
+            Assert.Contains("elseif ($summary.lostConnection) {", runner);
+            Assert.Contains("-notcontains 'lostConnection'", runner);
+            Assert.Contains("elseif (-not $summary.connectedAtFinish) {", runner);
+        }
+
+        /// <summary>
+        /// The harness gives the transport's warning sink somewhere to go.
+        /// </summary>
+        /// <remarks>
+        /// <c>NetLog.Warning</c> has no subscriber anywhere in the shipped project, so the only
+        /// two lines that ever explain a <c>TransportError</c> — "reliable sequence N abandoned
+        /// after M resends" and "reliable sequence slot collision at N" — are formatted and
+        /// handed to a null delegate. <c>Connection.Update</c>'s own comment says it ends the
+        /// connection "loudly instead of continuing quietly"; without this the loud half reaches
+        /// nobody, and a dropped lane-B client presents as a bare reason code with no cause.
+        /// The shipped-side gap is a filed defect, not something the harness fixes for everyone.
+        /// </remarks>
+        [Fact]
+        public void TheHarnessGivesTheTransportWarningsSomewhereToGo()
+        {
+            string harness = UnitySource("Net/Diagnostics/LaneBHarness.cs");
+
+            Assert.Contains("NetLog.Warning =", harness);
+            Assert.Contains("NetLog.Error =", harness);
+        }
+
+        /// <summary>
         /// The two linked files stay engine-free, or they silently leave this suite.
         /// </summary>
         /// <remarks>
@@ -277,6 +338,16 @@ namespace Ironfront.Net.Replication.Tests
                 relativePath.Replace('/', Path.DirectorySeparatorChar));
 
             Assert.True(File.Exists(path), $"missing Unity source: {path}");
+            return File.ReadAllText(path);
+        }
+
+        /// <summary>Any repo-relative file, for pinning the runner as well as the harness.</summary>
+        private static string RepoFile(string relativePath)
+        {
+            string path = Path.Combine(
+                RepoRoot(), relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+            Assert.True(File.Exists(path), $"missing repo file: {path}");
             return File.ReadAllText(path);
         }
 

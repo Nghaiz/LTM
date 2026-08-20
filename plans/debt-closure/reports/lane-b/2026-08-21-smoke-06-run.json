@@ -1,0 +1,34 @@
+{
+  "unitySeed": 20260821,
+  "simulatorPreset": "off",
+  "simulatorSeed": 12345,
+  "port": 27015,
+  "set": "smoke",
+  "smoke": true,
+  "clients": [
+    {
+      "playerId": 5001,
+      "label": "driver",
+      "displayName": "DRIVER",
+      "programme": "smoke.json"
+    },
+    {
+      "playerId": 5002,
+      "label": "observer-a",
+      "displayName": "OBS-A",
+      "programme": "smoke.json"
+    },
+    {
+      "playerId": 5003,
+      "label": "observer-b",
+      "displayName": "OBS-B",
+      "programme": "smoke.json"
+    }
+  ],
+  "failures": [
+    "driver: lost its link during the programme (final conn 0, actor 0). Every number it recorded after that is about an unconnected client.",
+    "observer-a: lost its link during the programme (final conn 0, actor 0). Every number it recorded after that is about an unconnected client.",
+    "observer-b: lost its link during the programme (final conn 0, actor 0). Every number it recorded after that is about an unconnected client."
+  ],
+  "passed": false
+}

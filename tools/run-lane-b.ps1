@@ -324,6 +324,27 @@ foreach ($c in $clients) {
     if ($summary.exitCode -ne 0) { $failures += "$($c.Label): exit $($summary.exitCode) -- $($summary.reason)" }
     elseif ($summary.checkpoints -lt 1) { $failures += "$($c.Label): exit 0 but captured no checkpoint" }
 
+    # A DISCONNECTED CLIENT STILL RUNS ITS SCRIPT, and every gate above says it passed. It
+    # advances the cursor, captures every checkpoint, exits 0 with "programme complete", and
+    # draws both seeds from the right place -- while its body falls through an empty world.
+    # artifacts/lane-b/combat-02 reported "passed": true with zero failures on a run where all
+    # three clients had been dropped with TransportError seconds after joining. Exit code,
+    # checkpoint count and seeds are all structurally incapable of noticing; this is the only
+    # row here that can, and a lane-B verdict read off a run without it is worthless.
+    if ($summary.PSObject.Properties.Name -notcontains 'lostConnection') {
+        $failures += "$($c.Label): the summary carries no lostConnection field -- this player " +
+                     "predates the link check, so nothing in this run can tell a connected " +
+                     "client from a disconnected one. Rebuild with -Build."
+    }
+    elseif ($summary.lostConnection) {
+        $failures += "$($c.Label): lost its link during the programme (final conn " +
+                     "$($summary.finalConnectionId), actor $($summary.finalActorId)). " +
+                     "Every number it recorded after that is about an unconnected client."
+    }
+    elseif (-not $summary.connectedAtFinish) {
+        $failures += "$($c.Label): was not connected when the programme ended."
+    }
+
     # The seed this runner PRINTS must be the seed the process actually DREW from. They are
     # two different numbers the moment anything mistypes the parse, and the first run of this
     # harness proved it: LaneBHarness read the seed through a float, float32 stops representing

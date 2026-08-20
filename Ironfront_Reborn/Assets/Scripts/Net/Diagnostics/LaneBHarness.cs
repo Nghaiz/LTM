@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.IO;
 using Ironfront.Net.Replication.Movement;
+using Ironfront.Net.Transport;
 using Ironfront.Net.Unity.Client;
 using Ironfront.Net.Unity.Server;
 using UnityEngine;
@@ -80,6 +81,20 @@ namespace Ironfront.Net.Unity.Diagnostics
         private bool _finished;
         private bool _serverAnnounced;
 
+        /// <summary>
+        /// Whether this client lost its link at any point after the programme was installed.
+        /// </summary>
+        /// <remarks>
+        /// <b>The single most important field this class writes.</b> A disconnected client keeps
+        /// running its script perfectly: it advances the cursor, captures every checkpoint, and
+        /// exits 0 with "programme complete". Every number in the artifact is then about a body
+        /// falling through an empty world, and the run reports success — <c>combat-02</c> did
+        /// exactly that, `"passed": true` with zero failures while all three clients had been
+        /// dropped with <c>TransportError</c> seconds after joining. The runner grades exit
+        /// codes, checkpoint counts and seeds; not one of them can see a dead link. This can.
+        /// </remarks>
+        private bool _lostConnection;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
@@ -115,6 +130,8 @@ namespace Ironfront.Net.Unity.Diagnostics
             // sequence, and § 4.4 grades a report that names one seed and not the other.
             UnityEngine.Random.InitState(_seeds.UnitySeed);
 
+            AttachTransportLog();
+
             Debug.Log($"[lane-b] role={_role} label={_label} unitySeed={_seeds.UnitySeed} "
                       + $"sim={_seeds.SimulatorPreset}/{_seeds.SimulatorSeed} "
                       + $"playerId={_seeds.PlayerId} artifacts={_artifacts}");
@@ -126,6 +143,42 @@ namespace Ironfront.Net.Unity.Diagnostics
         }
 
         private void OnDestroy() => SceneManager.sceneLoaded -= OnSceneLoaded;
+
+        /// <summary>
+        /// Points the transport's warning sinks at the Unity log, for this process only.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b><see cref="NetLog"/> has no subscriber anywhere in the shipped project</b> —
+        /// <c>grep -rn "NetLog.Warning" </c> across the whole repository finds the declaration
+        /// and nothing else. So every warning the transport raises goes to a null delegate,
+        /// including the only two lines that ever explain a <c>TransportError</c>: "reliable
+        /// sequence N abandoned after M resends" and "reliable sequence slot collision at N".
+        /// <c>Connection.Update</c>'s own comment says it "ends the connection loudly instead of
+        /// continuing quietly"; the loud half reaches nobody, so a dropped client presents as a
+        /// bare reason code with no cause. That cost this phase a run: three clients were
+        /// dropped seconds after joining and the reason existed, formatted, in a variable that
+        /// was passed to a null sink.
+        /// </para>
+        /// <para>
+        /// <b>Attached here, not in a bootstrap.</b> A sink in <c>NetClientBootstrap</c> would be
+        /// a change to shipped client behaviour, which § 6 forbids this phase. This runs only in
+        /// a process that set <c>IRONFRONT_LANEB_ROLE</c>, so an ordinary build is untouched —
+        /// and the shipped-side gap is reported as a defect rather than patched inside the
+        /// harness (§ 6 again).
+        /// </para>
+        /// <para>
+        /// <b>Warnings, not errors, for the transport's warnings.</b> A <c>Debug.LogError</c>
+        /// under <c>-batchmode</c> can end a run; these are diagnostics about a connection that
+        /// is already ending, and losing the rest of the log to report one of them would trade
+        /// away the artifact this phase is here to produce.
+        /// </para>
+        /// </remarks>
+        private static void AttachTransportLog()
+        {
+            NetLog.Warning = message => Debug.LogWarning($"[transport] {message}");
+            NetLog.Error = message => Debug.LogWarning($"[transport:error] {message}");
+        }
 
         /// <summary>
         /// Strips the bootstrap this process is not, before either of them reaches
@@ -178,6 +231,12 @@ namespace Ironfront.Net.Unity.Diagnostics
             }
 
             if (!_installed) { TryInstall(); return; }
+
+            // Latched, not sampled at the end: a client that dropped and reconnected would read
+            // as healthy at finish, and a run whose link went away mid-programme has already
+            // stopped measuring what the check asked about.
+            NetClientBootstrap live = NetClientBootstrap.Current;
+            if (live == null || !live.IsConnected) _lostConnection = true;
 
             if (!_cursor.Advance(Time.deltaTime))
             {
@@ -368,13 +427,35 @@ namespace Ironfront.Net.Unity.Diagnostics
                     + $"\"simPreset\":\"{_seeds.SimulatorPreset}\","
                     + $"\"simSeed\":{_seeds.SimulatorSeed.ToString(c)},"
                     + $"\"playerId\":{_seeds.PlayerId.ToString(c)},"
-                    + $"\"displayName\":\"{_seeds.DisplayName}\""
+                    + $"\"displayName\":\"{_seeds.DisplayName}\","
+                    + $"\"lostConnection\":{(_lostConnection ? "true" : "false")},"
+                    + $"\"connectedAtFinish\":{(IsLive() ? "true" : "false")},"
+                    + $"\"finalConnectionId\":{FinalConnectionId().ToString(c)},"
+                    + $"\"finalActorId\":{FinalActorId().ToString(c)}"
                     + "}\n");
             }
             catch (Exception ex)
             {
                 Debug.LogError($"[lane-b] could not write the summary: {ex.Message}");
             }
+        }
+
+        private static bool IsLive()
+        {
+            NetClientBootstrap client = NetClientBootstrap.Current;
+            return client != null && client.IsConnected;
+        }
+
+        private static int FinalConnectionId()
+        {
+            NetClientBootstrap client = NetClientBootstrap.Current;
+            return client != null ? client.ConnectionId : 0;
+        }
+
+        private static int FinalActorId()
+        {
+            NetClientBootstrap client = NetClientBootstrap.Current;
+            return client != null ? client.LocalActorId : 0;
         }
 
         private static string Read(string name)
