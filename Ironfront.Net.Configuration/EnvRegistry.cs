@@ -202,8 +202,11 @@ namespace Ironfront.Net.Configuration
             "with no master server in them. It must be DISTINCT PER CLIENT and never 0: the\n" +
             "game server enforces one session per player once a shared secret is configured,\n" +
             "so two clients sharing an id have the second join rejected -- and the rejection\n" +
-            "is reported as a bare InvalidTicket, which reads as a full server and is not one.",
-            "1");
+            "is reported as a bare InvalidTicket, which reads as a full server and is not one.\n" +
+            "UNSET derives one from the process id, above the range the load harness numbers\n" +
+            "its synthetic clients from, so several clients on one machine do not collide.\n" +
+            "Set it explicitly when a run has to be replayed against the same identities.",
+            "");
 
         /// <summary>The name that self-minted ticket carries into the killfeed.</summary>
         public static readonly EnvVar ClientDisplayName = new EnvVar(

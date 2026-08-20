@@ -138,9 +138,22 @@ namespace Ironfront.Net.LoadHarness
             {
                 if (client.IsConnected) continue;
                 string reason = client.DisconnectedBecause is { } why ? $", {why}" : string.Empty;
+                // InvalidTicket is a DELIBERATELY generic reason. The server knows exactly which
+                // of six TicketRejection values fired and withholds it, because a handshake that
+                // says which check failed is an oracle for forging a ticket one byte at a time
+                // (NetServerBootstrap logs the specific reason server-side and sends this).
+                //
+                // So this hint must not name one cause. It used to assert "not signed with it",
+                // and the first two-client run against a real server hit AlreadyConnected
+                // instead — the Editor's own client and harness client 0 both claiming player 1.
+                // The message sent the reader hunting a signing problem that did not exist.
                 string hint = client.DisconnectedBecause == DisconnectReason.InvalidTicket
-                    ? " — the server has a shared secret and this ticket was not signed with it; "
-                      + "pass --secret or make IRONFRONT_SHARED_SECRET reachable"
+                    ? " — the server rejected the ticket and will not say why (it is deliberately "
+                      + "generic). Read the SERVER log for the [net] join rejected line, which "
+                      + "names the reason. The two this harness hits: BadSignature (make "
+                      + "IRONFRONT_SHARED_SECRET reachable, or pass --secret) and AlreadyConnected "
+                      + "(another client already holds this playerId — a Unity client on the same "
+                      + "machine defaults into the same range this harness numbers from)"
                     : string.Empty;
 
                 errors.Add(
