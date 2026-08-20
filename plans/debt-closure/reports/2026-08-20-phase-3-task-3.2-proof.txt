@@ -1,6 +1,13 @@
 Phase 3 task 3.2 — Ironfront.Net.LoadHarness: gate mutations GREEN, smoke run RED
 Date: 2026-08-20 · Editor: Unity 6000.3.21f1 · Scene: Dustbowl.unity
 
+CORRECTED IN PLACE 2026-08-20 by phase 3B (see phase-3b-handshake-residual.md).
+The smoke run recorded below was RED and the record of that is kept. Its
+diagnosis was not: the premise 'ServerFull is sent from exactly one place' is
+false, and it aimed the whole investigation one layer too low. Two paragraphs in
+PART 2 are marked CORRECTED / added; everything else stands as written. The
+smoke is GREEN as of #154 — see the RE-RUN block at the end of PART 2.
+
 ==============================================================================
 PART 1 — acceptance criterion 4, and the gate that enforces it
 ==============================================================================
@@ -96,11 +103,33 @@ The server is healthy at the moment it denies. Read live by reflection, mid-run:
   _accepted.Count=0
   _playerIdToConnection.Count=0
 
-ConnectDenyReason.ServerFull is sent from exactly one place —
-UdpTransportServer.cs:265 — and only when
-'_connectionCount >= _maxConnections || _freeIds.Count == 0'. The probe above
-shows _freeIds at 16 and _connectionCount at 0 on the very server that is bound
-to the port under test. Both readings cannot be true of one server.
+CORRECTED 2026-08-20 (phase 3B). The paragraph that stood here read:
+
+  'ConnectDenyReason.ServerFull is sent from exactly one place —
+   UdpTransportServer.cs:265 — ... Both readings cannot be true of one server.'
+
+That premise is false, and it is what sent this investigation down to the
+transport layer and kept it there. A ServerFull the client can observe has TWO
+senders:
+
+  UdpTransportServer.cs:265        ConnectDenyReason.ServerFull — denied DURING
+                                   the handshake, when
+                                   '_connectionCount >= _maxConnections ||
+                                    _freeIds.Count == 0'
+  ServerTickLoop.cs:1275           DisconnectReason.ServerFull — disconnected
+                                   AFTER the handshake already succeeded,
+                                   when OnClientConnected cannot claim a
+                                   player slot
+
+The second reaches the client verbatim: Connection.cs:400 puts the reason byte
+on the wire, Connection.cs:212 reads it back. MapDeniedReason is not involved.
+
+So the two readings the paragraph called mutually exclusive are not
+simultaneous — they are sequential. '_freeIds=16, _connectionCount=0' is the
+state AFTER an accept and a same-tick disconnect. The server was never full;
+it admitted the connection and then threw it out one layer higher up, because
+exactly one prefab in the scene carried '_availableForPlayers = 1'. That is the
+phase-3A defect, fixed in #154 by ServerPlayerSlotPool.
 
 FALSIFIED, each by a test rather than by argument:
 
@@ -111,10 +140,52 @@ FALSIFIED, each by a test rather than by argument:
   4. Leaked sockets across     — after the run only 27017 is bound; 27015 and 27016
      Play Mode sessions          were released. Nothing survives a session
 
-STILL OPEN. Something other than ServerTickLoop.Current.Transport answers on the
-port, or the deny reason is not the one the server believes it sent. Separating
-those needs packet-level capture (the transport already ships PacketLogger), not
-more reasoning.
+WHY 1-4 COULD NOT HAVE REACHED IT (added 2026-08-20, phase 3B). All four are
+transport-layer hypotheses, and each was correctly falsified. The defect was one
+layer above the transport, in the Unity application: the handshake SUCCEEDED and
+ServerTickLoop.OnClientConnected then disconnected the connection for want of a
+player slot. No test aimed at the transport could have seen it, however well
+that test was run. The reasoning was sound; the altitude was wrong.
+
+  5. RESOLVED — there were THREE participants, not two
+
+     'SYMPTOM' above treats ServerFull and BadSignature as two accounts of one
+     handshake, of which one must be wrong. Neither was wrong. --smoke runs two
+     clients, and the Editor play session runs a THIRD — its own local
+     NetClientBootstrap, which the report never accounted for:
+
+       ServerFull    the two harness clients, post-handshake, phase-3A's
+                     one-player-slot defect (fixed in #154)
+       BadSignature  the Editor's own local client, at handshake time,
+                     presenting PendingJoin.CreateUnsignedTicket() —
+                     64 zero bytes (PendingJoin.cs:78, NetClientBootstrap.cs:180)
+
+     Measured inside the live server process against its own configured secret,
+     phase 3B:
+
+       unsignedTicket len=64 allZero=True
+       JoinTicket.Verify(unsigned) = BadSignature
+       JoinTicket.Verify(signed)   = Valid
+       server acceptUnsignedTickets=True   (inert: a secret is set)
+       local NetClientBootstrap in play session = True
+       OnValidateTicket subscribers = 1
+
+     JoinTicket.Verify returns BadSignature from exactly one branch — an HMAC
+     mismatch — so a zero ticket can produce nothing else. The client is told
+     the generic InvalidTicket (NetServerBootstrap.cs:373 logs the specific
+     reason server-side and deliberately does not send it), which is the
+     '[net] disconnected: InvalidTicket' line that follows every BadSignature in
+     the Editor log.
+
+     No packet capture was needed. The suggestion to reach for one followed from
+     the false premise corrected above.
+
+RE-RUN, 2026-08-20 with #154 merged: --smoke --port 27015 against a UDP Editor
+server. 2/2 clients connected in 601 ms and held the full 30 s; 1200 snapshots
+applied; 0 disagreements over 4186 entity comparisons across 600 ticks;
+HARNESS EXIT=0. Acceptance criterion 1 is MET. The BadSignature line still
+appears once per play session, from the local client described above, and is
+Editor-only — it does not gate the smoke.
 
 OWNERSHIP. Phase 3 section 7: 'If a check fails because of a defect, the defect is
 filed and fixed in its own commit — never patched inside the harness.' No
