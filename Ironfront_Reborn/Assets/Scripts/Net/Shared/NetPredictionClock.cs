@@ -18,13 +18,13 @@ namespace Ironfront.Net.Unity
     /// <para>
     /// <b>Why option A could not have worked, whatever anyone chose.</b> Option A was to set
     /// <c>ProjectSettings/TimeManager.asset</c> to 0.0333 and let <c>FixedUpdate</c> be the
-    /// tick. That setting does not survive the first frame: <c>IngameMenuUi.Hide()</c>
-    /// assigns <c>Time.fixedDeltaTime = Time.timeScale / 60f</c>, and it is called from
-    /// <c>IngameMenuUi.Awake()</c>. <c>FpsActorController</c> assigns the same expression
-    /// again on every slow-motion toggle. So the live timestep is 1/60 during play and
-    /// 0.2/60 in slow motion, never the 0.02 in the asset and never the 0.0333 option A would
-    /// have written there. A tick rate that three unrelated files can overwrite is not a tick
-    /// rate. This component owns the netcode's clock outright, which is the only arrangement
+    /// tick. That setting did not survive the first frame: <c>IngameMenuUi.Hide()</c>
+    /// assigned <c>Time.fixedDeltaTime = Time.timeScale / 60f</c> and was called from
+    /// <c>IngameMenuUi.Awake()</c>, and <c>FpsActorController</c> assigned the same expression
+    /// again on every slow-motion toggle. Issue #123 routed both through <c>PhysicsRate</c>, so
+    /// the live timestep is now the asset's own value scaled by <c>Time.timeScale</c> — but that
+    /// is still a rate the pause menu moves, and option A would have made it the simulation's
+    /// tick. A tick rate any unrelated file can scale is not a tick rate. This component owns the netcode's clock outright, which is the only arrangement
     /// those assignments cannot break.
     /// </para>
     /// <para>

@@ -557,15 +557,12 @@ public class FpsActorController : ActorController
 		}
 		if (Input.GetButtonDown("Slowmotion") && !IngameMenuUi.IsOpen())
 		{
-			if (Time.timeScale < 1f)
-			{
-				Time.timeScale = 1f;
-			}
-			else
-			{
-				Time.timeScale = 0.2f;
-			}
-			Time.fixedDeltaTime = Time.timeScale / 60f;
+			// PhysicsRate, not a second Time.fixedDeltaTime = Time.timeScale / 60f here. That
+			// literal made this component an unwitting authority on the project's physics rate:
+			// a peer that never constructed it -- a dedicated server build -- kept the 50 Hz
+			// project setting while this one forced 60, and rigidbody integration is not
+			// step-independent. Issue #123.
+			PhysicsRate.SetTimeScale(Time.timeScale < 1f ? 1f : 0.2f);
 			mixer.SetFloat("pitch", Time.timeScale);
 		}
 		if (inputEnabled)

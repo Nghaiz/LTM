@@ -10,14 +10,19 @@ public class Actor : Hurtable
 	/// accumulator, which is why it is a named constant rather than the literal it replaced.
 	/// </summary>
 	/// <remarks>
-	/// <b>The rate is 60 Hz at runtime, not the project setting's 50.</b> V0 shipped 25 on the
-	/// strength of TimeManager's <c>Fixed Timestep: 0.02</c>, but both
-	/// <see cref="FpsActorController"/> and <see cref="IngameMenuUi"/> assign
-	/// <c>Time.fixedDeltaTime = Time.timeScale / 60f</c> at runtime, and the server deliberately
-	/// does not fight them (NetServerBootstrap decision A5). So the project setting is the value
-	/// physics runs at for as long as it takes those two to wake up, and 25 ticks was 0.417 s in
-	/// every real session — a 17% shortening of a window Task 8 said it was preserving. Found by
-	/// the Editor behavioural pass, confirmed against the Profiler at 16.667 ms.
+	/// <b>The rate is 60 Hz, and every peer now agrees on that.</b> V0 shipped 25 on the strength
+	/// of TimeManager's then <c>Fixed Timestep: 0.02</c>, but <see cref="FpsActorController"/>
+	/// and <see cref="IngameMenuUi"/> each overwrote it with <c>Time.timeScale / 60f</c> at
+	/// runtime, so 25 ticks was 0.417 s in every real session — a 17% shortening of a window
+	/// Task 8 said it was preserving. Found by the Editor behavioural pass, confirmed against the
+	/// Profiler at 16.667 ms, and corrected to 30.
+	/// <para>
+	/// Issue #123 removed the disagreement rather than the symptom: <c>TimeManager.asset</c> now
+	/// declares 0.016666668 and both call sites go through <c>PhysicsRate</c>, which SCALES that
+	/// setting instead of declaring a second one. A peer that constructs neither component — a
+	/// dedicated server build — therefore runs the same step a rendered client does, which it
+	/// previously did not. 30 ticks is 0.5 s everywhere.
+	/// </para>
 	/// </remarks>
 	private const int REACTIVATE_COLLISION_TICKS = 30;
 

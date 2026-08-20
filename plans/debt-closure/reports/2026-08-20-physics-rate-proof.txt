@@ -1,0 +1,94 @@
+Issue #123 -- every peer now steps physics at the same rate, and the server says which.
+
+THE DIVERGENCE. ProjectSettings/TimeManager.asset declared Fixed Timestep: 0.02 (50 Hz) while
+FpsActorController and IngameMenuUi each overwrote Time.fixedDeltaTime at runtime with
+Time.timeScale / 60f. A peer that constructed neither -- a dedicated server build is exactly
+such a peer -- kept 50 Hz while every rendered client ran 60. Rigidbody integration is not
+step-independent, so identical inputs produced different vehicle, helicopter and turret motion
+on the two sides.
+
+WHY IT WAS BLOCKING. phase-3-harness.md section 2 check 7 (two clients see the same vehicle in
+the same place while a third drives it, 100 ms RTT / 5% loss) and check 12 (turret parity) are
+graded across a headless server and rendered clients. A step-rate disagreement would have shown
+up there as a convergence failure and been read as a replication defect -- phase-3d-lane-b.md
+section 8 scores "scripted clients are flaky and burn the phase" at 12, and this is that risk
+arriving through a door that section did not watch.
+
+WHAT IS NOT AFFECTED. MovementCore does not read Time.fixedDeltaTime at all; MovementCore.cs:137
+pins the step to 1/ProtocolConstants.SIM_TICK_RATE, 30 Hz, "never a variable". Player movement
+prediction was never exposed to this, so the "no perceptible input lag" half of check 8 was
+never at risk. Decision A5 still stands: the netcode does not take the physics rate, and the
+physics rate does not take the netcode's.
+
+THE FIX, AND THE DIRECTION IT CHOSE. TimeManager.asset moves 0.02 -> 0.016666668 and the call
+sites go through PhysicsRate, which SCALES the project setting rather than declaring a rate.
+The server follows the client, not the file: every rendered client already ran 60 Hz, so no
+client's vehicle feel changes and only the server moves. Standardising on 50 Hz would have
+changed every client AND silently retuned Actor.REACTIVATE_COLLISION_TICKS = 30 from the 0.5 s
+#122 tuned it to into 0.6 s.
+
+PhysicsRate holds no rate of its own. A const 1f/60f inside it would be a second source of truth
+beside TimeManager.asset, free to disagree -- the same bug rebuilt inside its own fix. The base
+is recovered from the live values (fixedDeltaTime / timeScale) and is self-correcting.
+
+MEASURED IN THE LIVE EDITOR against the shipped class:
+
+    [proof] as found: fixedDeltaTime=0.016667s (60.00 Hz)  timeScale=1
+    [proof] PhysicsRate.BaseFixedDeltaTime=0.016667s (60.00 Hz)
+    [proof] slow-mo:  timeScale=0.2  fixedDeltaTime=0.003333s  ratio=0.200
+    [proof] paused:   timeScale=0  fixedDeltaTime=0.003333s  unchanged=True
+    [proof] resumed:  timeScale=1  fixedDeltaTime=0.016667s (60.00 Hz)
+    [proof] restored to the project setting = True
+
+Pause deliberately leaves the step alone. Unity issues no fixed step at timeScale 0, so scaling
+to 0 buys nothing and hands a zero timestep to every `rate * Time.fixedDeltaTime` in the
+project. The pause path never wrote the step before this change either; the asymmetry is
+preserved rather than tidied away.
+
+AND THE PEER THAT CONSTRUCTS NEITHER COMPONENT, from a play session's server log:
+
+    [net] role = Server
+    [net] physics fixed step 16.667 ms (60.0 Hz) — the project setting; the netcode's own
+          tick is 30 Hz and is unrelated
+    [net] server up on UDP :27015, 16 connections
+
+That line is new. A future divergence integrates rigidbodies differently for the same inputs and
+presents as a replication defect several layers away with nothing naming the cause, so the
+server now states its rate at startup instead of leaving it to be inferred.
+
+A THIRD WRITER, FOUND ON THE WAY. AppQuit.Quit() reset Time.timeScale = 1f without touching the
+step, and its own comment explains why that matters: in the Editor with domain reloading
+disabled, the next Play session inherits whatever the domain was left holding. Quitting from
+slow motion therefore left timeScale 1 against a 0.2/60 step -- and PhysicsRate would have
+recovered exactly that as the project's base rate and kept it for the whole session. Routed
+through PhysicsRate too.
+
+PINS -- PhysicsRateAuthorityTests, 6 assertions, all source and asset scans. They have to be:
+the subject is four files under Ironfront_Reborn/ plus a YAML asset, none of which any gate here
+compiles or loads, and the failure was two literals disagreeing with a project setting. Five
+mutations of the shipped artifacts, all red:
+
+    P1  a second authority reappears in FpsActorController   -> FAIL (2 tests)
+    P2  IngameMenuUi.Hide drops the scaling                   -> FAIL
+    P3  PhysicsRate declares 1f/60f instead of deriving       -> FAIL
+    P4  TimeManager.asset back to 0.02                        -> FAIL
+    P5  AppQuit assigns Time.timeScale bare                   -> FAIL (2 tests)
+
+P2 IS WHY THE FIRST VERSION OF THE PIN WAS WRONG. It asserted "the file names PhysicsRate", and
+IngameMenuUi.Show() still did -- so dropping the scaling from Hide() passed green. The sweep now
+covers Time.timeScale as well as Time.fixedDeltaTime, which catches P2 and P5 both. Asserting by
+presence rather than by identity is exactly what pinned-baseline-test-companion warns about, and
+it was caught only because the mutation was actually run.
+
+STALE COMMENTS CORRECTED IN PLACE, not deleted. Actor.cs, ServerTickLoop.cs, NetPredictionClock.cs,
+MovementSimulation.cs and NetMovementAgent.cs each described the old two-authority behaviour as
+current fact. Phase 3B lost a hypothesis and most of a phase to a comment that stayed wrong;
+these now state what changed and why the old text was true when written.
+
+GATES.
+
+    dotnet build Ironfront.sln            0 Warning(s), 0 Error(s)  (TreatWarningsAsErrors on)
+    dotnet test  Ironfront.sln            1633 passed, 0 failed, 0 skipped
+    tools/UnitySyntaxCheck                416 files parse cleanly at CSharp9
+    tools/check-unity-meta.ps1            PASS (1856 assets / 1929 metas)
+    Unity assets-refresh                  clean; 0 errors, 0 exceptions

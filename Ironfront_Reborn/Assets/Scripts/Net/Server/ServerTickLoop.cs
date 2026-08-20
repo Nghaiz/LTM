@@ -27,11 +27,13 @@ namespace Ironfront.Net.Unity.Server
     /// What is left here is wiring, and wiring is what a playtest is good at catching.
     /// </para>
     /// <para>
-    /// <b>The tick is not driven by the FixedUpdate count.</b> The project assigns
-    /// <c>Time.fixedDeltaTime</c> at runtime — <c>IngameMenuUi.cs:29</c> and
-    /// <c>FpsActorController.cs:497</c> both set it to <c>Time.timeScale / 60f</c> — so
-    /// FixedUpdate runs at 60 Hz, not the 30 the simulation needs, and the value in
-    /// <c>TimeManager.asset</c> is never what runs. The scheduler is fed the wall clock and
+    /// <b>The tick is not driven by the FixedUpdate count.</b> FixedUpdate runs at the project's
+    /// physics rate — 60 Hz, <c>TimeManager.asset</c> — not the 30 the simulation needs. (Until
+    /// issue #123 that rate was also a moving target: <c>IngameMenuUi</c> and
+    /// <c>FpsActorController</c> each overwrote <c>Time.fixedDeltaTime</c> with
+    /// <c>Time.timeScale / 60f</c>, so the value in <c>TimeManager.asset</c> was never what ran
+    /// on a client and always what ran on a server. Both now scale the project setting through
+    /// <c>PhysicsRate</c> instead.) The scheduler is fed the wall clock and
     /// reports how many 30 Hz ticks are owed, which makes the netcode independent of the
     /// physics rate exactly as decision A5 option B requires. Most fixed steps owe 0 ticks and
     /// every second one owes 1.

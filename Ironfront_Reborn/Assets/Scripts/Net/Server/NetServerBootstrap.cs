@@ -136,10 +136,23 @@ namespace Ironfront.Net.Unity.Server
             }
 
             // NOT set here, deliberately: Time.fixedDeltaTime. Decision A5 chose option B — the
-            // netcode owns its own 30 Hz accumulator and the physics rate is left alone. Forcing
-            // 1/30 here would also lose the argument anyway: IngameMenuUi.cs:29 and
-            // FpsActorController.cs:497 both assign Time.timeScale / 60f at runtime, so the
-            // value would be overwritten before the first physics step.
+            // netcode owns its own 30 Hz accumulator and the physics rate is left alone.
+            //
+            // The second half of that argument is now obsolete and is recorded here rather than
+            // deleted, because it was true for a long time: IngameMenuUi and FpsActorController
+            // each used to assign `Time.timeScale / 60f` directly, so anything set here would
+            // have been overwritten before the first physics step. Both now go through
+            // PhysicsRate, which scales the PROJECT SETTING rather than declaring a rate of its
+            // own — so there is exactly one number, in TimeManager.asset, and this server and a
+            // rendered client no longer disagree about it. Issue #123.
+            //
+            // Logged rather than assumed. A server whose fixed step drifts from the clients'
+            // integrates rigidbodies differently for the same inputs, and that presents as a
+            // replication defect several layers away with nothing naming the cause.
+            Debug.Log(
+                $"[net] physics fixed step {Time.fixedDeltaTime * 1000f:F3} ms "
+                + $"({1f / Time.fixedDeltaTime:F1} Hz) — the project setting; the netcode's own "
+                + $"tick is {ProtocolConstants.SIM_TICK_RATE} Hz and is unrelated");
 
             if (_startOnAwake) StartServer();
         }
