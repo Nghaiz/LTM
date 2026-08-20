@@ -63,4 +63,25 @@
     <ProjectReference Include="..\tools\SpecChecker\SpecChecker.csproj" />
   </ItemGroup>
 
+  <!--
+    debt-closure phase 3C. Same arrangement Ironfront.Client.Input.Tests and
+    Ironfront.Client.Flow.Tests already use, and for the same reason: the code lives under
+    Ironfront_Reborn/Assets/Scripts because that is where Unity has to compile it from, Assets/
+    has no .asmdef, so there is no assembly for a .NET project to reference and no Unity Test
+    Framework either. Compiling the source a second time here is the only way `dotnet test`
+    reaches it.
+
+    Linked here rather than into Ironfront.Client.Flow.Tests because the pin that matters drives
+    the payload through the real ServerMessageRouter, and Flow.Tests deliberately does not
+    reference Ironfront.Net.Replication.
+
+    THE ONE RULE: no UnityEngine in a linked file. A `using UnityEngine;` added to
+    BaselineAckPolicy fails this build rather than silently dropping it out of coverage - which
+    is exactly the fate its subject, AckBaselineMessage, had for four phases.
+  -->
+  <ItemGroup>
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\BaselineAckPolicy.cs"
+             Link="Linked\BaselineAckPolicy.cs" />
+  </ItemGroup>
+
 </Project>

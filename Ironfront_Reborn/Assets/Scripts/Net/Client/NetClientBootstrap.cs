@@ -58,6 +58,26 @@ namespace Ironfront.Net.Unity.Client
         private bool _ownsTransport;
         private bool _loggedFirstSnapshot;
 
+        /// <summary>
+        /// Tells the server which snapshot tick this client holds in full, so the delta encoder
+        /// has a baseline to measure against.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>It lives here rather than on the player prefab.</b> Snapshots start arriving
+        /// before this client owns an actor, and <c>DeltaEncoder</c> keeps only 32 ticks of
+        /// history — an ack that waits for a player prefab to exist names a baseline the server
+        /// has already dropped. The bootstrap owns the router and the transport for the whole
+        /// connection, which is exactly the lifetime an ack needs.
+        /// </para>
+        /// <para>
+        /// The decision and the byte layout are <see cref="BaselineAckPolicy"/>'s, where
+        /// <c>dotnet test</c> can reach them; this class supplies the subscription and the
+        /// transport call and nothing else.
+        /// </para>
+        /// </remarks>
+        public BaselineAckPolicy BaselineAck { get; } = new BaselineAckPolicy();
+
         /// <summary>Decodes and dispatches everything the server sends.</summary>
         public ClientMessageRouter Router { get; } = new ClientMessageRouter();
 
@@ -131,6 +151,7 @@ namespace Ironfront.Net.Unity.Client
             // identity at the bootstrap so interpolation can skip it and prediction can
             // reconcile the actor the player actually owns.
             Router.OnSpawnActor += OnSpawnActor;
+            Router.OnSnapshotApplied += OnSnapshotApplied;
 
             EnsureVehicleStage();
             EnsureLocalCombatDriver();
@@ -141,6 +162,7 @@ namespace Ironfront.Net.Unity.Client
         private void OnDestroy()
         {
             Router.OnSpawnActor -= OnSpawnActor;
+            Router.OnSnapshotApplied -= OnSnapshotApplied;
             if (ReferenceEquals(Current, this)) Current = null;
             Disconnect();
         }
@@ -224,6 +246,37 @@ namespace Ironfront.Net.Unity.Client
 
             Router.Reset();
             Reconciler.Reset();
+
+            // The server resets its encoder on the same event. Keeping the old session's tick
+            // would make every early ack of the next connection look stale and be suppressed,
+            // and the symptom is full snapshots forever with nothing in any log.
+            BaselineAck.Reset();
+        }
+
+        /// <summary>
+        /// Acknowledges the tick just applied, so the next snapshot can be a delta.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The decoder's tick, not the event's.</b> <c>lastProcessedInputTick</c> is the
+        /// server's opinion of this client's INPUT clock and has nothing to do with which
+        /// snapshot state is held; acking with it would name a tick from an unrelated sequence.
+        /// <c>DeltaDecoder.AckTick</c> is the state actually decoded, and it reports 0 until a
+        /// snapshot has landed.
+        /// </para>
+        /// <para>
+        /// Vehicle snapshots deliberately do NOT trigger a second ack. One ack moves both
+        /// encoders on the server (<c>ServerMessageRouter</c> routes it into
+        /// <c>Encoder</c> and <c>VehicleEncoder</c> together) because both streams ride the same
+        /// channel-1 datagram at the same server tick.
+        /// </para>
+        /// </remarks>
+        private void OnSnapshotApplied(uint serverTick, uint lastProcessedInputTick)
+        {
+            if (!BaselineAck.TryBuildAck(Router.Decoder.AckTick, out ReadOnlySpan<byte> payload))
+                return;
+
+            Send(BaselineAckPolicy.Channel, payload, reliable: true);
         }
 
         /// <summary>Sends one payload to the server.</summary>

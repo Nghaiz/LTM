@@ -76,6 +76,56 @@ namespace Ironfront.Net.Unity
         /// </summary>
         public Func<MoveInput> InputSource;
 
+        /// <summary>
+        /// Aim pitch, in degrees, as of the last simulated tick. -90..90.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why it is here and not on <see cref="MoveInput"/>.</b> Pitch is an aim quantity;
+        /// <c>MovementCore</c> never reads it and must not start. But it does have to reach the
+        /// wire — <c>ServerCombatAuthority.AimDirection</c> and <c>ShotOrigin</c> both read
+        /// <c>InputFrame.PitchDegrees</c> — so the sender needs it, and the sender must have the
+        /// value the TICK saw rather than whatever the render frame holds by the time the packet
+        /// is built.
+        /// </para>
+        /// <para>
+        /// <b>And not read directly by the sender.</b> <c>ClientPredictionStage</c> lives under
+        /// <c>Net/Client/</c>, where the client-wiring gate's G4 rule forbids reaching
+        /// <c>FpsActorController.instance</c> without a local-actor guard — the A16 camera-hijack
+        /// class. That rule is right, and the answer is to keep the resolution out of
+        /// <c>Net/Client/</c> rather than to write a G4 exemption for it.
+        /// </para>
+        /// </remarks>
+        public float AimPitchDegrees { get; private set; }
+
+        /// <summary>
+        /// This tick's <c>C_INPUT</c> button bits for fire, aim and reload. Installed by
+        /// <c>FpsActorController</c>; null means nothing pressed.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Pushed in, not pulled.</b> This component is in <c>Ironfront.Net.Unity.Shared</c>,
+        /// an assembly with no references and the one the SERVER assembly builds on. The input
+        /// seam (<c>IInputSource</c>, <c>LocalInputSource</c>) is in Assembly-CSharp, a layer
+        /// up, so this side cannot name it and the controller installs a delegate instead. A
+        /// <c>Func</c> rather than a cached value because the whole seam is deliberately live —
+        /// <c>LocalInputSource</c>'s own remark explains why latching a frame's input changes
+        /// behaviour.
+        /// </para>
+        /// <para>
+        /// <b>This is the seam a scripted client drives.</b> A programme calls
+        /// <c>FpsActorController.SetInputSource</c> and the same tick loop, the same sender and
+        /// the same frame layout carry its buttons — Lane B needs no second path. Movement is
+        /// scripted through <see cref="InputSource"/> instead, which replaces the whole
+        /// <see cref="MoveInput"/> rather than its combat half.
+        /// </para>
+        /// </remarks>
+        public Func<InputButtons> CombatButtonSource;
+
+        /// <summary>Aim pitch in degrees for this tick. Installed alongside
+        /// <see cref="CombatButtonSource"/>; null reports level.</summary>
+        public Func<float> AimPitchSource;
+
         private void Awake()
         {
             _agent = GetComponent<NetMovementAgent>();
@@ -153,6 +203,11 @@ namespace Ironfront.Net.Unity
             int ticks = 0;
             while (_accumulator >= TickInterval && ticks < MaxTicksPerFrame)
             {
+                // Sampled with the tick, not when the sender gets round to it. Two reads a
+                // frame apart is how a shot leaves along a direction the player was not
+                // looking in, and it is unreproducible when it happens.
+                AimPitchDegrees = AimPitchSource != null ? AimPitchSource() : 0f;
+
                 MoveInput input = InputSource();
                 _agent.Tick(in input, TickInterval);
 
@@ -189,6 +244,9 @@ namespace Ironfront.Net.Unity
             _secondTimer = 0f;
         }
 
-        private MoveInput DefaultInput() => MovementSimulation.FromUnityInput(_cameraParent.eulerAngles.y);
+        private MoveInput DefaultInput()
+            => MovementSimulation.FromUnityInput(
+                _cameraParent.eulerAngles.y,
+                CombatButtonSource != null ? CombatButtonSource() : InputButtons.None);
     }
 }

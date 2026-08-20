@@ -1,5 +1,6 @@
 using System;
 using Ironfront.Net.Protocol;
+using Ironfront.Net.Unity.Client;
 using Ironfront.Net.Replication;
 using Ironfront.Net.Replication.Movement;
 using Ironfront.Net.Replication.Server;
@@ -51,6 +52,14 @@ namespace Ironfront.Net.Replication.Tests
             Assert.True(
                 harness.PlayerSession.Encoder.DeltaSnapshotCount > harness.PlayerSession.Encoder.FullSnapshotCount,
                 "the server fell back to full snapshots more often than it sent deltas");
+
+            // Named separately from the delta count so a failure says WHICH half broke. The
+            // delta assertion above already cannot pass with a dead sender, but it reports
+            // "the server fell back to full snapshots", which points at the encoder and not at
+            // the client that stopped acking.
+            Assert.True(
+                harness.ClientAck.AcksSent > 0,
+                "the client's BaselineAckPolicy produced no acks at all");
 
             // 4. The client's world matches the server's, exactly, at the quantized level.
             harness.FlushUntilConverged();
@@ -119,7 +128,6 @@ namespace Ironfront.Net.Replication.Tests
             private readonly byte[] _snapshotBody = new byte[ServerPayloadWriter.MaxSnapshotBodySize];
             private readonly byte[] _payload = new byte[ProtocolConstants.MAX_PAYLOAD];
             private readonly byte[] _inputBody = new byte[64];
-            private readonly byte[] _ackBody = new byte[AckBaselineMessage.Size];
             private readonly InputFrame[] _recentInput = new InputFrame[ProtocolConstants.INPUT_REDUNDANCY];
 
             private readonly int _actorCount;
@@ -134,6 +142,14 @@ namespace Ironfront.Net.Replication.Tests
                 PlayerSession.State = MoveState.AtRest(Vec3.Zero, grounded: true);
 
                 ClientDecoder = new DeltaDecoder();
+
+                // The SHIPPED sender, not a copy of it. This harness used to hand-roll the ack
+                // beside the one the Unity client would eventually send, which meant the whole
+                // delta path below was exercised against a second implementation that could
+                // drift from the real one without anything noticing — and for four phases there
+                // was no real one to drift from (debt row X-3). Driving BaselineAckPolicy here
+                // makes this suite a full-loop test of the actual client behaviour.
+                ClientAck = new BaselineAckPolicy();
 
                 _wire.Server.OnMessage += OnServerMessage;
                 _wire.Client.OnMessage += OnClientMessage;
@@ -160,6 +176,9 @@ namespace Ironfront.Net.Replication.Tests
 
             public ClientSession PlayerSession { get; }
             public DeltaDecoder ClientDecoder { get; }
+
+            /// <summary>The shipped client-side ack sender this harness drives.</summary>
+            public BaselineAckPolicy ClientAck { get; }
 
             /// <summary>Drops everything the client tries to send, simulating a dead link.</summary>
             public bool NetworkDown { get; set; }
@@ -296,16 +315,10 @@ namespace Ironfront.Net.Replication.Tests
                     if (ClientDecoder.Read(body) != SnapshotReadResult.Applied) continue;
                     if (NetworkDown) continue;
 
-                    AckBaselineMessage.Write(_ackBody, ClientDecoder.AckTick);
+                    if (!ClientAck.TryBuildAck(ClientDecoder.AckTick, out ReadOnlySpan<byte> ack))
+                        continue;
 
-                    var writer = new PayloadFrameWriter(_payload, ChannelId.ReliableOrdered);
-                    writer.WriteMessage(ClientMessageType.AckBaseline, _ackBody);
-                    if (!writer.TryFinish(out int total)) continue;
-
-                    _wire.Client.Send(
-                        (byte)ChannelId.ReliableOrdered,
-                        new ReadOnlySpan<byte>(_payload, 0, total),
-                        reliable: true);
+                    _wire.Client.Send((byte)BaselineAckPolicy.Channel, ack, reliable: true);
                 }
             }
 
