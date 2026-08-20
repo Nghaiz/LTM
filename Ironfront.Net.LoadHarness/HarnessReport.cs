@@ -96,6 +96,14 @@ namespace Ironfront.Net.LoadHarness
 
             public long SnapshotsApplied { get; init; }
             public long VehicleSnapshotsApplied { get; init; }
+
+            /// <summary>Baseline acks this client sent, so a delta count of 0 says which half broke.</summary>
+            /// <remarks>
+            /// Until phase 3C the harness sent none, so DeltaEncoder.TryFindBaseline returned
+            /// false on every call and every byte counted above was a FULL snapshot. Reporting
+            /// the ack count beside the bandwidth is what stops that reading as a healthy zero.
+            /// </remarks>
+            public long AcksSent { get; init; }
             public long MalformedMessages { get; init; }
             public long UnknownMessages { get; init; }
             public int StateSamples { get; init; }
@@ -120,6 +128,7 @@ namespace Ironfront.Net.LoadHarness
                     SmoothedRttMs = stats.SmoothedRttMs,
                     ReceivedBytesPerSecond =
                         durationSec <= 0 ? 0 : stats.BytesReceived / durationSec,
+                    AcksSent = client.AcksSent,
                     SnapshotsApplied = client.SnapshotsApplied,
                     VehicleSnapshotsApplied = client.VehicleSnapshotsApplied,
                     MalformedMessages = client.MalformedMessages,

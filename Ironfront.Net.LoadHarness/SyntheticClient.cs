@@ -40,6 +40,12 @@ namespace Ironfront.Net.LoadHarness
         private readonly UdpTransportClient _transport;
         private readonly ClientMessageRouter _router = new ClientMessageRouter();
         private readonly StateCapture _capture = new StateCapture();
+
+        // The Unity client's own policy, compiled into this project by a <Compile Include> link
+        // rather than reimplemented -- see the csproj. Per client, because each holds its own
+        // decoder and therefore its own baseline.
+        private readonly Ironfront.Net.Unity.Client.BaselineAckPolicy _baselineAck =
+            new Ironfront.Net.Unity.Client.BaselineAckPolicy();
         private readonly LatencyRecorder _snapshotIntervalMs = new LatencyRecorder();
         private readonly List<InputFrame> _pending = new List<InputFrame>(FramesPerMessage);
         private readonly InputFrame[] _scratch = new InputFrame[FramesPerMessage];
@@ -91,6 +97,16 @@ namespace Ironfront.Net.LoadHarness
 
         /// <summary>Zero-based index within the run, and the client's identity in the report.</summary>
         public int Index { get; }
+
+        /// <summary>
+        /// How many baseline acks this client has sent, for the report.
+        /// </summary>
+        /// <remarks>
+        /// Reported beside the delta counts rather than inferred from them: a run showing no
+        /// deltas needs to say WHICH half broke — a dead sender here, or an encoder that
+        /// received the acks and ignored them.
+        /// </remarks>
+        public long AcksSent => _baselineAck.AcksSent;
 
         public ConnectionState State => _transport.State;
 
@@ -213,12 +229,43 @@ namespace Ironfront.Net.LoadHarness
 
         private void OnMessage(ReadOnlyMemory<byte> payload) => _router.Route(payload.Span);
 
+        /// <summary>
+        /// Records the cadence, captures the state, and acknowledges the baseline.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Without the ack, every byte this harness measures is a full snapshot.</b>
+        /// <c>DeltaEncoder.TryFindBaseline</c> returns false while the server's
+        /// <c>_ackedBaselineTick</c> is 0, so a client that never acks is served FULL snapshots
+        /// forever — correct, and large. That was true of every client until phase 3C gave the
+        /// Unity side a sender; leaving the harness silent would have made lane A's bandwidth
+        /// figures a measurement of a case nothing is in any more, and phase 4 consumes those
+        /// figures for ledger rows B-16 and B-17.
+        /// </para>
+        /// <para>
+        /// <b>The shipped policy, linked, not a second one.</b> See this project's csproj: 3C
+        /// found the integration suite hand-rolling its own ack beside the real client's, and a
+        /// harness that did the same would measure a copy free to drift from what ships.
+        /// </para>
+        /// <para>
+        /// <b><c>Decoder.AckTick</c>, not <c>serverTick</c> and not
+        /// <c>lastProcessedInputTick</c>.</b> The latter is the server's opinion of this
+        /// client's INPUT clock and names a tick from an unrelated sequence; the ack has to name
+        /// the snapshot state actually decoded. <c>NetClientBootstrap.OnSnapshotApplied</c>
+        /// makes the same call for the same reason.
+        /// </para>
+        /// </remarks>
         private void OnSnapshotApplied(uint serverTick, uint lastProcessedInputTick)
         {
             if (_lastSnapshotAtMs >= 0.0) _snapshotIntervalMs.Record(_nowMs - _lastSnapshotAtMs);
             _lastSnapshotAtMs = _nowMs;
 
             _capture.Capture(_router, _nowMs);
+
+            if (!_baselineAck.TryBuildAck(_router.Decoder.AckTick, out ReadOnlySpan<byte> ack))
+                return;
+
+            _transport.Send((byte)Ironfront.Net.Unity.Client.BaselineAckPolicy.Channel, ack, reliable: true);
         }
 
         private void OnConnected(ConnectResult result)

@@ -40,4 +40,27 @@
     <ProjectReference Include="..\Ironfront.Tools.LoadTest\Ironfront.Tools.LoadTest.csproj" />
   </ItemGroup>
 
+  <!--
+    debt-closure, phase 3C's handoff item 2. The harness has to ack, or every byte lane A
+    measures is a FULL snapshot — a case no real client has been in since 3C shipped the
+    sender, which makes the harness's bandwidth numbers a description of nothing.
+
+    Linked rather than reimplemented, and that distinction is the whole point. 3C found
+    SnapshotFlowIntegrationTests hand-rolling its own ack beside the one a real client would
+    send, so the delta path was being exercised against a second implementation free to drift
+    from the shipped one. A synthetic client with its own ack policy would rebuild exactly that
+    trap, one project over, in the place the measurements come from.
+
+    Same <Compile Include> arrangement Ironfront.Net.Replication.Tests uses, for the same
+    reason: the file lives under Ironfront_Reborn/Assets/Scripts because that is where Unity
+    compiles it from, Assets/ has no .asmdef, and there is no assembly to reference.
+
+    THE ONE RULE: no UnityEngine in a linked file. A `using UnityEngine;` added to
+    BaselineAckPolicy fails this build rather than silently dropping out of coverage.
+  -->
+  <ItemGroup>
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\BaselineAckPolicy.cs"
+             Link="Linked\BaselineAckPolicy.cs" />
+  </ItemGroup>
+
 </Project>
