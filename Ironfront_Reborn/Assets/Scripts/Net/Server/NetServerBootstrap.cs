@@ -351,6 +351,30 @@ namespace Ironfront.Net.Unity.Server
                 return;
             }
 
+            // A secret is present, so signed validation is what gets installed -- and the
+            // accept-unsigned flag is about to be ignored. Say so.
+            //
+            // It used to be ignored SILENTLY. The flag is only consulted on the branch above,
+            // where the secret is missing; with one present this method installed signed
+            // validation and never looked at the flag again. An operator who set it got the
+            // opposite of what they asked for, and the only evidence was a per-connection
+            // "join rejected: BadSignature" that names the symptom and not the cause. That trail
+            // consumed phase 3B and part of #152's. Issue #151.
+            //
+            // The flag is still ignored rather than honoured, deliberately: a server holding a
+            // real secret admitting unsigned tickets is a server anyone can join as anyone, and
+            // this method's whole contract is fail-closed. What changes is that the contradiction
+            // is now reported at start-up, once, by name.
+            if (Config.AcceptUnsignedTickets)
+            {
+                Debug.LogError(
+                    $"[net] {EnvRegistry.GameServerAcceptUnsignedTickets.Name} is set, but "
+                    + $"{SharedSecretVariable} is also set, so the flag is IGNORED and every "
+                    + "join ticket must carry a valid signature. Unsign an unsigned client by "
+                    + $"clearing {SharedSecretVariable}, or sign its ticket -- a Unity client "
+                    + $"mints one from {SharedSecretVariable} on its own.");
+            }
+
             // The ticket names a serverId, and the validator only enforces it once we have been
             // told our own — which is GS_REGISTER's answer and arrives later, if at all. 0 here
             // means "signature and expiry only", which is the correct standalone behaviour.

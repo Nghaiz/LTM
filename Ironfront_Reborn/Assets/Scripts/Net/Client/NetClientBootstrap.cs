@@ -188,18 +188,89 @@ namespace Ironfront.Net.Unity.Client
             _transport.OnConnected += OnConnected;
             _transport.OnDisconnected += OnDisconnected;
 
-            // A placeholder ticket, not a fabricated one: 64 zero bytes carry no more authority
-            // than nothing at all, and a server with validation on rejects them on the HMAC like
-            // any other unsigned ticket. That decision still belongs on the server.
-            //
-            // It cannot be ReadOnlySpan<byte>.Empty, which is what this line used to pass.
+            _transport.Connect(Config.Host, Config.Port, BuildJoinTicket());
+        }
+
+        /// <summary>
+        /// Builds the ticket this client presents: signed when a shared secret is reachable,
+        /// the 64-byte placeholder when one is not.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This is not the production join path.</b> A player who came through the master
+        /// server arrives holding a ticket the master signed, carried in <c>PendingJoin</c>, and
+        /// <c>MasterSession</c> dials with that one. This method covers the case with no master
+        /// in it at all — an Editor session against its own server, a scripted two- or
+        /// three-client run, a QA build pointed at a staging server whose secret the operator
+        /// already has.
+        /// </para>
+        /// <para>
+        /// <b>Why it had to exist.</b> This line used to hand over
+        /// <c>PendingJoin.CreateUnsignedTicket()</c> unconditionally — 64 zero bytes — on the
+        /// argument that admitting them was the server's decision to make. It is, and the server
+        /// decides no: <c>JoinTicket.Verify</c> returns <c>BadSignature</c> from exactly one
+        /// branch, the HMAC compare, so a zero ticket can produce nothing else once a secret is
+        /// configured. The consequence was that a Unity client could never join a server with a
+        /// secret set, and the log blamed a signature rather than the absence of one. Issue #151.
+        /// </para>
+        /// <para>
+        /// <b>The unsigned path is kept, not replaced.</b> With no secret reachable there is
+        /// nothing to sign with, and a development server running
+        /// <c>IRONFRONT_GAMESERVER_ACCEPT_UNSIGNED_TICKETS=1</c> admits the placeholder. Minting
+        /// only when a secret is present is what keeps every existing no-secret flow behaving
+        /// exactly as it did.
+        /// </para>
+        /// <para>
+        /// <b><see cref="GameClientConfig.PlayerId"/> must differ per client.</b> The server
+        /// enforces one session per player once a secret is configured, so several instances on
+        /// the default have every join after the first rejected — and the rejection is reported
+        /// as a bare <c>InvalidTicket</c>, which reads as a full server. The same argument is
+        /// already written down one project over, in <c>JoinTicketSource.Mint</c>.
+        /// </para>
+        /// </remarks>
+        private byte[] BuildJoinTicket()
+        {
+            string secret = Environment.GetEnvironmentVariable(EnvRegistry.SharedSecret.Name);
+
+            // Not a fabricated ticket: 64 zero bytes carry no more authority than nothing at all.
+            // It cannot be ReadOnlySpan<byte>.Empty, which is what this used to pass.
             // Connection.BeginConnect rejects any ticket that is not exactly JOIN_TICKET_SIZE
             // bytes and throws before a packet is sent, so an empty one never reached the
-            // _acceptUnsignedTickets switch it was written to defer to -- it threw
-            // ArgumentException out of Awake instead. The loopback path has no such check, which
-            // is why this survived: every test that exercised this method used a loopback
-            // transport, and the UDP path had never been dialled.
-            _transport.Connect(Config.Host, Config.Port, PendingJoin.CreateUnsignedTicket());
+            // accept-unsigned switch it was written to defer to -- it threw ArgumentException out
+            // of Awake instead. The loopback path has no such check, which is why that survived:
+            // every test that exercised this method used a loopback transport.
+            if (string.IsNullOrEmpty(secret)) return PendingJoin.CreateUnsignedTicket();
+
+            var ticket = new byte[ProtocolConstants.JOIN_TICKET_SIZE];
+
+            int written = JoinTicket.Issue(
+                ticket,
+                playerId: Config.PlayerId,
+                // serverId 0 means "signature and expiry only", which is the correct standalone
+                // behaviour and matches what NetServerBootstrap's validator is constructed with.
+                serverId: 0,
+                roomId: 0,
+                expiresAtUnixMs: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + JoinTicket.ValidityMs,
+                displayName: Config.DisplayName,
+                sharedSecret: System.Text.Encoding.UTF8.GetBytes(secret));
+
+            if (written != ProtocolConstants.JOIN_TICKET_SIZE)
+            {
+                // Falling back to the placeholder here would turn a mint failure into the exact
+                // BadSignature this method exists to remove, one layer further from its cause.
+                throw new InvalidOperationException(
+                    $"[net] JoinTicket.Issue wrote {written} bytes, expected "
+                    + $"{ProtocolConstants.JOIN_TICKET_SIZE}. The client cannot present a ticket.");
+            }
+
+            if (Config.Verbose)
+            {
+                Debug.Log(
+                    $"[net] join ticket signed for player {Config.PlayerId} "
+                    + $"as '{Config.DisplayName}'");
+            }
+
+            return ticket;
         }
 
         /// <summary>

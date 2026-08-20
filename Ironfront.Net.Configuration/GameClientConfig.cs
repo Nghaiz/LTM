@@ -37,6 +37,29 @@ namespace Ironfront.Net.Configuration
         /// </remarks>
         public bool PredictLocalVehicle { get; set; } = true;
 
+        /// <summary>
+        /// The playerId this client's self-minted join ticket claims. Never 0.
+        /// </summary>
+        /// <remarks>
+        /// <b>Distinct per client, or the second one is turned away.</b> The server's validator
+        /// enforces one session per player once a shared secret is configured, so a scripted run
+        /// that leaves every instance on the default has its second and third joins rejected —
+        /// and the rejection reads as a capacity limit, which it is not. It is only consulted on
+        /// the path where the client mints its own ticket; a master-issued ticket carries its own
+        /// id and this is ignored.
+        /// </remarks>
+        public uint PlayerId { get; set; } = 1;
+
+        /// <summary>
+        /// The name that self-minted ticket carries, truncated to 16 UTF-8 bytes.
+        /// </summary>
+        /// <remarks>
+        /// This is where a killfeed line gets its name, which is why it is configuration rather
+        /// than a constant: the two-client combat check grades a killfeed line <i>with a name</i>,
+        /// and two clients on the same default produce a killfeed nobody can read.
+        /// </remarks>
+        public string DisplayName { get; set; } = "player";
+
         /// <summary>Overlays the process environment onto this instance and returns it.</summary>
         public GameClientConfig ApplyEnvironment()
             => ApplyEnvironment(Environment.GetEnvironmentVariable);
@@ -54,6 +77,15 @@ namespace Ironfront.Net.Configuration
 
             PredictLocalVehicle = EnvParse.Flag(
                 EnvRegistry.ClientPredictLocalVehicle.Read(read), PredictLocalVehicle);
+
+            // PositiveInt, not NonNegativeInt: 0 is the one value the server's one-session-per-
+            // player claim cannot represent, so it is rejected here rather than becoming a join
+            // failure three layers away.
+            PlayerId = (uint)EnvParse.PositiveInt(
+                EnvRegistry.ClientPlayerId.Read(read), (int)PlayerId, EnvRegistry.ClientPlayerId.Name);
+
+            string displayName = EnvParse.Trimmed(EnvRegistry.ClientDisplayName.Read(read));
+            if (displayName.Length > 0) DisplayName = displayName;
 
             return this;
         }
