@@ -91,8 +91,38 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// <summary>Degrees per second added to <see cref="yawDegrees"/> while the step runs.</summary>
         public float yawRateDegreesPerSecond = 0f;
 
-        /// <summary>Absolute aim pitch, -90..90.</summary>
+        /// <summary>Absolute aim pitch, -90..90. Positive looks down (<see cref="ScriptedAim"/>).</summary>
         public float pitchDegrees = 0f;
+
+        /// <summary>
+        /// Display name of another player to face for the duration of this step. Empty means
+        /// the step's own <see cref="yawDegrees"/>/<see cref="pitchDegrees"/> stand.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A NAME, not an actor id.</b> Actor ids are the server's to hand out and depend on
+        /// join order, so a programme written against one would be a programme about one run.
+        /// The display name is the runner's own input (<c>IRONFRONT_CLIENT_DISPLAY_NAME</c>) and
+        /// resolves through the same <c>PlayerNameTable</c> the killfeed reads — which check 1
+        /// grades anyway, so a programme that cannot find its target by name has already found
+        /// the defect it was going to look for.
+        /// </para>
+        /// <para>
+        /// <b>Unresolvable is not fatal.</b> The target may not have joined yet, or may be dead.
+        /// The step falls back to its declared yaw and pitch and the recorder writes that the
+        /// target was missing, rather than the run ending on a name lookup.
+        /// </para>
+        /// </remarks>
+        public string aimAtPlayer = null;
+
+        /// <summary>
+        /// Walk toward <see cref="aimAtPlayer"/> instead of using <see cref="moveZ"/>, stopping
+        /// at <see cref="holdDistanceMeters"/>. Ignored when no target resolves.
+        /// </summary>
+        public bool approach = false;
+
+        /// <summary>How close <see cref="approach"/> gets before it stops. Metres.</summary>
+        public float holdDistanceMeters = 8f;
 
         public bool fire = false;
         public bool aim = false;

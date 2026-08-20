@@ -122,6 +122,26 @@ namespace Ironfront
 
             previousDefines = StripEditorOnlyDefines();
 
+            // A define change QUEUES A RECOMPILE, and outside batchmode BuildPlayer refuses to
+            // start while one is running. Batchmode never sees it because the compile completes
+            // before the next statement runs; a live Editor does, every time, and the failure
+            // arrived as "Error building Player because scripts are compiling" followed by this
+            // class's own "build Unknown with 0 error(s)" — accurate and unreadable. Waiting
+            // here cannot help: the compile needs Editor update ticks to progress and finishes
+            // with a domain reload that would destroy this call's stack anyway.
+            //
+            // So the interactive path refuses, and says what to do. Making it work would take a
+            // SessionState continuation across two domain reloads, which is a lot of machinery
+            // for verification scaffolding whose batch path already works.
+            if (previousDefines != null && !Application.isBatchMode)
+            {
+                Fail($"a live Editor cannot run this build: stripping {McpReadyDefine} queues a "
+                     + "script recompile, and BuildPlayer refuses to start during one. Close "
+                     + "the Editor and run `pwsh tools/run-lane-b.ps1 -Build`, which builds the "
+                     + "same player in batchmode. The defines are restored either way.");
+                return false;
+            }
+
             var options = new BuildPlayerOptions
             {
                 scenes = scenes,

@@ -73,6 +73,7 @@ namespace Ironfront.Net.Unity.Diagnostics
 
         private ScriptedInputCursor _cursor;
         private ScriptedInputSource _source;
+        private ScriptedTargetSolver _solver;
         private LaneBCheckpointRecorder _recorder;
         private LaneBRunSeeds _seeds;
         private bool _installed;
@@ -233,8 +234,10 @@ namespace Ironfront.Net.Unity.Diagnostics
             if (programme == null) { Finish(ExitProgrammeUnusable, problem); return; }
 
             _cursor = new ScriptedInputCursor(programme);
-            _source = new ScriptedInputSource(_cursor);
-            _recorder = new LaneBCheckpointRecorder(_artifacts, _label, programme.name, _seeds);
+            _solver = new ScriptedTargetSolver();
+            _source = new ScriptedInputSource(_cursor, _solver);
+            _recorder = new LaneBCheckpointRecorder(
+                _artifacts, _label, programme.name, _seeds, _solver);
 
             local.SetInputSource(_source);
 
@@ -255,13 +258,40 @@ namespace Ironfront.Net.Unity.Diagnostics
                       + $"actor={client.LocalActorId} conn={client.ConnectionId}");
         }
 
+        /// <summary>
+        /// The movement half of the seam, built from the same step and the same solved aim the
+        /// controller half is reading this frame.
+        /// </summary>
+        /// <remarks>
+        /// <b>Yaw comes from <see cref="ScriptedInputSource.Yaw"/>, not from the cursor.</b> The
+        /// two differ exactly when a step names a target: the cursor holds the programme's
+        /// declared facing and the source holds the solved one. Reading the cursor here would
+        /// send a <c>C_INPUT</c> facing one way while the controller aimed another — the client
+        /// would appear to shoot sideways to every observer, and its own screen would look
+        /// correct, which is the version of that bug that survives a screenshot check.
+        /// </remarks>
         private MoveInput BuildMoveInput()
         {
             ScriptedInputStep step = _cursor.Current;
-            if (step == null) return new MoveInput(0f, 0f, _cursor.Yaw, false, false, false);
+            float yaw = _source != null ? _source.Yaw : _cursor.Yaw;
+
+            if (step == null) return new MoveInput(0f, 0f, yaw, false, false, false);
+
+            float moveZ = step.moveZ;
+
+            if (step.approach && _source != null)
+            {
+                ScriptedTargetSolver.Solution aim = _source.Aim();
+
+                // An unresolved target leaves the step's own moveZ standing, so a programme
+                // that says "walk forward at whoever OBS-A is" still walks forward if the name
+                // has not arrived yet, instead of standing still and reporting nothing.
+                if (aim.Resolved)
+                    moveZ = ScriptedAim.ApproachMoveZ(aim.Distance, step.holdDistanceMeters);
+            }
 
             return new MoveInput(
-                step.moveX, step.moveZ, _cursor.Yaw,
+                step.moveX, moveZ, yaw,
                 step.jump, step.sprint, step.crouch,
                 step.fire, step.aim, step.reload);
         }

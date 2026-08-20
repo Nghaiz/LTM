@@ -35,9 +35,18 @@ namespace Ironfront.Net.Unity.Diagnostics
     public sealed class ScriptedInputSource : IInputSource
     {
         private readonly ScriptedInputCursor _cursor;
+        private readonly ScriptedTargetSolver _solver;
 
-        public ScriptedInputSource(ScriptedInputCursor cursor)
-            => _cursor = cursor ?? throw new ArgumentNullException(nameof(cursor));
+        /// <param name="solver">
+        /// Optional. Without one, a step's <c>aimAtPlayer</c> is inert and the programme's
+        /// declared yaw and pitch stand — which is what the unit tests exercise, since the
+        /// solver needs a live scene to resolve anything.
+        /// </param>
+        public ScriptedInputSource(ScriptedInputCursor cursor, ScriptedTargetSolver solver = null)
+        {
+            _cursor = cursor ?? throw new ArgumentNullException(nameof(cursor));
+            _solver = solver;
+        }
 
         private ScriptedInputStep Step => _cursor.Current;
 
@@ -45,10 +54,46 @@ namespace Ironfront.Net.Unity.Diagnostics
 
         public float MoveZ => Step != null ? Step.moveZ : 0f;
 
-        /// <summary>The cursor's integrated facing, not the step's declared one.</summary>
-        public float Yaw => _cursor.Yaw;
+        /// <summary>
+        /// The solved facing when the step names a target, else the cursor's integrated one —
+        /// never the step's declared yaw, which the cursor has already absorbed.
+        /// </summary>
+        public float Yaw
+        {
+            get
+            {
+                ScriptedTargetSolver.Solution aim = Aim();
+                return aim.Resolved ? aim.Yaw : _cursor.Yaw;
+            }
+        }
 
-        public float Pitch => Step != null ? Step.pitchDegrees : 0f;
+        public float Pitch
+        {
+            get
+            {
+                ScriptedTargetSolver.Solution aim = Aim();
+                if (aim.Resolved) return aim.Pitch;
+                return Step != null ? Step.pitchDegrees : 0f;
+            }
+        }
+
+        /// <summary>
+        /// The live step's target solution, or an unresolved one when the step names nobody.
+        /// </summary>
+        /// <remarks>
+        /// The solver memoizes per frame, so calling this from <see cref="Yaw"/>,
+        /// <see cref="Pitch"/> and the harness's <c>MoveInput</c> builder in one frame is one
+        /// solve, not three — and, more to the point, one ANSWER rather than three that can
+        /// disagree while the target walks.
+        /// </remarks>
+        public ScriptedTargetSolver.Solution Aim()
+        {
+            ScriptedInputStep step = Step;
+            if (step == null || _solver == null || string.IsNullOrEmpty(step.aimAtPlayer))
+                return default;
+
+            return _solver.Solve(step.aimAtPlayer);
+        }
 
         public float Lean => 0f;
 

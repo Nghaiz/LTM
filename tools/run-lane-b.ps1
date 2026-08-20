@@ -28,7 +28,13 @@
 # Usage:
 #   $env:UNITY_PATH = "C:\Program Files\Unity\Hub\Editor\6000.3.21f1\Editor\Unity.exe"
 #   pwsh tools/run-lane-b.ps1 -Build -Smoke
-#   pwsh tools/run-lane-b.ps1 -Sim typical -OutputDirectory plans/debt-closure/reports/lane-b/run-01
+#   pwsh tools/run-lane-b.ps1 -Set combat -OutputDirectory artifacts/lane-b/combat-01
+#   pwsh tools/run-lane-b.ps1 -Set vehicle -Sim typical -OutputDirectory artifacts/lane-b/vehicle-01
+#
+# PROGRAMME SETS. -Set names a family of recorded programmes under tools/lane-b/. Each client
+# takes <set>-<label>.json when that file exists and <set>.json when it does not, so the smoke
+# runs one programme on all three while a check set gives the shooter, the victim and the
+# witness a different one each.
 #
 # OUTPUT: <OutputDirectory>/ holds one -summary.json and one -checkpoints.jsonl per process,
 # a PNG per client checkpoint, the four process logs, and run.json with both seeds.
@@ -45,8 +51,17 @@ param(
     [string] $PlayerDirectory = "build/windows",
 
     # 14 seconds of scripted input, no combat, no vehicle -- proves the three-client bring-up
-    # before any check runs. phase-3d-lane-b.md section 8 row 1 requires this first.
+    # before any check runs. phase-3d-lane-b.md section 8 row 1 requires this first. Sugar for
+    # -Set smoke, and it wins if both are given.
     [switch] $Smoke,
+
+    # Which programme set to run. Each client looks for tools/lane-b/<set>-<label>.json and
+    # falls back to tools/lane-b/<set>.json when there is no per-label file -- which is how the
+    # smoke keeps running one programme on all three while a check set gives each client its
+    # own. A check set NEEDS that: check 1 has a shooter, a victim and a witness, and giving
+    # all three the shooter's programme would have three clients firing at each other and no
+    # observer left to grade the killfeed.
+    [string] $Set = "combat",
 
     # NetworkSimulator preset applied to every process. "typical" is 50 ms one-way (100 ms RTT)
     # with 5% loss, which is check 7's stated condition exactly.
@@ -118,8 +133,10 @@ if ($Build) {
 }
 
 if (-not (Test-Path $player)) {
-    throw "no player at $player. Run once with -Build, or build it from the Editor menu " +
-          "(Ironfront > Build Windows Player (lane-B harness))."
+    throw "no player at $player. Run once with -Build, with the Unity Editor CLOSED. The " +
+          "Editor holds the project lock, and the menu item of the same name refuses in a " +
+          "live Editor for a second reason: stripping UNITY_MCP_READY queues a recompile and " +
+          "BuildPlayer will not start during one."
 }
 
 # --------------------------------------------------------------------------------------
@@ -130,23 +147,29 @@ if (-not (Test-Path $player)) {
 # check 1 grades a killfeed line WITH A NAME, and three clients on one default produce a
 # killfeed nobody can read.
 # --------------------------------------------------------------------------------------
-$suffix = if ($Smoke) { "smoke" } else { "laneb" }
+if ($Smoke) { $Set = "smoke" }
 
 $clients = @(
-    @{ Label = "driver";     PlayerId = 5001; Name = "DRIVER";  Programme = "$suffix-driver.json" }
-    @{ Label = "observer-a"; PlayerId = 5002; Name = "OBS-A";   Programme = "$suffix-observer.json" }
-    @{ Label = "observer-b"; PlayerId = 5003; Name = "OBS-B";   Programme = "$suffix-observer.json" }
+    @{ Label = "driver";     PlayerId = 5001; Name = "DRIVER" }
+    @{ Label = "observer-a"; PlayerId = 5002; Name = "OBS-A"  }
+    @{ Label = "observer-b"; PlayerId = 5003; Name = "OBS-B"  }
 )
 
-if ($Smoke) {
-    # One programme for all three: the smoke proves bring-up, not a check.
-    foreach ($c in $clients) { $c.Programme = "smoke.json" }
-}
-
+# Per-label first, shared second. The smoke has one programme for all three because it proves
+# bring-up rather than a check; a check set gives each client its own, because the roles are
+# not interchangeable.
 foreach ($c in $clients) {
-    $path = Join-Path $progDir $c.Programme
-    if (-not (Test-Path $path)) { throw "no input programme at $path" }
-    $c.ProgrammePath = $path
+    $perLabel = "$Set-$($c.Label).json"
+    $shared   = "$Set.json"
+
+    if (Test-Path (Join-Path $progDir $perLabel))   { $c.Programme = $perLabel }
+    elseif (Test-Path (Join-Path $progDir $shared)) { $c.Programme = $shared }
+    else {
+        throw "no input programme for '$($c.Label)' in set '$Set': looked for " +
+              "$perLabel then $shared under $progDir"
+    }
+
+    $c.ProgrammePath = Join-Path $progDir $c.Programme
 }
 
 # --------------------------------------------------------------------------------------
@@ -328,6 +351,7 @@ $run = [ordered]@{
     simulatorPreset= $Sim
     simulatorSeed  = $SimSeed
     port           = $Port
+    set            = $Set
     smoke          = [bool]$Smoke
     clients        = $clients | ForEach-Object { @{ label = $_.Label; playerId = $_.PlayerId; displayName = $_.Name; programme = $_.Programme } }
     failures       = $failures
