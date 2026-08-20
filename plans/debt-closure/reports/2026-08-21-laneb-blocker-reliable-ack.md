@@ -40,8 +40,16 @@ time it arrives nobody is left holding it.
 With no RTT sample yet the retransmission timeout sits at its floor, so ten resends is **300 ms**
 from join to abandonment. That is the whole window in which the server must see an ack.
 
-Also established: sequences **0 and 2** are abandoned and **1 is not**, on every connection, on
-every run. Whatever this is, it is selective and repeatable rather than a general loss of acks.
+Also established, and it is stronger than the first look suggested: **the client acknowledges
+nothing, for the whole life of the connection.** Connections 1 and 3 abandon sequences 0 and 2 and
+die there, because failing sequence 0 ends the connection before anything else is sent. Connection
+2 in the same run lived slightly longer and abandoned **0, 2, and then 3 through 58 consecutively**
+— every reliable packet the server sent it, without exception, while unreliable snapshots flowed
+and the client applied them.
+
+Sequence **1** is not the exception it appeared to be in the first two runs: it is simply not
+reliable, and the abandonment logic only tracks reliable packets. The mundane reading is the right
+one, and the "why does 1 survive?" clue this note originally built on is retracted.
 
 **NOT established — and a first draft of this note asserted it wrongly.** The obvious explanation
 is "an ack can only ride an outgoing packet, and the client's only guaranteed packet is the 1000 ms
@@ -98,21 +106,45 @@ or dedicated server still discards every transport warning it raises.
   `artifacts/lane-b/combat-02/run.json` says `"passed": true` with `"failures": []`. The runner now
   grades `lostConnection`, which is the only row that can see it.
 
-## 5. Next measurement, before any fix
+## 4a. The measurement, taken — one candidate eliminated
+
+Evidence: [`lane-b/2026-08-21-transport-counters.txt`](lane-b/2026-08-21-transport-counters.txt).
+The server prints its own packet counters once a second:
+
+```
+t=21s conns=0 fromUnknown=0   badConnId=0 rateLimited=0 playerIdRejects=0
+t=22s conns=1 fromUnknown=0   badConnId=0 ...      <- client connected
+t=23s conns=0 fromUnknown=0   badConnId=0 ...      <- already dropped
+t=24s conns=0 fromUnknown=679 badConnId=0 ...      <- it is still talking to a server that forgot it
+```
+
+**`PacketsWithBadConnectionId` never moves.** So the acks are not arriving and being rejected on a
+connection-id mismatch — `UdpTransportServer.ReceivePacket`'s reject path is never taken, and that
+candidate is dead. `PacketsFromUnknown` stays at 0 for the whole life of the connection and only
+explodes *after* the server has removed it, which is the client continuing to send into a hole.
+
+What survives: either the client's outgoing packets do not reach the server during the live window
+at all, or they reach it and carry an ack that covers nothing. Both are client-send-path questions,
+and neither is answerable from the server's counters alone — the next measurement is the client's
+`ReliablePacketsSent` / `AckCursor` against the server's, which needs a handle the client bootstrap
+does not currently expose.
+
+## 5. Next steps, before any fix
 
 Per [`phase-3-harness.md`](../phases/phase-3-harness.md) § 7 a defect found by the harness is filed
 and fixed in its own commit, never patched inside the harness — and per § 2 above, the cause is not
 yet named, so there is nothing to fix yet. The order is:
 
-1. **Print the transport counters** from the lane-B server and client once a second
-   (`PacketsWithBadConnectionId`, `PacketsFromUnknown`, `ReliablePacketsResent`,
-   `ReliablePacketsRetried`, and the connection's ack cursor). Diagnostics-owned, so it belongs to
-   this phase; it distinguishes "the ack never arrived" from "the ack arrived and was rejected"
-   from "the ack arrived and did not cover sequence 0".
-2. **Explain why 1 survives while 0 and 2 do not.** Any theory that does not account for that is
-   not the theory.
+1. **Done** — see § 4a. The connection-id rejection candidate is eliminated; the question is now
+   entirely on the client's send path.
+2. **Read the client's counters against the server's.** `Connection` exposes `AckCursor`,
+   `HasSeededAckCursor` and the reliability statistics; `NetClientBootstrap` exposes none of them.
+   The one number that settles it is whether the client's `AckCursor` ever advances past 0 —
+   i.e. whether `_hasReceived` is true on the side that is receiving.
 3. Only then, the fix — with a test that pins the **failure**, not the success: a connection whose
-   peer answers exactly as the shipped receive path answers must not be abandoned.
+   peer answers exactly as the shipped receive path answers must not be abandoned. Note that
+   `Ironfront.Net.Transport.Tests` is 85 tests green, so whatever this is, it is not covered by
+   them; the reproduction belongs there before the fix does.
 
 Two candidate directions worth arguing once the measurement is in, neither adopted here: a floor on
 the initial RTO until the first RTT sample exists (30 ms is a loopback number no real link beats,
