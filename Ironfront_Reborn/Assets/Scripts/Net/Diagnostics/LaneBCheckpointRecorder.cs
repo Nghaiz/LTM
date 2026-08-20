@@ -40,6 +40,8 @@ namespace Ironfront.Net.Unity.Diagnostics
         private readonly LaneBRunSeeds _seeds;
         private readonly StringBuilder _json = new StringBuilder(2048);
 
+        private static readonly UTF8Encoding NoBom = new UTF8Encoding(false);
+
         public LaneBCheckpointRecorder(string directory, string label, string programme,
                                        LaneBRunSeeds seeds)
         {
@@ -80,7 +82,11 @@ namespace Ironfront.Net.Unity.Diagnostics
             if (captured) ScreenCapture.CaptureScreenshot(Path.Combine(_directory, shot));
 
             Compose(checkpoint, dueAtSeconds, elapsedSeconds, captured ? shot : null);
-            File.AppendAllText(RecordPath, _json.ToString() + "\n", Encoding.UTF8);
+            // UTF8Encoding(false), not Encoding.UTF8: the latter writes a BOM on the first
+            // append, and a JSONL file whose first line starts with U+FEFF fails json.loads in
+            // every reader that does not know to ask for utf-8-sig. The artifact IS the
+            // deliverable here, so it has to be readable by the obvious command.
+            File.AppendAllText(RecordPath, _json.ToString() + "\n", NoBom);
         }
 
         private void Compose(string checkpoint, float dueAt, float elapsed, string screenshot)

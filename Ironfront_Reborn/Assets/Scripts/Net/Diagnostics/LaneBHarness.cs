@@ -32,8 +32,18 @@ namespace Ironfront.Net.Unity.Diagnostics
     /// callback runs after every <c>Awake</c> and before every <c>Start</c>.
     /// <c>NetServerBootstrap</c> fills its sixteen player bodies in <c>Start</c> and
     /// <c>NetClientBootstrap</c> dials in <c>Start</c>, so both of the expensive, observable
-    /// halves are pre-empted; all that has happened by then is an <c>Awake</c> against the
-    /// scene's loopback transport, which owns no socket and is undone by <c>OnDestroy</c>.
+    /// halves are pre-empted.
+    /// </para>
+    /// <para>
+    /// <b>What the strip CANNOT pre-empt is the transport bind</b>, which happens in
+    /// <c>NetServerBootstrap.Awake</c>. So a client process must be CONFIGURED not to open a
+    /// socket rather than stripped after it has: <c>tools/run-lane-b.ps1</c> sets
+    /// <c>IRONFRONT_GAMESERVER_TRANSPORT=loopback</c> on every client for that reason, and does
+    /// not merely leave it unset. Leaving it unset is what the first three-client run did, and
+    /// the repo-root <c>.env</c> — which every process loads from its working directory — says
+    /// <c>udp</c>: all three clients bound port 27015 behind the real server, took a
+    /// <c>SocketException</c>, and then lost their own connection to <c>TransportError</c>
+    /// seconds after joining. The strip was working perfectly and could not have helped.
     /// </para>
     /// <para>
     /// <b>This is not a fix for the missing client-only mode.</b> Per § 6 a defect found here is
@@ -93,10 +103,10 @@ namespace Ironfront.Net.Unity.Diagnostics
 
             _seeds = new LaneBRunSeeds
             {
-                UnitySeed = (int)ReadFloat(UnitySeedVariable, 20260821f),
+                UnitySeed = ReadInt(UnitySeedVariable, 20260821),
                 SimulatorPreset = Read("IRONFRONT_SIM") ?? "off",
-                SimulatorSeed = (int)ReadFloat("IRONFRONT_SIM_SEED", 12345f),
-                PlayerId = (long)ReadFloat("IRONFRONT_CLIENT_PLAYER_ID", 0f),
+                SimulatorSeed = ReadInt("IRONFRONT_SIM_SEED", 12345),
+                PlayerId = ReadLong("IRONFRONT_CLIENT_PLAYER_ID", 0L),
                 DisplayName = Read("IRONFRONT_CLIENT_DISPLAY_NAME") ?? "player",
             };
 
@@ -346,6 +356,29 @@ namespace Ironfront.Net.Unity.Diagnostics
         private static float ReadFloat(string name, float fallback)
             => float.TryParse(Read(name), NumberStyles.Float, CultureInfo.InvariantCulture,
                               out float parsed)
+                ? parsed
+                : fallback;
+
+        /// <summary>
+        /// An integer read as an integer, which is not the same as a float cast back.
+        /// </summary>
+        /// <remarks>
+        /// <b>float32 holds only 24 bits of mantissa</b>, so it stops representing consecutive
+        /// integers above 16,777,216. Reading the seed through <see cref="ReadFloat"/> turned
+        /// 20260821 into 20260820 — silently, and the run then printed one seed while having
+        /// drawn from another. A report whose stated seed does not reproduce its own run is
+        /// worse than a report with no seed in it, because it looks reproducible.
+        /// </remarks>
+        private static int ReadInt(string name, int fallback)
+            => int.TryParse(Read(name), NumberStyles.Integer, CultureInfo.InvariantCulture,
+                            out int parsed)
+                ? parsed
+                : fallback;
+
+        /// <summary>A player id, which reaches into the u32 range. See <see cref="ReadInt"/>.</summary>
+        private static long ReadLong(string name, long fallback)
+            => long.TryParse(Read(name), NumberStyles.Integer, CultureInfo.InvariantCulture,
+                             out long parsed)
                 ? parsed
                 : fallback;
     }

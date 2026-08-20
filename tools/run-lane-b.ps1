@@ -108,9 +108,12 @@ if ($Build) {
         "-logFile", $buildLog
     )
 
-    $build = Start-Process -FilePath $UnityPath -ArgumentList $buildArgs -PassThru -Wait -NoNewWindow
-    if ($build.ExitCode -ne 0) {
-        throw "the Windows player build exited $($build.ExitCode). See $buildLog."
+    # NOT $build: that is this script's own -Build switch parameter, and assigning a Process to
+    # it fails with a SwitchParameter conversion error AFTER the build has already run -- so the
+    # build succeeds and the script reports failure.
+    $buildProcess = Start-Process -FilePath $UnityPath -ArgumentList $buildArgs -PassThru -Wait -NoNewWindow
+    if ($buildProcess.ExitCode -ne 0) {
+        throw "the Windows player build exited $($buildProcess.ExitCode). See $buildLog."
     }
 }
 
@@ -164,7 +167,7 @@ function Set-CommonEnvironment {
 function Clear-ClientEnvironment {
     foreach ($n in @("IRONFRONT_LANEB_ROLE", "IRONFRONT_LANEB_LABEL", "IRONFRONT_LANEB_PROGRAMME",
                      "IRONFRONT_CLIENT_PLAYER_ID", "IRONFRONT_CLIENT_DISPLAY_NAME",
-                     "IRONFRONT_GAMESERVER_TRANSPORT")) {
+                     "IRONFRONT_GAMESERVER_TRANSPORT", "IRONFRONT_GAMESERVER_UDP_PORT")) {
         Remove-Item "env:$n" -ErrorAction SilentlyContinue
     }
 }
@@ -219,6 +222,22 @@ try {
         $env:IRONFRONT_CLIENT_DISPLAY_NAME = $c.Name
         $env:IRONFRONT_CLIENT_HOST = "127.0.0.1"
         $env:IRONFRONT_CLIENT_PORT = "$Port"
+
+        # A client process must be CONFIGURED not to open a server socket, not merely left
+        # unset. LaneBHarness strips the scene's NetServer, but the strip runs in sceneLoaded
+        # and the transport is bound in Awake -- so by the time anything can be stripped the
+        # socket is already open. Leaving this unset is what the first three-client run did:
+        # every process loads the repo-root .env from its working directory, .env says
+        # IRONFRONT_GAMESERVER_TRANSPORT=udp, and all three clients bound 27015 behind the real
+        # server, took a SocketException, and lost their own connection to TransportError a
+        # second after joining. Stating loopback here beats whatever .env says, because DotEnv
+        # skips a variable that is already set in the process.
+        $env:IRONFRONT_GAMESERVER_TRANSPORT = "loopback"
+
+        # Belt and braces, and a distinct one each: if some future path binds anyway, three
+        # clients must not collide with the server OR with each other. Loopback opens no
+        # socket, so this number is never used on the intended path.
+        $env:IRONFRONT_GAMESERVER_UDP_PORT = "$($Port + 100 + $clients.IndexOf($c))"
 
         $log = Join-Path $outDir "$($c.Label).log"
         Write-Host "[lane-b] starting client '$($c.Label)' id=$($c.PlayerId) name=$($c.Name) prog=$($c.Programme)"
@@ -281,6 +300,22 @@ foreach ($c in $clients) {
 
     if ($summary.exitCode -ne 0) { $failures += "$($c.Label): exit $($summary.exitCode) -- $($summary.reason)" }
     elseif ($summary.checkpoints -lt 1) { $failures += "$($c.Label): exit 0 but captured no checkpoint" }
+
+    # The seed this runner PRINTS must be the seed the process actually DREW from. They are
+    # two different numbers the moment anything mistypes the parse, and the first run of this
+    # harness proved it: LaneBHarness read the seed through a float, float32 stops representing
+    # consecutive integers above 16,777,216, and 20260821 silently became 20260820. The run
+    # reported a seed that would not reproduce it, which is worse than reporting none -- it
+    # looks reproducible. This is the only check that can tell the difference.
+    if ($summary.unitySeed -ne $UnitySeed) {
+        $failures += "$($c.Label): drew from unity seed $($summary.unitySeed) but the run says $UnitySeed"
+    }
+    if ($summary.simSeed -ne $SimSeed) {
+        $failures += "$($c.Label): drew from simulator seed $($summary.simSeed) but the run says $SimSeed"
+    }
+    if ($summary.playerId -ne $c.PlayerId) {
+        $failures += "$($c.Label): joined as player $($summary.playerId), not $($c.PlayerId)"
+    }
 }
 
 Write-Host ""

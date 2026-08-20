@@ -221,7 +221,13 @@ namespace Ironfront
                 }
             }
 
-            return Path.GetFullPath(DefaultOutputDirectory);
+            // Anchored to the project folder, not to the working directory. An interactive build
+            // from the menu inherits whatever CWD the Editor was launched with, and a batch run
+            // that forgot -buildOutput would land the player somewhere the runner does not look
+            // and report success. Application.dataPath is <project>/Assets, so two levels up is
+            // the repo root -- the same build/ the Linux server build writes into.
+            return Path.GetFullPath(
+                Path.Combine(Application.dataPath, "..", "..", DefaultOutputDirectory));
         }
 
         private static void Fail(string message) => Debug.LogError($"[build] {message}");

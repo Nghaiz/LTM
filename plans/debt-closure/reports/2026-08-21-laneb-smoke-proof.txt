@@ -1,0 +1,73 @@
+phase 3D lane B — three-client bring-up smoke
+date: 2026-08-21
+command: pwsh tools/run-lane-b.ps1 -Build -Smoke -OutputDirectory artifacts/lane-b/smoke-02 -TimeoutSeconds 120 -ServerReadySeconds 180
+player: build/windows/Ironfront.exe (StandaloneWindows64, Player subtarget, 382713070 B)
+seeds:  UnityEngine.Random=20260821  NetworkSimulator=off/12345
+
+This is the section 8 row 1 gate — the bring-up smoked before any check runs. It is NOT
+a check and no lane-B row is claimed by it.
+
+== runner verdict ==
+{
+  "unitySeed": 20260821,
+  "simulatorPreset": "off",
+  "simulatorSeed": 12345,
+  "port": 27015,
+  "smoke": true,
+  "clients": [
+    {
+      "displayName": "DRIVER",
+      "playerId": 5001,
+      "label": "driver",
+      "programme": "smoke.json"
+    },
+    {
+      "displayName": "OBS-A",
+      "playerId": 5002,
+      "label": "observer-a",
+      "programme": "smoke.json"
+    },
+    {
+      "displayName": "OBS-B",
+      "playerId": 5003,
+      "label": "observer-b",
+      "programme": "smoke.json"
+    }
+  ],
+  "failures": [],
+  "passed": true
+}
+
+== per-process summaries ==
+-- artifacts/lane-b/smoke-02/driver-summary.json
+{"label":"driver","role":"client","exitCode":0,"reason":"programme complete","elapsedSeconds":19.47,"checkpoints":4,"unitySeed":20260821,"simPreset":"off","simSeed":12345,"playerId":5001,"displayName":"DRIVER"}
+-- artifacts/lane-b/smoke-02/observer-a-summary.json
+{"label":"observer-a","role":"client","exitCode":0,"reason":"programme complete","elapsedSeconds":19.76,"checkpoints":4,"unitySeed":20260821,"simPreset":"off","simSeed":12345,"playerId":5002,"displayName":"OBS-A"}
+-- artifacts/lane-b/smoke-02/observer-b-summary.json
+{"label":"observer-b","role":"client","exitCode":0,"reason":"programme complete","elapsedSeconds":20.05,"checkpoints":4,"unitySeed":20260821,"simPreset":"off","simSeed":12345,"playerId":5003,"displayName":"OBS-B"}
+
+== server readiness ==
+[lane-b] server ready slots=16 port=27015 transport=udp
+
+== three distinct sessions, no disconnect, no socket collision ==
+driver      [net] connected as 1, server tick 0 [net] local actor is 41 disconnects=0 socketExceptions=0
+observer-a  [net] connected as 2, server tick 0 [net] local actor is 42 disconnects=0 socketExceptions=0
+observer-b  [net] connected as 3, server tick 0 [net] local actor is 43 disconnects=0 socketExceptions=0
+
+== checkpoint records (the scripted input is driving real bodies) ==
+driver      smoke-spawned  due= 2.00 conn=1 actor=41 rtt= 22.9ms remoteActors=55 pos=(0.0,0.0) shot=driver-01-smoke-spawned.png
+driver      smoke-turn     due= 5.00 conn=1 actor=41 rtt= 29.3ms remoteActors=55 pos=(0.0,0.0) shot=driver-02-smoke-turn.png
+driver      smoke-forward  due= 9.00 conn=1 actor=41 rtt= 28.5ms remoteActors=55 pos=(0.0,0.0) shot=driver-03-smoke-forward.png
+driver      smoke-settled  due=13.00 conn=1 actor=41 rtt= 30.0ms remoteActors=55 pos=(14.0,-0.0) shot=driver-04-smoke-settled.png
+observer-a  smoke-spawned  due= 2.00 conn=2 actor=42 rtt= 20.2ms remoteActors=55 pos=(0.0,0.0) shot=observer-a-01-smoke-spawned.png
+observer-a  smoke-turn     due= 5.00 conn=2 actor=42 rtt= 22.2ms remoteActors=55 pos=(0.0,0.0) shot=observer-a-02-smoke-turn.png
+observer-a  smoke-forward  due= 9.00 conn=2 actor=42 rtt= 22.6ms remoteActors=55 pos=(0.0,0.0) shot=observer-a-03-smoke-forward.png
+observer-a  smoke-settled  due=13.00 conn=2 actor=42 rtt= 23.8ms remoteActors=55 pos=(14.0,-0.0) shot=observer-a-04-smoke-settled.png
+observer-b  smoke-spawned  due= 2.00 conn=3 actor=43 rtt= 21.7ms remoteActors=55 pos=(0.0,0.0) shot=observer-b-01-smoke-spawned.png
+observer-b  smoke-turn     due= 5.00 conn=3 actor=43 rtt= 23.8ms remoteActors=55 pos=(0.0,0.0) shot=observer-b-02-smoke-turn.png
+observer-b  smoke-forward  due= 9.00 conn=3 actor=43 rtt= 24.5ms remoteActors=55 pos=(0.0,0.0) shot=observer-b-03-smoke-forward.png
+observer-b  smoke-settled  due=13.00 conn=3 actor=43 rtt= 25.7ms remoteActors=55 pos=(14.0,-0.0) shot=observer-b-04-smoke-settled.png
+
+moveZ=1.0 held for 4 s moved every body 14.0 m along +x from the origin, on all three
+clients independently — the scripted programme reaches MovementCore through the shipped
+seam, not through a test-only path.

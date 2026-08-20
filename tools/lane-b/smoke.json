@@ -1,9 +1,31 @@
 {
   "name": "smoke",
   "steps": [
-    { "checkpoint": "smoke-spawned",  "seconds": 3.0, "yawDegrees": 0 },
-    { "checkpoint": "smoke-turn",     "seconds": 4.0, "yawDegrees": 0, "yawRateDegreesPerSecond": 45 },
-    { "checkpoint": "smoke-forward",  "seconds": 4.0, "yawDegrees": 90, "moveZ": 1.0 },
-    { "checkpoint": "smoke-settled",  "seconds": 3.0, "yawDegrees": 90 }
+    {
+      "seconds": 2.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "smoke-spawned",
+      "seconds": 3.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "smoke-turn",
+      "seconds": 4.0,
+      "yawDegrees": 0,
+      "yawRateDegreesPerSecond": 45
+    },
+    {
+      "checkpoint": "smoke-forward",
+      "seconds": 4.0,
+      "yawDegrees": 90,
+      "moveZ": 1.0
+    },
+    {
+      "checkpoint": "smoke-settled",
+      "seconds": 3.0,
+      "yawDegrees": 90
+    }
   ]
 }
