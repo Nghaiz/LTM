@@ -91,6 +91,16 @@
   <ItemGroup>
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\BaselineAckPolicy.cs"
              Link="Linked\BaselineAckPolicy.cs" />
+
+    <!--
+      debt-closure phase 3D lane B. The scripted-input programme and the cursor that walks it
+      are the only arithmetic in lane B's client half; the rest is Unity wiring nothing in this
+      repository compiles. Linking them keeps the half that CAN be graded graded.
+    -->
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Diagnostics\ScriptedInputProgramme.cs"
+             Link="Linked\ScriptedInputProgramme.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Diagnostics\ScriptedInputCursor.cs"
+             Link="Linked\ScriptedInputCursor.cs" />
   </ItemGroup>
 
 </Project>
