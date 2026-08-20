@@ -266,7 +266,54 @@ namespace Ironfront.Net.Unity.Diagnostics
                 }
             }
 
+            ReportTransportCounters();
+
             if (_elapsed > _timeoutSeconds) Finish(0, "server timeout reached; shutting down");
+        }
+
+        private float _nextCounterReportAt;
+
+        /// <summary>
+        /// Prints the UDP server's own packet counters once a second.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The discriminator for the join-time disconnect</b>
+        /// (<c>2026-08-21-laneb-blocker-reliable-ack.md</c>). Every lane-B client is dropped with
+        /// <c>TransportError</c> about a second after joining, because the server abandons
+        /// reliable sequences 0 and 2 after ten resends — while the client's receive path answers
+        /// every reliable packet with a prompt ack-carrying keep-alive, which is exactly the
+        /// mechanism that should prevent it.
+        /// </para>
+        /// <para>
+        /// These three counters separate the surviving explanations, and nothing else can.
+        /// <c>PacketsWithBadConnectionId</c> climbing means the acks ARRIVE and are rejected
+        /// before reaching the connection — <c>UdpTransportServer.ReceivePacket</c> drops any
+        /// packet whose header id does not match the connection it found by endpoint.
+        /// <c>PacketsFromUnknown</c> climbing means they arrive from an endpoint the server has
+        /// no connection for. Both flat means they never arrive at all, and the question moves to
+        /// the client's send path.
+        /// </para>
+        /// <para>
+        /// Server role only: <c>NetServerBootstrap.Udp</c> is the public handle, and the client
+        /// bootstrap exposes no equivalent. Reading it is free and changes nothing — this counts
+        /// what the transport already counted for itself and had no way to say.
+        /// </para>
+        /// </remarks>
+        private void ReportTransportCounters()
+        {
+            if (_elapsed < _nextCounterReportAt) return;
+            _nextCounterReportAt = _elapsed + 1f;
+
+            var server = FindFirstObjectByType<NetServerBootstrap>(FindObjectsInactive.Include);
+            UdpTransportServer udp = server != null ? server.Udp : null;
+            if (udp == null) return;
+
+            Debug.Log($"[lane-b] transport t={_elapsed:F0}s conns={udp.ConnectionCount} "
+                      + $"fromUnknown={udp.PacketsFromUnknown} "
+                      + $"badConnId={udp.PacketsWithBadConnectionId} "
+                      + $"rateLimited={udp.RateLimitedRequests} "
+                      + $"playerIdRejects={udp.TotalRejectedByPlayerIdBinding}");
         }
 
         /// <summary>

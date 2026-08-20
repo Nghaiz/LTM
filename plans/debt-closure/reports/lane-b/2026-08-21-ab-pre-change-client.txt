@@ -1,0 +1,10 @@
+[net] conn 1 joined as actor 41 (127.0.0.1:57013)
+[net] conn 1 left (TransportError)
+[net] conn 2 joined as actor 41 (127.0.0.1:60226)
+[net] conn 2 left (TransportError)
+[net] conn 3 joined as actor 41 (127.0.0.1:52006)
+[net] conn 3 left (TransportError)
+smoke-spawned    t= 2.05 conn=0 actor=0 rtt=0
+smoke-turn       t= 5.04 conn=0 actor=0 rtt=0
+smoke-forward    t= 9.02 conn=0 actor=0 rtt=0
+smoke-settled    t=13.05 conn=0 actor=0 rtt=0
