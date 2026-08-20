@@ -353,8 +353,18 @@ namespace Ironfront.Net.Unity.Server
 
             // The ticket names a serverId, and the validator only enforces it once we have been
             // told our own — which is GS_REGISTER's answer and arrives later, if at all. 0 here
-            // means "signature and expiry only", which is the correct standalone behaviour;
-            // ServerMasterReporter re-registers a stricter validator once it has an id.
+            // means "signature and expiry only", which is the correct standalone behaviour.
+            //
+            // This is the ONLY validator anything registers. An earlier remark here claimed
+            // ServerMasterReporter re-registers a stricter one once it has a server id; it does
+            // not — it subscribes to MatchEnded and nothing else, and no second TicketValidator
+            // is constructed anywhere outside the tests. The claim cost phase 3B a hypothesis:
+            // because OnValidateTicket is a multicast event whose walk in
+            // UdpTransportServer.ValidateTicket refuses if ANY subscriber refuses, a second
+            // stricter validator would have been a plausible source of an unexplained
+            // BadSignature. Measured at runtime, the subscriber count is 1. If a serverId-aware
+            // validator is ever added, decide replace-vs-accumulate deliberately and pin it —
+            // an accumulating hook where every subscriber must agree is a footgun.
             Validator = new TicketValidator(Encoding.UTF8.GetBytes(secret), serverId: 0);
 
             Debug.Log("[net] join-ticket validation ON (HMAC + expiry + one-session-per-player)");
