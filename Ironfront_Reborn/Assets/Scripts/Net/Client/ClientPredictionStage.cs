@@ -156,14 +156,32 @@ namespace Ironfront.Net.Unity.Client
                 _agent.ApplyAuthoritativeState(in predicted);
         }
 
-        private static InputFrame ToFrame(in MoveInput input)
-        {
-            InputButtons buttons = InputButtons.None;
-            if (input.Jump) buttons |= InputButtons.Jump;
-            if (input.Sprint) buttons |= InputButtons.Sprint;
-            if (input.Crouch) buttons |= InputButtons.Crouch;
-
-            return InputFrame.FromFloats(input.MoveX, input.MoveZ, input.YawDegrees, 0f, buttons);
-        }
+        /// <summary>
+        /// Quantizes one tick's intent into the frame that goes on the wire.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Delegates to <c>MovementSimulation.ToFrame</c> rather than building the mask
+        /// here.</b> This method used to carry its own copy of the Jump / Sprint / Crouch
+        /// chain, and that copy is the whole of debt-ledger row X-3: <c>InputButtons</c>
+        /// declared Fire, Aim and Reload, <c>ServerCombatAuthority</c> read all three, and the
+        /// only client that could have set them had a mask builder that had never heard of
+        /// them. One builder, in <c>MoveInput.ToButtons</c>, is what stops that recurring.
+        /// </para>
+        /// <para>
+        /// <b>The pitch comes off the clock, which sampled it with the tick.</b> This method
+        /// used to hard-code <c>0f</c>, and the server aims with that number
+        /// (<c>ServerCombatAuthority.AimDirection</c>) and places the muzzle with it
+        /// (<c>ShotOrigin</c>) — so every shot a networked client fired went out perfectly
+        /// level, and the trigger could work while the bullet still never arrived. Reading the
+        /// aim source directly from here instead would trip the client-wiring gate's G4 rule,
+        /// correctly: <c>Net/Client/</c> may not reach <c>FpsActorController.instance</c>
+        /// without a local-actor guard, and the fix for that is to keep the read on the clock's
+        /// side rather than to write an exemption.
+        /// </para>
+        /// </remarks>
+        private InputFrame ToFrame(in MoveInput input)
+            => MovementSimulation.ToFrame(
+                in input, _clock != null ? _clock.AimPitchDegrees : 0f, InputButtons.None);
     }
 }

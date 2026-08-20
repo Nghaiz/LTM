@@ -121,6 +121,38 @@ public class FpsActorController : ActorController
 		inputSource = source ?? NullInputSource.Instance;
 	}
 
+	/// <summary>
+	/// Hands the netcode's tick loop this actor's fire/aim/reload bits and aim pitch.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// PUSHED FROM HERE, NOT PULLED FROM THERE. NetPredictionClock lives in the
+	/// Ironfront.Net.Unity.Shared assembly, which declares no references and is the assembly the
+	/// dedicated SERVER builds on; IInputSource lives in Assembly-CSharp, one layer up. Shared
+	/// naming it would be a layering inversion the compiler refuses outright. So the layer that
+	/// owns the seam installs a delegate into the layer that needs the value.
+	/// </para>
+	/// <para>
+	/// Closures over the FIELD, not over its current value, so a later SetInputSource -- a
+	/// scripted client, a network-driven actor -- is picked up with no re-install. That is also
+	/// what makes debt-closure phase 3C's Lane B work without a second input path.
+	/// </para>
+	/// <para>
+	/// Until this existed, ClientPredictionStage built its C_INPUT button mask from Jump, Sprint
+	/// and Crouch alone and sent a hard-coded level pitch, so no networked player could fire,
+	/// aim or reload at all and no shot could have been aimed -- debt-ledger row X-3.
+	/// </para>
+	/// </remarks>
+	private void InstallNetworkCombatIntent()
+	{
+		Ironfront.Net.Unity.NetPredictionClock clock =
+			GetComponent<Ironfront.Net.Unity.NetPredictionClock>();
+		if (clock == null) return;
+
+		clock.CombatButtonSource = () => (Ironfront.Net.Protocol.InputButtons)inputSource.Buttons;
+		clock.AimPitchSource = () => inputSource.Pitch;
+	}
+
 	private void Awake()
 	{
 		instance = this;
@@ -153,6 +185,7 @@ public class FpsActorController : ActorController
 			// once a playtest has come back quiet.
 			InputShadowCompare.Install(base.gameObject, inputSource);
 		}
+		InstallNetworkCombatIntent();
 		ForceEndCrouch();
 	}
 
