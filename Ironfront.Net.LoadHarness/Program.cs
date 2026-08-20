@@ -374,6 +374,16 @@ namespace Ironfront.Net.LoadHarness
 
             Line($"ran {report.ActualDurationSec:0.0}s, {report.ClientsHeldToEnd}/{report.ClientsRequested} client(s) held to the end");
             Line($"snapshots applied  {report.Totals.SnapshotsApplied}");
+
+            // Printed IMMEDIATELY above the bandwidth line, because it is the number that says
+            // whether the bandwidth line means anything. A client that sends no ack is served
+            // FULL snapshots forever -- correct, and large -- so 0 here makes every byte below
+            // a measurement of a case no real client has been in since phase 3C.
+            long acks = 0;
+            foreach (HarnessReport.ClientBlock block in report.Clients) acks += block.AcksSent;
+            string ackWarning = acks == 0 ? "  <-- ZERO: the bandwidth below is all FULL snapshots" : "";
+            Line($"baseline acks      {acks}{ackWarning}");
+
             Line($"bandwidth          {report.Totals.MeanReceivedBytesPerSecondPerClient:0} B/s per client (mean; read the per-client rows)");
             Line($"malformed/unknown  {report.Totals.MalformedMessages}/{report.Totals.UnknownMessages}");
             Line($"decoded agreement  {report.Agreement.Disagreements} disagreement(s) over {report.Agreement.EntitiesCompared} entity comparison(s) across {report.Agreement.TicksCompared} tick(s)");

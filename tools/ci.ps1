@@ -78,6 +78,18 @@ try {
         & "$PSScriptRoot/check-duplicate-assemblies.ps1"
     }
 
+    # phase-3-harness.md acceptance criterion 4, and the ack half debt-closure added to it.
+    #
+    # WIRED HERE BELATEDLY. The gate shipped with #150 and nothing ever invoked it — not ci.ps1,
+    # not ci.yml, not a doc. It was PRESENT and never RUN, which is the failure mode that reads
+    # as coverage right up until somebody checks. Grep for its name across the repo before this
+    # commit and the only hit is the file itself.
+    #
+    # Reads sources and a csproj, so it costs well under a second and needs no Unity.
+    Invoke-Step "3d. Harness owns no decoder and no ack policy" {
+        & "$PSScriptRoot/check-harness-no-decoder.ps1"
+    }
+
     # ADVISORY — mirrors the `style` job in .github/workflows/ci.yml, which is
     # continue-on-error. Deliberately NOT routed through Invoke-Step: a formatting nit must
     # not add to $failures and make this script exit 1, or people will stop running it.
