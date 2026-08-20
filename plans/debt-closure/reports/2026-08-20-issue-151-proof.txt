@@ -1,0 +1,45 @@
+Issue #151 -- the Unity client can now join a server that has a shared secret.
+
+Measured in the live Editor (Unity 23224/43848/49640, Dustbowl project open) by invoking the
+SHIPPED NetClientBootstrap.BuildJoinTicket through reflection -- not a copy of it. The stack
+trace in the Console confirms the call reached Assets/Scripts/Net/Client/NetClientBootstrap.cs:268.
+
+    [proof] .env=D:\Coding\LTM\.env  secret set=True
+    [net]   join ticket signed for player 2 as 'lane-b-two'
+    [proof] ticket len=64 allZero=False
+    [proof] JoinTicket.Verify = Valid   playerId=2  displayName='lane-b-two'
+    [proof] TicketValidator.TryAdmit = True  player=2  reason=None
+
+TicketValidator is constructed here exactly as NetServerBootstrap constructs it
+(secret from IRONFRONT_SHARED_SECRET, serverId: 0), so TryAdmit is the same call the server
+makes on the OnValidateTicket walk.
+
+BEFORE, measured by phase 3B the same way (2026-08-20-phase-3b-handshake-residual.md section 3):
+
+    unsignedTicket len=64 allZero=True
+    JoinTicket.Verify(unsigned) = BadSignature
+    server acceptUnsignedTickets=True
+    local NetClientBootstrap in play session = True
+
+A point-for-point inversion: allZero True -> False, Verify BadSignature -> Valid, and the
+displayName that a killfeed line needs (phase-3-harness.md section 2, check 1) is now carried.
+
+Editor state at the time of measurement:
+    assets-refresh    clean; 0 errors, 0 exceptions
+    warnings          40 pre-existing CS0618/CS0219/CS0414 in legacy Assembly-CSharp code;
+                      none in either changed file
+
+Gates:
+    dotnet build Ironfront.sln           0 Warning(s), 0 Error(s)  (TreatWarningsAsErrors on)
+    dotnet test  Ironfront.sln           1626 passed, 0 failed, 0 skipped
+    tools/UnitySyntaxCheck               415 files parse cleanly at CSharp9
+    tools/ClientWiringGate               15/15 router events subscribed; G2-G5, G7 clean
+      asset-wiring                       8 checks clean (1 pre-existing KNOWN GAP: RemoteActorView, A-2)
+      writer-coverage                    13/13 writers have a production caller
+    tools/build-libs.ps1                 6 libs + 5 deps into Assets/Plugins
+                                         (Ironfront.Net.Configuration changed, so the plugin DLL
+                                          had to be rebuilt or Unity would read the old one)
+
+PROTOCOL_VERSION is unchanged at 3 and the protocol diff is empty. This is not a wire change:
+JoinTicket.Issue and JoinTicket.Verify have both existed since phase-03. What was missing was a
+Unity client that called Issue.

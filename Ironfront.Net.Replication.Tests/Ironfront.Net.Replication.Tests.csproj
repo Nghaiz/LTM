@@ -61,6 +61,15 @@
       the wire, which is what makes watching them go red the point.
     -->
     <ProjectReference Include="..\tools\SpecChecker\SpecChecker.csproj" />
+    <!--
+      debt-closure, issue #151. JoinTicketSenderTests grades the ticket a Unity client presents,
+      and both halves of that ticket come from configuration: GameClientConfig.PlayerId (which
+      must differ per instance, or the server's one-session-per-player claim turns the second
+      join into a bare InvalidTicket) and DisplayName (which is where a killfeed line gets its
+      name). Pinning the mint without the config would grade JoinTicket.Issue, which was never
+      the broken half.
+    -->
+    <ProjectReference Include="..\Ironfront.Net.Configuration\Ironfront.Net.Configuration.csproj" />
   </ItemGroup>
 
   <!--

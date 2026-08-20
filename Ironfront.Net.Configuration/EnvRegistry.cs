@@ -195,6 +195,24 @@ namespace Ironfront.Net.Configuration
             "Log the first snapshot and every connection state change.",
             "1");
 
+        /// <summary>The player id this client's self-minted join ticket claims.</summary>
+        public static readonly EnvVar ClientPlayerId = new EnvVar(
+            "IRONFRONT_CLIENT_PLAYER_ID", "Game client", "game client",
+            "The playerId written into the join ticket a client mints for itself, on the runs\n" +
+            "with no master server in them. It must be DISTINCT PER CLIENT and never 0: the\n" +
+            "game server enforces one session per player once a shared secret is configured,\n" +
+            "so two clients sharing an id have the second join rejected -- and the rejection\n" +
+            "is reported as a bare InvalidTicket, which reads as a full server and is not one.",
+            "1");
+
+        /// <summary>The name that self-minted ticket carries into the killfeed.</summary>
+        public static readonly EnvVar ClientDisplayName = new EnvVar(
+            "IRONFRONT_CLIENT_DISPLAY_NAME", "Game client", "game client",
+            "The displayName written into that ticket, truncated to 16 UTF-8 bytes. This is\n" +
+            "where a killfeed line gets its name, so a scripted two-client run that leaves\n" +
+            "both instances on the default produces a killfeed nobody can read.",
+            "player");
+
         /// <summary>The V5-D6 driver-prediction fallback, as one flag.</summary>
         public static readonly EnvVar ClientPredictLocalVehicle = new EnvVar(
             "IRONFRONT_CLIENT_PREDICT_VEHICLE", "Game client", "game client",
@@ -400,6 +418,7 @@ namespace Ironfront.Net.Configuration
             GameServerUdpPort, GameServerTransport, GameServerMaxConnections, GameServerMaxPlayers,
             GameServerPublicIp, GameServerMapIds, GameServerAcceptUnsignedTickets,
             ClientHost, ClientPort, ClientVerbose, ClientPredictLocalVehicle,
+            ClientPlayerId, ClientDisplayName,
             LogLevel, StructuredLog,
             TlsCertificatePath, TlsCertificatePassword,
             MetricsPort, MetricsBind, MetricsHost, MetricsCsvPath, MetricsCsvIntervalSeconds,
