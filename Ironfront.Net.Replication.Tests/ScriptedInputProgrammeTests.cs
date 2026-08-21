@@ -358,6 +358,62 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
+        /// A client process declares its role BEFORE any scene <c>Awake</c> can read it, and
+        /// the server bootstrap defers to that declaration.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Both halves, because either one alone is inert.</b> The declaration without the
+        /// deference is overwritten by <c>NetServerBootstrap.Awake</c> a moment later; the
+        /// deference without the declaration has nothing to defer to. Only together do they
+        /// close the window in which <c>NetClientPresenterGuard.IsPresentable</c> answers
+        /// "server" inside a client process — the window that gave <c>combat-fix01</c> a
+        /// permanently disabled combat driver and killfeed, and therefore
+        /// <c>weaponId: 0</c> and <c>namedPlayers: 0</c>.
+        /// </para>
+        /// <para>
+        /// <b><c>BeforeSceneLoad</c> is asserted by name, not by "some initializer".</b>
+        /// <c>AfterSceneLoad</c> compiles, installs the harness, and is exactly the timing that
+        /// was already wrong — a pin that both spellings satisfy would have passed on the bug.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public void AClientProcessDeclaresItsRoleBeforeAnySceneAwakeCanReadIt()
+        {
+            string harness = UnitySource("Net/Diagnostics/LaneBHarness.cs");
+
+            Assert.Contains(
+                "[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]",
+                harness);
+            Assert.Contains("private static void DeclareRole()", harness);
+            Assert.Contains("NetContext.SetRole(isServer ? NetRole.Server : NetRole.Client);",
+                            harness);
+
+            // The other half. An unconditional claim here re-opens the window whatever the
+            // harness declared.
+            string server = UnitySource("Net/Server/NetServerBootstrap.cs");
+            Assert.Contains("if (!NetContext.IsClient) NetContext.SetRole(NetRole.Server);",
+                            server);
+        }
+
+        /// <summary>
+        /// The checkpoint says whether the two combat components were RUNNING, so a zero can
+        /// never again be read as "nothing happened yet" when it meant "this was disabled".
+        /// </summary>
+        [Fact]
+        public void TheCheckpointRecorderReportsWhetherTheCombatComponentsWereEnabled()
+        {
+            string recorder = UnitySource("Net/Diagnostics/LaneBCheckpointRecorder.cs");
+
+            // The SOURCE text, so the escapes are literal backslashes — this is Roslyn-free
+            // text matching over a Unity file, not a parse.
+            Assert.Contains("_json.Append(\"\\\"driverEnabled\\\":\")", recorder);
+            Assert.Contains("driver.isActiveAndEnabled", recorder);
+            Assert.Contains("_json.Append(\"\\\"presenterEnabled\\\":\")", recorder);
+            Assert.Contains("presenter.isActiveAndEnabled", recorder);
+        }
+
+        /// <summary>
         /// The two linked files stay engine-free, or they silently leave this suite.
         /// </summary>
         /// <remarks>

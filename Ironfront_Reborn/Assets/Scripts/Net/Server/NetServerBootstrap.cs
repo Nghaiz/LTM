@@ -123,7 +123,23 @@ namespace Ironfront.Net.Unity.Server
 
             ResolveConfiguration();
 
-            NetContext.SetRole(NetRole.Server);
+            // Deference, mirroring NetClientBootstrap's `if (!NetContext.IsServer)`. Dustbowl
+            // carries an ACTIVE NetServer and an ACTIVE NetClient, both at -1000, so before this
+            // guard existed the role was decided by whichever Awake Unity happened to run
+            // second — and the client half always lost, because only the client deferred.
+            //
+            // That race is not cosmetic: every presenter guarded by
+            // NetClientPresenterGuard.IsPresentable latches `enabled = false` during the SAME
+            // Awake pass and never re-checks, so a process that becomes a client one callback
+            // later still has a dead combat driver and a dead killfeed for the rest of its life.
+            // Measured on lane-b/combat-fix01: `[net] role = Server` at driver.log:70,
+            // `role = Client` only at :173 — every client Awake in between read "server".
+            //
+            // A process that has DECLARED itself a client (see LaneBHarness.DeclareRole, which
+            // runs at BeforeSceneLoad — ahead of every scene Awake) now wins. With no
+            // declaration the role is Offline here and the server still claims it, so the
+            // Editor sandbox and the dedicated build behave exactly as they did.
+            if (!NetContext.IsClient) NetContext.SetRole(NetRole.Server);
             Time.maximumDeltaTime = MaxDeltaTime;
 
             // Only in a real headless run. Capping the Editor to 30 fps would make the client track's

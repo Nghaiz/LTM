@@ -25,8 +25,14 @@ namespace Ironfront.Net.Unity.Diagnostics
     /// an active <c>NetClient</c>, so every process that loads it is a listen server — there is
     /// no client-only mode in the project today. Three listen servers plus a real one is not the
     /// topology any check in <c>phase-3-harness.md</c> § 2 describes, so this strips the half
-    /// this process is not, and pins <see cref="NetContext.Role"/> rather than leaving it to
-    /// whichever of two <c>-1000</c> <c>Awake</c>s Unity happened to run second.
+    /// this process is not.
+    /// </para>
+    /// <para>
+    /// <b>The role is declared in <see cref="DeclareRole"/>, not by the strip.</b> This remark
+    /// used to say the strip "pins <see cref="NetContext.Role"/> rather than leaving it to
+    /// whichever of two <c>-1000</c> <c>Awake</c>s Unity happened to run second", and that was
+    /// wrong in the only way that mattered: it pins the role AFTER both of those <c>Awake</c>s
+    /// have already read it. See <see cref="DeclareRole"/> for what that cost and what fixes it.
     /// </para>
     /// <para>
     /// <b>The strip lands in <c>sceneLoaded</c>, and the timing is load-bearing.</b> That
@@ -94,6 +100,44 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// codes, checkpoint counts and seeds; not one of them can see a dead link. This can.
         /// </remarks>
         private bool _lostConnection;
+
+        /// <summary>
+        /// Declares this process's role BEFORE the first scene loads, so that every
+        /// <c>Awake</c> in every scene reads the role this process actually has.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The strip in <see cref="OnSceneLoaded"/> is too late for this, and the class
+        /// remark used to claim otherwise.</b> <c>sceneLoaded</c> runs after every
+        /// <c>Awake</c>, so pinning the role there pins it for <c>Start</c> and afterwards —
+        /// not for the pass that has already happened. Every presenter behind
+        /// <c>NetClientPresenterGuard.IsPresentable</c> decides in <c>Awake</c> and latches
+        /// <c>enabled = false</c> permanently, so a client process whose role arrived one
+        /// callback later ran its whole programme with a dead combat driver (no weapon, no
+        /// clip, no shot) and a dead killfeed (no names, so no scripted aim could resolve).
+        /// That is <c>combat-fix01</c>'s <c>weaponId: 0</c> and <c>namedPlayers: 0</c>, one
+        /// cause, both symptoms.
+        /// </para>
+        /// <para>
+        /// <b>Declaring is not the same as forcing.</b> This sets the role and
+        /// <c>NetServerBootstrap</c> now defers to a declared client, so nothing has to be
+        /// re-set afterwards. The <c>SetRole</c> calls in <see cref="OnSceneLoaded"/> stay as
+        /// idempotent belt-and-braces for a scene loaded some other way.
+        /// </para>
+        /// <para>
+        /// Still inert without <c>IRONFRONT_LANEB_ROLE</c>: no variable, no declaration, and
+        /// the role is decided exactly as it is in an ordinary build.
+        /// </para>
+        /// </remarks>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void DeclareRole()
+        {
+            string role = Read(RoleVariable);
+            if (string.IsNullOrEmpty(role)) return;
+
+            bool isServer = role.Trim().ToLowerInvariant() == "server";
+            NetContext.SetRole(isServer ? NetRole.Server : NetRole.Client);
+        }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()

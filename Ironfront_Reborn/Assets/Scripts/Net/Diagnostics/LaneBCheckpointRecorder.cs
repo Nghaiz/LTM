@@ -320,6 +320,17 @@ namespace Ironfront.Net.Unity.Diagnostics
                 ClientCombatState state = driver.State;
                 float now = Time.time;
 
+                // Whether the component is RUNNING, not merely present. Both of these are found
+                // with FindObjectsInactive.Include, and both disable themselves in Awake when
+                // NetClientPresenterGuard.IsPresentable is false — silently, with no log. A
+                // disabled driver reports weaponId 0 / clipSize 0 / predictedShots 0 and a
+                // disabled presenter reports namedPlayers 0, which reads identically to "the
+                // player simply has not fired yet" and to "nobody has joined". combat-fix01 was
+                // exactly that and cost a full investigation before the log ordering explained
+                // it. One boolean each, and the artifact can never be ambiguous about it again.
+                _json.Append("\"driverEnabled\":")
+                     .Append(driver.isActiveAndEnabled ? "true" : "false"); Comma();
+
                 Num("health", state.Health); Comma();
                 _json.Append("\"alive\":").Append(state.IsAlive ? "true" : "false"); Comma();
                 Num("ammoInClip", state.AmmoInClip); Comma();
@@ -341,6 +352,10 @@ namespace Ironfront.Net.Unity.Diagnostics
             {
                 KillfeedModel feed = presenter.Killfeed;
                 PlayerNameTable names = presenter.Names;
+
+                // See driverEnabled above — same guard, same silence, same ambiguity.
+                _json.Append("\"presenterEnabled\":")
+                     .Append(presenter.isActiveAndEnabled ? "true" : "false"); Comma();
 
                 Num("hitmarkerHits", presenter.Hitmarker.HitCount); Comma();
                 Num("killfeedTotalKills", feed.TotalKills); Comma();
