@@ -17,9 +17,12 @@ container vẫn `Up`, không log lỗi nào. Không có bước cấu hình hạ
 Lỗi ấy đã sửa và đã chứng minh trên chính artifact Linux (chi tiết:
 [`plans/consolidation/plan.md`](../plans/consolidation/plan.md) § 2).
 
-> **Chờ tín hiệu bắt đầu.** Bạn chỉ bắt đầu khi nhận được **digest** của image game-server.
-> Chưa có digest thì chưa có gì để deploy — đừng chạy `deploy.sh up`, nó sẽ báo lỗi biến
-> `IRONFRONT_GAMESERVER_IMAGE` chưa đặt và đó là hành vi đúng.
+> **Digest game-server đã sẵn sàng** (§ 4). Bạn còn chờ đúng một thứ: digest của image
+> **master**, sinh ra sau khi PR #163 merge vào `develop`. Có thể làm trước bước 2, 3 và phần
+> `issue-cert.sh` của bước 4 ngay bây giờ — chúng không phụ thuộc vào image nào cả.
+>
+> Lưu ý tên package **đã đổi**: `ironfront-game-server` (có gạch nối), không phải
+> `ironfront-gameserver` như tài liệu cũ. Cái cũ là bản 18/08 đã bỏ, đừng dùng.
 
 ---
 
@@ -30,7 +33,8 @@ Lỗi ấy đã sửa và đã chứng minh trên chính artifact Linux (chi ti�
 | SSH key vào VM | key hiện có của bạn; IP `171.224.181.111` đã được cho phép |
 | Một tên miền trỏ được về `20.214.142.73` | bạn chọn; ví dụ `master.ironfront.<domain>` |
 | `IRONFRONT_SHARED_SECRET` | **tự sinh** (bước 4), rồi gửi lại cho chủ dự án qua kênh riêng |
-| Digest image master + game-server | chủ dự án gửi, dạng `ghcr.io/nghaiz/...@sha256:...` |
+| Digest image game-server | **đã có** — xem bước 4 (`sha256:f88f04e2…`, public, tag `gameserver-v0.2.0`) |
+| Digest image master | chủ dự án gửi sau khi PR #163 merge vào `develop` |
 
 Nếu IP nhà bạn đổi: sửa `ssh_source_cidrs` trong `infra/terraform/terraform.tfvars` rồi
 `terraform apply`. Đừng mở `0.0.0.0/0`.
@@ -93,8 +97,8 @@ IRONFRONT_PUBLIC_IP=20.214.142.73
 IRONFRONT_SHARED_SECRET=<chuỗi openssl ở trên>
 IRONFRONT_TLS_CERT_PASSWORD=<mật khẩu bạn đặt cho master.pfx>
 
-IRONFRONT_MASTER_IMAGE=ghcr.io/nghaiz/ironfront-master@sha256:<digest>
-IRONFRONT_GAMESERVER_IMAGE=ghcr.io/nghaiz/ironfront-game-server@sha256:<digest>
+IRONFRONT_MASTER_IMAGE=ghcr.io/nghaiz/ironfront-master@sha256:<digest chủ dự án gửi>
+IRONFRONT_GAMESERVER_IMAGE=ghcr.io/nghaiz/ironfront-game-server@sha256:f88f04e2bf95ee08641d98428181a2b8116216ae69989cc210be36b45a6bd429
 
 IRONFRONT_GAMESERVER_SCENE=Dustbowl
 ```
