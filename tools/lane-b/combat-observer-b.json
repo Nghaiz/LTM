@@ -12,8 +12,11 @@
     },
     {
       "checkpoint": "approach",
-      "seconds": 20.0,
-      "aimAtPlayer": "OBS-A"
+      "seconds": 95.0,
+      "aimAtPlayer": "OBS-A",
+      "approach": true,
+      "holdDistanceMeters": 25.0,
+      "sprint": true
     },
     {
       "checkpoint": "in-range",
