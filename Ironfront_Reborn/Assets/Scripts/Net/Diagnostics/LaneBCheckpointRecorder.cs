@@ -120,12 +120,28 @@ namespace Ironfront.Net.Unity.Diagnostics
                 Num("connectionId", client.ConnectionId); Comma();
                 Num("localActorId", client.LocalActorId); Comma();
                 Num("rttMs", client.SmoothedRttMs); Comma();
-                Num("snapshotsApplied", client.Router.VehicleSnapshotsApplied); Comma();
+                // Both counters, each under a name that says which one it is.
+                //
+                // This block used to publish VehicleSnapshotsApplied as "snapshotsApplied",
+                // and the four VehicleInterpolator readings as bare "interp*". On an ON-FOOT
+                // programme every one of them is legitimately zero — nobody is in a vehicle —
+                // and the record then reads, to anyone who did not open this file, as a client
+                // that applied no snapshots and buffered nothing: replication dead. It is the
+                // mirror of a green that proves nothing, and it cost a real investigation on
+                // 2026-08-21 before `remoteActorCount: 55` and the client's own
+                // "first snapshot applied at server tick 143" contradicted it.
+                //
+                // The name was not merely vague, it was already TAKEN: NetVerificationHarness
+                // publishes "snapshotsApplied" from Router.SnapshotsApplied — the actor-stream
+                // counter. Two harnesses, one key, two meanings, and no way to tell from the
+                // artifact which one you were holding.
+                Num("snapshotsApplied", client.Router.SnapshotsApplied); Comma();
+                Num("vehicleSnapshotsApplied", client.Router.VehicleSnapshotsApplied); Comma();
                 Num("vehicleBaselineMiss", client.Router.UnknownVehicleBaselines); Comma();
-                Num("interpBuffered", client.Router.VehicleInterpolator.Count); Comma();
-                Num("interpNewestTick", client.Router.VehicleInterpolator.NewestTick); Comma();
-                Num("interpStalled", client.Router.VehicleInterpolator.StalledCount); Comma();
-                Num("interpReordered", client.Router.VehicleInterpolator.OutOfOrderCount); Comma();
+                Num("vehicleInterpBuffered", client.Router.VehicleInterpolator.Count); Comma();
+                Num("vehicleInterpNewestTick", client.Router.VehicleInterpolator.NewestTick); Comma();
+                Num("vehicleInterpStalled", client.Router.VehicleInterpolator.StalledCount); Comma();
+                Num("vehicleInterpReordered", client.Router.VehicleInterpolator.OutOfOrderCount); Comma();
             }
             else
             {
@@ -140,8 +156,9 @@ namespace Ironfront.Net.Unity.Diagnostics
                 VehicleCorrectionStats s = stage.DrivenStats;
                 Num("drivenVehicleId", stage.DrivenVehicleId); Comma();
                 Num("occupiedVehicleId", stage.OccupiedVehicleId); Comma();
-                Num("inputsSent", stage.InputsSent); Comma();
-                Num("starvedFrames", stage.StarvedFrames); Comma();
+                // Vehicle-scoped like everything else in this block — see the note above.
+                Num("vehicleInputsSent", stage.InputsSent); Comma();
+                Num("vehicleStarvedFrames", stage.StarvedFrames); Comma();
                 Num("correctionBlends", s.BlendCount); Comma();
                 Num("correctionSnaps", s.SnapCount); Comma();
                 Num("lastPositionErrorM", s.LastPositionError); Comma();

@@ -289,6 +289,52 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
+        /// A vehicle-scoped counter never reaches the artifact under a generic name.
+        /// </summary>
+        /// <remarks>
+        /// Every reading in <c>LaneBCheckpointRecorder</c>'s vehicle block is legitimately zero
+        /// on an on-foot programme, so a generic name turns "no vehicle in this run" into what
+        /// reads as "replication is dead". That is not hypothetical: on 2026-08-21 the combat
+        /// set's record showed <c>snapshotsApplied: 0</c>, <c>inputsSent: 0</c> and four zeroed
+        /// <c>interp*</c> fields, and it took <c>remoteActorCount: 55</c> plus the client's own
+        /// log line to establish that the client was replicating perfectly well.
+        ///
+        /// <c>snapshotsApplied</c> is pinned by IDENTITY rather than by absence, because the
+        /// name was already taken: <c>NetVerificationHarness</c> publishes it from
+        /// <c>Router.SnapshotsApplied</c>, the actor-stream counter. Two harnesses emitting one
+        /// key with two meanings is worse than either name alone, since the artifact carries no
+        /// way to tell which one you are holding.
+        /// </remarks>
+        [Fact]
+        public void TheCheckpointRecorderNamesVehicleCountersAsVehicleCounters()
+        {
+            string recorder = UnitySource("Net/Diagnostics/LaneBCheckpointRecorder.cs");
+
+            // The generic key means the actor stream, in BOTH harnesses.
+            Assert.Contains("Num(\"snapshotsApplied\", client.Router.SnapshotsApplied)", recorder);
+
+            foreach (string key in new[]
+                     {
+                         "vehicleSnapshotsApplied", "vehicleInterpBuffered", "vehicleInterpNewestTick",
+                         "vehicleInterpStalled", "vehicleInterpReordered", "vehicleInputsSent",
+                         "vehicleStarvedFrames",
+                     })
+            {
+                Assert.Contains($"Num(\"{key}\"", recorder);
+            }
+
+            // And the generic forms are gone, so the fix cannot silently drift back.
+            foreach (string stale in new[]
+                     {
+                         "Num(\"interpBuffered\"", "Num(\"interpNewestTick\"", "Num(\"interpStalled\"",
+                         "Num(\"interpReordered\"", "Num(\"inputsSent\"", "Num(\"starvedFrames\"",
+                     })
+            {
+                Assert.DoesNotContain(stale, recorder);
+            }
+        }
+
+        /// <summary>
         /// The SHIPPED build gives them somewhere to go too — not only the test harness.
         /// </summary>
         /// <remarks>
