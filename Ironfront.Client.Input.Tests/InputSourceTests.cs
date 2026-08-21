@@ -47,6 +47,43 @@ namespace Ironfront.Client.Input.Tests
             Assert.Equal((ushort)expected, packed);
         }
 
+        /// <summary>Each slot sets exactly its own switch bit and nothing else.</summary>
+        [Theory]
+        [InlineData(0, InputButtons.SwitchWeapon0)]
+        [InlineData(1, InputButtons.SwitchWeapon1)]
+        [InlineData(2, InputButtons.SwitchWeapon2)]
+        [InlineData(3, InputButtons.SwitchWeapon3)]
+        public void A_weapon_slot_sets_exactly_its_own_bit(int slot, InputButtons expected)
+        {
+            ushort packed = InputButtonPacker.Pack(
+                false, false, false, false, false, false, false, weaponSlot: slot);
+
+            Assert.Equal((ushort)expected, packed);
+        }
+
+        /// <summary>
+        /// A slot outside 0..3 selects nothing, and the seven-argument overload never selects.
+        /// </summary>
+        /// <remarks>
+        /// Silent rather than throwing: this runs once per input frame, and a scripted programme
+        /// with a typo'd slot should produce a run that visibly does not switch rather than one
+        /// that dies at frame 1.
+        /// </remarks>
+        [Theory]
+        [InlineData(-1)]
+        [InlineData(4)]
+        [InlineData(int.MinValue)]
+        public void An_out_of_range_slot_selects_nothing(int slot)
+        {
+            Assert.Equal(0, InputButtonPacker.Pack(
+                false, false, false, false, false, false, false, weaponSlot: slot));
+        }
+
+        [Fact]
+        public void The_seven_argument_overload_selects_no_weapon()
+        {
+            Assert.Equal(0, InputButtonPacker.Pack(false, false, false, false, false, false, false));
+        }
         [Fact]
         public void Nothing_pressed_packs_to_zero()
         {
@@ -106,6 +143,7 @@ namespace Ironfront.Client.Input.Tests
             public float HeliCollective => 0f;
             public float HeliRoll => 0f;
             public float HeliPitch => 0f;
+            public bool RespawnPressed => false;
         }
 
         [Fact]

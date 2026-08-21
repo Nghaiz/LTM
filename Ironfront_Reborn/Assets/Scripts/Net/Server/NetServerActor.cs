@@ -42,6 +42,10 @@ namespace Ironfront.Net.Unity.Server
                + "network id of whatever it is currently holding.")]
         [SerializeField] private byte _weaponId;
 
+        // Not serialized: this is per-life runtime state, and an authored value would mean a
+        // freshly spawned body arrives already believing it requested a slot.
+        private int _lastRequestedWeaponSlot = -1;
+
         [SerializeField] private byte _ammoInClip;
 
         /// <summary>Id on the wire. One space shared by players and bots (spec § 4.3.1).</summary>
@@ -132,6 +136,43 @@ namespace Ironfront.Net.Unity.Server
                     : _weaponId;
             }
             set => _weaponId = value;
+        }
+
+        /// <summary>
+        /// Applies one frame's weapon selection, edged. <paramref name="slot"/> is 0..3, or
+        /// negative for "this frame selects nothing".
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The edge lives here because the intent is a HELD bit and the action is not.</b>
+        /// <c>InputButtons.SwitchWeapon0..3</c> ride <c>C_INPUT</c>, which repeats each frame
+        /// seven times for redundancy, so a slot holding a <c>ToggleableItem</c> would flip in
+        /// and out at tick rate if every arrival called through. Storing the last requested slot
+        /// on the actor also means it dies with the actor -- no per-connection table to leak.
+        /// </para>
+        /// <para>
+        /// <b>Releasing resets it</b>, so pressing the same slot twice in a row works: a frame
+        /// with no switch bit set writes -1 and re-arms the next press.
+        /// </para>
+        /// <para>
+        /// Returns whether the seam was actually called. A false does NOT mean the switch was
+        /// refused -- <c>Actor.SwitchWeapon</c> makes that decision on the far side and says
+        /// nothing back.
+        /// </para>
+        /// </remarks>
+        public bool ApplyWeaponSwitchIntent(int slot)
+        {
+            if (slot == _lastRequestedWeaponSlot) return false;
+
+            _lastRequestedWeaponSlot = slot;
+
+            if (slot < 0) return false;
+
+            IGameplayActorSource source = Source;
+            if (source == null) return false;
+
+            source.SwitchWeapon(slot);
+            return true;
         }
 
         public byte AmmoInClip

@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using Ironfront.Net.Protocol;
 using Ironfront.Net.Unity.Diagnostics;
 using Xunit;
 
@@ -266,6 +267,64 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Contains("elseif ($summary.lostConnection) {", runner);
             Assert.Contains("-notcontains 'lostConnection'", runner);
             Assert.Contains("elseif (-not $summary.connectedAtFinish) {", runner);
+        }
+
+        /// <summary>
+        /// A step declaring <c>respawn</c> raises the edge exactly once, and only on that step.
+        /// </summary>
+        /// <remarks>
+        /// Defect 4 of the phase-3D report: the driver read <c>Input.GetKeyDown</c> directly, so
+        /// check 13 could reach a death and a death screen and could not reach the respawn. This
+        /// pins the half that lives in the harness; the driver half is a source assertion below.
+        /// </remarks>
+        [Fact]
+        public void AScriptedRespawnIsAnEdge()
+        {
+            var programme = new ScriptedInputProgramme
+            {
+                steps = new[]
+                {
+                    new ScriptedInputStep { seconds = 1f },
+                    new ScriptedInputStep { seconds = 1f, respawn = true },
+                    new ScriptedInputStep { seconds = 1f },
+                },
+            };
+
+            var cursor = new ScriptedInputCursor(programme);
+
+            Assert.False(cursor.TryConsumeRespawn(), "a step that does not declare respawn");
+            cursor.Advance(1f);
+
+            Assert.True(cursor.TryConsumeRespawn(), "first read of the respawn step");
+            Assert.False(cursor.TryConsumeRespawn(), "the edge is consumed");
+            Assert.False(cursor.TryConsumeRespawn());
+
+            cursor.Advance(1f);
+            Assert.False(cursor.TryConsumeRespawn(), "the step after it declares nothing");
+        }
+
+        /// <summary>
+        /// The scripted source hands its step's weapon slot to the shared packer.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A source assertion, deliberately. <c>ScriptedInputSource</c> implements a Unity
+        /// interface and cannot be linked into this project; the behaviour it would have proved
+        /// is already pinned where it can be — slot to bit in
+        /// <c>Ironfront.Client.Input.Tests.InputButtonPackerTests</c>, bit to slot in
+        /// <c>Ironfront.Net.Protocol.Tests</c>, and the server edge in the EditMode seam tests.
+        /// </para>
+        /// <para>
+        /// What is left unproven here, and would not be caught by any of those, is the wiring
+        /// between them: that the source passes <c>step.switchWeaponSlot</c> rather than a
+        /// constant. That is what this asserts, and it asserts it on an UNCOMMENTED line.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public void TheScriptedSourceHandsItsWeaponSlotToThePacker()
+        {
+            AssertCallsUncommented(
+                "Net/Diagnostics/ScriptedInputSource.cs", "weaponSlot: step.switchWeaponSlot");
         }
 
         /// <summary>

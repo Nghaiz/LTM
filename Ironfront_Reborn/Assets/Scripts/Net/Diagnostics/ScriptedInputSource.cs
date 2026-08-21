@@ -136,7 +136,8 @@ namespace Ironfront.Net.Unity.Diagnostics
                     jump: step.jump,
                     crouch: step.crouch,
                     sprint: step.sprint,
-                    use: step.use);
+                    use: step.use,
+                    weaponSlot: step.switchWeaponSlot);
             }
         }
 
@@ -147,6 +148,17 @@ namespace Ironfront.Net.Unity.Diagnostics
         public float HeliRoll => 0f;
 
         public float HeliPitch => 0f;
+
+        /// <summary>
+        /// True exactly once per step that declares <c>respawn</c>.
+        /// </summary>
+        /// <remarks>
+        /// <b>Reading this consumes the edge.</b> That is deliberate and it is safe because
+        /// exactly one consumer exists -- <c>NetClientLocalCombatDriver.Update</c>. A second
+        /// reader would silently eat the press, so if one ever appears this becomes a method
+        /// with a name that says so rather than a property that lies.
+        /// </remarks>
+        public bool RespawnPressed => _cursor.TryConsumeRespawn();
     }
 }
 #endif

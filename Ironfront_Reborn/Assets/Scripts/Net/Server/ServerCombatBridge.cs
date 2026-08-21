@@ -101,6 +101,21 @@ namespace Ironfront.Net.Unity.Server
             // meant (V6-D7) -- a Gunner fires through the HasMountedWeapon() clause and never
             // through the carried one -- and letting both run would have one trigger pull spend a
             // turret round AND hitscan from the gunner's chest.
+            // Weapon selection, BEFORE the mounted-weapon return and before anything reads the
+            // active weapon. A gunner may still re-select what they will be holding when they
+            // leave the seat, and Actor.SwitchWeapon refuses on its own if the seat forbids it.
+            //
+            // Bits 11-14 have been on the wire since the freeze with zero producers and zero
+            // consumers. This is the consumer; the producer is InputButtonPacker's weaponSlot
+            // overload. Both landed together deliberately -- a bit only one half understands is
+            // how a protocol field becomes permanently zero, which is the packer's own remark.
+            //
+            // This is also what makes check 4 (two-client grenade parity) runnable at all: a
+            // grenade is thrown by selecting the gear slot and pressing Fire, the path V6 already
+            // made server-authoritative. Bit 7 was ThrowGrenade and V7-D10 retired it rather than
+            // implementing it, because a dedicated throw bit is a second route to firing that
+            // does not pass Weapon.CanFire().
+            actor.ApplyWeaponSwitchIntent(frame.WeaponSlot);
             if (StepMountedWeapon(session, actor, in frame, now)) return;
 
             BuildTargets(tick);

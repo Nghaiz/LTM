@@ -69,5 +69,23 @@ namespace Ironfront.Net.Unity.Server
         /// only for the first. Maps to <c>Actor.activeWeapon.NetworkId</c>.
         /// </remarks>
         bool TryGetActiveWeaponNetworkId(out byte networkId);
+
+        /// <summary>
+        /// Selects a weapon slot. Maps to <c>Actor.SwitchWeapon</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>No guards here.</b> <c>Actor.SwitchWeapon</c> already returns early when the actor
+        /// is dead, fallen over, or seated without <c>CanUseCarriedWeapon</c>, and re-stating
+        /// those three on this side of the seam would be a second copy free to drift from the
+        /// one the offline game uses.
+        /// </para>
+        /// <para>
+        /// <b>The caller must edge it.</b> A slot holding a <c>ToggleableItem</c> TOGGLES on
+        /// every call, so driving this from a held bit would flip a binocular in and out at tick
+        /// rate. <see cref="NetServerActor.ApplyWeaponSwitchIntent"/> owns that edge.
+        /// </para>
+        /// </remarks>
+        void SwitchWeapon(int slot);
     }
 }

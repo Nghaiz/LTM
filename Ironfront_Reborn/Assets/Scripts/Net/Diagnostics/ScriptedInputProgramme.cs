@@ -144,6 +144,33 @@ namespace Ironfront.Net.Unity.Diagnostics
         public bool sprint = false;
         public bool crouch = false;
         public bool use = false;
+
+        /// <summary>
+        /// Request a respawn once, on entering this step. An EDGE, not a hold.
+        /// </summary>
+        /// <remarks>
+        /// Respawn is <c>C_SPAWN_REQUEST</c>, a reliable message of its own, so holding it would
+        /// mean asking every frame. The driver still gates on its own death clock; this only
+        /// says the player pressed the key.
+        /// </remarks>
+        public bool respawn = false;
+
+        /// <summary>
+        /// Weapon slot to select, 0..3. Negative means "leave the weapon alone".
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Held for the step, not edged: <c>InputButtons.SwitchWeapon0..3</c> are ordinary bits
+        /// on <c>C_INPUT</c> (protocol-spec § 4.2 bits 11-14) and the server edges them itself.
+        /// </para>
+        /// <para>
+        /// <b>This is how a grenade is thrown</b>, and the reason check 4 needs no new wire bit:
+        /// select the gear slot, then <c>fire</c>. Bit 7 was <c>ThrowGrenade</c> and V7-D10
+        /// retired it rather than implementing it, because a dedicated throw bit is a second
+        /// route to firing that does not pass <c>Weapon.CanFire()</c>.
+        /// </para>
+        /// </remarks>
+        public int switchWeaponSlot = -1;
     }
 }
 #endif

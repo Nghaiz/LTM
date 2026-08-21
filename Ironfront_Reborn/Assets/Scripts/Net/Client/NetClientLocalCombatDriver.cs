@@ -120,12 +120,36 @@ namespace Ironfront.Net.Unity.Client
             // ClientCombatState has no clock of its own, by the same decision KillfeedModel made.
             _state.Tick(Time.time);
 
-            if (!_state.IsAlive
-                && _state.CanRequestRespawn(Time.time)
-                && Input.GetKeyDown(_respawnKey))
+            // Two ways in, and the keyboard is still first so a human press costs no lookup.
+            //
+            // Defect 4 of the phase-3D report: this line was Input.GetKeyDown alone, so check 13
+            // could reach the death and the death screen and could NOT reach the respawn -- no
+            // scripted client, no controller and no rebind had any path to C_SPAWN_REQUEST.
+            // IInputSource.RespawnPressed is that path. It is local-only and never packed: a
+            // respawn is its own reliable message, not a bit in C_INPUT.
+            //
+            // Short-circuit order matters for the scripted source, whose RespawnPressed consumes
+            // its edge when read. A real key press leaves that edge unconsumed, which is the
+            // harmless direction: the scripted press then fires on the next frame instead.
+            if (!_state.IsAlive && _state.CanRequestRespawn(Time.time)
+                && (Input.GetKeyDown(_respawnKey) || ScriptedRespawnPressed()))
             {
                 RequestRespawn();
             }
+        }
+
+        /// <summary>
+        /// The local player's input source, if there is a local player at all.
+        /// </summary>
+        /// <remarks>
+        /// Resolved per frame rather than cached: this component lives on the NetClient object
+        /// and the body is spawned, killed and respawned independently of it, so a cached
+        /// reference would go stale exactly at a death -- the one moment this method matters.
+        /// </remarks>
+        private static bool ScriptedRespawnPressed()
+        {
+            FpsActorController local = FpsActorController.instance;
+            return local != null && local.InputSource != null && local.InputSource.RespawnPressed;
         }
 
         /// <summary>

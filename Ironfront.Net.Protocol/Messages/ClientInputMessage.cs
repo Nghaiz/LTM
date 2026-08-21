@@ -50,6 +50,35 @@ namespace Ironfront.Net.Protocol
         public float PitchDegrees => Quantize.UnpackPitch(Pitch);
 
         public bool IsPressed(InputButtons button) => (Buttons & button) != 0;
+
+        /// <summary>
+        /// The weapon slot this frame selects, or <c>-1</c> when it selects none.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>SwitchWeapon0..3</c> are bits 11-14 (protocol-spec § 4.2). They were declared at
+        /// the freeze and had zero producers and zero consumers until 2026-08-21, which is why
+        /// this decoder lives here rather than in either peer: two transcriptions of the same
+        /// four bits is how the halves drift.
+        /// </para>
+        /// <para>
+        /// <b>Lowest set bit wins.</b> More than one is not a state a producer should send, and
+        /// the alternatives on receiving it are worse: rejecting the frame drops the movement
+        /// with it, and taking the highest would make a stuck low bit invisible.
+        /// </para>
+        /// </remarks>
+        public int WeaponSlot
+        {
+            get
+            {
+                if (IsPressed(InputButtons.SwitchWeapon0)) return 0;
+                if (IsPressed(InputButtons.SwitchWeapon1)) return 1;
+                if (IsPressed(InputButtons.SwitchWeapon2)) return 2;
+                if (IsPressed(InputButtons.SwitchWeapon3)) return 3;
+
+                return -1;
+            }
+        }
     }
 
     /// <summary>

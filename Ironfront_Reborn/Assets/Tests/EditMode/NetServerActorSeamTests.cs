@@ -34,6 +34,13 @@ namespace Ironfront.Net.Unity.Server.Tests
                 networkId = HoldsAWeapon ? HeldWeaponNetworkId : (byte)0;
                 return HoldsAWeapon;
             }
+
+            /// <summary>Every slot this seam was asked for, in order. The edge is what is under
+            /// test, so the COUNT matters as much as the values.</summary>
+            internal readonly System.Collections.Generic.List<int> SwitchedSlots =
+                new System.Collections.Generic.List<int>();
+
+            public void SwitchWeapon(int slot) => SwitchedSlots.Add(slot);
         }
 
         private GameObject _gameObject;
@@ -142,6 +149,43 @@ namespace Ironfront.Net.Unity.Server.Tests
             Assert.AreEqual(NetServerActor.DefaultSpawnHealth, actor.Health,
                 "a destroyed gameplay actor was still being dereferenced");
             Assert.IsTrue(actor.IsAlive);
+        }
+
+        /// <summary>
+        /// A held switch bit reaches the seam ONCE, and releasing it re-arms the next press.
+        /// </summary>
+        /// <remarks>
+        /// C_INPUT repeats each frame seven times for redundancy, so "call the seam on every
+        /// arrival" would flip a ToggleableItem in and out at tick rate. This is the test that
+        /// would go red if the edge were removed.
+        /// </remarks>
+        [Test]
+        public void AHeldWeaponSwitchReachesTheSeamOnceAndAReleaseReArmsIt()
+        {
+            var fake = new FakeGameplayActor();
+            NetServerActor actor = CreateActor(fake);
+
+            Assert.IsTrue(actor.ApplyWeaponSwitchIntent(2), "first press should reach the seam");
+            Assert.IsFalse(actor.ApplyWeaponSwitchIntent(2), "a held bit must not repeat");
+            Assert.IsFalse(actor.ApplyWeaponSwitchIntent(2));
+
+            Assert.IsFalse(actor.ApplyWeaponSwitchIntent(-1), "release selects nothing");
+            Assert.IsTrue(actor.ApplyWeaponSwitchIntent(2), "the same slot again after a release");
+
+            CollectionAssert.AreEqual(new[] { 2, 2 }, fake.SwitchedSlots);
+        }
+
+        /// <summary>A frame that selects nothing never reaches the seam.</summary>
+        [Test]
+        public void AFrameThatSelectsNothingNeverReachesTheSeam()
+        {
+            var fake = new FakeGameplayActor();
+            NetServerActor actor = CreateActor(fake);
+
+            Assert.IsFalse(actor.ApplyWeaponSwitchIntent(-1));
+            Assert.IsFalse(actor.ApplyWeaponSwitchIntent(-1));
+
+            CollectionAssert.IsEmpty(fake.SwitchedSlots);
         }
     }
 }
