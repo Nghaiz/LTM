@@ -50,7 +50,7 @@ Prior-art check, `zero new overlays needed across Assets/Scripts/Net/`:
 | Existing | Serves |
 |---|---|
 | `Ironfront.Net.Protocol` `JoinTicket.Issue`, via `NetClientBootstrap` | a client that can join a secret-configured server at all (#151) |
-| `Assets/Scripts/Net/Headless/LocalClient.cs` | the client driver |
+| `Assets/Scripts/Net/Shared/LocalClient.cs` | the client driver (moved out of `Net/Headless/` on 2026-08-21; it is a zero-dependency static class in the Shared assembly's own namespace, so the folder went with it) |
 | `Assets/Scripts/Net/Diagnostics/VehicleReplicationOverlay.cs` | `ClientVehicleStage.DrivenStats` — checks 7, 9 |
 | `Assets/Scripts/Net/Diagnostics/TransportDebugOverlay.cs` | connection / RTT state |
 | `Assets/Scripts/Net/Diagnostics/MovementShadowCompare.cs` | convergence — check 8 |
