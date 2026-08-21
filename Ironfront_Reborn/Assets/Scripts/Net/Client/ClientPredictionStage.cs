@@ -152,8 +152,15 @@ namespace Ironfront.Net.Unity.Client
 
             // Only written back when it actually changed. Assigning on Agreed would push the
             // CharacterController through a redundant move every tick for no displacement.
-            if (result == ReconcileResult.Corrected || result == ReconcileResult.Resynchronised)
-                _agent.ApplyAuthoritativeState(in predicted);
+            //
+            // ApplyCorrectedState, not ApplyAuthoritativeState: the latter updates the state
+            // struct and leaves the transform alone, which is right on the server (the
+            // CharacterController has already moved) and silently drops every correction here.
+            // That was X-13 -- 88 corrections computed and discarded in one measured run.
+            if (result == ReconcileResult.Resynchronised)
+                _agent.ApplyCorrectedState(in predicted, hardSnap: true);
+            else if (result == ReconcileResult.Corrected)
+                _agent.ApplyCorrectedState(in predicted, hardSnap: false);
         }
 
         /// <summary>

@@ -15,6 +15,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Client;
 using Ironfront.Net.Unity.Client;
 using UnityEngine;
@@ -218,8 +219,66 @@ namespace Ironfront.Net.Unity.Diagnostics
             Num("x", p.x); Comma(); Num("y", p.y); Comma(); Num("z", p.z); Comma();
             Num("yaw", local.transform.eulerAngles.y); Comma();
             Num("aimPitch", local.InputSource.Pitch); Comma();
-            Num("buttons", local.InputSource.Buttons);
+            Num("buttons", local.InputSource.Buttons); Comma();
+
+            // X-13. The row cited correctionSnaps / lastPositionErrorM as evidence that the
+            // local body is never corrected. Those are VEHICLE-scoped -- they come from
+            // ClientVehicleStage.DrivenStats -- so on an on-foot programme they read zero
+            // whatever the local actor is doing, and they say nothing about it. That is the
+            // same misattribution 525f68b fixed five fields over.
+            //
+            // The local body has its own correction path and it was unreported: the server
+            // snapshot for the local actor goes through ClientPredictionStage.OnSnapshotApplied
+            // into PredictionReconciler, and a 2 km disagreement should come out as a Resync.
+            // Three ways that can silently not happen, and the record could not tell them
+            // apart -- so it reports all three now rather than one summary:
+            //
+            //   predictionStage : the component is on Player Fps Actor.prefab, so absent here
+            //                     means this body is not that prefab.
+            //   inSnapshot      : the decoded snapshot carries no entry for the local actor id,
+            //                     so OnSnapshotApplied returns before it reconciles anything.
+            //   corrections     : the reconciler ran and agreed, which with a 2 km gap would
+            //                     mean the authoritative position it was handed is not the one
+            //                     the server logged.
+            //
+            // authoritativeX/Y/Z is what the snapshot actually carries, so the artifact can be
+            // compared against the server log line without a second run.
+            AppendLocalPrediction(client, local);
             _json.Append('}');
+        }
+
+        private void AppendLocalPrediction(NetClientBootstrap client, FpsActorController local)
+        {
+            ClientPredictionStage stage = local.GetComponent<ClientPredictionStage>();
+            Bool("predictionStage", stage != null); Comma();
+
+            if (client == null)
+            {
+                _json.Append("\"inSnapshot\":null");
+                return;
+            }
+
+            Num("corrections", client.Reconciler.CorrectionCount); Comma();
+            Num("resyncs", client.Reconciler.ResyncCount); Comma();
+            Num("pendingInputs", client.Reconciler.Pending); Comma();
+
+            ushort localActorId = client.LocalActorId;
+
+            // Declared and defaulted OUTSIDE the condition: an `out` inside a short-circuiting
+            // && is only definitely assigned on the branch that ran, and CS0170 is the compiler
+            // saying so.
+            ActorSnapshotEntry authoritative = default;
+            bool found = localActorId != 0
+                         && client.Router.Decoder.Current.TryFind(localActorId, out authoritative);
+
+            Bool("inSnapshot", found);
+
+            if (!found) return;
+
+            Comma();
+            Num("authoritativeX", Quantize.UnpackPos(authoritative.PosX)); Comma();
+            Num("authoritativeY", Quantize.UnpackPos(authoritative.PosY)); Comma();
+            Num("authoritativeZ", Quantize.UnpackPos(authoritative.PosZ));
         }
 
         /// <summary>
@@ -581,6 +640,11 @@ namespace Ironfront.Net.Unity.Diagnostics
         }
 
         private void Comma() => _json.Append(',');
+
+        private void Bool(string key, bool value)
+        {
+            _json.Append('"').Append(key).Append("\":").Append(value ? "true" : "false");
+        }
 
         private void Str(string key, string value)
         {
