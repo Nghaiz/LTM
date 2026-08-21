@@ -294,6 +294,16 @@ namespace Ironfront.Net.Unity.Server
 
             MoveToSpawnPoint(player);
 
+            // Arms the body. MoveToSpawnPoint teleports and does not call Actor.SpawnAt, so
+            // until 2026-08-21 SpawnLoadoutWeapons never ran for a claimed body and every
+            // networked player spawned holding nothing: weaponId 0, ammo 0/0, and eight seconds
+            // of point-blank fire doing zero damage. That was X-11's predicted "next one".
+            //
+            // BEFORE the WeaponId read below, necessarily: that read goes through
+            // Actor.activeWeapon.NetworkId, which does not exist until the loadout is spawned
+            // and the first weapon unholstered.
+            actor.EquipLoadout();
+
             // BEFORE ResetWeapon, always. The clip size comes from the config, the config is
             // derived from this id (phase-V2 D9), and re-arming an unassigned id loads a clip of
             // zero — which presents as FireRejection.NoAmmo forever and reads exactly like the

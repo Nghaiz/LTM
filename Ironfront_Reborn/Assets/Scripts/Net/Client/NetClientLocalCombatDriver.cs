@@ -87,6 +87,7 @@ namespace Ironfront.Net.Unity.Client
             _state.OnDied += OnDied;
             _state.OnRespawned += OnRespawned;
 
+            _client.Router.OnSpawnActor += OnSpawnActor;
             _client.Router.OnDeath += OnDeathMessage;
             _client.Router.OnSnapshotApplied += OnSnapshotApplied;
         }
@@ -98,6 +99,7 @@ namespace Ironfront.Net.Unity.Client
             _state.OnDied -= OnDied;
             _state.OnRespawned -= OnRespawned;
 
+            _client.Router.OnSpawnActor -= OnSpawnActor;
             _client.Router.OnDeath -= OnDeathMessage;
             _client.Router.OnSnapshotApplied -= OnSnapshotApplied;
 
@@ -107,6 +109,36 @@ namespace Ironfront.Net.Unity.Client
             _state.Reset();
         }
 
+        /// <summary>
+        /// Ledger row <b>X-11</b>: the local player learns which weapon it is holding.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>SpawnActorMessage</c> has carried <c>WeaponId</c> since the freeze and
+        /// <c>ClientCombatState.EquipWeapon</c> has existed to consume it. Nothing connected
+        /// them: a repository-wide grep for <c>EquipWeapon</c> on 2026-08-21 returned twenty
+        /// call sites and every one was in <c>ClientCombatTests</c>, all green -- the textbook
+        /// shape of a green that proves nothing, because each of them calls it first.
+        /// </para>
+        /// <para>
+        /// <b>The loop that kept it invisible.</b> The other way a client could learn its weapon
+        /// is a snapshot delta, and <c>DeltaEncoder</c> masks <c>SnapshotField.Weapon</c> only
+        /// when the weapon or the ammo count changes -- and the client's own firing is what
+        /// would change the ammo. No weapon, cannot fire, ammo never moves, field never sent, no
+        /// weapon.
+        /// </para>
+        /// <para>
+        /// <b>Remote spawns are ignored here.</b> A remote body's weapon is a rendering concern
+        /// and belongs to <c>RemoteActorRegistry</c>; this state is the LOCAL player's ammo model
+        /// and adopting somebody else's weapon into it would show their clip on this HUD.
+        /// </para>
+        /// </remarks>
+        private void OnSpawnActor(SpawnActorMessage message)
+        {
+            if (!message.IsLocalPlayer) return;
+
+            _state.EquipWeapon(message.WeaponId);
+        }
         private void Update()
         {
             if (_client == null) return;

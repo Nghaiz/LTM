@@ -160,6 +160,18 @@ namespace Ironfront.Net.Unity.Server
         /// nothing back.
         /// </para>
         /// </remarks>
+        /// <summary>
+        /// Arms the body from its loadout. Returns false when there is no gameplay actor behind
+        /// this replicated object -- a prop, or a bare test rig.
+        /// </summary>
+        public bool EquipLoadout()
+        {
+            IGameplayActorSource source = Source;
+            if (source == null) return false;
+
+            source.EquipLoadout();
+            return true;
+        }
         public bool ApplyWeaponSwitchIntent(int slot)
         {
             if (slot == _lastRequestedWeaponSlot) return false;

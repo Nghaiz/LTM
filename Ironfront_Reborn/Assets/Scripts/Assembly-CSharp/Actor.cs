@@ -260,6 +260,22 @@ public class Actor : Hurtable
 		ActorManager.SetAlive(this);
 	}
 
+	// Arms the body from its loadout and unholsters the first weapon, WITHOUT the rest of
+	// SpawnAt. Added 2026-08-21 for the networked player slot.
+	//
+	// A claimed body is placed by ServerCombatBridge.MoveToSpawnPoint, which teleports and does
+	// not call SpawnAt -- so SpawnLoadoutWeapons never ran and the body spawned with no weapon
+	// at all. Measured: eight seconds of point-blank fire, weaponId 0, ammo 0/0, zero damage.
+	//
+	// Deliberately NOT SpawnAt, and deliberately not controller.EnableInput(): a networked body
+	// is driven by MoveInput from the server, not by a local controller, and enabling local input
+	// on a headless server is a second input path nobody wants. Everything else SpawnAt does --
+	// ragdoll, animator, IngameUi, ActorManager.SetAlive -- either already happened on the join
+	// path or belongs to the client that renders this body.
+	public void EquipLoadout()
+	{
+		SpawnLoadoutWeapons();
+	}
 	private void SpawnLoadoutWeapons()
 	{
 		hasAmmoBox = false;

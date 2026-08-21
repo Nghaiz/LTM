@@ -41,6 +41,11 @@ namespace Ironfront.Net.Unity.Server.Tests
                 new System.Collections.Generic.List<int>();
 
             public void SwitchWeapon(int slot) => SwitchedSlots.Add(slot);
+
+            /// <summary>How many times the body was armed. The join path calls this once.</summary>
+            internal int LoadoutsEquipped;
+
+            public void EquipLoadout() => LoadoutsEquipped++;
         }
 
         private GameObject _gameObject;
