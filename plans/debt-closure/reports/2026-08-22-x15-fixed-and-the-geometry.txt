@@ -35,3 +35,24 @@ without touching shipped code -- which makes it D3's, not another engine layer.
 
 Also visible: body yaw stays 0 while the solver asks for 214.4. Whether a headless server
 turns the body is a separate question this run does not answer.
+
+
+=== SECOND RUN, INDEPENDENT, artifacts/lane-b/x15-fixed-01 ===
+
+A -Build run that appeared to stall was actually still going and finished eight minutes after the
+run above. The two are independent servers, not one server serving both: different spawn points
+(1211.4, 31.97, 1767.1 vs 1895.3, 25.84, 1803.9) and different shot origins. So this is a second
+observation, not the same one counted twice.
+
+  origin=1861.9,27.3,1771.0  nearest[actor=42 alive=True d=1127.8m]
+  240 of 240 shots hits=0, victim on 100 health at all seven checkpoints
+  aim block: requested=OBS-A resolved=true distanceM=2570
+
+What it corroborates:
+
+  * X-15 CLOSED holds across a different spawn -- origin y = 27.3, on the ground, not -353 falling.
+  * ZERO "no NetMovementAgent" warnings. The warn-once leash added in the same commit stayed
+    silent, which is the green that means something here: it fires after 30 detached ticks, so a
+    silent run says the agent really was attached rather than that nobody looked.
+  * X-17 is not a one-spawn fluke. 2139 m in the first run, 2570 m in this one. Whatever spawn the
+    driver draws, the victim is kilometres away, and the approach step has 20 seconds.
