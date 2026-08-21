@@ -147,6 +147,45 @@ guess at it in a report — the measurement is to read `ActorManager.SpawnWave` 
 phase and find out whether a `Warmup`/`Ended` round spawns anybody at all, and whether a
 connection that joins during `Ended` is ever put in a wave.
 
+## 5b. X-12, dug the same day — root cause found, server half fixed
+
+**A join is a spawn, and `OnClientConnected` never treated it as one.** It ran
+`Health` / `IsAlive`, then `WeaponId` / `ResetWeapon` / `AmmoInClip` — the respawn's five
+statements in the respawn's order, with the respawn's `MoveToSpawnPoint` missing from the middle.
+
+And `IsAlive = true` was not merely insufficient, it was **actively disqualifying**.
+`ActorManager.SpawnWave` is the only code in the project that ever calls `Actor.SpawnAt`; it
+selects on `actor.dead`; and `NetServerActor.IsAlive` is a pass-through to that flag. The join
+cleared the one bit that would have let a wave place the body, and nothing else ever would.
+
+Fixed at `5b19e38`: the shared sequence is now `ServerCombatBridge.PlaceAtSpawn`, called by the
+join and by `TryRespawn`, which deletes the half-duplicated copy that let the two drift apart.
+Confirmed on the wire, not asserted — `combat-spawn02/server.log:326`:
+
+```
+[net] actor 41 (team 0) placed at spawn point 4 of 6 (1208.61, 31.86, 1770.10)
+[net] actor 42 (team 1) placed at spawn point 1 of 6 (1154.00, 60.94, 1340.04)
+```
+
+That log line exists because the first attempt at this fix **changed nothing and said nothing**.
+Both `return`s in `MoveToSpawnPoint` were silent, so after the join was taught to call
+`PlaceAtSpawn` and the body still sat at the origin, there was no way to tell whether the
+directory was missing, no spawn point was eligible for that team, or the call had not happened at
+all. Two of the three would have been a one-line fix. A spawn that silently does not happen is
+the same shape as § 1 and cost a second investigation on top of the first.
+
+### And the client half is the mirror image (X-13)
+
+With the server placing actor 41 two kilometres away, the client still reports its own body at
+`x=0, y=994.3, z=0` — with `correctionSnaps: 0`, `correctionBlends: 0`, `lastPositionErrorM:
+0.00`. It is 2 km out and believes it matches.
+
+Not a delivery failure: `driver.log:255` logs `[net] local actor is 41`, `:262` shows
+`NetClientBootstrap.OnSpawnActor` running, and `SpawnActorMessage` carries `PosX/PosY/PosZ`. The
+open question is whether that position is ever applied to the **local** actor. The local player
+is deliberately excluded from `RemoteActorRegistry` ("predicted, not interpolated"), so the path
+that places every remote body structurally cannot place this one — and nothing else appears to.
+
 ## 6. Two notes that travel with every verdict from this runner
 
 `run-lane-b.ps1` runs the server as a **Windows player**; the product's server is the Linux
