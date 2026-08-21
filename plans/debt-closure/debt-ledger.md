@@ -256,9 +256,14 @@ C-10, C-11, C-16**, plus **D-1**, **E-6**, **E-9**, **X-3**, **X-4**, **X-6**. T
 C-3 is smaller than planned (sender only), C-16 is half its stated size, and **X-3 is new and blocks
 Phase 3**. The ordering constraint holds — **C-4 lands before A-6/A-9**.
 
-**To Phase 3** — group B rows **B-1 … B-9, B-11, B-13, B-14**. All blocked on the same missing
+**To Phase 3** — group B rows **B-1 … B-9, B-11, B-13, B-14**, all blocked on the same missing
 two-process harness, and all blocked behind **X-3** for any check involving firing, respawning or
-baseline acks.
+baseline acks. **They do not all go to the same lane, and this line used to read as though they
+did:** [`phase-3d-lane-b.md`](phases/phase-3d-lane-b.md) § 2 owns **B-1…B-9, B-13, B-14** as lane B,
+and [`phase-3e-run-and-ledger.md`](phases/phase-3e-run-and-ledger.md) § 3 owns **B-11** as lane A —
+it is "a headless server survives drive → damage → burn → death", which needs no rendered client at
+all. Recorded here on 2026-08-21 because reading this paragraph alone suggested B-11 was a lane-B
+row that lane B had dropped, and it never was.
 
 **To Phase 4** — **B-10, B-15, B-16, B-17** (measurements), and **D-2**'s decision on the five
 genuinely-unwritten tests. Note that B-16 and B-17 both have a first measurement on record already;

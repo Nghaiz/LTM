@@ -97,7 +97,7 @@ Measured against the 375 type names defined in `Assembly-CSharp`:
 
 | Folder | Files | Distinct legacy types | Heaviest | Verdict |
 |---|---|---|---|---|
-| `Net/Headless` | 1 | **0** | — | **Free.** Move now. |
+| `Net/Headless` | 1 | **0** | — | **DONE 2026-08-21** — and not as an asmdef. `LocalClient` is a static class in `namespace Ironfront.Net.Unity` whose only `using` is `UnityEngine`, which is Shared's namespace and Shared's shape, so it was folded into `Net/Shared/` and the folder deleted. One assembly fewer than a one-file asmdef. |
 | `Net/Input` | 8 | ~8 real | `Helicopter` 16×, `FpsActorController` 15× | One phase |
 | `Net/Diagnostics` | 11 | 15 | — | One phase, after Input |
 | `Net/Client` | 25 | 31 | `Actor` 53×, `Vehicle` 47×, `Weapon` 23× | **Its own multi-phase track** |
@@ -108,8 +108,26 @@ name a legacy type, it names an interface a legacy component implements.
 
 **Sequencing.** C1 `Net/Headless` → C2 `Net/Input` (behind `IVehicleControlSurface`-style bindings
 for `Helicopter`/`FpsActorController`) → C3 `Net/Diagnostics` (test-only, excluded from player
-builds) → C4 `Net/Client` (the real work; ~10 bindings mirroring the server set). C4 closes
-ledger **E-11** and unblocks **P-D6** / **P-D9**.
+builds) → C4 `Net/Client` (the real work; ~10 bindings mirroring the server set).
+
+**Two corrections to that last sentence, both made on 2026-08-21 and both load-bearing.**
+
+**E-11 did not need C4, and C4 could not have closed it.** The row is about client code calling
+server code, and an asmdef cannot stop that: `NetBindings/` must live in `Assembly-CSharp` (the only
+assembly that sees both halves), so `Assembly-CSharp` must reference the server assembly, so all 333
+legacy files may call in. `autoReferenced: false` closes that and kills `NetBindings` with it. It was
+also not hypothetical — fifteen files named `Ironfront.Net.Unity.Server` outside a comment, one of
+them `Net/Client/NetClientObjectivePresenter.cs` reading `NetServerBindings.CapturePoints` since V8.
+That one was fixed (`ICapturePointDirectory` moved to Shared as `NetSceneBindings`) and the rest are
+held by `tools/check-net-layering.ps1`, wired into `ci.ps1` and `ci.yml`. E-11's layering half is
+**closed**; the remainder is **E-11b**.
+
+**C4 does NOT unlock P-D6 or P-D9.** `plan.md:37` says P-D6's gate must read prefab YAML and legacy
+source; `plan.md:40` says P-D9's ten V7 tests exercise `Weapon` and `ThrowableWeapon`. Those are
+legacy MonoBehaviours and authored assets, and no asmdef move touches either. Both stay closed
+whatever C4 does. What C4 genuinely buys is an EditMode test path for `Net/Client`'s own 25 files
+(`Reconciler`, `RemoteActorRegistry`, the killfeed model), which have none today. That is worth
+doing; it is a different thing from what this line promised.
 
 **Verification is Editor-only.** `Assets/Scripts/Net/Shared` has zero references, so `dotnet build`
 staying green proves *nothing* about layering. Each step is graded by a Unity compile, driven over

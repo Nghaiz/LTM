@@ -3,10 +3,18 @@
 - **Track:** [`plan.md`](../plan.md) · **Parent:** [`phase-3-harness.md`](phase-3-harness.md) § 5 (task 3.3) · **Effort:** L (1wk)
 - **Depends on:** [`phase-3a-player-slots.md`](phase-3a-player-slots.md) (a second player can exist), [`phase-3c-client-input.md`](phase-3c-client-input.md) (that player can fire), #151 (a client can join a server that has a secret), #123 (server and clients agree on the physics rate)
 - **Unblocks:** [`phase-3e-run-and-ledger.md`](phase-3e-run-and-ledger.md)
-- **Status (2026-08-21): BLOCKED, 0 of 11 verdicts.** The vehicle is built and runs; every client
-  is dropped by the transport about a second after joining, so no check has a connected client to
-  observe. Report: [`2026-08-21-phase-3d-lane-b.md`](../reports/2026-08-21-phase-3d-lane-b.md).
-  Blocker: [`2026-08-21-laneb-blocker-reliable-ack.md`](../reports/2026-08-21-laneb-blocker-reliable-ack.md).
+- **Status (2026-08-21, later the same day): UNBLOCKED at the transport, still 0 of 11 verdicts,
+  and the blocker has moved twice.** The reliable-sequence-abandonment drop no longer reproduces:
+  three clients now join, hold the link and complete seven checkpoints each, exiting 0
+  ([`2026-08-21-x13-root-cause-and-fix.txt`](../reports/2026-08-21-x13-root-cause-and-fix.txt)).
+  Since then, in order, each found by the harness and each fixed in its own commit:
+  **X-13** (the client computed 901 corrections and never moved the body), the **loadout gap**
+  (every player body spawned holding nothing — X-11's own predicted "next one"), and now
+  **X-15**: thirty rounds leave the server at six metres and the victim finishes on 100 health
+  ([`2026-08-21-loadout-fixed-hits-not.txt`](../reports/2026-08-21-loadout-fixed-hits-not.txt)).
+  X-15 blocks checks 1, 2, 4 and 13, and the next step there is a **measurement** — the server
+  writes no per-shot line at all.
+  Original report: [`2026-08-21-phase-3d-lane-b.md`](../reports/2026-08-21-phase-3d-lane-b.md).
 
 ---
 
@@ -42,7 +50,7 @@ Prior-art check, `zero new overlays needed across Assets/Scripts/Net/`:
 | Existing | Serves |
 |---|---|
 | `Ironfront.Net.Protocol` `JoinTicket.Issue`, via `NetClientBootstrap` | a client that can join a secret-configured server at all (#151) |
-| `Assets/Scripts/Net/Headless/LocalClient.cs` | the client driver |
+| `Assets/Scripts/Net/Shared/LocalClient.cs` | the client driver (moved out of `Net/Headless/` on 2026-08-21; it is a zero-dependency static class in the Shared assembly's own namespace, so the folder went with it) |
 | `Assets/Scripts/Net/Diagnostics/VehicleReplicationOverlay.cs` | `ClientVehicleStage.DrivenStats` — checks 7, 9 |
 | `Assets/Scripts/Net/Diagnostics/TransportDebugOverlay.cs` | connection / RTT state |
 | `Assets/Scripts/Net/Diagnostics/MovementShadowCompare.cs` | convergence — check 8 |
