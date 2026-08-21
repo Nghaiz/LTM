@@ -877,6 +877,18 @@ namespace Ironfront.Net.Unity.Server
         /// the actor out of the snapshot until it has gone (the tracker handed to
         /// <c>BuildView</c>) makes the ordering a property of the send rather than a race.
         /// </remarks>
+        /// <summary>
+        /// Whether this actor is something a client should be told about at all. X-18.
+        /// </summary>
+        /// <remarks>
+        /// Extracted from <see cref="AnnounceNewActors"/> so the EditMode suite can drive it:
+        /// the loop it came from needs a session, a transport and a payload buffer, and the
+        /// decision itself needs none of those. The comment at the call site carries the why;
+        /// this carries the rule.
+        /// </remarks>
+        internal static bool IsAnnounceable(NetServerActor actor)
+            => actor != null && !(actor.AvailableForPlayers && !actor.IsClaimed);
+
         private void AnnounceNewActors(ClientSession session)
         {
             IReadOnlyList<NetServerActor> actors = ServerActorRegistry.Instance.Actors;
@@ -885,6 +897,29 @@ namespace Ironfront.Net.Unity.Server
             {
                 NetServerActor actor = actors[i];
                 if (actor == null || !actor.isActiveAndEnabled) continue;
+
+                // An UNCLAIMED player slot is not an actor yet. X-18.
+                //
+                // ServerPlayerSlotPool fills sixteen of these at startup and
+                // IronfrontNetBindings.CreatePlayerBody Instantiates them with no position, so
+                // they all sit on the prefab's authored spot near (0, 1000, 0) until somebody
+                // joins and MoveToSpawnPoint places them. Announcing one there told every client
+                // a position that was wrong the moment it was sent -- and MarkSpawnSent fires
+                // once, so the real spawn point was never sent afterwards.
+                //
+                // Harmless while the body is inside the viewer's interest radius, where
+                // snapshots overwrite it every frame. Outside InterestManager.CullRadius it is
+                // the ONLY position the client ever has, which is X-17: measured 2026-08-22, a
+                // driver held (0.03, 999.98, 0.03) for a whole run while the server had placed
+                // that actor at (1885.33, 26.46, 1805.13).
+                //
+                // Waiting for the claim means the announce carries a position that is already
+                // true. A slot that is released and re-claimed is re-announced, because the
+                // leave path runs ForgetActor -> SpawnAckTracker.Forget and drops its rows.
+                //
+                // Bots are unaffected: AvailableForPlayers is set only by the slot pool.
+                if (!IsAnnounceable(actor)) continue;
+
                 if (!_spawnAcks.MarkSpawnSent(session.ActorId, actor.ActorId)) continue;
 
                 ActorSnapshotEntry entry = actor.Capture();

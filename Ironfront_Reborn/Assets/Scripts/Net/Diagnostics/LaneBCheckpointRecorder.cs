@@ -186,7 +186,7 @@ namespace Ironfront.Net.Unity.Diagnostics
             Comma();
             AppendRemoteActors();
             Comma();
-            AppendAim();
+            AppendAim(client);
             Comma();
             AppendCombat();
             Comma();
@@ -332,7 +332,7 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// where it found the target and missed: no killfeed line, full health on both sides.
         /// The screenshot cannot tell them apart either. This is the field that can.
         /// </remarks>
-        private void AppendAim()
+        private void AppendAim(NetClientBootstrap client)
         {
             _json.Append("\"aim\":");
 
@@ -349,7 +349,80 @@ namespace Ironfront.Net.Unity.Diagnostics
             Num("targetActorId", s.ActorId); Comma();
             Num("yaw", s.Resolved ? s.Yaw : float.NaN); Comma();
             Num("pitch", s.Resolved ? s.Pitch : float.NaN); Comma();
-            Num("distanceM", s.Resolved ? s.Distance : float.NaN);
+            Num("distanceM", s.Resolved ? s.Distance : float.NaN); Comma();
+            AppendAimTarget(client, s.ActorId);
+            _json.Append('}');
+        }
+
+        /// <summary>
+        /// Where the aimed actor's PROXY stands on this client, and where the snapshot says it
+        /// should stand. X-17.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>`resolved: true` says the name found a transform, not that the transform is
+        /// anywhere real.</b> On 2026-08-22 the driver aimed at (0, 2000, 0) -- the pool's
+        /// parking spot, two kilometres straight up -- while the victim's own record put it at
+        /// (1088.1, 103.1, 954.3). The aim block said `resolved` and the distance said 2570 m,
+        /// and neither field could say that the thing being aimed at was a proxy nobody had
+        /// ever positioned. Reading a parked proxy off `pitch` alone is a trap: pitch is
+        /// POSITIVE-IS-DOWN (<c>ScriptedAim</c>), so the -42.6 deg that block carried reads as
+        /// a target far BELOW the map if you assume the ordinary sign, and as one far above it
+        /// if you do not. That is why these are coordinates and not an angle.
+        /// </para>
+        /// <para>
+        /// <b>The two fields separate the only two causes there are.</b>
+        /// <c>RemoteActorRegistry.Update</c> writes a proxy's position only for an actor the
+        /// interpolated snapshot pair carries, so either the entry is absent
+        /// (<c>inSnapshot: false</c> -- the server is not replicating player actors) or it is
+        /// present and the write still did not land (<c>inSnapshot: true</c> with proxy and
+        /// authoritative disagreeing -- the lerp or the baseline). Those are fixed in different
+        /// files, and without this block the choice is a guess.
+        /// </para>
+        /// </remarks>
+        private void AppendAimTarget(NetClientBootstrap client, ushort actorId)
+        {
+            _json.Append("\"target\":");
+
+            if (actorId == 0) { _json.Append("null"); return; }
+
+            _json.Append('{');
+
+            var registry = Object.FindFirstObjectByType<RemoteActorRegistry>(
+                FindObjectsInactive.Include);
+
+            Transform proxy = null;
+            bool hasProxy = registry != null
+                            && registry.TryFind(actorId, out proxy)
+                            && proxy != null;
+
+            Bool("hasProxy", hasProxy);
+
+            if (hasProxy)
+            {
+                Vector3 p = proxy.position;
+                Comma();
+                Num("proxyX", p.x); Comma();
+                Num("proxyY", p.y); Comma();
+                Num("proxyZ", p.z);
+            }
+
+            // Same CS0170 shape as AppendLocalPrediction: `out` inside a short-circuiting &&.
+            ActorSnapshotEntry entry = default;
+            bool inSnapshot = client != null
+                              && client.Router.Decoder.Current.TryFind(actorId, out entry);
+
+            Comma();
+            Bool("inSnapshot", inSnapshot);
+
+            if (inSnapshot)
+            {
+                Comma();
+                Num("snapshotX", Quantize.UnpackPos(entry.PosX)); Comma();
+                Num("snapshotY", Quantize.UnpackPos(entry.PosY)); Comma();
+                Num("snapshotZ", Quantize.UnpackPos(entry.PosZ));
+            }
+
             _json.Append('}');
         }
 
