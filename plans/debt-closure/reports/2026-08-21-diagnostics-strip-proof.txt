@@ -1,0 +1,27 @@
+=== IRONFRONT_NO_DIAGNOSTICS strip proof — two Windows player builds ===
+when: 2026-08-21T16:05:44Z   editor: D:\\UnityEditor/6000.3.21f1/Editor/Unity.exe
+method: Ironfront.EditorBuildWindowsHarness.BuildWindowsPlayer, batchmode, identical
+        except for -noDiagnostics. Symbol presence read from the built Assembly-CSharp.dll
+        (ASCII and UTF-16), not from the source.
+
+NetClientBootstrap is the CONTROL. If it had gone absent too, the check would be measuring
+'the dll changed', not 'diagnostics were stripped'.
+
+=== build: with-diagnostics (extra: )
+    unity exit: 0
+    LaneBHarness               PRESENT
+    VehicleReplicationOverlay  PRESENT
+    ScriptedInputSource        PRESENT
+    NetClientBootstrap         PRESENT
+=== build: no-diagnostics (extra: -noDiagnostics)
+    unity exit: 0
+    LaneBHarness               ABSENT
+    VehicleReplicationOverlay  ABSENT
+    ScriptedInputSource        ABSENT
+    NetClientBootstrap         PRESENT
+
+[exited with code 0]
+
+--- build logs ---
+-rw-r--r-- 1 Nghaiz 197121 357869 Aug 21 23:05 build-diag-diag-no-diagnostics.log
+-rw-r--r-- 1 Nghaiz 197121 795583 Aug 21 23:04 build-diag-diag-with-diagnostics.log
