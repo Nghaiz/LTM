@@ -338,7 +338,19 @@ namespace Ironfront
                 }
             }
 
-            return Path.GetFullPath(DefaultOutputDirectory);
+            // Anchored to the REPO ROOT, not the process working directory. A bare
+            // Path.GetFullPath("build/server") resolves against the Editor's cwd, which is the
+            // Unity project folder — so an interactive or MCP-driven build silently wrote to
+            // Ironfront_Reborn/build/server while tools/build-server.ps1, .dockerignore and
+            // images.yml all mean <repo>/build/server. Nothing failed: the build reported
+            // success, the tarball step packaged whatever stale tree was at the repo-root path,
+            // and the resulting image was days old with no warning anywhere. The command-line
+            // path above never hit this because the script always passes an absolute -buildOutput.
+            //
+            // Application.dataPath is "<repo>/<project>/Assets", so the repo root is two levels up.
+            string projectRoot = Directory.GetParent(Application.dataPath)!.FullName;
+            string repoRoot = Directory.GetParent(projectRoot)?.FullName ?? projectRoot;
+            return Path.GetFullPath(Path.Combine(repoRoot, DefaultOutputDirectory));
         }
 
         private static string[] EnabledScenePaths()

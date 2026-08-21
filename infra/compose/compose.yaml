@@ -63,6 +63,12 @@ x-gameserver-env: &gameserver-env
   # A headless build left on the loopback transport starts cleanly and accepts nobody, so
   # a deployment states udp rather than inheriting the scene default.
   IRONFRONT_GAMESERVER_TRANSPORT: udp
+  # The map scene to host, for the same reason and with a sharper failure: NetServerBootstrap
+  # is a component that lives in a map scene, so a server that never loads one walks
+  # Splash -> Menu and binds nothing. The container stays Up, the healthcheck we deliberately
+  # do not have would have passed anyway, restart: unless-stopped never fires, and every
+  # client times out against a server that looks perfectly healthy from outside.
+  IRONFRONT_GAMESERVER_SCENE: ${IRONFRONT_GAMESERVER_SCENE:-Dustbowl}
   # Off on anything reachable from the Internet: with unsigned tickets accepted, anyone
   # can join as anyone. A missing secret then refuses every connection, which is the
   # failure you want.

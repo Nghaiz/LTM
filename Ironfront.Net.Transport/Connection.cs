@@ -126,6 +126,44 @@ namespace Ironfront.Net.Transport
         /// </remarks>
         public uint PlayerId { get; internal set; }
 
+        /// <summary>
+        /// Datagrams discarded because a v1-reserved flag bit was set.
+        /// </summary>
+        /// <remarks>
+        /// The three Dropped* counters exist because <see cref="Receive"/> has three bare
+        /// <c>return</c>s that leave no trace of any kind. That is survivable on the server,
+        /// which counts its own rejections before ever calling in here; on the CLIENT these
+        /// were the whole diagnostic surface, and they were blank. A client that silently
+        /// discards every reliable packet and a client that never receives one present
+        /// identically — the far side gives up after ten resends either way, and the reason
+        /// code it reports (<c>TransportError</c>) is the same. Distinguishing them is the
+        /// entire difference between "our parser rejects this" and "the wire lost it", so the
+        /// counters are the measurement that has to exist before any theory is worth holding.
+        /// </remarks>
+        public long DroppedReservedFlags { get; private set; }
+
+        /// <summary>Datagrams discarded because this side is not <c>Connected</c>.</summary>
+        /// <remarks>See <see cref="DroppedReservedFlags"/>.</remarks>
+        public long DroppedNotConnected { get; private set; }
+
+        /// <summary>Datagrams discarded because the header named a different connection.</summary>
+        /// <remarks>See <see cref="DroppedReservedFlags"/>.</remarks>
+        public long DroppedWrongConnectionId { get; private set; }
+
+        /// <summary>Reliable datagrams accepted by this side.</summary>
+        /// <remarks>
+        /// Paired with <see cref="AckKeepAlivesSent"/>: the two must move together, because the
+        /// ack-keep-alive is emitted on exactly this event. A gap between them is a send that
+        /// failed; a zero in BOTH while the far side is resending is a delivery failure, and
+        /// the two diagnoses have nothing in common.
+        /// </remarks>
+        public long ReliablePacketsReceived { get; private set; }
+
+        /// <summary>Ack-carrying keep-alives emitted on reliable receipt.</summary>
+        /// <remarks>See <see cref="ReliablePacketsReceived"/>. Distinct from
+        /// <see cref="PeriodicKeepAlivesSent"/>, which counts only the idle timer's.</remarks>
+        public long AckKeepAlivesSent { get; private set; }
+
         public bool CanSendReliable => _flow.CanSendReliable(_reliability.PendingReliableCount)
             && _reliability.CanSendReliable;
 
@@ -173,7 +211,11 @@ namespace Ironfront.Net.Transport
         internal void Receive(in GspHeader header, ReadOnlyMemory<byte> datagram, double nowMs)
         {
             if (_disposed) return;
-            if ((header.Flags & PacketFlags.ReservedMask) != 0) return;
+            if ((header.Flags & PacketFlags.ReservedMask) != 0)
+            {
+                DroppedReservedFlags++;
+                return;
+            }
 
             if (_isClient && State != ConnectionState.Connected)
             {
@@ -181,7 +223,17 @@ namespace Ironfront.Net.Transport
                 return;
             }
 
-            if (State != ConnectionState.Connected || header.ConnectionId != ConnectionId) return;
+            if (State != ConnectionState.Connected)
+            {
+                DroppedNotConnected++;
+                return;
+            }
+
+            if (header.ConnectionId != ConnectionId)
+            {
+                DroppedWrongConnectionId++;
+                return;
+            }
 
             _lastReceiveMs = nowMs;
             _stats.PacketsReceived++;
@@ -194,9 +246,11 @@ namespace Ironfront.Net.Transport
             // before the next one-second idle keep-alive.
             if (header.IsReliable)
             {
+                ReliablePacketsReceived++;
                 Span<byte> ackPayload = stackalloc byte[3];
                 WriteFlowControl(ackPayload);
                 SendPacket(PacketType.Keepalive, PacketFlags.None, ackPayload, false, nowMs, false);
+                AckKeepAlivesSent++;
             }
 
             ReadOnlyMemory<byte> payload = datagram.Slice(GspHeader.Size, header.PayloadLength);
