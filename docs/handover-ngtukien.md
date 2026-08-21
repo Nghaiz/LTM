@@ -94,7 +94,7 @@ IRONFRONT_SHARED_SECRET=<chuỗi openssl ở trên>
 IRONFRONT_TLS_CERT_PASSWORD=<mật khẩu bạn đặt cho master.pfx>
 
 IRONFRONT_MASTER_IMAGE=ghcr.io/nghaiz/ironfront-master@sha256:<digest>
-IRONFRONT_GAMESERVER_IMAGE=ghcr.io/nghaiz/ironfront-gameserver@sha256:<digest>
+IRONFRONT_GAMESERVER_IMAGE=ghcr.io/nghaiz/ironfront-game-server@sha256:<digest>
 
 IRONFRONT_GAMESERVER_SCENE=Dustbowl
 ```

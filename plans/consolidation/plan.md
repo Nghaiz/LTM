@@ -183,30 +183,35 @@ Three limits recorded across the plans and the ledger died on 2026-08-21:
 account. An image existed under `nghaiz` the whole time — stale, private, and (we now know)
 built from a server that could not bind a port.
 
-### The one live blocker
+### The blocker, and how it was resolved
+
+The first push was refused:
 
 ```
 ERROR: failed to push ghcr.io/nghaiz/ironfront-gameserver:gameserver-v0.2.0
        denied: permission_denied: read_package
 ```
 
-Two packages, one difference:
+Two packages, one difference, and the contrast *is* the diagnosis:
 
 | Package | `repository` | Workflow can push? |
 |---|---|---|
 | `ironfront-master` | `Nghaiz/LTM` | ✅ created *by* the workflow, so auto-linked |
 | `ironfront-gameserver` | **`null`** | ❌ created by hand outside the repo |
 
-`GITHUB_TOKEN` reaches packages linked to its repo. The stale package is linked to nothing, and
-the REST API has no endpoint that links one. **Resolution — either is one action, both are the
-owner's:**
+`GITHUB_TOKEN` reaches packages linked to its own repo. The stale one is linked to nothing, and
+the REST API exposes no endpoint that links an existing package — deleting it needs a
+`delete:packages` scope this token does not carry.
 
-1. `gh auth refresh -h github.com -s delete:packages,write:packages`, then delete
-   `ironfront-gameserver` and re-run the workflow, which recreates it linked and public; **or**
-2. In the package's UI settings → *Manage Actions access* → add `Nghaiz/LTM` with **Write**.
+**Resolved by renaming rather than by a credential** (owner decision, 2026-08-21: the 18/08 build
+is too old to keep). `images.yml` now targets **`ghcr.io/<owner>/ironfront-game-server`**, which
+does not exist yet — so the workflow creates it, and a workflow-created package is linked to the
+repo and inherits its visibility automatically. No token refresh, no UI step.
 
-Option 1 is preferred: the package holds only the superseded 18/08 build, and a fresh
-workflow-created package is correctly linked and public without further action.
+The name also matches the compose service names (`game-server-1`, `game-server-2`) and the
+workflow's own job label, which the old one did not. The stale `ironfront-gameserver` package is
+abandoned in place; it is private, unreferenced, and holds only a build that could not bind a port.
+Delete it whenever a token with `delete:packages` is convenient — nothing depends on it.
 
 ---
 

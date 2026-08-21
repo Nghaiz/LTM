@@ -170,7 +170,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository_owner }}/ironfront-gameserver
+          images: ghcr.io/${{ github.repository_owner }}/ironfront-game-server
           tags: |
             type=semver,pattern={{version}},value=${{ steps.release_tag.outputs.tag }}
             type=semver,pattern={{major}}.{{minor}},value=${{ steps.release_tag.outputs.tag }}
