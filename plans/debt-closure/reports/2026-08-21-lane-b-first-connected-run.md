@@ -105,11 +105,41 @@ programmes is now ordinary work rather than impossible work, which is the whole 
 written, `combat` needs the driver to hold a weapon and its aim to resolve — otherwise every set
 built on the same scaffolding inherits a shooter that cannot shoot.
 
+## 4b. Why the shooter cannot aim — four candidates eliminated, one open
+
+`aim.resolved: false` is downstream of one number: **`namedPlayers: 0`**.
+`ScriptedTargetSolver.ResolveActorId` resolves a name by scanning
+`presenter.Names` (`PlayerNameTable`), so an empty table cannot resolve anything, and E7 does not
+merely need a kill — it needs a killfeed line **with a name**.
+
+Traced end to end. Four plausible causes are eliminated by reading the tree, not by argument:
+
+| Candidate | Status |
+|---|---|
+| The server never sends a player list | **Eliminated.** `ServerTickLoop.EmitPlayerList` writes it via `ServerEventWriter.WritePlayerList` and dispatches with `BroadcastReliable` — to everyone, on the reliable channel. |
+| Our actor ids are dropped by the u8 narrowing | **Eliminated.** `EmitPlayerList` skips `actorId > byte.MaxValue`; this run's ids are 41, 42, 43. |
+| The client never routes it | **Eliminated.** `ClientMessageRouter` handles `ServerMessageType.PlayerList` (`:353`) and raises `OnPlayerList` (`:183`). |
+| Nothing subscribes — the `NetLog` shape | **Eliminated.** `NetClientCombatPresenter:104` does `_client.Router.OnPlayerList += _names.Apply`, and the script IS in the scene: guid `bc6c11e3…` appears in `Assets/Scenes/Dustbowl.unity`. |
+
+That last row also **retires part of ledger row X-1**, which reads "none of the nine presenter
+scripts is referenced anywhere". At least `NetClientCombatPresenter` is referenced now; the row
+needs re-verifying per script rather than being carried forward as a block.
+
+**Still open, and deliberately not guessed at:** `EmitPlayerList` fires on join and on leave and
+nowhere else, so a client that subscribes after the last join receives nothing until somebody
+leaves. Whether that is the cause here — or whether the harness's scene-strip removes the
+subscribing object on a client process, since every client boots as a listen server first
+(`[net] role = Server` precedes `[net] role = Client` in every client log) — is the next
+measurement. Both are cheap to distinguish: log the arrival of `OnPlayerList` per process.
+
+The missing weapon (`weaponId: 0`, `clipSize: 0`) is a separate thread from the missing names and
+should not be assumed to share a cause.
+
 ## 5. Next, in order
 
-1. Find why the scripted client spawns with `weaponId: 0` and why `ScriptedAim` reports
-   `resolved: false` against a player that is present (`remoteActorCount: 55`). Both are
-   preconditions for checks 1, 2 and 13, and both are cheap to observe now.
+1. Log `OnPlayerList` arrivals per process to settle § 4b's one open candidate, and separately
+   find why the scripted client spawns with `weaponId: 0`. Both are preconditions for checks 1,
+   2 and 13; neither should be assumed to share a cause with the other.
 2. Re-run `-Set combat`; grade 1, 2 and 13 against `phase-3-harness.md` § 2.
 3. Author the missing sets — capture, grenade, camera, vehicle, turret — reusing the combat
    scaffolding once it is proven by (2).
