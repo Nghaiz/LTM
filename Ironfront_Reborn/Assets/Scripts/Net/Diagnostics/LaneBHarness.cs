@@ -233,8 +233,12 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// </remarks>
         private static void AttachTransportLog()
         {
-            NetLog.Warning = message => Debug.LogWarning($"[transport] {message}");
-            NetLog.Error = message => Debug.LogWarning($"[transport:error] {message}");
+            // Delegates to the shared installer rather than assigning here. The two sinks were
+            // identical, and this file compiles out of a shipping build (IRONFRONT_NO_DIAGNOSTICS)
+            // -- so a copy living only here is a copy that disappears exactly where defect 2 was
+            // reported. Every bootstrap installs it now, and this call is what keeps a
+            // harness-only process covered when it runs before either bootstrap wakes.
+            NetLogUnitySink.Install();
         }
 
         /// <summary>

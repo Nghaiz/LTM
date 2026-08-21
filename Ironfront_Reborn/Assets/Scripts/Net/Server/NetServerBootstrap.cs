@@ -119,6 +119,11 @@ namespace Ironfront.Net.Unity.Server
 
         private void Awake()
         {
+            // Defect 2 of the lane-B report: until this call the transport's warnings went to a
+            // null delegate in every shipped build. Installed FIRST, so anything the rest of this
+            // Awake logs is already reaching somewhere.
+            NetLogUnitySink.Install();
+
             TickLoop = GetComponent<ServerTickLoop>();
 
             ResolveConfiguration();

@@ -1908,7 +1908,21 @@ public class AiActorController : ActorController
 	{
 		LeaveCover();
 		CancelPath();
-		squad.DropMember(this);
+
+		// A squadless body is ORDINARY here, not exceptional. Every networked player slot is one
+		// of these characters, built by NetServerBindings.PlayerBodyFactory, and nothing ever puts
+		// it in a squad -- InSquad() exists precisely because the field is allowed to be null.
+		//
+		// Without the guard the first death threw here, which ABORTED the rest of Actor.Die, so
+		// the body never finished dying and died again the next frame, and the frame after that:
+		// 676 NullReferenceExceptions in one 90-second lane-B run (combat-01/server.log). The
+		// noise was the small half of the cost; the large half is that no player body has ever
+		// completed Actor.Die on a headless server.
+		if (InSquad())
+		{
+			squad.DropMember(this);
+		}
+
 		squad = null;
 		StopAllCoroutines();
 		CancelInvoke();

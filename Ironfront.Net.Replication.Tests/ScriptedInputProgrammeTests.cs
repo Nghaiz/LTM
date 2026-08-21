@@ -269,23 +269,48 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
-        /// The harness gives the transport's warning sink somewhere to go.
+        /// The SHIPPED player gives the transport's warning sink somewhere to go — not just the
+        /// harness.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// <c>NetLog.Warning</c> is an <c>Action&lt;string&gt;</c> the transport writes to; with
         /// no subscriber the only two lines that ever explain a <c>TransportError</c> —
         /// "reliable sequence N abandoned after M resends" and "reliable sequence slot collision
         /// at N" — are formatted and handed to a null delegate. <c>Connection.Update</c>'s own
         /// comment says it ends the connection "loudly instead of continuing quietly"; without a
         /// sink the loud half reaches nobody and a dropped client presents as a bare reason code.
+        /// </para>
+        /// <para>
+        /// <b>This test used to assert only that <c>LaneBHarness</c> installed one</b>, which was
+        /// true and was defect 2 of the phase-3D report at the same time: the harness was the
+        /// ONLY subscriber in the repository, so every shipped client and dedicated server ran
+        /// deaf. It now asserts the sink lives in Shared and that both bootstraps install it.
+        /// Asserting the harness alone would additionally be wrong now that the file compiles out
+        /// under <c>IRONFRONT_NO_DIAGNOSTICS</c>.
+        /// </para>
         /// </remarks>
         [Fact]
-        public void TheHarnessGivesTheTransportWarningsSomewhereToGo()
+        public void TheShippedPlayerGivesTheTransportWarningsSomewhereToGo()
         {
-            string harness = UnitySource("Net/Diagnostics/LaneBHarness.cs");
+            string sink = UnitySource("Net/Shared/NetLogUnitySink.cs");
+            Assert.Contains("NetLog.Warning =", sink);
+            Assert.Contains("NetLog.Error =", sink);
 
-            Assert.Contains("NetLog.Warning =", harness);
-            Assert.Contains("NetLog.Error =", harness);
+            // The wired half. A sink nothing calls is the same silence one indirection further
+            // out, which is the failure this test exists to catch.
+            //
+            // Uncommented, deliberately. The first version of this used Assert.Contains and a
+            // mutation that commented the call OUT still passed -- the same trap the phase-3D
+            // report records for `Assert.Contains("$summary.lostConnection")`. A commented call
+            // is exactly the mutation this must catch, so matching one is not a near miss.
+            AssertCallsUncommented("Net/Client/NetClientBootstrap.cs", "NetLogUnitySink.Install();");
+            AssertCallsUncommented("Net/Server/NetServerBootstrap.cs", "NetLogUnitySink.Install();");
+            AssertCallsUncommented("Net/Diagnostics/LaneBHarness.cs", "NetLogUnitySink.Install();");
+
+            // And nobody keeps a private copy: a second assignment is a second thing to fix when
+            // the severity policy changes, and the batchmode-severity reasoning lives in one file.
+            Assert.DoesNotContain("NetLog.Warning =", UnitySource("Net/Diagnostics/LaneBHarness.cs"));
         }
 
         /// <summary>
@@ -484,6 +509,26 @@ namespace Ironfront.Net.Replication.Tests
                 yawRateDegreesPerSecond = yawRate,
                 checkpoint = checkpoint,
             };
+
+        /// <summary>
+        /// Asserts <paramref name="call"/> appears on a line that is not commented out.
+        /// </summary>
+        /// <remarks>
+        /// <c>Assert.Contains</c> is satisfied by the text inside <c>// call();</c>, which makes
+        /// it blind to the one edit most likely to break the wiring it is guarding.
+        /// </remarks>
+        private static void AssertCallsUncommented(string relativePath, string call)
+        {
+            foreach (string line in UnitySource(relativePath).Split('\n'))
+            {
+                string trimmed = line.TrimStart();
+                if (trimmed.StartsWith("//", StringComparison.Ordinal)) continue;
+                if (trimmed.StartsWith("*", StringComparison.Ordinal)) continue;
+                if (trimmed.Contains(call, StringComparison.Ordinal)) return;
+            }
+
+            Assert.Fail($"{relativePath} does not call {call} on any uncommented line.");
+        }
 
         private static string UnitySource(string relativePath)
         {
