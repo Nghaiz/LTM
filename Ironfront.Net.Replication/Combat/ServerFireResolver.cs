@@ -32,6 +32,17 @@ namespace Ironfront.Net.Replication.Combat
         /// Any non-zero value. Seeded rather than time-based so a failing hit-rate measurement
         /// can be replayed exactly; AD-3 means nothing depends on the client agreeing.
         /// </param>
+        /// <summary>
+        /// The compensator this resolver shoots through, for diagnostics only.
+        /// </summary>
+        /// <remarks>
+        /// Exposed so a shot log can print <c>ShotsOccluded</c> and <c>PresentFallbacks</c>
+        /// beside the shot they belong to. A ray can be proven by slab test to enter a hitbox
+        /// and still resolve as a miss -- occlusion and a rewound pose are the two ways -- and
+        /// without these counters those are indistinguishable from a bad aim. X-19.
+        /// </remarks>
+        public LagCompensator LagCompensator => _lagCompensator;
+
         public ServerFireResolver(LagCompensator lagCompensator, uint seed = 0x9E3779B9)
         {
             _lagCompensator = lagCompensator ?? throw new ArgumentNullException(nameof(lagCompensator));

@@ -387,7 +387,13 @@ namespace Ironfront.Net.Unity.Server
                 + $"targets={_targetCount} alive={alive} solidTorsos={solid} "
                 + $"origin={result.Origin.X:F1},{result.Origin.Y:F1},{result.Origin.Z:F1} "
                 + $"aim={result.AimDirection.X:F2},{result.AimDirection.Y:F2},{result.AimDirection.Z:F2} "
-                + $"nearest[{nearest}]");
+                + $"nearest[{nearest}] "
+                // A ray can be PROVEN to enter a hitbox and still resolve as a miss. These are
+                // the two ways, and without them a rejected hit is indistinguishable from a
+                // bad aim -- which cost a slab test done by hand on 2026-08-22 to rule out. X-19.
+                + $"occluded={_authority.FireResolver.LagCompensator.ShotsOccluded} "
+                + $"presentFallbacks={_authority.FireResolver.LagCompensator.PresentFallbacks} "
+                + $"resolved={_authority.FireResolver.LagCompensator.ShotsResolved}");
         }
 
         /// <summary>Read once: this is consulted on every trigger frame.</summary>
