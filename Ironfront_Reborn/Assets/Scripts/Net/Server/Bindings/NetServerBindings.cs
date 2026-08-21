@@ -6,6 +6,8 @@ namespace Ironfront.Net.Unity.Server
     /// <summary>
     /// Where <c>Assembly-CSharp</c> hands this assembly its implementations of
     /// <see cref="IGameplayActorSource"/> and <see cref="ISpawnPointDirectory"/>.
+    /// Scene objects both sides write — capture points — live on
+    /// <see cref="NetSceneBindings"/> instead.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -80,13 +82,6 @@ namespace Ironfront.Net.Unity.Server
         public static ISpawnPointDirectory SpawnPoints { get; set; }
 
         /// <summary>
-        /// The scene's capture points, or <see langword="null"/> when unavailable — which
-        /// <see cref="MatchController"/> reads as "this map has no objectives", the same
-        /// deathmatch branch an empty authored array already produced.
-        /// </summary>
-        public static ICapturePointDirectory CapturePoints { get; set; }
-
-        /// <summary>
         /// Resolves the gameplay source for <paramref name="gameObject"/>, or
         /// <see langword="null"/> when nothing is registered or the object has no actor.
         /// </summary>
@@ -129,7 +124,11 @@ namespace Ironfront.Net.Unity.Server
             AiDriverResolver = null;
             PlayerBodyFactory = null;
             SpawnPoints = null;
-            CapturePoints = null;
+
+            // The scene registry is cleared here too, so a test that resets the server
+            // seams does not leave a capture-point directory installed behind it. Moving
+            // CapturePoints to NetSceneBindings must not quietly change what Clear clears.
+            NetSceneBindings.Clear();
         }
     }
 }

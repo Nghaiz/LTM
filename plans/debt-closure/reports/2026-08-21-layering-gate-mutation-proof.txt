@@ -1,0 +1,71 @@
+=== tools/check-net-layering.ps1 — mutation proof, 2026-08-21T15:55:56Z ===
+base: 90cc6a0, working tree as of this commit
+
+--- 0. BASELINE: unmutated tree must be GREEN ---
+=== Assembly-CSharp does not reach into Ironfront.Net.Unity.Server ===
+PASS: 380 predefined-assembly source(s) scanned; 14 reference the server assembly,
+      all named in the baseline; 12 of them are debt, and every row still applies.
+      Net/Client and Net/Input name it nowhere.
+      This says no NEW call site appeared and no listed one was silently fixed. It
+      does NOT say the listed call sites are acceptable — that is what the count is for.
+exit=0
+
+--- 1. RULE 1 (grow): a NEW predefined-assembly file names the server namespace ---
+=== Assembly-CSharp does not reach into Ironfront.Net.Unity.Server ===
+
+FAIL: the layering between Assembly-CSharp and Ironfront.Net.Unity.Server moved.
+
+  RULE 1 (new debt): Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ZzMutantOne.cs references Ironfront.Net.Unity.Server and is not in the baseline.
+    Assembly-CSharp code calling the server assembly is exactly what E-11 names. Route it through a seam, or state the debt in $Baseline with a reason.
+
+A rise is new debt: fix the call site. A fall is a fix: delete the baseline row.
+The two read identically in a diff, which is why this gate distinguishes them.
+exit=1
+
+--- 2. RULE 2 (shrink): a baselined file STOPS referencing it — must report PAID, not pass ---
+  remaining mentions (comments only): 1
+=== Assembly-CSharp does not reach into Ironfront.Net.Unity.Server ===
+
+FAIL: the layering between Assembly-CSharp and Ironfront.Net.Unity.Server moved.
+
+  RULE 2 (stale): Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Vehicle.cs no longer references the server namespace — the debt is PAID.
+    Reason it was listed: legacy gameplay calls the server assembly directly
+    DELETE the row. Do NOT re-pin the list to what this run reported.
+
+A rise is new debt: fix the call site. A fall is a fix: delete the baseline row.
+The two read identically in a diff, which is why this gate distinguishes them.
+exit=1
+
+--- 3. RULE 4 (hard): a CLIENT file names it — no baseline may absorb this ---
+=== Assembly-CSharp does not reach into Ironfront.Net.Unity.Server ===
+
+FAIL: the layering between Assembly-CSharp and Ironfront.Net.Unity.Server moved.
+
+  RULE 1 (new debt): Ironfront_Reborn/Assets/Scripts/Net/Client/ZzMutantFour.cs references Ironfront.Net.Unity.Server and is not in the baseline.
+    Assembly-CSharp code calling the server assembly is exactly what E-11 names. Route it through a seam, or state the debt in $Baseline with a reason.
+
+  RULE 4 (hard): Ironfront_Reborn/Assets/Scripts/Net/Client/ZzMutantFour.cs references Ironfront.Net.Unity.Server.
+    Client and input code has no baseline available. A presenter that reads a server binding is the failure E-11 describes, not an instance of it that can be grandfathered.
+
+A rise is new debt: fix the call site. A fall is a fix: delete the baseline row.
+The two read identically in a diff, which is why this gate distinguishes them.
+exit=1
+
+--- 4. RESTORED: tree must be GREEN again ---
+=== Assembly-CSharp does not reach into Ironfront.Net.Unity.Server ===
+PASS: 380 predefined-assembly source(s) scanned; 14 reference the server assembly,
+      all named in the baseline; 12 of them are debt, and every row still applies.
+      Net/Client and Net/Input name it nowhere.
+      This says no NEW call site appeared and no listed one was silently fixed. It
+      does NOT say the listed call sites are acceptable — that is what the count is for.
+exit=0
+  git-status:  M Ironfront_Reborn/Assets/Scripts/Net/Client/NetClientObjectivePresenter.cs
+  git-status:  M Ironfront_Reborn/Assets/Scripts/Net/Server/Bindings/NetServerBindings.cs
+  git-status:  M Ironfront_Reborn/Assets/Scripts/Net/Server/MatchController.cs
+  git-status: RM Ironfront_Reborn/Assets/Scripts/Net/Server/Bindings/ICapturePointDirectory.cs -> Ironfront_Reborn/Assets/Scripts/Net/Shared/ICapturePointDirectory.cs
+  git-status: R  Ironfront_Reborn/Assets/Scripts/Net/Server/Bindings/ICapturePointDirectory.cs.meta -> Ironfront_Reborn/Assets/Scripts/Net/Shared/ICapturePointDirectory.cs.meta
+  git-status:  M Ironfront_Reborn/Assets/Scripts/NetBindings/IronfrontNetBindings.cs
+  git-status: ?? Ironfront_Reborn/Assets/Scripts/Net/Shared/NetSceneBindings.cs
+  git-status: ?? Ironfront_Reborn/Assets/Scripts/Net/Shared/NetSceneBindings.cs.meta
+  git-status: ?? plans/debt-closure/reports/2026-08-21-layering-gate-mutation-proof.txt
+  git-status: ?? tools/check-net-layering.ps1

@@ -180,7 +180,7 @@ namespace Ironfront.Net.Unity.Server
         /// </remarks>
         private CapturePointState[] BuildCapturePoints()
         {
-            _points = NetServerBindings.CapturePoints;
+            _points = NetSceneBindings.CapturePoints;
 
             if (_points == null)
             {
