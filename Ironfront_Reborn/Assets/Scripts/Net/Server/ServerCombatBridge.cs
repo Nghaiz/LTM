@@ -145,6 +145,8 @@ namespace Ironfront.Net.Unity.Server
             // finally clears.
             actor.AmmoInClip = session.Weapon.AmmoInClip;
 
+            LogShot(session, in frame, in result);
+
             if (!result.Fired) return;
 
             EmitWeaponFire(session, actor, in result);
@@ -322,6 +324,77 @@ namespace Ironfront.Net.Unity.Server
         /// actor set does not change between them. Rebuilding per shot would be 16 scans of 64
         /// actors per tick for one answer.
         /// </remarks>
+        /// <summary>
+        /// One line per trigger frame, when <c>IRONFRONT_LOG_SHOTS=1</c>. Silent otherwise.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Ledger row X-15 exists because this did not.</b> On 2026-08-21 a client held
+        /// Fire|Aim at six metres, the server drained a thirty-round clip on its own accounting,
+        /// and the victim finished on 100 health -- and there was no way to tell from any
+        /// artifact whether the shots were refused, fired and missed, or fired at a target list
+        /// that was empty. Three very different bugs, one indistinguishable symptom.
+        /// </para>
+        /// <para>
+        /// <b>Off by default, and by an env var rather than a define</b>, so a running dedicated
+        /// server can be asked the question without a rebuild. Bounded by the fire rate rather
+        /// than the tick rate: only a frame that pulled the trigger or was refused for pulling it
+        /// prints, so an idle player costs one branch.
+        /// </para>
+        /// <para>
+        /// <c>hitboxes</c> is the total across every candidate target, because a target with no
+        /// hitboxes cannot be hit and would otherwise be indistinguishable from a miss. That is
+        /// the first hypothesis this line was written to kill or confirm.
+        /// </para>
+        /// </remarks>
+        private void LogShot(ClientSession session, in InputFrame frame, in CombatTickResult result)
+        {
+            if (!ShotLoggingEnabled) return;
+            if (!frame.IsPressed(InputButtons.Fire)) return;
+
+            // A HitboxSet is always four AABBs, so counting them proves nothing. What can be
+            // wrong is that they are DEGENERATE -- Aabb.IsEmpty -- which is indistinguishable
+            // from a miss in every artifact that exists today. So count the targets whose torso
+            // is a real box, and print the nearest other target's torso outright.
+            int alive = 0;
+            int solid = 0;
+            string nearest = "none";
+            float nearestDistance = float.MaxValue;
+
+            for (int i = 0; i < _targetCount; i++)
+            {
+                HitscanTarget target = _targets[i];
+                if (target.IsAlive) alive++;
+                if (!target.Present.Torso.IsEmpty) solid++;
+                if (target.ActorId == session.ActorId) continue;
+
+                Vec3 delta = target.Present.Torso.Center - result.Origin;
+                float distance = MathF.Sqrt(delta.X * delta.X + delta.Y * delta.Y + delta.Z * delta.Z);
+                if (distance >= nearestDistance) continue;
+
+                nearestDistance = distance;
+                nearest = $"actor={target.ActorId} alive={target.IsAlive} d={distance:F1}m "
+                          + $"torso={target.Present.Torso.Center.X:F1},{target.Present.Torso.Center.Y:F1},"
+                          + $"{target.Present.Torso.Center.Z:F1} "
+                          + $"extents={target.Present.Torso.Extents.X:F2},{target.Present.Torso.Extents.Y:F2},"
+                          + $"{target.Present.Torso.Extents.Z:F2}";
+            }
+
+            Debug.Log(
+                $"[shot] actor={session.ActorId} weapon={session.WeaponId} "
+                + $"ammo={session.Weapon.AmmoInClip} rejection={result.Rejection} "
+                + $"fired={result.Fired} hits={result.HitCount} "
+                + $"targets={_targetCount} alive={alive} solidTorsos={solid} "
+                + $"origin={result.Origin.X:F1},{result.Origin.Y:F1},{result.Origin.Z:F1} "
+                + $"aim={result.AimDirection.X:F2},{result.AimDirection.Y:F2},{result.AimDirection.Z:F2} "
+                + $"nearest[{nearest}]");
+        }
+
+        /// <summary>Read once: this is consulted on every trigger frame.</summary>
+        private static bool ShotLoggingEnabled =>
+            _shotLogging ??= Environment.GetEnvironmentVariable("IRONFRONT_LOG_SHOTS") == "1";
+
+        private static bool? _shotLogging;
         private void BuildTargets(uint tick)
         {
             if (_targetsBuiltForTick == tick) return;
