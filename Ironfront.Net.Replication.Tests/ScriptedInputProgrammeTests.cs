@@ -397,6 +397,36 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
+        /// A programme's <c>aimAtPlayer</c> survives the fact that the server names players
+        /// <c>#&lt;playerId&gt;</c> and has never heard of "OBS-A".
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Both ends, because either alone resolves nothing: the runner has to EXPORT the
+        /// mapping it already owns, and the solver has to FALL BACK to it. Asserted as a pair
+        /// for the same reason the role pin above is — a half-wired translation looks exactly
+        /// like a wired one from either file on its own.
+        /// </para>
+        /// <para>
+        /// The literal name is still tried first, so a deployment whose players carry real
+        /// usernames is unaffected by the harness's aliasing.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public void AScriptedAimResolvesTheNameTheServerActuallyPublishes()
+        {
+            string solver = UnitySource("Net/Diagnostics/ScriptedTargetSolver.cs");
+
+            Assert.Contains("ushort found = Scan(names, playerName);", solver);
+            Assert.Contains("if (found == 0) found = Scan(names, RosterAlias(playerName));", solver);
+            Assert.Contains("IRONFRONT_LANEB_ROSTER", solver);
+            // The server's own rendering, from ServerTickLoop.DisplayNameFor.
+            Assert.Contains("\"#\" + id", solver);
+
+            Assert.Contains("IRONFRONT_LANEB_ROSTER", RepoFile("tools/run-lane-b.ps1"));
+        }
+
+        /// <summary>
         /// The checkpoint says whether the two combat components were RUNNING, so a zero can
         /// never again be read as "nothing happened yet" when it meant "this was disabled".
         /// </summary>

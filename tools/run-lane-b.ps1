@@ -182,6 +182,18 @@ function Set-CommonEnvironment {
     $env:IRONFRONT_LANEB_SCENE = "Dustbowl"
     $env:IRONFRONT_SHARED_SECRET = $SharedSecret
 
+    # The roster, because the server does not know "OBS-A". It never parses the join ticket, so
+    # the only identity it holds is the transport's PlayerId, and ServerTickLoop.DisplayNameFor
+    # renders that as "#5002" -- deliberate, and documented on ServerPlayer.DisplayName: a real
+    # username needs a new opcode and acceptance criterion 2 forbids moving PROTOCOL_VERSION.
+    # A programme that says aimAtPlayer "OBS-A" therefore resolves nothing (combat-role01:
+    # namedPlayers 3, aim.resolved false, targetActorId 0). ScriptedTargetSolver falls back to
+    # this mapping. It lives HERE because this script already owns the name-to-id pairing; the
+    # alternative -- writing "#5002" into the three combat-*.json files -- couples every recorded
+    # programme to these magic ids and rots the day they change.
+    $env:IRONFRONT_LANEB_ROSTER = ($clients | ForEach-Object { "$($_.Name)=$($_.PlayerId)" }) -join ","
+
+
     # Unrecognised or absent returns a DISABLED config by design, so "off" needs no special case.
     $env:IRONFRONT_SIM = $Sim
     $env:IRONFRONT_SIM_SEED = "$SimSeed"

@@ -149,21 +149,83 @@ namespace Ironfront.Net.Unity.Diagnostics
                 return _cachedActorId;
             }
 
-            ushort found = 0;
-            for (ushort id = 0; id < ProtocolConstants.MAX_ACTORS; id++)
-            {
-                if (string.Equals(names.NameOf(id), playerName, StringComparison.Ordinal))
-                {
-                    found = id;
-                    break;
-                }
-            }
+            ushort found = Scan(names, playerName);
+
+            // The server does not know "OBS-A". It never parses the join ticket, so the only
+            // identity it holds is the transport's PlayerId, and ServerTickLoop.DisplayNameFor
+            // renders that as "#5002" — documented on ServerPlayer.DisplayName as deliberate,
+            // because a real username needs a new opcode and acceptance criterion 2 forbids
+            // moving PROTOCOL_VERSION. So the harness is the side that has to translate.
+            //
+            // Measured on combat-role01: namedPlayers 3, aim.resolved false, targetActorId 0 —
+            // three names in the table, none of them the one three programmes asked for.
+            if (found == 0) found = Scan(names, RosterAlias(playerName));
 
             _cachedName = playerName;
             _cachedRevision = names.Revision;
             _cachedActorId = found;
             return found;
         }
+
+        private static ushort Scan(PlayerNameTable names, string wanted)
+        {
+            if (string.IsNullOrEmpty(wanted)) return 0;
+
+            // Actor id 0 is the unassigned sentinel, so a hit there would be meaningless anyway;
+            // starting at 1 also keeps "found nothing" and "found actor 0" from colliding.
+            for (ushort id = 1; id < ProtocolConstants.MAX_ACTORS; id++)
+            {
+                if (string.Equals(names.NameOf(id), wanted, StringComparison.Ordinal)) return id;
+            }
+
+            return 0;
+        }
+
+        /// <summary>
+        /// The name the SERVER would use for a logical roster name, or null when the roster does
+        /// not carry it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>IRONFRONT_LANEB_ROSTER</c> is written by <c>tools/run-lane-b.ps1</c>, which is the
+        /// one place that already owns the logical-name-to-player-id mapping. Putting <c>#5002</c>
+        /// into the three <c>combat-*.json</c> files instead would couple every recorded
+        /// programme to that script's magic ids and rot silently the day they change.
+        /// </para>
+        /// <para>
+        /// Format: <c>DRIVER=5001,OBS-A=5002,OBS-B=5003</c>. Absent or unparsable returns null
+        /// and the literal name stands, so an ordinary programme naming a real username is
+        /// unaffected.
+        /// </para>
+        /// </remarks>
+        private static string RosterAlias(string logicalName)
+        {
+            if (string.IsNullOrEmpty(logicalName)) return null;
+
+            if (_roster == null)
+            {
+                _roster = new System.Collections.Generic.Dictionary<string, string>(
+                    StringComparer.Ordinal);
+
+                string raw = Environment.GetEnvironmentVariable("IRONFRONT_LANEB_ROSTER");
+                if (!string.IsNullOrEmpty(raw))
+                {
+                    foreach (string pair in raw.Split(','))
+                    {
+                        int eq = pair.IndexOf('=');
+                        if (eq <= 0 || eq == pair.Length - 1) continue;
+
+                        string name = pair.Substring(0, eq).Trim();
+                        string id = pair.Substring(eq + 1).Trim();
+                        if (name.Length > 0 && id.Length > 0) _roster[name] = "#" + id;
+                    }
+                }
+            }
+
+            return _roster.TryGetValue(logicalName, out string alias) ? alias : null;
+        }
+
+        private static System.Collections.Generic.Dictionary<string, string> _roster;
 
         private bool TryPresenter(out NetClientCombatPresenter presenter)
         {
