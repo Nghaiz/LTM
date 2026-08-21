@@ -1,0 +1,48 @@
+=== X-15 root cause: the server shoots from a body that is falling out of the world ===
+when: 2026-08-21T17:16:56Z   run: artifacts/lane-b/x15-measure-02 (IRONFRONT_LOG_SHOTS=1)
+
+The measurement first, because the conclusion is not what the symptom suggested.
+
+  [shot] actor=41 weapon=6 ammo=7 rejection=None fired=True hits=0 targets=56 alive=3 solidTorsos=56 origin=1993.9,-353.1,1089.4 aim=-0.67,0.65,-0.37 nearest[actor=42 alive=True d=649.1m torso=1612.3,45.5,1431.1 extents=0.25,0.35,0.16]
+  [shot] actor=41 weapon=6 ammo=7 rejection=OnCooldown fired=False hits=0 targets=56 alive=3 solidTorsos=56 origin=1993.5,-354.5,1089.1 aim=-0.67,0.65,-0.37 nearest[actor=42 alive=True d=649.8m torso=1612.3,45.5,1431.1 extents=0.25,0.35,0.16]
+  ...
+  [shot] actor=41 weapon=6 ammo=2 rejection=OnCooldown fired=False hits=0 targets=56 alive=3 solidTorsos=56 origin=1964.8,-448.5,1073.1 aim=-0.67,0.65,-0.37 nearest[actor=42 alive=True d=704.6m torso=1612.3,45.5,1431.1 extents=0.25,0.35,0.16]
+
+Read it in this order:
+  rejection=None fired=True   -- the server IS firing. Not refused, not out of ammo.
+  solidTorsos=56              -- every candidate target has a real hitbox. Not degenerate.
+  origin y = -353 ... -448    -- the SHOOTER is hundreds of metres below the map, falling.
+  nearest d = 649m ... 704m   -- and getting further from the target every frame.
+
+So this was never hit detection. Nothing was ever near anything.
+
+Now the contradiction that names the cause. For the SAME actor 41, in the same run:
+  snapshot / rendered body   (2048.0, 8.40, 1139.1)  -- static all seven checkpoints
+  authoritative in snapshot  y = 8.59
+  session MoveState (shot)   y = -353 and descending
+
+Two positions for one player, from two sources: NetServerActor reads the TRANSFORM for the
+snapshot, and ShotOrigin reads ClientSession.State. MoveToSpawnPoint seeds both correctly
+(ServerCombatBridge.cs:516-518). Only one of them then falls.
+
+ROOT CAUSE. ServerPlayer.Tick branches on Actor.Movement:
+  agent == null -> InputAuthority.ApplyPendingInput(Session, dt, _moveDetached, this)
+  MoveDetached  -> Session.State.Position + motion, with NO collision at all.
+That branch is documented as 'a connection that has claimed a slot but whose actor has not
+spawned yet'. For a networked player it is permanent, because:
+
+  NetServerActor.Movement = GetComponent<NetMovementAgent>()   (NetServerActor.cs:315)
+  NetMovementAgent is authored on exactly ONE prefab:
+    Ironfront_Reborn/Assets/Prefab/Player Fps Actor.prefab
+  and the claimed player body is ActorManager.actorPrefab -- the AI character -- which is
+  not that prefab (IronfrontNetBindings.CreatePlayerBody).
+
+So every networked player integrates detached, free-falls forever in the server's own
+movement state, and fires from wherever that ghost has fallen to. The transform stays at
+the spawn because nothing is driving it, which is exactly why no artifact showed this until
+the shot line printed the origin.
+
+WHAT THIS DOES NOT SAY: which fix is right. Authoring NetMovementAgent onto the AI prefab,
+adding it in NetServerActor.Awake when absent, or adding it in CreatePlayerBody are three
+different answers with different blast radii, and the detached branch being SILENT for a
+player who will never spawn an agent is a fourth defect regardless of which is chosen.
