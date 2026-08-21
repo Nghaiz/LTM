@@ -125,6 +125,13 @@ That last row also **retires part of ledger row X-1**, which reads "none of the 
 scripts is referenced anywhere". At least `NetClientCombatPresenter` is referenced now; the row
 needs re-verifying per script rather than being carried forward as a block.
 
+> **RESOLVED 2026-08-21 — and both candidates below were wrong.** The cause was neither
+> `EmitPlayerList`'s cadence nor the scene-strip: `NetContext.Role` read `Server` for the whole
+> `Awake` pass of a client process, so `NetClientCombatPresenter` disabled itself before it could
+> subscribe. The same window killed the combat driver, so the two threads this section says not to
+> assume share a cause **do** share one. Full account, evidence and fix:
+> [`2026-08-21-lane-b-role-race.md`](2026-08-21-lane-b-role-race.md). Ledger **X-9**.
+
 **Still open, and deliberately not guessed at:** `EmitPlayerList` fires on join and on leave and
 nowhere else, so a client that subscribes after the last join receives nothing until somebody
 leaves. Whether that is the cause here — or whether the harness's scene-strip removes the
@@ -137,9 +144,11 @@ should not be assumed to share a cause.
 
 ## 5. Next, in order
 
-1. Log `OnPlayerList` arrivals per process to settle § 4b's one open candidate, and separately
-   find why the scripted client spawns with `weaponId: 0`. Both are preconditions for checks 1,
-   2 and 13; neither should be assumed to share a cause with the other.
+1. ~~Log `OnPlayerList` arrivals per process to settle § 4b's one open candidate, and separately
+   find why the scripted client spawns with `weaponId: 0`.~~ **Done 2026-08-21, and the answer was
+   one cause for both** — see [`2026-08-21-lane-b-role-race.md`](2026-08-21-lane-b-role-race.md).
+   No logging was needed; the ordering was already in `driver.log`. Both are fixed, and what they
+   were hiding is that the scripted client never spawns into the map at all.
 2. Re-run `-Set combat`; grade 1, 2 and 13 against `phase-3-harness.md` § 2.
 3. Author the missing sets — capture, grenade, camera, vehicle, turret — reusing the combat
    scaffolding once it is proven by (2).
