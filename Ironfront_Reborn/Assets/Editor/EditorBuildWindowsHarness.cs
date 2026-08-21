@@ -39,6 +39,18 @@ namespace Ironfront
     public static class EditorBuildWindowsHarness
     {
         private const string BuildOutputArgument = "-buildOutput";
+
+        // Opt-in strip of Assets/Scripts/Net/Diagnostics/. Passed as an EXTRA define rather
+        // than by editing the project define set, because extraScriptingDefines applies to the
+        // player compilation alone and queues no Editor recompile -- unlike StripEditorOnlyDefines
+        // below, which is why that one refuses to run outside batchmode.
+        //
+        // The flag exists so the guard can be PROVEN rather than asserted: build once without
+        // it and LaneBHarness is in the player, build once with it and it is not. There is no
+        // shipping client target in this repo yet -- when there is, it passes this.
+        private const string NoDiagnosticsArgument = "-noDiagnostics";
+        private const string NoDiagnosticsDefine   = "IRONFRONT_NO_DIAGNOSTICS";
+
         private const string DefaultOutputDirectory = "build/windows";
 
         // Matched literally by tools/run-lane-b.ps1, so it is part of the contract.
@@ -149,7 +161,15 @@ namespace Ironfront
                 target = BuildTarget.StandaloneWindows64,
                 subtarget = (int)StandaloneBuildSubtarget.Player,
                 options = BuildOptions.Development,
+                extraScriptingDefines = HasNoDiagnosticsFlag()
+                    ? new[] { NoDiagnosticsDefine }
+                    : null,
             };
+
+            if (HasNoDiagnosticsFlag())
+            {
+                Debug.Log($"[build] {NoDiagnosticsDefine} set: Net/Diagnostics is compiled out.");
+            }
 
             Debug.Log($"[build] lane-B windows player: {scenes.Length} scene(s) -> {executablePath}");
 
@@ -227,6 +247,20 @@ namespace Ironfront
             }
 
             EditorUserBuildSettings.standaloneBuildSubtarget = subtarget;
+        }
+
+        /// <summary>True when <c>-noDiagnostics</c> was passed on the command line.</summary>
+        private static bool HasNoDiagnosticsFlag()
+        {
+            foreach (string arg in Environment.GetCommandLineArgs())
+            {
+                if (string.Equals(arg, NoDiagnosticsArgument, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static string ResolveOutputDirectory()

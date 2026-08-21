@@ -1,3 +1,16 @@
+// Diagnostics are compiled OUT of a shipping client build.
+//
+// The sense is INVERTED on purpose. Unity's BuildPlayerOptions.extraScriptingDefines can only
+// ADD symbols, never subtract one, so a positive IRONFRONT_DIAGNOSTICS would have to be off in
+// ProjectSettings and switched on for every build that needs it -- which is the Editor, the
+// EditMode tests and the lane-B harness, i.e. everything except the one build that does not
+// exist yet. Defaulting ON and letting a shipping build ADD IRONFRONT_NO_DIAGNOSTICS is the
+// only arrangement the mechanism actually supports.
+//
+// Nothing outside Assets/Scripts/Net/Diagnostics/ names a type from this folder: the ten
+// mentions elsewhere are doc-comments, checked 2026-08-21. So this guard needs no companion
+// guard at any call site, and a strip cannot leave a dangling reference behind it.
+#if !IRONFRONT_NO_DIAGNOSTICS
 // #nullable disable, for the reason ScriptedInputProgramme.cs states: this file is compiled
 // twice, once by Unity's Assembly-CSharp (no nullable context) and once by
 // Ironfront.Net.Replication.Tests through a <Compile Include> link (nullable warnings are
@@ -135,3 +148,4 @@ namespace Ironfront.Net.Unity.Diagnostics
         }
     }
 }
+#endif

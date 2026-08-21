@@ -90,6 +90,17 @@ try {
         & "$PSScriptRoot/check-harness-no-decoder.ps1"
     }
 
+    # Ledger row E-11. Reads `using` lines under Assets/Scripts/, so it costs well under a second
+    # and needs no Unity -- which matters here, because the thing it guards is invisible to
+    # `dotnet build`: Ironfront.Net.Unity.Shared has zero references, so the solution builds green
+    # no matter what Assets/ does to its own layering.
+    #
+    # Wired in the SAME commit that added the gate, deliberately. 3d above is the standing
+    # reminder of what happens otherwise.
+    Invoke-Step "3e. Assembly-CSharp does not reach into the server assembly" {
+        & "$PSScriptRoot/check-net-layering.ps1"
+    }
+
     # ADVISORY — mirrors the `style` job in .github/workflows/ci.yml, which is
     # continue-on-error. Deliberately NOT routed through Invoke-Step: a formatting nit must
     # not add to $failures and make this script exit 1, or people will stop running it.

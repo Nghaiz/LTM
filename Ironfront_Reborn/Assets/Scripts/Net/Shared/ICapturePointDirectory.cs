@@ -2,7 +2,7 @@ using System;
 using Ironfront.Net.Replication.Match;
 using UnityEngine;
 
-namespace Ironfront.Net.Unity.Server
+namespace Ironfront.Net.Unity
 {
     /// <summary>
     /// One capture point as the authority needs to see it at construction time.
@@ -52,8 +52,8 @@ namespace Ironfront.Net.Unity.Server
     /// <c>MatchController._capturePoints</c> to change type from <c>Transform[]</c> to
     /// <c>CapturePoint[]</c>. It cannot: <c>CapturePoint</c> compiles into
     /// <c>Assembly-CSharp</c>, which is compiled last and which no assembly definition may
-    /// reference — the same constraint that produced <see cref="ISpawnPointDirectory"/> and
-    /// <see cref="IGameplayActorSource"/>, documented at length in <c>IronfrontNetBindings</c>.
+    /// reference — the same constraint that produced <c>ISpawnPointDirectory</c> and
+    /// <c>IGameplayActorSource</c>, documented at length in <c>IronfrontNetBindings</c>.
     /// D6's actual content — radius and capture speed authored per point, id staying the array
     /// index — is delivered through here instead.
     /// </para>

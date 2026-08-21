@@ -1,7 +1,6 @@
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Client;
 using Ironfront.Net.Replication.Match;
-using Ironfront.Net.Unity.Server;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -132,7 +131,7 @@ namespace Ironfront.Net.Unity.Client
         {
             if (!_view.Apply(in message)) return;
 
-            ICapturePointDirectory points = NetServerBindings.CapturePoints;
+            ICapturePointDirectory points = NetSceneBindings.CapturePoints;
             if (points == null) return;
 
             points.ApplyAuthoritativeOwner(

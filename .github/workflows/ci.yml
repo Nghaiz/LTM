@@ -128,6 +128,14 @@ jobs:
         shell: pwsh
         run: pwsh tools/check-unity-meta.ps1
 
+      # Ledger row E-11. Also a HARD gate, and for the mirror of the reason above: this one is
+      # invisible to every other step in this job. Ironfront.Net.Unity.Shared has zero
+      # references, so `dotnet build` compiles nothing under Assets/ and cannot see a client
+      # presenter reaching into the server assembly. Only the Editor or this grep can.
+      - name: Check Assembly-CSharp does not reach into the server assembly
+        shell: pwsh
+        run: pwsh tools/check-net-layering.ps1
+
       # if: always() — the results are most valuable exactly when the previous step failed.
       - name: Upload test results and coverage
         if: always()

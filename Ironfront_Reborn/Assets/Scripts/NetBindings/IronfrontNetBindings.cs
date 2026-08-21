@@ -39,7 +39,7 @@ namespace Ironfront.Net.Unity.Bindings
             NetServerBindings.AiDriverResolver = ResolveAiDriver;
             NetServerBindings.PlayerBodyFactory = CreatePlayerBody;
             NetServerBindings.SpawnPoints = new ActorManagerSpawnPoints();
-            NetServerBindings.CapturePoints = new SceneCapturePoints();
+            NetSceneBindings.CapturePoints = new SceneCapturePoints();
         }
 
         /// <summary>

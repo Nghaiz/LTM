@@ -1,0 +1,23 @@
+=== Unity batchmode compile proof — capture-point seam move + layering gate ===
+when: 2026-08-21T16:00:06Z   editor: D:\\UnityEditor/6000.3.21f1/Editor/Unity.exe
+command: pwsh tools/build-server.ps1 -OutputPath build/server-layering-check
+
+Why a build and not 'dotnet build': Ironfront.Net.Unity.Shared has zero references, so the
+solution compiles nothing under Assets/. Only Unity resolves the moved namespace.
+Why batchmode and not MCP: this session bound no mcp__ai-game-developer__* tools (the Editor
+was closed at session start), and per .claude/scripts/unity-editor.ps1 that cannot be
+recovered mid-session. Editor confirmed not running before the build:
+{"action":"status","result":"ok","status":{"unityRunning":false,"unityPid":null,"projectPath":"D:/Coding/LTM/Ironfront_Reborn","mcpServerPid":null,"serverParentPid":null,"serverIsUnityChild":false,"serverStandalone":false,"pluginPort":21471,"portListening":false,"establishedConn":0}}
+
+--- error CS occurrences in unity-server-build.log ---
+0
+0
+
+--- the moved type resolved: it is in the player's compiled scripts ---
+3
+
+--- player produced ---
+-rw-r--r-- 1 Nghaiz 197121 4808 Aug 21 22:59 build/server-layering-check/Ironfront.Server.x86_64
+
+--- log line count / freshness ---
+-rw-r--r-- 1 Nghaiz 197121 520952 Aug 21 22:59 unity-server-build.log
