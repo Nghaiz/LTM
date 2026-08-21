@@ -106,5 +106,23 @@ namespace Ironfront.Net.Unity
 
         /// <summary>Helicopter nose pitch. The <c>Vector4.w</c>. See <see cref="HeliYaw"/>.</summary>
         float HeliPitch { get; }
+
+        /// <summary>
+        /// Respawn requested this frame. A rising edge, LOCAL ONLY -- it never reaches the wire.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Not a button bit, deliberately.</b> Respawning is <c>C_SPAWN_REQUEST</c>, its own
+        /// reliable message on channel 2 (protocol-spec § 4.1), not a bit in <c>C_INPUT</c>. This
+        /// member exists so a source that is not a keyboard can raise the intent; what happens
+        /// next is <c>NetClientLocalCombatDriver</c>'s, and it is unchanged.
+        /// </para>
+        /// <para>
+        /// <b>Why it exists at all.</b> The driver read <c>Input.GetKeyDown</c> directly, so
+        /// check 13 of phase-3-harness could reach a death and a death screen and could not
+        /// reach the respawn -- defect 4 of the phase-3D report. A scripted client had no way in.
+        /// </para>
+        /// </remarks>
+        bool RespawnPressed { get; }
     }
 }

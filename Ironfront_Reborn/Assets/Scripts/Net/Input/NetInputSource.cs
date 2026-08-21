@@ -140,5 +140,9 @@ namespace Ironfront.Net.Unity
 
         /// <summary>See <see cref="HeliYaw"/>.</summary>
         public float HeliPitch => _heli.Pitch;
+
+        /// <summary>Always false. A remote input frame carries no respawn intent -- respawn is
+        /// its own reliable message, and the server is the one that receives it.</summary>
+        public bool RespawnPressed => false;
     }
 }

@@ -78,6 +78,8 @@ namespace Ironfront.Net.Unity.Diagnostics
         }
 
         /// <summary>Index of the live step, or <see cref="StepCount"/> once the run is over.</summary>
+        private int _respawnConsumedForStep = -1;
+
         public int StepIndex { get; private set; }
 
         /// <summary>How many steps the programme holds.</summary>
@@ -156,6 +158,32 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// Takes the oldest checkpoint that has come due, in programme order.
         /// </summary>
         /// <returns>False when nothing is owed.</returns>
+        /// <summary>
+        /// True the first time it is asked on a step that declares <c>respawn</c>, and false
+        /// every time after until a different step arrives.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Here rather than on the source, so it can be pinned.</b>
+        /// <c>ScriptedInputSource</c> implements a Unity interface and cannot be linked into a
+        /// test project without dragging UnityEngine in behind it; this class already is linked,
+        /// and it already owns the one other edge in the harness -- <see cref="TryTakeCheckpoint"/>.
+        /// </para>
+        /// <para>
+        /// <b>Consuming, like TryTakeCheckpoint.</b> One caller exists. A second would silently
+        /// eat the press, so if one ever appears this needs a name that says so.
+        /// </para>
+        /// </remarks>
+        public bool TryConsumeRespawn()
+        {
+            ScriptedInputStep step = Current;
+            if (step == null || !step.respawn) return false;
+            if (_respawnConsumedForStep == StepIndex) return false;
+
+            _respawnConsumedForStep = StepIndex;
+            return true;
+        }
+
         public bool TryTakeCheckpoint(out ScriptedCheckpoint checkpoint)
         {
             if (_due.Count == 0)

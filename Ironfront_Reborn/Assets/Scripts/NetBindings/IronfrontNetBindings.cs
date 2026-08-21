@@ -374,6 +374,14 @@ namespace Ironfront.Net.Unity.Bindings
             networkId = weapon.NetworkId;
             return true;
         }
+
+        /// <summary>Selects a weapon slot on the wrapped actor. See the seam for why there are
+        /// no guards on this side.</summary>
+        public void SwitchWeapon(int slot) => _actor.SwitchWeapon(slot);
+
+        /// <summary>Arms the wrapped actor from its loadout. See the seam for why this is not
+        /// <c>SpawnAt</c>.</summary>
+        public void EquipLoadout() => _actor.EquipLoadout();
     }
 
     /// <summary>Adapts <c>ActorManager.spawnPoints</c> to <see cref="ISpawnPointDirectory"/>.</summary>

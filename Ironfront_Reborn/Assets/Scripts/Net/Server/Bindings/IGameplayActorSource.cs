@@ -69,5 +69,41 @@ namespace Ironfront.Net.Unity.Server
         /// only for the first. Maps to <c>Actor.activeWeapon.NetworkId</c>.
         /// </remarks>
         bool TryGetActiveWeaponNetworkId(out byte networkId);
+
+        /// <summary>
+        /// Selects a weapon slot. Maps to <c>Actor.SwitchWeapon</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>No guards here.</b> <c>Actor.SwitchWeapon</c> already returns early when the actor
+        /// is dead, fallen over, or seated without <c>CanUseCarriedWeapon</c>, and re-stating
+        /// those three on this side of the seam would be a second copy free to drift from the
+        /// one the offline game uses.
+        /// </para>
+        /// <para>
+        /// <b>The caller must edge it.</b> A slot holding a <c>ToggleableItem</c> TOGGLES on
+        /// every call, so driving this from a held bit would flip a binocular in and out at tick
+        /// rate. <see cref="NetServerActor.ApplyWeaponSwitchIntent"/> owns that edge.
+        /// </para>
+        /// </remarks>
+        void SwitchWeapon(int slot);
+
+        /// <summary>
+        /// Arms the body from its loadout and unholsters the first weapon.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Maps to <c>Actor.EquipLoadout</c>, which is <c>SpawnLoadoutWeapons</c> and nothing
+        /// else. NOT <c>Actor.SpawnAt</c>: a networked body is driven by <c>MoveInput</c> from
+        /// the server rather than by a local controller, so <c>controller.EnableInput()</c>
+        /// would open a second input path on a headless process.
+        /// </para>
+        /// <para>
+        /// Called from <c>ServerCombatBridge.PlaceAtSpawn</c>, which is the one place a claimed
+        /// body enters the world. Before this seam existed that path teleported the body and
+        /// left it holding nothing, which is what made every combat check unrunnable.
+        /// </para>
+        /// </remarks>
+        void EquipLoadout();
     }
 }

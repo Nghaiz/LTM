@@ -122,6 +122,17 @@ namespace Ironfront.Net.Unity
         public float HeliPitch => HelicopterControls.Pitch;
 
         /// <summary>
+        /// Always false: the keyboard path still lives in <c>NetClientLocalCombatDriver</c>,
+        /// which owns the serialized key and reads it directly.
+        /// </summary>
+        /// <remarks>
+        /// Moving that read here would be the right home for it -- every other keyboard read
+        /// in the client is in this class -- but it is a rebind change, and rebinding is not
+        /// what check 13 is blocked on. Left as named debt rather than half-done.
+        /// </remarks>
+        public bool RespawnPressed => false;
+
+        /// <summary>
         /// The four helicopter controls, scaled and inverted per this user's options (V5-D9).
         /// </summary>
         /// <remarks>
