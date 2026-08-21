@@ -164,6 +164,43 @@ namespace Ironfront.Net.Unity.Server
         /// Arms the body from its loadout. Returns false when there is no gameplay actor behind
         /// this replicated object -- a prop, or a bare test rig.
         /// </summary>
+        /// <summary>
+        /// Ensures this body has a <see cref="NetMovementAgent"/>, adding one if the prefab does
+        /// not carry it. Returns the agent.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Ledger row X-15.</b> <c>Movement</c> is resolved once in <c>Awake</c>, and the AI
+        /// character prefab a claimed player body is built from does not carry the component --
+        /// it is authored on <c>Prefab/Player Fps Actor.prefab</c> and nowhere else. So
+        /// <c>Movement</c> was null for every networked player, <c>ServerPlayer.Tick</c> took its
+        /// DETACHED branch, and the session's <c>MoveState</c> integrated gravity with no
+        /// collision -- free-falling forever while the transform stood still at the spawn.
+        /// Measured: shot origins at <c>y = -353</c> descending to <c>-448</c> with the nearest
+        /// target 649 → 704 m away, against a snapshot that reported the same actor at
+        /// <c>y = 8.59</c>.
+        /// </para>
+        /// <para>
+        /// <b>Called explicitly rather than resolved lazily.</b> A lazy <c>Movement</c> would
+        /// <c>GetComponent</c> on every read for every prop that legitimately has no agent, in
+        /// the tick loop. An explicit call from the one place that builds a player body costs
+        /// nothing and says who is responsible.
+        /// </para>
+        /// <para>
+        /// <b>Not called for bots.</b> They are driven by <c>AiActorController</c> through the
+        /// game's own movement, and giving them a server-authoritative agent would be a second
+        /// driver on one body.
+        /// </para>
+        /// </remarks>
+        public NetMovementAgent AttachMovementAgent()
+        {
+            if (Movement != null) return Movement;
+
+            Movement = GetComponent<NetMovementAgent>();
+            if (Movement == null) Movement = gameObject.AddComponent<NetMovementAgent>();
+
+            return Movement;
+        }
         public bool EquipLoadout()
         {
             IGameplayActorSource source = Source;
