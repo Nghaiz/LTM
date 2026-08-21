@@ -272,13 +272,12 @@ namespace Ironfront.Net.Replication.Tests
         /// The harness gives the transport's warning sink somewhere to go.
         /// </summary>
         /// <remarks>
-        /// <c>NetLog.Warning</c> has no subscriber anywhere in the shipped project, so the only
-        /// two lines that ever explain a <c>TransportError</c> — "reliable sequence N abandoned
-        /// after M resends" and "reliable sequence slot collision at N" — are formatted and
-        /// handed to a null delegate. <c>Connection.Update</c>'s own comment says it ends the
-        /// connection "loudly instead of continuing quietly"; without this the loud half reaches
-        /// nobody, and a dropped lane-B client presents as a bare reason code with no cause.
-        /// The shipped-side gap is a filed defect, not something the harness fixes for everyone.
+        /// <c>NetLog.Warning</c> is an <c>Action&lt;string&gt;</c> the transport writes to; with
+        /// no subscriber the only two lines that ever explain a <c>TransportError</c> —
+        /// "reliable sequence N abandoned after M resends" and "reliable sequence slot collision
+        /// at N" — are formatted and handed to a null delegate. <c>Connection.Update</c>'s own
+        /// comment says it ends the connection "loudly instead of continuing quietly"; without a
+        /// sink the loud half reaches nobody and a dropped client presents as a bare reason code.
         /// </remarks>
         [Fact]
         public void TheHarnessGivesTheTransportWarningsSomewhereToGo()
@@ -287,6 +286,29 @@ namespace Ironfront.Net.Replication.Tests
 
             Assert.Contains("NetLog.Warning =", harness);
             Assert.Contains("NetLog.Error =", harness);
+        }
+
+        /// <summary>
+        /// The SHIPPED build gives them somewhere to go too — not only the test harness.
+        /// </summary>
+        /// <remarks>
+        /// The companion to the test above, and the half that actually matters in production.
+        /// A sink only the lane-B harness installs is a sink the dedicated server does not
+        /// have, and the dedicated server is the process that will be running when a reliable
+        /// channel dies in front of real players. Pinned on
+        /// <see cref="IronfrontLog"/>'s <c>RuntimeInitializeOnLoadMethod</c> boot path
+        /// specifically, because that is the only wiring in this project that cannot be
+        /// omitted from a scene or a prefab.
+        /// </remarks>
+        [Fact]
+        public void TheShippedBuildGivesTheTransportWarningsSomewhereToGo()
+        {
+            string log = UnitySource("Net/Diagnostics/IronfrontLog.cs");
+
+            Assert.Contains("RuntimeInitializeOnLoadMethod", log);
+            Assert.Contains("AttachTransportLog();", log);
+            Assert.Contains("NetLog.Warning ??=", log);
+            Assert.Contains("NetLog.Error ??=", log);
         }
 
         /// <summary>

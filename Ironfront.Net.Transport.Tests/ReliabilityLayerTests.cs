@@ -154,8 +154,10 @@ namespace Ironfront.Net.Transport.Tests
             var reliability = new ReliabilityLayer();
             reliability.OnPacketSent(0, new byte[] { 0xAB }, true, 0);
 
+            // 31 ms clears the first interval (RTO floor 30); the second is 60 ms after that,
+            // not another 31 — see RetransmissionIntervalsBackOffExponentially...
             reliability.Update(31, (_, _) => { });
-            reliability.Update(62, (_, _) => { });
+            reliability.Update(92, (_, _) => { });
 
             Assert.Equal(1, reliability.ReliablePacketsSent);
             Assert.Equal(1, reliability.ReliablePacketsRetried);
@@ -177,16 +179,63 @@ namespace Ironfront.Net.Transport.Tests
         }
 
         [Fact]
-        public void TenRetransmissionsThenGiveUpAndReleaseTheBuffer()
+        public void ARetransmittedPacketIsGivenUpOnTimeNotOnAttemptCountAndReleasesItsBuffer()
         {
+            // Replaces TenRetransmissionsThenGiveUpAndReleaseTheBuffer, which asserted 10
+            // resends at a fixed 31 ms interval. That test was green for the whole life of the
+            // lane-B blocker BECAUSE it encoded the blocker as the specification: ten attempts
+            // at the RTO floor is a 300 ms budget, and it fired on clients that were merely
+            // busy. The behaviour worth pinning is the BUDGET, and it is a duration.
             var reliability = new ReliabilityLayer();
             reliability.OnPacketSent(0, new byte[] { 1 }, true, 0);
-            int resends = 0;
-            for (int i = 1; i <= 11; i++)
-                reliability.Update(i * 31, (_, _) => resends++);
 
-            Assert.Equal(10, resends);
+            // Nothing is abandoned inside the old budget, or anywhere near it.
+            for (double nowMs = 1; nowMs <= 2_000; nowMs += 5)
+                reliability.Update(nowMs, (_, _) => { });
+
+            Assert.False(
+                reliability.HasAbandonedReliable,
+                "a peer that has been quiet for 2 s is busy, not gone — the connection's own "
+                + "liveness rule is TIMEOUT_MS and it has not fired");
+            Assert.Equal(1, reliability.PendingReliableCount);
+
+            // And it IS abandoned once the budget genuinely expires, so this is a deadline
+            // that moved, not one that was deleted.
+            for (double nowMs = 2_000; nowMs <= ReliabilityLayer.AbandonAfterMs + 2_000; nowMs += 5)
+                reliability.Update(nowMs, (_, _) => { });
+
+            Assert.True(
+                reliability.HasAbandonedReliable,
+                "the layer must still give up on a peer that never answers, or a dead "
+                + "connection is held open forever");
             Assert.Equal(0, reliability.PendingReliableCount);
+        }
+
+        [Fact]
+        public void RetransmissionIntervalsBackOffExponentiallyInsteadOfFloodingAtTheRtoFloor()
+        {
+            // The other half of the same fix. Ten copies of one packet inside 300 ms is not
+            // only the give-up bug — it floods a peer at exactly the moment it has least
+            // capacity to answer. Asserted on the schedule rather than a count, because the
+            // count is what was wrong.
+            var reliability = new ReliabilityLayer();
+            reliability.OnPacketSent(0, new byte[] { 1 }, true, 0);
+
+            var sendTimes = new List<double>();
+            for (double nowMs = 1; nowMs <= 1_000; nowMs += 1)
+                reliability.Update(nowMs, (_, _) => sendTimes.Add(nowMs));
+
+            // 30, then 60, 120, 240, 480 later: five resends in the first second, where the
+            // fixed-interval schedule issued thirty-three.
+            Assert.Equal(5, sendTimes.Count);
+            for (int i = 1; i < sendTimes.Count; i++)
+            {
+                double gap = sendTimes[i] - sendTimes[i - 1];
+                double previousGap = i == 1 ? 30.0 : sendTimes[i - 1] - sendTimes[i - 2];
+                Assert.True(
+                    gap >= previousGap * 1.9,
+                    $"gap {i} was {gap:F0} ms after {previousGap:F0} ms — backoff must double");
+            }
         }
 
         [Fact]
@@ -240,17 +289,35 @@ namespace Ironfront.Net.Transport.Tests
             var receiver = new ReliabilityLayer(ackPool);
             var delivered = new bool[packetCount];
             int deliveredCount = 0;
+            double lastPeriodicAckMs = 0;
 
-            for (ushort sequence = 0; sequence < packetCount; sequence++)
+            // Fed through the SAME in-flight gate production uses. Handing the layer all 1000
+            // at nowMs 0 — which this test did — is a state Connection forbids: CanSendReliable
+            // stops the sender at 64 unacked. It matters because the ack window is 33 sequences
+            // wide, so with a thousand outstanding the receiver's cumulative ack has already
+            // slid past most of them and a resend of an old sequence can never be acknowledged
+            // at all. That made the test's outcome depend on retransmitting hard enough to keep
+            // re-asking inside the window, which is not a property anyone wants to preserve.
+            ushort nextSequence = 0;
+            void FeedSendWindow(double nowMs)
             {
-                byte[] packet = new byte[2];
-                Endian.WriteU16LE(packet, 0, sequence);
-                sender.OnPacketSent(sequence, packet, reliable: true, nowMs: 0);
-                dataWire.ShouldSend(packet, 0, 0);
+                while (nextSequence < packetCount && sender.CanSendReliable)
+                {
+                    byte[] packet = new byte[2];
+                    Endian.WriteU16LE(packet, 0, nextSequence);
+                    sender.OnPacketSent(nextSequence, packet, reliable: true, nowMs);
+                    dataWire.ShouldSend(packet, 0, nowMs);
+                    nextSequence++;
+                }
             }
 
+            FeedSendWindow(0);
+
             for (double nowMs = 0;
-                 nowMs <= 10_000 && (deliveredCount < packetCount || sender.PendingReliableCount > 0);
+                 nowMs <= 60_000
+                     && (deliveredCount < packetCount
+                         || nextSequence < packetCount
+                         || sender.PendingReliableCount > 0);
                  nowMs += 5)
             {
                 dataWire.Flush(nowMs, (data, length, _) =>
@@ -276,8 +343,26 @@ namespace Ironfront.Net.Transport.Tests
                     sender.ProcessIncomingAck(ack, bits, nowMs);
                 });
 
+                // The receiver's periodic ack, at ProtocolConstants.KEEPALIVE_MS. Production has
+                // this and the model above did not: Connection emits a keep-alive on the idle
+                // timer carrying the freshly built ack window, so the sender learns of delivery
+                // even when no further data arrives to piggyback on. Without it this test made
+                // the sender's knowledge depend entirely on how hard it was retransmitting,
+                // which is backwards — retransmission is what the acks are supposed to STOP.
+                if (nowMs - lastPeriodicAckMs >= ProtocolConstants.KEEPALIVE_MS)
+                {
+                    lastPeriodicAckMs = nowMs;
+                    (ushort ack, uint bits) = receiver.BuildAck();
+                    byte[] periodic = new byte[6];
+                    Endian.WriteU16LE(periodic, 0, ack);
+                    Endian.WriteU32LE(periodic, 2, bits);
+                    ackWire.ShouldSend(periodic, 0, nowMs);
+                }
+
                 sender.Update(nowMs, (data, length) =>
                     dataWire.ShouldSend(data.AsSpan(0, length), 0, nowMs));
+
+                FeedSendWindow(nowMs);
             }
 
             Assert.Equal(packetCount, deliveredCount);
