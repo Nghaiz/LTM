@@ -138,6 +138,11 @@ namespace Ironfront.Net.Unity.Client
 
         private void Awake()
         {
+            // Defect 2 of the lane-B report: until this call the transport's warnings went to a
+            // null delegate in every shipped build. Installed FIRST, so anything the rest of this
+            // Awake logs is already reaching somewhere.
+            NetLogUnitySink.Install();
+
             ResolveConfiguration();
 
             // Not claimed on a machine already running the server. A loopback test puts both in

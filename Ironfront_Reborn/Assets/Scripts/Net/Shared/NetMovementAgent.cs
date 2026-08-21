@@ -120,6 +120,59 @@ namespace Ironfront.Net.Unity
             ApplyStanceHeight();
         }
 
+        /// <summary>
+        /// Adopts a state the SERVER produced, and moves the body to it. The client's
+        /// counterpart to <see cref="ApplyAuthoritativeState"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Two callers, opposite preconditions, and that is ledger row X-13.</b>
+        /// <see cref="ApplyAuthoritativeState"/> is correct for the server because
+        /// <c>InputAuthority.ApplyPendingInput</c> has already driven the CharacterController --
+        /// its own remarks say the position half is "harmless ... which the CharacterController
+        /// already moved". On a client nothing has moved anything: the reconciler hands back a
+        /// corrected state and the body stays exactly where it was. Measured 2026-08-21 on
+        /// `combat-driver`: `corrections: 88`, `resyncs: 1`, `inSnapshot: true`,
+        /// `authoritative (1603.1, 42.3, 1437.7)` -- and the rendered body at `x=0, z=0`,
+        /// falling. Eighty-eight corrections were computed, accepted, and dropped on the floor.
+        /// </para>
+        /// <para>
+        /// <b>A resync teleports; a correction moves through collision.</b> A resync is the
+        /// server saying "you are not where you think you are" by more than
+        /// <c>PredictionReconciler.PositionToleranceMetres</c> can absorb, and pushing that
+        /// through <c>CharacterController.Move</c> would sweep the body across the level and
+        /// snag it on the first wall. An ordinary correction is small and MUST resolve through
+        /// collision, or the client would walk itself into geometry the server has not told it
+        /// about yet.
+        /// </para>
+        /// <para>
+        /// <b>Velocity is not reset on the teleport.</b> The server just sent one; discarding it
+        /// would stall a player mid-fall and hand the next tick a velocity of zero to predict
+        /// from.
+        /// </para>
+        /// </remarks>
+        /// <param name="hardSnap">
+        /// True for <c>ReconcileResult.Resynchronised</c>, false for <c>Corrected</c>.
+        /// </param>
+        public void ApplyCorrectedState(in MoveState state, bool hardSnap)
+        {
+            State = state;
+
+            Vector3 target = MovementSimulation.ToUnity(state.Position);
+
+            if (hardSnap)
+            {
+                Teleport(target, resetVelocity: false);
+            }
+            else
+            {
+                CharacterMove(target - transform.position);
+                State.Position = MovementSimulation.ToCore(transform.position);
+            }
+
+            ApplyStanceHeight();
+        }
+
         /// <summary>Teleports the actor, used on spawn and on a hard server correction.</summary>
         public void Teleport(Vector3 position, bool resetVelocity = true)
         {
