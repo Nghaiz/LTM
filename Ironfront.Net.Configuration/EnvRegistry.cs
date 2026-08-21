@@ -164,6 +164,16 @@ namespace Ironfront.Net.Configuration
             "Comma-separated map ids this server can host, driving the matchmaker's\n" +
             "preferred-map filter. Empty means no preference.");
 
+        /// <summary>The map scene a dedicated server hosts.</summary>
+        public static readonly EnvVar GameServerScene = new EnvVar(
+            "IRONFRONT_GAMESERVER_SCENE", "Game server", "game server",
+            "The map scene a headless dedicated server loads at startup. Without it the build\n" +
+            "boots Splash then Menu and stops there: NetServerBootstrap is a component that\n" +
+            "lives in a map scene, so nothing binds the UDP port and the process sits healthy\n" +
+            "and unreachable. Distinct from IRONFRONT_GAMESERVER_MAP_IDS, which only tells the\n" +
+            "matchmaker what this server is willing to host and loads nothing.",
+            "Dustbowl");
+
         /// <summary>Development shortcut: admit tickets nobody signed.</summary>
         public static readonly EnvVar GameServerAcceptUnsignedTickets = new EnvVar(
             "IRONFRONT_GAMESERVER_ACCEPT_UNSIGNED_TICKETS", "Game server", "game server",
@@ -419,7 +429,7 @@ namespace Ironfront.Net.Configuration
             MasterPort, MasterHost, GameServerMasterTls, GameServerMasterTlsTargetHost,
             GameServerMasterTlsPinnedFingerprint, DatabasePath,
             GameServerUdpPort, GameServerTransport, GameServerMaxConnections, GameServerMaxPlayers,
-            GameServerPublicIp, GameServerMapIds, GameServerAcceptUnsignedTickets,
+            GameServerPublicIp, GameServerMapIds, GameServerScene, GameServerAcceptUnsignedTickets,
             ClientHost, ClientPort, ClientVerbose, ClientPredictLocalVehicle,
             ClientPlayerId, ClientDisplayName,
             LogLevel, StructuredLog,
