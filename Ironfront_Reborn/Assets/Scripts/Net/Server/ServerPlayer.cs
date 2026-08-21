@@ -94,6 +94,12 @@ namespace Ironfront.Net.Unity.Server
         /// Applies every input frame buffered for this tick, plus the coast that covers a
         /// dropped packet.
         /// </summary>
+        /// <summary>One simulation second at 30 Hz. Long enough that a genuine mid-spawn gap
+        /// stays quiet, short enough that a permanent one is reported before the body has fallen
+        /// far.</summary>
+        private const int DetachedTicksBeforeWarning = 30;
+
+        private int _detachedTicks;
         public void Tick(float dt)
         {
             NetMovementAgent agent = Actor != null ? Actor.Movement : null;
@@ -103,9 +109,32 @@ namespace Ironfront.Net.Unity.Server
                 // No collision seam — a connection that has claimed a slot but whose actor has
                 // not spawned yet. Integrating in a straight line keeps its tick accounting and
                 // anti-cheat counters honest instead of silently skipping the player.
+                //
+                // TEMPORARY is the whole premise, and until 2026-08-22 nothing checked it. X-15:
+                // the claimed body is the AI character prefab, which carries no NetMovementAgent,
+                // so this branch was PERMANENT for every networked player -- and it integrates
+                // gravity with no collision, so the session MoveState free-fell out of the world
+                // while the transform stood still at the spawn. Every shot then originated from a
+                // ghost hundreds of metres below the map, and no artifact said so.
+                //
+                // The fix is NetServerActor.AttachMovementAgent, called where a player body is
+                // built. This warning is the leash: whatever else changes, a player that is still
+                // detached after a second of ticks says so once, by name.
+                _detachedTicks++;
+                if (_detachedTicks == DetachedTicksBeforeWarning)
+                {
+                    Debug.LogWarning(
+                        $"[net] player {Session.ActorId} has ticked {_detachedTicks} times with no "
+                        + "NetMovementAgent, so its authoritative position is integrating with NO "
+                        + "COLLISION and will fall out of the world. Shots will originate from "
+                        + "wherever it has fallen to. See ledger X-15.");
+                }
+
                 InputAuthority.ApplyPendingInput(Session, dt, _moveDetached, this);
                 return;
             }
+
+            _detachedTicks = 0;
 
             // Ground contact is Unity's answer, not the simulation's: the CharacterController
             // knows what it is standing on and MovementCore does not.

@@ -1,0 +1,37 @@
+=== X-15 fixed, and the last blocker is the programme's geometry, not the engine ===
+when: 2026-08-21T17:29:36Z   run: artifacts/lane-b/x15-fixed-02 (IRONFRONT_LOG_SHOTS=1)
+
+BEFORE (x15-measure-02)  origin y = -353 -> -448 falling,  nearest target 649 -> 704 m
+AFTER  (x15-fixed-02)    origin y = 33.6 on the ground,    nearest target 37.7 m
+
+  [shot] actor=41 weapon=1 ammo=29 rejection=None fired=True hits=0 targets=56 alive=3 solidTorsos=56 origin=1209.7,33.6,1764.5 aim=-0.42,0.68,-0.61 nearest[actor=43 alive=True d=37.7m torso=1196.4,33.3,1799.8 extents=0.25,0.35,0.16]
+
+The fix: NetServerActor.AttachMovementAgent, called from IronfrontNetBindings.CreatePlayerBody.
+A claimed player body is the AI character prefab, which carries NetServerActor but not
+NetMovementAgent -- that is authored on Player Fps Actor.prefab and nowhere else -- so
+ServerPlayer.Tick took its DETACHED branch permanently and the session MoveState free-fell.
+Attached at the one place a player body is built, NOT authored onto the prefab: every bot
+uses that prefab and is driven by AiActorController, so authoring it would put a second
+driver on every character in the game.
+
+ServerPlayer now also warns once when a player has ticked 30 times still detached. That
+branch is documented as covering a body that has not spawned YET; nothing checked that the
+'yet' ever ended, and for every networked player it never did.
+
+STILL hits=0, on all 240 shots -- and this time the numbers say why, and it is not the engine:
+  aim block:  requested=OBS-A resolved=True targetActorId=42
+              yaw=214.4 pitch=-42.6 distanceM=2139
+  body:       yaw=0.0 aimPitch=-42.6
+
+OBS-A is 2139 metres away. The driver is aiming 42.6 degrees DOWNWARD at a target two
+kilometres off, which is why the server's aim vector points nowhere near anything and why
+the nearest body to the muzzle is actor 43 -- an unrelated bot at 37.7 m.
+
+The three clients spawn at their own teams' spawn points, and Dustbowl is kilometres across.
+The combat programme's 'approach' step gives 20 seconds at walking pace. It cannot close
+2 km, so the shooter never gets near the victim and check 1 was never going to fire a shot
+at anybody. That is a programme-geometry problem and it is fixable in tools/lane-b/*.json
+without touching shipped code -- which makes it D3's, not another engine layer.
+
+Also visible: body yaw stays 0 while the solver asks for 214.4. Whether a headless server
+turns the body is a separate question this run does not answer.

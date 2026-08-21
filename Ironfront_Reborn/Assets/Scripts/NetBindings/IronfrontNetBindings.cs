@@ -110,6 +110,19 @@ namespace Ironfront.Net.Unity.Bindings
             actor.SetTeam(team);
             actor.deathTimestamp = Time.time;
 
+            // X-15. This body is driven by MoveInput from the server, not by its own controller,
+            // and ServerPlayer.Tick needs a NetMovementAgent to move it THROUGH COLLISION. The AI
+            // character prefab carries NetServerActor but not the agent -- that is authored on
+            // Player Fps Actor.prefab and nowhere else -- so without this the session MoveState
+            // took the detached branch and free-fell out of the world while the transform stood
+            // still, and every shot originated from wherever the ghost had fallen to.
+            //
+            // Here rather than on the prefab, deliberately: every bot uses the same prefab and
+            // is driven by AiActorController, so authoring the agent onto it would put a second
+            // driver on every character in the game.
+            NetServerActor replicated = body.GetComponent<NetServerActor>();
+            if (replicated != null) replicated.AttachMovementAgent();
+
             return body;
         }
 
