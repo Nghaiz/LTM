@@ -1278,25 +1278,24 @@ namespace Ironfront.Net.Unity.Server
                 return;
             }
 
-            // A slot is reused across the match, and the previous occupant may have left while
-            // dead. Without this the new player inherits that corpse: Health 0, Actor.dead true,
-            // and every shot they take rejected as ShooterDead until they work out that pressing
-            // respawn on a player who never died is what fixes it.
-            actor.Health  = NetServerActor.DefaultSpawnHealth;
-            actor.IsAlive = true;
-
             var player = new ServerPlayer(
                 connectionId, actor.ActorId, _combat, DisplayNameFor(in info, actor.ActorId))
             { Actor = actor };
             player.SyncFromActor();
 
-            // The session's clip and the actor's must agree from the first snapshot, or the
-            // client's first reload reconciles against a number nobody ever set. The weapon id
-            // is assigned first for the same reason it is at the other two ResetWeapon sites
-            // (phase-V2 D9): the clip size is derived from it.
-            player.Session.WeaponId = actor.WeaponId;
-            player.Session.ResetWeapon();
-            actor.AmmoInClip = player.Session.Weapon.AmmoInClip;
+            // A JOIN IS A SPAWN, and for four phases this path did not treat it as one. It set
+            // Health and IsAlive, then WeaponId / ResetWeapon / AmmoInClip — the respawn's five
+            // statements in the respawn's order, with the respawn's MoveToSpawnPoint missing from
+            // the middle. So a joining player's body stayed where Instantiate left it: the world
+            // origin, falling, while the snapshot reported it alive on full health and every
+            // other client rendered it standing there.
+            //
+            // Clearing the previous occupant's corpse (Health 0, dead true) is still done and is
+            // still right — a reused slot must not hand the next player a body that is rejected
+            // as ShooterDead. It just was never the whole job. PlaceAtSpawn carries that comment
+            // and the evidence; SyncFromActor above is now only the pre-spawn seed, superseded a
+            // line later by the real spawn position.
+            _combat.PlaceAtSpawn(player);
 
             _byConnection.Add(connectionId, player);
             _players.Add(player);

@@ -228,6 +228,52 @@ namespace Ironfront.Net.Unity.Server
 
             _respawnGate.MarkRespawned(session.ActorId);
 
+            PlaceAtSpawn(player);
+            return true;
+        }
+
+        /// <summary>
+        /// Puts a claimed body into the world: full health, alive, standing on a spawn point of
+        /// its own team, holding a reloaded weapon.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This exists because the JOIN path did every step of it except the one that
+        /// matters.</b> <c>OnClientConnected</c> set <c>Health</c> and <c>IsAlive</c>, then
+        /// <c>WeaponId</c> / <c>ResetWeapon</c> / <c>AmmoInClip</c> — the same five statements in
+        /// the same order as the respawn below — and never moved the body. The claimed actor
+        /// therefore stayed wherever <c>Instantiate</c> left it: the world origin, falling.
+        /// Measured on <c>artifacts/lane-b/combat-roster01</c>, where the local actor reports
+        /// <c>x=0, z=0</c> with <c>y</c> descending 996.73 → 967.44 across all seven checkpoints
+        /// while the snapshot cheerfully reported it alive on 100 health.
+        /// </para>
+        /// <para>
+        /// <b>And <c>IsAlive = true</c> was not merely insufficient, it was actively
+        /// disqualifying.</b> <c>ActorManager.SpawnWave</c> — the only code in the project that
+        /// ever calls <c>Actor.SpawnAt</c> — selects on <c>actor.dead</c>, and
+        /// <c>NetServerActor.IsAlive</c> is a pass-through to that flag. So the join cleared the
+        /// one bit that would have let a wave place the body, and nothing else ever would. The
+        /// comment on those two lines explains why they clear the previous occupant's corpse,
+        /// which is correct and remains correct; what neither line did was finish the spawn.
+        /// </para>
+        /// <para>
+        /// <b>Still short of a gameplay spawn, deliberately and visibly.</b>
+        /// <see cref="MoveToSpawnPoint"/> teleports; it does not run <c>Actor.SpawnAt</c>, so
+        /// <c>SpawnLoadoutWeapons</c> never runs and <c>actor.WeaponId</c> — which reads
+        /// <c>activeWeapon.NetworkId</c> — stays 0 for a claimed body. That was already true of
+        /// every respawn and is ledger row <b>X-11</b>; it needs a seam that does not exist yet
+        /// (<c>IGameplayActorSource</c> has no spawn hook) and a decision about whether driving
+        /// <c>controller.EnableInput()</c> server-side is right for a remotely-driven body.
+        /// Fixing the position without claiming to have fixed the loadout.
+        /// </para>
+        /// </remarks>
+        public void PlaceAtSpawn(ServerPlayer player)
+        {
+            NetServerActor actor = player.Actor;
+            if (actor == null) return;
+
+            ClientSession session = player.Session;
+
             actor.Health = NetServerActor.DefaultSpawnHealth;
             actor.IsAlive = true;
 
@@ -241,8 +287,6 @@ namespace Ironfront.Net.Unity.Server
 
             session.ResetWeapon();
             actor.AmmoInClip = session.Weapon.AmmoInClip;
-
-            return true;
         }
 
         /// <summary>
@@ -316,16 +360,54 @@ namespace Ironfront.Net.Unity.Server
         /// where they were, which is the previous behaviour.
         /// </para>
         /// </remarks>
+        // Once-only, because a player who cannot spawn will keep asking: the respawn path calls
+        // MoveToSpawnPoint on every request, and a warning that repeats sixty times a second is
+        // filtered out as noise, which is the same as not warning at all.
+        private static readonly System.Collections.Generic.HashSet<string> _warned =
+            new System.Collections.Generic.HashSet<string>();
+
+        private static void WarnOnce(string key, string message)
+        {
+            if (!_warned.Add(key)) return;
+            Debug.LogWarning(message);
+        }
+
         private static void MoveToSpawnPoint(ServerPlayer player)
         {
             NetServerActor actor = player.Actor;
             ISpawnPointDirectory spawnPoints = NetServerBindings.SpawnPoints;
-            if (spawnPoints == null) return;
+
+            // BOTH of these used to return in silence, and a spawn that silently does not happen
+            // is the single most expensive shape of bug in this subsystem: the actor stays where
+            // Instantiate left it, the snapshot reports it alive on full health, every client
+            // renders a healthy player at the world origin, and no log anywhere says why. That
+            // cost a whole investigation on 2026-08-21 (X-12) — and then cost a second one,
+            // because after the join was taught to call this, the body STILL did not move and
+            // there was no way to tell which of these two branches had fired.
+            if (spawnPoints == null)
+            {
+                WarnOnce(
+                    "spawn-no-directory",
+                    "[net] no ISpawnPointDirectory, so no player can ever be placed. "
+                    + "NetServerBindings.SpawnPoints is installed by IronfrontNetBindings; a "
+                    + "scene with no ActorManager has nothing to install.");
+                return;
+            }
 
             int chosen = ChooseSpawnIndex(spawnPoints, actor.Team);
-            if (chosen < 0) return;
+            if (chosen < 0)
+            {
+                WarnOnce(
+                    "spawn-none-eligible-team" + actor.Team,
+                    $"[net] actor {actor.ActorId} (team {actor.Team}) has no eligible spawn point "
+                    + $"among {spawnPoints.Count}, so it stays where it is. SpawnPoint.owner must "
+                    + "be -1 (any team) or match the team.");
+                return;
+            }
 
             Vector3 position = spawnPoints.GetSpawnPosition(chosen);
+            Debug.Log($"[net] actor {actor.ActorId} (team {actor.Team}) placed at spawn point "
+                      + $"{chosen} of {spawnPoints.Count} {position}");
 
             // Teleport, not a transform write: it disables the CharacterController around the
             // assignment, which otherwise fights it and lands the actor somewhere else.
