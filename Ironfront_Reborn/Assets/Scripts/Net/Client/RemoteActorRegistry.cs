@@ -171,6 +171,32 @@ namespace Ironfront.Net.Unity.Client
             if (_live.ContainsKey(message.ActorId)) return;
 
             Transform t = _pool.Count > 0 ? _pool.Pop() : NewPooled();
+
+            // PLACED from the spawn message, not left wherever the pool parked it. X-17.
+            //
+            // This looks like a redundant write -- the Update loop below positions everything
+            // every frame -- and it is not, for two reasons that only bite together.
+            //
+            // TryLerpPosition needs the actor in BOTH interpolation endpoints, and interest
+            // culling REMOVES a distant actor from the accumulated world (DeltaDecoder.Current),
+            // so an actor past InterestManager.CullRadius is in neither. Meanwhile
+            // AnnounceNewActors announces EVERY actor to every client regardless of interest.
+            // Together those describe an actor that is spawned and never replicated, and for
+            // that actor this message carries the only position it will ever be given.
+            //
+            // Without this the proxy renders at the pool's parking spot and stays there. Measured
+            // 2026-08-22 (artifacts/lane-b/x17-measure-01): a client 2570 m from its target drew
+            // it at (0, 2000, 0) at every one of seven checkpoints, while the snapshot -- whenever
+            // it did arrive -- carried (1088.11, 103.41, 954.30), the victim's exact position to
+            // the centimetre. Nothing was wrong with the wire, the interest manager or the
+            // decoder. The scripted aim solver reported `resolved: true` and fired 240 rounds
+            // into open sky, and a human's crosshair would have done the same.
+            t.position = new Vector3(
+                Quantize.UnpackPos(message.PosX),
+                Quantize.UnpackPos(message.PosY),
+                Quantize.UnpackPos(message.PosZ));
+            t.rotation = Quaternion.Euler(0f, Quantize.UnpackYaw(message.Yaw), 0f);
+
             t.gameObject.SetActive(true);
             _live[message.ActorId] = t;
 
