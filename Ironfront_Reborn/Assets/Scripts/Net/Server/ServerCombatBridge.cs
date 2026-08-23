@@ -145,7 +145,7 @@ namespace Ironfront.Net.Unity.Server
             // finally clears.
             actor.AmmoInClip = session.Weapon.AmmoInClip;
 
-            LogShot(session, in frame, in result);
+            LogShot(session, in frame, in result, tick);
 
             if (!result.Fired) return;
 
@@ -347,7 +347,8 @@ namespace Ironfront.Net.Unity.Server
         /// the first hypothesis this line was written to kill or confirm.
         /// </para>
         /// </remarks>
-        private void LogShot(ClientSession session, in InputFrame frame, in CombatTickResult result)
+        private void LogShot(
+            ClientSession session, in InputFrame frame, in CombatTickResult result, uint tick)
         {
             if (!ShotLoggingEnabled) return;
             if (!frame.IsPressed(InputButtons.Fire)) return;
@@ -358,7 +359,7 @@ namespace Ironfront.Net.Unity.Server
             // is a real box, and print the nearest other target's torso outright.
             int alive = 0;
             int solid = 0;
-            string nearest = "none";
+            int nearestIndex = -1;
             float nearestDistance = float.MaxValue;
 
             for (int i = 0; i < _targetCount; i++)
@@ -373,7 +374,14 @@ namespace Ironfront.Net.Unity.Server
                 if (distance >= nearestDistance) continue;
 
                 nearestDistance = distance;
-                nearest = $"actor={target.ActorId} alive={target.IsAlive} d={distance:F1}m "
+                nearestIndex = i;
+            }
+
+            string nearest = "none";
+            if (nearestIndex >= 0)
+            {
+                HitscanTarget target = _targets[nearestIndex];
+                nearest = $"actor={target.ActorId} alive={target.IsAlive} d={nearestDistance:F1}m "
                           + $"torso={target.Present.Torso.Center.X:F1},{target.Present.Torso.Center.Y:F1},"
                           + $"{target.Present.Torso.Center.Z:F1} "
                           + $"extents={target.Present.Torso.Extents.X:F2},{target.Present.Torso.Extents.Y:F2},"
@@ -393,8 +401,82 @@ namespace Ironfront.Net.Unity.Server
                 // bad aim -- which cost a slab test done by hand on 2026-08-22 to rule out. X-19.
                 + $"occluded={_authority.FireResolver.LagCompensator.ShotsOccluded} "
                 + $"presentFallbacks={_authority.FireResolver.LagCompensator.PresentFallbacks} "
-                + $"resolved={_authority.FireResolver.LagCompensator.ShotsResolved}");
+                + $"resolved={_authority.FireResolver.LagCompensator.ShotsResolved} "
+                + DescribeX19(session, nearestIndex, tick));
         }
+
+        /// <summary>
+        /// The five fields phase-3F section 3 names, on the same line as the shot they belong to.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Three runs could not tell two different files apart, because the line printed one
+        /// pose and the resolver used another.</b> <c>nearest[... torso=...]</c> above comes from
+        /// <c>HitscanTarget.Present</c> -- the pose the server holds NOW -- while
+        /// <see cref="LagCompensator.ResolveHitscan"/> raycasts against
+        /// <c>HitboxHistory.Frame.Boxes</c> at the REWOUND tick. Both are printed here, so the
+        /// artifact separates "the pose was recorded low" from "the pose is fine and the body is
+        /// drawn low". Those are different defects in different files, and X-19 has been stuck on
+        /// exactly that fork since 2026-08-22.
+        /// </para>
+        /// <para>
+        /// <b>The rewind tick is recomputed, not read back.</b> <c>CombatTickResult</c> carries
+        /// the tick only on a <see cref="HitResult"/>, and the shots this line exists to explain
+        /// are the ones that produced no hit at all. Recomputing through the same
+        /// <see cref="LagCompensator.ResolveTargetTick"/> the resolver used, from the same tick
+        /// and the same RTT, is the only way to name the frame a MISS was judged against -- and
+        /// it is the same static function, so it cannot drift from the resolver's answer.
+        /// </para>
+        /// <para>
+        /// <b><c>shooter.movement</c> and <c>shooter.transform</c> are printed separately on
+        /// purpose.</b> The first is <c>NetMovementAgent.State.Position</c>, which is what
+        /// <see cref="ServerCombatAuthority.ShotOrigin"/> adds the eye height to; the second is
+        /// where the body actually stands in the scene. On the server those are written together
+        /// by <c>NetMovementAgent.CharacterMove</c> and must agree; a gap between them is the
+        /// server-side half of the same disagreement the clients report at every checkpoint.
+        /// </para>
+        /// </remarks>
+        private string DescribeX19(ClientSession session, int nearestIndex, uint tick)
+        {
+            uint rewindTick = LagCompensator.ResolveTargetTick(
+                tick, SmoothedRttMs(session.ConnectionId));
+
+            string present = "none";
+            string recorded = "none";
+            string recordedTick = "absent";
+
+            if (nearestIndex >= 0)
+            {
+                HitscanTarget target = _targets[nearestIndex];
+                present = Describe(target.Present.Torso.Center);
+
+                if (_loop.HitboxHistory.TryGetFrame(
+                        target.ActorId, rewindTick, out HitboxHistory.Frame recordedFrame))
+                {
+                    recorded = Describe(recordedFrame.Boxes.Torso.Center);
+                    recordedTick = recordedFrame.Tick.ToString();
+                }
+            }
+
+            string movement = "absent";
+            string drawn = "absent";
+
+            if (_registry.TryFind(session.ActorId, out NetServerActor shooter) && shooter != null)
+            {
+                if (shooter.Movement != null)
+                    movement = Describe(shooter.Movement.State.Position);
+
+                Vector3 p = shooter.transform.position;
+                drawn = $"{p.x:F3},{p.y:F3},{p.z:F3}";
+            }
+
+            return $"present.torso={present} frame.torso={recorded} "
+                   + $"frame.tick={recordedTick} wanted.tick={rewindTick} tick={tick} "
+                   + $"shooter.movement={movement} shooter.transform={drawn}";
+        }
+
+        /// <summary>Three decimals: the offset under investigation is a third of a metre.</summary>
+        private static string Describe(in Vec3 v) => $"{v.X:F3},{v.Y:F3},{v.Z:F3}";
 
         /// <summary>Read once: this is consulted on every trigger frame.</summary>
         private static bool ShotLoggingEnabled =>

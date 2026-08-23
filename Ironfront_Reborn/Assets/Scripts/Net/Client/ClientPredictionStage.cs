@@ -48,6 +48,8 @@ namespace Ironfront.Net.Unity.Client
         private NetPredictionClock _clock;
         private NetMovementAgent _agent;
         private NetClientBootstrap _client;
+        private CharacterController _controller;
+        private ClientVehicleStage _vehicleStage;
 
         private readonly List<InputFrame> _pending = new List<InputFrame>(FramesPerMessage);
         private readonly InputFrame[] _scratch = new InputFrame[FramesPerMessage];
@@ -65,6 +67,81 @@ namespace Ironfront.Net.Unity.Client
             _clock = GetComponent<NetPredictionClock>();
             _agent = GetComponent<NetMovementAgent>();
             _client = NetClientBootstrap.Current;
+            _controller = GetComponent<CharacterController>();
+        }
+
+        /// <summary>
+        /// Keeps the collision capsule the netcode moves this body through switched on. X-19.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The body was being moved with no collision at all, for entire matches.</b>
+        /// <c>FpsActorController.Start</c> calls <c>DisableInput()</c>, which sets
+        /// <c>characterController.enabled = false</c>; the only thing that ever sets it back is
+        /// <c>EnableInput()</c>, and its one live caller is <c>FpsActorController.SpawnAt</c> --
+        /// the gameplay spawn a networked body deliberately never runs (<c>Actor.cs</c>, "not
+        /// SpawnAt, and not controller.EnableInput()"). So on a networked client the flag was
+        /// cleared at Start and never set again, and every predicted tick fell through
+        /// <c>NetMovementAgent.CharacterMove</c>'s uncollided branch. Measured on
+        /// <c>artifacts/lane-b/x19-move</c>: 11,785 of 11,785 ticks, all three clients.
+        /// </para>
+        /// <para>
+        /// <b>Input and the collision capsule are two different questions, and
+        /// <c>DisableInput</c> answers both.</b> Taking a player's controls away is right during
+        /// warm-up and right for a corpse. Taking their collision away is right for neither,
+        /// because a networked body is moved by the SERVER whether or not it has controls -- so
+        /// what the disable actually bought was a body that keeps moving and stops colliding.
+        /// This re-asserts only the half that was never anybody's to take.
+        /// </para>
+        /// <para>
+        /// <b>Per frame, and ahead of the clock.</b> <c>Start</c> runs after every <c>OnEnable</c>
+        /// on a runtime-instantiated prefab, so claiming it once at enable would be undone
+        /// immediately; and <c>DisableInput</c> fires again on death. This type already declares
+        /// <c>DefaultExecutionOrder(-40)</c> while <c>NetPredictionClock</c> sits at the default
+        /// 0, so this <c>Update</c> is guaranteed to run before the tick it is protecting. The
+        /// cost is two bool reads on a frame where nothing is wrong.
+        /// </para>
+        /// <para>
+        /// <b>A seated body is left alone.</b> <c>FpsActorController.StartSeated</c> disables the
+        /// capsule on purpose -- the occupant is carried by the vehicle, and a live capsule
+        /// inside a moving hull is a fight, not a fix. <c>ClientVehicleStage.OccupiedVehicleId</c>
+        /// is the netcode's own answer to "am I in a seat", which is why it is read rather than
+        /// the scene's.
+        /// </para>
+        /// <para>
+        /// <b>The legacy <c>FirstPersonController</c> is deliberately NOT disabled.</b> It is the
+        /// obvious way to guarantee a single writer, and it is wrong: its <c>Update</c> runs
+        /// <c>RotateView()</c>, so switching the component off takes mouse look away from the
+        /// local player. It keeps <c>inputEnabled == false</c> from <c>DisableInput</c>, which
+        /// zeroes <c>m_Input</c> and therefore its entire horizontal contribution; what remains
+        /// is a vertical stick-to-ground it applies through the same collision system, in the
+        /// same direction the simulation wants. That is a co-mover rather than a rival, and it
+        /// is called out here so the next reader knows it was weighed rather than missed.
+        /// </para>
+        /// </remarks>
+        private void Update()
+        {
+            if (_controller == null || _controller.enabled) return;
+            if (IsSeated) return;
+
+            _controller.enabled = true;
+        }
+
+        /// <summary>True while this client occupies a vehicle seat.</summary>
+        /// <remarks>
+        /// Resolved lazily off <see cref="NetClientBootstrap"/>, which owns the stage on its own
+        /// GameObject: this component lives on the player prefab and the two are built at
+        /// different times, so an Awake-time lookup finds nothing on the frame it matters.
+        /// </remarks>
+        private bool IsSeated
+        {
+            get
+            {
+                if (_vehicleStage == null && _client != null)
+                    _vehicleStage = _client.GetComponent<ClientVehicleStage>();
+
+                return _vehicleStage != null && _vehicleStage.OccupiedVehicleId != 0;
+            }
         }
 
         private void OnEnable()
