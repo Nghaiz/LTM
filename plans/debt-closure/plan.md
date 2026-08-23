@@ -87,8 +87,12 @@ is an owner, not the type.
 | 3C | [`phase-3c-client-input.md`](phases/phase-3c-client-input.md) | Fire / Aim / Reload and `C_ACK_BASELINE` reach the wire (**X-3**) | M (3d) |
 | 3D | [`phase-3d-lane-b.md`](phases/phase-3d-lane-b.md) | Lane B — two scripted rendered clients, an artifact per checkpoint | L (1wk) |
 | 3E | [`phase-3e-run-and-ledger.md`](phases/phase-3e-run-and-ledger.md) | Thirteen verdicts, and the ledger rows #150/#152 left standing | M (3d) |
-| 4 | [`phase-4-measure.md`](phases/phase-4-measure.md) | Bandwidth, tick p99, `releaseDelay` read not guessed | M (3d) |
+| **3F** | [`phase-3f-x19-drawn-vs-held.md`](phases/phase-3f-x19-drawn-vs-held.md) | **X-19 — the client draws a body 0.332 m below the one the server holds, and every shot passes over. Blocks 16 of the 28 open rows** | S–M (1–2d) |
+| 4 | [`phase-4-measure.md`](phases/phase-4-measure.md) | Bandwidth, tick p99, per-weapon release delay verified | M (3d) |
 | 5 | [`phase-5-cutover-gate.md`](phases/phase-5-cutover-gate.md) | `AuthoritativeFlight` on with proof, or off with a reason | S (1d) |
+| **6** | [`phase-6-rows-no-run-closes.md`](phases/phase-6-rows-no-run-closes.md) | The five rows no acceptance run can close — D-1, E-6, X-6, X-7, X-8 — plus group A's residue | M (3d) |
+| **7** | [`phase-7-ops-to-digest.md`](phases/phase-7-ops-to-digest.md) | The server shipped as far as a digest; E-3 corrected; three dead limits retired from the docs | S (1d) |
+| **8** | [`phase-8-hygiene.md`](phases/phase-8-hygiene.md) | Nine stale branches, one of them an unmerged PR; a roll-up recomputed rather than decremented | XS |
 
 **Phase 3 is split.** Tasks 3.1/3.2 landed in #150/#152; acceptance criterion 1 stayed red on a
 defect that was never a handshake defect. 3A–3E carry the phase to its acceptance criteria —
@@ -100,6 +104,33 @@ constraint**: task 2c (extract `ScoreUi` state) lands before task 1.6 authors `S
 or the authoring targets fields the refactor is about to move.
 
 **Total: ~4 weeks.**
+
+### 4a. Where the track actually stands — 2026-08-23
+
+Phases 0, 1, 2, 3A, 3B, 3C are merged. 3D built its vehicle and found five defects with it; the
+fifth, **X-19**, is still open and holds **sixteen of the twenty-eight** remaining rows shut, because
+group B is sixteen assertions over one run shape and the run does not resolve a hit.
+
+```
+3F ──▶ 3D (re-run, 11 verdicts) ──▶ 3E ──▶ 4 ──▶ 5
+                                     │              ▲
+                                     └──▶ asmdef    │  X-6 (task 6.3)
+                                          track     │  gates this arrow
+6 ───────────────────────────────────────────────────┘
+7 ─── independent of everything, in both directions
+8 ─── independent
+```
+
+Three orderings, and nothing else is ordered:
+
+1. **3F before 3D.** 3D cannot return a verdict on a run where no shot lands.
+2. **Phase 6 task 6.3 (X-6) before Phase 5.** The cutover's proof rests on the `ownsHealth` guard,
+   which has no pin today.
+3. **[`plans/asmdef-seam/plan.md`](../asmdef-seam/plan.md) after 3E.** Refactoring the client while a
+   harness compares artifacts across runs makes a run difference unattributable.
+
+Phases 6, 7 and 8 are parallel from now. [`plans/consolidation/plan.md`](../consolidation/plan.md) is
+the source for 6's scope (§ 4) and 7's path (§§ 5–6).
 
 ---
 

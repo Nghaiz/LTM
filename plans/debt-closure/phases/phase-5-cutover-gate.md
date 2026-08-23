@@ -1,7 +1,11 @@
 # Phase 5 — The cutover gate
 
 - **Track:** [`plans/debt-closure/plan.md`](../plan.md) · **Effort:** S (1 day)
-- **Depends on:** Phase 2 task 2e (the prepared patch), Phase 3 (damage accounting), Phase 4 (tick budget)
+- **Depends on:** Phase 2 task 2e (the prepared patch), Phase 3 (damage accounting), Phase 4 (tick
+  budget), and **[`phase-6-rows-no-run-closes.md`](phase-6-rows-no-run-closes.md) task 6.3 — the
+  `ownsHealth` pin (X-6)**. That is a hard gate, not a preference: this phase's whole proof rests on
+  a guard that today has no test asserting it is false on a client, so an inverted guard would leave
+  the "exactly once" measurement describing a world that no longer holds.
 - **Nature:** a decision with a proof obligation, not a refactor
 
 ---
