@@ -1,0 +1,56 @@
+# Ironfront master server — fly.io app config.
+#
+# Deploy with:
+#   fly deploy --config infra/fly/master.toml --app kien-master-2026
+#
+# Secrets (set once, never in this file):
+#   fly secrets set IRONFRONT_SHARED_SECRET="<key>" --app kien-master-2026
+#
+# Volume (create once):
+#   fly volumes create ironfront_data --size 1 --region sin --app kien-master-2026
+
+app = "kien-master-2026"
+primary_region = "sin"
+
+[build]
+  image = "ghcr.io/nghaiz/ironfront-master:latest"
+
+# Persistent volume for SQLite database + durability CSV.
+# The path /data matches IRONFRONT_DB_PATH and IRONFRONT_METRICS_CSV in the image.
+[mounts]
+  source = "ironfront_data"
+  destination = "/data"
+
+[env]
+  IRONFRONT_MASTER_PORT               = "27000"
+  IRONFRONT_DB_PATH                   = "/data/ironfront.db"
+  IRONFRONT_METRICS_CSV               = "/data/durability.csv"
+  IRONFRONT_METRICS_PORT              = "27001"
+  IRONFRONT_METRICS_BIND              = "[IP_ADDRESS]"
+  IRONFRONT_STRUCTURED_LOG            = "1"
+  IRONFRONT_LOG_LEVEL                 = "Warn"
+  IRONFRONT_MAX_CONNECTIONS_PER_IP    = "5"
+  IRONFRONT_MAX_TOTAL_CONNECTIONS     = "256"
+  IRONFRONT_LOGIN_RATE_PER_MINUTE     = "5"
+  # TLS: de trong vi fly.io terminate TLS o edge; master chay plaintext noi bo.
+  IRONFRONT_TLS_CERT_PATH             = ""
+  IRONFRONT_TLS_CERT_PASSWORD         = ""
+
+# MSP port — players va game servers deu dial vao day.
+# fly.io se terminate TLS (Let's Encrypt tu dong) roi forward TCP vao container.
+[[services]]
+  protocol      = "tcp"
+  internal_port = 27000
+
+  [[services.ports]]
+    port     = 27000
+    handlers = ["tls"]   # fly.io terminate TLS, forward plaintext vao container
+
+  # TCP healthcheck khop voi HEALTHCHECK trong master.Dockerfile
+  [[services.tcp_checks]]
+    interval     = "30s"
+    timeout      = "5s"
+    grace_period = "20s"
+
+# Metrics port chi dung noi bo — khong expose ra internet.
+# Truy cap qua: fly proxy 27001 --app kien-master-2026 (tren may local)
