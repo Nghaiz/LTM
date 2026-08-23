@@ -1,7 +1,9 @@
 # Phase 4 — Measure, and close the claims nobody verified
 
 - **Track:** [`plans/debt-closure/plan.md`](../plan.md) · **Effort:** M (3 days)
-- **Depends on:** Phase 3 (both lanes), Phase 1 (an authored client)
+- **Depends on:** Phase 3 (both lanes), Phase 1 (an authored client), and — for task 4.3 only —
+  [`phase-6-rows-no-run-closes.md`](phase-6-rows-no-run-closes.md) task 6.1, which took over what 4.3
+  used to own (§ 4)
 
 ---
 
@@ -45,17 +47,25 @@ From Lane A's tick histogram, at the § 2 check-list load. Report p50, p99 and m
 configuration. State the sample size next to the percentile — a percentile over a short run is a
 number with no meaning attached.
 
-## 4. Task 4.3 — Read `releaseDelay` from the throw clip (S)
+## 4. Task 4.3 — Verify the per-weapon release delay (S) — **AMENDED 2026-08-23**
 
-`Weapon.Configuration.releaseDelay = 0.6f` is a **guess**. V7's handoff is explicit that this is the
-one number D7 depends on and that nothing in CI can discover it: the throw clip's animation-event
-time has to be read in the Editor and authored.
+> **This task's original framing was wrong and is kept visible rather than rewritten away.** It read
+> *"`releaseDelay = 0.6f` is a guess; read it from the throw clip and author it"*, and assumed one
+> number. The clips are force-text and were readable all along — Phase 0 read them:
+> `frag_throw.anim:2248-2250` → **1.2381772 s**, and the second throwable clip → **0.414 s**.
+> **Three times apart.** One constant cannot serve both, and `0.6f` is wrong for either. So this was
+> never a measurement task; it is code work, and it moved to
+> [`phase-6-rows-no-run-closes.md`](phase-6-rows-no-run-closes.md) task 6.1.
 
-Read it, author it, and record the actual value. **If it is not 0.6 s, D7's divergence does not
-disappear — it changes shape** from client-vs-server to offline-vs-server, and that has to be written
-into the V7 phase doc rather than quietly dropped.
+What remains here is verification, not discovery:
 
-While the clip is open, confirm each throwable prefab's Animator still fires `SpawnThrowable()` for
+1. Confirm task 6.1's authored per-weapon values match their own clips' `SpawnThrowable` event times.
+2. Confirm the replacement test **fails** when a value is de-tuned — the test it replaces fed the
+   same constant to both sides and was true by construction.
+3. **D7's divergence does not disappear — it changes shape**, from client-vs-server to
+   offline-vs-server. 6.1 amends the V7 phase doc; this task checks the amendment is there.
+
+While the Editor is open, confirm each throwable prefab's Animator still fires `SpawnThrowable()` for
 the arm, now that it spawns nothing at `NetRole.Client`.
 
 ## 5. Task 4.4 — Re-verify the three assumed-closed claims (S)
@@ -89,7 +99,7 @@ only), `Weapon.Configuration`'s `releaseDelay` value, `plans/debt-closure/debt-l
 
 1. The bandwidth table has all five rows filled with measured numbers, and the transport-vs-server cross-check agrees within 5% (or the disagreement is investigated and explained).
 2. Tick p50/p99/max are reported with sample size, seed and configuration.
-3. `releaseDelay` is an authored number read from the clip. If it is not 0.6 s, V7's D7 record is amended in the same commit.
+3. The per-weapon release delays authored by task 6.1 match their own clips' event times, the replacement test was seen failing on a de-tuned value, and V7's D7 record carries the offline-vs-server amendment. **Owned by phase 6; verified here.**
 4. The three assumed-closed claims each carry a `file:line` citation or a test run.
 5. V7 § 6.1 records the ten tests as won't-do with the asmdef reason and the reopening condition.
 6. Any criterion that fails is reported failed, with its number. No target is re-scoped to fit a measurement.

@@ -17,6 +17,9 @@
   fired=True hits=0`, victim on 100 health. A hand slab test of the logged ray against all four
   hitboxes puts it **inside the head box** at t=5.63 m, so aim and hitbox geometry are both
   exonerated and the rejection happens after the box test.
+  **X-19 now has an owner** — [`phase-3f-x19-drawn-vs-held.md`](phase-3f-x19-drawn-vs-held.md), which
+  runs the measurement the report already named and hands this phase a run where the trigger
+  resolves. This phase does not start again until 3F closes.
   Reports: [`2026-08-22-x17-root-cause-and-fix.txt`](../reports/2026-08-22-x17-root-cause-and-fix.txt),
   [`2026-08-22-x18-mutation-proof.txt`](../reports/2026-08-22-x18-mutation-proof.txt).
   Original: [`2026-08-21-phase-3d-lane-b.md`](../reports/2026-08-21-phase-3d-lane-b.md).
