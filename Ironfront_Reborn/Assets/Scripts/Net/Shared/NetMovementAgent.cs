@@ -40,10 +40,24 @@ namespace Ironfront.Net.Unity
 
         private void Awake()
         {
-            _controller = GetComponent<CharacterController>();
             State = MoveState.AtRest(MovementSimulation.ToCore(transform.position),
-                                     grounded: _controller.isGrounded);
+                                     grounded: IsGrounded);
         }
+
+        /// <summary>
+        /// The collision capsule this agent moves through, resolved on first use.
+        /// </summary>
+        /// <remarks>
+        /// <b>Lazy rather than cached in <see cref="Awake"/>, because <c>Awake</c> is not a
+        /// guarantee.</b> It does not run at all in an EditMode test, and it has already run by
+        /// the time anything adds a controller to a body that was built without one -- in both
+        /// cases the cached field is a permanent null and every move silently takes the
+        /// uncollided branch, which is the exact failure X-19 is about. `GetComponent` runs once
+        /// per body in the normal case and the null-check is a field read on every tick after
+        /// that.
+        /// </remarks>
+        private CharacterController Controller
+            => _controller != null ? _controller : (_controller = GetComponent<CharacterController>());
 
         /// <summary>Velocity as the simulation believes it. Not the CharacterController's.</summary>
         /// <remarks>
@@ -60,21 +74,79 @@ namespace Ironfront.Net.Unity
         }
 
         /// <summary>Ground contact, straight from the CharacterController.</summary>
-        public bool IsGrounded => _controller != null && _controller.isGrounded;
+        public bool IsGrounded => Controller != null && Controller.isGrounded;
 
         /// <summary>Crouch stance, as the simulation last saw it.</summary>
         public bool IsCrouching => State.IsCrouching;
 
-        /// <summary>Moves by a delta and reports where the actor actually ended up.</summary>
+        /// <summary>
+        /// Moves through the collision system that is supposed to resolve the motion, and
+        /// counts every time it could not.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The bypass used to be silent, and it cost X-19.</b> When the
+        /// <see cref="CharacterController"/> is absent or disabled this method has no way to
+        /// resolve the motion, so it writes the delta straight onto the transform -- no sweep,
+        /// no floor, no collision flags -- and then returns <c>transform.position</c> exactly as
+        /// it would after a real move. <see cref="Tick"/> stores that as
+        /// <see cref="MoveState.Position"/>, so the actor's own record of where it is agrees
+        /// with a position collision never validated, and nothing anywhere reports it.
+        /// </para>
+        /// <para>
+        /// Measured on <c>artifacts/lane-b/x19-move</c>: <b>11,785 of 11,785</b> client ticks
+        /// took this branch, on all three clients, for the whole run -- the local body's
+        /// controller is disabled by <c>FpsActorController.Start</c> and, on a networked client,
+        /// nothing ever re-enables it. Each of those ticks sank the drawn body 0.332 m below the
+        /// position the server held, which is why every shot at six metres passed over the
+        /// target's head. Two runs and three weeks of investigation could not see it, because
+        /// the one line that knew was the one that said nothing.
+        /// </para>
+        /// <para>
+        /// <b>Counted rather than thrown, and logged once rather than every tick.</b> Throwing
+        /// would take down a client for a condition it can still limp through, and a per-tick
+        /// error at 30 Hz buries the log it is trying to write. The counter is the durable
+        /// signal: <see cref="CollisionBypassedMoves"/> is <c>0</c> on a healthy body and rises
+        /// monotonically on a broken one, so a run can be graded on it without reading a log at
+        /// all. That is what makes this a detector and not a comment.
+        /// </para>
+        /// </remarks>
         public Vector3 CharacterMove(Vector3 delta)
         {
-            if (_controller != null && _controller.enabled)
-                LastCollisionFlags = _controller.Move(delta);
-            else
-                transform.position += delta;
+            CharacterController controller = Controller;
 
+            if (controller != null && controller.enabled)
+            {
+                LastCollisionFlags = controller.Move(delta);
+                return transform.position;
+            }
+
+            CollisionBypassedMoves++;
+
+            // Zeroed, not left stale: a caller reading Below off a move that never touched the
+            // collision system would conclude the actor is standing on something.
+            LastCollisionFlags = CollisionFlags.None;
+
+            if (CollisionBypassedMoves == 1)
+            {
+                Debug.LogError(
+                    $"[net] '{name}' moved with no collision: its CharacterController is "
+                    + (controller == null ? "missing" : "disabled")
+                    + ". Motion is being written straight onto the transform, so this body will "
+                    + "pass through the world and sink below the server's authoritative "
+                    + "position. See ledger X-19. Further occurrences are counted in "
+                    + "CollisionBypassedMoves and not logged.");
+            }
+
+            transform.position += delta;
             return transform.position;
         }
+
+        /// <summary>
+        /// Moves this agent applied WITHOUT collision, because the controller was missing or
+        /// disabled. Zero on a healthy body; the X-19 detector.
+        /// </summary>
+        public long CollisionBypassedMoves { get; private set; }
 
         /// <summary>
         /// One authoritative or predicted tick: step the shared simulation, apply the motion
@@ -248,7 +320,7 @@ namespace Ironfront.Net.Unity
         /// <summary>Teleports the actor, used on spawn and on a hard server correction.</summary>
         public void Teleport(Vector3 position, bool resetVelocity = true)
         {
-            bool wasEnabled = _controller != null && _controller.enabled;
+            bool wasEnabled = Controller != null && Controller.enabled;
 
             // The CharacterController must be disabled around a direct transform write, or it
             // fights the assignment and the actor lands somewhere else.
@@ -264,7 +336,7 @@ namespace Ironfront.Net.Unity
 
         private void ApplyStanceHeight()
         {
-            if (_controller == null) return;
+            if (Controller == null) return;
 
             float wanted = MovementCore.HeightFor(State.IsCrouching);
             if (!Mathf.Approximately(_controller.height, wanted)) _controller.height = wanted;
