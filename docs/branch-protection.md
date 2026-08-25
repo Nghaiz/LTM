@@ -38,14 +38,59 @@ The two walls this page recorded on 2026-08-15 are gone, for different reasons.
 | Actions default token | `read`, and workflows may not approve pull requests |
 | Merge methods | squash, merge **and rebase** all allowed. §3 asks for rebase off; the owner chose to keep all three on 2026-08-25 |
 
+### Require-status-check is ON, as of 2026-08-25
+
+The condition this section used to state — *"`build-test` is red on `develop` right now, so
+turning it on would deadlock every merge"* — was met and the rule was added the same day.
+The order it was done in is the order §1 asks for, and each step was checked rather than assumed:
+
+1. **The red was fixed.** X-23 (#178), then #181 for the advisory `style` job.
+2. **`build-test` was watched green once.** `develop` at `76734c5`:
+   `build-test (ubuntu-latest)` and `build-test (windows-latest)` both **success**.
+3. **The check names were read back from the API**, not copied from this page —
+   `GET /commits/{sha}/check-runs` returns them character for character as written in §1.
+4. **`ci.yml` was confirmed to run on `pull_request`** with no workflow-level `paths:` filter,
+   which is the deadlock §1 warns about twice. Its own header comment forbids adding one.
+
+Added to the existing `protect-shared-branches` ruleset, so `main` and `develop` are covered by
+one object rather than two that drift:
+
+| Setting | Value |
+|---|---|
+| `required_status_checks` | `build-test (ubuntu-latest)`, `build-test (windows-latest)` |
+| `strict_required_status_checks_policy` | `false` — see below |
+| `bypass_actors` | `[]`, unchanged; `current_user_can_bypass: "never"` |
+
+**Verified after the write**, by asking GitHub which rules apply to each ref rather than trusting
+the PUT's 200: `main` and `develop` both return
+`["deletion","non_fast_forward","required_status_checks"]`, and a feature branch returns `[]`.
+
+**Two consequences worth knowing before they surprise someone.** A direct `git push` to `main` or
+`develop` is now refused — a fresh commit has no checks yet, and there is no bypass — which suits
+a PR-only workflow and would block an emergency hotfix pushed straight to the branch. And with no
+bypass actor, a CI outage blocks merging entirely; that is §1's deliberate choice ("an emergency
+exception that exists is an exception that gets used weekly"), not an oversight.
+
+**Not proven, only configured.** The same caveat the force-push row carries below. Nobody has yet
+opened a PR with a *failing* `build-test` and watched the merge button refuse. What has been
+observed is the positive half — the two checks are required and reported. Read "a red build-test
+blocks the merge" as **configured**, until a PR fails one and is seen to be blocked.
+
 ### What is deliberately still off
 
-The require-a-pull-request and require-status-check rules in §1 and §2 are **not** on.
-`build-test` is red on `develop` right now — `[G4] NetClientLocalCombatDriver.cs:183`,
-`FpsActorController.instance` reached from a per-actor path with no `IsLocalActor` guard.
-Turning the status-check requirement on today would deadlock every merge rather than protect
-anything. Fix that finding, watch `build-test` go green once, then add the two check names
-listed in §1.
+**Require a pull request, and required approvals.** GitHub does not let an author approve their
+own PR, and this repository has one active owner, so a required approval would block every merge
+by the only person able to make one — the same deadlock this page refuses elsewhere. §2's
+one-approval row applies to the four-person team it was written for; revisit it when there is a
+second reviewer. Note that required status checks already make a direct push fail, so the
+practical effect of the missing PR requirement is small.
+
+**Require branches to be up to date** (`strict`). §2 asks for it and it is not on. The failure it
+prevents — green on an old base, broken after the merge — is real but is not what happened here:
+the eleven-merge red streak was a branch nobody was *required* to look at, which the rule above
+fixes. Strict mode costs an update-and-re-run on every PR that lands after another, which on a
+single-owner repository is a per-merge tax for a failure that has not yet occurred. Turn it on the
+day two people are merging in parallel.
 
 ### What has not been mutation-tested
 
