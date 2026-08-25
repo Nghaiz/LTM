@@ -71,10 +71,20 @@ a PR-only workflow and would block an emergency hotfix pushed straight to the br
 bypass actor, a CI outage blocks merging entirely; that is §1's deliberate choice ("an emergency
 exception that exists is an exception that gets used weekly"), not an oversight.
 
-**Not proven, only configured.** The same caveat the force-push row carries below. Nobody has yet
-opened a PR with a *failing* `build-test` and watched the merge button refuse. What has been
-observed is the positive half — the two checks are required and reported. Read "a red build-test
-blocks the merge" as **configured**, until a PR fails one and is seen to be blocked.
+**Observed blocking a merge, on PR #183, the first PR the rule applied to.** While
+`build-test (windows-latest)` was still running, `gh pr view --json mergeStateStatus` returned
+`BLOCKED` against `mergeable: MERGEABLE` — the merge was held by the check and nothing else. It
+flipped to `CLEAN` the moment that job finished, and the squash merge then went through. So the
+rule is load-bearing rather than decorative: it is not a setting that saved and did nothing.
+
+**Still not proven for the case that matters most.** What #183 demonstrates is that a *pending*
+required check blocks. Nobody has yet opened a PR whose `build-test` actually **fails** and watched
+the merge refuse — and that is the case this rule exists for. The two are close but not the same:
+GitHub could in principle treat a concluded-failure differently from a not-yet-reported check, and
+"close enough" is how a gate ends up trusted for something it does not do. Read "a red build-test
+blocks the merge" as **strongly indicated, not proven**, until a PR fails one and is seen to be
+blocked. The cheapest honest way to close it is to notice the next genuine CI failure rather than
+to manufacture one.
 
 ### What is deliberately still off
 
