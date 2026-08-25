@@ -144,7 +144,71 @@ namespace Ironfront.Tools.ClientWiringGate
             // actor. There is no local-actor question here to guard.
             ("/NetClientExplosionPresenter.cs", "ApplyScreenshake",
                 "screenshake is this client's camera by definition; the blast has no owning actor"),
+
+            // NOT on a per-actor path. This file is scoped because OnSpawnActor IS one, but
+            // ScriptedRespawnPressed is reached only from Update(), reading THIS client's own
+            // input to decide whether the local player asked to respawn - the local singleton is
+            // the target, not a leak from a remote player's event. It is resolved per frame
+            // rather than cached precisely because the body is spawned and killed independently
+            // of this component, so a cached reference would go stale at a death, which is the
+            // one moment the read matters. G4 scopes by file and cannot see the call path.
+            // RESIDUAL RISK, stated rather than hidden: if a second caller ever reaches this
+            // helper from OnSpawnActor or another per-actor path, G4 will not catch it. The
+            // companion PerActorGuardExemptions_HasNoStaleEntries pins that the exemption is
+            // still suppressing a real touch; it does not pin the call path. If a per-actor
+            // caller appears, delete this entry and guard the read instead of widening it.
+            ("/NetClientLocalCombatDriver.cs", "ScriptedRespawnPressed",
+                "reached only from Update(), a local-only per-frame path; the local player IS the "
+                + "subject of the read"),
         };
+
+        /// <summary>
+        /// The G4 exemptions, exposed read-only so the companion test can re-check every entry
+        /// against the tree it claims to describe.
+        /// </summary>
+        /// <remarks>
+        /// An exemption is a stored judgement about code that moves underneath it. Without a
+        /// companion, an entry whose file was renamed, whose member was deleted, or whose touch
+        /// was refactored away keeps suppressing nothing and reads forever as deliberate - which
+        /// is how an allow-list becomes a graveyard nobody re-checks
+        /// (<c>pinned-baseline-test-companion.md</c>).
+        /// </remarks>
+        public static IReadOnlyList<(string PathMatch, string? Member, string Reason)>
+            PerActorGuardExemptionsView => PerActorGuardExemptions;
+
+        /// <summary>
+        /// Whether <paramref name="path"/> is inside <see cref="PerActorGuardScope"/>, IGNORING
+        /// the exemptions. <see cref="IsPerActorGuardScoped"/> answers the question G4 asks;
+        /// this answers the one the companion asks - "would this file be governed at all, were
+        /// the exemption not there?" - so an entry exempting an out-of-scope file is reported as
+        /// the no-op it is.
+        /// </summary>
+        public static bool IsInPerActorGuardScopeIgnoringExemptions(string path)
+            => IsInScope(path, PerActorGuardScope);
+
+        /// <summary>
+        /// The enclosing member name of every local-only-singleton <c>.instance</c> touch in
+        /// <paramref name="tree"/>, using G4's own notions of "touch" and "enclosing member" so
+        /// the companion cannot drift from the rule it guards.
+        /// </summary>
+        public static IReadOnlyList<string> LocalOnlySingletonTouchMembers(SyntaxTree tree)
+        {
+            var members = new List<string>();
+
+            foreach (MemberAccessExpressionSyntax access in tree.GetRoot()
+                         .DescendantNodes()
+                         .OfType<MemberAccessExpressionSyntax>())
+            {
+                if (access.Name.Identifier.ValueText != "instance") continue;
+                if (!(access.Expression is IdentifierNameSyntax type)) continue;
+                if (Array.IndexOf(LocalOnlySingletons, type.Identifier.ValueText) < 0) continue;
+
+                string? member = EnclosingMemberName(access);
+                if (member != null) members.Add(member);
+            }
+
+            return members;
+        }
 
         /// <summary>
         /// The client-only singletons G4 protects. Reaching either from a per-actor path is how a

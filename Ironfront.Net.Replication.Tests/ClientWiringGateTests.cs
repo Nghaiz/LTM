@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Ironfront.Tools.ClientWiringGate;
 using Microsoft.CodeAnalysis;
 using Xunit;
@@ -208,6 +209,134 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Contains("OnDeath", names);
             Assert.Contains("OnCapturePoint", names);
             Assert.Contains("OnSnapshotApplied", names);
+        }
+
+        [Fact]
+        public void PerActorGuardExemptions_HasNoStaleEntries()
+        {
+            // The companion pinned-baseline-test-companion.md asks for. Each G4 exemption is a
+            // stored judgement about code that moves underneath it: rename the file, delete the
+            // member, or refactor the singleton touch away, and the entry keeps suppressing
+            // nothing while still reading as deliberate. Nothing else in the suite would notice.
+            //
+            // Asserted by IDENTITY, not by count - a count is satisfied by any five entries,
+            // including five entirely different ones.
+            string scripts = Path.Combine(RepoRoot(), "Ironfront_Reborn", "Assets", "Scripts");
+            Assert.True(Directory.Exists(scripts), "scripts tree not found at " + scripts);
+
+            string[] allFiles = Directory.GetFiles(scripts, "*.cs", SearchOption.AllDirectories);
+            Assert.NotEmpty(allFiles);
+
+            foreach ((string pathMatch, string? member, string reason)
+                     in ClientWiringDetectors.PerActorGuardExemptionsView)
+            {
+                string label = pathMatch + (member == null ? " (whole file)" : "." + member);
+
+                string[] matches = allFiles
+                    .Where(f => Slash(f).Contains(pathMatch, StringComparison.Ordinal))
+                    .ToArray();
+
+                Assert.True(matches.Length > 0,
+                    $"STALE G4 EXEMPTION: {label} matches no file under Assets/Scripts. The file "
+                    + "was renamed or deleted and the entry now suppresses nothing. DELETE the "
+                    + "entry - do not repoint it at whatever file looks closest, and do not leave "
+                    + $"it because the reason still reads well (\"{reason}\").");
+
+                foreach (string file in matches)
+                {
+                    string rel = Slash(file);
+
+                    Assert.True(ClientWiringDetectors.IsInPerActorGuardScopeIgnoringExemptions(rel),
+                        $"POINTLESS G4 EXEMPTION: {label} names {rel}, which G4 does not govern "
+                        + "even without the exemption. Exempting a file from a rule that never "
+                        + "applied to it is a no-op that reads as a considered decision. DELETE "
+                        + "the entry.");
+
+                    IReadOnlyList<string> touches = ClientWiringDetectors.LocalOnlySingletonTouchMembers(
+                        ClientWiringDetectors.Parse(File.ReadAllText(file), rel));
+
+                    if (member == null)
+                    {
+                        Assert.True(touches.Count > 0,
+                            $"STALE G4 EXEMPTION: {label} exempts the whole of {rel}, which no "
+                            + "longer touches a local-only singleton at all. The reason it was "
+                            + "written for is gone. DELETE the entry - do NOT keep it as "
+                            + "insurance against a touch coming back.");
+                        continue;
+                    }
+
+                    Assert.True(touches.Contains(member),
+                        $"STALE G4 EXEMPTION: {label} exempts a member that no longer reaches a "
+                        + $"local-only singleton in {rel}. Either the member was renamed or "
+                        + "deleted, or the touch was refactored away - in every case the "
+                        + "exemption now hides nothing. DELETE the entry. Do NOT re-point it at "
+                        + "whichever member currently does touch one: that would silently move a "
+                        + "judgement made about different code onto code nobody judged.");
+                }
+            }
+        }
+
+        [Fact]
+        public void TheGateAcceptsTheScriptedRespawnExemption()
+        {
+            // The green half of the entry added for X-23, as a fixture rather than against the
+            // real file, so it keeps its meaning if that file changes. Same shape as the file
+            // the exemption names: one per-actor path (which is why G4 scopes the file at all)
+            // and one local-only helper reached from Update().
+            const string path =
+                "Ironfront_Reborn/Assets/Scripts/Net/Client/NetClientLocalCombatDriver.cs";
+
+            IReadOnlyList<GateFinding> findings =
+                ClientWiringDetectors.FindUnguardedLocalSingletonTouches(
+                    Parse(
+                        "class D { void OnSpawnActor(M m) { } "
+                        + "static bool ScriptedRespawnPressed() "
+                        + "{ return FpsActorController.instance != null; } }",
+                        path),
+                    path);
+
+            Assert.Empty(findings);
+        }
+
+        [Fact]
+        public void TheGateStillFlagsAnUnexemptedMemberInTheSameFile()
+        {
+            // The red twin, and the one that matters: the exemption is per MEMBER, so it must not
+            // hand the whole file a pass. Without this, narrowing the entry to a file would look
+            // identical on every run.
+            const string path =
+                "Ironfront_Reborn/Assets/Scripts/Net/Client/NetClientLocalCombatDriver.cs";
+
+            IReadOnlyList<GateFinding> findings =
+                ClientWiringDetectors.FindUnguardedLocalSingletonTouches(
+                    Parse(
+                        "class D { void OnSpawnActor(M m) "
+                        + "{ IngameUi.instance.SetHealth(1f); } }",
+                        path),
+                    path);
+
+            GateFinding finding = Assert.Single(findings);
+            Assert.Equal("G4", finding.RuleId);
+        }
+
+        /// <summary>
+        /// Path separators as the detector normalizes them. Written through
+        /// <see cref="Path.DirectorySeparatorChar"/> rather than a literal so the test reads the
+        /// same on Windows and Linux, where CI runs both.
+        /// </summary>
+        private static string Slash(string path)
+            => path.Replace(Path.DirectorySeparatorChar, '/');
+
+        private static string RepoRoot()
+        {
+            for (DirectoryInfo? d = new DirectoryInfo(Directory.GetCurrentDirectory());
+                 d != null; d = d.Parent)
+            {
+                if (File.Exists(Path.Combine(d.FullName, "Ironfront.sln"))) return d.FullName;
+            }
+
+            throw new InvalidOperationException(
+                "Ironfront.sln not found walking up from " + Directory.GetCurrentDirectory());
         }
 
         private static SyntaxTree Parse(string source, string path)
