@@ -136,6 +136,14 @@ jobs:
         shell: pwsh
         run: pwsh tools/check-net-layering.ps1
 
+      # A HARD gate for the same reason as the two above: nothing else in CI can see it. No job
+      # here builds a Unity player, so an editor-only plugin left unconstrained is invisible until
+      # someone builds a release — and #175 proved that costs four days. It is also a shipping
+      # question, not only a compile one: the MCP bridge speaks HTTP and hosts Roslyn.
+      - name: Check the Unity MCP bridge cannot reach a player build
+        shell: pwsh
+        run: pwsh tools/check-plugin-define-constraints.ps1
+
       # if: always() — the results are most valuable exactly when the previous step failed.
       - name: Upload test results and coverage
         if: always()
