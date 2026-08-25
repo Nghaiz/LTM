@@ -82,10 +82,12 @@ namespace Ironfront.Net.Unity.Diagnostics
         private const string UnitySeedVariable = "IRONFRONT_LANEB_UNITY_SEED";
         private const string TimeoutVariable = "IRONFRONT_LANEB_TIMEOUT";
         private const string SpawnIndexVariable = "IRONFRONT_LANEB_SPAWN_INDEX";
+        private const string WeaponVariable = "IRONFRONT_LANEB_WEAPON";
 
         /// <summary>Set once the directory is wrapped; sceneLoaded can fire more than once.</summary>
         private static bool _spawnPinned;
         private static bool _spawnPinReported;
+        private static bool _loadoutPinned;
 
         private const int ExitTimedOut = 2;
         private const int ExitProgrammeUnusable = 3;
@@ -287,6 +289,41 @@ namespace Ironfront.Net.Unity.Diagnostics
                 + "(a false here starves that team and MoveToSpawnPoint will warn).");
         }
 
+        /// <summary>
+        /// Forces every server-spawned body's primary weapon to the name
+        /// <c>IRONFRONT_LANEB_WEAPON</c> asks for, so two runs of one programme are comparable
+        /// shot-for-shot (ledger <b>X-27</b>).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>No deadline here, unlike the spawn pin.</b> That one had to wait for a directory
+        /// the scene fills later; this installs a directory of its own and depends on nothing
+        /// the scene has to build first, so `sceneLoaded` is early enough — bodies are armed at
+        /// spawn, and nothing can join before the server announces its slots.
+        /// </para>
+        /// <para>
+        /// <b>The name is not validated, and cannot be.</b> Only `WeaponManager.EntryNamed`
+        /// knows which names exist and it lives in `Assembly-CSharp`. So the name is LOGGED
+        /// here and the resulting `weaponId` is recorded per checkpoint by the artifact — a
+        /// misspelling shows up as an empty slot in the run rather than as a lie in this line.
+        /// </para>
+        /// </remarks>
+        private static void PinLoadoutIfRequested()
+        {
+            if (_loadoutPinned) return;
+
+            string weapon = Read(WeaponVariable);
+            if (string.IsNullOrWhiteSpace(weapon)) return;
+
+            NetServerBindings.Loadouts = new PinnedLoadoutDirectory(weapon.Trim());
+            _loadoutPinned = true;
+
+            Debug.Log(
+                $"[lane-b] primary weapon pinned to '{weapon.Trim()}' for every body the server "
+                + "spawns, so two runs of one programme are comparable shot-for-shot (X-27). "
+                + "The name is NOT validated here - check weaponId in the checkpoint record.");
+        }
+
         private void OnDestroy() => SceneManager.sceneLoaded -= OnSceneLoaded;
 
         /// <summary>
@@ -343,6 +380,7 @@ namespace Ironfront.Net.Unity.Diagnostics
                       "NetClient");
                 NetContext.SetRole(NetRole.Server);
                 PinSpawnPointIfRequested(final: false);
+                PinLoadoutIfRequested();
             }
             else
             {

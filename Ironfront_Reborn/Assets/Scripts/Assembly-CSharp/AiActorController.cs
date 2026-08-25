@@ -2201,10 +2201,34 @@ public class AiActorController : ActorController
 	public override WeaponManager.LoadoutSet GetLoadout()
 	{
 		WeaponManager.LoadoutSet loadoutSet = new WeaponManager.LoadoutSet();
-		loadoutSet.primary = WeaponManager.EntryNamed(primaryWeaponNames[UnityEngine.Random.Range(0, primaryWeaponNames.Length)]);
-		loadoutSet.secondary = WeaponManager.EntryNamed(secondaryWeaponNames[UnityEngine.Random.Range(0, secondaryWeaponNames.Length)]);
-		loadoutSet.gear1 = WeaponManager.EntryNamed(gearNames[UnityEngine.Random.Range(0, gearNames.Length)]);
+		loadoutSet.primary = WeaponManager.EntryNamed(PinnedOr(primaryWeaponNames[UnityEngine.Random.Range(0, primaryWeaponNames.Length)], LoadoutSlot.Primary));
+		loadoutSet.secondary = WeaponManager.EntryNamed(PinnedOr(secondaryWeaponNames[UnityEngine.Random.Range(0, secondaryWeaponNames.Length)], LoadoutSlot.Secondary));
+		loadoutSet.gear1 = WeaponManager.EntryNamed(PinnedOr(gearNames[UnityEngine.Random.Range(0, gearNames.Length)], LoadoutSlot.Gear1));
 		return loadoutSet;
+	}
+
+	// Ledger X-27. A networked player's server-side body comes through here, so which weapon
+	// a lane-B shooter holds was a random draw and two runs of one programme were not
+	// comparable shot-for-shot (weapon 1, 1, 15 across three runs; 30 shots against 14).
+	//
+	// THE DRAW IS ALWAYS CONSUMED, and that is structural rather than a discipline: `drawn` is
+	// an ARGUMENT, so C# evaluates the Random.Range call before this method is entered and no
+	// edit inside it can skip one. Pinning a loadout therefore cannot shift the RNG sequence
+	// for anything else the seed governs — the same argument PinnedSpawnPointDirectory makes
+	// for spawn selection, where the reservoir draw is likewise still taken.
+	//
+	// With no directory installed — every configuration that ships — this returns `drawn`
+	// and the behaviour is what it was before the seam existed.
+	private static string PinnedOr(string drawn, LoadoutSlot slot)
+	{
+		ILoadoutDirectory directory = NetServerBindings.Loadouts;
+		if (directory == null)
+		{
+			return drawn;
+		}
+
+		string forced = directory.OverrideFor(slot);
+		return string.IsNullOrEmpty(forced) ? drawn : forced;
 	}
 
 	private void SwitchToPrimaryWeapon()

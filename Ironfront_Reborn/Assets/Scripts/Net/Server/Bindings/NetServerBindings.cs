@@ -82,6 +82,13 @@ namespace Ironfront.Net.Unity.Server
         public static ISpawnPointDirectory SpawnPoints { get; set; }
 
         /// <summary>
+        /// Forces named weapons into loadout slots instead of the random draw. Null — the
+        /// default, and the shipped configuration — means every slot keeps its draw, so this
+        /// changes nothing until something installs a directory. Ledger <b>X-27</b>.
+        /// </summary>
+        public static ILoadoutDirectory Loadouts { get; set; }
+
+        /// <summary>
         /// Resolves the gameplay source for <paramref name="gameObject"/>, or
         /// <see langword="null"/> when nothing is registered or the object has no actor.
         /// </summary>
@@ -124,6 +131,7 @@ namespace Ironfront.Net.Unity.Server
             AiDriverResolver = null;
             PlayerBodyFactory = null;
             SpawnPoints = null;
+            Loadouts = null;
 
             // The scene registry is cleared here too, so a test that resets the server
             // seams does not leave a capture-point directory installed behind it. Moving
