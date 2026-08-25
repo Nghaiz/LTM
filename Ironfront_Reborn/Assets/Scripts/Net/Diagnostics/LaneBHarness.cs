@@ -85,6 +85,7 @@ namespace Ironfront.Net.Unity.Diagnostics
 
         /// <summary>Set once the directory is wrapped; sceneLoaded can fire more than once.</summary>
         private static bool _spawnPinned;
+        private static bool _spawnPinReported;
 
         private const int ExitTimedOut = 2;
         private const int ExitProgrammeUnusable = 3;
@@ -208,19 +209,32 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// <c>IRONFRONT_LANEB_SPAWN_INDEX</c> asks for it, so a lane-B re-run is a repeat rather
         /// than a coin flip (ledger <b>X-22</b>).
         /// </summary>
+        /// <param name="final">
+        /// True on the last attempt — the frame the server is about to announce its slots. Up
+        /// to then a directory that is absent or still empty means "ask again next frame"; at
+        /// the deadline it means the run is unpinned and says so.
+        /// </param>
         /// <remarks>
         /// <para>
-        /// <b>Here, and not in <see cref="Install"/>.</b> The pin is validated against the
-        /// scene's spawn-point count, and those points do not exist until the map scene has
-        /// loaded — <see cref="Install"/> runs at <c>AfterSceneLoad</c> of whatever scene the
-        /// process started in, which for a lane-B run is not the map. Validating there would
-        /// read a count of zero and reject every index.
+        /// <b>Retried, and that is the X-22 correction.</b> The first fix called this once from
+        /// <see cref="OnSceneLoaded"/> and validated the index against the directory's count
+        /// there — but that count comes from <c>ActorManager.instance.spawnPoints</c>, filled by
+        /// <c>ActorManager.StartGame()</c> which <c>GameManager</c> reaches from the SAME
+        /// <c>sceneLoaded</c> event. The harness read <c>0</c> on a six-point map and rejected
+        /// every index. Both runs that reported a pinned spawn were unpinned; see
+        /// <see cref="LaneBSpawnPin"/> for the evidence.
         /// </para>
         /// <para>
-        /// <b>Every failure path logs an error and leaves the run UNPINNED rather than
-        /// throwing.</b> A harness that refuses to start teaches nobody anything; a harness that
-        /// starts while quietly no longer deterministic is the whole of X-22. So the run
-        /// proceeds and says, in the artifact, that it is a coin flip again.
+        /// <b>The ready line is the deadline because it is the earliest a spawn can happen.</b>
+        /// No client can join before the server announces its slots, so a pin installed by then
+        /// is installed in time — and the runner will not start a client until it sees that
+        /// line.
+        /// </para>
+        /// <para>
+        /// <b>Every failure path leaves the run UNPINNED rather than throwing.</b> A harness
+        /// that refuses to start teaches nobody anything; one that starts while quietly no
+        /// longer deterministic is the whole of X-22. So the run proceeds and says, in the
+        /// artifact, that it is a coin flip again.
         /// </para>
         /// <para>
         /// The eligibility of the pinned point is logged for both teams at pin time. A point
@@ -229,39 +243,35 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// from here, and much harder to connect back.
         /// </para>
         /// </remarks>
-        private static void PinSpawnPointIfRequested()
+        private static void PinSpawnPointIfRequested(bool final)
         {
             if (_spawnPinned) return;
 
-            string raw = Read(SpawnIndexVariable);
-            if (string.IsNullOrEmpty(raw)) return;
-
-            if (!int.TryParse(
-                    raw.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int index))
-            {
-                Debug.LogError(
-                    $"[lane-b] {SpawnIndexVariable}='{raw}' is not an integer. The spawn is NOT "
-                    + "pinned and this run is a coin flip again (X-22).");
-                return;
-            }
-
             ISpawnPointDirectory inner = NetServerBindings.SpawnPoints;
-            if (inner == null)
-            {
-                Debug.LogError(
-                    $"[lane-b] {SpawnIndexVariable}={index} but no ISpawnPointDirectory is "
-                    + "installed, so there is nothing to pin. A scene with no ActorManager "
-                    + "installs none. The spawn is NOT pinned.");
-                return;
-            }
 
-            if (index >= inner.Count)
+            LaneBSpawnPin.Outcome outcome = LaneBSpawnPin.Evaluate(
+                Read(SpawnIndexVariable),
+                inner != null,
+                inner != null ? inner.Count : 0,
+                final,
+                out int index,
+                out string message);
+
+            switch (outcome)
             {
-                Debug.LogError(
-                    $"[lane-b] {SpawnIndexVariable}={index} is outside the scene's {inner.Count} "
-                    + "spawn point(s). The spawn is NOT pinned and this run is a coin flip "
-                    + "again (X-22).");
-                return;
+                case LaneBSpawnPin.Outcome.NotRequested:
+                case LaneBSpawnPin.Outcome.Retry:
+                    return;
+
+                case LaneBSpawnPin.Outcome.Failed:
+                    // Once. This runs every frame until the deadline, and a per-frame error
+                    // would bury the run's own log under thousands of copies of itself.
+                    if (!_spawnPinReported)
+                    {
+                        _spawnPinReported = true;
+                        Debug.LogError("[lane-b] " + message);
+                    }
+                    return;
             }
 
             var pinned = new PinnedSpawnPointDirectory(inner, index);
@@ -332,7 +342,7 @@ namespace Ironfront.Net.Unity.Diagnostics
                 Strip(FindFirstObjectByType<NetClientBootstrap>(FindObjectsInactive.Include),
                       "NetClient");
                 NetContext.SetRole(NetRole.Server);
-                PinSpawnPointIfRequested();
+                PinSpawnPointIfRequested(final: false);
             }
             else
             {
@@ -393,7 +403,16 @@ namespace Ironfront.Net.Unity.Diagnostics
             if (!_serverAnnounced)
             {
                 var server = FindFirstObjectByType<NetServerBootstrap>(FindObjectsInactive.Include);
-                if (server != null && server.SlotPool.IsFilled)
+                bool announcing = server != null && server.SlotPool.IsFilled;
+
+                // Retried here, with the ready line below as its deadline: at sceneLoaded the
+                // spawn directory still answers 0 because ActorManager.StartGame() has not run
+                // yet, and taking that 0 as an answer is what left every "pinned" run unpinned
+                // (X-22, see LaneBSpawnPin). Nothing can join before the line below, so nothing
+                // can spawn before it.
+                PinSpawnPointIfRequested(final: announcing);
+
+                if (announcing)
                 {
                     _serverAnnounced = true;
 
