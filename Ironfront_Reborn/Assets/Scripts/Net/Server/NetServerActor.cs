@@ -2,6 +2,7 @@ using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication;
 using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Movement;
+using System;
 using UnityEngine;
 
 namespace Ironfront.Net.Unity.Server
@@ -218,10 +219,34 @@ namespace Ironfront.Net.Unity.Server
             if (slot < 0) return false;
 
             IGameplayActorSource source = Source;
-            if (source == null) return false;
+            if (source == null)
+            {
+                LogSwitchIntent(slot, "no gameplay source");
+                return false;
+            }
 
             source.SwitchWeapon(slot);
+            LogSwitchIntent(slot, "forwarded");
             return true;
+        }
+
+        // Ledger X-31. The grenade never gets held, and every link of the chain reads correct in
+        // source: the programme asks for slot 2, InputButtonPacker sets SwitchWeapon2,
+        // InputFrame.WeaponSlot decodes 2, the slots are armed (`slot2[FRAG toggleable=False]`),
+        // and Actor.SwitchWeapon's guards all pass for a live body holding a non-toggleable
+        // weapon. Reading further is out of road -- what is missing is whether this edge is
+        // reached at all, and with what.
+        //
+        // Off unless asked for, matching IRONFRONT_LOG_SHOTS; observation only, per the
+        // phase-3d section 6 decision that permits gated diagnostic logging.
+        private static bool? _switchLogging;
+
+        private void LogSwitchIntent(int slot, string outcome)
+        {
+            _switchLogging ??= Environment.GetEnvironmentVariable("IRONFRONT_LOG_LOADOUT") == "1";
+            if (_switchLogging != true) return;
+
+            Debug.Log($"[switch] actor={ActorId} slot={slot} outcome={outcome} weaponId={WeaponId}");
         }
 
         public byte AmmoInClip

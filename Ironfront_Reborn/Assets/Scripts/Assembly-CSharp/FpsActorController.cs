@@ -322,6 +322,22 @@ public class FpsActorController : ActorController
 		defaultMix.TransitionTo(8f);
 	}
 
+	/// <summary>
+	/// Whether this controller is currently reading the player's input. Read-only.
+	/// </summary>
+	/// <remarks>
+	/// Exists for the lane-B artifact and nothing else. Check 13 is "death -> input disable ->
+	/// respawn screen", and the harness could record the death and the respawn window and NOT
+	/// the term in the middle: <c>inputEnabled</c> is private, and the obvious proxy is a trap,
+	/// because <c>DisableInput</c> also clears <c>characterController.enabled</c> while X-19's
+	/// fix has <c>ClientPredictionStage</c> RE-ASSERTING that capsule every tick. So the capsule
+	/// says nothing about input.
+	///
+	/// Observation only -- no setter, no behaviour. Phase-3d section 6 permits read-only
+	/// accessors by a decision recorded in that file.
+	/// </remarks>
+	public bool IsInputEnabled => inputEnabled;
+
 	public override void DisableInput()
 	{
 		characterController.enabled = false;

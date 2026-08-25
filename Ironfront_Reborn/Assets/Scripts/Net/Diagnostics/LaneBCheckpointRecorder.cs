@@ -489,6 +489,21 @@ namespace Ironfront.Net.Unity.Diagnostics
                 Num("weaponId", state.WeaponId); Comma();
                 Num("predictedShots", state.PredictedShots); Comma();
                 Num("ammoCorrections", state.SnapshotAmmoCorrections); Comma();
+                // Check 13's middle term, and the reason X-29 named it missing: driverEnabled
+                // above says whether the COMPONENT runs (it must, to accept a respawn request),
+                // which is a different fact from whether the dead player's input is suppressed.
+                // FpsActorController.IsInputEnabled is that fact, and it is read-only.
+                FpsActorController localForInput = FpsActorController.instance;
+                if (localForInput != null)
+                {
+                    _json.Append("\"localInputEnabled\":")
+                         .Append(localForInput.IsInputEnabled ? "true" : "false"); Comma();
+                }
+                else
+                {
+                    _json.Append("\"localInputEnabled\":null"); Comma();
+                }
+
                 _json.Append("\"canRespawn\":")
                      .Append(state.CanRequestRespawn(now) ? "true" : "false"); Comma();
                 Num("secondsUntilRespawn", state.SecondsUntilRespawn(now)); Comma();
