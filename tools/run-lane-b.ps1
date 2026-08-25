@@ -82,6 +82,22 @@ param(
     # pair is co-located either way. 0 is as good a default as any.
     [int] $SpawnIndex = -1,
 
+    # Pin the primary weapon every server-spawned body is armed with, by NAME.
+    #
+    # Ledger X-27: `AiActorController.GetLoadout` draws each slot with `Random.Range` over a
+    # private name array, and a networked player's server-side body goes through it. Three runs
+    # of the SAME programme with the spawn already pinned produced weapon 1, 1 and 15 -- 30
+    # shots against 14 -- so a flake rate across them is a rate across three different
+    # experiments. Seeding does not fix this and already did not, for the same reason it did
+    # not fix the spawn: the seed pins the draw SEQUENCE, and three clients join at times
+    # nobody controls.
+    #
+    # Empty (the default) leaves the draw alone, matching -SpawnIndex's -1. Names come from
+    # `AiActorController.primaryWeaponNames`: RK-44, 76 EAGLE, SL-DEFENDER, SIGNAL DMR,
+    # RECON LRR. The name is NOT validated -- nothing outside Assembly-CSharp can -- so a
+    # misspelling arms nobody and shows up as `weaponId` in the checkpoint record.
+    [string] $Weapon = "",
+
     # NetworkSimulator preset applied to every process. "typical" is 50 ms one-way (100 ms RTT)
     # with 5% loss, which is check 7's stated condition exactly.
     [ValidateSet("off", "lan", "good", "typical", "bad", "awful")]
@@ -221,7 +237,7 @@ function Set-CommonEnvironment {
 function Clear-ClientEnvironment {
     foreach ($n in @("IRONFRONT_LANEB_ROLE", "IRONFRONT_LANEB_LABEL", "IRONFRONT_LANEB_PROGRAMME",
                      "IRONFRONT_CLIENT_PLAYER_ID", "IRONFRONT_CLIENT_DISPLAY_NAME",
-                     "IRONFRONT_LANEB_SPAWN_INDEX",
+                     "IRONFRONT_LANEB_SPAWN_INDEX", "IRONFRONT_LANEB_WEAPON",
                      "IRONFRONT_GAMESERVER_TRANSPORT", "IRONFRONT_GAMESERVER_UDP_PORT")) {
         Remove-Item "env:$n" -ErrorAction SilentlyContinue
     }
@@ -242,9 +258,11 @@ try {
     # Server only: the clients place nobody, so the variable would be inert on them and only
     # make the three logs disagree about what the run was configured to do.
     if ($SpawnIndex -ge 0) { $env:IRONFRONT_LANEB_SPAWN_INDEX = "$SpawnIndex" }
+    if ($Weapon)            { $env:IRONFRONT_LANEB_WEAPON = $Weapon }
 
     $spawnNote = if ($SpawnIndex -ge 0) { "spawn=pinned:$SpawnIndex" } else { "spawn=sampled (X-22: this run is a coin flip)" }
-    Write-Host "[lane-b] starting the server (port $Port, sim=$Sim/$SimSeed, $spawnNote)"
+    $weaponNote = if ($Weapon) { "weapon=pinned:$Weapon" } else { "weapon=drawn (X-27: not comparable to another run)" }
+    Write-Host "[lane-b] starting the server (port $Port, sim=$Sim/$SimSeed, $spawnNote, $weaponNote)"
     $server = Start-Process -FilePath $player -PassThru -ArgumentList @(
         "-batchmode", "-nographics", "-logFile", $serverLog)
     $processes += @{ Label = "server"; Process = $server }
@@ -410,6 +428,8 @@ $run = [ordered]@{
     port           = $Port
     set            = $Set
     smoke          = [bool]$Smoke
+    spawnIndex     = $SpawnIndex
+    pinnedWeapon   = $(if ($Weapon) { $Weapon } else { $null })
     clients        = $clients | ForEach-Object { @{ label = $_.Label; playerId = $_.PlayerId; displayName = $_.Name; programme = $_.Programme } }
     failures       = $failures
     passed         = ($failures.Count -eq 0)
