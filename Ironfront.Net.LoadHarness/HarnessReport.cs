@@ -18,7 +18,13 @@ namespace Ironfront.Net.LoadHarness
     public sealed class HarnessReport
     {
         /// <summary>Bumped when a field changes meaning, so old reports stay readable.</summary>
-        public string Schema { get; init; } = "ironfront.loadharness/1";
+        /// <remarks>
+        /// <c>/2</c> added <see cref="ClientBlock.Wire"/> — the per-opcode byte attribution
+        /// phase 4's bandwidth decomposition reads. Additive only: every <c>/1</c> field kept
+        /// its name and its meaning, so the 3E artifacts under <c>artifacts/lane-a/</c> stay
+        /// readable and comparable against a <c>/2</c> run.
+        /// </remarks>
+        public string Schema { get; init; } = "ironfront.loadharness/2";
 
         public string? Label { get; init; }
         public bool Smoke { get; init; }
@@ -110,6 +116,9 @@ namespace Ironfront.Net.LoadHarness
 
             public LatencyBlock SnapshotIntervalMs { get; init; } = new LatencyBlock();
 
+            /// <summary>Where this client's received bytes went, by message type.</summary>
+            public WireBlock Wire { get; init; } = new WireBlock();
+
             public static ClientBlock From(SyntheticClient client, double durationSec)
             {
                 TransportStats stats = client.Stats;
@@ -135,7 +144,127 @@ namespace Ironfront.Net.LoadHarness
                     UnknownMessages = client.UnknownMessages,
                     StateSamples = client.Capture.Samples.Count,
                     SnapshotIntervalMs = LatencyBlock.From(client.SnapshotIntervalMs),
+                    Wire = WireBlock.From(client.Wire, stats.BytesReceived, durationSec),
                 };
+            }
+        }
+
+        /// <summary>
+        /// One client's received bytes, split by the message type that carried them.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Three levels, and they are not the same number.</b>
+        /// <see cref="DatagramBytes"/> is what the link carried — the transport's own counter,
+        /// whole datagrams, including the acks and heartbeats that carry no payload.
+        /// <see cref="PayloadBytes"/> is what reached the router. The
+        /// <see cref="Types"/> rows are what each message type inside those payloads cost. A
+        /// bandwidth budget is spent at the datagram level, so that is the number graded;
+        /// the rows are what say <i>which feature</i> spent it.
+        /// </para>
+        /// <para>
+        /// <b><see cref="TransportOverheadBytes"/> is reported, not assumed away.</b> It is the
+        /// gap between the two upper levels, and on a lossy wire it grows with retransmission —
+        /// a decomposition that quietly equated payload bytes with link bytes would under-report
+        /// the cost of the exact condition check 7 names.
+        /// </para>
+        /// </remarks>
+        public sealed class WireBlock
+        {
+            /// <summary>Whole datagrams, from the transport. The number a budget is graded against.</summary>
+            public long DatagramBytes { get; init; }
+
+            /// <summary>Bytes of PAYLOAD regions delivered to the router.</summary>
+            public long PayloadBytes { get; init; }
+
+            /// <summary>Payload batches received.</summary>
+            public long PayloadCount { get; init; }
+
+            /// <summary><see cref="DatagramBytes"/> minus <see cref="PayloadBytes"/>.</summary>
+            public long TransportOverheadBytes { get; init; }
+
+            /// <summary>Batch headers — channel and message count, 3 B per batch.</summary>
+            public long FrameHeaderBytes { get; init; }
+
+            /// <summary>Per-message headers — type and length, 3 B per message.</summary>
+            public long MessageHeaderBytes { get; init; }
+
+            /// <summary>Payload bytes no reader could walk. Non-zero means a truncated batch.</summary>
+            public long UnaccountedBytes { get; init; }
+
+            /// <summary>Batches whose own header was too short to read.</summary>
+            public long InvalidPayloads { get; init; }
+
+            /// <summary>
+            /// Whether the parts sum to <see cref="PayloadBytes"/> exactly.
+            /// </summary>
+            /// <remarks>
+            /// False makes every share below unreliable, so it is a field of the report rather
+            /// than an assertion in a log nobody reads. The analysis script refuses to print a
+            /// percentage when this is false.
+            /// </remarks>
+            public bool Reconciles { get; init; }
+
+            /// <summary>Datagram bytes per second — the per-client bandwidth figure.</summary>
+            public double DatagramBytesPerSecond { get; init; }
+
+            /// <summary>Actor entries inside the snapshots received, off their own ActorCount byte.</summary>
+            public long SnapshotEntries { get; init; }
+
+            /// <summary>Snapshot bodies too short to hold a header. Non-zero invalidates the mean.</summary>
+            public long ShortSnapshots { get; init; }
+
+            /// <summary>Per message type, largest first.</summary>
+            public IReadOnlyList<TypeBlock> Types { get; init; } = Array.Empty<TypeBlock>();
+
+            public static WireBlock From(WireByteTally tally, long datagramBytes, double durationSec)
+            {
+                var types = new List<TypeBlock>();
+                foreach (WireByteTally.TypeRow row in tally.Rows())
+                {
+                    types.Add(new TypeBlock
+                    {
+                        Name = row.Name,
+                        Opcode = row.Opcode,
+                        Messages = row.Messages,
+                        BodyBytes = row.BodyBytes,
+                        WireBytes = row.WireBytes,
+                        WireBytesPerSecond = durationSec <= 0 ? 0 : row.WireBytes / durationSec,
+                    });
+                }
+
+                return new WireBlock
+                {
+                    DatagramBytes = datagramBytes,
+                    PayloadBytes = tally.PayloadBytes,
+                    PayloadCount = tally.PayloadCount,
+                    TransportOverheadBytes = datagramBytes - tally.PayloadBytes,
+                    FrameHeaderBytes = tally.FrameHeaderBytes,
+                    MessageHeaderBytes = tally.MessageHeaderBytes,
+                    UnaccountedBytes = tally.UnaccountedBytes,
+                    InvalidPayloads = tally.InvalidPayloads,
+                    Reconciles = tally.Reconciles,
+                    DatagramBytesPerSecond = durationSec <= 0 ? 0 : datagramBytes / durationSec,
+                    SnapshotEntries = tally.SnapshotEntries,
+                    ShortSnapshots = tally.ShortSnapshots,
+                    Types = types,
+                };
+            }
+
+            /// <summary>One message type's share of this client's inbound bytes.</summary>
+            public sealed class TypeBlock
+            {
+                public string Name { get; init; } = string.Empty;
+                public byte Opcode { get; init; }
+                public long Messages { get; init; }
+
+                /// <summary>Bodies only.</summary>
+                public long BodyBytes { get; init; }
+
+                /// <summary>Bodies plus this type's own 3-byte message headers.</summary>
+                public long WireBytes { get; init; }
+
+                public double WireBytesPerSecond { get; init; }
             }
         }
 

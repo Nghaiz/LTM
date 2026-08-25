@@ -518,6 +518,40 @@ ships and is already tested; that fallback existing is a precondition of startin
 | **The client prefab array is unauthored.** | `NetClientProjectilePresenter._prefabsByKind` has to be filled in the Editor — a client cannot instantiate a projectile it has no prefab for. Until it is, no replicated projectile renders, and `UnrenderableKinds` counts every message that arrives. The server side needs no authoring: it learns each kind's numbers from the first prefab of that kind it fires. |
 | **Ten plan-named tests are not written** — the four grenade tests, the three throwable tests, and the guided-missile end-to-end pair. | They exercise Unity `MonoBehaviour` behaviour, and this phase adds no EditMode harness. Their subjects are covered at the library level where the arithmetic lives. |
 
+### 6.1.1. The ten tests are WON'T-DO, and this is the reason — recorded 2026-08-26
+
+> Added by [`plans/debt-closure/phases/phase-4-measure.md`](../../debt-closure/phases/phase-4-measure.md)
+> task 4.5, per the debt-closure track's decision **P-D9**. The row above said the tests were
+> not written and gave a reason that reads as scheduling — *"this phase adds no EditMode
+> harness"* — which invites the next reader to add one. They cannot. The obstacle is structural,
+> and leaving it unstated is what turns a decision into a gap somebody re-discovers.
+
+**No test assembly can reference these subjects.** The four grenade tests, the three throwable
+tests, the two guided-missile tests and the end-to-end pair all exercise `MonoBehaviour`
+behaviour that compiles into **`Assembly-CSharp`**, and `Assembly-CSharp` is a Unity predefined
+assembly that no `.asmdef` may name. Two facts fix that, both re-verified on 2026-08-26:
+
+- `Assets/Tests/EditMode/Ironfront.Net.Unity.Server.Tests.asmdef` references exactly
+  `Ironfront.Net.Unity.Server` and `Ironfront.Net.Unity.Shared` — neither contains the
+  subjects.
+- `Assets/Scripts/Net/Client/` carries **no `.asmdef` at all** (zero files matching `*.asmdef`
+  under that tree), so `NetClientProjectilePresenter` and its neighbours land in
+  `Assembly-CSharp` along with `GrenadeProjectile`, `ThrowableWeapon` and `Projectile`.
+
+So this is **won't-do**, not "not yet". Writing them would require first splitting the client
+into its own assembly, which is a refactor with its own risk and its own plan — and their
+arithmetic is already pinned at the library level, in `Ironfront.Net.Replication.Tests`, where
+it can be tested without an engine at all.
+
+**Reopening condition, stated so nobody has to guess it.** If `Assets/Scripts/Net/Client/` ever
+gains its own `.asmdef` — which [`plans/asmdef-seam/plan.md`](../../asmdef-seam/plan.md) exists
+to do — these ten become writable, and this record should be revisited rather than inherited.
+Until then a reader finding no grenade test has an answer here instead of a hole.
+
+**What this does NOT excuse.** The gap is in the *Unity* half only. Nothing here licenses
+leaving the library-level arithmetic untested, and nothing here applies to a subject that could
+live in `Ironfront.Net.Replication` and was merely put in `Assembly-CSharp` for convenience.
+
 **Acceptance criteria (§ 4) as merged:** 2, 3, 7, 12 and 13 are met and pinned. 4 and 10 are met in
 code with no Unity-level test. **1, 5, 6, 8, 9 and 11 are NOT met** — every one of them needs either
 the authored client prefabs or a running two-client session, and claiming them from a green
