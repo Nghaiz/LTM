@@ -63,6 +63,25 @@ param(
     # observer left to grade the killfeed.
     [string] $Set = "combat",
 
+    # Pin every player to one spawn slot, so a re-run is a repeat rather than a coin flip.
+    #
+    # Ledger X-22: four runs opened at 1,078 m, 940 m, ~940 m and adjacent, and checks 1, 2, 4
+    # and 13 all need the pair to actually meet -- so three runs in four could not tell a failed
+    # check from a run that never got close enough to try. Seeding does NOT fix this and already
+    # did not: -UnitySeed pins the draw SEQUENCE, while three clients join over a real socket at
+    # times nobody controls, so each run reaches MoveToSpawnPoint at a different point in it.
+    #
+    # -1 (the default) leaves selection alone. Any slot index narrows the server's directory to
+    # that one point, so every player spawns on it and the pair is adjacent every run. An index
+    # outside the scene's count logs an error and leaves the run UNPINNED rather than failing --
+    # see LaneBHarness.PinSpawnPointIfRequested.
+    #
+    # Dustbowl has SIX slots, 0..5, and every one of them has placed a real player across the
+    # recorded runs under artifacts/lane-b (grep "placed at spawn point"), so any of the six is
+    # a valid pin. Which one barely matters: every player lands on whichever is chosen, so the
+    # pair is co-located either way. 0 is as good a default as any.
+    [int] $SpawnIndex = -1,
+
     # NetworkSimulator preset applied to every process. "typical" is 50 ms one-way (100 ms RTT)
     # with 5% loss, which is check 7's stated condition exactly.
     [ValidateSet("off", "lan", "good", "typical", "bad", "awful")]
@@ -202,6 +221,7 @@ function Set-CommonEnvironment {
 function Clear-ClientEnvironment {
     foreach ($n in @("IRONFRONT_LANEB_ROLE", "IRONFRONT_LANEB_LABEL", "IRONFRONT_LANEB_PROGRAMME",
                      "IRONFRONT_CLIENT_PLAYER_ID", "IRONFRONT_CLIENT_DISPLAY_NAME",
+                     "IRONFRONT_LANEB_SPAWN_INDEX",
                      "IRONFRONT_GAMESERVER_TRANSPORT", "IRONFRONT_GAMESERVER_UDP_PORT")) {
         Remove-Item "env:$n" -ErrorAction SilentlyContinue
     }
@@ -219,8 +239,12 @@ try {
     $env:IRONFRONT_LANEB_LABEL = "server"
     $env:IRONFRONT_GAMESERVER_TRANSPORT = "udp"
     $env:IRONFRONT_GAMESERVER_UDP_PORT = "$Port"
+    # Server only: the clients place nobody, so the variable would be inert on them and only
+    # make the three logs disagree about what the run was configured to do.
+    if ($SpawnIndex -ge 0) { $env:IRONFRONT_LANEB_SPAWN_INDEX = "$SpawnIndex" }
 
-    Write-Host "[lane-b] starting the server (port $Port, sim=$Sim/$SimSeed)"
+    $spawnNote = if ($SpawnIndex -ge 0) { "spawn=pinned:$SpawnIndex" } else { "spawn=sampled (X-22: this run is a coin flip)" }
+    Write-Host "[lane-b] starting the server (port $Port, sim=$Sim/$SimSeed, $spawnNote)"
     $server = Start-Process -FilePath $player -PassThru -ArgumentList @(
         "-batchmode", "-nographics", "-logFile", $serverLog)
     $processes += @{ Label = "server"; Process = $server }

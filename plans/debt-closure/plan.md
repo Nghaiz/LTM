@@ -116,26 +116,25 @@ first time** (`occluded=20` of `resolved=30`, against `occluded=0` across 260 pr
 inherit its blocking role, and the same **sixteen** group-B assertions (B-1…B-11, B-13…B-17) are shut
 behind them for two independent reasons:
 
-| row | why a lane-B run still grades nothing |
+| row | state |
 |---|---|
-| **X-20** | Twenty shots that DID enter a hitbox were rejected by the world linecast — `resolved=30 occluded=20 hits=0`, victim on 100 health. Two readings survive the run and it cannot separate them. Next measurement: print what the linecast actually hit, same shape as 3F.1 |
-| **X-22** | Spawn pairing is not under the runner's control. Four post-fix runs opened at 1,078 m, 940 m, ~940 m and adjacent; only the last closed to 10.1 m. Checks 1, 2, 4 and 13 therefore ride a coin flip, and a failure cannot be told from a run that never got close enough to try |
+| **X-20** | **OPEN, and now the only thing between here and 3D.** Twenty shots that DID enter a hitbox were rejected by the world linecast — `resolved=30 occluded=20 hits=0`, victim on 100 health. Two readings survive the run and it cannot separate them. Next measurement: print what the linecast actually hit, same shape as 3F.1 |
+| **X-22** | **CLOSED 2026-08-25.** Spawn pairing was a coin flip: four post-fix runs opened at 1,078 m, 940 m, ~940 m and adjacent. The seed was never the missing piece — `LaneBHarness` has always called `Random.InitState`, and a seed pins the draw *sequence* while three clients join over a socket at times nobody controls. `PinnedSpawnPointDirectory` narrows the server's directory to one slot instead, so reservoir sampling has nothing to sample between. `-SpawnIndex 0..5` on `run-lane-b.ps1` |
 
-Both point at phase 3D, and neither is a fix 3D can assume. The arrow that read `3F ──▶ 3D` now
-reads `X-20 + X-22 ──▶ 3D`; nothing else about the ordering moved.
+So the arrow that read `3F ──▶ 3D` and then `X-20 + X-22 ──▶ 3D` now reads `X-20 ──▶ 3D`. Nothing
+else about the ordering moved.
 
 ```
-X-20 ──┐
-       ├──▶ 3D (re-run, 11 verdicts) ──▶ 3E ──▶ 4 ──▶ 5
-X-22 ──┘                                 │              ▲
-                                         └──▶ asmdef    │  X-6 (task 6.3)
-                                              track     │  gates this arrow
-6 ───────────────────────────────────────────────────────┘
+X-20 ──▶ 3D (re-run, 11 verdicts) ──▶ 3E ──▶ 4 ──▶ 5
+                                      │              ▲
+                                      └──▶ asmdef    │  X-6 (task 6.3)
+                                           track     │  gates this arrow
+6 ────────────────────────────────────────────────────┘
 7 ─── independent of everything, in both directions
 8 ─── independent
 ```
 
-**Open rows: 32** — counted from the ledger table, not decremented from a previous total. It was 28
+**Open rows: 31** — counted from the ledger table, not decremented from a previous total. It was 28
 on 2026-08-23; X-19 closed, X-20, X-21 and X-22 opened in its wake — the expected shape when a fix
 removes the thing that was masking what sat behind it — and **X-23** was both filed and closed on
 2026-08-25.
@@ -161,8 +160,9 @@ Unity assemblies, which no `dotnet` target references.
 
 Three orderings, and nothing else is ordered:
 
-1. **X-20 and X-22 before 3D.** 3D cannot return a verdict on a run where no shot damages, nor on a
-   run whose two clients may never meet. This replaces "3F before 3D", which is done.
+1. **X-20 before 3D.** 3D cannot return a verdict on a run where no shot damages. This replaces
+   "X-20 and X-22 before 3D", whose second half closed on 2026-08-25, which in turn replaced
+   "3F before 3D".
 2. **Phase 6 task 6.3 (X-6) before Phase 5.** The cutover's proof rests on the `ownsHealth` guard,
    which has no pin today.
 3. **[`plans/asmdef-seam/plan.md`](../asmdef-seam/plan.md) after 3E.** Refactoring the client while a

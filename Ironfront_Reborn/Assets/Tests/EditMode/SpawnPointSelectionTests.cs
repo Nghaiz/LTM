@@ -101,6 +101,69 @@ namespace Ironfront.Net.Unity.Server.Tests
                 + "sampling has collapsed onto one point");
         }
 
+        // ---- PinnedSpawnPointDirectory - the X-22 fix -----------------------------------
+
+        [Test]
+        public void APinnedDirectoryReturnsThatIndexOnEveryDraw()
+        {
+            // The mirror of SamplingReachesEveryEligiblePointRatherThanAlwaysTheFirst, and the
+            // whole point of X-22: with one candidate, Random.Range(0, 1) has a single value, so
+            // the result does not depend on where in the draw sequence this call landed. That is
+            // what a seed alone could not deliver - three clients join over a real socket at
+            // times nobody controls.
+            var points = new PinnedSpawnPointDirectory(new FakeSpawnPoints(-1, -1, -1), 2);
+
+            for (int attempt = 0; attempt < 300; attempt++)
+            {
+                Assert.AreEqual(2, ServerCombatBridge.ChooseSpawnIndex(points, 0),
+                    $"attempt {attempt} escaped the pin - the run is a coin flip again");
+            }
+        }
+
+        [Test]
+        public void APinnedDirectoryNarrowsAndNeverWidens()
+        {
+            // Pinning index 0, which team 0 owns. Team 1 must still get nothing rather than be
+            // handed a point the team rule forbids: the pin removes candidates, it does not
+            // grant eligibility.
+            var points = new PinnedSpawnPointDirectory(new FakeSpawnPoints(0, -1, -1), 0);
+
+            Assert.AreEqual(0, ServerCombatBridge.ChooseSpawnIndex(points, 0));
+            Assert.AreEqual(-1, ServerCombatBridge.ChooseSpawnIndex(points, 1),
+                "the pin widened eligibility - a pinned point owned by one team must starve the "
+                + "other, loudly, rather than silently admit it");
+        }
+
+        [Test]
+        public void PinningAnEmptySlotChoosesNothingRatherThanFallingBack()
+        {
+            // A fallback to sampling here would be the exact failure X-22 describes: a run that
+            // quietly stopped being deterministic. -1 trips MoveToSpawnPoint's existing warning.
+            var points = new PinnedSpawnPointDirectory(new FakeSpawnPoints(-1, null, -1), 1);
+
+            Assert.AreEqual(-1, ServerCombatBridge.ChooseSpawnIndex(points, 0));
+        }
+
+        [Test]
+        public void APinnedIndexIsASlotAndNeverTheNoPointSentinel()
+        {
+            // -1 is what ChooseSpawnIndex RETURNS for "nowhere to go". Accepting it as an input
+            // would make a typo read as a deliberate pin onto nothing.
+            Assert.Throws<System.ArgumentOutOfRangeException>(
+                () => new PinnedSpawnPointDirectory(new FakeSpawnPoints(-1), -1));
+        }
+
+        [Test]
+        public void APinnedDirectoryDelegatesCountAndPosition()
+        {
+            var inner = new FakeSpawnPoints(-1, -1, -1);
+            var points = new PinnedSpawnPointDirectory(inner, 1);
+
+            Assert.AreEqual(3, points.Count, "Count must stay the scene's, not the pin's");
+            Assert.AreEqual(1, points.PinnedIndex);
+            Assert.AreEqual(new Vector3(1f, 0f, 0f), points.GetSpawnPosition(1));
+        }
+
         [Test]
         public void ChoosingAPointDoesNotAskAnyPointForItsPosition()
         {

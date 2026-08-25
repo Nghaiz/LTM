@@ -81,6 +81,10 @@ namespace Ironfront.Net.Unity.Diagnostics
         private const string LabelVariable = "IRONFRONT_LANEB_LABEL";
         private const string UnitySeedVariable = "IRONFRONT_LANEB_UNITY_SEED";
         private const string TimeoutVariable = "IRONFRONT_LANEB_TIMEOUT";
+        private const string SpawnIndexVariable = "IRONFRONT_LANEB_SPAWN_INDEX";
+
+        /// <summary>Set once the directory is wrapped; sceneLoaded can fire more than once.</summary>
+        private static bool _spawnPinned;
 
         private const int ExitTimedOut = 2;
         private const int ExitProgrammeUnusable = 3;
@@ -199,6 +203,80 @@ namespace Ironfront.Net.Unity.Diagnostics
             if (SceneManager.GetActiveScene().name != map) SceneManager.LoadScene(map);
         }
 
+        /// <summary>
+        /// Narrows the server's spawn directory to one slot when
+        /// <c>IRONFRONT_LANEB_SPAWN_INDEX</c> asks for it, so a lane-B re-run is a repeat rather
+        /// than a coin flip (ledger <b>X-22</b>).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Here, and not in <see cref="Install"/>.</b> The pin is validated against the
+        /// scene's spawn-point count, and those points do not exist until the map scene has
+        /// loaded — <see cref="Install"/> runs at <c>AfterSceneLoad</c> of whatever scene the
+        /// process started in, which for a lane-B run is not the map. Validating there would
+        /// read a count of zero and reject every index.
+        /// </para>
+        /// <para>
+        /// <b>Every failure path logs an error and leaves the run UNPINNED rather than
+        /// throwing.</b> A harness that refuses to start teaches nobody anything; a harness that
+        /// starts while quietly no longer deterministic is the whole of X-22. So the run
+        /// proceeds and says, in the artifact, that it is a coin flip again.
+        /// </para>
+        /// <para>
+        /// The eligibility of the pinned point is logged for both teams at pin time. A point
+        /// whose <c>SpawnPoint.owner</c> names one team starves the other, and that surfaces
+        /// later as the "no eligible spawn point" warning from <c>MoveToSpawnPoint</c> — far
+        /// from here, and much harder to connect back.
+        /// </para>
+        /// </remarks>
+        private static void PinSpawnPointIfRequested()
+        {
+            if (_spawnPinned) return;
+
+            string raw = Read(SpawnIndexVariable);
+            if (string.IsNullOrEmpty(raw)) return;
+
+            if (!int.TryParse(
+                    raw.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int index))
+            {
+                Debug.LogError(
+                    $"[lane-b] {SpawnIndexVariable}='{raw}' is not an integer. The spawn is NOT "
+                    + "pinned and this run is a coin flip again (X-22).");
+                return;
+            }
+
+            ISpawnPointDirectory inner = NetServerBindings.SpawnPoints;
+            if (inner == null)
+            {
+                Debug.LogError(
+                    $"[lane-b] {SpawnIndexVariable}={index} but no ISpawnPointDirectory is "
+                    + "installed, so there is nothing to pin. A scene with no ActorManager "
+                    + "installs none. The spawn is NOT pinned.");
+                return;
+            }
+
+            if (index >= inner.Count)
+            {
+                Debug.LogError(
+                    $"[lane-b] {SpawnIndexVariable}={index} is outside the scene's {inner.Count} "
+                    + "spawn point(s). The spawn is NOT pinned and this run is a coin flip "
+                    + "again (X-22).");
+                return;
+            }
+
+            var pinned = new PinnedSpawnPointDirectory(inner, index);
+            NetServerBindings.SpawnPoints = pinned;
+            _spawnPinned = true;
+
+            Debug.Log(
+                $"[lane-b] spawn pinned to index {index} of {inner.Count} at "
+                + $"{inner.GetSpawnPosition(index)} - every player spawns here, so the pair is "
+                + "adjacent on every run. "
+                + $"team0Eligible={pinned.IsEligible(index, 0)} "
+                + $"team1Eligible={pinned.IsEligible(index, 1)} "
+                + "(a false here starves that team and MoveToSpawnPoint will warn).");
+        }
+
         private void OnDestroy() => SceneManager.sceneLoaded -= OnSceneLoaded;
 
         /// <summary>
@@ -254,6 +332,7 @@ namespace Ironfront.Net.Unity.Diagnostics
                 Strip(FindFirstObjectByType<NetClientBootstrap>(FindObjectsInactive.Include),
                       "NetClient");
                 NetContext.SetRole(NetRole.Server);
+                PinSpawnPointIfRequested();
             }
             else
             {
