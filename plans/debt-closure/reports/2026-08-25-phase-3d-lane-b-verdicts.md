@@ -197,6 +197,9 @@ says nothing about whether it matches the **server's** score. Harness gap, phase
 ```
 dotnet test (Ironfront.sln)      1,727 passed, 0 failed   (was 1,703: +9 aim cases,
                                                             +15 spawn-pin cases)
+EditMode (Unity, via MCP)        64 passed, 0 failed
+SpecChecker                      OK -- 90 constants match protocol-spec.md
+ClientWiringGate                 15/15 routed, 13/13 writers, 8 authoring checks
 check-net-layering               PASS, 379 scanned, no new debt
 check-plugin-define-constraints  PASS, 3 bridge DLLs, all UNITY_EDITOR-only
 check-unity-meta                 PASS, 1,872 assets / 1,944 .meta
@@ -209,6 +212,12 @@ spawn pin                        index 0 of 6, all three actors on point 0, 3 of
 `LaneBSpawnPin.Evaluate` (empty directory answered rather than retried — the shipped bug
 verbatim / out-of-range index retried rather than answered / missing directory never
 reaching its deadline). Each red is the test written for that fault, not a neighbour.
+
+One note on the EditMode line, because it read the other way for an hour: the Editor
+reported "Unity project has compilation errors" against a tree with **zero** `error CS` in
+`Editor.log`, and an `assets-refresh` re-reported it while doing 0.003 s of work. It was a
+stale flag in a long-running Editor process, and a close/reopen cleared it — 64 of 64 on the
+same tree. Recorded so the next person does not chase a compile error that is not there.
 
 **What no green here covers.** No human has watched any of the 21 frames per run, so checks
 8's and 9's human halves are unverdicted rather than passed. And per `run-lane-b.ps1`'s own
