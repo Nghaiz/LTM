@@ -105,25 +105,55 @@ or the authoring targets fields the refactor is about to move.
 
 **Total: ~4 weeks.**
 
-### 4a. Where the track actually stands — 2026-08-23
+### 4a. Where the track actually stands — 2026-08-25
 
-Phases 0, 1, 2, 3A, 3B, 3C are merged. 3D built its vehicle and found five defects with it; the
-fifth, **X-19**, is still open and holds **sixteen of the twenty-eight** remaining rows shut, because
-group B is sixteen assertions over one run shape and the run does not resolve a hit.
+Phases 0, 1, 2, 3A, 3B, 3C and **3F** are merged. 3F closed **X-19** (#173): the client was moving a
+body with its CharacterController disabled — no sweep, no floor, no collision flags — and drawing it
+0.332 m below the one the server held, so every shot passed over. **Shots now enter hitboxes for the
+first time** (`occluded=20` of `resolved=30`, against `occluded=0` across 260 pre-fix shots).
+
+**They still do not damage, and 3D still cannot return a verdict.** X-19's fix surfaced two rows that
+inherit its blocking role, and the same **sixteen** group-B assertions (B-1…B-11, B-13…B-17) are shut
+behind them for two independent reasons:
+
+| row | why a lane-B run still grades nothing |
+|---|---|
+| **X-20** | Twenty shots that DID enter a hitbox were rejected by the world linecast — `resolved=30 occluded=20 hits=0`, victim on 100 health. Two readings survive the run and it cannot separate them. Next measurement: print what the linecast actually hit, same shape as 3F.1 |
+| **X-22** | Spawn pairing is not under the runner's control. Four post-fix runs opened at 1,078 m, 940 m, ~940 m and adjacent; only the last closed to 10.1 m. Checks 1, 2, 4 and 13 therefore ride a coin flip, and a failure cannot be told from a run that never got close enough to try |
+
+Both point at phase 3D, and neither is a fix 3D can assume. The arrow that read `3F ──▶ 3D` now
+reads `X-20 + X-22 ──▶ 3D`; nothing else about the ordering moved.
 
 ```
-3F ──▶ 3D (re-run, 11 verdicts) ──▶ 3E ──▶ 4 ──▶ 5
-                                     │              ▲
-                                     └──▶ asmdef    │  X-6 (task 6.3)
-                                          track     │  gates this arrow
-6 ───────────────────────────────────────────────────┘
+X-20 ──┐
+       ├──▶ 3D (re-run, 11 verdicts) ──▶ 3E ──▶ 4 ──▶ 5
+X-22 ──┘                                 │              ▲
+                                         └──▶ asmdef    │  X-6 (task 6.3)
+                                              track     │  gates this arrow
+6 ───────────────────────────────────────────────────────┘
 7 ─── independent of everything, in both directions
 8 ─── independent
 ```
 
+**Open rows: 33** — counted from the ledger table, not decremented from a previous total. It was 28
+on 2026-08-23; X-19 closed, X-20, X-21 and X-22 opened in its wake — the expected shape when a fix
+removes the thing that was masking what sat behind it — and **X-23** was filed today for a blocker
+that had never had a row: `develop`'s CI has been red since 2026-08-21 and nothing requires anyone
+to notice. It is the first thing to read in
+[`plans/00-shared/roadmap.md`](../00-shared/roadmap.md) § 1a. **X-21** (the reconciler replays inputs
+without ever moving the predicted position) is quiet rather than gone — X-19's fix dropped
+`corrections` 2208 → 0 by removing what was being corrected, so it resurfaces the moment prediction
+has real work to do. It is filed to phase 6.
+
+`dotnet test` at this commit: **1,700 passed, 0 failed, 0 skipped** across seven projects
+(Protocol 259, Replication 1,119, Transport 89, MasterServer 81, Client.Flow 79, Client.Input 39,
+Configuration 34). That is success criterion 7 at the current boundary; it says nothing about the
+Unity assemblies, which no `dotnet` target references.
+
 Three orderings, and nothing else is ordered:
 
-1. **3F before 3D.** 3D cannot return a verdict on a run where no shot lands.
+1. **X-20 and X-22 before 3D.** 3D cannot return a verdict on a run where no shot damages, nor on a
+   run whose two clients may never meet. This replaces "3F before 3D", which is done.
 2. **Phase 6 task 6.3 (X-6) before Phase 5.** The cutover's proof rests on the `ownsHealth` guard,
    which has no pin today.
 3. **[`plans/asmdef-seam/plan.md`](../asmdef-seam/plan.md) after 3E.** Refactoring the client while a
@@ -131,6 +161,17 @@ Three orderings, and nothing else is ordered:
 
 Phases 6, 7 and 8 are parallel from now. [`plans/consolidation/plan.md`](../consolidation/plan.md) is
 the source for 6's scope (§ 4) and 7's path (§§ 5–6).
+
+### 4b. Deployment — where it is, and what is waiting on a person
+
+Not a phase of this track; recorded here because it is the other half of "what is open".
+
+| Item | State |
+|---|---|
+| Master + game-server images | **Done.** Both GHCR packages are **public**; master `sha256:5c1770f8…` (develop, 2026-08-25), game server `sha256:f88f04e2…` (`gameserver-v0.2.0`). Phase 7's "nobody has run the renamed workflow" no longer holds |
+| Azure VM (`20.214.142.73`) stack | **Waiting on ngtukien**, issues #78 § 3.2–3.6 and #127. Nobody else can do it: `ssh_source_cidrs` admits one IP. Steps and both digests: [`docs/handover-ngtukien.md`](../../docs/handover-ngtukien.md) |
+| fly.io master | **Landed** (#174) — `infra/fly/`, TCP 27000, SQLite volume, digest-pinned, one machine |
+| fly.io game server | **Blocked, and not by us.** Fly carries no UDP over public IPv6 and requires a bind to `fly-global-services`; the design is IPv6-only and `UdpPeer.cs:92` binds `IPAddress.Any`. Three steps to unblock, in [`infra/fly/README.md`](../../infra/fly/README.md). Until then the game server runs only on the compose VM |
 
 ---
 

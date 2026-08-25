@@ -16,8 +16,19 @@ blocker was resolved by renaming the target to `ghcr.io/<owner>/ironfront-game-s
 that does **not exist yet**, so the workflow creates it, and a workflow-created package is linked to
 the repo and inherits its visibility. No token refresh, no UI step.
 
-Nobody has run the renamed workflow. Until somebody does, "resolved" is a design, not a fact
-(`wired-not-just-present.md`).
+**Resolved in fact, 2026-08-25.** The workflow has run and the package exists:
+`gh api user/packages/container/ironfront-game-server` reports `visibility=public`, holding
+`sha256:f88f04e2bf95ee08641d98428181a2b8116216ae69989cc210be36b45a6bd429`
+(tags `gameserver-v0.2.0`, `2026-08-21T14-25-11VN`). `ironfront-master` is public too, at
+`sha256:5c1770f87e2ff8ff14f1a46d2c09649965fa86d29fa46cdeb482a5f4131da23c` off `develop`. Both are
+pullable without credentials, which is what made the fly.io master deploy (#174) possible.
+
+The sibling `ironfront-gameserver` (no hyphen) is still there and still **private** — the abandoned
+2026-08-18 build. Nothing should reference it; `infra/compose/.env.example` and
+[`docs/handover-ngtukien.md`](../../../docs/handover-ngtukien.md) both name the hyphenated one.
+
+What this phase still owes is the *next* digest, not the first: the path below is unproven for any
+build after `gameserver-v0.2.0`.
 
 ## 2. The path, and the one gate on it
 

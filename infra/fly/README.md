@@ -80,8 +80,13 @@ Until (1) and (2) are done, the game server belongs on the compose VM.
   self-signed pin flow in [`infra/tls/`](../tls/), which is for the compose VM.
 - **One machine, enforced by `--ha=false`.** Fly provisions a standby otherwise, and two
   masters share neither the SQLite volume nor the connection state.
-- **GHCR packages are private by default.** Whether Fly can pull
-  `ghcr.io/nghaiz/ironfront-master` without extra credentials has not been verified here. If a
-  deploy fails on an authentication error, the documented fallback is to re-tag through Fly's
-  own registry: `fly auth docker && docker tag <digest> registry.fly.io/kien-master-2026:<ts>
-  && docker push registry.fly.io/kien-master-2026:<ts>`.
+- **The GHCR package is public, so Fly needs no registry credentials.** Checked 2026-08-25:
+  `gh api user/packages/container/ironfront-master` reports `visibility=public`. Note the
+  sibling `ironfront-gameserver` (no hyphen) is a private, abandoned 2026-08-18 build — the live
+  package is `ironfront-game-server`, with the hyphen.
+- **Latest master digest on `develop`** (2026-08-25T15:19:38VN, from the merge of #174):
+  ```
+  ghcr.io/nghaiz/ironfront-master@sha256:5c1770f87e2ff8ff14f1a46d2c09649965fa86d29fa46cdeb482a5f4131da23c
+  ```
+  Re-read it rather than copying this line once it ages:
+  `gh api user/packages/container/ironfront-master/versions --jq '.[0].name'`.
