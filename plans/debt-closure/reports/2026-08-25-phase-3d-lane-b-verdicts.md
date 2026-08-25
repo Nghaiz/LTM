@@ -73,13 +73,13 @@ these frames — so every human-judgment half below reads **unverdicted**, not p
 | 4 | E10 — grenade detonates at the same place on both clients | **BLOCKED** — no programme throws one | — |
 | 5 | E11 — A16 camera hijack | **NOT GRADED** — the case is never provoked | `x25-torso-aim-02/*-checkpoints.jsonl` (`activeCameras`, baseline only) |
 | 6 | E12 — scene ordering | **NOT GRADED** — the case is never provoked | — |
-| 7 | Two clients see the same vehicle in the same place while a third drives it, 100 ms / 5 % | **PARTIAL** — parity exact, but nobody drove and the sim was off | `x25-torso-aim-02/observer-{a,b}-checkpoints.jsonl` (`vehicles`) |
+| 7 | Two clients see the same vehicle in the same place while a third drives it, 100 ms / 5 % | **BLOCKED** (was: partial) — parity exact, but no client can enter a seat at all (**X-30**) | `x25-torso-aim-02/observer-{a,b}-checkpoints.jsonl` (`vehicles`) |
 | 8 | No perceptible input lag; convergence without visible snapping | **PARTIAL** — zero snaps measured, on a weak sample; human half unverdicted | `x25-torso-aim-02/*-checkpoints.jsonl` (`correctionSnaps`, `lastPositionErrorM`) |
 | 9 | Kinematic remote path breaks no cosmetic outside Task 3's six | **UNVERDICTED** — human judgment, frames captured, nobody has looked | `x25-torso-aim-02/*.png` (21 frames) |
-| 12 | Turret parity across two clients | **BLOCKED** — no client mans a turret | `x25-torso-aim-02/…` (`vehicles[].turretYaw`, unmanned) |
+| 12 | Turret parity across two clients | **BLOCKED** — no client *can* man a turret (**X-30**) | `x25-torso-aim-02/…` (`vehicles[].turretYaw`, unmanned) |
 | 13 | Death → input disable → respawn screen | **PARTIAL** — death and respawn window shown, input-disable not measured at all | `x25-torso-aim-02/observer-a-checkpoints.jsonl` |
 
-**0 of 11 clean passes. 1 pass with a caveat, 4 partials, 1 flaky, 2 blocked, 3 not graded.**
+**0 of 11 clean passes. 1 pass with a caveat, 4 partials, 1 flaky, 2 blocked, 3 not graded** — re-counted 2026-08-25 after X-30 as **1 caveated pass, 3 partials, 1 flaky, 3 blocked, 3 not graded** (check 7 moved partial → blocked).
 That is the honest count and it is a large move from the previous state, which was eleven
 rows blocked behind a run that could not resolve a trigger.
 
@@ -124,8 +124,13 @@ the artifact records. That is the parity half, and it is the strongest number in
 
 It is not check 7. `drivenVehicleId: 0` on all three clients — nobody drove anything — and
 the run used `-Sim off` rather than `typical` (100 ms RTT / 5 % loss). Check 7 reads *"while
-a third drives it"* and names the network condition; both are missing, so the verdict is
-partial and the remaining work is a vehicle-mount programme step plus `-Sim typical`.
+a third drives it"* and names the network condition; both are missing.
+
+**Corrected 2026-08-25:** this was graded PARTIAL on the assumption that the missing half was
+a programme step nobody had written. It is not. `SeatRequestMessage` has zero production
+senders, so **no client can enter a seat**, and no programme can express one because it is a
+reliable opcode rather than an input bit. Check 7 and check 12 are **BLOCKED on X-30**, not
+partial — the distinction matters because a partial invites someone to go write the programme.
 
 ### Check 8 — zero snaps, on a sample too quiet to mean much
 
@@ -232,9 +237,21 @@ trusted.
 Nothing below is blocked on a defect; all of it is programme and harness work this phase
 owns.
 
-1. **A vehicle set** — mount, drive, and run under `-Sim typical`. Unblocks checks 7 and 12,
-   and gives check 8 a sample worth grading.
-2. **A grenade step** — check 4.
+1. ~~**A vehicle set** — mount, drive, and run under `-Sim typical`. Unblocks checks 7 and 12,
+   and gives check 8 a sample worth grading.~~ **CORRECTED 2026-08-25: this is not programme
+   work and the vehicle set cannot be written.** `SeatRequestMessage` has **zero production
+   senders** — searched with `grep -rn "SeatRequestMessage" --include=*.cs` across the whole
+   repository excluding `Library/`, `obj/` and `bin/`; every hit is the protocol struct, its
+   conformance tests, the server half, or replication tests. A real client can be *put* in a
+   seat (`ClientVehicleStage` subscribes `Router.OnSeatChange`) and has no way to *ask* for
+   one. Entering a seat is a reliable opcode of its own, not an `InputButtons` bit, so no
+   recorded programme can express it. **Checks 7 and 12 are blocked on a client sender**, filed
+   as **X-30**. `-Sim typical` remains this phase's, and remains untested.
+2. **A grenade step** — check 4, and it is cheaper than it looked: no new wire bit is needed.
+   `switchWeaponSlot` to the gear slot followed by `fire` is how a grenade is thrown —
+   `ScriptedInputProgramme` records this, and V7-D10 retired the dedicated `ThrowGrenade` bit
+   rather than implementing a second route to firing that bypasses `Weapon.CanFire()`. X-27's
+   `PinnedLoadoutDirectory` can pin `gear1` to `FRAG`, so the step is deterministic.
 3. **The A16 case and a scene-ordering case** — checks 5 and 6, each needing the situation
    provoked rather than merely photographed.
 4. **The two missing measurements of X-29** — checks 2 and 13 cannot be graded without them.
