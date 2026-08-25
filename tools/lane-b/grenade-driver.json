@@ -1,0 +1,38 @@
+{
+  "name": "grenade-driver",
+  "steps": [
+    {
+      "seconds": 5.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "spawned",
+      "seconds": 2.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "armed",
+      "seconds": 3.0,
+      "aimAtPlayer": "OBS-A",
+      "switchWeaponSlot": 2
+    },
+    {
+      "checkpoint": "thrown",
+      "seconds": 2.0,
+      "aimAtPlayer": "OBS-A",
+      "switchWeaponSlot": 2,
+      "fire": true
+    },
+    {
+      "checkpoint": "detonated",
+      "seconds": 6.0,
+      "aimAtPlayer": "OBS-A",
+      "switchWeaponSlot": 2
+    },
+    {
+      "checkpoint": "settled",
+      "seconds": 6.0,
+      "aimAtPlayer": "OBS-A"
+    }
+  ]
+}

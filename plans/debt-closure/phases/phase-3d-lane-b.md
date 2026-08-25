@@ -41,6 +41,14 @@
   "mount, drive" line is corrected. Unlike **X-8**, this is needed BY the phase's own checks —
   it is why the runner was sized for three clients. Adjacent win: check 4 needs no new wire bit
   (`switchWeaponSlot` to the gear slot, then `fire`), and X-27's seam can pin `gear1` to `FRAG`.
+  **Fourth pass: that adjacent win did not land, and check 4 is still blocked (X-31).** The gear
+  pin, the grenade programme set and an explosion recorder all work — `artifacts/lane-b/x-grenade-01`
+  runs 3 of 3 clean with `gear1='FRAG'` pinned and `explosionsAttached: true` on every client — and
+  **`weaponId` never leaves 1**, so the grenade is never equipped and `explosionsTotal` is 0. The
+  wire path is intact end to end (checked, including that `NetServerActor.WeaponId` reads the LIVE
+  actor, so a real switch would have shown). Two candidates survive and the run cannot separate
+  them: an empty `weapons[2]`, or `Actor.SwitchWeapon` taking its `IsToggleable()` branch. Filed,
+  not guessed.
   Reports: [`2026-08-25-phase-3d-lane-b-verdicts.md`](../reports/2026-08-25-phase-3d-lane-b-verdicts.md).
   Prior: [`2026-08-25-x20-the-linecast-blocked-nothing.txt`](../reports/2026-08-25-x20-the-linecast-blocked-nothing.txt),
   [`2026-08-23-x19-lane-b-rerun.txt`](../reports/2026-08-23-x19-lane-b-rerun.txt).

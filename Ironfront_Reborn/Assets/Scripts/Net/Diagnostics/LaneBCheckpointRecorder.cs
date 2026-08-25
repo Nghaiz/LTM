@@ -53,6 +53,7 @@ namespace Ironfront.Net.Unity.Diagnostics
         private readonly string _programme;
         private readonly LaneBRunSeeds _seeds;
         private readonly ScriptedTargetSolver _solver;
+        private readonly LaneBExplosionLog _explosions;
         private readonly StringBuilder _json = new StringBuilder(4096);
 
         private static readonly UTF8Encoding NoBom = new UTF8Encoding(false);
@@ -63,13 +64,15 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// never had a target", and no screenshot can tell those apart.
         /// </param>
         public LaneBCheckpointRecorder(string directory, string label, string programme,
-                                       LaneBRunSeeds seeds, ScriptedTargetSolver solver = null)
+                                       LaneBRunSeeds seeds, ScriptedTargetSolver solver = null,
+                                       LaneBExplosionLog explosions = null)
         {
             _directory = directory;
             _label = label;
             _programme = programme;
             _seeds = seeds;
             _solver = solver;
+            _explosions = explosions;
 
             Directory.CreateDirectory(_directory);
             RecordPath = Path.Combine(_directory, _label + "-checkpoints.jsonl");
@@ -195,6 +198,8 @@ namespace Ironfront.Net.Unity.Diagnostics
             AppendObjectives();
             Comma();
             AppendCameras();
+            Comma();
+            AppendExplosions();
 
             if (screenshot != null)
             {
@@ -663,6 +668,64 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// carry what A's cameras WERE before B did anything. Recording the enabled set at every
         /// checkpoint makes the before-and-after a diff rather than a memory.
         /// </remarks>
+        /// <summary>
+        /// Every authoritative explosion this client has been sent — check 4 (E10).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b><c>explosionsAttached</c> is the load-bearing field, not the list.</b> An empty
+        /// list from a log that never attached and an empty list from a run where nothing
+        /// exploded are opposite verdicts for check 4, and they render identically. So the
+        /// listening state is stated rather than inferred.
+        /// </para>
+        /// <para>
+        /// <b>What comparing two clients' lists can and cannot show.</b> Both decode the same
+        /// <c>S_EXPLOSION</c> through the same <c>Quantize.UnpackPos</c>, so agreeing POSITIONS
+        /// prove nothing — that comparison cannot fail. What can fail is RECEIPT: a blast
+        /// interest management culled for one client, a client whose presenter never
+        /// instantiated, a blast the server never emitted. Read the counts first and the
+        /// coordinates second.
+        /// </para>
+        /// <para>
+        /// The thrower's DRAWN position is not here and cannot be: the presenter suppresses the
+        /// server's confirmation of a blast it already predicted, and exposes neither the drawn
+        /// centre nor the suppressor's verdict. Ledger X-29.
+        /// </para>
+        /// </remarks>
+        private void AppendExplosions()
+        {
+            if (_explosions == null)
+            {
+                _json.Append("\"explosionsAttached\":false,\"explosionsTotal\":0,\"explosions\":[]");
+                return;
+            }
+
+            _json.Append("\"explosionsAttached\":")
+                 .Append(_explosions.Attached ? "true" : "false"); Comma();
+            Num("explosionsTotal", _explosions.TotalReceived); Comma();
+
+            _json.Append("\"explosions\":[");
+
+            IReadOnlyList<LaneBExplosionLog.Entry> entries = _explosions.Entries;
+            for (int i = 0; i < entries.Count; i++)
+            {
+                if (i > 0) Comma();
+
+                LaneBExplosionLog.Entry e = entries[i];
+                _json.Append('{');
+                Num("atSeconds", e.Seconds); Comma();
+                Num("sourceActorId", e.SourceActorId); Comma();
+                Num("x", e.X); Comma();
+                Num("y", e.Y); Comma();
+                Num("z", e.Z); Comma();
+                Num("radiusMetres", e.RadiusMetres); Comma();
+                Str("kind", e.Kind.ToString());
+                _json.Append('}');
+            }
+
+            _json.Append(']');
+        }
+
         private void AppendCameras()
         {
             Camera[] cameras = Object.FindObjectsByType<Camera>(

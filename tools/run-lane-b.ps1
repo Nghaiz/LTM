@@ -98,6 +98,16 @@ param(
     # misspelling arms nobody and shows up as `weaponId` in the checkpoint record.
     [string] $Weapon = "",
 
+    # Pin the FIRST GEAR slot the same way, by name. Check 4 (E10, "grenade detonates at the
+    # same place on both clients") needs a grenade in slot 2, and gear is drawn from the same
+    # random array the primary is (`AiActorController.gearNames`: BEU AW1, FRAG, SPEARHEAD,
+    # AMMO BAG, MEDIPACK -- so an unpinned run holds a grenade about 3 times in 10).
+    #
+    # No new wire bit is needed to throw it: `switchWeaponSlot` to slot 2 then `fire` is the
+    # whole of it. V7-D10 retired the dedicated ThrowGrenade bit rather than add a second route
+    # to firing that does not pass Weapon.CanFire().
+    [string] $Gear = "",
+
     # NetworkSimulator preset applied to every process. "typical" is 50 ms one-way (100 ms RTT)
     # with 5% loss, which is check 7's stated condition exactly.
     [ValidateSet("off", "lan", "good", "typical", "bad", "awful")]
@@ -237,7 +247,7 @@ function Set-CommonEnvironment {
 function Clear-ClientEnvironment {
     foreach ($n in @("IRONFRONT_LANEB_ROLE", "IRONFRONT_LANEB_LABEL", "IRONFRONT_LANEB_PROGRAMME",
                      "IRONFRONT_CLIENT_PLAYER_ID", "IRONFRONT_CLIENT_DISPLAY_NAME",
-                     "IRONFRONT_LANEB_SPAWN_INDEX", "IRONFRONT_LANEB_WEAPON",
+                     "IRONFRONT_LANEB_SPAWN_INDEX", "IRONFRONT_LANEB_WEAPON", "IRONFRONT_LANEB_GEAR",
                      "IRONFRONT_GAMESERVER_TRANSPORT", "IRONFRONT_GAMESERVER_UDP_PORT")) {
         Remove-Item "env:$n" -ErrorAction SilentlyContinue
     }
@@ -259,9 +269,11 @@ try {
     # make the three logs disagree about what the run was configured to do.
     if ($SpawnIndex -ge 0) { $env:IRONFRONT_LANEB_SPAWN_INDEX = "$SpawnIndex" }
     if ($Weapon)            { $env:IRONFRONT_LANEB_WEAPON = $Weapon }
+    if ($Gear)              { $env:IRONFRONT_LANEB_GEAR = $Gear }
 
     $spawnNote = if ($SpawnIndex -ge 0) { "spawn=pinned:$SpawnIndex" } else { "spawn=sampled (X-22: this run is a coin flip)" }
     $weaponNote = if ($Weapon) { "weapon=pinned:$Weapon" } else { "weapon=drawn (X-27: not comparable to another run)" }
+    if ($Gear) { $weaponNote += ", gear=pinned:$Gear" }
     Write-Host "[lane-b] starting the server (port $Port, sim=$Sim/$SimSeed, $spawnNote, $weaponNote)"
     $server = Start-Process -FilePath $player -PassThru -ArgumentList @(
         "-batchmode", "-nographics", "-logFile", $serverLog)
@@ -430,6 +442,7 @@ $run = [ordered]@{
     smoke          = [bool]$Smoke
     spawnIndex     = $SpawnIndex
     pinnedWeapon   = $(if ($Weapon) { $Weapon } else { $null })
+    pinnedGear     = $(if ($Gear) { $Gear } else { $null })
     clients        = $clients | ForEach-Object { @{ label = $_.Label; playerId = $_.PlayerId; displayName = $_.Name; programme = $_.Programme } }
     failures       = $failures
     passed         = ($failures.Count -eq 0)
