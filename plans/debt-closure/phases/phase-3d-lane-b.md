@@ -34,6 +34,13 @@
   inside the driver's 6 m hold distance, so the approach never runs and the pin parks the shooter
   exactly where X-26 fires.
   Report: [`2026-08-25-x27-x28-and-what-the-flake-really-was.txt`](../reports/2026-08-25-x27-x28-and-what-the-flake-really-was.txt).
+  **Third pass: checks 7 and 12 are BLOCKED, not partial — `SeatRequestMessage` has zero
+  production senders (X-30).** A real client can be PUT in a seat and cannot ask for one, and a
+  seat request is a reliable opcode rather than an `InputButtons` bit, so no recorded programme
+  can express it. The vehicle set this phase owed cannot be written, and the earlier report's
+  "mount, drive" line is corrected. Unlike **X-8**, this is needed BY the phase's own checks —
+  it is why the runner was sized for three clients. Adjacent win: check 4 needs no new wire bit
+  (`switchWeaponSlot` to the gear slot, then `fire`), and X-27's seam can pin `gear1` to `FRAG`.
   Reports: [`2026-08-25-phase-3d-lane-b-verdicts.md`](../reports/2026-08-25-phase-3d-lane-b-verdicts.md).
   Prior: [`2026-08-25-x20-the-linecast-blocked-nothing.txt`](../reports/2026-08-25-x20-the-linecast-blocked-nothing.txt),
   [`2026-08-23-x19-lane-b-rerun.txt`](../reports/2026-08-23-x19-lane-b-rerun.txt).
