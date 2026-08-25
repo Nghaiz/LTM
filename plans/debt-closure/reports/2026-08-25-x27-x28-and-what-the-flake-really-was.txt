@@ -1,0 +1,100 @@
+X-27 and X-28 are closed, and check 1's flake turns out to be X-26 at close range
+=================================================================================
+
+Written:  2026-08-25
+Runs:     artifacts/lane-b/x27-pinned-01, -02, -03
+Command:  $env:IRONFRONT_LOG_SHOTS = "1"
+          pwsh tools/run-lane-b.ps1 -Set combat -SpawnIndex 0 -Weapon "RK-44" \
+               -OutputDirectory artifacts/lane-b/x27-pinned-0N
+Seeds:    UnityEngine.Random=20260821   NetworkSimulator=off/12345
+Result:   3 of 3 clients exit 0, 7 of 7 checkpoints each, passed=true, all three runs
+
+
+1. WHAT WAS FIXED, AND THAT IT TOOK
+------------------------------------
+
+X-27 -- the weapon. `AiActorController.GetLoadout` draws every slot with `Random.Range`
+over a private static name array, and a networked player's server-side body comes through
+it. Three earlier runs of the same programme produced weapon 1, 1 and 15. Now:
+
+    x27-pinned-01   weapon=1     x27-pinned-02   weapon=1     x27-pinned-03   weapon=1
+
+X-28 (first half) -- the witness. `combat-observer-b.json` strafes for its first seven
+seconds, before anything fires. The resolver's nearest target, which was the WITNESS at
+2.7 m in the run before this change:
+
+    x27-pinned-01   nearest[actor=42]  (the target)   239 of 239 shot lines
+    x27-pinned-02   nearest[actor=42]  (the target)   240 of 240
+    x27-pinned-03   nearest[actor=43]  (the witness)  241 of 241
+
+Two of three. The strafe is 7 s of walk against a spawn point all three still share, so it
+buys separation rather than guaranteeing it. Filed as still-open under X-28 rather than
+claimed closed: the second half of that row -- a third party shooting the driver -- was
+never addressed and did not recur in these three.
+
+
+2. THE FLAKE RATE DID NOT MOVE, AND THAT IS THE FINDING
+--------------------------------------------------------
+
+Check 1 is still 1 of 3. With the weapon pinned and the witness mostly out of the way, the
+cause is now visible with nothing else on top of it:
+
+    run   min distance   occluded   of which the victim's own bone   hits   outcome
+    01        3.30 m         0                    0                   4     KILL
+    02        1.52 m        16                   16                   0     nothing
+    03        1.93 m        18                   18                   0     nothing
+
+**Every occlusion in all three runs is `collider=Bone_002 layer=8`, at `frac=0.938..0.960`.**
+Not one is terrain, not one is a building. `frac` near 1.0 puts the blocker at the endpoint
+-- inside the victim it is supposed to have hit -- and the occlusion mask `-2049` excludes
+only layer 11, so layer 8 blocks.
+
+That is X-26, and this is a far stronger statement of it than the row was filed with. The
+original observation (12 of 30 at ~1 m, in a run whose weapon and witness were both
+uncontrolled) could not rule out the weapon or the witness. This one can: same weapon, same
+programme, same spawn slot, and the ONLY run that scored is the only run where the pair
+never got inside 3.3 m.
+
+**So X-26 is distance-dependent and it is check 1's flake.** Not the aim (X-25, closed),
+not the loadout (X-27, closed), not the witness (X-28, mostly), and not the spawn (X-22,
+closed).
+
+WHAT THIS DOES NOT SAY. Three runs are three runs. 3.3 m is one clean sample above the
+threshold and 1.52/1.93 m are two below it; the crossover is somewhere in between and this
+does not locate it. It also does not say the bone SHOULD be excluded -- widening the mask is
+a game decision with its own consequences for shooting through bodies, and X-26 belongs to
+phase 6 for exactly that reason.
+
+
+3. WHY THE PAIR IS THAT CLOSE AT ALL
+-------------------------------------
+
+`combat-driver.json` sets `holdDistanceMeters: 6.0`, which reads as "close to 6 m". It never
+runs: with the spawn pinned, all three bodies start INSIDE 6 m of each other, so
+`ApproachMoveZ` returns 0 from the first frame and the driver never moves. The 1.5..3.3 m
+spread across runs is spawn jitter at the shared point, not an approach.
+
+This is the cost of X-22's pin stated precisely, and it is why X-28's remaining half matters
+more than it looked: the pin does not merely co-locate the witness, it puts the SHOOTER
+inside the range where X-26 fires. A programme that backed the driver off to 5-6 m before
+firing would probably score every run -- and would be measuring around a game defect rather
+than through it, which is a decision for whoever picks up X-26, not a thing to slip into the
+harness quietly.
+
+
+4. GREEN
+---------
+
+  EditMode                  74 passed, 0 failed  (was 64; +10 LoadoutPinTests)
+  check-net-layering        PASS, 380 scanned, no new debt
+  check-unity-meta          PASS, every asset paired
+  lane-b x27-pinned-01..03  3 clients, 7 checkpoints each, exit 0, passed=true, 3 of 3
+  spawn pin                 index 0 of 6, all three actors on point 0, 3 of 3
+  weapon pin                weapon=1 on every shot line of every run
+
+Mutation-proved, four mutants, four reds, each caught by the test written for it:
+`OverrideFor` ignoring the slot reds AnUnpinnedSlotDefersToTheDraw and
+EachSlotAnswersWithItsOwnName; `Normalize` passing blanks through reds
+ABlankNameDefersRatherThanArmingNothing and ANameIsTrimmed; dropping the pins-nothing guard
+reds ADirectoryThatPinsNothingIsRejected; dropping `Loadouts` from `Clear()` reds
+ClearRemovesAnInstalledDirectory.

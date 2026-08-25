@@ -22,6 +22,18 @@
   plus **X-27** and **X-28** before any flake rate is quoted again.
   Filed, not fixed: **X-26** (the victim's own rig bone occludes the shot — X-20's reading 2, proven
   from the collider name), **X-27**, **X-28**, **X-29**.
+  **Second pass, same day: X-27 and X-28's first half are closed, and check 1's flake has a name.**
+  The weapon was a random draw inside `AiActorController.GetLoadout` (weapon 1, 1, 15 across three
+  runs), fixed with an `ILoadoutDirectory` seam rather than a seed — the first edit this phase has
+  made to shipped gameplay code, taken as an explicit decision against §6 rather than assumed. The
+  witness now strafes out of the line before anything fires (2 of 3 runs). **The flake rate did not
+  move, and that is the finding:** with both controlled, all 34 occlusions across three runs are
+  `Bone_002 layer=8` at `frac≈0.94`, and the only run that scored is the only one where the pair
+  never got inside **3.30 m** (1.52 m and 1.93 m scored nothing). **X-26 is check 1's flake, and it
+  is distance-dependent.** A consequence worth carrying: with the spawn pinned every body starts
+  inside the driver's 6 m hold distance, so the approach never runs and the pin parks the shooter
+  exactly where X-26 fires.
+  Report: [`2026-08-25-x27-x28-and-what-the-flake-really-was.txt`](../reports/2026-08-25-x27-x28-and-what-the-flake-really-was.txt).
   Reports: [`2026-08-25-phase-3d-lane-b-verdicts.md`](../reports/2026-08-25-phase-3d-lane-b-verdicts.md).
   Prior: [`2026-08-25-x20-the-linecast-blocked-nothing.txt`](../reports/2026-08-25-x20-the-linecast-blocked-nothing.txt),
   [`2026-08-23-x19-lane-b-rerun.txt`](../reports/2026-08-23-x19-lane-b-rerun.txt).
@@ -127,7 +139,14 @@ tools/                                                  (runner script)
 plans/debt-closure/reports/                             (artifacts + phase report)
 ```
 
-Does not modify shipped server or client behaviour. Per
+Does not modify shipped server or client behaviour — **with one recorded exception, taken as a
+decision on 2026-08-25 rather than assumed.** Closing **X-27** needed the loadout draw to be
+overridable, and that draw is `AiActorController.GetLoadout` reading a `private static string[]`
+in `Assembly-CSharp`. The two available shapes were an injection seam (a behaviour-neutral edit
+to shipped gameplay code) or reflection into the private field from the harness (no shipped edit,
+but it breaks silently on a rename). The seam was chosen. It is behaviour-identical with no
+directory installed, matches the `ISpawnPointDirectory` / `IGameplayActorSource` inversion the
+codebase already uses, and is the only shipped-code edit this phase has made. Per
 [`phase-3-harness.md`](phase-3-harness.md) § 7, a defect found here is filed and fixed in its own
 commit — never patched inside the harness. 3A exists because that rule was followed once already.
 
