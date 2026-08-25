@@ -118,14 +118,17 @@ behind them for two independent reasons:
 
 | row | state |
 |---|---|
-| **X-20** | **OPEN, and the only thing between here and 3D — but it is now a RUN away, not an investigation away.** Twenty shots that DID enter a hitbox were rejected by the world linecast: `resolved=30 occluded=20 hits=0`, victim on 100 health. Two readings survived and no artifact could separate them, because `IsOccluded` used `Physics.Linecast`'s bool overload and discarded the hit. As of 2026-08-25 it records the collider, its layer, and where along the ray it sits, and the shot log prints it as `occlusionHit[...]`. The collider NAME decides it: terrain or a building is reading 1 (real cover), the victim's own body is reading 2 (mask `-2049` excludes only layer 11). Same move 3F.1 made for X-19 |
+| **X-20** | **CLOSED 2026-08-25** — by the run, and it answered neither reading. `artifacts/lane-b/x20-occlusion-01`, pinned to slot 0: 240 trigger frames, every one `occlusionHit[none-this-shot]`, `occluded=0 resolved=6 hits=0`, victim on 100 health. There was no occlusion to name. The collider-name discriminator decides nothing because the linecast rejected nothing — and this does not settle the baseline either, which held at 10.1 m unpinned against this run's 4.7 m pinned. Different geometry, question retired. What it uncovered is **X-24** (a 3 cm seam between torso/arms at 1.550 and head at 1.580, where a ray hits nothing) and **X-25** (the harness aims at feet + `EYE_HEIGHT`, 0.02 m inside the head box's edge, so it meets that seam every time). `reports/2026-08-25-x20-the-linecast-blocked-nothing.txt` |
+| **X-25** | **OPEN, and now the only thing between here and 3D.** It replaces X-20 in that position and is the same shape: a harness change, not an investigation. `ScriptedTargetSolver` raises BOTH endpoints by `EYE_HEIGHT` 1.6 — correct in intent, since aiming at the target's origin from 1.6 m up is a shot into the feet, but feet + 1.6 is not centre of mass. Aim at the torso centre (feet + 1.20, nearest edge 0.35 m away) and the margin stops being two centimetres. Until then no lane-B combat run can score a hit, and 3D cannot grade check 1 or 13 |
+| **X-24** | **OPEN, routed to phase 6, and deliberately NOT a blocker for 3D.** The seam is a game defect and outlives the harness fix — X-25 stops the harness aiming into it, which is exactly why X-24 must keep its own row rather than disappear when the runs go green. It owes a measurement before a fix: `LagCompensator.Resolve` already loops all four boxes, so record the nearest box and its signed miss distance on a miss |
 | **X-22** | **CLOSED 2026-08-25.** Spawn pairing was a coin flip: four post-fix runs opened at 1,078 m, 940 m, ~940 m and adjacent. The seed was never the missing piece — `LaneBHarness` has always called `Random.InitState`, and a seed pins the draw *sequence* while three clients join over a socket at times nobody controls. `PinnedSpawnPointDirectory` narrows the server's directory to one slot instead, so reservoir sampling has nothing to sample between. `-SpawnIndex 0..5` on `run-lane-b.ps1` |
 
-So the arrow that read `3F ──▶ 3D` and then `X-20 + X-22 ──▶ 3D` now reads `X-20 ──▶ 3D`. Nothing
-else about the ordering moved.
+So the arrow that read `3F ──▶ 3D`, then `X-20 + X-22 ──▶ 3D`, then `X-20 ──▶ 3D`, now reads
+`X-25 ──▶ 3D`. The arrow has not shortened — X-20 closed and handed its position to the defect it
+was hiding. Nothing else about the ordering moved.
 
 ```
-X-20 ──▶ 3D (re-run, 11 verdicts) ──▶ 3E ──▶ 4 ──▶ 5
+X-25 ──▶ 3D (re-run, 11 verdicts) ──▶ 3E ──▶ 4 ──▶ 5
                                       │              ▲
                                       └──▶ asmdef    │  X-6 (task 6.3)
                                            track     │  gates this arrow
@@ -160,11 +163,21 @@ Unity assemblies, which no `dotnet` target references.
 
 Three orderings, and nothing else is ordered:
 
-1. **X-20 before 3D.** 3D cannot return a verdict on a run where no shot damages. This replaces
-   "X-20 and X-22 before 3D", whose second half closed on 2026-08-25, which in turn replaced
-   "3F before 3D". **What X-20 now needs is a lane-B run, not an investigation** — the instrument
-   that answers it landed on 2026-08-25, so the next pinned run (`-SpawnIndex 0`,
-   `IRONFRONT_LOG_SHOTS=1`) both closes X-20 and is 3D's own re-run.
+1. **X-25 before 3D.** 3D cannot return a verdict on a run where no shot damages, and after
+   2026-08-25 the reason it does not is X-25 rather than X-20. This replaces "X-20 before 3D",
+   which replaced "X-20 and X-22 before 3D", which replaced "3F before 3D". **X-25 is a harness
+   change, not an investigation** — aim at the torso centre instead of eye height — so the shape of
+   the remaining work is unchanged: one edit, then the pinned run is 3D's own re-run.
+
+   **A correction to what that re-run can deliver, found while running it.** "3D's 11 verdicts"
+   does not follow from one `-Set combat` run. `tools/lane-b/` holds `combat-*` and `smoke` and
+   nothing else, and the combat programmes have no grenade step and no vehicle step, so checks 4
+   (grenade parity), 7 (vehicle seen by two while a third drives, at 100 ms RTT / 5% loss),
+   9 (kinematic remote cosmetics) and 12 (turret parity) are not exercised by it at all — check 7
+   also needs `-Sim typical`, which the combat run does not pass. What a combat run can grade is
+   the subset the recorder captures: checks 1, 2, 3, 5, 6 and 13. **A vehicle programme set does
+   not exist yet and is unbuilt work**, and AC-2 grades all eleven, so it belongs in 3D's scope
+   rather than being discovered again at verdict time.
 2. **Phase 6 task 6.3 (X-6) before Phase 5.** The cutover's proof rests on the `ownsHealth` guard,
    which has no pin today.
 3. **[`plans/asmdef-seam/plan.md`](../asmdef-seam/plan.md) after 3E.** Refactoring the client while a
