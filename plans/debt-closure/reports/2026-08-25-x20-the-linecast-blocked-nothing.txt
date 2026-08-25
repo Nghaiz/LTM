@@ -138,10 +138,18 @@ naming R3, the file that was correct, and never naming McpPlugin.dll, the file t
 Two .meta lines fixed it and the build succeeded on the retry -- which is the whole causal
 proof: same tree, same command, one constraint added, Failure -> Success.
 
-It was never only a compile problem. defineConstraints are evaluated per target and UNITY_EDITOR
-is false in every player, so the shipping Linux dedicated server was equally unbuildable, and a
-build that HAD linked would have carried an HTTP bridge hosting Roslyn into the game server
-image -- the exact thing `EditorBuild.StripEditorOnlyDefines` was written to prevent.
+It was never only a compile problem, and the reach beyond the harness is DERIVED rather than run.
+No Linux dedicated-server build was attempted for this report. What is measured is that the
+Windows player's linker input listed McpPlugin.dll and McpPlugin.Common.dll among its allowed
+assemblies and did not list R3. What follows from the source, and not from a run: defineConstraints
+are evaluated against the target's define set, UNITY_EDITOR is false in every player of every
+target, and these .meta files carry no Server-specific platform entry (`Any: enabled: 1`, and only
+WindowsStoreApps disabled). So the server build takes the same two DLLs into the same linker and
+should fail the same way -- and a build that HAD linked would have carried an HTTP bridge hosting
+Roslyn into the game server image, the exact thing `EditorBuild.StripEditorOnlyDefines` was written
+to prevent. Read that as: the mechanism is shared, the failure is expected, nobody has watched it.
+Cheap to settle whenever a release build is next made; not worth a Linux toolchain run today,
+because the fix is identical either way.
 
 Nothing in CI could see it: no job builds a Unity player, `images.yml` downloads a pre-built
 Linux artifact from a release, and `build-test` is `dotnet build` over the pure-.NET libraries,
