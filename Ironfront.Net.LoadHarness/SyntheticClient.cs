@@ -47,6 +47,9 @@ namespace Ironfront.Net.LoadHarness
         private readonly Ironfront.Net.Unity.Client.BaselineAckPolicy _baselineAck =
             new Ironfront.Net.Unity.Client.BaselineAckPolicy();
         private readonly LatencyRecorder _snapshotIntervalMs = new LatencyRecorder();
+
+        /// <summary>Per-opcode byte attribution for phase 4's bandwidth decomposition.</summary>
+        private readonly WireByteTally _wire = new WireByteTally();
         private readonly List<InputFrame> _pending = new List<InputFrame>(FramesPerMessage);
         private readonly InputFrame[] _scratch = new InputFrame[FramesPerMessage];
         private readonly byte[] _body = new byte[ClientInputMessage.SizeFor(FramesPerMessage)];
@@ -126,6 +129,9 @@ namespace Ironfront.Net.LoadHarness
         public ClientMessageRouter Router => _router;
 
         public StateCapture Capture => _capture;
+
+        /// <summary>Which message types this client's received bytes went to.</summary>
+        public WireByteTally Wire => _wire;
 
         /// <summary>Gaps between applied snapshots, in milliseconds.</summary>
         /// <remarks>
@@ -227,7 +233,21 @@ namespace Ironfront.Net.LoadHarness
                 reliable: false);
         }
 
-        private void OnMessage(ReadOnlyMemory<byte> payload) => _router.Route(payload.Span);
+        /// <summary>
+        /// Routes the batch through the shipped client path, then attributes its bytes.
+        /// </summary>
+        /// <remarks>
+        /// <b>Route first, tally second.</b> The tally must never be able to change what the
+        /// router sees or when it sees it — a measurement that perturbs the thing measured is
+        /// the one failure this whole harness exists to avoid. Both reads are over the same
+        /// span and neither mutates it, so the order is a statement of precedence rather than
+        /// a correctness requirement.
+        /// </remarks>
+        private void OnMessage(ReadOnlyMemory<byte> payload)
+        {
+            _router.Route(payload.Span);
+            _wire.Observe(payload.Span);
+        }
 
         /// <summary>
         /// Records the cadence, captures the state, and acknowledges the baseline.
