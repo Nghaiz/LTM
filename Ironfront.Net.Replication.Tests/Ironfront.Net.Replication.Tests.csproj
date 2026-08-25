@@ -103,6 +103,8 @@
              Link="Linked\ScriptedInputCursor.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Diagnostics\ScriptedAim.cs"
              Link="Linked\ScriptedAim.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Diagnostics\LaneBSpawnPin.cs"
+             Link="Linked\LaneBSpawnPin.cs" />
   </ItemGroup>
 
 </Project>

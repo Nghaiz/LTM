@@ -19,6 +19,7 @@
 
 using System;
 using Ironfront.Net.Protocol;
+using Ironfront.Net.Replication.Combat;
 
 namespace Ironfront.Net.Unity.Diagnostics
 {
@@ -60,15 +61,38 @@ namespace Ironfront.Net.Unity.Diagnostics
     public static class ScriptedAim
     {
         /// <summary>
-        /// Where a scripted shooter aims on a standing body, as a height above its origin.
+        /// How far above its own feet a scripted shooter's eye sits — the same constant
+        /// <c>ServerCombatAuthority.EyePosition</c> raises the shooter by.
+        /// </summary>
+        public const float ShooterEyeHeight = ProtocolConstants.EYE_HEIGHT;
+
+        /// <summary>
+        /// Where a scripted shooter aims ON a standing body, as a height above that body's
+        /// feet: the torso box's centre.
         /// </summary>
         /// <remarks>
-        /// The eye, not the origin: <c>ServerCombatAuthority.EyePosition</c> raises the SHOOTER
-        /// by the same constant, so aiming at the target's origin would be aiming 1.6 m below
-        /// its head from 1.6 m up — a downward shot that lands at the feet, passes the hitbox at
-        /// close range, and misses entirely at any distance worth calling a range test.
+        /// <para>
+        /// <b>Aiming at the target's ORIGIN is wrong</b>, and that is the reason this constant
+        /// is not zero: <c>ServerCombatAuthority.EyePosition</c> raises the SHOOTER by 1.6 m,
+        /// so a shot at the target's feet is a downward shot that grazes the hitbox at contact
+        /// range and misses entirely at any distance worth calling a range test.
+        /// </para>
+        /// <para>
+        /// <b>Raising BOTH ends by the eye height is also wrong, and ledger X-25 is what it
+        /// cost.</b> That reads as "aim level", and it is level — at 1.6 m, which on
+        /// <see cref="HitboxSet.Humanoid"/> is 0.020 m inside the head box's lower edge
+        /// (1.580..1.820), with the torso's 0.35 m of margin never used. Both endpoints move
+        /// together, so the aim point was 1.6 m at EVERY range rather than only up close: it is
+        /// why no lane-B combat run had ever scored a hit, and it put every shot through the
+        /// 1.550..1.580 gap ledger X-24 names.
+        /// </para>
+        /// <para>
+        /// The torso centre is the one aim point on a standing body with margin on every side.
+        /// It is read from <see cref="HitboxSet.HumanoidTorsoCenterHeight"/> rather than
+        /// restated here, so moving the box moves the shooter with it.
+        /// </para>
         /// </remarks>
-        public const float DefaultAimHeight = ProtocolConstants.EYE_HEIGHT;
+        public const float TargetAimHeight = HitboxSet.HumanoidTorsoCenterHeight;
 
         /// <summary>
         /// Compass yaw in degrees from one point to another, in the engine's left-handed Y-up
@@ -108,6 +132,24 @@ namespace Ironfront.Net.Unity.Diagnostics
             // which AimDirection then re-negates into a +Y component.
             return -RadiansToDegrees((float)Math.Atan2(dy, horizontal));
         }
+
+        /// <summary>
+        /// Aim pitch in degrees from a shooter to the torso of a standing body, given the FEET
+        /// position of each. Positive looks DOWN — see the class remark.
+        /// </summary>
+        /// <remarks>
+        /// The two ends are raised by different heights on purpose, and that asymmetry is the
+        /// whole of the method: <see cref="ShooterEyeHeight"/> is where the shot leaves from
+        /// and <see cref="TargetAimHeight"/> is where it should arrive. Calling
+        /// <see cref="PitchDegrees"/> directly with the same height on both ends is ledger
+        /// X-25, so the harness calls this instead.
+        /// </remarks>
+        public static float PitchAtBody(
+            float fromX, float fromFeetY, float fromZ,
+            float toX, float toFeetY, float toZ)
+            => PitchDegrees(
+                fromX, fromFeetY + ShooterEyeHeight, fromZ,
+                toX, toFeetY + TargetAimHeight, toZ);
 
         /// <summary>
         /// Forward axis for a client told to close on a target: full ahead until it is inside

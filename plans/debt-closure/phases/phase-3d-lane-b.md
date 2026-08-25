@@ -3,25 +3,28 @@
 - **Track:** [`plan.md`](../plan.md) · **Parent:** [`phase-3-harness.md`](phase-3-harness.md) § 5 (task 3.3) · **Effort:** L (1wk)
 - **Depends on:** [`phase-3a-player-slots.md`](phase-3a-player-slots.md) (a second player can exist), [`phase-3c-client-input.md`](phase-3c-client-input.md) (that player can fire), #151 (a client can join a server that has a secret), #123 (server and clients agree on the physics rate)
 - **Unblocks:** [`phase-3e-run-and-ledger.md`](phase-3e-run-and-ledger.md)
-- **Status (2026-08-22): the three clients now MEET, and the fight still does not resolve.**
-  Three clients join, hold the link and complete seven checkpoints each, exiting 0. The
-  programme's own geometry was the first thing wrong and is fixed: both sides approach, all
-  three sprint, the step is 95 s, and the measured range at `in-range` went **518.9 m -> 5.79 m**.
-  Closed since the last update, each found by the harness and fixed in its own commit:
-  **X-13** (901 corrections, body never moved), the **loadout gap** (X-11), **X-15** (every
-  player integrated detached and free-fell), **X-17** (a remote player's proxy was spawned and
-  never positioned, so clients drew each other at the object pool's parking spot) and **X-18**
-  (an unclaimed slot body was announced at the prefab's parked position, and the truth was never
-  re-sent).
-  Still **0 of 11 verdicts**, now blocked on **X-19**: 240 rounds at 5.79 m, `rejection=None
-  fired=True hits=0`, victim on 100 health. A hand slab test of the logged ray against all four
-  hitboxes puts it **inside the head box** at t=5.63 m, so aim and hitbox geometry are both
-  exonerated and the rejection happens after the box test.
-  **X-19 now has an owner** — [`phase-3f-x19-drawn-vs-held.md`](phase-3f-x19-drawn-vs-held.md), which
-  runs the measurement the report already named and hands this phase a run where the trigger
-  resolves. This phase does not start again until 3F closes.
-  Reports: [`2026-08-22-x17-root-cause-and-fix.txt`](../reports/2026-08-22-x17-root-cause-and-fix.txt),
-  [`2026-08-22-x18-mutation-proof.txt`](../reports/2026-08-22-x18-mutation-proof.txt).
+- **Status (2026-08-25): the fight resolves. Lane B has its first kill, and eleven checks now have
+  verdicts instead of one blocker.** 3F closed X-19 and handed this phase a run where the trigger
+  could resolve; it still did not, and the two reasons were both in this phase's own ownership.
+  **X-25** — the harness raised BOTH aim endpoints by `EYE_HEIGHT`, so it aimed level at 1.6 m,
+  which is 2 cm inside the head box's lower edge at every range and straight through X-24's seam.
+  **X-22 was never actually fixed** — the spawn pin was installed at `sceneLoaded`, before
+  `ActorManager.StartGame()` fills the spawn-point array, so every "pinned" run logged `outside the
+  scene's 0 spawn point(s)` on a six-point map and was a coin flip; `x20-occlusion-01`'s claim to a
+  pinned slot is corrected in the ledger.
+  With both closed, `artifacts/lane-b/x25-torso-aim-02` fires 30, hits 4, takes OBS-A 100 → 21 → 0
+  and posts a killfeed line on **both** observers. Three pinned runs put all three actors on point 0,
+  3 of 3.
+  **The count, honestly:** 1 pass with a caveat (check 3), 4 partials, 1 flaky (check 1, **1 of 3**),
+  2 blocked, 3 not graded — and **no human has watched a frame**, so checks 8 and 9 read unverdicted
+  rather than passed. What remains is programme and harness work this phase owns (a vehicle set, a
+  grenade step, the A16 and scene-ordering cases, X-29's two missing measurements, and a human pass),
+  plus **X-27** and **X-28** before any flake rate is quoted again.
+  Filed, not fixed: **X-26** (the victim's own rig bone occludes the shot — X-20's reading 2, proven
+  from the collider name), **X-27**, **X-28**, **X-29**.
+  Reports: [`2026-08-25-phase-3d-lane-b-verdicts.md`](../reports/2026-08-25-phase-3d-lane-b-verdicts.md).
+  Prior: [`2026-08-25-x20-the-linecast-blocked-nothing.txt`](../reports/2026-08-25-x20-the-linecast-blocked-nothing.txt),
+  [`2026-08-23-x19-lane-b-rerun.txt`](../reports/2026-08-23-x19-lane-b-rerun.txt).
   Original: [`2026-08-21-phase-3d-lane-b.md`](../reports/2026-08-21-phase-3d-lane-b.md).
 
 ---

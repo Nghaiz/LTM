@@ -152,6 +152,133 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(1f, dot, 4);
         }
 
+        // ------------------------------------------------------- where on the body it aims
+
+        /// <summary>
+        /// The pitch a scripted shooter sends puts the shot inside the target's TORSO box,
+        /// with margin, at every range — not through the 1.550..1.580 gap between torso and
+        /// head that ledger X-24 names.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This is the pin ledger X-25 needed and did not have.</b> The harness used to
+        /// raise both endpoints by <c>EYE_HEIGHT</c>, which is level aim at 1.6 m — 0.020 m
+        /// inside the head box's lower edge, with the torso's 0.35 m of margin unused. Every
+        /// quadrant assertion in this file passed the whole time, because none of them ever
+        /// asked WHERE on a body the ray lands. That is why no lane-B combat run had scored a
+        /// hit: the harness aimed at the one height where X-24's seam lives.
+        /// </para>
+        /// <para>
+        /// <b>What it grades, and what it deliberately does not.</b> It asserts the ray enters
+        /// the torso with at least <see cref="MinimumTorsoMarginMetres"/> of vertical room to
+        /// the nearest edge, which fails for an aim point that is merely inside the box by a
+        /// hair. It does NOT assert the seam is gone — X-24 owns that, keeps its own row, and
+        /// closing it is a hitbox change this file must not pre-empt. A shooter that aims at
+        /// centre of mass stops being a coin toss against the seam; it does not repair it.
+        /// </para>
+        /// <para>
+        /// The ray is built by the SHIPPED resolver (<c>AimDirection</c>) and tested against
+        /// the SHIPPED boxes (<c>HitboxSet.Humanoid</c>, <c>Aabb.Raycast</c>), so a convention
+        /// this file transcribed wrongly cannot make it pass.
+        /// </para>
+        /// </remarks>
+        [Theory]
+        [InlineData(0f, 1.5f)]      // contact range
+        [InlineData(0f, 5f)]        // the lane-B hold distance
+        [InlineData(0f, 12f)]
+        [InlineData(0f, 40f)]
+        [InlineData(0f, 120f)]      // both ends move together, so range must not matter
+        [InlineData(3.5f, 18f)]     // shooter uphill
+        [InlineData(-2.5f, 18f)]    // shooter downhill
+        public void AimingAtAStandingBodyEntersTheTorsoWithMargin(float shooterFeetY, float range)
+        {
+            var shooterFeet = new Vec3(0f, shooterFeetY, 0f);
+            var targetFeet = new Vec3(0f, 0f, range);
+
+            float yaw = ScriptedAim.YawDegrees(
+                shooterFeet.X, shooterFeet.Z, targetFeet.X, targetFeet.Z);
+            float pitch = ScriptedAim.PitchAtBody(
+                shooterFeet.X, shooterFeet.Y, shooterFeet.Z,
+                targetFeet.X, targetFeet.Y, targetFeet.Z);
+
+            Vec3 direction = ServerCombatAuthority.AimDirection(yaw, pitch);
+            var eye = new Vec3(
+                shooterFeet.X, shooterFeet.Y + ScriptedAim.ShooterEyeHeight, shooterFeet.Z);
+
+            HitboxSet boxes = HitboxSet.Humanoid(in targetFeet);
+            Aabb torso = boxes.Torso;
+
+            Assert.True(
+                torso.Raycast(in eye, in direction, range * 2f + 10f, out float distance),
+                $"the shot missed the torso entirely at {range} m");
+
+            float entryY = eye.Y + direction.Y * distance;
+            float marginBelow = entryY - torso.Min.Y;
+            float marginAbove = torso.Max.Y - entryY;
+
+            Assert.True(
+                MathF.Min(marginBelow, marginAbove) >= MinimumTorsoMarginMetres,
+                $"entered the torso at y={entryY:F4} with only "
+                + $"{MathF.Min(marginBelow, marginAbove):F4} m to the nearest edge "
+                + $"({torso.Min.Y:F3}..{torso.Max.Y:F3}) at {range} m");
+        }
+
+        /// <summary>
+        /// Level ground does NOT mean level aim: the shooter's eye is 1.6 m up and the torso
+        /// centre it aims at is 1.2 m up, so the shot looks slightly DOWN.
+        /// </summary>
+        /// <remarks>
+        /// The asymmetry between the two ends is the entire content of
+        /// <c>ScriptedAim.PitchAtBody</c>. A pitch of exactly zero here is the X-25 bug
+        /// restored, and this states that in one line without a slab test.
+        /// </remarks>
+        [Fact]
+        public void PitchAtABodyOnLevelGroundLooksDownAtTheTorsoRatherThanLevel()
+        {
+            const float range = 20f;
+
+            float pitch = ScriptedAim.PitchAtBody(0f, 0f, 0f, 0f, 0f, range);
+
+            float expected = -RadiansToDegrees(
+                MathF.Atan2(ScriptedAim.TargetAimHeight - ScriptedAim.ShooterEyeHeight, range));
+
+            Assert.Equal(expected, pitch, 4);
+            Assert.True(pitch > 0f, "aiming at the torso from eye height looks down, not level");
+        }
+
+        /// <summary>
+        /// The height the harness aims at is the shipped torso box's centre, not a second
+        /// transcription of it.
+        /// </summary>
+        /// <remarks>
+        /// Move <c>HitboxSet</c>'s torso and this stays true; restate 1.20 at the aim site and
+        /// the two drift the first time the box moves, which is the failure this asserts
+        /// against rather than the value.
+        /// </remarks>
+        [Fact]
+        public void TheAimHeightIsTheShippedTorsoCentre()
+        {
+            HitboxSet boxes = HitboxSet.Humanoid(new Vec3(0f, 0f, 0f));
+
+            Assert.Equal(ScriptedAim.TargetAimHeight, boxes.Torso.Center.Y, 5);
+            Assert.Equal(Ironfront.Net.Protocol.ProtocolConstants.EYE_HEIGHT, ScriptedAim.ShooterEyeHeight, 5);
+        }
+
+        /// <summary>
+        /// Half the torso's height, less a margin for the float trig on both sides — the
+        /// smallest room-to-edge that distinguishes "aimed at centre of mass" from "landed
+        /// inside the box by luck".
+        /// </summary>
+        /// <remarks>
+        /// The torso is 0.70 m tall, so a perfect centre shot has 0.35 m. 0.30 m accepts the
+        /// float error of two <c>Atan2</c>s and a <c>Sin</c>/<c>Cos</c> pair and rejects
+        /// everything else: the X-25 aim point sat 0.05 m ABOVE the box entirely.
+        /// </remarks>
+        private const float MinimumTorsoMarginMetres = 0.30f;
+
+        private static float RadiansToDegrees(float radians)
+            => (float)(radians * (180.0 / Math.PI));
+
         // ---------------------------------------------------------------------------- approach
 
         /// <summary>Full ahead while outside the hold distance.</summary>

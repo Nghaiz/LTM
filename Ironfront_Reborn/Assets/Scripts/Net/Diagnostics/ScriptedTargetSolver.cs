@@ -132,17 +132,19 @@ namespace Ironfront.Net.Unity.Diagnostics
             Vector3 from = local.transform.position;
             Vector3 to = target.position;
 
-            // Both sides raised by the eye height: ServerCombatAuthority.EyePosition raises the
-            // SHOOTER, so aiming at the target's origin is a downward shot from 1.6 m at a point
-            // 1.6 m below its head. See ScriptedAim.DefaultAimHeight.
+            // Both transforms are FEET positions, and PitchAtBody raises each end by the
+            // height that belongs to it: the shooter by its eye height, the target to its
+            // torso centre. Raising both by the eye height instead reads as "aim level" and
+            // was ledger X-25 -- level at 1.6 m, which is 2 cm inside the head box's lower
+            // edge at every range. See ScriptedAim.TargetAimHeight.
             var solution = new Solution
             {
                 Resolved = true,
                 ActorId = actorId,
                 Yaw = ScriptedAim.YawDegrees(from.x, from.z, to.x, to.z),
-                Pitch = ScriptedAim.PitchDegrees(
-                    from.x, from.y + ScriptedAim.DefaultAimHeight, from.z,
-                    to.x, to.y + ScriptedAim.DefaultAimHeight, to.z),
+                Pitch = ScriptedAim.PitchAtBody(
+                    from.x, from.y, from.z,
+                    to.x, to.y, to.z),
                 Distance = ScriptedAim.PlanarDistance(from.x, from.z, to.x, to.z),
             };
 

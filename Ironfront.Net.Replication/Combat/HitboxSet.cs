@@ -70,6 +70,22 @@ namespace Ironfront.Net.Replication.Combat
         /// of each inventing their own. Real actors override it with boxes read from the client track's
         /// rig; nothing in the resolution path depends on these numbers being the real ones.
         /// </remarks>
+        /// <summary>
+        /// Height above the feet of <see cref="Humanoid"/>'s torso box centre, in metres.
+        /// </summary>
+        /// <remarks>
+        /// Named because a second party needs it: a scripted shooter has to pick a point ON a
+        /// body to aim at, and the only aim point with margin on every side is this one — the
+        /// torso is 0.70 m tall, so its nearest edge is 0.35 m away. Ledger X-25 is what
+        /// happens without it: the harness aimed at feet + <c>EYE_HEIGHT</c> (1.6 m), which is
+        /// 0.02 m inside the head box's lower edge, and every lane-B combat shot was a coin
+        /// toss against the 1.550..1.580 gap X-24 names.
+        ///
+        /// It is a constant here rather than a literal at the aim site so the two cannot drift:
+        /// move the torso box and the shooter follows it.
+        /// </remarks>
+        public const float HumanoidTorsoCenterHeight = 1.20f;
+
         public static HitboxSet Humanoid(in Vec3 feetPosition, float scale = 1f)
         {
             // Copied out of the `in` parameter: a local function cannot capture one.
@@ -79,7 +95,7 @@ namespace Ironfront.Net.Replication.Combat
 
             return new HitboxSet(
                 head: Aabb.FromSize(At(1.70f), new Vec3(0.24f, 0.24f, 0.24f) * scale),
-                torso: Aabb.FromSize(At(1.20f), new Vec3(0.50f, 0.70f, 0.32f) * scale),
+                torso: Aabb.FromSize(At(HumanoidTorsoCenterHeight), new Vec3(0.50f, 0.70f, 0.32f) * scale),
                 arms: Aabb.FromSize(At(1.25f), new Vec3(0.80f, 0.60f, 0.26f) * scale),
                 legs: Aabb.FromSize(At(0.45f), new Vec3(0.40f, 0.90f, 0.30f) * scale));
         }
