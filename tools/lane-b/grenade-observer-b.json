@@ -1,0 +1,36 @@
+{
+  "name": "grenade-witness",
+  "steps": [
+    {
+      "seconds": 5.0,
+      "yawDegrees": 180,
+      "moveX": 1.0
+    },
+    {
+      "checkpoint": "spawned",
+      "seconds": 2.0,
+      "yawDegrees": 180,
+      "moveX": 1.0
+    },
+    {
+      "checkpoint": "armed",
+      "seconds": 3.0,
+      "aimAtPlayer": "DRIVER"
+    },
+    {
+      "checkpoint": "thrown",
+      "seconds": 2.0,
+      "aimAtPlayer": "DRIVER"
+    },
+    {
+      "checkpoint": "detonated",
+      "seconds": 6.0,
+      "aimAtPlayer": "DRIVER"
+    },
+    {
+      "checkpoint": "settled",
+      "seconds": 6.0,
+      "aimAtPlayer": "DRIVER"
+    }
+  ]
+}

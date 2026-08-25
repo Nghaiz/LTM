@@ -83,6 +83,7 @@ namespace Ironfront.Net.Unity.Diagnostics
         private const string TimeoutVariable = "IRONFRONT_LANEB_TIMEOUT";
         private const string SpawnIndexVariable = "IRONFRONT_LANEB_SPAWN_INDEX";
         private const string WeaponVariable = "IRONFRONT_LANEB_WEAPON";
+        private const string GearVariable = "IRONFRONT_LANEB_GEAR";
 
         /// <summary>Set once the directory is wrapped; sceneLoaded can fire more than once.</summary>
         private static bool _spawnPinned;
@@ -102,6 +103,7 @@ namespace Ironfront.Net.Unity.Diagnostics
         private ScriptedInputSource _source;
         private ScriptedTargetSolver _solver;
         private LaneBCheckpointRecorder _recorder;
+        private readonly LaneBExplosionLog _explosions = new LaneBExplosionLog();
         private LaneBRunSeeds _seeds;
         private bool _installed;
         private bool _finished;
@@ -313,18 +315,31 @@ namespace Ironfront.Net.Unity.Diagnostics
             if (_loadoutPinned) return;
 
             string weapon = Read(WeaponVariable);
-            if (string.IsNullOrWhiteSpace(weapon)) return;
+            string gear = Read(GearVariable);
 
-            NetServerBindings.Loadouts = new PinnedLoadoutDirectory(weapon.Trim());
+            bool wantsWeapon = !string.IsNullOrWhiteSpace(weapon);
+            bool wantsGear = !string.IsNullOrWhiteSpace(gear);
+            if (!wantsWeapon && !wantsGear) return;
+
+            NetServerBindings.Loadouts = new PinnedLoadoutDirectory(
+                wantsWeapon ? weapon.Trim() : null,
+                secondary: null,
+                gear1: wantsGear ? gear.Trim() : null);
             _loadoutPinned = true;
 
             Debug.Log(
-                $"[lane-b] primary weapon pinned to '{weapon.Trim()}' for every body the server "
-                + "spawns, so two runs of one programme are comparable shot-for-shot (X-27). "
-                + "The name is NOT validated here - check weaponId in the checkpoint record.");
+                $"[lane-b] loadout pinned for every body the server spawns - "
+                + $"primary='{(wantsWeapon ? weapon.Trim() : "drawn")}' "
+                + $"gear1='{(wantsGear ? gear.Trim() : "drawn")}' - so two runs of one programme "
+                + "are comparable shot-for-shot (X-27). Names are NOT validated here; check "
+                + "weaponId in the checkpoint record.");
         }
 
-        private void OnDestroy() => SceneManager.sceneLoaded -= OnSceneLoaded;
+        private void OnDestroy()
+        {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+            _explosions.Detach();
+        }
 
         /// <summary>
         /// Points the transport's warning sinks at the Unity log, for this process only.
@@ -539,8 +554,13 @@ namespace Ironfront.Net.Unity.Diagnostics
             _cursor = new ScriptedInputCursor(programme);
             _solver = new ScriptedTargetSolver();
             _source = new ScriptedInputSource(_cursor, _solver);
+            // Attached before the recorder exists, and before the programme's first step: a
+            // blast that arrives between connecting and installing would otherwise be missed,
+            // and check 4 grades RECEIPT, so a gap in the listening window is a false negative.
+            _explosions.Attach(client.Router);
+
             _recorder = new LaneBCheckpointRecorder(
-                _artifacts, _label, programme.name, _seeds, _solver);
+                _artifacts, _label, programme.name, _seeds, _solver, _explosions);
 
             local.SetInputSource(_source);
 
