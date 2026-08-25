@@ -1,12 +1,12 @@
 using System;
 using Ironfront.Net.Protocol;
-using Ironfront.Net.Unity.Client;
 using Ironfront.Net.Replication;
 using Ironfront.Net.Replication.Movement;
 using Ironfront.Net.Replication.Server;
 using Ironfront.Net.Transport;
 using Ironfront.Net.Transport.Loopback;
 using Ironfront.Net.Transport.Simulation;
+using Ironfront.Net.Unity.Client;
 using Xunit;
 
 namespace Ironfront.Net.Replication.Tests

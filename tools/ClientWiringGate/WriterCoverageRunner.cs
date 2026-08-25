@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using Ironfront.Net.Replication.Server;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Ironfront.Net.Replication.Server;
 
 namespace Ironfront.Tools.ClientWiringGate
 {
