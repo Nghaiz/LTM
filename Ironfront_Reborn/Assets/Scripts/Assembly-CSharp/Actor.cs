@@ -287,6 +287,47 @@ public class Actor : Hurtable
 		SpawnWeapon(loadout.gear2, 3);
 		SpawnWeapon(loadout.gear3, 4);
 		SwitchToFirstAvailableWeapon();
+		LogLoadoutSlots();
+	}
+
+	// Ledger X-31. A lane-B run pinned gear1 to FRAG, asked for slot 2 every frame, and the
+	// client's weaponId never left the rifle -- and no artifact could say whether slot 2 was
+	// EMPTY or whether SwitchWeapon took its IsToggleable() branch and toggled instead of
+	// unholstering. Those are different files and the run could not distinguish them.
+	//
+	// One line, at the only moment both facts are true at once. Off unless asked for, matching
+	// ServerCombatBridge's IRONFRONT_LOG_SHOTS gate; observation only, per the phase-3d
+	// section 6 decision that permits diagnostic logging in shipped code.
+	private static bool? _loadoutLogging;
+
+	private void LogLoadoutSlots()
+	{
+		_loadoutLogging ??= System.Environment.GetEnvironmentVariable("IRONFRONT_LOG_LOADOUT") == "1";
+		if (_loadoutLogging != true)
+		{
+			return;
+		}
+
+		var sb = new System.Text.StringBuilder("[loadout] actor=").Append(name).Append(" active=")
+			.Append(activeWeaponSlot);
+
+		for (int i = 0; i < weapons.Length; i++)
+		{
+			Weapon w = weapons[i];
+			sb.Append(" slot").Append(i).Append('[');
+			if (w == null)
+			{
+				sb.Append("empty");
+			}
+			else
+			{
+				sb.Append(w.name).Append(" toggleable=").Append(w.IsToggleable())
+				  .Append(" netId=").Append(w.NetworkId);
+			}
+			sb.Append(']');
+		}
+
+		Debug.Log(sb.ToString());
 	}
 
 	private void SwitchToFirstAvailableWeapon()

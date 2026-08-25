@@ -54,6 +54,16 @@
   presenter would leave the OFFLINE model driving the text; drawn == offline at **0 of 7**
   checkpoints in `x27-pinned-01`, on a different clock (`200 → 0 → 200` against `0/0 → 2/20`).
   Standing at **2 caveated passes, 2 partials, 1 flaky, 3 blocked, 3 not graded**.
+  **Fifth pass, under the new §6 policy: two diagnostics added, X-31 narrowed hard, and check 13's
+  accessor turned out not to grade it.** The FRAG *is* in slot 2 and is *not* toggleable, so both of
+  X-31's filed candidates are dead — and the switch intent logs **zero** `[switch]` lines while
+  `[loadout]` lines appear in the same log from the same env var, so the bit never reaches the
+  server. Everything upstream reads correct in source; the break is at runtime and the next
+  measurement is one env var on a re-run. **`FpsActorController.IsInputEnabled` reads False on every
+  client at every checkpoint, alive or dead**, because `Start` disables it and only the gameplay
+  spawn re-enables — it cannot distinguish alive from dead, so check 13 stays ungraded and the
+  exception is recorded as spent. The measurement that WOULD grade it is server-side (`rejection=`
+  on a dead player's input) and needs no accessor.
   Reports: [`2026-08-25-phase-3d-lane-b-verdicts.md`](../reports/2026-08-25-phase-3d-lane-b-verdicts.md).
   Prior: [`2026-08-25-x20-the-linecast-blocked-nothing.txt`](../reports/2026-08-25-x20-the-linecast-blocked-nothing.txt),
   [`2026-08-23-x19-lane-b-rerun.txt`](../reports/2026-08-23-x19-lane-b-rerun.txt).
@@ -166,7 +176,27 @@ in `Assembly-CSharp`. The two available shapes were an injection seam (a behavio
 to shipped gameplay code) or reflection into the private field from the harness (no shipped edit,
 but it breaks silently on a rename). The seam was chosen. It is behaviour-identical with no
 directory installed, matches the `ISpawnPointDirectory` / `IGameplayActorSource` inversion the
-codebase already uses, and is the only shipped-code edit this phase has made. Per
+codebase already uses, and is the only shipped-code edit of its KIND this phase has made.
+
+**And a standing policy, decided 2026-08-25 rather than assumed.** Three further checks could
+not be graded at all without small **read-only** additions to shipped code: check 4's predicted
+blast centre, check 13's input-disable term (`FpsActorController.inputEnabled` is private, and
+the obvious proxy is a trap — `DisableInput` also clears `characterController.enabled`, which
+X-19's fix re-asserts every tick), and X-31's equip diagnostic. This phase MAY add **read-only
+accessors and gated diagnostic logging** to shipped code, and MAY NOT change shipped behaviour.
+Each one is recorded here as it is taken:
+
+| Added | Where | For |
+|---|---|---|
+| `ILoadoutDirectory` seam (behaviour-neutral) | `AiActorController.GetLoadout` | X-27 |
+| `IsInputEnabled` (read-only) | `FpsActorController` | check 13 / X-29 |
+| `LogLoadoutSlots()` behind `IRONFRONT_LOG_LOADOUT=1` | `Actor.SpawnLoadoutWeapons` | X-31 |
+
+**And one more, of a different kind:** the harness may send a `SeatRequestMessage` itself, from
+inside the diagnostics assembly, to unblock checks 7 and 12 (**X-30**). Normally a test-only
+path is exactly what the scripted driver avoids — but there is no shipped mount path to bypass,
+and those checks grade vehicle REPLICATION rather than mounting. Any run using it says so.
+X-30 stays open as real client work. Per
 [`phase-3-harness.md`](phase-3-harness.md) § 7, a defect found here is filed and fixed in its own
 commit — never patched inside the harness. 3A exists because that rule was followed once already.
 
