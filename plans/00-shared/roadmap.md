@@ -22,38 +22,46 @@ Measured, not estimated. Every number comes from a command run at `29b44bf` or f
 | Area | State |
 |---|---|
 | Tests | **1,700 green**, 0 failed, 0 skipped, across seven projects (Protocol 259 · Replication 1,119 · Transport 89 · MasterServer 81 · Client.Flow 79 · Client.Input 39 · Configuration 34). Was 297 on 2026-08-13 |
-| **CI on `develop`** | **RED, and has been since 2026-08-21T16:58 (`26a3f33a`, #166) — eleven consecutive runs.** `ClientWiringGate` exits 1 on `[G4] NetClientLocalCombatDriver.cs:183`. See § 1a |
+| **CI on `develop`** | **Green again as of 2026-08-25** (X-23). It had been red for eleven consecutive runs since 2026-08-21T16:58 (`26a3f33a`, #166). All three gates now exit 0: `ClientWiringGate`, `SpecChecker`, `dotnet test`. See § 1a for what is still off |
 | Protocol | **v3.0.0 frozen**, wire `PROTOCOL_VERSION = 3` — the vehicle wire (#135). Was v1.0.0 here |
 | Transport | **UDP shipped.** `UdpPeer`, `UdpTransportClient`, `UdpTransportServer`, plus reliability, congestion, flow control and fragment assembly. The 2026-08-13 critical path in § 2 is closed |
-| Replication | V0–V10 all merged; the residue is the debt-closure track's ledger — **33 rows open**, of which sixteen are group-B assertions waiting on one run |
+| Replication | V0–V10 all merged; the residue is the debt-closure track's ledger — **32 rows open**, of which sixteen are group-B assertions waiting on one run |
 | Master server | Not a skeleton: `Auth`, `Lobby`, `GameServers`, `Dispatch`, `Data`, `Security`, `Diagnostics`, 81 tests |
 | Unity client | Scripted two-client lane-B harness runs and produces artifacts. X-19 closed 2026-08-23: shots now enter hitboxes for the first time. They do not yet damage (**X-20**) |
 | Branch protection | Ruleset **`protect-shared-branches` is active** on `main` and `develop` (`deletion` + `non_fast_forward`). Require-a-PR and require-status-check are deliberately **off** — see § 1a. The legacy `/branches/*/protection` endpoint answers 404 for both; that is the ruleset API, not an absence |
 | Images | Both GHCR packages **public**: `ironfront-master` (`sha256:5c1770f8…`, develop) and `ironfront-game-server` (`sha256:f88f04e2…`, `gameserver-v0.2.0`) |
 | Deployment | fly.io **master** landed (#174). fly.io **game server** is blocked by Fly itself. Azure VM stack waits on ngtukien (#78 § 3.2–3.6, #127) |
 
-### 1a. The one that compounds — a red branch nothing is required to notice
+### 1a. The red streak, what closed it, and the half still open
 
-`develop` has been red for four days and eleven merges landed on it anyway, because
-require-status-check is off. The two facts hold each other up:
-[`docs/branch-protection.md`](../../docs/branch-protection.md) declines to require `build-test`
-*because it is red*, and `build-test` stays red because nothing makes anyone look.
+`develop` was red for **eleven consecutive runs** between 2026-08-21T16:58 (`26a3f33a`, #166) and
+2026-08-25, and eleven merges landed on it. It is green now — but only one of the two things that
+allowed it has been fixed.
 
-The finding itself is one line. `ClientWiringGate`'s G4 rule governs a file if any per-actor path
-exists in it, and `NetClientLocalCombatDriver` has one (`OnSpawnActor`). The flagged read is not on
-it: `ScriptedRespawnPressed()` reaches `FpsActorController.instance` from `Update()`, a local-only
-per-frame path where the local singleton is the intended target. The detector cannot separate the
-two call paths and says so about itself — *"G4 is a judgement call, and a judgement call encoded as
-a silent regex rots"* (`ClientWiringDetectors.cs:112`), which is why it carries a `PerActorGuardScope`.
+**The finding (closed, X-23).** `ClientWiringGate`'s G4 rule scopes by *file*: a file is governed
+when any per-actor path exists in it, and `NetClientLocalCombatDriver` has one (`OnSpawnActor`). The
+flagged read was not on it. `ScriptedRespawnPressed()` reaches `FpsActorController.instance` from
+`Update()`, reading this client's own input, resolved per frame rather than cached because the body
+is spawned and killed independently of the component and a cached reference goes stale at a death —
+the one moment the read matters.
 
-So the fix is a scoping decision, not a guard sprinkled on a working line, and whichever way it goes
-it owes a companion assertion under
-[`pinned-baseline-test-companion.md`](../../.claude/rules/pinned-baseline-test-companion.md): an
-exemption that no test would notice becoming wrong is how this returns. Tracked as **B-5** (the A16
-camera-hijack check) for the observational half; the gate failure itself is **X-23**, filed today.
+So it closed as a **scoping** decision, not a guard bolted onto a working line: one entry in the
+`PerActorGuardExemptions` array that already existed for exactly this shape, carrying its reason and
+its residual risk (G4 cannot see call paths, so the entry says *delete rather than widen* if a
+per-actor caller of that helper ever appears). It also gained the companion no exemption in that
+array had before — all six entries are now re-checked by identity, and the failure text says DELETE,
+never re-point. Mutation-proved with five mutants, five reds, one of which removes the new entry and
+watches the gate return to exit 1, so the exemption is load-bearing rather than decoration.
 
-**Until it is green, "CI passes" is not evidence for anything on this project**, and no phase should
-cite a green run it did not itself produce.
+**The half still open: nothing was required to notice.** Require-status-check is off, and
+[`docs/branch-protection.md`](../../docs/branch-protection.md) withheld it *because `build-test` was
+red*. That reason is now gone. Until the rule goes on, the two facts that produced an eleven-merge
+streak are one red commit away from holding each other up again — this time with no record that the
+gate was ever consulted.
+
+The gates themselves are worth more than the streak suggests. G4 caught a real class of defect (A16:
+a remote player's event writing this client's HUD or camera); what failed was the loop that turns a
+red gate into someone looking at it.
 
 ---
 

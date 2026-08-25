@@ -135,12 +135,21 @@ X-22 ──┘                                 │              ▲
 8 ─── independent
 ```
 
-**Open rows: 33** — counted from the ledger table, not decremented from a previous total. It was 28
+**Open rows: 32** — counted from the ledger table, not decremented from a previous total. It was 28
 on 2026-08-23; X-19 closed, X-20, X-21 and X-22 opened in its wake — the expected shape when a fix
-removes the thing that was masking what sat behind it — and **X-23** was filed today for a blocker
-that had never had a row: `develop`'s CI has been red since 2026-08-21 and nothing requires anyone
-to notice. It is the first thing to read in
-[`plans/00-shared/roadmap.md`](../00-shared/roadmap.md) § 1a. **X-21** (the reconciler replays inputs
+removes the thing that was masking what sat behind it — and **X-23** was both filed and closed on
+2026-08-25.
+
+**`develop` is green again.** X-23 was the eleven-run red streak: G4 scopes by file, and the flagged
+read was on `Update()` rather than on the per-actor path that put the file in scope. It closed as one
+entry in the exemption array that already existed for that shape, plus the companion no exemption had
+before — six entries now re-checked by identity, mutation-proved with five mutants including one that
+removes the new entry and watches the gate return to exit 1. All three gates are green at
+`fefc901`+: `ClientWiringGate` 0, `SpecChecker` 0, `dotnet test` **1,703 / 0 / 0**.
+
+One thing did not change with it: **require-status-check is still off**, and it is now off for no
+reason — `docs/branch-protection.md` withheld it because `build-test` was red, and it no longer is.
+Until it goes on, the next eleven-merge streak has nothing standing in its way. **X-21** (the reconciler replays inputs
 without ever moving the predicted position) is quiet rather than gone — X-19's fix dropped
 `corrections` 2208 → 0 by removing what was being corrected, so it resurfaces the moment prediction
 has real work to do. It is filed to phase 6.
