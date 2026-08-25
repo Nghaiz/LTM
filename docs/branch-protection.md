@@ -5,45 +5,56 @@ this page are **not** — they live in the GitHub UI and someone with admin righ
 them on by hand, once. Until then, `CODEOWNERS` requests reviewers that nobody is obliged to
 wait for, and the CI job that says "required" is not actually required.
 
-Owner: The master-server track. Estimated time: about ten minutes.
+Owner: the repository owner (`Nghaiz`). Everything reachable without a plan upgrade is already
+applied — see the status section below for what is on, what is off, and why.
 
 ---
 
-## Status, 2026-08-15 — §0 done, §1 and §2 blocked on someone who is not the master-server track
+## Status, 2026-08-25 — both walls are down, and a first ruleset is live
 
-Read this before spending time on the rest of the page.
+The two walls this page recorded on 2026-08-15 are gone, for different reasons.
 
-**§0 is done.** The four placeholders are replaced with real handles, mapped from merged-PR
-authorship rather than from anyone's recollection — see the header of `.github/CODEOWNERS`.
-All four are already collaborators, so the Write-access requirement in step 3 is satisfied.
+1. **Admin.** The repository was transferred to `Nghaiz/LTM`. The owner account now reports
+   `permissions.admin: true`, so the branch-protection endpoints answer normally. The old
+   404-instead-of-403 confusion no longer applies.
+2. **Plan.** The ruleset endpoint accepts writes on this private repository. Measured, not
+   assumed: `POST /repos/Nghaiz/LTM/rulesets` returned `201` with
+   `current_user_can_bypass: "never"`. Whatever the plan wall was, it is not there now.
 
-**§1 and §2 cannot be done by the master-server track, or by anyone else on the team.** Two separate walls,
-and the second one survives fixing the first:
+> For the record, the 2026-08-15 diagnosis was: no collaborator held admin, *and* protection on
+> a private repository owned by a free personal account needed Pro or above. Both were correct
+> at the time and both were resolved by the transfer, not by anyone re-reading the docs.
 
-1. **Nobody but the repository owner has admin.** `GET /repos/Sagitoaz/LTM` reports
-   `permissions.admin: false` for a collaborator account. Branch-protection writes are an
-   admin-only endpoint, and GitHub answers a non-admin with **404 rather than 403** — which is
-   why the roadmap read this as "not configured yet" instead of "cannot be configured by us".
-   `PUT /branches/{main,develop}/protection` returns 404 for both branches.
-2. **The repository is private and owned by a personal account on the free plan.** Branch
-   protection rules and rulesets on a private repository need GitHub Pro, Team or Enterprise.
-   Granting a teammate admin does not lift this; the plan does.
+### What is configured today
 
-So there are exactly three ways forward, and all three belong to the repository owner
-(), not to the master-server track:
+| Area | State |
+|---|---|
+| Ruleset `protect-shared-branches` | active on `refs/heads/main` and `refs/heads/develop`; rules `deletion` + `non_fast_forward`; `bypass_actors: []` |
+| Default branch | `develop`, so a UI-opened PR targets the integration branch (§3) |
+| Automatically delete head branches | on (§3) |
+| Allow auto-merge, allow update branch | on |
+| Dependabot alerts | on. It was **off** until today — `GET /vulnerability-alerts` answered 404 |
+| Dependabot security updates | on (§3) |
+| Actions default token | `read`, and workflows may not approve pull requests |
+| Merge methods | squash, merge **and rebase** all allowed. §3 asks for rebase off; the owner chose to keep all three on 2026-08-25 |
 
-| Option | What it costs | What it buys |
-|---|---|---|
-| Make the repository public | Loses privacy before the report is submitted | Branch protection and rulesets become free and immediate |
-| Upgrade the owner account to Pro | A paid plan | Protection on the private repository, no other change |
-| Leave it unprotected for the rest of the project | Nothing up front | `main` and `develop` stay force-pushable and merge-over-red for four contributors |
+### What is deliberately still off
 
-Until one of those happens, the honest description of this repository's state is: **the CI
-gates report, and nothing enforces them.** That belongs in the report's limitations section
-rather than being quietly carried as a to-do that four people keep reassigning.
+The require-a-pull-request and require-status-check rules in §1 and §2 are **not** on.
+`build-test` is red on `develop` right now — `[G4] NetClientLocalCombatDriver.cs:183`,
+`FpsActorController.instance` reached from a per-actor path with no `IsLocalActor` guard.
+Turning the status-check requirement on today would deadlock every merge rather than protect
+anything. Fix that finding, watch `build-test` go green once, then add the two check names
+listed in §1.
 
-The advisory half of this page that *is* enforceable from a PR has been done instead — see
-the plugin-DLL drift check in `.github/workflows/ci.yml`.
+### What has not been mutation-tested
+
+The force-push block was verified by asking GitHub which rules apply to each ref:
+`GET /repos/Nghaiz/LTM/rules/branches/main` and `.../develop` both return
+`["deletion","non_fast_forward"]`, and a feature branch returns `[]`. Nobody has attempted an
+actual non-fast-forward push and watched it be refused, because the only place to run that
+experiment is a shared branch. Read "force pushes are blocked" as **configured**, not as
+**proven**.
 
 ---
 

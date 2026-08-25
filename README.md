@@ -1,6 +1,6 @@
 # Ironfront Reborn
 
-[![CI](https://github.com/Sagitoaz/LTM/actions/workflows/ci.yml/badge.svg)](https://github.com/Sagitoaz/LTM/actions/workflows/ci.yml)
+[![CI](https://github.com/Nghaiz/LTM/actions/workflows/ci.yml/badge.svg)](https://github.com/Nghaiz/LTM/actions/workflows/ci.yml)
 
 <!--
   No CodeQL badge on purpose: codeql.yml skips itself while this repository is private
@@ -77,7 +77,7 @@ Requires the **.NET 8 SDK** (`global.json` pins the feature band — a 9.x or 10
 rejected on purpose) and **PowerShell 7+** for the scripts.
 
 ```bash
-git clone git@github.com:Sagitoaz/LTM.git
+git clone git@github.com:Nghaiz/LTM.git
 cd LTM
 
 dotnet build Ironfront.sln -c Release
