@@ -49,6 +49,11 @@
   actor, so a real switch would have shown). Two candidates survive and the run cannot separate
   them: an empty `weapons[2]`, or `Actor.SwitchWeapon` taking its `IsToggleable()` branch. Filed,
   not guessed.
+  **Check 2 upgraded to a caveated PASS in the same pass — no new measurement, I had mis-read the
+  one I had.** `ScoreUi`'s remark says the offline and authoritative sources never mix, so a dead
+  presenter would leave the OFFLINE model driving the text; drawn == offline at **0 of 7**
+  checkpoints in `x27-pinned-01`, on a different clock (`200 → 0 → 200` against `0/0 → 2/20`).
+  Standing at **2 caveated passes, 2 partials, 1 flaky, 3 blocked, 3 not graded**.
   Reports: [`2026-08-25-phase-3d-lane-b-verdicts.md`](../reports/2026-08-25-phase-3d-lane-b-verdicts.md).
   Prior: [`2026-08-25-x20-the-linecast-blocked-nothing.txt`](../reports/2026-08-25-x20-the-linecast-blocked-nothing.txt),
   [`2026-08-23-x19-lane-b-rerun.txt`](../reports/2026-08-23-x19-lane-b-rerun.txt).

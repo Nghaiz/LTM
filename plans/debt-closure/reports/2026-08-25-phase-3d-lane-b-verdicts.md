@@ -68,7 +68,7 @@ these frames — so every human-judgment half below reads **unverdicted**, not p
 | # | Check | Verdict | Artifact |
 |---|---|---|---|
 | 1 | E7 — fire, hit, kill, killfeed line with a name | **FLAKY 1 of 3**, and the name half is a partial | `x25-torso-aim-02/observer-{a,b}-checkpoints.jsonl`, `-04-firing.png` |
-| 2 | E8 — HUD reflects authoritative state | **PARTIAL** — drawn ≠ offline is shown; drawn == authoritative is not measured | `x25-torso-aim-02/observer-b-checkpoints.jsonl` (`hud`) |
+| 2 | E8 — HUD reflects authoritative state | **PASS**, with a caveat (upgraded 2026-08-25 from partial — the measurement was already there) | `x27-pinned-01/observer-b-checkpoints.jsonl` (`hud`) |
 | 3 | E9 — capture point changes owner on both clients | **PASS**, with a caveat | `x25-torso-aim-02/observer-{a,b}-checkpoints.jsonl` (`capturePoints`) |
 | 4 | E10 — grenade detonates at the same place on both clients | **BLOCKED** — no programme throws one | — |
 | 5 | E11 — A16 camera hijack | **NOT GRADED** — the case is never provoked | `x25-torso-aim-02/*-checkpoints.jsonl` (`activeCameras`, baseline only) |
@@ -79,7 +79,7 @@ these frames — so every human-judgment half below reads **unverdicted**, not p
 | 12 | Turret parity across two clients | **BLOCKED** — no client *can* man a turret (**X-30**) | `x25-torso-aim-02/…` (`vehicles[].turretYaw`, unmanned) |
 | 13 | Death → input disable → respawn screen | **PARTIAL** — death and respawn window shown, input-disable not measured at all | `x25-torso-aim-02/observer-a-checkpoints.jsonl` |
 
-**0 of 11 clean passes. 1 pass with a caveat, 4 partials, 1 flaky, 2 blocked, 3 not graded** — re-counted 2026-08-25 after X-30 as **1 caveated pass, 3 partials, 1 flaky, 3 blocked, 3 not graded** (check 7 moved partial → blocked).
+**0 of 11 clean passes. 1 pass with a caveat, 4 partials, 1 flaky, 2 blocked, 3 not graded** — re-counted 2026-08-25 after X-30 as **1 caveated pass, 3 partials, 1 flaky, 3 blocked, 3 not graded** (check 7 moved partial → blocked), and again after re-reading `ScoreUi` as **2 caveated passes, 2 partials, 1 flaky, 3 blocked, 3 not graded** (check 2 moved partial → pass).
 That is the honest count and it is a large move from the previous state, which was eleven
 rows blocked behind a run that could not resolve a trigger.
 
@@ -107,6 +107,35 @@ reader would recognise.
 
 Neither failure is a repeat of the other, and neither is the aim. They are filed as **X-26**,
 **X-27** and **X-28** below.
+
+### Check 2 — upgraded, because I mis-read my own artifact
+
+This was graded PARTIAL on the reasoning that "drawn ≠ offline" is necessary but not
+sufficient. `ScoreUi`'s own remark makes it sufficient: **"Two sources feed it and they
+never mix."** Offline, `MatchScoreboard` raises `Changed` and `UpdateUi` redraws; on a
+networked client `SetAuthoritativeState` writes the server's totals *straight to the text
+fields and never touches the offline scoreboard* (V10 D11). A dead presenter therefore
+does not leave the HUD blank — it leaves the OFFLINE model driving the text, and the two
+would agree.
+
+| Run | drawn == offline |
+|---|---|
+| `x27-pinned-01` | **0 of 7** checkpoints |
+| `x25-torso-aim-02` | 1 of 7 — and that one is a coincidence (`2/64` on both sides) |
+
+The drawn values also run on a different clock: a round cycle `200 → 0 → 200`, against an
+offline model that creeps monotonically `0/0 → 2/20`.
+
+**The caveat, and it is not small.** This proves *not offline-driven*, and
+authoritative-driven only by way of `ScoreUi`'s two-source design — no artifact here
+independently checks that the drawn numbers equal the **server's** numbers. Closing that
+needs the server process to record its own totals, which is in scope for this phase and
+not yet done.
+
+**Noticed while grading, not filed:** the offline `MatchScoreboard` is *advancing* on a
+networked client. Per the same remark the two never mix, so it is a second scoreboard
+nobody reads rather than a wrong one — consistent with local bot scoring. Recorded so the
+next reader is not surprised by it.
 
 ### Check 3 — the one clean-ish pass
 
