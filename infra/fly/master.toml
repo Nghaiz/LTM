@@ -1,0 +1,69 @@
+# Ironfront master server — fly.io app config.
+#
+# The image is NOT pinned here. deploy.sh passes it with `--image`, because the repo's
+# convention is a @sha256 digest (infra/compose/.env.example says so) and a tag written into
+# a committed file drifts under whatever the last push moved it to. Note that
+# .github/workflows/images.yml pushes branch, semver and timestamp tags — it never pushes
+# `latest`, so any config naming `:latest` fails with manifest-unknown.
+#
+# Deploy:
+#   IRONFRONT_MASTER_IMAGE=ghcr.io/nghaiz/ironfront-master@sha256:... ./infra/fly/deploy.sh
+#
+# Secrets (set once, never in this file):
+#   fly secrets set IRONFRONT_SHARED_SECRET="<key>" --app kien-master-2026
+#
+# Volume (created by deploy.sh FIRST_RUN=1):
+#   fly volumes create ironfront_data --size 1 --region sin --app kien-master-2026
+
+app = "kien-master-2026"
+primary_region = "sin"
+
+# Persistent volume for the SQLite database + durability CSV.
+# /data matches IRONFRONT_DB_PATH and IRONFRONT_METRICS_CSV below.
+[mounts]
+  source = "ironfront_data"
+  destination = "/data"
+
+# One VM. `fly deploy --ha=false` in deploy.sh is what actually enforces this — Fly
+# provisions a standby second machine otherwise, and this app is not written to run two.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"          # infra/compose/compose.yaml caps the master at 768M; leave headroom.
+
+[env]
+  IRONFRONT_MASTER_PORT               = "27000"
+  IRONFRONT_DB_PATH                   = "/data/ironfront.db"
+  IRONFRONT_METRICS_CSV               = "/data/durability.csv"
+  IRONFRONT_METRICS_PORT              = "27001"
+  # Loopback is deliberate, not an oversight: the metrics payload is unauthenticated and tells
+  # any reader how many players are online and whether a game server is down (EnvRegistry.cs
+  # MetricsBind). Read it from inside the VM: `fly ssh console --app kien-master-2026`, then
+  # `curl 127.0.0.1:27001`. MasterServerConfig.cs:270 parses this with IPAddress.Parse, so a
+  # non-IP value (a Fly hostname, a template placeholder) is not a valid setting here.
+  IRONFRONT_METRICS_BIND              = "127.0.0.1"
+  IRONFRONT_STRUCTURED_LOG            = "1"
+  IRONFRONT_LOG_LEVEL                 = "Warn"
+  IRONFRONT_MAX_CONNECTIONS_PER_IP    = "5"
+  IRONFRONT_MAX_TOTAL_CONNECTIONS     = "256"
+  IRONFRONT_LOGIN_RATE_PER_MINUTE     = "5"
+  # Empty on purpose: Fly terminates TLS at the edge (handlers = ["tls"] below) and forwards
+  # plaintext into the container, so the master must not also try to serve TLS itself.
+  IRONFRONT_TLS_CERT_PATH             = ""
+  IRONFRONT_TLS_CERT_PASSWORD         = ""
+
+# MSP port — clients and game servers both dial this.
+# Fly's docs say a TCP service binds 0.0.0.0, which is what the master already does.
+[[services]]
+  protocol      = "tcp"
+  internal_port = 27000
+
+  [[services.ports]]
+    port     = 27000
+    handlers = ["tls"]
+
+  [[services.tcp_checks]]
+    interval     = "30s"
+    timeout      = "5s"
+    grace_period = "20s"
+
+# Metrics port 27001 is deliberately absent from [[services]] — see IRONFRONT_METRICS_BIND.
