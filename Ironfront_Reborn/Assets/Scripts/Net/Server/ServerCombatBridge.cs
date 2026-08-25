@@ -404,6 +404,13 @@ namespace Ironfront.Net.Unity.Server
 
             Debug.Log(
                 $"[shot] actor={session.ActorId} weapon={session.WeaponId} "
+                // Ledger X-31. The grenade is never held, and the loss is somewhere between the
+                // programme's switchWeaponSlot and frame.WeaponSlot: the slots ARE armed
+                // (slot2[FRAG toggleable=False]), the wire carries the full ushort, this very
+                // method runs 60 times in the run that reports it, and `fire` from the SAME step
+                // object arrives while the slot bit does not. These two fields are the only place
+                // left to look -- what the server actually received, before anything interprets it.
+                + $"buttons=0x{(ushort)frame.Buttons:X4} slot={frame.WeaponSlot} "
                 + $"ammo={session.Weapon.AmmoInClip} rejection={result.Rejection} "
                 + $"fired={result.Fired} hits={result.HitCount} "
                 + $"targets={_targetCount} alive={alive} solidTorsos={solid} "
