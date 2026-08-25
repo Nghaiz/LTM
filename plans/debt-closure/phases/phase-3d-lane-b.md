@@ -59,7 +59,10 @@
   X-31's filed candidates are dead — and the switch intent logs **zero** `[switch]` lines while
   `[loadout]` lines appear in the same log from the same env var, so the bit never reaches the
   server. Everything upstream reads correct in source; the break is at runtime and the next
-  measurement is one env var on a re-run. **`FpsActorController.IsInputEnabled` reads False on every
+  measurement is one env var on a re-run. *(Taken, and it answered: the server receives
+  `buttons=0x0001 slot=-1` on 60 of 60 frames — `Fire` alone. The programme, the wire width and the
+  decode are each ruled out by reading them; the loss is client-side, between the parsed step and
+  the packed word.)* **`FpsActorController.IsInputEnabled` reads False on every
   client at every checkpoint, alive or dead**, because `Start` disables it and only the gameplay
   spawn re-enables — it cannot distinguish alive from dead, so check 13 stays ungraded and the
   exception is recorded as spent. The measurement that WOULD grade it is server-side (`rejection=`
