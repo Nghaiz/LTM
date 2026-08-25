@@ -10,6 +10,16 @@
 
 Every number below came from a command run today. Where something was not run, the row says so.
 
+> **Resolved the same day, after this report was written.** The red branch in § 1 is green:
+> **X-23** closed (#178), **X-22** closed (#179), **X-20** instrumented (#180), and the advisory
+> `style` job — red on two pre-existing import blocks — fixed (#181). `develop` run
+> `32833312863` at `2121f9e` is **completed/success**, the first green since 2026-08-21T16:28.
+>
+> This section is left as written rather than edited, because what it records is how the streak
+> was found and what it cost. The live status is
+> [`plans/debt-closure/plan.md`](../debt-closure/plan.md) § 4a. **One thing here is still true:**
+> require-status-check is off, so nothing yet requires anyone to notice the next one.
+
 ---
 
 ## 1. The headline, and it is not the PR
