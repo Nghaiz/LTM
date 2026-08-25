@@ -118,7 +118,7 @@ behind them for two independent reasons:
 
 | row | state |
 |---|---|
-| **X-20** | **OPEN, and now the only thing between here and 3D.** Twenty shots that DID enter a hitbox were rejected by the world linecast — `resolved=30 occluded=20 hits=0`, victim on 100 health. Two readings survive the run and it cannot separate them. Next measurement: print what the linecast actually hit, same shape as 3F.1 |
+| **X-20** | **OPEN, and the only thing between here and 3D — but it is now a RUN away, not an investigation away.** Twenty shots that DID enter a hitbox were rejected by the world linecast: `resolved=30 occluded=20 hits=0`, victim on 100 health. Two readings survived and no artifact could separate them, because `IsOccluded` used `Physics.Linecast`'s bool overload and discarded the hit. As of 2026-08-25 it records the collider, its layer, and where along the ray it sits, and the shot log prints it as `occlusionHit[...]`. The collider NAME decides it: terrain or a building is reading 1 (real cover), the victim's own body is reading 2 (mask `-2049` excludes only layer 11). Same move 3F.1 made for X-19 |
 | **X-22** | **CLOSED 2026-08-25.** Spawn pairing was a coin flip: four post-fix runs opened at 1,078 m, 940 m, ~940 m and adjacent. The seed was never the missing piece — `LaneBHarness` has always called `Random.InitState`, and a seed pins the draw *sequence* while three clients join over a socket at times nobody controls. `PinnedSpawnPointDirectory` narrows the server's directory to one slot instead, so reservoir sampling has nothing to sample between. `-SpawnIndex 0..5` on `run-lane-b.ps1` |
 
 So the arrow that read `3F ──▶ 3D` and then `X-20 + X-22 ──▶ 3D` now reads `X-20 ──▶ 3D`. Nothing
@@ -162,7 +162,9 @@ Three orderings, and nothing else is ordered:
 
 1. **X-20 before 3D.** 3D cannot return a verdict on a run where no shot damages. This replaces
    "X-20 and X-22 before 3D", whose second half closed on 2026-08-25, which in turn replaced
-   "3F before 3D".
+   "3F before 3D". **What X-20 now needs is a lane-B run, not an investigation** — the instrument
+   that answers it landed on 2026-08-25, so the next pinned run (`-SpawnIndex 0`,
+   `IRONFRONT_LOG_SHOTS=1`) both closes X-20 and is 3D's own re-run.
 2. **Phase 6 task 6.3 (X-6) before Phase 5.** The cutover's proof rests on the `ownsHealth` guard,
    which has no pin today.
 3. **[`plans/asmdef-seam/plan.md`](../asmdef-seam/plan.md) after 3E.** Refactoring the client while a

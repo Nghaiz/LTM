@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication;
 using Ironfront.Net.Replication.Combat;
@@ -1484,11 +1485,98 @@ namespace Ironfront.Net.Unity.Server
         /// </remarks>
         private static bool IsOccluded(Vec3 origin, Vec3 point, float distance)
         {
-            return Physics.Linecast(
-                MovementSimulation.ToUnity(origin),
-                MovementSimulation.ToUnity(point),
-                BulletBlockingLayers,
-                QueryTriggerInteraction.Ignore);
+            Vector3 from = MovementSimulation.ToUnity(origin);
+            Vector3 to = MovementSimulation.ToUnity(point);
+
+            // The out-overload, not the bool one. They cost the same query and the bool one
+            // throws away the only fact that can settle X-20 -- see LastOcclusion.
+            if (!Physics.Linecast(
+                    from, to, out RaycastHit hit, BulletBlockingLayers,
+                    QueryTriggerInteraction.Ignore))
+            {
+                return false;
+            }
+
+            LastOcclusion = DescribeOcclusion(
+                hit.collider == null ? "<destroyed>" : hit.collider.name,
+                hit.collider == null ? -1 : hit.collider.gameObject.layer,
+                hit.distance,
+                Vector3.Distance(from, to));
+
+            return true;
+        }
+
+        /// <summary>
+        /// What the last occlusion linecast actually hit, for the shot log. <c>"none"</c> until
+        /// one has blocked a shot.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Ledger row X-20.</b> The first run in which any shot reached a hitbox at all read
+        /// <c>resolved=30 occluded=20 hits=0</c> with the victim on 100 health, and TWO readings
+        /// survive it: either the linecast is right and there is geometry between the pair — they
+        /// held at 10.1 m against a programmed 6.0 m, and stopping 4 m short is what an obstacle
+        /// looks like — or the endpoint lands inside the victim's OWN capsule, which mask -2049
+        /// does not exclude, so the victim's collider blocks the shot that hit it.
+        /// </para>
+        /// <para>
+        /// <b>Nothing in any artifact could separate them</b>, because <c>Physics.Linecast</c>'s
+        /// bool overload discards the hit. This is the same move 3F.1 made for X-19: put the two
+        /// quantities that disagree on one line and let the run answer. It prints facts and
+        /// states no verdict — the collider NAME is the discriminator (the victim's own body
+        /// versus terrain or a building), and the fraction corroborates it.
+        /// </para>
+        /// <para>
+        /// Read by <c>ServerCombatBridge.LogShot</c>, so it costs nothing unless
+        /// <c>IRONFRONT_LOG_SHOTS=1</c> asked for the line. It is deliberately last-write-wins
+        /// rather than a list: the compensator may test several candidates per shot, and the log
+        /// is one line per trigger frame.
+        /// </para>
+        /// </remarks>
+        internal static string LastOcclusion { get; private set; } = "none";
+
+        /// <summary>
+        /// The occlusion description that belongs to THIS shot, or a stated absence.
+        /// </summary>
+        /// <remarks>
+        /// <b><see cref="LastOcclusion"/> is last-write-wins and is only written when a linecast
+        /// HITS.</b> So a shot that was not occluded at all would otherwise print the previous
+        /// shot's collider, and the artifact would read as though a wall blocked a shot that
+        /// nothing blocked. Since the compensator's <c>ShotsOccluded</c> counter rises exactly
+        /// when a description is written, comparing it against its value at the previous logged
+        /// shot says whether the description is this shot's or a leftover.
+        /// </remarks>
+        internal static string OcclusionFor(
+            long occludedNow, long occludedAtLastLog, string lastDescription)
+        {
+            if (occludedNow <= occludedAtLastLog) return "none-this-shot";
+
+            return string.IsNullOrEmpty(lastDescription) ? "none" : lastDescription;
+        }
+
+        /// <summary>
+        /// Formats one occlusion hit. Pure, so the EditMode suite can pin it without a
+        /// <c>PhysicsScene</c>.
+        /// </summary>
+        /// <param name="rayLength">
+        /// Measured between the two endpoints rather than taken from <c>IsOccluded</c>'s
+        /// <c>distance</c> argument, which is the compensator's notion of the shot and not
+        /// necessarily the length of the segment that was actually cast.
+        /// </param>
+        internal static string DescribeOcclusion(
+            string colliderName, int layer, float hitDistance, float rayLength)
+        {
+            // A zero-length segment cannot have a fraction, and printing NaN or a divide-by-zero
+            // into the one artifact that is supposed to settle this would be worse than saying so.
+            string fraction = rayLength > 0.0001f
+                ? (hitDistance / rayLength).ToString("F3", CultureInfo.InvariantCulture)
+                : "n/a";
+
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "collider={0} layer={1} d={2:F2}m of {3:F2}m frac={4}",
+                string.IsNullOrEmpty(colliderName) ? "<unnamed>" : colliderName,
+                layer, hitDistance, rayLength, fraction);
         }
 
         private static double NowMs() => Time.realtimeSinceStartupAsDouble * 1000.0;

@@ -347,6 +347,12 @@ namespace Ironfront.Net.Unity.Server
         /// the first hypothesis this line was written to kill or confirm.
         /// </para>
         /// </remarks>
+        /// <summary>
+        /// <c>ShotsOccluded</c> as of the previous logged shot, so the occlusion description can
+        /// be dated rather than reprinted. See <c>ServerTickLoop.OcclusionFor</c>.
+        /// </summary>
+        private long _occludedAtLastShotLog;
+
         private void LogShot(
             ClientSession session, in InputFrame frame, in CombatTickResult result, uint tick)
         {
@@ -388,6 +394,14 @@ namespace Ironfront.Net.Unity.Server
                           + $"{target.Present.Torso.Extents.Z:F2}";
             }
 
+            // X-20 freshness: LastOcclusion is last-write-wins and only written on a HIT, so a
+            // shot nothing blocked would otherwise reprint the previous shot's collider. The
+            // counter rises exactly when a description is written, so it dates it.
+            long occludedNow = _authority.FireResolver.LagCompensator.ShotsOccluded;
+            string occlusion = ServerTickLoop.OcclusionFor(
+                occludedNow, _occludedAtLastShotLog, ServerTickLoop.LastOcclusion);
+            _occludedAtLastShotLog = occludedNow;
+
             Debug.Log(
                 $"[shot] actor={session.ActorId} weapon={session.WeaponId} "
                 + $"ammo={session.Weapon.AmmoInClip} rejection={result.Rejection} "
@@ -400,6 +414,11 @@ namespace Ironfront.Net.Unity.Server
                 // the two ways, and without them a rejected hit is indistinguishable from a
                 // bad aim -- which cost a slab test done by hand on 2026-08-22 to rule out. X-19.
                 + $"occluded={_authority.FireResolver.LagCompensator.ShotsOccluded} "
+                // X-20: occluded counts rejections; this says WHAT rejected them. The two
+                // readings the 2026-08-23 run could not separate are "there is a wall between
+                // them" and "the victim's own capsule blocked the shot that hit it", and the
+                // collider name tells them apart on sight.
+                + $"occlusionHit[{occlusion}] "
                 + $"presentFallbacks={_authority.FireResolver.LagCompensator.PresentFallbacks} "
                 + $"resolved={_authority.FireResolver.LagCompensator.ShotsResolved} "
                 + DescribeX19(session, nearestIndex, tick));
