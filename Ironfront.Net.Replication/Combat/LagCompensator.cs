@@ -43,17 +43,35 @@ namespace Ironfront.Net.Replication.Combat
         }
 
         /// <summary>
-        /// Optional line-of-sight test against world geometry: origin, point, and the distance
-        /// between them; returns true when a wall is in the way.
+        /// Optional line-of-sight test against world geometry: origin, the point that was hit,
+        /// the distance between them, and <b>the actor that point belongs to</b>; returns true
+        /// when a wall is in the way.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// The one thing an engine-free hit test genuinely cannot do is know where the walls
         /// are, so that single question is delegated and everything else stays testable. The
         /// Unity server assigns a <c>Physics.Linecast</c> against the world layer here once at
         /// bootstrap; leaving it null resolves shots with no occlusion, which is what the unit
         /// tests want and what a geometry-free test map gets.
+        /// </para>
+        /// <para>
+        /// <b>The victim's actor id is the fourth argument, and ledger row X-26 is why.</b> The
+        /// endpoint of this query sits INSIDE the body that was hit, so the first thing a
+        /// linecast meets there is that body's own collider. Measured on
+        /// <c>artifacts/lane-b/x27-pinned-01..03</c>: all 34 occlusions across three runs were
+        /// <c>collider=Bone_002 layer=8</c> at <c>frac=0.938..0.960</c> — a rig bone, at the
+        /// endpoint, on a layer the <c>-2049</c> mask includes. Not one was terrain and not one
+        /// was a building. The body was rejecting the shot that hit it, and it did so more the
+        /// closer the pair got.
+        /// </para>
+        /// <para>
+        /// Whose colliders those are is a question only the engine can answer, so this seam
+        /// carries the id and the Unity implementation decides. Nothing engine-free needs to
+        /// know what a collider is, which is the whole point of the seam.
+        /// </para>
         /// </remarks>
-        public Func<Vec3, Vec3, float, bool>? Occlusion { get; set; }
+        public Func<Vec3, Vec3, float, ushort, bool>? Occlusion { get; set; }
 
         /// <summary>Shots resolved. Denominator for the hit-rate experiment.</summary>
         public long ShotsResolved { get; private set; }
@@ -231,7 +249,7 @@ namespace Ironfront.Net.Replication.Combat
             // Walls last: an occluded shot is a miss, and asking the engine about geometry is
             // the most expensive thing here, so it runs once for the winner rather than once
             // per candidate box.
-            if (Occlusion != null && Occlusion(origin, point, bestDistance))
+            if (Occlusion != null && Occlusion(origin, point, bestDistance, bestActor))
             {
                 ShotsOccluded++;
                 return HitResult.Miss(targetTick);

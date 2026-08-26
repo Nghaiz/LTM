@@ -123,7 +123,7 @@ namespace Ironfront.Net.Replication.Tests
             // Blocked is not missed. Conflating them is what made X-20 and X-24 one symptom.
             var compensator = new LagCompensator(new HitboxHistory())
             {
-                Occlusion = (_, _, _) => true,
+                Occlusion = (_, _, _, _) => true,
             };
 
             compensator.ResolveHitscan(
