@@ -195,8 +195,8 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         private static bool ScriptedRespawnPressed()
         {
-            FpsActorController local = FpsActorController.instance;
-            return local != null && local.InputSource != null && local.InputSource.RespawnPressed;
+            IInputSource input = NetClientBindings.LocalPlayer.InputSource;
+            return input != null && input.RespawnPressed;
         }
 
         /// <summary>
@@ -227,10 +227,10 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         private static bool FirePressed()
         {
-            FpsActorController local = FpsActorController.instance;
-            if (local == null || local.InputSource == null) return false;
+            IInputSource input = NetClientBindings.LocalPlayer.InputSource;
+            if (input == null) return false;
 
-            return (local.InputSource.Buttons & (ushort)InputButtons.Fire) != 0;
+            return (input.Buttons & (ushort)InputButtons.Fire) != 0;
         }
 
         /// <summary>
@@ -300,8 +300,8 @@ namespace Ironfront.Net.Unity.Client
         {
             if (!NetClientPresenterGuard.IsLocalActor(_state.LocalActorId)) return;
 
-            FpsActorController local = FpsActorController.instance;
-            if (local == null) return;
+            ILocalPlayerRig local = NetClientBindings.LocalPlayer;
+            if (!local.Exists) return;
 
             local.DisableInput();
             _inputSuppressedByDeath = true;
@@ -316,8 +316,8 @@ namespace Ironfront.Net.Unity.Client
 
             if (!NetClientPresenterGuard.IsLocalActor(_state.LocalActorId)) return;
 
-            FpsActorController local = FpsActorController.instance;
-            if (local == null) return;
+            ILocalPlayerRig local = NetClientBindings.LocalPlayer;
+            if (!local.Exists) return;
 
             local.EnableInput();
         }

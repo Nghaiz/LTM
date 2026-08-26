@@ -45,6 +45,15 @@ namespace Ironfront.Net.Unity.Bindings
             // the first scene's Awake, and so before FpsActorController can build a
             // LocalInputSource that reads them.
             NetInputBindings.Environment = new LocalInputEnvironmentBinding();
+
+            // C4a. The client presenters may no longer name FpsActorController or IngameUi, so
+            // the local player's rig and the hitmarker are handed over here. Both are registered
+            // unconditionally, including on a dedicated server: each binding resolves its
+            // singleton per call and reports absent when there is none, so registering on a
+            // headless process costs one allocation and changes no behaviour. A role test here
+            // would be a second copy of a decision NetContext already owns.
+            Client.NetClientBindings.LocalPlayer = new LocalPlayerRigBinding();
+            Client.NetClientBindings.Hud = new HitmarkerHudBinding();
         }
 
         /// <summary>

@@ -27,7 +27,7 @@ namespace Ironfront.Net.Unity.Client
     /// <b>Only the local player's own blast is predicted.</b> Suppression keys on
     /// <c>SourceActorId</c> matching this client's actor, so predicting somebody else's
     /// explosion would draw it locally AND fail to suppress the confirmation — one blast, two
-    /// flashes. Gating on <see cref="NetClientPresenterGuard.IsLocalActor(Actor)"/> makes that
+    /// flashes. Gating on <see cref="NetClientPresenterGuard.IsLocalActor(IGameplayActorPresence)"/> makes that
     /// unreachable rather than unlikely.
     /// </para>
     /// </remarks>
@@ -43,13 +43,18 @@ namespace Ironfront.Net.Unity.Client
         /// with no explosion presenter still gets the server's <c>S_EXPLOSION</c> and simply
         /// draws nothing early, which is the pre-V10 behaviour rather than a failure.
         /// </remarks>
-        /// <param name="source">Whoever set it off, for the local-player test.</param>
+        /// <param name="source">
+        /// Whoever set it off, for the local-player test. Declared as the seam rather than as
+        /// <c>Actor</c>, which this assembly may no longer name — the legacy caller passes its
+        /// own component and the conversion is implicit, so <c>ActorManager.Explode</c> is
+        /// unchanged (phase C4a).
+        /// </param>
         /// <param name="radiusMetres">
         /// The radius the damage selection used — the same value the server puts on the wire,
         /// so the predicted effect and the confirmed one are the same size (V1 D4).
         /// </param>
         public static void PredictExplosion(
-            Actor source, Vector3 centre, float radiusMetres, ExplosionKind kind)
+            IGameplayActorPresence source, Vector3 centre, float radiusMetres, ExplosionKind kind)
         {
             if (!NetContext.IsClient) return;
             if (!NetClientPresenterGuard.IsLocalActor(source)) return;

@@ -122,6 +122,72 @@ $Baseline = @(
        Reason = 'the lane-B harness strips the server half of a listen-server scene, so it names it' }
 )
 
+# RULE 6's baseline: the legacy type names Net/Client still contains, one row per NAME.
+#
+# WHY THIS EXISTS
+#
+# Phase C4 seals Net/Client into an assembly, and an assembly cannot reference Assembly-CSharp.
+# That is one move but roughly ten bindings, so it lands as a sequence of sub-phases -- one
+# binding CLUSTER each, never one file each. Between the first and the last, the folder is
+# partly bound, and nothing but this table can tell "a name C4b has not reached yet" apart from
+# "a name somebody just added back".
+#
+# rules/pinned-baseline-test-companion.md governs the shape: a baseline pinning a known gap ships
+# a companion that fails when the pin stops being accurate, and the companion asserts by
+# IDENTITY, not by count. A count would be satisfied by any eight names -- including eight
+# entirely different ones. So both directions are asserted, by name:
+#
+#   RULE 6a (grow)   -- a legacy name in Net/Client that is NOT here FAILS. That is the whole
+#                       point: the cluster you just bound must not be quietly re-opened, and a
+#                       new crossing must not slip in while the folder is legitimately dirty.
+#   RULE 6b (stale)  -- a row whose name Net/Client no longer contains FAILS, telling you to
+#                       DELETE it. Otherwise the list becomes a graveyard, and a cluster that
+#                       got bound reads exactly like one nobody touched.
+#
+# ON A RULE 6b FAILURE: delete the row. Do NOT re-pin the table to whatever the run reported.
+# When the last `debt` row goes, this rule is finished and the seal rule replaces it -- see the
+# note at RULE 6 itself.
+#
+# Kind = 'debt'          -- a real crossing, retired by the named sub-phase.
+# Kind = 'not-a-reference' -- the matcher cannot resolve it and never will: a member named like a
+#                       legacy type, a namespace segment, an enum member, or System.Action. These
+#                       rows do NOT go away when C4 finishes, and each one states what it really
+#                       is so the next reader does not go hunting for a crossing that is not
+#                       there. Every one of these was verified by reading the call site; the same
+#                       four cost phase C2 a wrong plan when they were counted as real.
+$ClientBaseline = @(
+    @{ Type = 'Vehicle'                 ; Kind = 'debt'; Retires = 'C4b'
+       Reason = 'NetClientVehicle holds one; RemoteVehicleRegistry spawns and destroys them' }
+    @{ Type = 'VehicleSpawner'          ; Kind = 'debt'; Retires = 'C4b'
+       Reason = 'RemoteVehicleRegistry finds the scene spawners to read prefabs off' }
+    @{ Type = 'Projectile'              ; Kind = 'debt'; Retires = 'C4b'
+       Reason = 'NetClientProjectilePresenter tracks spawned projectiles by component' }
+    @{ Type = 'GrenadeProjectile'       ; Kind = 'debt'; Retires = 'C4b'
+       Reason = 'NetClientProjectilePresenter type-tests for the grenade re-seat path' }
+    @{ Type = 'ProjectileCatalogBuilder'; Kind = 'debt'; Retires = 'C4b'
+       Reason = 'NetClientProjectilePresenter builds its catalogue from prefabs' }
+    @{ Type = 'DecalManager'            ; Kind = 'debt'; Retires = 'C4b'
+       Reason = 'NetClientExplosionPresenter puts a scorch mark down' }
+    @{ Type = 'DecalType'               ; Kind = 'debt'; Retires = 'C4b'
+       Reason = 'the nested enum on DecalManager, named at the same call site' }
+    @{ Type = 'ScoreUi'                 ; Kind = 'debt'; Retires = 'C4b'
+       Reason = 'NetClientObjectivePresenter writes the scoreboard and fades it' }
+
+    @{ Type = 'State'                   ; Kind = 'not-a-reference'; Retires = 'never'
+       Reason = 'a PROPERTY named State on eight client types (GameFlowController.State, ' +
+                'driver.State, _agent.State). The legacy declaration it collides with is a ' +
+                'private nested enum inside ActiveRaggy, which no client file can even see' }
+    @{ Type = 'Action'                  ; Kind = 'not-a-reference'; Retires = 'never'
+       Reason = 'System.Action, the delegate -- plus result.Action, a field on a replication ' +
+                'struct. Assembly-CSharp happens to declare a MonoBehaviour called Action too' }
+    @{ Type = 'Configuration'           ; Kind = 'not-a-reference'; Retires = 'never'
+       Reason = 'the last segment of `using Ironfront.Net.Configuration;`, matched as a bare ' +
+                'identifier because the matcher tokenises rather than parses' }
+    @{ Type = 'Helicopter'              ; Kind = 'not-a-reference'; Retires = 'never'
+       Reason = 'VehicleKind.Helicopter, an enum MEMBER on a replication-library enum. The ' +
+                'identically-named legacy MonoBehaviour is not referenced anywhere in Net/Client' }
+)
+
 Write-Host "=== Assembly-CSharp does not reach into Ironfront.Net.Unity.Server ==="
 
 if (-not (Test-Path $root)) {
@@ -260,16 +326,35 @@ function Get-CodeLines([string]$fullPath) {
 # default; C# is not. The first run of this rule matched the local `options` against the type
 # `Options` and the parameter `weaponSlot` against `WeaponSlot`, and reported both as legacy
 # references. A gate that fires on every lowercase local is one nobody keeps.
-$legacyTypes = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
-foreach ($file in $allSources) {
-    if (-not (Test-OutsideAsmdef $file.FullName)) { continue }
-    # Belt and braces: if 5a already failed, do not let Net/Input's own types poison the set and
-    # bury the real finding under a pile of self-matches.
-    if ($file.FullName.StartsWith($inputRoot, [StringComparison]::OrdinalIgnoreCase)) { continue }
-    foreach ($line in (Get-CodeLines $file.FullName)) {
-        if ($line -match $declPattern) { [void]$legacyTypes.Add($Matches[1]) }
+# Excluded roots are the folder being judged: a folder's OWN type declarations are not legacy
+# names to it, and letting them in buries the real finding under a pile of self-matches. For
+# RULE 5b that is belt and braces (5a already failed if Net/Input has no asmdef); for RULE 6,
+# where Net/Client genuinely has no asmdef yet, it is load-bearing -- without it every client
+# type would report itself.
+function Get-LegacyTypeSet([string[]]$excludedRoots) {
+    $set = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+
+    foreach ($file in $allSources) {
+        if (-not (Test-OutsideAsmdef $file.FullName)) { continue }
+
+        $skip = $false
+        foreach ($excluded in $excludedRoots) {
+            if ($file.FullName.StartsWith($excluded, [StringComparison]::OrdinalIgnoreCase)) {
+                $skip = $true
+                break
+            }
+        }
+        if ($skip) { continue }
+
+        foreach ($line in (Get-CodeLines $file.FullName)) {
+            if ($line -match $declPattern) { [void]$set.Add($Matches[1]) }
+        }
     }
+
+    return $set
 }
+
+$legacyTypes = Get-LegacyTypeSet @($inputRoot)
 
 if ($legacyTypes.Count -eq 0) {
     Write-Host "COULD NOT TELL: no type declarations found in predefined-assembly sources, so"
@@ -305,6 +390,84 @@ foreach ($file in $inputSources) {
     }
 }
 
+# RULE 6 — Net/Client's shrinking legacy surface, phase C4.
+#
+# Net/Client is NOT an assembly yet, so there is no seam to assert the way RULE 5a does for
+# Net/Input. What there is, between the first C4 sub-phase and the last, is a folder whose legacy
+# surface is supposed to shrink monotonically — and a monotonic shrink is exactly the thing a
+# baseline plus its companion can hold. See $ClientBaseline above for the full contract.
+#
+# WHEN THIS RULE IS FINISHED: every `debt` row is gone and only `not-a-reference` rows remain.
+# At that point Net/Client takes its asmdef and this rule is REPLACED by a 5a/5b-shaped seam
+# assertion — with the four surviving rows carried over as its allow-list, because those four
+# names are matcher artefacts and outlive the refactor entirely.
+$clientRoot = Join-Path $root ('Net' + [IO.Path]::DirectorySeparatorChar + 'Client')
+
+if (Test-Path $clientRoot) {
+    $clientSources = @(Get-ChildItem -Path $clientRoot -Filter *.cs -Recurse -File)
+
+    if ($clientSources.Count -eq 0) {
+        Write-Host "COULD NOT TELL: no .cs files under '$ScriptsPath/Net/Client'."
+        exit 2
+    }
+
+    # Its own declarations are not legacy names to it. Without this exclusion every client type
+    # reports itself and the rule is noise rather than a gate.
+    $clientLegacyTypes = Get-LegacyTypeSet @($inputRoot, $clientRoot)
+
+    if ($clientLegacyTypes.Count -eq 0) {
+        Write-Host "COULD NOT TELL: no type declarations found outside Net/Client, so RULE 6 had"
+        Write-Host "                nothing to match against. An empty set matches nothing and"
+        Write-Host "                would have passed for the wrong reason."
+        exit 2
+    }
+
+    $clientAllowed = @{}
+    foreach ($entry in $ClientBaseline) { $clientAllowed[$entry.Type] = $entry }
+
+    # name -> the files naming it, so a RULE 6b failure can say where the row USED to apply and a
+    # 6a failure can point at the call site rather than at the folder.
+    $clientNamed = @{}
+    foreach ($file in $clientSources) {
+        $relative = ConvertTo-RepoRelative $file.FullName
+        foreach ($line in (Get-CodeLines $file.FullName)) {
+            foreach ($name in ([regex]::Matches($line, '[A-Za-z_][A-Za-z0-9_]*') | ForEach-Object { $_.Value })) {
+                if (-not $clientLegacyTypes.Contains($name)) { continue }
+                if (-not $clientNamed.ContainsKey($name)) { $clientNamed[$name] = @{} }
+                $clientNamed[$name][$relative] = $true
+            }
+        }
+    }
+
+    # RULE 6a — grow.
+    foreach ($name in ($clientNamed.Keys | Sort-Object)) {
+        if ($clientAllowed.ContainsKey($name)) { continue }
+
+        $where = ($clientNamed[$name].Keys | Sort-Object) -join ', '
+        $violations += "RULE 6a (new crossing): Net/Client names '$name', which is declared in " +
+                       "a predefined-assembly source and is not in `$ClientBaseline.`n" +
+                       "    Named by: $where`n" +
+                       "    Phase C4 is shrinking this surface to nothing so the folder can " +
+                       "become an assembly. A name that is not on the list is either a crossing " +
+                       "somebody just added — route it through an interface Net/Client owns, as " +
+                       "IGameplayActorPresence does for Actor — or a matcher artefact, in which " +
+                       "case add a 'not-a-reference' row SAYING WHAT IT REALLY IS."
+    }
+
+    # RULE 6b — shrink. The companion, asserting by identity.
+    foreach ($entry in $ClientBaseline) {
+        if ($clientNamed.ContainsKey($entry.Type)) { continue }
+
+        $violations += "RULE 6b (stale): Net/Client no longer names '$($entry.Type)' — the " +
+                       "binding is DONE.`n" +
+                       "    Reason it was listed: $($entry.Reason)`n" +
+                       "    DELETE the row. Do NOT re-pin the table to what this run reported: " +
+                       "that renames a fix 'expected' and is how a gate gets muted. If this was " +
+                       "the last 'debt' row, Net/Client is ready for its asmdef and this rule " +
+                       "is ready to become a seam assertion — see the RULE 6 header."
+    }
+}
+
 if ($violations.Count -gt 0) {
     Write-Host ""
     Write-Host "FAIL: the layering between Assembly-CSharp and Ironfront.Net.Unity.Server moved."
@@ -321,6 +484,16 @@ Write-Host ("      all named in the baseline; {0} of them are debt, and every ro
 Write-Host "      Net/Client and Net/Input name it nowhere."
 Write-Host ("      RULE 5: Net/Input carries its asmdef and names none of the {0} type(s) declared" -f $legacyTypes.Count)
 Write-Host ("              in predefined-assembly sources, across {0} of its own file(s)." -f $inputSources.Count)
+if (Test-Path $clientRoot) {
+    $clientDebt = @($ClientBaseline | Where-Object { $_.Kind -eq 'debt' })
+    Write-Host ("      RULE 6: Net/Client names {0} legacy type(s), every one of them listed —" -f $clientNamed.Count)
+    Write-Host ("              {0} still to bind (phase C4), {1} matcher artefact(s) that never will be." -f
+                $clientDebt.Count, ($ClientBaseline.Count - $clientDebt.Count))
+    if ($clientDebt.Count -eq 0) {
+        Write-Host "              No debt rows left: Net/Client is ready for its asmdef, and this"
+        Write-Host "              rule is ready to become a seam assertion. See the RULE 6 header."
+    }
+}
 Write-Host "      This says no NEW call site appeared and no listed one was silently fixed. It"
 Write-Host "      does NOT say the listed call sites are acceptable — that is what the count is for."
 exit 0

@@ -115,11 +115,14 @@ namespace Ironfront.Tools.ClientWiringGate
         /// </summary>
         private static readonly (string PathMatch, string? Member, string Reason)[] PerActorGuardExemptions =
         {
-            // This file IS the guard. IsLocalActor(Actor) is defined as "does
-            // FpsActorController.instance's actor reference-equal this one", so demanding that it
-            // guard that read with itself is circular.
-            ("/NetClientPresenterGuard.cs", null,
-                "defines IsLocalActor; guarding the definition with itself is circular"),
+            // The NetClientPresenterGuard.cs entry that used to sit here was DELETED by phase
+            // C4a, on this gate's own instruction. It existed because IsLocalActor(Actor) was
+            // defined as "does FpsActorController.instance's actor reference-equal this one" --
+            // a local-only singleton read that could not guard itself without circularity. C4a
+            // inverted that: the question is now asked through IGameplayActorPresence, which the
+            // Actor answers on the far side of the seam, so the file touches no singleton at all
+            // and the exemption had nothing left to exempt. PerActorGuardExemptions_HasNoStaleEntries
+            // is what noticed, which is the whole reason that companion exists.
 
             // One-line HUD writers whose guard lives at every call site, because the callee has no
             // way to know whose HUD it is. Verified 2026-08-18: Actor.cs:894, :1183, :1199 and
@@ -195,7 +198,7 @@ namespace Ironfront.Tools.ClientWiringGate
             => IsInScope(path, PerActorGuardScope);
 
         /// <summary>
-        /// The enclosing member name of every local-only-singleton <c>.instance</c> touch in
+        /// The enclosing member name of every local-only-singleton handle touch in
         /// <paramref name="tree"/>, using G4's own notions of "touch" and "enclosing member" so
         /// the companion cannot drift from the rule it guards.
         /// </summary>
@@ -207,9 +210,7 @@ namespace Ironfront.Tools.ClientWiringGate
                          .DescendantNodes()
                          .OfType<MemberAccessExpressionSyntax>())
             {
-                if (access.Name.Identifier.ValueText != "instance") continue;
-                if (!(access.Expression is IdentifierNameSyntax type)) continue;
-                if (Array.IndexOf(LocalOnlySingletons, type.Identifier.ValueText) < 0) continue;
+                if (!IsLocalOnlySingletonTouch(access, out _)) continue;
 
                 string? member = EnclosingMemberName(access);
                 if (member != null) members.Add(member);
@@ -219,10 +220,72 @@ namespace Ironfront.Tools.ClientWiringGate
         }
 
         /// <summary>
-        /// The client-only singletons G4 protects. Reaching either from a per-actor path is how a
-        /// remote player's event ends up kicking your camera or rewriting your health bar.
+        /// The client-only singleton HANDLES G4 protects, as (type, member) pairs. Reaching one
+        /// from a per-actor path is how a remote player's event ends up kicking your camera or
+        /// rewriting your health bar.
         /// </summary>
-        private static readonly string[] LocalOnlySingletons = { "FpsActorController", "IngameUi" };
+        /// <remarks>
+        /// <para>
+        /// <b>Pairs, not type names with an implied <c>.instance</c> — phase C4a is why.</b> That
+        /// phase sealed <c>Net/Client</c> behind interfaces, so every
+        /// <c>FpsActorController.instance</c> read in the folder became
+        /// <c>NetClientBindings.LocalPlayer</c>. The hazard did not move an inch: it is the same
+        /// singleton, reached from the same per-actor paths, able to write the same camera. Only
+        /// the spelling changed. A detector that knew one spelling would have gone quietly green
+        /// across the whole folder — and the four exemptions below would have read as "no longer
+        /// needed" rather than "no longer visible", which is the more dangerous of the two
+        /// because it looks like progress.
+        /// </para>
+        /// <para>
+        /// The companion is what caught it: <c>PerActorGuardExemptions_HasNoStaleEntries</c> went
+        /// RED the moment the reads were re-spelled, and reading the failure in the direction it
+        /// pointed — is this a fix, or is it the gate losing sight? — is the whole reason
+        /// <c>pinned-baseline-test-companion.md</c> demands a leash on stored judgements.
+        /// </para>
+        /// <para>
+        /// <b><c>NetClientBindings.ShowHit</c> is deliberately absent.</b> It is the static
+        /// forwarder to the HUD, and its predecessor <c>IngameUi.Hit(...)</c> was never covered
+        /// either — G4 has only ever matched singleton HANDLES, not static calls that use one
+        /// internally. Adding it here would widen the rule under cover of a refactor that was
+        /// supposed to change nothing; if that gap is worth closing it is worth closing on its
+        /// own evidence, for both spellings at once.
+        /// </para>
+        /// </remarks>
+        private static readonly (string Type, string Member)[] LocalOnlySingletons =
+        {
+            ("FpsActorController", "instance"),
+            ("IngameUi", "instance"),
+
+            // C4a. The seam Net/Client now reaches the local player and the HUD through. Same
+            // singletons, same hazard, new names.
+            ("NetClientBindings", "LocalPlayer"),
+            ("NetClientBindings", "Hud"),
+        };
+
+        /// <summary>
+        /// Whether <paramref name="access"/> is a touch of a client-only singleton handle, and
+        /// which one.
+        /// </summary>
+        private static bool IsLocalOnlySingletonTouch(
+            MemberAccessExpressionSyntax access, out string singleton)
+        {
+            singleton = string.Empty;
+
+            if (!(access.Expression is IdentifierNameSyntax type)) return false;
+
+            string typeName   = type.Identifier.ValueText;
+            string memberName = access.Name.Identifier.ValueText;
+
+            foreach ((string Type, string Member) candidate in LocalOnlySingletons)
+            {
+                if (candidate.Type != typeName || candidate.Member != memberName) continue;
+
+                singleton = typeName + "." + memberName;
+                return true;
+            }
+
+            return false;
+        }
 
         /// <summary>
         /// The predicate that makes a per-actor singleton touch legitimate:
@@ -509,18 +572,14 @@ namespace Ironfront.Tools.ClientWiringGate
                          .DescendantNodes()
                          .OfType<MemberAccessExpressionSyntax>())
             {
-                if (access.Name.Identifier.ValueText != "instance") continue;
-                if (!(access.Expression is IdentifierNameSyntax type)) continue;
-
-                string singleton = type.Identifier.ValueText;
-                if (Array.IndexOf(LocalOnlySingletons, singleton) < 0) continue;
+                if (!IsLocalOnlySingletonTouch(access, out string singleton)) continue;
 
                 if (IsMemberExempt(path, EnclosingMemberName(access))) continue;
                 if (HasLocalActorGuard(access)) continue;
 
                 findings.Add(new GateFinding(
                     "G4", path, LineOf(access),
-                    $"'{singleton}.instance' is reached from a per-actor path with no "
+                    $"'{singleton}' is reached from a per-actor path with no "
                     + $"NetClientPresenterGuard.{LocalActorGuardMethod} guard. A remote player's "
                     + "event would write this client's own HUD or camera (finding A16)."));
             }

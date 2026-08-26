@@ -113,6 +113,47 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void TheGateFlagsTheSeamSpellingOfTheSameSingletonTouch()
+        {
+            // Phase C4a re-spelled every FpsActorController.instance read in Net/Client as
+            // NetClientBindings.LocalPlayer, so that the folder could become an assembly. The
+            // singleton, the per-actor paths and the A16 hazard are all unchanged — only the name
+            // is different, and a detector that knew one name would have gone silently green
+            // across the whole folder while reporting its own exemptions as "no longer needed".
+            //
+            // This is the red path for the new spelling. It is a separate fact from the one above
+            // because the two names can regress independently: deleting either row from
+            // LocalOnlySingletons leaves the other test passing.
+            IReadOnlyList<GateFinding> findings = ClientWiringDetectors
+                .FindUnguardedLocalSingletonTouches(
+                    Parse(
+                        @"class Actor { void Hurt() { NetClientBindings.LocalPlayer.FellBody(); } }",
+                        ActorPath),
+                    ActorPath);
+
+            GateFinding finding = Assert.Single(findings);
+            Assert.Equal("G4", finding.RuleId);
+
+            // The message must NAME the spelling it caught. "FpsActorController.instance is
+            // reached..." printed over a NetClientBindings touch would send the reader to a line
+            // that does not exist.
+            Assert.Contains("NetClientBindings.LocalPlayer", finding.Message);
+        }
+
+        [Fact]
+        public void TheGateAcceptsAGuardedSeamSingletonTouch()
+        {
+            // The green twin for the seam spelling, for the reason the twin below gives: a rule
+            // that fires on correct code is a rule people delete.
+            Assert.Empty(ClientWiringDetectors.FindUnguardedLocalSingletonTouches(
+                Parse(
+                    @"class Actor { void Hurt() { if (NetClientPresenterGuard.IsLocalActor(this))"
+                    + @" { NetClientBindings.LocalPlayer.FellBody(); } } }",
+                    ActorPath),
+                ActorPath));
+        }
+
+        [Fact]
         public void TheGateAcceptsAGuardedLocalSingletonTouch()
         {
             // The green twin. Without it, G4 could be passing by flagging everything — and a
