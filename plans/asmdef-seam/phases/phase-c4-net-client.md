@@ -101,7 +101,7 @@ the number in it did not. It splits **by binding cluster**, never by file count:
 | **C4a** | Actor / presence | `FpsActorController` 16×, `Actor` 7×, `Weapon` 4×, `IngameUi` 1× | **done 2026-08-26** |
 | **C4b** | Vehicle, projectile, decal, objective | `Vehicle` 13×, `ScoreUi` 8×, `Projectile` 5×, `VehicleSpawner` 2×, `DecalManager` 2×, `GrenadeProjectile` 1×, `ProjectileCatalogBuilder` 1× | **done 2026-08-26** |
 | **C4c** | The Client seal | `Ironfront.Net.Unity.Client`, the EditMode suite, the gate rewrite | **done 2026-08-26** |
-| **C4d** | The Diagnostics seal | `Ironfront.Net.Unity.Diagnostics`, its 4 bindings, the exclusion-gate fold | last |
+| **C4d** | The Diagnostics seal | `Ironfront.Net.Unity.Diagnostics`, its 3 seams, the exclusion-gate fold | **done 2026-08-26** |
 
 **The split is four, and it grew from three during C4c — stated here rather than quietly.** The
 original three assumed C4c would seal `Net/Client` and `Net/Diagnostics` together, on § 0's
@@ -279,6 +279,73 @@ assertion in three separate parts: **6a** the asmdef exists, **6b** no unlisted 
 **6c** no stale allow-list row. 6a is asserted directly rather than inferred, because **6b would
 stay green right through an asmdef deletion** — it matches names, and deleting an asmdef changes no
 name in any file. Mutation-tested: removing the asmdef fires 6a alone.
+
+## 3.4 C4d — done 2026-08-26
+
+`Assets/Scripts/Net/Diagnostics` is **`Ironfront.Net.Unity.Diagnostics`**, referencing Shared,
+Input, Client and Server, and — read off the runtime manifest — **neither `Assembly-CSharp` nor
+`Assembly-CSharp-firstpass`**. All three folders are now sealed; track success criterion 1 is met
+in full.
+
+**C3 said 5 bindings. The answer was 4, and then 3.** `Vehicle` dissolved entirely in C4b, exactly
+as § 0 guessed it might. `FpsActorController` needed no new interface at all — Diagnostics
+references the Client assembly and reuses `ILocalPlayerRig`, which is the whole reason C3's asmdef
+was deferred here. So the new surface is one probe (`ScoreUi`, `MatchScoreboard`, `CapturePoint`),
+one movement seam (below), and three additions to the rig.
+
+| Seam | Retires |
+|---|---|
+| `IDiagnosticsProbe` | `ScoreUi`, `MatchScoreboard`, `CapturePoint` |
+| `ILegacyMovementProbe` | `FirstPersonController` — see below |
+| `ILocalPlayerRig` +`GameObject` +`IsInputEnabled` +`SetInputSource` +`YawDegrees` | `FpsActorController` |
+
+### The blind spot, and it is the one worth carrying forward
+
+**`Assets/Plugins/Assembly-CSharp-firstpass/` is a SECOND predefined assembly, and neither the C4
+enumeration nor `check-net-layering.ps1` was looking at it.** Both rooted at `Assets/Scripts`. It
+holds 112 files and **155 type names**, every one of them as unreachable from an asmdef as
+`Assembly-CSharp`'s are, and all of them invisible to every measurement this track has taken.
+
+It cost a real miss: `MovementShadowCompare` named
+`UnityStandardAssets.Characters.FirstPerson.FirstPersonController`; the enumeration never saw it;
+RULE 6 and RULE 7 could not have flagged it; **only the Unity compile found it.** That is
+`green-that-proves-nothing.md`'s "measures the wrong population" — the gate was asking the right
+question of the wrong set.
+
+C4d widened the scan root. The population went 404 → 558 names, and the wider net immediately
+found three more collisions — `Mode`, `Entry`, `Entries` — all nested public types inside
+`UnityStandardAssets` utilities, all allow-listed with what they really are. **The green compile is
+the proof they are artefacts**: an asmdef naming a firstpass type does not build.
+
+### The exclusion gate folded, and its report was a false green for one run
+
+`check-diagnostics-exclusion.ps1` RULES 1–3 are **deleted**, on that file's own written
+instruction. RULE 1/2 (per-file `#if` guards) are replaced by `defineConstraints` on the asmdef;
+RULE 3 (dangling references) by the assembly boundary, which does that job properly rather than by
+source-text approximation. **RULE 4 outlives them**, exactly as predicted: nothing about an asmdef
+proves the excluded configuration still *builds*.
+
+The `#if` guards stay in the files as an unchecked fallback, stated rather than implied.
+
+**Caught in passing:** after deleting the rules, the script's `PASS` banner still reported RULE 1
+and RULE 3 findings — a summary describing checks that no longer ran, which is the exact false-green
+shape the fold was supposed to remove. Rewritten to say it checked one thing.
+
+### RULE 7, and a delegation that would otherwise have gone unwatched
+
+New in `check-net-layering.ps1`, shaped like RULE 6 with one addition: **7a asserts the
+`defineConstraints` line is still on the asmdef**, not merely that the asmdef exists. The exclusion
+gate gave up its own rules on the strength of that line and has nothing left watching it — *a gate
+that hands its job to a config value and then does not watch the config value has not delegated, it
+has stopped checking.* Both limbs mutation-tested: dropping the line fires "exclusion gone";
+deleting the asmdef fires "seam gone".
+
+**One baseline row was deleted, and the direction is worth stating.** RULE 2 reported
+`LaneBHarness.cs` as "the debt is PAID". It is not: the file still names
+`Ironfront.Net.Unity.Server`, exactly as before. What changed is that it is no longer part of
+`Assembly-CSharp` — and this baseline is about *Assembly-CSharp* reaching into the server. The row
+stopped applying rather than the reference stopping, and the deletion is correct for a reason the
+failure text did not offer.
 
 ## 4. Acceptance criteria
 

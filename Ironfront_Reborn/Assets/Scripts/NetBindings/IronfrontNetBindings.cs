@@ -65,6 +65,30 @@ namespace Ironfront.Net.Unity.Bindings
             Client.NetClientBindings.Decals = new DecalSinkBinding();
             Client.NetClientBindings.Objectives = new ScoreUiObjectiveHud();
             Client.NetClientBindings.ProjectileCatalogReader = ProjectileCatalogBinding.Read;
+
+            // C4d. The lane-B recorder observes the scoreboard HUD, the offline scoreboard and
+            // the scene's capture points, and may name none of them now that Net/Diagnostics is
+            // an assembly. Registered unconditionally: the probe resolves its singletons per call
+            // and reports absent when there are none, which is the "absent" the recorder's JSON
+            // already carried.
+            Diagnostics.NetDiagnosticsBindings.Probe = new LaneBDiagnosticsProbe();
+            Diagnostics.NetDiagnosticsBindings.LegacyMovementResolver = ResolveLegacyMovement;
+        }
+
+        /// <summary>
+        /// The <c>GetComponent&lt;FirstPersonController&gt;()</c> the diagnostics assembly cannot
+        /// do itself — that type is declared in <c>Assembly-CSharp-firstpass</c>, a second
+        /// predefined assembly no asmdef may reference. Null on a body that carries none, which
+        /// the shadow comparison reads as "cannot score this run". Phase C4d.
+        /// </summary>
+        private static Diagnostics.ILegacyMovementProbe ResolveLegacyMovement(GameObject gameObject)
+        {
+            if (gameObject == null) return null;
+
+            var controller = gameObject
+                .GetComponent<UnityStandardAssets.Characters.FirstPerson.FirstPersonController>();
+
+            return controller != null ? new LegacyMovementProbeBinding(controller) : null;
         }
 
         /// <summary>

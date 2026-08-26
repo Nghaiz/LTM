@@ -159,10 +159,14 @@ namespace Ironfront.Net.Unity.Client
 
             public bool Exists => false;
             public IInputSource InputSource => null;
+            public GameObject GameObject => null;
+            public bool IsInputEnabled => false;
+            public void SetInputSource(IInputSource source) { }
             public void EnableInput() { }
             public void DisableInput() { }
             public bool IsDriving(IGameplayActorPresence actor) => false;
             public Vector3 Position => Vector3.zero;
+            public float YawDegrees => 0f;
             public bool CanApplyScreenshake => false;
             public void ApplyScreenshake(float magnitude, int iterations) { }
             public bool HasFellableBody => false;

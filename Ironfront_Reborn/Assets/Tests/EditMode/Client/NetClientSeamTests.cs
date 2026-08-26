@@ -128,15 +128,19 @@ namespace Ironfront.Net.Unity.Client.Tests
             Assert.IsFalse(rig.Exists);
             Assert.IsNull(rig.InputSource);
             Assert.IsFalse(rig.CanApplyScreenshake);
+            Assert.IsNull(rig.GameObject);
+            Assert.IsFalse(rig.IsInputEnabled);
             Assert.IsFalse(rig.HasFellableBody);
             Assert.IsFalse(rig.IsDriving(new FakeActorPresence()));
             Assert.AreEqual(Vector3.zero, rig.Position);
+            Assert.AreEqual(0f, rig.YawDegrees);
 
             Assert.DoesNotThrow(() =>
             {
                 rig.EnableInput();
                 rig.DisableInput();
                 rig.ApplyScreenshake(1f, 2);
+                rig.SetInputSource(null);
                 rig.FellBody(Vector3.up, HumanBodyBones.Hips);
             });
         }
@@ -222,10 +226,14 @@ namespace Ironfront.Net.Unity.Client.Tests
         {
             public bool Exists => true;
             public IInputSource InputSource => null;
+            public GameObject GameObject => null;
+            public bool IsInputEnabled => false;
+            public void SetInputSource(IInputSource source) { }
             public void EnableInput() { }
             public void DisableInput() { }
             public bool IsDriving(IGameplayActorPresence actor) => false;
             public Vector3 Position => Vector3.zero;
+            public float YawDegrees => 0f;
             public bool CanApplyScreenshake => false;
             public void ApplyScreenshake(float magnitude, int iterations) { }
             public bool HasFellableBody => false;

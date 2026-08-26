@@ -212,17 +212,17 @@ namespace Ironfront.Net.Unity.Diagnostics
 
         private void AppendLocalActor(NetClientBootstrap client)
         {
-            FpsActorController local = FpsActorController.instance;
-            if (local == null)
+            ILocalPlayerRig local = NetClientBindings.LocalPlayer;
+            if (!local.Exists)
             {
                 _json.Append("\"localActor\":null");
                 return;
             }
 
-            Vector3 p = local.transform.position;
+            Vector3 p = local.Position;
             _json.Append("\"localActor\":{");
             Num("x", p.x); Comma(); Num("y", p.y); Comma(); Num("z", p.z); Comma();
-            Num("yaw", local.transform.eulerAngles.y); Comma();
+            Num("yaw", local.YawDegrees); Comma();
             Num("aimPitch", local.InputSource.Pitch); Comma();
             Num("buttons", local.InputSource.Buttons); Comma();
 
@@ -252,9 +252,14 @@ namespace Ironfront.Net.Unity.Diagnostics
             _json.Append('}');
         }
 
-        private void AppendLocalPrediction(NetClientBootstrap client, FpsActorController local)
+        private void AppendLocalPrediction(NetClientBootstrap client, ILocalPlayerRig local)
         {
-            ClientPredictionStage stage = local.GetComponent<ClientPredictionStage>();
+            // Through the rig's own GameObject: ClientPredictionStage is a Net/Client type, so
+            // this assembly may name it once it references that assembly. What it may NOT name is
+            // FpsActorController, which is why the rig arrives as a seam rather than as itself.
+            GameObject rig = local.GameObject;
+            ClientPredictionStage stage =
+                rig != null ? rig.GetComponent<ClientPredictionStage>() : null;
             Bool("predictionStage", stage != null); Comma();
 
             if (client == null)
@@ -492,8 +497,8 @@ namespace Ironfront.Net.Unity.Diagnostics
                 // above says whether the COMPONENT runs (it must, to accept a respawn request),
                 // which is a different fact from whether the dead player's input is suppressed.
                 // FpsActorController.IsInputEnabled is that fact, and it is read-only.
-                FpsActorController localForInput = FpsActorController.instance;
-                if (localForInput != null)
+                ILocalPlayerRig localForInput = NetClientBindings.LocalPlayer;
+                if (localForInput.Exists)
                 {
                     _json.Append("\"localInputEnabled\":")
                          .Append(localForInput.IsInputEnabled ? "true" : "false"); Comma();
@@ -576,27 +581,34 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// </remarks>
         private void AppendHud()
         {
-            ScoreUi ui = ScoreUi.instance;
-            MatchScoreboard board = MatchScoreboard.Current;
+            IDiagnosticsProbe probe = NetDiagnosticsBindings.Probe;
+
+            // Declared and defaulted OUTSIDE the condition, for the reason AppendLocalPrediction
+            // records: an `out` inside a short-circuiting && is only definitely assigned on the
+            // branch that ran, and CS0170 is the compiler saying so.
+            HudReading hud = default;
+            ScoreboardReading board = default;
+
+            bool hasHud   = probe != null && probe.TryReadHud(out hud);
+            bool hasBoard = probe != null && probe.TryReadScoreboard(out board);
 
             _json.Append("\"hud\":");
-            if (ui == null && board == null) { _json.Append("null"); return; }
+            if (!hasHud && !hasBoard) { _json.Append("null"); return; }
 
             _json.Append('{');
 
-            if (ui != null)
+            if (hasHud)
             {
-                NullableStr("blueScoreText", TextOf(ui.blueScoreText)); Comma();
-                NullableStr("redScoreText", TextOf(ui.redScoreText)); Comma();
-                NullableStr("blueFlagsText", TextOf(ui.blueFlagsText)); Comma();
-                NullableStr("redFlagsText", TextOf(ui.redFlagsText)); Comma();
-                NullableStr("phaseText", TextOf(ui.phaseText)); Comma();
-                NullableStr("phaseTimerText", TextOf(ui.phaseTimerText)); Comma();
+                NullableStr("blueScoreText", hud.BlueScore); Comma();
+                NullableStr("redScoreText", hud.RedScore); Comma();
+                NullableStr("blueFlagsText", hud.BlueFlags); Comma();
+                NullableStr("redFlagsText", hud.RedFlags); Comma();
+                NullableStr("phaseText", hud.Phase); Comma();
+                NullableStr("phaseTimerText", hud.PhaseTimer); Comma();
                 _json.Append("\"phaseTimerVisible\":")
-                     .Append(IsVisible(ui.phaseTimerText) ? "true" : "false"); Comma();
+                     .Append(hud.PhaseTimerVisible ? "true" : "false"); Comma();
                 _json.Append("\"victoryVisible\":")
-                     .Append(ui.victoryScreen != null
-                             && ui.victoryScreen.gameObject.activeInHierarchy ? "true" : "false");
+                     .Append(hud.VictoryVisible ? "true" : "false");
                 Comma();
             }
             else
@@ -604,7 +616,7 @@ namespace Ironfront.Net.Unity.Diagnostics
                 Str("scoreUi", "absent"); Comma();
             }
 
-            if (board != null)
+            if (hasBoard)
             {
                 Num("offlineBlueScore", board.BlueScore); Comma();
                 Num("offlineRedScore", board.RedScore); Comma();
@@ -642,32 +654,24 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// forbids — the honest cost is that half of one check is graded by eye.
         /// </para>
         /// </remarks>
+        // Reused across checkpoints: the recorder runs on a timer during a match, and a fresh
+        // list per read would be garbage generated by the instrument measuring the frame time.
+        private readonly List<CapturePointReading> _capturePoints = new List<CapturePointReading>();
+
         private void AppendObjectives()
         {
-            CapturePoint[] points = Object.FindObjectsByType<CapturePoint>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None);
+            _capturePoints.Clear();
+            NetDiagnosticsBindings.Probe?.ReadCapturePoints(_capturePoints);
 
             _json.Append("\"capturePoints\":[");
 
-            if (points != null)
+            for (int i = 0; i < _capturePoints.Count; i++)
             {
-                // Sorted by name so two clients' arrays line up index for index. Unity's scene
-                // order is not a contract, and a diff that compared point 0 on one client with
-                // a different point 0 on another would report a flip that never happened.
-                System.Array.Sort(points, (a, b) => string.CompareOrdinal(
-                    a != null ? a.name : string.Empty, b != null ? b.name : string.Empty));
-
-                for (int i = 0; i < points.Length; i++)
-                {
-                    CapturePoint p = points[i];
-                    if (p == null) continue;
-
-                    if (i > 0) _json.Append(',');
-                    _json.Append('{');
-                    Str("name", p.name); Comma();
-                    Num("owner", p.owner);
-                    _json.Append('}');
-                }
+                if (i > 0) _json.Append(',');
+                _json.Append('{');
+                Str("name", _capturePoints[i].Name); Comma();
+                Num("owner", _capturePoints[i].Owner);
+                _json.Append('}');
             }
 
             _json.Append(']');
@@ -771,12 +775,6 @@ namespace Ironfront.Net.Unity.Diagnostics
 
             _json.Append(']');
         }
-
-        private static string TextOf(UnityEngine.UI.Text text)
-            => text != null ? text.text : null;
-
-        private static bool IsVisible(UnityEngine.UI.Text text)
-            => text != null && text.gameObject.activeInHierarchy && text.enabled;
 
         private void AppendRemoteActors()
         {

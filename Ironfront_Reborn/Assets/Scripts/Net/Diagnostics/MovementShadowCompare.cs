@@ -12,8 +12,8 @@
 // guard at any call site, and a strip cannot leave a dangling reference behind it.
 #if !IRONFRONT_NO_DIAGNOSTICS
 using Ironfront.Net.Replication.Movement;
+using Ironfront.Net.Unity.Diagnostics;
 using UnityEngine;
-using UnityStandardAssets.Characters.FirstPerson;
 
 namespace Ironfront.Net.Unity
 {
@@ -106,7 +106,7 @@ namespace Ironfront.Net.Unity
         public float DiscontinuityMargin = 4f;
 
         private CharacterController _controller;
-        private FirstPersonController _legacyController;
+        private ILegacyMovementProbe _legacyController;
         private Transform _cameraParent;
         private MoveState _shadow;
         private Vector3 _previousRealPosition;
@@ -153,7 +153,10 @@ namespace Ironfront.Net.Unity
                     "both FpsActorController and CharacterController.");
             }
 
-            _legacyController = GetComponent<FirstPersonController>();
+            // Resolved through the seam: FirstPersonController is declared in
+            // Assembly-CSharp-firstpass, a SECOND predefined assembly, and an asmdef can no more
+            // reference that than it can reference Assembly-CSharp.
+            _legacyController = NetDiagnosticsBindings.ResolveLegacyMovement(gameObject);
             if (_legacyController == null)
             {
                 Debug.LogWarning(
@@ -227,7 +230,7 @@ namespace Ironfront.Net.Unity
                 sampledInput.MoveZ,
                 sampledInput.YawDegrees,
                 sampledInput.Jump,
-                _legacyController.sprinting,
+                _legacyController.IsSprinting,
                 sampledInput.Crouch);
 
             bool grounded = _controller != null && _controller.isGrounded;
@@ -307,8 +310,7 @@ namespace Ironfront.Net.Unity
             => _controller != null
                && _controller.enabled
                && _legacyController != null
-               && _legacyController.enabled
-               && _legacyController.inputEnabled;
+               && _legacyController.IsDriving;
 
         private void Resync()
         {

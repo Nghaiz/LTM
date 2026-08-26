@@ -62,6 +62,56 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         IInputSource InputSource { get; }
 
+        /// <summary>
+        /// The rig's own <c>GameObject</c>, for finding client components mounted on it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Added by phase C4d, and it is narrower than it looks.</b> The lane-B recorder asks
+        /// whether the local rig carries a <c>ClientPredictionStage</c> — a type
+        /// <em>this</em> assembly owns — and needs the rig's object to ask it.
+        /// </para>
+        /// <para>
+        /// It is not the escape hatch back to <c>Assembly-CSharp</c> that it first appears to be:
+        /// a caller holding this still cannot write <c>GetComponent&lt;Actor&gt;()</c>, because
+        /// naming <c>Actor</c> is what the assembly boundary and
+        /// <c>check-net-layering.ps1</c> RULE 6b forbid. What you can reach through it is exactly
+        /// what your own assembly can name, which is the constraint that made this safe to add.
+        /// </para>
+        /// <para>
+        /// Null when the rig is absent. Check <see cref="Exists"/> first.
+        /// </para>
+        /// </remarks>
+        GameObject GameObject { get; }
+
+        /// <summary>
+        /// Whether player control is currently enabled.
+        /// </summary>
+        /// <remarks>
+        /// Maps to <c>FpsActorController.IsInputEnabled</c>, and it is a DIFFERENT fact from
+        /// whether a driver component is running: a component must keep running while dead in
+        /// order to accept a respawn request, and this says whether the dead player's input is
+        /// suppressed. Ledger X-29 named the distinction after conflating them once.
+        /// </remarks>
+        bool IsInputEnabled { get; }
+
+        /// <summary>
+        /// Installs an input source on the rig, replacing whatever it was reading.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Maps to <c>FpsActorController.SetInputSource</c>. The lane-B harness uses it to drive
+        /// a recorded programme: <c>MovementSimulation.FromUnityInput</c> would otherwise sample
+        /// a keyboard nobody is sitting at.
+        /// </para>
+        /// <para>
+        /// The mirror of the server's <c>IDriverInputSink</c>, and here for the same reason —
+        /// the call and the type it passes both live on the far side of a seam. A no-op when the
+        /// rig is absent.
+        /// </para>
+        /// </remarks>
+        void SetInputSource(IInputSource source);
+
         /// <summary>Restores player control. Maps to <c>FpsActorController.EnableInput</c>.</summary>
         void EnableInput();
 
@@ -84,6 +134,17 @@ namespace Ironfront.Net.Unity.Client
         /// absent.
         /// </summary>
         Vector3 Position { get; }
+
+        /// <summary>
+        /// The rig's facing, degrees. Zero when absent.
+        /// </summary>
+        /// <remarks>
+        /// Symmetrical with <see cref="Position"/>, and added by C4d for the same observer that
+        /// needed that one. Deliberately a scalar rather than routing the caller through
+        /// <see cref="GameObject"/><c>.transform</c>: a rotation read should not be the thing
+        /// that makes the rig's whole object graph load-bearing.
+        /// </remarks>
+        float YawDegrees { get; }
 
         /// <summary>
         /// Whether this rig has a first-person camera a screenshake can be applied to.

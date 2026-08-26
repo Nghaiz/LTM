@@ -39,7 +39,7 @@ the cost of the bindings layer that replaces its legacy references — not the c
 | `Net/Headless` | 1 | **0** | — | done |
 | `Net/Input` | 8 | **2** (measured) | `LoadoutUi`, `OptionsUi` | **C2 — done 2026-08-26** |
 | `Net/Diagnostics` | **13** | **13** — of which **5** legacy, **8** `Net/Client` | `LaneBCheckpointRecorder` (all 13) | **C3 — gate done 2026-08-26; asmdef → C4** |
-| `Net/Client` | 25 | **11** *(measured 2026-08-26)* | `FpsActorController` 16×, `Vehicle` 13×, `ScoreUi` 8×, `Actor` 7× | **C4 — C4a-C4c done; C4d (Diagnostics) to go** |
+| `Net/Client` | 25 | **11** *(measured 2026-08-26)* | `FpsActorController` 16×, `Vehicle` 13×, `ScoreUi` 8×, `Actor` 7× | **C4 — done 2026-08-26 (C4a-C4d)** |
 
 > **The `Net/Input` row said `~8 real`, with `Helicopter` at 16 references and
 > `FpsActorController` at 15. All three numbers were wrong, and wrong in the same way.**
@@ -123,20 +123,25 @@ per § 2.
 ## 6. Success criteria
 
 1. Each of `Net/Input`, `Net/Diagnostics`, `Net/Client` compiles as its own assembly, with **zero**
-   references to `Assembly-CSharp`. — `Net/Input` **met** (C2). `Net/Client` **met** (C4c, verified
-   against the runtime assembly manifest, not the asmdef file). `Net/Diagnostics` is **C4d's**: the
-   "land together" reasoning was about sealing Diagnostics BEFORE Client and stopped binding the
-   moment Client was sealed, since Diagnostics may now simply reference that assembly.
+   references to `Assembly-CSharp`. — `Net/Input` **met** (C2). `Net/Client` **met** (C4c) and
+   `Net/Diagnostics` **met** (C4d), both verified against the runtime assembly manifest rather
+   than the asmdef file — and Diagnostics against `Assembly-CSharp-firstpass` too, which is a
+   second predefined assembly this track had not been counting. **All three folders are sealed.**
 2. Every legacy dependency crossing a seam does so through an interface owned by the sealed side,
    mirroring `Net/Server/Bindings/`.
 3. Every phase is graded by a **Unity compile over MCP**, not by `dotnet build`.
-4. `tools/check-net-layering.ps1` stays green and gains a rule per new seam.
+4. `tools/check-net-layering.ps1` stays green and gains a rule per new seam. — **Met.** RULE 5
+   (Input), RULE 6 (Client), RULE 7 (Diagnostics), each a three-part seam assertion, each
+   mutation-tested. C4d also widened its scan to `Assembly-CSharp-firstpass`: 155 type names in a
+   second predefined assembly that every earlier measurement on this track was blind to, and which
+   cost one real miss only the compiler caught.
 5. `Net/Diagnostics` is excluded from player builds, and something fails if it is re-included.
-   — **Met 2026-08-26.** The exclusion shipped 2026-08-21 (`#if !IRONFRONT_NO_DIAGNOSTICS` on all
-   13 files, demonstrated by `EditorBuildWindowsHarness -noDiagnostics`); the *something* is
-   `tools/check-diagnostics-exclusion.ps1`, wired into `ci.ps1` and `ci.yml`, nine mutations
-   observed RED and one negative control GREEN. It does **not** depend on the asmdef, and is
-   written to be deleted when C4 replaces it with `defineConstraints`.
+   — **Met 2026-08-26, and re-based the same day.** The exclusion shipped 2026-08-21 as a per-file
+   `#if` convention gated by `tools/check-diagnostics-exclusion.ps1`. C4d moved the mechanism to
+   `defineConstraints` on the Diagnostics asmdef and deleted that gate's RULES 1–3 accordingly;
+   RULE 4 — that `EditorBuildWindowsHarness` still BUILDS the excluded configuration — outlives
+   them, because no asmdef proves a build works. The *something* that now fails if the exclusion is
+   removed is `check-net-layering.ps1` **RULE 7a**, mutation-tested both ways.
 6. `Net/Client` has at least one EditMode test that could not have been written before C4 — the
    deliverable that justifies the phase. — **Met 2026-08-26** (C4c). Six tests in
    `Ironfront.Net.Unity.Client.Tests`; the load-bearing one pins finding A16 and was enabled by
