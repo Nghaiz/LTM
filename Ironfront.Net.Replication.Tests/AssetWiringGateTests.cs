@@ -505,6 +505,26 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Empty(AssetWiringDetectors.ScoreUiTextRefsAreAssigned(index));
         }
 
+        /// <summary>E5's third element is owed on the same terms as the other two. Ledger A-6.</summary>
+        /// <remarks>
+        /// Both directions. Unassigned is the state the shipped prefab was in until phase 6 task
+        /// 6.6; aimed at the phase label is the authoring that looks correct in the Inspector and
+        /// renders the phase twice, which no per-field null check can see.
+        /// </remarks>
+        [Fact]
+        public void TheHumanCountLabelIsOwedAndMustBeItsOwnElement()
+        {
+            Assert.Contains(
+                AssetWiringDetectors.ScoreUiTextRefsAreAssigned(
+                    ScoreUiFixture("{fileID: 903}", "{fileID: 904}", humanCountText: null)),
+                f => f.Message.Contains("ScoreUi.humanCountText is unassigned"));
+
+            Assert.Contains(
+                AssetWiringDetectors.ScoreUiTextRefsAreAssigned(
+                    ScoreUiFixture("{fileID: 903}", "{fileID: 904}", humanCountText: "{fileID: 903}")),
+                f => f.Message.Contains("humanCountText") && f.Message.Contains("phaseText"));
+        }
+
         [Fact]
         public void RenderedLabels_HasNoStaleEntries()
         {
@@ -514,7 +534,8 @@ namespace Ironfront.Net.Replication.Tests
             UnityAssetIndex index = ScoreUiFixtureRaw(
                 "  blueScoreText: {fileID: 905}\n  redScoreText: {fileID: 906}\n"
                 + "  blueFlagsText: {fileID: 901}\n  redFlagsText: {fileID: 902}\n"
-                + "  phaseText: {fileID: 903}\n  phaseTimerText: {fileID: 904}\n");
+                + "  phaseText: {fileID: 903}\n  phaseTimerText: {fileID: 904}\n"
+                + "  humanCountText: {fileID: 908}\n");
 
             Assert.Contains(
                 AssetWiringDetectors.ScoreUiTextRefsAreAssigned(index),
@@ -785,10 +806,13 @@ namespace Ironfront.Net.Replication.Tests
         /// and the two owed fields set to whatever the test is exercising.
         /// </summary>
         /// <remarks>
-        /// All seven keys are written because <c>RenderedLabels</c> now owes a staleness guard,
-        /// and an omitted key is what that guard reports. Pass <c>null</c> to omit an owed field.
+        /// All eight keys are written because <c>RenderedLabels</c> owes a staleness guard, and
+        /// an omitted key is what that guard reports. Pass <c>null</c> to omit an owed field.
+        /// <c>humanCountText</c> joined the owed set in phase 6 task 6.6 (ledger A-6); this
+        /// fixture failed the moment it did, which is the staleness guard working.
         /// </remarks>
-        private static UnityAssetIndex ScoreUiFixture(string? phaseText, string? phaseTimerText)
+        private static UnityAssetIndex ScoreUiFixture(
+            string? phaseText, string? phaseTimerText, string? humanCountText = "{fileID: 908}")
         {
             string body =
                 "  blueScoreText: {fileID: 905}\n  redScoreText: {fileID: 906}\n"
@@ -797,6 +821,7 @@ namespace Ironfront.Net.Replication.Tests
 
             if (phaseText != null) body += "  phaseText: " + phaseText + "\n";
             if (phaseTimerText != null) body += "  phaseTimerText: " + phaseTimerText + "\n";
+            if (humanCountText != null) body += "  humanCountText: " + humanCountText + "\n";
 
             return ScoreUiFixtureRaw(body);
         }
@@ -805,7 +830,7 @@ namespace Ironfront.Net.Replication.Tests
         /// The same prefab with an arbitrary serialized body, for tests about the body itself.
         /// </summary>
         /// <remarks>
-        /// Anchors 901-907 are Text-shaped MonoBehaviours the refs resolve to; 920 is a
+        /// Anchors 901-908 are Text-shaped MonoBehaviours the refs resolve to; 920 is a
         /// RectTransform and 921 a MonoBehaviour running a different script, both present so the
         /// type clause has something real to reject. 999999999999999 is deliberately absent.
         /// Without real objects here every red-path test would report for the resolution reason
@@ -819,7 +844,7 @@ namespace Ironfront.Net.Replication.Tests
             string prefab = "--- !u!1 &900\nGameObject:\n  m_Name: Score UI Canvas\n"
                 + Component(910, 900, ScoreUi, body.TrimEnd('\n'));
 
-            for (long anchor = 901; anchor <= 907; anchor++)
+            for (long anchor = 901; anchor <= 908; anchor++)
                 prefab += Component(anchor, 900, textScript, "  m_Text: label");
 
             prefab += "--- !u!224 &920\nRectTransform:\n  m_GameObject: {fileID: 900}\n";

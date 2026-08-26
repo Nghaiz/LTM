@@ -159,26 +159,47 @@ namespace Ironfront.Tools.ClientWiringGate
         };
 
         /// <summary>
-        /// Every <c>Text</c> <c>ScoreUi</c> already drives, and the two E5 still owes.
+        /// Every <c>Text</c> <c>ScoreUi</c> drives, including the three E5 names.
         /// </summary>
         /// <remarks>
-        /// The distinctness set for <see cref="ScoreUiTextRefsAreAssigned"/>. It lists all seven
-        /// rather than just the two fallbacks because the failure is "this element is already
-        /// spoken for", and that is true of the ticket and victory labels exactly as much as of
-        /// the flag labels the null path happens to borrow. The two owed fields are in the same
-        /// set so they are checked against each other.
+        /// The distinctness set for <see cref="ScoreUiTextRefsAreAssigned"/>. It lists all eight
+        /// rather than just the fallbacks because the failure is "this element is already spoken
+        /// for", and that is true of the ticket and victory labels exactly as much as of the flag
+        /// labels the null path happens to borrow. The three owed fields are in the same set so
+        /// they are checked against each other — E5's whole point is three SEPARATE elements, and
+        /// two of them aimed at one label would satisfy any per-field null check.
         /// </remarks>
         private static readonly string[] RenderedLabels =
         {
             "blueScoreText", "redScoreText", "blueFlagsText", "redFlagsText", "victoryText",
-            "phaseText", "phaseTimerText",
+            "phaseText", "phaseTimerText", "humanCountText",
         };
 
-        /// <summary>The two fields E5 owes, with what the fallback renders in their place.</summary>
+        /// <summary>The three elements E5 names, with what happens when each is unassigned.</summary>
+        /// <remarks>
+        /// <c>humanCountText</c> joined the pair in phase 6 task 6.6 (ledger <b>A-6</b>). E5 has
+        /// always named three elements — phase, timer and human count — and the count was
+        /// concatenated into the phase label instead of rendered on its own, so the label's width
+        /// changed every time somebody joined. Its fallback is that concatenation rather than a
+        /// borrowed flag label, which is a milder consequence than the other two and is still a
+        /// missing element.
+        /// </remarks>
         private static readonly (string Field, string Consequence)[] OwedPhaseLabels =
         {
-            ("phaseText",      "the phase label borrows the blue flag count"),
-            ("phaseTimerText", "the round clock borrows the red flag count"),
+            ("phaseText",
+             "SetAuthoritativeState falls back to a flag label — the phase label borrows the blue "
+             + "flag count — and the WarnOnce naming E5 fires on every networked match"),
+
+            ("phaseTimerText",
+             "SetAuthoritativeState falls back to a flag label — the round clock borrows the red "
+             + "flag count — and the WarnOnce naming E5 fires on every networked match"),
+
+            // Its own sentence, because the other two are wrong about this one: nothing is
+            // borrowed and no WarnOnce fires. The count simply goes back to being concatenated,
+            // which is the E5 gap A-6 records rather than a collision.
+            ("humanCountText",
+             "the count goes back to being concatenated into the phase label, whose width then "
+             + "changes every time somebody joins, and E5's third element does not exist"),
         };
 
         /// <summary>
@@ -608,9 +629,7 @@ namespace Ironfront.Tools.ClientWiringGate
                     {
                         findings.Add(new GateFinding(
                             "A8", Rel(index, path), 0,
-                            $"ScoreUi.{field} is unassigned, so SetAuthoritativeState falls back "
-                            + $"to a flag label — {what}, and the WarnOnce naming E5 fires on "
-                            + "every networked match (ledger A-9, A-6)."));
+                            $"ScoreUi.{field} is unassigned, so {what} (ledger A-9, A-6)."));
                         continue;
                     }
 
