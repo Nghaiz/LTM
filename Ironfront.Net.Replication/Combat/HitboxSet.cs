@@ -71,20 +71,79 @@ namespace Ironfront.Net.Replication.Combat
         /// rig; nothing in the resolution path depends on these numbers being the real ones.
         /// </remarks>
         /// <summary>
-        /// Height above the feet of <see cref="Humanoid"/>'s torso box centre, in metres.
+        /// Height above the feet of <see cref="Humanoid"/>'s torso box centre, in metres, and the
+        /// point a scripted shooter aims at.
         /// </summary>
         /// <remarks>
         /// Named because a second party needs it: a scripted shooter has to pick a point ON a
         /// body to aim at, and the only aim point with margin on every side is this one — the
-        /// torso is 0.70 m tall, so its nearest edge is 0.35 m away. Ledger X-25 is what
+        /// torso is 0.73 m tall, so its nearest edge is 0.365 m away. Ledger X-25 is what
         /// happens without it: the harness aimed at feet + <c>EYE_HEIGHT</c> (1.6 m), which is
         /// 0.02 m inside the head box's lower edge, and every lane-B combat shot was a coin
         /// toss against the 1.550..1.580 gap X-24 names.
         ///
         /// It is a constant here rather than a literal at the aim site so the two cannot drift:
         /// move the torso box and the shooter follows it.
+        ///
+        /// <b>Derived from the box's own edges since X-24</b>, where it read <c>1.20f</c> and the
+        /// box's centre read 1.20 m by coincidence of two independently-authored numbers. Raising
+        /// the torso's top edge to close the seam moved the centre to 1.215 m, and a literal here
+        /// would have left the shooter aiming 1.5 cm off the centre it claims to name — a drift
+        /// of exactly the kind this constant exists to prevent. <c>ScriptedAimTests</c> pins the
+        /// two as equal.
         /// </remarks>
-        public const float HumanoidTorsoCenterHeight = 1.20f;
+        public const float HumanoidTorsoCenterHeight =
+            (HumanoidTorsoTopHeight + HumanoidTorsoBottomHeight) * 0.5f;
+
+        /// <summary>Height above the feet of the head box's centre, in metres.</summary>
+        public const float HumanoidHeadCenterHeight = 1.70f;
+
+        /// <summary>Full height of the head box, in metres.</summary>
+        /// <remarks>
+        /// The head is the one box with a damage multiplier, so its size and its position are a
+        /// balance decision and nothing else may move them as a side effect. X-24's fix raised
+        /// the torso to meet this box; it did not touch this box. See
+        /// <see cref="HumanoidTorsoTopHeight"/>.
+        /// </remarks>
+        public const float HumanoidHeadHeight = 0.24f;
+
+        /// <summary>Height above the feet where the head box begins: 1.58 m.</summary>
+        public const float HumanoidHeadBottomHeight =
+            HumanoidHeadCenterHeight - HumanoidHeadHeight * 0.5f;
+
+        /// <summary>Height above the feet where the torso box begins, in metres.</summary>
+        public const float HumanoidTorsoBottomHeight = 0.85f;
+
+        /// <summary>
+        /// Height above the feet where the torso box ends — <b>defined as the head's lower
+        /// edge</b>, not as a number of its own.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Ledger row X-24.</b> The torso used to be authored as (centre 1.20, height 0.70)
+        /// and the head as (centre 1.70, height 0.24), which put the torso's top at 1.550 m and
+        /// the head's bottom at 1.580 m — <b>3 cm of a standing body, at chest-to-chin height,
+        /// covered by nothing.</b> A ray through it struck no box, so
+        /// <see cref="LagCompensator.ResolveHitscan"/> returned a miss BEFORE the occlusion test
+        /// ever ran, and a human aiming at the same band got the same nothing.
+        /// </para>
+        /// <para>
+        /// <b>Why the torso moved and not the head.</b> Lowering the head's lower edge by 3 cm
+        /// would have made the multiplier box 12.5% taller and moved where a headshot begins —
+        /// a balance change to the most sensitive box in the set. Raising the torso puts the
+        /// neck into <see cref="HitboxType.Body"/>, which is where a player aiming at a neck
+        /// expects a body hit, and leaves headshot geometry exactly where it was. A fifth neck
+        /// box was the third option and is worse than both: the wire enum has three values
+        /// (protocol-spec.md section 4.5), so a neck would have to be reported as one of these
+        /// anyway.
+        /// </para>
+        /// <para>
+        /// <b>Derived rather than written down</b>, so the seam cannot reopen: move the head and
+        /// the torso follows it. A future set that re-authors the head from a real rig gets the
+        /// coverage for free.
+        /// </para>
+        /// </remarks>
+        public const float HumanoidTorsoTopHeight = HumanoidHeadBottomHeight;
 
         public static HitboxSet Humanoid(in Vec3 feetPosition, float scale = 1f)
         {
@@ -93,9 +152,13 @@ namespace Ironfront.Net.Replication.Combat
 
             Vec3 At(float y) => new Vec3(x, baseY + y * scale, z);
 
+            const float torsoHeight = HumanoidTorsoTopHeight - HumanoidTorsoBottomHeight;
+
             return new HitboxSet(
-                head: Aabb.FromSize(At(1.70f), new Vec3(0.24f, 0.24f, 0.24f) * scale),
-                torso: Aabb.FromSize(At(HumanoidTorsoCenterHeight), new Vec3(0.50f, 0.70f, 0.32f) * scale),
+                head: Aabb.FromSize(
+                    At(HumanoidHeadCenterHeight),
+                    new Vec3(0.24f, HumanoidHeadHeight, 0.24f) * scale),
+                torso: Aabb.FromSize(At(HumanoidTorsoCenterHeight), new Vec3(0.50f, torsoHeight, 0.32f) * scale),
                 arms: Aabb.FromSize(At(1.25f), new Vec3(0.80f, 0.60f, 0.26f) * scale),
                 legs: Aabb.FromSize(At(0.45f), new Vec3(0.40f, 0.90f, 0.30f) * scale));
         }
