@@ -107,6 +107,89 @@ namespace Ironfront.Net.Replication.Combat
             return true;
         }
 
+        /// <summary>
+        /// How close a ray came to this box without entering it, and on which side vertically.
+        /// </summary>
+        /// <param name="origin">Ray start.</param>
+        /// <param name="direction">Ray direction. Must be normalized for the outputs to be metres.</param>
+        /// <param name="maxDistance">Ray length. The closest approach is searched within it.</param>
+        /// <param name="gapMetres">
+        /// Distance from <paramref name="pointOnRay"/> to the box's surface. 0 when that point is
+        /// inside the box.
+        /// </param>
+        /// <param name="verticalOffsetMetres">
+        /// Signed: positive when the ray passed above the box's top edge, negative when below its
+        /// bottom edge, 0 when level with it. See <see cref="HitboxMiss"/> for why the sign is
+        /// the load-bearing half.
+        /// </param>
+        /// <param name="pointOnRay">The point on the ray this was measured at.</param>
+        /// <remarks>
+        /// <para>
+        /// <b>The closest approach is taken to the box's CENTRE, not to its surface, and that is
+        /// a stated approximation rather than an oversight.</b> The exact nearest point between a
+        /// segment and an AABB has no closed form on all three axes at once; solving it needs an
+        /// iteration this has no business running per missed shot. Projecting the centre onto the
+        /// ray is exact for the case the instrument exists to measure — a roughly level shot past
+        /// a standing body, where the vertical offset at the projection IS the offset at the
+        /// nearest point — and it is well-defined everywhere else, which is what a measurement
+        /// needs to be. A very oblique ray reports a gap no smaller than the true one, so the
+        /// number never flatters the aim.
+        /// </para>
+        /// <para>
+        /// <b>Returns rather than throws on a degenerate box or a non-finite ray</b>, with
+        /// <paramref name="gapMetres"/> set to <see cref="float.PositiveInfinity"/> so a caller
+        /// ranking candidates never selects one. <see cref="Raycast"/> already rejects the same
+        /// inputs; a diagnostic that threw where the resolver returned a miss would turn a
+        /// measurement into an outage.
+        /// </para>
+        /// </remarks>
+        public void ClosestApproach(
+            in Vec3 origin, in Vec3 direction, float maxDistance,
+            out float gapMetres, out float verticalOffsetMetres, out Vec3 pointOnRay)
+        {
+            gapMetres = float.PositiveInfinity;
+            verticalOffsetMetres = 0f;
+            pointOnRay = origin;
+
+            if (IsEmpty) return;
+            if (!IsFinite(in origin) || !IsFinite(in direction)) return;
+            if (!(maxDistance > 0f)) return;   // false for NaN too
+
+            Vec3 toCentre = Center - origin;
+            float t = toCentre.X * direction.X + toCentre.Y * direction.Y + toCentre.Z * direction.Z;
+
+            // Clamped to the segment: a target behind the muzzle, or past the weapon's range, is
+            // measured from the end of the ray rather than from a point the bullet never reached.
+            if (t < 0f) t = 0f;
+            if (t > maxDistance) t = maxDistance;
+
+            pointOnRay = origin + direction * t;
+
+            Vec3 min = Min;
+            Vec3 max = Max;
+
+            float dx = AxisGap(pointOnRay.X, min.X, max.X);
+            float dy = AxisGap(pointOnRay.Y, min.Y, max.Y);
+            float dz = AxisGap(pointOnRay.Z, min.Z, max.Z);
+
+            gapMetres = (float)Math.Sqrt(dx * dx + dy * dy + dz * dz);
+
+            // Signed on the Y axis alone. The other two are folded into the gap; only this one
+            // answers "raise the box or lower it".
+            verticalOffsetMetres =
+                pointOnRay.Y > max.Y ? pointOnRay.Y - max.Y
+                : pointOnRay.Y < min.Y ? pointOnRay.Y - min.Y
+                : 0f;
+        }
+
+        /// <summary>How far <paramref name="value"/> lies outside [min, max]. Never negative.</summary>
+        private static float AxisGap(float value, float min, float max)
+        {
+            if (value < min) return min - value;
+            if (value > max) return value - max;
+            return 0f;
+        }
+
         private static bool ClipAxis(
             float origin, float direction, float min, float max, ref float tMin, ref float tMax)
         {

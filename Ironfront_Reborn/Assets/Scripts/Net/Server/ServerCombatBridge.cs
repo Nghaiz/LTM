@@ -353,6 +353,13 @@ namespace Ironfront.Net.Unity.Server
         /// </summary>
         private long _occludedAtLastShotLog;
 
+        /// <summary>
+        /// <c>NearestMissesMeasured</c> as of the previous logged shot, so the nearest-miss
+        /// description can be dated rather than reprinted. See
+        /// <c>LagCompensator.NearestMissFor</c>.
+        /// </summary>
+        private long _nearestMissesAtLastShotLog;
+
         private void LogShot(
             ClientSession session, in InputFrame frame, in CombatTickResult result, uint tick)
         {
@@ -402,6 +409,17 @@ namespace Ironfront.Net.Unity.Server
                 occludedNow, _occludedAtLastShotLog, ServerTickLoop.LastOcclusion);
             _occludedAtLastShotLog = occludedNow;
 
+            // X-24: `hits=0` reads identically for a shot aimed at the sky, a shot three
+            // centimetres high, and a shot the boxes never saw. This says WHICH box the ray came
+            // closest to and on WHICH SIDE of it -- the measurement the row required before any
+            // fix, so a widening is sized from a run rather than from the constants that produced
+            // the gap. Dated the same way the occlusion line is, and for the same reason.
+            long nearestMissesNow = _authority.FireResolver.LagCompensator.NearestMissesMeasured;
+            string nearestMiss = LagCompensator.NearestMissFor(
+                nearestMissesNow, _nearestMissesAtLastShotLog,
+                _authority.FireResolver.LagCompensator.LastNearestMiss);
+            _nearestMissesAtLastShotLog = nearestMissesNow;
+
             Debug.Log(
                 $"[shot] actor={session.ActorId} weapon={session.WeaponId} "
                 // Ledger X-31. The grenade is never held, and the loss is somewhere between the
@@ -426,6 +444,7 @@ namespace Ironfront.Net.Unity.Server
                 // them" and "the victim's own capsule blocked the shot that hit it", and the
                 // collider name tells them apart on sight.
                 + $"occlusionHit[{occlusion}] "
+                + $"nearestMiss[{nearestMiss}] "
                 + $"presentFallbacks={_authority.FireResolver.LagCompensator.PresentFallbacks} "
                 + $"resolved={_authority.FireResolver.LagCompensator.ShotsResolved} "
                 + DescribeX19(session, nearestIndex, tick));
