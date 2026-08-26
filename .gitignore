@@ -127,6 +127,13 @@ InitTestScene*.unity*
 **/[Aa]ssets/packages-merged-link/
 **/[Aa]ssets/packages-merged-link.meta
 
+# Unity writes Assets/_Recovery/<n>.unity when the Editor dies with an unsaved scene, so it can
+# offer to restore it on next launch. It is per-machine crash state, not project content -- the one
+# observed here held a brand-new empty scene (a camera and a light), was in no build settings, and
+# was referenced by nothing. Committing it would put another project's crash in everyone's Assets.
+**/[Aa]ssets/_Recovery/
+**/[Aa]ssets/_Recovery.meta
+
 # Scratch output from tools/unity-run.py and the tools/probe-*.cs snippets it runs. The snippets are
 # tracked; what they write to the project root is not.
 /Ironfront_Reborn/harness-*.txt
