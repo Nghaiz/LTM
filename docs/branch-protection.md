@@ -2,8 +2,10 @@
 
 Everything in `.github/` is version-controlled and arrives with a `git pull`. The settings on
 this page are **not** — they live in the GitHub UI and someone with admin rights has to switch
-them on by hand, once. Until then, `CODEOWNERS` requests reviewers that nobody is obliged to
-wait for, and the CI job that says "required" is not actually required.
+them on by hand, once. That sentence used to end "and until then the CI job that says *required*
+is not actually required"; as of 2026-08-25 it **is**, and as of 2026-08-26 CodeQL is required
+too. What remains unenforced is `CODEOWNERS`, which still requests reviewers nobody is obliged
+to wait for.
 
 Owner: the repository owner (`Nghaiz`). Everything reachable without a plan upgrade is already
 applied — see the status section below for what is on, what is off, and why.
@@ -17,9 +19,15 @@ The two walls this page recorded on 2026-08-15 are gone, for different reasons.
 1. **Admin.** The repository was transferred to `Nghaiz/LTM`. The owner account now reports
    `permissions.admin: true`, so the branch-protection endpoints answer normally. The old
    404-instead-of-403 confusion no longer applies.
-2. **Plan.** The ruleset endpoint accepts writes on this private repository. Measured, not
-   assumed: `POST /repos/Nghaiz/LTM/rulesets` returned `201` with
+2. **Plan.** The ruleset endpoint accepts writes. Measured, not assumed:
+   `POST /repos/Nghaiz/LTM/rulesets` returned `201` with
    `current_user_can_bypass: "never"`. Whatever the plan wall was, it is not there now.
+
+> **The repository is PUBLIC** (`visibility: PUBLIC`, confirmed 2026-08-26), and has been since
+> the transfer. This page called it private in six places, which was not merely a stale
+> adjective — three of those places drew live conclusions from it (CodeQL dormant, code scanning
+> unavailable, secret scanning unavailable). All three are corrected below, and two of them
+> turned out to be free features sitting switched off.
 
 > For the record, the 2026-08-15 diagnosis was: no collaborator held admin, *and* protection on
 > a private repository owned by a free personal account needed Pro or above. Both were correct
@@ -57,7 +65,7 @@ one object rather than two that drift:
 
 | Setting | Value |
 |---|---|
-| `required_status_checks` | `build-test (ubuntu-latest)`, `build-test (windows-latest)` |
+| `required_status_checks` | `build-test (ubuntu-latest)`, `build-test (windows-latest)`, **`analyze (csharp)`** (added 2026-08-26) |
 | `strict_required_status_checks_policy` | `false` — see below |
 | `bypass_actors` | `[]`, unchanged; `current_user_can_bypass: "never"` |
 
@@ -160,10 +168,17 @@ build-test (windows-latest)
 required makes a formatting nit block a merge, which is the fastest way to get the whole file
 deleted by whoever it inconveniences first.
 
-**Do not add `analyze (csharp)` either, while this repository is private.** CodeQL skips
-itself on a private repository (see § 3), and a required check that never reports shows as
-**Expected — Waiting** forever, which deadlocks every merge. Add it only after the repository
-is made public and you have seen the job actually run and pass once.
+**`analyze (csharp)` is required as of 2026-08-26**, and the condition this paragraph used to
+set is the reason it took until then. It read: *"do not add it while this repository is private —
+CodeQL skips itself on a private repository, and a required check that never reports shows as
+**Expected — Waiting** forever, which deadlocks every merge. Add it only after the repository is
+made public and you have seen the job actually run and pass once."* Both halves were met: the
+repository is public, and CodeQL had four consecutive green runs before the check was added. The
+name was read back from `GET /commits/{sha}/check-runs`, not copied from this page.
+
+The cost is real and is the same trade already made for `build-test`: every PR now waits ~2m45s
+on CodeQL before it can merge, and with `bypass_actors: []` a CodeQL outage blocks merging
+outright.
 
 **Do not add `unity-libs`.** It only runs on `push`, so on a pull request it is skipped —
 same deadlock.
@@ -208,19 +223,30 @@ feature PR, so a two-approval requirement on a four-person team would stall it.
 - [ ] **Dependency graph** — on (Dependabot needs it).
 - [ ] **Dependabot security updates** — on. `.github/dependabot.yml` handles the scheduled
       version bumps; this covers the urgent security ones.
-- [ ] **Secret scanning** + **push protection** — on **if the plan offers it**. On a private
-      repository this is part of GitHub Advanced Security, the same paid add-on as code
-      scanning below, so it may simply not be available. conventions.md § 1.4 forbids
-      committing `SHARED_SECRET`; where push protection is unavailable, the local
-      `secret-guard` hook and code review are what enforce it.
-- [ ] **Code scanning** — see the note below. Nothing to switch on today.
+- [x] **Secret scanning** + **push protection** — **both ON, 2026-08-26.** This row used to say
+      "on *if the plan offers it*", because on a **private** repository these are part of GitHub
+      Advanced Security, a paid add-on. The repository is public, where both are free, so the
+      "may simply not be available" caveat had been dead since the transfer and the features
+      were simply switched off. Read back after enabling: `secret_scanning: enabled`,
+      `secret_scanning_push_protection: enabled`. conventions.md § 1.4 forbids committing
+      `SHARED_SECRET`; the local `secret-guard` hook now has a server-side counterpart rather
+      than being the only thing enforcing it.
+      **Consequence:** a push carrying a detected credential is now refused by GitHub, yours
+      included. That is the point, but it will be a surprise the first time.
+- [x] **Code scanning** — on, and running. See the note below.
 
-### Why CodeQL is dormant, and what covers the gap
+### CodeQL is live — this section used to explain why it was dormant
 
-`.github/workflows/codeql.yml` exists and is correct, but it **skips itself while this
-repository is private**. Code scanning on a private repository requires GitHub Advanced
-Security, a paid add-on. On the free plan the analysis runs and only the upload is refused —
-measured on the first run: 471 of 471 C# files scanned, SARIF produced, 4m48s, then
+**As of the public transfer it runs and uploads.** Measured 2026-08-26: four consecutive
+successful `CodeQL` runs (~2m45s each) on `develop` and on PR branches, and
+`GET /repos/Nghaiz/LTM/code-scanning/alerts` answers with **0 alerts** rather than refusing.
+The prediction at the foot of this section came true with no edit to the workflow.
+
+What it used to say, kept because it explains the shape of the workflow file:
+`.github/workflows/codeql.yml` **skipped itself while this repository was private**, because
+code scanning on a private repository requires GitHub Advanced Security, a paid add-on. On the
+free plan the analysis ran and only the upload was refused — measured on the first run: 471 of
+471 C# files scanned, SARIF produced, 4m48s, then
 `##[error] Code scanning is not enabled for this repository`.
 
 Leaving that red on every push would have been worse than not having it: a check that is red
@@ -229,17 +255,29 @@ for a reason nobody can fix teaches everyone to ignore red.
 What runs instead, needing no paid feature: the **vulnerable dependency scan** in the `style`
 job of `ci.yml` (`dotnet list package --vulnerable --include-transitive`).
 
-When the repository is made public — likely at submission — CodeQL starts by itself, no edit
-required. On that day, and only then:
+That day has come and gone. This was the checklist for it, with what each step turned out to be:
 
-1. Confirm the `analyze (csharp)` job actually ran and passed.
-2. Turn **Code scanning → default setup OFF**. `codeql.yml` is the *advanced* setup and the
-   two conflict; with default setup on, the workflow fails with *"Code scanning default setup
-   is enabled"* on every run.
-3. Consider switching `build-mode` from `none` to `manual` in `codeql.yml`. The dormant run
-   reported *low analysis quality* — 53% of calls resolved against a threshold of 85% — which
-   means taint analysis would miss real findings. `manual` costs a build and gets that back.
-4. Only then add `analyze (csharp)` to the required checks.
+1. ~~Confirm the `analyze (csharp)` job actually ran and passed.~~ **Done** — four consecutive
+   green runs before anything was required.
+2. ~~Turn **Code scanning → default setup OFF**.~~ **Nothing to do.**
+   `GET /code-scanning/default-setup` reports `state: not-configured`, so the advanced/default
+   conflict this step guarded against never existed here. Checked rather than performed.
+3. **Still open — the one step not done.** `build-mode` is still `none`
+   (`codeql.yml:86`). The dormant run reported *low analysis quality* — 53% of calls resolved
+   against a threshold of 85% — which means taint analysis misses real findings. `manual` costs
+   a build and gets that back.
+   **Do not read the current green as evidence this fixed itself.** The
+   `csharp/diagnostic/database-quality` query still runs, and on run `32921090200` it raised no
+   annotation and the repository shows 0 alerts — but *no annotation* is not *good quality*, and
+   0 alerts on a buildless extraction is exactly what a blind analysis also looks like. The
+   number itself has not been re-measured since the repository went public.
+4. ~~Only then add `analyze (csharp)` to the required checks.~~ **Done, 2026-08-26** — see § 1.
+
+**Which leaves a gate that is required but not yet proven sharp.** Step 4 landed while step 3 is
+outstanding, so every PR now waits on a check whose analysis depth is the depth this page already
+called insufficient. It is not decoration — it runs, it uploads, and it would report a finding it
+sees — but *what it sees* is the open question. Close step 3 before treating a green
+`analyze (csharp)` as meaning the code is clean.
 
 ---
 

@@ -1,0 +1,80 @@
+Building Ironfront.Net.Configuration (Release)...
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  Ironfront.Net.Configuration -> D:\Coding\LTM\Ironfront.Net.Configuration\bin\Release\netstandard2.1\Ironfront.Net.Configuration.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:01.62
+  -> Ironfront.Net.Configuration.dll
+Building Ironfront.Net.Protocol (Release)...
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  Ironfront.Net.Protocol -> D:\Coding\LTM\Ironfront.Net.Protocol\bin\Release\netstandard2.1\Ironfront.Net.Protocol.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:00.99
+  -> Ironfront.Net.Protocol.dll
+Building Ironfront.Net.Transport (Release)...
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  Ironfront.Net.Protocol -> D:\Coding\LTM\Ironfront.Net.Protocol\bin\Release\netstandard2.1\Ironfront.Net.Protocol.dll
+  Ironfront.Net.Transport -> D:\Coding\LTM\Ironfront.Net.Transport\bin\Release\netstandard2.1\Ironfront.Net.Transport.dll
+  Ironfront.Net.Transport -> D:\Coding\LTM\Ironfront.Net.Transport\bin\Release\net8.0\Ironfront.Net.Transport.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:03.07
+  -> Ironfront.Net.Transport.dll
+Building Ironfront.Net.Replication (Release)...
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  Ironfront.Net.Protocol -> D:\Coding\LTM\Ironfront.Net.Protocol\bin\Release\netstandard2.1\Ironfront.Net.Protocol.dll
+  Ironfront.Net.Replication -> D:\Coding\LTM\Ironfront.Net.Replication\bin\Release\netstandard2.1\Ironfront.Net.Replication.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:01.31
+  -> Ironfront.Net.Replication.dll
+Building Ironfront.MasterClient (Release)...
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  Ironfront.Net.Protocol -> D:\Coding\LTM\Ironfront.Net.Protocol\bin\Release\netstandard2.1\Ironfront.Net.Protocol.dll
+  Ironfront.MasterClient -> D:\Coding\LTM\Ironfront.MasterClient\bin\Release\netstandard2.1\Ironfront.MasterClient.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:01.14
+  -> Ironfront.MasterClient.dll
+Building Ironfront.Net.MasterLink (Release)...
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  Ironfront.Net.Protocol -> D:\Coding\LTM\Ironfront.Net.Protocol\bin\Release\netstandard2.1\Ironfront.Net.Protocol.dll
+  Ironfront.Net.Replication -> D:\Coding\LTM\Ironfront.Net.Replication\bin\Release\netstandard2.1\Ironfront.Net.Replication.dll
+  Ironfront.MasterClient -> D:\Coding\LTM\Ironfront.MasterClient\bin\Release\netstandard2.1\Ironfront.MasterClient.dll
+  Ironfront.Net.MasterLink -> D:\Coding\LTM\Ironfront.Net.MasterLink\bin\Release\netstandard2.1\Ironfront.Net.MasterLink.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:02.12
+  -> Ironfront.Net.MasterLink.dll
+  -> Microsoft.Bcl.AsyncInterfaces.dll
+  -> System.IO.Pipelines.dll
+  -> System.Runtime.CompilerServices.Unsafe.dll
+  -> System.Text.Encodings.Web.dll
+  -> System.Text.Json.dll
+
+Copied 6 library DLL(s) + 5 dependency/dependencies into D:\Coding\LTM\Ironfront_Reborn\Assets\Plugins
