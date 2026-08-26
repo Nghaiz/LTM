@@ -135,6 +135,17 @@ namespace Ironfront.Net.Unity
         public bool RespawnPressed => false;
 
         /// <summary>
+        /// Always false: the keyboard path lives in <c>ClientSeatRequester</c>, which owns the
+        /// serialized key and reads it directly.
+        /// </summary>
+        /// <remarks>
+        /// The same shape and the same debt as <see cref="RespawnPressed"/> above, and named
+        /// again rather than left implicit — moving both reads here is the right end state and
+        /// is a rebind change, which is not what ledger X-30 was blocked on.
+        /// </remarks>
+        public bool SeatTogglePressed => false;
+
+        /// <summary>
         /// The four helicopter controls, scaled and inverted per this user's options (V5-D9).
         /// </summary>
         /// <remarks>

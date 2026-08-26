@@ -1464,11 +1464,35 @@ namespace Ironfront.Net.Unity.Server
         /// The best name this side actually holds for a joining connection.
         /// </summary>
         /// <remarks>
-        /// The transport's <c>PlayerId</c> when the master issued one, and the actor id
-        /// otherwise. See <c>ServerPlayer.DisplayName</c> for why this is not the username.
+        /// <para>
+        /// <b>Three sources, in falling order of how much a reader would recognise them</b>
+        /// (ledger X-36): the name from the signed join ticket, then <c>"#" + PlayerId</c>, then
+        /// the actor id. The first is what E7's "killfeed line with a name" asks for; the other
+        /// two are what this method used to be, kept because they are still the honest answer
+        /// when there is no ticket — a loopback session, a lane-B harness client, or a
+        /// development stub whose ticket leaves the name field zeroed.
+        /// </para>
+        /// <para>
+        /// <b>An absent or hostile name falls through rather than rendering blank</b>, and that
+        /// is the decision this method exists to record. <c>PlayerNameSanitizer</c> returns
+        /// <see cref="string.Empty"/> for a name made entirely of control characters, bidi
+        /// overrides or spaces — so a player who registers one gets <c>#5001</c>, exactly as
+        /// before. A blank feed line reads as a rendering fault and teaches nobody anything;
+        /// <c>#5001</c> at least distinguishes killer from victim, which is the half of E7 that
+        /// was already met.
+        /// </para>
+        /// <para>
+        /// It is NOT re-sanitized here. The transport did it at ingress
+        /// (<c>ConnectionInfo.DisplayName</c>), and sanitizing twice would leave two places to
+        /// keep in step with no reader able to tell which one was load-bearing.
+        /// </para>
         /// </remarks>
         private static string DisplayNameFor(in ConnectionInfo info, ushort actorId)
-            => info.PlayerId != 0 ? "#" + info.PlayerId : "Player " + actorId;
+        {
+            if (!string.IsNullOrEmpty(info.DisplayName)) return info.DisplayName;
+
+            return info.PlayerId != 0 ? "#" + info.PlayerId : "Player " + actorId;
+        }
 
         /// <summary>
         /// True when world geometry stands between the shooter and the point that was hit.

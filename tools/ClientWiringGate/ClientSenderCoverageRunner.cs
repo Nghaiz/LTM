@@ -20,8 +20,16 @@ namespace Ironfront.Tools.ClientWiringGate
     /// build. Nothing graded the client's OUTBOUND half, and that is where opcodes have actually
     /// been going missing: <c>Chat</c>, <c>LoadoutSelect</c> and <c>Ping</c> have never had a
     /// sender (<b>X-8</b>), and <c>SeatRequest</c> — which the server fully routes, with a
-    /// handler waiting in <c>ServerSeatBridge</c> — has none either (<b>X-30</b>), which blocks
-    /// three lane-B checks (B-7, B-11, B-13) because no client can ask for a seat.
+    /// handler waiting in <c>ServerSeatBridge</c> — had none either (<b>X-30</b>), which blocked
+    /// lane-B checks B-7 and B-13 because no client could ask for a seat.
+    /// </para>
+    /// <para>
+    /// <b><c>SeatRequest</c>'s exemption was deleted, not re-pinned</b> (verdict-closure R2).
+    /// <c>ClientSeatRequester</c> is the sender, so the entry describing its absence had nothing
+    /// left to describe — and the companion assertion that watches for exactly that is what a
+    /// stale entry would now fail on. It is named here rather than removed from the paragraph
+    /// above so the next reader can see what the gate caught and what closing it looked like:
+    /// four opcodes uncovered became three, and the one the server already routed went first.
     /// </para>
     /// <para>
     /// <b>The population is every declared enum member, not only the routed ones.</b> The phase
@@ -85,18 +93,6 @@ namespace Ironfront.Tools.ClientWiringGate
              "unrouted, and RTT is already measured a layer down — Connection.SmoothedRttMs, "
              + "from reliable-packet acks — so a Ping opcode needs a purpose the transport does "
              + "not already serve before it needs a sender. Ledger X-8."),
-
-            ("SeatRequest",
-             "THE LIVE ONE. Unlike the three above the server DOES route this "
-             + "(ServerMessageRouter.Route -> ISeatRequestHandler -> ServerSeatBridge), so the "
-             + "handler is waiting and only the client half is missing — no client can ask for a "
-             + "seat, which blocks lane-B checks B-7 and B-13. NOT B-11 — that is a lane-A "
-             + "check and lane A is engine-free: it CAN send this opcode and simply has no "
-             + "behaviour that does, which is ledger X-34 and a different fix (corrected "
-             + "2026-08-26; the lane attribution here was wrong). Exempt ONLY because "
-             + "phase 6 task 6.5 was scoped to the gate and closing this row was explicitly "
-             + "deferred; deleting this entry is the whole change once a sender lands. "
-             + "Ledger X-30, owned by verdict-closure R2."),
         };
 
         /// <summary>

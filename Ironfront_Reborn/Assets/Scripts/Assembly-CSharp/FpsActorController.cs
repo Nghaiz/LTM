@@ -589,6 +589,26 @@ public class FpsActorController : ActorController
 		{
 			return;
 		}
+		// SEAT AUTHORITY IS THE SERVER'S AT CLIENT ROLE (design D2, ledger X-30).
+		//
+		// Everything below decides, locally and immediately, that this player is now in a seat
+		// -- SampleUseRay -> actor.EnterSeat, and the else-branch's actor.LeaveSeat. That is
+		// correct offline and is exactly the local decision the netcode forbids: the client would
+		// seat itself in a vehicle the SeatArbiter may refuse (occupied, destroyed, out of reach,
+		// still inside the re-entry lockout) and nothing would ever put it back on its feet,
+		// because the refusal it ignored was the only message that could have.
+		//
+		// Before ClientSeatRequester existed this was harmless in the way an unreachable bug is
+		// harmless: no client sent C_SEAT_REQUEST at all, so a networked player pressing Use next
+		// to a car simply got a seat nobody else could see. It stops being harmless the moment
+		// one press produces BOTH a local entry here and a server request there.
+		//
+		// Guarded rather than deleted: offline and the original single-player game still run this
+		// path, and NetContext.Role is Offline until something calls SetRole.
+		if (NetContext.IsClient)
+		{
+			return;
+		}
 		if (!actor.IsSeated())
 		{
 			if (actor.CanEnterSeat())

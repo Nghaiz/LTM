@@ -171,6 +171,17 @@ namespace Ironfront.Tools.ClientWiringGate
             ("/NetClientLocalCombatDriver.cs", "FirePressed",
                 "reached only from Update(), a local-only per-frame path; the local player IS the "
                 + "subject of the read"),
+
+            // The third of the same shape, added with the C_SEAT_REQUEST sender (ledger X-30).
+            // Reached only from Update(); it reads THIS client's own input to decide whether the
+            // player asked for a seat, and there is no actor id in scope to guard against. The
+            // file IS otherwise per-actor -- OnSeatChange takes an ActorId and guards it with
+            // IsLocalActor, which is why the file is in scope at all and why the exemption is
+            // per-member rather than per-file. Same instruction as the two above: if a per-actor
+            // caller ever reaches this helper, delete this entry and guard the read.
+            ("/ClientSeatRequester.cs", "TryReadLocalSeatIntent",
+                "reached only from Update(), a local-only per-frame path; the local player IS the "
+                + "subject of the read"),
         };
 
         /// <summary>

@@ -144,6 +144,7 @@ namespace Ironfront.Client.Input.Tests
             public float HeliRoll => 0f;
             public float HeliPitch => 0f;
             public bool RespawnPressed => false;
+            public bool SeatTogglePressed => false;
         }
 
         [Fact]

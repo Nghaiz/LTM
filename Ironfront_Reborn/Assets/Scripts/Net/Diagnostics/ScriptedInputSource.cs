@@ -159,6 +159,16 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// with a name that says so rather than a property that lies.
         /// </remarks>
         public bool RespawnPressed => _cursor.TryConsumeRespawn();
+
+        /// <summary>
+        /// True exactly once per step that declares <c>seatToggle</c>.
+        /// </summary>
+        /// <remarks>
+        /// <b>Reading this consumes the edge</b>, exactly as <see cref="RespawnPressed"/> does
+        /// and with the same one-consumer contract -- <c>ClientSeatRequester.Update</c>. A
+        /// second reader would silently eat the press.
+        /// </remarks>
+        public bool SeatTogglePressed => _cursor.TryConsumeSeatToggle();
     }
 }
 #endif

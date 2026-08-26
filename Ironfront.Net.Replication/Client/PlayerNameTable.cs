@@ -74,7 +74,22 @@ namespace Ironfront.Net.Replication.Client
                 // ceiling without raising ours.
                 if (actorId >= _names.Length) continue;
 
-                _names[actorId] = PlayerListMessage.NameOf(in entries[i]);
+                // SANITIZED HERE, on the client's own ingress, even though the server sanitized
+                // its copy at the transport (ledger X-36). That is not redundant work: the
+                // server's pass protects the SERVER from the ticket, and this one protects THIS
+                // client from the server. A client cannot verify a game server it connected to
+                // — a modified or hostile one can put any bytes it likes in S_PLAYER_LIST, and
+                // they land in a killfeed label with rich text on. Trusting the far end because
+                // the near end is careful is how the near end's care stops meaning anything.
+                //
+                // A name that sanitizes to nothing is left NULL rather than stored as "": null
+                // is this table's existing word for "no broadcast has named this actor", and
+                // NameOr's fallback is what the caller wants in both cases. Storing an empty
+                // string would render a blank feed line, which reads as a rendering fault.
+                string sanitized = PlayerNameSanitizer.Sanitize(
+                    PlayerListMessage.NameOf(in entries[i]));
+
+                _names[actorId] = sanitized.Length == 0 ? null : sanitized;
             }
 
             Count = count;

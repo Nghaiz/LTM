@@ -127,6 +127,18 @@ namespace Ironfront.Net.Transport
         public uint PlayerId { get; internal set; }
 
         /// <summary>
+        /// The sanitized display name from the same signed ticket <see cref="PlayerId"/> came
+        /// from. Empty when the ticket carried none, or on a transport with no ticket at all.
+        /// </summary>
+        /// <remarks>
+        /// Set once, on the handshake, beside <see cref="PlayerId"/> — the two are read out of
+        /// one <c>JoinTicket.TryReadFields</c> call after the HMAC has verified, and neither is
+        /// trustworthy before that. Never null: <c>ConnectionInfo.DisplayName</c> promises the
+        /// same, and a nullable hop in the middle would only move the guard.
+        /// </remarks>
+        public string DisplayName { get; internal set; } = string.Empty;
+
+        /// <summary>
         /// Datagrams discarded because a v1-reserved flag bit was set.
         /// </summary>
         /// <remarks>

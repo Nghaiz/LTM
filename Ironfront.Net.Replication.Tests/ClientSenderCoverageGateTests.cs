@@ -153,11 +153,21 @@ namespace Ironfront.Net.Replication.Tests
                 Assert.Contains("Ledger", reason);
             }
 
-            // SeatRequest is the one the server already routes, so it is the one that should
-            // retire first. Its reason has to say so rather than reading like the other three.
-            (string _, string seat) = ClientSenderCoverageRunner.KnownUnsentMessages
-                .Single(e => e.OpcodeName == "SeatRequest");
-            Assert.Contains("X-30", seat);
+            // INVERTED, NOT RE-PINNED (verdict-closure R2, ledger X-30).
+            //
+            // This assertion used to read: SeatRequest is exempt, and because the server already
+            // routes it, its reason must say it should retire first. It did retire first --
+            // ClientSeatRequester is the sender -- so the pin's subject no longer exists, and
+            // pinned-baseline-test-companion.md says the answer to that is to invert the
+            // assertion rather than to delete it or to re-pin it to whatever the run now reports.
+            //
+            // What it asserts now is the regression: an exemption reappearing here would mean
+            // somebody deleted the sender and quieted G10 instead of fixing it, which is exactly
+            // the move that makes an exemption list a graveyard. The other three rows are X-8's
+            // and stay named above.
+            Assert.DoesNotContain(
+                ClientSenderCoverageRunner.KnownUnsentMessages,
+                e => e.OpcodeName == "SeatRequest");
         }
 
         /// <summary>A scan that looked at nothing is exit 2, never a pass.</summary>

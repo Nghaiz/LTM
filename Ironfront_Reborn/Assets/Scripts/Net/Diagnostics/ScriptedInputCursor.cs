@@ -80,6 +80,8 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// <summary>Index of the live step, or <see cref="StepCount"/> once the run is over.</summary>
         private int _respawnConsumedForStep = -1;
 
+        private int _seatToggleConsumedForStep = -1;
+
         public int StepIndex { get; private set; }
 
         /// <summary>How many steps the programme holds.</summary>
@@ -181,6 +183,35 @@ namespace Ironfront.Net.Unity.Diagnostics
             if (_respawnConsumedForStep == StepIndex) return false;
 
             _respawnConsumedForStep = StepIndex;
+            return true;
+        }
+
+        /// <summary>
+        /// True the first time it is asked on a step that declares <c>seatToggle</c>, and false
+        /// every time after until a different step arrives.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The seat edge, and it is deliberately not <c>step.use</c>.</b> A programme's
+        /// <c>use</c> is a LEVEL held for the whole step and packed into
+        /// <c>InputButtons.Use</c>; a seat request is a reliable message that must be sent once.
+        /// Driving one off the other would send a request per tick for the length of the step.
+        /// Ledger X-30.
+        /// </para>
+        /// <para>
+        /// <b>Consuming, exactly like <see cref="TryConsumeRespawn"/>, with a separate counter.</b>
+        /// Sharing one counter would let a step declaring both <c>respawn</c> and
+        /// <c>seatToggle</c> deliver whichever was asked for first and silently swallow the
+        /// other.
+        /// </para>
+        /// </remarks>
+        public bool TryConsumeSeatToggle()
+        {
+            ScriptedInputStep step = Current;
+            if (step == null || !step.seatToggle) return false;
+            if (_seatToggleConsumedForStep == StepIndex) return false;
+
+            _seatToggleConsumedForStep = StepIndex;
             return true;
         }
 
