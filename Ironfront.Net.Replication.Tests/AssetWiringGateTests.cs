@@ -39,6 +39,7 @@ namespace Ironfront.Net.Replication.Tests
         private const string LobbyShellOverlay    = "3a9b866060cb47f1af22ca5125dd4d71";
         private const string ProjectileComponent  = "75280d5bb60068b2fabefd8e2004397e";
         private const string ScoreUi              = "47bac8ff82521e88b577c05861af19e4";
+        private const string ThrowableWeapon      = "441fac300879ede440ac8541efaa1c65";
 
         private const string ScenePath  = "fixtures/Client.unity";
         private const string PrefabPath = "fixtures/Proxy.prefab";
@@ -588,6 +589,175 @@ namespace Ironfront.Net.Replication.Tests
                 + Component(13, 500, ObjectivePresenter, "  m_Name: ")
                 + Component(14, 500, TracerPool,
                             "  _tracerPrefab: " + (tracerPrefab ?? "{fileID: 0}"));
+        }
+
+        // ------------------------------------------------- A9, the throw release delay (D-1)
+
+        /// <summary>
+        /// A throwable prefab, its controller and its clip, wired guid-to-guid.
+        /// </summary>
+        /// <remarks>
+        /// The clip carries a position curve whose keyframes each hold a <c>time</c> BEFORE
+        /// <c>m_Events</c> appears, because that is the trap the event reader exists to avoid: a
+        /// plain scalar lookup for "time" answers with the first keyframe in the document and is
+        /// believed. A fixture without those curves would let a broken reader pass.
+        /// </remarks>
+        private static UnityAssetIndex ThrowableFixture(
+            string? releaseDelayLine = "  releaseDelay: 0.952444",
+            string speedParameterActive = "0",
+            string speed = "1.3",
+            string eventFunction = "SpawnThrowable",
+            string eventTime = "1.2381772",
+            bool withThrowable = true)
+        {
+            const string controllerGuid = "cccccccccccccccccccccccccccccccc";
+            const string clipGuid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+            string weapon = withThrowable
+                ? Component(810, 800, ThrowableWeapon,
+                            "  configuration:\n    unholsterTime: 0\n"
+                            + (releaseDelayLine == null ? "" : releaseDelayLine + "\n")
+                            + "    aimFov: 50")
+                : string.Empty;
+
+            string prefab = "--- !u!1 &800\nGameObject:\n  m_Name: frag\n"
+                + weapon
+                + $"--- !u!95 &820\nAnimator:\n  m_GameObject: {{fileID: 800}}\n"
+                + $"  m_Controller: {{fileID: 9100000, guid: {controllerGuid}, type: 2}}\n";
+
+            string controller = "--- !u!91 &9100000\nAnimatorController:\n  m_Name: Old Frag\n"
+                + "--- !u!1102 &1001\nAnimatorState:\n  m_Name: Hip\n  m_Speed: 1\n"
+                + "  m_SpeedParameterActive: 0\n"
+                + "  m_Motion: {fileID: 7400000, guid: dddddddddddddddddddddddddddddddd, type: 2}\n"
+                + $"--- !u!1102 &1002\nAnimatorState:\n  m_Name: Throw\n  m_Speed: {speed}\n"
+                + $"  m_SpeedParameterActive: {speedParameterActive}\n"
+                + $"  m_Motion: {{fileID: 7400000, guid: {clipGuid}, type: 2}}\n";
+
+            string clip = "--- !u!74 &7400000\nAnimationClip:\n  m_Name: frag_throw\n"
+                + "  m_PositionCurves:\n  - curve:\n      m_Curve:\n"
+                + "      - serializedVersion: 3\n        time: 0\n        value: {x: 0, y: 0, z: 0}\n"
+                + "      - serializedVersion: 3\n        time: 0.25\n        value: {x: 1, y: 0, z: 0}\n"
+                + "  m_Events:\n"
+                + $"  - time: {eventTime}\n    functionName: {eventFunction}\n    data:\n"
+                + "    objectReferenceParameter: {fileID: 0}\n    floatParameter: 0\n"
+                + "  m_StopTime: 1.8333335\n";
+
+            return UnityAssetIndex.ForFixtures(
+                new Dictionary<string, string>
+                {
+                    ["fixtures/frag.prefab"] = prefab,
+                    ["fixtures/Old Frag.controller"] = controller,
+                    ["fixtures/frag_throw.anim"] = clip,
+                },
+                new Dictionary<string, string>
+                {
+                    [controllerGuid] = "fixtures/Old Frag.controller",
+                    [clipGuid] = "fixtures/frag_throw.anim",
+                });
+        }
+
+        [Fact]
+        public void ThrowReleaseDelay_IsCleanWhenTheAuthoredValueMatchesTheClip()
+        {
+            // 1.2381772 s of clip at m_Speed 1.3 is 0.952444 s of wall clock.
+            Assert.Empty(AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip(
+                ThrowableFixture()));
+        }
+
+        [Fact]
+        public void ThrowReleaseDelay_ReportsTheOldSharedConstant()
+        {
+            GateFinding finding = Assert.Single(
+                AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip(
+                    ThrowableFixture("  releaseDelay: 0.6")));
+
+            Assert.Equal("A9", finding.RuleId);
+            Assert.Contains("0.6000000", finding.Message);
+            Assert.Contains("0.9524440", finding.Message);
+        }
+
+        /// <summary>
+        /// The clause the state speed earns: the same clip at speed 1 is a different answer.
+        /// </summary>
+        /// <remarks>
+        /// Without dividing by <c>m_Speed</c> the check would expect the raw 1.2381772 s and
+        /// call today's correct authoring wrong. This is the assertion that fails if the divide
+        /// is ever dropped as "a detail".
+        /// </remarks>
+        [Fact]
+        public void ThrowReleaseDelay_DividesTheClipTimeByTheStateSpeed()
+        {
+            Assert.Empty(AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip(
+                ThrowableFixture("  releaseDelay: 1.2381772", speed: "1")));
+
+            GateFinding finding = Assert.Single(
+                AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip(
+                    ThrowableFixture("  releaseDelay: 1.2381772")));
+
+            Assert.Contains("0.9524440", finding.Message);
+        }
+
+        [Fact]
+        public void ThrowReleaseDelay_ReportsAnUnserializedDelay()
+        {
+            GateFinding finding = Assert.Single(
+                AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip(
+                    ThrowableFixture(releaseDelayLine: null)));
+
+            Assert.Contains("serializes no configuration.releaseDelay", finding.Message);
+        }
+
+        [Fact]
+        public void ThrowReleaseDelay_CannotTellWhenTheSpeedIsParameterDriven()
+        {
+            AssetGateUnknownException thrown = Assert.Throws<AssetGateUnknownException>(
+                () => AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip(
+                    ThrowableFixture(speedParameterActive: "1")).ToList());
+
+            Assert.Contains("driven by a parameter", thrown.Message);
+        }
+
+        [Fact]
+        public void ThrowReleaseDelay_CannotTellWhenTheClipRaisesNoReleaseEvent()
+        {
+            AssetGateUnknownException thrown = Assert.Throws<AssetGateUnknownException>(
+                () => AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip(
+                    ThrowableFixture(eventFunction: "Footstep")).ToList());
+
+            Assert.Contains("raises no SpawnThrowable", thrown.Message);
+        }
+
+        /// <summary>
+        /// A tree with no throwable at all is exit 2, never a clean run.
+        /// </summary>
+        [Fact]
+        public void ThrowReleaseDelay_CannotTellWhenNoPrefabCarriesAThrowableWeapon()
+        {
+            AssetGateUnknownException thrown = Assert.Throws<AssetGateUnknownException>(
+                () => AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip(
+                    ThrowableFixture(withThrowable: false)).ToList());
+
+            Assert.Contains("carries a ThrowableWeapon", thrown.Message);
+        }
+
+        /// <summary>
+        /// The event reader answers from <c>m_Events</c>, not from the first <c>time</c> key.
+        /// </summary>
+        /// <remarks>
+        /// Asserted directly as well as through A9 because it is the one way this whole check
+        /// could be confidently wrong rather than absent: the fixture's first keyframe sits at
+        /// <c>time: 0</c>, and a scalar lookup would return that and expect a release delay of
+        /// zero.
+        /// </remarks>
+        [Fact]
+        public void AnimationEventTime_IgnoresCurveKeyframeTimes()
+        {
+            UnityAssetDocument clip = ThrowableFixture()
+                .Documents("fixtures/frag_throw.anim")
+                .Single(d => d.ClassId == 74);
+
+            Assert.Equal(1.2381772, clip.AnimationEventTime("SpawnThrowable")!.Value, 7);
+            Assert.Null(clip.AnimationEventTime("NoSuchEvent"));
         }
 
         private static UnityAssetDocument OneDocument(string body) =>

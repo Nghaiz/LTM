@@ -62,7 +62,7 @@ By the end of this phase:
 | **D4-local** | **The constant-speed distance accumulator is preserved, bug and all.** `Projectile.cs:70` advances `travelDistance` by `configuration.speed * dt` — the **muzzle** speed, not the current velocity magnitude — so a projectile that has dropped 40 m still accrues distance as if it were flying flat. Changing it to the true path length is more correct and silently rebalances every drop-off curve in the game, which are authored against the current behaviour. Preserved, and pinned by a test so it is a recorded quirk rather than a rediscovered bug. |
 | **D5-local** | **The doubled sweep IS fixed.** `Physics.Raycast(ray, out hit, delta.magnitude * 2f, -2049)` (`:105`) sweeps twice the distance the projectile then advances, so whether a hit registers depends on frame time — the same class of defect V0 removed from vehicles. Sweep `delta.magnitude` and advance by `delta`. Accepted under brainstorm D8 as a deliberate change to offline behaviour, and pinned by a test. |
 | **D6** | **Guided projectiles are re-parameterized, not state-streamed.** A `JavelinMissile` re-sends `S_PROJECTILE_SPAWN` with the **same `ProjectileId`** at 5 Hz; each message is a complete fresh `(origin, velocity, spawnTick)` and the client re-seats the existing projectile rather than spawning a second. This stays inside D5 — every message is still parameters — and needs no new opcode. ~95 B/s per missile in flight, over a flight of a few seconds. |
-| **D7** | **`ThrowableWeapon`'s release becomes a server-owned delay, not an Animator event.** A new `Weapon.Configuration.releaseDelay` matches the throw clip's event time. Both roles schedule the release from the same constant. Reason in Task 5 — the server does not merely lack the Animator, it currently throws *instantly* while the client throws ~0.6 s later, and that divergence exists today. |
+| **D7** | **`ThrowableWeapon`'s release becomes a server-owned delay, not an Animator event.** A new `Weapon.Configuration.releaseDelay` matches the throw clip's event time. Both roles schedule the release from the same authored value. **Amended by debt-closure phase 6 task 6.1 (2026-08-26): the value is authored PER WEAPON, not once** — see § D7 amendment below. Reason in Task 5 — the server does not merely lack the Animator, it currently throws *instantly* while the client throws ~0.6 s later, and that divergence exists today. |
 | **D8** | **Deployables replicate as re-parameterized projectiles, not as a new entity stream.** `Ammobox` and `Medipack` are Rigidbody-driven and therefore not parameter-deterministic, so they re-announce at 10 Hz while moving and go silent once at rest — a bag on the ground costs nothing. `S_PROJECTILE_SPAWN` gains a `RemainingLifetimeDeciseconds` byte, which is what makes the Medipack's self-shortening lifetime expressible. |
 | **D9** | **Spare ammo is enforced server-side and displayed client-predicted.** The server owns the pool (V6's `ISpareAmmoPool`), so a resupply cannot be forged. The client's HUD number is its own prediction and is corrected whenever a reload delivers fewer rounds than it expected — via the `AmmoInClip` the snapshot already carries. An ammo-bag resupply makes the client's displayed number too **low**, never too high, so the error never tells a player they have ammo they do not. `SnapshotField` is 8/8 (§ 3.1) and this needs no bit. |
 | **D10** | **`InputButtons.ThrowGrenade` is retired, not implemented.** Zero producers, zero consumers. The original game has no dedicated grenade input either — throwing is *switch to the gear slot, then Fire*, which V6 already made authoritative. Implementing the bit would create a **second fire path** that bypasses the `Weapon.CanFire()` chokepoint. Renamed `Reserved7`, documented as deliberately unassigned. No wire change: the bit was never set. |
@@ -232,8 +232,9 @@ returns false there, and on a stripped prefab `GetComponent<Animator>()` returns
 **today the server would throw instantly and the client ~0.6 s later.** That divergence is not
 introduced by the network; the network is what makes it visible.
 
-**The fix (D7).** `Weapon.Configuration` gains `public float releaseDelay = 0.6f` — the throw clip's
-event time, authored once. Then:
+**The fix (D7).** `Weapon.Configuration` gains `public float releaseDelay` — the throw clip's
+event time divided by the `Throw` state's speed multiplier, authored **per weapon** (the `0.6f`
+this shipped with was a guess, and it was wrong for both clips; see § D7 amendment below). Then:
 
 | Role | Behaviour |
 |---|---|
@@ -245,7 +246,8 @@ event time, authored once. Then:
 authoritative release tick — a modified client throws instantly, and the server has nothing to check
 it against. **Why not run an Animator on the server.** A headless build strips the renderers the
 clip drives, the clip is authored for visuals rather than simulation, and it would make the release
-time an Editor-only fact that no CI test can grade. A single constant is checkable by both sides.
+time an Editor-only fact that no CI test can grade. An authored constant is checkable by both
+sides — and, since phase 6, by CI: gate rule **A9** reads prefab, controller and clip.
 
 **Cost, stated plainly:** if `releaseDelay` and the clip's event time drift apart, the projectile
 leaves the hand at a visibly wrong point in the animation. That is a cosmetic error with a loud
@@ -254,6 +256,53 @@ symptom, which is the right failure mode to trade a silent authority hole for.
 **Verify:** `AThrowReleasesOnTheSameTickOnServerAndClient`;
 `AClientSpawnThrowableSpawnsNothing`; `AThrowReloadStillChambersTheNextGrenade` (`:34`'s `Reload()`
 survives the split).
+
+### D7 amendment — the release delay is per-weapon, and the divergence changed shape
+
+*Written by debt-closure phase 6 task 6.1, 2026-08-26. Ledger row **D-1**; required in the same
+commit by that phase's AC-2 and by `phases/phase-4-measure.md` AC-3.*
+
+**One constant could never have served both throwables.** Both throw clips are force-text and were
+readable the whole time this section claimed otherwise:
+
+| Weapons | Clip | Event time | `Throw` state speed | Authored `releaseDelay` |
+|---|---|---|---|---|
+| `frag`, `spearhead` | `AnimationClip/frag_throw.anim:2249` | 1.2381772 s | `AnimatorController/Old Frag.controller:249` — `m_Speed: 1.3` | **0.952444 s** |
+| `ammobox`, `medipack` | `AnimationClip/Ammobox Throw.anim:1430` | 0.4142947 s | `AnimatorController/Old Ammobox.controller:149` — `m_Speed: 1.3` | **0.3186882 s** |
+
+The two are three times apart, so the shipped `0.6f` was wrong for both — not drifted, never right.
+`m_SpeedParameterActive: 0` on both states, so the 1.3 is a static multiplier and dividing by it is
+the whole of the conversion; that was the one part `phases/phase-4-measure.md` task 4.3 still owed
+the Editor, and it did not need one.
+
+**The divergence does not disappear. It moves from client-vs-server to offline-vs-server, and it
+shrinks by two orders of magnitude.** A networked client no longer releases on its own animation
+event at all — `SpawnThrowable` is cosmetic at `NetRole.Client` and the projectile arrives on
+`S_PROJECTILE_SPAWN` — so client and server agree exactly. `NetRole.Offline` still runs the
+animation-event path (D11), and offline time is continuous while the server's is quantised by
+`Mathf.Ceil` in `ThrowableWeapon.cs:42`:
+
+| Weapons | Offline release | Server release | Server is late by |
+|---|---|---|---|
+| `frag`, `spearhead` | 0.952444 s | `ceil(28.573) = 29` ticks = 0.9666667 s | **14.22 ms** |
+| `ammobox`, `medipack` | 0.3186882 s | `ceil(9.561) = 10` ticks = 0.3333333 s | **14.65 ms** |
+
+Bounded by one sim tick (33.3 ms) and always in the same direction — the server never releases
+*early*, because `Ceil` only ever rounds up. That direction is the safe one: a server that released
+before the animation reached the throw would spawn a projectile from a hand still holding it.
+
+**What now grades it.** Gate rule **A9**
+(`tools/ClientWiringGate/AssetWiringDetectors.cs`, `ThrowReleaseDelayMatchesTheThrowClip`) walks
+prefab → Animator → controller → `Throw` state → clip and fails the build when an authored delay
+sits more than 0.1 ms from its own clip. It cannot be satisfied by a rename and it reports exit 2 —
+never a pass — when the chain is unresolvable or the state's speed becomes parameter-driven. Five
+mutations, five REDs, no false green: `plans/debt-closure/reports/2026-08-26-d1-mutation-proof.txt`.
+
+**What used to guard it, and did not.** `OfflineBehaviourChangeTests`' third recorded change read
+`TicksFor(0.6f) == TicksFor(0.6f)` — one constant compared against itself, true whatever the clips
+said, and green for the entire time this row was open (`green-that-proves-nothing.md`). Its
+replacement pins the property a gate cannot see — that the conversion is role-independent and that
+the two weapons land on genuinely different ticks, 29 and 10 — and leaves drift to A9.
 
 ---
 
@@ -625,8 +674,10 @@ To **The client track**, one PR per file with its pinning test attached:
 
 Editor-only work that stays with the client track:
 
-- **The throw clip's animation-event time**, read once and authored into `releaseDelay`. This is the
-  single number D7 depends on, and nothing in CI can discover it.
+- ~~**The throw clip's animation-event time**, read once and authored into `releaseDelay`. This is the
+  single number D7 depends on, and nothing in CI can discover it.~~ **Wrong on both counts, and
+  corrected by phase 6 task 6.1:** the clips are force-text, so CI reads them directly (gate rule
+  **A9**), and there is no single number — see § D7 amendment below.
 - Confirming each throwable prefab's Animator still fires `SpawnThrowable()` for the arm, now that
   it spawns nothing at `NetRole.Client`.
 - The authored `damageDropOff` curves that the build step samples into `ProjectileConfig`.

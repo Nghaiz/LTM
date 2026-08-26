@@ -34,14 +34,24 @@ public class Weapon : MonoBehaviour
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// <b>Matches the throw clip's animation-event time, and it is the one number in this
-		/// phase that nothing in CI can discover.</b> <c>ThrowableWeapon.Fire</c> does not shoot
-		/// -- it sets an Animator trigger, and an animation event calls
-		/// <c>ThrowableWeapon.SpawnThrowable</c>. A headless server has no active Animator
-		/// (<c>Weapon.HasActiveAnimator</c> already returns false there, and on a stripped prefab
-		/// <c>GetComponent&lt;Animator&gt;()</c> returns null outright), so <b>today the server
-		/// throws instantly and the client about 0.6 s later</b>. That divergence is not
-		/// introduced by the network; the network is what makes it visible.
+		/// <b>Authored per weapon, from that weapon's own throw clip.</b>
+		/// <c>ThrowableWeapon.Fire</c> does not shoot -- it sets an Animator trigger, and an
+		/// animation event calls <c>ThrowableWeapon.SpawnThrowable</c>. A headless server has no
+		/// active Animator (<c>Weapon.HasActiveAnimator</c> already returns false there, and on a
+		/// stripped prefab <c>GetComponent&lt;Animator&gt;()</c> returns null outright), so it
+		/// schedules the release from this number instead. The two agree only when this equals
+		/// the wall-clock time from trigger to event, which is the event's clip time divided by
+		/// the <c>Throw</c> state's speed multiplier.
+		/// </para>
+		/// <para>
+		/// <b>One number could never have served both throwables, and for a while one did.</b>
+		/// <c>frag_throw.anim</c> raises the event at 1.2381772 s and <c>Ammobox Throw.anim</c> at
+		/// 0.4142947 s -- three times apart -- and both <c>Throw</c> states run at
+		/// <c>m_Speed: 1.3</c>. So the authored values are 0.952444 s (frag, spearhead) and
+		/// 0.3186882 s (ammobox, medipack), and the <c>0.6f</c> below is now only the default a
+		/// NEW throwable starts from before anybody authors it. It is deliberately left wrong for
+		/// every existing clip: a new prefab that ships unauthored fails the gate loudly rather
+		/// than inheriting a plausible-looking number (ledger D-1).
 		/// </para>
 		/// <para>
 		/// <b>Why not run an Animator on the server.</b> A headless build strips the renderers
@@ -49,13 +59,16 @@ public class Weapon : MonoBehaviour
 		/// make the release time an Editor-only fact no test can grade. <b>Why not trust the
 		/// client's animation event.</b> It would make a client the author of the authoritative
 		/// release tick, and a modified client throws instantly with nothing to check it against.
-		/// A single authored constant is checkable by both sides.
+		/// An authored constant is checkable by both sides.
 		/// </para>
 		/// <para>
-		/// <b>Cost, stated plainly:</b> if this drifts from the clip's event time, the grenade
-		/// leaves the hand at a visibly wrong point in the animation. That is a cosmetic error
-		/// with a loud symptom, which is the right failure mode to trade a silent authority hole
-		/// for.
+		/// <b>Drift is graded, and no longer only by eye.</b> This used to be "the one number in
+		/// this phase that nothing in CI can discover", and the cost was stated as a cosmetic
+		/// error with a loud symptom. Both halves were wrong: the clips are force-text and were
+		/// readable all along, and the symptom is loud only to somebody watching for it. Gate rule
+		/// <b>A9</b> (<c>AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip</c>) now reads
+		/// prefab, controller and clip and fails the build when this and the clip disagree by
+		/// more than 0.1 ms.
 		/// </para>
 		/// </remarks>
 		public float releaseDelay = 0.6f;

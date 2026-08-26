@@ -53,6 +53,8 @@ namespace Ironfront.Tools.ClientWiringGate
                  AssetWiringDetectors.LobbyShellOverlayIsInAScene),
                 (nameof(AssetWiringDetectors.ScoreUiTextRefsAreAssigned),
                  AssetWiringDetectors.ScoreUiTextRefsAreAssigned),
+                (nameof(AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip),
+                 AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip),
             };
 
         /// <summary>

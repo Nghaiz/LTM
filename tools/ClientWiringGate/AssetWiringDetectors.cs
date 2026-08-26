@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using Ironfront.Net.Protocol;
@@ -55,6 +56,26 @@ namespace Ironfront.Tools.ClientWiringGate
         private const string LobbyShellOverlayGuid       = "3a9b866060cb47f1af22ca5125dd4d71";
         private const string ScoreUiGuid                 = "47bac8ff82521e88b577c05861af19e4";
         private const string CatalogInstallerGuid        = "1e1d8de547d73f847a33a9a802368cbe";
+        private const string ThrowableWeaponGuid         = "441fac300879ede440ac8541efaa1c65";
+
+        /// <summary>Unity class ids this file reaches outside the 1/114 pair.</summary>
+        private const int AnimatorClassId      = 95;
+        private const int AnimatorStateClassId = 1102;
+        private const int AnimationClipClassId = 74;
+
+        /// <summary>The Animator state and clip event a throw releases on.</summary>
+        private const string ThrowStateName     = "Throw";
+        private const string ThrowEventFunction = "SpawnThrowable";
+
+        /// <summary>
+        /// How far the authored release delay may sit from the clip before A9 speaks.
+        /// </summary>
+        /// <remarks>
+        /// 0.1 ms — three orders above the ~1e-7 relative error of Unity's float round-trip, and
+        /// far below the 33 ms sim tick the delay is ceilinged into, so it can only ever fire on
+        /// a real authoring divergence rather than on serialization noise.
+        /// </remarks>
+        private const double ReleaseDelayToleranceSeconds = 1e-4;
         /// <summary>
         /// <c>Projectile</c> and everything deriving from it. All of them, because the clause
         /// E4 cares about is "cannot deal damage" and a <c>GrenadeProjectile</c> is no more inert
@@ -793,6 +814,189 @@ namespace Ironfront.Tools.ClientWiringGate
         }
 
         /// <summary>Every document in the tree running a given script, with the asset it came from.</summary>
+        /// <summary>
+        /// <b>D-1</b> — every throwable's authored release delay matches its own throw clip.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>What the number has to be.</b> A networked client plays the throw animation and
+        /// the clip's <c>SpawnThrowable</c> event releases the projectile; a headless server has
+        /// no Animator at all and schedules the release from
+        /// <c>Weapon.Configuration.releaseDelay</c> instead
+        /// (<c>ThrowableWeapon.Fire</c>). The two agree only when the authored constant equals
+        /// the wall-clock time from trigger to event, which is the event's clip time divided by
+        /// the <c>Throw</c> state's speed multiplier. Neither half of that is a constant across
+        /// weapons: <c>frag_throw</c> fires at 1.2381772 s and <c>Ammobox Throw</c> at
+        /// 0.4142947 s, three times apart, so the single <c>0.6f</c> both inherited was wrong for
+        /// both.
+        /// </para>
+        /// <para>
+        /// <b>Why a gate and not a test.</b> The consumer compiles into
+        /// <c>Assembly-CSharp</c>, which no test assembly can reference (<b>E-11b</b>) — the same
+        /// wall <b>G7</b> and <b>G8</b> were built against. But the assertion here is entirely
+        /// about authored data, and the data is force-text YAML, so this reads it directly rather
+        /// than modelling it. The test that used to guard this fed one constant to both sides of
+        /// its own comparison and was true whatever the clips said
+        /// (<c>green-that-proves-nothing.md</c>).
+        /// </para>
+        /// <para>
+        /// <b>Everything it cannot resolve is exit 2, not a finding.</b> A throwable with no
+        /// Animator, a <c>Throw</c> state whose speed comes from a parameter, a clip that raises
+        /// no <c>SpawnThrowable</c> — in each case the gate cannot say what the right number is,
+        /// and reporting "the authored value is wrong" would be a guess.
+        /// <c>m_SpeedParameterActive</c> is checked rather than assumed for exactly that reason:
+        /// both controllers hold a static 1.3 today, and a parameter-driven speed would make the
+        /// release time a runtime fact this file has no way to read.
+        /// </para>
+        /// </remarks>
+        public static IEnumerable<GateFinding> ThrowReleaseDelayMatchesTheThrowClip(
+            UnityAssetIndex index)
+        {
+            var findings = new List<GateFinding>();
+            int graded = 0;
+
+            foreach (string prefabPath in index.Prefabs())
+            {
+                IReadOnlyList<UnityAssetDocument> documents = index.Documents(prefabPath);
+
+                UnityAssetDocument? weapon = documents.FirstOrDefault(
+                    d => d.IsMonoBehaviour && string.Equals(
+                        d.ScriptGuid, ThrowableWeaponGuid, StringComparison.OrdinalIgnoreCase));
+
+                if (weapon == null) continue;
+                graded++;
+
+                double expected = ExpectedReleaseSeconds(index, documents, prefabPath);
+                string? authored = weapon.Scalar("releaseDelay");
+
+                if (authored == null)
+                {
+                    findings.Add(new GateFinding(
+                        "A9", Rel(index, prefabPath), 0,
+                        "the ThrowableWeapon serializes no configuration.releaseDelay, so it "
+                        + "runs on Weapon.Configuration's class default while its own clip "
+                        + $"releases at {expected:F6} s. The server would schedule the throw at a "
+                        + "time this weapon's animation never reaches (ledger D-1)."));
+                    continue;
+                }
+
+                if (!double.TryParse(
+                        authored, NumberStyles.Float, CultureInfo.InvariantCulture,
+                        out double delay))
+                    throw new AssetGateUnknownException(
+                        $"{prefabPath}: configuration.releaseDelay is '{authored}', which is not "
+                        + "a number. This check cannot grade it.");
+
+                if (Math.Abs(delay - expected) <= ReleaseDelayToleranceSeconds) continue;
+
+                findings.Add(new GateFinding(
+                    "A9", Rel(index, prefabPath), 0,
+                    $"configuration.releaseDelay is {delay:F7} s but this weapon's throw clip "
+                    + $"raises SpawnThrowable at {expected:F7} s of wall clock. A networked "
+                    + $"client throws at {expected:F7} s and the server at {delay:F7} s, so the "
+                    + "projectile leaves the hand at two different moments in the same throw "
+                    + "(ledger D-1)."));
+            }
+
+            if (graded == 0)
+                throw new AssetGateUnknownException(
+                    "[asset-wiring] no prefab under Assets/ carries a ThrowableWeapon. Four did "
+                    + "when this check was written (frag, spearhead, ammobox, medipack), so "
+                    + "their disappearance is a tree change this check cannot grade rather than "
+                    + "an authoring gap (ledger D-1).");
+
+            return findings;
+        }
+
+        /// <summary>
+        /// Wall-clock seconds from the throw trigger to the clip's <c>SpawnThrowable</c> event.
+        /// </summary>
+        /// <remarks>
+        /// The transition into <c>Throw</c> deliberately adds nothing: Unity advances the
+        /// destination state's clock from zero as the cross-fade begins, so the event lands the
+        /// same distance after the trigger whichever state the throw interrupted — which is what
+        /// makes one authored number per weapon sufficient, rather than one per source state.
+        /// </remarks>
+        private static double ExpectedReleaseSeconds(
+            UnityAssetIndex index,
+            IReadOnlyList<UnityAssetDocument> prefabDocuments,
+            string prefabPath)
+        {
+            List<UnityAssetDocument> animators =
+                prefabDocuments.Where(d => d.ClassId == AnimatorClassId).ToList();
+
+            if (animators.Count != 1)
+                throw new AssetGateUnknownException(
+                    $"{prefabPath}: a ThrowableWeapon prefab with {animators.Count} Animators. "
+                    + "This check reads the throw clip through exactly one; which controller "
+                    + "drives the release is a question it cannot answer here.");
+
+            UnityAssetDocument controller = Resolve(
+                index, animators[0].Reference("m_Controller"), prefabPath, "m_Controller")
+                .First();
+
+            List<UnityAssetDocument> states = index.Documents(controller.SourcePath)
+                .Where(d => d.ClassId == AnimatorStateClassId
+                            && string.Equals(d.Name, ThrowStateName, StringComparison.Ordinal))
+                .ToList();
+
+            if (states.Count != 1)
+                throw new AssetGateUnknownException(
+                    $"{controller.SourcePath}: {states.Count} states named '{ThrowStateName}'. "
+                    + "The release time is that state's speed times its clip, so this check "
+                    + "cannot pick one.");
+
+            UnityAssetDocument state = states[0];
+
+            if (state.Scalar("m_SpeedParameterActive") != "0")
+                throw new AssetGateUnknownException(
+                    $"{controller.SourcePath}: the {ThrowStateName} state's speed is driven by a "
+                    + "parameter, so the release time is a runtime fact and no authored constant "
+                    + "can be graded against it. Decide what the server should schedule from, "
+                    + "then re-point this check (ledger D-1).");
+
+            if (!double.TryParse(
+                    state.Scalar("m_Speed"), NumberStyles.Float, CultureInfo.InvariantCulture,
+                    out double speed) || speed <= 0)
+                throw new AssetGateUnknownException(
+                    $"{controller.SourcePath}: the {ThrowStateName} state's m_Speed is "
+                    + $"'{state.Scalar("m_Speed")}'. A non-positive or unreadable speed makes the "
+                    + "release time undefined.");
+
+            UnityAssetDocument clip = Resolve(
+                index, state.Reference("m_Motion"), controller.SourcePath, "m_Motion")
+                .First(d => d.ClassId == AnimationClipClassId);
+
+            double? eventTime = clip.AnimationEventTime(ThrowEventFunction);
+
+            if (eventTime == null)
+                throw new AssetGateUnknownException(
+                    $"{clip.SourcePath}: the clip the {ThrowStateName} state plays raises no "
+                    + $"{ThrowEventFunction} event, so nothing in it says when the projectile "
+                    + "leaves the hand (ledger D-1).");
+
+            return eventTime.Value / speed;
+        }
+
+        /// <summary>The documents of the asset a serialized reference names.</summary>
+        private static IReadOnlyList<UnityAssetDocument> Resolve(
+            UnityAssetIndex index, UnityObjectRef? reference, string from, string field)
+        {
+            if (reference == null || reference.Value.IsNull || reference.Value.Guid == null)
+                throw new AssetGateUnknownException(
+                    $"{from}: {field} is unset, so the chain from weapon to throw clip stops "
+                    + "here and this check cannot grade the release time (ledger D-1).");
+
+            string? path = index.PathOf(reference.Value.Guid);
+
+            if (path == null)
+                throw new AssetGateUnknownException(
+                    $"{from}: {field} names guid {reference.Value.Guid}, which no asset in the "
+                    + "tree carries. The reference is dangling; this check cannot grade it.");
+
+            return index.Documents(path);
+        }
+
         private static IEnumerable<(UnityAssetDocument Document, string Path)> Instances(
             UnityAssetIndex index, string scriptGuid)
         {

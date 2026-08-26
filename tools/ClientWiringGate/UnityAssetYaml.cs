@@ -202,6 +202,99 @@ namespace Ironfront.Tools.ClientWiringGate
             return ids;
         }
 
+        /// <summary>
+        /// The <c>time</c> of the <c>m_Events</c> entry that calls
+        /// <paramref name="functionName"/>, or null when this clip raises no such event.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Its own reader rather than <see cref="Scalar"/>, because <c>time</c> is not a unique
+        /// key in an <c>.anim</c>: every keyframe on every curve carries one, and
+        /// <see cref="FindKeyLine"/> returns the first match in the document. A scalar lookup
+        /// here would silently answer with a curve keyframe and be believed.
+        /// </para>
+        /// <para>
+        /// The pair is read per entry and decided at the entry boundary rather than assuming
+        /// <c>time</c> precedes <c>functionName</c> — Unity emits them in that order today, and
+        /// a reader that depends on emission order is one serializer change away from returning
+        /// the wrong number rather than failing.
+        /// </para>
+        /// </remarks>
+        public double? AnimationEventTime(string functionName)
+        {
+            int at = FindKeyLine("m_Events");
+            if (at < 0 || ValueAfterColon(_lines[at]) == "[]") return null;
+
+            int blockIndent = IndentOf(_lines[at]);
+            double? time = null;
+            string? name = null;
+            bool inEntry = false;
+
+            for (int i = at + 1; i <= _lines.Count; i++)
+            {
+                string trimmed = i < _lines.Count ? _lines[i].Trim() : string.Empty;
+                bool end = i == _lines.Count
+                           || (trimmed.Length > 0
+                               && IndentOf(_lines[i]) <= blockIndent
+                               && !trimmed.StartsWith("- ", StringComparison.Ordinal));
+
+                bool starts = !end && trimmed.StartsWith("- ", StringComparison.Ordinal);
+
+                // Decide the entry that just closed before opening the next one.
+                if ((end || starts) && inEntry
+                    && string.Equals(name, functionName, StringComparison.Ordinal))
+                {
+                    if (time == null)
+                        throw new AssetGateUnknownException(
+                            $"{SourcePath}: the {functionName} animation event carries no time, "
+                            + "so the clip cannot say when it fires.");
+
+                    return time;
+                }
+
+                if (end) break;
+
+                if (starts)
+                {
+                    time = null;
+                    name = null;
+                    inEntry = true;
+                    trimmed = trimmed.Substring(2).Trim();
+                }
+
+                if (!inEntry || trimmed.Length == 0) continue;
+
+                string[] kv = trimmed.Split(new[] { ':' }, 2);
+                if (kv.Length != 2) continue;
+
+                switch (kv[0].Trim())
+                {
+                    case "time":
+                        if (!double.TryParse(
+                                kv[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture,
+                                out double parsed))
+                            throw new AssetGateUnknownException(
+                                $"{SourcePath}: animation event time '{kv[1].Trim()}' is not a "
+                                + "number.");
+                        time = parsed;
+                        break;
+
+                    case "functionName":
+                        name = kv[1].Trim();
+                        break;
+                }
+            }
+
+            return null;
+        }
+
+        private static int IndentOf(string line)
+        {
+            int i = 0;
+            while (i < line.Length && line[i] == ' ') i++;
+            return i;
+        }
+
         private int FindKeyLine(string field)
         {
             string needle = field + ":";

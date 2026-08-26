@@ -1,0 +1,93 @@
+D-1 / A9 mutation proof — ThrowReleaseDelayMatchesTheThrowClip
+==============================================================
+
+Date       2026-08-26
+Phase      debt-closure phase 6, task 6.1
+Rule       A9, tools/ClientWiringGate/AssetWiringDetectors.cs
+           (registered in AssetGateRunner.Checks; runs on every full-tree gate run)
+Command    dotnet run --project tools/ClientWiringGate
+Exit codes 0 clean · 1 the gate found something · 2 the gate could not tell
+
+Why a mutation proof and not a green run
+----------------------------------------
+The rule this replaces was green for the whole time D-1 was open. It read
+
+    const float releaseDelaySeconds = 0.6f;
+    Assert.Equal(TicksFor(releaseDelaySeconds), TicksFor(releaseDelaySeconds));
+
+— one constant compared against itself, so it could not have failed whatever the clips said. A
+replacement that has only ever been seen passing would be the same artifact with more lines. Each
+mutation below was applied to the REAL asset, the gate run, and the asset restored.
+
+Baseline
+--------
+  [asset-wiring] 9 authoring check(s) clean across 4 scene(s) and 62 prefab(s).
+  exit 0
+
+  Authored values under test:
+    frag.prefab        releaseDelay: 0.952444     (frag_throw.anim   1.2381772 s / 1.3)
+    spearhead.prefab   releaseDelay: 0.952444     (same controller, same clip)
+    ammobox.prefab     releaseDelay: 0.3186882    (Ammobox Throw.anim 0.4142947 s / 1.3)
+    medipack.prefab    releaseDelay: 0.3186882    (same controller, same clip)
+
+Mutations
+---------
+
+A — frag.prefab: releaseDelay 0.952444 -> 0.6      (the old shared constant, LONG clip)
+    RED, exit 1
+      [A9] configuration.releaseDelay is 0.6000000 s but this weapon's throw clip raises
+      SpawnThrowable at 0.9524440 s of wall clock. A networked client throws at 0.9524440 s and
+      the server at 0.6000000 s, so the projectile leaves the hand at two different moments in
+      the same throw (ledger D-1).
+
+B — ammobox.prefab: releaseDelay 0.3186882 -> 0.6  (the SAME constant, SHORT clip)
+    RED, exit 1
+      [A9] configuration.releaseDelay is 0.6000000 s but this weapon's throw clip raises
+      SpawnThrowable at 0.3186882 s of wall clock. ...
+
+    A and B together are the load-bearing pair. One expected value hardcoded in the rule would
+    pass one of them; the rule has to read each weapon's own clip to fail both, and the two
+    reported expectations differ (0.9524440 vs 0.3186882) because it does.
+
+C — medipack.prefab: the releaseDelay line deleted  (falls back to the class default)
+    RED, exit 1
+      [A9] the ThrowableWeapon serializes no configuration.releaseDelay, so it runs on
+      Weapon.Configuration's class default while its own clip releases at 0.318688 s. The server
+      would schedule the throw at a time this weapon's animation never reaches (ledger D-1).
+
+    This is the state all four prefabs were in before this task: the field existed on the class
+    and no prefab serialized it. It is a distinct clause from A/B because "absent" and "present
+    and wrong" reach the gate down different paths.
+
+D — Old Frag.controller: the Throw state's m_SpeedParameterActive 0 -> 1
+    RED, exit **2** (could not tell — NOT a finding)
+      [asset-wiring] FAIL - ThrowReleaseDelayMatchesTheThrowClip could not reach a verdict:
+      ...the Throw state's speed is driven by a parameter, so the release time is a runtime fact
+      and no authored constant can be graded against it.
+
+E — frag_throw.anim: functionName SpawnThrowable -> SpawnThrowableXX
+    RED, exit **2** (could not tell — NOT a finding)
+      [asset-wiring] FAIL - ThrowReleaseDelayMatchesTheThrowClip could not reach a verdict:
+      ...the clip the Throw state plays raises no SpawnThrowable event, so nothing in it says
+      when the projectile leaves the hand (ledger D-1).
+
+    D and E are exit 2 on purpose. In both the chain from weapon to clip is intact but the
+    ANSWER is unavailable, and reporting "the authored value is wrong" would be a guess dressed
+    as a finding. A gate that cannot tell must not resolve to either verdict
+    (green-that-proves-nothing.md).
+
+Result
+------
+  5 mutations / 5 REDs / 0 false greens.
+  Exit-code split held: A,B,C -> 1 (a finding); D,E -> 2 (could not tell).
+  Assets restored byte-identical after every run — verified with `git diff --stat` on
+  Old Frag.controller and frag_throw.anim, which reported no change.
+
+Not covered here, and where it is covered
+-----------------------------------------
+  A prefab with zero or several Animators, a controller with zero or several `Throw` states, a
+  dangling m_Controller/m_Motion guid, and the "no prefab in the tree carries a ThrowableWeapon"
+  completeness guard are exercised as fixtures rather than by mutating the real tree, in
+  Ironfront.Net.Replication.Tests/AssetWiringGateTests.cs. So is the trap the event reader exists
+  for: an .anim holds a `time` key on every curve keyframe, so a plain scalar lookup answers with
+  a keyframe and is believed — AnimationEventTime_IgnoresCurveKeyframeTimes pins that directly.
