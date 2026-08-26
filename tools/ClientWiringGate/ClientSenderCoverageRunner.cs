@@ -90,9 +90,13 @@ namespace Ironfront.Tools.ClientWiringGate
              "THE LIVE ONE. Unlike the three above the server DOES route this "
              + "(ServerMessageRouter.Route -> ISeatRequestHandler -> ServerSeatBridge), so the "
              + "handler is waiting and only the client half is missing — no client can ask for a "
-             + "seat, which blocks lane-B checks B-7, B-11 and B-13. Exempt ONLY because phase 6 "
-             + "task 6.5 was scoped to the gate and closing this row was explicitly deferred; "
-             + "deleting this entry is the whole change once a sender lands. Ledger X-30."),
+             + "seat, which blocks lane-B checks B-7 and B-13. NOT B-11 — that is a lane-A "
+             + "check and lane A is engine-free: it CAN send this opcode and simply has no "
+             + "behaviour that does, which is ledger X-34 and a different fix (corrected "
+             + "2026-08-26; the lane attribution here was wrong). Exempt ONLY because "
+             + "phase 6 task 6.5 was scoped to the gate and closing this row was explicitly "
+             + "deferred; deleting this entry is the whole change once a sender lands. "
+             + "Ledger X-30, owned by verdict-closure R2."),
         };
 
         /// <summary>

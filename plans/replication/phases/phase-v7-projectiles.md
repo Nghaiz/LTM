@@ -569,7 +569,7 @@ ships and is already tested; that fallback existing is a precondition of startin
 
 ### 6.1.1. The ten tests are WON'T-DO, and this is the reason — recorded 2026-08-26
 
-> Added by [`plans/debt-closure/phases/phase-4-measure.md`](../../debt-closure/phases/phase-4-measure.md)
+> Added by `plans/debt-closure/phases/phase-4-measure.md` ([spec deleted 2026-08-26 — index](../../debt-closure/phases/README.md))
 > task 4.5, per the debt-closure track's decision **P-D9**. The row above said the tests were
 > not written and gave a reason that reads as scheduling — *"this phase adds no EditMode
 > harness"* — which invites the next reader to add one. They cannot. The obstacle is structural,
@@ -583,18 +583,46 @@ assembly that no `.asmdef` may name. Two facts fix that, both re-verified on 202
 - `Assets/Tests/EditMode/Ironfront.Net.Unity.Server.Tests.asmdef` references exactly
   `Ironfront.Net.Unity.Server` and `Ironfront.Net.Unity.Shared` — neither contains the
   subjects.
-- `Assets/Scripts/Net/Client/` carries **no `.asmdef` at all** (zero files matching `*.asmdef`
+- ~~`Assets/Scripts/Net/Client/` carries **no `.asmdef` at all** (zero files matching `*.asmdef`
   under that tree), so `NetClientProjectilePresenter` and its neighbours land in
-  `Assembly-CSharp` along with `GrenadeProjectile`, `ThrowableWeapon` and `Projectile`.
+  `Assembly-CSharp` along with `GrenadeProjectile`, `ThrowableWeapon` and `Projectile`.~~
+  **False since 2026-08-26 — corrected in place rather than deleted, because it is the fact the
+  reopening condition below was keyed to.** `Net/Client` now carries
+  `Ironfront.Net.Unity.Client.asmdef`, so `NetClientProjectilePresenter` is **no longer** in
+  `Assembly-CSharp`. `GrenadeProjectile`, `ThrowableWeapon`, `Projectile` and `Weapon` still are —
+  all four remain under `Assets/Scripts/Assembly-CSharp/`, verified by path on 2026-08-26. The
+  won't-do therefore stands, and it stands for a **narrower** reason than this bullet gave.
 
 So this is **won't-do**, not "not yet". Writing them would require first splitting the client
 into its own assembly, which is a refactor with its own risk and its own plan — and their
 arithmetic is already pinned at the library level, in `Ironfront.Net.Replication.Tests`, where
 it can be tested without an engine at all.
 
-**Reopening condition, stated so nobody has to guess it.** If `Assets/Scripts/Net/Client/` ever
-gains its own `.asmdef` — which [`plans/asmdef-seam/plan.md`](../../asmdef-seam/plan.md) exists
-to do — these ten become writable, and this record should be revisited rather than inherited.
+**Reopening condition — ~~as first written~~, and why it had to be rewritten.** It read: *"If
+`Assets/Scripts/Net/Client/` ever gains its own `.asmdef` — which
+[`plans/asmdef-seam/plan.md`](../../asmdef-seam/plan.md) exists to do — these ten become
+writable."* **That condition FIRED on 2026-08-26** (asmdef-seam C4c shipped
+`Ironfront.Net.Unity.Client.asmdef` and a test assembly referencing it) **and its conclusion is
+false.** Not one of the ten became writable, because the asmdef the condition watched is not the
+assembly the subjects live in: the ten exercise `Weapon`, `ThrowableWeapon`, `GrenadeProjectile`
+and `Projectile`, every one of which is still in `Assembly-CSharp`. A condition that a reader can
+observe as met, on a record whose verdict has not changed, is worse than no condition — it invites
+exactly the "revisit" it names and then wastes it.
+
+**Reopening condition, restated against the subjects rather than against a folder.** These ten
+become writable when **the subject types themselves leave `Assembly-CSharp`** — concretely, when
+`Weapon`, `ThrowableWeapon`, `GrenadeProjectile` and `Projectile` are reachable from some assembly
+an `.asmdef` may name. Check it by locating the subject, not the test folder:
+
+```
+find Ironfront_Reborn/Assets/Scripts -name 'Weapon.cs' -o -name 'ThrowableWeapon.cs'      -o -name 'GrenadeProjectile.cs' -o -name 'Projectile.cs'
+```
+
+Every path still under `Assets/Scripts/Assembly-CSharp/` ⇒ still won't-do. Any path under a folder
+carrying an `.asmdef` ⇒ that subject's tests are writable and this record is owed a revisit.
+No asmdef-seam phase currently plans to move them; `Net/Client`, `Net/Input` and `Net/Diagnostics`
+are all sealed and none of the four is in any of them.
+
 Until then a reader finding no grenade test has an answer here instead of a hole.
 
 **What this does NOT excuse.** The gap is in the *Unity* half only. Nothing here licenses
@@ -618,7 +646,7 @@ level and says in its own remarks that it cannot reach the Unity paths.
 
 ### 6.1.2. `AuthoritativeFlight` was decided, and the answer is still OFF — recorded 2026-08-26
 
-> Added by [`plans/debt-closure/phases/phase-5-cutover-gate.md`](../../debt-closure/phases/phase-5-cutover-gate.md).
+> Added by `plans/debt-closure/phases/phase-5-cutover-gate.md` ([spec deleted 2026-08-26 — index](../../debt-closure/phases/README.md)).
 > The row above gave a reason that reads as scheduling — *"turning it on is a follow-up"* — which
 > leaves a reader unable to tell whether anyone ever came back to it. Someone did. This records
 > what they found, so the next reader inherits a decision rather than an open question.

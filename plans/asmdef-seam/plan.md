@@ -3,7 +3,7 @@
 - **Created:** 2026-08-23 · **Branch base:** `develop`
 - **Source of record:** [`plans/consolidation/plan.md`](../consolidation/plan.md) § 3 (**F3**), which
   measured this against the 375 type names defined in `Assembly-CSharp`.
-- **Starts after:** [`plans/debt-closure/phases/phase-3e-run-and-ledger.md`](../debt-closure/phases/phase-3e-run-and-ledger.md).
+- **Starts after:** `plans/debt-closure/phases/phase-3e-run-and-ledger.md` ([spec deleted 2026-08-26 — index](../debt-closure/phases/README.md)).
   Refactoring the client while a harness is comparing artifacts across runs is how a run difference
   becomes unattributable.
 
@@ -91,6 +91,7 @@ about layering.** A green `dotnet build` is the canonical false green on this tr
 | **C2** | [`phase-c2-net-input.md`](phases/phase-c2-net-input.md) | `Net/Input` behind one `ILocalInputEnvironment` binding for `LoadoutUi` / `OptionsUi` | M (3 d) |
 | **C3** | [`phase-c3-net-diagnostics.md`](phases/phase-c3-net-diagnostics.md) | The player-build exclusion gated. **Asmdef deferred into C4** — 8 of its 13 crossings are `Net/Client` types | S (1–2 d) |
 | **C4** | [`phase-c4-net-client.md`](phases/phase-c4-net-client.md) | `Net/Client` behind ~10 bindings; EditMode tests become possible. **Now also folds in `Net/Diagnostics`** — 5 bindings, not 13, once the Client assembly exists | L (multi-phase) |
+| **C5** | [`phase-c5-autoreferenced.md`](phases/phase-c5-autoreferenced.md) | `autoReferenced: false` on all three sealed assemblies, and `NetBindings` dies with it — the step the subsection below has been naming as *"one step, taken once, after C4"* | M (3 d) |
 
 > **The stated reason for this ordering did not survive C2, but the ordering still holds.**
 > `Net/Input` does not reference `FpsActorController` at all, so the two halves never shared it
@@ -117,8 +118,16 @@ deliberately.** Four files consume `Net/Input` types and none can add an explici
 requires inverting `FpsActorController`'s pull-model into a pushed control surface, which is a
 behaviour-shaped change and the thing C2's AC-6 forbids. **It is one step, taken once, after C4
 has landed** (C3 no longer produces an assembly, so it is no longer a precondition) — not a
-per-phase instruction. Whoever takes it kills `NetBindings` with it,
-per § 2.
+per-phase instruction. Whoever takes it kills `NetBindings` with it, per § 2.
+
+**C4 landed 2026-08-26, so the step is now a phase:** [`phase-c5-autoreferenced.md`](phases/phase-c5-autoreferenced.md).
+Two of the four consumers in the table above have already moved — `Net/Client` and `Net/Diagnostics`
+are sealed assemblies that *can* now add explicit references. What remains was enumerated rather
+than carried, and it found the trap this table would have walked into: **`Net/Input`'s files declare
+`namespace Ironfront.Net.Unity`, not `Ironfront.Net.Unity.Input`**, so a `using`-grep keyed to the
+assembly name returns **0** against five real consumers. Measured by TYPE instead — Input **5**
+(1 legacy: `FpsActorController`, 31 sites; 4 bindings), Client **8** (2 legacy: `DecalManager`,
+`MinimapUi`; 6 bindings), Diagnostics **2** (0 legacy). C5 § 1 carries the table.
 
 ## 6. Success criteria
 

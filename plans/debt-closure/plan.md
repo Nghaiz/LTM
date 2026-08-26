@@ -78,21 +78,21 @@ is an owner, not the type.
 
 | Phase | File | Goal | Effort |
 |---|---|---|---|
-| 0 | [`phase-0-ledger.md`](phases/phase-0-ledger.md) | One evidence-backed ledger replaces five sources of truth | S (1d) |
-| 1 | [`phase-1-authoring.md`](phases/phase-1-authoring.md) | Group A authored **and** pinned by gates that can fail | M (3d) |
-| 2 | [`phase-2-code.md`](phases/phase-2-code.md) | Four product items, ledger cleanups, cutover prepared | L (1wk) |
-| 3 | [`phase-3-harness.md`](phases/phase-3-harness.md) | Two-process harness + scripted rendered clients | L (1.5wk) |
-| 3A | [`phase-3a-player-slots.md`](phases/phase-3a-player-slots.md) | The server admits `MaxConnections` players, not one | M (3d) |
-| 3B | [`phase-3b-handshake-residual.md`](phases/phase-3b-handshake-residual.md) | Account for `BadSignature`, correct #151 and the proof report | S (1d) |
-| 3C | [`phase-3c-client-input.md`](phases/phase-3c-client-input.md) | Fire / Aim / Reload and `C_ACK_BASELINE` reach the wire (**X-3**) | M (3d) |
-| 3D | [`phase-3d-lane-b.md`](phases/phase-3d-lane-b.md) | Lane B — two scripted rendered clients, an artifact per checkpoint | L (1wk) |
-| 3E | [`phase-3e-run-and-ledger.md`](phases/phase-3e-run-and-ledger.md) | Thirteen verdicts, and the ledger rows #150/#152 left standing | M (3d) |
-| **3F** | [`phase-3f-x19-drawn-vs-held.md`](phases/phase-3f-x19-drawn-vs-held.md) | **X-19 — the client draws a body 0.332 m below the one the server holds, and every shot passes over. Blocks 16 of the 28 open rows** | S–M (1–2d) |
-| 4 | [`phase-4-measure.md`](phases/phase-4-measure.md) | Bandwidth, tick p99, per-weapon release delay verified | M (3d) |
-| 5 | [`phase-5-cutover-gate.md`](phases/phase-5-cutover-gate.md) | `AuthoritativeFlight` on with proof, or off with a reason | S (1d) |
-| **6** | [`phase-6-rows-no-run-closes.md`](phases/phase-6-rows-no-run-closes.md) | The five rows no acceptance run can close — D-1, E-6, X-6, X-7, X-8 — plus group A's residue | M (3d) |
-| **7** | [`phase-7-ops-to-digest.md`](phases/phase-7-ops-to-digest.md) | The server shipped as far as a digest; E-3 corrected; three dead limits retired from the docs | S (1d) |
-| **8** | [`phase-8-hygiene.md`](phases/phase-8-hygiene.md) | Nine stale branches, one of them an unmerged PR; a roll-up recomputed rather than decremented | XS |
+| 0 | `phase-0-ledger.md` ([index](phases/README.md)) | One evidence-backed ledger replaces five sources of truth | S (1d) |
+| 1 | `phase-1-authoring.md` ([index](phases/README.md)) | Group A authored **and** pinned by gates that can fail | M (3d) |
+| 2 | `phase-2-code.md` ([index](phases/README.md)) | Four product items, ledger cleanups, cutover prepared | L (1wk) |
+| 3 | `phase-3-harness.md` ([index](phases/README.md)) | Two-process harness + scripted rendered clients | L (1.5wk) |
+| 3A | `phase-3a-player-slots.md` ([index](phases/README.md)) | The server admits `MaxConnections` players, not one | M (3d) |
+| 3B | `phase-3b-handshake-residual.md` ([index](phases/README.md)) | Account for `BadSignature`, correct #151 and the proof report | S (1d) |
+| 3C | `phase-3c-client-input.md` ([index](phases/README.md)) | Fire / Aim / Reload and `C_ACK_BASELINE` reach the wire (**X-3**) | M (3d) |
+| 3D | `phase-3d-lane-b.md` ([index](phases/README.md)) | Lane B — two scripted rendered clients, an artifact per checkpoint | L (1wk) |
+| 3E | `phase-3e-run-and-ledger.md` ([index](phases/README.md)) | Thirteen verdicts, and the ledger rows #150/#152 left standing | M (3d) |
+| **3F** | `phase-3f-x19-drawn-vs-held.md` ([index](phases/README.md)) | **X-19 — the client draws a body 0.332 m below the one the server holds, and every shot passes over. Blocks 16 of the 28 open rows** | S–M (1–2d) |
+| 4 | `phase-4-measure.md` ([index](phases/README.md)) | Bandwidth, tick p99, per-weapon release delay verified | M (3d) |
+| 5 | `phase-5-cutover-gate.md` ([index](phases/README.md)) | `AuthoritativeFlight` on with proof, or off with a reason | S (1d) |
+| **6** | `phase-6-rows-no-run-closes.md` ([index](phases/README.md)) | The five rows no acceptance run can close — D-1, E-6, X-6, X-7, X-8 — plus group A's residue | M (3d) |
+| **7** | `phase-7-ops-to-digest.md` ([index](phases/README.md)) | The server shipped as far as a digest; E-3 corrected; three dead limits retired from the docs | S (1d) |
+| **8** | `phase-8-hygiene.md` ([index](phases/README.md)) | Nine stale branches, one of them an unmerged PR; a roll-up recomputed rather than decremented | XS |
 
 **Phase 3 is split.** Tasks 3.1/3.2 landed in #150/#152; acceptance criterion 1 stayed red on a
 defect that was never a handshake defect. 3A–3E carry the phase to its acceptance criteria —
@@ -105,86 +105,43 @@ or the authoring targets fields the refactor is about to move.
 
 **Total: ~4 weeks.**
 
-### 4a. Where the track actually stands — 2026-08-25
+### 4a. Where the track stands — CLOSED 2026-08-26
 
-Phases 0, 1, 2, 3A, 3B, 3C and **3F** are merged. 3F closed **X-19** (#173): the client was moving a
-body with its CharacterController disabled — no sweep, no floor, no collision flags — and drawing it
-0.332 m below the one the server held, so every shot passed over. **Shots now enter hitboxes for the
-first time** (`occluded=20` of `resolved=30`, against `occluded=0` across 260 pre-fix shots).
+**All nine phases are merged.** 0, 1, 2, 3A, 3B, 3C, 3D, 3E, 3F, 4, 5, 6, 7 and 8, in that order of
+landing. Every acceptance criterion is graded in its own report, and the three that were not met say
+so there rather than here:
 
-**They still do not damage, and 3D still cannot return a verdict.** X-19's fix surfaced two rows that
-inherit its blocking role, and the same **sixteen** group-B assertions (B-1…B-11, B-13…B-17) are shut
-behind them for two independent reasons:
+| Phase | Criteria | Not met, and why |
+|---|---|---|
+| **3E** | 6 | AC-1 **PARTIAL** — 11 of 13 checks have an artifact; checks 6 and 10 have none because no programme provokes the case (**X-37**) and nothing samples an allocator (**X-33**). AC-6 **PARTIAL** — one flake rate over a controlled run set, and no rate quoted where there is no repeat sample |
+| **4** | 6 | AC-1 **PARTIAL** — 3 of 5 rows measured, two unrunnable on this tree. AC-3 **FAILED on the day** and **discharged 2026-08-26 by phase 6 task 6.1**; the failure line is left standing and the discharge recorded beneath it |
+| **8** | 4 | All four met. Its finding 6 — 35 rows owned by phases that had finished — was reported and deliberately not acted on, because re-owning a row is a plan's job |
 
-| row | state |
-|---|---|
-| **X-20** | **CLOSED 2026-08-25** — by the run, and it answered neither reading. `artifacts/lane-b/x20-occlusion-01`, pinned to slot 0: 240 trigger frames, every one `occlusionHit[none-this-shot]`, `occluded=0 resolved=6 hits=0`, victim on 100 health. There was no occlusion to name. The collider-name discriminator decides nothing because the linecast rejected nothing — and this does not settle the baseline either, which held at 10.1 m unpinned against this run's 4.7 m pinned. Different geometry, question retired. What it uncovered is **X-24** (a 3 cm seam between torso/arms at 1.550 and head at 1.580, where a ray hits nothing) and **X-25** (the harness aims at feet + `EYE_HEIGHT`, 0.02 m inside the head box's edge, so it meets that seam every time). `reports/2026-08-25-x20-the-linecast-blocked-nothing.txt` |
-| **X-25** | **OPEN, and now the only thing between here and 3D.** It replaces X-20 in that position and is the same shape: a harness change, not an investigation. `ScriptedTargetSolver` raises BOTH endpoints by `EYE_HEIGHT` 1.6 — correct in intent, since aiming at the target's origin from 1.6 m up is a shot into the feet, but feet + 1.6 is not centre of mass. Aim at the torso centre (feet + 1.20, nearest edge 0.35 m away) and the margin stops being two centimetres. Until then no lane-B combat run can score a hit, and 3D cannot grade check 1 or 13 |
-| **X-24** | **OPEN, routed to phase 6, and deliberately NOT a blocker for 3D.** The seam is a game defect and outlives the harness fix — X-25 stops the harness aiming into it, which is exactly why X-24 must keep its own row rather than disappear when the runs go green. It owes a measurement before a fix: `LagCompensator.Resolve` already loops all four boxes, so record the nearest box and its signed miss distance on a miss |
-| **X-22** | **CLOSED 2026-08-25.** Spawn pairing was a coin flip: four post-fix runs opened at 1,078 m, 940 m, ~940 m and adjacent. The seed was never the missing piece — `LaneBHarness` has always called `Random.InitState`, and a seed pins the draw *sequence* while three clients join over a socket at times nobody controls. `PinnedSpawnPointDirectory` narrows the server's directory to one slot instead, so reservoir sampling has nothing to sample between. `-SpawnIndex 0..5` on `run-lane-b.ps1` |
+**The residue is real and it now has a plan.** Thirty-one rows are open. Three of the thirty-four
+phase 8 counted closed on 2026-08-26 with no new engineering (**X-25**, **X-27**, **E-11b** — the
+work was on disk, only the ledger cell lagged), and the remaining twenty-eight are owned by
+[`plans/verdict-closure/plan.md`](../verdict-closure/plan.md) R1–R6 plus
+[`plans/asmdef-seam/phases/phase-c5-autoreferenced.md`](../asmdef-seam/phases/phase-c5-autoreferenced.md).
 
-So the arrow that read `3F ──▶ 3D`, then `X-20 + X-22 ──▶ 3D`, then `X-20 ──▶ 3D`, now reads
-`X-25 ──▶ 3D`. The arrow has not shortened — X-20 closed and handed its position to the defect it
-was hiding. Nothing else about the ordering moved.
+**Read the ledger, not this section.** [`debt-ledger.md`](debt-ledger.md) § 8 is computed by
+`tools/recount_debt_ledger.py` and `--check` fails the moment it drifts; this paragraph is prose and
+has no such guard. The ledger stays the single source of truth and is **not** forked by the
+successor track (V-D1).
 
-```
-X-25 ──▶ 3D (re-run, 11 verdicts) ──▶ 3E ──▶ 4 ──▶ 5
-                                      │              ▲
-                                      └──▶ asmdef    │  X-6 (task 6.3)
-                                           track     │  gates this arrow
-6 ────────────────────────────────────────────────────┘
-7 ─── independent of everything, in both directions
-8 ─── independent
-```
+**`develop` is green.** At `b23aa28`: `dotnet test` **1,782 / 0 / 0** across seven projects
+(Protocol 259, Replication 1,172, Transport 89, MasterServer 84, Client.Flow 79, Client.Input 39,
+Configuration 60), `SpecChecker` 0, `ClientWiringGate` 0.
 
-**Open rows: 31** — counted from the ledger table, not decremented from a previous total. It was 28
-on 2026-08-23; X-19 closed, X-20, X-21 and X-22 opened in its wake — the expected shape when a fix
-removes the thing that was masking what sat behind it — and **X-23** was both filed and closed on
-2026-08-25.
+**Require-status-check is ON**, contrary to what this section said on 2026-08-25. Verified against
+the API rather than the doc: ruleset `protect-shared-branches` (id 21395850) covers
+`refs/heads/main` and `refs/heads/develop` with `deletion`, `non_fast_forward` and
+`required_status_checks` — contexts `build-test (ubuntu-latest)`, `build-test (windows-latest)`,
+`analyze (csharp)`. The eleven-merge red streak that X-23 recorded now has something standing in its
+way.
 
-**`develop` is green again.** X-23 was the eleven-run red streak: G4 scopes by file, and the flagged
-read was on `Update()` rather than on the per-actor path that put the file in scope. It closed as one
-entry in the exemption array that already existed for that shape, plus the companion no exemption had
-before — six entries now re-checked by identity, mutation-proved with five mutants including one that
-removes the new entry and watches the gate return to exit 1. All three gates are green at
-`fefc901`+: `ClientWiringGate` 0, `SpecChecker` 0, `dotnet test` **1,703 / 0 / 0**.
-
-One thing did not change with it: **require-status-check is still off**, and it is now off for no
-reason — `docs/branch-protection.md` withheld it because `build-test` was red, and it no longer is.
-Until it goes on, the next eleven-merge streak has nothing standing in its way. **X-21** (the reconciler replays inputs
-without ever moving the predicted position) is quiet rather than gone — X-19's fix dropped
-`corrections` 2208 → 0 by removing what was being corrected, so it resurfaces the moment prediction
-has real work to do. It is filed to phase 6.
-
-`dotnet test` at this commit: **1,700 passed, 0 failed, 0 skipped** across seven projects
-(Protocol 259, Replication 1,119, Transport 89, MasterServer 81, Client.Flow 79, Client.Input 39,
-Configuration 34). That is success criterion 7 at the current boundary; it says nothing about the
-Unity assemblies, which no `dotnet` target references.
-
-Three orderings, and nothing else is ordered:
-
-1. **X-25 before 3D.** 3D cannot return a verdict on a run where no shot damages, and after
-   2026-08-25 the reason it does not is X-25 rather than X-20. This replaces "X-20 before 3D",
-   which replaced "X-20 and X-22 before 3D", which replaced "3F before 3D". **X-25 is a harness
-   change, not an investigation** — aim at the torso centre instead of eye height — so the shape of
-   the remaining work is unchanged: one edit, then the pinned run is 3D's own re-run.
-
-   **A correction to what that re-run can deliver, found while running it.** "3D's 11 verdicts"
-   does not follow from one `-Set combat` run. `tools/lane-b/` holds `combat-*` and `smoke` and
-   nothing else, and the combat programmes have no grenade step and no vehicle step, so checks 4
-   (grenade parity), 7 (vehicle seen by two while a third drives, at 100 ms RTT / 5% loss),
-   9 (kinematic remote cosmetics) and 12 (turret parity) are not exercised by it at all — check 7
-   also needs `-Sim typical`, which the combat run does not pass. What a combat run can grade is
-   the subset the recorder captures: checks 1, 2, 3, 5, 6 and 13. **A vehicle programme set does
-   not exist yet and is unbuilt work**, and AC-2 grades all eleven, so it belongs in 3D's scope
-   rather than being discovered again at verdict time.
-2. **Phase 6 task 6.3 (X-6) before Phase 5.** The cutover's proof rests on the `ownsHealth` guard,
-   which has no pin today.
-3. **[`plans/asmdef-seam/plan.md`](../asmdef-seam/plan.md) after 3E.** Refactoring the client while a
-   harness compares artifacts across runs makes a run difference unattributable.
-
-Phases 6, 7 and 8 are parallel from now. [`plans/consolidation/plan.md`](../consolidation/plan.md) is
-the source for 6's scope (§ 4) and 7's path (§§ 5–6).
+**Phase files deleted 2026-08-26.** The nine phase specs were executed and their reports are the
+durable record; see [`phases/README.md`](phases/README.md) for the index and the commit each file
+was last present at.
 
 ### 4b. Deployment — where it is, and what is waiting on a person
 
