@@ -100,10 +100,21 @@ the number in it did not. It splits **by binding cluster**, never by file count:
 |---|---|---|---|
 | **C4a** | Actor / presence | `FpsActorController` 16×, `Actor` 7×, `Weapon` 4×, `IngameUi` 1× | **done 2026-08-26** |
 | **C4b** | Vehicle, projectile, decal, objective | `Vehicle` 13×, `ScoreUi` 8×, `Projectile` 5×, `VehicleSpawner` 2×, `DecalManager` 2×, `GrenadeProjectile` 1×, `ProjectileCatalogBuilder` 1× | **done 2026-08-26** |
-| **C4c** | The seal | the two asmdefs, the tests, the gate rewrite | **next, and unblocked** |
+| **C4c** | The Client seal | `Ironfront.Net.Unity.Client`, the EditMode suite, the gate rewrite | **done 2026-08-26** |
+| **C4d** | The Diagnostics seal | `Ironfront.Net.Unity.Diagnostics`, its 4 bindings, the exclusion-gate fold | last |
 
-**The split is three, not the four the row above originally implied, because the measurement
-halved the phase.** § 2's rule is *by binding cluster, never by file count*, and its stated reason
+**The split is four, and it grew from three during C4c — stated here rather than quietly.** The
+original three assumed C4c would seal `Net/Client` and `Net/Diagnostics` together, on § 0's
+reasoning that "the two assemblies land together or the first pays for interfaces the second
+deletes". That reasoning was about sealing Diagnostics *before* Client, and it no longer binds once
+Client is sealed: Diagnostics may simply reference the Client assembly. What forced the split is
+that the two folders need *differently shaped* seams — Client's are push-shaped (fell this body,
+show this hitmarker) while Diagnostics is a read-shaped observer serialising HUD labels and
+capture-point owners into JSON. Landing them together would have produced exactly the
+unreviewable diff § 2 exists to prevent. The one thing that genuinely coupled them —
+`NetClientVehicle` being `internal` — was resolved without widening anything; see § 3.3.
+
+**The earlier reduction from four to three stands**, because the measurement halved the phase. § 2's rule is *by binding cluster, never by file count*, and its stated reason
 is reviewability — "ten bindings against three types referenced 123 times is not one diff anybody
 can review". The real figure is ten bindings over **61** references, and C4b's four clusters are
 one or two files each (`NetClientVehicle` + `RemoteVehicleRegistry`, `NetClientProjectilePresenter`,
@@ -219,6 +230,55 @@ not see uses of a legacy-typed **field** — `_vehicle.MaxHealth`, `_vehicle.Set
 surfaced only when the Unity compile went red. **The enumeration sizes a cluster; only the compiler
 finishes it.** RULE 6 has the same blind spot by construction and is not a substitute for the
 compile.
+
+## 3.3 C4c — done 2026-08-26
+
+`Assets/Scripts/Net/Client` is **`Ironfront.Net.Unity.Client`**, referencing
+`Ironfront.Net.Unity.Shared` and `Ironfront.Net.Unity.Input` and — read off the runtime assembly
+manifest rather than off the asmdef file — **not `Assembly-CSharp`**. AC-1 met.
+
+**AC-3 met, and by a test that names why it could not have been written before.**
+`Assets/Tests/EditMode/Client/` carries `Ironfront.Net.Unity.Client.Tests`, six tests, all green,
+alongside the 76 pre-existing server tests (82 total). The load-bearing one is
+`IsLocalActor_IsDecidedByRoleAndRig`: its subject used to take an `Actor` — a `MonoBehaviour`
+whose `aiControlled` flag needed a real component and whose "is this the local rig" half reached
+`FpsActorController.instance`, a scene singleton no test can install. **It was C4a's seam that made
+it answerable, not the asmdef**, and the test's own doc says so, so nobody later mistakes it for an
+"the asmdef landed" test. Mutation-tested: reintroducing finding A16 in the guard turns it RED with
+the message "A REMOTE HUMAN IS NOT THE LOCAL PLAYER".
+
+**Sealing did not widen `NetClientVehicle`, and that was the interesting decision.** The lane-B
+recorder reached three internals — `TryFind`, `NetClientVehicle.Body`, `LiveIds` — plus
+`TryGetTurretPose`. The two obvious answers were both worse than the one taken: making
+`NetClientVehicle` public exports a collaborator of the vehicle stage as API, and
+`InternalsVisibleTo("Assembly-CSharp")` opens every internal to all four hundred legacy files,
+which is the opposite of a seam. Instead:
+
+- `RemoteVehicleRegistry.TryGetPose` — a new narrow public read handing back a position, a yaw and
+  a mode string. The recorder wanted a pose snapshot; it now gets one, and no object it could
+  drive.
+- `LiveIds` went public **and `IReadOnlyList<ushort>`**. It was already documented "do not mutate";
+  the type now says it. Strictly better than the `internal List` it replaces.
+- `TryGetTurretPose` went public — two floats out, no object.
+- `NetClientVehicle` and `ClientTurretDirectory` **stay internal**, with
+  `InternalsVisibleTo("Ironfront.Net.Unity.Client.Tests")` in a `Bindings/AssemblyInfo.cs` that
+  mirrors the server assembly's own.
+
+**`LiveIds` and `TryGetTurretPose` were, again, invisible to the enumeration** — the C4b caveat
+reproducing exactly. Only the compile found them.
+
+**The prefab was checked, not assumed.** `Assets/Prefab/Remote Actor Proxy.prefab` still records
+`m_EditorClassIdentifier: Assembly-CSharp::…RemoteActorView` and **Unity did not rewrite it** — the
+identifier is a fallback, and the script GUID is the primary key. Loading the prefab resolves
+`RemoteActorView` from `Ironfront.Net.Unity.Client` with **0 missing script slots**, so the stale
+string is inert. It will be rewritten the next time anything saves that prefab; that diff is
+expected and is not a regression.
+
+**RULE 6 changed job**, as its own header promised it would. It is now a 5a/5b-shaped seam
+assertion in three separate parts: **6a** the asmdef exists, **6b** no unlisted legacy name,
+**6c** no stale allow-list row. 6a is asserted directly rather than inferred, because **6b would
+stay green right through an asmdef deletion** — it matches names, and deleting an asmdef changes no
+name in any file. Mutation-tested: removing the asmdef fires 6a alone.
 
 ## 4. Acceptance criteria
 
