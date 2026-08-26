@@ -7,7 +7,7 @@ scratch** — no WebSocket, no Mirror/Netcode-for-GameObjects/Photon.
 - **Owner**: one developer, four subsystems
 - **Timeline**: 14 weeks (one-semester capstone)
 - **Target scale**: 16 real players + 32 AI bots per match
-- **Deployment**: LAN first, public VPS at M3
+- **Deployment**: LAN first, public VPS at M3 — **the public half is blocked**, and not by us: Fly carries no UDP over public IPv6, and the Azure VM waits on a person. [`../debt-closure/plan.md`](../debt-closure/plan.md) § 4b
 
 ---
 
@@ -21,7 +21,7 @@ scratch** — no WebSocket, no Mirror/Netcode-for-GameObjects/Photon.
 | 4 | [protocol-spec.md](protocol-spec.md) | **Know it by heart** | Week 1, and keep referring back |
 | 5 | [dependency-map.md](dependency-map.md) | Foundational | Week 1 — the ordering constraints are still real |
 | 6 | [conventions.md](conventions.md) | Foundational | Before the first commit |
-| 7 | `../<subsystem>/plan.md` | The track you are about to touch | Before every phase |
+| 7 | the track you are about to touch | [`../replication/plan.md`](../replication/plan.md) or [`../master-server/plan.md`](../master-server/plan.md) — the two that still exist. `transport` and `unity-client` are closed and carry a `README.md` instead | Before every phase |
 
 ---
 
@@ -88,36 +88,74 @@ how a criterion becomes debt nobody knows they have.
 
 ### M0 breakdown
 
-| Criterion | Owner | Status |
+| Criterion | Track | Status |
 |---|---|---|
-| Protocol spec v1.0 frozen | C (chair) | **Done** — [protocol-spec.md](protocol-spec.md) is at 1.0.0 FROZEN, with all 8 open questions recorded in [§ 15.1](protocol-spec.md#151-questions-settled-at-the-freeze) |
-| CI compiles all 3 projects | D | **Done** — `.github/workflows/ci.yml` green on Ubuntu and Windows: build (0 warnings), **297 tests**, spec-drift check |
-| Network simulator working | B | **Done** — `NetworkSimulator` + `SimulatorConfig` with lan/typical/bad profiles, covered by `NetworkSimulatorTests`. Shipped ahead of B's phase-00 Task 5 so A and C were never blocked on it |
-| Headless build runs | **A** | **Done 2026-08-21** — and it had been failing for a reason no one had looked for. `NetServerBootstrap` is a MonoBehaviour in a map scene and **nothing loaded one**: a `-batchmode` run walked Splash → Menu and stopped, with a clean start, a container `Up`, and **no UDP port**. Invisible because the only thing that ever loaded a map headlessly was `LaneBHarness`, which does it for itself — so every headless run was served by the thing being *tested* rather than the thing being *shipped*. Closed by `DedicatedServerSceneBootstrap` (`IRONFRONT_GAMESERVER_SCENE`, default `Dustbowl`) in `2b7ac41`; see [`consolidation/plan.md`](../consolidation/plan.md) § 2.2 (F2). The server image now ships as a GHCR digest |
+| Protocol spec v1.0 frozen | replication | **Done** — [protocol-spec.md](protocol-spec.md) is at 1.0.0 FROZEN, with all 8 open questions recorded in [§ 15.1](protocol-spec.md#151-questions-settled-at-the-freeze) |
+| CI compiles all 3 projects | master-server | **Done** — `.github/workflows/ci.yml` green on Ubuntu and Windows: build (0 warnings), **297 tests**, spec-drift check |
+| Network simulator working | transport | **Done** — `NetworkSimulator` + `SimulatorConfig` with lan/typical/bad profiles, covered by `NetworkSimulatorTests`. Shipped ahead of the transport track's phase-00 Task 5 so the client and replication tracks were never blocked on it |
+| Headless build runs | unity-client | **Done 2026-08-21** — and it had been failing for a reason no one had looked for. `NetServerBootstrap` is a MonoBehaviour in a map scene and **nothing loaded one**: a `-batchmode` run walked Splash → Menu and stopped, with a clean start, a container `Up`, and **no UDP port**. Invisible because the only thing that ever loaded a map headlessly was `LaneBHarness`, which does it for itself — so every headless run was served by the thing being *tested* rather than the thing being *shipped*. Closed by `DedicatedServerSceneBootstrap` (`IRONFRONT_GAMESERVER_SCENE`, default `Dustbowl`) in `2b7ac41`; see [`consolidation/plan.md`](../consolidation/plan.md) § 2.2 (F2). The server image now ships as a GHCR digest |
 
 Also already delivered, ahead of their phases: `Ironfront.Net.Protocol` (the shared SSOT, 160
 conformance tests), the four project skeletons, `tools/build-libs.ps1`, `tools/ci.ps1` and
-`tools/SpecChecker`. See each dev's `plan.md` for what that removes from their phase-00.
+`tools/SpecChecker`. ~~See each dev's `plan.md` for what that removes from their phase-00.~~ Those
+phase-00 specs are all deleted now; what the shared deliverables removed is recorded in the phase
+reports that closed them.
 
 ---
 
 ## Working rhythm
 
-- **Daily async** (5 minutes, written): what I did yesterday / what I'm doing today / what I'm stuck on.
-- **Weekly sync** (60 minutes, Saturday): demo something that runs, update the milestone table, write the weekly report.
-- **Integration day**: every Wednesday, all 4 merge into `develop` and run a 2-client smoke test.
-- **Reports**: each person writes into their own `reports/` after every phase, following `reports/_TEMPLATE.md`.
+~~Daily async · weekly sync (Saturday) · integration day (Wednesday, all 4 merge into `develop`).~~
+**All three were four-person ceremonies and died with the four people** (`899e75d`, #120). They are
+struck rather than deleted because their *purpose* did not die, and it is worth naming what took it
+over: a standup surfaces what is stuck, a weekly sync updates this table, and an integration day
+catches what the merges broke. With one owner, none of that can be a meeting — so each is now a
+mechanism that runs whether or not anyone remembers it.
+
+| Was | Is |
+|---|---|
+| Daily async — *"what I'm stuck on"* | The **ledger**. [`../debt-closure/debt-ledger.md`](../debt-closure/debt-ledger.md) is what is stuck, per row, with `file:line` evidence and an owning phase. `python tools/recount_debt_ledger.py --check` fails the moment its roll-up drifts from its rows |
+| Weekly sync — *"update the milestone table"* | The table above, updated in the commit that moves a milestone rather than on a day of the week. Its **Graded by** column names what would have to go green, so the status is derivable rather than declared |
+| Integration day — *"all 4 merge, run a 2-client smoke test"* | **Required status checks** on `develop` (`build-test` ×2 + `analyze`), plus the three gates every phase runs: `SpecChecker`, `ClientWiringGate`, `check-net-layering.ps1`. The 2-client smoke test became the lane-B harness — `pwsh tools/run-lane-b.ps1 -Smoke` |
+| Reports after every phase | **Unchanged, and the one rhythm that still needs a human to keep.** `reports/_TEMPLATE.md` still sits in all four tracks. It is also the one that has slipped: phase 6 shipped no `.md` report, so its five task records live only in commit `fa275d5`'s body |
+
+**Nothing here is a schedule.** The failure mode a rhythm guards against — work that silently stops
+being tracked — is now guarded by scripts that fail a build, which is the only form of discipline a
+single-owner project reliably keeps.
 
 ---
 
-## Golden rules for staying out of each other's way
+## Golden rules
 
-1. **Only A opens the Unity Editor** and edits scenes/prefabs/`.meta` files. B, C and D write pure
-   C# in Rider/VS and never open the Editor. Reason: merge conflicts in Unity scene/prefab files
-   are effectively unresolvable by hand.
-2. **Nobody edits `protocol-spec.md` alone.** Every protocol change goes through a PR with 2
-   approvals, and bumps the version. See [conventions.md § Protocol changes](conventions.md).
+Written as *"for staying out of each other's way"*, when there was a way to be in. **All three named
+a person and none of them can now** — but each was protecting something real, and dropping the rule
+would drop the protection with it. Rewritten against the mechanism instead of the person.
+
+1. ~~**Only A opens the Unity Editor.** B, C and D write pure C# and never open the Editor.~~
+   **The reason outlived the roles, and it is the half worth keeping:** *merge conflicts in Unity
+   scene/prefab files are effectively unresolvable by hand.* So is a hand-written prefab edit.
+   **Author prefabs and scenes through the Editor — over MCP, not by editing YAML** —
+   `PrefabUtility.LoadPrefabContents` / `SaveAsPrefabAsset`. The trap is `fileID`s: an assignment
+   typed by hand can name a non-existent object, or an object of the wrong type, and Unity loads
+   **both** as `null` while the YAML reads correct. Ledger rows **A-9** and **A-6** were authored
+   this way for exactly that reason. **And authoring through the Editor is not by itself the
+   safeguard** — A-9's detector grew from one clause to four after three mutations each reported
+   `clean, exit 0` on an authoring it was written to forbid, and one of the three (a field aimed at
+   an object of the *wrong type*, which Unity loads as `null`) **cannot be produced by drag-and-drop
+   at all — only by a programmatic pass**, which is exactly how that row was closed. The rule is
+   author-through-the-Editor **and** pin it with a detector you have watched fail.
+2. ~~**Nobody edits `protocol-spec.md` alone** — every change goes through a PR with 2 approvals.~~
+   **The approval half is unenforceable and unenforced:** the `protect-shared-branches` ruleset
+   carries `deletion`, `non_fast_forward` and `required_status_checks` and **no `pull_request` rule
+   at all**, so zero approvals are required — and one owner cannot produce two. **The substance is
+   machine-enforced instead**, and more tightly than a reviewer would: spec, `ProtocolConstants.cs`
+   and a conformance test move **in one commit or not at all**, the version bumps and is recorded in
+   § 15, and `tools/SpecChecker` fails the build when the constants and the spec disagree — 90 of
+   them, on every run. See [conventions.md § Protocol changes](conventions.md).
 3. ~~**Everyone commits only files inside their own ownership area** (the ownership table in each
    `plan.md`).~~ **Dead since `899e75d` (#120) — single owner, no ownership tables.** The two
    `plan.md` files that carried them are deleted; the surviving constraint is a compile-time one
    rather than a social one, enforced by `tools/check-net-layering.ps1` and the asmdef seam.
+
+**A person-shaped rule is not the same as no rule.** Each of the three was load-bearing; each is now
+a gate that fails a build rather than a habit somebody has to remember.
