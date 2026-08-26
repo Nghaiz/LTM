@@ -120,10 +120,20 @@ namespace Ironfront.Tools.ClientWiringGate
                 Console.Out,
                 Console.Error);
 
+            // G10 scans the SHIPPED CLIENT only -- DefaultRoots, not WriterCallerRoots. The
+            // Editor verification harness and the load harness both send client messages, and
+            // counting either would mark an opcode covered by something no player runs. That is
+            // the X-10 lesson in gate form.
+            int senders = ClientSenderCoverageRunner.Run(
+                ClientSenderCoverageRunner.ClientMessageNames(),
+                files,
+                Console.Out,
+                Console.Error);
+
             // Every half always runs, and the worst code wins. Short-circuiting on the source
             // half would hide every authoring gap behind one dead event, and 2 outranks 1
             // because "could not tell" must never be reported as "found nothing".
-            return Math.Max(source, Math.Max(assets, writers));
+            return Math.Max(source, Math.Max(assets, Math.Max(writers, senders)));
         }
 
         /// <summary>
