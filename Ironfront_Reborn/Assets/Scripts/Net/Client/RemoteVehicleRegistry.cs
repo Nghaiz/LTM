@@ -240,7 +240,8 @@ namespace Ironfront.Net.Unity.Client
                 return;
             }
 
-            var bound = new NetClientVehicle(message.VehicleId, message.Kind, vehicle);
+            var bound = new NetClientVehicle(
+                message.VehicleId, message.Kind, vehicle, message.SeatCount);
 
             _live[message.VehicleId] = bound;
             _liveIds.Add(message.VehicleId);

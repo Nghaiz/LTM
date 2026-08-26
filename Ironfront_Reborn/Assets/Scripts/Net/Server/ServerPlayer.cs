@@ -51,22 +51,28 @@ namespace Ironfront.Net.Unity.Server
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <b>This is not the player's master-server username, and the difference is worth
-        /// stating rather than hiding.</b> The game server never parses a
-        /// <c>JoinTicket</c> — <c>OnClientConnected</c> receives a <c>ConnectionInfo</c> and
-        /// nothing else, and the ticket's <c>displayName</c> field is written by the master and
-        /// read by nobody on this side. So the only identity the server actually holds is the
-        /// transport's <c>PlayerId</c>, and that is what this is built from.
+        /// <b>This IS the master-server username now, when the ticket carried one</b>
+        /// (verdict-closure R2, ledger X-36). Phase 2 recorded the opposite here and its reason
+        /// was wrong in an instructive way: it held that plumbing the real name through needed a
+        /// new client-to-server message and therefore a <c>PROTOCOL_VERSION</c> move. It needed
+        /// neither. protocol-spec § 12 has carried <c>u8[16] displayNameUtf8</c> inside the
+        /// signed ticket since the freeze, <c>UdpTransportServer</c> was already verifying that
+        /// ticket and already parsing it to bind <c>PlayerId</c> — and discarding the name
+        /// field of the same parse with an <c>out string _</c>. The whole change was to stop
+        /// discarding it. Not one byte on the wire moved.
         /// </para>
         /// <para>
-        /// <b>Why phase 2 did not plumb the real name through.</b> Doing so needs a new
-        /// client-to-server message carrying the ticket, and acceptance criterion 2 forbids
-        /// moving <c>PROTOCOL_VERSION</c> — a new opcode is exactly that. Verifying the ticket
-        /// here would also need the master's shared secret on every game server, which is a
-        /// deployment decision and not a debt repayment. A killfeed that reads "#1042 killed
-        /// Player 3" is a worse name than the username and a strictly better one than a bare
-        /// actor id, which is what it rendered before; the wire, the writer, the router and the
-        /// table are all in place for the real name the moment a join handshake carries it.
+        /// <b>The fallbacks are still live and still correct.</b> A transport with no ticket to
+        /// read — the loopback, a lane-B harness client, a development stub whose name field is
+        /// zeroed — supplies no name, and <c>ServerTickLoop.DisplayNameFor</c> then falls to
+        /// <c>"#" + PlayerId</c> and finally to the actor id, exactly as it did before. So does
+        /// a name that sanitizes to nothing. That method owns the ordering and states why.
+        /// </para>
+        /// <para>
+        /// <b>Sanitized before it ever reaches this constructor.</b> The string arrives over a
+        /// socket and ends in a UI label, so <c>PlayerNameSanitizer</c> runs at the transport's
+        /// ingress. Nothing downstream — not this type, not <c>S_PLAYER_LIST</c> — repeats that
+        /// work, because two sanitizing sites is two places to drift.
         /// </para>
         /// </remarks>
         public string DisplayName { get; }

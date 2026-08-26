@@ -156,6 +156,27 @@ namespace Ironfront.Net.Unity.Diagnostics
         public bool respawn = false;
 
         /// <summary>
+        /// Ask to enter the nearest seat, or to leave the current one, once on entering this
+        /// step. An EDGE, not a hold.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This is what checks B-7 and B-13 were blocked on, and it is not <see cref="use"/>.</b>
+        /// A seat change is <c>C_SEAT_REQUEST</c>, a reliable message of its own; <c>use</c> is
+        /// bit 10 of <c>C_INPUT</c>, held for the step, and no server code reads it. A programme
+        /// could therefore describe a player pressing Use and could not describe one entering a
+        /// vehicle — which is why ledger X-30 reads as a client capability gap rather than as
+        /// programme work.
+        /// </para>
+        /// <para>
+        /// <b>Enter or leave is decided by the client, from the server's own last
+        /// <c>S_SEAT_CHANGE</c></b>, not by the programme. A step cannot say "enter" and be
+        /// wrong about whether this actor is already seated — see <c>ClientSeatRequester</c>.
+        /// </para>
+        /// </remarks>
+        public bool seatToggle = false;
+
+        /// <summary>
         /// Weapon slot to select, 0..3. Negative means "leave the weapon alone".
         /// </summary>
         /// <remarks>

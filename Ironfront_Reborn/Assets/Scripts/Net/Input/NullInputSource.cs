@@ -29,5 +29,7 @@ namespace Ironfront.Net.Unity
         public float HeliPitch => 0f;
 
         public bool RespawnPressed => false;
+
+        public bool SeatTogglePressed => false;
     }
 }

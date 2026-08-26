@@ -56,6 +56,32 @@ namespace Ironfront.Net.Transport
         public readonly uint PlayerId;
         public readonly TransportStats Stats;
 
+        /// <summary>
+        /// The name this peer joined under, already sanitized, or <see cref="string.Empty"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Read out of the signed join ticket and nowhere else</b> (protocol-spec § 12 has
+        /// carried <c>u8[16] displayNameUtf8</c> since the freeze). The transport already
+        /// verified the HMAC and already parsed the ticket to bind <see cref="PlayerId"/>; this
+        /// is the field beside it that the same parse used to discard with an <c>out string _</c>.
+        /// So a real name reaching the killfeed costs no new opcode, no layout change and no
+        /// <c>PROTOCOL_VERSION</c> move — ledger X-36 was filed believing it needed all three.
+        /// </para>
+        /// <para>
+        /// <b>Empty is the normal state on a transport with no ticket to read</b> — the loopback
+        /// has none, and a development stub may carry a ticket whose name field is all zeroes.
+        /// It is never null, so a consumer never has to guard, and the consumer that renders it
+        /// supplies its own fallback (<c>ServerTickLoop.DisplayNameFor</c>).
+        /// </para>
+        /// <para>
+        /// <b>Sanitized at the transport, not at the label</b>, because this is the ingress: the
+        /// bytes have crossed a socket by the time anything else sees them, and every later
+        /// reader would otherwise have to remember. See <see cref="Ironfront.Net.Protocol.PlayerNameSanitizer"/>.
+        /// </para>
+        /// </remarks>
+        public readonly string DisplayName;
+
         public ConnectionInfo(
             ushort connectionId, string remoteAddress, float smoothedRttMs, ConnectionState state)
             : this(connectionId, remoteAddress, smoothedRttMs, state, 0, default)
@@ -69,6 +95,18 @@ namespace Ironfront.Net.Transport
             ConnectionState state,
             uint playerId,
             TransportStats stats)
+            : this(connectionId, remoteAddress, smoothedRttMs, state, playerId, stats, string.Empty)
+        {
+        }
+
+        public ConnectionInfo(
+            ushort connectionId,
+            string remoteAddress,
+            float smoothedRttMs,
+            ConnectionState state,
+            uint playerId,
+            TransportStats stats,
+            string displayName)
         {
             ConnectionId  = connectionId;
             RemoteAddress = remoteAddress;
@@ -76,6 +114,7 @@ namespace Ironfront.Net.Transport
             State         = state;
             PlayerId      = playerId;
             Stats         = stats;
+            DisplayName   = displayName ?? string.Empty;
         }
     }
 

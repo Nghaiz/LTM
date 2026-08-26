@@ -332,9 +332,16 @@ namespace Ironfront.Net.Transport
             }
 
             // Bind the ticket's playerId, so one captured ticket cannot become many players.
+            //
+            // The display name comes out of the SAME parse, and until ledger X-36 it was
+            // discarded here with an `out string _` — which is the whole reason the killfeed
+            // rendered "#5001". It is safe to read now and only now: Verify ran above, so these
+            // bytes are the master's rather than the caller's. Sanitized on the spot because
+            // this is the ingress; every later reader would otherwise have to remember.
             if (!JoinTicket.TryReadFields(
                     response.JoinTicket,
-                    out uint playerId, out ushort _, out ushort _, out long _, out string _))
+                    out uint playerId, out ushort _, out ushort _, out long _,
+                    out string ticketDisplayName))
             {
                 SendDenied(remote, header.Sequence, ConnectDenyReason.InvalidTicket);
                 return;
@@ -367,6 +374,7 @@ namespace Ironfront.Net.Transport
                 pool: _peer!.Pool,
                 ackBitfieldEnabled: AckBitfieldEnabled);
             connection.PlayerId = playerId;
+            connection.DisplayName = PlayerNameSanitizer.Sanitize(ticketDisplayName);
             connection.AttachSender(SendRaw);
             connection.ActivateServer(connectionId, _nowMs);
             connection.MessageReceived += payload => OnMessage?.Invoke(connectionId, payload);
@@ -514,7 +522,8 @@ namespace Ironfront.Net.Transport
                 connection.SmoothedRttMs,
                 connection.State,
                 connection.PlayerId,
-                connection.Stats);
+                connection.Stats,
+                connection.DisplayName);
 
         private static EndPoint CloneEndpoint(EndPoint endpoint)
         {

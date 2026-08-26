@@ -148,5 +148,50 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(0, router.UnknownMessages);
             Assert.Equal(0, router.MalformedMessages);
         }
+
+        [Fact]
+        public void AHostileNameFromTheServerIsSanitizedBeforeItIsStored()
+        {
+            // THE CLIENT SANITIZES ITS OWN INGRESS, even though the server sanitized the ticket
+            // at the transport (ledger X-36). The server's pass protects the SERVER from the
+            // ticket; this one protects THIS client from the server, which it cannot verify --
+            // a modified or hostile game server can put any bytes it likes in S_PLAYER_LIST, and
+            // they land in a killfeed label with Unity rich text on.
+            //
+            // Every assertion below goes GREEN on a table that stores NameOf's output verbatim,
+            // which is what this test exists to reject.
+            var table = new PlayerNameTable();
+
+            table.Apply(
+                Buffer(
+                    Row(1, "<color=#00000000>"),
+                    Row(2, "Bob\nAdmin"),
+                    Row(3, "‮Bob")),
+                3);
+
+            Assert.DoesNotContain("<", table.NameOr(1, string.Empty));
+            Assert.DoesNotContain(">", table.NameOr(1, string.Empty));
+            Assert.DoesNotContain("\n", table.NameOr(2, string.Empty));
+            Assert.Equal("Bob", table.NameOf(3));
+        }
+
+        [Fact]
+        public void ANameThatSanitizesToNothingReadsAsUnnamedRatherThanBlank()
+        {
+            // Null, not "". Null is this table's existing word for "no broadcast has named this
+            // actor", so NameOr's fallback fires and the killfeed reads "actor 7" -- a row a
+            // reader can act on. Storing the empty string would render a blank feed line, which
+            // reads as a rendering fault and teaches nobody anything.
+            var table = new PlayerNameTable();
+
+            table.Apply(Buffer(Row(7, "‮​ ")), 1);
+
+            Assert.Null(table.NameOf(7));
+            Assert.Equal("actor 7", table.NameOr(7, "actor 7"));
+
+            // The row still counted: a player who chose an unrenderable name is present, and a
+            // count that disagreed with the broadcast would be a second bug on top of the first.
+            Assert.Equal(1, table.Count);
+        }
     }
 }

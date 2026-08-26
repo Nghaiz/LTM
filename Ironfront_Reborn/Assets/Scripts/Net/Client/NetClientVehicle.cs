@@ -56,10 +56,12 @@ namespace Ironfront.Net.Unity.Client
         private bool _hasPose;
         private float _lastCorrectionTime;
 
-        internal NetClientVehicle(ushort vehicleId, VehicleKind kind, IGameplayVehicleBody vehicle)
+        internal NetClientVehicle(
+            ushort vehicleId, VehicleKind kind, IGameplayVehicleBody vehicle, byte seatCount)
         {
             VehicleId = vehicleId;
             Kind      = kind;
+            SeatCount = seatCount;
             _vehicle  = vehicle;
             _rigidbody = vehicle != null ? vehicle.Rigidbody : null;
 
@@ -73,6 +75,25 @@ namespace Ironfront.Net.Unity.Client
         /// The physics family, from <c>S_VEHICLE_SPAWN</c>. Decides how the subtype tail reads.
         /// </summary>
         internal VehicleKind Kind { get; }
+
+        /// <summary>
+        /// How many seats this vehicle has, from <c>S_VEHICLE_SPAWN</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Kept so the client can bound a seat search</b> (ledger X-30). It was on the wire
+        /// from V3 and the client threw it away, which was fine while nothing could ask for a
+        /// seat; <c>ClientSeatRequester</c> needs an upper bound on the seat index it offers, or
+        /// it walks the whole 0..255 range against a server that answers
+        /// <c>RejectedNoSuchSeat</c> to every one of them.
+        /// </para>
+        /// <para>
+        /// <b>The server's copy is still the authority.</b> <c>SeatArbiter.Decide</c> re-checks
+        /// the index against its own <c>VehicleState.SeatCount</c>, so this being stale or wrong
+        /// costs a refusal rather than a seat nobody is entitled to.
+        /// </para>
+        /// </remarks>
+        internal byte SeatCount { get; }
 
         /// <summary>
         /// The scene object, behind the seam. Null on a record whose vehicle never resolved.

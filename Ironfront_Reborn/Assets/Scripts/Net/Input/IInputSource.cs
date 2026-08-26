@@ -124,5 +124,38 @@ namespace Ironfront.Net.Unity
         /// </para>
         /// </remarks>
         bool RespawnPressed { get; }
+
+        /// <summary>
+        /// Enter-or-leave-a-seat requested this frame. A rising edge, LOCAL ONLY -- it never
+        /// reaches the wire.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Not <see cref="Ironfront.Net.Protocol.InputButtons"/><c>.Use</c>, and that
+        /// difference is the whole reason this member exists.</b> <c>Use</c> is a LEVEL bit in
+        /// the <c>C_INPUT</c> word
+        /// (<c>InputButtonPacker</c> packs it; no server code reads it). Driving a seat request
+        /// off a level would send one reliable message per tick for as long as the key is held —
+        /// roughly thirty round trips for one press, every one of them arbitrated. An edge sends
+        /// one. This is the same argument <see cref="RespawnPressed"/> makes for
+        /// <c>C_SPAWN_REQUEST</c>, and it lands the same way: seat entry is
+        /// <c>C_SEAT_REQUEST</c>, its own reliable message on channel 2, not a bit in
+        /// <c>C_INPUT</c>.
+        /// </para>
+        /// <para>
+        /// <b>Enter and leave are the same edge.</b> Which one the press means is not the input
+        /// source's to decide — it depends on whether this client is seated, which only
+        /// <c>ClientSeatRequester</c> knows, from the server's own <c>S_SEAT_CHANGE</c>. A
+        /// source that tried to answer it would be making the local decision design D2 forbids.
+        /// </para>
+        /// <para>
+        /// <b>Why it exists at all (ledger X-30).</b> <c>SeatRequestMessage</c> had zero
+        /// production senders: the server routes it, <c>ServerSeatBridge</c> waits for it, and
+        /// no client could ask. A recorded lane-B programme could not express the intent either,
+        /// because a programme writes <c>InputButtons</c> and this is not one — which is why
+        /// checks B-7 and B-13 were blocked on a client capability rather than on programme work.
+        /// </para>
+        /// </remarks>
+        bool SeatTogglePressed { get; }
     }
 }

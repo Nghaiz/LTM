@@ -159,6 +159,7 @@ namespace Ironfront.Net.Unity.Client
             Router.OnSnapshotApplied += OnSnapshotApplied;
 
             EnsureVehicleStage();
+            EnsureSeatRequester();
             EnsureLocalCombatDriver();
 
             if (_connectOnStart) Connect();
@@ -431,6 +432,35 @@ namespace Ironfront.Net.Unity.Client
         {
             if (GetComponent<NetClientLocalCombatDriver>() == null)
                 gameObject.AddComponent<NetClientLocalCombatDriver>();
+        }
+
+        /// <summary>
+        /// Makes sure this client can ask for a seat. verdict-closure R2, ledger X-30.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Added in code for <see cref="EnsureVehicleStage"/>'s reason, and it must run AFTER it:
+        /// <c>ClientSeatRequester</c> declares <c>[RequireComponent(typeof(RemoteVehicleRegistry))]</c>
+        /// and reads <c>ClientVehicleStage</c> for the seat it currently occupies, both of which
+        /// that call has just guaranteed.
+        /// </para>
+        /// <para>
+        /// <b>This is what makes the sender WIRED rather than merely present.</b>
+        /// <c>ClientWiringGate</c>'s G10 grades whether a <c>ClientMessageType</c> has a
+        /// production sender in the shipped client's sources — it reads files, so a component
+        /// that existed and was authored onto no scene would retire the X-30 exemption on paper
+        /// while every player still stood outside the vehicle. An <c>AddComponent</c> here has no
+        /// scene to be missing from.
+        /// </para>
+        /// <para>
+        /// An authored instance wins, so a later scene pass can place it explicitly and this
+        /// becomes a no-op rather than a duplicate.
+        /// </para>
+        /// </remarks>
+        private void EnsureSeatRequester()
+        {
+            if (GetComponent<ClientSeatRequester>() == null)
+                gameObject.AddComponent<ClientSeatRequester>();
         }
 
         private void OnSpawnActor(SpawnActorMessage message)
