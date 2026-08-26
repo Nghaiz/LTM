@@ -80,6 +80,21 @@ namespace Ironfront.Tools.ClientWiringGate
 
             List<string> files = CSharpFilesUnder(repoRoot, DefaultRoots);
 
+            // G8 is an ABSENCE rule scoped to one file: it fires when Actor.Damage's ownsHealth
+            // guard is missing or inverted. An absence rule inside a per-file loop is silent when
+            // the file is never scanned, so a full-tree run that somehow missed Actor.cs would
+            // report G8 clean having graded nothing (ledger X-6). That is exit 2, not exit 0 -
+            // the gate could not tell, which is a different failure from the gate passing.
+            if (!files.Any(ClientWiringDetectors.IsHealthOwnershipScoped))
+            {
+                Console.Error.WriteLine(
+                    "[client-wiring] FAIL - a full-tree run discovered no file G8 grades, so "
+                    + "Actor.Damage's ownsHealth guard went unchecked. Either Actor.cs moved out "
+                    + "of the scanned roots, or it was renamed; re-point HealthOwnershipScope in "
+                    + "the same commit (ledger X-6).");
+                return 2;
+            }
+
             int source = GateRunner.Run(
                 GateRunner.RouterEventNames(), files, Console.Out, Console.Error);
 
