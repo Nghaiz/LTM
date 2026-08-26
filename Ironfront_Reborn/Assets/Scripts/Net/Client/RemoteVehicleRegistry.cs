@@ -56,11 +56,6 @@ namespace Ironfront.Net.Unity.Client
         private readonly Dictionary<GameObject, ushort> _byGameObject =
             new Dictionary<GameObject, ushort>(ProtocolConstants.MAX_VEHICLES);
 
-        private readonly Dictionary<byte, GameObject> _prefabsByNetworkId =
-            new Dictionary<byte, GameObject>(8);
-
-        private bool _scannedPrefabs;
-
         /// <summary>Vehicles currently replicated.</summary>
         public int LiveCount => _liveIds.Count;
 
@@ -149,7 +144,7 @@ namespace Ironfront.Net.Unity.Client
             for (int i = 0; i < _liveIds.Count; i++)
             {
                 if (_live.TryGetValue(_liveIds[i], out NetClientVehicle v) && v.Exists)
-                    Destroy(v.Vehicle.gameObject);
+                    Destroy(v.Body.GameObject);
             }
 
             _live.Clear();
@@ -182,7 +177,7 @@ namespace Ironfront.Net.Unity.Client
 
             GameObject spawned = Instantiate(prefab, position, new Quaternion(qx, qy, qz, qw));
 
-            Vehicle vehicle = spawned.GetComponent<Vehicle>();
+            IGameplayVehicleBody vehicle = NetClientBindings.ResolveVehicleBody(spawned);
             if (vehicle == null)
             {
                 // Cannot happen through ResolvePrefab, which only admits prefabs carrying one.
@@ -213,7 +208,7 @@ namespace Ironfront.Net.Unity.Client
             // Dropped BEFORE the GameObject is destroyed. A destroyed object is not a usable
             // dictionary key on Unity's Mono runtime, so a stale entry here would be one nothing
             // could ever remove -- ServerVehicleRegistry.Unregister scans for exactly that reason.
-            if (vehicle.Exists) _byGameObject.Remove(vehicle.Vehicle.gameObject);
+            if (vehicle.Exists) _byGameObject.Remove(vehicle.Body.GameObject);
 
             if (!vehicle.Exists) return;
 
@@ -223,51 +218,30 @@ namespace Ironfront.Net.Unity.Client
             {
                 // Give the body back to PhysX first, so the wreck falls apart instead of hanging
                 // in the air kinematic.
-                vehicle.Vehicle.SetNetworkDriven(false);
-                vehicle.Vehicle.Die();
+                vehicle.Body.SetNetworkDriven(false);
+                vehicle.Body.Die();
                 return;
             }
 
-            Destroy(vehicle.Vehicle.gameObject);
+            Destroy(vehicle.Body.GameObject);
         }
 
         /// <summary>
-        /// Finds the prefab for a <c>networkTypeId</c>, scanning the scene's spawners once.
+        /// Finds the prefab for a <c>networkTypeId</c>, through the scene directory.
         /// </summary>
         /// <remarks>
-        /// Scanned lazily rather than in <c>Awake</c>: the map scene may finish loading after
-        /// this component does, and a directory built too early would be empty for the whole
-        /// match with nothing to say why. Re-scanned only while a lookup misses, so the steady
-        /// state is a dictionary hit.
+        /// <b>The scan moved across the seam in phase C4b</b>, not because it was in the wrong
+        /// place but because performing it meant naming <c>VehicleSpawner</c> and
+        /// <c>Vehicle</c> — both <c>Assembly-CSharp</c> types this folder is being sealed away
+        /// from. Its lazy-and-re-scan-while-missing behaviour went with it intact; see
+        /// <c>IVehiclePrefabDirectory</c>.
         /// </remarks>
         private GameObject ResolvePrefab(byte networkTypeId)
         {
-            if (_prefabsByNetworkId.TryGetValue(networkTypeId, out GameObject cached)) return cached;
+            IVehiclePrefabDirectory directory = NetClientBindings.VehiclePrefabs;
+            if (directory == null) return null;
 
-            if (_scannedPrefabs && _prefabsByNetworkId.Count > 0) return null;
-
-            ScanPrefabs();
-
-            return _prefabsByNetworkId.TryGetValue(networkTypeId, out GameObject found) ? found : null;
-        }
-
-        private void ScanPrefabs()
-        {
-            _scannedPrefabs = true;
-
-            VehicleSpawner[] spawners = FindObjectsByType<VehicleSpawner>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None);
-
-            for (int i = 0; i < spawners.Length; i++)
-            {
-                GameObject prefab = spawners[i] != null ? spawners[i].prefab : null;
-                if (prefab == null) continue;
-
-                Vehicle vehicle = prefab.GetComponent<Vehicle>();
-                if (vehicle == null || vehicle.NetworkId == 0) continue;
-
-                _prefabsByNetworkId[vehicle.NetworkId] = prefab;
-            }
+            return directory.TryGetPrefab(networkTypeId, out GameObject prefab) ? prefab : null;
         }
     }
 }

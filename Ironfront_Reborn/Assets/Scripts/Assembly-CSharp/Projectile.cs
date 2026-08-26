@@ -2,7 +2,7 @@ using System;
 using Ironfront.Net.Unity;
 using UnityEngine;
 
-public class Projectile : MonoBehaviour
+public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.Client.IProjectileBody
 {
 	[Serializable]
 	public class Configuration

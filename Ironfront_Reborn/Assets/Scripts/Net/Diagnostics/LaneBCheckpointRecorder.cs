@@ -311,7 +311,7 @@ namespace Ironfront.Net.Unity.Diagnostics
                     if (registry.TryFind(id, out NetClientVehicle vehicle)
                         && vehicle != null && vehicle.Exists)
                     {
-                        Transform t = vehicle.Vehicle.transform;
+                        Transform t = vehicle.Body.Transform;
                         Vector3 p = t.position;
                         Num("x", p.x); Comma(); Num("y", p.y); Comma(); Num("z", p.z); Comma();
                         Num("yaw", t.eulerAngles.y); Comma();

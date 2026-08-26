@@ -1,7 +1,7 @@
 using Ironfront.Net.Unity;
 using UnityEngine;
 
-public class GrenadeProjectile : Projectile
+public partial class GrenadeProjectile : Projectile
 {
 	private const int LAYER_MASK = 4097;
 
