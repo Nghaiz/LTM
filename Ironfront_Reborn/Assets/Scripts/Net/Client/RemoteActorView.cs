@@ -32,8 +32,8 @@ namespace Ironfront.Net.Unity.Client
     /// </para>
     /// <para>
     /// <b>No allocation.</b> <see cref="Apply"/> runs per interpolated actor per frame. Animator
-    /// parameters are cached hashes, the weapon lookup is a bounded indexed scan, and nothing
-    /// here builds a string outside a once-only warning.
+    /// parameters are cached hashes, the weapon lookup is a bounded indexed scan on the far side
+    /// of the actor seam, and nothing here builds a string outside a once-only warning.
     /// </para>
     /// </remarks>
     [DisallowMultipleComponent]
@@ -42,8 +42,43 @@ namespace Ironfront.Net.Unity.Client
         [Tooltip("Drives stance, aim and death. Optional; without it the body holds one pose.")]
         [SerializeField] private Animator _animator;
 
+        /// <remarks>
+        /// <para>
+        /// <b>Typed <c>MonoBehaviour</c>, not <c>Actor</c>, and not <c>IGameplayActorPresence</c>
+        /// — this field is the reason phase C4a is not a two-line change.</b> Unity does not
+        /// serialise an interface-typed object reference at all, and <c>Actor</c> is a name this
+        /// assembly may no longer speak. <c>MonoBehaviour</c> is the widest type that is both
+        /// serialisable and legal here.
+        /// </para>
+        /// <para>
+        /// <b>The field NAME is deliberately unchanged, so no serialised data migrates.</b> Unity
+        /// keys an object reference on the field name and the target's file id rather than on the
+        /// declared type, so widening the type re-binds an existing reference silently and
+        /// correctly, while renaming would have dropped it. The resolved seam below is therefore
+        /// called <c>_presence</c>: this field keeps the name it was authored against and no
+        /// <c>FormerlySerializedAs</c> migration is in play at all.
+        /// </para>
+        /// <para>
+        /// <b>Checked rather than assumed, 2026-08-26:</b> exactly one asset in the tree carries
+        /// this component — <c>Assets/Prefab/Remote Actor Proxy.prefab</c> — and its link reads
+        /// <c>_actor: {fileID: 0}</c>. <em>Nothing is wired to this field anywhere</em>, so the
+        /// widening could not have broken an authored reference even had the name changed. That
+        /// also means the ragdoll and weapon-cosmetic paths below are degraded in the shipped
+        /// prefab today and announce themselves through the once-only warnings — client-track
+        /// item E1, unchanged by phase C4a and not its to close.
+        /// </para>
+        /// <para>
+        /// The cost is that the inspector will now accept any component. <see cref="Awake"/>
+        /// rejects one that is not an actor, once and loudly, rather than presenting as "remote
+        /// bodies never ragdoll".
+        /// </para>
+        /// </remarks>
         [Tooltip("The Actor this body belongs to, for the ragdoll and the weapon set. Optional.")]
-        [SerializeField] private Actor _actor;
+        [SerializeField] private MonoBehaviour _actor;
+
+        // Resolved once in Awake. Re-casting per frame would hide a mis-wired field behind a
+        // silent null instead of the one-time error below, and HasActor is on a per-frame path.
+        private IGameplayActorPresence _presence;
 
         [Tooltip("Where a muzzle flash and a tracer originate. Optional.")]
         [SerializeField] private Transform _muzzleAnchor;
@@ -71,7 +106,7 @@ namespace Ironfront.Net.Unity.Client
         private bool _hasState;
         private bool _ragdollApplied;
         private byte _appliedWeaponId = byte.MaxValue;
-        private Weapon _activeWeapon;
+        private IGameplayWeapon _activeWeapon;
 
         /// <summary>The network actor id this body is currently drawing.</summary>
         public ushort ActorId { get; private set; }
@@ -82,11 +117,8 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>Whether any snapshot has been applied since the last <see cref="Bind"/>.</summary>
         public bool HasState => _hasState;
 
-        /// <summary>The <c>Actor</c> this body belongs to, or null on a prefab without one.</summary>
-        public Actor Actor => _actor;
-
-        /// <summary>The weapon the replicated <c>WeaponId</c> selects, or null.</summary>
-        public Weapon ActiveWeapon => _activeWeapon;
+        /// <summary>Whether this body carries a live gameplay actor.</summary>
+        public bool HasActor => _presence != null && _presence.Exists;
 
         /// <summary>Replicated weapon id. Zero before the first snapshot.</summary>
         public byte WeaponId => _state.WeaponId;
@@ -98,11 +130,10 @@ namespace Ironfront.Net.Unity.Client
         public bool IsLocal => false;
 
         /// <summary>The rigidbody a death impulse is applied to, or null without a rig.</summary>
-        public Rigidbody MainRagdollBody
-            => _actor != null && _actor.ragdoll != null ? _actor.ragdoll.MainRigidbody() : null;
+        public Rigidbody MainRagdollBody => HasRagdollRig ? _presence.MainRagdollBody : null;
 
         /// <summary>Whether a death can produce a corpse on this prefab.</summary>
-        public bool HasRagdollRig => _actor != null && _actor.ragdoll != null;
+        public bool HasRagdollRig => HasActor && _presence.HasRagdollRig;
 
         /// <summary>
         /// Where a muzzle flash and a tracer start, dropped for stance so a crouched shooter's
@@ -126,6 +157,62 @@ namespace Ironfront.Net.Unity.Client
 
         /// <summary>Whether this body may play a cosmetic. A corpse fires nothing.</summary>
         public bool CanPlayCosmetics => _hasState && _state.CanPlayCosmetics;
+
+        /// <summary>
+        /// Resolves the serialised actor link to the seam this assembly speaks.
+        /// </summary>
+        /// <remarks>
+        /// An unset field is normal — the class remark says every piece is optional — so only a
+        /// field wired to a component that is <em>not</em> an actor is an error. That is a
+        /// mis-wire in an authored prefab, unreadable from source (client-track item E1), and
+        /// silently treating it as "no actor" would present as the exact bug phase V10 closed.
+        /// </remarks>
+        private void Awake()
+        {
+            if (_actor == null) return;
+
+            _presence = _actor as IGameplayActorPresence;
+            if (_presence != null) return;
+
+            Debug.LogError(
+                $"[net] {name}'s RemoteActorView has its actor link wired to a "
+                + $"{_actor.GetType().Name}, which is not a gameplay actor. This body will not "
+                + "ragdoll and will play no weapon cosmetics. Client-track item E1.",
+                this);
+        }
+
+        /// <summary>
+        /// Fells this body, landing the impulse on <paramref name="bone"/>.
+        /// </summary>
+        /// <remarks>
+        /// <b>The impulse goes through the actor, not around it.</b> <c>Actor.KnockOver</c> owns
+        /// the re-entrancy guard that lets the death message and the snapshot confirmation both
+        /// call it, so a presenter reaching for the rigidbody directly would be a second writer
+        /// for one event. Returns false when there is no rig to fell, which is the caller's cue
+        /// to degrade visibly rather than silently.
+        /// </remarks>
+        public bool TryFellBody(Vector3 force, HumanBodyBones bone)
+        {
+            if (!HasRagdollRig) return false;
+
+            _presence.KnockOver(force, bone);
+            return true;
+        }
+
+        /// <summary>
+        /// Plays one flash and one report on whatever this body is holding.
+        /// </summary>
+        /// <remarks>
+        /// The weapon itself does not cross the seam to the caller: a presenter holding an
+        /// <c>IGameplayWeapon</c> across frames would have to repeat this component's own
+        /// liveness check, and V10 D9 forbids it touching anything on a weapon but this.
+        /// </remarks>
+        public void PlayActiveWeaponFireCosmetics()
+        {
+            if (_activeWeapon == null || !_activeWeapon.Exists) return;
+
+            _activeWeapon.PlayFireCosmetics();
+        }
 
         /// <summary>
         /// Claims this body for an actor id. Called from the registry on spawn, before any
@@ -191,7 +278,7 @@ namespace Ironfront.Net.Unity.Client
             if (shouldRagdoll == _ragdollApplied) return;
             _ragdollApplied = shouldRagdoll;
 
-            if (_actor == null || _actor.ragdoll == null)
+            if (!HasRagdollRig)
             {
                 if (!shouldRagdoll) return;
 
@@ -204,13 +291,13 @@ namespace Ironfront.Net.Unity.Client
 
             if (shouldRagdoll)
             {
-                if (!_actor.ragdoll.IsRagdoll()) _actor.KnockOver(Vector3.zero);
+                if (!_presence.IsRagdollActive) _presence.KnockOver(Vector3.zero);
             }
-            else if (_actor.ragdoll.IsRagdoll())
+            else if (_presence.IsRagdollActive)
             {
                 // A respawn reuses the same body. Without this the snapshot says "alive" while
                 // the rig stays limp -- which reads exactly like the netcode dropped the respawn.
-                _actor.ragdoll.InstantAnimate();
+                _presence.RestoreFromRagdoll();
             }
         }
 
@@ -234,28 +321,28 @@ namespace Ironfront.Net.Unity.Client
             if (weaponId == _appliedWeaponId) return;
             _appliedWeaponId = weaponId;
 
-            if (_actor == null || _actor.weapons == null)
+            if (!HasActor)
             {
                 _activeWeapon = null;
                 return;
             }
 
-            // Indexed, not foreach, and bounded by the loadout size. An unknown id leaves the
-            // previous weapon in place rather than clearing it: a newer server sending a weapon
-            // this build does not know should cost the right model, never every cosmetic.
-            for (int i = 0; i < _actor.weapons.Length; i++)
+            // The bounded, allocation-free scan itself now lives on the far side of the seam --
+            // it reads the game's own loadout array and the game's own ids, so a copy of that
+            // shape here would be free to drift from whatever the loadout does next. An unknown
+            // id still leaves the previous weapon in place rather than clearing it: a newer
+            // server sending a weapon this build does not know should cost the right model,
+            // never every cosmetic.
+            if (_presence.TryGetWeaponByNetworkId(weaponId, out IGameplayWeapon resolved))
             {
-                Weapon candidate = _actor.weapons[i];
-                if (candidate == null || candidate.NetworkId != weaponId) continue;
-
-                _activeWeapon = candidate;
+                _activeWeapon = resolved;
                 return;
             }
 
-            if (_activeWeapon != null) return;
+            if (_activeWeapon != null && _activeWeapon.Exists) return;
 
-            _activeWeapon = _actor.activeWeapon;
-            if (_activeWeapon == null)
+            _activeWeapon = _presence.ActiveWeapon;
+            if (_activeWeapon == null || !_activeWeapon.Exists)
             {
                 NetClientPresenterGuard.WarnOnce(
                     "no-remote-weapon",

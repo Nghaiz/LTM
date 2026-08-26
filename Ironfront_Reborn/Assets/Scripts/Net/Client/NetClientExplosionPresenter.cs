@@ -235,20 +235,20 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         private void ApplyScreenshake(Vector3 position, float radiusMetres)
         {
-            FpsActorController local = FpsActorController.instance;
-            if (local == null || local.fpParent == null) return;
+            ILocalPlayerRig local = NetClientBindings.LocalPlayer;
+            if (!local.CanApplyScreenshake) return;
 
             float audible = radiusMetres * _shakeRadiusMultiplier;
             if (audible <= 0f) return;
 
-            float distance = Vector3.Distance(local.transform.position, position);
+            float distance = Vector3.Distance(local.Position, position);
             if (distance >= audible) return;
 
             float falloff = 1f - distance / audible;
             float magnitude = radiusMetres * _shakeMagnitudePerMetre * falloff;
             if (magnitude <= 0f) return;
 
-            local.fpParent.ApplyScreenshake(magnitude, _shakeIterations);
+            local.ApplyScreenshake(magnitude, _shakeIterations);
         }
     }
 }

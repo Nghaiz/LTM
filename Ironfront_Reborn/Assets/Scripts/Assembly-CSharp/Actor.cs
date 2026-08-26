@@ -2,7 +2,7 @@ using System;
 using Ironfront.Net.Replication.Vehicles;
 using UnityEngine;
 
-public class Actor : Hurtable
+public partial class Actor : Hurtable, Ironfront.Net.Unity.Client.IGameplayActorPresence
 {
 	/// <summary>
 	/// How long the actor's hitboxes stay on the vehicle layer after leaving a seat, in fixed

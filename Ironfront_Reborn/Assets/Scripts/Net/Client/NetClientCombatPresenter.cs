@@ -239,11 +239,7 @@ namespace Ironfront.Net.Unity.Client
         {
             if (view == null) return;
 
-            if (view.Actor != null && view.HasRagdollRig)
-            {
-                view.Actor.KnockOver(force, BoneFor(hitbox));
-                return;
-            }
+            if (view.TryFellBody(force, BoneFor(hitbox))) return;
 
             // Degraded, and loudly. A silent no-op here is indistinguishable from the bug this
             // whole phase exists to close.
@@ -283,11 +279,10 @@ namespace Ironfront.Net.Unity.Client
             // this presenter's is that the body falls over: at the client role Actor.Damage
             // never reaches Die() (ownsHealth is false), so without this the local player takes
             // hits, staggers, and stands there dead.
-            FpsActorController local = FpsActorController.instance;
-            if (local == null || local.actor == null) return;
-            if (local.actor.ragdoll == null) return;
+            ILocalPlayerRig local = NetClientBindings.LocalPlayer;
+            if (!local.HasFellableBody) return;
 
-            local.actor.KnockOver(force, BoneFor(hitbox));
+            local.FellBody(force, BoneFor(hitbox));
         }
 
         /// <summary>
@@ -321,13 +316,10 @@ namespace Ironfront.Net.Unity.Client
             ShotEvent shot = ShotEvent.From(in message);
             Vector3 direction = new Vector3(shot.Direction.X, shot.Direction.Y, shot.Direction.Z);
 
-            Weapon weapon = view.ActiveWeapon;
-            if (weapon != null)
-            {
-                // One report per message, never the Fire() loop: each S_WEAPON_FIRE is one shot,
-                // and Shoot alone is SILENT on an automatic weapon (V10 D8).
-                weapon.PlayFireCosmetics();
-            }
+            // One report per message, never the Fire() loop: each S_WEAPON_FIRE is one shot, and
+            // Shoot alone is SILENT on an automatic weapon (V10 D8). The liveness check the
+            // weapon needs lives with the view, which is the only thing holding one.
+            view.PlayActiveWeaponFireCosmetics();
 
             if (_tracers != null) _tracers.Fire(view.MuzzlePosition, direction);
         }
@@ -349,8 +341,9 @@ namespace Ironfront.Net.Unity.Client
 
             // The newest hit wins, including a quieter one — that is HitmarkerModel's documented
             // semantics, and the severity travels as an int so Assembly-CSharp takes no
-            // dependency on the replication library for a cosmetic.
-            IngameUi.Hit((int)_hitmarker.Current.Severity);
+            // dependency on the replication library for a cosmetic. Silent when this build
+            // registered no HUD, which is what a headless client and an EditMode test are.
+            NetClientBindings.ShowHit((int)_hitmarker.Current.Severity);
         }
     }
 }

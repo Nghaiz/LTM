@@ -49,8 +49,31 @@ Two consequences worth carrying into the work:
 
 ## 1. Scope, and what it is actually worth
 
-Twenty-five files, **31 distinct legacy types**, with three that dominate: `Actor` **53×**,
-`Vehicle` **47×**, `Weapon` **23×**. Roughly ten bindings, mirroring the server set.
+> **ENUMERATED 2026-08-26, and the warning in § 0 paid for itself a third time.** Every headline
+> number in this section was wrong, in the same way C2's and C3's were.
+>
+> | | Planned | Measured |
+> |---|---|---|
+> | Distinct legacy types | 31 | **11** |
+> | `Actor` | 53× | **7×** |
+> | `Vehicle` | 47× | **13×** |
+> | `Weapon` | 23× | **4×** |
+> | Total references | — | 96 matched, **61 real** |
+>
+> **Four names accounted for 35 of the 96 matches and not one is a reference:**
+> `State` (26×) is a *property* called `State` on eight client types — `GameFlowController.State`,
+> `driver.State`, `_agent.State` — colliding with a **private nested enum inside `ActiveRaggy`**
+> that no client file can see; `Action` (7×) is `System.Action` plus a field named `Action` on a
+> replication struct; `Configuration` (1×) is the last segment of
+> `using Ironfront.Net.Configuration;`; `Helicopter` (1×) is `VehicleKind.Helicopter`, an enum
+> **member** — the identical miss C2 recorded, in the identical spelling.
+>
+> The heaviest real crossing is **not** one of the three the plan named: it is
+> `FpsActorController` at 16 matches over 9 sites. The `Actor 53× / Vehicle 47×` figures were
+> counted over a tree in which `Net/Client` named its own neighbours, exactly as § 0 predicted.
+
+Twenty-five files, **11 distinct legacy types** over 61 real references. Roughly ten bindings,
+mirroring the server set — that estimate, alone among the numbers here, survived.
 
 **What this phase buys**, stated plainly so it is not oversold a third time: an EditMode test path
 for `Net/Client`'s own 25 files — `Reconciler`, `RemoteActorRegistry`, the killfeed model — which
@@ -69,15 +92,24 @@ If this phase is ever justified by one of those three, the justification is wron
 
 ## 2. Why it splits, and how
 
-Ten bindings against three types referenced 123 times between them is not one diff anybody can
-review. It splits **by binding cluster**, never by file count:
+Ten bindings is not one diff anybody can review — the original wording said "against three types
+referenced 123 times between them", and § 1 has since measured that as 61. The conclusion holds;
+the number in it did not. It splits **by binding cluster**, never by file count:
 
-| Cluster | Anchored on | Rough size |
-|---|---|---|
-| Actor/presence | `Actor` (53×) | the largest; likely its own sub-phase |
-| Vehicle | `Vehicle` (47×) | second |
-| Weapon/combat | `Weapon` (23×) | third |
-| The remainder | the other 28 legacy types | last, and smallest |
+| Sub-phase | Cluster | Anchored on | Status |
+|---|---|---|---|
+| **C4a** | Actor / presence | `FpsActorController` 16×, `Actor` 7×, `Weapon` 4×, `IngameUi` 1× | **done 2026-08-26** |
+| **C4b** | Vehicle, projectile, decal, objective | `Vehicle` 13×, `ScoreUi` 8×, `Projectile` 5×, `VehicleSpawner` 2×, `DecalManager` 2×, `GrenadeProjectile` 1×, `ProjectileCatalogBuilder` 1× | next |
+| **C4c** | The seal | the two asmdefs, the tests, the gate rewrite | last |
+
+**The split is three, not the four the row above originally implied, because the measurement
+halved the phase.** § 2's rule is *by binding cluster, never by file count*, and its stated reason
+is reviewability — "ten bindings against three types referenced 123 times is not one diff anybody
+can review". The real figure is ten bindings over **61** references, and C4b's four clusters are
+one or two files each (`NetClientVehicle` + `RemoteVehicleRegistry`, `NetClientProjectilePresenter`,
+`NetClientExplosionPresenter`, `NetClientObjectivePresenter`). Splitting those four into four PRs
+would produce four diffs of one file each and satisfy the letter of a rule whose purpose had
+already been met.
 
 Each cluster: declare the interface, implement on the legacy component, move the files that only
 need that cluster, **Unity compile over MCP**, layering rule observed RED. The asmdef itself lands
@@ -86,13 +118,64 @@ cannot be sealed, so sealing is the final step, not the first.
 
 ## 3. Work, per sub-phase
 
-1. Enumerate the cluster's legacy references at `file:line`. The 31/53/47/23 figures are from
-   [`plans/consolidation/plan.md`](../../consolidation/plan.md) § 3 and are re-counted, not trusted.
+1. Enumerate the cluster's legacy references at `file:line`. **Done once for the whole folder on
+   2026-08-26** — § 1 carries the result and § 3.1 the method. The 31/53/47/23 figures from
+   [`plans/consolidation/plan.md`](../../consolidation/plan.md) § 3 were re-counted, not trusted,
+   and every one of them was wrong. Re-run the enumeration after each sub-phase rather than
+   trusting this one either: RULE 6's baseline is the machine-checked form of it.
 2. Declare the binding on the sealed side, in the `Net/Server/Bindings/` shape.
 3. Implement on the legacy component.
 4. Move only the files whose remaining references are now all bound.
 5. Unity compile over MCP.
 6. Layering rule for the cluster, observed RED against a deliberate violation.
+
+## 3.1 C4a — done 2026-08-26
+
+Four bindings, declared in `Net/Client/Bindings/` in the `Net/Server/Bindings/` shape:
+
+| Binding | Retires | Implemented by |
+|---|---|---|
+| `IGameplayActorPresence` | `Actor` | `Actor` **directly** — see below |
+| `IGameplayWeapon` | `Weapon` | `Weapon` directly |
+| `ILocalPlayerRig` | `FpsActorController` | `LocalPlayerRigBinding`, registered |
+| `IHitmarkerHud` | `IngameUi` | `HitmarkerHudBinding`, registered |
+
+**`Actor` and `Weapon` implement their interfaces directly rather than through an adapter, and
+that is a deliberate departure from the server pattern.** The server resolves an
+`IGameplayActorSource` once per body in `Awake`, so an adapter costs one object per actor. This
+seam is consumed the other way round: **fifteen legacy call sites pass `this`** to
+`NetClientPresenterGuard.IsLocalActor` — eight inside `Actor`, several on the damage path — so an
+adapter would mean `IsLocalActor(new ActorPresence(this))` at each: an allocation per hit, and
+fifteen call sites edited to say nothing new. Implementing on the component left **all fifteen
+compiling unchanged**.
+
+**Two findings worth carrying forward.**
+
+1. **The G4 wiring gate would have gone silently blind.** `tools/ClientWiringGate` protects
+   per-actor paths from touching client-only singletons (finding A16), and it matched
+   `<Type>.instance` against `{ FpsActorController, IngameUi }`. C4a re-spelled every one of
+   those reads in `Net/Client` as `NetClientBindings.LocalPlayer` — same singleton, same paths,
+   same hazard, new name — so the detector would have reported a clean green across the folder
+   while its own exemptions read as "no longer needed" rather than "no longer visible". The
+   companion `PerActorGuardExemptions_HasNoStaleEntries` is what caught it. `LocalOnlySingletons`
+   is now a `(type, member)` table carrying the seam spelling, with its own red/green fixture pair.
+2. **`Assets/Prefab/Remote Actor Proxy.prefab` is the only asset carrying `RemoteActorView`, and
+   its actor link is `_actor: {fileID: 0}` — unset.** So the serialised-field widening
+   (`Actor` → `MonoBehaviour`, name deliberately unchanged) could not have broken an authored
+   reference. It also means the ragdoll and weapon-cosmetic paths are degraded in the shipped
+   prefab today, announcing themselves through the once-only warnings. Pre-existing, client-track
+   item E1, and **not** C4's to close.
+
+**For C4c:** that prefab records `m_EditorClassIdentifier: Assembly-CSharp::Ironfront.Net.Unity.Client.RemoteActorView`
+— the string names the **assembly**. Moving `RemoteActorView` into the sealed assembly changes it.
+Unity re-resolves through the script GUID and rewrites the field, but verify it rather than assume
+it, and commit the rewritten prefab with the asmdef.
+
+**The gate this sub-phase left behind** is `check-net-layering.ps1` RULE 6: an identity-keyed,
+both-direction baseline of the legacy names `Net/Client` still contains — 8 debt rows for C4b, 4
+`not-a-reference` rows for the matcher artefacts above. RULE 6a fails on a name that is not
+listed; RULE 6b fails on a listed name the folder no longer contains, and says to **delete the
+row, never re-pin it**. Both observed RED against the real tree before landing.
 
 ## 4. Acceptance criteria
 

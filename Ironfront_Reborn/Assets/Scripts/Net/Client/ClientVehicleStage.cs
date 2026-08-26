@@ -65,10 +65,10 @@ namespace Ironfront.Net.Unity.Client
         private ClientTurretDirectory _turretDirectory;
 
         // Resolved inside OnSeatChange's local-actor guard and held, rather than reached for
-        // per frame. FpsActorController.instance is a client-only singleton, and every path
-        // that touches one has to prove it is on the local player's side of the wire -- the
-        // A16 failure was a remote player's event writing this client's own camera.
-        private FpsActorController _localController;
+        // per frame. The local player's rig is a client-only singleton, and every path that
+        // touches one has to prove it is on the local player's side of the wire -- the A16
+        // failure was a remote player's event writing this client's own camera.
+        private ILocalPlayerRig _localController;
 
         private bool _configured;
 
@@ -278,7 +278,7 @@ namespace Ironfront.Net.Unity.Client
             if (tick == _lastSentTick) return;
             _lastSentTick = tick;
 
-            if (_localController == null) return;
+            if (_localController == null || !_localController.Exists) return;
 
             IInputSource input = _localController.InputSource;
             if (input == null) return;
@@ -364,7 +364,7 @@ namespace Ironfront.Net.Unity.Client
 
                 // Resolved here and not in SendVehicleInput: this is the member the local-actor
                 // guard is in, and the controller cannot change while seated.
-                _localController = FpsActorController.instance;
+                _localController = NetClientBindings.LocalPlayer;
 
                 if (message.SeatIndex == DriverSeatIndex) Register(message.VehicleId);
                 return;

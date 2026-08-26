@@ -39,7 +39,7 @@ the cost of the bindings layer that replaces its legacy references — not the c
 | `Net/Headless` | 1 | **0** | — | done |
 | `Net/Input` | 8 | **2** (measured) | `LoadoutUi`, `OptionsUi` | **C2 — done 2026-08-26** |
 | `Net/Diagnostics` | **13** | **13** — of which **5** legacy, **8** `Net/Client` | `LaneBCheckpointRecorder` (all 13) | **C3 — gate done 2026-08-26; asmdef → C4** |
-| `Net/Client` | 25 | 31 *(unverified — see below)* | `Actor` 53×, `Vehicle` 47×, `Weapon` 23× | **C4** |
+| `Net/Client` | 25 | **11** *(measured 2026-08-26)* | `FpsActorController` 16×, `Vehicle` 13×, `ScoreUi` 8×, `Actor` 7× | **C4 — C4a done; C4b, C4c to go** |
 
 > **The `Net/Input` row said `~8 real`, with `Helicopter` at 16 references and
 > `FpsActorController` at 15. All three numbers were wrong, and wrong in the same way.**
@@ -64,10 +64,14 @@ the cost of the bindings layer that replaces its legacy references — not the c
 > `Net/Client` becomes an assembly Diagnostics can simply reference. See
 > [`phase-c3-net-diagnostics.md`](phases/phase-c3-net-diagnostics.md) § 0.
 >
-> **C4's own row is now the last unverified one, and it is the one most likely to be wrong** —
-> `Actor 53×` and `Vehicle 47×` were counted over a tree in which `Net/Client` and
-> `Net/Diagnostics` were both still inside `Assembly-CSharp`, so an unknown share of those hits
-> is `Net/Client` naming its own neighbours. Enumerate before sizing.
+> **C4 enumerated on 2026-08-26 and the warning paid for itself a third time.** 31 types were
+> **11**; `Actor 53×` was **7×**, `Vehicle 47×` was **13×**, `Weapon 23×` was **4×**. Four names —
+> `State`, `Action`, `Configuration`, `Helicopter` — accounted for 35 of the 96 matches and not
+> one of them is a reference: a property called `State`, `System.Action`, a namespace segment, and
+> `VehicleKind.Helicopter`. The last of those is the *identical* miss C2 recorded, in the
+> identical spelling. The heaviest real crossing was not one of the three the table named; it was
+> `FpsActorController`. **Every count on this track that was carried rather than measured has now
+> been wrong.** See [`phase-c4-net-client.md`](phases/phase-c4-net-client.md) § 1.
 
 `Net/Server` and `Net/Shared` are already sealed. **`Net/Server/Bindings/` is the pattern to copy** —
 `IAiDriver`, `ICapturePointDirectory`, `ISpawnPointDirectory`: the server does not name a legacy

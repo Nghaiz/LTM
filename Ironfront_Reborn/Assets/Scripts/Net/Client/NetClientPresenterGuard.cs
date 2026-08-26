@@ -14,7 +14,7 @@ namespace Ironfront.Net.Unity.Client
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b><see cref="IsLocalActor(Actor)"/> replaces <c>!aiControlled</c>, everywhere V10 gates
+    /// <b><see cref="IsLocalActor(IGameplayActorPresence)"/> replaces <c>!aiControlled</c>, everywhere V10 gates
     /// a client-only singleton.</b> That flag means "is this a bot" and coincided with "is this
     /// the local player" only while the local player was the only non-AI actor in the process.
     /// The moment a remote human has an <c>Actor</c>, the coincidence ends: a remote player
@@ -72,15 +72,21 @@ namespace Ironfront.Net.Unity.Client
         /// Whether this actor is the local player — the predicate that replaces
         /// <c>!aiControlled</c> on every per-actor path that touches a client-only singleton.
         /// </summary>
-        public static bool IsLocalActor(Actor actor)
+        /// <remarks>
+        /// <para>
+        /// <b>The parameter is the seam, and the null test with it.</b> <c>actor == null</c> here
+        /// is a plain reference comparison — the interface has none of <c>UnityEngine.Object</c>'s
+        /// overloaded equality — so a destroyed body arrives non-null and is rejected by
+        /// <c>Exists</c> on the far side instead. Both spellings answer false for a corpse; only
+        /// this one keeps answering it from an assembly that cannot name <c>Actor</c>.
+        /// </para>
+        /// </remarks>
+        public static bool IsLocalActor(IGameplayActorPresence actor)
         {
-            if (actor == null) return false;
-
-            FpsActorController local = FpsActorController.instance;
-            bool isLocalPlayerRig = local != null && ReferenceEquals(local.actor, actor);
+            if (actor == null || !actor.Exists) return false;
 
             return LocalActorIdentity.IsLocalActor(
-                NetContext.IsOffline, actor.aiControlled, isLocalPlayerRig);
+                NetContext.IsOffline, actor.IsAiControlled, actor.IsLocalPlayerBody);
         }
 
         /// <summary>This client's own actor id, if the server has assigned one yet.</summary>
