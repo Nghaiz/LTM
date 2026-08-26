@@ -37,9 +37,24 @@ the cost of the bindings layer that replaces its legacy references — not the c
 | Folder | Files | Distinct legacy types | Heaviest | Phase |
 |---|---|---|---|---|
 | `Net/Headless` | 1 | **0** | — | done |
-| `Net/Input` | 8 | ~8 real | `Helicopter` 16×, `FpsActorController` 15× | **C2** |
-| `Net/Diagnostics` | 11 | 15 | — | **C3** |
-| `Net/Client` | 25 | 31 | `Actor` 53×, `Vehicle` 47×, `Weapon` 23× | **C4** |
+| `Net/Input` | 8 | **2** (measured) | `LoadoutUi`, `OptionsUi` | **C2 — done 2026-08-26** |
+| `Net/Diagnostics` | 11 | 15 *(unverified — see below)* | — | **C3** |
+| `Net/Client` | 25 | 31 *(unverified — see below)* | `Actor` 53×, `Vehicle` 47×, `Weapon` 23× | **C4** |
+
+> **The `Net/Input` row said `~8 real`, with `Helicopter` at 16 references and
+> `FpsActorController` at 15. All three numbers were wrong, and wrong in the same way.**
+> C2 enumerated rather than trusting them, as its § 3.1 required, and found **two**:
+> `LoadoutUi` and `OptionsUi`, both static-singleton reads in `LocalInputSource`. Every one of
+> the 16 `Helicopter` hits is `Net/Input`'s own `HelicopterAxes` / `HelicopterControls` /
+> `HelicopterAxisMap`, or the `"Helicopter Pitch"` axis string. Every one of the 15
+> `FpsActorController` hits is an XML doc comment, bar one inside a `Debug.Log` literal.
+> Neither legacy type is referenced at all. The measurement had been a substring grep that
+> counted comments and the folder's own type names.
+>
+> **The C3 and C4 counts come from the same grep and are therefore unverified.** Do not size
+> either phase from this table — enumerate first, stripping comments and string literals, the
+> way `tools/check-net-layering.ps1` RULE 5b now does. C4's `Actor 53× / Vehicle 47×` is
+> plausible on its face, but "plausible" is what `Helicopter 16×` looked like too.
 
 `Net/Server` and `Net/Shared` are already sealed. **`Net/Server/Bindings/` is the pattern to copy** —
 `IAiDriver`, `ICapturePointDirectory`, `ISpawnPointDirectory`: the server does not name a legacy
@@ -56,13 +71,36 @@ about layering.** A green `dotnet build` is the canonical false green on this tr
 
 | # | Phase | Goal | Effort |
 |---|---|---|---|
-| **C2** | [`phase-c2-net-input.md`](phases/phase-c2-net-input.md) | `Net/Input` behind `IVehicleControlSurface`-style bindings for `Helicopter` / `FpsActorController` | M (3 d) |
+| **C2** | [`phase-c2-net-input.md`](phases/phase-c2-net-input.md) | `Net/Input` behind one `ILocalInputEnvironment` binding for `LoadoutUi` / `OptionsUi` | M (3 d) |
 | **C3** | [`phase-c3-net-diagnostics.md`](phases/phase-c3-net-diagnostics.md) | `Net/Diagnostics` sealed and excluded from player builds | S (1–2 d) |
 | **C4** | [`phase-c4-net-client.md`](phases/phase-c4-net-client.md) | `Net/Client` behind ~10 bindings; EditMode tests become possible | L (multi-phase) |
 
-> **Do not start C4 before C2 lands.** `Net/Client` and `Net/Input` share `FpsActorController`.
-> Binding it twice, differently, is how the two halves end up with rival abstractions for the same
-> component — and the second one is written by somebody who cannot see the first.
+> **The stated reason for this ordering did not survive C2, but the ordering still holds.**
+> `Net/Input` does not reference `FpsActorController` at all, so the two halves never shared it
+> and C2 bound nothing C4 could contradict. What C4 must not contradict instead is the seam C2
+> built: `ILocalInputEnvironment` + `NetInputBindings`, registered from
+> `NetBindings/IronfrontNetBindings.Install`. `Net/Client` **does** reach `FpsActorController`
+> (`ClientVehicleStage` reads `_localController.InputSource`), so the rival-abstraction risk is
+> real — it is simply C4's alone, and phase C2's AC-3 was grading a shared surface that had no
+> second party.
+
+### The `autoReferenced: false` step, and why it is not C2's
+
+Phase C2 § 3.4 said to set `autoReferenced: false` on the new asmdef. **It shipped `true`,
+deliberately.** Four files consume `Net/Input` types and none can add an explicit reference:
+
+| Consumer | Assembly | Can it ever add a reference? |
+|---|---|---|
+| `Assembly-CSharp/FpsActorController.cs` | Assembly-CSharp | **No** — permanently predefined. 31 `inputSource` sites; it *constructs* `LocalInputSource` and holds `NullInputSource.Instance` |
+| `NetBindings/NetDriverInputSink.cs` | Assembly-CSharp | **No** — the bindings folder is predefined by design |
+| `Net/Client/ClientVehicleStage.cs` | Assembly-CSharp | Only after **C4** |
+| `Net/Diagnostics/ScriptedInputSource.cs` | Assembly-CSharp | Only after **C3** |
+
+`Net/Server` ships `autoReferenced: true` today for the same reason. Flipping either to `false`
+requires inverting `FpsActorController`'s pull-model into a pushed control surface, which is a
+behaviour-shaped change and the thing C2's AC-6 forbids. **It is one step, taken once, after C3
+and C4 have landed** — not a per-phase instruction. Whoever takes it kills `NetBindings` with it,
+per § 2.
 
 ## 6. Success criteria
 

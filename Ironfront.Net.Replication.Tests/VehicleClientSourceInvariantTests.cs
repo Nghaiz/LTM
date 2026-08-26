@@ -40,16 +40,26 @@ namespace Ironfront.Net.Replication.Tests
             // why the server must not read it does not fail the check that says so.
             const string OptionsRead = "OptionsUi.GetOptions(";
 
-            foreach (string file in ScriptsUnder("Net", "Server"))
+            // SCOPE WIDENED FROM Net/Server TO ALL OF Net/ BY PHASE C2, and the widening is the
+            // point rather than tidying. LocalInputSource used to be the one file under Net/
+            // that read OptionsUi directly, so the scan had to stop at Net/Server to leave it
+            // alone. C2 moved that read behind ILocalInputEnvironment, so Net/ now contains zero
+            // reads and the gate can say so -- a strictly stronger claim that still contains
+            // the V5-D9 one. For Net/Input it is also structurally guaranteed: that folder is
+            // its own assembly and cannot name OptionsUi at all (check-net-layering RULE 5b).
+            // If this ever fails for a file under Net/Input, the asmdef is gone.
+            foreach (string file in ScriptsUnder("Net"))
             {
                 Assert.False(
                     File.ReadAllText(file).Contains(OptionsRead, StringComparison.Ordinal),
-                    $"{Path.GetFileName(file)} reads OptionsUi on a server-role path. "
-                    + "Client-local options must be applied by the sender (V5-D9).");
+                    $"{Path.GetFileName(file)} reads OptionsUi from under Net/. "
+                    + "Client-local options must be applied by the sender (V5-D9), and since C2 "
+                    + "they reach the sender through ILocalInputEnvironment rather than the UI "
+                    + "class.");
             }
 
-            // The one file that legitimately reads them is LocalInputSource, and it is never
-            // installed at server role.
+            // The one path that legitimately reads them is LocalInputSource, through the
+            // binding, and it is never installed at server role.
             string controller = ReadScript("Assembly-CSharp", "FpsActorController.cs");
 
             Assert.Matches(
@@ -67,13 +77,34 @@ namespace Ironfront.Net.Replication.Tests
             string local = ReadScript("Net", "Input", "LocalInputSource.cs");
             string controller = ReadScript("Assembly-CSharp", "FpsActorController.cs");
 
-            // Moved, not deleted: the sensitivity product and all four invert flags now live in
+            // Moved, not deleted: the sensitivity product and all four invert flags still live in
             // the one place UnityEngine.Input is allowed to be read.
-            Assert.Contains("helicopterSensitivity", local, StringComparison.Ordinal);
-            Assert.Contains("heliInvertPitch", local, StringComparison.Ordinal);
-            Assert.Contains("heliInvertYaw", local, StringComparison.Ordinal);
-            Assert.Contains("heliInvertRoll", local, StringComparison.Ordinal);
-            Assert.Contains("heliInvertThrottle", local, StringComparison.Ordinal);
+            //
+            // THE SPELLINGS CHANGED IN C2 AND THE INVARIANT DID NOT. These used to be
+            // OptionsUi.Options field names (helicopterSensitivity, heliInvertPitch, ...) read
+            // directly. Net/Input is now its own assembly and cannot name OptionsUi, so the same
+            // five values arrive through HelicopterControlOptions and are spelled accordingly.
+            // What this test pins is WHERE the scaling happens, not how the fields are cased --
+            // so the names were updated rather than the assertions dropped.
+            Assert.Contains("HelicopterSensitivity", local, StringComparison.Ordinal);
+            Assert.Contains("InvertPitch", local, StringComparison.Ordinal);
+            Assert.Contains("InvertYaw", local, StringComparison.Ordinal);
+            Assert.Contains("InvertRoll", local, StringComparison.Ordinal);
+            Assert.Contains("InvertThrottle", local, StringComparison.Ordinal);
+
+            // "Moved, not deleted" now spans two files, so pin the far end too: the legacy field
+            // names must still be read by SOMETHING, or the seam is dropping them on the floor
+            // and every assertion above passes on a helicopter that no longer inverts.
+            string binding = ReadScript("NetBindings", "LocalInputEnvironmentBinding.cs");
+
+            Assert.Contains("helicopterSensitivity", binding, StringComparison.Ordinal);
+            Assert.Contains("heliInvertPitch", binding, StringComparison.Ordinal);
+            Assert.Contains("heliInvertYaw", binding, StringComparison.Ordinal);
+            Assert.Contains("heliInvertRoll", binding, StringComparison.Ordinal);
+            Assert.Contains("heliInvertThrottle", binding, StringComparison.Ordinal);
+
+            // And the sender must not have kept a back channel to the UI class.
+            Assert.DoesNotContain("OptionsUi", local, StringComparison.Ordinal);
 
             // HelicopterInput() is component order and nothing else now. The raw Input.GetAxis
             // branch it used to carry was the accepted debt V5-D8 closes.
