@@ -101,6 +101,13 @@ try {
         & "$PSScriptRoot/check-net-layering.ps1"
     }
 
+    # plans/asmdef-seam/plan.md success criterion 5. Invisible to everything above for the mirror
+    # of 3e's reason: `dotnet build` compiles four Net/Diagnostics files with the define ABSENT,
+    # so it only ever exercises the INCLUDED configuration and can never notice a broken strip.
+    Invoke-Step "3f. Net/Diagnostics compiles out of a shipping player" {
+        & "$PSScriptRoot/check-diagnostics-exclusion.ps1"
+    }
+
     # ADVISORY — mirrors the `style` job in .github/workflows/ci.yml, which is
     # continue-on-error. Deliberately NOT routed through Invoke-Step: a formatting nit must
     # not add to $failures and make this script exit 1, or people will stop running it.
