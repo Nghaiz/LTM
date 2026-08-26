@@ -40,6 +40,35 @@ namespace Ironfront.Net.Unity.Bindings
         }
 
         /// <inheritdoc/>
+        public GameObject GameObject
+        {
+            get
+            {
+                FpsActorController local = FpsActorController.instance;
+                return local != null ? local.gameObject : null;
+            }
+        }
+
+        /// <inheritdoc/>
+        public bool IsInputEnabled
+        {
+            get
+            {
+                FpsActorController local = FpsActorController.instance;
+                return local != null && local.IsInputEnabled;
+            }
+        }
+
+        /// <inheritdoc/>
+        public void SetInputSource(IInputSource source)
+        {
+            FpsActorController local = FpsActorController.instance;
+            if (local == null) return;
+
+            local.SetInputSource(source);
+        }
+
+        /// <inheritdoc/>
         public void EnableInput()
         {
             FpsActorController local = FpsActorController.instance;
@@ -73,6 +102,16 @@ namespace Ironfront.Net.Unity.Bindings
             {
                 FpsActorController local = FpsActorController.instance;
                 return local != null ? local.transform.position : Vector3.zero;
+            }
+        }
+
+        /// <inheritdoc/>
+        public float YawDegrees
+        {
+            get
+            {
+                FpsActorController local = FpsActorController.instance;
+                return local != null ? local.transform.eulerAngles.y : 0f;
             }
         }
 

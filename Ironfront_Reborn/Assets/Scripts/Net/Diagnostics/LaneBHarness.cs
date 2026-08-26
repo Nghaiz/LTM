@@ -545,8 +545,8 @@ namespace Ironfront.Net.Unity.Diagnostics
             NetClientBootstrap client = NetClientBootstrap.Current;
             if (client == null || !client.IsConnected || client.LocalActorId == 0) return;
 
-            FpsActorController local = FpsActorController.instance;
-            if (local == null) return;
+            ILocalPlayerRig local = NetClientBindings.LocalPlayer;
+            if (!local.Exists) return;
 
             ScriptedInputProgramme programme = LoadProgramme(out string problem);
             if (programme == null) { Finish(ExitProgrammeUnusable, problem); return; }

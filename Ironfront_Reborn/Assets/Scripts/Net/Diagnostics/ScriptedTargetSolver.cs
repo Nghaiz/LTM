@@ -114,8 +114,8 @@ namespace Ironfront.Net.Unity.Diagnostics
 
             if (string.IsNullOrEmpty(playerName)) { Last = miss; return miss; }
 
-            FpsActorController local = FpsActorController.instance;
-            if (local == null) { Last = miss; return miss; }
+            ILocalPlayerRig local = NetClientBindings.LocalPlayer;
+            if (!local.Exists) { Last = miss; return miss; }
 
             ushort actorId = ResolveActorId(playerName);
             if (actorId == 0) { Last = miss; return miss; }
@@ -129,7 +129,7 @@ namespace Ironfront.Net.Unity.Diagnostics
                 return miss;
             }
 
-            Vector3 from = local.transform.position;
+            Vector3 from = local.Position;
             Vector3 to = target.position;
 
             // Both transforms are FEET positions, and PitchAtBody raises each end by the

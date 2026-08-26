@@ -1,0 +1,21 @@
+{
+    "name": "Ironfront.Net.Unity.Diagnostics",
+    "rootNamespace": "Ironfront.Net.Unity.Diagnostics",
+    "references": [
+        "Ironfront.Net.Unity.Shared",
+        "Ironfront.Net.Unity.Input",
+        "Ironfront.Net.Unity.Client",
+        "Ironfront.Net.Unity.Server"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!IRONFRONT_NO_DIAGNOSTICS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

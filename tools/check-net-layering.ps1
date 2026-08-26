@@ -84,7 +84,21 @@
 
 [CmdletBinding()]
 param(
-    [string]$ScriptsPath = "Ironfront_Reborn/Assets/Scripts"
+    [string]$ScriptsPath = "Ironfront_Reborn/Assets/Scripts",
+
+    # THE SECOND PREDEFINED ASSEMBLY, and it was a blind spot until phase C4d.
+    #
+    # Assets/Plugins/Assembly-CSharp-firstpass/ compiles into Assembly-CSharp-firstpass, which is
+    # ALSO predefined and therefore ALSO unreachable from any asmdef. Every rule below is about
+    # "names a type an asmdef cannot reference", and for three phases this file answered that
+    # question over Assets/Scripts alone -- so 112 files' worth of types were invisible to it.
+    #
+    # It cost a real miss: Net/Diagnostics/MovementShadowCompare.cs named
+    # UnityStandardAssets.Characters.FirstPerson.FirstPersonController, the C4 enumeration never
+    # saw it, RULE 6/7 could not have flagged it, and it surfaced only when the Unity compile went
+    # red on the asmdef. The gate was answering the right question over the wrong population --
+    # green-that-proves-nothing.md, "measures the wrong population".
+    [string]$FirstPassPath = "Ironfront_Reborn/Assets/Plugins/Assembly-CSharp-firstpass"
 )
 
 $ErrorActionPreference = "Stop"
@@ -117,9 +131,13 @@ $Baseline = @(
     @{ Path = 'Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Vehicle.cs'                   ; Kind = 'debt'; Reason = 'legacy gameplay calls the server assembly directly' }
     @{ Path = 'Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/VehicleSpawner.cs'            ; Kind = 'debt'; Reason = 'legacy gameplay calls the server assembly directly' }
 
-    @{ Path = 'Ironfront_Reborn/Assets/Scripts/Net/Diagnostics/LaneBHarness.cs'
-       Kind = 'debt'
-       Reason = 'the lane-B harness strips the server half of a listen-server scene, so it names it' }
+    # The LaneBHarness.cs row that was here was DELETED by phase C4d, and the DIRECTION matters:
+    # the file still names Ironfront.Net.Unity.Server, exactly as it did. What changed is that it
+    # is no longer part of Assembly-CSharp -- Net/Diagnostics became an assembly that declares an
+    # explicit reference to the server assembly, which is a dependency the compiler now checks.
+    # This baseline is about ASSEMBLY-CSHARP reaching into the server, so the row stopped applying
+    # rather than the reference stopping. Recorded because "the debt is PAID" is what RULE 2
+    # printed, and it is the wrong reading of a real and correct removal.
 )
 
 # RULE 6's baseline: the legacy type names Net/Client still contains, one row per NAME.
@@ -178,6 +196,38 @@ $ClientBaseline = @(
     @{ Type = 'Helicopter'              ; Kind = 'not-a-reference'; Retires = 'never'
        Reason = 'VehicleKind.Helicopter, an enum MEMBER on a replication-library enum. The ' +
                 'identically-named legacy MonoBehaviour is not referenced anywhere in Net/Client' }
+
+    # Found by C4d, when the scan grew to cover Assembly-CSharp-firstpass. The green compile is
+    # proof on its own: an asmdef naming a firstpass type does not build.
+    @{ Type = 'Mode'                    ; Kind = 'not-a-reference'; Retires = 'never'
+       Reason = 'NetClientVehicle.Mode, a PROPERTY, plus the local it is assigned from. It ' +
+                'collides with a public enum NESTED inside UnityStandardAssets ActivateTrigger, ' +
+                'which the declaration matcher reads at line start regardless of nesting -- the ' +
+                'same shape as the ActiveRaggy.State collision above' }
+)
+
+# RULE 7's allow-list: the legacy names Net/Diagnostics still contains, one row per NAME.
+#
+# Same contract as $ClientBaseline, and the same reason for existing — see its header. The
+# difference is that this list was NEVER a shrinking baseline: C4d bound all four real crossings
+# in one go, so every row here is a matcher artefact from the day it was written.
+$DiagnosticsBaseline = @(
+    @{ Type = 'Path'   ; Kind = 'not-a-reference'; Retires = 'never'
+       Reason = 'System.IO.Path.Combine, in three files that write artifacts to disk. ' +
+                'Assembly-CSharp happens to declare a pathfinding class called Path too' }
+    @{ Type = 'State'  ; Kind = 'not-a-reference'; Retires = 'never'
+       Reason = 'driver.State and client.State -- PROPERTIES on Net/Client types. The legacy ' +
+                'declaration it collides with is a private nested enum inside ActiveRaggy' }
+
+    # Both found by C4d's widened scan, and both the same shape: a type nested inside
+    # UnityStandardAssets TimedObjectActivator, matched because the declaration pattern reads a
+    # line start regardless of nesting. Net/Diagnostics declares its OWN Entry (a readonly struct
+    # in LaneBExplosionLog) and exposes it as Entries -- neither is the firstpass one, and the
+    # green compile proves it.
+    @{ Type = 'Entry'  ; Kind = 'not-a-reference'; Retires = 'never'
+       Reason = 'LaneBExplosionLog.Entry, a readonly struct this folder declares itself' }
+    @{ Type = 'Entries'; Kind = 'not-a-reference'; Retires = 'never'
+       Reason = 'LaneBExplosionLog.Entries, the property exposing the list of the above' }
 )
 
 Write-Host "=== Assembly-CSharp does not reach into Ironfront.Net.Unity.Server ==="
@@ -202,6 +252,16 @@ function Test-OutsideAsmdef([string]$filePath) {
 
 function ConvertTo-RepoRelative([string]$fullPath) {
     return $fullPath.Substring($repoRoot.Length + 1).Replace('\', '/')
+}
+
+$firstPassRoot = Join-Path $repoRoot $FirstPassPath
+
+# Absent is tolerated rather than fatal: a consumer without Standard Assets is a legitimate tree,
+# and the rules below still hold over Assembly-CSharp alone. It IS reported, because a silently
+# empty second population is how this blind spot went unnoticed for three phases.
+$firstPassSources = @()
+if (Test-Path $firstPassRoot) {
+    $firstPassSources = @(Get-ChildItem -Path $firstPassRoot -Filter *.cs -Recurse -File)
 }
 
 $allSources = Get-ChildItem -Path $root -Filter *.cs -Recurse -File
@@ -325,6 +385,14 @@ function Get-CodeLines([string]$fullPath) {
 # type would report itself.
 function Get-LegacyTypeSet([string[]]$excludedRoots) {
     $set = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+
+    # Assembly-CSharp-firstpass first. Its types are off-limits to an asmdef for exactly the
+    # reason Assembly-CSharp's are, and no exclusion applies: no folder being sealed lives there.
+    foreach ($file in $firstPassSources) {
+        foreach ($line in (Get-CodeLines $file.FullName)) {
+            if ($line -match $declPattern) { [void]$set.Add($Matches[1]) }
+        }
+    }
 
     foreach ($file in $allSources) {
         if (-not (Test-OutsideAsmdef $file.FullName)) { continue }
@@ -476,6 +544,94 @@ if (Test-Path $clientRoot) {
     }
 }
 
+# RULE 7 — the Net/Diagnostics seam, phase C4d.
+#
+# The last of the three folders. Shaped exactly like RULE 6, with one addition: 7a asserts not
+# just that the asmdef EXISTS but that it still carries its defineConstraints line, because
+# check-diagnostics-exclusion.ps1 deleted its RULES 1-3 on the strength of that line and now has
+# nothing of its own watching it. A gate that hands its job to a config value and then does not
+# watch the config value has not delegated, it has stopped checking.
+$diagRoot   = Join-Path $root ('Net' + [IO.Path]::DirectorySeparatorChar + 'Diagnostics')
+$diagAsmdef = Join-Path $diagRoot 'Ironfront.Net.Unity.Diagnostics.asmdef'
+
+if (Test-Path $diagRoot) {
+    $diagSources = @(Get-ChildItem -Path $diagRoot -Filter *.cs -Recurse -File)
+
+    if ($diagSources.Count -eq 0) {
+        Write-Host "COULD NOT TELL: no .cs files under '$ScriptsPath/Net/Diagnostics'."
+        exit 2
+    }
+
+    # 7a — the seam, and the exclusion it carries.
+    if (-not (Test-Path $diagAsmdef)) {
+        $violations += "RULE 7a (seam gone): Net/Diagnostics has no " +
+                       "Ironfront.Net.Unity.Diagnostics.asmdef.`n" +
+                       "    Without it the folder is inside Assembly-CSharp again AND ships in " +
+                       "every player build, because the exclusion now lives on that asmdef. Two " +
+                       "regressions in one deletion."
+    }
+    else {
+        $diagJson = Get-Content -Path $diagAsmdef -Raw
+
+        # The exclusion itself. check-diagnostics-exclusion.ps1 deleted its RULES 1 and 2 because
+        # this line replaced them; nothing else watches it.
+        if ($diagJson -notmatch '!IRONFRONT_NO_DIAGNOSTICS') {
+            $violations += "RULE 7a (exclusion gone): Ironfront.Net.Unity.Diagnostics.asmdef no " +
+                           "longer carries defineConstraints '!IRONFRONT_NO_DIAGNOSTICS'.`n" +
+                           "    THE DIAGNOSTICS FOLDER NOW SHIPS IN PLAYER BUILDS. That line is " +
+                           "the whole mechanism: check-diagnostics-exclusion.ps1 deleted its own " +
+                           "per-file guard rules in phase C4d precisely because this replaced " +
+                           "them, so nothing else is watching. Restore it."
+        }
+    }
+
+    $diagLegacyTypes = Get-LegacyTypeSet @($inputRoot, $clientRoot, $diagRoot)
+
+    if ($diagLegacyTypes.Count -eq 0) {
+        Write-Host "COULD NOT TELL: no type declarations found outside Net/Diagnostics, so RULE 7"
+        Write-Host "                had nothing to match against."
+        exit 2
+    }
+
+    $diagAllowed = @{}
+    foreach ($entry in $DiagnosticsBaseline) { $diagAllowed[$entry.Type] = $entry }
+
+    $diagNamed = @{}
+    foreach ($file in $diagSources) {
+        $relative = ConvertTo-RepoRelative $file.FullName
+        foreach ($line in (Get-CodeLines $file.FullName)) {
+            foreach ($name in ([regex]::Matches($line, '[A-Za-z_][A-Za-z0-9_]*') | ForEach-Object { $_.Value })) {
+                if (-not $diagLegacyTypes.Contains($name)) { continue }
+                if (-not $diagNamed.ContainsKey($name)) { $diagNamed[$name] = @{} }
+                $diagNamed[$name][$relative] = $true
+            }
+        }
+    }
+
+    # 7b — reaches back.
+    foreach ($name in ($diagNamed.Keys | Sort-Object)) {
+        if ($diagAllowed.ContainsKey($name)) { continue }
+
+        $where = ($diagNamed[$name].Keys | Sort-Object) -join ', '
+        $violations += "RULE 7b (reaches back): Net/Diagnostics names '$name', which is declared " +
+                       "in a predefined-assembly source and is not in `$DiagnosticsBaseline.`n" +
+                       "    Named by: $where`n" +
+                       "    Ironfront.Net.Unity.Diagnostics cannot reference Assembly-CSharp, so " +
+                       "this does not compile. Route it through a seam this assembly owns, as " +
+                       "IDiagnosticsProbe does for ScoreUi and CapturePoint — or, if it is a " +
+                       "matcher artefact, add a row SAYING WHAT IT REALLY IS."
+    }
+
+    # 7c — stale. The companion.
+    foreach ($entry in $DiagnosticsBaseline) {
+        if ($diagNamed.ContainsKey($entry.Type)) { continue }
+
+        $violations += "RULE 7c (stale): Net/Diagnostics no longer names '$($entry.Type)'.`n" +
+                       "    Reason it was listed: $($entry.Reason)`n" +
+                       "    DELETE the row. Do NOT re-pin the table to what this run reported."
+    }
+}
+
 if ($violations.Count -gt 0) {
     Write-Host ""
     Write-Host "FAIL: the layering between Assembly-CSharp and Ironfront.Net.Unity.Server moved."
@@ -486,10 +642,16 @@ if ($violations.Count -gt 0) {
     exit 1
 }
 
+$firstPassTypeCount = (Get-LegacyTypeSet @($root)).Count
+
 $debtCount = ($Baseline | Where-Object { $_.Kind -eq 'debt' }).Count
 Write-Host ("PASS: {0} predefined-assembly source(s) scanned; {1} reference the server assembly," -f $scanned, $offenders.Count)
 Write-Host ("      all named in the baseline; {0} of them are debt, and every row still applies." -f $debtCount)
 Write-Host "      Net/Client and Net/Input name it nowhere."
+Write-Host ("      SCAN:   {0} type name(s) come from Assembly-CSharp-firstpass ({1} file(s)), which is" -f
+            $firstPassTypeCount, $firstPassSources.Count)
+Write-Host "              predefined too and equally unreachable from an asmdef. Counting it is C4d's"
+Write-Host "              fix for a blind spot only the compiler caught."
 Write-Host ("      RULE 5: Net/Input carries its asmdef and names none of the {0} type(s) declared" -f $legacyTypes.Count)
 Write-Host ("              in predefined-assembly sources, across {0} of its own file(s)." -f $inputSources.Count)
 if (Test-Path $clientRoot) {
@@ -497,6 +659,13 @@ if (Test-Path $clientRoot) {
                 $clientNamed.Count, $clientLegacyTypes.Count)
     Write-Host ("              in predefined-assembly sources, across {0} of its own file(s) — and every" -f $clientSources.Count)
     Write-Host "              one of those is an allow-listed matcher artefact, not a reference."
+}
+if (Test-Path $diagRoot) {
+    Write-Host ("      RULE 7: Net/Diagnostics carries its asmdef — with the " +
+                "'!IRONFRONT_NO_DIAGNOSTICS'")
+    Write-Host ("              exclusion still on it — and names {0} of the {1} type(s) declared in" -f
+                $diagNamed.Count, $diagLegacyTypes.Count)
+    Write-Host ("              predefined-assembly sources, across {0} of its own file(s); all allow-listed." -f $diagSources.Count)
 }
 Write-Host "      This says no NEW call site appeared and no listed one was silently fixed. It"
 Write-Host "      does NOT say the listed call sites are acceptable — that is what the count is for."
