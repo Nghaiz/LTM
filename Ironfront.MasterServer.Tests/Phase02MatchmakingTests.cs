@@ -308,6 +308,11 @@ namespace Ironfront.MasterServer.Tests
         }
 
         /// <summary>Allocation picks the least busy healthy server, per D-AD's registry design.</summary>
+        /// <remarks>
+        /// Cpu and tick agree here, so this test passes under either ordering rule and cannot by
+        /// itself say which one is in force. That is what the three X-7 tests below are for; this
+        /// one stays because "least busy wins" is the behaviour D-AD promised, whatever measures it.
+        /// </remarks>
         [Fact]
         public void AllocationPrefersTheLeastBusyServer()
         {
@@ -319,6 +324,118 @@ namespace Ironfront.MasterServer.Tests
             registry.Heartbeat(2, quiet!.ServerId, 0, 5f, 2f, 0, now);
 
             Assert.Same(quiet, registry.Allocate(1, 42, now));
+        }
+
+        /// <summary>
+        /// Allocation follows measured tick time, not registration order. Ledger <b>X-7</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The registrations are deliberately in the wrong order.</b> The busy server is
+        /// registered FIRST, so it is what <c>Dictionary.Values</c> yields first and what the
+        /// old <c>CpuPercent</c> comparison left <c>best</c> pointing at. A rule that reads any
+        /// signal at all picks the second one; a rule that reads none returns the first.
+        /// </para>
+        /// <para>
+        /// <b>Both report <c>cpuPercent: -1</c>, which is production reality, not a contrivance.</b>
+        /// <c>ServerMasterReporter.Update</c> sends that sentinel on every heartbeat by design,
+        /// so the old comparison was false for every pair of live servers and allocation was
+        /// decided by dictionary layout. This is the X-7 repro.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public void AllocationFollowsTickTimeAndNotRegistrationOrder()
+        {
+            var registry = new GameServerRegistry(SharedSecret);
+            long now = 1_000_000;
+
+            registry.TryRegister(1, SharedSecret, "10.0.0.7", 27015, 16, Dustbowl, now, out GameServerRecord? busy);
+            registry.TryRegister(2, SharedSecret, "10.0.0.8", 27016, 16, Dustbowl, now, out GameServerRecord? quick);
+
+            // The sentinel every real game server sends. It orders nothing, and must not.
+            registry.Heartbeat(1, busy!.ServerId, 0, -1f, 31f, 0, now);
+            registry.Heartbeat(2, quick!.ServerId, 0, -1f, 4f, 0, now);
+
+            Assert.Same(quick, registry.Allocate(1, 42, now));
+        }
+
+        /// <summary>
+        /// The cpu sentinel does not outrank the measured signal, whichever way it points.
+        /// </summary>
+        /// <remarks>
+        /// A guard against the fix being quietly reverted to "cpu first, tick as a tie-break":
+        /// here cpu and tick disagree, so any rule consulting cpu ahead of tick returns the
+        /// other server. `AllocationPrefersTheLeastBusyServer` cannot catch that — its two
+        /// signals agree, so it passes under either rule.
+        /// </remarks>
+        [Fact]
+        public void AllocationPrefersMeasuredTickTimeOverAReportedCpuPercent()
+        {
+            var registry = new GameServerRegistry(SharedSecret);
+            long now = 1_000_000;
+
+            registry.TryRegister(1, SharedSecret, "10.0.0.7", 27015, 16, Dustbowl, now, out GameServerRecord? lowCpu);
+            registry.TryRegister(2, SharedSecret, "10.0.0.8", 27016, 16, Dustbowl, now, out GameServerRecord? lowTick);
+
+            registry.Heartbeat(1, lowCpu!.ServerId, 0, 5f, 30f, 0, now);    // idle cpu, struggling ticks
+            registry.Heartbeat(2, lowTick!.ServerId, 0, 80f, 3f, 0, now);   // busy cpu, healthy ticks
+
+            Assert.Same(lowTick, registry.Allocate(1, 42, now));
+        }
+
+        /// <summary>
+        /// Equal load resolves by server id, in a registry where id order and dictionary order
+        /// DISAGREE. Ledger <b>X-7</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The reap-and-re-register is the whole test, and it is not contrived.</b> A tie on
+        /// tick time is the common case at match start — idle servers all report the same
+        /// number — so the tie-break is what decides most real allocations, and a tie-break that
+        /// silently equals "first one the dictionary yields" is the X-7 defect with a new name.
+        /// <c>Dictionary</c> hands out insertion order only while nothing is removed; once
+        /// <c>Prune</c> or <c>RemoveConnection</c> frees a slot, the next registration reuses it
+        /// and lands at the FRONT of iteration. That is a long-running master's steady state,
+        /// not an edge case.
+        /// </para>
+        /// <para>
+        /// <b>Here server 4 occupies freed slot 0, so iteration yields 4, 2, 3 while ascending
+        /// id says 2.</b> An earlier version of this test registered three servers and asserted
+        /// the first — which passes under BOTH rules, because the lowest id was also the first
+        /// yielded. Mutation-testing caught it: degrading the tie-break to "first seen wins"
+        /// left that version green (green-that-proves-nothing.md).
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public void AllocationIsDeterministicWhenLoadTies()
+        {
+            var registry = new GameServerRegistry(SharedSecret);
+            long now = 1_000_000;
+
+            registry.TryRegister(1, SharedSecret, "10.0.0.7", 27015, 16, Dustbowl, now, out GameServerRecord? reaped);
+            registry.TryRegister(2, SharedSecret, "10.0.0.8", 27016, 16, Dustbowl, now, out GameServerRecord? lowest);
+            registry.TryRegister(3, SharedSecret, "10.0.0.9", 27017, 16, Dustbowl, now, out GameServerRecord? third);
+
+            // Its connection drops; the dictionary slot it held goes on the free list.
+            registry.RemoveConnection(1);
+            registry.TryRegister(4, SharedSecret, "10.0.0.10", 27018, 16, Dustbowl, now, out GameServerRecord? newest);
+
+            Assert.NotNull(newest);
+            Assert.True(newest!.ServerId > lowest!.ServerId, "the reused slot must carry a HIGHER id");
+            Assert.True(lowest.ServerId < third!.ServerId);
+            Assert.Equal(3, registry.Count);
+            Assert.False(registry.TryGet(reaped!.ServerId, out _));
+
+            // All three idle and identical, so only the tie-break can choose.
+            registry.Heartbeat(2, lowest.ServerId, 0, -1f, 5f, 0, now);
+            registry.Heartbeat(3, third.ServerId, 0, -1f, 5f, 0, now);
+            registry.Heartbeat(4, newest.ServerId, 0, -1f, 5f, 0, now);
+
+            // Lowest id, NOT the one the dictionary yields first (which is `newest`, in the
+            // slot the reaped server vacated).
+            Assert.Same(lowest, registry.Allocate(1, 42, now));
+            Assert.Same(third, registry.Allocate(1, 43, now));
+            Assert.Same(newest, registry.Allocate(1, 44, now));
         }
 
         private static int CreateAccount(SqliteDatabase database, string username, string displayName)

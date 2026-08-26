@@ -7,10 +7,12 @@ public class ThrowableWeapon : Weapon
 	/// The tick the pending throw releases on, or 0 when nothing is pending. V7-D7.
 	/// </summary>
 	/// <remarks>
-	/// Scheduled from <c>configuration.releaseDelay</c>, which is authored to match the throw
-	/// clip's animation-event time. Both networked roles derive it from the same constant, so
-	/// the projectile leaves the hand on the same tick regardless of the thrower's framerate or
-	/// animation state.
+	/// Scheduled from <c>configuration.releaseDelay</c>, which is authored PER WEAPON to match
+	/// that weapon's own throw clip -- the event's clip time divided by the <c>Throw</c> state's
+	/// speed multiplier. Both networked roles derive it from the same authored value, so the
+	/// projectile leaves the hand on the same tick regardless of the thrower's framerate or
+	/// animation state. Gate rule <b>A9</b> fails the build when the value and the clip diverge
+	/// (ledger D-1); it was one shared <c>0.6f</c>, correct for neither clip, until phase 6.
 	/// </remarks>
 	private uint releaseTick;
 

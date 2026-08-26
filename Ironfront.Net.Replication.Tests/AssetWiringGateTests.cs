@@ -39,6 +39,7 @@ namespace Ironfront.Net.Replication.Tests
         private const string LobbyShellOverlay    = "3a9b866060cb47f1af22ca5125dd4d71";
         private const string ProjectileComponent  = "75280d5bb60068b2fabefd8e2004397e";
         private const string ScoreUi              = "47bac8ff82521e88b577c05861af19e4";
+        private const string ThrowableWeapon      = "441fac300879ede440ac8541efaa1c65";
 
         private const string ScenePath  = "fixtures/Client.unity";
         private const string PrefabPath = "fixtures/Proxy.prefab";
@@ -504,6 +505,26 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Empty(AssetWiringDetectors.ScoreUiTextRefsAreAssigned(index));
         }
 
+        /// <summary>E5's third element is owed on the same terms as the other two. Ledger A-6.</summary>
+        /// <remarks>
+        /// Both directions. Unassigned is the state the shipped prefab was in until phase 6 task
+        /// 6.6; aimed at the phase label is the authoring that looks correct in the Inspector and
+        /// renders the phase twice, which no per-field null check can see.
+        /// </remarks>
+        [Fact]
+        public void TheHumanCountLabelIsOwedAndMustBeItsOwnElement()
+        {
+            Assert.Contains(
+                AssetWiringDetectors.ScoreUiTextRefsAreAssigned(
+                    ScoreUiFixture("{fileID: 903}", "{fileID: 904}", humanCountText: null)),
+                f => f.Message.Contains("ScoreUi.humanCountText is unassigned"));
+
+            Assert.Contains(
+                AssetWiringDetectors.ScoreUiTextRefsAreAssigned(
+                    ScoreUiFixture("{fileID: 903}", "{fileID: 904}", humanCountText: "{fileID: 903}")),
+                f => f.Message.Contains("humanCountText") && f.Message.Contains("phaseText"));
+        }
+
         [Fact]
         public void RenderedLabels_HasNoStaleEntries()
         {
@@ -513,7 +534,8 @@ namespace Ironfront.Net.Replication.Tests
             UnityAssetIndex index = ScoreUiFixtureRaw(
                 "  blueScoreText: {fileID: 905}\n  redScoreText: {fileID: 906}\n"
                 + "  blueFlagsText: {fileID: 901}\n  redFlagsText: {fileID: 902}\n"
-                + "  phaseText: {fileID: 903}\n  phaseTimerText: {fileID: 904}\n");
+                + "  phaseText: {fileID: 903}\n  phaseTimerText: {fileID: 904}\n"
+                + "  humanCountText: {fileID: 908}\n");
 
             Assert.Contains(
                 AssetWiringDetectors.ScoreUiTextRefsAreAssigned(index),
@@ -590,6 +612,175 @@ namespace Ironfront.Net.Replication.Tests
                             "  _tracerPrefab: " + (tracerPrefab ?? "{fileID: 0}"));
         }
 
+        // ------------------------------------------------- A9, the throw release delay (D-1)
+
+        /// <summary>
+        /// A throwable prefab, its controller and its clip, wired guid-to-guid.
+        /// </summary>
+        /// <remarks>
+        /// The clip carries a position curve whose keyframes each hold a <c>time</c> BEFORE
+        /// <c>m_Events</c> appears, because that is the trap the event reader exists to avoid: a
+        /// plain scalar lookup for "time" answers with the first keyframe in the document and is
+        /// believed. A fixture without those curves would let a broken reader pass.
+        /// </remarks>
+        private static UnityAssetIndex ThrowableFixture(
+            string? releaseDelayLine = "  releaseDelay: 0.952444",
+            string speedParameterActive = "0",
+            string speed = "1.3",
+            string eventFunction = "SpawnThrowable",
+            string eventTime = "1.2381772",
+            bool withThrowable = true)
+        {
+            const string controllerGuid = "cccccccccccccccccccccccccccccccc";
+            const string clipGuid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+            string weapon = withThrowable
+                ? Component(810, 800, ThrowableWeapon,
+                            "  configuration:\n    unholsterTime: 0\n"
+                            + (releaseDelayLine == null ? "" : releaseDelayLine + "\n")
+                            + "    aimFov: 50")
+                : string.Empty;
+
+            string prefab = "--- !u!1 &800\nGameObject:\n  m_Name: frag\n"
+                + weapon
+                + $"--- !u!95 &820\nAnimator:\n  m_GameObject: {{fileID: 800}}\n"
+                + $"  m_Controller: {{fileID: 9100000, guid: {controllerGuid}, type: 2}}\n";
+
+            string controller = "--- !u!91 &9100000\nAnimatorController:\n  m_Name: Old Frag\n"
+                + "--- !u!1102 &1001\nAnimatorState:\n  m_Name: Hip\n  m_Speed: 1\n"
+                + "  m_SpeedParameterActive: 0\n"
+                + "  m_Motion: {fileID: 7400000, guid: dddddddddddddddddddddddddddddddd, type: 2}\n"
+                + $"--- !u!1102 &1002\nAnimatorState:\n  m_Name: Throw\n  m_Speed: {speed}\n"
+                + $"  m_SpeedParameterActive: {speedParameterActive}\n"
+                + $"  m_Motion: {{fileID: 7400000, guid: {clipGuid}, type: 2}}\n";
+
+            string clip = "--- !u!74 &7400000\nAnimationClip:\n  m_Name: frag_throw\n"
+                + "  m_PositionCurves:\n  - curve:\n      m_Curve:\n"
+                + "      - serializedVersion: 3\n        time: 0\n        value: {x: 0, y: 0, z: 0}\n"
+                + "      - serializedVersion: 3\n        time: 0.25\n        value: {x: 1, y: 0, z: 0}\n"
+                + "  m_Events:\n"
+                + $"  - time: {eventTime}\n    functionName: {eventFunction}\n    data:\n"
+                + "    objectReferenceParameter: {fileID: 0}\n    floatParameter: 0\n"
+                + "  m_StopTime: 1.8333335\n";
+
+            return UnityAssetIndex.ForFixtures(
+                new Dictionary<string, string>
+                {
+                    ["fixtures/frag.prefab"] = prefab,
+                    ["fixtures/Old Frag.controller"] = controller,
+                    ["fixtures/frag_throw.anim"] = clip,
+                },
+                new Dictionary<string, string>
+                {
+                    [controllerGuid] = "fixtures/Old Frag.controller",
+                    [clipGuid] = "fixtures/frag_throw.anim",
+                });
+        }
+
+        [Fact]
+        public void ThrowReleaseDelay_IsCleanWhenTheAuthoredValueMatchesTheClip()
+        {
+            // 1.2381772 s of clip at m_Speed 1.3 is 0.952444 s of wall clock.
+            Assert.Empty(AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip(
+                ThrowableFixture()));
+        }
+
+        [Fact]
+        public void ThrowReleaseDelay_ReportsTheOldSharedConstant()
+        {
+            GateFinding finding = Assert.Single(
+                AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip(
+                    ThrowableFixture("  releaseDelay: 0.6")));
+
+            Assert.Equal("A9", finding.RuleId);
+            Assert.Contains("0.6000000", finding.Message);
+            Assert.Contains("0.9524440", finding.Message);
+        }
+
+        /// <summary>
+        /// The clause the state speed earns: the same clip at speed 1 is a different answer.
+        /// </summary>
+        /// <remarks>
+        /// Without dividing by <c>m_Speed</c> the check would expect the raw 1.2381772 s and
+        /// call today's correct authoring wrong. This is the assertion that fails if the divide
+        /// is ever dropped as "a detail".
+        /// </remarks>
+        [Fact]
+        public void ThrowReleaseDelay_DividesTheClipTimeByTheStateSpeed()
+        {
+            Assert.Empty(AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip(
+                ThrowableFixture("  releaseDelay: 1.2381772", speed: "1")));
+
+            GateFinding finding = Assert.Single(
+                AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip(
+                    ThrowableFixture("  releaseDelay: 1.2381772")));
+
+            Assert.Contains("0.9524440", finding.Message);
+        }
+
+        [Fact]
+        public void ThrowReleaseDelay_ReportsAnUnserializedDelay()
+        {
+            GateFinding finding = Assert.Single(
+                AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip(
+                    ThrowableFixture(releaseDelayLine: null)));
+
+            Assert.Contains("serializes no configuration.releaseDelay", finding.Message);
+        }
+
+        [Fact]
+        public void ThrowReleaseDelay_CannotTellWhenTheSpeedIsParameterDriven()
+        {
+            AssetGateUnknownException thrown = Assert.Throws<AssetGateUnknownException>(
+                () => AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip(
+                    ThrowableFixture(speedParameterActive: "1")).ToList());
+
+            Assert.Contains("driven by a parameter", thrown.Message);
+        }
+
+        [Fact]
+        public void ThrowReleaseDelay_CannotTellWhenTheClipRaisesNoReleaseEvent()
+        {
+            AssetGateUnknownException thrown = Assert.Throws<AssetGateUnknownException>(
+                () => AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip(
+                    ThrowableFixture(eventFunction: "Footstep")).ToList());
+
+            Assert.Contains("raises no SpawnThrowable", thrown.Message);
+        }
+
+        /// <summary>
+        /// A tree with no throwable at all is exit 2, never a clean run.
+        /// </summary>
+        [Fact]
+        public void ThrowReleaseDelay_CannotTellWhenNoPrefabCarriesAThrowableWeapon()
+        {
+            AssetGateUnknownException thrown = Assert.Throws<AssetGateUnknownException>(
+                () => AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip(
+                    ThrowableFixture(withThrowable: false)).ToList());
+
+            Assert.Contains("carries a ThrowableWeapon", thrown.Message);
+        }
+
+        /// <summary>
+        /// The event reader answers from <c>m_Events</c>, not from the first <c>time</c> key.
+        /// </summary>
+        /// <remarks>
+        /// Asserted directly as well as through A9 because it is the one way this whole check
+        /// could be confidently wrong rather than absent: the fixture's first keyframe sits at
+        /// <c>time: 0</c>, and a scalar lookup would return that and expect a release delay of
+        /// zero.
+        /// </remarks>
+        [Fact]
+        public void AnimationEventTime_IgnoresCurveKeyframeTimes()
+        {
+            UnityAssetDocument clip = ThrowableFixture()
+                .Documents("fixtures/frag_throw.anim")
+                .Single(d => d.ClassId == 74);
+
+            Assert.Equal(1.2381772, clip.AnimationEventTime("SpawnThrowable")!.Value, 7);
+            Assert.Null(clip.AnimationEventTime("NoSuchEvent"));
+        }
+
         private static UnityAssetDocument OneDocument(string body) =>
             UnityAssetIndex.Parse(
                     "fixtures/one.prefab",
@@ -615,10 +806,13 @@ namespace Ironfront.Net.Replication.Tests
         /// and the two owed fields set to whatever the test is exercising.
         /// </summary>
         /// <remarks>
-        /// All seven keys are written because <c>RenderedLabels</c> now owes a staleness guard,
-        /// and an omitted key is what that guard reports. Pass <c>null</c> to omit an owed field.
+        /// All eight keys are written because <c>RenderedLabels</c> owes a staleness guard, and
+        /// an omitted key is what that guard reports. Pass <c>null</c> to omit an owed field.
+        /// <c>humanCountText</c> joined the owed set in phase 6 task 6.6 (ledger A-6); this
+        /// fixture failed the moment it did, which is the staleness guard working.
         /// </remarks>
-        private static UnityAssetIndex ScoreUiFixture(string? phaseText, string? phaseTimerText)
+        private static UnityAssetIndex ScoreUiFixture(
+            string? phaseText, string? phaseTimerText, string? humanCountText = "{fileID: 908}")
         {
             string body =
                 "  blueScoreText: {fileID: 905}\n  redScoreText: {fileID: 906}\n"
@@ -627,6 +821,7 @@ namespace Ironfront.Net.Replication.Tests
 
             if (phaseText != null) body += "  phaseText: " + phaseText + "\n";
             if (phaseTimerText != null) body += "  phaseTimerText: " + phaseTimerText + "\n";
+            if (humanCountText != null) body += "  humanCountText: " + humanCountText + "\n";
 
             return ScoreUiFixtureRaw(body);
         }
@@ -635,7 +830,7 @@ namespace Ironfront.Net.Replication.Tests
         /// The same prefab with an arbitrary serialized body, for tests about the body itself.
         /// </summary>
         /// <remarks>
-        /// Anchors 901-907 are Text-shaped MonoBehaviours the refs resolve to; 920 is a
+        /// Anchors 901-908 are Text-shaped MonoBehaviours the refs resolve to; 920 is a
         /// RectTransform and 921 a MonoBehaviour running a different script, both present so the
         /// type clause has something real to reject. 999999999999999 is deliberately absent.
         /// Without real objects here every red-path test would report for the resolution reason
@@ -649,7 +844,7 @@ namespace Ironfront.Net.Replication.Tests
             string prefab = "--- !u!1 &900\nGameObject:\n  m_Name: Score UI Canvas\n"
                 + Component(910, 900, ScoreUi, body.TrimEnd('\n'));
 
-            for (long anchor = 901; anchor <= 907; anchor++)
+            for (long anchor = 901; anchor <= 908; anchor++)
                 prefab += Component(anchor, 900, textScript, "  m_Text: label");
 
             prefab += "--- !u!224 &920\nRectTransform:\n  m_GameObject: {fileID: 900}\n";

@@ -46,6 +46,13 @@ public class ScoreUi : MonoBehaviour
 
 	public Text phaseTimerText;
 
+	// V10 task 7, checklist row E5, ledger A-6. E5 names THREE elements -- phase, timer and
+	// human count -- and this is the third. Until it was authored the count was concatenated
+	// into the phase label, which made the label's width change every time somebody joined and
+	// left the count with no independent position, style or visibility. Pinned by
+	// AssetWiringDetectors.ScoreUiTextRefsAreAssigned alongside the other two.
+	public Text humanCountText;
+
 	public Image blueBar;
 
 	public Image redBar;
@@ -159,9 +166,10 @@ public class ScoreUi : MonoBehaviour
 	/// <see cref="blueFlagsText"/> / <see cref="redFlagsText"/> survives only for a prefab that
 	/// predates the authoring, and must be deleted when capture points land (V10 task 8, blocked
 	/// on V8 task 1) — from then on those labels are live and borrowing them collides.
-	/// <b>Still owed: a dedicated human-count element.</b> The count is concatenated into the
-	/// phase label below rather than rendered on its own, which is why E5 stays open (ledger
-	/// A-6) even though both fields here are now assigned.
+	/// <see cref="humanCountText"/> is E5's third element, authored by phase 6 task 6.1's sibling
+	/// 6.6 (ledger A-6). The count used to be concatenated into the phase label, which made that
+	/// label's width change every time somebody joined; it now renders on its own and the
+	/// concatenation survives only as a fallback for a prefab that predates the element.
 	/// </para>
 	/// <para>
 	/// Staleness is not a parameter here — that decision belongs to the presenter, which has the
@@ -202,7 +210,23 @@ public class ScoreUi : MonoBehaviour
 		Text phaseTarget = instance.phaseText != null ? instance.phaseText : instance.blueFlagsText;
 		if (phaseTarget != null)
 		{
-			phaseTarget.text = PhaseLabel(phase) + (humanPlayerCount > 0 ? " (" + humanPlayerCount + ")" : string.Empty);
+			// The count moves OUT of the phase label the moment a dedicated element exists.
+			// Keeping both would render it twice; keeping only the concatenation is the E5 gap
+			// (ledger A-6). The fallback survives for a prefab that predates the authoring, and
+			// retires with the flag-text fallback below it.
+			phaseTarget.text = instance.humanCountText != null
+				? PhaseLabel(phase)
+				: PhaseLabel(phase) + (humanPlayerCount > 0 ? " (" + humanPlayerCount + ")" : string.Empty);
+		}
+		if (instance.humanCountText != null)
+		{
+			// Self-describing, because a bare number in a HUD corner says nothing and a
+			// companion static label would be a second thing to author and keep in sync.
+			// Zero renders blank rather than "0 players" -- before the first broadcast there is
+			// no answer, and stating one would be a fabricated zero.
+			instance.humanCountText.text = humanPlayerCount > 0
+				? humanPlayerCount + (humanPlayerCount == 1 ? " player" : " players")
+				: string.Empty;
 		}
 		// A negative secondsRemaining means this phase has no clock. Blank, never "0:00".
 		Text timerTarget = instance.phaseTimerText != null ? instance.phaseTimerText : instance.redFlagsText;

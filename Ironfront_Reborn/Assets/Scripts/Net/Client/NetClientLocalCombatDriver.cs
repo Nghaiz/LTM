@@ -152,6 +152,21 @@ namespace Ironfront.Net.Unity.Client
             // ClientCombatState has no clock of its own, by the same decision KillfeedModel made.
             _state.Tick(Time.time);
 
+            // X-16: PredictFire had zero production callers, so predictedShots was 0 at every
+            // lane-B checkpoint while the server emptied a magazine — the field could not be
+            // read as evidence about anything.
+            //
+            // Called every frame the trigger is down rather than on a rising edge, and that is
+            // correct rather than lazy: PredictFire runs ServerFireResolver.CheckCanFire first,
+            // so the cooldown, the empty clip, the reload and the death all reject the extra
+            // calls. An edge detector here would additionally have to model auto-fire, which is
+            // the same predicate written a second time and free to disagree with the server's.
+            //
+            // Safe by construction: PredictFire never raycasts, never applies damage and never
+            // moves health. It stamps a local cooldown and decrements a predicted clip that the
+            // next snapshot reconciles.
+            if (_state.IsAlive && FirePressed()) _state.PredictFire(Time.time);
+
             // Two ways in, and the keyboard is still first so a human press costs no lookup.
             //
             // Defect 4 of the phase-3D report: this line was Input.GetKeyDown alone, so check 13
@@ -182,6 +197,40 @@ namespace Ironfront.Net.Unity.Client
         {
             FpsActorController local = FpsActorController.instance;
             return local != null && local.InputSource != null && local.InputSource.RespawnPressed;
+        }
+
+        /// <summary>
+        /// Whether the local player's trigger is down this frame. Ledger <b>X-16</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Reads <c>IInputSource.Buttons</c> rather than <c>Input.GetMouseButton</c>, and for the
+        /// same reason the respawn path reads <c>RespawnPressed</c> (defect 4 of the phase-3D
+        /// report): a keyboard-only check leaves every scripted client, controller and rebind
+        /// with no path at all, so a recorded programme could fire on the server and never
+        /// predict on the client. <c>Buttons</c> is the packed wire word both sources fill.
+        /// </para>
+        /// <para>
+        /// Resolved per frame rather than cached, exactly as
+        /// <see cref="ScriptedRespawnPressed"/> is: the body is spawned, killed and respawned
+        /// independently of this component, so a cached reference goes stale at a death.
+        /// </para>
+        /// <para>
+        /// <b>What this still does NOT deliver.</b> <c>PredictFire</c>'s own remark names the
+        /// effects a caller plays on <c>FireRejection.None</c> — muzzle flash, recoil, a cosmetic
+        /// tracer and an ammo readout. Nothing in the build reads
+        /// <c>ClientCombatState.AmmoInClip</c> or <c>PredictedShots</c> except
+        /// <c>LaneBCheckpointRecorder</c>, so what this call buys today is that the recorder's
+        /// <c>predictedShots</c> stops being a constant zero and becomes evidence. The
+        /// presentation half needs a presenter that does not exist yet (ledger X-16).
+        /// </para>
+        /// </remarks>
+        private static bool FirePressed()
+        {
+            FpsActorController local = FpsActorController.instance;
+            if (local == null || local.InputSource == null) return false;
+
+            return (local.InputSource.Buttons & (ushort)InputButtons.Fire) != 0;
         }
 
         /// <summary>

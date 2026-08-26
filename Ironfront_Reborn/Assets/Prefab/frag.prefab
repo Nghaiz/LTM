@@ -68,6 +68,7 @@ MonoBehaviour:
     reloadTime: 0
     cooldown: 1.3
     unholsterTime: 0
+    releaseDelay: 0.952444
     aimFov: 50
     forceAutoReload: 0
     loud: 0

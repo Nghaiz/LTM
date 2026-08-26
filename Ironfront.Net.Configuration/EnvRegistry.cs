@@ -120,6 +120,31 @@ namespace Ironfront.Net.Configuration
             "second scene.",
             "27015");
 
+        /// <summary>Which half of the netcode this process is. Ledger X-10.</summary>
+        public static readonly EnvVar NetRole = new EnvVar(
+            "IRONFRONT_ROLE", "Game server", "game server, client",
+            "server | client. Declared BEFORE any scene loads, which is the whole point.\n" +
+            "\n" +
+            "Dustbowl carries an active NetServer AND an active NetClient, so every process that\n" +
+            "loads it runs both bootstraps, and each claims the role only if the other has not.\n" +
+            "Both sit at execution order -1000, so with nothing declared which one wins is\n" +
+            "Unity's tie to break. That is not cosmetic: every client presenter latches\n" +
+            "enabled = false during the same Awake pass and never re-checks, so a process that\n" +
+            "loses the flip has a dead killfeed, name table and local combat driver for the rest\n" +
+            "of its life.\n" +
+            "\n" +
+            "SHIPPED BLANK, and the blank behaviour is unchanged: the bootstraps decide exactly\n" +
+            "as they always have, which is what keeps offline single-player and the Editor\n" +
+            "sandbox working. A headless process needs nothing here either -- it is inferred to\n" +
+            "be a server. What this exists for is a RENDERED process that is a client, which had\n" +
+            "no way to say so at all.\n" +
+            "\n" +
+            "NOT IRONFRONT_LANEB_ROLE. That one also installs the lane-B harness, strips a\n" +
+            "bootstrap and writes checkpoint artifacts; this one only names a role, so setting it\n" +
+            "on a player build cannot drag verification scaffolding in. The command line\n" +
+            "-ironfront-role=client is the same declaration for a launcher that cannot set an\n" +
+            "environment.");
+
         /// <summary>Transport selection: the real socket, or the in-process wire.</summary>
         public static readonly EnvVar GameServerTransport = new EnvVar(
             "IRONFRONT_GAMESERVER_TRANSPORT", "Game server", "game server",
@@ -428,6 +453,7 @@ namespace Ironfront.Net.Configuration
             SharedSecret,
             MasterPort, MasterHost, GameServerMasterTls, GameServerMasterTlsTargetHost,
             GameServerMasterTlsPinnedFingerprint, DatabasePath,
+            NetRole,
             GameServerUdpPort, GameServerTransport, GameServerMaxConnections, GameServerMaxPlayers,
             GameServerPublicIp, GameServerMapIds, GameServerScene, GameServerAcceptUnsignedTickets,
             ClientHost, ClientPort, ClientVerbose, ClientPredictLocalVehicle,
