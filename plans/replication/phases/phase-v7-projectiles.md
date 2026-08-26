@@ -513,7 +513,7 @@ ships and is already tested; that fallback existing is a precondition of startin
 
 | Gap | Why |
 |---|---|
-| **The library stepper is not the production hit path.** `ServerProjectileBridge.AuthoritativeFlight` defaults **off**. | The Unity server already simulates every projectile it spawns and applies its damage through `Hitbox.ProjectileHit` and `ActorManager.Explode` — the path phase-05 and V1 established, which works today. Running both would apply every damage number **twice**, which is the exact "exactly once" clause criterion 5 protects. Turning it on is a follow-up whose first task is deleting the engine-side damage call, not a config change. |
+| **The library stepper is not the production hit path.** `ServerProjectileBridge.AuthoritativeFlight` defaults **off**. | The Unity server already simulates every projectile it spawns and applies its damage through `Hitbox.ProjectileHit` and `ActorManager.Explode` — the path phase-05 and V1 established, which works today. Running both would apply every damage number **twice**, which is the exact "exactly once" clause criterion 5 protects. Turning it on is a follow-up whose first task is deleting the engine-side damage call, not a config change. **Decided 2026-08-26 and the answer is still off** — not on a bad number but because the load harness cannot fire, so two of the three required inputs could not be produced at all (ledger X-34). See § 6.1.2 for the numbers and the reopening condition. |
 | **Grenades and deployables are never ballistically stepped**, at any setting. | The stepper terminates a projectile on the first surface its segment touches. A grenade *bounces* off that surface and nothing in the library models a bounce; a deployable's pose comes from a Rigidbody. Pinned by `ABouncingOrRigidbodyProjectileIsNotBallisticallyStepped`. |
 | **The client prefab array is unauthored.** | `NetClientProjectilePresenter._prefabsByKind` has to be filled in the Editor — a client cannot instantiate a projectile it has no prefab for. Until it is, no replicated projectile renders, and `UnrenderableKinds` counts every message that arrives. The server side needs no authoring: it learns each kind's numbers from the first prefab of that kind it fires. |
 | **Ten plan-named tests are not written** — the four grenade tests, the three throwable tests, and the guided-missile end-to-end pair. | They exercise Unity `MonoBehaviour` behaviour, and this phase adds no EditMode harness. Their subjects are covered at the library level where the arithmetic lives. |
@@ -566,6 +566,48 @@ never one trajectory to preserve. `OfflineBehaviourChangeTests` pins all three a
 level and says in its own remarks that it cannot reach the Unity paths.
 
 ---
+
+### 6.1.2. `AuthoritativeFlight` was decided, and the answer is still OFF — recorded 2026-08-26
+
+> Added by [`plans/debt-closure/phases/phase-5-cutover-gate.md`](../../debt-closure/phases/phase-5-cutover-gate.md).
+> The row above gave a reason that reads as scheduling — *"turning it on is a follow-up"* — which
+> leaves a reader unable to tell whether anyone ever came back to it. Someone did. This records
+> what they found, so the next reader inherits a decision rather than an open question.
+
+**The decision is OFF, and not because a number came back bad.** Phase 5 required three inputs and
+pre-committed that a missing one is a "no". Two could not be produced at all, for one shared cause:
+`Ironfront.Net.LoadHarness`'s synthetic client **cannot fire**. `HarnessBehavior` declares exactly
+`Idle` and `Move`, and every input frame carries `InputButtons.None` (debt-closure ledger **X-34**).
+
+- **Damage accounting** — **0 hits producible**, so criterion 5's "exactly once" has never had an
+  input to count.
+- **Tick p99** — **1,502 µs** against a 33,333 µs budget (n = 3,637), but measured with the flag off
+  and nothing firing, so the ballistic stepper stepped zero projectiles. That is the baseline the
+  stepper's cost would be *added to*, not a measurement of it.
+- **Bandwidth** — **0 B/s** of projectile traffic, for the same reason. The shipped baseline is
+  2,590 B/s per client against an 8,192 B/s budget.
+
+**What criterion 5 is protected by in the meantime**, since the run cannot grade it:
+`ProjectileDamageOwnershipTests` proves the engine and the library are never simultaneously the
+owner in either configuration, and `ClientWiringGate` **G7** fails the build if any of the three
+engine-side damage sites loses its guard. Those are proofs about the code; criterion 5 asks for a
+run, and the run is what is missing.
+
+**Phase 2 task 2e's cutover patch is written and unlanded** — the one whose first act is deleting the
+engine-side damage call. It is referenced from debt-closure ledger row **C-1** so the next attempt
+starts from a patch instead of from a decision.
+
+**The default is no longer a remark.** `Assets/Tests/EditMode/ProjectileAuthorityDefaultTests.cs`
+asserts both that the flag is off at subsystem registration and that, at that default, a dedicated
+server's *engine* still owns projectile damage while the library stepper does not. Inverting the
+default turns both RED.
+
+**Reopening condition, stated so nobody has to guess it.** Close X-34 (a `HarnessBehavior` that
+fires), then: ≥ 100 hits across ≥ 2 seeds with **0** double applications and **0** zero
+applications; tick p99 **< 33,333 µs** with the stepper genuinely active at 16 clients / 12 vehicles
+over n ≥ 3,000 loaded ticks; per-client bandwidth **< 8,192 B/s** mean and worst. Any one failing
+keeps the flag off. Full workings:
+[`2026-08-26-phase-5-cutover-gate.md`](../../debt-closure/reports/2026-08-26-phase-5-cutover-gate.md).
 
 ## 7. Handoff
 

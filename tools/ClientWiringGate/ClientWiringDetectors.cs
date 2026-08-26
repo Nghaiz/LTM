@@ -312,6 +312,36 @@ namespace Ironfront.Tools.ClientWiringGate
             "LibraryOwnsProjectileDamage",
         };
 
+        /// <summary>
+        /// The one file G8 governs - <c>Actor</c>, where every damage source in the game funnels
+        /// into a single <c>Damage</c> method and therefore into a single ownership guard.
+        /// </summary>
+        /// <remarks>
+        /// Scoped to one file on purpose. The guard is deliberately NOT spread across the six
+        /// callers (<c>Hitbox</c>, <c>MeleeWeapon</c>, <c>ExplodingProjectile</c>,
+        /// <c>ActorManager</c>, <c>Vehicle</c>, <c>AiActorController</c>), so there is exactly
+        /// one place to grade and widening this would report correct code.
+        /// </remarks>
+        private static readonly string[] HealthOwnershipScope = { "/Actor.cs" };
+
+        /// <summary>The type G8's messages name, for a reader who has only the CI log.</summary>
+        private const string HealthOwnershipOwner = "Actor";
+
+        /// <summary>The method that funnels every damage source in the game.</summary>
+        private const string HealthOwnershipMethod = "Damage";
+
+        /// <summary>The local whose value, and whose polarity, is the guard.</summary>
+        private const string HealthOwnershipLocal = "ownsHealth";
+
+        /// <summary>The member the guard negates. See <see cref="NegatesClientTest"/>.</summary>
+        private const string ClientTestMember = "IsClient";
+
+        /// <summary>The field only the health's owner may subtract from.</summary>
+        private const string HealthField = "health";
+
+        /// <summary>The call only the health's owner may make.</summary>
+        private const string DeathMethod = "Die";
+
         /// <summary>Parses at the language version Unity uses, so fixtures and the real tree agree.</summary>
         public static SyntaxTree Parse(string source, string path) =>
             CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(UnityLanguageVersion), path);
@@ -555,6 +585,178 @@ namespace Ironfront.Tools.ClientWiringGate
 
             return false;
         }
+
+        /// <summary>
+        /// G8 - <c>Actor.Damage</c>'s <c>ownsHealth</c> guard: present, correctly polarised, and
+        /// actually covering the two operations only the health's owner may perform. Ledger X-6.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why this is not another G7.</b> <see cref="HasGuardAbove"/> deliberately does not
+        /// model polarity - it answers "is there a guard at all", because for G7 an inverted
+        /// guard still leaves exactly one side applying damage. Here polarity IS the fault.
+        /// <c>ownsHealth</c> is <c>!NetContext.IsClient</c>; drop the <c>!</c> and a client
+        /// subtracts health the server already subtracted and calls <c>Die()</c> for a death
+        /// <c>S_DEATH</c> is about to announce. Nothing else in the tree would notice: the
+        /// declaration still exists, both call sites are still guarded, and G7 stays green.
+        /// </para>
+        /// <para>
+        /// <b>Why a gate and not a test.</b> <c>Actor</c> compiles into <c>Assembly-CSharp</c>,
+        /// which no test assembly can reference (ledger <b>E-11b</b>), so the guard cannot be
+        /// exercised from NUnit at all. That is the same reason G7 exists, and it is why X-6 sat
+        /// unpinned: the obvious instrument was unavailable and no second one was built.
+        /// </para>
+        /// <para>
+        /// <b>Three clauses because three different edits break it.</b> Removing the negation
+        /// (clause 1) inverts ownership; unguarding the subtraction (clause 2) double-subtracts
+        /// on a client; unguarding the death branch (clause 3) kills a body locally that the
+        /// server has not killed. Each was mutated and observed RED separately - a single
+        /// combined assertion would have passed on two of the three.
+        /// </para>
+        /// <para>
+        /// <b>This is the pin Phase 5 rests on.</b> The cutover decides
+        /// <c>AuthoritativeFlight</c> on the strength of "damage applies exactly once", and that
+        /// sentence is only true while a client applies none. Ledger C-1.
+        /// </para>
+        /// </remarks>
+        /// <summary>Whether G8 governs this file at all. See <see cref="HealthOwnershipScope"/>.</summary>
+        public static bool IsHealthOwnershipScoped(string path) =>
+            !IsExcludedFromScan(path) && IsInScope(path, HealthOwnershipScope);
+
+        public static IReadOnlyList<GateFinding> FindUnpinnedHealthOwnershipGuard(
+            SyntaxTree tree, string path)
+        {
+            var findings = new List<GateFinding>();
+
+            if (IsExcludedFromScan(path)) return findings;
+            if (!IsInScope(path, HealthOwnershipScope)) return findings;
+
+            MethodDeclarationSyntax? damage = tree.GetRoot()
+                .DescendantNodes()
+                .OfType<MethodDeclarationSyntax>()
+                .FirstOrDefault(m => m.Identifier.ValueText == HealthOwnershipMethod);
+
+            if (damage == null)
+            {
+                findings.Add(new GateFinding(
+                    "G8", path, 0,
+                    $"No '{HealthOwnershipMethod}' method in {HealthOwnershipOwner}. G8 grades the "
+                    + $"'{HealthOwnershipLocal}' guard inside it; if the method was renamed, move "
+                    + "this rule with it in the same commit rather than letting the guard go "
+                    + "ungraded (ledger X-6)."));
+                return findings;
+            }
+
+            // Clause 1 - the declaration exists and negates a client test.
+            VariableDeclaratorSyntax? declarator = damage.DescendantNodes()
+                .OfType<VariableDeclaratorSyntax>()
+                .FirstOrDefault(v => v.Identifier.ValueText == HealthOwnershipLocal);
+
+            if (declarator == null)
+            {
+                findings.Add(new GateFinding(
+                    "G8", path, LineOf(damage),
+                    $"{HealthOwnershipOwner}.{HealthOwnershipMethod} declares no "
+                    + $"'{HealthOwnershipLocal}' local. Every damage source in the game funnels "
+                    + "through this method, so this local is the only thing stopping a client "
+                    + "from writing health the server owns (ledger X-6, D5)."));
+            }
+            else if (!NegatesClientTest(declarator.Initializer?.Value))
+            {
+                findings.Add(new GateFinding(
+                    "G8", path, LineOf(declarator),
+                    $"'{HealthOwnershipLocal}' is not '!<...>.{ClientTestMember}'. Its polarity IS "
+                    + "the guard: unnegated, a client subtracts health the server already "
+                    + "subtracted and calls Die() for a death S_DEATH is about to announce. "
+                    + "Phase 5's 'damage applies exactly once' is only true while a client "
+                    + "applies none (ledger X-6, C-1)."));
+            }
+
+            // Clauses 2 and 3 - the two owner-only operations are actually under it.
+            bool subtractionSeen = false;
+
+            foreach (AssignmentExpressionSyntax assignment in damage.DescendantNodes()
+                         .OfType<AssignmentExpressionSyntax>())
+            {
+                if (!assignment.IsKind(SyntaxKind.SubtractAssignmentExpression)) continue;
+                if (assignment.Left is not IdentifierNameSyntax left) continue;
+                if (left.Identifier.ValueText != HealthField) continue;
+
+                subtractionSeen = true;
+                if (HasGuardAbove(assignment, MentionsHealthOwnershipGuard)) continue;
+
+                findings.Add(new GateFinding(
+                    "G8", path, LineOf(assignment),
+                    $"'{HealthField} -= ...' runs with no '{HealthOwnershipLocal}' guard above it. "
+                    + "On a client this field is written from snapshots, so subtracting here "
+                    + "double-counts every hit the server already applied (ledger X-6, D5)."));
+            }
+
+            if (!subtractionSeen)
+            {
+                findings.Add(new GateFinding(
+                    "G8", path, LineOf(damage),
+                    $"No '{HealthField} -= ...' in {HealthOwnershipOwner}."
+                    + $"{HealthOwnershipMethod}. G8 cannot grade a guard over an operation that is "
+                    + "no longer there; re-point this rule at wherever health is now subtracted, "
+                    + "in the same commit (ledger X-6)."));
+            }
+
+            bool deathSeen = false;
+
+            foreach (InvocationExpressionSyntax invocation in damage.DescendantNodes()
+                         .OfType<InvocationExpressionSyntax>())
+            {
+                if (NameOfInvoked(invocation) != DeathMethod) continue;
+
+                deathSeen = true;
+                if (HasGuardAbove(invocation, MentionsHealthOwnershipGuard)) continue;
+
+                findings.Add(new GateFinding(
+                    "G8", path, LineOf(invocation),
+                    $"'{DeathMethod}(...)' runs with no '{HealthOwnershipLocal}' guard above it. "
+                    + "A client's copy of health genuinely reaches zero from snapshots, so this "
+                    + "kills the body locally for a death S_DEATH is about to announce (ledger "
+                    + "X-6, D5)."));
+            }
+
+            if (!deathSeen)
+            {
+                findings.Add(new GateFinding(
+                    "G8", path, LineOf(damage),
+                    $"No '{DeathMethod}(...)' in {HealthOwnershipOwner}.{HealthOwnershipMethod}. "
+                    + "The death branch is half of what the guard protects; if it moved, move "
+                    + "this rule with it in the same commit (ledger X-6)."));
+            }
+
+            return findings;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="initializer"/> is a logical NOT of something ending in
+        /// <see cref="ClientTestMember"/>.
+        /// </summary>
+        /// <remarks>
+        /// Matched on the member NAME rather than its fully-qualified receiver, so the guard may
+        /// be written <c>!NetContext.IsClient</c> or
+        /// <c>!Ironfront.Net.Unity.NetContext.IsClient</c> without the rule caring. What it does
+        /// care about is the <c>!</c>.
+        /// </remarks>
+        private static bool NegatesClientTest(ExpressionSyntax? initializer)
+        {
+            if (initializer is not PrefixUnaryExpressionSyntax unary) return false;
+            if (!unary.IsKind(SyntaxKind.LogicalNotExpression)) return false;
+
+            return unary.Operand.DescendantNodesAndSelf()
+                .OfType<SimpleNameSyntax>()
+                .Any(name => name.Identifier.ValueText == ClientTestMember);
+        }
+
+        /// <summary>G8's predicate: the ownership local by name.</summary>
+        private static bool MentionsHealthOwnershipGuard(SyntaxNode condition) =>
+            condition.DescendantNodesAndSelf()
+                .OfType<SimpleNameSyntax>()
+                .Any(name => name.Identifier.ValueText == HealthOwnershipLocal);
 
         /// <summary>Whether G4 governs this file at all. See <see cref="PerActorGuardScope"/>.</summary>
         public static bool IsPerActorGuardScoped(string path)
