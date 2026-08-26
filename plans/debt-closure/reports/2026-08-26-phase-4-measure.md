@@ -310,6 +310,29 @@ The clip times remain as Phase 0 read them: `frag_throw.anim:2248-2250` → **1.
 The Editor half of 4.3 — confirming each throwable prefab's Animator still fires `SpawnThrowable()`
 — is deferred with it, since it has no value ahead of the authoring it is meant to check.
 
+### AC-3 discharged 2026-08-26 by phase 6 task 6.1 — recorded here rather than left as a FAILED line
+
+Phase 6 merged in `fa275d5` (#195) hours after this report was written, and it landed all three of
+the clauses above. Verified by path on 2026-08-26 against `develop`, not taken from the phase-6
+commit message:
+
+| 4.3 clause | State now | Evidence |
+|---|---|---|
+| Per-weapon values authored from their clips | **Authored** | `Prefab/frag.prefab:71` and `Prefab/spearhead.prefab:71` → `releaseDelay: 0.952444` (= 1.2381772 / 1.3); `Prefab/ammobox.prefab:88` and `Prefab/medipack.prefab:88` → `releaseDelay: 0.3186882` (= 0.4142947 / 1.3). The `0.6f` at `Weapon.cs:74` survives only as the class initializer no shipped throwable now uses |
+| The replacement test fails on a de-tuned value | **Replaced, and red-pathed** | `AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip` (gate rule A9) with `ThrowReleaseDelay_ReportsTheOldSharedConstant` feeding it `releaseDelay: 0.6` and asserting a finding — the exact de-tune this clause names. The old `TicksFor(0.6f) == TicksFor(0.6f)` self-comparison is gone |
+| V7's D7 record carries the offline-vs-server amendment | **Amended** | `phase-v7-projectiles.md`, in the same commit, per phase 6 AC-2 |
+
+**So AC-3 now reads MET, and the FAILED verdict in § 12 is left standing rather than edited** — the
+same discipline phase 8's AC-4 applied to the roll-up. A criterion that failed on a dependency and
+was later satisfied by that dependency landing is a different fact from a criterion that was met on
+the day, and collapsing the two would erase the ordering constraint that made phase 4 report a
+failure instead of waiting.
+
+**What this does not discharge:** the Editor half — confirming each throwable prefab's Animator
+still fires `SpawnThrowable()` — is now checkable and was still not run. Gate rule A9 walks
+prefab → Animator → controller → Throw state → clip on every CI run, which covers the drift this
+half was watching for; the one-time Editor eyeball it asked for is superseded rather than owed.
+
 ---
 
 ## 10. Task 4.4 — the three assumed-closed claims, re-verified (AC-4)
