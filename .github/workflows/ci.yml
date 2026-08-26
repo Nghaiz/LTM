@@ -144,6 +144,16 @@ jobs:
         shell: pwsh
         run: pwsh tools/check-plugin-define-constraints.ps1
 
+      # plans/asmdef-seam/plan.md success criterion 5 — "something fails if it is re-included".
+      # This step IS that something. A HARD gate for the same reason as the three above: the
+      # `dotnet build` step links four Net/Diagnostics files with IRONFRONT_NO_DIAGNOSTICS absent,
+      # so it compiles the INCLUDED configuration only and is structurally blind to a dropped
+      # guard. Nothing else here builds a player, and no shipping client target exists yet, so
+      # without this the exclusion could rot indefinitely with every check green.
+      - name: Check Net/Diagnostics compiles out of a shipping player
+        shell: pwsh
+        run: pwsh tools/check-diagnostics-exclusion.ps1
+
       # if: always() — the results are most valuable exactly when the previous step failed.
       - name: Upload test results and coverage
         if: always()

@@ -38,7 +38,7 @@ the cost of the bindings layer that replaces its legacy references — not the c
 |---|---|---|---|---|
 | `Net/Headless` | 1 | **0** | — | done |
 | `Net/Input` | 8 | **2** (measured) | `LoadoutUi`, `OptionsUi` | **C2 — done 2026-08-26** |
-| `Net/Diagnostics` | 11 | 15 *(unverified — see below)* | — | **C3** |
+| `Net/Diagnostics` | **13** | **13** — of which **5** legacy, **8** `Net/Client` | `LaneBCheckpointRecorder` (all 13) | **C3 — gate done 2026-08-26; asmdef → C4** |
 | `Net/Client` | 25 | 31 *(unverified — see below)* | `Actor` 53×, `Vehicle` 47×, `Weapon` 23× | **C4** |
 
 > **The `Net/Input` row said `~8 real`, with `Helicopter` at 16 references and
@@ -55,6 +55,19 @@ the cost of the bindings layer that replaces its legacy references — not the c
 > either phase from this table — enumerate first, stripping comments and string literals, the
 > way `tools/check-net-layering.ps1` RULE 5b now does. C4's `Actor 53× / Vehicle 47×` is
 > plausible on its face, but "plausible" is what `Helicopter 16×` looked like too.
+>
+> **C3 enumerated on 2026-08-26 and the warning paid for itself twice.** 11 files were 13;
+> 15 types were 13 (`Path` is `System.IO.Path`; `State` matched a `private` nested enum in
+> `ActiveRaggy`) — and, decisively, **8 of the 13 are declared in `Net/Client`, not in
+> `Assembly-CSharp` at all.** They only *look* legacy because C4 has not run yet. That killed
+> C3's asmdef rather than its gate: sealing before C4 means 8 interfaces deleted the moment
+> `Net/Client` becomes an assembly Diagnostics can simply reference. See
+> [`phase-c3-net-diagnostics.md`](phases/phase-c3-net-diagnostics.md) § 0.
+>
+> **C4's own row is now the last unverified one, and it is the one most likely to be wrong** —
+> `Actor 53×` and `Vehicle 47×` were counted over a tree in which `Net/Client` and
+> `Net/Diagnostics` were both still inside `Assembly-CSharp`, so an unknown share of those hits
+> is `Net/Client` naming its own neighbours. Enumerate before sizing.
 
 `Net/Server` and `Net/Shared` are already sealed. **`Net/Server/Bindings/` is the pattern to copy** —
 `IAiDriver`, `ICapturePointDirectory`, `ISpawnPointDirectory`: the server does not name a legacy
@@ -72,8 +85,8 @@ about layering.** A green `dotnet build` is the canonical false green on this tr
 | # | Phase | Goal | Effort |
 |---|---|---|---|
 | **C2** | [`phase-c2-net-input.md`](phases/phase-c2-net-input.md) | `Net/Input` behind one `ILocalInputEnvironment` binding for `LoadoutUi` / `OptionsUi` | M (3 d) |
-| **C3** | [`phase-c3-net-diagnostics.md`](phases/phase-c3-net-diagnostics.md) | `Net/Diagnostics` sealed and excluded from player builds | S (1–2 d) |
-| **C4** | [`phase-c4-net-client.md`](phases/phase-c4-net-client.md) | `Net/Client` behind ~10 bindings; EditMode tests become possible | L (multi-phase) |
+| **C3** | [`phase-c3-net-diagnostics.md`](phases/phase-c3-net-diagnostics.md) | The player-build exclusion gated. **Asmdef deferred into C4** — 8 of its 13 crossings are `Net/Client` types | S (1–2 d) |
+| **C4** | [`phase-c4-net-client.md`](phases/phase-c4-net-client.md) | `Net/Client` behind ~10 bindings; EditMode tests become possible. **Now also folds in `Net/Diagnostics`** — 5 bindings, not 13, once the Client assembly exists | L (multi-phase) |
 
 > **The stated reason for this ordering did not survive C2, but the ordering still holds.**
 > `Net/Input` does not reference `FpsActorController` at all, so the two halves never shared it
@@ -94,23 +107,31 @@ deliberately.** Four files consume `Net/Input` types and none can add an explici
 | `Assembly-CSharp/FpsActorController.cs` | Assembly-CSharp | **No** — permanently predefined. 31 `inputSource` sites; it *constructs* `LocalInputSource` and holds `NullInputSource.Instance` |
 | `NetBindings/NetDriverInputSink.cs` | Assembly-CSharp | **No** — the bindings folder is predefined by design |
 | `Net/Client/ClientVehicleStage.cs` | Assembly-CSharp | Only after **C4** |
-| `Net/Diagnostics/ScriptedInputSource.cs` | Assembly-CSharp | Only after **C3** |
+| `Net/Diagnostics/ScriptedInputSource.cs` | Assembly-CSharp | Only after **C4** — was "after C3"; the Diagnostics asmdef moved there on 2026-08-26, § 3 |
 
 `Net/Server` ships `autoReferenced: true` today for the same reason. Flipping either to `false`
 requires inverting `FpsActorController`'s pull-model into a pushed control surface, which is a
-behaviour-shaped change and the thing C2's AC-6 forbids. **It is one step, taken once, after C3
-and C4 have landed** — not a per-phase instruction. Whoever takes it kills `NetBindings` with it,
+behaviour-shaped change and the thing C2's AC-6 forbids. **It is one step, taken once, after C4
+has landed** (C3 no longer produces an assembly, so it is no longer a precondition) — not a
+per-phase instruction. Whoever takes it kills `NetBindings` with it,
 per § 2.
 
 ## 6. Success criteria
 
 1. Each of `Net/Input`, `Net/Diagnostics`, `Net/Client` compiles as its own assembly, with **zero**
-   references to `Assembly-CSharp`.
+   references to `Assembly-CSharp`. — `Net/Input` **met** (C2). The other two are **both C4's**:
+   8 of Diagnostics' 13 crossings are `Net/Client` types, so the two assemblies land together or
+   the first pays for interfaces the second deletes.
 2. Every legacy dependency crossing a seam does so through an interface owned by the sealed side,
    mirroring `Net/Server/Bindings/`.
 3. Every phase is graded by a **Unity compile over MCP**, not by `dotnet build`.
 4. `tools/check-net-layering.ps1` stays green and gains a rule per new seam.
 5. `Net/Diagnostics` is excluded from player builds, and something fails if it is re-included.
+   — **Met 2026-08-26.** The exclusion shipped 2026-08-21 (`#if !IRONFRONT_NO_DIAGNOSTICS` on all
+   13 files, demonstrated by `EditorBuildWindowsHarness -noDiagnostics`); the *something* is
+   `tools/check-diagnostics-exclusion.ps1`, wired into `ci.ps1` and `ci.yml`, nine mutations
+   observed RED and one negative control GREEN. It does **not** depend on the asmdef, and is
+   written to be deleted when C4 replaces it with `defineConstraints`.
 6. `Net/Client` has at least one EditMode test that could not have been written before C4 — the
    deliverable that justifies the phase.
 
