@@ -160,6 +160,14 @@ namespace Ironfront.Tools.ClientWiringGate
             ("/NetClientLocalCombatDriver.cs", "ScriptedRespawnPressed",
                 "reached only from Update(), a local-only per-frame path; the local player IS the "
                 + "subject of the read"),
+
+            // The same shape as the entry above, added with PredictFire's caller (ledger X-16).
+            // Reached only from Update(); the trigger it reads is the local player's own, and
+            // there is no actor id in scope to guard against. The same instruction applies: if a
+            // per-actor caller ever appears, delete this and guard the read.
+            ("/NetClientLocalCombatDriver.cs", "FirePressed",
+                "reached only from Update(), a local-only per-frame path; the local player IS the "
+                + "subject of the read"),
         };
 
         /// <summary>
