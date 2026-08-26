@@ -95,6 +95,19 @@ namespace Ironfront.Tools.ClientWiringGate
                 return 2;
             }
 
+            // G9 is an absence rule with the same shape and the same failure mode as G8: a
+            // full-tree run that never scanned Vehicle.cs would report the play-area boundary
+            // clean having graded nothing (ledger E-6).
+            if (!files.Any(ClientWiringDetectors.IsLevelBoundsScoped))
+            {
+                Console.Error.WriteLine(
+                    "[client-wiring] FAIL - a full-tree run discovered no file G9 grades, so the "
+                    + "LevelBounds clamp went unchecked. Either Vehicle.cs moved out of the "
+                    + "scanned roots, or it was renamed; re-point LevelBoundsScope in the same "
+                    + "commit (ledger E-6).");
+                return 2;
+            }
+
             int source = GateRunner.Run(
                 GateRunner.RouterEventNames(), files, Console.Out, Console.Error);
 

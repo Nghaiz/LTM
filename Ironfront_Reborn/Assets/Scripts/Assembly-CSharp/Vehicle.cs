@@ -1,5 +1,6 @@
 using System;
 using Ironfront.Net.Replication.Vehicles;
+using Ironfront.Net.Unity;
 using Ironfront.Net.Unity.Server;
 using UnityEngine;
 
@@ -273,6 +274,44 @@ public class Vehicle : MonoBehaviour
 			DropSeatClaim();
 			drainClaimAction.Start();
 		}
+
+		KeepInsideLevelBounds();
+	}
+
+	/// <summary>
+	/// Pulls this vehicle back into the play area when it leaves it. Ledger <b>E-6</b>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Server-only, because the fault it prevents is a wire fault.</b> Past the wire's
+	/// ±2048 m, <c>Quantize.PackPos</c> clamps every snapshot to the boundary while this server
+	/// keeps simulating the true position — so every client sees the vehicle pinned, forever,
+	/// with nothing logged. Offline there is no wire and no observer to disagree with, so the
+	/// same flight is merely eccentric and is left alone (D11's posture: single-player is not
+	/// changed by a networking fix).
+	/// </para>
+	/// <para>
+	/// <b>The outward velocity goes with the position.</b> Clamping alone leaves the rigidbody
+	/// still pushing into the wall, so it re-crosses on the next step and the counter climbs
+	/// once per physics tick — a clamp that fires 60 times a second reads as broken rather than
+	/// as a boundary. Only the component pointing out is removed; motion ALONG the face is
+	/// untouched, so a helicopter at the edge flies sideways rather than stopping dead.
+	/// </para>
+	/// </remarks>
+	private void KeepInsideLevelBounds()
+	{
+		if (!NetContext.IsServer || rigidbody == null) return;
+
+		if (!LevelBounds.ClampInside(rigidbody.position, out Vector3 inside)) return;
+
+		Vector3 pushedBackBy = inside - rigidbody.position;
+		rigidbody.position = inside;
+
+		Vector3 velocity = rigidbody.linearVelocity;
+		if (pushedBackBy.x != 0f) velocity.x = 0f;
+		if (pushedBackBy.y != 0f) velocity.y = 0f;
+		if (pushedBackBy.z != 0f) velocity.z = 0f;
+		rigidbody.linearVelocity = velocity;
 	}
 
 	public void OccupantEntered(Seat seat)

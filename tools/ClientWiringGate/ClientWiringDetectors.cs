@@ -799,6 +799,113 @@ namespace Ironfront.Tools.ClientWiringGate
         /// G4 it deliberately does NOT model polarity: it answers "is there a guard at all", and
         /// claiming to catch an inverted one would be a green that proves nothing.
         /// </remarks>
+        /// <summary>Files G9 grades. See <see cref="FindUnpinnedLevelBoundsCall"/>.</summary>
+        private static readonly string[] LevelBoundsScope = { "/Vehicle.cs" };
+
+        /// <summary>The method the bounds call has to live inside.</summary>
+        private const string LevelBoundsCaller = "KeepInsideLevelBounds";
+
+        /// <summary>The call itself, and the role guard it must sit behind.</summary>
+        private const string LevelBoundsMethod = "ClampInside";
+
+        /// <summary>Whether G9 governs this file at all. See <see cref="LevelBoundsScope"/>.</summary>
+        public static bool IsLevelBoundsScoped(string path) =>
+            !IsExcludedFromScan(path) && IsInScope(path, LevelBoundsScope);
+
+        /// <summary>
+        /// <b>G9</b> — the play-area boundary is still enforced, and still only by the server.
+        /// Ledger <b>E-6</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>An absence rule, because the fault E-6 records is an absence.</b>
+        /// <c>LevelBounds.IsInside</c> shipped with zero callers, and nothing said so for the
+        /// whole of V5 — a body past the wire's ±2048 m is clamped silently by
+        /// <c>Quantize.PackPos</c> while the server keeps simulating the true position, so
+        /// clients and server disagree permanently with no exception and no log line. Deleting
+        /// the call restores exactly that, and no test can catch it: <c>Vehicle</c> and
+        /// <c>LevelBounds</c> both compile into <c>Assembly-CSharp</c>, which no test assembly
+        /// can reference (<b>E-11b</b>) — the same wall G7 and G8 were built against.
+        /// </para>
+        /// <para>
+        /// <b>Two clauses, because two different edits break it.</b> Clause 1 is the call's
+        /// existence. Clause 2 is that it sits behind a server-role test: the clamp writes a
+        /// rigidbody position, and a client running it would fight its own snapshot corrections
+        /// at the boundary — a correction loop that looks like the very rubber-band this closes.
+        /// One assertion would have passed the second edit.
+        /// </para>
+        /// <para>
+        /// <b>What it deliberately does not claim.</b> This resolves no symbols, so it says a
+        /// call spelled <c>ClampInside</c> appears under a server guard — not that the volume is
+        /// authored, nor that the clamp is correct. Whether the authored box fits the wire is a
+        /// different question with a different owner: <c>PlayVolume.FitsOnTheWire</c>, asserted
+        /// in <c>PlayVolumeTests</c> and reported by <c>LevelBounds.SetupBounds</c> at runtime.
+        /// </para>
+        /// </remarks>
+        public static IReadOnlyList<GateFinding> FindUnpinnedLevelBoundsCall(
+            SyntaxTree tree, string path)
+        {
+            var findings = new List<GateFinding>();
+
+            if (IsExcludedFromScan(path)) return findings;
+            if (!IsInScope(path, LevelBoundsScope)) return findings;
+
+            MethodDeclarationSyntax? caller = tree.GetRoot()
+                .DescendantNodes()
+                .OfType<MethodDeclarationSyntax>()
+                .FirstOrDefault(m => m.Identifier.ValueText == LevelBoundsCaller);
+
+            if (caller == null)
+            {
+                findings.Add(new GateFinding(
+                    "G9", path, 0,
+                    $"No '{LevelBoundsCaller}' method. LevelBounds.IsInside had zero callers for "
+                    + "the whole of V5 and a body past the wire's ±2048 m desynced silently; if "
+                    + "this method was renamed, move G9 with it in the same commit rather than "
+                    + "letting the boundary go ungraded (ledger E-6)."));
+                return findings;
+            }
+
+            // Clause 1 - the call exists.
+            InvocationExpressionSyntax? clamp = caller.DescendantNodes()
+                .OfType<InvocationExpressionSyntax>()
+                .FirstOrDefault(i => i.Expression is MemberAccessExpressionSyntax member
+                                     && member.Name.Identifier.ValueText == LevelBoundsMethod);
+
+            if (clamp == null)
+            {
+                findings.Add(new GateFinding(
+                    "G9", path, LineOf(caller),
+                    $"{LevelBoundsCaller} calls no LevelBounds.{LevelBoundsMethod}. Without it a "
+                    + "vehicle leaving the play area keeps being simulated at a position the "
+                    + "snapshot encoder clamps, so every client sees it pinned to the boundary "
+                    + "forever and nothing is logged (ledger E-6)."));
+                return findings;
+            }
+
+            // Clause 2 - and it is behind a server-role test.
+            if (!HasGuardAbove(clamp, MentionsServerRoleTest))
+                findings.Add(new GateFinding(
+                    "G9", path, LineOf(clamp),
+                    $"LevelBounds.{LevelBoundsMethod} runs with no server-role guard above it. "
+                    + "The clamp writes a rigidbody position; on a client it fights the snapshot "
+                    + "corrections arriving for the same body, which presents as the rubber-band "
+                    + "this rule exists to prevent (ledger E-6)."));
+
+            return findings;
+        }
+
+        /// <summary>True for a node that tests the server role.</summary>
+        /// <remarks>
+        /// Text, not symbols, and deliberately narrow: <c>NetContext.IsServer</c> is the one
+        /// spelling in the Unity tree. A negated CLIENT test would read as equivalent to a human
+        /// and is not accepted, because <c>IsClient</c> and <c>IsServer</c> are not complements
+        /// — <c>NetRole.Offline</c> is neither, and offline is exactly the role this clamp is
+        /// meant to leave alone.
+        /// </remarks>
+        private static bool MentionsServerRoleTest(SyntaxNode node)
+            => node.ToString().Contains("IsServer", StringComparison.Ordinal);
+
         private static bool HasGuardAbove(SyntaxNode touch, Func<SyntaxNode, bool> mentionsGuard)
         {
             SyntaxNode? node = touch;
