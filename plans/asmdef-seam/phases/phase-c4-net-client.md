@@ -99,8 +99,8 @@ the number in it did not. It splits **by binding cluster**, never by file count:
 | Sub-phase | Cluster | Anchored on | Status |
 |---|---|---|---|
 | **C4a** | Actor / presence | `FpsActorController` 16×, `Actor` 7×, `Weapon` 4×, `IngameUi` 1× | **done 2026-08-26** |
-| **C4b** | Vehicle, projectile, decal, objective | `Vehicle` 13×, `ScoreUi` 8×, `Projectile` 5×, `VehicleSpawner` 2×, `DecalManager` 2×, `GrenadeProjectile` 1×, `ProjectileCatalogBuilder` 1× | next |
-| **C4c** | The seal | the two asmdefs, the tests, the gate rewrite | last |
+| **C4b** | Vehicle, projectile, decal, objective | `Vehicle` 13×, `ScoreUi` 8×, `Projectile` 5×, `VehicleSpawner` 2×, `DecalManager` 2×, `GrenadeProjectile` 1×, `ProjectileCatalogBuilder` 1× | **done 2026-08-26** |
+| **C4c** | The seal | the two asmdefs, the tests, the gate rewrite | **next, and unblocked** |
 
 **The split is three, not the four the row above originally implied, because the measurement
 halved the phase.** § 2's rule is *by binding cluster, never by file count*, and its stated reason
@@ -176,6 +176,49 @@ both-direction baseline of the legacy names `Net/Client` still contains — 8 de
 `not-a-reference` rows for the matcher artefacts above. RULE 6a fails on a name that is not
 listed; RULE 6b fails on a listed name the folder no longer contains, and says to **delete the
 row, never re-pin it**. Both observed RED against the real tree before landing.
+
+## 3.2 C4b — done 2026-08-26
+
+Six seams, retiring the remaining seven legacy types:
+
+| Binding | Retires | Implemented by |
+|---|---|---|
+| `IGameplayVehicleBody` | `Vehicle` | `Vehicle` directly |
+| `IVehiclePrefabDirectory` | `VehicleSpawner` | `SceneVehiclePrefabDirectory` |
+| `IProjectileBody` | `Projectile`, `GrenadeProjectile` | `Projectile` directly, virtual override on `GrenadeProjectile` |
+| `NetClientBindings.ProjectileCatalogReader` | `ProjectileCatalogBuilder` | a function, not a type — see below |
+| `IDecalSink` | `DecalManager`, `DecalType` | `DecalSinkBinding` |
+| `IObjectiveHud` | `ScoreUi` | `ScoreUiObjectiveHud` |
+
+**`Net/Client` now names zero legacy types.** RULE 6 reports `0 still to bind` and announces the
+folder ready for its asmdef.
+
+**Three decisions worth recording.**
+
+1. **`projectile is GrenadeProjectile` became `TryArmFuse`, and that is an improvement, not a
+   workaround.** The type test could not survive the seal, but the replacement asks the question
+   the caller actually had — *does this thing have a fuse* — so a second fused type now needs no
+   branch at the call site rather than a second one. Virtual dispatch verified live: `virtual=True`,
+   overridden by `GrenadeProjectile`.
+2. **The scoreboard dimming became one call, not six.** The presenter used to name six `Text`
+   fields on `ScoreUi.instance` while its own comment recorded that dimming only *some* of them is
+   worse than dimming none. A per-field seam is exactly how that regression returns, one forgotten
+   label at a time, so `IObjectiveHud.SetAlpha` hands the whole question to the HUD — and takes
+   `UnityEngine.UI` out of the netcode with it.
+3. **The catalogue seam is a function, not a type.** `GameObject[]` in and `ProjectileCatalog` out
+   are both types this assembly may name; only the middle — `GetComponent<Projectile>().configuration`
+   — is off-limits. A `Func<>` was the smaller answer than an interface wrapping a catalogue.
+
+**`NetClientVehicle.Vehicle` was renamed to `.Body`**, settling the § 0 question inside the vehicle
+cluster as § 0 asked. It stays `internal`; C4c decides its visibility once it knows which assembly
+`Net/Diagnostics` reads it from. `LaneBCheckpointRecorder` was updated in the same commit.
+
+**A measurement caveat worth carrying into C4c.** The enumeration counts *type NAMES*, so it could
+not see uses of a legacy-typed **field** — `_vehicle.MaxHealth`, `_vehicle.SetHealthAuthoritative`,
+`_vehicle.ApplyReplicatedFlags`, `_vehicle.ApplyReplicatedSubtypeTail` were all invisible to it and
+surfaced only when the Unity compile went red. **The enumeration sizes a cluster; only the compiler
+finishes it.** RULE 6 has the same blind spot by construction and is not a substitute for the
+compile.
 
 ## 4. Acceptance criteria
 

@@ -1,3 +1,5 @@
+using System;
+using Ironfront.Net.Replication.Projectiles;
 using UnityEngine;
 
 namespace Ironfront.Net.Unity.Client
@@ -53,6 +55,76 @@ namespace Ironfront.Net.Unity.Client
         public static IHitmarkerHud Hud { get; set; }
 
         /// <summary>
+        /// Produces the vehicle body for a spawned GameObject, or <see langword="null"/> when it
+        /// carries none. Called once per replicated vehicle, at spawn. Phase C4b.
+        /// </summary>
+        /// <remarks>
+        /// A resolver rather than a registered instance, for the reason the server's
+        /// <c>VehicleSourceResolver</c> gives: there are many vehicles and they arrive over the
+        /// wire. The component form would need an adapter MonoBehaviour on every vehicle prefab,
+        /// which is a change to authored assets in a refactor forbidden from changing behaviour.
+        /// </remarks>
+        public static Func<GameObject, IGameplayVehicleBody> VehicleBodyResolver { get; set; }
+
+        /// <summary>
+        /// Produces the cosmetic projectile body for a spawned GameObject, or
+        /// <see langword="null"/> when it carries none. Phase C4b.
+        /// </summary>
+        public static Func<GameObject, IProjectileBody> ProjectileBodyResolver { get; set; }
+
+        /// <summary>The scene's replicated-vehicle prefabs, or null when unavailable.</summary>
+        public static IVehiclePrefabDirectory VehiclePrefabs { get; set; }
+
+        /// <summary>Where a blast leaves a scorch mark, or null when this build draws none.</summary>
+        public static IDecalSink Decals { get; set; }
+
+        /// <summary>The match scoreboard, or null when this build has none.</summary>
+        public static IObjectiveHud Objectives { get; set; }
+
+        /// <summary>
+        /// Reads a projectile catalogue off the authored prefab array. Phase C4b.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The prefabs are a <c>GameObject[]</c> — an engine type, which crosses freely — and the
+        /// result is a <c>ProjectileCatalog</c> from the replication library, which this assembly
+        /// references directly. Only the MIDDLE of the operation is off-limits: reading it means
+        /// <c>prefab.GetComponent&lt;Projectile&gt;().configuration</c>, and both of those names
+        /// belong to <c>Assembly-CSharp</c>. So the seam is a function, not a type.
+        /// </para>
+        /// <para>
+        /// Unset yields an EMPTY catalogue rather than null. A tracker built on null would throw
+        /// on the first projectile; one built on an empty catalogue draws nothing and counts the
+        /// kinds it could not render, which is the behaviour a build with no projectile prefabs
+        /// already had.
+        /// </para>
+        /// </remarks>
+        public static Func<GameObject[], ProjectileCatalog> ProjectileCatalogReader { get; set; }
+
+        /// <summary>
+        /// The catalogue for <paramref name="prefabsByKind"/>, or an empty one when nothing is
+        /// registered.
+        /// </summary>
+        public static ProjectileCatalog BuildProjectileCatalog(GameObject[] prefabsByKind)
+            => ProjectileCatalogReader != null
+                ? ProjectileCatalogReader(prefabsByKind)
+                : new ProjectileCatalog();
+
+        /// <summary>
+        /// Resolves the vehicle body for <paramref name="gameObject"/>, or
+        /// <see langword="null"/> when nothing is registered or the object is not a vehicle.
+        /// </summary>
+        public static IGameplayVehicleBody ResolveVehicleBody(GameObject gameObject)
+            => VehicleBodyResolver?.Invoke(gameObject);
+
+        /// <summary>
+        /// Resolves the projectile body for <paramref name="gameObject"/>, or
+        /// <see langword="null"/> when nothing is registered or the object is not a projectile.
+        /// </summary>
+        public static IProjectileBody ResolveProjectileBody(GameObject gameObject)
+            => ProjectileBodyResolver?.Invoke(gameObject);
+
+        /// <summary>
         /// Shows a hitmarker, or does nothing when no HUD is registered.
         /// </summary>
         public static void ShowHit(int severity) => Hud?.ShowHit(severity);
@@ -65,6 +137,12 @@ namespace Ironfront.Net.Unity.Client
         {
             _localPlayer = null;
             Hud = null;
+            VehicleBodyResolver = null;
+            ProjectileBodyResolver = null;
+            VehiclePrefabs = null;
+            Decals = null;
+            Objectives = null;
+            ProjectileCatalogReader = null;
         }
 
         /// <summary>

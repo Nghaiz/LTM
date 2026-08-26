@@ -51,8 +51,8 @@ namespace Ironfront.Net.Unity.Client
         private NetClientBootstrap _client;
         private ClientProjectileTracker _tracker;
 
-        private readonly Dictionary<ushort, Projectile> _spawned =
-            new Dictionary<ushort, Projectile>();
+        private readonly Dictionary<ushort, IProjectileBody> _spawned =
+            new Dictionary<ushort, IProjectileBody>();
 
         // Reused every frame. Sized to the id pool so a mass expiry cannot overflow it and leave
         // a projectile alive on screen with nothing left to expire it.
@@ -83,7 +83,11 @@ namespace Ironfront.Net.Unity.Client
                 return;
             }
 
-            _tracker = new ClientProjectileTracker(ProjectileCatalogBuilder.FromPrefabs(_prefabsByKind));
+            // The catalogue is read off the prefabs by the side that can name Projectile and its
+            // configuration; this side receives the finished ProjectileCatalog, which is a
+            // replication-library type and crosses the seam unwrapped.
+            _tracker = new ClientProjectileTracker(
+                NetClientBindings.BuildProjectileCatalog(_prefabsByKind));
         }
 
         private void OnEnable()
@@ -131,10 +135,10 @@ namespace Ironfront.Net.Unity.Client
             }
 
             if (result.Action == ProjectileApplyAction.ReSeat
-                && _spawned.TryGetValue(result.ProjectileId, out Projectile live)
-                && live != null)
+                && _spawned.TryGetValue(result.ProjectileId, out IProjectileBody live)
+                && live != null && live.Exists)
             {
-                live.transform.SetPositionAndRotation(
+                live.Transform.SetPositionAndRotation(
                     ToUnity(result.Position), RotationFor(result.Velocity));
 
                 // THE VELOCITY IS THE POINT OF THE CORRECTION, not the pose. A guided missile
@@ -156,12 +160,14 @@ namespace Ironfront.Net.Unity.Client
             GameObject instance = Object.Instantiate(
                 prefab, ToUnity(result.Position), RotationFor(result.Velocity));
 
-            var projectile = instance.GetComponent<Projectile>();
+            IProjectileBody projectile = NetClientBindings.ResolveProjectileBody(instance);
             if (projectile != null)
             {
                 // source stays null on purpose: it is the field Weapon.SpawnProjectile sets to
                 // make a projectile do real damage, and a cosmetic instance must never carry it.
-                projectile.netProjectileId = result.ProjectileId;
+                // Since C4b the seam simply does not expose it, so that is structural rather
+                // than a comment asking nicely.
+                projectile.SetNetProjectileId(result.ProjectileId);
 
                 // A grenade's fuse counts from the launch tick, so both sides detonate on the
                 // same integer rather than on whichever frame each side's own float crossed.
@@ -171,11 +177,14 @@ namespace Ironfront.Net.Unity.Client
                 // roughly four billion and hand the grenade a fuse that never fires. A clamp
                 // costs one comparison and the worst case is a grenade that detonates slightly
                 // early on a client during the first two seconds of a round.
-                if (projectile is GrenadeProjectile grenade)
+                // "Does this thing have a fuse", asked of the projectile itself. It replaces a
+                // `projectile is GrenadeProjectile` type test this assembly may no longer write,
+                // and is the better question: a second fused type would have needed a second
+                // branch here and now needs none.
                 {
                     uint now = NetContext.CurrentTick;
                     var caughtUp = (uint)result.FastForwardedTicks;
-                    grenade.ArmFuse(now >= caughtUp ? now - caughtUp : 0u);
+                    projectile.TryArmFuse(now >= caughtUp ? now - caughtUp : 0u);
                 }
 
                 _spawned[result.ProjectileId] = projectile;
@@ -192,10 +201,10 @@ namespace Ironfront.Net.Unity.Client
 
         private void Despawn(ushort projectileId)
         {
-            if (!_spawned.TryGetValue(projectileId, out Projectile projectile)) return;
+            if (!_spawned.TryGetValue(projectileId, out IProjectileBody projectile)) return;
 
             _spawned.Remove(projectileId);
-            if (projectile != null) Object.Destroy(projectile.gameObject);
+            if (projectile != null && projectile.Exists) Object.Destroy(projectile.GameObject);
         }
 
         private static Vector3 ToUnity(in Ironfront.Net.Replication.Movement.Vec3 v)

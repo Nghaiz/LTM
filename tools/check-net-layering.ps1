@@ -156,22 +156,14 @@ $Baseline = @(
 #                       there. Every one of these was verified by reading the call site; the same
 #                       four cost phase C2 a wrong plan when they were counted as real.
 $ClientBaseline = @(
-    @{ Type = 'Vehicle'                 ; Kind = 'debt'; Retires = 'C4b'
-       Reason = 'NetClientVehicle holds one; RemoteVehicleRegistry spawns and destroys them' }
-    @{ Type = 'VehicleSpawner'          ; Kind = 'debt'; Retires = 'C4b'
-       Reason = 'RemoteVehicleRegistry finds the scene spawners to read prefabs off' }
-    @{ Type = 'Projectile'              ; Kind = 'debt'; Retires = 'C4b'
-       Reason = 'NetClientProjectilePresenter tracks spawned projectiles by component' }
-    @{ Type = 'GrenadeProjectile'       ; Kind = 'debt'; Retires = 'C4b'
-       Reason = 'NetClientProjectilePresenter type-tests for the grenade re-seat path' }
-    @{ Type = 'ProjectileCatalogBuilder'; Kind = 'debt'; Retires = 'C4b'
-       Reason = 'NetClientProjectilePresenter builds its catalogue from prefabs' }
-    @{ Type = 'DecalManager'            ; Kind = 'debt'; Retires = 'C4b'
-       Reason = 'NetClientExplosionPresenter puts a scorch mark down' }
-    @{ Type = 'DecalType'               ; Kind = 'debt'; Retires = 'C4b'
-       Reason = 'the nested enum on DecalManager, named at the same call site' }
-    @{ Type = 'ScoreUi'                 ; Kind = 'debt'; Retires = 'C4b'
-       Reason = 'NetClientObjectivePresenter writes the scoreboard and fades it' }
+    # THE EIGHT 'debt' ROWS THAT WERE HERE ARE GONE, deleted by phase C4b on this rule's own
+    # instruction — Vehicle, VehicleSpawner, Projectile, GrenadeProjectile, ProjectileCatalogBuilder,
+    # DecalManager, DecalType and ScoreUi. Each was bound behind an interface Net/Client owns, RULE
+    # 6b reported the row stale, and the row was DELETED rather than re-pinned.
+    #
+    # WHAT THAT MEANS FOR THIS RULE: no 'debt' rows remain, so Net/Client names no legacy type at
+    # all and is ready for its asmdef. The four rows below are matcher artefacts — they outlive the
+    # refactor and become the seam rule's allow-list in C4c. See the RULE 6 header.
 
     @{ Type = 'State'                   ; Kind = 'not-a-reference'; Retires = 'never'
        Reason = 'a PROPERTY named State on eight client types (GameFlowController.State, ' +

@@ -4,7 +4,7 @@ using Ironfront.Net.Unity;
 using Ironfront.Net.Unity.Server;
 using UnityEngine;
 
-public class Vehicle : MonoBehaviour
+public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.Client.IGameplayVehicleBody
 {
 	/// <summary>
 	/// The attacker id meaning "nobody in particular" -- world damage, decay, a crash.

@@ -54,6 +54,43 @@ namespace Ironfront.Net.Unity.Bindings
             // would be a second copy of a decision NetContext already owns.
             Client.NetClientBindings.LocalPlayer = new LocalPlayerRigBinding();
             Client.NetClientBindings.Hud = new HitmarkerHudBinding();
+
+            // C4b. The vehicle, projectile, decal and scoreboard seams. The two resolvers mirror
+            // the server's VehicleSourceResolver for the same reason it exists: many objects,
+            // arriving over the wire, and an adapter component on every prefab would be a change
+            // to authored assets that this refactor is forbidden from making.
+            Client.NetClientBindings.VehicleBodyResolver = ResolveVehicleBody;
+            Client.NetClientBindings.ProjectileBodyResolver = ResolveProjectileBody;
+            Client.NetClientBindings.VehiclePrefabs = new SceneVehiclePrefabDirectory();
+            Client.NetClientBindings.Decals = new DecalSinkBinding();
+            Client.NetClientBindings.Objectives = new ScoreUiObjectiveHud();
+            Client.NetClientBindings.ProjectileCatalogReader = ProjectileCatalogBinding.Read;
+        }
+
+        /// <summary>
+        /// The <c>GetComponent&lt;Vehicle&gt;()</c> the client assembly cannot do itself. Null
+        /// for a spawned object carrying no vehicle, which the registry reads as an unrenderable
+        /// spawn and counts. Phase C4b.
+        /// </summary>
+        private static Client.IGameplayVehicleBody ResolveVehicleBody(GameObject gameObject)
+        {
+            if (gameObject == null) return null;
+
+            Vehicle vehicle = gameObject.GetComponent<Vehicle>();
+            return vehicle != null ? vehicle : null;
+        }
+
+        /// <summary>
+        /// The <c>GetComponent&lt;Projectile&gt;()</c> the client assembly cannot do itself. Null
+        /// for an instance carrying no projectile — a purely decorative prefab — which the
+        /// presenter reads as "spawned but not tracked". Phase C4b.
+        /// </summary>
+        private static Client.IProjectileBody ResolveProjectileBody(GameObject gameObject)
+        {
+            if (gameObject == null) return null;
+
+            Projectile projectile = gameObject.GetComponent<Projectile>();
+            return projectile != null ? projectile : null;
         }
 
         /// <summary>

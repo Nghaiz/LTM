@@ -2,13 +2,12 @@ using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Client;
 using Ironfront.Net.Replication.Match;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace Ironfront.Net.Unity.Client
 {
     /// <summary>
     /// Renders the server's authoritative match state -- phase, tickets, phase timer and human
-    /// count -- onto <see cref="ScoreUi"/>. phase-V10 task 7.
+    /// count -- onto the match scoreboard, through <see cref="IObjectiveHud"/>. phase-V10 task 7.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -28,16 +27,17 @@ namespace Ironfront.Net.Unity.Client
     /// <b>The <see cref="MatchPhase.Playing"/> timer rule.</b>
     /// <c>MatchStateMessage.PhaseSecondsRemaining</c> is 0 during <c>Playing</c> by design --
     /// that phase ends on tickets, not a clock. <see cref="MatchStateModel.HasTimer"/> is false
-    /// there, and this presenter passes <c>-1</c> to <see cref="ScoreUi.SetAuthoritativeState"/>
+    /// there, and this presenter passes <c>-1</c> to <see cref="IObjectiveHud.SetAuthoritativeState"/>
     /// in that case, which is documented there as "hide the timer", never "render 0:00".
     /// </para>
     /// <para>
     /// <b>Staleness dims rather than freezes-and-lies.</b>
     /// <see cref="MatchStateModel.IsStale"/> stops new numbers from being pushed (the fixed
-    /// <see cref="ScoreUi.SetAuthoritativeState"/> signature has no confidence flag to carry,
+    /// <see cref="IObjectiveHud.SetAuthoritativeState"/> signature has no confidence flag to carry,
     /// so a stale value cannot be told apart from a live one once it is inside that call) and
-    /// instead dims the same Text elements the last good render used, via their already-public
-    /// fields on <see cref="ScoreUi.instance"/>. "Errors Over Silent Fallbacks", applied to a
+    /// instead dims the whole scoreboard through <see cref="IObjectiveHud.SetAlpha"/> — which
+    /// label elements that covers is the HUD's own business (phase C4b; before it, this file
+    /// listed six of them by name). "Errors Over Silent Fallbacks", applied to a
     /// clock: unknown is shown as unknown, not as the last known-good number pretending to be
     /// current.
     /// </para>
@@ -105,7 +105,7 @@ namespace Ironfront.Net.Unity.Client
         /// <para>
         /// <b>Only dirty points are written.</b> The view returns false for a repeat, and
         /// <c>ApplyAuthoritativeOwner</c> is not free: it calls <c>SetOwner</c> on a change of
-        /// hands, which drives <c>ScoreUi.AddFlag</c> and <c>MinimapUi.UpdateSpawnPointButtons</c>.
+        /// hands, which drives the scoreboard's flag count and <c>MinimapUi.UpdateSpawnPointButtons</c>.
         /// Writing unconditionally at message rate would add a scoreboard flag repeatedly for a
         /// point nobody touched -- the failure ApplyAuthoritativeOwner's own remarks describe.
         /// </para>
@@ -157,13 +157,13 @@ namespace Ironfront.Net.Unity.Client
 
             MatchStateMessage state = _model.Current;
 
-            // -1 sentinel: "no timer this phase" (Playing). ScoreUi.SetAuthoritativeState hides
+            // -1 sentinel: "no timer this phase" (Playing). The HUD hides
             // the timer element on that value rather than rendering a zero.
             int secondsRemaining = _model.HasTimer
                 ? Mathf.CeilToInt(_model.SecondsRemaining(now))
                 : -1;
 
-            ScoreUi.SetAuthoritativeState(
+            NetClientBindings.Objectives?.SetAuthoritativeState(
                 (int)state.Phase, state.Tickets0, state.Tickets1, secondsRemaining, state.HumanPlayerCount);
         }
 
@@ -172,28 +172,13 @@ namespace Ironfront.Net.Unity.Client
             if (_isDimmed == dimmed) return;
             _isDimmed = dimmed;
 
-            if (ScoreUi.instance == null) return;
-
-            float alpha = dimmed ? DimmedAlpha : LiveAlpha;
-            SetAlpha(ScoreUi.instance.blueScoreText, alpha);
-            SetAlpha(ScoreUi.instance.redScoreText, alpha);
-            SetAlpha(ScoreUi.instance.blueFlagsText, alpha);
-            SetAlpha(ScoreUi.instance.redFlagsText, alpha);
-
-            // The dedicated phase/timer elements too, when the prefab has them. Dimming only
-            // the four legacy fields would leave the timer reading as live while the numbers
-            // beside it are flagged stale -- worse than not dimming at all.
-            SetAlpha(ScoreUi.instance.phaseText, alpha);
-            SetAlpha(ScoreUi.instance.phaseTimerText, alpha);
-        }
-
-        private static void SetAlpha(Text text, float alpha)
-        {
-            if (text == null) return;
-
-            Color color = text.color;
-            color.a = alpha;
-            text.color = color;
+            // One call, not six labels. Which elements the scoreboard owns -- and the standing
+            // rule that dimming only SOME of them is worse than dimming none, because a
+            // live-looking timer beside numbers flagged stale is the worst of the three states --
+            // is the HUD's business. Since C4b that rule is enforced on the HUD's side of the
+            // seam rather than remembered at this call site, which previously had to list all six
+            // by name and would have failed silently on a seventh.
+            NetClientBindings.Objectives?.SetAlpha(dimmed ? DimmedAlpha : LiveAlpha);
         }
     }
 }

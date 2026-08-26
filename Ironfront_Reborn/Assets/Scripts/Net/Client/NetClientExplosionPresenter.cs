@@ -186,8 +186,8 @@ namespace Ironfront.Net.Unity.Client
             // predates that authoring. There is still no surface normal on the wire, so this
             // projects straight up rather than raycasting for one; a slightly wrong decal
             // orientation is a cosmetic detail, not a correctness one.
-            DecalManager.AddDecal(
-                position, Vector3.up, radiusMetres * _decalSizePerMetre, DecalManager.DecalType.Scorch);
+            NetClientBindings.Decals?.AddScorch(
+                position, Vector3.up, radiusMetres * _decalSizePerMetre);
         }
 
         private void PlayEffect(Vector3 position, float radiusMetres, ExplosionKind kind)

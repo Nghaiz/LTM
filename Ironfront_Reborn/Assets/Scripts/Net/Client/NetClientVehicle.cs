@@ -49,19 +49,19 @@ namespace Ironfront.Net.Unity.Client
     /// </remarks>
     internal sealed class NetClientVehicle
     {
-        private readonly Vehicle _vehicle;
+        private readonly IGameplayVehicleBody _vehicle;
         private readonly Rigidbody _rigidbody;
 
         private VehicleCorrectionStats _stats;
         private bool _hasPose;
         private float _lastCorrectionTime;
 
-        internal NetClientVehicle(ushort vehicleId, VehicleKind kind, Vehicle vehicle)
+        internal NetClientVehicle(ushort vehicleId, VehicleKind kind, IGameplayVehicleBody vehicle)
         {
             VehicleId = vehicleId;
             Kind      = kind;
             _vehicle  = vehicle;
-            _rigidbody = vehicle != null ? vehicle.rigidbody : null;
+            _rigidbody = vehicle != null ? vehicle.Rigidbody : null;
 
             SetMode(VehicleClientMode.Remote);
         }
@@ -74,11 +74,22 @@ namespace Ironfront.Net.Unity.Client
         /// </summary>
         internal VehicleKind Kind { get; }
 
-        /// <summary>The scene object. Null once it has been destroyed.</summary>
-        internal Vehicle Vehicle => _vehicle;
+        /// <summary>
+        /// The scene object, behind the seam. Null on a record whose vehicle never resolved.
+        /// </summary>
+        /// <remarks>
+        /// <b>Renamed from <c>Vehicle</c> in phase C4b</b>, because its type is no longer
+        /// <c>Vehicle</c> and <c>vehicle.Vehicle.Transform</c> reads as a typo. Phase C4's § 0
+        /// asked for this member to be DECIDED with the vehicle cluster rather than left to the
+        /// sealing sub-phase, because <c>Net/Diagnostics</c> reads through it and
+        /// <c>internal</c> stops working the moment the two folders become separate assemblies.
+        /// It stays <c>internal</c> here; C4c settles the visibility when it knows which assembly
+        /// Diagnostics is reading from.
+        /// </remarks>
+        internal IGameplayVehicleBody Body => _vehicle;
 
-        /// <summary>False once the underlying <c>Vehicle</c> has been destroyed.</summary>
-        internal bool Exists => _vehicle != null;
+        /// <summary>False once the underlying vehicle has been destroyed.</summary>
+        internal bool Exists => _vehicle != null && _vehicle.Exists;
 
         /// <summary>Remote or Predicted.</summary>
         internal VehicleClientMode Mode { get; private set; }
@@ -129,7 +140,7 @@ namespace Ironfront.Net.Unity.Client
             }
             else
             {
-                _vehicle.transform.SetPositionAndRotation(
+                _vehicle.Transform.SetPositionAndRotation(
                     new Vector3(pose.Position.X, pose.Position.Y, pose.Position.Z),
                     ToQuaternion(in pose.Rotation));
             }

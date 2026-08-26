@@ -39,7 +39,7 @@ the cost of the bindings layer that replaces its legacy references — not the c
 | `Net/Headless` | 1 | **0** | — | done |
 | `Net/Input` | 8 | **2** (measured) | `LoadoutUi`, `OptionsUi` | **C2 — done 2026-08-26** |
 | `Net/Diagnostics` | **13** | **13** — of which **5** legacy, **8** `Net/Client` | `LaneBCheckpointRecorder` (all 13) | **C3 — gate done 2026-08-26; asmdef → C4** |
-| `Net/Client` | 25 | **11** *(measured 2026-08-26)* | `FpsActorController` 16×, `Vehicle` 13×, `ScoreUi` 8×, `Actor` 7× | **C4 — C4a done; C4b, C4c to go** |
+| `Net/Client` | 25 | **11** *(measured 2026-08-26)* | `FpsActorController` 16×, `Vehicle` 13×, `ScoreUi` 8×, `Actor` 7× | **C4 — C4a + C4b done; C4c to go** |
 
 > **The `Net/Input` row said `~8 real`, with `Helicopter` at 16 references and
 > `FpsActorController` at 15. All three numbers were wrong, and wrong in the same way.**
