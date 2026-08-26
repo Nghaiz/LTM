@@ -1,7 +1,7 @@
 # Codebase map — the original single-player game
 
 **Audience:** anyone about to edit `Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/`.
-**Closes** the client track [phase-00 task 1](../plans/unity-client/phases/phase-00-foundation.md#task-1--read-and-understand-the-codebase-2-days).
+**Closes** the client track's phase-00 task 1 (*read and understand the codebase*). That spec was deleted 2026-08-26 with the rest of the track — [`plans/unity-client/README.md`](../plans/unity-client/README.md) records why and how to recover it.
 **Audited** 2026-08-15 against the repository at `3676c6e`. Every line number below was read, not
 recalled; re-run the greps in § 7 if the files have moved since.
 
@@ -265,7 +265,7 @@ this section. Read the middle column as "this read only matters when…".
 The other 43 `Input.*` lines, in 16 files (`SpectatorCamera` 9, `PathTypesDemo` 9,
 `ObjectPlacer`/`GroupController`/`CommandRoomCamera` 4 each, `WeaponManager`/`ScoreUi` 2 each, and
 nine files with one apiece), are spectator, level-editor tooling and menus.
-[Phase-00 criterion 6](../plans/unity-client/phases/phase-00-foundation.md#3-acceptance-criteria)
+Phase-00 criterion 6 ([spec deleted](../plans/unity-client/README.md))
 explicitly permits them to keep calling `Input` directly.
 
 > **Count correction.** Both phase-00 ("59 `Input.*` call sites, ~40 in `FpsActorController`") and
@@ -377,7 +377,7 @@ grep -rl "NetContext\|NetMovementAgent\|MovementSimulation" *.cs | wc -l   # 0
 
 ## 8. Related
 
-- [`plans/unity-client/phases/phase-00-foundation.md`](../plans/unity-client/phases/phase-00-foundation.md) — the task this closes
+- `plans/unity-client/phases/phase-00-foundation.md` — the task this closes; spec deleted 2026-08-26, see [`plans/unity-client/README.md`](../plans/unity-client/README.md)
 - `plans/unity-client/study/` — the assist track; steps 02 and 03 consume § 4 and § 3 respectively
 - [`docs/movement-analysis.md`](movement-analysis.md) — the movement port, in the depth this document does not go into
 - [`plans/00-shared/conventions.md`](../plans/00-shared/conventions.md) § 7 — who may edit what

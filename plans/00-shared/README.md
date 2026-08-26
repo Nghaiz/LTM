@@ -33,8 +33,8 @@ who is typing.
 
 | Folder | Subsystem | Core deliverable |
 |---|---|---|
-| [`../unity-client/`](../unity-client/plan.md) | Unity client | Refactor seam, `NetworkActorController`, interpolation, prediction glue, HUD/lobby UI, headless build |
-| [`../transport/`](../transport/plan.md) | Transport | Pure-C# UDP reliability: seq/ack/bitfield, channels, fragmentation, congestion control, network simulator, bit-packing serializer |
+| [`../unity-client/`](../unity-client/README.md) | Unity client | Refactor seam, `NetworkActorController`, interpolation, prediction glue, HUD/lobby UI, headless build. **Track closed 2026-08-26**; its reports remain and are cited as evidence by the debt ledger |
+| [`../transport/`](../transport/README.md) | Transport | Pure-C# UDP reliability: seq/ack/bitfield, channels, fragmentation, congestion control, network simulator, bit-packing serializer. **Track closed 2026-08-26**; the code shipped and M0–M4 all have reports |
 | [`../replication/`](../replication/plan.md) | Replication & simulation | Snapshot + delta, interest management, server tick loop, lag compensation, `MovementSimulation`, conformance suite, integration harness |
 | [`../master-server/`](../master-server/plan.md) | Master server | .NET TCP master server: auth, lobby, matchmaking, room registry, chat, SQLite, load-test harness, CI + build script |
 
@@ -46,17 +46,41 @@ master-server 01/02/04, and the client-onboarding study track). Their reports ar
 carry the measurements and the failures. The specs describe work that now exists as code and
 tests; `git log` has them if a decision needs re-reading.
 
+**Second pass, 2026-08-26** — the first pass had missed some of its own targets. `transport`
+still carried `phase-03-operations.md`, and the whole `unity-client` track (`plan.md` plus phases
+00–04) had never been swept at all. Both tracks' `plan.md` are **four-dev role documents** — they
+assign work to "B", "C" and "D" and were superseded when the project went single-owner in `899e75d`
+(#120). Deleted, with a `README.md` left in each track recording what closed it and what its
+reports are still cited for. **The criteria that existed only in those specs were folded into the
+milestone table below first** — deleting a spec that is the sole home of an acceptance criterion is
+how a criterion becomes debt nobody knows they have.
+
 ---
 
 ## Shared milestones — everyone tracks this table
 
-| Milestone | Week | Acceptance criteria (measurable) | Status |
-|---|---|---|---|
-| **M0** Foundation | 1–2 | Protocol spec v1.0 frozen · headless build runs · network simulator working · CI compiles all 3 projects | **3 / 4** |
-| **M1** Connection | 3–6 | **2 clients see each other moving smoothly** at 100 ms RTT + 5% packet loss | ☐ |
-| **M2** Combat | 7–10 | Server-authoritative shooting with lag compensation · health/death/respawn · AI bots replicate | ☐ |
-| **M3** Full match | 11–13 | Login → lobby → room → capture point → win/lose → back to lobby, 16 players | ☐ |
-| **M4** Polish | 14 | Load test with 16 clients · measurement report · documentation · demo video | ☐ |
+| Milestone | Week | Acceptance criteria (measurable) | Status | Graded by |
+|---|---|---|---|---|
+| **M0** Foundation | 1–2 | Protocol spec v1.0 frozen · headless build runs · network simulator working · CI compiles all 3 projects | **4 / 4** | breakdown below |
+| **M1** Connection | 3–6 | **2 clients see each other moving smoothly** at 100 ms RTT + 5% packet loss | ☐ | check 7 → **B-7** |
+| **M2** Combat | 7–10 | Server-authoritative shooting with lag compensation · health/death/respawn · AI bots replicate | ☐ | checks 1, 13 → **B-1**, **B-2** |
+| **M3** Full match | 11–13 | Login → lobby → room → capture point → win/lose → back to lobby, 16 players · **the flow runs with no manual file editing** · **a wrong password gives a clear error** · **disconnecting mid-match returns to the lobby with a message** | ☐ | the last three: **nothing** — see below |
+| **M4** Polish | 14 | Load test with 16 clients · measurement report · documentation · demo video · **0 P0 bugs** · **the 5-scenario measurement table filled in** · **the on/off comparison table for the five netcode techniques filled in** · **30 minutes of continuous play with no crash and no leak** | ☐ | V9 (16 clients, soak) · `docs/report-chapter-*.md` · the rest: **nothing** |
+
+> **The bolded clauses in M3 and M4 were folded in here on 2026-08-26, and the reason matters.**
+> They existed in exactly one place — `unity-client/phases/phase-03-match.md` and
+> `phase-04-polish.md` — and nowhere else in `plans/` or `docs/`. Deleting those specs under the
+> "delivered phase specs have been removed" policy above would have deleted the criteria with them,
+> silently. Searched before deleting: every `*.md` under `plans/` and `docs/`; the strings
+> *"no manual file editing"*, *"wrong password"*, *"returns to the lobby"*, *"0 P0"*,
+> *"5-scenario"* and *"on/off comparison"* returned **zero** hits outside those two files.
+>
+> **M1 and M2 are ☐ for a reason that is written down, not for want of attention.** They are the
+> same assertions the debt ledger tracks as group B, and group B is *ungradeable* rather than
+> failing — no programme provokes the case, or the wire does not hold under the condition the
+> criterion names. [`plans/verdict-closure/plan.md`](../verdict-closure/plan.md) R1–R5 exist to
+> make them gradeable. **M4's lobby and polish clauses have no owner at all** — they are the
+> capstone's defense deliverables, and they are recorded here so that stays visible.
 
 > **M1 is the make-or-break milestone.** If two clients still can't see each other by the end of
 > week 6, trigger the contingency plan in
@@ -69,7 +93,7 @@ tests; `git log` has them if a decision needs re-reading.
 | Protocol spec v1.0 frozen | C (chair) | **Done** — [protocol-spec.md](protocol-spec.md) is at 1.0.0 FROZEN, with all 8 open questions recorded in [§ 15.1](protocol-spec.md#151-questions-settled-at-the-freeze) |
 | CI compiles all 3 projects | D | **Done** — `.github/workflows/ci.yml` green on Ubuntu and Windows: build (0 warnings), **297 tests**, spec-drift check |
 | Network simulator working | B | **Done** — `NetworkSimulator` + `SimulatorConfig` with lan/typical/bad profiles, covered by `NetworkSimulatorTests`. Shipped ahead of B's phase-00 Task 5 so A and C were never blocked on it |
-| Headless build runs | **A** | **The last open M0 item.** Needs the Unity Editor, so nobody can pull it forward — see [roadmap.md](roadmap.md) |
+| Headless build runs | **A** | **Done 2026-08-21** — and it had been failing for a reason no one had looked for. `NetServerBootstrap` is a MonoBehaviour in a map scene and **nothing loaded one**: a `-batchmode` run walked Splash → Menu and stopped, with a clean start, a container `Up`, and **no UDP port**. Invisible because the only thing that ever loaded a map headlessly was `LaneBHarness`, which does it for itself — so every headless run was served by the thing being *tested* rather than the thing being *shipped*. Closed by `DedicatedServerSceneBootstrap` (`IRONFRONT_GAMESERVER_SCENE`, default `Dustbowl`) in `2b7ac41`; see [`consolidation/plan.md`](../consolidation/plan.md) § 2.2 (F2). The server image now ships as a GHCR digest |
 
 Also already delivered, ahead of their phases: `Ironfront.Net.Protocol` (the shared SSOT, 160
 conformance tests), the four project skeletons, `tools/build-libs.ps1`, `tools/ci.ps1` and
@@ -93,5 +117,7 @@ conformance tests), the four project skeletons, `tools/build-libs.ps1`, `tools/c
    are effectively unresolvable by hand.
 2. **Nobody edits `protocol-spec.md` alone.** Every protocol change goes through a PR with 2
    approvals, and bumps the version. See [conventions.md § Protocol changes](conventions.md).
-3. **Everyone commits only files inside their own ownership area** (the ownership table in each
-   `plan.md`). Shared files must be named explicitly in the plan before anyone touches them.
+3. ~~**Everyone commits only files inside their own ownership area** (the ownership table in each
+   `plan.md`).~~ **Dead since `899e75d` (#120) — single owner, no ownership tables.** The two
+   `plan.md` files that carried them are deleted; the surviving constraint is a compile-time one
+   rather than a social one, enforced by `tools/check-net-layering.ps1` and the asmdef seam.

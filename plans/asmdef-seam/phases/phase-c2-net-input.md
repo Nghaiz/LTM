@@ -1,7 +1,7 @@
 # Phase C2 — `Net/Input` behind a control-surface binding
 
 - **Track:** [`plan.md`](../plan.md) · **Effort:** M (3 d) · **Landed:** 2026-08-26
-- **Depends on:** [`plans/debt-closure/phases/phase-3e-run-and-ledger.md`](../../debt-closure/phases/phase-3e-run-and-ledger.md)
+- **Depends on:** `plans/debt-closure/phases/phase-3e-run-and-ledger.md` ([spec deleted 2026-08-26 — index](../../debt-closure/phases/README.md))
 - **Unblocks:** [`phase-c4-net-client.md`](phase-c4-net-client.md) — which must not start before this lands
 
 ---

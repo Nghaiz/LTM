@@ -1,8 +1,8 @@
 # Phase 3D — Lane B: three real clients, a written programme, and an artifact per verdict
 
-- **Track:** [`plan.md`](../plan.md) · **Parent:** [`phase-3-harness.md`](phase-3-harness.md) § 5 (task 3.3) · **Effort:** L (1wk)
-- **Depends on:** [`phase-3a-player-slots.md`](phase-3a-player-slots.md) (a second player can exist), [`phase-3c-client-input.md`](phase-3c-client-input.md) (that player can fire), #151 (a client can join a server that has a secret), #123 (server and clients agree on the physics rate)
-- **Unblocks:** [`phase-3e-run-and-ledger.md`](phase-3e-run-and-ledger.md)
+- **Track:** [`plan.md`](../plan.md) · **Parent:** `phase-3-harness.md` ([spec deleted — index](README.md)) § 5 (task 3.3) · **Effort:** L (1wk)
+- **Depends on:** `phase-3a-player-slots.md` ([spec deleted — index](README.md)) (a second player can exist), `phase-3c-client-input.md` ([spec deleted — index](README.md)) (that player can fire), #151 (a client can join a server that has a secret), #123 (server and clients agree on the physics rate)
+- **Unblocks:** `phase-3e-run-and-ledger.md` ([spec deleted — index](README.md))
 - **Status (2026-08-25): the fight resolves. Lane B has its first kill, and eleven checks now have
   verdicts instead of one blocker.** 3F closed X-19 and handed this phase a run where the trigger
   could resolve; it still did not, and the two reasons were both in this phase's own ownership.
@@ -81,7 +81,7 @@ screenshot at every checkpoint the check list names. Repeatable, rather than a o
 pass.
 
 **Three clients, not two — and only check 7 needs the third.** This file said "two" until
-2026-08-20, and [`phase-3-harness.md`](phase-3-harness.md) § 2 check 7 reads *"two clients see the
+2026-08-20, and `phase-3-harness.md` ([spec deleted — index](README.md)) § 2 check 7 reads *"two clients see the
 same vehicle in the same place **while a third drives it**, 100 ms RTT / 5 % loss"*. The phase that
 owns check 7 could not have satisfied it as written. Ten of the eleven checks run on two clients;
 check 7 needs a third participant and needs it as a **driver**, not an observer — the two observers
@@ -94,7 +94,7 @@ still need two.
 
 ## 2. Which checks this lane owns
 
-Eleven of the thirteen in [`phase-3-harness.md`](phase-3-harness.md) § 2 — every row marked lane
+Eleven of the thirteen in `phase-3-harness.md` ([spec deleted — index](README.md)) § 2 — every row marked lane
 **B**: checks 1–9, 12, 13. Checks 10 and 11 are lane A and belong to 3E.
 
 Ledger rows: **B-1**…**B-9**, **B-13**, **B-14**.
@@ -116,7 +116,7 @@ What is genuinely new: the scripted-input driver and the runner script.
 
 ## 3a. Cleared before this phase starts — do not re-investigate
 
-[`phase-3c-client-input.md`](phase-3c-client-input.md)'s report handed over two blockers and a
+`phase-3c-client-input.md` ([spec deleted — index](README.md))'s report handed over two blockers and a
 third was found while clearing them. All three are closed; they are listed so nobody spends a day
 rediscovering one.
 
@@ -130,7 +130,7 @@ rediscovering one.
 Design and reasoning: [`2026-08-20-brainstorm-unblock-3d.md`](../reports/2026-08-20-brainstorm-unblock-3d.md).
 
 Still open and deliberately **not** this phase's: **X-8** (`Chat`, `LoadoutSelect` and `Ping` have
-no client sender). No check in [`phase-3-harness.md`](phase-3-harness.md) § 2 needs any of the
+no client sender). No check in `phase-3-harness.md` ([spec deleted — index](README.md)) § 2 needs any of the
 three, so closing them here would be scope this phase did not buy.
 
 ## 4. Work
@@ -200,7 +200,7 @@ inside the diagnostics assembly, to unblock checks 7 and 12 (**X-30**). Normally
 path is exactly what the scripted driver avoids — but there is no shipped mount path to bypass,
 and those checks grade vehicle REPLICATION rather than mounting. Any run using it says so.
 X-30 stays open as real client work. Per
-[`phase-3-harness.md`](phase-3-harness.md) § 7, a defect found here is filed and fixed in its own
+`phase-3-harness.md` ([spec deleted — index](README.md)) § 7, a defect found here is filed and fixed in its own
 commit — never patched inside the harness. 3A exists because that rule was followed once already.
 
 ## 7. Acceptance criteria
