@@ -71,7 +71,15 @@ namespace Ironfront.Net.Unity.Client
         public long UnknownPrefabSpawns { get; private set; }
 
         /// <summary>The ids currently live, for the per-frame stage. Do not mutate.</summary>
-        internal List<ushort> LiveIds => _liveIds;
+        /// <remarks>
+        /// <b>Public since phase C4c, and typed read-only with it.</b> Sealing this folder put the
+        /// lane-B recorder outside the assembly, and it iterates these to write its per-vehicle
+        /// array. The list itself was already documented "do not mutate"; exporting it as
+        /// <see cref="IReadOnlyList{T}"/> makes that the type rather than a request, which is
+        /// strictly better than the <c>internal List</c> it replaces — the per-frame stage inside
+        /// this assembly only ever indexed it.
+        /// </remarks>
+        public IReadOnlyList<ushort> LiveIds => _liveIds;
 
         /// <summary>Resolves an id to the vehicle drawing it. A miss is normal — see below.</summary>
         /// <remarks>
@@ -90,6 +98,45 @@ namespace Ironfront.Net.Unity.Client
         /// seats needs the id to name itself in <c>C_VEHICLE_INPUT</c>, and cannot see into this
         /// assembly to get it any other way.
         /// </remarks>
+        /// <summary>
+        /// A replicated vehicle's pose and correction mode, for an observer outside this
+        /// assembly. Phase C4c.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This exists so <c>NetClientVehicle</c> does not have to be public.</b> The lane-B
+        /// checkpoint recorder reached <c>TryFind</c> and then <c>vehicle.Body.Transform</c> —
+        /// two internals — to write three numbers and a mode string into its JSON. Sealing this
+        /// folder made that reach illegal, and the two obvious answers were both worse than this
+        /// one: widening <c>NetClientVehicle</c> to public exports a collaborator of the vehicle
+        /// stage as API, and <c>InternalsVisibleTo("Assembly-CSharp")</c> opens every internal in
+        /// the assembly to all four hundred legacy files, which is the opposite of a seam.
+        /// </para>
+        /// <para>
+        /// So the seam is shaped to the need instead: the recorder wanted a pose snapshot, and a
+        /// pose snapshot is what it gets. Nothing here hands back an object the caller could
+        /// then drive.
+        /// </para>
+        /// </remarks>
+        public bool TryGetPose(
+            ushort vehicleId, out Vector3 position, out float yawDegrees, out string mode)
+        {
+            position   = Vector3.zero;
+            yawDegrees = 0f;
+            mode       = null;
+
+            if (!_live.TryGetValue(vehicleId, out NetClientVehicle vehicle)) return false;
+            if (vehicle == null || !vehicle.Exists) return false;
+
+            Transform t = vehicle.Body.Transform;
+
+            position   = t.position;
+            yawDegrees = t.eulerAngles.y;
+            mode       = vehicle.Mode.ToString();
+
+            return true;
+        }
+
         public ushort NetworkIdOf(GameObject vehicle)
             => vehicle != null && _byGameObject.TryGetValue(vehicle, out ushort id) ? id : (ushort)0;
 
@@ -101,7 +148,12 @@ namespace Ironfront.Net.Unity.Client
         /// snapshot would swing every remote turret to due north for one frame on spawn, which
         /// reads as a network glitch rather than as "no data yet".
         /// </remarks>
-        internal bool TryGetTurretPose(ushort vehicleId, out float yawDegrees, out float pitchDegrees)
+        /// <remarks>
+        /// Public since phase C4c, for the lane-B recorder, which now sits outside this assembly.
+        /// It is a pose read that hands back two floats and no object, so it widens nothing the
+        /// way exporting <c>NetClientVehicle</c> would have — see <see cref="TryGetPose"/>.
+        /// </remarks>
+        public bool TryGetTurretPose(ushort vehicleId, out float yawDegrees, out float pitchDegrees)
         {
             yawDegrees   = 0f;
             pitchDegrees = 0f;

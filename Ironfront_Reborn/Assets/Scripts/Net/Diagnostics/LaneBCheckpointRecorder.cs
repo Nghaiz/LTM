@@ -298,7 +298,7 @@ namespace Ironfront.Net.Unity.Diagnostics
             _json.Append("\"vehicles\":[");
             if (registry != null)
             {
-                List<ushort> ids = registry.LiveIds;
+                IReadOnlyList<ushort> ids = registry.LiveIds;
                 for (int i = 0; i < ids.Count; i++)
                 {
                     if (i > 0) _json.Append(',');
@@ -306,16 +306,15 @@ namespace Ironfront.Net.Unity.Diagnostics
                     _json.Append('{');
                     Num("id", id); Comma();
 
-                    // NetClientVehicle is a plain class, not a MonoBehaviour -- it holds the
-                    // Vehicle it drives rather than being one, so the transform comes from that.
-                    if (registry.TryFind(id, out NetClientVehicle vehicle)
-                        && vehicle != null && vehicle.Exists)
+                    // Through the registry's pose read rather than the record itself: phase C4c
+                    // sealed Net/Client into an assembly, and NetClientVehicle is internal to it
+                    // -- correctly, since it is a collaborator of the vehicle stage rather than
+                    // API. TryGetPose is the narrow public read this reach actually wanted.
+                    if (registry.TryGetPose(id, out Vector3 p, out float yaw, out string mode))
                     {
-                        Transform t = vehicle.Body.Transform;
-                        Vector3 p = t.position;
                         Num("x", p.x); Comma(); Num("y", p.y); Comma(); Num("z", p.z); Comma();
-                        Num("yaw", t.eulerAngles.y); Comma();
-                        Str("mode", vehicle.Mode.ToString()); Comma();
+                        Num("yaw", yaw); Comma();
+                        Str("mode", mode); Comma();
                     }
 
                     bool posed = registry.TryGetTurretPose(id, out float ty, out float tp);

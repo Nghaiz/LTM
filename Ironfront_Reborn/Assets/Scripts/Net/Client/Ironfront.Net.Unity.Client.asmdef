@@ -1,0 +1,17 @@
+{
+    "name": "Ironfront.Net.Unity.Client",
+    "rootNamespace": "Ironfront.Net.Unity.Client",
+    "references": [
+        "Ironfront.Net.Unity.Shared",
+        "Ironfront.Net.Unity.Input"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

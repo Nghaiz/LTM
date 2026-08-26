@@ -39,7 +39,7 @@ the cost of the bindings layer that replaces its legacy references — not the c
 | `Net/Headless` | 1 | **0** | — | done |
 | `Net/Input` | 8 | **2** (measured) | `LoadoutUi`, `OptionsUi` | **C2 — done 2026-08-26** |
 | `Net/Diagnostics` | **13** | **13** — of which **5** legacy, **8** `Net/Client` | `LaneBCheckpointRecorder` (all 13) | **C3 — gate done 2026-08-26; asmdef → C4** |
-| `Net/Client` | 25 | **11** *(measured 2026-08-26)* | `FpsActorController` 16×, `Vehicle` 13×, `ScoreUi` 8×, `Actor` 7× | **C4 — C4a + C4b done; C4c to go** |
+| `Net/Client` | 25 | **11** *(measured 2026-08-26)* | `FpsActorController` 16×, `Vehicle` 13×, `ScoreUi` 8×, `Actor` 7× | **C4 — C4a-C4c done; C4d (Diagnostics) to go** |
 
 > **The `Net/Input` row said `~8 real`, with `Helicopter` at 16 references and
 > `FpsActorController` at 15. All three numbers were wrong, and wrong in the same way.**
@@ -123,9 +123,10 @@ per § 2.
 ## 6. Success criteria
 
 1. Each of `Net/Input`, `Net/Diagnostics`, `Net/Client` compiles as its own assembly, with **zero**
-   references to `Assembly-CSharp`. — `Net/Input` **met** (C2). The other two are **both C4's**:
-   8 of Diagnostics' 13 crossings are `Net/Client` types, so the two assemblies land together or
-   the first pays for interfaces the second deletes.
+   references to `Assembly-CSharp`. — `Net/Input` **met** (C2). `Net/Client` **met** (C4c, verified
+   against the runtime assembly manifest, not the asmdef file). `Net/Diagnostics` is **C4d's**: the
+   "land together" reasoning was about sealing Diagnostics BEFORE Client and stopped binding the
+   moment Client was sealed, since Diagnostics may now simply reference that assembly.
 2. Every legacy dependency crossing a seam does so through an interface owned by the sealed side,
    mirroring `Net/Server/Bindings/`.
 3. Every phase is graded by a **Unity compile over MCP**, not by `dotnet build`.
@@ -137,7 +138,10 @@ per § 2.
    observed RED and one negative control GREEN. It does **not** depend on the asmdef, and is
    written to be deleted when C4 replaces it with `defineConstraints`.
 6. `Net/Client` has at least one EditMode test that could not have been written before C4 — the
-   deliverable that justifies the phase.
+   deliverable that justifies the phase. — **Met 2026-08-26** (C4c). Six tests in
+   `Ironfront.Net.Unity.Client.Tests`; the load-bearing one pins finding A16 and was enabled by
+   C4a's seam rather than by the asmdef, which its own doc says so it is not misread later.
+   Mutation-tested RED.
 
 ## 7. Risk
 

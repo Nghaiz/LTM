@@ -382,21 +382,36 @@ foreach ($file in $inputSources) {
     }
 }
 
-# RULE 6 — Net/Client's shrinking legacy surface, phase C4.
+# RULE 6 — the Net/Client seam, phase C4c.
 #
-# Net/Client is NOT an assembly yet, so there is no seam to assert the way RULE 5a does for
-# Net/Input. What there is, between the first C4 sub-phase and the last, is a folder whose legacy
-# surface is supposed to shrink monotonically — and a monotonic shrink is exactly the thing a
-# baseline plus its companion can hold. See $ClientBaseline above for the full contract.
+# THIS RULE CHANGED JOB ON 2026-08-26, exactly as its previous header said it would. Through C4a
+# and C4b it held a SHRINKING BASELINE: Net/Client was not an assembly yet, its legacy surface was
+# supposed to shrink monotonically, and a baseline plus an identity-keyed companion is what holds
+# a monotonic shrink. C4b removed the last `debt` row. Net/Client then took its asmdef, and this
+# became a 5a/5b-shaped SEAM assertion — with the four surviving rows carried over as its
+# allow-list, because those four names are matcher artefacts and outlive the refactor entirely.
 #
-# WHEN THIS RULE IS FINISHED: every `debt` row is gone and only `not-a-reference` rows remain.
-# At that point Net/Client takes its asmdef and this rule is REPLACED by a 5a/5b-shaped seam
-# assertion — with the four surviving rows carried over as its allow-list, because those four
-# names are matcher artefacts and outlive the refactor entirely.
-$clientRoot = Join-Path $root ('Net' + [IO.Path]::DirectorySeparatorChar + 'Client')
+# The three assertions below are separate on purpose. "The assembly is gone", "the assembly
+# reaches backwards" and "an allow-list row went stale" are different regressions, and any one of
+# them masking another is how a seam rots quietly.
+$clientRoot   = Join-Path $root ('Net' + [IO.Path]::DirectorySeparatorChar + 'Client')
+$clientAsmdef = Join-Path $clientRoot 'Ironfront.Net.Unity.Client.asmdef'
 
 if (Test-Path $clientRoot) {
     $clientSources = @(Get-ChildItem -Path $clientRoot -Filter *.cs -Recurse -File)
+
+    # 6a - the seam. Mirrors RULE 5a: without the asmdef, Net/Client compiles back into
+    # Assembly-CSharp and every legacy type is reachable from it again. Asserted DIRECTLY rather
+    # than inferred from 6b, because 6b would stay GREEN right through the deletion: it matches
+    # names, and deleting an asmdef changes no name in any file. That is exactly the shape of
+    # silent regression this rule exists to refuse.
+    if (-not (Test-Path $clientAsmdef)) {
+        $violations += "RULE 6a (seam gone): Net/Client has no Ironfront.Net.Unity.Client.asmdef.`n" +
+                       "    Without it Net/Client is inside Assembly-CSharp again, every legacy " +
+                       "type is reachable from it, and the EditMode suite phase C4 exists for " +
+                       "cannot reference it at all. The seam IS the asmdef; deleting it is the " +
+                       "regression, not a formatting choice."
+    }
 
     if ($clientSources.Count -eq 0) {
         Write-Host "COULD NOT TELL: no .cs files under '$ScriptsPath/Net/Client'."
@@ -431,32 +446,33 @@ if (Test-Path $clientRoot) {
         }
     }
 
-    # RULE 6a — grow.
+    # 6b - reaches back. Mirrors RULE 5b.
     foreach ($name in ($clientNamed.Keys | Sort-Object)) {
         if ($clientAllowed.ContainsKey($name)) { continue }
 
         $where = ($clientNamed[$name].Keys | Sort-Object) -join ', '
-        $violations += "RULE 6a (new crossing): Net/Client names '$name', which is declared in " +
+        $violations += "RULE 6b (reaches back): Net/Client names '$name', which is declared in " +
                        "a predefined-assembly source and is not in `$ClientBaseline.`n" +
                        "    Named by: $where`n" +
-                       "    Phase C4 is shrinking this surface to nothing so the folder can " +
-                       "become an assembly. A name that is not on the list is either a crossing " +
-                       "somebody just added — route it through an interface Net/Client owns, as " +
-                       "IGameplayActorPresence does for Actor — or a matcher artefact, in which " +
-                       "case add a 'not-a-reference' row SAYING WHAT IT REALLY IS."
+                       "    Ironfront.Net.Unity.Client cannot reference Assembly-CSharp, so this " +
+                       "does not compile — and if it does, the asmdef is gone and 6a should have " +
+                       "fired first. Route it through an interface this assembly owns, as " +
+                       "IGameplayActorPresence does for Actor. If it is a matcher artefact rather " +
+                       "than a reference, add a 'not-a-reference' row SAYING WHAT IT REALLY IS."
     }
 
-    # RULE 6b — shrink. The companion, asserting by identity.
+    # 6c - stale. The companion, asserting by identity.
     foreach ($entry in $ClientBaseline) {
         if ($clientNamed.ContainsKey($entry.Type)) { continue }
 
-        $violations += "RULE 6b (stale): Net/Client no longer names '$($entry.Type)' — the " +
-                       "binding is DONE.`n" +
+        $violations += "RULE 6c (stale): Net/Client no longer names '$($entry.Type)'.`n" +
                        "    Reason it was listed: $($entry.Reason)`n" +
                        "    DELETE the row. Do NOT re-pin the table to what this run reported: " +
-                       "that renames a fix 'expected' and is how a gate gets muted. If this was " +
-                       "the last 'debt' row, Net/Client is ready for its asmdef and this rule " +
-                       "is ready to become a seam assertion — see the RULE 6 header."
+                       "that renames a fix 'expected' and is how a gate gets muted. Every " +
+                       "surviving row is a MATCHER ARTEFACT — a member, an enum value, a " +
+                       "namespace segment — so a stale one means the matcher stopped colliding, " +
+                       "and the allow-list shrinks with it rather than becoming a graveyard " +
+                       "nobody re-reads."
     }
 }
 
@@ -477,14 +493,10 @@ Write-Host "      Net/Client and Net/Input name it nowhere."
 Write-Host ("      RULE 5: Net/Input carries its asmdef and names none of the {0} type(s) declared" -f $legacyTypes.Count)
 Write-Host ("              in predefined-assembly sources, across {0} of its own file(s)." -f $inputSources.Count)
 if (Test-Path $clientRoot) {
-    $clientDebt = @($ClientBaseline | Where-Object { $_.Kind -eq 'debt' })
-    Write-Host ("      RULE 6: Net/Client names {0} legacy type(s), every one of them listed —" -f $clientNamed.Count)
-    Write-Host ("              {0} still to bind (phase C4), {1} matcher artefact(s) that never will be." -f
-                $clientDebt.Count, ($ClientBaseline.Count - $clientDebt.Count))
-    if ($clientDebt.Count -eq 0) {
-        Write-Host "              No debt rows left: Net/Client is ready for its asmdef, and this"
-        Write-Host "              rule is ready to become a seam assertion. See the RULE 6 header."
-    }
+    Write-Host ("      RULE 6: Net/Client carries its asmdef and names {0} of the {1} type(s) declared" -f
+                $clientNamed.Count, $clientLegacyTypes.Count)
+    Write-Host ("              in predefined-assembly sources, across {0} of its own file(s) — and every" -f $clientSources.Count)
+    Write-Host "              one of those is an allow-listed matcher artefact, not a reference."
 }
 Write-Host "      This says no NEW call site appeared and no listed one was silently fixed. It"
 Write-Host "      does NOT say the listed call sites are acceptable — that is what the count is for."

@@ -192,7 +192,7 @@ namespace Ironfront.Net.Unity.Client
             NetPredictionClock clock = NetPredictionClock.Current;
             double renderTick = buffer.RenderTick(clock != null ? clock.Alpha : 0f);
 
-            System.Collections.Generic.List<ushort> ids = _registry.LiveIds;
+            System.Collections.Generic.IReadOnlyList<ushort> ids = _registry.LiveIds;
 
             for (int i = 0; i < ids.Count; i++)
             {
