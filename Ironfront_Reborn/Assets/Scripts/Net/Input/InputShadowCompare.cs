@@ -34,8 +34,8 @@ namespace Ironfront.Net.Unity
     /// the controller, or the input source. It reads and it logs.
     /// </para>
     /// </remarks>
-    // Late, so that anything FpsActorController.Update does to LoadoutUi this frame has already
-    // happened and both sides of the comparison see the same UI state.
+    // Late, so that anything the actor controller's Update does to the loadout screen this frame
+    // has already happened and both sides of the comparison see the same UI state.
     [DefaultExecutionOrder(1000)]
     [DisallowMultipleComponent]
     public sealed class InputShadowCompare : MonoBehaviour
@@ -128,7 +128,11 @@ namespace Ironfront.Net.Unity
             // The right-hand side of each pair is the expression that stood in
             // FpsActorController before the refactor, transcribed verbatim. Where it stops being
             // verbatim, this harness stops being evidence.
-            bool loadoutOpen = LoadoutUi.IsOpen();
+            // Through the binding, as LocalInputSource reads it. Calling the legacy UI directly
+            // would make this harness compare the seam against itself minus the seam, and the
+            // one thing it must not do is disagree with the production path for a reason that
+            // is the harness's own.
+            bool loadoutOpen = NetInputBindings.Environment.LoadoutScreenOpen;
 
             CompareBool(0, _source.Fire(),
                 (Input.GetButton("Fire1") || Input.GetMouseButton(0)) && !loadoutOpen);

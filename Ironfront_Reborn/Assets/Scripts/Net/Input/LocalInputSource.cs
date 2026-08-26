@@ -84,8 +84,10 @@ namespace Ironfront.Net.Unity
 
         /// <summary>
         /// The button bitfield. Each expression here is a transcription of the line it replaced
-        /// in <c>FpsActorController</c> — including the <c>LoadoutUi.IsOpen()</c> terms, which
-        /// are part of the button's meaning and not a caller's concern.
+        /// in <c>FpsActorController</c> — including the loadout-screen terms, which are part of
+        /// the button's meaning and not a caller's concern. Those now come from
+        /// <see cref="ILocalInputEnvironment.LoadoutScreenOpen"/> rather than from the UI class
+        /// directly, which is a change of route and not of meaning (C2).
         /// </summary>
         /// <remarks>
         /// <c>InputShadowCompare</c> re-evaluates those original expressions beside these and
@@ -96,7 +98,7 @@ namespace Ironfront.Net.Unity
         {
             get
             {
-                bool loadoutOpen = LoadoutUi.IsOpen();
+                bool loadoutOpen = NetInputBindings.Environment.LoadoutScreenOpen;
 
                 return InputButtonPacker.Pack(
                     fire:   (Input.GetButton("Fire1") || Input.GetMouseButton(0)) && !loadoutOpen,
@@ -145,7 +147,8 @@ namespace Ironfront.Net.Unity
         /// </para>
         /// <para>
         /// <b>The scaling happens here, on the sender, and that is the decision.</b>
-        /// <c>OptionsUi.GetOptions()</c> is a client-local setting the server does not have —
+        /// <see cref="ILocalInputEnvironment.HelicopterOptions"/> is a client-local setting the
+        /// server does not have —
         /// reaching it at server role is an authority hole and a headless
         /// <c>NullReferenceException</c> at once. So a finished control vector crosses the wire
         /// and the server treats it as opaque, bounded by <c>Vehicle.Clamp4</c> exactly as it
@@ -163,15 +166,15 @@ namespace Ironfront.Net.Unity
         {
             get
             {
-                OptionsUi.Options options = OptionsUi.GetOptions();
-                float sensitivity = options.mouseSensitivity * options.helicopterSensitivity;
+                HelicopterControlOptions options = NetInputBindings.Environment.HelicopterOptions;
+                float sensitivity = options.MouseSensitivity * options.HelicopterSensitivity;
 
-                if (options.helicopterType == OptionsUi.Options.HELICOPTER_TYPE_CUSTOM)
+                if (options.Style == HelicopterControlStyle.Custom)
                 {
-                    float stickPitch = Input.GetAxis("Helicopter Pitch") * (options.heliInvertPitch ? -1f : 1f);
-                    float stickYaw = Input.GetAxis("Helicopter Yaw") * (options.heliInvertYaw ? -1f : 1f);
-                    float stickRoll = Input.GetAxis("Helicopter Roll") * (options.heliInvertRoll ? -1f : 1f);
-                    float stickCollective = Input.GetAxis("Helicopter Throttle") * (options.heliInvertThrottle ? -1f : 1f);
+                    float stickPitch = Input.GetAxis("Helicopter Pitch") * (options.InvertPitch ? -1f : 1f);
+                    float stickYaw = Input.GetAxis("Helicopter Yaw") * (options.InvertYaw ? -1f : 1f);
+                    float stickRoll = Input.GetAxis("Helicopter Roll") * (options.InvertRoll ? -1f : 1f);
+                    float stickCollective = Input.GetAxis("Helicopter Throttle") * (options.InvertThrottle ? -1f : 1f);
 
                     return new HelicopterAxes(
                         stickYaw * 30f * sensitivity,
@@ -186,7 +189,7 @@ namespace Ironfront.Net.Unity
                 float mouseX = sensitivity * LookDeltaX;
                 float mouseY = sensitivity * LookDeltaY;
 
-                if (!options.heliInvertPitch) mouseY = -mouseY;
+                if (!options.InvertPitch) mouseY = -mouseY;
 
                 if (_aiming != null && _aiming())
                 {
@@ -194,7 +197,7 @@ namespace Ironfront.Net.Unity
                     mouseY = 0f;
                 }
 
-                if (options.helicopterType == OptionsUi.Options.HELICOPTER_TYPE_BATTLEFIELD)
+                if (options.Style == HelicopterControlStyle.Battlefield)
                     return new HelicopterAxes(MoveX, MoveZ, mouseX * 20f, mouseY * 30f);
 
                 return new HelicopterAxes(mouseX * 30f, MoveZ, MoveX * 20f, mouseY * 30f);

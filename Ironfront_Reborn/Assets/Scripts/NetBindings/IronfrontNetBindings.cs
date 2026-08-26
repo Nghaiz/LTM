@@ -40,6 +40,11 @@ namespace Ironfront.Net.Unity.Bindings
             NetServerBindings.PlayerBodyFactory = CreatePlayerBody;
             NetServerBindings.SpawnPoints = new ActorManagerSpawnPoints();
             NetSceneBindings.CapturePoints = new SceneCapturePoints();
+            // C2. Ironfront.Net.Unity.Input cannot name LoadoutUi or OptionsUi, so the loadout
+            // screen's open state and the helicopter preferences are handed to it here. Before
+            // the first scene's Awake, and so before FpsActorController can build a
+            // LocalInputSource that reads them.
+            NetInputBindings.Environment = new LocalInputEnvironmentBinding();
         }
 
         /// <summary>
