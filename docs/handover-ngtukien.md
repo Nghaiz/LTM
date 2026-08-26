@@ -20,6 +20,11 @@ Lỗi ấy đã sửa và đã chứng minh trên chính artifact Linux (chi ti�
 > **Cả hai digest đã sẵn sàng và đã điền vào bước 4.** Bạn không phải chờ gì nữa — bắt đầu
 > được ngay từ bước 2.
 >
+> Cập nhật 26/08: cả hai digest đã được thay bằng bản mới hơn, và **hai cái đến từ CÙNG một lần
+> chạy** `images.yml` (`32922452961`) trên cùng một commit — nên chúng không thể lệch pha với
+> nhau. Bản game-server này đã được chạy thử thật: kéo image xuống bằng digest, chạy lên, và
+> `27015/udp` mở. Chi tiết: `plans/debt-closure/reports/2026-08-26-phase-7-ops-to-digest.md`.
+>
 > Lưu ý tên package **đã đổi**: `ironfront-game-server` (có gạch nối), không phải
 > `ironfront-gameserver` như tài liệu cũ. Cái cũ là bản 18/08 đã bỏ, đừng dùng.
 
@@ -32,8 +37,8 @@ Lỗi ấy đã sửa và đã chứng minh trên chính artifact Linux (chi ti�
 | SSH key vào VM | key hiện có của bạn; IP `171.224.181.111` đã được cho phép |
 | Một tên miền trỏ được về `20.214.142.73` | bạn chọn; ví dụ `master.ironfront.<domain>` |
 | `IRONFRONT_SHARED_SECRET` | **tự sinh** (bước 4), rồi gửi lại cho chủ dự án qua kênh riêng |
-| Digest image game-server | **đã có** — xem bước 4 (`sha256:f88f04e2…`, public, tag `gameserver-v0.2.0`) |
-| Digest image master | **đã có** — xem bước 4 (`sha256:3421d24b…`, tag `develop`) |
+| Digest image game-server | **đã có** — xem bước 4 (`sha256:c310da19…`, public, tag `gameserver-v0.3.0`) |
+| Digest image master | **đã có** — xem bước 4 (`sha256:026c8852…`) |
 
 Nếu IP nhà bạn đổi: sửa `ssh_source_cidrs` trong `infra/terraform/terraform.tfvars` rồi
 `terraform apply`. Đừng mở `0.0.0.0/0`.
@@ -96,8 +101,8 @@ IRONFRONT_PUBLIC_IP=20.214.142.73
 IRONFRONT_SHARED_SECRET=<chuỗi openssl ở trên>
 IRONFRONT_TLS_CERT_PASSWORD=<mật khẩu bạn đặt cho master.pfx>
 
-IRONFRONT_MASTER_IMAGE=ghcr.io/nghaiz/ironfront-master@sha256:3421d24bf1d3ae7a2fb44054ff6ffc1efbb6f4881a6291a56cebdf5b5c3e6d67
-IRONFRONT_GAMESERVER_IMAGE=ghcr.io/nghaiz/ironfront-game-server@sha256:f88f04e2bf95ee08641d98428181a2b8116216ae69989cc210be36b45a6bd429
+IRONFRONT_MASTER_IMAGE=ghcr.io/nghaiz/ironfront-master@sha256:026c885256063c0f3e5901562d53d81d182aa874a397f49b95bdea8ccfe31e81
+IRONFRONT_GAMESERVER_IMAGE=ghcr.io/nghaiz/ironfront-game-server@sha256:c310da19a065c3dd3a39417d8ede252aa0f9e3c03cabf0cdc3a4a494f9627a40
 
 IRONFRONT_GAMESERVER_SCENE=Dustbowl
 ```
@@ -161,7 +166,9 @@ chưa hợp lệ, hoặc `IRONFRONT_GAMESERVER_MASTER_TLS_TARGET_HOST` không kh
 **6.4 — Nới buffer nhận UDP** (đã đo được, không phải phòng xa)
 
 Server báo: `socket receive buffer clamped to 425984 B (asked for 1048576 B)`. Mặc định của kernel
-thấp hơn mức server xin, nên **sẽ mất gói khi đông người**.
+thấp hơn mức server xin, nên **sẽ mất gói khi đông người**. Con số này đo lại ngày 26/08 trên
+chính image `gameserver-v0.3.0` đang ghim ở bước 4 — vẫn đúng từng chữ số, nên bước này chưa
+làm là chưa xong.
 
 ```bash
 echo 'net.core.rmem_max = 1048576' | sudo tee /etc/sysctl.d/60-ironfront.conf

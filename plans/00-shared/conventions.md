@@ -314,7 +314,20 @@ A phase is done when **all five** hold:
 
 Miss one and the phase is not done, however much code was written.
 
-**On CI:** GitHub Actions is currently blocked repo-wide by a billing limit — every job fails in
-3–5 seconds without starting. Until that is lifted, criteria 2–4 are satisfied locally, and a PR
-merged over red checks is expected rather than a shortcut. Say so in the PR body so the record
-does not read as "the tests were ignored".
+**On CI, corrected 2026-08-26 — this paragraph said the opposite, and following it now is a
+policy violation rather than a shortcut.** It read: *"GitHub Actions is currently blocked
+repo-wide by a billing limit — every job fails in 3–5 seconds without starting. Until that is
+lifted, criteria 2–4 are satisfied locally, and a PR merged over red checks is expected rather
+than a shortcut."*
+
+That limit died with the 2026-08-21 transfer to `Nghaiz/LTM`: the repository is **public**, so
+Actions minutes are free, and every workflow runs. What replaced it is the exact inverse —
+`build-test (ubuntu-latest)`, `build-test (windows-latest)` and `analyze (csharp)` are
+**required status checks** on `main` and `develop` with `bypass_actors: []`, so a PR with a red
+check is not merged over, it is **refused**, and there is nobody who can wave it through. See
+[`docs/branch-protection.md`](../../docs/branch-protection.md).
+
+So criteria 2–4 are no longer "satisfied locally" — they are satisfied locally *and* proved in
+CI, and green is the merge condition rather than a courtesy. The one thing worth keeping from
+the old text is its instinct: if you ever do have to explain a check's state in a PR body, say
+so plainly, so the record does not read as "the tests were ignored".
