@@ -225,24 +225,78 @@ left for a later phase to rediscover.
 
 ## 8. Roll-up
 
-Recomputed from the rows above after Phase 2, rather than decremented by hand — the previous
-roll-up had already drifted from its own table.
+**Computed, not decremented.** Every cell below is derived from the row tables in §§ 2–7 by
+`python tools/recount_debt_ledger.py`, which reads each row's own status cell. Nothing here is
+carried forward from a previous roll-up.
 
-| Group | Open | Closed | Void | Decided | Other | Total |
+- **Computed at:** `6e38afe` (`develop` HEAD), working tree clean, **2026-08-26**, by
+  [`phase-8-hygiene.md`](phases/phase-8-hygiene.md). No row status changed in this phase, so the
+  pin is the commit the rows were read at.
+- **Re-run after any phase that moves a row.** `--check` exits non-zero the moment this table
+  disagrees with the rows, so the next drift is a failing command rather than a careful reading.
+
+The previous roll-up drifted **twice**. Its own opening sentence warned about the first drift, and
+then it drifted again in the same way — Group X eleven rows behind, Group E two behind, and the
+Partial column three behind. A warning is not a mechanism; that is why the count now lives in a
+script.
+
+| Group | Open | Closed | Void | Decided | Partial | Total |
 |---|---|---|---|---|---|---|
-| A — authoring | 2 | 7 | 4 | — | 1 partial (A-2) | 14 |
-| B — two clients | 16 | — | 1 | — | — | 17 |
+| A — authoring | — | 9 | 4 | — | 1 | 14 |
+| B — two clients | 11 | 3 | 1 | — | 2 | 17 |
 | C — code | 2 | 13 | 1 | — | — | 16 |
-| D — unverified claims | 2 | 3 | — | — | — | 5 |
-| E — ops round 8 | 3 | 4 | 1 | 3 | — | 11 |
-| X — found in Phase 0 | 12 | 17 | — | — | — | 29 |
-| **Total** | **37** | **44** | **7** | **3** | **1** | **92** |
+| D — unverified claims | 1 | 4 | — | — | — | 5 |
+| E — ops round 8 | 1 | 6 | 1 | 4 | 1 | 13 |
+| X — found in Phase 0 | 19 | 21 | — | — | — | 40 |
+| **Total** | **34** | **56** | **7** | **4** | **4** | **105** |
 
-> **Group X recounted 2026-08-25** (phase 3D), by matching `^| \*\*X-\d+\*\* |` and reading each
-> row's own status cell — 29 rows, 13 open, 16 closed. The other five groups are still the
-> post-Phase-2 numbers above them and have not been re-derived; the totals row adds the
-> recounted X to those, so it is only as fresh as its stalest group. Recomputed rather than
-> decremented, for the reason the paragraph above this table gives.
+Two classification calls the script makes in the open, because they are judgment rather than
+arithmetic. **A reasoned `won't-do` counts as `Decided`, not `Void`** — the legend in § "How to read
+a row" puts "nothing is owed" under `DECIDED` and reserves `VOID` for rows whose subject no longer
+exists; E-3a is the first of these. **B-16 and B-17 count as `Closed`** on the strength of their own
+leading token, even though each says it "re-opens as V9's row at 16" — the V9 row does not exist in
+this ledger, and inventing an open row for it here would be the hand-adjustment this section exists
+to stop.
+
+### What the recount disagrees with
+
+Recorded, not reconciled — this phase's AC-4 forbids editing a total into agreement.
+
+1. **Group X was eleven rows behind.** The table carried 29; the rows hold 40. `X-30`…`X-40` were
+   filed on 2026-08-25/26 by phases 3D, 3E and 4 and never reached the roll-up.
+2. **Group E was two rows behind.** The table carried 11; the rows hold 13. `E-3a` (Phase 7's
+   reasoned won't-do) and `E-11b` (the asmdef split) were spun off and never added.
+3. **The previous roll-up contradicted itself, and the total hid it.** Its Group X row read
+   `12 open / 17 closed`; the note printed directly beneath it reported the same 2026-08-25 recount
+   as `13 open, 16 closed`. Both sum to 29, so the total reconciled while the split did not. Neither
+   pair is right today (19 / 21). Kept here because it is the failure mode in miniature: **a total
+   that adds up is not a total that is correct.**
+4. **The Partial column undercounted by three.** It carried "1 partial (A-2)". The rows carry four:
+   `A-2`, plus `B-8` and `B-11` (both graded `PARTIAL` on 2026-08-25) and `E-11` (`SPLIT`,
+   2026-08-21). Only the oldest one had ever been counted.
+5. **§ 8 and § 9 disagree on what Phase 1 closed.** The paragraph below says six rows (A-1, A-5,
+   A-7, X-1, X-2, X-5); § 9 says seven, adding **A-9**. `A-9`'s own row reads
+   `**CLOSED** (Phase 1, 2026-08-19)`, so the row and § 9 agree and the paragraph below is the one
+   that is wrong. Left standing rather than corrected, per AC-4.
+6. **Every open row but three is owned by a phase that has already finished.** Of the 38 open and
+   partial rows, only `C-5` and `C-12` (excluded by P-D10) and `X-14` (a product decision, gated by
+   X-8's G10) are deliberately parked. The other 35 point at:
+
+   | `closes in` | Rows | Why it is dead |
+   |---|---|---|
+   | `3D` | 15 — B-1, B-2, B-4…B-9, B-13, B-14, X-28, X-29, X-31, X-37, X-38 | phase 3D completed 2026-08-25 |
+   | `3E` | 6 — B-10, B-11, X-32, X-33, X-34, X-35 | phase 3E completed 2026-08-25 |
+   | `phase 6` | 4 — X-21, X-24, X-26, X-30 | **phase 6 never adopted them** — none of the four is named anywhere in [`phase-6-rows-no-run-closes.md`](phases/phase-6-rows-no-run-closes.md), and the phase has completed. X-30 was *touched* by task 6.5 (surfaced by X-8's G10) but not owned for closure. |
+   | `4` | 2 — B-15, D-2 | assigned to Phase 4 by § 9; **neither appears anywhere in [`2026-08-26-phase-4-measure.md`](reports/2026-08-26-phase-4-measure.md)**, and the phase has completed |
+   | `1` | 1 — A-2 | phase 1 completed 2026-08-19; the `_actor` half was never re-owned |
+   | `own phase` | 1 — E-11b | no such phase file exists |
+   | `closed` | 2 — X-25, X-27 | the ownership cell says `closed` while the row's own status says `VERIFIED-OPEN` |
+   | `—` | 3 — X-36, X-39, X-40 | no owner was ever recorded |
+
+   This is the shape § 9 already named once — *"nothing scheduled them, which is precisely the shape
+   that turned group A into ownerless debt"* — and it now covers 35 rows rather than three. **The
+   track has run out of phases before it ran out of rows.** Phase 8 reports it; assigning owners is
+   a planning decision and not this phase's to take.
 
 **Phase 2 (2026-08-19) closed ten rows** — C-2, C-3, C-4, C-6, C-7, C-8, C-10, C-11, C-16 and
 X-4 — and left C-1 **prepared but not flipped**, which is what task 2e was for. Group C went from

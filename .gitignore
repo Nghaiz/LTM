@@ -230,3 +230,7 @@ ironfront.db-shm
 # Ignore Claude context
 CLAUDE.md
 unity-editmode-results.xml
+
+# The tools/ python helpers (recount_debt_ledger.py and friends) leave bytecode caches.
+__pycache__/
+*.pyc
