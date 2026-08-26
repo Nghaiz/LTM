@@ -204,6 +204,15 @@ namespace Ironfront.Net.Replication.Tests
         /// server WILL be once it has consumed the inputs it has not seen yet — not where the
         /// server was half a round trip ago.
         /// </summary>
+        /// <remarks>
+        /// <b>This test was green while the replay never moved the position at all</b> — ledger
+        /// row X-21, 2,208 corrections in a 136 s run that never converged. It built
+        /// <c>expected</c> by calling <c>MovementCore.Step</c> and reading
+        /// <c>expected.Position</c>, and <c>Step</c> deliberately does not write that field, so
+        /// both sides sat on the authoritative 3.000 m and compared equal. The expectation is now
+        /// accumulated from the returned deltas the way a caller must; the position assertion is
+        /// stated independently of the constants in <c>PredictionReplayTests</c>.
+        /// </remarks>
         [Fact]
         public void ACorrectionReplaysTheUnacknowledgedInputsOverAuthority()
         {
@@ -216,10 +225,11 @@ namespace Ironfront.Net.Replication.Tests
             var authoritative = MoveState.AtRest(new Vec3(0f, 0f, 3f));
             var predicted = MoveState.AtRest(new Vec3(0f, 0f, 9f));
 
-            // What the server itself will reach once it consumes ticks 4 and 5.
+            // What the server itself will reach once it consumes ticks 4 and 5 -- with the motion
+            // WRITTEN BACK, which is the half this test used to drop on the floor.
             var expected = authoritative;
-            MovementCore.Step(ref expected, in input, Dt);
-            MovementCore.Step(ref expected, in input, Dt);
+            expected.Position += MovementCore.Step(ref expected, in input, Dt);
+            expected.Position += MovementCore.Step(ref expected, in input, Dt);
 
             ReconcileResult result = reconciler.Reconcile(ref predicted, authoritative, 3, Dt);
 

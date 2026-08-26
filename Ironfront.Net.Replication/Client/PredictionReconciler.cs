@@ -53,6 +53,28 @@ namespace Ironfront.Net.Replication.Client
     /// <see cref="PositionToleranceMetres"/>.
     /// </para>
     /// <para>
+    /// <b>The replay integrates the motion itself, and there is no collision system in here.</b>
+    /// <see cref="MovementCore.Step"/> returns a motion delta and deliberately does not write
+    /// <see cref="MoveState.Position"/>, because on both the server and an ordinary predicted
+    /// tick the caller pushes that delta through the collision system and writes back where the
+    /// actor really ended up. A replay cannot: it is re-simulating N ticks in one frame from a
+    /// position the body is not standing at, so there is nothing to sweep a capsule through.
+    /// It therefore adds the delta directly — which is exactly what the server's own collision
+    /// would produce in open space, and an over-estimate anywhere the client has not been told
+    /// about geometry yet.
+    /// </para>
+    /// <para>
+    /// <b>The vertical channel is where that shows, and what absorbs it is named.</b> While
+    /// grounded, <see cref="MovementCore.Step"/> asks for <see cref="MovementCore.StickToGroundForce"/>
+    /// downwards every tick — a force whose whole purpose is to be refused by the floor — so an
+    /// N-input replay asks to descend N x 0.333 m. The client does not act on that directly: a
+    /// <see cref="ReconcileResult.Corrected"/> result is applied through
+    /// <c>NetMovementAgent.ApplyCorrectedState</c>, whose non-resync path MOVES the body with
+    /// <c>CharacterMove</c> and writes back the position collision granted, so a grounded body
+    /// does not sink. <c>PredictionReplayTests</c> pins the number so a reader who meets it in a
+    /// log knows it is expected and knows what cancels it.
+    /// </para>
+    /// <para>
     /// <b>Zero allocation after construction.</b> The ring is a struct array sized once.
     /// </para>
     /// </remarks>
@@ -177,7 +199,16 @@ namespace Ironfront.Net.Replication.Client
             for (long i = firstUnacked; i < _count; i++)
             {
                 int slot = (int)(i % Capacity);
-                MovementCore.Step(ref predicted, in _inputs[slot], dt);
+
+                // The RETURN VALUE, written back. Ledger row X-21: this line used to call Step
+                // and discard it, and `MovementCore.Step` deliberately does not write
+                // MoveState.Position -- "only the collision system knows where the actor really
+                // ended up, so the caller writes it back after moving". So the replay advanced
+                // velocity and stance and never the position, and every correction landed the
+                // client on the server's STALE position with the unacknowledged motion thrown
+                // away. Measured: `corrections: 2208` in a 136 s run that never converged, with
+                // pendingInputs pinned at Capacity.
+                predicted.Position += MovementCore.Step(ref predicted, in _inputs[slot], dt);
                 ReplayedInputCount++;
             }
 
