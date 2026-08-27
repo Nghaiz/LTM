@@ -269,8 +269,81 @@ namespace Ironfront.Net.LoadHarness
                             : bytesReceived / durationSec / clients.Count,
                 },
                 Agreement = CompareClients(clients),
+                Verbs = CollectVerbs(options, clients, durationSec),
                 Errors = errors,
                 TransportWarnings = transportWarnings,
+            };
+        }
+
+        /// <summary>
+        /// Folds every client's verb log into one, and counts what the drill put on the wire.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Merged rather than taken from client 0.</b> Interest management sends different
+        /// clients different entities, so the client that first saw a burn is whichever one
+        /// happened to hold that vehicle in its set — and reading one client's log would grade
+        /// check 11 on that accident. The merge keeps the EARLIEST sighting and sums the counts.
+        /// </para>
+        /// <para>
+        /// <b>The send counters are reported beside the verbs, and they answer a different
+        /// question.</b> A run with zero verbs and zero seat requests is a harness that did not
+        /// try; a run with zero verbs and 240 seat requests is a server that refused every one.
+        /// Those need different next steps, and a verb list alone cannot tell them apart.
+        /// </para>
+        /// </remarks>
+        private static HarnessReport.VerbsBlock CollectVerbs(
+            HarnessOptions options, List<SyntheticClient> clients, double durationSec)
+        {
+            var merged = new VerbLog();
+            long seatSent = 0, seatRefused = 0, vehicleInputs = 0, respawns = 0, trigger = 0;
+
+            foreach (SyntheticClient client in clients)
+            {
+                merged.MergeFrom(client.Verbs);
+                vehicleInputs += client.VehicleInputsSent;
+
+                CombatDrill? drill = client.Drill;
+                if (drill == null) continue;
+
+                seatSent += drill.SeatRequestsSent;
+                seatRefused += drill.SeatRequestsRefused;
+                respawns += drill.RespawnRequestsSent;
+                trigger += drill.TriggerTicks;
+            }
+
+            var seen = new List<HarnessReport.VerbRow>(4);
+            foreach (HarnessVerb verb in
+                     new[] { HarnessVerb.Drive, HarnessVerb.Damage,
+                             HarnessVerb.Burn, HarnessVerb.Death })
+            {
+                if (!merged.First.TryGetValue(verb, out VerbLog.Entry? entry)) continue;
+
+                seen.Add(new HarnessReport.VerbRow
+                {
+                    Verb = verb.ToString(),
+                    ObservedByClient = entry.ObservedByClient,
+                    AtDecodedTick = entry.AtDecodedTick,
+                    AtSeconds = Math.Round(entry.AtMs / 1000.0, 3),
+                    Evidence = entry.Evidence,
+                    Count = entry.Count,
+                });
+            }
+
+            var missing = new List<string>(4);
+            foreach (HarnessVerb verb in merged.Missing) missing.Add(verb.ToString());
+
+            return new HarnessReport.VerbsBlock
+            {
+                Behavior = options.Behavior.ToString(),
+                AllFour = merged.AllFour,
+                Missing = missing,
+                Seen = seen,
+                SeatRequestsSent = seatSent,
+                SeatRequestsRefused = seatRefused,
+                VehicleInputsSent = vehicleInputs,
+                RespawnRequestsSent = respawns,
+                TriggerTicks = trigger,
             };
         }
 
@@ -432,6 +505,30 @@ namespace Ironfront.Net.LoadHarness
             if (agreement.UnclassifiedComparisons > 0)
                 Line($"UNCLASSIFIED       {agreement.UnclassifiedComparisons} comparison(s) carried no update tick - the provenance tracking is wrong");
             Line($"network seed       {report.Network.Seed} ({report.Network.Preset})");
+
+            // Printed for every behaviour, including the two that cannot fight. "verbs none
+            // (behavior Move)" is a complete and honest sentence; omitting the line on a Move
+            // run would make a Combat run that provoked nothing look like an old report.
+            HarnessReport.VerbsBlock verbs = report.Verbs;
+            foreach (HarnessReport.VerbRow row in verbs.Seen)
+            {
+                // One bare interpolated literal, for the reason the Line helper's own comment
+                // gives: concatenating two of them rebinds to Append(string) and stops
+                // compiling. The pieces are composed first and interpolated once.
+                string when = FormattableString.Invariant(
+                    $"decoded tick {row.AtDecodedTick} (t+{row.AtSeconds:0.0}s) by client {row.ObservedByClient}");
+                Line($"verb {row.Verb,-6}        first at {when}, {row.Count} sighting(s) - {row.Evidence}");
+            }
+
+            string missing = verbs.Missing.Count == 0
+                ? "none — all four of check 11's verbs fired"
+                : string.Join(", ", verbs.Missing);
+            Line($"verbs missing      {missing} (behavior {verbs.Behavior})");
+            string seats = FormattableString.Invariant(
+                $"{verbs.SeatRequestsSent} seat request(s), {verbs.SeatRequestsRefused} refused");
+            string wheel = FormattableString.Invariant(
+                $"{verbs.VehicleInputsSent} vehicle input(s), {verbs.RespawnRequestsSent} respawn request(s)");
+            Line($"drill sent         {seats}; {wheel}; {verbs.TriggerTicks} trigger tick(s)");
 
             // Surfaced beside the client count, because "4 of 8 held" and the transport's
             // reason for the other four belong in the same glance.

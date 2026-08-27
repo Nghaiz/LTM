@@ -33,7 +33,10 @@ param(
     [int] $Clients = 8,
     [int] $Seconds = 120,
     [int] $InputHz = 30,
-    [ValidateSet("idle", "move")]
+    # combat is R5's addition (ledger X-34): it drives, fires, dies and respawns, which are
+    # check 11's four verbs. It puts reliable channel-2 traffic on the wire that move never
+    # sends, so a bandwidth figure taken under it is NOT comparable with the phase-4 baselines.
+    [ValidateSet("idle", "move", "combat")]
     [string] $Behavior = "move",
 
     # A NetworkSimulator preset name, or "off" for a clean wire.

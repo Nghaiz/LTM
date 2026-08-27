@@ -50,6 +50,19 @@ namespace Ironfront.Net.LoadHarness
         public readonly uint Rotation;
         public readonly byte Health;
 
+        /// <summary>
+        /// Dead / burning / in water / airborne, straight off the wire.
+        /// </summary>
+        /// <remarks>
+        /// <b>Added by R5 because check 11's third verb has no message.</b> There is no
+        /// <c>S_VEHICLE_BURNING</c> — <c>VehicleStateFlags.Burning</c> is a snapshot field and
+        /// the snapshot is the only place a burn can be seen, so a capture that dropped the
+        /// flags byte could not answer the question no matter how long the run was. Actors
+        /// carried theirs from the start (<see cref="ActorSample.Flags"/>); the vehicle half was
+        /// the gap.
+        /// </remarks>
+        public readonly VehicleStateFlags Flags;
+
         /// <summary>The server tick this client last received a position for this vehicle on.</summary>
         /// <remarks><see cref="ActorSample.UpdatedAtTick"/> — same rule, and X-35's worked example.</remarks>
         public readonly uint UpdatedAtTick;
@@ -62,6 +75,7 @@ namespace Ironfront.Net.LoadHarness
             Z = entry.PosZ;
             Rotation = entry.Rotation;
             Health = entry.Health;
+            Flags = entry.Flags;
             UpdatedAtTick = updatedAtTick;
         }
     }
@@ -155,10 +169,19 @@ namespace Ironfront.Net.LoadHarness
 
         /// <summary>Appends this client's samples to a JSONL sink.</summary>
         /// <remarks>
+        /// <para>
         /// <b>Row shape changed with X-35:</b> each actor and vehicle tuple gained a trailing
         /// <c>updatedAtTick</c>, so captures written before 2026-08-27 have one fewer column
         /// and cannot be classified into divergence and staleness at all. A reader must key off
         /// the tuple length rather than assume; an older capture supports the old total only.
+        /// </para>
+        /// <para>
+        /// <b>And again with X-34:</b> the VEHICLE tuple gained a <c>flags</c> column BEFORE
+        /// <c>updatedAtTick</c>, so a vehicle row is now 8 wide against the actor row's 7. The
+        /// flags column had to go in the middle rather than at the end because
+        /// <c>updatedAtTick</c> is the provenance stamp and reads last on both entity types;
+        /// splitting that convention to spare one reader an edit would cost every future reader
+        /// the rule. Key off the tuple length: 6 is pre-X-35, 7 is X-35, 8 is X-34 onward.
         /// </remarks>
         public void WriteJsonl(System.IO.TextWriter writer, int clientIndex)
         {
@@ -188,7 +211,8 @@ namespace Ironfront.Net.LoadHarness
                     VehicleSample v = sample.Vehicles[i];
                     if (i > 0) line.Append(',');
                     line.Append(CultureInfo.InvariantCulture,
-                        $"[{v.VehicleId},{v.X},{v.Y},{v.Z},{v.Rotation},{v.Health},{v.UpdatedAtTick}]");
+                        $"[{v.VehicleId},{v.X},{v.Y},{v.Z},{v.Rotation},{v.Health},"
+                        + $"{(int)v.Flags},{v.UpdatedAtTick}]");
                 }
 
                 line.Append("]}");

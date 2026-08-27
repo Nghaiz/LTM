@@ -39,10 +39,32 @@ D5 bandwidth-reduction ladder.
 | 7 | Two clients see the same vehicle in the same place while a third drives it, 100 ms RTT / 5% loss | B | V5 |
 | 8 | No perceptible input lag; convergence without visible snapping | B | V5 |
 | 9 | The kinematic remote path breaks no cosmetic outside Task 3's enumerated six | B | V5 |
-| 10 | Client vehicle stage adds no per-frame allocation | A | V5 |
+| 10 | Client vehicle stage adds no per-frame allocation | **B** (was A — see below) | V5 |
 | 11 | Headless server survives drive → damage → burn → death with a networked driver | A | V5 |
 | 12 | Turret parity across two clients | B | V6 |
 | 13 | Death → input disable → respawn screen (the `ClientCombatState` owner) | B | Phase 2 task 2b |
+
+**Check 10 moved from lane A to lane B on 2026-08-27** (verdict-closure R5 task R5.2, ledger
+**X-33**), and the row above is the assignment — not a report noting the move.
+
+The original assignment was unmeetable by construction. Lane A is engine-free *on purpose* — § 4:
+*"a harness with its own decoder would grade the harness"* — so it never loads Unity, holds no
+reference to `ClientVehicleStage`, and no length of run against it produces an allocation figure
+for a type it cannot name. Phase 3E ran lane A, found the same thing, and filed **X-33** rather
+than grading the check on the strength of a lane that structurally could not reach it (**P-D1**,
+and **V-D2** one track later).
+
+The measurement is a Unity Profiler measurement, so it belongs to the lane that already loads the
+Editor and already has a per-checkpoint recorder to hang it on. The instrument is
+`LaneBAllocationSampler`, which lives in `Net/Diagnostics` — excluded from player builds by the
+asmdef's `defineConstraints` (asmdef-seam C4d), so it costs a shipping build nothing.
+
+**One property of that instrument decides how the check is graded, and it is a limitation rather
+than a detail.** `GC Allocated In Frame` is a WHOLE-FRAME counter and cannot attribute a byte to
+one component — attribution needs a sampled call tree, which is a capture rather than a counter.
+So check 10 is graded as a DIFFERENCE between checkpoint windows: the per-frame figure while the
+client is on foot against the figure while it is driving, from one run. A single number from a
+single window answers a question nobody asked.
 
 ---
 

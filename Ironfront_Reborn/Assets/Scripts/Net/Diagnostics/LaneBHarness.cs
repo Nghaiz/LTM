@@ -105,6 +105,17 @@ namespace Ironfront.Net.Unity.Diagnostics
         private ScriptedTargetSolver _solver;
         private LaneBCheckpointRecorder _recorder;
         private readonly LaneBExplosionLog _explosions = new LaneBExplosionLog();
+
+        /// <summary>
+        /// Check 10's instrument, or null on the server role. Ledger <b>X-33</b>.
+        /// </summary>
+        /// <remarks>
+        /// Constructed in <c>Awake</c> rather than in <see cref="TryInstall"/>, unlike the
+        /// recorder it feeds: the frames between connecting and installing are ordinary client
+        /// frames and belong in the first window's denominator. Starting it late would make that
+        /// window a measurement of the programme's opening seconds only.
+        /// </remarks>
+        private LaneBAllocationSampler _allocation;
         private LaneBRunSeeds _seeds;
         private bool _installed;
         private bool _finished;
@@ -198,6 +209,11 @@ namespace Ironfront.Net.Unity.Diagnostics
             UnityEngine.Random.InitState(_seeds.UnitySeed);
 
             AttachTransportLog();
+
+            // Client role only. The server is a headless process with no ClientVehicleStage in
+            // it at all, so a sampler there would produce an allocation figure for a frame that
+            // check 10 is not about -- a number that looks like an answer and is not one.
+            if (_role != "server") _allocation = new LaneBAllocationSampler();
 
             Debug.Log($"[lane-b] role={_role} label={_label} unitySeed={_seeds.UnitySeed} "
                       + $"sim={_seeds.SimulatorPreset}/{_seeds.SimulatorSeed} "
@@ -340,6 +356,11 @@ namespace Ironfront.Net.Unity.Diagnostics
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
             _explosions.Detach();
+
+            // A ProfilerRecorder holds a native handle. Leaking one per domain reload is the
+            // kind of thing that is invisible in a batchmode run and noisy in a live Editor.
+            _allocation?.Dispose();
+            _allocation = null;
         }
 
         /// <summary>
@@ -423,6 +444,12 @@ namespace Ironfront.Net.Unity.Diagnostics
             _elapsed += Time.unscaledDeltaTime;
 
             if (_role == "server") { TickServer(); return; }
+
+            // Every frame, and BEFORE the finished guard: the counter reports the frame that has
+            // already been finalised, so a sampler that stopped at the same instant the
+            // programme did would drop the last window's final reading. Sampling is two adds
+            // and a comparison; there is no frame it is worth skipping.
+            _allocation?.Sample();
 
             if (_finished) return;
 
@@ -577,7 +604,7 @@ namespace Ironfront.Net.Unity.Diagnostics
             _explosions.Attach(client.Router);
 
             _recorder = new LaneBCheckpointRecorder(
-                _artifacts, _label, programme.name, _seeds, _solver, _explosions);
+                _artifacts, _label, programme.name, _seeds, _solver, _explosions, _allocation);
 
             local.SetInputSource(_source);
 

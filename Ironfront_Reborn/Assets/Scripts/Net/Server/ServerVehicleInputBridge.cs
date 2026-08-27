@@ -222,6 +222,19 @@ namespace Ironfront.Net.Unity.Server
             }
         }
 
+        /// <summary>
+        /// Installs the network input source on a new driver. Ledger <b>X-46</b>.
+        /// </summary>
+        /// <remarks>
+        /// <b>Both failures LOG now, and that is the whole of the change.</b>
+        /// <see cref="UnreachableControllers"/> was incremented here and read by nothing in the
+        /// repository — no log line, no report field, no gate — so the one outcome it exists to
+        /// surface was invisible: a driver seated in a vehicle that will not respond to them.
+        /// Nothing could reach it until R2 gave the shipped client a seat sender and R5 gave lane
+        /// A one, and the first lane-A Combat run then produced 1,138 accepted vehicle inputs
+        /// against a hull that never moved, with nothing anywhere saying why. A counter nobody
+        /// reads is not a measurement.
+        /// </remarks>
         private void Install(ushort actorId)
         {
             if (_seated.ContainsKey(actorId)) return;
@@ -229,6 +242,10 @@ namespace Ironfront.Net.Unity.Server
             if (!_actors.TryFind(actorId, out NetServerActor actor) || actor == null)
             {
                 UnreachableControllers++;
+                Debug.LogError(
+                    $"[net] actor {actorId} took a driver seat and is not in the actor registry, "
+                    + $"so its vehicle will not respond to it. unreachableControllers="
+                    + $"{UnreachableControllers}");
                 return;
             }
 
@@ -236,6 +253,14 @@ namespace Ironfront.Net.Unity.Server
             if (sink == null)
             {
                 UnreachableControllers++;
+
+                // LogError rather than LogWarning: this is a driver whose vehicle is inert, and
+                // every symptom of it downstream -- accepted input, an unmoving hull, a check 11
+                // 'drive' verb that never fires -- reads as something else.
+                Debug.LogError(
+                    $"[net] actor {actorId} took a driver seat and no driver input sink could be "
+                    + $"attached to '{actor.gameObject.name}', so its vehicle will not respond to "
+                    + $"it. unreachableControllers={UnreachableControllers}");
                 return;
             }
 
