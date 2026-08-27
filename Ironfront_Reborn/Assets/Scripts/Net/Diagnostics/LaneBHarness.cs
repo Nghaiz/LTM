@@ -15,6 +15,7 @@ using System;
 using System.Globalization;
 using System.IO;
 using Ironfront.Net.Replication.Movement;
+using Ironfront.Net.Replication.World;
 using Ironfront.Net.Transport;
 using Ironfront.Net.Unity.Client;
 using Ironfront.Net.Unity.Server;
@@ -512,6 +513,8 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// what the transport already counted for itself and had no way to say.
         /// </para>
         /// </remarks>
+        private bool _reportedSaturation;
+
         private void ReportTransportCounters()
         {
             if (_elapsed < _nextCounterReportAt) return;
@@ -525,7 +528,21 @@ namespace Ironfront.Net.Unity.Diagnostics
                       + $"fromUnknown={udp.PacketsFromUnknown} "
                       + $"badConnId={udp.PacketsWithBadConnectionId} "
                       + $"rateLimited={udp.RateLimitedRequests} "
-                      + $"playerIdRejects={udp.TotalRejectedByPlayerIdBinding}");
+                      + $"playerIdRejects={udp.TotalRejectedByPlayerIdBinding} "
+                      + $"posSaturated={PositionSaturationLog.Count}"
+                      + $"/{PositionSaturationLog.DistinctEntities}ent");
+
+            // X-39: named once, the first time it happens. The per-second count above says HOW
+            // MUCH; this says WHICH, and without it a reader has a number and no way to act on
+            // it. Once, not every second, because the condition persists for as long as the
+            // entity is out there and a line per tick would bury the run.
+            if (PositionSaturationLog.First != null && !_reportedSaturation)
+            {
+                _reportedSaturation = true;
+                Debug.LogError("[bounds] a replicated entity is outside the wire's position "
+                               + "range and is being clamped onto the boundary: "
+                               + PositionSaturationLog.First);
+            }
         }
 
         /// <summary>

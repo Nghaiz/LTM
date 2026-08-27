@@ -150,6 +150,29 @@ namespace Ironfront.Net.LoadHarness
 
         public long VehicleSnapshotsApplied => _router.VehicleSnapshotsApplied;
 
+        /// <summary>
+        /// Vehicle snapshots this client REFUSED, and why.
+        /// </summary>
+        /// <remarks>
+        /// <b>Separates "this client was sent fewer vehicles" from "this client threw them
+        /// away".</b> Per-client vehicle counts vary enormously between clients on a clean wire
+        /// — 449 against 2,022 in one 8-client run — and that spread moves the agreement
+        /// denominator by 7x between otherwise identical runs, which is what made X-40's rate
+        /// vary six-fold. Interest management culling a distant vehicle and a decoder stuck on
+        /// a baseline it never received produce the same shortfall in the applied count and
+        /// mean opposite things, so the applied count alone cannot tell them apart.
+        /// </remarks>
+        public long VehicleUnknownBaselines => _router.VehicleDecoder.UnknownBaselineCount;
+
+        /// <summary>Vehicle snapshots refused as older than one already applied.</summary>
+        public long VehicleStaleSnapshots => _router.VehicleDecoder.StaleCount;
+
+        /// <summary>The actor stream's twin of <see cref="VehicleUnknownBaselines"/>.</summary>
+        public long ActorUnknownBaselines => _router.Decoder.UnknownBaselineCount;
+
+        /// <summary>The actor stream's twin of <see cref="VehicleStaleSnapshots"/>.</summary>
+        public long ActorStaleSnapshots => _router.Decoder.StaleCount;
+
         /// <summary>Harness clock at the current <see cref="Poll"/>, for the capture stamp.</summary>
         private double _nowMs;
 

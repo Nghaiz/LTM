@@ -115,6 +115,21 @@ namespace Ironfront.Net.LoadHarness
             public long SnapshotsApplied { get; init; }
             public long VehicleSnapshotsApplied { get; init; }
 
+            /// <summary>
+            /// Snapshots this client refused, by stream and reason.
+            /// </summary>
+            /// <remarks>
+            /// Read these BEFORE reading anything into a low applied count. A client far from
+            /// every vehicle is sent none and applies none, which is interest management
+            /// working; a client whose baseline the server no longer agrees with refuses every
+            /// delta and also applies none, which is a defect. The two are indistinguishable in
+            /// the applied count and obvious here.
+            /// </remarks>
+            public long ActorUnknownBaselines { get; init; }
+            public long ActorStaleSnapshots { get; init; }
+            public long VehicleUnknownBaselines { get; init; }
+            public long VehicleStaleSnapshots { get; init; }
+
             /// <summary>Baseline acks this client sent, so a delta count of 0 says which half broke.</summary>
             /// <remarks>
             /// Until phase 3C the harness sent none, so DeltaEncoder.TryFindBaseline returned
@@ -152,6 +167,10 @@ namespace Ironfront.Net.LoadHarness
                     AcksSent = client.AcksSent,
                     SnapshotsApplied = client.SnapshotsApplied,
                     VehicleSnapshotsApplied = client.VehicleSnapshotsApplied,
+                    ActorUnknownBaselines = client.ActorUnknownBaselines,
+                    ActorStaleSnapshots = client.ActorStaleSnapshots,
+                    VehicleUnknownBaselines = client.VehicleUnknownBaselines,
+                    VehicleStaleSnapshots = client.VehicleStaleSnapshots,
                     MalformedMessages = client.MalformedMessages,
                     UnknownMessages = client.UnknownMessages,
                     StateSamples = client.Capture.Samples.Count,
