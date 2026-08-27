@@ -1,4 +1,4 @@
-namespace Ironfront.Net.Unity.Client
+namespace Ironfront.Net.Unity
 {
     /// <summary>
     /// The match scoreboard: tickets, phase, timer, and whether it is showing live numbers or

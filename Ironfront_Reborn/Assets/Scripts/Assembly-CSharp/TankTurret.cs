@@ -186,7 +186,7 @@ public class TankTurret : MountedWeapon
 		// V10 task 3 (A16): was `!user.aiControlled`, so a remote human entering this turret
 		// disabled the LOCAL player's cameras.
 		if (NetWeaponAuthority.CosmeticHalfRunsHere
-			&& Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(user))
+			&& Ironfront.Net.Unity.NetPresenterGate.IsLocalActor(user))
 		{
 			FpsActorController.instance.DisableCameras();
 			if (camera != null)
@@ -211,7 +211,7 @@ public class TankTurret : MountedWeapon
 		}
 		// V10 task 3 (A16): the mirror of Unholster's guard above.
 		if (NetWeaponAuthority.CosmeticHalfRunsHere
-			&& Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(user))
+			&& Ironfront.Net.Unity.NetPresenterGate.IsLocalActor(user))
 		{
 			FpsActorController.instance.EnableCameras();
 		}

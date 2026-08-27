@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using Ironfront.Net.Replication.Projectiles;
-using Ironfront.Net.Unity.Client;
 using UnityEngine;
 
 namespace Ironfront.Net.Unity.Bindings

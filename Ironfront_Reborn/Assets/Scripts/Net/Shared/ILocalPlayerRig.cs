@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Ironfront.Net.Unity.Client
+namespace Ironfront.Net.Unity
 {
     /// <summary>
     /// The human at this keyboard: their input, their camera, their body. What

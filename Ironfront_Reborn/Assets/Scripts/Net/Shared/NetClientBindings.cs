@@ -1,8 +1,9 @@
 using System;
+using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Projectiles;
 using UnityEngine;
 
-namespace Ironfront.Net.Unity.Client
+namespace Ironfront.Net.Unity
 {
     /// <summary>
     /// Where <c>Assembly-CSharp</c> hands this assembly the client-side singletons it may no
@@ -130,6 +131,42 @@ namespace Ironfront.Net.Unity.Client
         public static void ShowHit(int severity) => Hud?.ShowHit(severity);
 
         /// <summary>
+        /// Reports the local player's team from the client's current snapshot. Registered by the
+        /// client assembly; read through <see cref="NetPresenterGate.TryResolveLocalTeam"/>.
+        /// </summary>
+        /// <remarks>
+        /// A named delegate rather than a <c>Func</c> because the answer is a try-pattern with an
+        /// <c>out</c> parameter, and <c>Func</c> cannot express one. The alternative — returning a
+        /// nullable team — would have changed the shape of a shipped call site to suit a
+        /// refactor, which is the trade this phase refuses everywhere else too.
+        /// </remarks>
+        public delegate bool LocalTeamResolver(out byte team);
+
+        /// <summary>The registered team resolver, or null on a server and offline.</summary>
+        public static LocalTeamResolver LocalTeam { get; set; }
+
+        /// <summary>
+        /// Draws this client's own explosion immediately rather than a round-trip late. Registered
+        /// by the client assembly's <c>ClientCombatEvents</c>; called from <c>ActorManager</c>,
+        /// which may no longer name it. Phase C5b.
+        /// </summary>
+        /// <remarks>
+        /// <b>Unregistered is the server and the offline game, and both already did nothing here.</b>
+        /// The predictor's own first line is a <c>NetContext.IsClient</c> test, so a null slot and
+        /// a registered-but-inert predictor produce the same behaviour — which is what makes this
+        /// a relocation of the call rather than a change to when prediction fires.
+        /// </remarks>
+        public static Action<IGameplayActorPresence, Vector3, float, ExplosionKind> ExplosionPredictor { get; set; }
+
+        /// <summary>
+        /// Predicts <paramref name="source"/>'s own explosion, or does nothing when no client is
+        /// running to predict for.
+        /// </summary>
+        public static void PredictExplosion(
+            IGameplayActorPresence source, Vector3 centre, float radiusMetres, ExplosionKind kind)
+            => ExplosionPredictor?.Invoke(source, centre, radiusMetres, kind);
+
+        /// <summary>
         /// Clears every registration. See the class remark for why this is not optional.
         /// </summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -143,6 +180,8 @@ namespace Ironfront.Net.Unity.Client
             Decals = null;
             Objectives = null;
             ProjectileCatalogReader = null;
+            LocalTeam = null;
+            ExplosionPredictor = null;
         }
 
         /// <summary>

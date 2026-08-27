@@ -98,7 +98,27 @@ param(
     # saw it, RULE 6/7 could not have flagged it, and it surfaced only when the Unity compile went
     # red on the asmdef. The gate was answering the right question over the wrong population --
     # green-that-proves-nothing.md, "measures the wrong population".
-    [string]$FirstPassPath = "Ironfront_Reborn/Assets/Plugins/Assembly-CSharp-firstpass"
+    [string]$FirstPassPath = "Ironfront_Reborn/Assets/Plugins/Assembly-CSharp-firstpass",
+
+    # THE THIRD PREDEFINED ASSEMBLY, and it was a blind spot until phase C5b -- exactly one
+    # assembly further along than the blind spot C4d found, and found the same way.
+    #
+    # Assets/Editor/ compiles into Assembly-CSharp-Editor, which is predefined and therefore
+    # auto-references every `autoReferenced: true` asmdef and can be referenced back by none.
+    # C4d widened this scan from one predefined population to two and stopped there, so a third
+    # went on being invisible: Assets/Editor/NetVerificationHarness.cs held
+    # `using Ironfront.Net.Unity.Client;` and five NetClientBootstrap reads, and NOTHING in the
+    # C5b enumeration saw them. The Unity compile did, the moment Client was sealed.
+    #
+    # The manifest settles that all three are ONE population, and it is worth quoting because it
+    # is the reason this parameter exists rather than a fourth special case:
+    #
+    #     Assembly-CSharp           -> [EditorHarness, Input, Server, Shared]
+    #     Assembly-CSharp-Editor    -> [EditorHarness, Input, Server, Shared]
+    #     Assembly-CSharp-firstpass -> [EditorHarness, Input, Server, Shared]
+    #
+    # Identical. "Predefined" is the property that matters, and there are three of them.
+    [string]$EditorPath = "Ironfront_Reborn/Assets/Editor"
 )
 
 $ErrorActionPreference = "Stop"
@@ -250,9 +270,10 @@ if (-not (Test-Path $root)) {
 
 # A file is "outside any asmdef" when no ancestor directory up to $root carries one. Those are
 # the files Unity compiles into the predefined Assembly-CSharp.
-function Test-OutsideAsmdef([string]$filePath) {
+function Test-OutsideAsmdef([string]$filePath, [string]$stopAt) {
+    if (-not $stopAt) { $stopAt = $root }
     $dir = Split-Path -Parent $filePath
-    while ($dir -and $dir.Length -ge $root.Length) {
+    while ($dir -and $dir.Length -ge $stopAt.Length) {
         if (Get-ChildItem -Path $dir -Filter *.asmdef -File -ErrorAction SilentlyContinue) {
             return $false
         }
@@ -273,6 +294,17 @@ $firstPassRoot = Join-Path $repoRoot $FirstPassPath
 $firstPassSources = @()
 if (Test-Path $firstPassRoot) {
     $firstPassSources = @(Get-ChildItem -Path $firstPassRoot -Filter *.cs -Recurse -File)
+}
+
+# Assets/Editor, minus anything an asmdef has claimed. Phase C5b moved NetVerificationHarness.cs
+# into Ironfront.Net.Unity.EditorHarness precisely so it could name the sealed client explicitly,
+# and that file must therefore drop OUT of this population -- which is what the asmdef walk does.
+$editorRoot    = Join-Path $repoRoot $EditorPath
+$editorSources = @()
+if (Test-Path $editorRoot) {
+    $editorSources = @(
+        Get-ChildItem -Path $editorRoot -Filter *.cs -Recurse -File |
+            Where-Object { Test-OutsideAsmdef $_.FullName $editorRoot })
 }
 
 $allSources = Get-ChildItem -Path $root -Filter *.cs -Recurse -File
@@ -405,6 +437,13 @@ function Get-LegacyTypeSet([string[]]$excludedRoots) {
         }
     }
 
+    # Assembly-CSharp-Editor, on the same footing and for the same reason (phase C5b).
+    foreach ($file in $editorSources) {
+        foreach ($line in (Get-CodeLines $file.FullName)) {
+            if ($line -match $declPattern) { [void]$set.Add($Matches[1]) }
+        }
+    }
+
     foreach ($file in $allSources) {
         if (-not (Test-OutsideAsmdef $file.FullName)) { continue }
 
@@ -488,6 +527,7 @@ function Get-DeclaredTypeSet([string]$folderRoot) {
 # no asmdef claims. Both are predefined, so both are on the wrong side of every wall below.
 $predefinedSources = New-Object System.Collections.Generic.List[object]
 foreach ($file in $firstPassSources) { [void]$predefinedSources.Add($file) }
+foreach ($file in $editorSources)    { [void]$predefinedSources.Add($file) }
 foreach ($file in $allSources) {
     if (Test-OutsideAsmdef $file.FullName) { [void]$predefinedSources.Add($file) }
 }
@@ -680,6 +720,28 @@ if (Test-Path $clientRoot) {
                        "and the allow-list shrinks with it rather than becoming a graveyard " +
                        "nobody re-reads."
     }
+
+    # 6d — the C5b clause. Client ships autoReferenced: false; its Assembly-CSharp-facing seam
+    # (the nine interfaces, NetClientBindings, and the half of NetClientPresenterGuard the legacy
+    # tree asks for) moved to Ironfront.Net.Unity.Shared. See the C5 clause header for why the
+    # bindings could not move the other way instead.
+    if (Test-Path $clientAsmdef) {
+        if ((Get-Content -Path $clientAsmdef -Raw) -notmatch '"autoReferenced"\s*:\s*false') {
+            $violations += "RULE 6d (channel reopened): " +
+                           "Ironfront.Net.Unity.Client.asmdef is autoReferenced: true.`n" +
+                           "    Assembly-CSharp can see all 37 types in it again, from any of " +
+                           "333 legacy files. Phase C5b set this false and moved the seam to " +
+                           "Shared so it could stay false. 6a will NOT catch this: the asmdef " +
+                           "still exists, which is all 6a reads."
+        }
+    }
+
+    $violations += Get-SealedFromPredefinedViolations `
+        -sealedRoot $clientRoot `
+        -assemblyName 'Ironfront.Net.Unity.Client' `
+        -qualifiedPrefix 'Ironfront.Net.Unity.Client.' `
+        -Allowed @{} `
+        -ruleId 'RULE 6d'
 }
 
 # RULE 7 — the Net/Diagnostics seam, phase C4d.
@@ -821,6 +883,9 @@ if (Test-Path $clientRoot) {
                 $clientNamed.Count, $clientLegacyTypes.Count)
     Write-Host ("              in predefined-assembly sources, across {0} of its own file(s) — and every" -f $clientSources.Count)
     Write-Host "              one of those is an allow-listed matcher artefact, not a reference."
+    Write-Host "      RULE 6d: it ships autoReferenced: false, and no predefined-assembly source names"
+    Write-Host "              a type in it. Its seam — nine interfaces, NetClientBindings, and the"
+    Write-Host "              half of the presenter guard the legacy tree asks for — is in Shared."
 }
 if (Test-Path $diagRoot) {
     Write-Host ("      RULE 7: Net/Diagnostics carries its asmdef — with the " +

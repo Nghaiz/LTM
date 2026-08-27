@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Ironfront.Net.Unity.Client
+namespace Ironfront.Net.Unity
 {
     /// <summary>
     /// The scene's replicated-vehicle prefabs, by authored network type id. Phase C4b.

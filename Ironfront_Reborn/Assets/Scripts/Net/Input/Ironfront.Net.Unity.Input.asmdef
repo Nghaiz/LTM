@@ -1,7 +1,9 @@
 {
     "name": "Ironfront.Net.Unity.Input",
     "rootNamespace": "Ironfront.Net.Unity",
-    "references": [],
+    "references": [
+        "Ironfront.Net.Unity.Shared"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

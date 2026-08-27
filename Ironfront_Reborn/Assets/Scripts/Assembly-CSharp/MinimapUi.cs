@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Unity;
-using Ironfront.Net.Unity.Client;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -153,7 +152,7 @@ public class MinimapUi : MonoBehaviour
 		{
 			localTeam = 0;
 		}
-		else if (NetClientPresenterGuard.TryResolveLocalTeam(out byte team))
+		else if (NetPresenterGate.TryResolveLocalTeam(out byte team))
 		{
 			localTeam = team;
 		}
@@ -175,7 +174,7 @@ public class MinimapUi : MonoBehaviour
 		}
 		if (instance.minimapSpawnPointButton == null)
 		{
-			NetClientPresenterGuard.WarnOnce(
+			NetPresenterGate.WarnOnce(
 				"minimap-spawn-buttons-not-ready",
 				"[net] MinimapUi.UpdateSpawnPointButtons ran before SetupMinimap built its "
 				+ "button map. Skipping this update.");
@@ -262,7 +261,7 @@ public class MinimapUi : MonoBehaviour
 
 		if (prefab == null)
 		{
-			NetClientPresenterGuard.WarnOnce(
+			NetPresenterGate.WarnOnce(
 				"minimap-no-marker-prefab",
 				"[minimap] MinimapUi has neither capturePointMarkerPrefab nor "
 				+ "minimapSpawnPointPrefab assigned, so capture points draw no marker.");

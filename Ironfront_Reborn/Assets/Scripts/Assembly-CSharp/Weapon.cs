@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Ironfront.Net.Unity;
 using UnityEngine;
 
-public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.Client.IGameplayWeapon
+public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 {
 	public enum Effectiveness
 	{

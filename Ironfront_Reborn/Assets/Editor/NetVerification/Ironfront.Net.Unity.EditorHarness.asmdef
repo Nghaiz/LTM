@@ -1,16 +1,19 @@
 {
-    "name": "Ironfront.Net.Unity.Client",
-    "rootNamespace": "Ironfront.Net.Unity.Client",
+    "name": "Ironfront.Net.Unity.EditorHarness",
+    "rootNamespace": "Ironfront.Net.Unity.EditorTools",
     "references": [
         "Ironfront.Net.Unity.Shared",
-        "Ironfront.Net.Unity.Input"
+        "Ironfront.Net.Unity.Client",
+        "Ironfront.Net.Unity.Server"
     ],
-    "includePlatforms": [],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,
     "precompiledReferences": [],
-    "autoReferenced": false,
+    "autoReferenced": true,
     "defineConstraints": [],
     "versionDefines": [],
     "noEngineReferences": false

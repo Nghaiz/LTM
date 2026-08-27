@@ -539,7 +539,7 @@ public class ActorManager : MonoBehaviour
 		// Client only, and only for this client's own blast: draw it now rather than a
 		// round-trip late, and suppress the confirming S_EXPLOSION when it lands (V10 D13,
 		// taking V1 D6's own recorded fallback clause).
-		Ironfront.Net.Unity.Client.ClientCombatEvents.PredictExplosion(
+		Ironfront.Net.Unity.NetClientBindings.PredictExplosion(
 			source, point, configuration.damageRange, kind);
 
 		return result;

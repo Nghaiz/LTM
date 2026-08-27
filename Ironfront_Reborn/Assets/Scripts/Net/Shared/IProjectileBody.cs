@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Ironfront.Net.Unity.Client
+namespace Ironfront.Net.Unity
 {
     /// <summary>
     /// A cosmetic projectile instance the client spawned to draw somebody else's shot.

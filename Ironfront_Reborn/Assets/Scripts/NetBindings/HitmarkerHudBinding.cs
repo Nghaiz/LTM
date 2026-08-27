@@ -1,4 +1,3 @@
-using Ironfront.Net.Unity.Client;
 
 namespace Ironfront.Net.Unity.Bindings
 {

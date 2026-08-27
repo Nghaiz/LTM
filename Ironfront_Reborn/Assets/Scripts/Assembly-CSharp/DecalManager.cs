@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using Ironfront.Net.Unity.Client;
+using Ironfront.Net.Unity;
 using UnityEngine;
 
 public class DecalManager : MonoBehaviour
@@ -147,7 +147,7 @@ public class DecalManager : MonoBehaviour
 			// down; announcing the gap once and drawing that type through its fallback does not.
 			if (decalDrawers == null || value >= decalDrawers.Length || decalDrawers[value] == null)
 			{
-				NetClientPresenterGuard.WarnOnce(
+				NetPresenterGate.WarnOnce(
 					"decal-drawer-missing:" + value,
 					"[decals] DecalType." + (DecalType)value + " has no drawer in "
 					+ "DecalManager.decalDrawers. Decals of that type fall back to Impact. "
@@ -176,7 +176,7 @@ public class DecalManager : MonoBehaviour
 		// as MinimapUi defect 2).
 		if (instance.decalMeshData == null || instance.vertexIndex == null)
 		{
-			NetClientPresenterGuard.WarnOnce(
+			NetPresenterGate.WarnOnce(
 				"decal-manager-not-ready",
 				"[net] DecalManager.AddDecal ran before StartGame() built the decal mesh data. "
 				+ "Skipping this decal.");

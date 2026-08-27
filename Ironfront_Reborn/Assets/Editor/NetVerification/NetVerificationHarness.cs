@@ -610,9 +610,19 @@ namespace Ironfront.Editor.Verification
             }
 
             // E6 needs somewhere to respawn to.
-            ActorManager manager = ActorManager.instance;
-            sb.Append(",\"spawnPoints\":")
-              .Append(manager != null && manager.spawnPoints != null ? manager.spawnPoints.Length : -1);
+            //
+            // Read through ISpawnPointDirectory rather than ActorManager.instance.spawnPoints
+            // (phase C5b). This harness moved out of Assembly-CSharp-Editor into an assembly that
+            // can name the client, and an assembly cannot name ActorManager — so the count comes
+            // through the seam the server assembly already declares for exactly this data, and
+            // which ActorManagerSpawnPoints answers from that same array.
+            //
+            // ONE SENTINEL CHANGED, deliberately and harmlessly: the old expression reported -1
+            // when ActorManager or its array was absent, the directory reports 0. Both render as
+            // "E6 has nowhere to respawn"; -1 survives here only for "nothing registered a
+            // directory at all", which is a different fact and worth keeping distinct.
+            ISpawnPointDirectory spawnPoints = NetServerBindings.SpawnPoints;
+            sb.Append(",\"spawnPoints\":").Append(spawnPoints != null ? spawnPoints.Count : -1);
 
             sb.Append(",\"localScripted\":").Append(_localScripted ? "true" : "false");
             sb.Append(",\"localYaw\":").Append(N(_localYaw));

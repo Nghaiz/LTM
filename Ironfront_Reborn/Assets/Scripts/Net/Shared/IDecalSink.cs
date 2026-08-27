@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Ironfront.Net.Unity.Client
+namespace Ironfront.Net.Unity
 {
     /// <summary>
     /// Where a blast leaves its scorch mark. Phase C4b.

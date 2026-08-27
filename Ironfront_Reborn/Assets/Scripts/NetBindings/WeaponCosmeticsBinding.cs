@@ -1,5 +1,5 @@
 /// <summary>
-/// The <c>Assembly-CSharp</c> half of <see cref="Ironfront.Net.Unity.Client.IGameplayWeapon"/>.
+/// The <c>Assembly-CSharp</c> half of <see cref="Ironfront.Net.Unity.IGameplayWeapon"/>.
 /// Phase C4a.
 /// </summary>
 /// <remarks>

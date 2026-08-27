@@ -1,4 +1,4 @@
-using Ironfront.Net.Unity.Client;
+using Ironfront.Net.Unity;
 using UnityEngine;
 
 /// <summary>
