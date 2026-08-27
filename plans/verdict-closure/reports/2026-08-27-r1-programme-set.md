@@ -25,6 +25,16 @@ blocked on something the phase did not know about when it was written.
 **Nothing here is graded on its numeric half** (V-D2). Every check that could not be graded is
 reported ungradeable with the row that blocks it.
 
+**On the artifacts this report quotes.** `artifacts/` is gitignored (`.gitignore:217`) and no lane-B
+run has ever been committed — every prior row cites these paths the same way. So the directories
+named below exist on the machine the runs were taken on and nowhere else, and the numbers are
+quoted inline throughout rather than referred to, so a reader without the directory can still check
+the reasoning against a re-run. Reproduce with:
+
+```
+pwsh tools/run-lane-b.ps1 -Set grenade -SpawnIndex 0 -Weapon "RK-44" -Gear "FRAG" \n     -OutputDirectory artifacts/lane-b/<name>        # IRONFRONT_LOG_SHOTS=1 IRONFRONT_LOG_LOADOUT=1
+```
+
 ---
 
 ## 2. R1.1 — X-31, and why two days of correct readings found nothing
