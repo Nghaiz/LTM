@@ -26,6 +26,7 @@ namespace Ironfront.Net.Replication
     {
         private readonly VehicleWorldSnapshot[] _history;
         private readonly VehicleSnapshotEntry[] _scratch;
+        private readonly PositionProvenance _provenance;
         private bool _hasApplied;
 
         public VehicleDeltaDecoder()
@@ -34,11 +35,23 @@ namespace Ironfront.Net.Replication
             for (int i = 0; i < _history.Length; i++) _history[i] = new VehicleWorldSnapshot();
 
             _scratch = new VehicleSnapshotEntry[ProtocolConstants.MAX_VEHICLES];
+            _provenance = new PositionProvenance(
+                VehicleDeltaEncoder.BaselineHistory, ProtocolConstants.MAX_VEHICLES);
             Current  = new VehicleWorldSnapshot();
         }
 
         /// <summary>The reconstructed vehicle world. Valid once <see cref="Read"/> returned Applied.</summary>
         public VehicleWorldSnapshot Current { get; }
+
+        /// <summary>
+        /// The server tick the position of <c>Current.Vehicles[slot]</c> last arrived on.
+        /// </summary>
+        /// <remarks>
+        /// The actor decoder's twin, and the one lane A actually reaches for: X-35's worked
+        /// example is vehicle 4 settling through eleven Y values while different clients sit at
+        /// different points in that sequence. See <see cref="PositionProvenance"/>.
+        /// </remarks>
+        public uint PositionUpdatedAt(int slot) => _provenance.CurrentAt(slot);
 
         /// <summary>The newest vehicle-snapshot tick applied. 0 until the first one lands.</summary>
         /// <remarks>
@@ -71,6 +84,7 @@ namespace Ironfront.Net.Replication
         {
             _hasApplied = false;
             Current.Clear();
+            _provenance.Clear();
             for (int i = 0; i < _history.Length; i++) _history[i].Clear();
         }
 
@@ -117,6 +131,7 @@ namespace Ironfront.Net.Replication
             AppliedCount++;
 
             _history[Current.ServerTick % VehicleDeltaEncoder.BaselineHistory].CopyFrom(Current);
+            _provenance.FileCurrent(Current.ServerTick, Current.VehicleCount);
 
             return SnapshotReadResult.Applied;
         }
@@ -126,7 +141,11 @@ namespace Ironfront.Net.Replication
             Current.Clear();
             Current.ServerTick = header.ServerTick;
 
-            for (int i = 0; i < count; i++) Current.Add(in _scratch[i]);
+            for (int i = 0; i < count; i++)
+            {
+                int slot = Current.VehicleCount;
+                if (Current.Add(in _scratch[i])) _provenance.SetCurrent(slot, header.ServerTick);
+            }
         }
 
         private void ApplyDelta(
@@ -143,15 +162,33 @@ namespace Ironfront.Net.Replication
             {
                 ref VehicleSnapshotEntry incoming = ref _scratch[i];
 
-                VehicleSnapshotEntry resolved =
-                    baseline.TryFind(incoming.VehicleId, out VehicleSnapshotEntry previous)
-                        ? ApplyEntry(in previous, in incoming)
-                        : incoming;
+                // IndexOf rather than TryFind, because the baseline's SLOT is what the position
+                // provenance is keyed by — an inherited position is exactly as old as the
+                // baseline entry it was inherited from.
+                int baselineSlot = baseline.IndexOf(incoming.VehicleId);
+                bool carriesPosition = (incoming.ChangeMask & VehicleField.Position) != 0;
+
+                VehicleSnapshotEntry resolved;
+                uint positionTick;
+                if (baselineSlot >= 0)
+                {
+                    resolved = ApplyEntry(in baseline.Vehicles[baselineSlot], in incoming);
+                    positionTick = carriesPosition
+                        ? header.ServerTick
+                        : _provenance.BaselineAt(header.BaselineTick, baselineSlot);
+                }
+                else
+                {
+                    resolved = incoming;
+                    positionTick = header.ServerTick;
+                }
 
                 // The stored entry carries every field, not the sparse wire mask, so it can
                 // serve as a baseline itself next tick.
                 resolved.ChangeMask = VehicleField.Full;
-                Current.Add(in resolved);
+
+                int slot = Current.VehicleCount;
+                if (Current.Add(in resolved)) _provenance.SetCurrent(slot, positionTick);
             }
         }
 

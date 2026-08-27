@@ -43,6 +43,18 @@ namespace Ironfront.Net.LoadHarness
         public AgreementBlock Agreement { get; init; } = new AgreementBlock();
         public IReadOnlyList<string> Errors { get; init; } = Array.Empty<string>();
 
+        /// <summary>
+        /// What the transport said about itself while the run was happening.
+        /// </summary>
+        /// <remarks>
+        /// Separate from <see cref="Errors"/> on purpose. An entry here is not necessarily a
+        /// failed run — a couple of retransmission warnings on an impaired wire is the
+        /// transport working — but it is the difference between "four clients disconnected"
+        /// and "four clients disconnected because sequence N was abandoned after 11 resends
+        /// over 10.8 s". Until X-32 this list did not exist and neither did that sentence.
+        /// </remarks>
+        public IReadOnlyList<string> TransportWarnings { get; init; } = Array.Empty<string>();
+
         public sealed class TargetBlock
         {
             public string Host { get; init; } = string.Empty;
@@ -297,20 +309,93 @@ namespace Ironfront.Net.LoadHarness
         /// </para>
         /// <para>
         /// Comparison is on the quantized integers straight off the wire, so agreement is
-        /// exact. A non-zero <see cref="Disagreements"/> is a real divergence, not a rounding
-        /// artifact somebody chose an epsilon for.
+        /// exact: a difference is a real difference, not a rounding artifact somebody chose an
+        /// epsilon for.
+        /// </para>
+        /// <para>
+        /// <b>A difference is not automatically a disagreement, which is what X-35 was.</b> A
+        /// client's decoded world is the newest value IT received for each entity, and interest
+        /// management gives different connections different update rates on purpose — so two
+        /// clients at tick T legitimately hold values from different moments. The old single
+        /// <c>Disagreements</c> count scored that as divergence, and reported 31 of them over
+        /// 32,520 comparisons on a run with nothing else wrong with it: every one was a vehicle
+        /// settling while one client held an older copy. Neither its zero nor its non-zero
+        /// meant what it said, and it was quoted in the run banner both ways.
+        /// </para>
+        /// <para>
+        /// So the two are counted separately, by comparing the tick each side's entry was last
+        /// UPDATED at (<c>DeltaDecoder.PositionUpdatedAt</c>) rather than the tick the capture
+        /// was taken at. Equal update ticks and different values is a
+        /// <see cref="Divergences"/>; different update ticks is
+        /// <see cref="StaleComparisons"/> and is the system working.
         /// </para>
         /// </remarks>
         public sealed class AgreementBlock
         {
             public int ClientPairsCompared { get; init; }
             public int TicksCompared { get; init; }
+
+            /// <summary>Entity comparisons attempted — both clients held the entity.</summary>
             public int EntitiesCompared { get; init; }
-            public int Disagreements { get; init; }
-            public string? FirstDisagreement { get; init; }
+
+            /// <summary>
+            /// Comparisons where both sides' entries were last updated at the SAME server tick.
+            /// </summary>
+            /// <remarks>
+            /// <b>This, not <see cref="EntitiesCompared"/>, is the denominator a divergence rate
+            /// is taken over.</b> A comparison between entries of different age cannot answer
+            /// the question at all, so including it inflates the denominator and quietly makes
+            /// every rate look better the worse interest management's spread gets.
+            /// </remarks>
+            public int SameTickComparisons { get; init; }
+
+            /// <summary>
+            /// Different values, SAME update tick. The server sent two clients different state
+            /// for one entity at one tick, and that is a defect wherever it comes from.
+            /// </summary>
+            public int Divergences { get; init; }
+
+            /// <summary>
+            /// Different values, DIFFERENT update ticks. One client has a newer copy of the
+            /// world than the other. Expected, and not a fault.
+            /// </summary>
+            public int StaleComparisons { get; init; }
+
+            /// <summary>
+            /// Comparisons neither counter could classify because a side reported update tick 0.
+            /// </summary>
+            /// <remarks>
+            /// Reported rather than folded into either count. 0 means "no position has arrived
+            /// for this entry", which should be unreachable for an entry that exists in a
+            /// decoded snapshot — so a non-zero here is a bug in the provenance tracking, and
+            /// silently counting it as staleness would hide exactly that.
+            /// </remarks>
+            public int UnclassifiedComparisons { get; init; }
+
+            /// <summary>
+            /// Divergences that are one unit on exactly one axis — the quantizer's own edge.
+            /// </summary>
+            /// <remarks>
+            /// X-40's shape split. Two distinct populations were present and
+            /// <c>FirstDisagreement</c> recorded only the first one seen, so the mix was
+            /// unknown and the real rate could not be sized. A 1-unit step on one axis is
+            /// 6.25 cm at the shipped POS scale and is a rounding boundary; anything else is
+            /// two clients being told different things.
+            /// </remarks>
+            public int DivergencesOneUnitOneAxis { get; init; }
+
+            /// <summary>Divergences that are not the quantizer edge. The number that matters.</summary>
+            public int DivergencesSubstantive { get; init; }
+
+            public string? FirstDivergence { get; init; }
+            public string? FirstSubstantiveDivergence { get; init; }
+            public string? FirstStale { get; init; }
 
             public string Note { get; init; } =
-                "decoded-state agreement only; rendering is lane B's to grade";
+                "decoded-state agreement only; rendering is lane B's to grade. "
+                + "Divergences and StaleComparisons are separated by per-entry update tick "
+                + "(X-35); Divergences are split by shape (X-40). Rate the substantive "
+                + "divergences over SameTickComparisons, not over EntitiesCompared.";
         }
 
         public sealed class LatencyBlock

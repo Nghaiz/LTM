@@ -22,7 +22,15 @@ namespace Ironfront.Net.LoadHarness
         public readonly byte Health;
         public readonly ActorStateFlags Flags;
 
-        public ActorSample(in ActorSnapshotEntry entry)
+        /// <summary>The server tick this client last received a position for this actor on.</summary>
+        /// <remarks>
+        /// Not the tick the sample was captured at, and the gap between the two is X-35. Two
+        /// clients differing at the same capture tick have diverged only if these agree; if
+        /// they do not, one of them simply holds an older copy of a world that is still moving.
+        /// </remarks>
+        public readonly uint UpdatedAtTick;
+
+        public ActorSample(in ActorSnapshotEntry entry, uint updatedAtTick)
         {
             ActorId = entry.ActorId;
             X = entry.PosX;
@@ -30,6 +38,7 @@ namespace Ironfront.Net.LoadHarness
             Z = entry.PosZ;
             Health = entry.Health;
             Flags = entry.StateFlags;
+            UpdatedAtTick = updatedAtTick;
         }
     }
 
@@ -41,7 +50,11 @@ namespace Ironfront.Net.LoadHarness
         public readonly uint Rotation;
         public readonly byte Health;
 
-        public VehicleSample(in VehicleSnapshotEntry entry)
+        /// <summary>The server tick this client last received a position for this vehicle on.</summary>
+        /// <remarks><see cref="ActorSample.UpdatedAtTick"/> — same rule, and X-35's worked example.</remarks>
+        public readonly uint UpdatedAtTick;
+
+        public VehicleSample(in VehicleSnapshotEntry entry, uint updatedAtTick)
         {
             VehicleId = entry.VehicleId;
             X = entry.PosX;
@@ -49,6 +62,7 @@ namespace Ironfront.Net.LoadHarness
             Z = entry.PosZ;
             Rotation = entry.Rotation;
             Health = entry.Health;
+            UpdatedAtTick = updatedAtTick;
         }
     }
 
@@ -117,13 +131,18 @@ namespace Ironfront.Net.LoadHarness
             _lastTick = actors.ServerTick;
             _hasCaptured = true;
 
+            // The provenance is read by SLOT, alongside the entry it describes, which is why
+            // this loop indexes rather than foreaches. Both come from the shipped decoders; the
+            // harness still parses no bytes of its own.
             var actorSamples = new ActorSample[actors.ActorCount];
             for (int i = 0; i < actors.ActorCount; i++)
-                actorSamples[i] = new ActorSample(in actors.Actors[i]);
+                actorSamples[i] = new ActorSample(
+                    in actors.Actors[i], router.Decoder.PositionUpdatedAt(i));
 
             var vehicleSamples = new VehicleSample[vehicles.VehicleCount];
             for (int i = 0; i < vehicles.VehicleCount; i++)
-                vehicleSamples[i] = new VehicleSample(in vehicles.Vehicles[i]);
+                vehicleSamples[i] = new VehicleSample(
+                    in vehicles.Vehicles[i], router.VehicleDecoder.PositionUpdatedAt(i));
 
             _samples.Add(new StateSample
             {
@@ -135,6 +154,12 @@ namespace Ironfront.Net.LoadHarness
         }
 
         /// <summary>Appends this client's samples to a JSONL sink.</summary>
+        /// <remarks>
+        /// <b>Row shape changed with X-35:</b> each actor and vehicle tuple gained a trailing
+        /// <c>updatedAtTick</c>, so captures written before 2026-08-27 have one fewer column
+        /// and cannot be classified into divergence and staleness at all. A reader must key off
+        /// the tuple length rather than assume; an older capture supports the old total only.
+        /// </remarks>
         public void WriteJsonl(System.IO.TextWriter writer, int clientIndex)
         {
             if (writer == null) throw new ArgumentNullException(nameof(writer));
@@ -154,7 +179,7 @@ namespace Ironfront.Net.LoadHarness
                     ActorSample a = sample.Actors[i];
                     if (i > 0) line.Append(',');
                     line.Append(CultureInfo.InvariantCulture,
-                        $"[{a.ActorId},{a.X},{a.Y},{a.Z},{a.Health},{(int)a.Flags}]");
+                        $"[{a.ActorId},{a.X},{a.Y},{a.Z},{a.Health},{(int)a.Flags},{a.UpdatedAtTick}]");
                 }
 
                 line.Append("],\"vehicles\":[");
@@ -163,7 +188,7 @@ namespace Ironfront.Net.LoadHarness
                     VehicleSample v = sample.Vehicles[i];
                     if (i > 0) line.Append(',');
                     line.Append(CultureInfo.InvariantCulture,
-                        $"[{v.VehicleId},{v.X},{v.Y},{v.Z},{v.Rotation},{v.Health}]");
+                        $"[{v.VehicleId},{v.X},{v.Y},{v.Z},{v.Rotation},{v.Health},{v.UpdatedAtTick}]");
                 }
 
                 line.Append("]}");
