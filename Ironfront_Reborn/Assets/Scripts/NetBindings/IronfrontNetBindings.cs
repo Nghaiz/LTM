@@ -71,8 +71,8 @@ namespace Ironfront.Net.Unity.Bindings
             // an assembly. Registered unconditionally: the probe resolves its singletons per call
             // and reports absent when there are none, which is the "absent" the recorder's JSON
             // already carried.
-            Diagnostics.NetDiagnosticsBindings.Probe = new LaneBDiagnosticsProbe();
-            Diagnostics.NetDiagnosticsBindings.LegacyMovementResolver = ResolveLegacyMovement;
+            NetDiagnosticsBindings.Probe = new LaneBDiagnosticsProbe();
+            NetDiagnosticsBindings.LegacyMovementResolver = ResolveLegacyMovement;
         }
 
         /// <summary>
@@ -81,7 +81,7 @@ namespace Ironfront.Net.Unity.Bindings
         /// predefined assembly no asmdef may reference. Null on a body that carries none, which
         /// the shadow comparison reads as "cannot score this run". Phase C4d.
         /// </summary>
-        private static Diagnostics.ILegacyMovementProbe ResolveLegacyMovement(GameObject gameObject)
+        private static ILegacyMovementProbe ResolveLegacyMovement(GameObject gameObject)
         {
             if (gameObject == null) return null;
 

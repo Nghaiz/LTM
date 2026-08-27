@@ -12,7 +12,6 @@
 // guard at any call site, and a strip cannot leave a dangling reference behind it.
 #if !IRONFRONT_NO_DIAGNOSTICS
 using Ironfront.Net.Replication.Movement;
-using Ironfront.Net.Unity.Diagnostics;
 using UnityEngine;
 
 namespace Ironfront.Net.Unity
