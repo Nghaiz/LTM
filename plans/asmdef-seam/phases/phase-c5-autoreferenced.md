@@ -262,9 +262,35 @@ change wearing a refactor's clothes, in the one phase whose criteria forbid exac
 caught by reading the original, not by any gate — no test in this repo covers a destroyed local
 actor's identity, and that gap is now on the record.
 
-### 7.8 Verification
+### 7.8 A false green in this very phase, caught by CI
 
-`dotnet test` 1857/1857 · Unity EditMode 87/87 · `SpecChecker` · `ClientWiringGate` ·
+The first `dotnet test` run here reported **1857/1857 passed and exit code 0** — and had a
+`CSC : error CS2001` on **line 1** of its own output. `Ironfront.Client.Input.Tests` links
+`IInputSource.cs` **by path** into a dotnet project (`<Compile Include="..\Ironfront_Reborn\…">`),
+the C5b move broke that path, the project failed to build, and `dotnet test` **still exited 0** —
+so the suite silently shrank from 8 projects to 7 and the missing 39 tests read as a smaller total
+nobody was comparing against.
+
+Two failures stacked, and both are the same rule:
+
+1. **The exit code could not carry the signal.** `dotnet test` returns 0 when a project fails to
+   build but every project that *did* build passes.
+2. **The read could not carry it either.** The output was inspected with `tail -25`; the error was
+   the first line.
+
+Fixed by pointing the link at `Net/Shared/IInputSource.cs`, and re-verified by grepping the WHOLE
+log for `error` rather than tailing it — `1896/1896` across **8** projects, with
+`Ironfront.Client.Input.Tests` present at 39. `green-that-proves-nothing.md`, "the output format
+cannot carry the signal", found in the phase that cites that rule.
+
+**Standing note for this repo:** a file move under `Assets/` can break a dotnet project that never
+mentions Unity, because six `.csproj` files compile Unity sources by path. `grep -rn "Compile
+Include.*Assets" --include=*.csproj .` is the list, and `dotnet test`'s exit code will not tell you.
+
+### 7.9 Verification
+
+`dotnet test` **1896/1896 across 8 projects** (clean rebuild, full log grepped for `error`) ·
+Unity EditMode 87/87 · `SpecChecker` · `ClientWiringGate` ·
 `check-net-layering` · `check-diagnostics-exclusion` · `check-unity-meta` ·
 `check-duplicate-assemblies` · `check-plugin-define-constraints` — all exit 0. Unity compile green
 over MCP at both C5a and C5b. `dotnet build` graded nothing here, as § 4 requires.
