@@ -43,17 +43,35 @@ namespace Ironfront.Net.Replication.Combat
         }
 
         /// <summary>
-        /// Optional line-of-sight test against world geometry: origin, point, and the distance
-        /// between them; returns true when a wall is in the way.
+        /// Optional line-of-sight test against world geometry: origin, the point that was hit,
+        /// the distance between them, and <b>the actor that point belongs to</b>; returns true
+        /// when a wall is in the way.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// The one thing an engine-free hit test genuinely cannot do is know where the walls
         /// are, so that single question is delegated and everything else stays testable. The
         /// Unity server assigns a <c>Physics.Linecast</c> against the world layer here once at
         /// bootstrap; leaving it null resolves shots with no occlusion, which is what the unit
         /// tests want and what a geometry-free test map gets.
+        /// </para>
+        /// <para>
+        /// <b>The victim's actor id is the fourth argument, and ledger row X-26 is why.</b> The
+        /// endpoint of this query sits INSIDE the body that was hit, so the first thing a
+        /// linecast meets there is that body's own collider. Measured on
+        /// <c>artifacts/lane-b/x27-pinned-01..03</c>: all 34 occlusions across three runs were
+        /// <c>collider=Bone_002 layer=8</c> at <c>frac=0.938..0.960</c> — a rig bone, at the
+        /// endpoint, on a layer the <c>-2049</c> mask includes. Not one was terrain and not one
+        /// was a building. The body was rejecting the shot that hit it, and it did so more the
+        /// closer the pair got.
+        /// </para>
+        /// <para>
+        /// Whose colliders those are is a question only the engine can answer, so this seam
+        /// carries the id and the Unity implementation decides. Nothing engine-free needs to
+        /// know what a collider is, which is the whole point of the seam.
+        /// </para>
         /// </remarks>
-        public Func<Vec3, Vec3, float, bool>? Occlusion { get; set; }
+        public Func<Vec3, Vec3, float, ushort, bool>? Occlusion { get; set; }
 
         /// <summary>Shots resolved. Denominator for the hit-rate experiment.</summary>
         public long ShotsResolved { get; private set; }
@@ -70,6 +88,28 @@ namespace Ironfront.Net.Replication.Combat
 
         /// <summary>Shots blocked by <see cref="Occlusion"/>.</summary>
         public long ShotsOccluded { get; private set; }
+
+        /// <summary>
+        /// The nearest box the last box-missing shot passed, and by how much. Ledger row X-24.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Last-write-wins, exactly like the Unity side's occlusion description, and for the
+        /// same reason:</b> a shot resolves against every candidate but the log is one line per
+        /// trigger frame. <see cref="NearestMissesMeasured"/> rises exactly when this is written,
+        /// so a reader can date it — see <see cref="NearestMissFor"/>.
+        /// </para>
+        /// <para>
+        /// Written only when the ray struck no box at all. A shot that found a box and was then
+        /// rejected by <see cref="Occlusion"/> leaves this alone: it did not miss, it was blocked,
+        /// and conflating the two is what made X-20 and X-24 one indistinguishable symptom for
+        /// three runs.
+        /// </para>
+        /// </remarks>
+        public HitboxMiss LastNearestMiss { get; private set; }
+
+        /// <summary>How many times <see cref="LastNearestMiss"/> has been written.</summary>
+        public long NearestMissesMeasured { get; private set; }
 
         /// <summary>
         /// How many ticks to rewind for a client at this round-trip time.
@@ -198,14 +238,18 @@ namespace Ironfront.Net.Replication.Combat
                 }
             }
 
-            if (!found) return HitResult.Miss(targetTick);
+            if (!found)
+            {
+                MeasureNearestMiss(targets, shooterActorId, in origin, in ray, maxDistance, targetTick);
+                return HitResult.Miss(targetTick);
+            }
 
             Vec3 point = origin + ray * bestDistance;
 
             // Walls last: an occluded shot is a miss, and asking the engine about geometry is
             // the most expensive thing here, so it runs once for the winner rather than once
             // per candidate box.
-            if (Occlusion != null && Occlusion(origin, point, bestDistance))
+            if (Occlusion != null && Occlusion(origin, point, bestDistance, bestActor))
             {
                 ShotsOccluded++;
                 return HitResult.Miss(targetTick);
@@ -214,6 +258,87 @@ namespace Ironfront.Net.Replication.Combat
             ShotsHit++;
             return new HitResult(
                 true, bestActor, bestType, in point, bestDistance, targetTick, bestUsedFallback);
+        }
+
+        /// <summary>
+        /// Records which box the shot came closest to, and by how much. Ledger row X-24.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A second pass, run only on a miss.</b> Folding it into the resolution loop would
+        /// cost every HIT a closest-approach computation per box for a number nothing reads, and
+        /// the resolution loop is the one this server runs per shot per candidate. A miss has
+        /// already decided it has no answer, so the pass is free where it matters.
+        /// </para>
+        /// <para>
+        /// <b>The same frame the resolver used, re-read rather than remembered.</b> Looking the
+        /// history up again at the same tick cannot drift from what the raycast saw; carrying a
+        /// per-candidate cache would introduce exactly the "the line printed one pose and the
+        /// resolver used another" fork that cost three runs on X-19.
+        /// </para>
+        /// <para>
+        /// <see cref="PresentFallbacks"/> is deliberately NOT incremented here. It counts
+        /// resolution decisions; incrementing it from a diagnostic would double every fallback a
+        /// missed shot took and quietly corrupt the one number that says whether the relevance
+        /// filter is dropping actors people are shooting at.
+        /// </para>
+        /// </remarks>
+        private void MeasureNearestMiss(
+            ReadOnlySpan<HitscanTarget> targets, ushort shooterActorId,
+            in Vec3 origin, in Vec3 ray, float maxDistance, uint targetTick)
+        {
+            float bestGap = float.PositiveInfinity;
+            HitboxMiss best = HitboxMiss.None;
+
+            for (int i = 0; i < targets.Length; i++)
+            {
+                ref readonly HitscanTarget target = ref targets[i];
+
+                if (!target.IsAlive) continue;
+                if (target.ActorId == shooterActorId) continue;
+
+                HitboxSet boxes = _history.TryGetFrame(target.ActorId, targetTick, out HitboxHistory.Frame frame)
+                    ? frame.Boxes
+                    : target.Present;
+
+                for (int box = 0; box < HitboxSet.Count; box++)
+                {
+                    boxes[box].ClosestApproach(
+                        in origin, in ray, maxDistance,
+                        out float gap, out float vertical, out Vec3 point);
+
+                    if (!(gap < bestGap)) continue;   // false for NaN and for infinity
+
+                    bestGap = gap;
+                    best = new HitboxMiss(
+                        target.ActorId, box, HitboxSet.TypeOf(box), gap, vertical, in point);
+                }
+            }
+
+            if (!best.Measured) return;
+
+            LastNearestMiss = best;
+            NearestMissesMeasured++;
+        }
+
+        /// <summary>
+        /// The nearest-miss description belonging to THIS shot, or a stated absence.
+        /// </summary>
+        /// <remarks>
+        /// <b><see cref="LastNearestMiss"/> is last-write-wins and is only written when a shot
+        /// struck no box.</b> So a shot that hit, or one blocked by geometry, would otherwise
+        /// print the previous shot's miss and the artifact would read as though a hit had missed.
+        /// Comparing <see cref="NearestMissesMeasured"/> against its value at the previously
+        /// logged shot says whether the description is this shot's or a leftover — the same
+        /// dating <c>ServerTickLoop.OcclusionFor</c> does for occlusion, spelled the same way so
+        /// a reader learns the pattern once.
+        /// </remarks>
+        public static string NearestMissFor(
+            long measuredNow, long measuredAtLastLog, in HitboxMiss last)
+        {
+            if (measuredNow <= measuredAtLastLog) return "none-this-shot";
+
+            return last.Describe();
         }
 
         /// <summary>True when every component is a real number.</summary>
@@ -232,6 +357,8 @@ namespace Ironfront.Net.Replication.Combat
             ShotsHit = 0;
             PresentFallbacks = 0;
             ShotsOccluded = 0;
+            NearestMissesMeasured = 0;
+            LastNearestMiss = HitboxMiss.None;
         }
     }
 }

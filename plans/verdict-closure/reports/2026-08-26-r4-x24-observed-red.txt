@@ -1,0 +1,30 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  Ironfront.Net.Protocol -> D:\Coding\LTM\Ironfront.Net.Protocol\bin\Debug\netstandard2.1\Ironfront.Net.Protocol.dll
+  Ironfront.Net.Configuration -> D:\Coding\LTM\Ironfront.Net.Configuration\bin\Debug\netstandard2.1\Ironfront.Net.Configuration.dll
+  Ironfront.MasterClient -> D:\Coding\LTM\Ironfront.MasterClient\bin\Debug\netstandard2.1\Ironfront.MasterClient.dll
+  Ironfront.Net.Replication -> D:\Coding\LTM\Ironfront.Net.Replication\bin\Debug\netstandard2.1\Ironfront.Net.Replication.dll
+  SpecChecker -> D:\Coding\LTM\tools\SpecChecker\bin\Debug\net8.0\SpecChecker.dll
+  Ironfront.Net.MasterLink -> D:\Coding\LTM\Ironfront.Net.MasterLink\bin\Debug\netstandard2.1\Ironfront.Net.MasterLink.dll
+  ClientWiringGate -> D:\Coding\LTM\tools\ClientWiringGate\bin\Debug\net8.0\ClientWiringGate.dll
+  Ironfront.Net.Transport -> D:\Coding\LTM\Ironfront.Net.Transport\bin\Debug\net8.0\Ironfront.Net.Transport.dll
+  Ironfront.Net.Replication.Tests -> D:\Coding\LTM\Ironfront.Net.Replication.Tests\bin\Debug\net8.0\Ironfront.Net.Replication.Tests.dll
+Test run for D:\Coding\LTM\Ironfront.Net.Replication.Tests\bin\Debug\net8.0\Ironfront.Net.Replication.Tests.dll (.NETCoreApp,Version=v8.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:00.38]     Ironfront.Net.Replication.Tests.HitboxSeamTests.TheCoverageHoldsAtEveryScale [FAIL]
+[xUnit.net 00:00:00.40]     Ironfront.Net.Replication.Tests.HitboxSeamTests.NoVerticalBandOfAStandingBodyIsUncovered [FAIL]
+[xUnit.net 00:00:00.40]     Ironfront.Net.Replication.Tests.HitboxSeamTests.ALevelShotThroughTheOldSeamNowLands [FAIL]
+  Failed Ironfront.Net.Replication.Tests.HitboxSeamTests.TheCoverageHoldsAtEveryScale [9 ms]
+  Error Message:
+   vertical seam of 0.0255 m below head: nothing covers 13.3175..13.3430 m on a standing body at scale 0.85. A ray through that band hits a live player for nothing (ledger X-24).
+  Stack Trace:
+  Failed Ironfront.Net.Replication.Tests.HitboxSeamTests.NoVerticalBandOfAStandingBodyIsUncovered [< 1 ms]
+  Error Message:
+   vertical seam of 0.0300 m below head: nothing covers 1.5500..1.5800 m on a standing body at scale 1. A ray through that band hits a live player for nothing (ledger X-24).
+  Stack Trace:
+  Failed Ironfront.Net.Replication.Tests.HitboxSeamTests.ALevelShotThroughTheOldSeamNowLands [< 1 ms]
+  Error Message:
+   the 1.560 m band still resolves as a miss
+  Stack Trace:
+
+Failed!  - Failed:     3, Passed:     9, Skipped:     0, Total:    12, Duration: 55 ms - Ironfront.Net.Replication.Tests.dll (net8.0)

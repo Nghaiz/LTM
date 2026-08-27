@@ -1507,27 +1507,114 @@ namespace Ironfront.Net.Unity.Server
         /// Triggers are ignored: a capture-point volume or a water trigger is not cover.
         /// </para>
         /// </remarks>
-        private static bool IsOccluded(Vec3 origin, Vec3 point, float distance)
+        private static bool IsOccluded(Vec3 origin, Vec3 point, float distance, ushort victimActorId)
         {
             Vector3 from = MovementSimulation.ToUnity(origin);
             Vector3 to = MovementSimulation.ToUnity(point);
 
-            // The out-overload, not the bool one. They cost the same query and the bool one
-            // throws away the only fact that can settle X-20 -- see LastOcclusion.
-            if (!Physics.Linecast(
-                    from, to, out RaycastHit hit, BulletBlockingLayers,
-                    QueryTriggerInteraction.Ignore))
+            Vector3 segment = to - from;
+            float length = segment.magnitude;
+            if (length <= 0.0001f) return false;   // muzzle inside the box: nothing to occlude
+
+            Transform victim = VictimRoot(victimActorId);
+
+            // RaycastNonAlloc, not Linecast: the nearest hit may be the victim's own rig bone,
+            // and a query that returns only the nearest cannot look past it. The buffer is a
+            // reused static -- this runs on the tick loop, and the one loop that must not
+            // allocate is this one (M1 criterion 9).
+            int count = Physics.RaycastNonAlloc(
+                from, segment / length, _occlusionHits, length, BulletBlockingLayers,
+                QueryTriggerInteraction.Ignore);
+
+            if (count >= _occlusionHits.Length) OcclusionBufferSaturations++;
+
+            RaycastHit nearest = default;
+            bool found = false;
+
+            for (int i = 0; i < count; i++)
             {
+                RaycastHit candidate = _occlusionHits[i];
+
+                // X-26. The body that was HIT is not cover for the shot that hit it. Its
+                // colliders sit at the endpoint by construction, so without this every
+                // point-blank shot is rejected by its own target -- 34 of 34 occlusions across
+                // x27-pinned-01..03 were `Bone_002 layer=8` at frac 0.94.
+                if (IsPartOf(candidate.collider, victim)) continue;
+
+                if (found && candidate.distance >= nearest.distance) continue;
+
+                nearest = candidate;
+                found = true;
+            }
+
+            if (!found)
+            {
+                // Counted rather than silent: a run where this rises and ShotsOccluded does not
+                // is the direct evidence that the self-occlusion was what X-26 said it was.
+                if (count > 0) SelfOcclusionsIgnored++;
                 return false;
             }
 
             LastOcclusion = DescribeOcclusion(
-                hit.collider == null ? "<destroyed>" : hit.collider.name,
-                hit.collider == null ? -1 : hit.collider.gameObject.layer,
-                hit.distance,
-                Vector3.Distance(from, to));
+                nearest.collider == null ? "<destroyed>" : nearest.collider.name,
+                nearest.collider == null ? -1 : nearest.collider.gameObject.layer,
+                nearest.distance,
+                length);
 
             return true;
+        }
+
+        /// <summary>
+        /// Colliders the occlusion query may meet on one segment. Reused; never allocated per
+        /// shot.
+        /// </summary>
+        /// <remarks>
+        /// <b>A full buffer is a silently truncated query</b>, which would read as "no cover" on
+        /// exactly the busiest geometry. 32 is far past a rig's bone count plus the wall behind
+        /// it, and <see cref="OcclusionBufferSaturations"/> says outright when it was not enough
+        /// rather than leaving a reader to assume it never happens.
+        /// </remarks>
+        private static readonly RaycastHit[] _occlusionHits = new RaycastHit[32];
+
+        /// <summary>
+        /// Shots where every collider on the segment belonged to the victim, so nothing blocked.
+        /// X-26's counter: it rises exactly where the pre-fix build reported an occlusion.
+        /// </summary>
+        internal static long SelfOcclusionsIgnored { get; private set; }
+
+        /// <summary>Times the occlusion buffer filled, so the query may have missed a blocker.</summary>
+        internal static long OcclusionBufferSaturations { get; private set; }
+
+        /// <summary>The transform whose hierarchy belongs to <paramref name="actorId"/>, or null.</summary>
+        /// <remarks>
+        /// Null is the honest answer for an actor that has already left the world between the
+        /// resolve and this query, and it makes the loop below behave exactly as it did before
+        /// X-26 — nothing is excluded. A dead lookup must not make a body invulnerable.
+        /// </remarks>
+        private static Transform VictimRoot(ushort actorId)
+        {
+            if (actorId == 0) return null;
+
+            return ServerActorRegistry.Instance.TryFind(actorId, out NetServerActor actor) && actor != null
+                ? actor.transform
+                : null;
+        }
+
+        /// <summary>
+        /// True when <paramref name="collider"/> hangs off <paramref name="root"/>.
+        /// </summary>
+        /// <remarks>
+        /// <b>The whole hierarchy, not the root object.</b> The colliders that did the blocking
+        /// are ragdoll bones several levels down an imported rig (<c>Bone_002</c>), so a check
+        /// against the root GameObject alone would have excluded nothing and looked like a fix.
+        /// <c>Transform.IsChildOf</c> reports true for the transform itself, which covers the
+        /// capsule on the root as well.
+        /// </remarks>
+        internal static bool IsPartOf(Collider collider, Transform root)
+        {
+            if (collider == null || root == null) return false;
+
+            return collider.transform.IsChildOf(root);
         }
 
         /// <summary>
