@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The harness's own numbers, under test.
+
+    It had no test project until X-35, and that is how a counter quoted in every run banner
+    spent two phases reporting interest management as replication divergence. A number that
+    decides a verdict has to be reachable without a 120 s eight-client run against a Unity
+    server; if the only way to exercise it is to do the run, nobody exercises it.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Ironfront.Net.LoadHarness.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ironfront.Net.LoadHarness\Ironfront.Net.LoadHarness.csproj" />
+  </ItemGroup>
+
+</Project>

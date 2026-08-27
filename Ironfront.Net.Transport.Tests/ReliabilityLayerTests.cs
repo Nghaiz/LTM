@@ -131,7 +131,7 @@ namespace Ironfront.Net.Transport.Tests
             reliability.OnPacketSent(0, new byte[] { 0xAB }, true, 0);
             var resend = new List<byte>();
 
-            reliability.Update(31, (data, length) => resend.Add(data[0]));
+            reliability.Update(31, (data, length, _) => resend.Add(data[0]));
 
             Assert.Equal(new byte[] { 0xAB }, resend);
         }
@@ -142,8 +142,8 @@ namespace Ironfront.Net.Transport.Tests
             var reliability = new ReliabilityLayer();
             reliability.OnPacketSent(0, new byte[] { 0xAB }, true, 0);
 
-            reliability.Update(31, (_, _) => { });
-            reliability.Update(62, (_, _) => { });
+            reliability.Update(31, (_, _, _) => { });
+            reliability.Update(62, (_, _, _) => { });
 
             Assert.Equal(1, reliability.PacketsLost);
         }
@@ -156,8 +156,8 @@ namespace Ironfront.Net.Transport.Tests
 
             // 31 ms clears the first interval (RTO floor 30); the second is 60 ms after that,
             // not another 31 — see RetransmissionIntervalsBackOffExponentially...
-            reliability.Update(31, (_, _) => { });
-            reliability.Update(92, (_, _) => { });
+            reliability.Update(31, (_, _, _) => { });
+            reliability.Update(92, (_, _, _) => { });
 
             Assert.Equal(1, reliability.ReliablePacketsSent);
             Assert.Equal(1, reliability.ReliablePacketsRetried);
@@ -172,7 +172,7 @@ namespace Ironfront.Net.Transport.Tests
             reliability.ProcessIncomingAck(0, 0, 10);
             int resends = 0;
 
-            reliability.Update(1000, (_, _) => resends++);
+            reliability.Update(1000, (_, _, _) => resends++);
 
             Assert.Equal(0, resends);
             Assert.Equal(0, reliability.PendingReliableCount);
@@ -191,7 +191,7 @@ namespace Ironfront.Net.Transport.Tests
 
             // Nothing is abandoned inside the old budget, or anywhere near it.
             for (double nowMs = 1; nowMs <= 2_000; nowMs += 5)
-                reliability.Update(nowMs, (_, _) => { });
+                reliability.Update(nowMs, (_, _, _) => { });
 
             Assert.False(
                 reliability.HasAbandonedReliable,
@@ -202,7 +202,7 @@ namespace Ironfront.Net.Transport.Tests
             // And it IS abandoned once the budget genuinely expires, so this is a deadline
             // that moved, not one that was deleted.
             for (double nowMs = 2_000; nowMs <= ReliabilityLayer.AbandonAfterMs + 2_000; nowMs += 5)
-                reliability.Update(nowMs, (_, _) => { });
+                reliability.Update(nowMs, (_, _, _) => { });
 
             Assert.True(
                 reliability.HasAbandonedReliable,
@@ -223,7 +223,7 @@ namespace Ironfront.Net.Transport.Tests
 
             var sendTimes = new List<double>();
             for (double nowMs = 1; nowMs <= 1_000; nowMs += 1)
-                reliability.Update(nowMs, (_, _) => sendTimes.Add(nowMs));
+                reliability.Update(nowMs, (_, _, _) => sendTimes.Add(nowMs));
 
             // 30, then 60, 120, 240, 480 later: five resends in the first second, where the
             // fixed-interval schedule issued thirty-three.
@@ -243,7 +243,7 @@ namespace Ironfront.Net.Transport.Tests
         {
             var reliability = new ReliabilityLayer();
             reliability.OnPacketSent(0, new byte[] { 1 }, true, 0);
-            reliability.Update(31, (_, _) => { });
+            reliability.Update(31, (_, _, _) => { });
             reliability.ProcessIncomingAck(0, 0, 32);
 
             Assert.Equal(0f, reliability.SmoothedRttMs);
@@ -291,23 +291,27 @@ namespace Ironfront.Net.Transport.Tests
             int deliveredCount = 0;
             double lastPeriodicAckMs = 0;
 
-            // Fed through the SAME in-flight gate production uses. Handing the layer all 1000
-            // at nowMs 0 — which this test did — is a state Connection forbids: CanSendReliable
-            // stops the sender at 64 unacked. It matters because the ack window is 33 sequences
-            // wide, so with a thousand outstanding the receiver's cumulative ack has already
-            // slid past most of them and a resend of an old sequence can never be acknowledged
-            // at all. That made the test's outcome depend on retransmitting hard enough to keep
-            // re-asking inside the window, which is not a property anyone wants to preserve.
-            ushort nextSequence = 0;
+            // Fed through the SAME in-flight gate production uses: CanSendReliable stops the
+            // sender at 64 unacked, which is what Connection does.
+            //
+            // The wire payload carries the MESSAGE id and the GSP SEQUENCE separately, because
+            // after X-32 they are no longer the same number: a retransmission is re-stamped
+            // with a fresh sequence (Connection.Resend) while the message it carries is
+            // unchanged. Conflating them is what let the old model hide the defect — a resend
+            // "arriving" was scored against the message id, and the receiver's inability to
+            // acknowledge the SEQUENCE never showed up.
+            ushort nextMessage = 0;
             void FeedSendWindow(double nowMs)
             {
-                while (nextSequence < packetCount && sender.CanSendReliable)
+                while (nextMessage < packetCount && sender.CanSendReliable)
                 {
-                    byte[] packet = new byte[2];
-                    Endian.WriteU16LE(packet, 0, nextSequence);
-                    sender.OnPacketSent(nextSequence, packet, reliable: true, nowMs);
+                    ushort sequence = sender.NextSequence();
+                    byte[] packet = new byte[4];
+                    Endian.WriteU16LE(packet, 0, nextMessage);
+                    Endian.WriteU16LE(packet, 2, sequence);
+                    sender.OnPacketSent(sequence, packet, reliable: true, nowMs);
                     dataWire.ShouldSend(packet, 0, nowMs);
-                    nextSequence++;
+                    nextMessage++;
                 }
             }
 
@@ -316,16 +320,17 @@ namespace Ironfront.Net.Transport.Tests
             for (double nowMs = 0;
                  nowMs <= 60_000
                      && (deliveredCount < packetCount
-                         || nextSequence < packetCount
+                         || nextMessage < packetCount
                          || sender.PendingReliableCount > 0);
                  nowMs += 5)
             {
                 dataWire.Flush(nowMs, (data, length, _) =>
                 {
-                    ushort sequence = Endian.ReadU16LE(data.AsSpan(0, length), 0);
-                    if (!delivered[sequence])
+                    ushort message = Endian.ReadU16LE(data.AsSpan(0, length), 0);
+                    ushort sequence = Endian.ReadU16LE(data.AsSpan(0, length), 2);
+                    if (!delivered[message])
                     {
-                        delivered[sequence] = true;
+                        delivered[message] = true;
                         deliveredCount++;
                     }
                     receiver.OnPacketReceived(sequence);
@@ -359,8 +364,13 @@ namespace Ironfront.Net.Transport.Tests
                     ackWire.ShouldSend(periodic, 0, nowMs);
                 }
 
-                sender.Update(nowMs, (data, length) =>
-                    dataWire.ShouldSend(data.AsSpan(0, length), 0, nowMs));
+                sender.Update(nowMs, (data, length, sequence) =>
+                {
+                    // Connection.Resend's re-stamp, modelled: the retransmission goes out
+                    // under the fresh sequence, carrying the same message.
+                    Endian.WriteU16LE(data, 2, sequence);
+                    dataWire.ShouldSend(data.AsSpan(0, length), 0, nowMs);
+                });
 
                 FeedSendWindow(nowMs);
             }

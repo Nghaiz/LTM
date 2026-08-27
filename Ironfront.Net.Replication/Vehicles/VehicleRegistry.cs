@@ -269,6 +269,10 @@ namespace Ironfront.Net.Replication.Vehicles
 
                 ref VehicleState state = ref _states[id];
 
+                // X-39: see SnapshotBuilder.Capture. Eight of Dustbowl's fourteen vehicles
+                // reported a saturated X in one 120 s run and nothing said so.
+                World.PositionSaturationLog.Observe(isVehicle: true, id, in position);
+
                 var entry = new VehicleSnapshotEntry
                 {
                     VehicleId   = id,

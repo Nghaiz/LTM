@@ -55,6 +55,11 @@ namespace Ironfront.Net.Replication
             ushort vehicleId = 0,
             byte seatIndex = 0)
         {
+            // Saturation is otherwise invisible: PackPos clamps, and the clamped value decodes
+            // to a plausible position on the boundary rather than to anything that looks wrong.
+            // X-39.
+            World.PositionSaturationLog.Observe(isVehicle: false, actorId, in position);
+
             return new ActorSnapshotEntry
             {
                 ActorId    = actorId,

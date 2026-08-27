@@ -196,7 +196,7 @@ namespace Ironfront.Net.Transport.Tests
             for (int attempt = 0; attempt <= ReliabilityLayer.MaxResends + 1; attempt++)
             {
                 now += 5000;   // well past any plausible RTO
-                reliability.Update(now, (_, _) => { });
+                reliability.Update(now, (_, _, _) => { });
             }
 
             Assert.True(
@@ -217,7 +217,7 @@ namespace Ironfront.Net.Transport.Tests
             for (int attempt = 0; attempt <= ReliabilityLayer.MaxResends + 1; attempt++)
             {
                 now += 5000;
-                reliability.Update(now, (_, _) => { });
+                reliability.Update(now, (_, _, _) => { });
             }
 
             Assert.False(reliability.HasAbandonedReliable);
@@ -235,7 +235,7 @@ namespace Ironfront.Net.Transport.Tests
             for (int attempt = 0; attempt <= ReliabilityLayer.MaxResends + 1; attempt++)
             {
                 now += 5000;
-                reliability.Update(now, (_, _) => { });
+                reliability.Update(now, (_, _, _) => { });
             }
             Assert.True(reliability.HasAbandonedReliable);
 

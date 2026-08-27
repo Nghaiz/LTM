@@ -48,6 +48,16 @@ namespace Ironfront.Net.LoadHarness
         /// <summary>Grace after connecting before the run clock starts.</summary>
         private const double HandshakeBudgetMs = 5000.0;
 
+        /// <summary>
+        /// Transport warnings kept in the report before the tail is summarised away.
+        /// </summary>
+        /// <remarks>
+        /// A cap rather than everything: a connection that has gone wrong emits one of these
+        /// per retransmission, and a report whose interesting first line is buried under ten
+        /// thousand identical ones is the same as no report.
+        /// </remarks>
+        private const int MaxTransportWarnings = 200;
+
         public static int Main(string[] args)
         {
             if (!HarnessOptions.TryParse(args, out HarnessOptions options, out string error))
@@ -67,6 +77,26 @@ namespace Ironfront.Net.LoadHarness
             Console.WriteLine();
 
             var errors = new List<string>();
+
+            // The transport's own account of why a client died, which used to be emitted and
+            // dropped on the floor: nothing in this harness ever subscribed to NetLog, so the
+            // one line that names the abandoned sequence went nowhere and X-32 could only be
+            // reasoned about from the outside. Warnings go to the console AND into the report,
+            // capped so a connection that fails a thousand times cannot bury the run.
+            var transportWarnings = new List<string>();
+            NetLog.Warning = message =>
+            {
+                Console.Error.WriteLine($"[net] {message}");
+                if (transportWarnings.Count < MaxTransportWarnings) transportWarnings.Add(message);
+                else if (transportWarnings.Count == MaxTransportWarnings)
+                    transportWarnings.Add($"...further transport warnings suppressed after {MaxTransportWarnings}");
+            };
+            NetLog.Error = message =>
+            {
+                Console.Error.WriteLine($"[net] ERROR {message}");
+                errors.Add($"transport: {message}");
+            };
+
             var clients = new List<SyntheticClient>(options.ClientCount);
             var startedUtc = DateTime.UtcNow;
             var clock = Stopwatch.StartNew();
@@ -91,7 +121,7 @@ namespace Ironfront.Net.LoadHarness
 
             double durationSec = clock.Elapsed.TotalSeconds;
             HarnessReport report = BuildReport(
-                options, simulator, clients, startedUtc, durationSec, errors);
+                options, simulator, clients, startedUtc, durationSec, errors, transportWarnings);
 
             int exit = Finish(options, clients, report);
 
@@ -192,7 +222,8 @@ namespace Ironfront.Net.LoadHarness
             List<SyntheticClient> clients,
             DateTime startedUtc,
             double durationSec,
-            List<string> errors)
+            List<string> errors,
+            IReadOnlyList<string> transportWarnings)
         {
             var blocks = new List<HarnessReport.ClientBlock>(clients.Count);
             long bytesSent = 0, bytesReceived = 0, snapshots = 0, malformed = 0, unknown = 0;
@@ -239,6 +270,7 @@ namespace Ironfront.Net.LoadHarness
                 },
                 Agreement = CompareClients(clients),
                 Errors = errors,
+                TransportWarnings = transportWarnings,
             };
         }
 
@@ -263,53 +295,37 @@ namespace Ironfront.Net.LoadHarness
             if (clients.Count < 2) return new HarnessReport.AgreementBlock();
 
             Dictionary<uint, StateSample> baseline = ByTick(clients[0]);
-            int pairs = 0, ticks = 0, entities = 0, disagreements = 0;
-            string? first = null;
+            var tally = new AgreementTally();
 
             for (int c = 1; c < clients.Count; c++)
             {
-                pairs++;
+                tally.Pairs++;
                 foreach (StateSample other in clients[c].Capture.Samples)
                 {
                     if (!baseline.TryGetValue(other.ServerTick, out StateSample? mine)) continue;
-                    ticks++;
+                    tally.Ticks++;
 
                     foreach (ActorSample a in other.Actors)
                     {
                         if (!TryFindActor(mine, a.ActorId, out ActorSample b)) continue;
-                        entities++;
-                        if (a.X == b.X && a.Y == b.Y && a.Z == b.Z) continue;
-
-                        disagreements++;
-                        first ??= string.Format(
-                            CultureInfo.InvariantCulture,
-                            "tick {0} actor {1}: client 0 ({2},{3},{4}) vs client {5} ({6},{7},{8})",
-                            other.ServerTick, a.ActorId, b.X, b.Y, b.Z, c, a.X, a.Y, a.Z);
+                        tally.Classify(
+                            other.ServerTick, "actor", a.ActorId, c,
+                            b.X, b.Y, b.Z, b.UpdatedAtTick,
+                            a.X, a.Y, a.Z, a.UpdatedAtTick);
                     }
 
                     foreach (VehicleSample v in other.Vehicles)
                     {
                         if (!TryFindVehicle(mine, v.VehicleId, out VehicleSample w)) continue;
-                        entities++;
-                        if (v.X == w.X && v.Y == w.Y && v.Z == w.Z) continue;
-
-                        disagreements++;
-                        first ??= string.Format(
-                            CultureInfo.InvariantCulture,
-                            "tick {0} vehicle {1}: client 0 ({2},{3},{4}) vs client {5} ({6},{7},{8})",
-                            other.ServerTick, v.VehicleId, w.X, w.Y, w.Z, c, v.X, v.Y, v.Z);
+                        tally.Classify(
+                            other.ServerTick, "vehicle", v.VehicleId, c,
+                            w.X, w.Y, w.Z, w.UpdatedAtTick,
+                            v.X, v.Y, v.Z, v.UpdatedAtTick);
                     }
                 }
             }
 
-            return new HarnessReport.AgreementBlock
-            {
-                ClientPairsCompared = pairs,
-                TicksCompared = ticks,
-                EntitiesCompared = entities,
-                Disagreements = disagreements,
-                FirstDisagreement = first,
-            };
+            return tally.ToBlock();
         }
 
         private static Dictionary<uint, StateSample> ByTick(SyntheticClient client)
@@ -399,8 +415,32 @@ namespace Ironfront.Net.LoadHarness
 
             Line($"bandwidth          {report.Totals.MeanReceivedBytesPerSecondPerClient:0} B/s per client (mean; read the per-client rows)");
             Line($"malformed/unknown  {report.Totals.MalformedMessages}/{report.Totals.UnknownMessages}");
-            Line($"decoded agreement  {report.Agreement.Disagreements} disagreement(s) over {report.Agreement.EntitiesCompared} entity comparison(s) across {report.Agreement.TicksCompared} tick(s)");
+            // Two numbers, never one. A single "disagreements" figure was X-35: it read as
+            // replication divergence when it was interest management working, and its zero read
+            // as proof of agreement when it mostly proved a quiet wire. The rate is taken over
+            // SameTickComparisons, because a comparison between entries of different age cannot
+            // answer the question the rate is asking.
+            HarnessReport.AgreementBlock agreement = report.Agreement;
+            double divergenceRate = agreement.SameTickComparisons <= 0
+                ? 0.0
+                : agreement.DivergencesSubstantive * 100.0 / agreement.SameTickComparisons;
+            string sampleWarning = agreement.SameTickComparisons < 1000
+                ? "  <-- sample too small to carry a rate"
+                : string.Empty;
+            Line($"decoded divergence {agreement.DivergencesSubstantive} substantive + {agreement.DivergencesOneUnitOneAxis} quantizer-edge over {agreement.SameTickComparisons} same-tick comparison(s) = {divergenceRate:0.000}%{sampleWarning}");
+            Line($"decoded staleness  {agreement.StaleComparisons} over {agreement.EntitiesCompared} entity comparison(s) across {agreement.TicksCompared} tick(s) (expected, not a fault)");
+            if (agreement.UnclassifiedComparisons > 0)
+                Line($"UNCLASSIFIED       {agreement.UnclassifiedComparisons} comparison(s) carried no update tick - the provenance tracking is wrong");
             Line($"network seed       {report.Network.Seed} ({report.Network.Preset})");
+
+            // Surfaced beside the client count, because "4 of 8 held" and the transport's
+            // reason for the other four belong in the same glance.
+            if (report.TransportWarnings.Count > 0)
+            {
+                Line($"transport warnings {report.TransportWarnings.Count} (see TransportWarnings in the report)");
+                Line($"  first            {report.TransportWarnings[0]}");
+            }
+
             return text.ToString();
         }
 

@@ -47,6 +47,7 @@ namespace Ironfront.Net.Replication
     {
         private readonly WorldSnapshot[] _history;
         private readonly ActorSnapshotEntry[] _scratch;
+        private readonly PositionProvenance _provenance;
         private bool _hasApplied;
 
         public DeltaDecoder()
@@ -55,11 +56,25 @@ namespace Ironfront.Net.Replication
             for (int i = 0; i < _history.Length; i++) _history[i] = new WorldSnapshot();
 
             _scratch = new ActorSnapshotEntry[ProtocolConstants.MAX_ACTORS];
+            _provenance = new PositionProvenance(
+                DeltaEncoder.BaselineHistory, ProtocolConstants.MAX_ACTORS);
             Current  = new WorldSnapshot();
         }
 
         /// <summary>The reconstructed world. Valid once <see cref="Read"/> has returned Applied.</summary>
         public WorldSnapshot Current { get; }
+
+        /// <summary>
+        /// The server tick the position of <c>Current.Actors[slot]</c> last arrived on.
+        /// </summary>
+        /// <remarks>
+        /// Not the same as <see cref="WorldSnapshot.ServerTick"/>, and the difference is the
+        /// whole point: an entry whose Position bit was clear in this tick's delta is carried
+        /// over from the baseline and is as old as whenever it last moved. Two clients holding
+        /// different values for one entity are DIVERGENT only if these agree; otherwise one of
+        /// them simply has a newer copy. See <see cref="PositionProvenance"/> (X-35).
+        /// </remarks>
+        public uint PositionUpdatedAt(int slot) => _provenance.CurrentAt(slot);
 
         /// <summary>
         /// The tick to put in the next C_ACK_BASELINE. 0 until the first snapshot lands.
@@ -79,6 +94,7 @@ namespace Ironfront.Net.Replication
             _hasApplied = false;
             Current.Clear();
             LastProcessedInputTick = 0;
+            _provenance.Clear();
             for (int i = 0; i < _history.Length; i++) _history[i].Clear();
         }
 
@@ -126,6 +142,7 @@ namespace Ironfront.Net.Replication
             // against ticks this client acked, and it only acks ticks it applied, so the two
             // histories stay in step.
             _history[Current.ServerTick % DeltaEncoder.BaselineHistory].CopyFrom(Current);
+            _provenance.FileCurrent(Current.ServerTick, Current.ActorCount);
 
             return SnapshotReadResult.Applied;
         }
@@ -135,7 +152,11 @@ namespace Ironfront.Net.Replication
             Current.Clear();
             Current.ServerTick = header.ServerTick;
 
-            for (int i = 0; i < count; i++) Current.Add(in _scratch[i]);
+            for (int i = 0; i < count; i++)
+            {
+                int slot = Current.ActorCount;
+                if (Current.Add(in _scratch[i])) _provenance.SetCurrent(slot, header.ServerTick);
+            }
         }
 
         private void ApplyDelta(in SnapshotHeader header, int count, WorldSnapshot baseline)
@@ -151,10 +172,28 @@ namespace Ironfront.Net.Replication
             {
                 ref ActorSnapshotEntry incoming = ref _scratch[i];
 
-                ActorSnapshotEntry resolved =
-                    baseline.TryFind(incoming.ActorId, out ActorSnapshotEntry previous)
-                        ? ApplyEntry(in previous, in incoming)
-                        : incoming;
+                // IndexOf rather than TryFind, because the baseline's SLOT is what the position
+                // provenance is keyed by — an inherited position is exactly as old as the
+                // baseline entry it was inherited from.
+                int baselineSlot = baseline.IndexOf(incoming.ActorId);
+                bool carriesPosition = (incoming.ChangeMask & SnapshotField.Position) != 0;
+
+                ActorSnapshotEntry resolved;
+                uint positionTick;
+                if (baselineSlot >= 0)
+                {
+                    resolved = ApplyEntry(in baseline.Actors[baselineSlot], in incoming);
+                    positionTick = carriesPosition
+                        ? header.ServerTick
+                        : _provenance.BaselineAt(header.BaselineTick, baselineSlot);
+                }
+                else
+                {
+                    // Nothing to inherit from: whatever this entry says is what the wire said,
+                    // this tick, whether or not the mask advertised the field.
+                    resolved = incoming;
+                    positionTick = header.ServerTick;
+                }
 
                 // The stored entry carries every field, not the sparse wire mask, so it can
                 // serve as a baseline itself next tick. Full for a seated actor, so the mask
@@ -162,7 +201,9 @@ namespace Ironfront.Net.Replication
                 resolved.ChangeMask = resolved.VehicleId != 0
                     ? SnapshotField.Full
                     : SnapshotField.FullNoSeat;
-                Current.Add(in resolved);
+
+                int slot = Current.ActorCount;
+                if (Current.Add(in resolved)) _provenance.SetCurrent(slot, positionTick);
             }
         }
 

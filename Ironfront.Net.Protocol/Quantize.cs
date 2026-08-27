@@ -92,6 +92,27 @@ namespace Ironfront.Net.Protocol
         public static float UnpackPos(short q)
             => ((q + 32768f) / 65535f) * POS_RANGE + POS_MIN;
 
+        /// <summary>
+        /// True when <paramref name="v"/> is outside the representable range, so
+        /// <see cref="PackPos"/> will return a boundary code that does not describe it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The clamp in <see cref="PackPos"/> is silent, and that is the defect underneath
+        /// X-39.</b> An entity east of <see cref="POS_MAX"/> does not decode to something
+        /// obviously wrong — it decodes to a perfectly plausible position exactly on the
+        /// boundary, and two entities 50 m apart out there decode to the same one. Nothing in
+        /// the snapshot, the report or the log said so; the only way it was ever found was
+        /// noticing that the quantized value 32767 is unreachable by any other means.
+        /// </para>
+        /// <para>
+        /// Exclusive at the boundary: <see cref="POS_MAX"/> itself round-trips, so a body
+        /// resting exactly on the edge is representable and is not reported.
+        /// </para>
+        /// </remarks>
+        public static bool PositionSaturates(float v)
+            => !(v >= POS_MIN && v <= POS_MAX);   // written this way so NaN reports as saturating
+
         // ------------------------------------------------------------------- angles
 
         /// <summary>Packs a yaw in degrees into a u16. Input is wrapped into [0, 360).</summary>
