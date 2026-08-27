@@ -41,14 +41,16 @@ namespace Ironfront.Net.Replication.World
         public static long Count { get; private set; }
 
         /// <summary>Distinct entities seen saturating, by kind and id, since the last reset.</summary>
-        public static int DistinctEntities => _seen.Count;
+        public static int DistinctEntities => Seen.Count;
 
         /// <summary>
         /// The first saturating entity, formatted, or null when nothing has saturated.
         /// </summary>
         public static string? First { get; private set; }
 
-        private static readonly System.Collections.Generic.HashSet<(bool IsVehicle, ushort Id)> _seen
+        // PascalCase because it is static: .editorconfig reserves the _camelCase form for
+        // instance fields.
+        private static readonly System.Collections.Generic.HashSet<(bool IsVehicle, ushort Id)> Seen
             = new System.Collections.Generic.HashSet<(bool, ushort)>();
 
         /// <summary>
@@ -65,7 +67,7 @@ namespace Ironfront.Net.Replication.World
             }
 
             Count++;
-            _seen.Add((isVehicle, id));
+            Seen.Add((isVehicle, id));
             First ??= string.Format(
                 CultureInfo.InvariantCulture,
                 "{0} {1} at ({2:F2},{3:F2},{4:F2}) — outside +/-{5:F0} m, so it replicates on the "
@@ -80,7 +82,7 @@ namespace Ironfront.Net.Replication.World
         {
             Count = 0;
             First = null;
-            _seen.Clear();
+            Seen.Clear();
         }
     }
 }
