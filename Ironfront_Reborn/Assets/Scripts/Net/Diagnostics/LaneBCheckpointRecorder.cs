@@ -199,6 +199,8 @@ namespace Ironfront.Net.Unity.Diagnostics
             Comma();
             AppendCameras();
             Comma();
+            AppendPresenterOrdering();
+            Comma();
             AppendExplosions();
 
             if (screenshot != null)
@@ -774,6 +776,43 @@ namespace Ironfront.Net.Unity.Diagnostics
             }
 
             _json.Append(']');
+        }
+
+        /// <summary>
+        /// Check 6 (E12), as V10 § 7 states its pass condition: the presenters that found no
+        /// <c>NetClientBootstrap</c> in <c>Awake</c>. Empty is the pass.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The field records an OUTCOME, unlike <c>activeCameras</c> beside it.</b> Check 5's
+        /// field was recorded at every checkpoint of every run and carried baseline throughout,
+        /// because nothing ever attempted a camera hijack — so it recorded the absence of the
+        /// case rather than a verdict, which is what X-37 filed. This one is not in that
+        /// position: E12's case is an ordinary client start, so every run has always provoked it
+        /// and only the reading was missing.
+        /// </para>
+        /// <para>
+        /// <b>A count as well as the names, and both.</b> The names are what a person needs to
+        /// fix it; the count is what a grader can assert on without parsing an array that is
+        /// empty in the healthy case — and "the key was absent" and "the list was empty" must
+        /// not be the same reading, or a recorder that stopped writing this would look like a
+        /// pass forever.
+        /// </para>
+        /// </remarks>
+        private void AppendPresenterOrdering()
+        {
+            _json.Append("\"presentersWithNoBootstrap\":[");
+
+            int count = 0;
+            foreach (string presenter in NetClientPresenterGuard.PresentersThatFoundNoBootstrap)
+            {
+                if (count > 0) _json.Append(',');
+                _json.Append('"').Append(Escape(presenter)).Append('"');
+                count++;
+            }
+
+            _json.Append("],");
+            Num("presentersWithNoBootstrapCount", count);
         }
 
         private void AppendRemoteActors()

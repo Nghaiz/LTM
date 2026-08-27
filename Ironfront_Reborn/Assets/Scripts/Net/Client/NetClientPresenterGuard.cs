@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication;
@@ -141,11 +142,60 @@ namespace Ironfront.Net.Unity.Client
             if (client != null) return true;
 
             WarnOnce(
-                "no-bootstrap:" + presenterName,
+                NoBootstrapPrefix + presenterName,
                 $"[net] {presenterName} found no NetClientBootstrap in Awake. It will never "
                 + "subscribe, so nothing it presents will appear. Put it on the client "
                 + "bootstrap object, or after it in execution order.");
             return false;
+        }
+
+        /// <summary>
+        /// The prefix every no-bootstrap key carries. <b>E12's whole pass condition is the
+        /// emptiness of this set.</b>
+        /// </summary>
+        /// <remarks>
+        /// A named constant rather than a literal in two places, because
+        /// <see cref="PresentersThatFoundNoBootstrap"/> filtering on a prefix that
+        /// <see cref="TryResolveClient"/> no longer writes would report a permanent, cheerful
+        /// zero — a check that cannot fail.
+        /// </remarks>
+        private const string NoBootstrapPrefix = "no-bootstrap:";
+
+        /// <summary>
+        /// The presenters that found no bootstrap in <c>Awake</c> this session, by name. Empty
+        /// is the healthy answer.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This is check 6 (E12), and it needs no programme.</b> E12's pass condition, as
+        /// V10 § 7 states it, is <i>"no presenter logs its null-bootstrap warning on a normal
+        /// client start"</i> — a property of an ordinary start, not of a provoked situation. So
+        /// every lane-B run ever taken has already exercised the case; what no artifact carried
+        /// was the outcome. Reading it here turns E12 from ungradeable into graded on a run that
+        /// was going to happen anyway.
+        /// </para>
+        /// <para>
+        /// <b>Read from the same set the warning writes to, deliberately.</b> A separate counter
+        /// incremented beside <c>Debug.LogWarning</c> would be a second transcription that can
+        /// drift silently — and a diagnostic that disagrees with the log it is supposed to
+        /// summarise is worse than none, because the artifact is what gets quoted.
+        /// </para>
+        /// <para>
+        /// <b>Cleared by <see cref="ResetOnLoad"/> with the rest of the set</b>, so a warning
+        /// spent in a previous Play session cannot leak into this one's verdict — which with
+        /// domain reload disabled is not hypothetical.
+        /// </para>
+        /// </remarks>
+        public static IEnumerable<string> PresentersThatFoundNoBootstrap
+        {
+            get
+            {
+                foreach (string key in _warned)
+                {
+                    if (key.StartsWith(NoBootstrapPrefix, StringComparison.Ordinal))
+                        yield return key.Substring(NoBootstrapPrefix.Length);
+                }
+            }
         }
 
         /// <summary>Logs a warning the first time this key is seen, and never again.</summary>

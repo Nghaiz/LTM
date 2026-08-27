@@ -1,5 +1,11 @@
 # Phase R1 — The programmes that do not exist, and the spawn layout that hides the ones that do
 
+> **PARTLY EXECUTED 2026-08-27 —
+> [`reports/2026-08-27-r1-programme-set.md`](../reports/2026-08-27-r1-programme-set.md).**
+> R1.1 closed **X-31**; R1.2 graded **check 6 / B-6 PASS**. R1.3, R1.4 and R1.5 are **not done**.
+> **Three of this file's own claims were wrong and are corrected in place below** — search for
+> *CORRECTION*. Read the report before picking any task up.
+
 - **Track:** [`plan.md`](../plan.md) · **Effort:** L (1 wk)
 - **Depends on:** [`phase-r2-seat-and-name.md`](phase-r2-seat-and-name.md). A vehicle programme
   needs a client that can ask for a seat, and today none can (**X-30**). Starting R1 first produces
@@ -43,6 +49,12 @@ artifact would show it. In `artifacts/lane-b/x-grenade-01` the server logged
 `primary='RK-44' gear1='FRAG'` and `weaponId` read **1** on all three clients at all five
 checkpoints, with `explosionsTotal: 0`.
 
+> **CORRECTION (2026-08-27, R1.1 — CLOSED).** All three candidates below are server-side, and the
+> loss was on the **client**: `LaneBHarness` assigns `clock.InputSource = BuildMoveInput`, replacing
+> `NetPredictionClock.DefaultInput` wholesale, so `ScriptedInputSource.Buttons` — and the correct
+> packer behind it — never reached the wire, and `MoveInput` had no field for a slot. Row X-3, a
+> second time. The equip now works; the grenade still does not detonate, which is **X-42**.
+
 So the intent reaches the server and the equip does not happen. **Find where it is dropped before
 changing anything** — the candidates, in the order they are cheapest to eliminate:
 
@@ -70,6 +82,15 @@ check on `activeCameras` staying at one.
 **Check 6, scene ordering.** Same shape, different case. E12's ordering condition needs a step that
 puts the scene into the order it names.
 
+> **CORRECTION (2026-08-27, R1.2 — check 6 GRADED PASS).** The paragraph above is wrong, and so is
+> this phase's assumption that both halves of X-37 are "an unwritten programme". V10 § 7 states
+> E12's pass condition as *"no presenter logs its null-bootstrap warning on a **normal client
+> start**"* — a property of an ordinary start, not of a provoked situation. Every lane-B run ever
+> taken had already exercised it; only the **reading** was missing.
+> `LaneBCheckpointRecorder.presentersWithNoBootstrap` supplies it. **Check 5 is unaffected and is
+> still real programme work** — and is now blocked on **X-44**, because E11 needs a client that can
+> *reach* a mounted turret and none can.
+
 **These are two rows' worth of work under one row number, deliberately** — the missing artefact is
 the same *kind* of thing (an unwritten programme) but the steps differ, and **B-5** and **B-6** each
 keep their own verdict and their own artifact line. Do not fold either into the other.
@@ -87,6 +108,16 @@ The set mirrors the combat set's three-role shape: one driver, two observers. Ch
 requires `-Sim typical` (100 ms RTT / 5 % loss), which the combat runner does not pass today — add
 the flag to `run-lane-b.ps1` rather than to a programme, since it is a transport condition, not a
 behaviour.
+
+> **CORRECTION (2026-08-27).** The flag already exists — `tools/run-lane-b.ps1:114`,
+> `[string] $Sim = "off"`, threaded to `IRONFRONT_SIM` and recorded in `run.json`. What is missing
+> is a **run that passes it**, not the parameter.
+>
+> **AND THIS TASK IS BLOCKED, on a dependency the paragraph above gets half right.** R2 landing is
+> **necessary, not sufficient**: a client can now *ask* for a seat, and nothing can *reach* one.
+> `ClientSeatRequester.TryFindNearestSeat` only sees seats within `SeatArbiter.MaxSeatReachMetres`,
+> and `approach` resolves a **player display name**, which a vehicle does not have. That is
+> **X-44**, and it holds R1.3 and check 5 alike.
 
 **Read [`phase-r3-wire-integrity.md`](phase-r3-wire-integrity.md) before quoting a check-7 result.**
 **X-32** — the reliable channel abandons peers under exactly `--sim typical`, 4 of 8 clients lost in
@@ -108,7 +139,12 @@ and the run graded nothing).
 **The pin bought repeatable geometry, not a repeatable engagement**, and check 1's 1-in-3 flake is
 partly this. Three candidate shapes, all recorded in the row:
 
-- separate near-adjacent pins per role rather than one shared slot;
+- separate near-adjacent pins per role rather than one shared slot — **note (2026-08-27): not
+  expressible through the existing seam.** `ISpawnPointDirectory.IsEligible` is keyed by
+  `(index, team)`, **not by player**, so the server cannot tell OBS-A from OBS-B at selection time.
+  A team-keyed pin *is* expressible and is the wrong shape: shooter and victim must be on opposing
+  teams to damage each other, so pinning teams apart removes the engagement this row exists to
+  create. Picking this candidate means extending the seam, and that is part of the decision;
 - a programme step that walks the witness out of the line;
 - a spawn point the bots do not contest.
 
