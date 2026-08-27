@@ -128,6 +128,20 @@ B receives it and immediately knows 100 and 102 never arrived. Because every pac
 pieces of ack information (1 + 32), an ack is only lost if 33 consecutive packets are lost — in
 practice, never. **This is why no separate ACK packet is needed.**
 
+> **The argument above holds only for packets carrying a FRESH sequence, and that is a
+> requirement on the sender, not an observation.** The bitfield is addressed by *distance behind
+> `ack`* and can express exactly 32 of them, so a sequence further back than that is not
+> "unlikely to be acked" — it is **inexpressible**, however many copies arrive and however many
+> acks come back. A retransmission that reused its original sequence therefore fell out of the
+> addressable window after about 0.64 s at the ~50 packets/s a loaded client sends, and could
+> never be acknowledged again; the sender spent its whole reliable budget on a packet the peer
+> already held and then dropped the connection. **Every retransmission MUST be re-stamped with a
+> new `sequence` (and a current `ack`/`ackBitfield`) before it goes out.** The wire format is
+> unchanged by this — a receiver sees an ordinary new packet whose duplicate payload the channel
+> layer already discards on `channelSequence` (§ 5.1) — so it is not a version event. It is
+> defect **X-32**, and it is the reason 4 of 8 clients (later 8 of 8) died inside 120 s at 5 %
+> loss while 8 of 8 held on a clean wire, where nothing is ever retransmitted.
+
 ### 2.3. Sequence comparison with wrap-around
 
 `sequence` is a u16 and wraps after 65535. At 30 packets/second, that's every ~36 minutes. It must

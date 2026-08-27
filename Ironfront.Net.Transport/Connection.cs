@@ -23,7 +23,7 @@ namespace Ironfront.Net.Transport
         private readonly CongestionControl _congestion = new CongestionControl();
         private readonly FlowControl _flow = new FlowControl();
         private readonly Action<ReadOnlyMemory<byte>> _deliverMessage;
-        private readonly Action<byte[], int> _resendCallback;
+        private readonly Action<byte[], int, ushort> _resendCallback;
         private readonly long[] _lossReliableSent = new long[LossWindowBucketCount];
         private readonly long[] _lossReliableRetried = new long[LossWindowBucketCount];
         private readonly long[] _lossPacketsReceived = new long[LossWindowBucketCount];
@@ -630,9 +630,23 @@ namespace Ironfront.Net.Transport
             }
         }
 
-        private void Resend(byte[] datagram, int length)
+        /// <summary>
+        /// Puts a retransmission on the wire under the fresh sequence the reliability layer
+        /// just assigned it, with this connection's current ack window.
+        /// </summary>
+        /// <remarks>
+        /// <b>The re-stamp is the point.</b> Shipping the stored bytes verbatim kept the
+        /// original sequence, which the peer's 32-entry ack bitfield stops being able to
+        /// address after about 0.64 s of ordinary traffic — so the copy arrived and could not
+        /// be acknowledged, and the sender killed the connection over a packet the peer
+        /// already held. That was X-32.
+        /// </remarks>
+        private void Resend(byte[] datagram, int length, ushort sequence)
         {
             if (_send == null) return;
+            (ushort ack, uint bitfield) = _reliability.BuildAck();
+            if (!PacketBuilder.TryRestamp(datagram.AsSpan(0, length), sequence, ack, bitfield))
+                return;
             _send(datagram, length, RemoteEndPoint, _lastUpdateMs);
             _stats.PacketsResent++;
             _stats.PacketsSent++;
