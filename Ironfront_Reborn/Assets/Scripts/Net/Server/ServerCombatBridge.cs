@@ -116,6 +116,7 @@ namespace Ironfront.Net.Unity.Server
             // implementing it, because a dedicated throw bit is a second route to firing that
             // does not pass Weapon.CanFire().
             actor.ApplyWeaponSwitchIntent(frame.WeaponSlot);
+            AdoptTheWeaponTheBodyIsHolding(session, actor);
             if (StepMountedWeapon(session, actor, in frame, now)) return;
 
             BuildTargets(tick);
@@ -247,6 +248,55 @@ namespace Ironfront.Net.Unity.Server
 
             PlaceAtSpawn(player);
             return true;
+        }
+
+        /// <summary>
+        /// Re-points the combat session at whatever weapon the body is now holding.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Without this, a weapon switch changes the body and not the gun that fires.</b>
+        /// <see cref="ClientSession.WeaponId"/> was assigned in exactly three places — join,
+        /// respawn and round reset — all of them spawn-shaped, and
+        /// <c>ApplyWeaponSwitchIntent</c> is none of them. So the actor's
+        /// <c>activeWeapon.NetworkId</c> moved to the grenade while
+        /// <see cref="ClientSession.WeaponConfig"/> — derived from the session's id — stayed the
+        /// rifle's, and <c>ServerCombatAuthority</c> went on resolving hitscan with rifle
+        /// ballistics.
+        /// </para>
+        /// <para>
+        /// <b>Measured, not reasoned:</b> <c>artifacts/lane-b/r1-grenade-02</c> logs
+        /// <c>[switch] actor=41 slot=2 outcome=forwarded weaponId=7</c> — the switch arrived and
+        /// took — beside 60 of 60 <c>[shot] actor=41 weapon=1</c>. The body held the FRAG and
+        /// every trigger pull spent a rifle round. That is the whole distance between X-31's fix
+        /// and a detonation, and it is why R1.1's acceptance asks for both.
+        /// </para>
+        /// <para>
+        /// <b>On change only, and the three statements are <see cref="PlaceAtSpawn"/>'s own, in
+        /// its order</b> — id, then <c>ResetWeapon</c>, then the actor's clip. That order is not
+        /// stylistic: <see cref="ClientSession.ResetWeapon"/> takes its clip size from the config
+        /// the id derives, so re-arming before assigning loads a clip of zero and presents as
+        /// <see cref="FireRejection.NoAmmo"/> forever.
+        /// </para>
+        /// <para>
+        /// <b>A switch reloads, and that is a known consequence rather than an oversight.</b>
+        /// The netcode session models ONE weapon — <c>Weapon</c> is a single
+        /// <c>WeaponRuntimeState</c> — so there is nowhere to park the outgoing weapon's clip and
+        /// nothing to restore the incoming one's. <c>NetServerActor.AmmoInClip</c> cannot supply
+        /// it either: the bridge WRITES that field from the session every frame, so it mirrors the
+        /// session rather than the body. Re-arming is therefore the only state this method can
+        /// reach, and it means a player who switches away and back has a full magazine. Filed as
+        /// its own row rather than fixed here, because per-slot ammo is a state the wire, the
+        /// session and the snapshot would all have to grow.
+        /// </para>
+        /// </remarks>
+        private static void AdoptTheWeaponTheBodyIsHolding(ClientSession session, NetServerActor actor)
+        {
+            if (actor.WeaponId == session.WeaponId) return;
+
+            session.WeaponId = actor.WeaponId;
+            session.ResetWeapon();
+            actor.AmmoInClip = session.Weapon.AmmoInClip;
         }
 
         /// <summary>
