@@ -54,6 +54,7 @@ namespace Ironfront.Net.Unity.Diagnostics
         private readonly LaneBRunSeeds _seeds;
         private readonly ScriptedTargetSolver _solver;
         private readonly LaneBExplosionLog _explosions;
+        private readonly LaneBAllocationSampler _allocation;
         private readonly StringBuilder _json = new StringBuilder(4096);
 
         private static readonly UTF8Encoding NoBom = new UTF8Encoding(false);
@@ -63,9 +64,16 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// the name resolved — which is the difference between "check 1 failed" and "check 1
         /// never had a target", and no screenshot can tell those apart.
         /// </param>
+        /// <param name="allocation">
+        /// Optional. Present, every record carries the per-frame managed allocation measured
+        /// since the previous checkpoint, which is the only instrument check 10 has ever had
+        /// (ledger X-33). Absent, the record says <c>"allocation":null</c> rather than zero —
+        /// see <see cref="AllocationWindow.Valid"/> for why those must not look alike.
+        /// </param>
         public LaneBCheckpointRecorder(string directory, string label, string programme,
                                        LaneBRunSeeds seeds, ScriptedTargetSolver solver = null,
-                                       LaneBExplosionLog explosions = null)
+                                       LaneBExplosionLog explosions = null,
+                                       LaneBAllocationSampler allocation = null)
         {
             _directory = directory;
             _label = label;
@@ -73,6 +81,7 @@ namespace Ironfront.Net.Unity.Diagnostics
             _seeds = seeds;
             _solver = solver;
             _explosions = explosions;
+            _allocation = allocation;
 
             Directory.CreateDirectory(_directory);
             RecordPath = Path.Combine(_directory, _label + "-checkpoints.jsonl");
@@ -202,6 +211,8 @@ namespace Ironfront.Net.Unity.Diagnostics
             AppendPresenterOrdering();
             Comma();
             AppendExplosions();
+            Comma();
+            AppendAllocation();
 
             if (screenshot != null)
             {
@@ -824,6 +835,53 @@ namespace Ironfront.Net.Unity.Diagnostics
             _json.Append(registry != null
                 ? registry.LiveCount.ToString(CultureInfo.InvariantCulture)
                 : "-1");
+        }
+
+        /// <summary>
+        /// Per-frame managed allocation since the previous checkpoint. Ledger <b>X-33</b>,
+        /// check 10.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A WINDOW, not a total, and not one frame.</b> The window is drained at every
+        /// checkpoint, so two consecutive records describe two disjoint spans — which is what
+        /// makes them subtractable. Check 10 asks whether <c>ClientVehicleStage</c> ADDS
+        /// allocation, and "adds" is a difference: read <c>bytesPerFrame</c> on a checkpoint
+        /// where <c>drivenVehicleId</c> is 0 against one where it is not, in the same run.
+        /// </para>
+        /// <para>
+        /// <b><c>bytesPerFrame</c> is -1 when there is no answer</b>, never 0. A non-development
+        /// player has no profiler counters and a window with no frames has nothing to divide by;
+        /// both would render as a flawless zero and grade check 10 PASS on the strength of not
+        /// having measured. <c>valid</c> and <c>frames</c> are carried beside it so the reason is
+        /// legible rather than inferred.
+        /// </para>
+        /// <para>
+        /// <b><c>probeBytesPerFrame</c> is how this record says it is not evidence.</b> A run
+        /// with <c>IRONFRONT_LANEB_ALLOC_PROBE</c> armed is deliberately allocating and exists
+        /// to prove the instrument can rise (acceptance criterion 5). Non-zero here means every
+        /// allocation figure in this file grades the recorder, not the game.
+        /// </para>
+        /// </remarks>
+        private void AppendAllocation()
+        {
+            if (_allocation == null)
+            {
+                _json.Append("\"allocation\":null");
+                return;
+            }
+
+            AllocationWindow window = _allocation.TakeWindow();
+
+            _json.Append("\"allocation\":{");
+            Bool("valid", window.Valid); Comma();
+            Str("counter", LaneBAllocationSampler.CounterName); Comma();
+            Num("frames", window.Frames); Comma();
+            Num("totalBytes", window.TotalBytes); Comma();
+            Num("maxBytesInAFrame", window.MaxBytesInAFrame); Comma();
+            Num("bytesPerFrame", (float)window.BytesPerFrame); Comma();
+            Num("probeBytesPerFrame", _allocation.ProbeBytesPerFrame);
+            _json.Append('}');
         }
 
         private void Comma() => _json.Append(',');

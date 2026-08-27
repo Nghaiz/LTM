@@ -1747,8 +1747,44 @@ public class AiActorController : ActorController
 		return vector;
 	}
 
+	/// <summary>
+	/// The bot brain's helicopter stick. Ledger <b>X-47</b>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>A SUSPENDED controller flies nothing, and without this guard it throws once per physics
+	/// step.</b> <c>Helicopter.FixedUpdate</c> asks its driver's controller for a stick position
+	/// every step — <c>Driver().controller.HelicopterInput()</c> — and a networked player's
+	/// server-side body carries an <c>AiActorController</c> with no <see cref="squad"/>, because
+	/// <c>IronfrontNetBindings.CreatePlayerBody</c> instantiates the bot character. The first line
+	/// below dereferences it.
+	/// </para>
+	/// <para>
+	/// <b>Measured:</b> 309 <c>NullReferenceException</c>s in a 150 s lane-A Combat run and 1,204
+	/// in a 300 s one, all of them this line
+	/// (<c>artifacts/lane-a/r5/r5-combat-05-server.log</c>). Check 11 asks whether a headless
+	/// server SURVIVES a networked driver; a throw per physics step for as long as a player sits
+	/// in a pilot seat is the answer it was written to find.
+	/// </para>
+	/// <para>
+	/// <b>Why <see cref="BoatInput"/> and <see cref="CarInput"/> did not need this.</b> Both open
+	/// with <c>if (!hasPath) return zero</c>, and a suspended AI has no path — so they were
+	/// already returning a neutral stick for the same reason this now does explicitly. Only the
+	/// helicopter reaches its squad before any such guard.
+	/// </para>
+	/// <para>
+	/// <b>Zero is the right neutral, not the takeoff ramp below.</b> The real driver input for a
+	/// networked pilot is supposed to arrive through <c>NetDriverInputSink</c> on an
+	/// <c>FpsActorController</c>; that it does not is ledger <b>X-46</b>, a separate row. What
+	/// this method must not do is supply the BOT's opinion to a vehicle a player is sitting in.
+	/// </para>
+	/// </remarks>
 	public override Vector4 HelicopterInput()
 	{
+		if (!base.enabled)
+		{
+			return Vector4.zero;
+		}
 		if (!squad.AllSeated() || !helicopterTakeoffAction.TrueDone())
 		{
 			return new Vector4(0f, -1f + helicopterTakeoffAction.Ratio() * 1.5f, 0f, 0f);
@@ -1844,8 +1880,49 @@ public class AiActorController : ActorController
 	{
 	}
 
+	/// <summary>
+	/// The bot brain's seat bookkeeping. Ledger <b>X-45</b>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>A SUSPENDED controller does none of it, and that guard is load-bearing.</b> Everything
+	/// below is AI STEERING state -- squad leadership, the seeker's tag penalties, the two
+	/// pathfinding modifiers -- and a body that has been claimed by a connection is steered by
+	/// <c>ServerPlayer</c> through <c>NetMovementAgent</c> instead. <c>NetServerActor.Claim</c>
+	/// says so and disables this component to make it true (<c>IAiDriver.Suspend</c>).
+	/// </para>
+	/// <para>
+	/// <b>Disabling the component was not enough on its own.</b> It stops <c>Update</c> and the
+	/// eight coroutines -- which is what <c>IAiDriver</c>'s remark claims it buys -- but
+	/// <c>Actor.EnterSeat</c> calls <c>controller.StartSeated</c> DIRECTLY, and a direct call
+	/// runs on a disabled MonoBehaviour. So the one AI path a networked player could reach was
+	/// this one, and it dereferenced <see cref="squad"/>, which a player-slot body has never had:
+	/// <c>IronfrontNetBindings.CreatePlayerBody</c> instantiates <c>ActorManager.actorPrefab</c>
+	/// -- the bot character -- and no squad ever adopts it.
+	/// </para>
+	/// <para>
+	/// <b>What it cost, and why it was invisible until 2026-08-27.</b> A
+	/// <c>NullReferenceException</c> out of <c>ServerSeatBridge.Apply</c>, thrown AFTER
+	/// <c>Seat.SetOccupant</c> and the transform re-parent and BEFORE <c>Actor.EnterSeat</c>
+	/// finished -- so the seat was booked, the body was welded to it, and the rest of the entry
+	/// never ran. Nothing in the shipped client could reach it (X-30: <c>SeatRequestMessage</c>
+	/// had no production sender until R2) and lane A could not either (X-34: every frame carried
+	/// <c>InputButtons.None</c>), so check 11's <i>drive</i> verb had never once been executed
+	/// against a real server. The first lane-A Combat run found it in ninety seconds.
+	/// </para>
+	/// <para>
+	/// <b>Guarded on <c>enabled</c> rather than on <c>squad != null</c>.</b> A null squad on a
+	/// genuine bot is an AI setup fault and should still throw where it is thrown today -- line
+	/// 644 dereferences it unguarded, so bots always have one. <c>enabled</c> names the actual
+	/// condition: this controller is not driving this body.
+	/// </para>
+	/// </remarks>
 	public override void StartSeated(Seat seat)
 	{
+		if (!base.enabled)
+		{
+			return;
+		}
 		if (seat.type == Seat.Type.Driver || seat.type == Seat.Type.Pilot)
 		{
 			squad.MakeLeader(this);
@@ -1874,8 +1951,22 @@ public class AiActorController : ActorController
 		}
 	}
 
+	/// <summary>
+	/// Unwinds what <see cref="StartSeated"/> set. Ledger <b>X-45</b>.
+	/// </summary>
+	/// <remarks>
+	/// Guarded for <see cref="StartSeated"/>'s reason and one more: this method is the exact
+	/// inverse of a call the guard above may have declined, so running it on a suspended
+	/// controller would clear pathfinding state that this component never set -- and would do it
+	/// on behalf of a body it is not steering. <c>Actor.ExitSeat</c> reaches it by the same
+	/// direct call.
+	/// </remarks>
 	public override void EndSeated(Vector3 exitPosition, Quaternion flatFacing)
 	{
+		if (!base.enabled)
+		{
+			return;
+		}
 		flying = false;
 		aquatic = false;
 		radiusModifier.enabled = false;

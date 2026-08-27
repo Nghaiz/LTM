@@ -228,6 +228,17 @@ $DiagnosticsBaseline = @(
        Reason = 'LaneBExplosionLog.Entry, a readonly struct this folder declares itself' }
     @{ Type = 'Entries'; Kind = 'not-a-reference'; Retires = 'never'
        Reason = 'LaneBExplosionLog.Entries, the property exposing the list of the above' }
+
+    # R5 / X-33. The matcher reads identifiers, so ProfilerCategory.MEMORY -- a static property
+    # on Unity.Profiling.ProfilerCategory, in UnityEngine.CoreModule -- collides with
+    # Pathfinding.Util.Memory, a static helper class in Assembly-CSharp that this folder has
+    # never named and cannot reach. The green compile is the proof: an actual reference to the
+    # pathfinding class would not build, because Ironfront.Net.Unity.Diagnostics does not
+    # reference the predefined assembly at all.
+    @{ Type = 'Memory'  ; Kind = 'not-a-reference'; Retires = 'never'
+       Reason = 'ProfilerCategory.Memory in LaneBAllocationSampler, check 10s instrument. ' +
+                'The collision is with Pathfinding.Util.Memory, a static class in ' +
+                'Assembly-CSharp that this assembly does not and cannot reference' }
 )
 
 Write-Host "=== Assembly-CSharp does not reach into Ironfront.Net.Unity.Server ==="

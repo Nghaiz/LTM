@@ -16,6 +16,18 @@ namespace Ironfront.Net.LoadHarness
         /// snapshots carry deltas rather than settling into "nothing moved".
         /// </summary>
         Move = 1,
+
+        /// <summary>
+        /// Sits in a vehicle, drives it, gets out, shoots somebody, dies, asks for a body back
+        /// — the four verbs check 11 names. Ledger <b>X-34</b>.
+        /// </summary>
+        /// <remarks>
+        /// The most expensive behaviour by a wide margin, and deliberately NOT the default. It
+        /// puts reliable traffic on channel 2 (seat and respawn requests) that <c>Move</c> never
+        /// sends, so a bandwidth figure taken under it is not comparable with the phase-4
+        /// baselines — those were measured under <c>Move</c> and every one of them says so.
+        /// </remarks>
+        Combat = 2,
     }
 
     /// <summary>
@@ -169,7 +181,7 @@ namespace Ironfront.Net.LoadHarness
                     case "--behavior":
                         if (!Enum.TryParse(value, ignoreCase: true, out HarnessBehavior behavior))
                         {
-                            error = $"--behavior '{value}' is not one of: idle, move.";
+                            error = $"--behavior '{value}' is not one of: idle, move, combat.";
                             return false;
                         }
                         options.Behavior = behavior;
@@ -256,7 +268,10 @@ namespace Ironfront.Net.LoadHarness
               --port <n>           default 27015
               --clients <n>        1..64
               --seconds <n>        1..3600
-              --behavior <b>       idle | move   (default move)
+              --behavior <b>       idle | move | combat   (default move)
+                                   combat drives, fires, dies and respawns -- check 11's four
+                                   verbs. Its channel-2 traffic makes its bandwidth figures
+                                   incomparable with a move run's.
               --input-hz <n>       1..120        (default 30)
               --sim <preset>       lan | good | typical | bad | awful. Omit for a clean wire.
               --sim-seed <n>       default 12345. Printed with the results.

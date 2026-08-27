@@ -61,6 +61,23 @@
   <ItemGroup>
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\BaselineAckPolicy.cs"
              Link="Linked\BaselineAckPolicy.cs" />
+
+    <!--
+      verdict-closure R5 task R5.1, ledger X-34. The Combat behaviour has to point at a body,
+      and where to point is arithmetic the project already owns: ScriptedAim is what lane B's
+      scripted clients aim with, it is engine-free by construction (its own remark forbids a
+      `using UnityEngine;` for exactly this reason), and Ironfront.Net.Replication.Tests already
+      links it the same way.
+
+      LINKED RATHER THAN TRANSCRIBED, and X-25 is what a transcription costs. That row was one
+      aim convention (raise the shooter's eye, aim at the target's torso) written down twice
+      and drifting; the copy aimed level at 1.6 m, put every shot through the 3 cm seam X-24
+      names, and no lane-B combat run scored a hit for a month while every test of the copy
+      passed. A second copy in the harness would be free to drift the same way, in the place the
+      verdicts are measured from.
+    -->
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Diagnostics\ScriptedAim.cs"
+             Link="Linked\ScriptedAim.cs" />
   </ItemGroup>
 
 </Project>

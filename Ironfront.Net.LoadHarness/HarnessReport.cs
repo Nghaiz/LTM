@@ -41,6 +41,9 @@ namespace Ironfront.Net.LoadHarness
         public IReadOnlyList<ClientBlock> Clients { get; init; } = Array.Empty<ClientBlock>();
         public TotalsBlock Totals { get; init; } = new TotalsBlock();
         public AgreementBlock Agreement { get; init; } = new AgreementBlock();
+
+        /// <summary>Check 11's four verbs, and which of them the run actually provoked.</summary>
+        public VerbsBlock Verbs { get; init; } = new VerbsBlock();
         public IReadOnlyList<string> Errors { get; init; } = Array.Empty<string>();
 
         /// <summary>
@@ -54,6 +57,83 @@ namespace Ironfront.Net.LoadHarness
         /// over 10.8 s". Until X-32 this list did not exist and neither did that sentence.
         /// </remarks>
         public IReadOnlyList<string> TransportWarnings { get; init; } = Array.Empty<string>();
+
+        /// <summary>
+        /// The four verbs of check 11 — <i>drive, damage, burn, death</i> — and the first tick
+        /// each was seen at. Ledger <b>X-34</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Present on every report, not only on a Combat run.</b> An <c>Idle</c> or
+        /// <c>Move</c> run legitimately provokes none of them, and a block that appeared only
+        /// when something fired would make "no verbs" and "this schema is older than R5" the
+        /// same absence. <see cref="Behavior"/> is carried here so a reader can tell a run that
+        /// COULD not fight from one that DID not.
+        /// </para>
+        /// <para>
+        /// <b><see cref="Missing"/> is the field a verdict is written from.</b> Acceptance
+        /// criterion 1 grades B-11 on all four verbs <i>or names the one still missing</i>, so
+        /// the report names it rather than leaving the reader to diff two lists.
+        /// </para>
+        /// </remarks>
+        public sealed class VerbsBlock
+        {
+            /// <summary>The behaviour every client in this run was given.</summary>
+            public string Behavior { get; init; } = string.Empty;
+
+            /// <summary>Whether all four verbs were seen at least once.</summary>
+            public bool AllFour { get; init; }
+
+            /// <summary>The verbs never seen, in check 11's own order.</summary>
+            public IReadOnlyList<string> Missing { get; init; } = Array.Empty<string>();
+
+            /// <summary>One row per verb that WAS seen, earliest sighting across all clients.</summary>
+            public IReadOnlyList<VerbRow> Seen { get; init; } = Array.Empty<VerbRow>();
+
+            /// <summary>Seat requests framed across every client. Zero on a Combat run is a fault.</summary>
+            public long SeatRequestsSent { get; init; }
+
+            /// <summary>Seat requests the server refused, of any kind.</summary>
+            public long SeatRequestsRefused { get; init; }
+
+            /// <summary><c>C_VEHICLE_INPUT</c> messages framed across every client.</summary>
+            public long VehicleInputsSent { get; init; }
+
+            /// <summary><c>C_SPAWN_REQUEST</c> messages framed across every client.</summary>
+            public long RespawnRequestsSent { get; init; }
+
+            /// <summary>Ticks on which some client held the trigger down.</summary>
+            public long TriggerTicks { get; init; }
+        }
+
+        /// <summary>One verb's earliest sighting in the run.</summary>
+        public sealed class VerbRow
+        {
+            public string Verb { get; init; } = string.Empty;
+
+            /// <summary>Index of the client that saw it first. See <c>VerbLog.Entry</c>.</summary>
+            public int ObservedByClient { get; init; }
+
+            /// <summary>
+            /// Newest tick the observing client had decoded when the verb was seen — NOT the
+            /// server tick the event happened on.
+            /// </summary>
+            /// <remarks>
+            /// <c>S_DEATH</c> and <c>S_HIT_CONFIRM</c> carry no tick, so this is within one
+            /// snapshot interval of the truth and will not line up to the tick against the
+            /// server's own JSONL. The field is named for what it is so nobody tries.
+            /// </remarks>
+            public uint AtDecodedTick { get; init; }
+
+            /// <summary>Harness clock at the sighting, in seconds since the run started.</summary>
+            public double AtSeconds { get; init; }
+
+            /// <summary>What was actually observed, in the observer's terms.</summary>
+            public string Evidence { get; init; } = string.Empty;
+
+            /// <summary>Sightings across the whole run, so one freak is distinguishable.</summary>
+            public long Count { get; init; }
+        }
 
         public sealed class TargetBlock
         {
@@ -141,6 +221,27 @@ namespace Ironfront.Net.LoadHarness
             public long UnknownMessages { get; init; }
             public int StateSamples { get; init; }
 
+            /// <summary>The actor the server named as this client's own, or 0.</summary>
+            public ushort LocalActorId { get; init; }
+
+            /// <summary>Where the Combat drill ended the run, or null for Idle and Move.</summary>
+            public string? DrillPhase { get; init; }
+
+            /// <summary>Seat requests this client framed.</summary>
+            public long SeatRequestsSent { get; init; }
+
+            /// <summary>Seat requests the server refused.</summary>
+            public long SeatRequestsRefused { get; init; }
+
+            /// <summary><c>C_VEHICLE_INPUT</c> messages this client framed.</summary>
+            public long VehicleInputsSent { get; init; }
+
+            /// <summary><c>C_SPAWN_REQUEST</c> messages this client framed.</summary>
+            public long RespawnRequestsSent { get; init; }
+
+            /// <summary>Ticks this client held the trigger down.</summary>
+            public long TriggerTicks { get; init; }
+
             public LatencyBlock SnapshotIntervalMs { get; init; } = new LatencyBlock();
 
             /// <summary>Where this client's received bytes went, by message type.</summary>
@@ -174,6 +275,13 @@ namespace Ironfront.Net.LoadHarness
                     MalformedMessages = client.MalformedMessages,
                     UnknownMessages = client.UnknownMessages,
                     StateSamples = client.Capture.Samples.Count,
+                    LocalActorId = client.LocalActorId,
+                    DrillPhase = client.Drill?.Phase.ToString(),
+                    SeatRequestsSent = client.Drill?.SeatRequestsSent ?? 0,
+                    SeatRequestsRefused = client.Drill?.SeatRequestsRefused ?? 0,
+                    VehicleInputsSent = client.VehicleInputsSent,
+                    RespawnRequestsSent = client.Drill?.RespawnRequestsSent ?? 0,
+                    TriggerTicks = client.Drill?.TriggerTicks ?? 0,
                     SnapshotIntervalMs = LatencyBlock.From(client.SnapshotIntervalMs),
                     Wire = WireBlock.From(client.Wire, stats.BytesReceived, durationSec),
                 };

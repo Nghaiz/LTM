@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Ironfront.Net.Protocol;
+using Ironfront.Net.Replication;
 using Ironfront.Net.Replication.Client;
 using Ironfront.Net.Transport;
 using Ironfront.Net.Transport.Simulation;
@@ -58,6 +59,42 @@ namespace Ironfront.Net.LoadHarness
         private readonly HarnessBehavior _behavior;
         private readonly double _inputIntervalMs;
 
+        /// <summary>The Combat behaviour's state machine, or null for Idle and Move.</summary>
+        private readonly CombatDrill? _drill;
+
+        private readonly VerbLog _verbs = new VerbLog();
+
+        private readonly byte[] _seatBody = new byte[SeatRequestMessage.Size];
+        private readonly byte[] _vehicleBody = new byte[VehicleInputMessage.Size];
+
+        /// <summary>
+        /// A SECOND payload buffer, for the reliable channel.
+        /// </summary>
+        /// <remarks>
+        /// Not shared with <see cref="_payload"/>, which carries the unreliable input frame.
+        /// One <see cref="Poll"/> can legitimately frame both — a seat request rides channel 2
+        /// while movement keeps flowing on channel 3 — and <c>UdpTransportClient.Send</c> copies
+        /// into its own send buffer, so a shared array would be correct today and would silently
+        /// stop being correct the moment either side of that stopped holding.
+        /// </remarks>
+        private readonly byte[] _reliablePayload = new byte[ProtocolConstants.MTU_SAFE];
+
+        /// <summary>Health this client last decoded, per actor, for spotting a drop.</summary>
+        /// <remarks>
+        /// <b>A drop, not a value.</b> The verb is "damage happened", and the only evidence a
+        /// decoded stream carries for it is a health byte that went DOWN between two snapshots
+        /// of the same entity. A threshold on the absolute value would report every actor that
+        /// spawned on less than full health as damaged, and would miss a 100 -> 99 graze
+        /// entirely.
+        /// </remarks>
+        private readonly Dictionary<ushort, byte> _actorHealth = new Dictionary<ushort, byte>();
+
+        private readonly Dictionary<ushort, byte> _vehicleHealth = new Dictionary<ushort, byte>();
+
+        /// <summary>Where the vehicle was when this client sat down in it, in metres.</summary>
+        private float _seatedOriginX, _seatedOriginZ;
+        private bool _hasSeatedOrigin;
+
         /// <summary>
         /// Where on the circle this client starts, in radians, drawn once from its own seed.
         /// </summary>
@@ -90,12 +127,19 @@ namespace Ironfront.Net.LoadHarness
             own.RandomSeed = unchecked(simulator.RandomSeed + index * 7919);
             _phaseOffset = new Random(own.RandomSeed).NextDouble() * Math.PI * 2.0;
 
+            _drill = behavior == HarnessBehavior.Combat ? new CombatDrill(index) : null;
+
             _transport = new UdpTransportClient(own);
             _transport.OnMessage += OnMessage;
             _transport.OnConnected += OnConnected;
             _transport.OnDisconnected += OnDisconnected;
 
             _router.OnSnapshotApplied += OnSnapshotApplied;
+            _router.OnSpawnActor += OnSpawnActor;
+            _router.OnVehicleSpawn += OnVehicleSpawn;
+            _router.OnSeatChange += OnSeatChange;
+            _router.OnDeath += OnDeath;
+            _router.OnHitConfirm += OnHitConfirm;
         }
 
         /// <summary>Zero-based index within the run, and the client's identity in the report.</summary>
@@ -203,7 +247,9 @@ namespace Ironfront.Net.LoadHarness
             if (nowMs < _nextInputAtMs) return;
 
             _nextInputAtMs = nowMs + _inputIntervalMs;
-            PushInput(nowMs);
+
+            if (_drill == null) PushInput(nowMs);
+            else PushDrill(nowMs);
         }
 
         /// <summary>
@@ -228,6 +274,21 @@ namespace Ironfront.Net.LoadHarness
                 pitchDegrees: 0f,
                 InputButtons.None);
 
+            SendInputFrame(in frame);
+        }
+
+        /// <summary>
+        /// Puts one input frame on the wire, with the redundancy the Unity client sends.
+        /// </summary>
+        /// <remarks>
+        /// Extracted from <see cref="PushInput"/> when the Combat behaviour arrived, so the
+        /// circle walk and the drill frame their input through ONE writer. Two writers is how
+        /// one of them ends up with a different <see cref="FramesPerMessage"/>, a different
+        /// channel, or a different <c>reliable</c> flag, and the run that finds out is the one
+        /// whose numbers are being compared against the other's.
+        /// </remarks>
+        private void SendInputFrame(in InputFrame frame)
+        {
             _inputTick++;
             if (_pending.Count == 0) _oldestPendingTick = _inputTick;
             _pending.Add(frame);
@@ -255,6 +316,431 @@ namespace Ironfront.Net.LoadHarness
                 new ReadOnlySpan<byte>(_payload, 0, total),
                 reliable: false);
         }
+
+        /// <summary>
+        /// Runs one tick of the Combat drill and puts whatever it asks for on the wire.
+        /// </summary>
+        /// <remarks>
+        /// <b>The world is assembled here and the decision is made there.</b> Everything below
+        /// is a read of the shipped decoders' current state — never a payload — and the drill
+        /// itself has no route to a byte, which is what keeps
+        /// <c>tools/check-harness-no-decoder.ps1</c> honest across both files rather than only
+        /// across the one that happens to hold a socket.
+        /// </remarks>
+        private void PushDrill(double nowMs)
+        {
+            if (_drill == null) return;
+
+            DrillWorld world = BuildWorld();
+            DrillCommand command = _drill.Decide(in world, nowMs);
+
+            if (command.SendActorInput)
+            {
+                var frame = InputFrame.FromFloats(
+                    command.MoveX, command.MoveZ,
+                    command.YawDegrees, command.PitchDegrees,
+                    command.Buttons);
+
+                SendInputFrame(in frame);
+            }
+
+            if (command.SendVehicleInput) SendVehicleInput(in command);
+            if (command.Seat != SeatIntent.None) SendSeatRequest(in command);
+            if (command.SendRespawn) SendSpawnRequest();
+        }
+
+        /// <summary>
+        /// The drill's view of the world, in metres, from the shipped decoders.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Nearest, computed here, handed over as two bodies.</b> The drill needs one target
+        /// and one vehicle; giving it the arrays instead would put a search inside a class whose
+        /// whole value is that every rule in it can be exercised by <c>dotnet test</c> with three
+        /// literals.
+        /// </para>
+        /// <para>
+        /// <b><c>Quantize.UnpackPos</c>, not a scale factor written here.</b> It is the shipped
+        /// inverse of the packer the server used, so the metres this produces are the metres the
+        /// server sent to within the 6.25 cm the wire carries. A local <c>/ 16f</c> would be a
+        /// second transcription of <c>POS_RANGE</c> free to drift from the first.
+        /// </para>
+        /// </remarks>
+        private DrillWorld BuildWorld()
+        {
+            WorldSnapshot actors = _router.Decoder.Current;
+
+            var me = default(DrillBody);
+            bool alive = false;
+            float myX = 0f, myZ = 0f;
+            bool haveMe = false;
+
+            for (int i = 0; i < actors.ActorCount; i++)
+            {
+                ref ActorSnapshotEntry entry = ref actors.Actors[i];
+                if (entry.ActorId != LocalActorId || LocalActorId == 0) continue;
+
+                myX = Quantize.UnpackPos(entry.PosX);
+                myZ = Quantize.UnpackPos(entry.PosZ);
+                me = new DrillBody(
+                    entry.ActorId, myX, Quantize.UnpackPos(entry.PosY), myZ);
+                alive = (entry.StateFlags & ActorStateFlags.IsAlive) != 0;
+                haveMe = true;
+                break;
+            }
+
+            if (!haveMe) return new DrillWorld(default, default, default, alive: false);
+
+            var nearestActor = default(DrillBody);
+            float bestActor = float.MaxValue;
+
+            for (int i = 0; i < actors.ActorCount; i++)
+            {
+                ref ActorSnapshotEntry entry = ref actors.Actors[i];
+                if (entry.ActorId == LocalActorId) continue;
+
+                // A corpse is not a target. Shooting one is not damage — ServerFireResolver
+                // rejects it — and it would hold this client's aim on a body that will never
+                // fall while a live one stands behind it.
+                if ((entry.StateFlags & ActorStateFlags.IsAlive) == 0) continue;
+
+                float x = Quantize.UnpackPos(entry.PosX);
+                float z = Quantize.UnpackPos(entry.PosZ);
+                float squared = (x - myX) * (x - myX) + (z - myZ) * (z - myZ);
+                if (squared >= bestActor) continue;
+
+                bestActor = squared;
+                nearestActor = new DrillBody(
+                    entry.ActorId, x, Quantize.UnpackPos(entry.PosY), z);
+            }
+
+            VehicleWorldSnapshot vehicles = _router.VehicleDecoder.Current;
+            var nearestVehicle = default(DrillBody);
+            float bestVehicle = float.MaxValue;
+
+            for (int i = 0; i < vehicles.VehicleCount; i++)
+            {
+                ref VehicleSnapshotEntry entry = ref vehicles.Vehicles[i];
+
+                // A wreck has no seat to ask for. The arbiter answers RejectedVehicleDead, so
+                // approaching one costs a walk and a round trip to be told what the flag
+                // already said.
+                if ((entry.Flags & VehicleStateFlags.Dead) != 0) continue;
+
+                float x = Quantize.UnpackPos(entry.PosX);
+                float z = Quantize.UnpackPos(entry.PosZ);
+                float squared = (x - myX) * (x - myX) + (z - myZ) * (z - myZ);
+                if (squared >= bestVehicle) continue;
+
+                bestVehicle = squared;
+
+                // Seat count is NOT in the snapshot — it rides S_VEHICLE_SPAWN — so it is
+                // carried forward from the announcement rather than invented. Zero means "not
+                // announced to this client", and CombatDrill treats that as "ask for seat 0",
+                // which is the seat every vehicle has.
+                _seatCounts.TryGetValue(entry.VehicleId, out byte seats);
+                nearestVehicle = new DrillBody(
+                    entry.VehicleId, x, Quantize.UnpackPos(entry.PosY), z, seats);
+            }
+
+            return new DrillWorld(me, nearestActor, nearestVehicle, alive);
+        }
+
+        /// <summary>Frames <c>C_VEHICLE_INPUT</c> on the unreliable-sequenced channel.</summary>
+        /// <remarks>
+        /// Channel 3 and unreliable, matching <c>ClientVehicleStage.SendVehicleInput</c>: unlike
+        /// <c>C_INPUT</c> it carries no frame redundancy, because the next frame's axes supersede
+        /// this one's entirely (protocol-spec § 4.10).
+        /// </remarks>
+        private void SendVehicleInput(in DrillCommand command)
+        {
+            _inputTick++;
+
+            var message = new VehicleInputMessage(
+                _inputTick, command.VehicleId,
+                command.Throttle, command.Steer, pitchAxis: 0, auxAxis: 0,
+                turretYaw: 0, turretPitch: 0, buttons: 0);
+
+            int bodyLength = message.Write(_vehicleBody);
+            if (bodyLength < 0) return;
+
+            var writer = new PayloadFrameWriter(_payload, ChannelId.InputSequenced);
+            if (!writer.WriteMessage(
+                    ClientMessageType.VehicleInput,
+                    new ReadOnlySpan<byte>(_vehicleBody, 0, bodyLength)))
+                return;
+            if (!writer.TryFinish(out int total)) return;
+
+            _transport.Send(
+                (byte)ChannelId.InputSequenced,
+                new ReadOnlySpan<byte>(_payload, 0, total),
+                reliable: false);
+
+            VehicleInputsSent++;
+        }
+
+        /// <summary>Frames <c>C_SEAT_REQUEST</c> on the reliable-ordered channel.</summary>
+        /// <remarks>
+        /// Reliable on channel 2, for <c>ClientSeatRequester.Send</c>'s reason: a dropped seat
+        /// request is a client standing at a vehicle whose door never opens, and unlike vehicle
+        /// input there is no next frame carrying the same intent — the request is an edge.
+        /// </remarks>
+        private void SendSeatRequest(in DrillCommand command)
+        {
+            var message = new SeatRequestMessage(
+                command.SeatVehicleId, command.SeatIndex,
+                command.Seat == SeatIntent.Enter ? SeatAction.Enter : SeatAction.Leave);
+
+            int bodyLength = message.Write(_seatBody);
+            if (bodyLength < 0) return;
+
+            var writer = new PayloadFrameWriter(_reliablePayload, ChannelId.ReliableOrdered);
+            if (!writer.WriteMessage(
+                    ClientMessageType.SeatRequest,
+                    new ReadOnlySpan<byte>(_seatBody, 0, bodyLength)))
+                return;
+            if (!writer.TryFinish(out int total)) return;
+
+            _transport.Send(
+                (byte)ChannelId.ReliableOrdered,
+                new ReadOnlySpan<byte>(_reliablePayload, 0, total),
+                reliable: true);
+        }
+
+        /// <summary>Frames <c>C_SPAWN_REQUEST</c>. The body carries no fields.</summary>
+        private void SendSpawnRequest()
+        {
+            var writer = new PayloadFrameWriter(_reliablePayload, ChannelId.ReliableOrdered);
+            if (!writer.WriteMessage(ClientMessageType.SpawnRequest, ReadOnlySpan<byte>.Empty))
+                return;
+            if (!writer.TryFinish(out int total)) return;
+
+            _transport.Send(
+                (byte)ChannelId.ReliableOrdered,
+                new ReadOnlySpan<byte>(_reliablePayload, 0, total),
+                reliable: true);
+        }
+
+        // ------------------------------------------------------------- verb observation
+
+        /// <summary>
+        /// The four verbs this client has seen, with the tick each was first seen at.
+        /// </summary>
+        /// <remarks>
+        /// Populated whatever the behaviour is. An <c>Idle</c> or <c>Move</c> client that
+        /// happens to watch somebody else's vehicle burn has still WITNESSED the verb, and
+        /// suppressing that would make the log a record of what this client did rather than of
+        /// what the server was observed doing — which is what check 11 asks about.
+        /// </remarks>
+        public VerbLog Verbs => _verbs;
+
+        /// <summary>The actor the server named as this client's own, or 0 before S_SPAWN_ACTOR.</summary>
+        public ushort LocalActorId { get; private set; }
+
+        /// <summary><c>C_VEHICLE_INPUT</c> messages framed. Zero after a Combat run is the tell.</summary>
+        public long VehicleInputsSent { get; private set; }
+
+        /// <summary>The drill's state machine, or null unless the behaviour is Combat.</summary>
+        public CombatDrill? Drill => _drill;
+
+        /// <summary>Seat counts as announced by <c>S_VEHICLE_SPAWN</c>, per vehicle.</summary>
+        private readonly Dictionary<ushort, byte> _seatCounts = new Dictionary<ushort, byte>();
+
+        private void OnSpawnActor(SpawnActorMessage message)
+        {
+            if (message.IsLocalPlayer)
+            {
+                LocalActorId = message.ActorId;
+                _drill?.OnLocalSpawn();
+            }
+
+            // Seeded from the announcement rather than left to the first snapshot: the health
+            // ladder below reads a DROP, and an actor whose first observed value is its
+            // post-damage health would have its first hit invisible.
+            _actorHealth[message.ActorId] = message.Health;
+        }
+
+        private void OnVehicleSpawn(VehicleSpawnMessage message)
+        {
+            _seatCounts[message.VehicleId] = message.SeatCount;
+        }
+
+        private void OnSeatChange(SeatChangeMessage message)
+        {
+            _drill?.OnSeatChange(
+                message.ActorId, message.VehicleId, message.SeatIndex,
+                message.Result, LocalActorId);
+
+            if (message.ActorId != LocalActorId || LocalActorId == 0) return;
+
+            if (message.Result == SeatChangeResult.Entered)
+            {
+                _hasSeatedOrigin = false;
+                return;
+            }
+
+            if (message.Result == SeatChangeResult.Left) _hasSeatedOrigin = false;
+        }
+
+        private void OnDeath(DeathMessage message)
+        {
+            _verbs.Record(
+                HarnessVerb.Death, Index, _router.Decoder.Current.ServerTick, _nowMs,
+                $"S_DEATH victim={message.VictimActorId} killer={message.KillerActorId} "
+                + $"cause={message.Cause}");
+
+            if (message.VictimActorId == LocalActorId && LocalActorId != 0)
+                _drill?.OnLocalDeath(_nowMs);
+        }
+
+        private void OnHitConfirm(HitConfirmMessage message)
+        {
+            _verbs.Record(
+                HarnessVerb.Damage, Index, _router.Decoder.Current.ServerTick, _nowMs,
+                $"S_HIT_CONFIRM target={message.TargetActorId} hitbox={message.HitboxType}");
+        }
+
+        /// <summary>
+        /// Reads the four verbs off the decoded world, once per applied snapshot.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Three of the four are read from state rather than from an event, and that is not a
+        /// second-guessing of the events.</b> <c>S_HIT_CONFIRM</c> reaches only the SHOOTER and
+        /// <c>S_DEATH</c> only carries a victim, so a run whose damage was dealt by a bot, by a
+        /// fall, or by <c>Vehicle.AutoDamage</c> would show neither. There is no message for a
+        /// burn at all — <c>VehicleStateFlags.Burning</c> is a snapshot field, so the snapshot is
+        /// the only place it can be seen.
+        /// </para>
+        /// <para>
+        /// <b>Vehicle health of zero is recorded as a burn as well as the flag.</b>
+        /// <c>ServerVehicleDamageSink</c> starts the burn clock at zero health and the flag
+        /// follows on the next tick, so a client that missed the intermediate snapshot — which
+        /// interest management makes ordinary — would see a wreck and never a fire. The evidence
+        /// string says which of the two was observed, because they are not the same claim.
+        /// </para>
+        /// </remarks>
+        private void ObserveVerbs()
+        {
+            WorldSnapshot actors = _router.Decoder.Current;
+            uint tick = actors.ServerTick;
+
+            for (int i = 0; i < actors.ActorCount; i++)
+            {
+                ref ActorSnapshotEntry entry = ref actors.Actors[i];
+
+                if (_actorHealth.TryGetValue(entry.ActorId, out byte was) && entry.Health < was)
+                {
+                    _verbs.Record(
+                        HarnessVerb.Damage, Index, tick, _nowMs,
+                        $"actor {entry.ActorId} health {was} -> {entry.Health}");
+                }
+
+                _actorHealth[entry.ActorId] = entry.Health;
+            }
+
+            VehicleWorldSnapshot vehicles = _router.VehicleDecoder.Current;
+
+            for (int i = 0; i < vehicles.VehicleCount; i++)
+            {
+                ref VehicleSnapshotEntry entry = ref vehicles.Vehicles[i];
+
+                if (_vehicleHealth.TryGetValue(entry.VehicleId, out byte was) && entry.Health < was)
+                {
+                    _verbs.Record(
+                        HarnessVerb.Damage, Index, tick, _nowMs,
+                        $"vehicle {entry.VehicleId} health {was} -> {entry.Health}");
+                }
+
+                _vehicleHealth[entry.VehicleId] = entry.Health;
+
+                if ((entry.Flags & VehicleStateFlags.Burning) != 0)
+                {
+                    _verbs.Record(
+                        HarnessVerb.Burn, Index, tick, _nowMs,
+                        $"vehicle {entry.VehicleId} flags carry Burning, health {entry.Health}");
+                }
+                else if (entry.Health == 0 && (entry.Flags & VehicleStateFlags.Dead) == 0)
+                {
+                    _verbs.Record(
+                        HarnessVerb.Burn, Index, tick, _nowMs,
+                        $"vehicle {entry.VehicleId} health reached 0 and it is not yet Dead");
+                }
+
+                ObserveDrive(in entry, tick);
+            }
+        }
+
+        /// <summary>
+        /// Records <see cref="HarnessVerb.Drive"/> when the seat this client holds has moved.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Moved, not "sat in".</b> A seat grant proves the arbiter answered; it does not
+        /// prove a hull went anywhere, and check 11's first verb is <i>drive</i>. So the origin
+        /// is latched on the first snapshot after the grant and the verb fires when the decoded
+        /// position has travelled further than the quantizer's own step could account for.
+        /// </para>
+        /// <para>
+        /// <b>Seat 0 and at least one vehicle input, because a PASSENGER is not a driver.</b>
+        /// Only <c>VehicleInputAuthority.DriverSeatIndex</c> receives a driver input sink, so a
+        /// hull that moved while this client sat in seat 2 moved for somebody else's reason.
+        /// Measured 2026-08-27 in <c>r5-combat-04</c>: a client seated in a helicopter watched it
+        /// climb 139 m and lose 71 health, none of it its own doing.
+        /// </para>
+        /// <para>
+        /// <b>And even seat 0 with input flowing is CORRELATION, not causation, on this build.</b>
+        /// Ledger <b>X-46</b>: a player-slot body carries no <c>FpsActorController</c>, so
+        /// <c>NetDriverInputSink.Attach</c> returns null and the vehicle never receives what this
+        /// client sends. That fact lives in the SERVER's log and no client-side observer can see
+        /// it — which is why the evidence string carries the seat and the input count rather than
+        /// asserting a drive, and why the phase report grades this verb against the server log
+        /// rather than against this line alone.
+        /// </para>
+        /// </remarks>
+        private void ObserveDrive(in VehicleSnapshotEntry entry, uint tick)
+        {
+            if (_drill == null || _drill.SeatedVehicleId != entry.VehicleId) return;
+            if (_drill.SeatedSeatIndex != 0 || VehicleInputsSent == 0) return;
+
+            float x = Quantize.UnpackPos(entry.PosX);
+            float z = Quantize.UnpackPos(entry.PosZ);
+
+            if (!_hasSeatedOrigin)
+            {
+                _seatedOriginX = x;
+                _seatedOriginZ = z;
+                _hasSeatedOrigin = true;
+                return;
+            }
+
+            float dx = x - _seatedOriginX;
+            float dz = z - _seatedOriginZ;
+            float travelled = (float)Math.Sqrt(dx * dx + dz * dz);
+            if (travelled < DriveDistanceMetres) return;
+
+            // The seat index and the input count are IN the evidence, because "the vehicle
+            // moved" and "this client drove it" are different claims and only the first is
+            // observable from here. Ledger X-46: a driver input sink is attached only for seat 0,
+            // and only when the body carries a controller it can reach -- so a hull that moved
+            // while this client sat in seat 2, or while its inputs reached nothing, moved for
+            // some other reason. A line that omitted these would let that read as a drive.
+            _verbs.Record(
+                HarnessVerb.Drive, Index, tick, _nowMs,
+                $"vehicle {entry.VehicleId} moved {travelled:0.0} m while this client held seat "
+                + $"{_drill.SeatedSeatIndex} of it, having sent {VehicleInputsSent} vehicle input(s)");
+        }
+
+        /// <summary>
+        /// How far a driven vehicle must travel before the drive is recorded, in metres.
+        /// </summary>
+        /// <remarks>
+        /// Two metres is thirty-two quantizer steps at the wire's 6.25 cm, so no accumulation of
+        /// rounding reaches it, and it is well under one second at any vehicle speed in the game
+        /// — a threshold that discriminates a hull that moved from one that was jostled, without
+        /// requiring a journey.
+        /// </remarks>
+        public const float DriveDistanceMetres = 2f;
 
         /// <summary>
         /// Routes the batch through the shipped client path, then attributes its bytes.
@@ -304,6 +790,7 @@ namespace Ironfront.Net.LoadHarness
             _lastSnapshotAtMs = _nowMs;
 
             _capture.Capture(_router, _nowMs);
+            ObserveVerbs();
 
             if (!_baselineAck.TryBuildAck(_router.Decoder.AckTick, out ReadOnlySpan<byte> ack))
                 return;
@@ -325,6 +812,11 @@ namespace Ironfront.Net.LoadHarness
             _disposed = true;
 
             _router.OnSnapshotApplied -= OnSnapshotApplied;
+            _router.OnSpawnActor -= OnSpawnActor;
+            _router.OnVehicleSpawn -= OnVehicleSpawn;
+            _router.OnSeatChange -= OnSeatChange;
+            _router.OnDeath -= OnDeath;
+            _router.OnHitConfirm -= OnHitConfirm;
             _transport.OnMessage -= OnMessage;
             _transport.OnConnected -= OnConnected;
             _transport.OnDisconnected -= OnDisconnected;
