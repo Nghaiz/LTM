@@ -69,13 +69,10 @@ namespace Ironfront.Net.Unity
             if (sprint) b |= InputButtons.Sprint;
             if (use)    b |= InputButtons.Use;
 
-            switch (weaponSlot)
-            {
-                case 0: b |= InputButtons.SwitchWeapon0; break;
-                case 1: b |= InputButtons.SwitchWeapon1; break;
-                case 2: b |= InputButtons.SwitchWeapon2; break;
-                case 3: b |= InputButtons.SwitchWeapon3; break;
-            }
+            // The mapping is InputFrame.SlotBit's, not a copy of it. MoveInput.ToButtons is the
+            // other producer of these four bits and lives in an assembly this one cannot see;
+            // two transcriptions of bits 11-14 is exactly how X-31 happened.
+            b |= InputFrame.SlotBit(weaponSlot);
 
             return (ushort)b;
         }

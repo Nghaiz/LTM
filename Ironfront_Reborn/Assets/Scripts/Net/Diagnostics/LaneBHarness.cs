@@ -613,10 +613,17 @@ namespace Ironfront.Net.Unity.Diagnostics
                     moveZ = ScriptedAim.ApproachMoveZ(aim.Distance, step.holdDistanceMeters);
             }
 
+            // use and switchWeaponSlot ride here because MoveInput is the ONLY thing this
+            // client's tick loop hands to the sender: clock.InputSource is replaced wholesale
+            // above, so NetPredictionClock.DefaultInput -- and with it the packer behind
+            // ScriptedInputSource.Buttons -- never runs on a lane-B client. That is row X-31:
+            // grenade-driver.json carried "switchWeaponSlot": 2 and the server received
+            // buttons=0x0001, Fire alone, on 60 of 60 frames (artifacts/lane-b/x31-diag-04).
             return new MoveInput(
                 step.moveX, moveZ, yaw,
                 step.jump, step.sprint, step.crouch,
-                step.fire, step.aim, step.reload);
+                step.fire, step.aim, step.reload,
+                step.use, step.switchWeaponSlot);
         }
 
         private void DrainCheckpoints()

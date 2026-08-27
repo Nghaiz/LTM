@@ -110,7 +110,10 @@ namespace Ironfront.Net.Unity
                 Input.GetButton("Crouch"),
                 (combat & InputButtons.Fire) != 0,
                 (combat & InputButtons.Aim) != 0,
-                (combat & InputButtons.Reload) != 0);
+                (combat & InputButtons.Reload) != 0,
+                (combat & InputButtons.Use) != 0,
+                InputFrame.SlotOf(combat));
+
 
         /// <summary>Quantizes movement intent into the frame that goes on the wire.</summary>
         /// <remarks>

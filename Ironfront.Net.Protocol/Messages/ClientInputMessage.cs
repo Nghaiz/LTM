@@ -67,16 +67,55 @@ namespace Ironfront.Net.Protocol
         /// with it, and taking the highest would make a stuck low bit invisible.
         /// </para>
         /// </remarks>
-        public int WeaponSlot
-        {
-            get
-            {
-                if (IsPressed(InputButtons.SwitchWeapon0)) return 0;
-                if (IsPressed(InputButtons.SwitchWeapon1)) return 1;
-                if (IsPressed(InputButtons.SwitchWeapon2)) return 2;
-                if (IsPressed(InputButtons.SwitchWeapon3)) return 3;
+        public int WeaponSlot => SlotOf(Buttons);
 
-                return -1;
+        /// <summary>
+        /// The weapon slot a button mask selects, or <c>-1</c> when it selects none.
+        /// </summary>
+        /// <remarks>
+        /// The instance property above is the usual way in; this static form exists so a
+        /// producer holding a bare mask can ask the same question without framing a throwaway
+        /// frame first.
+        /// </remarks>
+        public static int SlotOf(InputButtons buttons)
+        {
+            if ((buttons & InputButtons.SwitchWeapon0) != 0) return 0;
+            if ((buttons & InputButtons.SwitchWeapon1) != 0) return 1;
+            if ((buttons & InputButtons.SwitchWeapon2) != 0) return 2;
+            if ((buttons & InputButtons.SwitchWeapon3) != 0) return 3;
+
+            return -1;
+        }
+
+        /// <summary>
+        /// The single bit a slot selects, or <see cref="InputButtons.None"/> when the slot is out
+        /// of range. The inverse of <see cref="SlotOf"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The one encoder for bits 11-14, and it lives in Protocol because there are two
+        /// producers in two assemblies that cannot see each other.</b> <c>InputButtonPacker</c>
+        /// is in <c>Ironfront.Net.Unity</c> and <c>MoveInput.ToButtons</c> is in
+        /// <c>Ironfront.Net.Replication</c>; neither may reference the other, so before this
+        /// existed the only way for both to speak bits 11-14 was to transcribe them twice. Rows
+        /// X-3 and X-31 are both what happens when one transcription learns a bit and the other
+        /// does not — X-31 because <c>MoveInput.ToButtons</c> had never heard of a slot at all.
+        /// </para>
+        /// <para>
+        /// Out of range is <see cref="InputButtons.None"/> rather than an exception: this is
+        /// called once per input frame on a hot path, and a scripted programme with a typo'd
+        /// slot should produce a run that visibly does not switch, not one that dies at frame 1.
+        /// </para>
+        /// </remarks>
+        public static InputButtons SlotBit(int slot)
+        {
+            switch (slot)
+            {
+                case 0:  return InputButtons.SwitchWeapon0;
+                case 1:  return InputButtons.SwitchWeapon1;
+                case 2:  return InputButtons.SwitchWeapon2;
+                case 3:  return InputButtons.SwitchWeapon3;
+                default: return InputButtons.None;
             }
         }
     }
