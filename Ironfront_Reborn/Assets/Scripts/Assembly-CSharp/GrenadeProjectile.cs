@@ -117,7 +117,7 @@ public partial class GrenadeProjectile : Projectile
 		// draw immediately and its confirmation is swallowed, which is V10-D13's existing
 		// prediction and the reason ExplosionSuppressor exists.
 		bool drawsOwnBlast = !NetContext.IsClient
-			|| Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(source);
+			|| Ironfront.Net.Unity.NetPresenterGate.IsLocalActor(source);
 
 		if (drawsOwnBlast)
 		{

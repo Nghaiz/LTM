@@ -1,4 +1,4 @@
-namespace Ironfront.Net.Unity.Diagnostics
+namespace Ironfront.Net.Unity
 {
     /// <summary>
     /// The original first-person controller, as the movement shadow-comparison reads it: is it

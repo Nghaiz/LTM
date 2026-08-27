@@ -52,27 +52,27 @@ namespace Ironfront.Net.Unity.Bindings
             // singleton per call and reports absent when there is none, so registering on a
             // headless process costs one allocation and changes no behaviour. A role test here
             // would be a second copy of a decision NetContext already owns.
-            Client.NetClientBindings.LocalPlayer = new LocalPlayerRigBinding();
-            Client.NetClientBindings.Hud = new HitmarkerHudBinding();
+            NetClientBindings.LocalPlayer = new LocalPlayerRigBinding();
+            NetClientBindings.Hud = new HitmarkerHudBinding();
 
             // C4b. The vehicle, projectile, decal and scoreboard seams. The two resolvers mirror
             // the server's VehicleSourceResolver for the same reason it exists: many objects,
             // arriving over the wire, and an adapter component on every prefab would be a change
             // to authored assets that this refactor is forbidden from making.
-            Client.NetClientBindings.VehicleBodyResolver = ResolveVehicleBody;
-            Client.NetClientBindings.ProjectileBodyResolver = ResolveProjectileBody;
-            Client.NetClientBindings.VehiclePrefabs = new SceneVehiclePrefabDirectory();
-            Client.NetClientBindings.Decals = new DecalSinkBinding();
-            Client.NetClientBindings.Objectives = new ScoreUiObjectiveHud();
-            Client.NetClientBindings.ProjectileCatalogReader = ProjectileCatalogBinding.Read;
+            NetClientBindings.VehicleBodyResolver = ResolveVehicleBody;
+            NetClientBindings.ProjectileBodyResolver = ResolveProjectileBody;
+            NetClientBindings.VehiclePrefabs = new SceneVehiclePrefabDirectory();
+            NetClientBindings.Decals = new DecalSinkBinding();
+            NetClientBindings.Objectives = new ScoreUiObjectiveHud();
+            NetClientBindings.ProjectileCatalogReader = ProjectileCatalogBinding.Read;
 
             // C4d. The lane-B recorder observes the scoreboard HUD, the offline scoreboard and
             // the scene's capture points, and may name none of them now that Net/Diagnostics is
             // an assembly. Registered unconditionally: the probe resolves its singletons per call
             // and reports absent when there are none, which is the "absent" the recorder's JSON
             // already carried.
-            Diagnostics.NetDiagnosticsBindings.Probe = new LaneBDiagnosticsProbe();
-            Diagnostics.NetDiagnosticsBindings.LegacyMovementResolver = ResolveLegacyMovement;
+            NetDiagnosticsBindings.Probe = new LaneBDiagnosticsProbe();
+            NetDiagnosticsBindings.LegacyMovementResolver = ResolveLegacyMovement;
         }
 
         /// <summary>
@@ -81,7 +81,7 @@ namespace Ironfront.Net.Unity.Bindings
         /// predefined assembly no asmdef may reference. Null on a body that carries none, which
         /// the shadow comparison reads as "cannot score this run". Phase C4d.
         /// </summary>
-        private static Diagnostics.ILegacyMovementProbe ResolveLegacyMovement(GameObject gameObject)
+        private static ILegacyMovementProbe ResolveLegacyMovement(GameObject gameObject)
         {
             if (gameObject == null) return null;
 
@@ -96,7 +96,7 @@ namespace Ironfront.Net.Unity.Bindings
         /// for a spawned object carrying no vehicle, which the registry reads as an unrenderable
         /// spawn and counts. Phase C4b.
         /// </summary>
-        private static Client.IGameplayVehicleBody ResolveVehicleBody(GameObject gameObject)
+        private static IGameplayVehicleBody ResolveVehicleBody(GameObject gameObject)
         {
             if (gameObject == null) return null;
 
@@ -109,7 +109,7 @@ namespace Ironfront.Net.Unity.Bindings
         /// for an instance carrying no projectile — a purely decorative prefab — which the
         /// presenter reads as "spawned but not tracked". Phase C4b.
         /// </summary>
-        private static Client.IProjectileBody ResolveProjectileBody(GameObject gameObject)
+        private static IProjectileBody ResolveProjectileBody(GameObject gameObject)
         {
             if (gameObject == null) return null;
 

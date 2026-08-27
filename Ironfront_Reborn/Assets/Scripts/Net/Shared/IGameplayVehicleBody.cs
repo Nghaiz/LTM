@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Ironfront.Net.Unity.Client
+namespace Ironfront.Net.Unity
 {
     /// <summary>
     /// A replicated vehicle's scene object, as the client netcode drives it: a body to take

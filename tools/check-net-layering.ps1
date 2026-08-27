@@ -98,7 +98,27 @@ param(
     # saw it, RULE 6/7 could not have flagged it, and it surfaced only when the Unity compile went
     # red on the asmdef. The gate was answering the right question over the wrong population --
     # green-that-proves-nothing.md, "measures the wrong population".
-    [string]$FirstPassPath = "Ironfront_Reborn/Assets/Plugins/Assembly-CSharp-firstpass"
+    [string]$FirstPassPath = "Ironfront_Reborn/Assets/Plugins/Assembly-CSharp-firstpass",
+
+    # THE THIRD PREDEFINED ASSEMBLY, and it was a blind spot until phase C5b -- exactly one
+    # assembly further along than the blind spot C4d found, and found the same way.
+    #
+    # Assets/Editor/ compiles into Assembly-CSharp-Editor, which is predefined and therefore
+    # auto-references every `autoReferenced: true` asmdef and can be referenced back by none.
+    # C4d widened this scan from one predefined population to two and stopped there, so a third
+    # went on being invisible: Assets/Editor/NetVerificationHarness.cs held
+    # `using Ironfront.Net.Unity.Client;` and five NetClientBootstrap reads, and NOTHING in the
+    # C5b enumeration saw them. The Unity compile did, the moment Client was sealed.
+    #
+    # The manifest settles that all three are ONE population, and it is worth quoting because it
+    # is the reason this parameter exists rather than a fourth special case:
+    #
+    #     Assembly-CSharp           -> [EditorHarness, Input, Server, Shared]
+    #     Assembly-CSharp-Editor    -> [EditorHarness, Input, Server, Shared]
+    #     Assembly-CSharp-firstpass -> [EditorHarness, Input, Server, Shared]
+    #
+    # Identical. "Predefined" is the property that matters, and there are three of them.
+    [string]$EditorPath = "Ironfront_Reborn/Assets/Editor"
 )
 
 $ErrorActionPreference = "Stop"
@@ -250,9 +270,10 @@ if (-not (Test-Path $root)) {
 
 # A file is "outside any asmdef" when no ancestor directory up to $root carries one. Those are
 # the files Unity compiles into the predefined Assembly-CSharp.
-function Test-OutsideAsmdef([string]$filePath) {
+function Test-OutsideAsmdef([string]$filePath, [string]$stopAt) {
+    if (-not $stopAt) { $stopAt = $root }
     $dir = Split-Path -Parent $filePath
-    while ($dir -and $dir.Length -ge $root.Length) {
+    while ($dir -and $dir.Length -ge $stopAt.Length) {
         if (Get-ChildItem -Path $dir -Filter *.asmdef -File -ErrorAction SilentlyContinue) {
             return $false
         }
@@ -273,6 +294,17 @@ $firstPassRoot = Join-Path $repoRoot $FirstPassPath
 $firstPassSources = @()
 if (Test-Path $firstPassRoot) {
     $firstPassSources = @(Get-ChildItem -Path $firstPassRoot -Filter *.cs -Recurse -File)
+}
+
+# Assets/Editor, minus anything an asmdef has claimed. Phase C5b moved NetVerificationHarness.cs
+# into Ironfront.Net.Unity.EditorHarness precisely so it could name the sealed client explicitly,
+# and that file must therefore drop OUT of this population -- which is what the asmdef walk does.
+$editorRoot    = Join-Path $repoRoot $EditorPath
+$editorSources = @()
+if (Test-Path $editorRoot) {
+    $editorSources = @(
+        Get-ChildItem -Path $editorRoot -Filter *.cs -Recurse -File |
+            Where-Object { Test-OutsideAsmdef $_.FullName $editorRoot })
 }
 
 $allSources = Get-ChildItem -Path $root -Filter *.cs -Recurse -File
@@ -405,6 +437,13 @@ function Get-LegacyTypeSet([string[]]$excludedRoots) {
         }
     }
 
+    # Assembly-CSharp-Editor, on the same footing and for the same reason (phase C5b).
+    foreach ($file in $editorSources) {
+        foreach ($line in (Get-CodeLines $file.FullName)) {
+            if ($line -match $declPattern) { [void]$set.Add($Matches[1]) }
+        }
+    }
+
     foreach ($file in $allSources) {
         if (-not (Test-OutsideAsmdef $file.FullName)) { continue }
 
@@ -423,6 +462,134 @@ function Get-LegacyTypeSet([string[]]$excludedRoots) {
     }
 
     return $set
+}
+
+# THE C5 CLAUSE — the other direction, and the one `autoReferenced: false` actually buys.
+#
+# RULES 5b/6b/7b watch a SEALED folder for legacy names: "this assembly reaches back". The
+# compiler enforces those on its own; the rules exist to name the violation before the red.
+#
+# This clause watches the OPPOSITE direction, and nothing else can. While a sealed assembly is
+# `autoReferenced: true`, Assembly-CSharp sees every public type in it and the compiler is
+# perfectly content -- 39 client types, 27 diagnostics types, 13 input types, all reachable from
+# 333 legacy files with no reference line anywhere to review. Flipping the flag is what closes
+# that, and this is what keeps it closed: flipping it BACK changes no name in any file, so
+# 5b/6b/7b stay green straight through the regression. Same shape as 5a/6a/7a, one level up.
+#
+# THE SEAM IS Ironfront.Net.Unity.Shared, DELIBERATELY. It stays `autoReferenced: true` and is
+# the one declared channel: every type Assembly-CSharp must name -- the interfaces the bindings
+# implement, the registration points they install into -- lives there. That is not a loophole
+# left open, it is the reference this gate exists to make reviewable, and it is the move
+# ICapturePointDirectory already made in the commit that added this file.
+#
+# WHY THE BINDINGS COULD NOT SIMPLY MOVE INSTEAD. The C5 plan predicted `NetBindings/` would die
+# with the flip, its files moving "to the side that owns their interface". The tree says
+# otherwise, structurally: a binding implements a sealed interface IN TERMS OF A LEGACY TYPE --
+# DecalSinkBinding over DecalManager, LaneBDiagnosticsProbe over ScoreUi. Moving one INTO the
+# sealed assembly would make that assembly name DecalManager, which is precisely what 5b/6b/7b
+# forbid. Both halves are pinned by the same wall; only the interface between them can move.
+#
+# TWO HALVES, BECAUSE ONE NAME CAN BE WRITTEN TWO WAYS:
+#
+#   (i)  QUALIFIED -- a predefined source naming `Ironfront.Net.Unity.<Asm>.` outright. This is
+#        how the legacy tree actually reaches Net/Client today: ScoreUi.cs:239 writes
+#        `Ironfront.Net.Unity.Client.NetClientPresenterGuard.WarnOnce(`, with no using line at
+#        all. A `using` grep keyed to the assembly name scores that file ZERO -- which is how the
+#        C5 plan came to carry 8 client consumers when there are 18.
+#
+#   (ii) UNQUALIFIED via a using -- caught by type NAME, the way RULE 5b measures.
+#
+# A NAME DECLARED ON BOTH SIDES IS NOT EVIDENCE, in half (ii). Assembly-CSharp-firstpass declares
+# a nested `Entry` in TimedObjectActivator and Net/Diagnostics declares LaneBExplosionLog.Entry;
+# a predefined file naming its OWN Entry is not a crossing. Rather than allow-list every such
+# collision by hand -- the upkeep RULES 6 and 7 pay in `not-a-reference` rows -- half (ii) skips
+# any name the predefined sources declare themselves. The residual blind spot is exact and worth
+# stating: a REAL crossing whose type name is also declared in Assembly-CSharp. Written
+# unqualified it is not a crossing at all (C# binds the local declaration first); written
+# qualified, half (i) catches it. That is why both halves ship, and why neither alone would do.
+#
+# HALF (i) IS SKIPPED WHERE AN ASSEMBLY'S NAMESPACE IS NOT ITS OWN. Net/Input declares
+# `namespace Ironfront.Net.Unity` -- the SHARED namespace -- so a `Ironfront.Net.Unity.Input.`
+# prefix scan would match nothing, and scanning the parent prefix would flag every legitimate
+# Shared reference in the tree. Half (ii) carries that assembly alone, which is the same
+# conclusion the C5 plan reached for measuring it.
+function Get-DeclaredTypeSet([string]$folderRoot) {
+    $set = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+    foreach ($file in (Get-ChildItem -Path $folderRoot -Filter *.cs -Recurse -File)) {
+        foreach ($line in (Get-CodeLines $file.FullName)) {
+            if ($line -match $declPattern) { [void]$set.Add($Matches[1]) }
+        }
+    }
+    return $set
+}
+
+# The predefined population, once: Assembly-CSharp-firstpass plus every Assets/Scripts file that
+# no asmdef claims. Both are predefined, so both are on the wrong side of every wall below.
+$predefinedSources = New-Object System.Collections.Generic.List[object]
+foreach ($file in $firstPassSources) { [void]$predefinedSources.Add($file) }
+foreach ($file in $editorSources)    { [void]$predefinedSources.Add($file) }
+foreach ($file in $allSources) {
+    if (Test-OutsideAsmdef $file.FullName) { [void]$predefinedSources.Add($file) }
+}
+
+# $Allowed is keyed by TYPE NAME, same contract as $ClientBaseline: a row that stops applying
+# FAILS rather than lingering, so the list shrinks instead of becoming a graveyard.
+function Get-SealedFromPredefinedViolations(
+    [string]$sealedRoot, [string]$assemblyName, [string]$qualifiedPrefix,
+    [hashtable]$Allowed, [string]$ruleId) {
+
+    $found      = @()
+    $sealedDecl = Get-DeclaredTypeSet $sealedRoot
+
+    # Names the predefined side declares itself -- ambiguous by construction, see the header.
+    $ownDecl = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+    foreach ($file in $predefinedSources) {
+        foreach ($line in (Get-CodeLines $file.FullName)) {
+            if ($line -match $declPattern) { [void]$ownDecl.Add($Matches[1]) }
+        }
+    }
+
+    $named = @{}
+    foreach ($file in $predefinedSources) {
+        $relative = ConvertTo-RepoRelative $file.FullName
+        foreach ($line in (Get-CodeLines $file.FullName)) {
+
+            # (i) qualified.
+            if ($qualifiedPrefix -and $line -match ([regex]::Escape($qualifiedPrefix))) {
+                if (-not $named.ContainsKey('(qualified)')) { $named['(qualified)'] = @{} }
+                $named['(qualified)'][$relative] = $true
+            }
+
+            # (ii) by name.
+            foreach ($token in ([regex]::Matches($line, '[A-Za-z_][A-Za-z0-9_]*') | ForEach-Object { $_.Value })) {
+                if (-not $sealedDecl.Contains($token)) { continue }
+                if ($ownDecl.Contains($token))         { continue }
+                if (-not $named.ContainsKey($token))   { $named[$token] = @{} }
+                $named[$token][$relative] = $true
+            }
+        }
+    }
+
+    foreach ($name in ($named.Keys | Sort-Object)) {
+        if ($Allowed.ContainsKey($name)) { continue }
+        $where = ($named[$name].Keys | Sort-Object) -join ', '
+        $found += "$ruleId (channel bypassed): a predefined-assembly source names " +
+                  "'$name' from $assemblyName.`n" +
+                  "    Named by: $where`n" +
+                  "    That assembly ships autoReferenced: false, so Assembly-CSharp has no " +
+                  "channel to it -- this does not compile, and if it does the flag was flipped " +
+                  "back. Route it through Ironfront.Net.Unity.Shared, which stays " +
+                  "autoReferenced: true precisely so there is ONE reviewable reference."
+    }
+
+    foreach ($name in ($Allowed.Keys | Sort-Object)) {
+        if ($named.ContainsKey($name)) { continue }
+        $found += "$ruleId (stale): no predefined-assembly source names '$name' any more.`n" +
+                  "    Reason it was listed: $($Allowed[$name])`n" +
+                  "    DELETE the row. Do NOT re-pin the list to what this run reported."
+    }
+
+    return $found
 }
 
 $legacyTypes = Get-LegacyTypeSet @($inputRoot)
@@ -553,6 +720,28 @@ if (Test-Path $clientRoot) {
                        "and the allow-list shrinks with it rather than becoming a graveyard " +
                        "nobody re-reads."
     }
+
+    # 6d — the C5b clause. Client ships autoReferenced: false; its Assembly-CSharp-facing seam
+    # (the nine interfaces, NetClientBindings, and the half of NetClientPresenterGuard the legacy
+    # tree asks for) moved to Ironfront.Net.Unity.Shared. See the C5 clause header for why the
+    # bindings could not move the other way instead.
+    if (Test-Path $clientAsmdef) {
+        if ((Get-Content -Path $clientAsmdef -Raw) -notmatch '"autoReferenced"\s*:\s*false') {
+            $violations += "RULE 6d (channel reopened): " +
+                           "Ironfront.Net.Unity.Client.asmdef is autoReferenced: true.`n" +
+                           "    Assembly-CSharp can see all 37 types in it again, from any of " +
+                           "333 legacy files. Phase C5b set this false and moved the seam to " +
+                           "Shared so it could stay false. 6a will NOT catch this: the asmdef " +
+                           "still exists, which is all 6a reads."
+        }
+    }
+
+    $violations += Get-SealedFromPredefinedViolations `
+        -sealedRoot $clientRoot `
+        -assemblyName 'Ironfront.Net.Unity.Client' `
+        -qualifiedPrefix 'Ironfront.Net.Unity.Client.' `
+        -Allowed @{} `
+        -ruleId 'RULE 6d'
 }
 
 # RULE 7 — the Net/Diagnostics seam, phase C4d.
@@ -641,6 +830,30 @@ if (Test-Path $diagRoot) {
                        "    Reason it was listed: $($entry.Reason)`n" +
                        "    DELETE the row. Do NOT re-pin the table to what this run reported."
     }
+
+    # 7d — the C5a clause. Diagnostics ships autoReferenced: false, so Assembly-CSharp must not
+    # name it at all; the seam it registers through (IDiagnosticsProbe, ILegacyMovementProbe,
+    # NetDiagnosticsBindings) moved to Ironfront.Net.Unity.Shared for exactly that reason.
+    #
+    # 7a would NOT catch a flip back to true: the asmdef still exists and still carries its
+    # defineConstraints line, which is all 7a reads. See the C5 clause header.
+    if (Test-Path $diagAsmdef) {
+        $diagAutoRef = (Get-Content -Path $diagAsmdef -Raw) -notmatch '"autoReferenced"\s*:\s*false'
+        if ($diagAutoRef) {
+            $violations += "RULE 7d (channel reopened): " +
+                           "Ironfront.Net.Unity.Diagnostics.asmdef is autoReferenced: true.`n" +
+                           "    Assembly-CSharp can see all 27 types in it again, from any of " +
+                           "333 legacy files, with no reference line to review. Phase C5a set " +
+                           "this false and moved the seam to Shared so it could stay false."
+        }
+    }
+
+    $violations += Get-SealedFromPredefinedViolations `
+        -sealedRoot $diagRoot `
+        -assemblyName 'Ironfront.Net.Unity.Diagnostics' `
+        -qualifiedPrefix 'Ironfront.Net.Unity.Diagnostics.' `
+        -Allowed @{} `
+        -ruleId 'RULE 7d'
 }
 
 if ($violations.Count -gt 0) {
@@ -670,6 +883,9 @@ if (Test-Path $clientRoot) {
                 $clientNamed.Count, $clientLegacyTypes.Count)
     Write-Host ("              in predefined-assembly sources, across {0} of its own file(s) — and every" -f $clientSources.Count)
     Write-Host "              one of those is an allow-listed matcher artefact, not a reference."
+    Write-Host "      RULE 6d: it ships autoReferenced: false, and no predefined-assembly source names"
+    Write-Host "              a type in it. Its seam — nine interfaces, NetClientBindings, and the"
+    Write-Host "              half of the presenter guard the legacy tree asks for — is in Shared."
 }
 if (Test-Path $diagRoot) {
     Write-Host ("      RULE 7: Net/Diagnostics carries its asmdef — with the " +
@@ -677,6 +893,9 @@ if (Test-Path $diagRoot) {
     Write-Host ("              exclusion still on it — and names {0} of the {1} type(s) declared in" -f
                 $diagNamed.Count, $diagLegacyTypes.Count)
     Write-Host ("              predefined-assembly sources, across {0} of its own file(s); all allow-listed." -f $diagSources.Count)
+    Write-Host "      RULE 7d: it ships autoReferenced: false, and no predefined-assembly source names"
+    Write-Host "              a type in it — qualified or otherwise. Its seam is in Shared, which is"
+    Write-Host "              autoReferenced: true on purpose: one channel, and it is reviewable."
 }
 Write-Host "      This says no NEW call site appeared and no listed one was silently fixed. It"
 Write-Host "      does NOT say the listed call sites are acceptable — that is what the count is for."

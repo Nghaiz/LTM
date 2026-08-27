@@ -1,4 +1,3 @@
-using Ironfront.Net.Unity.Diagnostics;
 using UnityEngine;
 using UnityStandardAssets.Characters.FirstPerson;
 

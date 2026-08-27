@@ -1,4 +1,4 @@
-namespace Ironfront.Net.Unity.Client
+namespace Ironfront.Net.Unity
 {
     /// <summary>
     /// A held weapon, reduced to the one thing the client netcode does with somebody else's:

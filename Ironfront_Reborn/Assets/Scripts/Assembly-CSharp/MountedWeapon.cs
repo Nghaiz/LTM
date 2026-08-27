@@ -116,7 +116,7 @@ public class MountedWeapon : Weapon
 				? NetTurretAim.VehicleIdOf(vehicle.gameObject)
 				: (ushort)0;
 			netSeatIndex = seatIndex >= 0 ? (byte)seatIndex : (byte)0;
-			netLocallyOccupied = Ironfront.Net.Unity.Client.NetClientPresenterGuard.IsLocalActor(user);
+			netLocallyOccupied = Ironfront.Net.Unity.NetPresenterGate.IsLocalActor(user);
 		}
 
 		if (netVehicleId == 0)

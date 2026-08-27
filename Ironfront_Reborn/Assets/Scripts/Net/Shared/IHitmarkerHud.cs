@@ -1,4 +1,4 @@
-namespace Ironfront.Net.Unity.Client
+namespace Ironfront.Net.Unity
 {
     /// <summary>
     /// The one HUD call the client netcode makes: a hitmarker, at a severity. Phase C4a.

@@ -120,3 +120,177 @@ assembly"*, and each new clause is **mutation-proved in both directions** before
 7. `dotnet test`, `SpecChecker`, `ClientWiringGate`, `check-net-layering.ps1`,
    `check-diagnostics-exclusion.ps1` exit 0, and a Unity compile is green over MCP at every step —
    **`dotnet build` alone grades nothing here.**
+
+---
+
+## 7. Outcome — 2026-08-28
+
+**Two of three flipped. `Net/Input` did not, and § 6.3's second branch is why.**
+
+| Assembly | Ships | Seam moved to Shared | Verified |
+|---|---|---|---|
+| `Ironfront.Net.Unity.Diagnostics` | `autoReferenced: false` | 3 types of 30 | manifest, C5a |
+| `Ironfront.Net.Unity.Client` | `autoReferenced: false` | 10 types of 47, plus two facades | manifest, C5b |
+| `Ironfront.Net.Unity.Input` | **`autoReferenced: true`** | 1 type (`IInputSource`) | deferred, § 7.3 |
+
+The manifest, for all three predefined assemblies at once — the check § 4.1 asks for, and the
+only one that distinguishes *sealed* from *deleted*:
+
+```
+Assembly-CSharp           -> [EditorHarness, Input, Server, Shared]
+Assembly-CSharp-Editor    -> [EditorHarness, Input, Server, Shared]
+Assembly-CSharp-firstpass -> [EditorHarness, Input, Server, Shared]
+EXISTING                  -> [..., Client, Diagnostics, ...]
+```
+
+### 7.1 The measurement, and the third way it had been wrong
+
+§ 1 opened by saying every carried count on this track had been wrong, then carried three of its
+own. Enumerating by type over all predefined sources:
+
+| Sealed assembly | § 1 said | Actually | What the miss was |
+|---|---|---|---|
+| Input | 5 consumers, `FpsActorController` 31 sites | 5 consumers, **20 sites** | site count carried, not counted |
+| Client | **8** | **18** (12 legacy, 6 bindings) | ten reach it FULLY QUALIFIED, no `using` line to grep |
+| Diagnostics | **2** | **3** | `IronfrontNetBindings.cs` reaches through a `Diagnostics.` prefix |
+
+C2 miscounted by grepping comments, C4 by grepping substrings, C5 by grepping a `using` line that
+was never there. § 1 was right that a `using` grep cannot measure this seam — and then used one
+for the two assemblies whose namespaces do match their names.
+
+### 7.2 § 2's prediction is false, and `NetBindings/` survives (C5d)
+
+§ 2 said the bindings would "move to the side that owns their interface". They cannot, and the
+reason is structural rather than circumstantial: a binding implements a sealed interface **in terms
+of a legacy type** — `DecalSinkBinding` over `DecalManager`, `LaneBDiagnosticsProbe` over `ScoreUi`.
+Moving one into the sealed assembly would make that assembly name a legacy type, which is exactly
+what RULES 6b/7b forbid. Both halves are pinned by the same wall; only the interface between them
+is free to move.
+
+So the interface moved, into `Ironfront.Net.Unity.Shared` — which stays `autoReferenced: true` as
+the one declared channel, and which is the move `ICapturePointDirectory` already made in the commit
+that added `check-net-layering.ps1`.
+
+**AC-4 answered: `NetBindings/` is NOT deleted, and none of its twelve files is waiting on an
+assembly.** They are the `Assembly-CSharp` halves of seams whose other halves are sealed, which is
+their permanent and correct home. AC-4 offered "deleted" or "waiting"; the tree gives a third
+answer, recorded rather than forced into one of the two.
+
+### 7.3 C5c deferred — the written reason AC-3 requires
+
+`Ironfront.Net.Unity.Input` keeps `autoReferenced: true`. The predefined side names **8 of its 11
+types**: `IInputSource`, `NullInputSource`, `NetInputSource`, `HelicopterAxes`,
+`ILocalInputEnvironment`, `HelicopterControlOptions`, `HelicopterControlStyle`, `NetInputBindings`
+— plus `LocalInputSource` and `InputShadowCompare`, which `FpsActorController` *constructs*.
+
+Sealing it therefore means relocating six types into Shared and factory-ising two more, leaving
+five behind. Two of the six — `NetInputSource` and `HelicopterAxes` — are **implementations, not
+interfaces**. That is hollowing the assembly out to make a reference go away, which § 5 forbids in
+terms: *"a seam is an interface owned by the sealed side, not a relocation."*
+
+The inversion AC-3 offers as its first branch would seal Input honestly, but it rewrites 20 reads
+on the game's shipped input path inside a refactor whose acceptance criteria forbid behaviour
+change. Neither branch is cheap; the second is the honest one.
+
+**Reopening condition, named as AC-3 requires:** when `FpsActorController`'s pull model is inverted
+to a pushed control surface **for a reason of its own** — a gameplay or input-latency requirement,
+not a layering one — `Ironfront.Net.Unity.Input` flips in the same change. Not before, and not to
+close this phase.
+
+`IInputSource` moved to Shared anyway, ahead of its phase: `ILocalPlayerRig.InputSource` returns one
+and `LocalPlayerRigBinding` implements that interface from `Assembly-CSharp`, so C5b could not land
+until it sat in an auto-referenced assembly. `Net/Input` gains a reference to Shared for it.
+
+### 7.4 A third predefined assembly (AC-6, widened)
+
+AC-6 asked the scan to cover `Assembly-CSharp` **and** `Assembly-CSharp-firstpass`. There is a
+third. `Assets/Editor/` compiles into `Assembly-CSharp-Editor`, and
+`Assets/Editor/NetVerificationHarness.cs` held `using Ironfront.Net.Unity.Client;` with five
+`NetClientBootstrap` reads that no enumeration on this track had ever seen. C4d widened the scan
+from one population to two and stopped one short; the Unity compile found the third, exactly as it
+found the second.
+
+It is fixed by explicit reference rather than by another seam — `autoReferenced: false` has never
+prevented one. The harness moved into `Ironfront.Net.Unity.EditorHarness`, an Editor-only asmdef
+naming Client directly, and its single legacy read (`ActorManager.spawnPoints.Length`) now goes
+through `ISpawnPointDirectory.Count`, the seam the server assembly already declared for that data.
+`check-net-layering.ps1` gains `-EditorPath`; its declared-type count moved 558 → 566, which is the
+evidence the population is read rather than merely configured.
+
+### 7.5 The gate (AC-5)
+
+RULE 6d and RULE 7d, one clause per flipped assembly, each in two halves because one name can be
+written two ways: a **qualified** `Ironfront.Net.Unity.<Asm>.` prefix — how the legacy tree actually
+reaches these assemblies, and invisible to a `using` grep — and a **type name**, skipping any name
+the predefined sources declare themselves (which is what keeps `TimedObjectActivator.Entry` from
+reporting itself against `LaneBExplosionLog.Entry` with no allow-list row).
+
+Each also asserts the flag directly, because 6a/7a stay green straight through a flip back to
+`true`: the asmdef still exists and still carries its `defineConstraints` line, which is all they
+read.
+
+Mutation-proved before shipping, seven ways:
+
+| Mutant | Fires |
+|---|---|
+| Diagnostics flag → `true` | RULE 7d (channel reopened) |
+| Diagnostics, qualified crossing | RULE 7d (channel bypassed) `(qualified)` |
+| Diagnostics, unqualified via `using` | RULE 7d (channel bypassed) `LaneBHarness` |
+| Diagnostics, stale allow-list row | RULE 7d (stale) |
+| Client flag → `true` | RULE 6d (channel reopened) |
+| Client, qualified + unqualified crossings | RULE 6d, both |
+| Crossing in `Assets/Editor/V0BehaviouralPass.cs` | RULE 6d — proves the third population is scanned |
+
+One mutant proved nothing, and it is recorded because that is mutation testing's own failure mode:
+the first Diagnostics mutant named `IDiagnosticsProbe`, which had already moved to Shared, so the
+gate was right to stay green. A mutant must be a real instance of the fault, not one that looks
+like it.
+
+### 7.6 What the seal is worth, counted
+
+Types reachable from `Assembly-CSharp` fall from **~158 to ~112**. Client (37) and Diagnostics (27)
+are gone; Shared grew by 21 absorbing their seam, and Input's 11 remain. The wall is real and
+narrower — it is not absolute, and Shared being `autoReferenced: true` is the deliberate reason why.
+
+### 7.7 A near-miss worth recording
+
+The relocated `NetPresenterGate.IsLocalActor` was first written with only the `actor == null` guard.
+The shipped predicate is `actor == null || !actor.Exists` — the second half rejects a **destroyed**
+body, which arrives non-null because the interface carries none of `UnityEngine.Object`'s overloaded
+equality. Dropping it would have made a destroyed local actor start answering `true`: a behaviour
+change wearing a refactor's clothes, in the one phase whose criteria forbid exactly that. It was
+caught by reading the original, not by any gate — no test in this repo covers a destroyed local
+actor's identity, and that gap is now on the record.
+
+### 7.8 A false green in this very phase, caught by CI
+
+The first `dotnet test` run here reported **1857/1857 passed and exit code 0** — and had a
+`CSC : error CS2001` on **line 1** of its own output. `Ironfront.Client.Input.Tests` links
+`IInputSource.cs` **by path** into a dotnet project (`<Compile Include="..\Ironfront_Reborn\…">`),
+the C5b move broke that path, the project failed to build, and `dotnet test` **still exited 0** —
+so the suite silently shrank from 8 projects to 7 and the missing 39 tests read as a smaller total
+nobody was comparing against.
+
+Two failures stacked, and both are the same rule:
+
+1. **The exit code could not carry the signal.** `dotnet test` returns 0 when a project fails to
+   build but every project that *did* build passes.
+2. **The read could not carry it either.** The output was inspected with `tail -25`; the error was
+   the first line.
+
+Fixed by pointing the link at `Net/Shared/IInputSource.cs`, and re-verified by grepping the WHOLE
+log for `error` rather than tailing it — `1896/1896` across **8** projects, with
+`Ironfront.Client.Input.Tests` present at 39. `green-that-proves-nothing.md`, "the output format
+cannot carry the signal", found in the phase that cites that rule.
+
+**Standing note for this repo:** a file move under `Assets/` can break a dotnet project that never
+mentions Unity, because six `.csproj` files compile Unity sources by path. `grep -rn "Compile
+Include.*Assets" --include=*.csproj .` is the list, and `dotnet test`'s exit code will not tell you.
+
+### 7.9 Verification
+
+`dotnet test` **1896/1896 across 8 projects** (clean rebuild, full log grepped for `error`) ·
+Unity EditMode 87/87 · `SpecChecker` · `ClientWiringGate` ·
+`check-net-layering` · `check-diagnostics-exclusion` · `check-unity-meta` ·
+`check-duplicate-assemblies` · `check-plugin-define-constraints` — all exit 0. Unity compile green
+over MCP at both C5a and C5b. `dotnet build` graded nothing here, as § 4 requires.

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Ironfront.Net.Unity.Diagnostics
+namespace Ironfront.Net.Unity
 {
     /// <summary>The scoreboard labels as the checkpoint recorder serialises them.</summary>
     /// <remarks>

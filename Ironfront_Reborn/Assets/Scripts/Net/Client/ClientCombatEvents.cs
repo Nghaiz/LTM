@@ -34,6 +34,32 @@ namespace Ironfront.Net.Unity.Client
     public static class ClientCombatEvents
     {
         /// <summary>
+        /// Hands <see cref="PredictExplosion"/> to <c>NetClientBindings</c>, so
+        /// <c>ActorManager</c> can still reach it. Phase C5b.
+        /// </summary>
+        /// <remarks>
+        /// <c>ActorManager.Damage</c> called this by its full name,
+        /// <c>Ironfront.Net.Unity.Client.ClientCombatEvents.PredictExplosion(…)</c>, and C5b sealed
+        /// that assembly. The call site now goes through <c>NetClientBindings.PredictExplosion</c>
+        /// in <c>Ironfront.Net.Unity.Shared</c> and arrives back here.
+        /// <para>
+        /// <b>Registered unconditionally, including on a dedicated server</b>, for the reason
+        /// <c>IronfrontNetBindings.Install</c> gives about every other seam: the method's own first
+        /// line is a <c>NetContext.IsClient</c> test, so registering on a headless process costs
+        /// one delegate and changes no behaviour. A role test here would be a second copy of a
+        /// decision <c>NetContext</c> already owns.
+        /// </para>
+        /// <para>
+        /// <c>BeforeSceneLoad</c>, after <c>NetClientBindings.ResetOnLoad</c> at
+        /// <c>SubsystemRegistration</c> — the other order would clear this registration
+        /// immediately after making it.
+        /// </para>
+        /// </remarks>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void Install()
+            => NetClientBindings.ExplosionPredictor = PredictExplosion;
+
+        /// <summary>
         /// Draws this client's own explosion now and arms the suppression that will swallow the
         /// server's confirmation of it.
         /// </summary>

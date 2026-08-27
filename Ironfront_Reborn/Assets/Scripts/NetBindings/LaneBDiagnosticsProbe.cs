@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using Ironfront.Net.Unity.Diagnostics;
 using UnityEngine;
 
 namespace Ironfront.Net.Unity.Bindings

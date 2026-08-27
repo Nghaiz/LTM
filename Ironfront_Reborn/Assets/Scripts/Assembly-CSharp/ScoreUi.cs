@@ -236,7 +236,7 @@ public class ScoreUi : MonoBehaviour
 		}
 		if (instance.phaseText == null || instance.phaseTimerText == null)
 		{
-			Ironfront.Net.Unity.Client.NetClientPresenterGuard.WarnOnce(
+			Ironfront.Net.Unity.NetPresenterGate.WarnOnce(
 				"scoreui-no-phase-elements",
 				"[net] ScoreUi has no dedicated phase/timer Text, so the networked HUD is "
 				+ "borrowing the flag labels. That collides with capture points the moment V10 "

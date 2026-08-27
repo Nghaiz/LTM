@@ -125,9 +125,20 @@ Two of the four consumers in the table above have already moved — `Net/Client`
 are sealed assemblies that *can* now add explicit references. What remains was enumerated rather
 than carried, and it found the trap this table would have walked into: **`Net/Input`'s files declare
 `namespace Ironfront.Net.Unity`, not `Ironfront.Net.Unity.Input`**, so a `using`-grep keyed to the
-assembly name returns **0** against five real consumers. Measured by TYPE instead — Input **5**
-(1 legacy: `FpsActorController`, 31 sites; 4 bindings), Client **8** (2 legacy: `DecalManager`,
-`MinimapUi`; 6 bindings), Diagnostics **2** (0 legacy). C5 § 1 carries the table.
+assembly name returns **0** against five real consumers.
+
+**Two of those three numbers were then wrong, and C5 § 7.1 has the corrected table.** C5 § 1
+measured Input by type and Client and Diagnostics by `using`, on the grounds that their namespaces
+match their assembly names — which is true and still insufficient, because ten legacy files reach
+`Net/Client` **fully qualified** with no `using` line at all. Measured by TYPE throughout: Input
+**5** (1 legacy: `FpsActorController`, **20** sites, not 31; 4 bindings), Client **18** (12 legacy,
+6 bindings), Diagnostics **3** (0 legacy).
+
+**C5 landed 2026-08-28.** Diagnostics and Client ship `autoReferenced: false`; **Input does not**,
+with a written reason and a named reopening condition (C5 § 7.3). `NetBindings/` was **not** killed
+— § 2's prediction below is false, and C5 § 7.2 says why a binding cannot move to the sealed side.
+A **third** predefined assembly, `Assembly-CSharp-Editor`, was found the same way the second one
+was: by the compiler (C5 § 7.4).
 
 ## 6. Success criteria
 
@@ -144,6 +155,11 @@ assembly name returns **0** against five real consumers. Measured by TYPE instea
    mutation-tested. C4d also widened its scan to `Assembly-CSharp-firstpass`: 155 type names in a
    second predefined assembly that every earlier measurement on this track was blind to, and which
    cost one real miss only the compiler caught.
+   — **C5 added RULES 6d and 7d**, one clause per assembly it flipped, each asserting the flag
+   directly (6a/7a stay green through a flip back to `true`) and each scanning for BOTH a qualified
+   `Ironfront.Net.Unity.<Asm>.` prefix and a bare type name. Seven mutants, all RED. It also widened
+   the scan again, to `Assembly-CSharp-Editor` — a **third** predefined population, found exactly as
+   the second was, by the compiler rather than by this gate. Declared-type count 558 → 566.
 5. `Net/Diagnostics` is excluded from player builds, and something fails if it is re-included.
    — **Met 2026-08-26, and re-based the same day.** The exclusion shipped 2026-08-21 as a per-file
    `#if` convention gated by `tools/check-diagnostics-exclusion.ps1`. C4d moved the mechanism to

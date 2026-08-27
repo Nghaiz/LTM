@@ -1,5 +1,4 @@
 using Ironfront.Net.Unity;
-using Ironfront.Net.Unity.Client;
 using UnityEngine;
 
 namespace Ironfront.Net.Unity.Bindings

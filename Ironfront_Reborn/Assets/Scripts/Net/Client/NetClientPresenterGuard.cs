@@ -37,10 +37,30 @@ namespace Ironfront.Net.Unity.Client
     /// </remarks>
     public static class NetClientPresenterGuard
     {
-        // Warnings that must fire once and then stay quiet. A presenter whose bootstrap was
-        // missing would otherwise log every frame, and a log that repeats 60 times a second is
-        // read as noise and filtered out — which is the same as not logging at all.
-        private static readonly HashSet<string> _warned = new HashSet<string>();
+        // PHASE C5b: the once-only warning set, the local-actor predicate and the reset moved to
+        // NetPresenterGate in Ironfront.Net.Unity.Shared, and the members below FORWARD to it.
+        //
+        // They forward rather than being deleted because this assembly's own 37 call sites are
+        // correct as written, and re-spelling them would have made a layering phase into a
+        // presenter rewrite. There is still exactly one implementation of each: the set lives
+        // once, over there, so a legacy WarnOnce and a presenter WarnOnce share one dedup key
+        // space exactly as they did when both halves were in this file.
+        //
+        // What could NOT move is below the forwarders: TryResolveClient hands back a
+        // NetClientBootstrap, and TryResolveLocalTeam reads client.Router.Decoder.Current.
+
+        /// <summary>
+        /// Hands <see cref="TryResolveLocalTeam"/> to the shared gate, which cannot compute it.
+        /// </summary>
+        /// <remarks>
+        /// <c>BeforeSceneLoad</c>, so no presenter's <c>Awake</c> can ask for a team before the
+        /// resolver is in place — and after <c>NetClientBindings.ResetOnLoad</c>, which runs at
+        /// <c>SubsystemRegistration</c> and would otherwise clear this registration right after
+        /// it was made.
+        /// </remarks>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void InstallGateResolvers()
+            => NetClientBindings.LocalTeam = TryResolveLocalTeam;
 
         /// <summary>
         /// Whether client-side presentation should run. False offline and false on a server, so
@@ -83,12 +103,7 @@ namespace Ironfront.Net.Unity.Client
         /// </para>
         /// </remarks>
         public static bool IsLocalActor(IGameplayActorPresence actor)
-        {
-            if (actor == null || !actor.Exists) return false;
-
-            return LocalActorIdentity.IsLocalActor(
-                NetContext.IsOffline, actor.IsAiControlled, actor.IsLocalPlayerBody);
-        }
+            => NetPresenterGate.IsLocalActor(actor);
 
         /// <summary>This client's own actor id, if the server has assigned one yet.</summary>
         public static bool TryResolveLocalActorId(out ushort id)
@@ -142,7 +157,7 @@ namespace Ironfront.Net.Unity.Client
             if (client != null) return true;
 
             WarnOnce(
-                NoBootstrapPrefix + presenterName,
+                NetPresenterGate.NoBootstrapPrefix + presenterName,
                 $"[net] {presenterName} found no NetClientBootstrap in Awake. It will never "
                 + "subscribe, so nothing it presents will appear. Put it on the client "
                 + "bootstrap object, or after it in execution order.");
@@ -159,7 +174,6 @@ namespace Ironfront.Net.Unity.Client
         /// <see cref="TryResolveClient"/> no longer writes would report a permanent, cheerful
         /// zero — a check that cannot fail.
         /// </remarks>
-        private const string NoBootstrapPrefix = "no-bootstrap:";
 
         /// <summary>
         /// The presenters that found no bootstrap in <c>Awake</c> this session, by name. Empty
@@ -181,37 +195,17 @@ namespace Ironfront.Net.Unity.Client
         /// summarise is worse than none, because the artifact is what gets quoted.
         /// </para>
         /// <para>
-        /// <b>Cleared by <see cref="ResetOnLoad"/> with the rest of the set</b>, so a warning
+        /// <b>Cleared by <c>NetPresenterGate</c> with the rest of the set</b>, so a warning
         /// spent in a previous Play session cannot leak into this one's verdict — which with
         /// domain reload disabled is not hypothetical.
         /// </para>
         /// </remarks>
         public static IEnumerable<string> PresentersThatFoundNoBootstrap
-        {
-            get
-            {
-                foreach (string key in _warned)
-                {
-                    if (key.StartsWith(NoBootstrapPrefix, StringComparison.Ordinal))
-                        yield return key.Substring(NoBootstrapPrefix.Length);
-                }
-            }
-        }
+            => NetPresenterGate.PresentersThatFoundNoBootstrap;
 
         /// <summary>Logs a warning the first time this key is seen, and never again.</summary>
         public static void WarnOnce(string key, string message)
-        {
-            if (!_warned.Add(key)) return;
-            Debug.LogWarning(message);
-        }
+            => NetPresenterGate.WarnOnce(key, message);
 
-        /// <summary>
-        /// Clears the once-only warning set. Called at subsystem registration for the same
-        /// reason <c>NetContext.ResetOnLoad</c> exists: with domain reload disabled, statics
-        /// survive into the next Play session, and a warning already "spent" in the previous run
-        /// would stay silent in the one where it matters.
-        /// </summary>
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetOnLoad() => _warned.Clear();
     }
 }
