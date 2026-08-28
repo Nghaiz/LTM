@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Movement;
 
@@ -46,9 +46,23 @@ namespace Ironfront.Net.Replication.Combat
         /// <summary>Where the shot originated — eye height above the shooter's feet (D10).</summary>
         public readonly Vec3 Origin;
 
+        /// <summary>
+        /// True when this shot LAUNCHED rather than swept, so the caller must pull the engine
+        /// weapon's trigger. Ledger <b>X-42</b>.
+        /// </summary>
+        /// <remarks>
+        /// <b>A fact about what happened, not a re-read of the config.</b> The bridge could ask
+        /// <c>session.WeaponConfig.Delivery</c> again, and then two places would decide what this
+        /// shot was — including on the tick a weapon switch lands between the step and the emit.
+        /// <see cref="Fired"/> stays the answer to "was a round spent"; this says which of the
+        /// two things spending it meant.
+        /// </remarks>
+        public readonly bool LaunchedProjectile;
+
         public CombatTickResult(
             FireRejection rejection, bool fired, int hitCount, bool weaponChanged,
-            bool victimDied, ushort deadActorId, in Vec3 aimDirection, in Vec3 origin)
+            bool victimDied, ushort deadActorId, in Vec3 aimDirection, in Vec3 origin,
+            bool launchedProjectile = false)
         {
             Rejection = rejection;
             Fired = fired;
@@ -58,6 +72,7 @@ namespace Ironfront.Net.Replication.Combat
             DeadActorId = deadActorId;
             AimDirection = aimDirection;
             Origin = origin;
+            LaunchedProjectile = launchedProjectile;
         }
     }
 
@@ -110,6 +125,18 @@ namespace Ironfront.Net.Replication.Combat
 
         /// <summary>Damage applications that took a victim from alive to dead.</summary>
         public long KillsResolved { get; private set; }
+
+        /// <summary>
+        /// Accepted trigger pulls on a <see cref="WeaponDelivery.Projectile"/> weapon. Ledger
+        /// <b>X-42</b>.
+        /// </summary>
+        /// <remarks>
+        /// Counted here rather than inferred from the absence of hits: "fired and hit nothing"
+        /// and "fired a grenade" produce the same <c>hits=0</c>, and telling them apart from an
+        /// artifact was exactly what X-42 cost. A run that reports zero launches while a client
+        /// held a FRAG has found this row again.
+        /// </remarks>
+        public long ProjectilesLaunched { get; private set; }
 
         /// <summary>
         /// The resolver this authority steps, for diagnostics that need to reach
@@ -186,6 +213,27 @@ namespace Ironfront.Net.Replication.Combat
             //    rejections — which is what moves FireRateViolations, the signal phase-05
             //    criterion 2 is graded on.
             Vec3 aim = AimDirection(frame.YawDegrees, frame.PitchDegrees);
+
+            // 3a. A weapon that LAUNCHES does not sweep. Ledger X-42: the same trigger rules
+            //     apply -- CheckCanFire is shared, not restated -- but the flight and the
+            //     detonation belong to the engine (V7-D1), so this path spends the round and
+            //     stops. Sweeping it as well would resolve a thrown grenade as a bullet, which
+            //     is precisely what shipped: `rejection=None fired=True hits=1` at 1.2 m, zero
+            //     damage, and no explosion anywhere (artifacts/lane-b/r1-grenade-03).
+            if (config.Delivery == WeaponDelivery.Projectile)
+            {
+                FireRejection launchRejection = _fireResolver.ResolveLaunch(
+                    ref weapon, in config, shooterIsAlive, nowSeconds);
+
+                bool launched = launchRejection == FireRejection.None;
+                if (launched) ProjectilesLaunched++;
+
+                return new CombatTickResult(
+                    launchRejection, launched, hitCount: 0,
+                    weaponChanged: weapon.AmmoInClip != ammoBefore,
+                    victimDied: false, deadActorId: 0, in aim, in origin,
+                    launchedProjectile: launched);
+            }
 
             FireRejection rejection = _fireResolver.Resolve(
                 ref weapon, in config, targets, shooterActorId, shooterIsAlive,
@@ -288,6 +336,7 @@ namespace Ironfront.Net.Replication.Combat
             ReloadsStarted = 0;
             ReloadsCompleted = 0;
             KillsResolved = 0;
+            ProjectilesLaunched = 0;
         }
     }
 }

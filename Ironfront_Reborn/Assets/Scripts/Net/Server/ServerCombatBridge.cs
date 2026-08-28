@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Combat;
@@ -150,10 +150,52 @@ namespace Ironfront.Net.Unity.Server
 
             if (!result.Fired) return;
 
+            // Ledger X-42. A launcher and a throwable are simulated by the ENGINE (V7-D1), and
+            // the netcode's own fire path never reached them: Actor.Update gets there through
+            // controller.Fire(), and a networked body's controller is the SUSPENDED bot brain.
+            // So a FRAG was spent, swept as a hitscan bullet, hit at 1.2 m for zero damage, and
+            // detonated nowhere -- explosionsTotal 0 on all three clients with the recorder
+            // proven live (artifacts/lane-b/r1-grenade-03).
+            //
+            // AFTER the authority, never instead of it: the round is already spent and the
+            // cooldown already stamped, so Weapon.CanFire() is the game's second opinion on a
+            // decision the server has made. BEFORE the cosmetic emit, so the ordering reads the
+            // way it happens.
+            if (result.LaunchedProjectile) LaunchCarriedProjectile(session, actor, in result);
+
             EmitWeaponFire(session, actor, in result);
             EmitHitConfirms(session, in result);
 
             if (result.VictimDied) EmitDeath(session, in result);
+        }
+
+        /// <summary>Launches this actor's carried projectile weapon. Ledger <b>X-42</b>.</summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A body holding nothing is LOGGED, not swallowed.</b> The server has just spent a
+        /// round on a weapon the actor does not have, which means the session and the body
+        /// disagree about the loadout -- the shape X-11 named and the shape a silent zero would
+        /// hide. Without this line the symptom is a grenade count that goes down and an
+        /// explosion that never happens, which is the row being closed.
+        /// </para>
+        /// <para>
+        /// The direction is the shot's own aim, already computed by
+        /// <c>ServerCombatAuthority.AimDirection</c> from the frame's yaw and pitch. Recomputing
+        /// it here would be a second transcription of a sign convention whose inversion still
+        /// hits at short range -- see that method's own remark.
+        /// </para>
+        /// </remarks>
+        private static void LaunchCarriedProjectile(
+            ClientSession session, NetServerActor actor, in CombatTickResult result)
+        {
+            if (actor.FireCarriedWeapon(
+                    result.AimDirection.X, result.AimDirection.Y, result.AimDirection.Z))
+                return;
+
+            Debug.LogError(
+                $"[net] actor {session.ActorId} spent a round of weapon {session.WeaponId} on a "
+                + "projectile launch and its body is holding nothing, so nothing was launched. "
+                + "The session and the body disagree about the loadout.");
         }
 
         /// <summary>

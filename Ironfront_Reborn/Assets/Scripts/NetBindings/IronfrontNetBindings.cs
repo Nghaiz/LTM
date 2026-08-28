@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Ironfront.Net.Replication.Match;
 using Ironfront.Net.Unity.Server;
@@ -470,6 +470,33 @@ namespace Ironfront.Net.Unity.Bindings
         /// <summary>Arms the wrapped actor from its loadout. See the seam for why this is not
         /// <c>SpawnAt</c>.</summary>
         public void EquipLoadout() => _actor.EquipLoadout();
+
+        /// <summary>
+        /// Fires the wrapped actor's active weapon. Ledger <b>X-42</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>useMuzzleDirection: true</c>, matching <c>ThrowableWeapon.ReleaseThrowable</c>'s own
+        /// call. The muzzle transform is where the game says the projectile leaves from, and for
+        /// a throwable it is the hand -- passing false would launch a grenade from the body
+        /// origin, which is inside the thrower's own collider.
+        /// </para>
+        /// <para>
+        /// The direction still travels, because a LAUNCHER (<c>Weapon.SpawnProjectile</c>) uses
+        /// it when the weapon has no muzzle authored, and because <c>Weapon.Fire</c>'s signature
+        /// is the offline one -- narrowing it here would fork the call.
+        /// </para>
+        /// </remarks>
+        public bool FireCarriedWeapon(float directionX, float directionY, float directionZ)
+        {
+            if (_actor == null) return false;
+
+            Weapon weapon = _actor.activeWeapon;
+            if (weapon == null) return false;
+
+            weapon.Fire(new Vector3(directionX, directionY, directionZ), useMuzzleDirection: true);
+            return true;
+        }
     }
 
     /// <summary>Adapts <c>ActorManager.spawnPoints</c> to <see cref="ISpawnPointDirectory"/>.</summary>

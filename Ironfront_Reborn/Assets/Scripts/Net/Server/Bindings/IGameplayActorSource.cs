@@ -1,4 +1,4 @@
-namespace Ironfront.Net.Unity.Server
+﻿namespace Ironfront.Net.Unity.Server
 {
     /// <summary>
     /// The gameplay actor's authoritative health, death flag and held-weapon id, as the
@@ -105,5 +105,42 @@ namespace Ironfront.Net.Unity.Server
         /// </para>
         /// </remarks>
         void EquipLoadout();
+
+        /// <summary>
+        /// Pulls the trigger on the weapon the body is holding, along the given direction.
+        /// Ledger <b>X-42</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The call <c>Actor.Update</c> makes offline, made by the netcode instead.</b>
+        /// Offline the path is
+        /// <c>controller.Fire()</c> -&gt; <c>activeWeapon.Fire(controller.FacingDirection(), ...)</c>;
+        /// on a server a networked body's controller is the SUSPENDED bot brain, so that line
+        /// never runs and nothing ever reached the weapon. A thrown grenade was therefore
+        /// resolved as a hitscan bullet and never detonated -- <c>hits=1</c> at 1.2 m, zero
+        /// damage, <c>explosionsTotal 0</c> on all three clients
+        /// (<c>artifacts/lane-b/r1-grenade-03</c>).
+        /// </para>
+        /// <para>
+        /// <b>Three floats, not a vector type.</b> Every other member here is a float, a byte or
+        /// a bool for the same reason: this interface is implemented in <c>Assembly-CSharp</c>
+        /// and consumed inside an asmdef, and the narrower the type surface crossing that seam
+        /// the less there is to keep aligned. <c>UnityEngine.Vector3</c> would work and
+        /// <c>Vec3</c> would too; neither buys anything a caller cannot do in one line.
+        /// </para>
+        /// <para>
+        /// <b>No guards on this side.</b> <c>Weapon.Fire</c> checks <c>CanFire()</c> itself, and
+        /// the server has ALREADY applied its own authority before calling --
+        /// <c>ServerFireResolver.ResolveLaunch</c> spent the round and stamped the cooldown.
+        /// Restating either here would be a second copy free to drift from the one the offline
+        /// game uses, which is the reason <see cref="SwitchWeapon"/> carries no guards either.
+        /// </para>
+        /// </remarks>
+        /// <returns>
+        /// False when the body is holding nothing. Distinguished from "fired and nothing
+        /// happened" so a run that reports launches against a body with no weapon is legible as
+        /// the loadout failure it is, rather than as a silent zero.
+        /// </returns>
+        bool FireCarriedWeapon(float directionX, float directionY, float directionZ);
     }
 }

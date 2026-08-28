@@ -1,4 +1,4 @@
-using NUnit.Framework;
+﻿using NUnit.Framework;
 using UnityEngine;
 
 namespace Ironfront.Net.Unity.Server.Tests
@@ -46,6 +46,18 @@ namespace Ironfront.Net.Unity.Server.Tests
             internal int LoadoutsEquipped;
 
             public void EquipLoadout() => LoadoutsEquipped++;
+
+            /// <summary>Every direction the carried weapon was fired along. Ledger X-42.</summary>
+            internal readonly System.Collections.Generic.List<Vector3> FiredDirections =
+                new System.Collections.Generic.List<Vector3>();
+
+            public bool FireCarriedWeapon(float directionX, float directionY, float directionZ)
+            {
+                if (!HoldsAWeapon) return false;
+
+                FiredDirections.Add(new Vector3(directionX, directionY, directionZ));
+                return true;
+            }
         }
 
         private GameObject _gameObject;
@@ -192,5 +204,42 @@ namespace Ironfront.Net.Unity.Server.Tests
 
             CollectionAssert.IsEmpty(fake.SwitchedSlots);
         }
+
+        // ------------------------------------------------ X-42: the engine's trigger
+
+        [Test]
+        public void FiringTheCarriedWeaponReachesTheGameplaySeamWithTheShotsOwnDirection()
+        {
+            // Ledger X-42. Offline the path is controller.Fire() -> activeWeapon.Fire(...), and
+            // on a server a networked body's controller is the SUSPENDED bot brain -- so nothing
+            // ever reached the weapon and a thrown grenade was resolved as a hitscan bullet that
+            // never detonated. This seam is the netcode making that call itself.
+            //
+            // The DIRECTION is asserted, not just the count: ServerCombatAuthority.AimDirection
+            // negates pitch, and its own remark says an inverted sign produces shots mirrored
+            // vertically that still hit at short range -- which is where a thrown grenade lands.
+            var gameplay = new FakeGameplayActor();
+            NetServerActor actor = CreateActor(gameplay);
+
+            Assert.IsTrue(actor.FireCarriedWeapon(0.25f, -0.5f, 0.75f));
+
+            Assert.AreEqual(1, gameplay.FiredDirections.Count);
+            Assert.AreEqual(new Vector3(0.25f, -0.5f, 0.75f), gameplay.FiredDirections[0]);
+        }
+
+        [Test]
+        public void FiringTheCarriedWeaponOfABodyHoldingNothingReportsFalse()
+        {
+            // Distinguished from "fired and nothing happened" on purpose: the server has just
+            // spent a round on a weapon the body does not have, which means the session and the
+            // body disagree about the loadout. A silent zero would present as a grenade count
+            // going down and an explosion that never happens -- the row itself.
+            var gameplay = new FakeGameplayActor { HoldsAWeapon = false };
+            NetServerActor actor = CreateActor(gameplay);
+
+            Assert.IsFalse(actor.FireCarriedWeapon(0f, 0f, 1f));
+            Assert.AreEqual(0, gameplay.FiredDirections.Count);
+        }
+
     }
 }
