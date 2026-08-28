@@ -26,6 +26,47 @@ namespace Ironfront.Net.Replication.Match
             LastSentQ    = CapturePointMessage.PackOwner(0f);
         }
 
+        /// <summary>
+        /// The value <see cref="Reset"/> returns this point to. Neutral until the host adopts
+        /// the map's own opening ownership.
+        /// </summary>
+        private float _openingOwner;
+
+        /// <summary>
+        /// Adopts the map's OPENING ownership: what this point is worth to each team before
+        /// anybody has fought over it, and what every later round resets to.
+        /// </summary>
+        /// <param name="owner">-1 fully team 0, +1 fully team 1, 0 neutral.</param>
+        /// <remarks>
+        /// <para>
+        /// <b>What went wrong without it (X-53).</b> The host built these states from position,
+        /// radius and capture speed and never read the authored owner, so every point on every
+        /// map started NEUTRAL on the server. <c>MatchController</c> then wrote that neutrality
+        /// onto every scene spawn point, so <c>CountSpawnPointsOwnedBy</c> answered 0 for BOTH
+        /// teams, and <c>MatchStateMachine.ApplyElimination</c> read "no spawn points" as "wiped
+        /// out" one second into <c>Playing</c> — every round, on both sides at once. The
+        /// deployed server drew and reset 34 times in four hours and never played a match.
+        /// Dustbowl authors exactly one base each (Oasis to team 0, Fortress to team 1); both
+        /// were discarded.
+        /// </para>
+        /// <para>
+        /// <b><see cref="LastSentQ"/> moves with it, deliberately.</b> It records what clients
+        /// have been TOLD. Leaving it at neutral while <see cref="Owner"/> jumps to a base would
+        /// make the opening state look already-sent to the dirty check, and the first client to
+        /// join would render both bases neutral until somebody walked onto one.
+        /// </para>
+        /// </remarks>
+        public void AdoptOpeningOwner(float owner)
+        {
+            if (owner < -1f) owner = -1f;
+            else if (owner > 1f) owner = 1f;
+
+            _openingOwner = owner;
+            Owner         = owner;
+            IsContested   = false;
+            LastSentQ     = CapturePointMessage.PackOwner(owner);
+        }
+
         public byte PointId { get; }
 
         public Vec3 Position { get; }
@@ -118,18 +159,28 @@ namespace Ironfront.Net.Replication.Match
         public void MarkSent() => LastSentQ = CapturePointMessage.PackOwner(Owner);
 
         /// <summary>
-        /// Returns the point to neutral for a new match.
+        /// Returns the point to the map's OPENING ownership for a new match.
         /// </summary>
         /// <remarks>
+        /// <para>
+        /// <b>To the opening owner, not to neutral</b> — see
+        /// <see cref="AdoptOpeningOwner"/> for what resetting to neutral cost. A round-2 reset
+        /// that neutralised both bases reproduced the whole defect one round later, so fixing
+        /// only the initial seed would have left the loop intact from the second round on.
+        /// Untouched by <see cref="AdoptOpeningOwner"/>, this is neutral, which is what it
+        /// always was.
+        /// </para>
+        /// <para>
         /// <see cref="LastSentQ"/> is deliberately reset too. Leaving it at the old value would
-        /// mean a point that ended the last match at 0 and starts the next at 0 never sends its
+        /// mean a point that ended the last match where it starts the next one never sends its
         /// opening state to the clients that joined in between.
+        /// </para>
         /// </remarks>
         public void Reset()
         {
-            Owner       = 0f;
+            Owner       = _openingOwner;
             IsContested = false;
-            LastSentQ   = CapturePointMessage.PackOwner(0f);
+            LastSentQ   = CapturePointMessage.PackOwner(_openingOwner);
         }
 
         /// <summary>Squared distance test, so the caller never needs a square root.</summary>

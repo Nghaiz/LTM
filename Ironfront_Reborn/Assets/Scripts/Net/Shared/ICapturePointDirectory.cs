@@ -130,5 +130,28 @@ namespace Ironfront.Net.Unity
         /// including uncapturable HQs, not just capture points.
         /// </summary>
         int CountSpawnPointsOwnedBy(int team);
+
+        /// <summary>
+        /// The point's CURRENT owner as the scene holds it: -1 neutral, 0 team 0, 1 team 1.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Read at <c>Start</c>, never at <c>Awake</c>, and that is the whole reason this is
+        /// an accessor rather than a field on <see cref="CapturePointDefinition"/>.</b>
+        /// <c>CapturePoint.Start</c> is what settles the OPENING ownership — it applies
+        /// <c>GameManager.reverseMode</c> (which swaps teams 0 and 1) and <c>assaultMode</c>
+        /// (which hands a neutral point to team 1) — and its own remark says the server "then
+        /// adopts it as its own initial value". The definitions are built in
+        /// <c>MatchController.Awake</c>, before any of that has run, so a field baked in there
+        /// would carry the pre-swap value and a reversed match would start with the two teams'
+        /// bases exchanged on the server only.
+        /// </para>
+        /// <para>
+        /// Reading it here also keeps the mode logic in ONE place. The alternative — re-applying
+        /// reverse/assault on the server — is two implementations of the same rule, free to
+        /// disagree, which is the drift <c>development-principles.md</c> § SSOT exists to stop.
+        /// </para>
+        /// </remarks>
+        int GetOwner(int index);
     }
 }

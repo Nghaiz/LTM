@@ -99,6 +99,7 @@ namespace Ironfront.Net.Unity.Server
             _match = new MatchStateMachine(rules, points);
             _match.PhaseChanged   += OnPhaseChanged;
             _match.ResetRequested += OnResetRequested;
+            _match.BothTeamsEliminated += OnBothTeamsEliminated;
 
             if (_points != null && points.Length > 0)
                 _slave = new CapturePointSlave(_points, points.Length);
@@ -111,11 +112,83 @@ namespace Ironfront.Net.Unity.Server
             _loop.BindMatchController(this);
         }
 
+        /// <summary>
+        /// Adopts the map's opening capture-point ownership, once every scene component has
+        /// settled it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Start, not Awake, and the execution order is why.</b> This component runs at 100,
+        /// so its <c>Start</c> is after <c>CapturePoint.Start</c> (order 0) — and
+        /// <c>CapturePoint.Start</c> is what decides the opening ownership, because it applies
+        /// <c>reverseMode</c> (teams swapped) and <c>assaultMode</c> (neutral points handed to
+        /// team 1). Adopting in <c>Awake</c>, where the states are built, would read the
+        /// pre-swap authored value and start a reversed match with the bases exchanged on the
+        /// server only. <c>CapturePoint.Start</c>'s own remark already promised this adoption;
+        /// nothing performed it (X-53).
+        /// </para>
+        /// <para>
+        /// Nothing has ticked yet: <c>FixedUpdate</c> is guaranteed to follow <c>Start</c>, so
+        /// no round has begun against neutral state.
+        /// </para>
+        /// </remarks>
+        /// <summary>
+        /// Said out loud, once, when no team holds a spawn point. Silent, this is an end/reset
+        /// loop that looks from a client like the world dissolving underfoot (X-53).
+        /// </summary>
+        private void OnBothTeamsEliminated()
+        {
+            Debug.LogError(
+                "[net] elimination fired against BOTH teams: neither holds a spawn point, so "
+                + "every round ends in a draw about a second after it starts and resets forever. "
+                + "Either the map authors no opening owner, or the host is not adopting it -- "
+                + "look for '[net] opening ownership adopted' above.");
+        }
+
+        private void Start()
+        {
+            if (_match == null || _points == null) return;
+
+            int count = _match.CapturePoints.Count;
+            int adopted = 0;
+
+            for (int i = 0; i < count && i < _points.Count; i++)
+            {
+                // -1 fully team 0, +1 fully team 1, 0 neutral -- the axis CapturePointState
+                // uses. The scene's own spelling is 0 / 1 / -1, which is a different axis and
+                // is converted here rather than at either end.
+                int owner = _points.GetOwner(i);
+                float opening = owner == TeamId.Team0 ? -1f : owner == TeamId.Team1 ? 1f : 0f;
+
+                _match.AdoptOpeningOwner(i, opening);
+                if (owner == TeamId.Team0 || owner == TeamId.Team1) adopted++;
+            }
+
+            // Counted and stated rather than assumed. A map that hands NEITHER team a base
+            // makes both spawn-point counts zero, which ApplyElimination reads as a double
+            // wipe-out one second into Playing -- the loop X-53 was. If that is ever true again
+            // it should be one log line, not a four-hour investigation.
+            if (adopted == 0)
+            {
+                Debug.LogError(
+                    $"[net] no capture point in this scene is authored to either team, so "
+                    + "neither starts with a base and the round will end in a draw about a "
+                    + "second after it begins. Author an opening owner on at least one point "
+                    + "per team (Dustbowl gives team 0 Oasis and team 1 Fortress).");
+            }
+            else
+            {
+                Debug.Log($"[net] opening ownership adopted: {adopted} of {count} "
+                          + "capture point(s) start owned.");
+            }
+        }
+
         private void OnDestroy()
         {
             if (_match == null) return;
             _match.PhaseChanged   -= OnPhaseChanged;
             _match.ResetRequested -= OnResetRequested;
+            _match.BothTeamsEliminated -= OnBothTeamsEliminated;
         }
 
         private void FixedUpdate()

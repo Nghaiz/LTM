@@ -98,6 +98,15 @@ namespace Ironfront.Net.Replication.Match
         private float _ticketsFloat1;
         private float _sinceLastBroadcast;
         private byte _lastBroadcastHumans;
+        /// <summary>
+        /// Raised once when elimination fires against BOTH teams — no team holds a spawn point,
+        /// so the round ends in a draw the instant the grace period expires and does so again
+        /// every round. A host subscribes to say so out loud. See <c>ApplyElimination</c>.
+        /// </summary>
+        public event Action? BothTeamsEliminated;
+
+        private bool _warnedBothEliminated;
+
         private int _spawnPoints0 = CountsNotReported;
         private int _spawnPoints1 = CountsNotReported;
         private float _playingElapsed;
@@ -140,6 +149,26 @@ namespace Ironfront.Net.Replication.Match
         public MatchRules Rules => _rules;
 
         public IReadOnlyList<CapturePointState> CapturePoints => _points;
+
+        /// <summary>
+        /// Adopts the map's OPENING ownership for one capture point, and for every later round.
+        /// </summary>
+        /// <param name="index">Point index, matching <see cref="CapturePoints"/> order.</param>
+        /// <param name="owner">-1 fully team 0, +1 fully team 1, 0 neutral.</param>
+        /// <remarks>
+        /// Here rather than on the caller so the dirty flag moves with the value: the host
+        /// adopts during <c>Start</c>, before any client can have been told anything, and a
+        /// point whose opening state was never broadcast renders neutral on every client that
+        /// joins before somebody walks onto it. See <c>CapturePointState.AdoptOpeningOwner</c>
+        /// for the defect this closes (X-53).
+        /// </remarks>
+        public void AdoptOpeningOwner(int index, float owner)
+        {
+            if (index < 0 || index >= _points.Length) return;
+
+            _points[index].AdoptOpeningOwner(owner);
+            MatchStateIsDirty = true;
+        }
 
         /// <summary>Capture points whose value moved enough to be worth a message this tick.</summary>
         public IReadOnlyList<byte> DirtyCapturePoints => _dirtyPoints;
@@ -406,6 +435,17 @@ namespace Ironfront.Net.Replication.Match
             bool eliminated0 = _spawnPoints0 == 0;
             bool eliminated1 = _spawnPoints1 == 0;
             if (!eliminated0 && !eliminated1) return;
+
+            // Both at once is not a match ending, it is a map with no bases -- and read as a
+            // draw it produces an unbounded end/reset loop rather than an error. That loop ran
+            // 34 times in four hours on the deployed server and nothing said why, so the
+            // degenerate case is announced (X-53). Once per machine lifetime: it is true on
+            // every tick of every round it happens in.
+            if (eliminated0 && eliminated1 && !_warnedBothEliminated)
+            {
+                _warnedBothEliminated = true;
+                BothTeamsEliminated?.Invoke();
+            }
 
             if (eliminated0) _ticketsFloat0 = 0f;
             if (eliminated1) _ticketsFloat1 = 0f;
