@@ -13,7 +13,7 @@ namespace Ironfront.Net.Protocol
     public static class ProtocolConstants
     {
         public const ushort PROTOCOL_ID       = 0x4946;  // 'IF' — filters out junk packets
-        public const byte   PROTOCOL_VERSION  = 3;
+        public const byte   PROTOCOL_VERSION  = 4;
 
         public const int    MTU_SAFE          = 1200;    // safe through any router
         public const int    GSP_HEADER_SIZE   = 16;

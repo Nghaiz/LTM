@@ -11,16 +11,17 @@ using Xunit;
 namespace Ironfront.Net.Replication.Tests
 {
     /// <summary>
-    /// X-39 — whether the map Dustbowl authors is a map the wire can carry.
+    /// X-39 / X-53 — whether the map Dustbowl authors is a map the wire can carry. It is, since
+    /// 4.0.0 moved the position window from +/-2048 to -1024..3072.
     /// </summary>
     /// <remarks>
     /// <para>
     /// <b>This check already existed and already fired, and that is the point.</b>
     /// <c>LevelBounds.SetupBounds</c> calls <see cref="PlayVolume.FitsOnTheWire"/> and logs an
-    /// error when it is false — and it has been printing that error into every lane-B server
-    /// log since E-6 landed, while the comment two lines above it says "Today Dustbowl's is, by
-    /// a wide margin". Nobody read either. A <c>Debug.LogError</c> in a 300 KB log is not a
-    /// gate; this is.
+    /// error when it is false — and it printed that error into every lane-B server log from E-6
+    /// until X-53, while the comment two lines above it said "Today Dustbowl's is, by a wide
+    /// margin". Nobody read either. A <c>Debug.LogError</c> in a 300 KB log is not a gate; this
+    /// is. What finally forced it was a player falling through the world at the Oasis spawn.
     /// </para>
     /// <para>
     /// <b>It reads the scene file off disk rather than the Editor.</b> Assembly-CSharp cannot
@@ -33,28 +34,29 @@ namespace Ironfront.Net.Replication.Tests
     public sealed class DustbowlFitsOnTheWireTests
     {
         [Fact]
-        public void DustbowlsPlayVolumeReachesPastTheWiresRange_KnownGap()
+        public void DustbowlsPlayVolumeFitsOnTheWire()
         {
             PlayVolume volume = AuthoredVolume("Dustbowl", "Level Bounds");
 
-            // A pinned baseline of a BROKEN state, and it inverts rather than moving. If this
-            // goes red it means the volume changed:
-            //   - now inside the range  -> the gap is CLOSED. Delete this test, and assert
-            //                              volume.FitsOnTheWire in its place. Do not re-pin.
-            //   - still outside, new numbers -> the map moved without fixing the range. Read
-            //                              the new corners below before deciding anything.
-            // Whichever it is, the answer is never "update the constant to whatever the run
-            // just reported".
-            Assert.False(
+            // INVERTED, not re-pinned (X-53). This was
+            // DustbowlsPlayVolumeReachesPastTheWiresRange_KnownGap, asserting the gap was still
+            // open and carrying its own instruction for this moment: "now inside the range ->
+            // the gap is CLOSED. Delete this test, and assert volume.FitsOnTheWire in its place.
+            // Do not re-pin." The gap closed by MOVING the wire's window rather than the map --
+            // Quantize.POS_MIN/POS_MAX went from +/-2048 to -1024..3072, same 4096 m width, same
+            // 6.25 cm -- so from here a red means a genuine regression: either the map grew or
+            // somebody narrowed the window.
+            Assert.True(
                 volume.FitsOnTheWire,
-                "Dustbowl's authored play volume now fits the wire's +/-2048 m position range. "
-                + "That is the gap closing, not a regression: replace this test with a positive "
-                + "assertion on FitsOnTheWire and delete the known-gap note in the X-39 ledger "
-                + "row. Never re-pin this to a new set of out-of-range corners.");
+                $"Dustbowl's authored play volume ({volume.Min} .. {volume.Max}) no longer fits "
+                + $"the wire's {Quantize.POS_MIN} .. {Quantize.POS_MAX} m position range. "
+                + "Bodies outside it are clamped silently by the snapshot encoder and desync "
+                + "permanently. Do NOT widen the range to absorb this without reading X-53 "
+                + "first: widening halves the resolution for every actor on every map.");
 
-            // By identity, not by a boolean. FitsOnTheWire is satisfied-or-not by any number of
-            // different overruns, and knowing WHICH corner is out is the whole difference
-            // between "the map is 300 m too wide" and "somebody moved the whole level".
+            // By identity, not by the boolean. FitsOnTheWire is satisfied by any volume inside
+            // the window, so knowing WHICH corner moved is the difference between "the map grew"
+            // and "somebody moved the whole level".
             Assert.Equal(650f, volume.Min.X, 1);
             Assert.Equal(2350f, volume.Max.X, 1);
             Assert.Equal(620f, volume.Min.Z, 1);
@@ -62,30 +64,62 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(-50f, volume.Min.Y, 1);
             Assert.Equal(650f, volume.Max.Y, 1);
 
-            // 302 m of x and 172 m of z, out of a 1700 x 1600 m box. Stated so a reader does
-            // not have to subtract, and so a change to POS_MAX moves this line too.
-            Assert.Equal(302f, volume.Max.X - Quantize.POS_MAX, 1);
-            Assert.Equal(172f, volume.Max.Z - Quantize.POS_MAX, 1);
+            // The headroom that is left, stated so a later widening of the MAP is a red here
+            // rather than a silent desync in a match. 722 m on x, 852 m on z.
+            Assert.Equal(722f, Quantize.POS_MAX - volume.Max.X, 1);
+            Assert.Equal(852f, Quantize.POS_MAX - volume.Max.Z, 1);
         }
 
         [Fact]
-        public void TheOasisCapturePointIsInsideTheUnrepresentableRegion_KnownGap()
+        public void NoCapturePointIsOutsideTheWiresRange()
         {
-            // What raises X-39 from "scenery parked off-map" to a defect: one of Dustbowl's
-            // seven capture points, its flag, and five vehicle spawners sit past POS_MAX. Every
-            // player and vehicle contesting Oasis replicates at exactly 2048.00 m to every
-            // other client, so two of them 50 m apart are drawn in the same place.
+            // INVERTED per this fixture's own instruction (X-53). It used to assert that Oasis
+            // SATURATED -- "if Oasis comes inside the range this goes red announcing the FIX.
+            // Move the assertion to 'no capture point is outside' and delete this." Done.
             //
-            // Inverts, never re-pins: if Oasis comes inside the range this goes red announcing
-            // the FIX. Move the assertion to "no capture point is outside" and delete this.
-            Vec3 oasis = AuthoredPosition("Dustbowl", "Oasis Capture Point");
+            // Why it mattered: Oasis is team 0's OPENING base, so under X-53's other half every
+            // team-0 player spawned there. At x = 2085.6 against the old POS_MAX of 2048 that
+            // replicated as exactly 2048.00 to every client -- 37.6 m from where the server had
+            // the body, over terrain that is not there. Measured on a real 3-client run: both
+            // team-0 clients were placed at x = 2084-2086 and fell through the world.
+            SceneTransforms transforms = Parse("Dustbowl");
 
-            Assert.True(
-                Quantize.PositionSaturates(oasis.X),
-                "the Oasis capture point is now inside the wire's range. That is the gap "
-                + "closing: assert that NO capture point saturates, and delete this test.");
-            Assert.Equal(2085.6f, oasis.X, 1);
-            Assert.Equal(37.6f, oasis.X - Quantize.POS_MAX, 1);
+            // Named, because a point this walk cannot place is NOT a point known to be inside.
+            // 'Outpost Capture Point' hangs off a rotated ancestor, and the parser refuses to
+            // sum local positions through a rotation rather than return a plausible wrong
+            // number. Asserted as a set so a NEW unresolvable point is a red here instead of
+            // silently dropping out of the sweep -- the exemption cannot become a graveyard.
+            var unresolvable = new List<string>();
+            var checked_ = new List<string>();
+
+            foreach (string point in new[]
+            {
+                "Fortress Capture Point", "Bridge Capture Point", "Town Capture Point",
+                "Oasis Capture Point", "Outpost Capture Point", "Mine Capture Point",
+            })
+            {
+                Vec3 p;
+                try { p = transforms.Resolve(point).World; }
+                catch (Exception) { unresolvable.Add(point); continue; }
+
+                checked_.Add(point);
+
+                Assert.False(
+                    Quantize.PositionSaturates(p.X),
+                    $"{point} is at x = {p.X}, outside the wire's "
+                    + $"{Quantize.POS_MIN} .. {Quantize.POS_MAX} m range, so every body "
+                    + "contesting it replicates at the boundary and desyncs permanently.");
+                Assert.False(
+                    Quantize.PositionSaturates(p.Z),
+                    $"{point} is at z = {p.Z}, outside the wire's range.");
+            }
+
+            Assert.Equal(new[] { "Outpost Capture Point" }, unresolvable);
+            Assert.Equal(5, checked_.Count);
+
+            // Oasis by identity, because it is the one that was out and the one whose position
+            // a future map edit is most likely to move.
+            Assert.Equal(2085.6f, transforms.Resolve("Oasis Capture Point").World.X, 1);
         }
 
         // ------------------------------------------------------------------ the saturation log
@@ -97,7 +131,7 @@ namespace Ironfront.Net.Replication.Tests
 
             SnapshotBuilder.Capture(
                 actorId: 41,
-                position: new Vec3(2085.6f, 8.9f, 1139.4f),   // standing on the Oasis flag
+                position: new Vec3(Quantize.POS_MAX + 40f, 8.9f, 1139.4f),  // past the ceiling
                 yawDegrees: 0f, pitchDegrees: 0f,
                 velocity: default,
                 stateFlags: default,

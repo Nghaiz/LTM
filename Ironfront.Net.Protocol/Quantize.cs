@@ -21,11 +21,33 @@ namespace Ironfront.Net.Protocol
     public static class Quantize
     {
         // ===== POSITION =====
-        // The current map fits inside a +/-2048 m box. An i16 has 65536 levels.
-        public const float POS_MIN   = -2048f;
-        public const float POS_MAX   =  2048f;
-        public const float POS_RANGE = POS_MAX - POS_MIN;        // 4096
-        // Resolution = 4096 / 65536 = 0.0625 m = 6.25 cm. Good enough for an FPS.
+        //
+        // A 4096 m window, placed where playable content actually lives. An i16 has 65536
+        // levels, so the WIDTH is what buys resolution and the PLACEMENT is free:
+        //   Resolution = 4096 / 65536 = 0.0625 m = 6.25 cm. Good enough for an FPS.
+        //
+        // X-53. This used to read "the current map fits inside a +/-2048 m box", and that was
+        // false the whole time it was written down: Dustbowl's authored play volume runs
+        // (650, -50, 620) .. (2350, 650, 2220), so 302 m of x and 172 m of z sat outside a
+        // symmetric window -- including the Oasis capture point at x = 2085.6, which is team 0's
+        // opening base. Every body out there encoded to exactly 2048.00 on every client, ~37 m
+        // from where the server had it, over terrain that is not there. Measured on a real run:
+        // both team-0 clients spawned at x = 2084-2086 and fell.
+        //
+        // WIDENING was the obvious fix and is the wrong one. +/-4096 would double the window and
+        // halve the resolution to 12.5 cm for every actor on every map, forever, to buy negative
+        // space no map uses. SHIFTING costs nothing: same width, same 6.25 cm, same 6 bytes per
+        // position on the wire.
+        //
+        // The split is a rule rather than a fit to one map: 1024 m of negative headroom for a map
+        // built around the origin, 3072 m of positive for a map built in positive space (which is
+        // how Ravenfield's are authored). Dustbowl's far corner sits 722 m inside the ceiling.
+        // A map that needs more negative space than this wants a per-map origin in the protocol,
+        // not a wider window -- and it will say so out loud rather than silently, because
+        // LevelBounds.SetupBounds checks the authored volume against these constants on load.
+        public const float POS_MIN   = -1024f;
+        public const float POS_MAX   =  3072f;
+        public const float POS_RANGE = POS_MAX - POS_MIN;        // 4096, unchanged
 
         // ===== ANGLES =====
         public const float YAW_SCALE   = 65536f / 360f;    // u16

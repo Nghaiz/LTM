@@ -12,7 +12,7 @@ namespace Ironfront.Net.Replication.World
     /// <para>
     /// <b>The failure this exists to stop is silent, and it is not a wall.</b>
     /// <c>Quantize.PackPos</c> clamps to <c>POS_MIN</c>/<c>POS_MAX</c> before it packs
-    /// (<c>Clamp01((v - POS_MIN) / POS_RANGE)</c>), so a body past ±2048 m is still simulated at
+    /// (<c>Clamp01((v - POS_MIN) / POS_RANGE)</c>), so a body outside the window is still simulated at
     /// its true position by the server while every snapshot pins it to the boundary. The server
     /// and its clients then disagree permanently, with no exception, no counter and nothing in a
     /// log — and the symptom a player reports is "the helicopter broke", which reads as lag.
