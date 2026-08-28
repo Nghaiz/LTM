@@ -171,6 +171,14 @@ namespace Ironfront.Net.Unity.Diagnostics
 
             bool isServer = role.Trim().ToLowerInvariant() == "server";
             NetContext.SetRole(isServer ? NetRole.Server : NetRole.Client);
+
+            // The class remark above says the strip "CANNOT pre-empt the transport bind", and
+            // that a client process must therefore be CONFIGURED not to open a socket --
+            // run-lane-b.ps1 sets IRONFRONT_GAMESERVER_TRANSPORT=loopback for exactly that. This
+            // is the fix that remark was waiting for: a declared client no longer opens one at
+            // all, on any transport, so the loopback setting is now belt-and-braces rather than
+            // the only thing standing between three clients and three SocketExceptions (X-52).
+            if (!isServer) NetContext.DeclareClientProcess();
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

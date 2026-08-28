@@ -1211,6 +1211,118 @@ namespace Ironfront.Tools.ClientWiringGate
             return findings;
         }
 
+        private static readonly string[] DeclaredClientHostScope = { "/NetServerBootstrap.cs" };
+
+        private const string DeclaredClientHostCaller = "Awake";
+
+        private const string DeclaredClientFlag = "IsDeclaredClient";
+
+        /// <summary>The call the guard must precede. See the rule's remark for why order matters.</summary>
+        private const string DeclaredClientHostConfigure = "ResolveConfiguration";
+
+        /// <summary>Exposed so the companion test can assert the rule is in scope at all.</summary>
+        public static bool IsDeclaredClientHostScoped(string path) =>
+            !IsExcludedFromScan(path) && IsInScope(path, DeclaredClientHostScope);
+
+        /// <summary>
+        /// G14 - <c>NetServerBootstrap.Awake</c> hosting a server on a declared client.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The mirror of G11, and the other half of AD-1.</b> G11 stops a dedicated server
+        /// dialling itself a client; this stops a client hosting a server. Both exist because
+        /// every map scene carries an active <c>NetServer</c> AND an active <c>NetClient</c>, so
+        /// a process that declares nothing is a listen server — and <c>architecture.md</c> AD-1
+        /// says there is no listen-server mode.
+        /// </para>
+        /// <para>
+        /// <b>What it protects, measured on two logs rather than argued.</b>
+        /// <c>tools/play-lan.ps1</c> launched two human clients against the sandbox server with
+        /// <c>IRONFRONT_ROLE=client</c>. Both logged <c>[net] role = Client</c> — the X-10
+        /// mechanism working — and then started a full authority anyway, because the role
+        /// deferral in <c>Awake</c> only declined to CLAIM the role and never declined to START.
+        /// Client 1 took UDP 27015 and reported <c>16 player slots will not fit: 51 actors are
+        /// already registered</c> and <c>0 claimable player bodies against 16 admitted
+        /// connections</c>; client 2 threw an unhandled <c>SocketException</c> out of
+        /// <c>Awake</c> because client 1 held the port. Lane B had already met this and worked
+        /// around it — <c>LaneBHarness</c>'s own remark says a client "must be CONFIGURED not to
+        /// open a socket rather than stripped after it has", which is why
+        /// <c>run-lane-b.ps1</c> sets <c>IRONFRONT_GAMESERVER_TRANSPORT=loopback</c> — and that
+        /// remark ends by saying the real fix belongs in its own commit. This is it (X-52).
+        /// </para>
+        /// <para>
+        /// <b>Position is part of the rule, not pedantry</b>, exactly as in G11. Everything below
+        /// the guard is server startup: <c>ResolveConfiguration</c> parses a port, a slot count
+        /// and a shared secret this process will never bind, and the lines after it log a physics
+        /// rate as though this were the authority for it. A guard placed lower still stops the
+        /// bind and still leaves a client reading and announcing a server's configuration.
+        /// </para>
+        /// <para>
+        /// <b>Not <c>NetContext.IsClient</c>.</b> That property IS the Awake race X-9 closed —
+        /// it is settled by whichever of the two <c>-1000</c> bootstraps wakes first, so gating
+        /// on it would make an Editor Play session stop hosting depending on component order.
+        /// Matching on <c>IsDeclaredClient</c> by name is deliberate: it has exactly one setter,
+        /// and a future edit that "simplifies" the condition turns this rule red rather than
+        /// quietly reintroducing that dependency.
+        /// </para>
+        /// </remarks>
+        public static IReadOnlyList<GateFinding> FindUnguardedDeclaredClientHost(
+            SyntaxTree tree, string path)
+        {
+            var findings = new List<GateFinding>();
+
+            if (IsExcludedFromScan(path)) return findings;
+            if (!IsInScope(path, DeclaredClientHostScope)) return findings;
+
+            MethodDeclarationSyntax? awake = tree.GetRoot()
+                .DescendantNodes()
+                .OfType<MethodDeclarationSyntax>()
+                .FirstOrDefault(m => m.Identifier.ValueText == DeclaredClientHostCaller);
+
+            if (awake == null)
+            {
+                findings.Add(new GateFinding(
+                    "G14", path, 0,
+                    $"'{DeclaredClientHostCaller}' is gone from NetServerBootstrap, so the "
+                    + "declared-client guard cannot be where it has to be. If the startup moved "
+                    + "to another member, move this rule with it rather than deleting it."));
+                return findings;
+            }
+
+            IfStatementSyntax? guard = awake.DescendantNodes()
+                .OfType<IfStatementSyntax>()
+                .FirstOrDefault(i =>
+                    i.Condition.ToString().Contains(DeclaredClientFlag, StringComparison.Ordinal)
+                    && i.Statement.DescendantNodesAndSelf().OfType<ReturnStatementSyntax>().Any());
+
+            if (guard == null)
+            {
+                findings.Add(new GateFinding(
+                    "G14", path, LineOf(awake),
+                    $"Awake has no 'if (NetContext.{DeclaredClientFlag}) ... return;' guard, so a "
+                    + "process launched to JOIN a match hosts one of its own: it binds the UDP "
+                    + "port, fills sixteen player bodies and runs a 30 Hz authority beside the "
+                    + "server it connected to, and a second client on the same machine dies on a "
+                    + "SocketException. AD-1 says there is no host/listen-server mode."));
+                return findings;
+            }
+
+            InvocationExpressionSyntax? configure = awake.DescendantNodes()
+                .OfType<InvocationExpressionSyntax>()
+                .FirstOrDefault(i => NameOfInvoked(i) == DeclaredClientHostConfigure);
+
+            if (configure != null && configure.SpanStart < guard.SpanStart)
+            {
+                findings.Add(new GateFinding(
+                    "G14", path, LineOf(guard),
+                    $"the declared-client guard sits AFTER '{DeclaredClientHostConfigure}', so a "
+                    + "client still parses and announces a server's port, slot count and shared "
+                    + "secret before declining to use any of them. Move the guard above it."));
+            }
+
+            return findings;
+        }
+
         private static readonly string[] DeployedViewScope =
             { "/NetClientLocalCombatDriver.cs" };
 

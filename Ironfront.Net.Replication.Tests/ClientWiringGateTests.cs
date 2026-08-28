@@ -380,6 +380,119 @@ namespace Ironfront.Net.Replication.Tests
                 "Ironfront.sln not found walking up from " + Directory.GetCurrentDirectory());
         }
 
+        // ------------------------------------------------- G14, the declared-client host guard
+
+        // Not a file on disk, for the fixture reason in the class remark. The path is what puts
+        // it in scope; the body is the shape of NetServerBootstrap.Awake, reduced to the two
+        // statements the rule is about.
+        private const string ServerBootstrapPath =
+            "Ironfront_Reborn/Assets/Scripts/Net/Server/NetServerBootstrap.cs";
+
+        private static IReadOnlyList<GateFinding> DeclaredClientHost(string body) =>
+            ClientWiringDetectors.FindUnguardedDeclaredClientHost(
+                Parse("class NetServerBootstrap { " + body + " }", ServerBootstrapPath),
+                ServerBootstrapPath);
+
+        [Fact]
+        public void TheGateAcceptsAGuardedServerBootstrap()
+        {
+            Assert.Empty(DeclaredClientHost(
+                "void Awake() { if (NetContext.IsDeclaredClient) { return; } "
+                + "ResolveConfiguration(); StartServer(); }"));
+        }
+
+        /// <summary>The defect itself: the role is deferred, the startup is not.</summary>
+        [Fact]
+        public void TheGateFlagsAServerBootstrapThatOnlyDefersTheRole()
+        {
+            GateFinding finding = Assert.Single(DeclaredClientHost(
+                "void Awake() { if (!NetContext.IsClient) NetContext.SetRole(NetRole.Server); "
+                + "ResolveConfiguration(); StartServer(); }"));
+
+            Assert.Equal("G14", finding.RuleId);
+            Assert.Contains("hosts one of its own", finding.Message, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// Position, separately from presence. This was G11's author's own first draft, and the
+        /// same misplacement is available here.
+        /// </summary>
+        [Fact]
+        public void TheGateFlagsAGuardPlacedBelowResolveConfiguration()
+        {
+            GateFinding finding = Assert.Single(DeclaredClientHost(
+                "void Awake() { ResolveConfiguration(); "
+                + "if (NetContext.IsDeclaredClient) { return; } StartServer(); }"));
+
+            Assert.Equal("G14", finding.RuleId);
+            Assert.Contains("AFTER", finding.Message, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// A guard that reads the RACE rather than the declaration is not a guard. Spelled out
+        /// because "simplifying" the condition to IsClient is the plausible future edit, and it
+        /// would make an Editor Play session stop hosting depending on component order (X-9).
+        /// </summary>
+        [Fact]
+        public void TheGateRejectsTheIsClientSpellingOfTheGuard()
+        {
+            GateFinding finding = Assert.Single(DeclaredClientHost(
+                "void Awake() { if (NetContext.IsClient) { return; } "
+                + "ResolveConfiguration(); StartServer(); }"));
+
+            Assert.Equal("G14", finding.RuleId);
+        }
+
+        /// <summary>A guard with no return stops nothing.</summary>
+        [Fact]
+        public void TheGateRejectsAGuardThatDoesNotReturn()
+        {
+            Assert.Single(DeclaredClientHost(
+                "void Awake() { if (NetContext.IsDeclaredClient) { Log(); } "
+                + "ResolveConfiguration(); StartServer(); }"));
+        }
+
+        [Fact]
+        public void TheGateFlagsAServerBootstrapWithNoAwakeAtAll()
+        {
+            GateFinding finding = Assert.Single(DeclaredClientHost("void Start() { }"));
+
+            Assert.Equal("G14", finding.RuleId);
+            Assert.Contains("move this rule with it", finding.Message, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// Scope, both directions. Without the negative case the rule could be scoped to nothing
+        /// and every assertion above would still pass on its own fixture path.
+        /// </summary>
+        [Fact]
+        public void TheRuleIsScopedToTheServerBootstrapAndNothingElse()
+        {
+            Assert.True(ClientWiringDetectors.IsDeclaredClientHostScoped(ServerBootstrapPath));
+            Assert.False(ClientWiringDetectors.IsDeclaredClientHostScoped(ProductionPath));
+
+            Assert.Empty(ClientWiringDetectors.FindUnguardedDeclaredClientHost(
+                Parse("class P { void Awake() { StartServer(); } }", ProductionPath),
+                ProductionPath));
+        }
+
+        /// <summary>
+        /// The real file, so the rule is graded against what ships rather than only against
+        /// fixtures. This is what goes red if somebody deletes the guard.
+        /// </summary>
+        [Fact]
+        public void TheShippedServerBootstrapIsGuarded()
+        {
+            string path = Path.Combine(
+                RepoRoot(), "Ironfront_Reborn", "Assets", "Scripts", "Net", "Server",
+                "NetServerBootstrap.cs");
+
+            Assert.True(File.Exists(path), $"no NetServerBootstrap at {path}");
+
+            Assert.Empty(ClientWiringDetectors.FindUnguardedDeclaredClientHost(
+                Parse(File.ReadAllText(path), path), path));
+        }
+
         private static SyntaxTree Parse(string source, string path)
             => ClientWiringDetectors.Parse(source, path);
 

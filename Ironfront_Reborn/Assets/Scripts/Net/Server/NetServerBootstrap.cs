@@ -1,4 +1,5 @@
 using System;
+using System.Net.Sockets;
 using System.Text;
 using Ironfront.Net.Configuration;
 using Ironfront.Net.Protocol;
@@ -126,6 +127,43 @@ namespace Ironfront.Net.Unity.Server
 
             TickLoop = GetComponent<ServerTickLoop>();
 
+            // ABOVE the declared-client guard, deliberately. This caps how much time one frame
+            // may simulate, and it is an ENGINE knob rather than server startup: a client that
+            // hitches owes the same physics backlog a server does, and its prediction re-simulates
+            // that backlog. Every client set it before the guard below existed, so leaving it under
+            // the guard would have quietly restored Unity's 0.333 s default on exactly the
+            // processes this change was about -- a physics behaviour change nobody asked for,
+            // shipped inside a networking fix.
+            Time.maximumDeltaTime = MaxDeltaTime;
+
+            // The mirror of NetClientBootstrap's dedicated-server guard, and the other half of
+            // AD-1 ("server-authoritative, no host/listen-server"). X-50 stopped a headless host
+            // dialling itself; this stops a rendered process launched to JOIN a match from
+            // hosting one of its own. Measured on tmp/client-1.log + client-2.log, two clients
+            // started by tools/play-lan.ps1 against the sandbox server: both logged
+            // `[net] role = Client` and then went on to run a full authority anyway -- the first
+            // took UDP 27015 and reported `16 player slots will not fit: 51 actors are already
+            // registered`, the second threw an unhandled SocketException out of this very Awake
+            // because the first already held the port.
+            //
+            // NOT NetContext.IsClient, for NetContext.IsDeclaredClient's own reason: the ROLE is
+            // an Awake ordering between two components that defer to each other, so gating on it
+            // would make an Editor Play session stop hosting depending on component order --
+            // the race X-9 closed. IsDeclaredClient has one meaning and one setter.
+            //
+            // ABOVE ResolveConfiguration, like G11's guard and for the same reason: everything
+            // below is server startup, and a client has no business parsing a server's port,
+            // slot count or shared secret, nor logging a physics rate it is not the authority
+            // for. Left ENABLED rather than switched off -- `enabled = false` assigned inside
+            // Awake does not survive the activation pass that called it (DedicatedServerDeclines-
+            // LocalClientTests measured that), so a line claiming to disable this would lie. It
+            // costs nothing: every Update path here returns on a null Transport.
+            if (NetContext.IsDeclaredClient)
+            {
+                Debug.Log("[net] declared client: no local server will be started (AD-1).");
+                return;
+            }
+
             ResolveConfiguration();
 
             // Deference, mirroring NetClientBootstrap's `if (!NetContext.IsServer)`. Dustbowl
@@ -145,7 +183,6 @@ namespace Ironfront.Net.Unity.Server
             // declaration the role is Offline here and the server still claims it, so the
             // Editor sandbox and the dedicated build behave exactly as they did.
             if (!NetContext.IsClient) NetContext.SetRole(NetRole.Server);
-            Time.maximumDeltaTime = MaxDeltaTime;
 
             // Only in a real headless run. Capping the Editor to 30 fps would make the client track's
             // two-client test miserable to watch for no benefit, and vSync is meaningless
@@ -316,7 +353,36 @@ namespace Ironfront.Net.Unity.Server
                 Udp = udp;
 
                 RegisterTicketValidator(udp);
-                udp.Start(Config.UdpPort, Config.MaxConnections);
+
+                try
+                {
+                    udp.Start(Config.UdpPort, Config.MaxConnections);
+                }
+                catch (SocketException ex)
+                {
+                    // Caught rather than allowed to escape, and the difference is not
+                    // cosmetic: this runs from Awake, so an escaping exception abandons the
+                    // REST of Awake -- leaving _ownsTransport set, Udp assigned and the tick
+                    // loop never bound, a half-built server that OnDestroy then tries to stop.
+                    // Observed exactly that in tmp/client-2.log.
+                    //
+                    // Still an error and still a stop, per errors-over-silent-fallbacks: the
+                    // server does not quietly fall back to another port or to loopback, because
+                    // a server the matchmaker keeps sending players who cannot reach it is
+                    // worse than one that refused to start and said why.
+                    _misconfigured = true;
+                    Udp = null;
+                    _ownsTransport = false;
+                    udp.Dispose();
+
+                    Debug.LogError(
+                        $"[net] UDP :{Config.UdpPort} could not be bound, so this server will "
+                        + $"not start: {ex.Message} Something already holds the port -- another "
+                        + "game server on this machine, or a client that is also hosting. "
+                        + $"Set {EnvRegistry.GameServerUdpPort.Name} to a free port, or stop the "
+                        + "other process.");
+                    return;
+                }
 
                 // Null clock pump: a real socket runs on the wall clock and needs no advancing.
                 TickLoop.Bind(udp, null);
