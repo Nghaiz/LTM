@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Client;
 using Ironfront.Net.Replication.Movement;
@@ -219,11 +219,14 @@ namespace Ironfront.Net.Replication.Tests
             var reconciler = new PredictionReconciler();
             var input = new MoveInput(0f, 1f, 0f, false, false, false);
 
-            for (uint tick = 1; tick <= 5; tick++) reconciler.Record(tick, input);
-
             // The server has consumed inputs 1-3 and disagrees by well over the tolerance.
             var authoritative = MoveState.AtRest(new Vec3(0f, 0f, 3f));
             var predicted = MoveState.AtRest(new Vec3(0f, 0f, 9f));
+
+            // Since X-41 the comparison is at the ACKNOWLEDGED tick, so the fixture states where
+            // the client believed it was then: Z = 9 against the server's 3.
+            for (uint tick = 1; tick <= 5; tick++)
+                reconciler.Record(tick, input, predicted.Position);
 
             // What the server itself will reach once it consumes ticks 4 and 5 -- with the motion
             // WRITTEN BACK, which is the half this test used to drop on the floor.
@@ -262,7 +265,7 @@ namespace Ironfront.Net.Replication.Tests
 
             // Fill past capacity so tick 1 has been evicted.
             for (uint tick = 1; tick <= PredictionReconciler.Capacity + 10; tick++)
-                reconciler.Record(tick, input);
+                reconciler.Record(tick, input, Vec3.Zero);
 
             var authoritative = MoveState.AtRest(new Vec3(0f, 0f, 42f));
             var predicted = MoveState.AtRest(new Vec3(0f, 0f, 0f));
