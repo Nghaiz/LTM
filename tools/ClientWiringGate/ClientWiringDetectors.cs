@@ -1099,5 +1099,116 @@ namespace Ironfront.Tools.ClientWiringGate
 
         private static int LineOf(SyntaxNode node) =>
             node.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+
+        private static readonly string[] DedicatedServerDialScope = { "/NetClientBootstrap.cs" };
+
+        private const string DedicatedServerDialCaller = "Awake";
+
+        private const string DedicatedServerFlag = "IsDedicatedServer";
+
+        /// <summary>The call the guard must precede. See the rule's remark for why order matters.</summary>
+        private const string DedicatedServerDialConfigure = "ResolveConfiguration";
+
+        /// <summary>Exposed so the companion test can assert the rule is in scope at all.</summary>
+        public static bool IsDedicatedServerDialScoped(string path) =>
+            !IsExcludedFromScan(path) && IsInScope(path, DedicatedServerDialScope);
+
+        /// <summary>
+        /// G11 - <c>NetClientBootstrap.Awake</c> dialling a client on a dedicated server.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why a gate and not a test.</b> The behaviour is one early return inside a Unity
+        /// lifecycle method, and Unity does not run <c>Awake</c> on <c>AddComponent</c> outside
+        /// play mode — <c>NetServerActorSeamTests</c> already records paying for that. An EditMode
+        /// fixture built around it passes whether or not the guard exists, which is the shape
+        /// <c>green-that-proves-nothing.md</c> is about; it was written first here and its own
+        /// control test caught it going vacuously green.
+        /// </para>
+        /// <para>
+        /// <b>What it protects.</b> Every map scene carries an active <c>NetServer</c> AND an
+        /// active <c>NetClient</c>, so any process loading one is a listen server. The lane-B
+        /// harness strips the half it is not; the shipped dedicated server strips nothing, so
+        /// before this guard it dialled itself over loopback and joined its own match — a real
+        /// body at a real spawn point, one of sixteen player slots and one connection spent on a
+        /// phantom, and the congestion controller reacting to its own traffic. Measured on the
+        /// first deployment anybody read the log of: <c>[net] conn 1 joined as actor 41
+        /// (127.0.0.1:59244)</c>. <c>architecture.md</c> AD-1 says there is no host/listen-server
+        /// mode; nothing enforced it.
+        /// </para>
+        /// <para>
+        /// <b>Position is part of the rule, not pedantry.</b> The guard must sit ahead of
+        /// <c>ResolveConfiguration</c>, because the role claim below that line
+        /// (<c>if (!NetContext.IsServer) SetRole(Client)</c>) races
+        /// <c>NetServerBootstrap.Awake</c>'s mirror of it and can settle a dedicated process as a
+        /// Client. A guard placed lower still stops the dial and still leaves that race — it was
+        /// this rule's author's own first draft, which is why the check is here rather than left
+        /// to a reviewer.
+        /// </para>
+        /// <para>
+        /// <b>Not <c>NetContext.IsServer</c>.</b> That property IS the race. Matching on
+        /// <c>IsDedicatedServer</c> by name is deliberate: it has exactly one setter, and a
+        /// future edit that "simplifies" the condition to <c>IsServer</c> turns this rule red
+        /// rather than quietly reintroducing an Awake-order dependency.
+        /// </para>
+        /// </remarks>
+        public static IReadOnlyList<GateFinding> FindUnguardedDedicatedServerClientDial(
+            SyntaxTree tree, string path)
+        {
+            var findings = new List<GateFinding>();
+
+            if (IsExcludedFromScan(path)) return findings;
+            if (!IsInScope(path, DedicatedServerDialScope)) return findings;
+
+            MethodDeclarationSyntax? awake = tree.GetRoot()
+                .DescendantNodes()
+                .OfType<MethodDeclarationSyntax>()
+                .FirstOrDefault(m => m.Identifier.ValueText == DedicatedServerDialCaller);
+
+            if (awake == null)
+            {
+                findings.Add(new GateFinding(
+                    "G11", path, 0,
+                    $"'{DedicatedServerDialCaller}' is gone from NetClientBootstrap, so the "
+                    + "dedicated-server guard cannot be where it has to be. If the dial moved to "
+                    + "another member, move this rule with it rather than deleting it."));
+                return findings;
+            }
+
+            IfStatementSyntax? guard = awake.DescendantNodes()
+                .OfType<IfStatementSyntax>()
+                .FirstOrDefault(i =>
+                    i.Condition.ToString().Contains(DedicatedServerFlag, StringComparison.Ordinal)
+                    && i.Statement.DescendantNodesAndSelf().OfType<ReturnStatementSyntax>().Any());
+
+            if (guard == null)
+            {
+                findings.Add(new GateFinding(
+                    "G11", path, LineOf(awake),
+                    $"Awake has no 'if (NetContext.{DedicatedServerFlag}) ... return;' guard, so a "
+                    + "dedicated server dials a client and joins its own match: a body at a spawn "
+                    + "point, one of sixteen player slots and one connection gone, and the "
+                    + "congestion controller reacting to its own loopback traffic. AD-1 says "
+                    + "there is no host/listen-server mode."));
+                return findings;
+            }
+
+            InvocationExpressionSyntax? configure = awake.DescendantNodes()
+                .OfType<InvocationExpressionSyntax>()
+                .FirstOrDefault(i =>
+                    NameOfInvoked(i) == DedicatedServerDialConfigure);
+
+            if (configure != null && configure.SpanStart < guard.SpanStart)
+            {
+                findings.Add(new GateFinding(
+                    "G11", path, LineOf(guard),
+                    $"the dedicated-server guard sits AFTER '{DedicatedServerDialConfigure}', so "
+                    + "the role claim between them still runs on a dedicated server and still "
+                    + "races NetServerBootstrap.Awake for this process's identity. Move the guard "
+                    + "above it."));
+            }
+
+            return findings;
+        }
     }
 }

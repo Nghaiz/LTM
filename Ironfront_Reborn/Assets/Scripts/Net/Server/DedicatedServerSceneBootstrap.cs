@@ -47,6 +47,47 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>Set by the lane-B harness; its presence means the harness owns scene loading.</summary>
         private const string HarnessRoleVariable = "IRONFRONT_LANEB_ROLE";
 
+        /// <summary>
+        /// Declares the process a dedicated server before any map scene <c>Awake</c> can read it,
+        /// so the client half of the map scene declines to dial. AD-1.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why this exists at all.</b> `Dustbowl` carries an active `NetServer` AND an active
+        /// `NetClient`, so every process that loads it is a listen server. The lane-B harness
+        /// strips the half it is not; the shipped dedicated server stripped nothing, so it
+        /// joined its own match: a real body at a real spawn point, holding one of sixteen
+        /// player slots and one connection, with the congestion controller reacting to its own
+        /// loopback traffic. Observed on the first deployment that anybody read the log of
+        /// (2026-08-28, `ironfront/game-server` on the sandbox node):
+        /// <c>[net] conn 1 joined as actor 41 (127.0.0.1:59244)</c>. `architecture.md` AD-1 says
+        /// there is no host/listen-server mode; until now nothing enforced it.
+        /// </para>
+        /// <para>
+        /// <b>Why a flag and not <c>NetContext.IsServer</c>.</b> The role is settled by an
+        /// `Awake` race between the two bootstraps — see `NetContext.IsDedicatedServer`. This
+        /// runs at `BeforeSceneLoad`, ahead of every `Awake` in every scene, which is the window
+        /// the harness's own `DeclareRole` remark records having got wrong once.
+        /// </para>
+        /// <para>
+        /// <b>The guards are the same three `Install` uses, and deliberately so.</b> Not batch
+        /// mode means a person is at the keyboard and an Editor listen server stays exactly as
+        /// it was; a harness role means lane B owns the topology and already strips a bootstrap.
+        /// A process reaching here with neither is a headless build launched to host a map, and
+        /// that is the only thing this declares.
+        /// </para>
+        /// </remarks>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void DeclareDedicatedServer()
+        {
+            if (!Application.isBatchMode) return;
+
+            if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(HarnessRoleVariable)))
+                return;
+
+            NetContext.DeclareDedicatedServer();
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
