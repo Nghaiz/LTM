@@ -115,9 +115,20 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: game-server
-          # PINNED BY DIGEST, never :latest — the tag gameserver-v0.3.0 resolved to this on
-          # 2026-08-28. Re-pin deliberately; do not let a moved tag change what runs.
-          image: ghcr.io/nghaiz/ironfront-game-server@sha256:c310da19a065c3dd3a39417d8ede252aa0f9e3c03cabf0cdc3a4a494f9627a40
+          # PINNED BY DIGEST, never :latest.
+          #
+          # NOT a registry image. GitHub-hosted runners have no Unity licence, so
+          # .github/workflows/images.yml cannot build the game server from source — it
+          # repackages a Linux artifact produced on a licensed machine and attached to a
+          # release. Until that release exists, this digest is a LOCAL build: tools/
+          # build-server.ps1, then `docker build -f infra/docker/gameserver.Dockerfile
+          # build/server`, side-loaded per the README. It carries the AD-1 fix (X-50);
+          # the published gameserver-v0.3.0 (sha256:c310da19…) predates it and self-joins.
+          #
+          # A locally-built digest exists on this node and NOWHERE ELSE, so a rescheduled
+          # pod cannot pull it back. That is the trade for pinning something the registry
+          # does not have; the README's side-load is the recovery.
+          image: ghcr.io/nghaiz/ironfront-game-server@sha256:469fab87798d3c64f7b767fa5460b64f981de5405bf1fbd2656ab2ce16c11628
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
