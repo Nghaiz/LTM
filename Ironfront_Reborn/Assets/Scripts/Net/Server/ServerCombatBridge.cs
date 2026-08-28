@@ -321,23 +321,28 @@ namespace Ironfront.Net.Unity.Server
         /// <see cref="FireRejection.NoAmmo"/> forever.
         /// </para>
         /// <para>
-        /// <b>A switch reloads, and that is a known consequence rather than an oversight.</b>
-        /// The netcode session models ONE weapon — <c>Weapon</c> is a single
-        /// <c>WeaponRuntimeState</c> — so there is nowhere to park the outgoing weapon's clip and
-        /// nothing to restore the incoming one's. <c>NetServerActor.AmmoInClip</c> cannot supply
-        /// it either: the bridge WRITES that field from the session every frame, so it mirrors the
-        /// session rather than the body. Re-arming is therefore the only state this method can
-        /// reach, and it means a player who switches away and back has a full magazine. Filed as
-        /// its own row rather than fixed here, because per-slot ammo is a state the wire, the
-        /// session and the snapshot would all have to grow.
+        /// <b>A switch used to reload, and X-43 is where that stopped.</b> The session modelled
+        /// ONE weapon, so there was nowhere to park the outgoing clip and nothing to restore the
+        /// incoming one's, and re-arming was the only state this method could reach — a player
+        /// who switched away and back had a full magazine. The row deferred it on the grounds
+        /// that "the wire, the session and the snapshot would all have to grow"; only the session
+        /// did. <c>SnapshotField</c> is 8/8 full and <c>AmmoInClip</c> already travels for the
+        /// weapon in hand, and a switch is a local event on both sides, so
+        /// <c>ClientSession.SwitchWeaponTo</c> keeping a clip per weapon id was the whole of it.
         /// </para>
         /// </remarks>
         private static void AdoptTheWeaponTheBodyIsHolding(ClientSession session, NetServerActor actor)
         {
             if (actor.WeaponId == session.WeaponId) return;
 
-            session.WeaponId = actor.WeaponId;
-            session.ResetWeapon();
+            // Ledger X-43. This used to assign the id and then call ResetWeapon(), because a
+            // full clip was the only weapon state reachable from here. SwitchWeaponTo parks the
+            // outgoing weapon's whole runtime state under its own id and restores the incoming
+            // one's, so switching away and back no longer hands out a magazine.
+            session.SwitchWeaponTo(actor.WeaponId);
+
+            // Unchanged, and still after: this field MIRRORS the session, which is why it could
+            // never have supplied the missing half itself.
             actor.AmmoInClip = session.Weapon.AmmoInClip;
         }
 
