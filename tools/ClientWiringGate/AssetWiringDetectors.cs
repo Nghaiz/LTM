@@ -141,21 +141,44 @@ namespace Ironfront.Tools.ClientWiringGate
         /// </para>
         /// <para>
         /// The alternative was to author <c>_actor</c> anyway. Refused on correctness rather than
-        /// convenience: the field needs an <c>Actor</c> component on the proxy, and <c>Actor</c>
-        /// registers itself with <c>ActorManager</c> — so a body the server owns would become a
-        /// client-side gameplay entity, which is a runtime-semantics decision and not authoring.
-        /// It gates ragdoll corpses (<c>_actor.ragdoll</c>) and remote weapon models
-        /// (<c>_actor.weapons</c>); until it lands, a remote death slides to the floor at a fixed
-        /// pose and remote hands are empty. <c>RemoteActorView</c> announces both absences once
+        /// convenience, and as of 2026-08-28 refused <em>by decision</em> rather than by deferral —
+        /// ledger <b>A-2</b> reads DECIDED, and this entry is the record it points at.
+        /// </para>
+        /// <para>
+        /// <b>Why authoring it is wrong and not merely unscheduled.</b> <c>ActorManager.Register</c>
+        /// ends <c>if (!actor.aiControlled) instance.player = actor</c>, and <c>Actor.Awake</c> sets
+        /// <c>aiControlled</c> from the controller type. A remote proxy is not AI-controlled, so an
+        /// <c>Actor</c> on it would <em>overwrite the local player's own actor</em> and repoint every
+        /// <c>ActorManager.Player</c> read — the reads that property's own remark exists to protect.
+        /// The C4a widening to <c>MonoBehaviour</c> behind <c>IGameplayActorPresence</c> does not make
+        /// this cheap either: <c>Actor</c> is still the interface's only implementor, and the members
+        /// that matter here (<c>HasRagdollRig</c>, <c>MainRagdollBody</c>, <c>KnockOver</c>) map onto a
+        /// ragdoll rig the proxy prefab does not have.
+        /// </para>
+        /// <para>
+        /// <b>What stays lost is cosmetic:</b> it gates ragdoll corpses (<c>_actor.ragdoll</c>) and
+        /// remote weapon models (<c>_actor.weapons</c>), so a remote death slides to the floor at a
+        /// fixed pose and remote hands are empty. <c>RemoteActorView</c> announces both absences once
         /// at runtime, by design.
+        /// </para>
+        /// <para>
+        /// <b>Reopening condition, keyed to the subject rather than to a phase.</b> Ledger D-2 records
+        /// what a folder-keyed condition costs: it fired, a reader observed it met, and its conclusion
+        /// was false. So this one names the two things that must both exist — <c>Remote Actor
+        /// Proxy.prefab</c> carrying a ragdoll rig, AND an <c>IGameplayActorPresence</c> implementation
+        /// that does not self-register with <c>ActorManager</c>. Check for those two, not for a phase
+        /// name. Neither existed on 2026-08-28.
         /// </para>
         /// </remarks>
         public static readonly (string Owner, string Field, string Reason)[] KnownUnauthoredFields =
         {
             ("RemoteActorView", "_actor",
-             "needs an Actor component on a server-owned proxy, which registers with "
-             + "ActorManager — a Phase 2 decision, not authoring. Blocks the ragdoll rig (E1) "
-             + "and remote weapon models. Ledger A-2, partially open."),
+             "WON'T-DO, decided 2026-08-28 (ledger A-2, DECIDED). ActorManager.Register ends "
+             + "'if (!actor.aiControlled) instance.player = actor', so an Actor on a server-owned "
+             + "proxy would overwrite the LOCAL player's actor. Blocks the ragdoll rig (E1) and "
+             + "remote weapon models, both cosmetic and both announced at runtime. Reopens when the "
+             + "proxy prefab carries a ragdoll rig AND a non-self-registering "
+             + "IGameplayActorPresence implementation exists — not on any phase boundary."),
         };
 
         /// <summary>
