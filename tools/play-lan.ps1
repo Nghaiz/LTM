@@ -4,11 +4,20 @@
 # lets LaneBHarness load the map and play a recorded programme. That harness is diagnostics-only
 # scaffolding. This script is the other thing -- a client a person drives with a keyboard.
 #
-# THE ROLE VARIABLE IS NOT OPTIONAL. Every map scene carries an active NetServer AND an active
-# NetClient, so a rendered process that declares no role becomes whichever of the two Awakes
-# first. The build says so itself on startup, and when the server wins,
-# NetClientPresenterGuard.IsPresentable is false for the whole session: no killfeed, no name
-# table, no local combat driver. IRONFRONT_ROLE=client settles it (ledger X-10).
+# THE ROLE VARIABLE IS NOT OPTIONAL, and it now buys two different things. Every map scene
+# carries an active NetServer AND an active NetClient, so a rendered process that declares no role
+# becomes whichever of the two Awakes first. The build says so itself on startup, and when the
+# server wins, NetClientPresenterGuard.IsPresentable is false for the whole session: no killfeed,
+# no name table, no local combat driver. IRONFRONT_ROLE=client settles it (ledger X-10).
+#
+# It also stops this process HOSTING. Until X-52 the declaration only made NetServerBootstrap
+# decline to claim the role, never to start -- so the first run of this script produced two
+# clients that each logged `[net] role = Client` and then ran a sixteen-slot authority anyway:
+# player 1 took UDP 27015 and reported `0 claimable player bodies against 16 admitted
+# connections`, and player 2 threw an unhandled SocketException because the port was gone. Two
+# players on ONE machine is exactly what this script is for, so that was not an edge case.
+# A declared client now starts no server at all; the log line to look for is
+# `[net] declared client: no local server will be started (AD-1).`
 #
 # EACH PLAYER NEEDS THEIR OWN ID. The server enforces one session per player id, so a second
 # client reusing the first's id is rejected with a bare InvalidTicket -- which reads as a full

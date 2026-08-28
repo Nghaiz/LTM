@@ -74,7 +74,14 @@ namespace Ironfront.Net.Unity
                     return;
 
                 case DeclaredNetRole.Client:
+                    // Both, and they are not the same statement. SetRole says what this process
+                    // IS RUNNING and is free to be overwritten by a bootstrap; DeclareClientProcess
+                    // says what this process WAS LAUNCHED AS, which NetServerBootstrap reads to
+                    // decline. Setting only the role left a declared client still binding UDP
+                    // 27015 and running a sixteen-slot authority beside the server it had joined
+                    // (X-52).
                     NetContext.SetRole(NetRole.Client);
+                    NetContext.DeclareClientProcess();
                     return;
             }
 
