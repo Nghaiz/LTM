@@ -1,4 +1,4 @@
-// Diagnostics are compiled OUT of a shipping client build.
+﻿// Diagnostics are compiled OUT of a shipping client build.
 //
 // The sense is INVERTED on purpose. Unity's BuildPlayerOptions.extraScriptingDefines can only
 // ADD symbols, never subtract one, so a positive IRONFRONT_DIAGNOSTICS would have to be off in
@@ -654,15 +654,28 @@ namespace Ironfront.Net.Unity.Diagnostics
 
             float moveZ = step.moveZ;
 
-            if (step.approach && _source != null)
+            if ((step.approach || step.approachVehicle) && _source != null)
             {
                 ScriptedTargetSolver.Solution aim = _source.Aim();
 
                 // An unresolved target leaves the step's own moveZ standing, so a programme
                 // that says "walk forward at whoever OBS-A is" still walks forward if the name
-                // has not arrived yet, instead of standing still and reporting nothing.
+                // has not arrived yet, instead of standing still and reporting nothing. Ledger
+                // X-44 rides the same rule: a vehicle search that found nothing is a miss the
+                // recorder writes down, not a step that stops the run.
+                //
+                // The hold distance is the VEHICLE one for a vehicle step. They are separate
+                // fields because 8 m is right for a player and wrong for a vehicle: a step that
+                // precedes a seatToggle has to stop inside SeatArbiter.MaxSeatReachMetres or the
+                // request comes back RejectedTooFar, a round trip spent to be told no.
                 if (aim.Resolved)
-                    moveZ = ScriptedAim.ApproachMoveZ(aim.Distance, step.holdDistanceMeters);
+                {
+                    float hold = step.approachVehicle
+                        ? step.vehicleHoldDistanceMeters
+                        : step.holdDistanceMeters;
+
+                    moveZ = ScriptedAim.ApproachMoveZ(aim.Distance, hold);
+                }
             }
 
             // use and switchWeaponSlot ride here because MoveInput is the ONLY thing this
@@ -702,6 +715,19 @@ namespace Ironfront.Net.Unity.Diagnostics
                 if (programme?.steps == null || programme.steps.Length == 0)
                 {
                     problem = $"{path} parsed to zero steps";
+                    return null;
+                }
+
+                // Ledger X-44. A step naming both a vehicle and a player names two targets, and
+                // whichever the code picks the other is a sentence somebody wrote that the run
+                // did not honour. Refused here rather than resolved by precedence: the symptom
+                // downstream is a bearing in an artifact, from which nobody can tell what it was
+                // pointed at.
+                int conflict = programme.FindConflictingStep();
+                if (conflict > 0)
+                {
+                    problem = $"{path} step {conflict} sets approachVehicle AND aimAtPlayer; "
+                              + "they name different targets. Split them into two steps.";
                     return null;
                 }
 

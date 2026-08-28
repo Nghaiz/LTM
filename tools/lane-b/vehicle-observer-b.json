@@ -1,0 +1,39 @@
+{
+  "name": "vehicle-observer-b",
+  "steps": [
+    {
+      "seconds": 5.0,
+      "yawDegrees": 200
+    },
+    {
+      "checkpoint": "spawned",
+      "seconds": 2.0,
+      "yawDegrees": 200
+    },
+    {
+      "checkpoint": "watching",
+      "seconds": 40.0,
+      "aimAtPlayer": "DRIVER"
+    },
+    {
+      "checkpoint": "at-vehicle",
+      "seconds": 2.0,
+      "aimAtPlayer": "DRIVER"
+    },
+    {
+      "checkpoint": "seat-requested",
+      "seconds": 3.0,
+      "aimAtPlayer": "DRIVER"
+    },
+    {
+      "checkpoint": "driving",
+      "seconds": 20.0,
+      "aimAtPlayer": "DRIVER"
+    },
+    {
+      "checkpoint": "driven",
+      "seconds": 10.0,
+      "aimAtPlayer": "DRIVER"
+    }
+  ]
+}

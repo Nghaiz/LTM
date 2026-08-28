@@ -1,4 +1,4 @@
-// Diagnostics are compiled OUT of a shipping client build.
+﻿// Diagnostics are compiled OUT of a shipping client build.
 //
 // The sense is INVERTED on purpose. Unity's BuildPlayerOptions.extraScriptingDefines can only
 // ADD symbols, never subtract one, so a positive IRONFRONT_DIAGNOSTICS would have to be off in
@@ -56,6 +56,17 @@ namespace Ironfront.Net.Unity.Diagnostics
             /// <summary>The target's actor id, or 0 when the name resolved to nobody.</summary>
             public ushort ActorId;
 
+            /// <summary>
+            /// The target's VEHICLE id, or 0 when this solve was not for a vehicle. Ledger
+            /// <b>X-44</b>.
+            /// </summary>
+            /// <remarks>
+            /// A field of its own rather than reusing <see cref="ActorId"/>: an actor id and a
+            /// vehicle id are different namespaces that overlap numerically, so folding them
+            /// would make the checkpoint record claim to have found an actor it never looked for.
+            /// </remarks>
+            public ushort VehicleId;
+
             public float Yaw;
             public float Pitch;
 
@@ -65,6 +76,16 @@ namespace Ironfront.Net.Unity.Diagnostics
 
         private NetClientCombatPresenter _presenter;
         private RemoteActorRegistry _registry;
+        private RemoteVehicleRegistry _vehicles;
+
+        // Reused across frames so a per-frame vehicle solve allocates nothing. GROWN rather
+        // than clamped if the registry ever exceeds the initial size -- a silent clamp would
+        // make "the nearest vehicle" mean "the nearest of the first N the registry happened to
+        // list", which is not a property any programme states.
+        private ushort[] _vehicleIds = new ushort[64];
+        private float[] _vehicleX = new float[64];
+        private float[] _vehicleY = new float[64];
+        private float[] _vehicleZ = new float[64];
 
         private string _cachedName;
         private int _cachedRevision = -1;
@@ -72,9 +93,22 @@ namespace Ironfront.Net.Unity.Diagnostics
 
         private int _solvedFrame = -1;
         private string _solvedName;
+        private bool _solvedIsVehicle;
 
         /// <summary>The last name a step asked for. Recorded per checkpoint.</summary>
         public string LastRequestedName { get; private set; }
+
+        /// <summary>
+        /// True when the last solve was for a VEHICLE rather than a player name. Ledger
+        /// <b>X-44</b>.
+        /// </summary>
+        /// <remarks>
+        /// The recorder writes <c>aim: null</c> when no NAME was requested, which was a complete
+        /// description while every solve was by name. A vehicle solve has no name, so without
+        /// this flag an approach that resolved a vehicle and one that never ran would produce the
+        /// same artifact — the exact failure <c>AppendAim</c>'s own remark exists to prevent.
+        /// </remarks>
+        public bool LastRequestWasVehicle { get; private set; }
 
         /// <summary>The last solve's outcome. Recorded per checkpoint.</summary>
         public Solution Last { get; private set; }
@@ -101,6 +135,7 @@ namespace Ironfront.Net.Unity.Diagnostics
         public Solution Solve(string playerName)
         {
             if (_solvedFrame == Time.frameCount
+                && !_solvedIsVehicle
                 && string.Equals(_solvedName, playerName, StringComparison.Ordinal))
             {
                 return Last;
@@ -108,7 +143,9 @@ namespace Ironfront.Net.Unity.Diagnostics
 
             _solvedFrame = Time.frameCount;
             _solvedName = playerName;
+            _solvedIsVehicle = false;
             LastRequestedName = playerName;
+            LastRequestWasVehicle = false;
 
             var miss = default(Solution);
 
@@ -150,6 +187,134 @@ namespace Ironfront.Net.Unity.Diagnostics
 
             Last = solution;
             return solution;
+        }
+
+        /// <summary>
+        /// Solves for the nearest replicated vehicle within <paramref name="maxSearchMetres"/>.
+        /// Ledger <b>X-44</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why a vehicle needs a solve of its own.</b> <see cref="Solve"/> takes a player
+        /// display name and scans <c>PlayerNameTable</c> backwards. A vehicle has no display
+        /// name and no such table, so before this the programme vocabulary could describe
+        /// walking to a person and could not describe walking to a car -- while
+        /// <c>ClientSeatRequester.TryFindNearestSeat</c> only sees seats within
+        /// <c>SeatArbiter.MaxSeatReachMetres</c> of where the player is ALREADY standing.
+        /// </para>
+        /// <para>
+        /// <b>Against <see cref="RemoteVehicleRegistry"/>, through its POSE seam.</b> That
+        /// registry is the client's own replicated vehicle set -- every vehicle in a networked
+        /// world arrives from <c>S_VEHICLE_SPAWN</c> with the id the server gave it -- and
+        /// <c>TryGetPose</c> exists precisely so an observer outside that assembly gets a pose
+        /// snapshot rather than a <c>NetClientVehicle</c> it could then drive.
+        /// </para>
+        /// <para>
+        /// <b>The arithmetic is <see cref="ScriptedAim.NearestIndexWithin"/>, not this
+        /// method.</b> What is left here is a registry walk and a transform read, which is this
+        /// class's standing rule. A nearest-within scan written inline would be untestable, and
+        /// its edge cases -- nothing in range, an empty set, a tie at a spawn pad -- are exactly
+        /// the ones a run cannot be relied on to produce.
+        /// </para>
+        /// <para>
+        /// <b>Memoized per frame like the player solve, on a key that distinguishes the two.</b>
+        /// Sharing <c>_solvedFrame</c> without <c>_solvedIsVehicle</c> would have a player solve
+        /// and a vehicle solve in the same frame return each other's answer.
+        /// </para>
+        /// </remarks>
+        public Solution SolveNearestVehicle(float maxSearchMetres)
+        {
+            if (_solvedFrame == Time.frameCount && _solvedIsVehicle) return Last;
+
+            _solvedFrame = Time.frameCount;
+            _solvedIsVehicle = true;
+            _solvedName = null;
+            LastRequestedName = null;
+            LastRequestWasVehicle = true;
+
+            var miss = default(Solution);
+
+            ILocalPlayerRig local = NetClientBindings.LocalPlayer;
+            if (!local.Exists) { Last = miss; return miss; }
+
+            if (!TryVehicleRegistry(out RemoteVehicleRegistry vehicles))
+            {
+                Last = miss;
+                return miss;
+            }
+
+            Vector3 from = local.Position;
+            int count = GatherVehicles(vehicles);
+
+            int index = ScriptedAim.NearestIndexWithin(
+                from.x, from.z, _vehicleX, _vehicleZ, count, maxSearchMetres);
+
+            if (index < 0) { Last = miss; return miss; }
+
+            var solution = new Solution
+            {
+                Resolved = true,
+                VehicleId = _vehicleIds[index],
+                Yaw = ScriptedAim.YawDegrees(from.x, from.z, _vehicleX[index], _vehicleZ[index]),
+                Pitch = ScriptedAim.PitchDegrees(
+                    from.x, from.y + ScriptedAim.ShooterEyeHeight, from.z,
+                    _vehicleX[index], _vehicleY[index] + ScriptedAim.VehicleAimHeight,
+                    _vehicleZ[index]),
+                Distance = ScriptedAim.PlanarDistance(
+                    from.x, from.z, _vehicleX[index], _vehicleZ[index]),
+            };
+
+            Last = solution;
+            return solution;
+        }
+
+        /// <summary>
+        /// Copies every live vehicle's id and position into the reusable arrays, growing them
+        /// first if the registry has outgrown them.
+        /// </summary>
+        /// <remarks>
+        /// A vehicle whose pose cannot be read is SKIPPED rather than written as a zero: the
+        /// world origin is a real place a client could walk to, so one such entry would pull
+        /// every approach toward (0, 0) and look like a solve rather than a miss.
+        /// </remarks>
+        private int GatherVehicles(RemoteVehicleRegistry vehicles)
+        {
+            System.Collections.Generic.IReadOnlyList<ushort> ids = vehicles.LiveIds;
+
+            if (ids.Count > _vehicleIds.Length)
+            {
+                _vehicleIds = new ushort[ids.Count];
+                _vehicleX = new float[ids.Count];
+                _vehicleY = new float[ids.Count];
+                _vehicleZ = new float[ids.Count];
+            }
+
+            int count = 0;
+
+            for (int i = 0; i < ids.Count; i++)
+            {
+                if (!vehicles.TryGetPose(ids[i], out Vector3 position, out _, out _)) continue;
+
+                _vehicleIds[count] = ids[i];
+                _vehicleX[count] = position.x;
+                _vehicleY[count] = position.y;
+                _vehicleZ[count] = position.z;
+                count++;
+            }
+
+            return count;
+        }
+
+        private bool TryVehicleRegistry(out RemoteVehicleRegistry registry)
+        {
+            if (_vehicles == null)
+            {
+                _vehicles = UnityEngine.Object.FindFirstObjectByType<RemoteVehicleRegistry>(
+                    FindObjectsInactive.Include);
+            }
+
+            registry = _vehicles;
+            return registry != null;
         }
 
         private ushort ResolveActorId(string playerName)

@@ -1,0 +1,49 @@
+{
+  "name": "vehicle-driver",
+  "steps": [
+    {
+      "seconds": 5.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "spawned",
+      "seconds": 2.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "walking-to-vehicle",
+      "seconds": 40.0,
+      "approachVehicle": true,
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0,
+      "sprint": true
+    },
+    {
+      "checkpoint": "at-vehicle",
+      "seconds": 2.0,
+      "approachVehicle": true,
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0
+    },
+    {
+      "checkpoint": "seat-requested",
+      "seconds": 3.0,
+      "approachVehicle": true,
+      "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0,
+      "seatToggle": true
+    },
+    {
+      "checkpoint": "driving",
+      "seconds": 20.0,
+      "moveZ": 1.0,
+      "yawDegrees": 45
+    },
+    {
+      "checkpoint": "driven",
+      "seconds": 10.0,
+      "moveZ": 1.0,
+      "yawDegrees": 45
+    }
+  ]
+}

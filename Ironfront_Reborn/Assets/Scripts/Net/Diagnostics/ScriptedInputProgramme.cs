@@ -1,4 +1,4 @@
-// Diagnostics are compiled OUT of a shipping client build.
+﻿// Diagnostics are compiled OUT of a shipping client build.
 //
 // The sense is INVERTED on purpose. Unity's BuildPlayerOptions.extraScriptingDefines can only
 // ADD symbols, never subtract one, so a positive IRONFRONT_DIAGNOSTICS would have to be off in
@@ -52,6 +52,40 @@ namespace Ironfront.Net.Unity.Diagnostics
 
         /// <summary>The steps, in order. An empty programme finishes immediately.</summary>
         public ScriptedInputStep[] steps = Array.Empty<ScriptedInputStep>();
+
+        /// <summary>
+        /// The 1-based index of the first step whose verbs contradict each other, or 0 when
+        /// none do. Ledger <b>X-44</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>At load time, because a programme defect is not a runtime condition.</b>
+        /// <see cref="ScriptedInputStep.approachVehicle"/> and
+        /// <see cref="ScriptedInputStep.aimAtPlayer"/> name two different targets, and whichever
+        /// the code picks, the other one is a sentence somebody wrote and the run did not
+        /// honour. Discovering that from an artifact means reading a bearing and inferring what
+        /// it was pointed at.
+        /// </para>
+        /// <para>
+        /// <b>1-based, and 0 is "clean".</b> A step index is quoted to a human editing a JSON
+        /// file, where the first step is step 1; returning -1 for clean and 0 for the first step
+        /// would make the two most common values adjacent and easy to invert.
+        /// </para>
+        /// </remarks>
+        public int FindConflictingStep()
+        {
+            if (steps == null) return 0;
+
+            for (int i = 0; i < steps.Length; i++)
+            {
+                ScriptedInputStep step = steps[i];
+                if (step == null) continue;
+
+                if (step.approachVehicle && !string.IsNullOrEmpty(step.aimAtPlayer)) return i + 1;
+            }
+
+            return 0;
+        }
 
         /// <summary>Total scripted duration in seconds.</summary>
         public float TotalSeconds
@@ -136,6 +170,60 @@ namespace Ironfront.Net.Unity.Diagnostics
 
         /// <summary>How close <see cref="approach"/> gets before it stops. Metres.</summary>
         public float holdDistanceMeters = 8f;
+
+        /// <summary>
+        /// Walk toward the nearest replicated VEHICLE instead of toward a player, stopping at
+        /// <see cref="vehicleHoldDistanceMeters"/>. Ledger <b>X-44</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A vehicle has no display name, which is the whole of the row.</b>
+        /// <see cref="approach"/> resolves through <c>ScriptedTargetSolver.Solve(aimAtPlayer)</c>,
+        /// which takes a player display name and scans <c>PlayerNameTable</c>; there is no such
+        /// table for vehicles and no name to put in one. So before this verb a driver programme
+        /// whose first step is <i>enter a vehicle</i> only worked if a vehicle happened to be
+        /// parked within <c>SeatArbiter.MaxSeatReachMetres</c> of the pinned spawn point — not a
+        /// property any run controls.
+        /// </para>
+        /// <para>
+        /// <b>Resolved against the CLIENT's own vehicle registry</b>, which is the only vehicle
+        /// truth a client has: every vehicle in a networked world arrives from
+        /// <c>S_VEHICLE_SPAWN</c> with the id the server gave it.
+        /// </para>
+        /// <para>
+        /// <b>Mutually exclusive with <see cref="aimAtPlayer"/>, and the vehicle wins loudly.</b>
+        /// A step naming both is a programme bug; a silent precedence would grade a run nobody
+        /// wrote.
+        /// </para>
+        /// </remarks>
+        public bool approachVehicle = false;
+
+        /// <summary>
+        /// How far <see cref="approachVehicle"/> looks for a vehicle. Metres.
+        /// </summary>
+        /// <remarks>
+        /// Generous on purpose: the point of the verb is that the vehicle is NOT already in
+        /// reach. A search that found nothing leaves the step's declared yaw and
+        /// <see cref="moveZ"/> standing and the recorder writes the miss down, so an
+        /// over-generous radius costs nothing and an under-generous one silently reproduces the
+        /// defect.
+        /// </remarks>
+        public float vehicleSearchMetres = 120f;
+
+        /// <summary>
+        /// How close <see cref="approachVehicle"/> gets before it stops. Metres.
+        /// </summary>
+        /// <remarks>
+        /// <b>A separate field from <see cref="holdDistanceMeters"/>, because 8 m is the wrong
+        /// answer for a vehicle and the right one for a player.</b> A step that precedes a
+        /// <see cref="seatToggle"/> must stop INSIDE <c>SeatArbiter.MaxSeatReachMetres</c> (6 m),
+        /// which the arbiter measures from its own transforms — stopping outside it produces
+        /// <c>RejectedTooFar</c>, a round trip spent to be told no. Sharing one field and
+        /// documenting "set it lower for vehicles" would make the default silently wrong, so the
+        /// default here is 4 m and a test pins it against the arbiter's constant rather than
+        /// against a number restated in a comment.
+        /// </remarks>
+        public float vehicleHoldDistanceMeters = 4f;
 
         public bool fire = false;
         public bool aim = false;
