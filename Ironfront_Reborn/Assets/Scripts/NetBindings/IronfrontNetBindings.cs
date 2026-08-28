@@ -616,6 +616,16 @@ namespace Ironfront.Net.Unity.Bindings
             return count;
         }
 
+        /// <summary>
+        /// The scene's own opening ownership for this point, after <c>CapturePoint.Start</c>
+        /// has applied reverse/assault mode. -1 neutral, 0 team 0, 1 team 1.
+        /// </summary>
+        public int GetOwner(int index)
+        {
+            CapturePoint point = _points[index];
+            return point != null ? point.owner : -1;
+        }
+
         private static int CompareByName(CapturePoint a, CapturePoint b)
             => string.CompareOrdinal(a != null ? a.name : string.Empty, b != null ? b.name : string.Empty);
     }

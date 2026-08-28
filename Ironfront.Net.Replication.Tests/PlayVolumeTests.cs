@@ -131,15 +131,28 @@ namespace Ironfront.Net.Replication.Tests
         [Fact]
         public void AVolumeWiderThanTheWireIsReportedAsSuch()
         {
+            // Centred on the WINDOW, not on the origin. The window stopped being symmetric in
+            // 4.0.0 (X-53: -1024 .. 3072, same 4096 m width, moved to where playable content
+            // is), and this fixture used to assume those were the same point -- so a volume of
+            // exactly the right width centred on zero read as fitting only by coincidence.
+            float centre = (Quantize.POS_MIN + Quantize.POS_MAX) / 2f;
+            var origin = new Vec3(centre, centre, centre);
+
             var tooWide = new PlayVolume(
-                new Vec3(0f, 0f, 0f), new Vec3(Quantize.POS_RANGE + 2f, 100f, 100f));
+                origin, new Vec3(Quantize.POS_RANGE + 2f, 100f, 100f));
 
             Assert.False(tooWide.FitsOnTheWire);
 
             // Exactly the range still fits — the quantizer maps POS_MAX to the top code.
             var exact = new PlayVolume(
-                new Vec3(0f, 0f, 0f), new Vec3(Quantize.POS_RANGE, Quantize.POS_RANGE, Quantize.POS_RANGE));
+                origin, new Vec3(Quantize.POS_RANGE, Quantize.POS_RANGE, Quantize.POS_RANGE));
             Assert.True(exact.FitsOnTheWire);
+
+            // And width alone is not the test: the same box slid off the window does not fit.
+            var slid = new PlayVolume(
+                new Vec3(centre - 1f, centre, centre),
+                new Vec3(Quantize.POS_RANGE, Quantize.POS_RANGE, Quantize.POS_RANGE));
+            Assert.False(slid.FitsOnTheWire);
         }
 
         [Fact]

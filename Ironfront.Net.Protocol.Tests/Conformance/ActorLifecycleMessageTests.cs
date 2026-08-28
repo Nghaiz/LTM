@@ -102,7 +102,11 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
             SpawnActorMessage.TryParse(buffer, out SpawnActorMessage parsed);
 
             // Within one 6.25 cm quantum of where it started.
-            Assert.Equal(123.45f, Quantize.UnpackPos(parsed.PosX), 1);
+            // Against the quantizer's real bound, not a decimal place. At 6.25 cm steps the
+            // round-trip error is up to 3.1 cm, which straddles the first decimal of 123.45 --
+            // so the old assertion passed on where the window happened to sit rather than on
+            // the round trip, and X-53's move made that visible.
+            Assert.True(Math.Abs(Quantize.UnpackPos(parsed.PosX) - 123.45f) < 0.07f);
         }
 
         // ------------------------------------------------------------------ S_DESPAWN_ACTOR
@@ -220,7 +224,7 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
             //   v3  the vehicle wire (§ 4.10): six new opcodes, a second entity stream, and
             //       SnapshotField.SeatInfo finished on the actor entry. S_EXPLOSION's layout was
             //       not touched by any of it and still is not what moved the number.
-            Assert.Equal(3, ProtocolConstants.PROTOCOL_VERSION);
+            Assert.Equal(4, ProtocolConstants.PROTOCOL_VERSION);   // 3 -> 4 in X-53: Quantize's position WINDOW moved (-1024..3072), so the same i16 decodes to a different metre. Same bytes, different meaning -- exactly what the version is for.
         }
     }
 }

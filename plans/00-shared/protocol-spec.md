@@ -1,6 +1,6 @@
 # Protocol Specification — Ironfront Reborn
 
-**Version: 3.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 3`
+**Version: 4.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 4`
 
 > This is the contract every side of the wire is written against. Every offset, every enum value
 > and every quantization constant in this document is **mandatory**. Client and server may not
@@ -47,7 +47,7 @@
 public static class ProtocolConstants
 {
     public const ushort PROTOCOL_ID       = 0x4946;  // 'IF' — filters out junk packets
-    public const byte   PROTOCOL_VERSION  = 3;
+    public const byte   PROTOCOL_VERSION  = 4;
 
     public const int    MTU_SAFE          = 1200;    // safe through any router
     public const int    GSP_HEADER_SIZE   = 16;
@@ -419,13 +419,24 @@ After interest management (only ~20 actors actually sent): **~5–7 KB/s**. Targ
 > `POS_RANGE = 2048` while the server uses `4096`, characters end up at double the wrong position.
 > The bug is very hard to spot because there's no runtime error.
 
+> **4.0.0 moved the window, and did not widen it (X-53).** It was `±2048` beside a comment claiming
+> the map fit inside it; Dustbowl's authored play volume is `(650, −50, 620) .. (2350, 650, 2220)`,
+> so 302 m of x and 172 m of z were unrepresentable — including the Oasis capture point at
+> `x = 2085.6`, team 0's opening base. Everything out there encoded to exactly `2048.00` on every
+> client. Widening to `±4096` would have halved the resolution to 12.5 cm for every actor on every
+> map to buy negative space no map uses; shifting to `−1024 .. 3072` keeps the width, the 6.25 cm
+> and the 6 bytes. A map needing more negative space than this wants a per-map origin, not a wider
+> window.
+
 ```csharp
 public static class Quantize
 {
     // ===== POSITION =====
-    // The current map fits inside a ±2048 m box. An i16 has 65536 levels.
-    public const float POS_MIN  = -2048f;
-    public const float POS_MAX  =  2048f;
+    // A 4096 m window placed where playable content lives. An i16 has 65536 levels, so the
+    // WIDTH buys resolution and the PLACEMENT is free. 1024 m of negative headroom for a map
+    // built around the origin, 3072 m of positive for one built in positive space.
+    public const float POS_MIN  = -1024f;
+    public const float POS_MAX  =  3072f;
     public const float POS_RANGE = POS_MAX - POS_MIN;        // 4096
     // Resolution = 4096 / 65536 = 0.0625 m = 6.25 cm. Good enough for an FPS.
 

@@ -36,7 +36,7 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
         [Fact]
         public void GivingPlayerListASenderDidNotMoveTheProtocolVersion()
         {
-            Assert.Equal(3, ProtocolConstants.PROTOCOL_VERSION);
+            Assert.Equal(4, ProtocolConstants.PROTOCOL_VERSION);   // 3 -> 4 in X-53: Quantize's position WINDOW moved (-1024..3072), so the same i16 decodes to a different metre. Same bytes, different meaning -- exactly what the version is for.
         }
 
         [Fact]

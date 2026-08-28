@@ -105,9 +105,13 @@ public class LevelBounds : MonoBehaviour
 			new Vec3(base.transform.localScale.x, base.transform.localScale.y, base.transform.localScale.z));
 
 		// Clamping to an authored box only keeps bodies encodable if the box is itself inside
-		// the wire's range. Today Dustbowl's is, by a wide margin -- but nothing said so, and
-		// widening it past 2048 m would reintroduce the exact silent divergence this closes
-		// while every other check still passed.
+		// the wire's range. This comment used to claim Dustbowl's was "by a wide margin"; it was
+		// false for as long as it stood (X-53) -- the volume reached 302 m past the old +/-2048 m
+		// ceiling, and the Oasis spawn out there put every team-0 player 37 m from where the
+		// server had them, through the ground. 4.0.0 moved the window to -1024..3072 and the
+		// volume now fits with 722 m to spare. Enlarging the volume past that ceiling would
+		// reintroduce the same silent divergence while every other check still passed, so this
+		// error stays.
 		if (!volume.FitsOnTheWire)
 		{
 			Debug.LogError(
