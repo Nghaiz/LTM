@@ -781,6 +781,21 @@ public class AiActorController : ActorController
 			Actor closestHighlighted = null;
 			foreach (Actor a in potentialTargets)
 			{
+				// Ledger X-49, the half the registry fix cannot reach. potentialTargets is a
+				// SNAPSHOT taken above, and this loop yields 0.2s between elements -- so on a
+				// long list it walks for seconds while the world moves on, and any entry can be
+				// destroyed mid-walk. Deregistering on destroy does not help a private copy that
+				// was already taken.
+				//
+				// The check has to be `== null` and not `!a.dead`. Unity's overloaded == is the
+				// only operator that reports a destroyed object as null; `dead` is an ordinary
+				// managed field, which a destroyed Actor answers perfectly happily -- so the
+				// existing `!a.dead` waves the corpse through and HasEffectiveWeaponAgainst then
+				// reaches Actor.Position() -> Component.get_transform() and throws. That was
+				// measured: 50 NullReferenceExceptions per combat run still came through here
+				// after the registry leak was closed, all from this one coroutine.
+				if (a == null) continue;
+
 				if (!a.dead && HasEffectiveWeaponAgainst(a) && CanSeeActor(a, true))
 				{
 					SetTarget(a);

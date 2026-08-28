@@ -1292,5 +1292,77 @@ namespace Ironfront.Tools.ClientWiringGate
 
             return findings;
         }
+
+        /// <summary>
+        /// Each registry that hands objects to per-frame consumers, and the removal its owning
+        /// type must call from <c>OnDestroy</c>. Ledger <b>X-49</b>.
+        /// </summary>
+        private static readonly (string File, string Call)[] RegistryDropContracts =
+        {
+            ("/Actor.cs", "ActorManager.Drop"),
+            ("/Vehicle.cs", "ActorManager.DropVehicle"),
+        };
+
+        /// <summary>Exposed so the companion test can assert the rule is in scope at all.</summary>
+        public static bool IsRegistryDropScoped(string path) =>
+            !IsExcludedFromScan(path)
+            && RegistryDropContracts.Any(c => IsInScope(path, new[] { c.File }));
+
+        /// <summary>
+        /// <b>G13</b> — a type that registers itself with <c>ActorManager</c> deregisters in
+        /// <c>OnDestroy</c>. Ledger <b>X-49</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>What this pins was PRESENT and UNWIRED, which is the shape that survives review.</b>
+        /// <c>ActorManager.Drop</c> existed with <b>zero callers</b> while its vehicle twin
+        /// <c>DropVehicle</c> was wired, so nothing looked missing — and a destroyed actor stayed
+        /// in <c>actors</c> and <c>aliveActors</c> for the rest of the match. Unity's overloaded
+        /// <c>==</c> then let each stale entry pass every <c>x != y</c> test in the consumers
+        /// before being dereferenced, at a measured 1,012 NullReferenceExceptions across three
+        /// clients in one lane-B combat run, from three separate call sites.
+        /// </para>
+        /// <para>
+        /// <b>Checks the method exists AND that it makes the call</b>, because an empty
+        /// <c>OnDestroy</c> is exactly as broken as no <c>OnDestroy</c> and looks deliberate.
+        /// </para>
+        /// </remarks>
+        public static IReadOnlyList<GateFinding> FindUnregisteredRegistryDrop(
+            SyntaxTree tree, string path)
+        {
+            var findings = new List<GateFinding>();
+
+            if (IsExcludedFromScan(path)) return findings;
+
+            foreach ((string file, string call) in RegistryDropContracts)
+            {
+                if (!IsInScope(path, new[] { file })) continue;
+
+                MethodDeclarationSyntax? onDestroy = tree.GetRoot()
+                    .DescendantNodes()
+                    .OfType<MethodDeclarationSyntax>()
+                    .FirstOrDefault(m => m.Identifier.ValueText == "OnDestroy");
+
+                bool drops = onDestroy != null
+                    && onDestroy.DescendantNodes()
+                        .OfType<InvocationExpressionSyntax>()
+                        .Any(i => i.Expression.ToString().EndsWith(call, StringComparison.Ordinal));
+
+                if (drops) continue;
+
+                findings.Add(new GateFinding(
+                    "G13", path, onDestroy != null ? LineOf(onDestroy) : 0,
+                    onDestroy == null
+                        ? $"no OnDestroy, so a destroyed instance is never removed from "
+                          + $"ActorManager and '{call}' is left with no caller. Every per-frame "
+                          + "consumer that walks that register then dereferences a destroyed "
+                          + "object, and Unity's overloaded == will not stop it."
+                        : $"OnDestroy does not call '{call}', so the deregistration it exists for "
+                          + "does not happen. An empty OnDestroy reads as deliberate and is as "
+                          + "broken as none at all."));
+            }
+
+            return findings;
+        }
     }
 }
