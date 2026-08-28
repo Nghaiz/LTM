@@ -98,6 +98,18 @@ X-24 ordering in § 2.
 1. **Every row in the ledger has a living owner or a written parking.** `closes in` names a phase
    file that exists, or the row says in its own status why nothing is owed. Checked by reading the
    `closes in` column, not asserted.
+
+   > **NOT MET at track end — 2026-08-28, verdict-closure R6, reported rather than re-scoped
+   > (criterion 6).** Reading the column end to end over 114 rows: 76 closed, 7 void, 6 decided,
+   > 3 parked, 13 owned by a named phase, and **9 with neither an owner nor a parking** — `X-41`,
+   > `X-42`, `X-43`, `X-44`, `X-46`, `X-48`, `X-49`, plus `B-4` and `B-14`, which chain to `X-42`.
+   > Every one is a live defect **this track's own runs found**, and R6 is its last phase, so there
+   > is no phase left to name. R6 deliberately did not park them: a parking says nothing is owed,
+   > and something is owed by all nine — parking them would be the decay-into-debt shape R6 § 4
+   > exists to prevent. Assigning them is a planning decision, which is why debt-closure phase 8
+   > stopped at naming orphans rather than adopting them, and it is the successor track's opening
+   > row set. R6 closed one ownerless row (`X-38`) and opened two (`X-48`, `X-49`); the net is
+   > stated here rather than smoothed.
 2. All thirteen group-B checks have a verdict **and** a named artifact, or a filed row saying which
    instrument or programme is missing — the standard phase 3E's AC-1 set and could not meet.
 3. Every defect fixed in this track ships a test or gate rule **observed RED** against the tree

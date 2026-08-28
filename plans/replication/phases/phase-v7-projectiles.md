@@ -565,9 +565,9 @@ ships and is already tested; that fallback existing is a precondition of startin
 | **The library stepper is not the production hit path.** `ServerProjectileBridge.AuthoritativeFlight` defaults **off**. | The Unity server already simulates every projectile it spawns and applies its damage through `Hitbox.ProjectileHit` and `ActorManager.Explode` — the path phase-05 and V1 established, which works today. Running both would apply every damage number **twice**, which is the exact "exactly once" clause criterion 5 protects. Turning it on is a follow-up whose first task is deleting the engine-side damage call, not a config change. **Decided 2026-08-26 and the answer is still off** — not on a bad number but because the load harness cannot fire, so two of the three required inputs could not be produced at all (ledger X-34). See § 6.1.2 for the numbers and the reopening condition. |
 | **Grenades and deployables are never ballistically stepped**, at any setting. | The stepper terminates a projectile on the first surface its segment touches. A grenade *bounces* off that surface and nothing in the library models a bounce; a deployable's pose comes from a Rigidbody. Pinned by `ABouncingOrRigidbodyProjectileIsNotBallisticallyStepped`. |
 | **The client prefab array is unauthored.** | `NetClientProjectilePresenter._prefabsByKind` has to be filled in the Editor — a client cannot instantiate a projectile it has no prefab for. Until it is, no replicated projectile renders, and `UnrenderableKinds` counts every message that arrives. The server side needs no authoring: it learns each kind's numbers from the first prefab of that kind it fires. |
-| **Ten plan-named tests are not written** — the four grenade tests, the three throwable tests, and the guided-missile end-to-end pair. | They exercise Unity `MonoBehaviour` behaviour, and this phase adds no EditMode harness. Their subjects are covered at the library level where the arithmetic lives. |
+| **Five plan-named tests are not written** — the three grenade tests and the two throwable tests. ~~Ten — the four grenade tests, the three throwable tests, and the guided-missile end-to-end pair.~~ **Corrected 2026-08-28 by verdict-closure R6 (ledger D-2).** The old count was wrong in both directions: its own arithmetic summed to nine, not ten, and the guided-missile work it named as missing is written — `AGuidedMissileReParameterizesWithTheSameId` at `ProjectileTests.cs:500`, and Task 10 names one guided test rather than a pair. Task 10 names **22** tests; **17 exist** (15 verbatim, 2 renamed) and **5 do not**. | They exercise Unity `MonoBehaviour` behaviour, and this phase adds no EditMode harness. Their subjects are covered at the library level where the arithmetic lives. § 6.1.1 names the five and gives the structural reason. |
 
-### 6.1.1. The ten tests are WON'T-DO, and this is the reason — recorded 2026-08-26
+### 6.1.1. The five unwritten tests are WON'T-DO, and this is the reason — recorded 2026-08-26, count corrected 2026-08-28
 
 > Added by `plans/debt-closure/phases/phase-4-measure.md` ([spec deleted 2026-08-26 — index](../../debt-closure/phases/README.md))
 > task 4.5, per the debt-closure track's decision **P-D9**. The row above said the tests were
@@ -575,10 +575,34 @@ ships and is already tested; that fallback existing is a precondition of startin
 > harness"* — which invites the next reader to add one. They cannot. The obstacle is structural,
 > and leaving it unstated is what turns a decision into a gap somebody re-discovers.
 
-**No test assembly can reference these subjects.** The four grenade tests, the three throwable
-tests, the two guided-missile tests and the end-to-end pair all exercise `MonoBehaviour`
-behaviour that compiles into **`Assembly-CSharp`**, and `Assembly-CSharp` is a Unity predefined
-assembly that no `.asmdef` may name. Two facts fix that, both re-verified on 2026-08-26:
+**The five, by name — checked against the repo on 2026-08-28, zero hits each under any name:**
+
+| Unwritten test | Task |
+|---|---|
+| `AGrenadeDetonatesOnTheSameTickOnBothSides` | 4 |
+| `AGrenadeDetonationPositionComesFromTheServerNotThePrediction` | 4 |
+| `AGrenadeAppliesItsBlastDamageExactlyOnce` | 4 |
+| `AThrowReleasesOnTheSameTickOnServerAndClient` | 5 |
+| `AClientSpawnThrowableSpawnsNothing` | 5 |
+
+**And the seventeen that exist**, so the arithmetic can be checked rather than taken: fifteen
+verbatim — `ProjectileTests.cs:58, 94, 118, 155, 255, 306, 349, 419, 476, 500, 563` and
+`DeployableTests.cs:44, 87, 255, 309` — plus two renamed. `AProjectileSpawnRoundTripsAtTwentyBytes`
+is `PacketHexSampleTests.cs:472` + `:486`, split into a serialize half and a parse half against one
+hex constant. `OfflineProjectileBehaviourIsUnchangedExceptTheTwoRecordedChanges` is
+`OfflineBehaviourChangeTests.cs:42`, renamed to `…ExceptTheRecordedChanges` because there turned
+out to be three recorded changes and not two. 15 + 2 + 5 = 22, which is what Task 10 names.
+
+**`AGuidedMissileReParameterizesWithTheSameId` is written**, at `ProjectileTests.cs:500`. Task 10
+names exactly one guided-missile test, so the "two guided-missile tests and the end-to-end pair"
+this section claimed were missing never existed to be missing — that phrase, and the "ten" it
+summed to, are both struck below.
+
+**No test assembly can reference these subjects.** The ~~four~~ **three** grenade tests and the
+~~three~~ **two** throwable tests ~~, the two guided-missile tests and the end-to-end pair,~~ all
+exercise `MonoBehaviour` behaviour that compiles into **`Assembly-CSharp`**, and `Assembly-CSharp`
+is a Unity predefined assembly that no `.asmdef` may name. Two facts fix that, both re-verified on
+2026-08-26:
 
 - `Assets/Tests/EditMode/Ironfront.Net.Unity.Server.Tests.asmdef` references exactly
   `Ironfront.Net.Unity.Server` and `Ironfront.Net.Unity.Shared` — neither contains the
@@ -593,23 +617,24 @@ assembly that no `.asmdef` may name. Two facts fix that, both re-verified on 202
   all four remain under `Assets/Scripts/Assembly-CSharp/`, verified by path on 2026-08-26. The
   won't-do therefore stands, and it stands for a **narrower** reason than this bullet gave.
 
-So this is **won't-do**, not "not yet". Writing them would require first splitting the client
-into its own assembly, which is a refactor with its own risk and its own plan — and their
+So this is **won't-do**, not "not yet". Writing them would require first moving the subject types
+out of `Assembly-CSharp`, which is a refactor with its own risk and its own plan — and their
 arithmetic is already pinned at the library level, in `Ironfront.Net.Replication.Tests`, where
 it can be tested without an engine at all.
 
 **Reopening condition — ~~as first written~~, and why it had to be rewritten.** It read: *"If
 `Assets/Scripts/Net/Client/` ever gains its own `.asmdef` — which
 [`plans/asmdef-seam/plan.md`](../../asmdef-seam/plan.md) exists to do — these ten become
-writable."* **That condition FIRED on 2026-08-26** (asmdef-seam C4c shipped
+writable."* (Ten was itself wrong; see the count correction above. The condition's defect is
+independent of the count, and is the reason this paragraph survives at all.) **That condition FIRED on 2026-08-26** (asmdef-seam C4c shipped
 `Ironfront.Net.Unity.Client.asmdef` and a test assembly referencing it) **and its conclusion is
-false.** Not one of the ten became writable, because the asmdef the condition watched is not the
-assembly the subjects live in: the ten exercise `Weapon`, `ThrowableWeapon`, `GrenadeProjectile`
+false.** Not one of the five became writable, because the asmdef the condition watched is not the
+assembly the subjects live in: the five exercise `Weapon`, `ThrowableWeapon`, `GrenadeProjectile`
 and `Projectile`, every one of which is still in `Assembly-CSharp`. A condition that a reader can
 observe as met, on a record whose verdict has not changed, is worse than no condition — it invites
 exactly the "revisit" it names and then wastes it.
 
-**Reopening condition, restated against the subjects rather than against a folder.** These ten
+**Reopening condition, restated against the subjects rather than against a folder.** These five
 become writable when **the subject types themselves leave `Assembly-CSharp`** — concretely, when
 `Weapon`, `ThrowableWeapon`, `GrenadeProjectile` and `Projectile` are reachable from some assembly
 an `.asmdef` may name. Check it by locating the subject, not the test folder:

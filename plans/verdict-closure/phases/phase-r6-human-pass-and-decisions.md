@@ -8,6 +8,31 @@
 - **Closes:** **X-38**, **A-2** (its `_actor` half), **D-2**; re-affirms **X-14**, **C-5**, **C-12**
   in writing (**V-D4**)
 
+> **EXECUTED 2026-08-28 —
+> [`reports/2026-08-28-r6-human-pass-and-decisions.md`](../reports/2026-08-28-r6-human-pass-and-decisions.md).**
+> All four tasks done. **X-38 closed**, **A-2 → DECIDED**, **D-2 → DECIDED**, three parkings written.
+> **Opened X-48 and X-49**, both found by doing R6.1 rather than by reasoning about it.
+> **Two of this file's own claims were wrong and are corrected in place below** — search for
+> *CORRECTION*. The track's success criterion 1 is **reported NOT MET**: nine ledger rows still have
+> neither an owner nor a parking. Read the report before picking anything up.
+
+> **CORRECTION (2026-08-28, R6.1).** § 1 assumes the frames are frames *of the game* and that the
+> only missing step is somebody watching them. They are not. **Every lane-B PNG ever captured —
+> 90 frames across five runs, 2026-08-25 to 2026-08-28 — renders the deploy/loadout menu**, so
+> checks 8 and 9 have never had an artifact that could answer them either way. Filed as **X-48**.
+> Check 8 has a second, independent blocker this file also did not anticipate: input lag and
+> snapping are temporal, and seven stills 20-30 s apart cannot show either even from correct
+> frames. Both checks read **UNGRADEABLE**, which is the *"cannot tell from a still"* outcome § 1
+> anticipated — and it is a finding about the capture, not a pass.
+
+> **CORRECTION (2026-08-28, R6.2 — DECIDED).** § 2's premise that *"the field needs an `Actor`
+> component on the proxy"* is stale: asmdef-seam C4a widened `_actor` to `MonoBehaviour` behind
+> `IGameplayActorPresence`, so the field no longer demands one. The decision is unchanged, for a
+> **narrower and sharper** reason — `Actor` is still that interface's only implementor, and
+> `ActorManager.Register` ends `if (!actor.aiControlled) instance.player = actor`, so an `Actor` on
+> a remote proxy would overwrite the **local player's own** actor rather than merely add a
+> gameplay entity. The registration is at `Actor.cs:216`, not `Actor.cs:186` as this file says.
+
 ---
 
 ## 1. Task R6.1 — X-38: 21 frames per run, and nobody has looked at one (S)
