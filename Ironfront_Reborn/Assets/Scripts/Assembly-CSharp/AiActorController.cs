@@ -1,6 +1,7 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using Ironfront.Net.Unity.Bindings;
 using Ironfront.Net.Unity.Server;
 using Pathfinding;
 using UnityEngine;
@@ -1603,8 +1604,20 @@ public class AiActorController : ActorController
 		return Vector3.zero;
 	}
 
+	/// <summary>
+	/// The boat's stick. Ledger <b>X-46</b>: a SUSPENDED controller returns the axes the server
+	/// accepted, not the bot's opinion and not zero.
+	/// </summary>
+	/// <remarks>
+	/// See <see cref="CarInput"/> for why the guard is on <c>enabled</c> and why it sits above the
+	/// <c>hasPath</c> return rather than replacing it.
+	/// </remarks>
 	public override Vector2 BoatInput()
 	{
+		if (!base.enabled)
+		{
+			return NetVehicleAxisRelay.CarAxesFor(this);
+		}
 		if (!hasPath)
 		{
 			return Vector2.zero;
@@ -1620,8 +1633,39 @@ public class AiActorController : ActorController
 		return Vector2.ClampMagnitude(vector, 1f);
 	}
 
+	/// <summary>
+	/// The car's stick. Ledger <b>X-46</b>: a SUSPENDED controller returns the axes the server
+	/// accepted for this body, which is how a networked driver's vehicle moves at all.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Why this class is the one that reads a network relay.</b> <c>Car.FixedUpdate</c> pulls
+	/// through <c>Driver().controller.CarInput()</c>, and a networked player's server-side body
+	/// carries an <c>AiActorController</c> because <c>IronfrontNetBindings.CreatePlayerBody</c>
+	/// instantiates the bot prefab. So this override IS the driver seam for every real networked
+	/// driver, and until X-46 it answered with a bot's pathfinding — or, having no path, with
+	/// nothing. Measured: 1,285 accepted <c>C_VEHICLE_INPUT</c> messages against a hull that never
+	/// moved (<c>artifacts/lane-a/r5/r5-combat-05</c>).
+	/// </para>
+	/// <para>
+	/// <b><c>enabled</c>, not <c>squad != null</c> (O-D2).</b> <c>NetServerActor.Claim</c> suspends
+	/// the bot brain through <c>IAiDriver.Suspend</c>, which sets <c>enabled = false</c>, so
+	/// <c>!enabled</c> names exactly "this controller is not steering this body" — the same
+	/// condition X-45 and X-47 established. A real bot's controller is enabled and never reaches
+	/// the relay, so an AI convoy still drives itself.
+	/// </para>
+	/// <para>
+	/// <b>Above the <c>hasPath</c> return, not folded into it.</b> A suspended controller has no
+	/// path either, so ordering them the other way would return zero before the relay was ever
+	/// consulted — and the symptom would be indistinguishable from the defect being fixed.
+	/// </para>
+	/// </remarks>
 	public override Vector2 CarInput()
 	{
+		if (!base.enabled)
+		{
+			return NetVehicleAxisRelay.CarAxesFor(this);
+		}
 		if (!hasPath)
 		{
 			return Vector2.zero;
@@ -1782,23 +1826,26 @@ public class AiActorController : ActorController
 	/// in a pilot seat is the answer it was written to find.
 	/// </para>
 	/// <para>
-	/// <b>Why <see cref="BoatInput"/> and <see cref="CarInput"/> did not need this.</b> Both open
+	/// <b>Why <see cref="BoatInput"/> and <see cref="CarInput"/> did not throw.</b> Both opened
 	/// with <c>if (!hasPath) return zero</c>, and a suspended AI has no path — so they were
-	/// already returning a neutral stick for the same reason this now does explicitly. Only the
-	/// helicopter reaches its squad before any such guard.
+	/// already returning a neutral stick where this one reached its squad first. Since X-46 all
+	/// three carry the same explicit <c>enabled</c> guard, and the incidental <c>hasPath</c> cover
+	/// is no longer what is holding the other two up.
 	/// </para>
 	/// <para>
-	/// <b>Zero is the right neutral, not the takeoff ramp below.</b> The real driver input for a
-	/// networked pilot is supposed to arrive through <c>NetDriverInputSink</c> on an
-	/// <c>FpsActorController</c>; that it does not is ledger <b>X-46</b>, a separate row. What
-	/// this method must not do is supply the BOT's opinion to a vehicle a player is sitting in.
+	/// <b>The relay, not the takeoff ramp below, and not zero either since X-46.</b> The real
+	/// driver input for a networked pilot arrives through <c>NetDriverInputSink</c>, which hands
+	/// a body with no <c>FpsActorController</c> a <c>NetVehicleAxisRelay</c> instead — so this
+	/// returns the stick the server accepted. It falls back to zero when nothing is driving, which
+	/// is what a suspended controller owes a vehicle. What this method must not do, and still does
+	/// not, is supply the BOT's opinion to a vehicle a player is sitting in.
 	/// </para>
 	/// </remarks>
 	public override Vector4 HelicopterInput()
 	{
 		if (!base.enabled)
 		{
-			return Vector4.zero;
+			return NetVehicleAxisRelay.HelicopterAxesFor(this);
 		}
 		if (!squad.AllSeated() || !helicopterTakeoffAction.TrueDone())
 		{

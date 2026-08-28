@@ -1,4 +1,4 @@
-# tools/check-net-layering.ps1 — nothing in Assembly-CSharp reaches into the server assembly
+﻿# tools/check-net-layering.ps1 — nothing in Assembly-CSharp reaches into the server assembly
 # except the files named here, and every file named here still reaches.
 #
 # WHY THIS GATE EXISTS
@@ -138,6 +138,9 @@ $Baseline = @(
     @{ Path = 'Ironfront_Reborn/Assets/Scripts/NetBindings/NetDriverInputSink.cs'
        Kind = 'structural'
        Reason = 'the Assembly-CSharp half of IDriverInputSink' }
+    @{ Path = 'Ironfront_Reborn/Assets/Scripts/NetBindings/NetRelayDriverInputSink.cs'
+       Kind = 'structural'
+       Reason = 'the Assembly-CSharp half of IDriverInputSink for a body with no FpsActorController (X-46)' }
 
     @{ Path = 'Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs'                     ; Kind = 'debt'; Reason = 'legacy gameplay calls the server assembly directly' }
     @{ Path = 'Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ActorManager.cs'              ; Kind = 'debt'; Reason = 'legacy gameplay calls the server assembly directly' }

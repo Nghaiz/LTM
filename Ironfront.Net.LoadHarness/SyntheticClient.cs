@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication;
@@ -689,13 +689,15 @@ namespace Ironfront.Net.LoadHarness
         /// climb 139 m and lose 71 health, none of it its own doing.
         /// </para>
         /// <para>
-        /// <b>And even seat 0 with input flowing is CORRELATION, not causation, on this build.</b>
-        /// Ledger <b>X-46</b>: a player-slot body carries no <c>FpsActorController</c>, so
-        /// <c>NetDriverInputSink.Attach</c> returns null and the vehicle never receives what this
-        /// client sends. That fact lives in the SERVER's log and no client-side observer can see
-        /// it — which is why the evidence string carries the seat and the input count rather than
-        /// asserting a drive, and why the phase report grades this verb against the server log
-        /// rather than against this line alone.
+        /// <b>Seat 0 with input flowing was CORRELATION and not causation until X-46 closed.</b>
+        /// A player-slot body carries no <c>FpsActorController</c>, so
+        /// <c>NetDriverInputSink.Attach</c> returned null and the vehicle never received what this
+        /// client sent; the hull moving meant something else moved it. Since X-46 the sink falls
+        /// back to a <c>NetVehicleAxisRelay</c> and the input does arrive. The evidence string
+        /// still carries the seat and the input count, because that is what makes the claim
+        /// checkable from the artifact alone, and the phase report still reads the server log for
+        /// <c>unreachableControllers</c> — a client-side observer cannot see that number and a
+        /// verb graded without it would be asserting the thing it is supposed to demonstrate.
         /// </para>
         /// </remarks>
         private void ObserveDrive(in VehicleSnapshotEntry entry, uint tick)
@@ -721,10 +723,11 @@ namespace Ironfront.Net.LoadHarness
 
             // The seat index and the input count are IN the evidence, because "the vehicle
             // moved" and "this client drove it" are different claims and only the first is
-            // observable from here. Ledger X-46: a driver input sink is attached only for seat 0,
-            // and only when the body carries a controller it can reach -- so a hull that moved
-            // while this client sat in seat 2, or while its inputs reached nothing, moved for
-            // some other reason. A line that omitted these would let that read as a drive.
+            // observable from here. A driver input sink is attached only for seat 0 -- so a hull
+            // that moved while this client sat in seat 2 moved for some other reason, and a line
+            // that omitted the seat would let that read as a drive. Ledger X-46 was the second
+            // half of that sentence ("and only when the body carries a controller it can reach")
+            // and is closed; the seat half is structural and stays.
             _verbs.Record(
                 HarnessVerb.Drive, Index, tick, _nowMs,
                 $"vehicle {entry.VehicleId} moved {travelled:0.0} m while this client held seat "
