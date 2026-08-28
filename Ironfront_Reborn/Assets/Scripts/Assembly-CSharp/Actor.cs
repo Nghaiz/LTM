@@ -217,6 +217,41 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		lastUpdate = Time.time;
 	}
 
+	/// <summary>
+	/// Leaves ActorManager's registers on the way out. Ledger <b>X-49</b>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Nothing did this, and the cost was ~1,650 NullReferenceExceptions per lane-B run.</b>
+	/// <c>Register</c> above adds to <c>actors</c> and <c>SpawnAt</c> adds to
+	/// <c>aliveActors[team]</c>; the only removal was <c>SetDead</c> from <c>Die</c>, so an actor
+	/// that was DESTROYED while alive stayed in both lists for the rest of the match.
+	/// <c>ActorManager.Drop</c> already existed for exactly this and had <b>zero callers</b> —
+	/// present, never wired — while the vehicle twin <c>DropVehicle</c> was wired all along.
+	/// </para>
+	/// <para>
+	/// <b>Why it surfaces as a null-ref rather than as an empty list.</b> Unity's overloaded
+	/// <c>==</c> reports a destroyed object as equal to null, so a stale entry passes every
+	/// <c>x != somethingElse</c> test in the consumers and is then dereferenced:
+	/// <c>AiActorController.FindPotentialTargets</c> reaches <c>Actor.Position()</c> through
+	/// <c>HasEffectiveWeaponAgainst</c>, and <c>NewWaypoint</c> reaches
+	/// <c>Vehicle.IsStill</c>'s <c>rigidbody.linearVelocity</c>. Both are the same defect one
+	/// register apart, which is why this is fixed HERE rather than by null-guarding each
+	/// consumer — a guard at the call site leaves the next consumer exposed and leaves a
+	/// destroyed body in the list to be counted, sorted and distance-tested forever.
+	/// </para>
+	/// <para>
+	/// <b>Unconditional, not gated on <c>dead</c>.</b> An actor destroyed while alive is exactly
+	/// the case that leaked; <c>List.Remove</c> on an absent entry is a no-op, so calling both
+	/// removals on an already-dead actor costs a failed scan and nothing else.
+	/// </para>
+	/// </remarks>
+	private void OnDestroy()
+	{
+		ActorManager.SetDead(this);
+		ActorManager.Drop(this);
+	}
+
 	public bool IsAiming()
 	{
 		return aiming;

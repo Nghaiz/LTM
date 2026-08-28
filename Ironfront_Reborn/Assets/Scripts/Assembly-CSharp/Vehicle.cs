@@ -1038,6 +1038,20 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 		return Vector3.Distance(base.transform.position, point) < avoidanceCoarseRadius + lineRadius;
 	}
 
+	/// <summary>
+	/// Leaves ActorManager's vehicle register on the way out. Ledger <b>X-49</b>.
+	/// </summary>
+	/// <remarks>
+	/// <c>DropVehicle</c> was already called from <c>Die</c>, so a vehicle that BURNED left the
+	/// list — and a vehicle that was destroyed without dying did not. See <c>Actor.OnDestroy</c>
+	/// for the full account; this is the same defect one register over, and it is what put a
+	/// destroyed vehicle in front of <see cref="IsStill"/>'s <c>rigidbody</c> read below.
+	/// </remarks>
+	private void OnDestroy()
+	{
+		ActorManager.DropVehicle(this);
+	}
+
 	public bool IsStill()
 	{
 		return rigidbody.linearVelocity.magnitude < 0.2f;

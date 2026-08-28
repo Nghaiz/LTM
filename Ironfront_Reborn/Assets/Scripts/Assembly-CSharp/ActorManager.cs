@@ -62,8 +62,15 @@ public class ActorManager : MonoBehaviour
 		}
 	}
 
+	// Ledger X-49. Every one of these three removals is now reached from an OnDestroy, so each
+	// has to survive being called while the scene is being torn down: Unity destroys children in
+	// no guaranteed order, so ActorManager may already be gone, and StartGame may never have run
+	// at all (a headless server that loads the map and quits). A null-ref thrown out of OnDestroy
+	// during quit is the kind of error that reads as a crash and is only ever noise.
 	public static void Drop(Actor actor)
 	{
+		if (instance == null || instance.actors == null) return;
+
 		instance.actors.Remove(actor);
 	}
 
@@ -180,7 +187,10 @@ public class ActorManager : MonoBehaviour
 
 	public static void SetDead(Actor actor)
 	{
-		instance.aliveActors[actor.team].Remove(actor);
+		if (instance == null || instance.aliveActors == null) return;
+		if (!instance.aliveActors.TryGetValue(actor.team, out List<Actor> onTeam)) return;
+
+		onTeam.Remove(actor);
 	}
 
 	public static List<Actor> AliveActorsOnTeam(int team)
@@ -370,6 +380,8 @@ public class ActorManager : MonoBehaviour
 
 	public static void DropVehicle(Vehicle vehicle)
 	{
+		if (instance == null || instance.vehicles == null) return;
+
 		instance.vehicles.Remove(vehicle);
 	}
 
