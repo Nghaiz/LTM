@@ -122,13 +122,21 @@ spec:
           # repackages a Linux artifact produced on a licensed machine and attached to a
           # release. Until that release exists, this digest is a LOCAL build: tools/
           # build-server.ps1, then `docker build -f infra/docker/gameserver.Dockerfile
-          # build/server`, side-loaded per the README. It carries the AD-1 fix (X-50);
-          # the published gameserver-v0.3.0 (sha256:c310da19…) predates it and self-joins.
+          # build/server`, side-loaded per the README. Tagged lan-v0.4.0 on the node.
+          #
+          # It carries X-53 (the map's opening capture-point ownership reaches the match, so
+          # rounds stop ending in a draw one second after they start), X-39 (the position
+          # window moved to -1024..3072, so the Oasis spawn is representable), X-54 (remote
+          # bodies stand on the ground) and, from before, the AD-1 fix (X-50). The published
+          # gameserver-v0.3.0 (sha256:c310da19…) predates all of them.
+          #
+          # PROTOCOL_VERSION IS 4 HERE. A v3 client cannot talk to it and must not try: the
+          # same i16 decodes to a different metre. Rebuild the player from the same commit.
           #
           # A locally-built digest exists on this node and NOWHERE ELSE, so a rescheduled
           # pod cannot pull it back. That is the trade for pinning something the registry
           # does not have; the README's side-load is the recovery.
-          image: ghcr.io/nghaiz/ironfront-game-server@sha256:469fab87798d3c64f7b767fa5460b64f981de5405bf1fbd2656ab2ce16c11628
+          image: ghcr.io/nghaiz/ironfront-game-server@sha256:8c5d062d7ddbd432fa87b363969e0499c8393be67e5c95ab7f5de9e4399293a1
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
