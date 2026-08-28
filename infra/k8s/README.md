@@ -73,10 +73,11 @@ sudo ctr -n k8s.io images tag \
 sudo ctr -n k8s.io images check | grep ironfront   # expect: complete
 ```
 
-**Save from a tag, never from a digest.** `docker save <ref>@sha256:…` writes an extra
-anonymous wrapper index, and `ctr import` names it `import-<date>@sha256:…`. The kubelet
-then normalises that to `docker.io/library/import-<date>@sha256:…`, which is not the string
-containerd stored, and every container creation fails with:
+**Save from a tag, not from a digest — and the reason is narrower than it first looks.**
+`ctr import` names the archive's index `import-<date>@sha256:…` **either way**; that stray
+name is still on this node beside a perfectly healthy pod, so it is not by itself the fault.
+What breaks is a container creation whose config digest resolves to one of those names when
+the name does not resolve back. It surfaces as:
 
 ```
 Error: failed to check if this is a checkpoint image: failed to get image from
@@ -84,11 +85,17 @@ containerd "sha256:9d16b4a5…": image "docker.io/library/import-2026-08-28@sha2
 ```
 
 That error names a checkpoint feature nobody asked for and a digest that appears nowhere in
-the manifest, so it reads as anything but what it is. Deleting the stray reference is **not**
-enough — containerd's CRI cache keeps the mapping, and restarting the kubelet does not clear
-it (tried; it lives in containerd, and restarting *that* would bounce every container on the
-node, including the other project's). Remove the image entirely and re-import an archive
-saved from a tag, which carries exactly one manifest and one name.
+the manifest, so it reads as anything but what it is.
+
+**What did not work, in order:** deleting the stray reference (containerd's CRI cache keeps
+the mapping); then restarting the kubelet (the cache is containerd's, not the kubelet's, and
+restarting *that* would bounce every container on the node, including the other project's).
+
+**What did work:** remove **every** reference to that image, then import an archive saved
+from a **tag**, so the image arrives carrying a real repository name rather than only an
+anonymous index, and add the digest alias afterwards with `ctr images tag`. Both halves were
+present in the working attempt and only the pair is proven — if you are ever down to one, the
+full delete is the half to keep.
 
 ## Two things to know before trusting a green
 
