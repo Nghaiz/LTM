@@ -137,7 +137,26 @@ namespace Ironfront.Net.Unity.Client
         {
             if (!message.IsLocalPlayer) return;
 
+            // Kept in step HERE as well as in Update, because this message is the moment the id
+            // becomes known and the guard below reads it. Update copies it once per frame, so at
+            // a router callback it can still be the unassigned zero -- and every IsLocalActor
+            // guard fed from it would then reject the one message that establishes identity. The
+            // Update comment already calls this "keeping it in step"; this is the same line at
+            // the only other moment it can change.
+            _state.LocalActorId = _client.LocalActorId;
+
             _state.EquipWeapon(message.WeaponId);
+
+            // Ledger X-48. The message that says "your body is deployed" is also the moment the
+            // client should stop rendering the menu it was deployed FROM. Nothing did this, and
+            // the consequence was total rather than cosmetic: every lane-B frame ever captured —
+            // 90 across five runs — showed the deploy screen, so checks 8 and 9 were ungradeable
+            // by construction and no human had ever seen the game render.
+            //
+            // Here rather than in a presenter because this component already owns exactly this
+            // responsibility: local presentation following the server's authoritative life state
+            // (see OnDied / OnRespawned below). A presenter would be a second owner of it.
+            EnterDeployedView();
         }
         private void Update()
         {
@@ -307,7 +326,47 @@ namespace Ironfront.Net.Unity.Client
             _inputSuppressedByDeath = true;
         }
 
-        private void OnRespawned() => RestoreInput();
+        /// <summary>
+        /// A respawn is a deploy, so it runs the whole presentation switch rather than input
+        /// alone. Ledger <b>X-48</b>.
+        /// </summary>
+        /// <remarks>
+        /// <b>Deliberately not <see cref="RestoreInput"/>.</b> That method gives back only what
+        /// a death took, which is right for the disconnect path it also serves and wrong here:
+        /// offline, a respawn goes through <c>Actor.SpawnAt</c>, which turns the backdrop off and
+        /// enables input unconditionally because the player is being placed into the world. The
+        /// suppression flag is cleared alongside so the <c>OnDisable</c> path does not later
+        /// re-enable input a seat or a loadout screen has legitimately taken.
+        /// </remarks>
+        private void OnRespawned()
+        {
+            _inputSuppressedByDeath = false;
+            EnterDeployedView();
+        }
+
+        /// <summary>
+        /// Switches this client out of the pre-deploy menu view.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Guarded exactly as <see cref="RestoreInput"/> is. <c>IsLocalActor</c> reads the live
+        /// <c>NetClientBootstrap.LocalActorId</c> and compares it against the argument, so the
+        /// staleness that matters is in what we PASS: <c>_state.LocalActorId</c> is copied once
+        /// per frame in <c>Update</c>, and at a router callback it can still be the unassigned
+        /// zero. <c>OnSpawnActor</c> therefore refreshes it before calling here — the guard is
+        /// kept rather than dropped, because gate rule G4 is right that a per-actor path reaching
+        /// the local rig unguarded is how one player's event writes another player's camera.
+        /// </para>
+        /// </remarks>
+        private void EnterDeployedView()
+        {
+            if (!NetClientPresenterGuard.IsLocalActor(_state.LocalActorId)) return;
+
+            ILocalPlayerRig local = NetClientBindings.LocalPlayer;
+            if (!local.Exists) return;
+
+            local.EnterDeployedView();
+        }
 
         private void RestoreInput()
         {

@@ -139,6 +139,7 @@ namespace Ironfront.Net.Unity.Client.Tests
             {
                 rig.EnableInput();
                 rig.DisableInput();
+                rig.EnterDeployedView();
                 rig.ApplyScreenshake(1f, 2);
                 rig.SetInputSource(null);
                 rig.FellBody(Vector3.up, HumanBodyBones.Hips);
@@ -231,6 +232,7 @@ namespace Ironfront.Net.Unity.Client.Tests
             public void SetInputSource(IInputSource source) { }
             public void EnableInput() { }
             public void DisableInput() { }
+            public void EnterDeployedView() { }
             public bool IsDriving(IGameplayActorPresence actor) => false;
             public Vector3 Position => Vector3.zero;
             public float YawDegrees => 0f;

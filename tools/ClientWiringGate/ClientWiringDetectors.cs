@@ -1210,5 +1210,87 @@ namespace Ironfront.Tools.ClientWiringGate
 
             return findings;
         }
+
+        private static readonly string[] DeployedViewScope =
+            { "/NetClientLocalCombatDriver.cs" };
+
+        /// <summary>The handler for the server's "your body is deployed" message.</summary>
+        private const string DeployedViewCaller = "OnSpawnActor";
+
+        /// <summary>The handler for the server's "you are alive again" transition.</summary>
+        private const string DeployedViewRespawnCaller = "OnRespawned";
+
+        private const string DeployedViewCall = "EnterDeployedView";
+
+        /// <summary>Exposed so the companion test can assert the rule is in scope at all.</summary>
+        public static bool IsDeployedViewScoped(string path) =>
+            !IsExcludedFromScan(path) && IsInScope(path, DeployedViewScope);
+
+        /// <summary>
+        /// <b>G12</b> — the client leaves the pre-deploy menu view when the server says it is
+        /// deployed. Ledger <b>X-48</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>What this is protecting, and why a rule rather than a test.</b> The defect it pins
+        /// was invisible for a week across five runs and 90 captured frames: a networked client
+        /// rendered the deploy menu for entire matches while its simulation joined, spawned,
+        /// aimed and killed. Nothing failed. Every counter was healthy, every check that reads a
+        /// counter passed, and the two checks that read the FRAMES were quietly ungradeable —
+        /// which reads like an artifact problem, not a game one. A test cannot pin the behaviour
+        /// here: the switch happens in a router callback on a live client, and Unity runs no
+        /// <c>Awake</c> outside play mode, which is the trap
+        /// <c>DedicatedServerDeclinesLocalClientTests</c> already paid for once.
+        /// </para>
+        /// <para>
+        /// <b>Both callers, not one.</b> The first spawn and a respawn are different code paths —
+        /// <c>S_SPAWN_ACTOR</c> and <c>ClientCombatState.OnRespawned</c> — and losing either one
+        /// leaves a player looking at the menu for the rest of a life, which is exactly as bad as
+        /// losing both and half as likely to be noticed.
+        /// </para>
+        /// </remarks>
+        public static IReadOnlyList<GateFinding> FindMissingDeployedViewSwitch(
+            SyntaxTree tree, string path)
+        {
+            var findings = new List<GateFinding>();
+
+            if (IsExcludedFromScan(path)) return findings;
+            if (!IsInScope(path, DeployedViewScope)) return findings;
+
+            foreach (string caller in new[] { DeployedViewCaller, DeployedViewRespawnCaller })
+            {
+                MethodDeclarationSyntax? handler = tree.GetRoot()
+                    .DescendantNodes()
+                    .OfType<MethodDeclarationSyntax>()
+                    .FirstOrDefault(m => m.Identifier.ValueText == caller);
+
+                if (handler == null)
+                {
+                    findings.Add(new GateFinding(
+                        "G12", path, 0,
+                        $"'{caller}' is gone from NetClientLocalCombatDriver, so the deploy-view "
+                        + "switch cannot be where it has to be. If the handler was renamed, move "
+                        + "this rule with it rather than deleting it."));
+                    continue;
+                }
+
+                bool calls = handler.DescendantNodes()
+                    .OfType<InvocationExpressionSyntax>()
+                    .Any(i => NameOfInvoked(i) == DeployedViewCall);
+
+                if (calls) continue;
+
+                findings.Add(new GateFinding(
+                    "G12", path, LineOf(handler),
+                    $"'{caller}' does not call '{DeployedViewCall}', so a networked client stays "
+                    + "in the pre-deploy menu view after the server has deployed it: the scenery "
+                    + "camera keeps repainting the whole screen at depth 100, the loadout screen "
+                    + "is never dismissed and input is never restored. The simulation carries on "
+                    + "normally throughout, so no counter and no test goes red — only the frames "
+                    + "do, and only to a human who looks at one."));
+            }
+
+            return findings;
+        }
     }
 }

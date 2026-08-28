@@ -119,6 +119,25 @@ namespace Ironfront.Net.Unity
         void DisableInput();
 
         /// <summary>
+        /// Switches this client from the pre-deploy menu view to the in-world view: dismisses the
+        /// loadout screen, turns off the menu backdrop camera, restores control and selects the
+        /// first-person camera. Ledger <b>X-48</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Maps to <c>FpsActorController.EnterDeployedView</c>, which is <c>SpawnAt</c> with the
+        /// transform write removed — see that method for why the position is deliberately left
+        /// to the server. <b>This is presentation only and grants no authority</b>: it is called
+        /// BECAUSE the server said the body is deployed, never to assert that it is.
+        /// </para>
+        /// <para>
+        /// A no-op when the rig is absent, which is the normal state on a headless server and
+        /// between a death and a respawn — same contract as every other member here.
+        /// </para>
+        /// </remarks>
+        void EnterDeployedView();
+
+        /// <summary>
         /// Whether <paramref name="actor"/> is the body this rig drives.
         /// </summary>
         /// <remarks>

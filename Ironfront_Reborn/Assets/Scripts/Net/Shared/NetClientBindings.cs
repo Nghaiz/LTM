@@ -203,6 +203,7 @@ namespace Ironfront.Net.Unity
             public void SetInputSource(IInputSource source) { }
             public void EnableInput() { }
             public void DisableInput() { }
+            public void EnterDeployedView() { }
             public bool IsDriving(IGameplayActorPresence actor) => false;
             public Vector3 Position => Vector3.zero;
             public float YawDegrees => 0f;

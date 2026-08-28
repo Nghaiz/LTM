@@ -413,6 +413,9 @@ public class FpsActorController : ActorController
 
 	public override void Die()
 	{
+		// Cleared here so the deploy screen can come back for the next life. This is the one
+		// place that must undo it: a corpse is exactly the state the menu view is FOR.
+		deployedView = false;
 		ThirdPersonCamera();
 		UpdateThirdPersonCamera(true);
 		Invoke("OpenLoadoutWhileDead", 2f);
@@ -420,6 +423,20 @@ public class FpsActorController : ActorController
 
 	public void OpenLoadoutWhileDead()
 	{
+		// Ledger X-48. GameManager schedules this by name through Invoke("OpenPlayerLoadout", 1f),
+		// so it lands a full second after StartGame -- and on a networked client the server's
+		// S_SPAWN_ACTOR can arrive inside that second. Without this guard the deploy screen we
+		// just dismissed reopens on a timer nobody can see, which is worse than never dismissing
+		// it: it looks intermittent.
+		//
+		// Guarded on deployedView rather than on actor.dead because the two are not the same
+		// question on this path. actor.dead is the CLIENT's copy of a flag the server owns, and
+		// nothing on the client's spawn path clears it -- ServerCombatBridge.PlaceAtSpawn writes
+		// IsAlive on the SERVER's actor, one process over.
+		if (deployedView)
+		{
+			return;
+		}
 		if (actor.dead)
 		{
 			OpenLoadout();
@@ -447,6 +464,65 @@ public class FpsActorController : ActorController
 		controller.SetMouseEnabled(true);
 		FirstPersonCamera();
 		ForceEndCrouch();
+		deployedView = true;
+	}
+
+	/// <summary>
+	/// Whether this controller has been switched from the pre-deploy menu view to the in-world
+	/// view. Set by <see cref="SpawnAt"/> and by <see cref="EnterDeployedView"/>, cleared on
+	/// death.
+	/// </summary>
+	private bool deployedView;
+
+	/// <summary>
+	/// The presentation half of <see cref="SpawnAt"/>, with no write to the body's transform.
+	/// Ledger <b>X-48</b>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>A networked client rendered the deploy menu for the whole match, on every run ever
+	/// captured.</b> <c>SpawnAt</c> is the only code in the project that turns the menu backdrop
+	/// off, gives the player their controls and switches to the first-person camera — and a
+	/// networked body deliberately never runs it (<c>Actor.EquipLoadout</c>, "not SpawnAt, and
+	/// not controller.EnableInput()"), because it would teleport a body the server owns.
+	/// <c>Start</c> above turns the backdrop ON and calls <c>DisableInput</c>, so on a networked
+	/// client both stayed that way forever. Measured across 90 checkpoint records of five runs:
+	/// <c>Scenery Camera</c> enabled at depth 100 in every one, <c>localInputEnabled</c> false in
+	/// every one — and <c>SceneryCamera</c> clears to skybox on a full culling mask, so at the
+	/// highest depth in the scene it repaints over the live FP camera rather than blending with
+	/// it. That is why the frames are truthful and still show no game.
+	/// </para>
+	/// <para>
+	/// <b>What is deliberately NOT here.</b> <c>controller.transform.position</c> and
+	/// <c>ResetVelocity()</c>. The server places a claimed body through
+	/// <c>ServerCombatBridge.MoveToSpawnPoint</c> and owns it thereafter; writing the transform
+	/// from the client's presentation path would make two writers for one position, which is the
+	/// authority split AD-1 exists to prevent. Everything else <c>SpawnAt</c> does is
+	/// presentation, and presentation is this client's to run.
+	/// </para>
+	/// <para>
+	/// <b>Idempotent, so a repeated spawn message costs a few bool writes and nothing else.</b>
+	/// Each call below already no-ops when it is already in the requested state.
+	/// </para>
+	/// </remarks>
+	public void EnterDeployedView()
+	{
+		// CloseLoadout also does controller.SetMouseEnabled(true), which is SpawnAt's line.
+		CloseLoadout();
+
+		// Null-guarded where SpawnAt is not. SpawnAt runs from a spawn wave, which cannot happen
+		// before the scene's singletons exist; this runs off a network message, which can arrive
+		// during a scene change. GameManager.cs makes the same argument for its own read.
+		SceneryCamera scenery = SceneryCamera.instance;
+		if (scenery != null && scenery.camera != null)
+		{
+			scenery.camera.enabled = false;
+		}
+
+		EnableInput();
+		FirstPersonCamera();
+		ForceEndCrouch();
+		deployedView = true;
 	}
 
 	public override void ApplyRecoil(Vector3 impulse)
