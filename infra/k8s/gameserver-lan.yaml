@@ -1,0 +1,152 @@
+# Ironfront game server — SINGLE-NODE LAN / DEV topology for a Kubernetes sandbox.
+#
+# This is NOT the production topology. infra/compose/ is, and it stays authoritative for
+# anything reachable from the Internet. What this file buys is the one thing the compose
+# stack cannot give a developer today: a real UDP game server on a real second machine,
+# with no master, no TLS and no certificate pinning to get wrong first.
+#
+# ---------------------------------------------------------------------------------------
+# WHY IT IS SAFE TO APPLY ON A CLUSTER THAT IS ALREADY RUNNING SOMETHING ELSE
+#
+# Everything below lives in the `ironfront` namespace and nothing outside it is named,
+# patched or referenced. No ClusterRole, no webhook, no CRD, no change to the apiserver's
+# NodePort range, no CNI change, no Docker install (docker-ce would replace the
+# containerd the kubelet is using, which is how a sandbox cluster dies). The whole
+# footprint is removed by:
+#
+#     kubectl delete namespace ironfront
+#
+# The one node-level resource it does claim is UDP port 27015 on the host, through
+# hostNetwork. Check it is free before applying — `ss -lnup | grep 27015` — and pick
+# another port here if it is not.
+#
+# ---------------------------------------------------------------------------------------
+# WHY hostNetwork RATHER THAN NodePort
+#
+# The default NodePort range is 30000-32767 and 27015 is not in it. Widening that range is
+# an apiserver flag change on a cluster that belongs to another project, which is exactly
+# the kind of edit this file refuses to make. hostNetwork binds the port the game server
+# already binds (`UdpPeer` opens IPAddress.Any:IRONFRONT_GAMESERVER_UDP_PORT), so the
+# client dials <node-ip>:27015 with no translation in the path and no CNI UDP quirk to
+# debug on top of a netcode question.
+#
+# ---------------------------------------------------------------------------------------
+# WHY THERE IS NO MASTER HERE
+#
+# `MasterLinkBootstrap` treats an unset IRONFRONT_MASTER_HOST as a supported state and says
+# so: "master link: standalone — no host configured, matches will not be advertised."
+# A standalone game server is the whole of what a two-client LAN match needs; the master
+# adds accounts, a room list and signed tickets, none of which are on the path to seeing
+# two players in one world. Add it back (infra/compose/) before anything is public.
+#
+# ---------------------------------------------------------------------------------------
+# SECURITY — READ THIS BEFORE EXPOSING THE NODE
+#
+# IRONFRONT_GAMESERVER_ACCEPT_UNSIGNED_TICKETS=1 with no shared secret means ANY client can
+# join as ANY player id. EnvRegistry says it plainly: "DEVELOPMENT ONLY ... a public server
+# running with it on is a server anyone can join as anyone." That is acceptable on a NAT'd
+# VMware host-only/NAT subnet and is not acceptable one router port-forward later. The day
+# this port is reachable from outside the LAN, set IRONFRONT_SHARED_SECRET on both ends and
+# flip this to "0".
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ironfront
+  labels:
+    app.kubernetes.io/part-of: ironfront
+    ironfront.dev/topology: lan-dev
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gameserver-env
+  namespace: ironfront
+data:
+  # A headless build left on the loopback transport starts cleanly and accepts nobody, so
+  # this states udp rather than inheriting a scene default.
+  IRONFRONT_GAMESERVER_TRANSPORT: "udp"
+  IRONFRONT_GAMESERVER_UDP_PORT: "27015"
+
+  # NetServerBootstrap is a component that lives in a map scene. Without this the build
+  # walks Splash -> Menu, binds nothing, and presents as healthy-and-unreachable.
+  IRONFRONT_GAMESERVER_SCENE: "Dustbowl"
+
+  # Development only. See the security note in the header.
+  IRONFRONT_GAMESERVER_ACCEPT_UNSIGNED_TICKETS: "1"
+
+  # What the server would advertise to players if a master were attached. Harmless while
+  # standalone, and correct for the moment one is: it must be an address clients can
+  # actually reach, which on this sandbox is the node's own VMnet8 address.
+  IRONFRONT_GAMESERVER_PUBLIC_IP: "192.168.94.130"
+
+  IRONFRONT_GAMESERVER_MAX_PLAYERS: "16"
+  IRONFRONT_GAMESERVER_MAX_CONNECTIONS: "16"
+  IRONFRONT_LOG_LEVEL: "Info"
+  IRONFRONT_STRUCTURED_LOG: "1"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: game-server
+  namespace: ironfront
+  labels:
+    app.kubernetes.io/name: ironfront-game-server
+spec:
+  # Exactly one. Two replicas under hostNetwork would fight over UDP 27015 and the loser
+  # would CrashLoopBackOff on a SocketException that reads as a server fault.
+  replicas: 1
+  strategy:
+    # A hostPort-shaped workload cannot roll: the new pod cannot bind 27015 while the old
+    # one still holds it. Recreate makes the gap explicit instead of a stuck rollout.
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ironfront-game-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ironfront-game-server
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      # Unity's SIGTERM handling is not instant and a half-drained match is worse than a
+      # slow one.
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: game-server
+          # PINNED BY DIGEST, never :latest — the tag gameserver-v0.3.0 resolved to this on
+          # 2026-08-28. Re-pin deliberately; do not let a moved tag change what runs.
+          image: ghcr.io/nghaiz/ironfront-game-server@sha256:c310da19a065c3dd3a39417d8ede252aa0f9e3c03cabf0cdc3a4a494f9627a40
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: gameserver-env
+          ports:
+            - name: game-udp
+              containerPort: 27015
+              protocol: UDP
+          securityContext:
+            # The image already drops to UID 1654. These make that stick.
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1654
+            runAsGroup: 1654
+            capabilities:
+              drop: ["ALL"]
+            # NOT readOnlyRootFilesystem: the Unity player writes its persistent data path
+            # and its own crash handler state under $HOME at startup.
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "768Mi"
+            limits:
+              # Expect 0.5-1.5 GB resident per Unity instance. The cap turns "the OOM
+              # killer picked a process at random" into "this pod restarted", which is
+              # diagnosable — and it protects the other project sharing this node.
+              cpu: "3"
+              memory: "2Gi"
+          # No readinessProbe on purpose. A Unity UDP listener cannot be probed honestly
+          # over TCP, and a probe that always passes is worse than none: it would report
+          # healthy on exactly the failure this server has had before (bound nothing,
+          # accepted nobody). Read the log line instead — see infra/k8s/README.md.
