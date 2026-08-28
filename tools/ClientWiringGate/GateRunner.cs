@@ -161,6 +161,8 @@ namespace Ironfront.Tools.ClientWiringGate
                 findings.AddRange(ClientWiringDetectors.FindUnguardedEngineProjectileDamage(tree, path));
                 findings.AddRange(ClientWiringDetectors.FindUnpinnedHealthOwnershipGuard(tree, path));
                 findings.AddRange(ClientWiringDetectors.FindUnpinnedLevelBoundsCall(tree, path));
+                findings.AddRange(
+                    ClientWiringDetectors.FindUnguardedDedicatedServerClientDial(tree, path));
             }
 
             var dead = routerEventNames.Where(name => !subscribed.ContainsKey(name)).ToList();
@@ -218,7 +220,7 @@ namespace Ironfront.Tools.ClientWiringGate
                 + $"{routerEventNames.Count} ClientMessageRouter events have a production "
                 + "subscriber"
                 + (KnownUnwiredEvents.Length == 0 ? "" : " and the rest are named gaps above")
-                + $"; G2-G5 and G7-G9 clean across {scanned} "
+                + $"; G2-G5, G7-G9 and G11 clean across {scanned} "
                 + "file(s). No types were resolved - this says something subscribes, not that it "
                 + "renders correctly.");
             return 0;

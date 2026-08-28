@@ -143,6 +143,34 @@ namespace Ironfront.Net.Unity.Client
             // Awake logs is already reaching somewhere.
             NetLogUnitySink.Install();
 
+            // A dedicated server loads the same map scene every client does, and that scene
+            // carries this component -- so without this guard the server dials ITSELF over
+            // loopback and joins its own match as a player: a real body at a real spawn point,
+            // one of sixteen slots gone, one connection gone, and the congestion controller
+            // reacting to its own traffic. `architecture.md` AD-1 forbids a host/listen-server
+            // mode; this is where that stops being only a written decision.
+            //
+            // It returns BEFORE the role is claimed and before `Current` is published, because
+            // both are wrong on a server: the role line below would race NetServerBootstrap's
+            // mirror of it and could settle a dedicated process as a Client, and every reader of
+            // `Current` is a client-side diagnostic.
+            //
+            // NOT `NetContext.IsServer` -- that IS the race, settled by whichever bootstrap's
+            // Awake runs first since each defers to the other, so gating on it would make an
+            // Editor Play session's behaviour depend on component order.
+            // `NetContext.IsDedicatedServer` has exactly one setter, which knows because the
+            // process was launched headless to host a map.
+            if (NetContext.IsDedicatedServer)
+            {
+                // Left ENABLED rather than switched off. `enabled = false` assigned inside Awake
+                // does not survive the activation pass that called it (measured: the assertion
+                // for it was the only red in this fixture's first run), so a line claiming to
+                // disable the component would be a line that lies. It costs nothing to leave on:
+                // `Update` is `_transport?.Poll()` and `_transport` stays null.
+                Debug.Log("[net] dedicated server: no local client will be dialled (AD-1).");
+                return;
+            }
+
             ResolveConfiguration();
 
             // Not claimed on a machine already running the server. A loopback test puts both in
