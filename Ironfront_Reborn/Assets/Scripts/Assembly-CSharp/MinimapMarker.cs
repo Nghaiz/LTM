@@ -1,6 +1,18 @@
 using UnityEngine;
 using UnityEngine.UI;
 
+/// <summary>Which authored prefab a <see cref="MinimapMarker"/> is drawn from.</summary>
+/// <remarks>
+/// The kinds differ by texture, not by behaviour — see <c>MinimapUi.SetMarker</c>. A body is a
+/// replicated player, bot or vehicle: everything P3 task 3.4 puts on the map that is not an
+/// <c>Actor</c>, and therefore everything <c>MinimapUi.AddActorBlip</c> structurally cannot draw.
+/// </remarks>
+public enum MinimapMarkerKind
+{
+	CapturePoint,
+	Body,
+}
+
 /// <summary>
 /// One minimap icon that follows a world transform. debt-closure phase 2 task 2d, ledger C-6.
 /// </summary>
@@ -50,6 +62,17 @@ public class MinimapMarker : MonoBehaviour
 		if (button != null)
 		{
 			button.interactable = false;
+		}
+
+		// The Body kind borrows the actorBlipPrefab, which carries an ActorBlip. Left alive it
+		// runs its own LateUpdate against a null Actor and sets image.enabled = false EVERY
+		// frame -- so the marker below would set the graphic visible and the borrowed component
+		// would hide it again, and the icon would never appear. Same reasoning as the Button
+		// above: a borrowed prefab's own behaviour has to be switched off, not merely ignored.
+		ActorBlip blip = GetComponent<ActorBlip>();
+		if (blip != null)
+		{
+			Object.Destroy(blip);
 		}
 
 		RectTransform rect = (RectTransform)base.transform;

@@ -55,6 +55,10 @@ namespace Ironfront.Tools.ClientWiringGate
                  AssetWiringDetectors.ScoreUiTextRefsAreAssigned),
                 (nameof(AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip),
                  AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip),
+                (nameof(AssetWiringDetectors.MinimapMarkerPrefabsAreAuthored),
+                 AssetWiringDetectors.MinimapMarkerPrefabsAreAuthored),
+                (nameof(AssetWiringDetectors.CapturePointFlagsCanDraw),
+                 AssetWiringDetectors.CapturePointFlagsCanDraw),
             };
 
         /// <summary>

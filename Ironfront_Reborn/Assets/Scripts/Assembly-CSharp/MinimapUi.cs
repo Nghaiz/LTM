@@ -243,6 +243,28 @@ public class MinimapUi : MonoBehaviour
 	/// </remarks>
 	public static void SetMarker(Transform subject, Color color)
 	{
+		SetMarker(subject, color, MinimapMarkerKind.CapturePoint);
+	}
+
+	/// <summary>
+	/// As <see cref="SetMarker(Transform, Color)"/>, choosing which authored prefab draws it.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Two kinds, not two APIs.</b> P3 task 3.4 needs an icon for every replicated body, and
+	/// a replicated body is a <c>Transform</c> with a team — the same shape a capture point is,
+	/// and the shape <see cref="MinimapMarker"/> was built for. What differs is only which
+	/// texture it wears, so the kind selects a prefab and nothing else branches.
+	/// </para>
+	/// <para>
+	/// <b>Both prefabs are already authored fields</b>, so this adds no new way for the gate to
+	/// find a null: <see cref="capturePointMarkerPrefab"/> is P3 task 3.3's authoring and
+	/// <see cref="actorBlipPrefab"/> has been assigned since the original game. Adding a third
+	/// serialized field per kind would have been a third thing to leave unassigned.
+	/// </para>
+	/// </remarks>
+	public static void SetMarker(Transform subject, Color color, MinimapMarkerKind kind)
+	{
 		if (instance == null || subject == null)
 		{
 			return;
@@ -255,16 +277,16 @@ public class MinimapUi : MonoBehaviour
 			return;
 		}
 
-		GameObject prefab = instance.capturePointMarkerPrefab != null
-			? instance.capturePointMarkerPrefab
-			: instance.minimapSpawnPointPrefab;
+		GameObject prefab = ((kind == MinimapMarkerKind.Body)
+			? instance.actorBlipPrefab
+			: instance.capturePointMarkerPrefab) ?? instance.minimapSpawnPointPrefab;
 
 		if (prefab == null)
 		{
 			NetPresenterGate.WarnOnce(
 				"minimap-no-marker-prefab",
-				"[minimap] MinimapUi has neither capturePointMarkerPrefab nor "
-				+ "minimapSpawnPointPrefab assigned, so capture points draw no marker.");
+				"[minimap] MinimapUi has no prefab for a " + kind + " marker and no "
+				+ "minimapSpawnPointPrefab to fall back on, so it draws nothing.");
 			return;
 		}
 

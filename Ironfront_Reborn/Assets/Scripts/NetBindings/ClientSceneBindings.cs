@@ -83,6 +83,26 @@ namespace Ironfront.Net.Unity.Bindings
     }
 
     /// <summary>
+    /// The <c>Assembly-CSharp</c> half of <see cref="IMinimapMarkers"/>. P3 task 3.4.
+    /// </summary>
+    /// <remarks>
+    /// <b>The colour is chosen here, not passed in</b> — the same reasoning
+    /// <see cref="DecalSinkBinding"/> gives for fixing the decal kind. <c>ColorScheme.TeamColor</c>
+    /// is the one answer to "what does team N look like", <c>ActorBlip</c> and
+    /// <c>CapturePoint.SetOwner</c> already read it, and a <c>Color</c> crossing the seam would
+    /// let a second answer grow inside the netcode where nobody would look for it.
+    /// </remarks>
+    internal sealed class MinimapMarkerBinding : IMinimapMarkers
+    {
+        /// <inheritdoc/>
+        public void SetBodyMarker(Transform subject, int team)
+            => MinimapUi.SetMarker(subject, ColorScheme.TeamColor(team), MinimapMarkerKind.Body);
+
+        /// <inheritdoc/>
+        public void RemoveMarker(Transform subject) => MinimapUi.RemoveMarker(subject);
+    }
+
+    /// <summary>
     /// The <c>Assembly-CSharp</c> half of <see cref="IObjectiveHud"/>. Phase C4b.
     /// </summary>
     internal sealed class ScoreUiObjectiveHud : IObjectiveHud

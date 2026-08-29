@@ -1339,6 +1339,18 @@ namespace Ironfront.Net.Unity.Server
             // After the tables, so the joiner is in the table it is about to be sent.
             EmitPlayerList();
 
+            // P3. MatchController.SendFullMatchStateTo had ZERO callers in the repository --
+            // the same shape as WritePlayerList and WriteDespawn above, and found the same way.
+            // Its own summary reads "the state a joining client needs before its first
+            // snapshot", and nothing asked for it: capture points are broadcast only when
+            // DIRTY, and AdoptOpeningOwner deliberately marks the opening value as already
+            // sent, so a point nobody has walked onto emits nothing for the whole match. A
+            // client therefore rendered every flag from CapturePoint.Start's LOCAL defaults and
+            // the round phase, tickets and timer from nothing at all -- and it looked correct
+            // on Dustbowl only because the authored owner and the client default happen to
+            // agree at t=0. Join after a point has flipped and they do not.
+            _match?.SendFullMatchStateTo(connectionId);
+
             Debug.Log($"[net] conn {connectionId} joined as actor {actor.ActorId} ({info.RemoteAddress})");
         }
 

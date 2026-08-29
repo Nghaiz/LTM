@@ -6402,7 +6402,8 @@ MonoBehaviour:
     type: 3}
   actorBlipPrefab: {fileID: 1143108456244231, guid: 33120f86bc184404e8610c76b999011c,
     type: 3}
-  capturePointMarkerPrefab: {fileID: 0}
+  capturePointMarkerPrefab: {fileID: 6907543899397732185, guid: 7bb943b4035d84649a72912e75fc39bc,
+    type: 3}
   spawnPointSprite: {fileID: 21300000, guid: 2eaa1cea02bdd4b449e3d6d7532fcfc3, type: 2}
   spawnPointSelectedSprite: {fileID: 21300000, guid: 25e6ddb3441020e4298aa7086a7a9dd0,
     type: 2}

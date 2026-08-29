@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication;
 using Ironfront.Net.Replication.Client;
+using Ironfront.Net.Replication.Match;
 using Ironfront.Net.Replication.Movement;
 using Ironfront.Net.Unity;
 using UnityEngine;
@@ -161,6 +162,13 @@ namespace Ironfront.Net.Unity.Client
                 // interpolated: these are discrete states, and lerping a crouch is meaningless.
                 if (!_views.TryGetValue(pair.Key, out RemoteActorView view) || view == null) continue;
                 if (to.TryFind(pair.Key, out ActorSnapshotEntry entry)) view.Apply(in entry);
+
+                // P3 task 3.4. Team arrives with the snapshot, not with the spawn, so the
+                // colour is written every frame rather than once. SetMarker is idempotent by
+                // subject -- a repeat recolours in place -- so this costs one dictionary hit
+                // and one Color assignment per live actor and never stacks a second icon.
+                NetClientBindings.Minimap?.SetBodyMarker(
+                    pair.Value, CapturePointOwnership.ToSpawnPointOwner(view.Team));
             }
         }
 
@@ -200,6 +208,18 @@ namespace Ironfront.Net.Unity.Client
             t.gameObject.SetActive(true);
             _live[message.ActorId] = t;
 
+            // P3 task 3.4. The icon is bound HERE, at the neutral colour, rather than waiting
+            // for the first snapshot to reveal the team: SpawnActorMessage does not carry a
+            // team, and an actor past InterestManager.CullRadius may never appear in a snapshot
+            // at all (see the placement comment above). Waiting would leave exactly those
+            // actors -- the far ones, the ones a minimap is FOR -- with no icon. The colour is
+            // corrected in Update the moment a snapshot names the team.
+            //
+            // Ledger A-2 is not touched: nothing here registers a proxy with ActorManager, so
+            // ActorManager.Player still resolves to the local body. That is the whole reason
+            // this goes through MinimapUi.SetMarker (Transform-keyed) and not AddActorBlip.
+            NetClientBindings.Minimap?.SetBodyMarker(t, -1);
+
             RemoteActorView view = t.GetComponent<RemoteActorView>();
             if (view != null)
             {
@@ -223,6 +243,13 @@ namespace Ironfront.Net.Unity.Client
 
             _live.Remove(message.ActorId);
             _views.Remove(message.ActorId);
+
+            // BEFORE the transform goes back to the pool. The marker is keyed by that
+            // transform, and the pool hands the same one to the NEXT actor -- so a marker left
+            // behind is not merely stale, it is an icon wearing the previous occupant's team
+            // that SetMarker would then recolour instead of replacing.
+            NetClientBindings.Minimap?.RemoveMarker(t);
+
             t.gameObject.SetActive(false);
             _pool.Push(t);
         }
