@@ -165,11 +165,79 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 
 	private int stopBurningRepairs;
 
+	// X-58. One report per vehicle; see HasDriver.
+	private bool reportedOneSidedDriverBooking;
+
+	/// <summary>
+	/// Whether seat 0 holds a body that agrees it is sitting there. Ledger <b>X-58</b>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Both halves of the link, not just the seat's.</b> <c>Seat.occupant</c> and
+	/// <c>Actor.seat</c> are two separate facts and they can disagree: X-45's remark describes how
+	/// one is made -- a throw AFTER <c>Seat.SetOccupant</c> and the transform re-parent but BEFORE
+	/// <c>Actor.EnterSeat</c> finishes, leaving "the seat booked, the body welded to it, and the
+	/// rest of the entry never ran".
+	/// </para>
+	/// <para>
+	/// <b>What the seat-only reading cost.</b> <c>Car.FixedUpdate</c> asks <c>HasDriver()</c> and
+	/// then reads <c>Driver().controller.CarInput()</c>, whose first act is <c>actor.seat.vehicle</c>
+	/// -- so a one-sided booking threw once per physics step. Measured twice in
+	/// <c>artifacts/lane-a/o6/o6-combat-03-server.log</c>, both immediately after a transport
+	/// <c>Connection.Fail</c>. <c>Boat</c>, <c>Helicopter</c>, <c>Tank</c>, <c>Javelin</c> and this
+	/// class's own ram-damage check read the same pair and were latently exposed to it.
+	/// </para>
+	/// <para>
+	/// <b>Reported once per vehicle, not per frame.</b> This runs inside FixedUpdate for every
+	/// vehicle in the map; a <c>Debug.LogError</c> per call would bury the thing it is reporting.
+	/// The eject path logs the same corruption with more detail when a world reset meets one.
+	/// </para>
+	/// </remarks>
 	public bool HasDriver()
 	{
-		return seats[0].IsOccupied();
+		Actor driver = seats[0].occupant;
+		if (driver == null)
+		{
+			return false;
+		}
+		if (driver.seat == seats[0])
+		{
+			return true;
+		}
+		if (!reportedOneSidedDriverBooking)
+		{
+			reportedOneSidedDriverBooking = true;
+			Debug.LogError(
+				$"[net] the driver seat of '{base.gameObject.name}' is booked by "
+				+ $"'{driver.gameObject.name}', which does not think it is seated there. Treating the "
+				+ "vehicle as driverless. Reported once per vehicle; the booking belongs to X-58.");
+		}
+		return false;
 	}
 
+	/// <summary>
+	/// Seat 0's occupant, whatever that occupant thinks. Deliberately NOT the strict reading
+	/// <see cref="HasDriver"/> uses. Ledger <b>X-58</b>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>A strict version of this was written and reverted, and the reason is worth keeping.</b>
+	/// <c>Actor.EnterSeat</c> calls <c>seat.SetOccupant(this)</c> BEFORE it assigns its own
+	/// <c>seat</c> field, and <c>SetOccupant</c> reaches <c>Vehicle.OccupantEntered</c> →
+	/// <c>DriverEntered</c> → <c>Tank.DriverEntered</c>, which reads <c>Driver().team</c>. Inside
+	/// that window the two halves ALWAYS disagree, so a strict <c>Driver()</c> returned null and
+	/// threw — which aborted <c>EnterSeat</c> and left the seat booked with the body's half unset.
+	/// It manufactured the very corruption it was written to survive: 6 vehicles reporting a
+	/// one-sided booking in a single lane-B run that had none before it.
+	/// </para>
+	/// <para>
+	/// <b>Safe because of how it is used.</b> Every reader outside the entry sequence pairs this
+	/// with <see cref="HasDriver"/>, which IS strict, so a corrupt booking is skipped before this
+	/// is called. The two callers that do not pair it — <c>Tank.DriverEntered</c> and
+	/// <c>Tank.DriverExited</c> — run at the entry and exit moments, which is exactly when the
+	/// permissive answer is the correct one.
+	/// </para>
+	/// </remarks>
 	public Actor Driver()
 	{
 		return seats[0].occupant;
@@ -769,6 +837,66 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 			InvokeRepeating("AutoDamage", AUTO_DAMAGE_START_TIME, AUTO_DAMAGE_PERIOD);
 		}
 		return result;
+	}
+
+	/// <summary>
+	/// Empties every seat WITHOUT killing anyone. Ledger <b>X-55</b>/<b>X-56</b>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>An occupant is a CHILD of this GameObject.</b> <c>Actor.EnterSeat</c> parents the body
+	/// to <c>seat.transform</c>, so destroying a vehicle destroys everyone riding it -- and does
+	/// so without <c>Actor.Die</c> ever running, which is a very different thing from killing
+	/// them. <see cref="Die"/> has always emptied the seats first for exactly this reason; a
+	/// vehicle destroyed WITHOUT dying had nothing doing it.
+	/// </para>
+	/// <para>
+	/// <b>Measured:</b> <c>VehicleSpawner.OnWorldReset</c> destroys a live, occupied vehicle at
+	/// every round transition, and <c>artifacts/lane-a/o1/o1-combat-01-server.log</c> carries
+	/// 4,183 <c>NullReferenceException</c>s in 150 s -- none of them before the first reset, and
+	/// 2,044 of them one frame apart in <c>AiActorController.LocalAvoidanceVelocity</c>, reading
+	/// a squad member that no longer has a transform.
+	/// </para>
+	/// <para>
+	/// <b>Not <see cref="Die"/>, deliberately (O-D8).</b> A round transition is not a kill.
+	/// Routing the reset through <c>Die</c> would score deaths, spawn a wreck, detonate an
+	/// explosion and hand 200 balance damage to every bot that happened to be seated when the
+	/// clock ran out.
+	/// </para>
+	/// </remarks>
+	public void EjectOccupants()
+	{
+		Seat[] array = seats;
+		foreach (Seat seat in array)
+		{
+			if (seat == null || !seat.IsOccupied())
+			{
+				continue;
+			}
+			Actor occupant = seat.occupant;
+			if (occupant.seat == seat)
+			{
+				occupant.LeaveSeat();
+				continue;
+			}
+			// A ONE-SIDED link: the seat is booked and the body does not think it is sitting in
+			// it. X-45's own remark describes how one is made -- a throw AFTER Seat.SetOccupant
+			// and the transform re-parent but BEFORE Actor.EnterSeat finishes, so "the seat was
+			// booked, the body was welded to it, and the rest of the entry never ran".
+			//
+			// Actor.LeaveSeat opens with seat.transform and would throw on the null half, which
+			// would abort this loop and leave every LATER seat of this vehicle un-ejected -- the
+			// one thing an eject must not do. Reported rather than skipped (X-58 was filed off
+			// this line): the body is still WELDED to a hierarchy that is about to be destroyed,
+			// so the parent has to go whatever the seat records say.
+			Debug.LogError(
+				$"[net] seat {seat.type} of '{base.gameObject.name}' is booked by "
+				+ $"'{occupant.gameObject.name}', which does not think it is seated there. Ejecting "
+				+ "by unparenting so it is not destroyed with this vehicle; the booking is a "
+				+ "half-finished Actor.EnterSeat and belongs to X-58.");
+			occupant.transform.SetParent(null, worldPositionStays: true);
+			seat.OccupantLeft();
+		}
 	}
 
 	public virtual void Die()

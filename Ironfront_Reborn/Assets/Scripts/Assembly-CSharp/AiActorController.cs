@@ -368,8 +368,39 @@ public class AiActorController : ActorController
 	// did before this seam existed, which is what makes the nine call sites safe to land ahead
 	// of any measurement. Unity's overloaded == also makes a destroyed gate read as null here,
 	// so a bot outliving its gate keeps thinking rather than freezing.
+	/// <summary>
+	/// Whether this brain should think this tick. The LOD gate, and — ledger <b>X-57</b> — whether
+	/// this controller is steering this body at all.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b><c>enabled</c> is checked here because Unity does not stop a coroutine when a
+	/// MonoBehaviour is disabled.</b> <c>IAiDriver.Suspend</c> sets <c>enabled = false</c> when a
+	/// networked player claims this body, which stops <c>Update</c> and nothing else: all eight AI
+	/// coroutines kept running on a body the server was driving. The suspension was half a
+	/// suspension, and the half that was missing is the one that carries state.
+	/// </para>
+	/// <para>
+	/// <b>What that cost.</b> <c>AiVehicle</c> reached <c>PushAntiStuckEvent</c>, which dereferences
+	/// <c>squad.squadVehicle</c> — and a player-slot body has never had a squad. That is X-45's
+	/// defect at a site X-45 did not reach, and it only became reachable once X-46 let a networked
+	/// player actually drive: <c>artifacts/lane-a/o6/o6-combat-01</c>, 5 throws in 150 s, the only
+	/// null-reference site left after O6's first two fixes.
+	/// </para>
+	/// <para>
+	/// <b>Here rather than at <c>PushAntiStuckEvent</c>.</b> The same coroutine calls
+	/// <c>squad.ExitVehicle()</c> and <c>squad.MoveTo()</c> two branches away, and seven other
+	/// coroutines are running on the same suspended brain. Guarding the one site that happened to
+	/// throw would leave the rest, which is the difference between fixing a suspension and muting a
+	/// stack trace.
+	/// </para>
+	/// </remarks>
 	private bool AiWorkAllowed()
 	{
+		if (!base.enabled)
+		{
+			return false;
+		}
 		return lodGate == null || lodGate.AllowAiWork;
 	}
 
@@ -1954,8 +1985,11 @@ public class AiActorController : ActorController
 	/// says so and disables this component to make it true (<c>IAiDriver.Suspend</c>).
 	/// </para>
 	/// <para>
-	/// <b>Disabling the component was not enough on its own.</b> It stops <c>Update</c> and the
-	/// eight coroutines -- which is what <c>IAiDriver</c>'s remark claims it buys -- but
+	/// <b>Disabling the component was not enough on its own</b>, and it buys even less than this
+	/// remark used to claim. It was written as "stops <c>Update</c> and the eight coroutines";
+	/// <b>it does not stop the coroutines</b> — Unity only stops those when the GameObject is
+	/// deactivated — which is <b>X-57</b>, found by a run on 2026-08-28 and closed by gating
+	/// <c>AiWorkAllowed()</c> on <c>enabled</c>. What it stops is <c>Update</c>. Separately,
 	/// <c>Actor.EnterSeat</c> calls <c>controller.StartSeated</c> DIRECTLY, and a direct call
 	/// runs on a disabled MonoBehaviour. So the one AI path a networked player could reach was
 	/// this one, and it dereferenced <see cref="squad"/>, which a player-slot body has never had:
@@ -2210,6 +2244,38 @@ public class AiActorController : ActorController
 	public bool IsMovingToCover()
 	{
 		return HasCover() && !InCover();
+	}
+
+	/// <summary>
+	/// Leaves the squad roster on the way out. Ledger <b>X-55</b>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <c>Squad.DropMember</c> had exactly one caller -- <see cref="Die"/> -- so a bot that DIED
+	/// left the roster and a bot that was DESTROYED did not. <c>Squad</c> is a plain C# object
+	/// with no lifecycle of its own, so nothing else was ever going to notice.
+	/// </para>
+	/// <para>
+	/// <b>Why a stale member is a crash and not an empty slot.</b> Unity's overloaded <c>==</c>
+	/// reports a destroyed object as equal to null, so the corpse passes <c>member != this</c> in
+	/// <c>LocalAvoidanceVelocity</c>, passes <c>member.actor.fallenOver</c> (a managed field read,
+	/// which does not throw), and is then asked for <c>Position()</c> -- which reaches
+	/// <c>base.transform</c> and throws. Same defect, same mechanism and the same remedy as
+	/// <c>Actor.OnDestroy</c> (X-49) one register out.
+	/// </para>
+	/// <para>
+	/// <b>The backstop, not the fix.</b> The path that actually destroyed seated bots is
+	/// <c>VehicleSpawner.OnWorldReset</c>, closed by <c>Vehicle.EjectOccupants</c>. This is here
+	/// so that the NEXT path to destroy a bot -- a slot pool being cleared, a scene torn down, one
+	/// not yet written -- does not reopen the same 2,044-exception cascade (O-D9).
+	/// </para>
+	/// </remarks>
+	private void OnDestroy()
+	{
+		if (InSquad())
+		{
+			squad.DropMember(this);
+		}
 	}
 
 	public bool InSquad()

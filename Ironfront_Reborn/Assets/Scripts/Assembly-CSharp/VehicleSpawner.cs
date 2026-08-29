@@ -275,6 +275,12 @@ public class VehicleSpawner : MonoBehaviour
 	{
 		if (lastSpawnedVehicle != null)
 		{
+			// Ledger X-55/X-56. BEFORE the Destroy, and it has to be before: a seated actor is a
+			// CHILD of this vehicle, so destroying it first takes every rider with it -- silently,
+			// without Actor.Die, leaving each one in its Squad's roster to be dereferenced once per
+			// frame by every squad-mate that outlived the round. Rescuing them from Vehicle's own
+			// OnDestroy is not available: by then Unity has already committed to the hierarchy.
+			lastSpawnedVehicle.EjectOccupants();
 			UnityEngine.Object.Destroy(lastSpawnedVehicle.gameObject);
 		}
 
