@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Ironfront.Net.Replication.Vehicles;
 using UnityEngine;
 
@@ -266,8 +266,11 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		SpawnLoadoutWeapons();
 		if (seat != null)
 		{
-			seat.OccupantLeft();
+			// X-58: same pair discipline as LeaveSeat. A respawn is the other route out of a
+			// seat and it carried the identical window.
+			Seat leaving = seat;
 			seat = null;
+			leaving.OccupantLeft();
 		}
 		ik.turnBody = true;
 		ik.weight = 1f;
@@ -1105,17 +1108,52 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		{
 			InstantGetUp();
 		}
-		if (seat.vehicle.dead || seat.IsOccupied())
+		// IsSeated() is the SECOND X-58 producer, and the run that closed the first one found
+		// it: s2-combat-01 still reported a one-sided booking on a jeep Passenger seat, at a
+		// match reset. Nothing here refused a body that is ALREADY sitting somewhere else, so
+		// a second successful entry re-pointed this actor's half at the new seat and left the
+		// OLD seat booked by a body that no longer agrees -- the same corrupt pair the window
+		// above used to make, by a different route.
+		//
+		// Three of the four callers already guard it and the fourth is the hole: the AI and
+		// the use-ray both go through CanEnterSeat() (`!IsSeated() && ...`), and SwitchSeat
+		// calls LeaveSeat() first -- but IronfrontNetBindings.TryEnterSeat, added later for
+		// the network path, checks only that the seat and the actor exist. The arbiter is
+		// supposed to refuse it with RejectedAlreadySeated, and does, EXCEPT when its record
+		// and the scene disagree -- which ServerVehicleRegistry.Clear() causes deliberately at
+		// every round boundary, and which is exactly where the surviving booking was found.
+		//
+		// The scene is authoritative about the scene, so the refusal belongs here rather than
+		// in the binding: TryEnterSeat turns a false into a refusal the bridge rolls back
+		// (V4-D7), so the arbiter is corrected by it instead of being trusted over the truth.
+		if (seat.vehicle.dead || seat.IsOccupied() || IsSeated())
 		{
 			return false;
 		}
 		animator.SetInteger("seated type", (int)seat.animation);
+		// Ledger X-58. BOTH halves of the seat link, published together and before anything
+		// that can call out or throw. seat.SetOccupant's own first statement is occupant =
+		// actor, so no callback runs between the two writes and there is no window to observe
+		// a half-booked seat in. The body's half used to be assigned five statements LATER,
+		// after SetOccupant (-> Vehicle.OccupantEntered -> Car/Tank.DriverEntered), the
+		// re-parent and controller.StartSeated -- so any throw in that window left the seat
+		// booked by a body whose own seat field was still null. X-45 closed one such throw and
+		// the strict Driver() of O6 section 6b manufactured another; the window is structural,
+		// which is why no single producer was ever identifiable. Closing the window makes the
+		// state unproducible by ANY throw rather than by the one that happened to be found.
+		//
+		// It also fixes a second defect the same window was hiding: SetOccupant calls
+		// MountedWeapon.DeclareToNet -> ResolveNetSeat, which opens with
+		// `user == null || user.seat == null` and so took its early return every time,
+		// leaving netVehicleId 0 and NetWeaponAuthority.Declare uncalled. On a dedicated
+		// server nothing drives a networked gunner's controller, so CanFire never re-resolved
+		// it either -- V6 task 3's "THE registration trigger" announced nothing at all.
+		this.seat = seat;
 		seat.SetOccupant(this);
 		base.transform.parent = seat.transform;
 		base.transform.localPosition = Vector3.zero;
 		base.transform.localRotation = Quaternion.identity;
 		controller.StartSeated(seat);
-		this.seat = seat;
 		animator.SetLayerWeight(2, 0f);
 		if (!seat.CanUseCarriedWeapon())
 		{
@@ -1149,8 +1187,13 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		{
 			HolsterActiveWeapon();
 		}
-		seat.OccupantLeft();
+		// X-58, the mirror of EnterSeat above. OccupantLeft reaches Vehicle.OccupantLeft ->
+		// Car/Tank.DriverExited, so clearing the seat's half FIRST and the body's half after
+		// left the opposite one-sided state -- a body that still thinks it is sitting in a
+		// seat nobody occupies -- for any throw in between.
+		Seat leaving = seat;
 		seat = null;
+		leaving.OccupantLeft();
 		Quaternion quaternion = Quaternion.LookRotation(Vector3.Scale(forward, removeY), Vector3.up);
 		controller.EndSeated(vector, quaternion);
 		base.transform.parent = originalParent;

@@ -389,7 +389,10 @@ namespace Ironfront.Net.LoadHarness
                 break;
             }
 
-            if (!haveMe) return new DrillWorld(default, default, default, alive: false);
+            if (!haveMe)
+                return new DrillWorld(
+                    default, default, default, alive: false,
+                    seatedVehicleHealth: DrillWorld.UnknownHealth);
 
             var nearestActor = default(DrillBody);
             float bestActor = float.MaxValue;
@@ -418,9 +421,19 @@ namespace Ironfront.Net.LoadHarness
             var nearestVehicle = default(DrillBody);
             float bestVehicle = float.MaxValue;
 
+            ushort seatedVehicleId = _drill != null ? _drill.SeatedVehicleId : (ushort)0;
+            byte seatedVehicleHealth = DrillWorld.UnknownHealth;
+
             for (int i = 0; i < vehicles.VehicleCount; i++)
             {
                 ref VehicleSnapshotEntry entry = ref vehicles.Vehicles[i];
+
+                // BEFORE the Dead filter below, and deliberately: the drill's own hull is the
+                // one vehicle whose health it needs whatever state that hull is in, and the
+                // filter exists to stop it WALKING to a wreck, not to hide the one it is
+                // sitting in.
+                if (seatedVehicleId != 0 && entry.VehicleId == seatedVehicleId)
+                    seatedVehicleHealth = entry.Health;
 
                 // A wreck has no seat to ask for. The arbiter answers RejectedVehicleDead, so
                 // approaching one costs a walk and a round trip to be told what the flag
@@ -443,7 +456,7 @@ namespace Ironfront.Net.LoadHarness
                     entry.VehicleId, x, Quantize.UnpackPos(entry.PosY), z, seats);
             }
 
-            return new DrillWorld(me, nearestActor, nearestVehicle, alive);
+            return new DrillWorld(me, nearestActor, nearestVehicle, alive, seatedVehicleHealth);
         }
 
         /// <summary>Frames <c>C_VEHICLE_INPUT</c> on the unreliable-sequenced channel.</summary>

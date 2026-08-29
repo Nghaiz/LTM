@@ -219,6 +219,163 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(9, Regex.Matches(controller, @"if \(!AiWorkAllowed\(\)\)").Count);
         }
 
+        // ------------------------------------------------ X-58: the producer
+
+        /// <summary>
+        /// The seat link is published as a PAIR, before anything that can call out or throw.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// X-58 was filed with two observation sites, a disconnect correlation and no producer,
+        /// because there is no single producer to find. <c>Seat.occupant</c> is written in
+        /// exactly two places and <c>Actor.seat</c> in exactly three, and BOTH transitions used
+        /// to publish one half, run a re-entrant callback, and publish the other -- so every
+        /// throw inside either window left a one-sided booking. X-45 closed one such throw and
+        /// the strict <c>Driver()</c> of O6 section 6b manufactured a second. Closing the window
+        /// makes the state unproducible by any throw rather than by the one that was found.
+        /// </para>
+        /// <para>
+        /// These assert ORDER, not presence. A version that sets both halves in the wrong order
+        /// contains every string below, compiles, and reproduces the defect exactly.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public void EnteringASeatPublishesBothHalvesBeforeTheEntryCallsOut()
+        {
+            string actor = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs");
+
+            string body = MethodBody(actor, "public bool EnterSeat(Seat seat)");
+
+            int bodysHalf = body.IndexOf("this.seat = seat;", StringComparison.Ordinal);
+            int seatsHalf = body.IndexOf("seat.SetOccupant(this);", StringComparison.Ordinal);
+
+            Assert.True(bodysHalf >= 0, "EnterSeat no longer assigns the body's half");
+            Assert.True(seatsHalf >= 0, "EnterSeat no longer assigns the seat's half");
+
+            // The whole fix, in one comparison. SetOccupant's own first statement is
+            // `occupant = actor`, so with the body's half already set no callback runs between
+            // the two writes and there is no window to observe a half-booked seat in.
+            Assert.True(
+                bodysHalf < seatsHalf,
+                "X-58: Actor.seat must be assigned BEFORE seat.SetOccupant(this), or every "
+                + "throw in SetOccupant -> Vehicle.OccupantEntered -> Car/Tank.DriverEntered, "
+                + "the re-parent and controller.StartSeated leaves the seat booked by a body "
+                + "whose own half is null.");
+
+            // And only once: a leftover late assignment would read as harmless and would put
+            // the window straight back for anything between the two.
+            Assert.Single(Regex.Matches(body, @"this\.seat = seat;"));
+        }
+
+        [Fact]
+        public void LeavingASeatClearsTheBodysHalfBeforeTheVehicleCallback()
+        {
+            string actor = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs");
+
+            string body = MethodBody(actor, "public void LeaveSeat()");
+
+            int cleared = body.IndexOf("seat = null;", StringComparison.Ordinal);
+            int callback = body.IndexOf("OccupantLeft();", StringComparison.Ordinal);
+
+            Assert.True(cleared >= 0 && callback >= 0);
+
+            // The mirror window. OccupantLeft reaches Vehicle.OccupantLeft ->
+            // Car/Tank.DriverExited, so clearing the seat's half first left the OPPOSITE
+            // one-sided state -- a body that still thinks it is sitting in a free seat -- and
+            // nothing in the eject or in HasDriver contains that direction.
+            Assert.True(
+                cleared < callback,
+                "X-58: Actor.seat must be cleared BEFORE Seat.OccupantLeft() runs.");
+        }
+
+        [Fact]
+        public void ARespawnClearsTheSeatPairInTheSameOrderAsLeaveSeat()
+        {
+            string actor = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs");
+
+            string body = MethodBody(actor, "public void SpawnAt(Vector3 position)");
+
+            int cleared = body.IndexOf("seat = null;", StringComparison.Ordinal);
+            int callback = body.IndexOf("OccupantLeft();", StringComparison.Ordinal);
+
+            Assert.True(cleared >= 0 && callback >= 0);
+
+            // SpawnAt is the OTHER route out of a seat and it carried the identical window.
+            // Fixing LeaveSeat alone would leave every respawn-while-seated able to produce the
+            // state -- which is the case a networked player death actually takes.
+            Assert.True(
+                cleared < callback,
+                "X-58: SpawnAt must clear Actor.seat BEFORE Seat.OccupantLeft() runs.");
+        }
+
+        [Fact]
+        public void AMountedWeaponResolvesItsSeatWithBothHalvesSet()
+        {
+            // The second defect the same window was hiding, and the reason this one is worth a
+            // test of its own: Seat.SetOccupant calls weapon.DeclareToNet() -> ResolveNetSeat(),
+            // which opens with `user == null || user.seat == null`. With the body's half still
+            // unassigned that guard was true EVERY time, so netVehicleId stayed 0 and
+            // NetWeaponAuthority.Declare was never called. On a dedicated server nothing drives
+            // a networked gunner's controller, so CanFire never re-resolved it either -- V6
+            // task 3 installed "THE registration trigger" and it announced nothing at all.
+            string weapon = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/MountedWeapon.cs");
+
+            Assert.Contains("user.seat == null", MethodBody(weapon, "protected void ResolveNetSeat()"),
+                            StringComparison.Ordinal);
+
+            string actor = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs");
+            string enter = MethodBody(actor, "public bool EnterSeat(Seat seat)");
+
+            // So the ordering above is what makes the declaration reachable. Stated here rather
+            // than left implicit in the entry test, because a future reader tidying EnterSeat
+            // needs to find the mounted-weapon consequence from the weapon's side too.
+            Assert.True(
+                enter.IndexOf("this.seat = seat;", StringComparison.Ordinal)
+                < enter.IndexOf("seat.SetOccupant(this);", StringComparison.Ordinal),
+                "MountedWeapon.DeclareToNet resolves nothing unless Actor.seat is set first.");
+        }
+
+        [Fact]
+        public void EnteringASeatRefusesABodyThatIsAlreadySittingSomewhereElse()
+        {
+            // The SECOND X-58 producer, found by the run that closed the first: a body already
+            // seated could enter a second seat, which re-pointed its own half and left the FIRST
+            // seat booked by a body that no longer agreed. Three of the four callers guard this
+            // externally (CanEnterSeat / LeaveSeat-first); IronfrontNetBindings.TryEnterSeat,
+            // added later for the network path, does not -- so the guard belongs in EnterSeat,
+            // where every caller reaches it.
+            string actor = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs");
+
+            string body = MethodBody(actor, "public bool EnterSeat(Seat seat)");
+
+            // Matched on the GUARD EXPRESSION, not on the name. The remark above this guard
+            // explains IsSeated() in prose, so a bare name search finds the comment and passes
+            // on a tree where the check has been deleted -- which is exactly what the first
+            // version of this test did, and exactly the trap O6 hit from the other side in
+            // TheSuspensionIsGatedAtTheOneGateAndNotAtTheSiteThatHappenedToThrow.
+            int guard = body.IndexOf(
+                "seat.IsOccupied() || IsSeated()", StringComparison.Ordinal);
+            int firstWrite = body.IndexOf("this.seat = seat;", StringComparison.Ordinal);
+
+            Assert.True(
+                guard >= 0,
+                "X-58: EnterSeat must refuse an already-seated body, in the guard expression "
+                + "itself -- a mention in a comment is not a check.");
+
+            // Before any mutation, or the refusal happens after the damage it exists to prevent.
+            Assert.True(
+                guard < firstWrite,
+                "X-58: the already-seated guard must run BEFORE either half of the link is "
+                + "written, or the corrupt pair is created and then reported rather than "
+                + "refused.");
+        }
+
         // ------------------------------------------------ helpers
 
         /// <summary>

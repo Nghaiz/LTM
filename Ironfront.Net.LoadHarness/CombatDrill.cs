@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Vehicles;
 using Ironfront.Net.Unity.Diagnostics;
@@ -82,12 +82,42 @@ namespace Ironfront.Net.LoadHarness
         /// <summary>Whether the local actor is alive, per the decoded snapshot's flags.</summary>
         public readonly bool Alive;
 
-        public DrillWorld(DrillBody me, DrillBody nearestActor, DrillBody nearestVehicle, bool alive)
+        /// <summary>
+        /// Health of the hull this client is seated in, 0-100, or <see cref="UnknownHealth"/>.
+        /// </summary>
+        /// <remarks>
+        /// The seated hull specifically, not the nearest one. <see cref="DrillBody"/> carries a
+        /// position and a seat count because that is all the walking and the asking need; the
+        /// finish rule needs one number about one vehicle, and widening DrillBody to carry it
+        /// would put a health field on the nearest ACTOR too.
+        /// </remarks>
+        public readonly byte SeatedVehicleHealth;
+
+        /// <summary>Health the drill reads when the snapshot has not named its hull yet.</summary>
+        /// <remarks>
+        /// Deliberately neither 0 nor 100, because both are legitimate readings and either
+        /// sentinel would make an unknown hull look like a decided one: 0 sends every drill
+        /// into the finish rule on the tick it sits down, and 100 silently denies the rule to a
+        /// hull whose row simply had not arrived. 255 cannot be a percentage.
+        /// </remarks>
+        public const byte UnknownHealth = 255;
+
+        /// <remarks>
+        /// <paramref name="seatedVehicleHealth"/> is REQUIRED rather than defaulted, for O-D5's
+        /// reason one track over: a defaulted reading would let a caller that forgot it keep the
+        /// old always-leave behaviour while still compiling, and the only symptom would be the
+        /// Burn verb quietly staying missing -- which is the exact failure this parameter exists
+        /// to end.
+        /// </remarks>
+        public DrillWorld(
+            DrillBody me, DrillBody nearestActor, DrillBody nearestVehicle, bool alive,
+            byte seatedVehicleHealth)
         {
             Me = me;
             NearestActor = nearestActor;
             NearestVehicle = nearestVehicle;
             Alive = alive;
+            SeatedVehicleHealth = seatedVehicleHealth;
         }
     }
 
@@ -219,6 +249,45 @@ namespace Ironfront.Net.LoadHarness
         /// </para>
         /// </remarks>
         public const double SeatedMs = 20_000.0;
+
+        /// <summary>Hull health at or below which the drill stays in to finish it off.</summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Check 11's fourth verb was missing for want of patience, not for want of a
+        /// route.</b> The ledger's premise -- "the only route open to a client with no explosive
+        /// is <c>Vehicle.AutoDamage</c>" -- stopped being true the moment X-46 closed and the
+        /// drill could actually drive. Crash damage is a shipped path
+        /// (<c>Vehicle.OnCollisionEnter</c>), the prefabs author it generously (quadbike: 400
+        /// max health, 2 m/s threshold, x15 multiplier, so a 10 m/s impact is 120 damage), and
+        /// <c>crashSkipsBurn</c> is 0 on every ground vehicle -- so a wrecked hull burns rather
+        /// than dying outright, which is what the verb watches for.
+        /// </para>
+        /// <para>
+        /// <b>It was already happening and nobody stayed to watch.</b> In
+        /// <c>artifacts/lane-a/o6/o6-combat-04</c> eight of sixteen hulls took real crash damage
+        /// and vehicle 4 reached <b>13</b> health -- while every drill let go of its vehicle at
+        /// exactly <see cref="SeatedMs"/> whatever state it was in. This rule keeps the driver
+        /// of a hull it has nearly wrecked in the seat, which makes Burn a property of the
+        /// programme rather than of who happened to be sitting in the last one standing.
+        /// </para>
+        /// <para>
+        /// <b>45 rather than something tighter.</b> Health is a percentage byte on the wire, one
+        /// crash is worth roughly 30 points of a quadbike, and the snapshot a drill reads is a
+        /// tick or two old -- so a threshold near the floor would be crossed and passed between
+        /// two readings. 45 is about one and a half impacts of headroom.
+        /// </para>
+        /// </remarks>
+        public const byte FinishHullAtOrBelowHealth = 45;
+
+        /// <summary>The ceiling on a finishing ride.</summary>
+        /// <remarks>
+        /// A hull can sit under the threshold and stop taking damage -- wedged against a rock,
+        /// or on ground too flat to crash on. Without a ceiling that drill holds a driver seat
+        /// for the rest of the run and seven other clients contend for one fewer vehicle: the
+        /// rule would buy the fourth verb by damaging the first. Generous rather than tight,
+        /// because a finishing ride cut off one impact early has bought nothing.
+        /// </remarks>
+        public const double MaxSeatedMs = 75_000.0;
 
         /// <summary>How long to wait for <c>S_SEAT_CHANGE</c> before the key works again.</summary>
         /// <remarks>
@@ -532,7 +601,16 @@ namespace Ironfront.Net.LoadHarness
                 _hasSeatedSince = true;
             }
 
-            if (nowMs - _seatedAtMs >= SeatedMs)
+            double heldMs = nowMs - _seatedAtMs;
+
+            // A hull this client has driven under the threshold is FINISHED, not abandoned.
+            // See FinishHullAtOrBelowHealth for why the fourth verb was missing without this.
+            bool finishing =
+                world.SeatedVehicleHealth != DrillWorld.UnknownHealth
+                && world.SeatedVehicleHealth <= FinishHullAtOrBelowHealth
+                && heldMs < MaxSeatedMs;
+
+            if (heldMs >= SeatedMs && !finishing)
             {
                 ushort leaving = _seatedVehicleId;
                 byte seat = _seatedSeatIndex;

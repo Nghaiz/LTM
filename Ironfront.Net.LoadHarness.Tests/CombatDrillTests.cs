@@ -1,4 +1,4 @@
-using Ironfront.Net.LoadHarness;
+﻿using Ironfront.Net.LoadHarness;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Vehicles;
 using Ironfront.Net.Unity.Diagnostics;
@@ -36,8 +36,8 @@ namespace Ironfront.Net.LoadHarness.Tests
 
         private static DrillWorld World(
             DrillBody? me = null, DrillBody actor = default, DrillBody vehicle = default,
-            bool alive = true)
-            => new DrillWorld(me ?? Me(), actor, vehicle, alive);
+            bool alive = true, byte seatedVehicleHealth = DrillWorld.UnknownHealth)
+            => new DrillWorld(me ?? Me(), actor, vehicle, alive, seatedVehicleHealth);
 
         [Fact]
         public void SendsNothingBeforeTheServerNamesItsBody()
@@ -45,7 +45,10 @@ namespace Ironfront.Net.LoadHarness.Tests
             var drill = new CombatDrill(0);
 
             DrillCommand command = drill.Decide(
-                new DrillWorld(default, Actor(1f, 1f), Vehicle(1f, 1f), alive: true), 0.0);
+                new DrillWorld(
+                    default, Actor(1f, 1f), Vehicle(1f, 1f), alive: true,
+                    seatedVehicleHealth: DrillWorld.UnknownHealth),
+                0.0);
 
             // A frame sent before S_SPAWN_ACTOR is movement input for a body the drill cannot
             // see. The server applies it to whatever actor the connection owns, so it is a real
@@ -154,13 +157,17 @@ namespace Ironfront.Net.LoadHarness.Tests
             DrillBody vehicle = Vehicle(0f, 1f);
 
             drill.OnSeatChange(10, 77, 0, SeatChangeResult.Entered, 10);
-            drill.Decide(World(vehicle: vehicle), 0.0);
+            drill.Decide(World(vehicle: vehicle, seatedVehicleHealth: 100), 0.0);
 
             DrillCommand leaving = drill.Decide(
-                World(vehicle: vehicle), CombatDrill.SeatedMs + 1.0);
+                World(vehicle: vehicle, seatedVehicleHealth: 100),
+                CombatDrill.SeatedMs + 1.0);
 
-            // Getting out is what arms Vehicle.AutoDamage, which is the one route to a burn a
-            // client with no explosive has. A drill that never left would deny itself the verb.
+            // Getting out is what arms Vehicle.AutoDamage and what gives eight clients a turn
+            // in a handful of hulls. The remark this replaces also called AutoDamage "the one
+            // route to a burn a client with no explosive has"; that stopped being true when
+            // X-46 closed and the drill could drive into things -- see
+            // CombatDrill.FinishHullAtOrBelowHealth.
             Assert.Equal(SeatIntent.Leave, leaving.Seat);
             Assert.Equal((ushort)77, leaving.SeatVehicleId);
 
@@ -168,6 +175,104 @@ namespace Ironfront.Net.LoadHarness.Tests
             // client driving, not walking on foot inside a vehicle it still occupies.
             Assert.Equal((ushort)77, drill.SeatedVehicleId);
         }
+
+        // ------------------------------------------------ B-11: the fourth verb, Burn
+
+        [Fact]
+        public void StaysInAHullItHasDrivenUnderTheFinishThreshold()
+        {
+            var drill = new CombatDrill(0);
+            DrillBody vehicle = Vehicle(0f, 1f);
+
+            drill.OnSeatChange(10, 77, 0, SeatChangeResult.Entered, 10);
+            drill.Decide(
+                World(vehicle: vehicle, seatedVehicleHealth: 100), 0.0);
+
+            // Past the ordinary hold, but the hull is nearly wrecked.
+            DrillCommand held = drill.Decide(
+                World(vehicle: vehicle,
+                      seatedVehicleHealth: CombatDrill.FinishHullAtOrBelowHealth),
+                CombatDrill.SeatedMs + 1.0);
+
+            // Still driving, and NOT asking to get out. This is the whole of what was missing:
+            // o6-combat-04 drove vehicle 4 to 13 health and let go of it anyway.
+            Assert.Equal(SeatIntent.None, held.Seat);
+            Assert.True(held.SendVehicleInput);
+            Assert.Equal((sbyte)127, held.Throttle);
+        }
+
+        [Fact]
+        public void LeavesAHullThatIsStillHealthyOnTime()
+        {
+            var drill = new CombatDrill(0);
+            DrillBody vehicle = Vehicle(0f, 1f);
+
+            drill.OnSeatChange(10, 77, 0, SeatChangeResult.Entered, 10);
+            drill.Decide(World(vehicle: vehicle, seatedVehicleHealth: 100), 0.0);
+
+            DrillCommand leaving = drill.Decide(
+                World(vehicle: vehicle,
+                      seatedVehicleHealth: (byte)(CombatDrill.FinishHullAtOrBelowHealth + 1)),
+                CombatDrill.SeatedMs + 1.0);
+
+            // One point above the threshold is the other side of the rule. Without this the
+            // finish clause could be written as "always stay" and the test above would pass.
+            Assert.Equal(SeatIntent.Leave, leaving.Seat);
+        }
+
+        [Fact]
+        public void DoesNotHoldASeatOnAHullTheSnapshotHasNotNamed()
+        {
+            var drill = new CombatDrill(0);
+            DrillBody vehicle = Vehicle(0f, 1f);
+
+            drill.OnSeatChange(10, 77, 0, SeatChangeResult.Entered, 10);
+            drill.Decide(World(vehicle: vehicle, seatedVehicleHealth: 100), 0.0);
+
+            DrillCommand leaving = drill.Decide(
+                World(vehicle: vehicle, seatedVehicleHealth: DrillWorld.UnknownHealth),
+                CombatDrill.SeatedMs + 1.0);
+
+            // UnknownHealth is not a low reading. Treating the sentinel as one would park every
+            // drill in the first seat it won for MaxSeatedMs, on a hull nothing had said was
+            // damaged -- the rule buying the fourth verb by destroying the first.
+            Assert.Equal(SeatIntent.Leave, leaving.Seat);
+        }
+
+        [Fact]
+        public void TheUnknownSentinelSitsAboveTheFinishThreshold()
+        {
+            // Written because the behavioural test above could NOT fail on its own, and the
+            // mutation run is what said so: removing the explicit `!= UnknownHealth` clause left
+            // it green, because 255 <= 45 is false anyway. The clause and this comparison are
+            // two independent guards on the same property, and only the second one is load
+            // bearing today -- so it is the one that gets pinned. Raise the threshold to the
+            // sentinel's value and an unnamed hull reads as a wrecked one.
+            Assert.True(
+                DrillWorld.UnknownHealth > CombatDrill.FinishHullAtOrBelowHealth,
+                "the unknown-health sentinel must never satisfy the finish threshold, or a hull "
+                + "the snapshot has not named yet reads as one this client has nearly wrecked.");
+        }
+
+        [Fact]
+        public void AFinishingRideStillEndsAtTheCeiling()
+        {
+            var drill = new CombatDrill(0);
+            DrillBody vehicle = Vehicle(0f, 1f);
+
+            drill.OnSeatChange(10, 77, 0, SeatChangeResult.Entered, 10);
+            drill.Decide(World(vehicle: vehicle, seatedVehicleHealth: 100), 0.0);
+
+            DrillCommand leaving = drill.Decide(
+                World(vehicle: vehicle, seatedVehicleHealth: 5),
+                CombatDrill.MaxSeatedMs + 1.0);
+
+            // A hull can sit under the threshold and stop taking damage -- wedged, or on ground
+            // too flat to crash on. Without the ceiling that drill holds a driver seat for the
+            // rest of the run and seven other clients contend for one fewer vehicle.
+            Assert.Equal(SeatIntent.Leave, leaving.Seat);
+        }
+
 
         [Fact]
         public void WalksToTheNextSeatWhenTheFirstIsOccupied()
@@ -246,7 +351,10 @@ namespace Ironfront.Net.LoadHarness.Tests
             DrillBody target = Actor(x: 0f, z: 20f);
 
             DrillCommand command = drill.Decide(
-                new DrillWorld(Me(), target, default, alive: true), 0.0);
+                new DrillWorld(
+                    Me(), target, default, alive: true,
+                    seatedVehicleHealth: DrillWorld.UnknownHealth),
+                0.0);
 
             Assert.Equal(DrillPhase.Fight, command.Phase);
             Assert.True(command.SendActorInput);
@@ -268,11 +376,14 @@ namespace Ironfront.Net.LoadHarness.Tests
             var drill = new CombatDrill(0);
 
             DrillCommand far = drill.Decide(
-                new DrillWorld(Me(), Actor(0f, 50f), default, alive: true), 0.0);
+                new DrillWorld(
+                    Me(), Actor(0f, 50f), default, alive: true,
+                    seatedVehicleHealth: DrillWorld.UnknownHealth),
+                0.0);
             DrillCommand near = drill.Decide(
                 new DrillWorld(
                     Me(), Actor(0f, CombatDrill.FightHoldDistanceMetres - 1f), default,
-                    alive: true),
+                    alive: true, seatedVehicleHealth: DrillWorld.UnknownHealth),
                 100.0);
 
             Assert.Equal(1f, far.MoveZ);
@@ -286,7 +397,10 @@ namespace Ironfront.Net.LoadHarness.Tests
             var drill = new CombatDrill(0);
 
             DrillCommand command = drill.Decide(
-                new DrillWorld(Me(), default, default, alive: true), 0.0);
+                new DrillWorld(
+                    Me(), default, default, alive: true,
+                    seatedVehicleHealth: DrillWorld.UnknownHealth),
+                0.0);
 
             // A Combat run that degenerated into eight statues would report a bandwidth figure
             // describing the one case delta encoding is best at -- which is Move's whole
