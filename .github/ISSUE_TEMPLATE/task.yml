@@ -7,7 +7,7 @@ body:
       value: |
         Two uses for this template:
 
-        1. Tracking a task from your own `plans/dev-X-*/phases/phase-NN-*.md`.
+        1. Tracking a task from `plans/phases/phase-pN-*.md`.
         2. **Asking the owner for a change in a file that is not yours.** conventions.md
            section 7 is explicit: describe what you need and let them make it — do not edit
            it yourself and mention it afterwards.
@@ -31,7 +31,7 @@ body:
     attributes:
       label: Phase
       description: Which plan file this belongs to, if any.
-      placeholder: plans/transport/phases/phase-01-reliability.md
+      placeholder: plans/phases/phase-p1-exception-storm.md
     validations:
       required: false
 

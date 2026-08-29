@@ -15,7 +15,7 @@ Trước đây bạn kẹt ở mục 3.2 vì **chưa từng có image game-serve
 image tồn tại nhưng build từ một server **không mở nổi cổng UDP** — nó boot vào menu rồi đứng im,
 container vẫn `Up`, không log lỗi nào. Không có bước cấu hình hạ tầng nào phát hiện được điều đó.
 Lỗi ấy đã sửa và đã chứng minh trên chính artifact Linux (chi tiết:
-[`plans/consolidation/plan.md`](../plans/consolidation/plan.md) § 2).
+`git show 68acdd9:plans/consolidation/plan.md` § 2).
 
 > **Cả hai digest đã sẵn sàng và đã điền vào bước 4.** Bạn không phải chờ gì nữa — bắt đầu
 > được ngay từ bước 2.
@@ -23,7 +23,7 @@ Lỗi ấy đã sửa và đã chứng minh trên chính artifact Linux (chi ti�
 > Cập nhật 26/08: cả hai digest đã được thay bằng bản mới hơn, và **hai cái đến từ CÙNG một lần
 > chạy** `images.yml` (`32922452961`) trên cùng một commit — nên chúng không thể lệch pha với
 > nhau. Bản game-server này đã được chạy thử thật: kéo image xuống bằng digest, chạy lên, và
-> `27015/udp` mở. Chi tiết: `plans/debt-closure/reports/2026-08-26-phase-7-ops-to-digest.md`.
+> `27015/udp` mở. Chi tiết: `git show 68acdd9:plans/debt-closure/reports/2026-08-26-phase-7-ops-to-digest.md`.
 >
 > Lưu ý tên package **đã đổi**: `ironfront-game-server` (có gạch nối), không phải
 > `ironfront-gameserver` như tài liệu cũ. Cái cũ là bản 18/08 đã bỏ, đừng dùng.
@@ -229,4 +229,4 @@ Báo lại đúng bốn thứ:
 
 Tham chiếu: [`operations.md`](operations.md) (vận hành hằng ngày) ·
 [`infrastructure-handover.md`](infrastructure-handover.md) (ai giữ cái gì) ·
-[`plans/consolidation/plan.md`](../plans/consolidation/plan.md) (bối cảnh kỹ thuật)
+`git show 68acdd9:plans/consolidation/plan.md` (bối cảnh kỹ thuật)

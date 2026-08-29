@@ -4,7 +4,8 @@
 #
 # WHY THIS GATE EXISTS
 #
-# plans/debt-closure/phases/phase-3-harness.md acceptance criterion 4:
+# The acceptance criterion this gate holds, inlined 2026-08-29 when its spec was deleted
+# (git show 68acdd9:plans/debt-closure/phases/phase-3-harness.md, AC-4):
 #
 #     "The harness drives the shipped Transport and DeltaDecoder — a grep proves no second
 #      decoder exists in Ironfront.Net.LoadHarness/."

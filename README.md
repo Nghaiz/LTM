@@ -34,7 +34,7 @@ speak either protocol without it. BCL primitives (`Span<T>`, `ArrayPool<T>`,
 `System.Threading.Channels`, `System.Security.Cryptography`) are data types, not frameworks,
 and are allowed. The full policy, including the two things deliberately re-implemented so
 they can be benchmarked against the standard library, is in
-[`plans/00-shared/conventions.md` § 3.4](plans/00-shared/conventions.md).
+[`docs/code-conventions.md` § 3.4](docs/code-conventions.md).
 
 ---
 
@@ -156,13 +156,9 @@ The boundaries still matter because they are where the bugs live:
   client-side prediction and server-side simulation; if the two ever diverge, every player
   rubber-bands.
 
-`.github/CODEOWNERS` encodes the full table so GitHub requests the right reviewer
-automatically. The authoritative version is
-[conventions.md § 7](plans/00-shared/conventions.md).
-
-If you need a change in someone else's file: open a
-[Task issue](.github/ISSUE_TEMPLATE/task.yml) describing what you need and let the owner make
-it. Do not edit it yourself and mention it afterwards.
+The discipline that replaces the old per-person ownership table is
+[`docs/code-conventions.md` § 7](docs/code-conventions.md): every changed line traces to the task
+at hand, and adjacent cleanup goes in its own commit.
 
 ---
 
@@ -208,13 +204,18 @@ written down in [`docs/branch-protection.md`](docs/branch-protection.md).
 
 | Document | What is in it |
 |---|---|
-| [`plans/00-shared/conventions.md`](plans/00-shared/conventions.md) | Branches, commit scopes, C# conventions, ownership, Definition of Done. **Read before your first commit.** |
-| [`plans/00-shared/protocol-spec.md`](plans/00-shared/protocol-spec.md) | The frozen wire format, byte by byte |
-| [`plans/00-shared/architecture.md`](plans/00-shared/architecture.md) | How the projects fit together, and why the shared library must not touch `UnityEngine` |
-| [`plans/00-shared/algorithm-decisions.md`](plans/00-shared/algorithm-decisions.md) | Why each netcode algorithm was chosen |
-| [`plans/00-shared/dependency-map.md`](plans/00-shared/dependency-map.md) | Who blocks whom, and when |
-| [`plans/00-shared/feasibility-study.md`](plans/00-shared/feasibility-study.md) | Scope, risks, and what was cut |
-| [`plans/dev-*/plan.md`](plans/) | Per-person phase plans and their reports |
+| [`plans/plan.md`](plans/plan.md) | The one plan: where the project is, the M0–M4 criteria, the nine phases |
+| [`plans/debt-ledger.md`](plans/debt-ledger.md) | Every row still open, parked or decided. The source of truth for what is owed |
+| [`plans/phases/`](plans/phases/) | One file per phase, self-contained |
+| [`plans/00-shared/protocol-spec.md`](plans/00-shared/protocol-spec.md) | The frozen wire format, byte by byte. Read at build time by `tools/SpecChecker` |
+| [`docs/code-conventions.md`](docs/code-conventions.md) | Commit scopes, C# conventions, library policy, Definition of Done. **Read before your first commit.** |
+| [`docs/architecture.md`](docs/architecture.md) | How the projects fit together, and why the shared library must not touch `UnityEngine` |
+| [`docs/codebase-map.md`](docs/codebase-map.md) | What is where in the Unity project |
+| [`docs/operations.md`](docs/operations.md) | How to run and deploy the system |
+
+**The nine per-track plan directories were deleted on 2026-08-29** — 228 files down to 12. They
+were executed; git keeps them (`git show 68acdd9:plans/…`), and a directory of finished
+instructions reads to the next person as work outstanding.
 
 ---
 
@@ -225,8 +226,8 @@ A phase is done when all five hold — not four:
 1. The code has been run and the output inspected
 2. That area's tests are green, and the result was actually read
 3. The full suite is green — nothing else broke
-4. It is merged into `develop`, and `develop` is still green
-5. The report is written in `plans/dev-X-*/reports/`, including what was tried and failed
+4. Unity compiles clean, and the log was read rather than the exit code trusted
+5. It is merged into `develop`, and `develop` is still green
 
 ---
 

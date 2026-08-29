@@ -3,7 +3,7 @@
     Runs the phase-03 load-test matrix and writes one JSON report per scenario.
 
 .DESCRIPTION
-    The six scenarios in plans/master-server/phases/phase-03-operations.md section 2,
+    The six scenarios (spec deleted 2026-08-29 -- git show 68acdd9:plans/master-server/phases/phase-03-operations.md section 2),
     task 4, in one command.
 
     Run it from a machine OTHER than the VPS. Running it on the box measures loopback, which

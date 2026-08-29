@@ -22,7 +22,7 @@ namespace Ironfront.Tools.ClientWiringGate
     /// </para>
     /// <para>
     /// <b>Each check is named for the ledger row it pins</b>
-    /// (<c>plans/debt-closure/debt-ledger.md</c>). A row that closes without a check here closes
+    /// (<c>plans/debt-ledger.md</c>). A row that closes without a check here closes
     /// into the same silence it came from; that is the author-then-pin rule (P-D5) the whole
     /// debt-closure track turns on.
     /// </para>

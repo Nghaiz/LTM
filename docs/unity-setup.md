@@ -155,5 +155,5 @@ having the gate rather than the guidance:
 - `tools/setup-unity-dev.ps1` — the setup + preflight script
 - `tools/check-unity-meta.ps1` — the `.meta` gate, wired into `ci.yml` and `tools/ci.ps1`
 - `.gitattributes` — merge routing and line-ending policy
-- `CODEOWNERS` / `plans/00-shared/conventions.md` § 7 — file ownership
-- `plans/replication/phases/phase-v10-client-event-consumption.md` § 7 — the E1–E12 Editor items
+- [`code-conventions.md` § 7](code-conventions.md) — scope discipline
+- The E1–E12 Editor items: `git show 68acdd9:plans/replication/phases/phase-v10-client-event-consumption.md` § 7

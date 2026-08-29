@@ -79,7 +79,7 @@ authoritative because it is local control state and is not encoded on the wire.
 
 The repository contains deterministic localhost transport and benchmark evidence. The
 `--phase4-report` benchmark option writes
-`plans/transport/reports/2026-08-14-phase-04-local-experiments.csv` with local ACK-history,
+`plans/transport/reports/2026-08-14-phase-04-local-experiments.csv` (deleted 2026-08-29; `git show 68acdd9:` it) with local ACK-history,
 head-of-line and congestion-hysteresis results. The regular benchmark also prints the
 BufferPool/ArrayPool comparison and supports connection-load CSV output.
 
