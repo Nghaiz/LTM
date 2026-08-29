@@ -180,9 +180,39 @@ public class ActorManager : MonoBehaviour
 		yield break;
 	}
 
+	/// <summary>
+	/// Adds an actor to its team's alive register. Ledger <b>X-59</b>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>The guard REPORTS a second producer; it is not the fix for the one that was found.</b>
+	/// X-59 was a body killed through <c>ActorGameplaySource.IsDead</c>, which wrote the flag and
+	/// left the register, so the next spawn wave registered the body a second time; that window
+	/// is closed at the seam, where the reason lives. What this refuses is the NEXT double-add,
+	/// from a path nobody has enumerated yet.
+	/// </para>
+	/// <para>
+	/// <b>Refused loudly rather than silently deduplicated.</b> A quiet membership test would
+	/// make the storm unproducible and the cause unfindable, which is how X-59 survived a gate
+	/// that read "zero throws at any site". One <c>LogError</c> naming the body is a defect
+	/// report; sixty <c>ArgumentException</c>s out of a coroutine are not.
+	/// </para>
+	/// </remarks>
 	public static void SetAlive(Actor actor)
 	{
-		instance.aliveActors[actor.team].Add(actor);
+		List<Actor> onTeam = instance.aliveActors[actor.team];
+
+		if (onTeam.Contains(actor))
+		{
+			Debug.LogError(
+				$"[actors] '{actor.name}' is already in team {actor.team}'s alive register, so "
+				+ "something registered it twice without a death in between (X-59's family). "
+				+ "Refusing the second entry: it would throw out of every "
+				+ "FindPotentialTargets on the opposing team for the rest of the match.");
+			return;
+		}
+
+		onTeam.Add(actor);
 	}
 
 	public static void SetDead(Actor actor)
