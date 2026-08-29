@@ -1,4 +1,5 @@
 using Ironfront.Net.Protocol;
+using Ironfront.Net.Replication.Movement;
 
 namespace Ironfront.Net.Replication.Client
 {
@@ -29,6 +30,25 @@ namespace Ironfront.Net.Replication.Client
         /// <summary>Upper-body aim, in degrees. Also the origin ray for the tracer.</summary>
         public readonly float PitchDegrees;
 
+        /// <summary>
+        /// World-space velocity, m/s, as the owner's own movement simulation computed it —
+        /// <c>SnapshotField.Velocity</c>, bit 2, quantized to an <c>i8</c> per axis.
+        /// </summary>
+        /// <remarks>
+        /// <b>Decoded since v1 and discarded until phase-P2, which is why remote bodies slid.</b>
+        /// <c>NetServerActor.Capture</c> has always fed this from <c>Movement.State.Velocity</c>
+        /// and <c>DeltaDecoder</c> has always carried it, but nothing on the client read it, so
+        /// <c>RemoteActorView</c> had no number to drive <c>movement x</c>/<c>movement y</c> with
+        /// and never wrote them. <see cref="RemoteLocomotionSolver"/> is the consumer.
+        /// <para>
+        /// <b>Exact zeros are ambiguous by design, and the solver resolves them.</b>
+        /// <c>InterestManager</c> zeroes all three axes for an actor past its 60 m
+        /// <c>NearRadius</c> rather than omitting the field, so "still" and "too far to be worth
+        /// three bytes" arrive identically. Both are answered by falling back to displacement.
+        /// </para>
+        /// </remarks>
+        public readonly Vec3 Velocity;
+
         public readonly bool IsAlive;
         public readonly bool IsCrouching;
         public readonly bool IsProne;
@@ -55,10 +75,12 @@ namespace Ironfront.Net.Replication.Client
 
         public RemoteActorVisualState(
             ushort actorId, float pitchDegrees, ActorStateFlags flags,
-            byte health, byte weaponId, byte ammoInClip, byte team)
+            byte health, byte weaponId, byte ammoInClip, byte team,
+            Vec3 velocity = default)
         {
             ActorId      = actorId;
             PitchDegrees = pitchDegrees;
+            Velocity     = velocity;
             IsAlive      = (flags & ActorStateFlags.IsAlive)     != 0;
             IsCrouching  = (flags & ActorStateFlags.IsCrouching) != 0;
             IsProne      = (flags & ActorStateFlags.IsProne)     != 0;
@@ -101,7 +123,8 @@ namespace Ironfront.Net.Replication.Client
                 entry.Health,
                 entry.WeaponId,
                 entry.AmmoInClip,
-                entry.Team);
+                entry.Team,
+                SnapshotBuilder.UnpackVelocity(in entry));
     }
 
     /// <summary>The three body poses the original game's animator distinguishes.</summary>
