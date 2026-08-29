@@ -138,7 +138,8 @@ prefab has `_actor: {fileID: 0}` and would otherwise never reach it.
 | Codec, solver, gates | `dotnet test Ironfront.sln` — **2007 passed, 0 failed, 8/8 projects reported, zero `error` lines** |
 | No layering, meta or assembly regression | `check-net-layering` PASS · `check-unity-meta` PASS (1920 assets) · `check-duplicate-assemblies` PASS |
 | **The Unity domain actually compiles it** | Reflection against the live Editor: `RemoteLocomotion` and `RemoteLocomotionSolver` resolve in `Ironfront.Net.Replication`; `RemoteActorView.Locomotion`, `.SolveLocomotion()` and `.ReportUnknownParameters()` all present |
-| Legs move (criterion 6) | Three-client lane-B `combat` run — see § 6 |
+| The network path is live under three clients | lane-B `combat`, 3/3 clients exit 0, 42 remote actors, ~2 470 snapshots each |
+| The body plays a locomotion clip, and stops | Editor Play-Mode probe through `RemoteActorView.Apply` — see § 6.2 |
 
 The domain check is not ceremony. Nothing under `Assets/Scripts` compiles under `dotnet test`, so
 a green solution build says nothing about `RemoteActorView`; and the first probe — taken before the
@@ -148,9 +149,57 @@ been graded against code that was not loaded.
 
 ---
 
-## 6. Two clients, one walking, one watching
+## 6. Does the body actually walk
 
-*(Filled in from `artifacts/lane-b/p2-locomotion-01` — see § 7 if the run is not yet complete.)*
+Two instruments, because the one the plan named could not answer the question.
+
+### 6.1 The three-client run — the network path, `artifacts/lane-b/p2-locomotion-01`
+
+`run-lane-b.ps1 -Build -Set combat -SpawnIndex 0`. All three clients completed their programme,
+exit 0, 7 checkpoints each. Every client saw **42 remote actors** and applied **~2 470 snapshots**
+by the last checkpoint, so the replication path this fix sits on was live throughout.
+
+**Its 21 screenshots do NOT show a walking body, and that is a limitation of the programme, not a
+result.** The `combat` set points its cameras at aim-and-fire geometry; at `in-range` observer-a is
+looking at a hillside and at `firing` the driver is facing a rock wall. No body is in frame at any
+checkpoint. Reporting "the legs look right" from these would have been reading a screenshot that
+never contained the subject.
+
+### 6.2 The Editor probe — the animator itself, `artifacts/p2-editor/`
+
+So the question was put to the animation system directly, in Play Mode, driving **the shipped
+path**: instantiate `Remote Actor Proxy.prefab`, `Bind`, and hand `RemoteActorView.Apply` a real
+`ActorSnapshotEntry` carrying `Quantize.PackVel(3.5)` — nothing written to the animator by the
+probe. Every value below was put there by `RemoteActorView`.
+
+| | walking (wire velocity 3.5 m/s N) | stationary (wire velocity 0) |
+|---|---|---|
+| `moving` | **True** | **False** |
+| `movement y` | **3.023622** | **0** (exactly) |
+| `movement x` | 0 | 0 |
+| layer-0 state | **`Locomotion Forward`** | **`Standing Idle`** |
+| clips playing | **`Standing_Walk_Forward` w=0.14 + `Standing_Run_Forward` w=0.86** | **`stand_idle` w=1.00** |
+
+`3.023622` is `UnpackVel(PackVel(3.5))` to the last digit — the value went through the wire codec,
+which is what makes it the server's number rather than one this probe invented. The two clips at
+0.14/0.86 are the 2D blend tree resolving a 3.02 m/s input between its walk node (y ≈ 1.23) and its
+run node (y ≈ 3.28), on a real 21-bone armature under a valid `characterAvatar`. **That is the
+animation system's own report of what it is playing, and it flips to `stand_idle` the moment the
+replicated velocity goes to zero.**
+
+### 6.3 A screenshot cannot answer this, and it was checked rather than assumed
+
+`screenshot-isolated` returned a **byte-identical PNG** (`md5 b8dfa211…`) for the running body and
+the idle one, and for three shots taken a second apart while running. It renders a fixed preview
+pose, not the live animated pose. `artifacts/p2-editor/p2-remote-body-walking.png` is kept for the
+record of *what the proxy is* — a blocky placeholder body, ledger **A-2** — and is **not** evidence
+about locomotion. Any future phase tempted to grade animation from that tool should read this
+paragraph first.
+
+One measurement on the way there is worth keeping: with the probe body off-camera the animator's
+`normalizedTime` advanced normally while every bone rotation stayed frozen, because
+`cullingMode` was `CullUpdateTransforms`. A check that read bone transforms on an off-screen body
+would have reported "the legs never move" on a perfectly working animator.
 
 ---
 
@@ -167,3 +216,22 @@ been graded against code that was not loaded.
   shipped prefab). Out of scope by the plan, unchanged, still announced by the existing
   once-only warnings.
 - **The local player's own animation.** `Assembly-CSharp` is untouched.
+
+### Found while verifying, NOT caused by it, and not fixed here
+
+The lane-B run logged **24 `NullReferenceException`s across the three clients**, all in
+`Assembly-CSharp`'s projectile path: 20 at `ActorManager.cs:373` (`int team = 1 - p.source.team`,
+reached from `Projectile.Start` → `Rocket.Start`, so `Projectile.source` is null) and 4 at
+`ExplodingProjectile.cs:57` via `Projectile.Travel`. They render as a red wall in the Development
+Console on every screenshot in `artifacts/lane-b/p2-locomotion-01`.
+
+**Not this change**, and checked rather than argued: `git diff --stat develop..HEAD -- '*Assembly-CSharp*'`
+is **empty** — P2 touches zero files in that assembly — and zero of the 24 traces name anything
+under `Scripts/Net`. The earlier `combat-01` / `combat-02` runs show none of them, which is a
+weapon-draw difference rather than a regression: this run was `pinnedWeapon: None`, and
+`Rocket` / `ExplodingProjectile` only exist on a draw that produces a rocket.
+
+Not filed as a ledger row here — the ledger carries a recount gate that a new row must be
+reconciled against, and [`phase-p4-lane-b-regrade.md`](../phases/phase-p4-lane-b-regrade.md) is
+the phase that re-runs lane B and owns that accounting. It is recorded here so P4 finds it written
+down rather than re-discovering it.
