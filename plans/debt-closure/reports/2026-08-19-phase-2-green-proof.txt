@@ -1,5 +1,0 @@
-[client-wiring] 15 of 15 ClientMessageRouter events have a production subscriber; G2-G5 and G7 clean across 411 file(s). No types were resolved - this says something subscribes, not that it renders correctly.
-[asset-wiring] KNOWN GAP - RemoteActorView._actor is unauthored. needs an Actor component on a server-owned proxy, which registers with ActorManager — a Phase 2 decision, not authoring. Blocks the ragdoll rig (E1) and remote weapon models. Ledger A-2, partially open.
-[asset-wiring] 7 authoring check(s) clean across 4 scene(s) and 62 prefab(s). No types were resolved - this says the components are present and their references are non-null, not that they render correctly.
-[writer-coverage] 13 of 13 ServerEventWriter writers have a production caller; scanned 432 file(s). No types were resolved - this says something calls it, not that the call is correct.
-[SpecChecker] OK — 90 constant(s) match plans/00-shared/protocol-spec.md.

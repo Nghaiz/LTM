@@ -10,7 +10,7 @@
 > `tools/SpecChecker` parses the fenced constants block in § 1 and never reads this line. That is
 > why § 15's wire gate calls out condition 4 separately — the header is prose, and prose is the
 > half no machine checks.
-> See [conventions.md](conventions.md) for the protocol change process.
+> See [`docs/code-conventions.md`](../../docs/code-conventions.md) for the protocol change process.
 >
 > **The single source of these constants in code:** `Ironfront.Net.Protocol/ProtocolConstants.cs`.
 > Re-hardcoding any number from this document anywhere else is forbidden.
@@ -1330,7 +1330,7 @@ Added at v3.0.0:
 >
 > **Owner:** written by the replication track (the verifier), against a serializer implemented by the transport track. Keep that
 > split whatever happens to the file locations — see
-> [conventions.md § 7](conventions.md#7-file-ownership-boundaries).
+> [`docs/code-conventions.md` § 7](../../docs/code-conventions.md#7-scope-discipline).
 
 ---
 
@@ -1385,4 +1385,4 @@ Each row was an open checkbox in the replication track's phase-00 Task 1. Record
 | Is an `actorId` reused immediately when an actor dies? | **No — 5-second quarantine** | [§ 4.3.1](#431-actorid--allocation-and-lifetime) |
 | Is an 8-bit `changeMask` enough for the future? | Yes for v1 — 7 used, 1 spare. **Reopened and answered at v3.0.0: all 8 are now used and populated**, so a ninth actor field is a wire change. The vehicle mask is a `u16` from the start for exactly this reason | [§ 4.3.1](#431-actorid--allocation-and-lifetime), [§ 4.10](#410-the-vehicle-stream) |
 | MSP `msgType` byte order (raised during implementation, not on the original list) | **Little-endian**, per the § 0 default | [§ 10](#10-framing) |
-| The `Serialization/` ownership boundary between the transport track and the replication track | `Quantize` is shared protocol and lives in `Ironfront.Net.Protocol`; `BitWriter`/`BitReader` stay the transport track's in `Ironfront.Net.Replication/Serialization/` | [conventions.md § 7](conventions.md#7-file-ownership-boundaries) |
+| The `Serialization/` ownership boundary between the transport track and the replication track | `Quantize` is shared protocol and lives in `Ironfront.Net.Protocol`; `BitWriter`/`BitReader` stay the transport track's in `Ironfront.Net.Replication/Serialization/` | [`docs/code-conventions.md` § 7](../../docs/code-conventions.md#7-scope-discipline) |

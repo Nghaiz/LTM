@@ -290,14 +290,14 @@ What is actually enforceable, and how:
 
 | Requirement | Enforced by |
 |---|---|
-| The affected people are asked | `.github/CODEOWNERS` lists all four on `Ironfront.Net.Protocol/` and `plans/00-shared/` |
+| The affected people are asked | **Retired 2026-08-29** — one owner, no `CODEOWNERS`, nobody to ask |
 | Two humans approve | Branch protection on `main` (2 approvals). On `develop`, add a second ruleset restricted to those paths, or rely on the checklist |
 | Spec, constants, test and version bump all move together | The protocol section of `.github/pull_request_template.md`, plus `tools/SpecChecker` in CI |
 | The version table is updated | The template checklist — no automation exists for this |
 
 If you want the two-approval rule enforced on `develop` for protocol paths only, create a
 second ruleset with **Restrict to files matching** `Ironfront.Net.Protocol/**` and
-`plans/00-shared/**`, required approvals 2. This is the one place worth the extra ruleset,
+`plans/00-shared/**` (the frozen protocol spec), required approvals 2. This is the one place worth the extra ruleset,
 because a wrong byte here breaks all four people at once instead of one.
 
 ---
@@ -320,6 +320,6 @@ discards an unnamed ruleset.
 
 ## Related
 
-- [`plans/00-shared/conventions.md`](../plans/00-shared/conventions.md) — the rules this page enforces
+- [`code-conventions.md`](code-conventions.md) — the rules this page enforces
 - [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) — where the check names come from
 - `.github/CODEOWNERS` — the ownership table

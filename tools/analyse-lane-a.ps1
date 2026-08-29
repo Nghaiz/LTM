@@ -14,7 +14,9 @@
 
     Every number is printed beside the configuration that produced it. A percentile without
     its sample size, or a byte rate without its network conditions, is a number rather than a
-    measurement — see plans/debt-closure/phases/phase-4-measure.md sections 2 and 3.
+    measurement. The rule, inlined here because its spec was deleted 2026-08-29:
+    a percentile is quoted with its sample size beside it, and a run that fell short of the
+    configuration it asked for reports the configuration it REACHED.
 
 .PARAMETER Report
     Path to the harness report JSON (schema ironfront.loadharness/2 or later for the
@@ -26,7 +28,9 @@
 
 .PARAMETER BudgetKbPerSec
     The per-client downstream budget to grade against. Defaults to 8, which is
-    plans/replication/plan.md:303 and docs/report-chapter-state-synchronization.md:47.
+    the bandwidth budget: <= 5 KB/s/client at 16 players + 32 bots + 12 vehicles, and a
+    non-zero EntriesShed at that load is a FAILURE, not a pass.
+    See docs/report-chapter-state-synchronization.md:47.
     Phase 4's own text quotes 5, inherited from phase-v4-vehicle-server-authority.md:364.
     They are different numbers and the report says which it used.
 

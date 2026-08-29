@@ -2,7 +2,8 @@
 #
 # WHY THIS GATE EXISTS
 #
-# plans/asmdef-seam/plan.md success criterion 5 reads "Net/Diagnostics is excluded from player
+# The criterion this gate holds, inlined 2026-08-29 when its spec was deleted:
+# "Net/Diagnostics is excluded from player
 # builds, and SOMETHING FAILS IF IT IS RE-INCLUDED." The first half shipped on 2026-08-21: every
 # .cs under Assets/Scripts/Net/Diagnostics/ is wrapped in `#if !IRONFRONT_NO_DIAGNOSTICS`, and
 # EditorBuildWindowsHarness's -noDiagnostics flag proves it by building the same player both ways.
@@ -46,7 +47,8 @@
 # reason is a measurement: of the 13 distinct types Net/Diagnostics reaches for outside itself,
 # EIGHT are declared in Net/Client — C4's folder, still inside Assembly-CSharp today. Sealing
 # before C4 means writing eight interfaces whose whole purpose disappears the moment Net/Client
-# becomes an assembly Diagnostics can simply reference. See plans/asmdef-seam/phases/
+# becomes an assembly Diagnostics can simply reference. Historical detail:
+# git show 68acdd9:plans/asmdef-seam/phases/
 # phase-c3-net-diagnostics.md § 0.
 #
 # So this gate guards the #if arrangement, and it is written to be DELETED at C4 rather than
@@ -210,7 +212,7 @@ if ($violations.Count -gt 0) {
     Write-Host "FAIL: the Net/Diagnostics exclusion moved."
     Write-Host ""
     foreach ($violation in $violations) { Write-Host "  $violation"; Write-Host "" }
-    Write-Host "plans/asmdef-seam/plan.md success criterion 5 is what this gate holds. Fix the"
+    Write-Host "Net/Diagnostics must stay excluded from player builds. Fix the"
     Write-Host "call site or restore the guard; do not relax the rule to match what the tree does."
     exit 1
 }

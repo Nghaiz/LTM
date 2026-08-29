@@ -101,7 +101,7 @@ try {
         & "$PSScriptRoot/check-net-layering.ps1"
     }
 
-    # plans/asmdef-seam/plan.md success criterion 5. Invisible to everything above for the mirror
+    # Net/Diagnostics stays out of player builds. Invisible to everything above for the mirror
     # of 3e's reason: `dotnet build` compiles four Net/Diagnostics files with the define ABSENT,
     # so it only ever exercises the INCLUDED configuration and can never notice a broken strip.
     Invoke-Step "3f. Net/Diagnostics compiles out of a shipping player" {

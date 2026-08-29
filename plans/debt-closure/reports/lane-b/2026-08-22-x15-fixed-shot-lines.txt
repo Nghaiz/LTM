@@ -1,3 +1,0 @@
-[shot] actor=41 weapon=1 ammo=29 rejection=None fired=True hits=0 targets=56 alive=3 solidTorsos=56 origin=1209.7,33.6,1764.5 aim=-0.42,0.68,-0.61 nearest[actor=43 alive=True d=37.7m torso=1196.4,33.3,1799.8 extents=0.25,0.35,0.16]
-[shot] actor=41 weapon=1 ammo=28 rejection=None fired=True hits=0 targets=56 alive=3 solidTorsos=56 origin=1209.7,33.6,1764.5 aim=-0.42,0.68,-0.61 nearest[actor=43 alive=True d=37.7m torso=1196.4,33.3,1799.8 extents=0.25,0.35,0.16]
-[shot] actor=41 weapon=1 ammo=28 rejection=OnCooldown fired=False hits=0 targets=56 alive=3 solidTorsos=56 origin=1209.7,33.6,1764.5 aim=-0.42,0.68,-0.61 nearest[actor=43 alive=True d=37.7m torso=1196.4,33.3,1799.8 extents=0.25,0.35,0.16]

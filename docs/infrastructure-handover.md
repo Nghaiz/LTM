@@ -3,8 +3,7 @@
 The master-server track owns CI, the build scripts, the load test and the deployment infrastructure. The other
 three depend on all of it. This document exists so that none of it stops working when the master-server track is
 unavailable — which is the whole point of the bus-factor table in
-[conventions.md § 8](../plans/00-shared/conventions.md), where **The transport track is the master server's
-backup**.
+`plans/00-shared/conventions.md` § 8, **deleted 2026-08-29 with the four-developer material**. That table named the transport track as the master server's backup; there is one owner now, and [P9](../plans/phases/phase-p9-deployment-and-cleanup.md) task 4.3 owns replacing this framing.
 
 Read [`operations.md`](operations.md) first for how to run the system. This is about who holds
 what, and how somebody else takes it over.
@@ -144,7 +143,7 @@ the stale `-wal` and `-shm` files, which belong to the database you just replace
 `tools/ci.ps1` runs the same steps locally that CI runs: build all projects with
 `TreatWarningsAsErrors`, run every test, and verify `ProtocolConstants.cs` against
 `protocol-spec.md` via `tools/SpecChecker`. A spec-checker failure means a protocol constant
-was renamed or changed without the [conventions.md § 2](../plans/00-shared/conventions.md)
+was renamed or changed without the [the protocol-change process](code-conventions.md#2-protocol-change-process)
 process — the fix is to revert the constant, not to update the checker. The `infra-validate`
 job (compose renders) is a hard gate; `infra-lint` (hadolint + terraform fmt/validate) is
 advisory.
@@ -160,7 +159,7 @@ advisory.
 | What happened? | `docker compose logs master`; `journalctl -u ironfront-backup` / `-u ironfront-alert` |
 | Is it leaking? | `tools/chart-durability.ps1` over the durability CSV |
 | Why is this slow / why does this fail? | [`report-chapter-master-server.md`](report-chapter-master-server.md) has the measured limits and their causes |
-| What was decided and why? | [`plans/master-server/reports/`](../plans/master-server/reports/) — one report per phase, including what failed |
+| What was decided and why? | `git show 68acdd9:plans/master-server/reports/` — one report per phase, including what failed; deleted from the tree 2026-08-29 |
 
 ---
 
@@ -193,4 +192,4 @@ and more repeatable risk than before, but it is not zero until it has been done 
 - [`infra/tls/README.md`](../infra/tls/README.md) — certificates
 - [`report-chapter-master-server.md`](report-chapter-master-server.md) — design rationale and measurements
 - [`branch-protection.md`](branch-protection.md) — repository settings
-- [conventions.md § 8](../plans/00-shared/conventions.md) — the bus-factor table this document serves
+- **The bus-factor table this document served is deleted.** See [P9](../plans/phases/phase-p9-deployment-and-cleanup.md) § 2

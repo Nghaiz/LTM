@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Recount the debt-ledger roll-up from its own row tables.
 
-Section 8 of plans/debt-closure/debt-ledger.md drifted twice from hand-decremented
+Section 8 of plans/debt-ledger.md drifted twice from hand-decremented
 totals -- once before Phase 2, and again by Phase 8 (Group E carried 11 rows while
 the table held 13, Group X carried 29 while the table held 40). The fix is to stop
 computing it by hand: this derives every cell from the rows themselves.
@@ -18,7 +18,7 @@ import re
 import sys
 import subprocess
 
-LEDGER = "plans/debt-closure/debt-ledger.md"
+LEDGER = "plans/debt-ledger.md"
 
 GROUPS = [
     ("A", "A - authoring"),

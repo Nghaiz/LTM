@@ -144,7 +144,7 @@ jobs:
         shell: pwsh
         run: pwsh tools/check-plugin-define-constraints.ps1
 
-      # plans/asmdef-seam/plan.md success criterion 5 — "something fails if it is re-included".
+      # Net/Diagnostics stays out of player builds — "something fails if it is re-included".
       # This step IS that something. A HARD gate for the same reason as the three above: the
       # `dotnet build` step links four Net/Diagnostics files with IRONFRONT_NO_DIAGNOSTICS absent,
       # so it compiles the INCLUDED configuration only and is structurally blind to a dropped
@@ -220,7 +220,7 @@ jobs:
       # source it was built from. That is not hypothetical: after #19 merged,
       # Ironfront.Net.Replication.dll on develop was missing ServerMessageRouter and
       # ServerPayloadWriter, and nothing reported it — it was fixed by accident in #21 by
-      # someone rebuilding for an unrelated reason. Standing rule 1 in plans/00-shared/roadmap.md
+      # someone rebuilding for an unrelated reason. Standing rule 5 in plans/plan.md
       # says rebuild in the same PR as the source change; this is the thing that notices when
       # nobody did.
       #
