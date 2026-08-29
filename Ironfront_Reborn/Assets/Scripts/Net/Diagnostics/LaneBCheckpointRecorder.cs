@@ -1,4 +1,4 @@
-// Diagnostics are compiled OUT of a shipping client build.
+﻿// Diagnostics are compiled OUT of a shipping client build.
 //
 // The sense is INVERTED on purpose. Unity's BuildPlayerOptions.extraScriptingDefines can only
 // ADD symbols, never subtract one, so a positive IRONFRONT_DIAGNOSTICS would have to be off in
@@ -358,7 +358,13 @@ namespace Ironfront.Net.Unity.Diagnostics
         {
             _json.Append("\"aim\":");
 
-            if (_solver == null || string.IsNullOrEmpty(_solver.LastRequestedName))
+            // Ledger X-44: a VEHICLE solve requests no name, so name-emptiness alone would
+            // write `aim: null` for an approach that resolved a vehicle -- indistinguishable
+            // from a step that never ran, which is the exact confusion this block exists to
+            // prevent. LastRequestWasVehicle is the second half of the question.
+            if (_solver == null
+                || (string.IsNullOrEmpty(_solver.LastRequestedName)
+                    && !_solver.LastRequestWasVehicle))
             {
                 _json.Append("null");
                 return;
@@ -366,9 +372,12 @@ namespace Ironfront.Net.Unity.Diagnostics
 
             ScriptedTargetSolver.Solution s = _solver.Last;
             _json.Append('{');
-            Str("requested", _solver.LastRequestedName); Comma();
+            Str("requested", _solver.LastRequestWasVehicle
+                ? "<nearest vehicle>"
+                : _solver.LastRequestedName); Comma();
             _json.Append("\"resolved\":").Append(s.Resolved ? "true" : "false"); Comma();
             Num("targetActorId", s.ActorId); Comma();
+            Num("targetVehicleId", s.VehicleId); Comma();
             Num("yaw", s.Resolved ? s.Yaw : float.NaN); Comma();
             Num("pitch", s.Resolved ? s.Pitch : float.NaN); Comma();
             Num("distanceM", s.Resolved ? s.Distance : float.NaN); Comma();

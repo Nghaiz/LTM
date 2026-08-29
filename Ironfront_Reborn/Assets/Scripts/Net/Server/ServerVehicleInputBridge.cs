@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Server;
@@ -89,10 +89,16 @@ namespace Ironfront.Net.Unity.Server
         internal int DriverCount => _drivers.Count;
 
         /// <summary>
-        /// Controllers a seat entry could not reach. Expected to be zero; non-zero means an
-        /// actor entered a driver seat with no <c>FpsActorController</c> on it, and that
-        /// vehicle will not respond to its driver at all.
+        /// Controllers a seat entry could not reach. Expected to be zero.
         /// </summary>
+        /// <remarks>
+        /// <b>Since X-46 this counts a destroyed or unregistered body, and nothing else.</b> It
+        /// used to count every ordinary networked driver: <c>NetDriverInputSink.Attach</c>
+        /// returned null for any body without an <c>FpsActorController</c>, and a player-slot body
+        /// never has one. The sink now falls back to a <c>NetVehicleAxisRelay</c>, so a non-zero
+        /// reading here is once again the thing this counter was named for — a driver whose
+        /// vehicle will not respond to them.
+        /// </remarks>
         internal long UnreachableControllers { get; private set; }
 
         /// <inheritdoc />
@@ -226,14 +232,15 @@ namespace Ironfront.Net.Unity.Server
         /// Installs the network input source on a new driver. Ledger <b>X-46</b>.
         /// </summary>
         /// <remarks>
-        /// <b>Both failures LOG now, and that is the whole of the change.</b>
+        /// <b>Both failures LOG, and since X-46 both are genuinely exceptional.</b>
         /// <see cref="UnreachableControllers"/> was incremented here and read by nothing in the
         /// repository — no log line, no report field, no gate — so the one outcome it exists to
         /// surface was invisible: a driver seated in a vehicle that will not respond to them.
         /// Nothing could reach it until R2 gave the shipped client a seat sender and R5 gave lane
         /// A one, and the first lane-A Combat run then produced 1,138 accepted vehicle inputs
         /// against a hull that never moved, with nothing anywhere saying why. A counter nobody
-        /// reads is not a measurement.
+        /// reads is not a measurement. R5 added the two log lines; O1 removed the reason the
+        /// second one fired at all, so it now names a destroyed body rather than every driver.
         /// </remarks>
         private void Install(ushort actorId)
         {

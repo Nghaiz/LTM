@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Movement;
 
@@ -111,11 +111,27 @@ namespace Ironfront.Net.Replication.Client
         private readonly MoveInput[] _inputs = new MoveInput[Capacity];
         private readonly uint[] _ticks = new uint[Capacity];
 
+        // Ledger X-41. The position this client predicted itself to be at AFTER each recorded
+        // tick's input was applied. Without it, Reconcile could only compare the client's
+        // CURRENT position against an authoritative state for a tick `lag` in the past -- so a
+        // client predicting perfectly was compared against a position it had legitimately left,
+        // and every snapshot past 0.25 m of lag reported Corrected.
+        private readonly Vec3[] _positions = new Vec3[Capacity];
+
         private long _count;
         private uint _lastAckedTick;
         private bool _hasAcked;
 
         /// <summary>Corrections applied. The number to quote for "how often prediction missed".</summary>
+        /// <remarks>
+        /// <b>True since X-41 closed, and NOT true of any artifact recorded before it.</b> This
+        /// counter used to move on lag rather than on error: the comparison was against the
+        /// client's current position, so once <c>lag x speed</c> passed
+        /// <see cref="PositionToleranceMetres"/> — 2.1 ticks at a walk, 1.2 at a sprint — every
+        /// snapshot reported <see cref="ReconcileResult.Corrected"/> while the replay moved the
+        /// client by nothing at all. A <c>corrections: N</c> from an older run is a lag
+        /// measurement and is not comparable with one from a newer one.
+        /// </remarks>
         public long CorrectionCount { get; private set; }
 
         /// <summary>Times the acknowledged tick fell outside the buffer.</summary>
@@ -140,18 +156,36 @@ namespace Ironfront.Net.Replication.Client
         }
 
         /// <summary>
-        /// Records an input the client has just predicted, so it can be replayed if needed.
+        /// Records an input the client has just predicted, so it can be replayed if needed, and
+        /// where that input left it.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// Call this every tick you step prediction, with the tick that input belongs to —
         /// recording after stepping, or with the wrong tick, silently shifts every replay by one
         /// frame and shows up as a correction that never converges.
+        /// </para>
+        /// <para>
+        /// <b><paramref name="predictedPosition"/> is REQUIRED rather than defaulted, and that is
+        /// ledger X-41 rather than API taste.</b> A default would let a caller that forgot it
+        /// keep the old comparison — current position against a past authoritative state — with
+        /// nothing anywhere reporting the difference. That is precisely the failure this row is
+        /// about, reintroduced by the fix for it.
+        /// </para>
+        /// <para>
+        /// <b>The position AFTER this tick's input, not before.</b>
+        /// <c>NetPredictionClock</c> raises <c>OnTickSimulated</c> after <c>_agent.Tick(...)</c>,
+        /// so the caller has exactly that value in hand and no new ordering is introduced.
+        /// Recording the pre-step position would offset every comparison by one tick's motion —
+        /// which at a sprint is most of the tolerance.
+        /// </para>
         /// </remarks>
-        public void Record(uint tick, in MoveInput input)
+        public void Record(uint tick, in MoveInput input, in Vec3 predictedPosition)
         {
             int slot = (int)(_count % Capacity);
             _ticks[slot] = tick;
             _inputs[slot] = input;
+            _positions[slot] = predictedPosition;
             _count++;
         }
 
@@ -180,7 +214,22 @@ namespace Ironfront.Net.Replication.Client
             _lastAckedTick = lastProcessedInputTick;
             _hasAcked = true;
 
-            if (WithinTolerance(predicted.Position, authoritative.Position))
+            // Ledger X-41. Compared at the ACKNOWLEDGED tick, not against where the client is
+            // standing now. `authoritative` is the server's answer for the tick it names, and
+            // the client left that position `lag` ticks ago on purpose -- so comparing the two
+            // measured how far behind the server was, and reported it as a mispredict. Measured:
+            // 16 of 16 snapshots Corrected on a client that mispredicted nothing, with the
+            // replay then moving it by nothing at all.
+            //
+            // A tick that has fallen out of the ring falls back to the current position, which
+            // is the pre-X-41 comparison and the only one still available. That is the
+            // resynchronise neighbourhood, and the fallback is an approximation rather than a
+            // second opinion.
+            Vec3 predictedThen = TryGetRecordedPosition(lastProcessedInputTick, out Vec3 recorded)
+                ? recorded
+                : predicted.Position;
+
+            if (WithinTolerance(predictedThen, authoritative.Position))
             {
                 return ReconcileResult.Agreed;
             }
@@ -214,6 +263,36 @@ namespace Ironfront.Net.Replication.Client
 
             CorrectionCount++;
             return ReconcileResult.Corrected;
+        }
+
+        /// <summary>
+        /// The position this client predicted for <paramref name="tick"/>, if it is still held.
+        /// Ledger <b>X-41</b>.
+        /// </summary>
+        /// <remarks>
+        /// A linear scan of at most <see cref="Capacity"/> entries, once per snapshot rather than
+        /// once per tick — 30 reads a second against a ring the same walk already searches in
+        /// <see cref="TryFindSlotAfter"/>. Indexing arithmetic off the tick would be O(1) and
+        /// would also have to reproduce the wrap rules <c>SequenceMath</c> owns, in a second
+        /// place, for a saving nothing has asked for.
+        /// </remarks>
+        private bool TryGetRecordedPosition(uint tick, out Vec3 position)
+        {
+            position = default;
+            if (_count == 0) return false;
+
+            long oldest = Math.Max(0, _count - Capacity);
+
+            for (long i = oldest; i < _count; i++)
+            {
+                int slot = (int)(i % Capacity);
+                if (_ticks[slot] != tick) continue;
+
+                position = _positions[slot];
+                return true;
+            }
+
+            return false;
         }
 
         private static bool WithinTolerance(in Vec3 a, in Vec3 b)

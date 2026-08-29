@@ -1,7 +1,45 @@
-using Ironfront.Net.Protocol;
+﻿using Ironfront.Net.Protocol;
 
 namespace Ironfront.Net.Replication.Combat
 {
+    /// <summary>
+    /// How a weapon delivers its shot. Ledger <b>X-42</b>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>This is the distinction <c>ProjectilesPerShot</c> was mistaken for.</b> That field is a
+    /// shotgun PELLET COUNT — how many rays one trigger pull sweeps — and a grenade has one of
+    /// them, so a thrown FRAG resolved as a single bullet and travelled 1.2 m to a hitscan hit
+    /// doing zero damage (<c>artifacts/lane-b/r1-grenade-03</c>). The weapon KIND was never
+    /// modelled at all.
+    /// </para>
+    /// <para>
+    /// <b><see cref="Hitscan"/> is 0 so every config written before X-42 keeps its behaviour.</b>
+    /// A default of <see cref="Projectile"/> would silently stop every rifle in the game doing
+    /// damage, which is the failure mode that is hardest to attribute.
+    /// </para>
+    /// </remarks>
+    public enum WeaponDelivery : byte
+    {
+        /// <summary>A ray, swept by <c>ServerFireResolver</c>. Every gun.</summary>
+        Hitscan = 0,
+
+        /// <summary>
+        /// A body that leaves the muzzle or the hand and is simulated by the ENGINE.
+        /// </summary>
+        /// <remarks>
+        /// <b>Not by <c>ServerProjectileAuthority</c>, and that is V7-D1 rather than an omission
+        /// here.</b> That stepper terminates a projectile on the first surface its swept segment
+        /// touches — right for a bullet, a shell and a rocket, and exactly wrong for a grenade,
+        /// whose whole behaviour is to bounce off it (<c>GrenadeProjectile.Update</c> reflects
+        /// and keeps going). <c>StepsKind</c> refuses <c>ProjectileKind.Grenade</c> in writing
+        /// for that reason. The engine owns the flight and the detonation still replicates as
+        /// <c>S_EXPLOSION</c> through <c>ActorManager.Explode</c>, so the authoritative blast
+        /// position is unaffected either way.
+        /// </remarks>
+        Projectile = 1,
+    }
+
     /// <summary>
     /// The authoritative numbers for one weapon. The server's copy of what a client's
     /// <c>WeaponConfiguration</c> asset says.
@@ -72,6 +110,19 @@ namespace Ironfront.Net.Replication.Combat
         /// </remarks>
         public readonly bool SpendsAmmo;
 
+        /// <summary>
+        /// Whether this weapon sweeps a ray or launches a body. Ledger <b>X-42</b>.
+        /// </summary>
+        /// <remarks>
+        /// Defaults to <see cref="WeaponDelivery.Hitscan"/>, which is what every caller written
+        /// before X-42 already had. The four entries that are not — FRAG, SPEARHEAD, BEU_AW1 and
+        /// BIL_SCALPEL — all carry <c>damage: 0f, force: 0f</c> in the catalogue already, with
+        /// comments saying the real numbers live on the projectile prefab. That is the tell:
+        /// hitscan-resolving them was always doing nothing, and only <c>hits=1</c> printing made
+        /// it read as a near miss rather than a category error.
+        /// </remarks>
+        public readonly WeaponDelivery Delivery;
+
         /// <summary>No ammo bag may refill this weapon. <c>Weapon.AllowsResupply</c>.</summary>
         public const short NoResupplySpareAmmo = -1;
 
@@ -128,10 +179,12 @@ namespace Ironfront.Net.Replication.Combat
             float dropoffEndMetres = 0f,
             float dropoffMinMultiplier = 1f,
             short spareAmmo = InfiniteSpareAmmo,
-            bool spendsAmmo = true)
+            bool spendsAmmo = true,
+            WeaponDelivery delivery = WeaponDelivery.Hitscan)
         {
             SpareAmmo = spareAmmo;
             SpendsAmmo = spendsAmmo;
+            Delivery = delivery;
             Cooldown = cooldown;
             Spread = spread;
             ProjectilesPerShot = projectilesPerShot < 1 ? 1 : projectilesPerShot;

@@ -1,4 +1,4 @@
-// Diagnostics are compiled OUT of a shipping client build.
+﻿// Diagnostics are compiled OUT of a shipping client build.
 //
 // The sense is INVERTED on purpose. Unity's BuildPlayerOptions.extraScriptingDefines can only
 // ADD symbols, never subtract one, so a positive IRONFRONT_DIAGNOSTICS would have to be off in
@@ -95,6 +95,23 @@ namespace Ironfront.Net.Unity.Diagnostics
         public const float TargetAimHeight = HitboxSet.HumanoidTorsoCenterHeight;
 
         /// <summary>
+        /// Where an <c>approachVehicle</c> step aims ON a vehicle, as a height above the
+        /// vehicle's own transform origin. Ledger <b>X-44</b>.
+        /// </summary>
+        /// <remarks>
+        /// <b>Not <see cref="TargetAimHeight"/>, and the difference is not cosmetic.</b> That
+        /// constant is the torso centre of a STANDING HUMANOID, read from
+        /// <see cref="HitboxSet.HumanoidTorsoCenterHeight"/>; a vehicle has no such box and
+        /// borrowing the number would be a coincidence rather than a reason. One metre is a
+        /// rough hull centre for everything the game drives, and the value does not have to be
+        /// exact: an approach step grades on planar DISTANCE
+        /// (<see cref="ApproachMoveZ"/>), and the pitch only decides where the client is looking
+        /// while it walks. It is named rather than inlined so the next reader does not have to
+        /// decide whether a bare 1f meant a hull or a rounding.
+        /// </remarks>
+        public const float VehicleAimHeight = 1f;
+
+        /// <summary>
         /// Compass yaw in degrees from one point to another, in the engine's left-handed Y-up
         /// frame — the same frame <c>ServerCombatAuthority.AimDirection</c> reads.
         /// </summary>
@@ -176,6 +193,75 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// <summary>Planar distance, ignoring height. What <see cref="ApproachMoveZ"/> grades.</summary>
         public static float PlanarDistance(float fromX, float fromZ, float toX, float toZ)
             => Horizontal(toX - fromX, toZ - fromZ);
+
+        /// <summary>
+        /// Index of the nearest candidate within <paramref name="maxMetres"/>, or <c>-1</c>.
+        /// What <c>ScriptedTargetSolver.SolveNearestVehicle</c> picks with. Ledger <b>X-44</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Here rather than in the solver, for this file's standing reason.</b> The solver is
+        /// the Unity half — two lookups and a transform read — and its own remark says that
+        /// "anything that starts computing in this file has left coverage". A nearest-within scan
+        /// is arithmetic with real edge cases (nothing in range, an empty candidate set, a tie),
+        /// so it belongs on this side of the seam where <c>dotnet test</c> can reach it.
+        /// </para>
+        /// <para>
+        /// <b>Planar, matching <see cref="PlanarDistance"/> and <see cref="ApproachMoveZ"/>.</b> A
+        /// vehicle parked at the bottom of a slope is not further away in the sense an approach
+        /// step means, and using a 3D distance here would make the hold band disagree with the
+        /// one the arbiter measures.
+        /// </para>
+        /// <para>
+        /// <b>Ties go to the LOWER index, deterministically.</b> Two vehicles at equal distance is
+        /// the ordinary case at a spawn pad, and picking whichever the comparison happened to see
+        /// first would make one run of a programme differ from the next — the one property lane B
+        /// is buying.
+        /// </para>
+        /// <para>
+        /// <b>Compared squared, and the caller is handed the index rather than the distance</b>,
+        /// so the one square root that is actually needed is taken once by the caller through
+        /// <see cref="PlanarDistance"/> rather than once per candidate here.
+        /// </para>
+        /// </remarks>
+        /// <param name="count">
+        /// How much of <paramref name="xs"/> / <paramref name="zs"/> is live. The caller reuses
+        /// its arrays across frames, so their <c>Length</c> is capacity and not population —
+        /// reading Length instead would scan stale entries from a previous frame's vehicle set.
+        /// </param>
+        public static int NearestIndexWithin(
+            float fromX, float fromZ, float[] xs, float[] zs, int count, float maxMetres)
+        {
+            if (xs == null || zs == null || count <= 0 || maxMetres <= 0f) return -1;
+
+            int limit = count;
+            if (limit > xs.Length) limit = xs.Length;
+            if (limit > zs.Length) limit = zs.Length;
+
+            // The band is CLOSED at the top -- a candidate exactly at maxMetres is in range --
+            // matching ApproachMoveZ's own convention, so a hold distance and a search radius
+            // that happen to coincide do not disagree about the same vehicle.
+            float maxSquared = maxMetres * maxMetres;
+            float bestSquared = float.PositiveInfinity;
+            int best = -1;
+
+            for (int i = 0; i < limit; i++)
+            {
+                float dx = xs[i] - fromX;
+                float dz = zs[i] - fromZ;
+                float squared = dx * dx + dz * dz;
+
+                if (squared > maxSquared) continue;
+
+                // Strictly less-than, so an equal distance leaves the earlier index standing.
+                if (squared >= bestSquared) continue;
+
+                bestSquared = squared;
+                best = i;
+            }
+
+            return best;
+        }
 
         private static float Horizontal(float dx, float dz)
             => (float)Math.Sqrt((double)dx * dx + (double)dz * dz);

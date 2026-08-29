@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Ironfront.Net.Protocol;
 
 namespace Ironfront.Net.Replication.Combat
@@ -229,25 +229,34 @@ namespace Ironfront.Net.Replication.Combat
 
             // Launched. smaw.prefab -> rocket.prefab (Rocket): damage 1000, balanceDamage 400.
             // The placeholder had this as an 8-pellet shotgun doing 12 a pellet.
+            //
+            // WeaponDelivery.Projectile on all four below is ledger X-42. Their `damage: 0f,
+            // force: 0f` was already saying it -- the real numbers live on the projectile prefab
+            // -- so hitscan-resolving them was always doing nothing. What made that read as a
+            // near miss rather than a category error is that a sweep still printed `hits=1`.
             configs[WeaponIds.BEU_AW1] = new WeaponConfig(
                 cooldown: 0.05f, spread: 0f, projectilesPerShot: 1, range: 300f,
-                damage: 0f, force: 0f, clipSize: 1);
+                damage: 0f, force: 0f, clipSize: 1,
+                delivery: WeaponDelivery.Projectile);
 
             // javelin.prefab -> javelin missile.prefab (JavelinMissile): damage 2000,
             // balanceDamage 300. The placeholder had this as a marksman rifle doing 40.
             configs[WeaponIds.BIL_SCALPEL] = new WeaponConfig(
                 cooldown: 0.2f, spread: 0f, projectilesPerShot: 1, range: 1000f,
-                damage: 0f, force: 0f, clipSize: 1);
+                damage: 0f, force: 0f, clipSize: 1,
+                delivery: WeaponDelivery.Projectile);
 
             // Thrown. Both -> GrenadeProjectile, impact damage 70, balanceDamage 60; the blast is
             // separate and V7's. One carried, not the two the placeholder assumed.
             configs[WeaponIds.FRAG] = new WeaponConfig(
                 cooldown: 1.3f, spread: 0.01f, projectilesPerShot: 1, range: 40f,
-                damage: 0f, force: 0f, clipSize: 1);
+                damage: 0f, force: 0f, clipSize: 1,
+                delivery: WeaponDelivery.Projectile);
 
             configs[WeaponIds.SPEARHEAD] = new WeaponConfig(
                 cooldown: 1.3f, spread: 0.01f, projectilesPerShot: 1, range: 40f,
-                damage: 0f, force: 0f, clipSize: 1);
+                damage: 0f, force: 0f, clipSize: 1,
+                delivery: WeaponDelivery.Projectile);
 
             // Not weapons, and the assets agree rather than the class name doing the arguing.
             // AMMO_BAG and MEDIPACK resolve a projectile whose damage is literally 0. BINOCS

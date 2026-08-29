@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
@@ -271,6 +271,87 @@ namespace Ironfront.Net.Replication.Tests
 
             Assert.Matches(
                 new Regex(@"if\s*\(\s*!\s*_configured\s*\)\s*ApplyConfiguration"), stage);
+        }
+
+        // ------------------ X-46: a networked driver's input reaches a player-slot body
+
+        [Theory]
+        [InlineData("public override Vector2 CarInput()", "CarAxesFor")]
+        [InlineData("public override Vector2 BoatInput()", "CarAxesFor")]
+        [InlineData("public override Vector4 HelicopterInput()", "HelicopterAxesFor")]
+        public void ASuspendedControllerReturnsTheNetworkRelayRatherThanTheBotsOpinion(
+            string signature, string accessor)
+        {
+            // Ledger X-46. Every vehicle PULLS through `Driver().controller.<Kind>Input()`, and a
+            // networked player's server-side body carries an AiActorController because
+            // IronfrontNetBindings.CreatePlayerBody instantiates the bot prefab. So these three
+            // overrides ARE the driver seam for every real networked driver -- and before this
+            // fix they answered with a bot's pathfinding, or with nothing. Measured: 1,285
+            // accepted C_VEHICLE_INPUT messages against a hull that never moved
+            // (artifacts/lane-a/r5/r5-combat-05).
+            string body = MethodBody(
+                ReadScript("Assembly-CSharp", "AiActorController.cs"),
+                "AiActorController.cs", signature);
+
+            // FIRST, and that ordering is load-bearing: a suspended controller has no path
+            // either, so a `hasPath` return placed above this one would answer zero before the
+            // relay was ever consulted -- a symptom indistinguishable from the defect.
+            Assert.Matches(
+                new Regex(
+                    @"\A\{\s*if\s*\(\s*!\s*base\.enabled\s*\)\s*\{\s*"
+                    + @"return\s+NetVehicleAxisRelay\." + accessor + @"\(\s*this\s*\)\s*;"),
+                body);
+
+            // And it is the ONLY reach for the relay in this method, so an ENABLED controller --
+            // a genuine bot -- cannot be steered by the network. O-D2.
+            Assert.Single(Regex.Matches(body, @"NetVehicleAxisRelay\."));
+        }
+
+        [Fact]
+        public void TheDriverInputSinkNoLongerReturnsNullForABodyWithNoFpsController()
+        {
+            // The remark this replaced predicted its own defect in writing -- "a networked PLAYER
+            // reaching a driver seat without one means that vehicle will not respond to them at
+            // all" -- and then that case turned out to be EVERY networked player, because a
+            // player-slot body is the bot prefab. Nothing noticed until R2 gave the shipped
+            // client a seat sender and R5 gave lane A one.
+            string body = MethodBody(
+                ReadScript("NetBindings", "NetDriverInputSink.cs"),
+                "NetDriverInputSink.cs", "internal static IDriverInputSink Attach(GameObject gameObject)");
+
+            // The controller path stays FIRST: on a listen server or in the Editor the driver
+            // really does have one, and its IInputSource seam is what remembers the keyboard
+            // source the player walks with.
+            Assert.Matches(
+                new Regex(
+                    @"FpsActorController\s+controller\s*=[\s\S]{0,120}?"
+                    + @"if\s*\(\s*controller\s*!=\s*null\s*\)\s*return\s+new\s+NetDriverInputSink"),
+                body);
+
+            // ... and the fallback exists rather than being a null the caller has to interpret.
+            Assert.Contains("NetVehicleAxisRelay.Install(gameObject)", body, StringComparison.Ordinal);
+
+            // The one surviving null is a destroyed body, which is the only thing
+            // ServerVehicleInputBridge.UnreachableControllers should still count.
+            Assert.Matches(
+                new Regex(@"if\s*\(\s*gameObject\s*==\s*null\s*\)\s*return\s+null\s*;"), body);
+        }
+
+        [Fact]
+        public void TheRelayIsNotAControllerAndNotAnInputSource()
+        {
+            // O-D1, and it is the same hazard AiControlledIsUnchangedForANetworkedDriver guards
+            // one folder over: the relay lives in NetBindings/, which that test's Net/ scan does
+            // not reach, so the constraint is re-asserted where the file actually is. A second
+            // ActorController on the body would make GetComponent<ActorController>()
+            // order-dependent AND flip Actor.aiControlled, which is frozen in Awake from an exact
+            // type comparison and then read by UI, LOD and weapon culling.
+            string relay = ReadScript("NetBindings", "NetVehicleAxisRelay.cs");
+
+            Assert.DoesNotMatch(
+                new Regex(@":\s*(ActorController|FpsActorController|AiActorController)"), relay);
+            Assert.DoesNotContain("SetInputSource", relay, StringComparison.Ordinal);
+            Assert.Contains(": MonoBehaviour", relay, StringComparison.Ordinal);
         }
 
         // ------------------------------------------------------------------ helpers

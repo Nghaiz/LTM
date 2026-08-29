@@ -1,4 +1,4 @@
-using Ironfront.Net.Protocol;
+﻿using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication;
 using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Movement;
@@ -209,6 +209,25 @@ namespace Ironfront.Net.Unity.Server
 
             source.EquipLoadout();
             return true;
+        }
+
+        /// <summary>
+        /// Pulls the trigger on the weapon this body is holding. Ledger <b>X-42</b>.
+        /// </summary>
+        /// <remarks>
+        /// Called by <c>ServerCombatBridge</c> only for a <c>WeaponDelivery.Projectile</c> weapon
+        /// whose trigger pull the server has ALREADY accepted. A hitscan weapon never reaches
+        /// here: its shot is resolved in the engine-free authority, which is decision D2 and the
+        /// reason every combat rule is graded by <c>dotnet test</c> rather than by two people
+        /// playing at once.
+        /// </remarks>
+        /// <returns>False when nothing is bound, or the body is holding nothing.</returns>
+        public bool FireCarriedWeapon(float directionX, float directionY, float directionZ)
+        {
+            IGameplayActorSource source = Source;
+            if (source == null) return false;
+
+            return source.FireCarriedWeapon(directionX, directionY, directionZ);
         }
         public bool ApplyWeaponSwitchIntent(int slot)
         {

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Client;
@@ -168,7 +168,12 @@ namespace Ironfront.Net.Unity.Client
             // Recorded BEFORE anything is sent, and with the tick the clock stamped. Recording
             // after, or with a different tick, shifts every replay by one frame -- which shows
             // up as a correction that never converges rather than as an error anyone can see.
-            _client.Reconciler.Record(tick, in input);
+            //
+            // Ledger X-41: the POSITION goes with it, and _agent.State is the right one because
+            // NetPredictionClock raises OnTickSimulated AFTER _agent.Tick(...) -- so this is
+            // where this input left the client, which is what the server's answer for this tick
+            // has to be compared against.
+            _client.Reconciler.Record(tick, in input, _agent.State.Position);
 
             if (_pending.Count == 0) _oldestPendingTick = tick;
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Movement;
@@ -201,6 +201,83 @@ namespace Ironfront.Net.Replication.Server
         /// </remarks>
         public int VehicleShedCursor;
 
+        // Ledger X-43. One WeaponRuntimeState per weapon id, so a switch parks a clip instead
+        // of discarding it. Eighteen entries is the whole id space (WeaponIds.MAX_ASSIGNED), the
+        // lookup is an array index rather than a hash, and both arrays are allocated once with
+        // the session -- this sits on the 30 Hz switch path.
+        private readonly WeaponRuntimeState[] _parkedWeapons =
+            new WeaponRuntimeState[WeaponIds.MAX_ASSIGNED + 1];
+
+        private readonly bool[] _hasParkedWeapon = new bool[WeaponIds.MAX_ASSIGNED + 1];
+
+        /// <summary>
+        /// Points the session at a different weapon, keeping each one's own clip. Ledger
+        /// <b>X-43</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>What this replaces.</b> <c>ServerCombatBridge.AdoptTheWeaponTheBodyIsHolding</c>
+        /// re-pointed the session and then called <see cref="ResetWeapon"/>, because a full clip
+        /// was the only weapon state it could reach: <see cref="Weapon"/> is a single
+        /// <see cref="WeaponRuntimeState"/>, and <c>NetServerActor.AmmoInClip</c> could not
+        /// supply the missing half either — the bridge WRITES that field from the session every
+        /// frame, so it mirrors the session rather than the body. A player who switched away and
+        /// back therefore had a full magazine.
+        /// </para>
+        /// <para>
+        /// <b>The whole runtime state is parked, not just the clip (O-D4).</b> Remembering ammo
+        /// and forgetting <see cref="WeaponRuntimeState.LastFiredTime"/> would leave a
+        /// quick-switch cooldown reset — fire, switch away, switch back, fire again inside the
+        /// cooldown the server believes it is still enforcing — which is a rapid-fire exploit
+        /// bought back one field at a time, and one <c>FireRateViolations</c> would not move for.
+        /// </para>
+        /// <para>
+        /// <b>A running reload is CANCELLED on the way out, and that is not tidiness.</b> Parked
+        /// with <see cref="WeaponRuntimeState.ReloadStartedAt"/> intact, a reload would complete
+        /// on its own while the weapon sat in a bag, so a player could switch away, wait, and
+        /// switch back to a full clip — the same free magazine arriving by a different door.
+        /// </para>
+        /// <para>
+        /// <b>An unchanged id returns immediately, and that guard is load-bearing for exactly one
+        /// reason.</b> The clip would round-trip unchanged without it — park and restore are
+        /// inverses — but the reload CANCEL above is not an inverse, so a same-weapon call would
+        /// cancel a reload the player never interrupted. The saved work is incidental; the
+        /// preserved reload is the point. Mutation-checked: removing the guard leaves every ammo
+        /// assertion green and fails only the reload one.
+        /// </para>
+        /// </remarks>
+        public void SwitchWeaponTo(byte weaponId)
+        {
+            if (weaponId == WeaponId) return;
+
+            if (WeaponId < _parkedWeapons.Length)
+            {
+                WeaponRuntimeState outgoing = Weapon;
+
+                // Holstered, and not mid-reload. Both are facts about a weapon in a bag.
+                outgoing.Unholstered = false;
+                outgoing.Reloading = false;
+                outgoing.ReloadStartedAt = float.NegativeInfinity;
+
+                _parkedWeapons[WeaponId] = outgoing;
+                _hasParkedWeapon[WeaponId] = true;
+            }
+
+            WeaponId = weaponId;
+
+            if (weaponId < _parkedWeapons.Length && _hasParkedWeapon[weaponId])
+            {
+                WeaponRuntimeState incoming = _parkedWeapons[weaponId];
+                incoming.Unholstered = true;
+                Weapon = incoming;
+                return;
+            }
+
+            // First time this life. A weapon reached for the first time is loaded, which is
+            // what the loadout handed the body.
+            ResetWeaponPreservingMemory();
+        }
+
         /// <summary>Re-arms the weapon with a full clip. Called on spawn and respawn.</summary>
         /// <remarks>
         /// <b><see cref="WeaponId"/> must already be assigned when this runs.</b> The clip size
@@ -212,6 +289,26 @@ namespace Ironfront.Net.Replication.Server
         /// doing so.
         /// </remarks>
         public void ResetWeapon()
+        {
+            // Ledger X-43: a life's worth of parked clips does not survive a death. Cleared
+            // here rather than in a separate call because all three callers -- spawn, respawn
+            // and round reset -- want exactly that, and a second method they had to remember to
+            // call is a second method one of them would eventually not.
+            Array.Clear(_hasParkedWeapon, 0, _hasParkedWeapon.Length);
+
+            ResetWeaponPreservingMemory();
+        }
+
+        /// <summary>
+        /// Loads a full clip without touching the parked table. Ledger <b>X-43</b>.
+        /// </summary>
+        /// <remarks>
+        /// Split from <see cref="ResetWeapon"/> so <see cref="SwitchWeaponTo"/> can arm a weapon
+        /// reached for the first time WITHOUT forgetting the clips it has just parked. Calling
+        /// the public one there would have every switch wipe the memory it exists to keep, which
+        /// is the defect with an extra step.
+        /// </remarks>
+        private void ResetWeaponPreservingMemory()
         {
             Weapon = WeaponRuntimeState.Loaded(WeaponConfig);
         }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Movement;
 
@@ -164,6 +164,53 @@ namespace Ironfront.Net.Replication.Combat
 
                 hits[hitCount++] = hit;
             }
+
+            return FireRejection.None;
+        }
+
+        /// <summary>
+        /// Resolves one trigger pull on a weapon that LAUNCHES rather than sweeps. Ledger
+        /// <b>X-42</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The same authority, minus the sweep.</b> It runs
+        /// <see cref="CheckCanFire"/> — alive, unholstered, not reloading, off cooldown, has
+        /// ammo — then stamps the cooldown and spends the round. Sharing that method rather than
+        /// restating its five rules is the point: two copies of "what a legal trigger pull is"
+        /// would drift, and the one that drifted would be the one nobody was testing.
+        /// <c>MountedWeaponAuthority</c> keeps its own <c>CheckCanFire</c> beside its shot for
+        /// exactly this reason.
+        /// </para>
+        /// <para>
+        /// <b>What happens after acceptance is the ENGINE's</b>, reached through
+        /// <c>IGameplayActorSource.FireCarriedWeapon</c>: a throwable schedules its release on a
+        /// tick (V7-D7) and a launcher spawns its projectile, and both announce themselves as
+        /// <c>S_PROJECTILE_SPAWN</c>. Nothing about the flight belongs here.
+        /// </para>
+        /// <para>
+        /// <b><see cref="ShotsFired"/> counts these too.</b> A launch is a shot: leaving it out
+        /// would make the fire-rate signal blind on exactly the weapons whose cooldown is
+        /// longest and whose abuse is most visible.
+        /// </para>
+        /// </remarks>
+        /// <returns><see cref="FireRejection.None"/> when the launch was accepted.</returns>
+        public FireRejection ResolveLaunch(
+            ref WeaponRuntimeState state,
+            in WeaponConfig config,
+            bool shooterIsAlive,
+            float nowSeconds)
+        {
+            FireRejection rejection = CheckCanFire(in state, in config, shooterIsAlive, nowSeconds);
+            if (rejection != FireRejection.None)
+            {
+                if (rejection == FireRejection.OnCooldown) FireRateViolations++;
+                return rejection;
+            }
+
+            state.LastFiredTime = nowSeconds;
+            state.AmmoInClip--;
+            ShotsFired++;
 
             return FireRejection.None;
         }

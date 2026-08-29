@@ -1,4 +1,4 @@
-// Diagnostics are compiled OUT of a shipping client build.
+﻿// Diagnostics are compiled OUT of a shipping client build.
 //
 // The sense is INVERTED on purpose. Unity's BuildPlayerOptions.extraScriptingDefines can only
 // ADD symbols, never subtract one, so a positive IRONFRONT_DIAGNOSTICS would have to be off in
@@ -102,8 +102,15 @@ namespace Ironfront.Net.Unity.Diagnostics
         public ScriptedTargetSolver.Solution Aim()
         {
             ScriptedInputStep step = Step;
-            if (step == null || _solver == null || string.IsNullOrEmpty(step.aimAtPlayer))
-                return default;
+            if (step == null || _solver == null) return default;
+
+            // Ledger X-44. A vehicle step outranks a named player. A step carrying BOTH is a
+            // programme defect and is rejected at LOAD time by
+            // ScriptedInputProgramme.FindConflictingStep -- not warned about here, which is
+            // read three times a frame and would say it three times a frame.
+            if (step.approachVehicle) return _solver.SolveNearestVehicle(step.vehicleSearchMetres);
+
+            if (string.IsNullOrEmpty(step.aimAtPlayer)) return default;
 
             return _solver.Solve(step.aimAtPlayer);
         }
