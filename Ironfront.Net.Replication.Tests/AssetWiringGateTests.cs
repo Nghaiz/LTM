@@ -40,11 +40,25 @@ namespace Ironfront.Net.Replication.Tests
         private const string ProjectileComponent  = "75280d5bb60068b2fabefd8e2004397e";
         private const string ScoreUi              = "47bac8ff82521e88b577c05861af19e4";
         private const string ThrowableWeapon      = "441fac300879ede440ac8541efaa1c65";
+        private const string MinimapUi            = "c159207211a5c0a8e6a51a845c493a8a";
+        private const string CapturePointScript   = "11005de75c307d114b42494cef599182";
 
         private const string ScenePath  = "fixtures/Client.unity";
         private const string PrefabPath = "fixtures/Proxy.prefab";
         private const string TracerPath = "fixtures/Tracer.prefab";
         private const string HudPath    = "fixtures/Hud.prefab";
+        private const string MarkerPath = "fixtures/Capture Point Marker.prefab";
+        private const string BlipPath   = "fixtures/Actor Blip.prefab";
+        private const string ButtonPath = "fixtures/Spawn Point Button.prefab";
+
+        private const string MeshPath   = "fixtures/Flag.asset";
+        private const string MatPath    = "fixtures/Flag.mat";
+
+        private const string MarkerGuid = "11111111111111111111111111111111";
+        private const string FlagMeshGuid = "44444444444444444444444444444444";
+        private const string FlagMatGuid  = "55555555555555555555555555555555";
+        private const string BlipGuid   = "22222222222222222222222222222222";
+        private const string ButtonGuid = "33333333333333333333333333333333";
 
         // ---------------------------------------------------------------- the YAML reader
 
@@ -857,6 +871,270 @@ namespace Ironfront.Net.Replication.Tests
                     [HudPath] = prefab,
                 },
                 new Dictionary<string, string>());
+        }
+
+        // --------------------------------------------- P3, the capture-point flag renderers (3.2)
+
+        /// <summary>
+        /// A scene holding one <c>CapturePoint</c> with an <c>lqFlag</c> (MeshFilter +
+        /// MeshRenderer) and an <c>hqFlag</c> (SkinnedMeshRenderer), each pointed at whatever the
+        /// test is exercising.
+        /// </summary>
+        /// <remarks>
+        /// The healthy default gives both a mesh and a material that resolve to a real asset.
+        /// The interesting mutations are the ones that are assigned and STILL dead: a guid no
+        /// asset carries, which is the shape the Dustbowl defect actually had.
+        /// </remarks>
+        private static UnityAssetIndex FlagFixture(
+            string? hqMesh = "{fileID: 4300000, guid: " + FlagMeshGuid + ", type: 2}",
+            string? hqMaterial = "{fileID: 2100000, guid: " + FlagMatGuid + ", type: 2}",
+            string? lqMesh = "{fileID: 4300000, guid: " + FlagMeshGuid + ", type: 2}",
+            string lqFlagRef = "{fileID: 710}",
+            string hqFlagRef = "{fileID: 720}",
+            bool withHqRenderer = true,
+            bool withLqFilter = true)
+        {
+            string scene = Scene(withPresenters: true)
+                + "--- !u!1 &700\nGameObject:\n  m_Name: Oasis Capture Point\n"
+                + Component(701, 700, CapturePointScript,
+                            "  lqFlag: " + lqFlagRef + "\n  hqFlag: " + hqFlagRef)
+                + "--- !u!1 &710\nGameObject:\n  m_Name: Flag\n"
+                + "--- !u!1 &720\nGameObject:\n  m_Name: HQ Flag\n";
+
+            if (withLqFilter)
+                scene += "--- !u!33 &711\nMeshFilter:\n  m_GameObject: {fileID: 710}\n"
+                       + "  m_Mesh: " + (lqMesh ?? "{fileID: 0}") + "\n";
+
+            scene += "--- !u!23 &712\nMeshRenderer:\n  m_GameObject: {fileID: 710}\n"
+                   + "  m_Materials:\n  - {fileID: 2100000, guid: " + FlagMatGuid + ", type: 2}\n";
+
+            if (withHqRenderer)
+                scene += "--- !u!137 &721\nSkinnedMeshRenderer:\n  m_GameObject: {fileID: 720}\n"
+                       + "  m_Materials:\n"
+                       + (hqMaterial == null ? "  []\n" : "  - " + hqMaterial + "\n")
+                       + "  m_Mesh: " + (hqMesh ?? "{fileID: 0}") + "\n";
+
+            return UnityAssetIndex.ForFixtures(
+                new Dictionary<string, string>
+                {
+                    [ScenePath]  = scene,
+                    [MeshPath]   = "--- !u!43 &4300000\nMesh:\n  m_Name: Flag\n",
+                    [MatPath]    = "--- !u!21 &2100000\nMaterial:\n  m_Name: Flag\n",
+                },
+                new Dictionary<string, string>
+                {
+                    [FlagMeshGuid] = MeshPath,
+                    [FlagMatGuid]  = MatPath,
+                });
+        }
+
+        [Fact]
+        public void CapturePointFlags_AreCleanWhenBothObjectsCanDraw()
+        {
+            Assert.Empty(AssetWiringDetectors.CapturePointFlagsCanDraw(FlagFixture()));
+        }
+
+        [Fact]
+        public void CapturePointFlags_ReportsTheDanglingMeshGuidTheDustbowlDefectHad()
+        {
+            // The real one: assigned, well-formed, and naming an asset the project lost. This is
+            // the mutation that separates this check from a null test — a null test was green on
+            // this scene for the whole life of the project.
+            Assert.Contains(
+                AssetWiringDetectors.CapturePointFlagsCanDraw(
+                    FlagFixture(hqMesh: "{fileID: 4300000, guid: 195886543318f6a41bd0575b175957e7, type: 2}")),
+                f => f.Message.Contains("hqFlag names guid 195886543318f6a41bd0575b175957e7")
+                     && f.Message.Contains("NO asset in the tree carries"));
+        }
+
+        [Fact]
+        public void CapturePointFlags_ReportsTheDanglingMaterialGuid()
+        {
+            Assert.Contains(
+                AssetWiringDetectors.CapturePointFlagsCanDraw(
+                    FlagFixture(hqMaterial: "{fileID: 2100000, guid: 2aaff793b776d0b45b232fc08ea42a5f, type: 2}")),
+                f => f.Message.Contains("for its first material")
+                     && f.Message.Contains("NO asset in the tree carries"));
+        }
+
+        [Fact]
+        public void CapturePointFlags_ReportsANullMesh()
+        {
+            Assert.Contains(
+                AssetWiringDetectors.CapturePointFlagsCanDraw(FlagFixture(hqMesh: null)),
+                f => f.Message.Contains("has no SkinnedMeshRenderer.m_Mesh"));
+        }
+
+        [Fact]
+        public void CapturePointFlags_ReportsAnEmptyMaterialList()
+        {
+            Assert.Contains(
+                AssetWiringDetectors.CapturePointFlagsCanDraw(FlagFixture(hqMaterial: null)),
+                f => f.Message.Contains("empty material list"));
+        }
+
+        [Fact]
+        public void CapturePointFlags_ReportsAFlagObjectWithNoRendererAtAll()
+        {
+            Assert.Contains(
+                AssetWiringDetectors.CapturePointFlagsCanDraw(FlagFixture(withHqRenderer: false)),
+                f => f.Message.Contains("carrying no Renderer"));
+        }
+
+        [Fact]
+        public void CapturePointFlags_ReportsAMeshRendererWithNoMeshFilter()
+        {
+            Assert.Contains(
+                AssetWiringDetectors.CapturePointFlagsCanDraw(FlagFixture(withLqFilter: false)),
+                f => f.Message.Contains("MeshRenderer and no MeshFilter"));
+        }
+
+        [Fact]
+        public void CapturePointFlags_ReportsAnUnassignedFlagField()
+        {
+            // Awake dereferences BOTH before it picks one, so an unassigned field throws on
+            // every quality level rather than only on the one that would have used it.
+            Assert.Contains(
+                AssetWiringDetectors.CapturePointFlagsCanDraw(FlagFixture(hqFlagRef: "{fileID: 0}")),
+                f => f.Message.Contains("hqFlag is unassigned"));
+        }
+
+        [Fact]
+        public void CapturePointFlags_AcceptsUnitysBuiltInResourceGuids()
+        {
+            // Dustbowl's lqFlag draws the built-in Cube. Its guid has no .meta in the tree, so a
+            // naive resolver calls it dangling — which it did, on all eleven points, on this
+            // check's first run. A gate that fires on healthy authoring teaches the reader to
+            // skip its output.
+            Assert.Empty(AssetWiringDetectors.CapturePointFlagsCanDraw(
+                FlagFixture(
+                    hqMesh: "{fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}",
+                    hqMaterial: "{fileID: 10303, guid: 0000000000000000f000000000000000, type: 0}",
+                    lqMesh: "{fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}")));
+        }
+
+        // ------------------------------------------------- P3, the minimap icon prefabs (3.3)
+
+        /// <summary>
+        /// A HUD prefab carrying one <c>MinimapUi</c> whose three icon-prefab fields are set to
+        /// whatever the test is exercising, plus three real prefabs for them to resolve to.
+        /// </summary>
+        /// <remarks>
+        /// The three prefabs are separate assets with distinct guids because that is the shape
+        /// the real authoring has, and because the distinctness clause is only meaningful when
+        /// the fixture CAN point two fields at one of them. Pass <c>null</c> to omit a key,
+        /// which is how an Editor writes a field it has never been given a value for.
+        /// </remarks>
+        private static UnityAssetIndex MinimapFixture(
+            string? capturePointMarkerPrefab = "{fileID: 1000, guid: " + MarkerGuid + ", type: 3}",
+            string? actorBlipPrefab          = "{fileID: 2000, guid: " + BlipGuid + ", type: 3}",
+            string? minimapSpawnPointPrefab  = "{fileID: 3000, guid: " + ButtonGuid + ", type: 3}",
+            bool withMinimapUi               = true)
+        {
+            string body = "  m_Name: \n";
+            if (capturePointMarkerPrefab != null) body += "  capturePointMarkerPrefab: " + capturePointMarkerPrefab + "\n";
+            if (actorBlipPrefab != null)          body += "  actorBlipPrefab: " + actorBlipPrefab + "\n";
+            if (minimapSpawnPointPrefab != null)  body += "  minimapSpawnPointPrefab: " + minimapSpawnPointPrefab + "\n";
+
+            string hud = "--- !u!1 &900\nGameObject:\n  m_Name: Ingame UI Container\n";
+            if (withMinimapUi) hud += Component(910, 900, MinimapUi, body.TrimEnd('\n'));
+
+            return UnityAssetIndex.ForFixtures(
+                new Dictionary<string, string>
+                {
+                    [ScenePath]  = Scene(withPresenters: true),
+                    [HudPath]    = hud,
+                    [MarkerPath] = "--- !u!1 &1000\nGameObject:\n  m_Name: Capture Point Marker\n",
+                    [BlipPath]   = "--- !u!1 &2000\nGameObject:\n  m_Name: Actor Blip\n",
+                    [ButtonPath] = "--- !u!1 &3000\nGameObject:\n  m_Name: Spawn Point Button\n",
+                },
+                new Dictionary<string, string>
+                {
+                    [MarkerGuid] = MarkerPath,
+                    [BlipGuid]   = BlipPath,
+                    [ButtonGuid] = ButtonPath,
+                });
+        }
+
+        [Fact]
+        public void MinimapPrefabs_AreCleanWhenAllThreeAreAuthoredAndDistinct()
+        {
+            Assert.Empty(AssetWiringDetectors.MinimapMarkerPrefabsAreAuthored(MinimapFixture()));
+        }
+
+        [Fact]
+        public void MinimapPrefabs_ReportsTheUnassignedCapturePointMarker()
+        {
+            // The authoring gap P3 task 3.3 exists to close: nine checks passed this prefab
+            // green with the field null, because none of them was looking at this component.
+            Assert.Contains(
+                AssetWiringDetectors.MinimapMarkerPrefabsAreAuthored(
+                    MinimapFixture(capturePointMarkerPrefab: "{fileID: 0}")),
+                f => f.Message.Contains("MinimapUi.capturePointMarkerPrefab is unassigned")
+                     && f.Message.Contains("spawn-point icon"));
+        }
+
+        [Fact]
+        public void MinimapPrefabs_ReportsAnOmittedKeyTheSameAsAnExplicitNull()
+        {
+            // Unity omits a key it has never been given a value for. Nothing downstream can
+            // tell that from {fileID: 0}, so neither does this.
+            Assert.Contains(
+                AssetWiringDetectors.MinimapMarkerPrefabsAreAuthored(
+                    MinimapFixture(capturePointMarkerPrefab: null)),
+                f => f.Message.Contains("MinimapUi.capturePointMarkerPrefab is unassigned"));
+        }
+
+        [Fact]
+        public void MinimapPrefabs_ReportsAFileIdThatNamesNoObject()
+        {
+            // Assigned, resolvable to an asset, and still null at runtime. This is the mutation
+            // that proves the check asserts more than non-nullness.
+            Assert.Contains(
+                AssetWiringDetectors.MinimapMarkerPrefabsAreAuthored(
+                    MinimapFixture(capturePointMarkerPrefab:
+                        "{fileID: 999999, guid: " + MarkerGuid + ", type: 3}")),
+                f => f.Message.Contains("names fileID 999999, which no object in"));
+        }
+
+        [Fact]
+        public void MinimapPrefabs_ReportsAReferenceIntoThisSameAssetRatherThanAPrefab()
+        {
+            Assert.Contains(
+                AssetWiringDetectors.MinimapMarkerPrefabsAreAuthored(
+                    MinimapFixture(capturePointMarkerPrefab: "{fileID: 900}")),
+                f => f.Message.Contains("inside this same asset rather than a prefab"));
+        }
+
+        [Fact]
+        public void MinimapPrefabs_ReportsTwoFieldsAimedAtOnePrefab()
+        {
+            // The second mutation: assigned, resolvable, and still wrong. A capture point and a
+            // replicated body wearing the same icon is not two icons.
+            Assert.Contains(
+                AssetWiringDetectors.MinimapMarkerPrefabsAreAuthored(
+                    MinimapFixture(capturePointMarkerPrefab:
+                        "{fileID: 2000, guid: " + BlipGuid + ", type: 3}")),
+                f => f.Message.Contains("points at the same prefab as actorBlipPrefab"));
+        }
+
+        [Fact]
+        public void MinimapPrefabs_ReportsATreeWithNoMinimapUiRatherThanPassingVacuously()
+        {
+            // A check satisfiable by deleting the component is satisfiable by deleting the HUD.
+            Assert.Contains(
+                AssetWiringDetectors.MinimapMarkerPrefabsAreAuthored(
+                    MinimapFixture(withMinimapUi: false)),
+                f => f.Message.Contains("MinimapUi is on no GameObject anywhere"));
+        }
+
+        [Fact]
+        public void MinimapPrefabs_IsUnknownRatherThanCleanOnADanglingGuid()
+        {
+            Assert.Throws<AssetGateUnknownException>(
+                () => AssetWiringDetectors.MinimapMarkerPrefabsAreAuthored(
+                    MinimapFixture(capturePointMarkerPrefab:
+                        "{fileID: 1000, guid: ffffffffffffffffffffffffffffffff, type: 3}")).ToList());
         }
 
         private static UnityAssetIndex RemoteActorFixture(string? viewBody)

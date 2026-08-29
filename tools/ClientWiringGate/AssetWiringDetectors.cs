@@ -55,6 +55,8 @@ namespace Ironfront.Tools.ClientWiringGate
         private const string RemoteActorViewGuid         = "076337bd4a5a4397a34c31257050ba36";
         private const string LobbyShellOverlayGuid       = "3a9b866060cb47f1af22ca5125dd4d71";
         private const string ScoreUiGuid                 = "47bac8ff82521e88b577c05861af19e4";
+        private const string MinimapUiGuid               = "c159207211a5c0a8e6a51a845c493a8a";
+        private const string CapturePointGuid            = "11005de75c307d114b42494cef599182";
         private const string CatalogInstallerGuid        = "1e1d8de547d73f847a33a9a802368cbe";
         private const string ThrowableWeaponGuid         = "441fac300879ede440ac8541efaa1c65";
 
@@ -62,6 +64,9 @@ namespace Ironfront.Tools.ClientWiringGate
         private const int AnimatorClassId      = 95;
         private const int AnimatorStateClassId = 1102;
         private const int AnimationClipClassId = 74;
+        private const int MeshFilterClassId    = 33;
+        private const int MeshRendererClassId  = 23;
+        private const int SkinnedMeshClassId   = 137;
 
         /// <summary>The Animator state and clip event a throw releases on.</summary>
         private const string ThrowStateName     = "Throw";
@@ -1021,6 +1026,360 @@ namespace Ironfront.Tools.ClientWiringGate
         }
 
         /// <summary>The documents of the asset a serialized reference names.</summary>
+        /// <summary>
+        /// <b>P3 task 3.2</b> — both flag objects on every capture point can actually draw:
+        /// each carries a renderer, and that renderer's mesh and material resolve to assets the
+        /// tree contains.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The defect this was written from.</b> "Flags do not render — only the pole" was
+        /// filed against <c>CapturePoint.cs:294</c>'s <c>SetFlagVisible(control &gt; 0f)</c>, and
+        /// the ownership mechanism turned out to have nothing to do with it. Every
+        /// <c>HQ Flag</c> on Dustbowl referenced mesh guid
+        /// <c>195886543318f6a41bd0575b175957e7</c> and material guid
+        /// <c>2aaff793b776d0b45b232fc08ea42a5f</c>, and <b>no asset in the project carries
+        /// either</b> — the assets were lost when the project was reconstructed. Unity loads a
+        /// dangling guid as null, so the renderer had no mesh and no material and could not draw
+        /// at any ownership value. <c>QualitySettings</c> defaults to level 5, so
+        /// <c>CapturePoint.Awake</c> selected that object on every client, and all six points
+        /// were bare poles for the whole life of the project.
+        /// </para>
+        /// <para>
+        /// <b>Why nine authoring checks passed it.</b> None of them looked at a renderer, and
+        /// the YAML is not obviously wrong: <c>m_Mesh</c> and <c>m_Materials</c> both hold a
+        /// well-formed reference. Only resolving the guid against the tree tells a live
+        /// reference from a dead one, which is why this check does that and does not merely
+        /// test for null (<c>rules/green-that-proves-nothing.md</c>).
+        /// </para>
+        /// <para>
+        /// <b>Both objects are graded, not just the active one.</b> Which one runs is decided at
+        /// runtime by <c>QualitySettings.GetQualityLevel()</c>, so a check that graded only the
+        /// high-quality branch would be green on a build that ships at any other level — and the
+        /// half it skipped is the half nobody looks at.
+        /// </para>
+        /// </remarks>
+        public static IEnumerable<GateFinding> CapturePointFlagsCanDraw(UnityAssetIndex index)
+        {
+            var findings = new List<GateFinding>();
+
+            foreach ((UnityAssetDocument point, string path) in Instances(index, CapturePointGuid))
+            {
+                string name = NameOfOwner(index, point, path);
+
+                foreach (string field in new[] { "lqFlag", "hqFlag" })
+                {
+                    UnityObjectRef? maybe = point.Reference(field);
+
+                    if (maybe == null || maybe.Value.IsNull)
+                    {
+                        findings.Add(new GateFinding(
+                            "P3", Rel(index, path), 0,
+                            $"CapturePoint '{name}'.{field} is unassigned. Awake dereferences "
+                            + "BOTH flag objects before it picks one, so this throws on every "
+                            + "quality level, not only the one that would have used it."));
+                        continue;
+                    }
+
+                    // Scene reference, no guid: the flag object is a child of the point.
+                    if (maybe.Value.Guid != null)
+                    {
+                        findings.Add(new GateFinding(
+                            "P3", Rel(index, path), 0,
+                            $"CapturePoint '{name}'.{field} names an object in another asset. "
+                            + "Awake calls SetActive on it and reads a Renderer off it, which "
+                            + "means it has to be a scene object under this point."));
+                        continue;
+                    }
+
+                    findings.AddRange(FlagObjectCanDraw(index, path, name, field, maybe.Value.FileId));
+                }
+            }
+
+            // No completeness clause here on purpose, unlike the ScoreUi and MinimapUi checks: a
+            // scene with no capture points is a deathmatch map or a menu, which is a supported
+            // shape rather than a missing HUD.
+            return findings;
+        }
+
+        /// <summary>
+        /// Grades the renderer on one flag object: present, with a mesh and a material that both
+        /// resolve to assets the tree carries.
+        /// </summary>
+        private static IEnumerable<GateFinding> FlagObjectCanDraw(
+            UnityAssetIndex index, string path, string pointName, string field, long gameObjectId)
+        {
+            var findings = new List<GateFinding>();
+
+            UnityAssetDocument? skinned = null, mesh = null, filter = null;
+
+            foreach (UnityAssetDocument document in index.Documents(path))
+            {
+                if (document.OwningGameObjectId != gameObjectId) continue;
+
+                if (document.ClassId == SkinnedMeshClassId) skinned = document;
+                else if (document.ClassId == MeshRendererClassId) mesh = document;
+                else if (document.ClassId == MeshFilterClassId) filter = document;
+            }
+
+            UnityAssetDocument? renderer = skinned ?? mesh;
+
+            if (renderer == null)
+            {
+                findings.Add(new GateFinding(
+                    "P3", Rel(index, path), 0,
+                    $"CapturePoint '{pointName}'.{field} names an object carrying no Renderer, "
+                    + "so Awake's GetComponent<Renderer>() returns null and SetFlagVisible is a "
+                    + "no-op for the whole match -- silently, because it null-guards."));
+                return findings;
+            }
+
+            // The mesh lives on the SkinnedMeshRenderer itself, and on a MeshFilter beside a
+            // MeshRenderer. Same question, two places to ask it.
+            UnityObjectRef? meshRef = skinned != null ? skinned.Reference("m_Mesh") : filter?.Reference("m_Mesh");
+            string meshWhere = skinned != null ? "SkinnedMeshRenderer.m_Mesh" : "its MeshFilter's m_Mesh";
+
+            if (skinned == null && filter == null)
+                findings.Add(new GateFinding(
+                    "P3", Rel(index, path), 0,
+                    $"CapturePoint '{pointName}'.{field} has a MeshRenderer and no MeshFilter, "
+                    + "so there is no mesh for it to draw."));
+            else
+                findings.AddRange(AssetRefResolves(
+                    index, path, meshRef, $"CapturePoint '{pointName}'.{field}", meshWhere));
+
+            IReadOnlyList<UnityObjectRef>? materials = renderer.ReferenceArray("m_Materials");
+
+            if (materials == null || materials.Count == 0)
+                findings.Add(new GateFinding(
+                    "P3", Rel(index, path), 0,
+                    $"CapturePoint '{pointName}'.{field} has an empty material list, so its "
+                    + "renderer draws nothing -- and CapturePoint.SetOwner writes the team "
+                    + "colour into material.color, which throws on a null material."));
+            else
+                findings.AddRange(AssetRefResolves(
+                    index, path, materials[0], $"CapturePoint '{pointName}'.{field}",
+                    "its first material"));
+
+            return findings;
+        }
+
+        /// <summary>
+        /// Reports a reference that is null, or that names a guid no asset in the tree carries.
+        /// </summary>
+        /// <remarks>
+        /// <b>A dangling guid is a finding, not an unknown.</b> Elsewhere in this file a guid the
+        /// tree does not carry throws <see cref="AssetGateUnknownException"/>, because the check
+        /// cannot grade what it cannot read. Here it IS the grade: Unity resolves a dangling
+        /// reference to null and renders nothing, so "this guid names no asset" is precisely the
+        /// defect rather than an obstacle to measuring one.
+        /// </remarks>
+        private static IEnumerable<GateFinding> AssetRefResolves(
+            UnityAssetIndex index, string path, UnityObjectRef? reference, string owner, string what)
+        {
+            if (reference == null || reference.Value.IsNull)
+            {
+                yield return new GateFinding(
+                    "P3", Rel(index, path), 0,
+                    $"{owner} has no {what}, so the object Awake selects cannot draw and the "
+                    + "flag is a bare pole at every ownership value.");
+                yield break;
+            }
+
+            if (reference.Value.Guid == null) yield break;   // in-scene, nothing to resolve
+            if (IsUnityBuiltIn(reference.Value.Guid)) yield break;
+
+            if (index.PathOf(reference.Value.Guid) == null)
+                yield return new GateFinding(
+                    "P3", Rel(index, path), 0,
+                    $"{owner} names guid {reference.Value.Guid} for {what}, which NO asset in "
+                    + "the tree carries. Unity loads a dangling reference as null, so this reads "
+                    + "as correctly authored in the YAML and draws nothing at runtime.");
+        }
+
+        /// <summary>
+        /// Is this one of Unity's own built-in resource libraries rather than a project asset?
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Unity ships three pseudo-assets outside <c>Assets/</c> and gives each a fixed guid:
+        /// <c>…e0…</c> is <i>unity default resources</i> (Cube, Sphere, Default-Diffuse),
+        /// <c>…f0…</c> is <i>unity_builtin_extra</i> (Default-Material, the Sprites shaders), and
+        /// <c>…d0…</c> is <i>unity editor resources</i>. None has a <c>.meta</c> in the tree, so
+        /// <c>UnityAssetIndex.PathOf</c> answers null for all three — which is
+        /// indistinguishable, to a naive resolver, from the dangling reference this check exists
+        /// to catch.
+        /// </para>
+        /// <para>
+        /// <b>Found by the false positive, not reasoned about in advance.</b> The first run of
+        /// <see cref="CapturePointFlagsCanDraw"/> reported all eleven <c>lqFlag</c> objects as
+        /// dangling; every one of them draws the built-in <c>Cube</c>, and every one renders
+        /// correctly. A gate that fires on healthy authoring is worse than no gate — it teaches
+        /// the reader to skip its output, which is how the real finding beside it gets missed.
+        /// </para>
+        /// </remarks>
+        private static bool IsUnityBuiltIn(string guid) =>
+            guid.Length == 32
+            && guid.StartsWith("0000000000000000", StringComparison.Ordinal)
+            && guid.EndsWith("000000000000000", StringComparison.Ordinal)
+            && (guid[16] == 'd' || guid[16] == 'e' || guid[16] == 'f');
+
+        /// <summary>The <c>m_Name</c> of the GameObject a component hangs off, for the message.</summary>
+        private static string NameOfOwner(UnityAssetIndex index, UnityAssetDocument component, string path)
+        {
+            long? owner = component.OwningGameObjectId;
+            if (owner == null) return "(unowned)";
+
+            foreach (UnityAssetDocument document in index.Documents(path))
+                if (document.AnchorId == owner.Value && document.ClassId == 1)
+                    return document.Name.Length > 0 ? document.Name : "(unnamed)";
+
+            return "(unnamed)";
+        }
+
+        /// <summary>
+        /// The three prefab fields <c>MinimapUi</c> draws icons from, with what a null costs.
+        /// </summary>
+        /// <remarks>
+        /// All three are checked against each other for distinctness, not just the one P3
+        /// authored: the failure being graded is "this prefab is already spoken for", and that
+        /// is as true of the spawn-point button as of the marker that borrows it. Two fields
+        /// aimed at one prefab satisfies any per-field null check and still gives capture points
+        /// and bodies the same icon.
+        /// </remarks>
+        private static readonly (string Field, string Consequence)[] MinimapPrefabs =
+        {
+            ("capturePointMarkerPrefab",
+             "SetMarker falls back to minimapSpawnPointPrefab, so every capture point wears a "
+             + "spawn-point icon -- the right size and in the right place, which is why nobody "
+             + "noticed it for a whole phase (P3 task 3.3)"),
+
+            ("actorBlipPrefab",
+             "AddActorBlip dereferences it on ActorManager.Register and every Body marker has "
+             + "no prefab, so the local player and every replicated body draw nothing (P3 task "
+             + "3.4)"),
+
+            ("minimapSpawnPointPrefab",
+             "SetupMinimap builds no spawn buttons and SetMarker loses its fallback, so a "
+             + "player cannot choose where to spawn"),
+        };
+
+        /// <summary>
+        /// <b>P3 task 3.3</b> — every <c>MinimapUi</c> icon prefab is assigned, resolves to a
+        /// real object, and is not a prefab another field on the same component already draws.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why this check did not exist, and what that cost.</b> Nine authoring checks passed
+        /// <c>Ingame UI Container.prefab</c> green while <c>capturePointMarkerPrefab</c> was
+        /// null, for as long as the field has existed. Nothing was wrong with those nine — none
+        /// of them was looking at this component. That is the shape of a green that proves
+        /// nothing (<c>rules/green-that-proves-nothing.md</c>): the gate reported clean because
+        /// the question was never asked, and the fallback in <c>SetMarker</c> made the symptom
+        /// cosmetic enough to survive being looked at.
+        /// </para>
+        /// <para>
+        /// <b>Non-nullness is not the assertion.</b> Following
+        /// <see cref="ScoreUiTextRefsAreAssigned"/>, which is in its current shape because three
+        /// mutations proved a weaker draft green: a fileID naming no object deserializes to null
+        /// and is indistinguishable from unassigned at runtime, and a field pointed at a prefab
+        /// another field already drives is assigned, resolvable, and still wrong. All three are
+        /// graded.
+        /// </para>
+        /// <para>
+        /// <b>A prefab reference is cross-file, and that is the difference from the ScoreUi
+        /// check.</b> A label lives in the same document as the <c>ScoreUi</c> pointing at it,
+        /// so an anchor is resolved within one file. A prefab lives in another asset entirely,
+        /// so the guid must resolve to a path in the tree and the fileID to the root GameObject
+        /// of that path. A guid that no asset carries is unknown rather than failing — this
+        /// check cannot tell a dangling reference from a tree it was handed incompletely.
+        /// </para>
+        /// </remarks>
+        public static IEnumerable<GateFinding> MinimapMarkerPrefabsAreAuthored(UnityAssetIndex index)
+        {
+            var findings = new List<GateFinding>();
+            int seen = 0;
+
+            foreach ((UnityAssetDocument minimap, string path) in Instances(index, MinimapUiGuid))
+            {
+                seen++;
+
+                foreach ((string field, string what) in MinimapPrefabs)
+                {
+                    UnityObjectRef? maybe = minimap.Reference(field);
+
+                    if (maybe == null || maybe.Value.IsNull)
+                    {
+                        findings.Add(new GateFinding(
+                            "P3", Rel(index, path), 0,
+                            $"MinimapUi.{field} is unassigned, so {what}."));
+                        continue;
+                    }
+
+                    UnityObjectRef assigned = maybe.Value;
+
+                    // A prefab reference always carries a guid. One without is an anchor inside
+                    // this same file, which for a GameObject field means a scene object rather
+                    // than a prefab -- assignable in the Editor, and not what any of these three
+                    // fields is Instantiated as.
+                    if (assigned.Guid == null)
+                    {
+                        findings.Add(new GateFinding(
+                            "P3", Rel(index, path), 0,
+                            $"MinimapUi.{field} names fileID {assigned.FileId} inside this same "
+                            + "asset rather than a prefab in the tree. Instantiate on a scene "
+                            + "object clones whatever it currently is, so this is not the "
+                            + "authoring the field asks for."));
+                        continue;
+                    }
+
+                    string? target = index.PathOf(assigned.Guid);
+
+                    if (target == null)
+                        throw new AssetGateUnknownException(
+                            $"{path}: MinimapUi.{field} names guid {assigned.Guid}, which no "
+                            + "asset in the tree carries. The reference is dangling; this check "
+                            + "cannot grade it.");
+
+                    bool resolves = index.Documents(target)
+                        .Any(d => d.AnchorId == assigned.FileId);
+
+                    if (!resolves)
+                        findings.Add(new GateFinding(
+                            "P3", Rel(index, path), 0,
+                            $"MinimapUi.{field} names fileID {assigned.FileId}, which no object "
+                            + $"in {Rel(index, target)} carries. Unity loads that as null, so "
+                            + $"this reads exactly like the unassigned case at runtime: {what}."));
+
+                    foreach ((string other, string _) in MinimapPrefabs)
+                    {
+                        if (other == field) continue;
+
+                        UnityObjectRef? held = minimap.Reference(other);
+                        if (held == null || held.Value.IsNull) continue;
+                        if (held.Value.FileId != assigned.FileId) continue;
+                        if (!string.Equals(held.Value.Guid, assigned.Guid,
+                                           StringComparison.OrdinalIgnoreCase)) continue;
+
+                        findings.Add(new GateFinding(
+                            "P3", Rel(index, path), 0,
+                            $"MinimapUi.{field} points at the same prefab as {other}. The two "
+                            + "draw different subjects and are told apart by their icon, so this "
+                            + "does not give the field a prefab -- it makes both subjects "
+                            + "indistinguishable on the map."));
+                    }
+                }
+            }
+
+            if (seen == 0)
+                findings.Add(new GateFinding(
+                    "P3", "(nothing)", 0,
+                    "MinimapUi is on no GameObject anywhere, so there is no minimap to author "
+                    + "and no capture point, player or vehicle can be drawn on one."));
+
+            return findings;
+        }
+
         private static IReadOnlyList<UnityAssetDocument> Resolve(
             UnityAssetIndex index, UnityObjectRef? reference, string from, string field)
         {

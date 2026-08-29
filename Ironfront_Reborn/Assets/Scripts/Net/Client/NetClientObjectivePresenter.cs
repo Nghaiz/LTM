@@ -134,11 +134,27 @@ namespace Ironfront.Net.Unity.Client
             ICapturePointDirectory points = NetSceneBindings.CapturePoints;
             if (points == null) return;
 
+            int spawnOwner = CapturePointOwnership.ToSpawnPointOwner(message.OwningTeam);
+            float control = CapturePointOwnership.ToControl(message.Owner);
+
+            // P3 task 3.1 -- THE measurement, taken where the wire is still a wire. Everything
+            // downstream of this line is derived, so a report built from CapturePoint's fields
+            // cannot tell "the server sent 0" from "the client threw the magnitude away". The
+            // raw quantized byte is printed beside the float because they are the two halves
+            // of the question: OwnerQ is what crossed the socket, Owner is what it decodes to.
+            //
+            // Rate is not a concern. A point sends only when it crosses
+            // MatchRules.CaptureSendThreshold or changes hands, plus once per point on join --
+            // and _view.Apply above has already dropped every repeat.
+            Debug.Log($"[net] capture point {message.PointId}: OwnerQ {message.OwnerQ} "
+                      + $"-> Owner {message.Owner:F2}, OwningTeam {message.OwningTeam} "
+                      + $"-> spawn owner {spawnOwner}, control {control:F2}, "
+                      + $"contested {message.IsContested} -- flag "
+                      + (control > 0f ? "VISIBLE" : "HIDDEN")
+                      + $" at pole height {(1.2f + 4.8f * control):F2}");
+
             points.ApplyAuthoritativeOwner(
-                message.PointId,
-                CapturePointOwnership.ToSpawnPointOwner(message.OwningTeam),
-                CapturePointOwnership.ToControl(message.Owner),
-                message.IsContested);
+                message.PointId, spawnOwner, control, message.IsContested);
         }
 
         private void Update()

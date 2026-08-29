@@ -82,6 +82,9 @@ namespace Ironfront.Net.Unity
         /// <summary>The match scoreboard, or null when this build has none.</summary>
         public static IObjectiveHud Objectives { get; set; }
 
+        /// <summary>The minimap's icon table, or null when this build draws no minimap.</summary>
+        public static IMinimapMarkers Minimap { get; set; }
+
         /// <summary>
         /// Reads a projectile catalogue off the authored prefab array. Phase C4b.
         /// </summary>
@@ -179,6 +182,7 @@ namespace Ironfront.Net.Unity
             VehiclePrefabs = null;
             Decals = null;
             Objectives = null;
+            Minimap = null;
             ProjectileCatalogReader = null;
             LocalTeam = null;
             ExplosionPredictor = null;

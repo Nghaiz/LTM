@@ -195,8 +195,11 @@ namespace Ironfront.Net.Unity.Client
         {
             for (int i = 0; i < _liveIds.Count; i++)
             {
-                if (_live.TryGetValue(_liveIds[i], out NetClientVehicle v) && v.Exists)
-                    Destroy(v.Body.GameObject);
+                if (!_live.TryGetValue(_liveIds[i], out NetClientVehicle v) || !v.Exists) continue;
+
+                // P3 task 3.4. Before the Destroy, per the keyed-by-transform ordering.
+                NetClientBindings.Minimap?.RemoveMarker(v.Body.Transform);
+                Destroy(v.Body.GameObject);
             }
 
             _live.Clear();
@@ -246,6 +249,13 @@ namespace Ironfront.Net.Unity.Client
             _live[message.VehicleId] = bound;
             _liveIds.Add(message.VehicleId);
             _byGameObject[spawned] = message.VehicleId;
+
+            // P3 task 3.4. A vehicle has no team -- ownership is whoever is sitting in it this
+            // second, which the client learns from seat state and not from the spawn -- so it
+            // draws in ColorScheme's neutral rather than in a team colour that would be a
+            // guess. The subject is the body transform for the same reason the actor markers
+            // use theirs: MinimapMarker reads position off it every LateUpdate.
+            NetClientBindings.Minimap?.SetBodyMarker(vehicle.Transform, -1);
         }
 
         private void OnVehicleDespawn(VehicleDespawnMessage message)
@@ -257,6 +267,11 @@ namespace Ironfront.Net.Unity.Client
             // snapshot stream for this id has already stopped.
             _live.Remove(message.VehicleId);
             _liveIds.Remove(message.VehicleId);
+
+            // P3 task 3.4, and for the same reason as _byGameObject below: dropped BEFORE the
+            // destruction, because MinimapUi.markers is keyed by the transform and a destroyed
+            // transform is not a usable dictionary key on Unity's Mono runtime.
+            if (vehicle.Exists) NetClientBindings.Minimap?.RemoveMarker(vehicle.Body.Transform);
 
             // Dropped BEFORE the GameObject is destroyed. A destroyed object is not a usable
             // dictionary key on Unity's Mono runtime, so a stale entry here would be one nothing

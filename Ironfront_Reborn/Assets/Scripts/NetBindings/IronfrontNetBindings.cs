@@ -66,6 +66,11 @@ namespace Ironfront.Net.Unity.Bindings
             NetClientBindings.Objectives = new ScoreUiObjectiveHud();
             NetClientBindings.ProjectileCatalogReader = ProjectileCatalogBinding.Read;
 
+            // P3 task 3.4. The minimap seam, for the same reason as the four above: the
+            // registries that own the replicated bodies live in Ironfront.Net.Unity.Client and
+            // may not name MinimapUi, which compiles into Assembly-CSharp.
+            NetClientBindings.Minimap = new MinimapMarkerBinding();
+
             // C4d. The lane-B recorder observes the scoreboard HUD, the offline scoreboard and
             // the scene's capture points, and may name none of them now that Net/Diagnostics is
             // an assembly. Registered unconditionally: the probe resolves its singletons per call

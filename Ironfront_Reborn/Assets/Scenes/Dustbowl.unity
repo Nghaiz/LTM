@@ -89144,7 +89144,7 @@ SkinnedMeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 2aaff793b776d0b45b232fc08ea42a5f, type: 2}
+  - {fileID: 2100000, guid: d9a1215091981cf458bbd84013003a4f, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -89171,7 +89171,7 @@ SkinnedMeshRenderer:
   m_Quality: 0
   m_UpdateWhenOffscreen: 0
   m_SkinnedMotionVectors: 1
-  m_Mesh: {fileID: 4300000, guid: 195886543318f6a41bd0575b175957e7, type: 2}
+  m_Mesh: {fileID: 4300000, guid: e40210dcae673ef4d9cb0ab3441936a1, type: 2}
   m_Bones: []
   m_BlendShapeWeights: []
   m_RootBone: {fileID: 0}
@@ -89204,7 +89204,7 @@ SkinnedMeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 2aaff793b776d0b45b232fc08ea42a5f, type: 2}
+  - {fileID: 2100000, guid: d9a1215091981cf458bbd84013003a4f, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -89231,7 +89231,7 @@ SkinnedMeshRenderer:
   m_Quality: 0
   m_UpdateWhenOffscreen: 0
   m_SkinnedMotionVectors: 1
-  m_Mesh: {fileID: 4300000, guid: 195886543318f6a41bd0575b175957e7, type: 2}
+  m_Mesh: {fileID: 4300000, guid: e40210dcae673ef4d9cb0ab3441936a1, type: 2}
   m_Bones: []
   m_BlendShapeWeights: []
   m_RootBone: {fileID: 0}
@@ -89264,7 +89264,7 @@ SkinnedMeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 2aaff793b776d0b45b232fc08ea42a5f, type: 2}
+  - {fileID: 2100000, guid: d9a1215091981cf458bbd84013003a4f, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -89291,7 +89291,7 @@ SkinnedMeshRenderer:
   m_Quality: 0
   m_UpdateWhenOffscreen: 0
   m_SkinnedMotionVectors: 1
-  m_Mesh: {fileID: 4300000, guid: 195886543318f6a41bd0575b175957e7, type: 2}
+  m_Mesh: {fileID: 4300000, guid: e40210dcae673ef4d9cb0ab3441936a1, type: 2}
   m_Bones: []
   m_BlendShapeWeights: []
   m_RootBone: {fileID: 0}
@@ -89351,7 +89351,7 @@ SkinnedMeshRenderer:
   m_Quality: 0
   m_UpdateWhenOffscreen: 0
   m_SkinnedMotionVectors: 1
-  m_Mesh: {fileID: 4300000, guid: 195886543318f6a41bd0575b175957e7, type: 2}
+  m_Mesh: {fileID: 4300000, guid: e40210dcae673ef4d9cb0ab3441936a1, type: 2}
   m_Bones: []
   m_BlendShapeWeights: []
   m_RootBone: {fileID: 0}
@@ -89384,7 +89384,7 @@ SkinnedMeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 2aaff793b776d0b45b232fc08ea42a5f, type: 2}
+  - {fileID: 2100000, guid: d9a1215091981cf458bbd84013003a4f, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -89411,7 +89411,7 @@ SkinnedMeshRenderer:
   m_Quality: 0
   m_UpdateWhenOffscreen: 0
   m_SkinnedMotionVectors: 1
-  m_Mesh: {fileID: 4300000, guid: 195886543318f6a41bd0575b175957e7, type: 2}
+  m_Mesh: {fileID: 4300000, guid: e40210dcae673ef4d9cb0ab3441936a1, type: 2}
   m_Bones: []
   m_BlendShapeWeights: []
   m_RootBone: {fileID: 0}
@@ -89444,7 +89444,7 @@ SkinnedMeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 2aaff793b776d0b45b232fc08ea42a5f, type: 2}
+  - {fileID: 2100000, guid: d9a1215091981cf458bbd84013003a4f, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -89471,7 +89471,7 @@ SkinnedMeshRenderer:
   m_Quality: 0
   m_UpdateWhenOffscreen: 0
   m_SkinnedMotionVectors: 1
-  m_Mesh: {fileID: 4300000, guid: 195886543318f6a41bd0575b175957e7, type: 2}
+  m_Mesh: {fileID: 4300000, guid: e40210dcae673ef4d9cb0ab3441936a1, type: 2}
   m_Bones: []
   m_BlendShapeWeights: []
   m_RootBone: {fileID: 0}
@@ -114414,6 +114414,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e89bb953faff4057eccaa8855da36ea0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  frameMargin: 0.08
 --- !u!1 &354848
 GameObject:
   m_ObjectHideFlags: 0
@@ -185958,6 +185959,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Ironfront.Net.Unity.Client.NetClientCombatPresenter
   _tracers: {fileID: 629676524}
   _registry: {fileID: 629676522}
+  _drawKillfeed: 1
 --- !u!114 &629676527
 MonoBehaviour:
   m_ObjectHideFlags: 0

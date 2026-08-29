@@ -162,6 +162,13 @@ namespace Ironfront.Net.Unity.Server
 
                 _match.AdoptOpeningOwner(i, opening);
                 if (owner == TeamId.Team0 || owner == TeamId.Team1) adopted++;
+
+                // P3 task 3.1. The count below says how many points start owned; it does not
+                // say WHICH, nor what float each one adopted -- and the flag's pole height is
+                // that float's magnitude. Recording it per point is what lets a run be graded
+                // against the wire rather than against either side's source.
+                Debug.Log($"[net] opening point {i}: scene owner {owner} -> Owner {opening:F2} "
+                          + $"(control {(opening < 0f ? -opening : opening):F2})");
             }
 
             // Counted and stated rather than assumed. A map that hands NEITHER team a base
