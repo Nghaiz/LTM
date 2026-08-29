@@ -24,7 +24,8 @@ this says something subscribes, not that it renders correctly."* Nothing in CI h
 the screen. The four defects a player hits in the first minute (§ 3) were all invisible to a
 green build, and that is the single most important fact on this page.
 
-**Sixteen ledger rows are open.** Two are live defects, three are harness gaps, eight are
+**Fourteen ledger rows are open.** **None is a live defect** — X-59 and X-60 closed on 2026-08-29
+in [P1](phases/phase-p1-exception-storm.md) — three are harness gaps, eight are
 verification rows that need one lane-B run, and three are parked with a written reason.
 [`debt-ledger.md`](debt-ledger.md) is the source of truth; this file does not restate it.
 
@@ -66,7 +67,7 @@ on screen.
 | Bodies slide; legs never move | `RemoteActorView.cs:258-265` sets six animator bools and a pitch float, and never `movement x` / `movement y` — the two parameters `Actor.cs:706-707` drives the local body with | [P2](phases/phase-p2-locomotion.md) |
 | Flags do not render — only the pole | `CapturePoint.cs:294` `SetFlagVisible(control > 0f)` disables the renderer at zero control, and `Update()` lerps the flag to the bottom of the pole at the same value | [P3](phases/phase-p3-flag-and-minimap.md) |
 | No friendly / enemy / self icons on the minimap | `MinimapUi.AddActorBlip` has exactly one caller — `ActorManager.cs:58`, in `Register` — and remote networked bodies deliberately never register (ledger **A-2**) | [P3](phases/phase-p3-flag-and-minimap.md) |
-| Exceptions beyond counting in the log | **X-59** (`ActorManager.SetAlive` double-add, 56–76 `ArgumentException` per run) and **X-60** (`PushAntiStuckEvent` dereferences a null squad) | [P1](phases/phase-p1-exception-storm.md) |
+| ~~Exceptions beyond counting in the log~~ **CLOSED 2026-08-29** | **X-59** (`ActorGameplaySource.IsDead` wrote the flag and left the alive register, so a respawn double-added) and **X-60** (`PushAntiStuckEvent` dereferenced `squad.squadVehicle`, **not** a null squad as filed) | [P1](phases/phase-p1-exception-storm.md) — a 151 s lane-A run now reports **0** exceptions of any type, against 39 before |
 
 ---
 

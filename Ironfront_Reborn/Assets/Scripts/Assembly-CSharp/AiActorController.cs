@@ -652,11 +652,57 @@ public class AiActorController : ActorController
 		}
 	}
 
+	/// <summary>
+	/// Marks the vehicle this body is driving as stuck and walks the squad out of it. Ledger
+	/// <b>X-60</b>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>X-60's filed cause was wrong, and the branch above says so.</b> It was filed as "a
+	/// squadless body with an enabled controller reaches here and dereferences a null squad",
+	/// with the candidate fix of gating <c>AiWorkAllowed()</c> on having a squad. But this
+	/// method has one caller — the Car/Tank arm of <c>AiVehicle</c> — and that arm is entered
+	/// only after <c>IsSquadLeader()</c>, which is <c>squad.Leader() == this</c> with no null
+	/// guard. A null <c>squad</c> throws THERE and never arrives here. <c>AiOrders</c> would
+	/// have thrown on <c>squad.Update()</c> twice a second besides, and no artifact carries
+	/// either site. <c>squad</c> is not the null.
+	/// </para>
+	/// <para>
+	/// <b><c>squad.squadVehicle</c> is.</b> It is written only by <c>Squad.EnterVehicle</c> and
+	/// <c>Squad.SetAlreadyInVehicle</c>, so a squad whose member boarded on its own has none —
+	/// and <c>AiVehicle</c>'s own tail boards exactly that way,
+	/// <c>actor.EnterSeat(targetVehicle.GetEmptySeat())</c>, with no squad order behind it. That
+	/// member can then be driving, get stuck three times, and dereference a vehicle its squad
+	/// never took. It needs a lone boarder AND a stuck vehicle, which is the intermittency the
+	/// counts show: 5, 3, 2 and five zeroes across the eight Combat runs on record.
+	/// </para>
+	/// <para>
+	/// <b>So this is a wrong reference corrected, not a null check added.</b> The vehicle that
+	/// is stuck is the one this body is sitting in, which is what the Boat arm of the same
+	/// coroutine already marks. The squad is still ordered out of it, because the squad is not
+	/// the thing that was missing.
+	/// </para>
+	/// </remarks>
 	private void PushAntiStuckEvent()
 	{
 		if ((float)recentAntiStuckEvents > 2f)
 		{
-			squad.squadVehicle.stuck = true;
+			if (actor.IsSeated() && actor.seat.vehicle != null)
+			{
+				actor.seat.vehicle.stuck = true;
+			}
+			else
+			{
+				// Unreachable through the one caller, which enters only for a seated driver.
+				// Reported rather than skipped: a body pushing an anti-stuck event from outside
+				// a vehicle is a state nothing has explained, and X-59 is what a quiet fallback
+				// buys.
+				Debug.LogError(
+					$"[ai] '{base.name}' pushed an anti-stuck event without driving anything, "
+					+ "so the caller's seated-driver precondition no longer holds. Nothing was "
+					+ "marked stuck; the squad is still being walked out.");
+			}
+
 			squad.ExitVehicle();
 			squad.MoveTo(lastGotoPoint);
 			recentAntiStuckEvents = 0;

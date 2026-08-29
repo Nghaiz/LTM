@@ -119,7 +119,53 @@ try {
         }
     }
 
+    # ------------------------------------------------- what the server actually threw
+    #
+    # WHY EVERY TYPE, NOT THE ONE BEING HUNTED. Orphan-closure O6 graded "a lane-A drill with
+    # ZERO throws at ANY site" MET on a run carrying 72 ArgumentExceptions, because the
+    # measurement behind that sentence counted NullReferenceException and nothing else. The
+    # gate's wording excluded nothing; the measurement excluded almost everything, and X-59 and
+    # X-60 both survived it (green-that-proves-nothing.md). So this groups by TYPE and prints
+    # every group -- a third kind cannot pass by not being the kind anyone was looking for.
+    #
+    # The two named below are printed even at zero. An absent line reads as "not measured";
+    # "ArgumentException 0" reads as measured and clean, and those must not look alike.
+    $exceptionsPath = Join-Path $outDir "$Tag-exceptions.json"
+    $tally = [ordered]@{}
+
+    if (Test-Path $serverLog) {
+        Select-String -Path $serverLog -Pattern '^(?<type>[A-Za-z][A-Za-z0-9_.]*Exception)\b' |
+            ForEach-Object { $_.Matches[0].Groups['type'].Value } |
+            Group-Object |
+            Sort-Object -Property @{ Expression = 'Count'; Descending = $true }, Name |
+            ForEach-Object { $tally[$_.Name] = $_.Count }
+    }
+    else {
+        Write-Warning "[lane-a] no server log at $serverLog -- the tally below is UNKNOWN, not zero."
+    }
+
+    foreach ($named in @("ArgumentException", "NullReferenceException")) {
+        if (-not $tally.Contains($named)) { $tally[$named] = 0 }
+    }
+
+    $total = ($tally.Values | Measure-Object -Sum).Sum
+    Write-Host "[lane-a] $Tag exceptions in the server log, by type ($total total):"
+    foreach ($type in $tally.Keys) {
+        $colour = if ($tally[$type] -gt 0) { "Yellow" } else { "Green" }
+        Write-Host ("  {0,-40} {1}" -f $type, $tally[$type]) -ForegroundColor $colour
+    }
+
+    [pscustomobject]@{
+        tag         = $Tag
+        seconds     = $Seconds
+        behavior    = $Behavior
+        serverLog   = $serverLog
+        total       = $total
+        byType      = $tally
+    } | ConvertTo-Json -Depth 4 | Set-Content -Path $exceptionsPath -Encoding utf8
+
     Write-Host "[lane-a] $Tag done, harness exit $harnessExit -> $report"
+    Write-Host "[lane-a] $Tag exception tally -> $exceptionsPath"
     exit $harnessExit
 }
 finally {

@@ -421,10 +421,65 @@ namespace Ironfront.Net.Unity.Bindings
             set => _actor.health = value;
         }
 
+        /// <summary>
+        /// The alive FLAG and the alive REGISTER, written as a pair. Ledger <b>X-59</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This was half a pair, and the cost was 39-76 <c>ArgumentException</c>s per lane-A
+        /// run.</b> <c>Actor.dead</c> is written in four places: <c>Actor.Awake</c>,
+        /// <c>Actor.SpawnAt</c> (which calls <c>ActorManager.SetAlive</c>), <c>Actor.Die</c>
+        /// (which calls <c>ActorManager.SetDead</c>) — and here, which called neither.
+        /// <c>ServerActorDamageSink</c> kills by writing <c>NetServerActor.IsAlive = false</c>
+        /// through this setter and deliberately does NOT call <c>Actor.Die()</c>, for the
+        /// reasons its own remark gives. But <c>Die()</c> was the only thing on that path that
+        /// left the register, so the corpse stayed in <c>aliveActors[team]</c>;
+        /// <c>ActorManager.SpawnWave</c> then selected the body on <c>dead</c> and
+        /// <c>Actor.SpawnAt</c> registered it a SECOND time.
+        /// </para>
+        /// <para>
+        /// <b>What the duplicate then did.</b> <c>AiActorController.FindPotentialTargets</c>
+        /// builds a <c>Dictionary&lt;Actor, float&gt;</c> over
+        /// <c>ActorManager.AliveActorsOnTeam(team)</c>, so the second entry throws
+        /// <c>ArgumentException: An item with the same key has already been added</c> — and it
+        /// throws out of the <c>AiTarget</c> coroutine, so that bot stops choosing targets for
+        /// the rest of the match. Same family as X-55/X-56/X-57: an AI coroutine throwing and
+        /// taking its own work with it.
+        /// </para>
+        /// <para>
+        /// <b>Here rather than a membership test at <c>SetAlive</c>.</b> A duplicate guard makes
+        /// the symptom unproducible without saying why a body was registered twice; this closes
+        /// the window that registered it. <c>SetAlive</c> does carry a guard now, but as a
+        /// REPORT of a second producer nobody has found yet, not as this fix.
+        /// </para>
+        /// <para>
+        /// <b>Idempotent, and that is load-bearing.</b> The flag is one fact in two places, so a
+        /// write that does not change it must not touch the register: without the early-out a
+        /// second <c>IsAlive = true</c> on a body already alive — which
+        /// <c>ServerCombatBridge.PlaceAtSpawn</c> can issue — would add a second entry and
+        /// reopen X-59 through the very setter that closes it.
+        /// </para>
+        /// <para>
+        /// <b>The <c>false</c> half is paired too, and it changes behaviour.</b> A claimed body
+        /// placed by <c>PlaceAtSpawn</c> never runs <c>Actor.SpawnAt</c>, so before this it was
+        /// alive by flag and absent from the register — invisible to every bot's target scan.
+        /// It is now registered, which means bots can see networked players. That is the
+        /// pairing being honest rather than a separate feature, and it is named here because no
+        /// existing measurement would have reported it.
+        /// </para>
+        /// </remarks>
         public bool IsDead
         {
             get => _actor.dead;
-            set => _actor.dead = value;
+            set
+            {
+                if (_actor.dead == value) return;
+
+                _actor.dead = value;
+
+                if (value) ActorManager.SetDead(_actor);
+                else ActorManager.SetAlive(_actor);
+            }
         }
 
         /// <summary>
