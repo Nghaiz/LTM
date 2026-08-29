@@ -16,6 +16,16 @@ namespace Ironfront.Net.Replication.Client
     /// <c>54b1bd752e9742e459d70a1045db1667</c> and it resolves to that file.
     /// </para>
     /// <para>
+    /// <b>The blend tree's axis convention, read from the same asset.</b> Four 2D freeform
+    /// trees drive locomotion, all keyed on the pair, and their motion nodes sit at
+    /// x = ±1.18 / ±3.05..3.49 and y = +1.23..3.28 / −0.89..−2.87. Those are METRES PER SECOND,
+    /// not a normalised −1..1: <c>MovementCore.WalkSpeed</c> is 3.5, which is where the run nodes
+    /// are, and the walk nodes sit near a third of it. <b>y is forward-positive, x is
+    /// right-positive</b> — <c>Actor.UpdateMovement</c> feeds them
+    /// <c>new Vector2(localVelocity.x, localVelocity.z)</c>, and Unity's local z is forward. So
+    /// the value this solver produces is a local-space velocity in m/s, fed in unscaled.
+    /// </para>
+    /// <para>
     /// <b><c>moving</c> is the gate, and leaving it out is why the floats alone would have
     /// changed nothing.</b> Every transition into a locomotion state is conditioned on it —
     /// <c>Standing Idle → Locomotion Forward</c> reads <c>moving == true AND movement y > -0.01</c>,
