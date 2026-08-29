@@ -1,0 +1,16 @@
+{
+  "name": "duel-driver",
+  "steps": [
+    { "seconds": 5.0, "yawDegrees": 0 },
+    { "checkpoint": "spawned", "seconds": 2.0, "yawDegrees": 0 },
+    { "checkpoint": "approach", "seconds": 150.0,
+      "aimAtPlayer": "OBS-A", "approach": true, "holdDistanceMeters": 6.0, "sprint": true },
+    { "checkpoint": "in-range", "seconds": 3.0,
+      "aimAtPlayer": "OBS-A", "approach": true, "holdDistanceMeters": 6.0, "aim": true },
+    { "checkpoint": "firing", "seconds": 8.0,
+      "aimAtPlayer": "OBS-A", "approach": true, "holdDistanceMeters": 6.0, "aim": true, "fire": true },
+    { "checkpoint": "killed", "seconds": 5.0, "aimAtPlayer": "OBS-A" },
+    { "checkpoint": "victim-input-held", "seconds": 5.0, "aimAtPlayer": "OBS-A" },
+    { "checkpoint": "respawn-window", "seconds": 8.0, "aimAtPlayer": "OBS-A" }
+  ]
+}

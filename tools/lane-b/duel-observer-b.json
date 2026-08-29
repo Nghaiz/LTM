@@ -1,0 +1,14 @@
+{
+  "name": "duel-witness",
+  "steps": [
+    { "seconds": 5.0, "yawDegrees": 90 },
+    { "checkpoint": "spawned", "seconds": 2.0, "yawDegrees": 90 },
+    { "checkpoint": "approach", "seconds": 150.0,
+      "aimAtPlayer": "OBS-A", "approach": true, "holdDistanceMeters": 20.0, "sprint": true },
+    { "checkpoint": "in-range", "seconds": 3.0, "aimAtPlayer": "OBS-A" },
+    { "checkpoint": "firing", "seconds": 8.0, "aimAtPlayer": "OBS-A" },
+    { "checkpoint": "killed", "seconds": 5.0, "aimAtPlayer": "OBS-A" },
+    { "checkpoint": "victim-input-held", "seconds": 5.0, "aimAtPlayer": "OBS-A" },
+    { "checkpoint": "respawn-window", "seconds": 8.0, "aimAtPlayer": "OBS-A" }
+  ]
+}

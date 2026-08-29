@@ -1,0 +1,17 @@
+{
+  "name": "turret-driver",
+  "steps": [
+    { "seconds": 5.0, "yawDegrees": 0 },
+    { "checkpoint": "spawned", "seconds": 2.0, "yawDegrees": 0 },
+    { "checkpoint": "walking-to-vehicle", "seconds": 40.0,
+      "approachVehicle": true, "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0, "sprint": true },
+    { "checkpoint": "driver-seated", "seconds": 6.0,
+      "approachVehicle": true, "vehicleSearchMetres": 200.0,
+      "vehicleHoldDistanceMeters": 4.0, "seatToggle": true },
+    { "checkpoint": "gunner-seated", "seconds": 8.0, "yawDegrees": 0 },
+    { "checkpoint": "turret-swept-90", "seconds": 8.0, "yawDegrees": 0 },
+    { "checkpoint": "turret-swept-180", "seconds": 8.0, "yawDegrees": 0 },
+    { "checkpoint": "turret-settled", "seconds": 8.0, "yawDegrees": 0 }
+  ]
+}

@@ -363,6 +363,24 @@ public class ActorManager : MonoBehaviour
 
 	public static void RegisterProjectile(Projectile p)
 	{
+		// This method exists to warn the ENEMY team's AI that something is incoming, and "the
+		// enemy team" is read off the shooter. A projectile with no shooter names no team, so
+		// there is nothing here to warn and no fallback that would be honest -- guessing a team
+		// would make bots duck away from a tracer nobody fired at them.
+		//
+		// It is not a rare case. Every projectile NetClientProjectilePresenter spawns carries
+		// `source == null` on purpose (V7-D3: damage, and therefore attribution, is the
+		// server's), and Projectile.Start calls this for all of them because `warnsEnemyAi`
+		// defaults true. That is 64 of the 95 NullReferenceExceptions three clients threw in
+		// artifacts/lane-b/p4-combat-01, and the reason a player's Development Console filled up
+		// within seconds of the first rocket.
+		//
+		// Returning early rather than warning on a client is also correct on its own terms: the
+		// AI runs on the server, so a client-side cosmetic tracer has no business steering it.
+		if (p.source == null)
+		{
+			return;
+		}
 		Ray ray = new Ray(p.transform.position, p.transform.forward);
 		float num = 9999f;
 		RaycastHit hitInfo;
