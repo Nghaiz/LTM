@@ -1,4 +1,4 @@
-# O1 report — a networked player in a driver's seat drives the vehicle
+﻿# O1 report — a networked player in a driver's seat drives the vehicle
 
 - **Phase:** [`phase-o1-driver-input-seam.md`](../phases/phase-o1-driver-input-seam.md) · **Date:** 2026-08-28
 - **Closes:** **X-46** → unblocks check 11's *drive* verb (**B-11**) and any driving window **B-10** would be graded from
@@ -102,6 +102,13 @@ run on the pre-O1 tree, which is the first thing the new rows ask for.
 
 Filed as **X-55** (`LocalAvoidanceVelocity` walks a squad roster holding destroyed members) and
 **X-56** (`FindPotentialTargets` hands a destroyed actor to `HasEffectiveWeaponAgainst`).
+
+> **Closed the same day by O6**, and the control run above turned out to be the load-bearing part
+> of this section: it is what stopped the cascade being fixed blind as part of X-46, and what
+> pointed at the match reset. Cause, fix and evidence:
+> [`2026-08-28-o6-null-reference-cascade.md`](2026-08-28-o6-null-reference-cascade.md). O6 also
+> found a third site (**X-57**) and a fourth state (**X-58**) that this run's 4,183 lines had
+> buried.
 
 ## 7. Out of scope, as the phase said in advance
 
