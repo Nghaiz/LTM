@@ -79,11 +79,32 @@ namespace Ironfront.Net.Protocol
         /// Returns <paramref name="raw"/> stripped of everything a label must not be asked to
         /// render, or <see cref="string.Empty"/> when nothing survives.
         /// </summary>
-        public static string Sanitize(string? raw)
+        public static string Sanitize(string? raw) => Sanitize(raw, MaxCharacters);
+
+        /// <summary>
+        /// The same rule, clipped at a caller-supplied character bound. Phase P6 task 3.3.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Chat text is the second caller, and it is the same hazard at a different length.</b>
+        /// A chat line arrives over a socket and lands in a label exactly as a display name does,
+        /// so it needs the same rich-text, control-character and bidi-override treatment — only
+        /// the cap differs (<see cref="Ironfront.Net.Protocol.ChatTextMessage.MaxTextCharacters"/>).
+        /// A second sanitizer for chat would be a second place to keep a security rule in step,
+        /// and the two would drift on exactly the character class nobody re-checked.
+        /// </para>
+        /// <para>
+        /// The class keeps its name. It is the display-name rule that generalised, not a new
+        /// rule that happens to resemble it, and renaming it would touch every call site to
+        /// record that fact in one identifier.
+        /// </para>
+        /// </remarks>
+        public static string Sanitize(string? raw, int maxCharacters)
         {
             if (string.IsNullOrEmpty(raw)) return string.Empty;
+            if (maxCharacters <= 0) return string.Empty;
 
-            var builder = new StringBuilder(Math.Min(raw!.Length, MaxCharacters));
+            var builder = new StringBuilder(Math.Min(raw!.Length, maxCharacters));
             bool pendingSpace = false;
 
             for (int i = 0; i < raw.Length; i++)
@@ -114,7 +135,7 @@ namespace Ironfront.Net.Protocol
                         continue;
                     }
 
-                    if (builder.Length + 2 > MaxCharacters) break;
+                    if (builder.Length + 2 > maxCharacters) break;
 
                     if (pendingSpace) { builder.Append(' '); pendingSpace = false; }
                     builder.Append(c).Append(raw[i + 1]);
@@ -131,7 +152,7 @@ namespace Ironfront.Net.Protocol
                 // The pending space is charged against the cap before the character it precedes,
                 // so a name is never truncated to end in a space.
                 int cost = pendingSpace ? 2 : 1;
-                if (builder.Length + cost > MaxCharacters) break;
+                if (builder.Length + cost > maxCharacters) break;
 
                 if (pendingSpace) { builder.Append(' '); pendingSpace = false; }
                 builder.Append(c);

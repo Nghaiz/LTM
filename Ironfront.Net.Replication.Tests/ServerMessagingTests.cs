@@ -103,17 +103,99 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(2, router.AcksApplied);
         }
 
+        /// <summary>
+        /// An opcode the router has no case for is counted, not thrown.
+        /// </summary>
+        /// <remarks>
+        /// <b>The exemplar was <c>Chat</c> until P6 routed it</b>, and repointing it at
+        /// <c>Ping</c> is the point rather than a chore: this test is only meaningful against an
+        /// opcode that genuinely has no case, so it has to move every time one is closed. Ping
+        /// is the right next one — RTT is already measured a layer down in
+        /// <c>Connection.SmoothedRttMs</c>, so the opcode needs a purpose the transport does not
+        /// already serve before it needs a route, and it stays a named gap in
+        /// <c>ClientSenderCoverageRunner.KnownUnsentMessages</c>.
+        /// </remarks>
         [Fact]
         public void AnUnknownMessageTypeIsCountedRatherThanThrown()
         {
             var session = new ClientSession(ConnectionId, ActorId);
             var router = new ServerMessageRouter();
 
-            byte[] payload = BuildPayload((byte)ClientMessageType.Chat, new byte[] { 1, 2, 3 });
+            byte[] payload = BuildPayload((byte)ClientMessageType.Ping, new byte[] { 1, 2, 3 });
 
             Assert.Equal(0, router.Route(payload, session));
             Assert.Equal(1, router.UnknownMessages);
             Assert.Equal(0, router.MalformedMessages);
+        }
+
+        /// <summary>
+        /// Phase P6 task 3.4's second detector: a <c>C_CHAT</c> from a client is ROUTED, and so
+        /// does not land in the counter the server reads as corruption.
+        /// </summary>
+        /// <remarks>
+        /// <b>UnknownMessages is asserted at zero, not merely ChatTextMessagesReceived at one.</b>
+        /// The gate's own retire condition for X-8 was about that counter specifically — "a
+        /// sender today would ship a write-only path the server counts as corruption" — so the
+        /// assertion that has to hold is the negative one. Deleting the router's
+        /// <c>case ClientMessageType.Chat</c> is what turns this red.
+        /// </remarks>
+        [Fact]
+        public void AChatMessageIsRoutedRatherThanCountedAsUnknown()
+        {
+            var session = new ClientSession(ConnectionId, ActorId);
+            var router = new ServerMessageRouter();
+            var handler = new RecordingChatHandler();
+            router.Chat = handler;
+
+            var body = new byte[ChatTextMessage.MaxClientBodySize];
+            int bodyLength = ChatTextMessage.WriteClient(
+                body, System.Text.Encoding.UTF8.GetBytes("hold the ridge"));
+            Assert.True(bodyLength > 0);
+
+            byte[] payload = BuildPayload(
+                (byte)ClientMessageType.Chat,
+                new ReadOnlySpan<byte>(body, 0, bodyLength).ToArray());
+
+            Assert.Equal(1, router.Route(payload, session));
+
+            Assert.Equal(0, router.UnknownMessages);
+            Assert.Equal(0, router.MalformedMessages);
+            Assert.Equal(1, router.ChatTextMessagesReceived);
+
+            // The text reached the handler intact, so "routed" means routed rather than merely
+            // consumed -- a case that counted and dropped would pass every assertion above.
+            Assert.Equal("hold the ridge", handler.LastText);
+        }
+
+        /// <summary>
+        /// An empty chat line is malformed, not unknown: it is a request to broadcast a blank
+        /// row to every player, and the sender either clipped wrong or is probing.
+        /// </summary>
+        [Fact]
+        public void AnEmptyChatLineIsCountedAsMalformed()
+        {
+            var session = new ClientSession(ConnectionId, ActorId);
+            var router = new ServerMessageRouter();
+            var handler = new RecordingChatHandler();
+            router.Chat = handler;
+
+            // A header claiming zero bytes of text.
+            Assert.Equal(0, router.Route(
+                BuildPayload((byte)ClientMessageType.Chat, new byte[] { 0 }), session));
+
+            Assert.Equal(1, router.MalformedMessages);
+            Assert.Equal(0, router.UnknownMessages);
+            Assert.Equal(0, router.ChatTextMessagesReceived);
+            Assert.Null(handler.LastText);
+        }
+
+        /// <summary>Keeps the decoded line, so "routed" can be asserted rather than assumed.</summary>
+        private sealed class RecordingChatHandler : IChatHandler
+        {
+            public string? LastText { get; private set; }
+
+            public void OnChat(ClientSession session, ReadOnlySpan<byte> textUtf8)
+                => LastText = ChatTextMessage.TextOf(textUtf8);
         }
 
         [Fact]

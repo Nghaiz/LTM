@@ -948,6 +948,46 @@ An over-long name is **refused, not truncated**: cutting UTF-8 at a fixed byte c
 multi-byte code points and renders as replacement characters. The caller clips at a character
 boundary, where it still knows what the characters are.
 
+### 4.12. `C_CHAT` (0x24) and `S_CHAT` (0x47) — byte layout
+
+Both declared at the freeze with no body layout, no codec and no route, which is why the opcode sat
+in `ClientWiringGate`'s named-gap list for four phases: a client sender would have shipped a
+write-only path the server counted in `UnknownMessages`, its corruption counter. Phase P6 landed the
+route first and the sender second, in that order.
+
+```
+C_CHAT (client → server), channel 2
+u8   textLength           1..120 bytes
+utf8 text                 textLength bytes, not NUL-terminated
+
+S_CHAT (server → client), channel 2
+u8   actorId              who said it
+u8   textLength           1..120 bytes
+utf8 text                 textLength bytes, not NUL-terminated
+```
+
+**The client never states who it is.** `C_CHAT` carries no `actorId` and must not: the server
+already knows which session the datagram arrived on, and a self-declared id is a client asserting it
+is somebody else. Same reasoning as `C_SEAT_REQUEST`.
+
+**`actorId` is a `u8` here**, as in § 4.11 and for the same reason — ids are allocated from
+`0 … MAX_ACTORS − 1` and `MAX_ACTORS` is 64.
+
+**An empty line is refused at the parser, not broadcast.** Zero bytes of text is a request to put a
+blank row on every player's screen; it costs a reliable send and renders as a rendering fault. The
+router counts it as malformed rather than as unknown — the sender either clipped wrong or is probing.
+
+**Both ends sanitize, at their own ingress**, with `PlayerNameSanitizer` — the same rule a display
+name gets, at a longer bound (60 characters). The hazards are identical: rich-text markup that hides
+or enlarges a line, control characters that split it, bidi overrides that re-order the text around
+it. The server cleans what it receives before re-broadcasting; the client cleans again on arrival,
+because a client cannot verify the game server.
+
+**120 bytes, refused rather than truncated.** Worst case `2 + 120 = 122 B`, so a chat line can never
+be the message that fragments. A sender clips at 60 *characters*, where a boundary can be found
+without splitting a multi-byte code point; a line that still exceeds 120 bytes after that — 60
+characters of Vietnamese will — is dropped and counted, not cut.
+
 ---
 
 ## 5. Channels

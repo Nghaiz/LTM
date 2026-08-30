@@ -5,6 +5,7 @@ using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication;
 using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Interest;
+using Ironfront.Net.Replication.Match;
 using Ironfront.Net.Replication.Movement;
 using Ironfront.Net.Replication.Projectiles;
 using Ironfront.Net.Replication.Server;
@@ -41,7 +42,7 @@ namespace Ironfront.Net.Unity.Server
     /// </para>
     /// </remarks>
     [DisallowMultipleComponent]
-    public sealed class ServerTickLoop : MonoBehaviour, ISpawnRequestHandler, IReliablePayloadSender
+    public sealed class ServerTickLoop : MonoBehaviour, ISpawnRequestHandler, IChatHandler, IReliablePayloadSender
     {
         /// <summary>Rows for the next S_PLAYER_LIST. Reused; sized to the protocol ceiling.</summary>
         private readonly PlayerListEntry[] _playerListEntries =
@@ -49,6 +50,23 @@ namespace Ironfront.Net.Unity.Server
 
         /// <summary>The variable-length body S_PLAYER_LIST is framed from. Never a stackalloc.</summary>
         private readonly byte[] _playerListBody = new byte[PlayerListMessage.MaxBodySize];
+
+        /// <summary>The variable-length body S_CHAT is framed from. Phase P6 task 3.3.</summary>
+        private readonly byte[] _chatBody = new byte[ChatTextMessage.MaxServerBodySize];
+
+        /// <summary>
+        /// Per-player kills and deaths for this match. Phase P6 task 3.1, checklist A13.
+        /// </summary>
+        /// <remarks>
+        /// Fed from <see cref="EmitDeath"/>, which is the single point where a death is
+        /// RESOLVED on this server -- the same call that costs the dying team its ticket. Read
+        /// once, at match end, by <c>ServerMasterReporter</c>.
+        /// </remarks>
+        private readonly MatchScoreTally _scoreTally = new MatchScoreTally();
+
+        /// <summary>Backing list for <see cref="ScoreRows"/>. Reused; never handed out to keep.</summary>
+        private readonly List<ServerPlayerScoreRow> _scoreRows =
+            new List<ServerPlayerScoreRow>(ProtocolConstants.MAX_PLAYERS);
 
         private readonly Dictionary<ushort, ServerPlayer> _byConnection =
             new Dictionary<ushort, ServerPlayer>(ProtocolConstants.MAX_ACTORS);
@@ -216,6 +234,11 @@ namespace Ironfront.Net.Unity.Server
 
             _router.SpawnRequests = this;
             _router.SeatRequests = _seatBridge;
+
+            // Phase P6 task 3.3. Before this, C_CHAT fell to default: UnknownMessages++, which
+            // is why the client shipped no sender for four phases -- a chat message would have
+            // been counted as corruption on every send (ledger X-8).
+            _router.Chat = this;
 
             // Before V5 this stayed null and every C_VEHICLE_INPUT was counted and dropped --
             // which was V4's honest shipped state, because nothing could drive a vehicle yet.
@@ -468,6 +491,12 @@ namespace Ironfront.Net.Unity.Server
             _vehicleInterest.Reset();
             _seatArbiter.Reset();
             _burnClock.Reset();
+
+            // Phase P6. AFTER the report, not before it: MatchStateMachine raises MatchEnded at
+            // the end of Playing and ResetRequested only once PostMatchSeconds has run out, so
+            // ServerMasterReporter has already read this by the time the round turns over.
+            // Clearing it anywhere earlier would report an empty scoreboard for every match.
+            _scoreTally.Clear();
             _vehicleInputBridge.Reset();
 
             if (Transport == null) return;
@@ -1042,6 +1071,12 @@ namespace Ironfront.Net.Unity.Server
             }
 
             ReportDeathToMatch(victimActorId);
+
+            // Phase P6 task 3.1, checklist A13. HERE and not at the serialisation above, even
+            // though the two are three lines apart: this call runs once per resolved death,
+            // whereas the broadcast's bytes may be retransmitted by the reliability layer any
+            // number of times. A tally reading the wire would count one kill per lost ack.
+            _scoreTally.RecordDeath(victimActorId, killerActorId);
         }
 
         /// <summary>
@@ -1116,6 +1151,139 @@ namespace Ironfront.Net.Unity.Server
                 return;
 
             _match.ReportDeath(victim.Team);
+        }
+
+        /// <summary>
+        /// Per-player kills and deaths for the match in progress. Phase P6, checklist A13.
+        /// </summary>
+        /// <remarks>
+        /// Exposed rather than reported from here because reporting is
+        /// <c>ServerMasterReporter</c>'s job and this class has no opinion about the master.
+        /// Cleared by <see cref="ResetForNewMatch"/>, which runs after the report -- the match
+        /// machine raises <c>MatchEnded</c> at the end of Playing and <c>ResetRequested</c> only
+        /// once the post-match seconds have run out.
+        /// </remarks>
+        public MatchScoreTally Scores => _scoreTally;
+
+        /// <summary>
+        /// One connected player's identity, for the end-of-match report. Phase P6.
+        /// </summary>
+        /// <remarks>
+        /// A pair rather than two parallel lookups, because the reporter needs both halves for
+        /// the same row and resolving them separately would mean walking the player list twice
+        /// per row.
+        /// </remarks>
+        public readonly struct ServerPlayerScoreRow
+        {
+            /// <summary>The actor this connection drives -- the key the tally is counted on.</summary>
+            public readonly ushort ActorId;
+
+            /// <summary>
+            /// The master's account id from the signed join ticket, or 0.
+            /// </summary>
+            /// <remarks>
+            /// <para>
+            /// <b>0 is an honest answer, not a failure.</b> A loopback session, a lane-B harness
+            /// client and a development stub all join without a ticket to read a player id out
+            /// of. The report says 0 for those rows rather than substituting the actor id: the
+            /// field it lands in is <c>MatchPlayerResult.PlayerId</c>, which the master reads as
+            /// one of its own account ids, and an actor id smuggled into that space would name a
+            /// real and entirely unrelated account.
+            /// </para>
+            /// <para>
+            /// The cost is stated rather than hidden: several ticketless clients in one match
+            /// all report 0, so a lane-B run produces rows the master cannot tell apart. That is
+            /// the correct amount of information -- this server genuinely does not know who they
+            /// were.
+            /// </para>
+            /// </remarks>
+            public readonly int PlayerId;
+
+            public ServerPlayerScoreRow(ushort actorId, int playerId)
+            {
+                ActorId  = actorId;
+                PlayerId = playerId;
+            }
+        }
+
+        /// <summary>
+        /// The connected players, as (actor, account) pairs. Phase P6, checklist A13.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Rebuilt on each read into a reused list rather than maintained alongside
+        /// <c>_players</c>: it is read once per match, and a second table kept in step with the
+        /// join and disconnect paths is a third place for those two to drift.
+        /// </para>
+        /// <para>
+        /// Exists because <c>ServerPlayer</c> is internal and the report needs exactly two of
+        /// its fields. Exposing the type itself would hand a reporter the session, the actor and
+        /// the movement agent to reach a pair of ids.
+        /// </para>
+        /// </remarks>
+        public IReadOnlyList<ServerPlayerScoreRow> ScoreRows
+        {
+            get
+            {
+                _scoreRows.Clear();
+                for (int i = 0; i < _players.Count; i++)
+                {
+                    _scoreRows.Add(new ServerPlayerScoreRow(
+                        _players[i].Session.ActorId, (int)_players[i].PlayerId));
+                }
+
+                return _scoreRows;
+            }
+        }
+
+        /// <summary>
+        /// A client said something. Sanitized here, then broadcast to everyone. Phase P6.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The speaker is the session, never the message.</b> C_CHAT carries no actor id and
+        /// must not: the datagram arrived on this connection, so this server already knows who
+        /// sent it, and a self-declared id would be a client speaking as somebody else.
+        /// </para>
+        /// <para>
+        /// <b>Sanitized at THIS ingress</b>, where the bytes have just crossed a socket, using
+        /// the same <c>PlayerNameSanitizer</c> rule a display name gets and for the same
+        /// reasons -- rich-text markup that hides or enlarges a line, control characters that
+        /// split it, bidi overrides that re-order the text around it. The client sanitizes again
+        /// on receipt, because a client cannot verify the game server either.
+        /// </para>
+        /// <para>
+        /// <b>A line with nothing left is dropped silently.</b> Not logged: the cause is a
+        /// hostile or broken sender, and one log line per message is how that becomes a way to
+        /// fill the server's console.
+        /// </para>
+        /// </remarks>
+        void IChatHandler.OnChat(ClientSession session, ReadOnlySpan<byte> textUtf8)
+        {
+            if (Transport == null || session == null) return;
+
+            ushort actorId = session.ActorId;
+
+            // Same u8 narrowing S_PLAYER_LIST does, and the same refusal rather than truncation:
+            // a truncated id attributes the line to the WRONG player, which is worse than
+            // dropping it.
+            if (actorId > byte.MaxValue) return;
+
+            string text = PlayerNameSanitizer.Sanitize(
+                ChatTextMessage.TextOf(textUtf8), ChatTextMessage.MaxTextCharacters);
+            if (text.Length == 0) return;
+
+            Span<byte> encoded = stackalloc byte[ChatTextMessage.MaxTextBytes];
+            int textLength = ChatTextMessage.Encode(text, encoded);
+            if (textLength < 0) return;
+
+            int written = ServerEventWriter.WriteChat(
+                _eventPayload, _chatBody, (byte)actorId, encoded.Slice(0, textLength));
+            if (written < 0) return;
+
+            BroadcastReliable(
+                new ReadOnlySpan<byte>(_eventPayload, 0, written),
+                (byte)ServerEventWriter.ReliableChannel);
         }
 
         /// <summary>
@@ -1315,7 +1483,8 @@ namespace Ironfront.Net.Unity.Server
             }
 
             var player = new ServerPlayer(
-                connectionId, actor.ActorId, _combat, DisplayNameFor(in info, actor.ActorId))
+                connectionId, actor.ActorId, _combat, DisplayNameFor(in info, actor.ActorId),
+                info.PlayerId)
             { Actor = actor };
             player.SyncFromActor();
 

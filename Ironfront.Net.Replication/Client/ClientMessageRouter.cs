@@ -40,6 +40,9 @@ namespace Ironfront.Net.Replication.Client
         // rare, but a router that allocates per message is one that allocates per packet as
         // soon as somebody sends it per tick.
         private readonly byte[] _playerListBody = new byte[PlayerListMessage.MaxBodySize];
+
+        /// <summary>Chat lines refused because nothing survived sanitizing. Phase P6.</summary>
+        private long _chatLinesDropped;
         private readonly PlayerListEntry[] _playerListEntries =
             new PlayerListEntry[ProtocolConstants.MAX_ACTORS];
 
@@ -181,6 +184,31 @@ namespace Ironfront.Net.Replication.Client
         /// strings keeps a broadcast of 64 names from allocating 64 strings on every join.
         /// </remarks>
         public event Action<PlayerListEntry[], int>? OnPlayerList;
+
+        /// <summary>
+        /// Somebody said something. Carries the speaker's actor id and the decoded line.
+        /// Phase P6 task 3.3, ledger X-8.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A string, unlike <see cref="OnPlayerList"/>, and the asymmetry is deliberate.</b>
+        /// A player list is up to 64 names on every join and hands out slices so that a broadcast
+        /// does not allocate 64 strings; a chat line is one short line a few times a minute whose
+        /// only possible consumer is a label. Handing out a slice there would buy nothing and
+        /// would hand every subscriber a buffer that is about to become somebody else's packet.
+        /// </para>
+        /// <para>
+        /// <b>Already sanitized</b> — <c>PlayerNameSanitizer</c> ran on it before this was
+        /// raised. The client sanitizes what it receives even though the server sanitized what
+        /// it forwarded, for the reason that class's own remark gives: the client cannot verify
+        /// the game server, so each end cleans at its own ingress.
+        /// </para>
+        /// <para>
+        /// <b>Empty is never raised.</b> A line that sanitizes to nothing is dropped rather than
+        /// delivered as a blank row, which would read as a rendering fault.
+        /// </para>
+        /// </remarks>
+        public event Action<byte, string>? OnChat;
 
         /// <summary>
         /// A snapshot was applied. Carries the server tick and the newest input tick the server
@@ -354,6 +382,10 @@ namespace Ironfront.Net.Replication.Client
                         if (RoutePlayerList(body)) handled++;
                         break;
 
+                    case ServerMessageType.Chat:
+                        if (RouteChat(body)) handled++;
+                        break;
+
                     default:
                         UnknownMessages++;
                         break;
@@ -361,6 +393,47 @@ namespace Ironfront.Net.Replication.Client
             }
 
             return handled;
+        }
+
+        /// <summary>Chat lines that parsed but had nothing left after sanitizing.</summary>
+        /// <remarks>
+        /// Counted rather than logged, because the cause is a hostile or broken sender and a log
+        /// line per message is what turns that into a way to fill somebody's console.
+        /// </remarks>
+        public long ChatLinesDropped => _chatLinesDropped;
+
+        /// <summary>
+        /// Parses an <c>S_CHAT</c> body and raises <see cref="OnChat"/> with a decoded line.
+        /// </summary>
+        /// <remarks>
+        /// The decode allocates and that is the right trade here — see <see cref="OnChat"/>. The
+        /// sanitize runs at this ingress, on the client's own side of a game server it cannot
+        /// verify, and a line with nothing left is dropped rather than raised blank.
+        /// </remarks>
+        private bool RouteChat(ReadOnlySpan<byte> body)
+        {
+            if (!ChatTextMessage.TryParseServer(
+                    body, out byte actorId, out ReadOnlySpan<byte> textUtf8))
+            {
+                MalformedMessages++;
+                return false;
+            }
+
+            string text = PlayerNameSanitizer.Sanitize(
+                ChatTextMessage.TextOf(textUtf8), ChatTextMessage.MaxTextCharacters);
+
+            if (text.Length == 0)
+            {
+                _chatLinesDropped++;
+
+                // Parsed, understood and deliberately not delivered -- so it is handled, not
+                // malformed. Counting it as malformed would put a hostile name-shaped line in
+                // the same counter as a truncated packet.
+                return true;
+            }
+
+            OnChat?.Invoke(actorId, text);
+            return true;
         }
 
         /// <summary>

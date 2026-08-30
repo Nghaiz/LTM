@@ -189,6 +189,7 @@ namespace Ironfront.Net.Unity.Client
             EnsureVehicleStage();
             EnsureSeatRequester();
             EnsureLocalCombatDriver();
+            EnsureChatSender();
 
             if (_connectOnStart) Connect();
         }
@@ -489,6 +490,30 @@ namespace Ironfront.Net.Unity.Client
         {
             if (GetComponent<ClientSeatRequester>() == null)
                 gameObject.AddComponent<ClientSeatRequester>();
+        }
+
+        /// <summary>
+        /// Makes sure this client can talk, and can hear. Phase P6 task 3.3, ledger X-8.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Added in code for <see cref="EnsureSeatRequester"/>'s reason, and it is what makes
+        /// BOTH halves wired rather than merely present. <c>ClientWiringGate</c> grades two
+        /// directions here at once: G10 wants a production sender for
+        /// <c>ClientMessageType.Chat</c>, and G1 wants a production subscriber for
+        /// <c>ClientMessageRouter.OnChat</c>. Both are satisfied by files, so a component
+        /// authored onto no scene would retire the X-8 exemption on paper while every player
+        /// still typed into nothing.
+        /// </para>
+        /// <para>
+        /// An authored instance wins, so a later scene pass can place it explicitly and this
+        /// becomes a no-op rather than a duplicate.
+        /// </para>
+        /// </remarks>
+        private void EnsureChatSender()
+        {
+            if (GetComponent<ClientChatSender>() == null)
+                gameObject.AddComponent<ClientChatSender>();
         }
 
         private void OnSpawnActor(SpawnActorMessage message)

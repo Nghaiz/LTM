@@ -36,7 +36,12 @@ namespace Ironfront.Tools.ClientWiringGate
         // production subscriber -- it instantiates the projectile, fast-forwards it past the
         // one-way latency and re-seats it on a re-announce -- so it does not belong in
         // KnownUnwiredEvents either.
-        public const int ExpectedRouterEventCount = 15;
+        //
+        // 16 since P6: OnChat, subscribed by ClientChatSender -- which is also the C_CHAT sender,
+        // because the two halves are one conversation and a sender whose own line never appears
+        // reads as a server that dropped it. Ledger X-8's Chat half; it does not belong in
+        // KnownUnwiredEvents either.
+        public const int ExpectedRouterEventCount = 16;
 
         /// <summary>
         /// Events knowingly unwired, each with the reason and the work that unblocks it. An entry
