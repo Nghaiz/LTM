@@ -101,7 +101,22 @@ namespace Ironfront.Net.Unity
         /// </para>
         /// </remarks>
         public static MoveInput FromUnityInput(float yawDegrees, InputButtons combat)
-            => new MoveInput(
+            => LocalTextEntry.Composing
+                // Neutral while a text field owns the keyboard. This sampler reads the walk,
+                // jump, sprint and crouch axes DIRECTLY -- they never pass through
+                // LocalInputSource, so suppressing them there does not reach here, and this is
+                // the path that actually moved the player while a chat line was open. Yaw is
+                // kept: it comes from the camera, not from a key.
+                //
+                // Sending neutral input is not a divergence risk. It is indistinguishable to the
+                // server from a player holding nothing, which is exactly what a player typing a
+                // message is doing.
+                ? new MoveInput(
+                    0f, 0f, yawDegrees,
+                    false, false, false,
+                    false, false, false, false,
+                    InputFrame.SlotOf(InputButtons.None))
+                : new MoveInput(
                 Input.GetAxis("Horizontal"),
                 Input.GetAxis("Vertical"),
                 yawDegrees,

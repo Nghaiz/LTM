@@ -33,6 +33,28 @@ namespace Ironfront.Net.Replication.Client
         /// despawned across the pair, or it is out of interest. No pose.
         /// </summary>
         NotPresent = 4,
+
+        /// <summary>
+        /// The vehicle is in exactly ONE of the two bracketing snapshots. The pose is that
+        /// snapshot's, held — not blended, and not extrapolated.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This is the ordinary steady state past 60 m, not an error.</b>
+        /// <c>InterestManager.SendEveryN</c> sends a Mid vehicle every 2nd snapshot and a Far
+        /// vehicle every 5th, and <c>VehicleDeltaDecoder</c> rebuilds each world from the message
+        /// alone — so a rate-limited vehicle is mathematically never in two ADJACENT worlds.
+        /// Treating that as <see cref="NotPresent"/> is ledger X-64: the caller wrote no pose, the
+        /// body is kinematic, and it held its last pose for the rest of the match while snapshots
+        /// kept arriving and <c>StalledCount</c> stayed 0.
+        /// </para>
+        /// <para>
+        /// <b>Held rather than blended, deliberately.</b> Blending from a single endpoint is the
+        /// slide-in the two-sided requirement existed to prevent. Taking the one real pose keeps
+        /// that guarantee and still lets a distant vehicle update at the rate its band intends.
+        /// </para>
+        /// </remarks>
+        Held = 5,
     }
 
     /// <summary>
@@ -101,12 +123,28 @@ namespace Ironfront.Net.Replication.Client
         /// <summary>Samples that ran off the newest end of the buffer. A starvation indicator.</summary>
         public long StalledCount { get; private set; }
 
+        /// <summary>
+        /// Samples served from one side of the bracket because the vehicle was rate-limited out
+        /// of the other. Expected to be non-zero whenever anything is past 60 m.
+        /// </summary>
+        /// <remarks>
+        /// <b>Counted because the silence is what made X-64 survive.</b> The old code returned
+        /// <see cref="VehicleSampleResult.NotPresent"/> without touching
+        /// <see cref="StalledCount"/>, so a permanently frozen vehicle read as a perfectly
+        /// healthy stream on every counter there was -- the lane-B regrade measured 303 m of
+        /// divergence at <c>vehicleInterpStalled 0</c>. A one-sided sample is normal, but it must
+        /// be VISIBLE, so that "every vehicle is Held and none is Interpolated" is a question
+        /// somebody can ask.
+        /// </remarks>
+        public long HeldCount { get; private set; }
+
         /// <summary>Drops everything. Call on disconnect, or when the baseline is reset.</summary>
         public void Reset()
         {
             _count = 0;
             OutOfOrderCount = 0;
             StalledCount = 0;
+            HeldCount = 0;
         }
 
         /// <summary>
@@ -203,8 +241,27 @@ namespace Ironfront.Net.Replication.Client
 
                 if (renderTick < earlier.ServerTick || renderTick >= later.ServerTick) continue;
 
-                if (!earlier.TryFind(vehicleId, out VehicleSnapshotEntry a)) return VehicleSampleResult.NotPresent;
-                if (!later.TryFind(vehicleId, out VehicleSnapshotEntry b)) return VehicleSampleResult.NotPresent;
+                bool inEarlier = earlier.TryFind(vehicleId, out VehicleSnapshotEntry a);
+                bool inLater = later.TryFind(vehicleId, out VehicleSnapshotEntry b);
+
+                // In neither: genuinely gone from this span. The explicit S_VEHICLE_DESPAWN on
+                // channel 2 is what retires the proxy; this only declines to draw it.
+                if (!inEarlier && !inLater) return VehicleSampleResult.NotPresent;
+
+                // In exactly one: rate-limited, not absent. See VehicleSampleResult.Held -- this
+                // is the whole of ledger X-64.
+                if (!inEarlier)
+                {
+                    HeldCount++;
+                    pose = VehiclePose.FromEntry(in b);
+                    return VehicleSampleResult.Held;
+                }
+                if (!inLater)
+                {
+                    HeldCount++;
+                    pose = VehiclePose.FromEntry(in a);
+                    return VehicleSampleResult.Held;
+                }
 
                 // The gap is not always 1: a dropped snapshot leaves a two-tick span, and
                 // dividing by a hardcoded 1 would cover it in half the time and then wait --

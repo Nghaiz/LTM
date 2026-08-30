@@ -55,11 +55,22 @@ namespace Ironfront.Net.Unity
             _aiming = aiming;
         }
 
-        public float MoveX => Input.GetAxis("Horizontal");
+        /// <summary>
+        /// Whether a text field owns the keyboard this frame, in which case every keyboard-driven
+        /// read below reports neutral.
+        /// </summary>
+        /// <remarks>
+        /// Mouse look is deliberately NOT suppressed: <see cref="LookDeltaX"/> and
+        /// <see cref="LookDeltaY"/> are not keys, so typing cannot produce them, and freezing the
+        /// camera while a chat line is open is a separate design decision this does not make.
+        /// </remarks>
+        private static bool Typing => LocalTextEntry.Composing;
 
-        public float MoveZ => Input.GetAxis("Vertical");
+        public float MoveX => Typing ? 0f : Input.GetAxis("Horizontal");
 
-        public float Lean => Input.GetAxis("Lean");
+        public float MoveZ => Typing ? 0f : Input.GetAxis("Vertical");
+
+        public float Lean => Typing ? 0f : Input.GetAxis("Lean");
 
         public float LookDeltaX => Input.GetAxis("Mouse X");
 
@@ -99,6 +110,14 @@ namespace Ironfront.Net.Unity
             get
             {
                 bool loadoutOpen = NetInputBindings.Environment.LoadoutScreenOpen;
+
+                // Every button, not just the three the loadout screen suppresses. Reload, jump,
+                // crouch, sprint and use are all keys a player types -- R, space, C, shift, E --
+                // so a chat line that left them live would reload and jump its way through a
+                // sentence.
+                if (Typing) return InputButtonPacker.Pack(
+                    fire: false, aim: false, reload: false,
+                    jump: false, crouch: false, sprint: false, use: false);
 
                 return InputButtonPacker.Pack(
                     fire:   (Input.GetButton("Fire1") || Input.GetMouseButton(0)) && !loadoutOpen,

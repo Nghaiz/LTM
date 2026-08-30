@@ -551,14 +551,40 @@ namespace Ironfront.Net.Replication.Tests
             Assert.True(guardAt >= 0, "CapturePoint.SetOwner touches the renderer with no null guard, and it now runs on the server.");
             Assert.True(guardAt < useAt, "CapturePoint.SetOwner's null guard does not enclose its renderer write.");
 
-            // IngameUi is dereferenced with no guard at all; it must stay off the server's path,
-            // which means inside the offline-only arithmetic and nowhere else.
+            // IngameUi must never be dereferenced unguarded on the server's path. Containment in
+            // the offline-only UpdateOwner USED to be the whole rule, and it was a proxy for the
+            // real property rather than the property itself -- which is why it also forbade the
+            // correct thing. The capture indicator has to run in every role (it is driven by the
+            // LOCAL player's distance, and a networked client has no other path to it), so the
+            // rule is now the property: guarded, or inside the offline-only arithmetic.
             (int start, int end) update = MethodSpan(source, "CapturePoint.cs", "private void UpdateOwner()");
+            (int start, int end) indicator =
+                MethodSpan(source, "CapturePoint.cs", "private void UpdateFlagIndicator()");
+
             MatchCollection uses = Regex.Matches(source, @"IngameUi\.instance");
             foreach (System.Text.RegularExpressions.Match use in uses)
-                Assert.True(Within(use.Index, update),
-                    $"CapturePoint.cs dereferences IngameUi.instance at offset {use.Index}, outside the offline-only "
-                    + "UpdateOwner. A headless server has no IngameUi and does not null-check it.");
+                Assert.True(Within(use.Index, update) || Within(use.Index, indicator),
+                    $"CapturePoint.cs dereferences IngameUi.instance at offset {use.Index}, outside both the "
+                    + "offline-only UpdateOwner and the null-guarded UpdateFlagIndicator. A headless server has "
+                    + "no IngameUi.");
+
+            // ...and inside UpdateFlagIndicator the guard must ENCLOSE the uses, the same shape
+            // SetOwner's renderer guard is held to above. Without this half the method could
+            // deref first and null-check afterwards and still satisfy the containment test.
+            string indicatorBody = source.Substring(indicator.start, indicator.end - indicator.start);
+            int uiGuardAt = indicatorBody.IndexOf("IngameUi.instance == null", StringComparison.Ordinal);
+            int uiUseAt = indicatorBody.IndexOf("IngameUi.instance.", StringComparison.Ordinal);
+
+            Assert.True(uiGuardAt >= 0,
+                "CapturePoint.UpdateFlagIndicator touches IngameUi with no null guard, and it runs in every role.");
+            Assert.True(uiUseAt < 0 || uiGuardAt < uiUseAt,
+                "CapturePoint.UpdateFlagIndicator's null guard does not enclose its IngameUi uses.");
+
+            // The other singleton on that path. A dedicated server has no local player either.
+            Assert.Contains("FpsActorController.instance", indicatorBody);
+            Assert.True(
+                indicatorBody.Contains("local != null") || indicatorBody.Contains("local == null"),
+                "CapturePoint.UpdateFlagIndicator does not null-check FpsActorController.instance.");
         }
 
         // ------------------------------------------------------------------ shape: VehicleSpawner

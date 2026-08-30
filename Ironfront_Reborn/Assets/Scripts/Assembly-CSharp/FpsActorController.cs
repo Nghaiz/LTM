@@ -628,7 +628,11 @@ public class FpsActorController : ActorController
 				fpCameraParent.transform.localRotation = Quaternion.RotateTowards(fpCameraParent.transform.localRotation, Quaternion.identity, Time.deltaTime * 400f);
 			}
 		}
-		if (Input.GetButtonDown("Loadout"))
+		// Not while a text field owns the keyboard. The "Loadout" axis is bound to return with
+		// enter as its alternate (ProjectSettings/InputManager.asset), and the chat line sends
+		// on Return -- so without this guard one press both sent the message and toggled the
+		// deploy screen, which is the shape the defect took when chat first shipped.
+		if (Input.GetButtonDown("Loadout") && !LocalTextEntry.Composing)
 		{
 			if (LoadoutUi.IsOpen())
 			{
@@ -705,6 +709,13 @@ public class FpsActorController : ActorController
 	// would either drop presses or fire them twice.
 	private void UpdateInput()
 	{
+		// One guard for the whole method rather than eleven. Every read below is a bare key --
+		// the digits especially -- so typing "1st squad" into the chat line would otherwise
+		// switch weapon three times on the way through the sentence.
+		if (LocalTextEntry.Composing)
+		{
+			return;
+		}
 		if (Input.GetKeyDown(KeyCode.Alpha1))
 		{
 			actor.SwitchWeapon(0);
