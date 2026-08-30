@@ -48,6 +48,37 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>True when something is actually putting these reports on the wire.</summary>
         public static bool IsReplicating => !(_sink is NullVehicleLifecycleSink);
 
+        /// <summary>
+        /// Why the last <see cref="ReportSpawned"/> returned 0, in the server's own words, or
+        /// an empty string when the installed sink cannot say.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>X-70, and what a two-cause message costs.</b> <c>VehicleSpawner</c> reported a
+        /// refused spawn as <i>"either the prefab's networkId is unauthored ... or every vehicle
+        /// id is in use"</i> -- two causes, no way to tell them apart, and a reader picked the
+        /// wrong one: P5 concluded the quadbike and helicopter prefabs were unauthored, and both
+        /// have carried ids since the V3 commit that introduced the field. Every id in
+        /// <c>VehicleIds</c> (1..5) is known to <c>TryGetKind</c>, so by elimination the refusal
+        /// was the id pool -- but nothing on disk said so, and the row sat open for a day being
+        /// investigated in the wrong direction.
+        /// </para>
+        /// <para>
+        /// The sink has counted the two separately the whole time. This is the reading of those
+        /// counters, so the log line names the cause instead of offering a choice.
+        /// </para>
+        /// </remarks>
+        public static string DescribeSpawnRefusal()
+        {
+            if (!(_sink is ServerVehicleLifecycleSink server)) return string.Empty;
+
+            VehicleIdPool ids = server.Ids;
+
+            return $"unauthored={server.UnauthoredPrefabCount} idExhausted={server.IdExhaustedCount}"
+                   + $" | ids in-use={ids.InUseCount} quarantined={ids.QuarantinedCount}"
+                   + $" free={ids.FreeCount} capacity={ids.Capacity}";
+        }
+
         /// <summary>Installs the server's sink. Called from <c>ServerTickLoop.Bind</c>.</summary>
         public static void Install(IVehicleLifecycleSink sink)
             => _sink = sink ?? NullVehicleLifecycleSink.Instance;

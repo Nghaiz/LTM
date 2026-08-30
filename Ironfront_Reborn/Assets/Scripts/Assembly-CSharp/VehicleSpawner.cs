@@ -215,10 +215,15 @@ public class VehicleSpawner : MonoBehaviour
 		if (warnedAboutUnreplicatedSpawn) return;
 
 		warnedAboutUnreplicatedSpawn = true;
+
+		// The counters, not the two candidates. X-70: this line used to say "either the prefab's
+		// networkId is unauthored or every vehicle id is in use", and a reader took the first
+		// branch for a prefab that had carried an id since the commit which introduced the
+		// field. A message that offers a choice is a message that gets chosen wrongly.
 		Debug.LogError(
-			$"[net] vehicle spawner '{name}' produced '{prefab.name}' with no network id, so no "
-			+ "client will ever see it. Either the prefab's networkId is unauthored (author it "
-			+ "against protocol-spec.md section 4.9) or every vehicle id is in use.");
+			$"[net] vehicle spawner '{name}' produced '{prefab.name}' (networkId "
+			+ $"{lastSpawnedVehicle.NetworkId}) with no network id, so no client will ever see "
+			+ $"it. {NetVehicleLifecycle.DescribeSpawnRefusal()}");
 	}
 
 	private bool SpawnIsBlocked()
