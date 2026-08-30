@@ -78,6 +78,24 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 	/// <summary>This prefab's vehicle-type id. 0 means unauthored, and never ships.</summary>
 	public byte NetworkId => networkId;
 
+	/// <summary>
+	/// World position of one seat, or <c>Vector3.positiveInfinity</c> when there is no such seat.
+	/// </summary>
+	/// <remarks>
+	/// <b>The single implementation both ends of the reach check read.</b> The server judges a
+	/// seat request against this; the client picks which seat to offer using the same call.
+	/// Before X-67 there were two measurements -- this one on the server and the hull origin on
+	/// the client -- against one 6 m constant, so a player standing beside a tank could be shown
+	/// a prompt the server then refused with "Too far from the seat."
+	/// </remarks>
+	public Vector3 GetSeatPosition(int seatIndex)
+	{
+		if (seats == null || seatIndex < 0 || seatIndex >= seats.Length) return Vector3.positiveInfinity;
+
+		Seat seat = seats[seatIndex];
+		return seat != null ? seat.transform.position : Vector3.positiveInfinity;
+	}
+
 	public float maxHealth = 1000f;
 
 	public float crashDamageSpeedThrehshold = 2f;
