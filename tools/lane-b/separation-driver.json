@@ -1,0 +1,40 @@
+{
+  "name": "separation-shooter",
+  "comment": [
+    "X-28. Three roles, three places, and the shooter starts OUTSIDE its own hold distance.",
+    "",
+    "The pin X-22 shipped is gone: X-63 found every Dustbowl spawn point is team-owned, so",
+    "-SpawnIndex now starves a team and VOIDS a run rather than pinning one. Separation has",
+    "to come from the programme, and this set is that.",
+    "",
+    "The withdraw step is the whole point of acceptance criterion 5. Same-team clients spawn",
+    "about 3 m apart, which is inside holdDistanceMeters 6.0, so ApproachMoveZ returns 0 from",
+    "the first frame and the driver never moves -- the 1.5..3.3 m spread earlier runs reported",
+    "was spawn jitter, not an approach. Walking backwards for 10 s while still facing the",
+    "target puts real distance in front of the approach, so aim.distanceM at the 'approaching'",
+    "capture (a checkpoint fires at its step's ENTRY) is the evidence that ApproachMoveZ was",
+    "non-zero on that step's first frame.",
+    "",
+    "Grade acceptance criterion 4 from the server's shot log: run with -LogShots, which sets",
+    "IRONFRONT_LOG_SHOTS=1 and makes ServerCombatBridge print the nearest OTHER target beside",
+    "every trigger frame. That line is the only artifact that says whether the resolver picked",
+    "the intended target or the witness."
+  ],
+  "steps": [
+    { "seconds": 5.0, "yawDegrees": 0 },
+    { "checkpoint": "spawned", "seconds": 3.0, "aimAtPlayer": "OBS-B" },
+    { "checkpoint": "withdrawing", "seconds": 10.0,
+      "aimAtPlayer": "OBS-B", "moveZ": -1.0 },
+    { "checkpoint": "approaching", "seconds": 12.0,
+      "aimAtPlayer": "OBS-B", "approach": true, "holdDistanceMeters": 6.0 },
+    { "checkpoint": "in-range", "seconds": 5.0,
+      "aimAtPlayer": "OBS-B", "approach": true, "holdDistanceMeters": 6.0, "aim": true },
+    { "checkpoint": "firing", "seconds": 10.0,
+      "aimAtPlayer": "OBS-B", "approach": true, "holdDistanceMeters": 6.0,
+      "aim": true, "fire": true },
+    { "checkpoint": "killed", "seconds": 6.0, "aimAtPlayer": "OBS-B" },
+    { "checkpoint": "victim-input-held", "seconds": 6.0, "aimAtPlayer": "OBS-B" },
+    { "checkpoint": "respawn-window", "seconds": 10.0, "aimAtPlayer": "OBS-B" },
+    { "checkpoint": "respawned", "seconds": 6.0, "aimAtPlayer": "OBS-B" }
+  ]
+}

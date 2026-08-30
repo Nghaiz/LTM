@@ -24,9 +24,12 @@ this says something subscribes, not that it renders correctly."* Nothing in CI h
 the screen. The four defects a player hits in the first minute (§ 3) were all invisible to a
 green build, and that is the single most important fact on this page.
 
-**Fourteen ledger rows are open.** **None is a live defect** — X-59 and X-60 closed on 2026-08-29
-in [P1](phases/phase-p1-exception-storm.md) — three are harness gaps, eight are
-verification rows that need one lane-B run, and three are parked with a written reason.
+**Sixteen ledger rows are open**, and **one is a live defect for the first time since P1** —
+**X-69**, a 534-exception server-side NRE storm in `AiActorController.LocalAvoidanceVelocity` that
+[P5](phases/phase-p5-harness-gaps.md) found on 2026-08-30 when its own exception gate voided a run.
+The rest are harness gaps and authoring gaps: **X-67** and **X-68** block E11, **X-70** is two
+unauthored vehicle prefabs, and **X-28**, **X-37**, **X-61**, **X-63**, **X-64**, **X-66** carry
+the remaining instrument debt.
 [`debt-ledger.md`](debt-ledger.md) is the source of truth; this file does not restate it.
 
 **Eight of those verification rows were last graded against blockers that have since closed.**
@@ -47,12 +50,16 @@ that README without carrying them would have completed the loss.
 |---|---|---|---|
 | **M0** Foundation | Protocol spec v1.0 frozen · headless build runs · network simulator working · CI compiles all projects | **4 / 4** | done |
 | **M1** Connection | **2 clients see each other moving smoothly** at 100 ms RTT + 5 % loss | ☐ | check 7 → **B-7** → [P4](phases/phase-p4-lane-b-regrade.md) |
-| **M2** Combat | Server-authoritative shooting with lag compensation · health/death/respawn · AI bots replicate | ☐ | checks 1, 13 → **B-1**, **B-2** → [P4](phases/phase-p4-lane-b-regrade.md) |
+| **M2** Combat | Server-authoritative shooting with lag compensation · health/death/respawn · AI bots replicate | **3 / 3** | checks 1, 13 → **B-1** (P4 § 4.1), **B-2** (P5 § 3.3 — `p5-separation-02` samples a dead body at `alive false / hp 0 / canRespawn true`, with input suppressed on 255 of 255 dead frames) |
 | **M3** Full match | Login → lobby → room → capture point → win/lose → back to lobby, 16 players · **the flow runs with no manual file editing** · **a wrong password gives a clear error** · **disconnecting mid-match returns to the lobby with a message** | ☐ | [P8](phases/phase-p8-capstone-deliverables.md); the 16-player half is [P7](phases/phase-p7-v9-integration.md) |
 | **M4** Polish | Load test with 16 clients · measurement report · documentation · demo video · **0 P0 bugs** · **the 5-scenario measurement table filled in** · **the on/off comparison table for the five netcode techniques filled in** · **30 minutes of continuous play with no crash and no leak** | ☐ | [P7](phases/phase-p7-v9-integration.md) + [P8](phases/phase-p8-capstone-deliverables.md) |
 
-**M1 and M2 are ☐ because they are ungradeable, not because they failed.** No programme provokes
-the case, or no artifact was ever captured of the case. P4 and P5 exist to make them gradeable.
+**M2 is met and M1 is a measured failure — neither is ☐ any more, and P4 and P5 are why.** M2's
+last unmet clause was health/death/respawn, ungradeable because no checkpoint had ever sampled a
+dead body; [P5](phases/phase-p5-harness-gaps.md) § 3.3 samples one. **M1 is ☐ here only because
+this table has no FAIL cell**: P4 § 4.4 measured it failing, with a located cause (**X-64**, one
+observer's copy of a hull freezes 303 m behind while its own snapshot counters keep advancing) —
+read the row as "measured, and failing", not as "not yet tried".
 
 ---
 

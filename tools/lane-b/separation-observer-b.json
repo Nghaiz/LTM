@@ -1,0 +1,31 @@
+{
+  "name": "separation-victim",
+  "comment": [
+    "X-28's TARGET. Stands where it spawned and faces the shooter, so the only thing that",
+    "moves the pair apart is the shooter's own withdraw step -- a target that also walked",
+    "would make the resulting distance a sum of two unknowns.",
+    "",
+    "victim-input-held is X-29's probe and it is deliberately a step that DEMANDS input while",
+    "dead: moveZ 1.0 and fire, held for six seconds. If the death path suppressed input the",
+    "body neither walks nor shoots, and combat.deathInput records both halves of that window.",
+    "",
+    "The last step exists because of X-29's second half. The respawn edge is raised by the",
+    "respawn-window step, and a checkpoint fires at its step's ENTRY, so the respawn-window",
+    "capture is taken BEFORE the request is even sent -- which is why no artifact has ever",
+    "shown a respawn landing. 'respawned' is the first capture after it."
+  ],
+  "steps": [
+    { "seconds": 5.0, "yawDegrees": 180 },
+    { "checkpoint": "spawned", "seconds": 3.0, "aimAtPlayer": "DRIVER" },
+    { "checkpoint": "withdrawing", "seconds": 10.0, "aimAtPlayer": "DRIVER" },
+    { "checkpoint": "approaching", "seconds": 12.0, "aimAtPlayer": "DRIVER" },
+    { "checkpoint": "in-range", "seconds": 5.0, "aimAtPlayer": "DRIVER" },
+    { "checkpoint": "firing", "seconds": 10.0, "aimAtPlayer": "DRIVER" },
+    { "checkpoint": "killed", "seconds": 6.0, "aimAtPlayer": "DRIVER" },
+    { "checkpoint": "victim-input-held", "seconds": 6.0,
+      "aimAtPlayer": "DRIVER", "moveZ": 1.0, "fire": true },
+    { "checkpoint": "respawn-window", "seconds": 10.0,
+      "aimAtPlayer": "DRIVER", "respawn": true },
+    { "checkpoint": "respawned", "seconds": 6.0, "aimAtPlayer": "DRIVER" }
+  ]
+}

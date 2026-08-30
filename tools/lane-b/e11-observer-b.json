@@ -1,0 +1,41 @@
+{
+  "name": "e11-turret-gunner",
+  "comment": [
+    "B: walks to the same tank and asks for a seat one step AFTER DRIVER has booked seat 0,",
+    "so the request is refused RejectedOccupied and ClientSeatRequester.TryNextSeat walks to",
+    "index 1 -- the Gunner seat, whose MountedTurret.Unholster is the A16 hijack site.",
+    "The turret-mounted capture is the FIRST one that can show the outcome: a checkpoint",
+    "fires at its step's entry, so the toggle in the seat0-taken step has completed by then.",
+    "Read combat.seat.requestsSent beside occupiedVehicleId -- X-65 exists because the record",
+    "could not tell a request that was never sent from one that was refused.",
+    "The toggle REPEATS because p5-e11-01 measured seat 1 already occupied: AiActorController",
+    "seats a bot in the nearest vehicle within 4 m, so the gunner seat is contested. Each",
+    "toggle costs two requests (index 0, then index 1 on the refusal), and a later one enters",
+    "if the bot has left. Retries do not make the case happen -- they only stop a single",
+    "badly-timed sample being read as though the seat were permanently unreachable."
+  ],
+  "steps": [
+    { "seconds": 5.0, "yawDegrees": 0 },
+    { "checkpoint": "spawned", "seconds": 2.0, "yawDegrees": 0 },
+    { "checkpoint": "walking-to-vehicle", "seconds": 90.0,
+      "approachVehicle": true, "vehicleSearchMetres": 2000.0,
+      "vehicleHoldDistanceMeters": 4.0, "sprint": true },
+    { "checkpoint": "seat0-requested", "seconds": 8.0,
+      "approachVehicle": true, "vehicleSearchMetres": 2000.0,
+      "vehicleHoldDistanceMeters": 4.0 },
+    { "checkpoint": "seat0-taken", "seconds": 10.0,
+      "approachVehicle": true, "vehicleSearchMetres": 2000.0,
+      "vehicleHoldDistanceMeters": 4.0, "seatToggle": true },
+    { "checkpoint": "turret-mounted", "seconds": 12.0,
+      "approachVehicle": true, "vehicleSearchMetres": 2000.0,
+      "vehicleHoldDistanceMeters": 4.0, "seatToggle": true },
+    { "checkpoint": "turret-retry-1", "seconds": 12.0,
+      "approachVehicle": true, "vehicleSearchMetres": 2000.0,
+      "vehicleHoldDistanceMeters": 4.0, "seatToggle": true },
+    { "checkpoint": "turret-retry-2", "seconds": 12.0,
+      "approachVehicle": true, "vehicleSearchMetres": 2000.0,
+      "vehicleHoldDistanceMeters": 4.0, "seatToggle": true },
+    { "checkpoint": "witness-firing", "seconds": 10.0, "yawDegrees": 90 },
+    { "checkpoint": "gunner-damaged", "seconds": 8.0, "yawDegrees": 90 }
+  ]
+}

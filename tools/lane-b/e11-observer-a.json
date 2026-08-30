@@ -1,0 +1,30 @@
+{
+  "name": "e11-witness",
+  "comment": [
+    "A: the watcher, and the source of B's damage -- E11 asks that B takes damage WHILE A",
+    "watches, so one client has to be both. Holds 12 m from the tank, which is outside",
+    "SeatArbiter.MaxSeatReachMetres (6) so this client can never accidentally take a seat,",
+    "and inside rifle range so the fire steps mean something.",
+    "It never toggles a seat, so its own activeCameras is the CONTROL for check 5: A16's fix",
+    "guards MountedTurret.Unholster with NetPresenterGate.IsLocalActor, and a remote human",
+    "mounting a turret must therefore leave this client's cameras alone.",
+    "Hitbox.ProjectileHit applies damage with no team test (P4 SS 4.1), so A and B being on",
+    "one team does not make the engagement fake."
+  ],
+  "steps": [
+    { "seconds": 5.0, "yawDegrees": 0 },
+    { "checkpoint": "spawned", "seconds": 2.0, "yawDegrees": 0 },
+    { "checkpoint": "walking-to-vehicle", "seconds": 90.0,
+      "approachVehicle": true, "vehicleSearchMetres": 2000.0,
+      "vehicleHoldDistanceMeters": 12.0, "sprint": true },
+    { "checkpoint": "seat0-requested", "seconds": 8.0, "aimAtPlayer": "OBS-B" },
+    { "checkpoint": "seat0-taken", "seconds": 10.0, "aimAtPlayer": "OBS-B" },
+    { "checkpoint": "turret-mounted", "seconds": 12.0,
+      "aimAtPlayer": "OBS-B", "aim": true },
+    { "checkpoint": "turret-retry-1", "seconds": 12.0, "aimAtPlayer": "OBS-B" },
+    { "checkpoint": "turret-retry-2", "seconds": 12.0, "aimAtPlayer": "OBS-B" },
+    { "checkpoint": "witness-firing", "seconds": 10.0,
+      "aimAtPlayer": "OBS-B", "aim": true, "fire": true },
+    { "checkpoint": "gunner-damaged", "seconds": 8.0, "aimAtPlayer": "OBS-B" }
+  ]
+}

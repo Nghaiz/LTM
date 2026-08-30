@@ -1,0 +1,32 @@
+{
+  "name": "separation-witness",
+  "comment": [
+    "X-28's WITNESS, and the role the shared spawn point kept putting in the line of fire.",
+    "In x25-torso-aim-02 the resolver's nearest target was this client at 2.7 m while the",
+    "shooter aimed at the other; combat-observer-b.json's seven-second strafe bought two runs",
+    "in three, which is separation by luck rather than by construction.",
+    "",
+    "This walks OUT rather than strafing across: a strafe stays broadside to the shooter's",
+    "line, so a few metres of it only moves the witness along the arc the resolver scans. Yaw",
+    "90 with sprint for twelve seconds leaves the engagement altogether, and then it holds --",
+    "a witness still walking during the fire window would make each run's geometry different,",
+    "which is the reproducibility this set is for.",
+    "",
+    "It never fires. A third shooter would make every killfeed line ambiguous about who killed",
+    "whom, which is the ambiguity check 1 spent three runs on."
+  ],
+  "steps": [
+    { "seconds": 5.0, "yawDegrees": 90 },
+    { "checkpoint": "spawned", "seconds": 3.0, "yawDegrees": 90 },
+    { "checkpoint": "withdrawing", "seconds": 10.0,
+      "yawDegrees": 90, "moveZ": 1.0, "sprint": true },
+    { "checkpoint": "approaching", "seconds": 12.0,
+      "yawDegrees": 90, "moveZ": 1.0, "sprint": true },
+    { "checkpoint": "in-range", "seconds": 5.0, "yawDegrees": 270 },
+    { "checkpoint": "firing", "seconds": 10.0, "yawDegrees": 270 },
+    { "checkpoint": "killed", "seconds": 6.0, "yawDegrees": 270 },
+    { "checkpoint": "victim-input-held", "seconds": 6.0, "yawDegrees": 270 },
+    { "checkpoint": "respawn-window", "seconds": 10.0, "yawDegrees": 270 },
+    { "checkpoint": "respawned", "seconds": 6.0, "yawDegrees": 270 }
+  ]
+}

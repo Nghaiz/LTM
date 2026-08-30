@@ -62,6 +62,31 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         private bool _inputSuppressedByDeath;
 
+        /// <summary>
+        /// <see cref="_inputSuppressedByDeath"/>, read-only. Ledger <b>X-29</b>, check 13.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Surfaced because nothing else in the artifact answers the question.</b> Check 13
+        /// reads "death → input disable → respawn screen" and was graded on two of its three
+        /// terms. <c>combat.driverEnabled</c> records whether THIS COMPONENT is running, and it
+        /// must keep running to accept a respawn request, so its staying <c>true</c> after a
+        /// death is correct rather than an answer. <c>FpsActorController.IsInputEnabled</c> —
+        /// the accessor X-29 reached for first — is pinned <c>false</c> for the whole life of a
+        /// lane-B client, because <c>Start</c> disables it and the only caller that re-enables
+        /// is <c>SpawnAt</c>, the gameplay spawn a networked body deliberately never runs. It is
+        /// therefore constant, and a constant cannot distinguish alive from dead.
+        /// </para>
+        /// <para>
+        /// <b>A getter, and nothing more.</b> No setter, no side effect, no harness type named
+        /// from this file. The suppression is still owned entirely by <see cref="OnDied"/>,
+        /// <see cref="OnRespawned"/> and <see cref="RestoreInput"/>; this only lets a recorder
+        /// read what they decided, which is the whole difference between a check that grades
+        /// the game and one that grades a proxy for it.
+        /// </para>
+        /// </remarks>
+        public bool IsInputSuppressedByDeath => _inputSuppressedByDeath;
+
         /// <summary>Reused for C_SPAWN_REQUEST. Sized like every other client send buffer.</summary>
         private readonly byte[] _payload = new byte[ProtocolConstants.MAX_PAYLOAD];
 
