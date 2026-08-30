@@ -123,6 +123,39 @@ try {
         if ($server.HasExited) {
             throw "the server exited during warm-up with code $($server.ExitCode). See $serverLog."
         }
+
+        # HasExited is not enough, and a whole 30-minute run was graded before this line existed.
+        #
+        # NetServerBootstrap.StartServer catches the SocketException when the UDP port is already
+        # held, logs an error, sets _misconfigured and RETURNS -- deliberately, because an
+        # exception escaping Awake leaves a half-built server behind. So the process stays alive
+        # and HasExited stays false while the server is serving nothing at all.
+        #
+        # On 2026-08-31 a stale server from a previous session still held 27015. The soak's own
+        # server refused to start, the playable client connected to that OLDER process instead
+        # (a build predating every fix under test), and the runner sampled the memory of a
+        # process that was doing no work. It graded "30 minutes MET, no crash MET" and reported
+        # the idle process's curve as a LEAK. Every one of those three verdicts was about the
+        # wrong process.
+        #
+        # This is the harness's own instance of the check operations.md asks of a deployment:
+        # `Up` does not mean working, and the port is what tells them apart.
+        $owner = Get-NetUDPEndpoint -LocalPort $Port -ErrorAction SilentlyContinue |
+                 Select-Object -ExpandProperty OwningProcess -First 1
+
+        if ($null -eq $owner) {
+            throw "the server did not bind UDP :$Port during warm-up, so it is running and " +
+                  "serving nothing. See $serverLog. Nothing is graded from here -- a soak that " +
+                  "samples a server which never bound measures an idle process."
+        }
+
+        if ($owner -ne $server.Id) {
+            throw "UDP :$Port is held by process $owner, not by this run's server " +
+                  "($($server.Id)). A client would connect to THAT process and this run would " +
+                  "grade the wrong one. Stop it first: Stop-Process -Id $owner -Force."
+        }
+
+        Write-Host "[soak] server pid $($server.Id) owns UDP :$Port - it is actually serving"
     }
 
     # ------------------------------------------------------------------ the client
