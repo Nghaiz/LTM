@@ -116,6 +116,7 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// window a measurement of the programme's opening seconds only.
         /// </remarks>
         private LaneBAllocationSampler _allocation;
+        private LaneBDeathInputSampler _deathInput;
         private LaneBRunSeeds _seeds;
         private bool _installed;
         private bool _finished;
@@ -222,6 +223,7 @@ namespace Ironfront.Net.Unity.Diagnostics
             // it at all, so a sampler there would produce an allocation figure for a frame that
             // check 10 is not about -- a number that looks like an answer and is not one.
             if (_role != "server") _allocation = new LaneBAllocationSampler();
+            if (_role != "server") _deathInput = new LaneBDeathInputSampler();
 
             Debug.Log($"[lane-b] role={_role} label={_label} unitySeed={_seeds.UnitySeed} "
                       + $"sim={_seeds.SimulatorPreset}/{_seeds.SimulatorSeed} "
@@ -369,6 +371,7 @@ namespace Ironfront.Net.Unity.Diagnostics
             // kind of thing that is invisible in a batchmode run and noisy in a live Editor.
             _allocation?.Dispose();
             _allocation = null;
+            _deathInput = null;
         }
 
         /// <summary>
@@ -458,6 +461,7 @@ namespace Ironfront.Net.Unity.Diagnostics
             // programme did would drop the last window's final reading. Sampling is two adds
             // and a comparison; there is no frame it is worth skipping.
             _allocation?.Sample();
+            _deathInput?.Sample();
 
             if (_finished) return;
 
@@ -612,7 +616,8 @@ namespace Ironfront.Net.Unity.Diagnostics
             _explosions.Attach(client.Router);
 
             _recorder = new LaneBCheckpointRecorder(
-                _artifacts, _label, programme.name, _seeds, _solver, _explosions, _allocation);
+                _artifacts, _label, programme.name, _seeds, _solver, _explosions, _allocation,
+                _deathInput);
 
             local.SetInputSource(_source);
 

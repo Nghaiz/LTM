@@ -55,6 +55,7 @@ namespace Ironfront.Net.Unity.Diagnostics
         private readonly ScriptedTargetSolver _solver;
         private readonly LaneBExplosionLog _explosions;
         private readonly LaneBAllocationSampler _allocation;
+        private readonly LaneBDeathInputSampler _deathInput;
         private readonly StringBuilder _json = new StringBuilder(4096);
 
         private static readonly UTF8Encoding NoBom = new UTF8Encoding(false);
@@ -70,10 +71,19 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// (ledger X-33). Absent, the record says <c>"allocation":null</c> rather than zero —
         /// see <see cref="AllocationWindow.Valid"/> for why those must not look alike.
         /// </param>
+        /// <param name="deathInput">
+        /// Optional. Present, every record carries whether a death took the local player's input
+        /// away at any point since the previous checkpoint — check 13's middle term, and the one
+        /// X-29 filed as having no measurement at all. Absent, the record says
+        /// <c>"deathInput":null</c> rather than a set of zeroes, for <paramref name="allocation"/>'s
+        /// reason: a window that was never sampled and a window in which nobody died are
+        /// different facts and must not render alike.
+        /// </param>
         public LaneBCheckpointRecorder(string directory, string label, string programme,
                                        LaneBRunSeeds seeds, ScriptedTargetSolver solver = null,
                                        LaneBExplosionLog explosions = null,
-                                       LaneBAllocationSampler allocation = null)
+                                       LaneBAllocationSampler allocation = null,
+                                       LaneBDeathInputSampler deathInput = null)
         {
             _directory = directory;
             _label = label;
@@ -82,6 +92,7 @@ namespace Ironfront.Net.Unity.Diagnostics
             _solver = solver;
             _explosions = explosions;
             _allocation = allocation;
+            _deathInput = deathInput;
 
             Directory.CreateDirectory(_directory);
             RecordPath = Path.Combine(_directory, _label + "-checkpoints.jsonl");
@@ -201,6 +212,8 @@ namespace Ironfront.Net.Unity.Diagnostics
             AppendAim(client);
             Comma();
             AppendCombat();
+            Comma();
+            AppendSeatRequests();
             Comma();
             AppendHud();
             Comma();
@@ -530,6 +543,15 @@ namespace Ironfront.Net.Unity.Diagnostics
                     _json.Append("\"localInputEnabled\":null"); Comma();
                 }
 
+                // The term localInputEnabled above cannot carry, and the reason it cannot:
+                // FpsActorController.Start disables input and only SpawnAt re-enables it, so
+                // that flag is pinned false on every lane-B client whether it is alive or dead.
+                // This one is written by the death path itself.
+                _json.Append("\"inputSuppressedByDeath\":")
+                     .Append(driver.IsInputSuppressedByDeath ? "true" : "false"); Comma();
+
+                AppendDeathInput(); Comma();
+
                 _json.Append("\"canRespawn\":")
                      .Append(state.CanRequestRespawn(now) ? "true" : "false"); Comma();
                 Num("secondsUntilRespawn", state.SecondsUntilRespawn(now)); Comma();
@@ -578,6 +600,112 @@ namespace Ironfront.Net.Unity.Diagnostics
                 Str("combatPresenter", "absent");
             }
 
+            _json.Append('}');
+        }
+
+        /// <summary>
+        /// Whether a death took the local player's input away since the previous checkpoint —
+        /// check 13's middle term. Ledger <b>X-29</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A WINDOW, not the instant, and both are written.</b> The instantaneous
+        /// <c>inputSuppressedByDeath</c> beside this answers "is input suppressed right now",
+        /// and a death can open and close between two captures: across all 21 checkpoints of
+        /// <c>p4-pointblank-01</c> the record showed <c>alive: true</c> every time while the
+        /// killfeed proved both players died repeatedly. This window counts every frame in
+        /// between, so a death that fell between two captures is still counted.
+        /// </para>
+        /// <para>
+        /// <b>The instant is not useless and the claim is deliberately narrow.</b> "A capture
+        /// never lands inside the dead window" would be false — <c>p5-separation-02</c>'s
+        /// <c>killed</c> capture landed on one and read <c>inputSuppressedByDeath: true</c>,
+        /// and seven lane-B artifacts predating this field already carried a checkpoint with
+        /// <c>alive: false</c>. The claim is only that the instant cannot be RELIED on: over
+        /// those same runs it caught 1 of the 6 windows in which a death occurred.
+        /// </para>
+        /// <para>
+        /// <b><c>deadFrames</c> is what stops a vacuous pass.</b> Zero suppressed frames means
+        /// one of two opposite things: nobody died in this window, or somebody died and kept
+        /// their input. Without the dead count those render identically and the healthy reading
+        /// is the same as the failure. Read them as a pair: <c>deadFrames &gt; 0</c> with
+        /// <c>suppressedFrames == 0</c> is the failure check 13 is looking for.
+        /// </para>
+        /// <para>
+        /// <b><c>null</c> when no sampler was supplied</b>, for <c>AppendAllocation</c>'s reason:
+        /// a server process has no driver, and a set of zeroes from a window nobody sampled
+        /// would grade check 13 on the strength of not having measured.
+        /// </para>
+        /// </remarks>
+        private void AppendDeathInput()
+        {
+            if (_deathInput == null)
+            {
+                _json.Append("\"deathInput\":null");
+                return;
+            }
+
+            DeathInputWindow window = _deathInput.TakeWindow();
+
+            _json.Append("\"deathInput\":{");
+            Bool("driverPresent", window.DriverPresent); Comma();
+            Num("frames", window.Frames); Comma();
+            Num("suppressedFrames", window.SuppressedFrames); Comma();
+            Num("deadFrames", window.DeadFrames); Comma();
+            Bool("suppressionObserved", window.SuppressionObserved); Comma();
+            Bool("deathObserved", window.DeathObserved);
+            _json.Append('}');
+        }
+
+        /// <summary>
+        /// What the server said about this client's seat requests — ledger <b>X-65</b>, and the
+        /// precondition for grading check 5.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>P4 named the missing field and this is it.</b> In <c>p4-turret-02</c> a second
+        /// client stood 1.7 m from vehicle 15 — against <c>SeatArbiter.MaxSeatReachMetres</c> of
+        /// 6 — pressed the seat toggle, and <c>occupiedVehicleId</c> stayed 0 with no
+        /// <c>S_SEAT_CHANGE</c>, no rejection and no log line anywhere in the artifact. The run
+        /// could not distinguish a request that was never sent from one that was refused, which
+        /// are opposite defects.
+        /// </para>
+        /// <para>
+        /// <b>Counters AND the last answer, because neither is sufficient.</b>
+        /// <c>requestsSent 0</c> after a programmed toggle localises the fault to the client's
+        /// own send path; <c>requestsSent 2, lastResult RejectedOccupied</c> localises it to the
+        /// arbiter's answer. <c>lastResult</c> alone cannot say which, because
+        /// <c>ClientSeatRequester.LastResult</c> initialises to <c>Entered</c> before any answer
+        /// has arrived — so an untouched requester and a granted one read the same, and only
+        /// <c>requestsSent</c> separates them.
+        /// </para>
+        /// <para>
+        /// <b>Why this gates E11 rather than merely check 12.</b> The only
+        /// <c>MountedTurret</c> in the project is on <c>tank.prefab</c>, at seat index 1 — the
+        /// Gunner — and <c>ClientSeatRequester</c> reaches index 1 only by being refused index 0
+        /// first. So the A16 camera hijack E11 grades cannot be provoked at all unless the
+        /// occupied-walk works, and until this field existed there was no way to see whether it
+        /// had run.
+        /// </para>
+        /// </remarks>
+        private void AppendSeatRequests()
+        {
+            var requester = Object.FindFirstObjectByType<ClientSeatRequester>(
+                FindObjectsInactive.Include);
+
+            if (requester == null)
+            {
+                _json.Append("\"seat\":null");
+                return;
+            }
+
+            _json.Append("\"seat\":{");
+            Bool("requesterEnabled", requester.isActiveAndEnabled); Comma();
+            Num("requestsSent", requester.RequestsSent); Comma();
+            Num("requestsRefused", requester.RequestsRefused); Comma();
+            Num("pressesWhileWaiting", requester.PressesWhileWaiting); Comma();
+            Str("lastResult", requester.LastResult.ToString()); Comma();
+            Str("lastRefusalText", requester.LastRefusalText ?? string.Empty);
             _json.Append('}');
         }
 

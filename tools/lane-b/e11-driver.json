@@ -1,0 +1,30 @@
+{
+  "name": "e11-seat0-holder",
+  "comment": [
+    "E11 / check 5: B enters a mounted turret and takes damage while A watches.",
+    "This client is neither A nor B. It exists to OCCUPY SEAT 0, and that is structural:",
+    "the only MountedTurret in the project is on tank.prefab and it is the GUNNER seat's",
+    "weapon -- index 1 of the Vehicle's two-entry seats array -- while ClientSeatRequester",
+    "always asks for seat 0 and reaches index 1 only by being told RejectedOccupied.",
+    "A lone client takes seat 0, gets no turret, and grades nothing.",
+    "This client toggles one step BEFORE OBS-B so seat 0 is booked when OBS-B asks.",
+    "Checkpoints fire at their step's ENTRY, so each one is named for the state it can",
+    "already see rather than for the action its own step is about to take."
+  ],
+  "steps": [
+    { "seconds": 5.0, "yawDegrees": 0 },
+    { "checkpoint": "spawned", "seconds": 2.0, "yawDegrees": 0 },
+    { "checkpoint": "walking-to-vehicle", "seconds": 90.0,
+      "approachVehicle": true, "vehicleSearchMetres": 2000.0,
+      "vehicleHoldDistanceMeters": 4.0, "sprint": true },
+    { "checkpoint": "seat0-requested", "seconds": 8.0,
+      "approachVehicle": true, "vehicleSearchMetres": 2000.0,
+      "vehicleHoldDistanceMeters": 4.0, "seatToggle": true },
+    { "checkpoint": "seat0-taken", "seconds": 10.0, "yawDegrees": 0 },
+    { "checkpoint": "turret-mounted", "seconds": 12.0, "yawDegrees": 0 },
+    { "checkpoint": "turret-retry-1", "seconds": 12.0, "yawDegrees": 0 },
+    { "checkpoint": "turret-retry-2", "seconds": 12.0, "yawDegrees": 0 },
+    { "checkpoint": "witness-firing", "seconds": 10.0, "yawDegrees": 0 },
+    { "checkpoint": "gunner-damaged", "seconds": 8.0, "yawDegrees": 0 }
+  ]
+}

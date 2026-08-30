@@ -274,11 +274,13 @@ namespace Ironfront.Net.Unity.Client
         private static void KnockOverLocalActor(Vector3 force, HitboxType hitbox)
         {
             // ClientCombatState owns the local player's death STATE — respawn timer, ammo,
-            // health — and V10 does not duplicate it. It is a pure model and no Unity component
-            // holds one yet, which is a recorded gap, not this presenter's to close. What is
-            // this presenter's is that the body falls over: at the client role Actor.Damage
-            // never reaches Die() (ownsHealth is false), so without this the local player takes
-            // hits, staggers, and stands there dead.
+            // health — and V10 does not duplicate it. NetClientLocalCombatDriver declares itself
+            // the one production owner and holds one, at its own :50. Until 2026-08-30 this
+            // remark still called that a recorded gap — the last surviving copy of a sentence
+            // that stopped being true when the driver landed, which is precisely the decay
+            // ledger X-29 was filed against. What is this presenter's is that the body falls
+            // over: at the client role Actor.Damage never reaches Die() (ownsHealth is false),
+            // so without this the local player takes hits, staggers, and stands there dead.
             ILocalPlayerRig local = NetClientBindings.LocalPlayer;
             if (!local.HasFellableBody) return;
 

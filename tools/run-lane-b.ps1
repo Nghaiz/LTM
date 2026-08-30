@@ -133,7 +133,22 @@ param(
     # Signed tickets are the real path (issue #151): with a secret set the client mints and
     # signs its own ticket and the server verifies it. Empty means unsigned, which exercises a
     # path no shipped server should run.
-    [string] $SharedSecret = "lane-b-harness-secret"
+    [string] $SharedSecret = "lane-b-harness-secret",
+
+    # Turn on ServerCombatBridge's per-trigger-frame shot log (IRONFRONT_LOG_SHOTS=1) for the
+    # SERVER process.
+    #
+    # Ledger X-28's acceptance test is "the resolver's nearest target is the intended target in
+    # N of N runs", and the only artifact that answers it is that log line -- it prints the
+    # nearest OTHER target's torso beside the shot, which is how the 2026-08-25 measurement
+    # found the witness being resolved instead of the target in one run of three. That
+    # measurement was taken by setting the variable by hand, so it was reproducible only by
+    # somebody who knew to. A switch makes the run that grades X-28 a command rather than a
+    # recollection.
+    #
+    # OFF by default because the line prints on every trigger frame: a 30-round burst is 30
+    # lines per shooter, and every check that does not grade targeting pays for them.
+    [switch] $LogShots
 )
 
 $ErrorActionPreference = "Stop"
@@ -263,6 +278,13 @@ try {
     $serverLog = Join-Path $outDir "server.log"
     $env:IRONFRONT_LANEB_ROLE = "server"
     $env:IRONFRONT_LANEB_LABEL = "server"
+
+    # ServerCombatBridge is the one emitter and the clients never reach it, so this is
+    # server-only in EFFECT rather than in scope: $env: is the runner's own process
+    # environment and every later Start-Process inherits it, clients included. Harmless --
+    # a client that never calls LogShot prints nothing -- but the variable is not confined
+    # to the server process and a reader should not think it is.
+    if ($LogShots) { $env:IRONFRONT_LOG_SHOTS = "1" } else { $env:IRONFRONT_LOG_SHOTS = $null }
     $env:IRONFRONT_GAMESERVER_TRANSPORT = "udp"
     $env:IRONFRONT_GAMESERVER_UDP_PORT = "$Port"
     # Server only: the clients place nobody, so the variable would be inert on them and only

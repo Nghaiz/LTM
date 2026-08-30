@@ -45,6 +45,11 @@
       "aimAtPlayer": "DRIVER",
       "moveZ": 1.0,
       "respawn": true
+    },
+    {
+      "checkpoint": "respawned",
+      "seconds": 6.0,
+      "aimAtPlayer": "DRIVER"
     }
   ]
 }

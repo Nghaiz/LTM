@@ -9,6 +9,7 @@
     { "checkpoint": "firing", "seconds": 8.0, "aimAtPlayer": "DRIVER" },
     { "checkpoint": "killed", "seconds": 5.0, "aimAtPlayer": "DRIVER" },
     { "checkpoint": "victim-input-held", "seconds": 5.0, "aimAtPlayer": "DRIVER", "moveZ": 1.0, "fire": true },
-    { "checkpoint": "respawn-window", "seconds": 8.0, "aimAtPlayer": "DRIVER", "respawn": true }
+    { "checkpoint": "respawn-window", "seconds": 8.0, "aimAtPlayer": "DRIVER", "respawn": true },
+    { "checkpoint": "respawned", "seconds": 6.0, "aimAtPlayer": "DRIVER" }
   ]
 }

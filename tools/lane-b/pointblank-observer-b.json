@@ -9,6 +9,7 @@
     { "checkpoint": "victim-input-held", "seconds": 6.0,
       "aimAtPlayer": "DRIVER", "moveZ": 1.0, "fire": true },
     { "checkpoint": "respawn-window", "seconds": 10.0,
-      "aimAtPlayer": "DRIVER", "respawn": true }
+      "aimAtPlayer": "DRIVER", "respawn": true },
+    { "checkpoint": "respawned", "seconds": 6.0, "aimAtPlayer": "DRIVER" }
   ]
 }
