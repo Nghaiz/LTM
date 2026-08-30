@@ -48,8 +48,8 @@ It is graded **P0** in [`p0-definition.md`](p0-definition.md) § 2.
 | 6 | Press a "Start" button whose only job was to admit the game had launched | the shell drew `Booting` with one button | **fixed** — the bootstrap makes `Booting -> LoginScreen` itself |
 | 7 | Press **Shift+F2** to see anything after a match | `LobbyShellOverlay.Update` set `_visible = false` on reaching `InMatch` and nothing ever set it back | **fixed** — `Show()`, called on the two lobby edges |
 | 8 | Quit the process after a disconnect | nothing returned to `Menu`; the player stood in a map nobody was updating | **fixed** — `OnFlowStateChanged` loads `Menu` |
-| 9 | Press "Enter match now (debug)" to start the round | `IMasterClient.OnRoomStatePush` has **no consumer** anywhere; the master broadcasts `RoomLifecycleState.InMatch` and the client never hears it | **OPEN** — see § 4 |
-| 10 | Leave a room by restarting | the phase-03 transition table has no edge out of `RoomLobby` except `ConnectingGame` | **OPEN** — a specification gap, not an authoring one |
+| 9 | Press "Enter match now (debug)" to start the round | `IMasterClient.OnRoomStatePush` had **no consumer** anywhere; the master broadcast `RoomLifecycleState.InMatch` and the client never heard it | **fixed** — `MasterSession.OnRoomStatePushed`; the enum moved to `Ironfront.Net.Protocol`, X-77 |
+| 10 | Leave a room by restarting | the phase-03 transition table had no edge out of `RoomLobby` except `ConnectingGame` | **fixed** — `RoomLobby -> RoomBrowser` added, `MasterSession.LeaveRoomAsync`, "Leave room" in the shell |
 
 Two of the ten (#3 and #4) were a single fault seen from each end: the server named its map in a
 variable the client could not read, and the one field on the wire that could have carried the
@@ -88,27 +88,36 @@ typed into the shell's own field; a different map needs a room that names one.
 
 ---
 
-## 4. The two that are still open, and what each would cost
+## 4. The two that were still open, and what each actually cost
 
-**#9 — the room never tells the client the match started.** The master already does its half:
-`MspMessageDispatcher.HandleMatchStarted` sets `RoomLifecycleState.InMatch` and broadcasts the
-room. The client subscribes to nothing. The fix is `MasterSession` handling
-`IMasterClient.OnRoomStatePush` and calling `EnterMatch()` when the state reaches `InMatch` while
-the flow sits at `RoomLobby` with a valid `PendingJoin`.
+Both are closed. Each is recorded here with what the estimate got wrong, because both estimates
+were wrong in the same direction — they priced a decision that had already been made.
 
-It is **deliberately not in this change**, for one concrete reason: `RoomState.State` is a raw
-`byte` on the client and a `RoomLifecycleState` enum inside `Ironfront.MasterServer`, which the
-client must not reference. Wiring it correctly means giving both ends one enum, and the only
-assemblies both already reference are `Ironfront.Net.Protocol` — where a new enum becomes a
-protocol change and a `SpecChecker` constant — and `Ironfront.MasterClient`. That is a decision
-about the shared surface, not an authoring gap, and pressing a debug button is not a file edit.
-Estimated cost: **S**, once that placement is chosen.
+**#9 — the room never told the client the match started.** Estimated **S, once the enum placement
+is chosen**, and that was the real cost. `RoomState.State` was a raw `byte` on the client and a
+`RoomLifecycleState` enum inside `Ironfront.MasterServer`, which the client must not reference.
+The enum now lives in `Ironfront.Net.Protocol` — the one assembly both ends already reference, so
+it needs no new edge in the dependency graph — and the client reads it through a
+`RoomState.Lifecycle` property over the unchanged wire byte. **It is not a `SpecChecker`
+constant:** that tool checks named constant classes against the spec, and an enum type is not one,
+so the feared protocol-change cost did not materialise. `MasterSession` subscribes and calls
+`EnterMatch()` on `Starting` or `InMatch`, guarded three ways — the room must be ours (the master
+BROADCASTS), the flow must still be in `RoomLobby` (the push repeats), and an unrecognised byte
+from a newer master is not an edge.
 
-**#10 — there is no way out of a room.** The transition table has no `RoomLobby -> RoomBrowser`
-edge because the phase-03 diagram has none, and `GameFlowController` documents the absence rather
-than papering over it. Adding the edge is trivial; deciding whether the master needs a
-`ROOM_LEAVE` to go with it is not. Estimated cost: **S** for the client half, unknown for the
-master half.
+**#10 — there was no way out of a room.** Estimated **S for the client half, unknown for the
+master half**, and the unknown half did not exist: `MspMessageType.RoomLeaveRequest` was already
+sent by `MasterClient.LeaveRoomAsync` and already handled by `MspMessageDispatcher`. The whole
+cost was the client edge. `RoomLobby -> RoomBrowser` is now in the table **and in the
+hand-transcribed diagram in `GameFlowControllerTests`**, which is the deviation stated in writing
+rather than a table quietly running ahead of its specification — that pair of tests exists to
+catch exactly this kind of helpful hand-added edge, and it did.
+
+`MasterSession.LeaveRoomAsync` clears `PendingJoin` with the room, for `JoinRoomAsync`'s reason
+read backwards: the ticket is signed for a room the master has just removed us from. It refuses
+rather than throws when the flow has already moved, because a click queued one frame before a
+match start lands after it, and an exception out of a UI callback is a crash rather than a
+declined action.
 
 ---
 

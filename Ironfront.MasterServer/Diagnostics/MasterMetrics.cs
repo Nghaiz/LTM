@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Ironfront.MasterServer.Auth;
 using Ironfront.MasterServer.Data;
+using Ironfront.Net.Protocol;
 using Ironfront.MasterServer.Dispatch;
 using Ironfront.MasterServer.GameServers;
 using Ironfront.MasterServer.Lobby;
