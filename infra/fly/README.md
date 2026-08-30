@@ -64,6 +64,37 @@ than having no file, so the file was withdrawn rather than shipped.
 
 Until (1) and (2) are done, the game server belongs on the compose VM.
 
+### DECIDED 2026-08-31: won't-do, with a reopening condition
+
+**The fly.io game server will not be built.** An item that is neither done nor decided reappears
+in every audit, which is how this one reached P9 having been re-investigated three times.
+
+**Why not, stated as a cost rather than as an obstacle.** Step (1) is a small change — a
+bind-address setting on `UdpPeer`, defaulting to `IPAddress.Any` so nothing else moves. Step (2)
+is not a change at all: a dedicated IPv4 on Fly is a **paid** resource, recurring, bought to
+reach a deployment target the project does not need. The compose VM already carries the game
+server, `27015/udp` has been confirmed open on it by pulling the published image by digest, and
+one map with one deployment is the scope this project holds itself to. Spending money to add a
+second way to run the same server is the definition of the scope creep `plan.md` § 5 rule 6
+exists to refuse.
+
+**What stays.** `infra/fly/` keeps the **master** server, which is deployed and working (#174) —
+TCP 27000, an SQLite volume, digest-pinned, one machine. Fly's UDP limitation is specific to UDP;
+none of it touches the master.
+
+**Reopening condition — any one of these, and this decision is void:**
+
+1. A second region or a second game-server deployment becomes a real requirement rather than a
+   nice-to-have, with a named reason.
+2. Fly announces UDP over public IPv6, which removes step (2) entirely and leaves only the cheap
+   half.
+3. The compose VM stops being available and a replacement is needed on short notice — in which
+   case steps (1) to (3) above are the procedure, already written, and the only new decision is
+   accepting the IPv4 cost.
+
+**Do not re-derive this.** The three unblock steps above are correct and are the work if it is
+ever taken up; what was missing was a decision, and this is it.
+
 ---
 
 ## Operational notes

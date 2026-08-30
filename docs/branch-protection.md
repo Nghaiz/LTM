@@ -35,9 +35,33 @@ The two walls this page recorded on 2026-08-15 are gone, for different reasons.
 
 ### What is configured today
 
+**Re-verified against the API on 2026-08-31**, in that order — the API first, then this page
+written from what it returned. `GET /repos/Nghaiz/LTM/rulesets/21395850` answered:
+
+```
+name        protect-shared-branches
+enforcement active
+target      branch
+include     refs/heads/main, refs/heads/develop
+rules       deletion
+            non_fast_forward
+            required_status_checks
+              strict_required_status_checks_policy: false
+              do_not_enforce_on_create: false
+              contexts: build-test (ubuntu-latest)
+                        build-test (windows-latest)
+                        analyze (csharp)
+```
+
+The row below used to read *"rules `deletion` + `non_fast_forward`"* and had done since before
+`required_status_checks` was added on 2026-08-26. § "Require-status-check is ON" recorded that
+addition correctly the whole time, so this page contradicted itself in two places — the summary
+table said two rules and the section below it said three. A reader who stopped at the table would
+have concluded the required checks were not configured.
+
 | Area | State |
 |---|---|
-| Ruleset `protect-shared-branches` | active on `refs/heads/main` and `refs/heads/develop`; rules `deletion` + `non_fast_forward`; `bypass_actors: []` |
+| Ruleset `protect-shared-branches` | active on `refs/heads/main` and `refs/heads/develop`; rules `deletion`, `non_fast_forward`, `required_status_checks`; `bypass_actors: []` |
 | Default branch | `develop`, so a UI-opened PR targets the integration branch (§3) |
 | Automatically delete head branches | on (§3) |
 | Allow auto-merge, allow update branch | on |

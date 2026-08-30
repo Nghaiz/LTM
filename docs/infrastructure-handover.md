@@ -1,12 +1,16 @@
 # Infrastructure handover
 
-The master-server track owns CI, the build scripts, the load test and the deployment infrastructure. The other
-three depend on all of it. This document exists so that none of it stops working when the master-server track is
-unavailable — which is the whole point of the bus-factor table in
-`plans/00-shared/conventions.md` § 8, **deleted 2026-08-29 with the four-developer material**. That table named the transport track as the master server's backup; there is one owner now, and [P9](../plans/phases/phase-p9-deployment-and-cleanup.md) task 4.3 owns replacing this framing.
+CI, the build scripts, the load test and the deployment infrastructure are one body of work, and
+everything else in the project depends on it. This document is about **what is held rather than
+who holds it** — the accounts, secrets and state that a rebuild would need, and where each one
+lives.
 
-Read [`operations.md`](operations.md) first for how to run the system. This is about who holds
-what, and how somebody else takes it over.
+It used to be framed as a hand-off between tracks, backed by a bus-factor table in
+`plans/00-shared/conventions.md` § 8 (deleted 2026-08-29 with the rest of the four-developer
+material). Re-framed here for a single-owner project by P9 task 4.3. The technical conventions
+that table sat beside now live in [`code-conventions.md`](code-conventions.md).
+
+Read [`operations.md`](operations.md) first for how to run the system.
 
 Since phase 03 the infrastructure is **code**: Terraform provisions one Azure VM and a backup
 Blob container, GitHub Actions builds immutable images to GHCR, and Docker Compose runs them
@@ -163,24 +167,36 @@ advisory.
 
 ---
 
-## 5. Open handover items
+## 5. Single-owner risk — what breaks if the one account is lost
 
-| Item | Blocked on | Impact if the master-server track disappears today |
+**The two-person access criterion is retired, not failed.** This section used to require that at
+least two people hold VPS access, and reported that as the outstanding handover risk. On a
+one-person project that criterion cannot be met by any amount of work, so leaving it in place
+meant carrying a permanently-red line that measured nothing. What replaces it is the question a
+handover criterion was a proxy for: *if this account were lost tomorrow, what could not be
+rebuilt from the repository?*
+
+| Held outside the repository | If it is lost | Recovery |
 |---|---|---|
-| Azure subscription + 2-person access | nobody has an Azure Student subscription wired up | M3 cannot be demonstrated on a real network; everything else still works on a LAN |
-| `terraform apply` run end to end by someone | the subscription | the config validates (`fmt`/`init`/`validate` pass locally) but has never been applied against real Azure |
-| First GHCR image publish | a green `main` build (or a manual dispatch) | no images exist to pull yet; the Dockerfiles build locally |
-| Shared secret + PFX password + webhook custody | follows the VM | none yet — no production secret exists to lose |
-| Remote Terraform state set up | the subscription | state would start local on one laptop; `backend.tf.example` is ready to copy |
+| GitHub account `Nghaiz` | no pushes, no Actions, no GHCR publish | the repository is public and cloneable; a new account re-runs `images.yml` to republish. Nothing in it is unrecoverable |
+| Azure subscription + the VM | the deployed stack stops | `infra/terraform` re-provisions from scratch. The VM holds no source of truth |
+| `IRONFRONT_SHARED_SECRET` | game servers cannot register with the master | regenerate and set it on all three services. It authenticates them to each other; it protects no stored data |
+| TLS PFX + its password | the master cannot present a certificate | re-issue with `tools/issue-cert.sh`. Let's Encrypt, so re-issuable at will |
+| Backup Blob container + its key | historical account data | **the only genuinely irreplaceable item.** Everything else on this list is regenerable |
+| Alert webhook URL | alerts stop arriving silently | re-create the webhook; the timers keep running |
 
-**The honest summary:** every piece of infrastructure is now **code** — Terraform, Dockerfiles,
-Compose, the image workflow, the TLS and backup scripts — and each has been validated as far as
-it can be without cloud credentials (`terraform validate`, `docker compose config`, `bash -n`,
-hadolint in CI). What has **not** happened is anybody running `terraform apply` against a real
-Azure subscription, publishing the first images, or executing a full deploy. That rehearsal is
-the remaining handover risk. It is no longer "one afternoon of shell commands nobody has tried"
-— it is "one `terraform apply` and one `deploy.sh up` nobody has run yet," which is a smaller
-and more repeatable risk than before, but it is not zero until it has been done once.
+**So the real exposure is one row.** Five of the six are regenerable from code, and the sixth is
+player accounts in the backup container. A second copy of that container's contents, held
+somewhere the primary account cannot delete, is the only thing on this page that materially
+reduces single-owner risk — and it is worth more than a second person with a VPS login, which is
+what the old criterion asked for.
+
+**What has still never been rehearsed:** nobody has run `terraform apply` against a real
+subscription end to end, and nobody has restored a backup and logged in with a recovered account.
+The images half of the old table IS done — both GHCR packages are public, published from one
+`images.yml` run, and the game-server image has been pulled by digest and confirmed listening on
+`27015/udp` (see [P9](../plans/phases/phase-p9-deployment-and-cleanup.md) § 1). The restore
+rehearsal is the item that stays open, and it is the one that guards the one irreplaceable row.
 
 ---
 
@@ -192,4 +208,4 @@ and more repeatable risk than before, but it is not zero until it has been done 
 - [`infra/tls/README.md`](../infra/tls/README.md) — certificates
 - [`report-chapter-master-server.md`](report-chapter-master-server.md) — design rationale and measurements
 - [`branch-protection.md`](branch-protection.md) — repository settings
-- **The bus-factor table this document served is deleted.** See [P9](../plans/phases/phase-p9-deployment-and-cleanup.md) § 2
+- **The bus-factor table this document served is deleted**, and § 5 no longer asks for two people. See [P9](../plans/phases/phase-p9-deployment-and-cleanup.md) § 2 and task 4.3
