@@ -30,13 +30,26 @@ namespace Ironfront.Net.Unity.Server
     /// a formality rather than the thing the run is really testing.
     /// </para>
     /// <para>
-    /// <b>The failure this can cause, and who reports it.</b> Eligibility is still the inner
-    /// directory's answer, so pinning a point whose <c>SpawnPoint.owner</c> names one team hands
-    /// the other team no eligible slot at all. That returns -1 from <c>ChooseSpawnIndex</c> and
-    /// trips the existing "no eligible spawn point" warning in <c>MoveToSpawnPoint</c> — the one
-    /// added after X-12 cost two investigations. This class deliberately does not paper over it
-    /// with a fallback to sampling: a run that quietly stopped being deterministic is exactly
-    /// the thing X-22 is about.
+    /// <b>The failure this causes on the shipping map, and when you learn about it.</b>
+    /// Eligibility is still the inner directory's answer, so pinning a point whose
+    /// <c>SpawnPoint.owner</c> names one team hands the other team no eligible slot at all —
+    /// <c>ChooseSpawnIndex</c> returns -1 and that actor is never placed. On Dustbowl EVERY
+    /// spawn point is team-owned, so this is not an edge case: <b>any</b> single pinned index
+    /// starves one side. That is ledger <b>X-63</b>, and it is why the option stopped pinning
+    /// runs and started voiding them.
+    /// </para>
+    /// <para>
+    /// <b>A pin per team, and a refusal at construction.</b> The option still exists because
+    /// what X-22 needed it for has not gone away; it now takes one index per team, so each side
+    /// gets a slot it may actually use. And the starvation is detected when the directory is
+    /// BUILT rather than when an actor fails to spawn ninety seconds in — a run that voids
+    /// itself at the top costs a minute, and one that voids itself in the middle costs the whole
+    /// run plus the reading of it.
+    /// </para>
+    /// <para>
+    /// This class still does not paper over anything with a fallback to sampling: a run that
+    /// quietly stopped being deterministic is exactly the thing X-22 is about. It refuses
+    /// instead.
     /// </para>
     /// <para>
     /// Diagnostics scaffolding. Nothing constructs it except <c>LaneBHarness</c>, behind
@@ -48,25 +61,74 @@ namespace Ironfront.Net.Unity.Server
     public sealed class PinnedSpawnPointDirectory : ISpawnPointDirectory
     {
         private readonly ISpawnPointDirectory _inner;
+        private readonly int[] _pinnedByTeam;
 
         /// <param name="inner">The real directory. Eligibility and positions still come from it.</param>
-        /// <param name="index">The only slot this directory will report eligible.</param>
+        /// <param name="index">The slot pinned for every team.</param>
         public PinnedSpawnPointDirectory(ISpawnPointDirectory inner, int index)
+            : this(inner, new[] { index, index })
+        {
+        }
+
+        /// <param name="inner">The real directory. Eligibility and positions still come from it.</param>
+        /// <param name="pinnedByTeam">
+        /// One slot per team, indexed by team number. X-63: a single slot shared by both teams
+        /// cannot work on a map whose every spawn point is team-owned.
+        /// </param>
+        public PinnedSpawnPointDirectory(ISpawnPointDirectory inner, int[] pinnedByTeam)
         {
             if (inner == null) throw new ArgumentNullException(nameof(inner));
-            if (index < 0)
+            if (pinnedByTeam == null || pinnedByTeam.Length == 0)
+                throw new ArgumentException("at least one team's slot is required", nameof(pinnedByTeam));
+
+            for (int team = 0; team < pinnedByTeam.Length; team++)
             {
+                if (pinnedByTeam[team] >= 0) continue;
+
                 throw new ArgumentOutOfRangeException(
-                    nameof(index), index, "a pinned spawn index is a slot, never the -1 that "
+                    nameof(pinnedByTeam), pinnedByTeam[team],
+                    $"team {team}'s pinned spawn index is a slot, never the -1 that "
                     + "ChooseSpawnIndex returns for 'no eligible point'");
             }
 
             _inner = inner;
-            PinnedIndex = index;
+            _pinnedByTeam = pinnedByTeam;
+
+            RefuseIfAnyTeamIsStarved();
         }
 
-        /// <summary>The slot this directory pins. Reported so the harness can log it.</summary>
-        public int PinnedIndex { get; }
+        /// <summary>
+        /// Throws when a team's pinned slot is not one that team may spawn on.
+        /// </summary>
+        /// <remarks>
+        /// <b>X-63, and the whole point of doing it here.</b> Without this the starvation shows
+        /// up as one actor silently never placed, minutes into a run, in a warning inside a
+        /// server log nobody reads until the artifact turns out to be ungradeable. Every Dustbowl
+        /// spawn point is team-owned, so on the shipping map this is the DEFAULT outcome of
+        /// pinning one index rather than a corner of it.
+        /// </remarks>
+        private void RefuseIfAnyTeamIsStarved()
+        {
+            for (int team = 0; team < _pinnedByTeam.Length; team++)
+            {
+                int slot = _pinnedByTeam[team];
+                if (_inner.IsEligible(slot, team)) continue;
+
+                throw new ArgumentException(
+                    $"spawn slot {slot} is not eligible for team {team}, so that team would "
+                    + "never be placed and the run would grade nothing. Every Dustbowl spawn "
+                    + "point is team-owned (ledger X-63): pass one slot per team, e.g. "
+                    + "IRONFRONT_LANEB_SPAWN_INDEX=3,7.",
+                    nameof(_pinnedByTeam));
+            }
+        }
+
+        /// <summary>Team 0's slot. Kept for callers and logs that pin one index for both.</summary>
+        public int PinnedIndex => _pinnedByTeam[0];
+
+        /// <summary>The slot pinned for <paramref name="team"/>, or -1 for an unknown team.</summary>
+        public int PinnedIndexFor(int team)
+            => team >= 0 && team < _pinnedByTeam.Length ? _pinnedByTeam[team] : -1;
 
         /// <inheritdoc />
         public int Count => _inner.Count;
@@ -77,7 +139,7 @@ namespace Ironfront.Net.Unity.Server
         /// what keeps the team rule, so this narrows the choice without ever widening it.
         /// </remarks>
         public bool IsEligible(int index, int team)
-            => index == PinnedIndex && _inner.IsEligible(index, team);
+            => index == PinnedIndexFor(team) && _inner.IsEligible(index, team);
 
         /// <inheritdoc />
         public Vector3 GetSpawnPosition(int index) => _inner.GetSpawnPosition(index);

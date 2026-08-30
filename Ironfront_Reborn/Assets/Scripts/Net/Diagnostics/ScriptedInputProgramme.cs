@@ -265,6 +265,19 @@ namespace Ironfront.Net.Unity.Diagnostics
         public bool seatToggle = false;
 
         /// <summary>
+        /// Holds the minimap open for the whole step, as a player holding <c>M</c> would.
+        /// </summary>
+        /// <remarks>
+        /// <b>Ledger X-61.</b> <c>MinimapUi.Update</c> read <c>Input.GetKey(KeyCode.M)</c> and
+        /// nothing else, and a scripted client cannot produce a physical key — so no lane-B run
+        /// could ever grade a minimap check, and the icons P3 shipped through
+        /// <c>IMinimapMarkers</c> have never been proven to draw. A LEVEL rather than an edge,
+        /// like <c>use</c> and <c>sprint</c>: the map is open while the key is down, so a
+        /// checkpoint inside the step catches it open.
+        /// </remarks>
+        public bool holdMinimap = false;
+
+        /// <summary>
         /// Weapon slot to select, 0..3. Negative means "leave the weapon alone".
         /// </summary>
         /// <remarks>

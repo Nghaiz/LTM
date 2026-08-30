@@ -215,6 +215,16 @@ namespace Ironfront.Net.Unity.Diagnostics
             return true;
         }
 
+        /// <summary>
+        /// Whether the live step holds the minimap open. A level, so it is not consumed.
+        /// </summary>
+        /// <remarks>
+        /// Not a <c>TryConsume</c> like respawn and seat-toggle: those are edges that must be
+        /// delivered exactly once, and this is a key held down. <c>MinimapUi</c> polls it every
+        /// frame through <c>MinimapUi.HoldSource</c>. Ledger X-61.
+        /// </remarks>
+        public bool HoldMinimap => Current != null && Current.holdMinimap;
+
         public bool TryTakeCheckpoint(out ScriptedCheckpoint checkpoint)
         {
             if (_due.Count == 0)

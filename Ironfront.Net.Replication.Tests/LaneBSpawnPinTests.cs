@@ -106,10 +106,17 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>A value that is not a number can never become one.</summary>
+        /// <remarks>
+        /// <c>"1,2"</c> USED to be listed here as nonsense and is now the per-team form
+        /// (ledger X-63). Inverted rather than deleted: the case it pinned is still exercised,
+        /// by <see cref="APerTeamPairPinsOneSlotEachWay"/> below, asserting the opposite outcome.
+        /// Deleting it would have removed the only record that this input was ever considered.
+        /// </remarks>
         [Theory]
         [InlineData("zero")]
         [InlineData("0.5")]
-        [InlineData("1,2")]
+        [InlineData("1;2")]
+        [InlineData("1,two")]
         public void AValueThatIsNotAnIntegerFailsImmediately(string raw)
         {
             LaneBSpawnPin.Outcome outcome = LaneBSpawnPin.Evaluate(
@@ -118,6 +125,53 @@ namespace Ironfront.Net.Replication.Tests
 
             Assert.Equal(LaneBSpawnPin.Outcome.Failed, outcome);
             Assert.Contains(raw, message);
+        }
+
+        /// <summary>
+        /// X-63: one slot per team, because every Dustbowl spawn point is team-owned and a
+        /// single pinned index therefore starves one side and voids the run.
+        /// </summary>
+        [Fact]
+        public void APerTeamPairPinsOneSlotEachWay()
+        {
+            LaneBSpawnPin.Outcome outcome = LaneBSpawnPin.EvaluatePerTeam(
+                "3,5", directoryInstalled: true, directoryCount: 6, final: true,
+                out int[] slots, out string message);
+
+            Assert.Equal(LaneBSpawnPin.Outcome.Pinned, outcome);
+            Assert.Null(message);
+            Assert.Equal(new[] { 3, 5 }, slots);
+        }
+
+        /// <summary>
+        /// The single-value form still means what it always meant: the same slot for every team.
+        /// Correct on a map with neutral spawn points, and refused at construction by
+        /// <c>PinnedSpawnPointDirectory</c> on one where it is not.
+        /// </summary>
+        [Fact]
+        public void ASingleValueStillPinsBothTeamsToOneSlot()
+        {
+            LaneBSpawnPin.Outcome outcome = LaneBSpawnPin.EvaluatePerTeam(
+                "4", directoryInstalled: true, directoryCount: 6, final: true,
+                out int[] slots, out string message);
+
+            Assert.Equal(LaneBSpawnPin.Outcome.Pinned, outcome);
+            Assert.Null(message);
+            Assert.Equal(new[] { 4, 4 }, slots);
+        }
+
+        /// <summary>
+        /// A per-team pair is still bounds-checked on every element, not just the first.
+        /// </summary>
+        [Fact]
+        public void ASecondTeamsSlotIsBoundsCheckedToo()
+        {
+            LaneBSpawnPin.Outcome outcome = LaneBSpawnPin.EvaluatePerTeam(
+                "1,99", directoryInstalled: true, directoryCount: 6, final: true,
+                out _, out string message);
+
+            Assert.Equal(LaneBSpawnPin.Outcome.Failed, outcome);
+            Assert.Contains("outside the scene's 6 spawn point(s)", message);
         }
 
         /// <summary>Negative asks for a slot no directory can ever hold.</summary>

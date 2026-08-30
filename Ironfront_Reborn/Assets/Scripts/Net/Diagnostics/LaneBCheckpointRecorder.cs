@@ -211,6 +211,8 @@ namespace Ironfront.Net.Unity.Diagnostics
             Comma();
             AppendAim(client);
             Comma();
+            AppendMinimap();
+            Comma();
             AppendCombat();
             Comma();
             AppendSeatRequests();
@@ -367,6 +369,34 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// where it found the target and missed: no killfeed line, full health on both sides.
         /// The screenshot cannot tell them apart either. This is the field that can.
         /// </remarks>
+        /// <summary>
+        /// Whether the minimap is open, and whether the live step asked for it.
+        /// </summary>
+        /// <remarks>
+        /// <b>Ledger X-61.</b> The map opens only while a key is held and a scripted client has
+        /// no keyboard, so until <c>MinimapUi.HoldSource</c> existed no run could open it and no
+        /// artifact could say so. Both halves are written: <c>held</c> is what the programme
+        /// ASKED for and <c>openness</c> is what the game DID, because a request that had no
+        /// effect and a request never made render identically otherwise — and P3's minimap icons
+        /// are still owed a screenshot precisely because nothing distinguished them.
+        ///
+        /// A null <c>MinimapUi</c> writes <c>openness: -1</c> rather than 0. Zero is a real
+        /// value meaning "closed", and a HUD that does not exist is not a closed map.
+        /// </remarks>
+        private void AppendMinimap()
+        {
+            MinimapUi map = UnityEngine.Object.FindFirstObjectByType<MinimapUi>(
+                FindObjectsInactive.Exclude);
+
+            _json.Append("\"minimap\":{");
+            _json.Append("\"present\":").Append(map != null ? "true" : "false"); Comma();
+            _json.Append("\"held\":")
+                 .Append(MinimapUi.HoldSource != null && MinimapUi.HoldSource() ? "true" : "false");
+            Comma();
+            Num("openness", map != null ? map.Openness : -1f);
+            _json.Append('}');
+        }
+
         private void AppendAim(NetClientBootstrap client)
         {
             _json.Append("\"aim\":");
@@ -384,16 +414,38 @@ namespace Ironfront.Net.Unity.Diagnostics
             }
 
             ScriptedTargetSolver.Solution s = _solver.Last;
+
+            // How old the cached solve is. X-72: Solver.Last is a cache, and a step that stops
+            // aiming stops refilling it -- so every later checkpoint re-wrote the same
+            // resolved-true reading with the same frozen distance, and a target that had walked
+            // 500 m away was indistinguishable from one standing still. A one-frame tolerance,
+            // not zero: the capture and the input source both run in Update and Unity does not
+            // order them, so a genuinely live solve can be one frame behind this line.
+            int ageFrames = _solver.LastSolvedFrame < 0
+                ? int.MaxValue
+                : Time.frameCount - _solver.LastSolvedFrame;
+            bool live = ageFrames <= 1;
+
             _json.Append('{');
             Str("requested", _solver.LastRequestWasVehicle
                 ? "<nearest vehicle>"
                 : _solver.LastRequestedName); Comma();
             _json.Append("\"resolved\":").Append(s.Resolved ? "true" : "false"); Comma();
+
+            // Reported, so a reader can tell a stale reading from a live one without having to
+            // know that Last is a cache at all.
+            _json.Append("\"live\":").Append(live ? "true" : "false"); Comma();
+            Num("ageFrames", ageFrames == int.MaxValue ? -1 : ageFrames); Comma();
+
             Num("targetActorId", s.ActorId); Comma();
             Num("targetVehicleId", s.VehicleId); Comma();
-            Num("yaw", s.Resolved ? s.Yaw : float.NaN); Comma();
-            Num("pitch", s.Resolved ? s.Pitch : float.NaN); Comma();
-            Num("distanceM", s.Resolved ? s.Distance : float.NaN); Comma();
+
+            // NaN unless the reading is BOTH resolved and current. A stale measurement rendered
+            // as a live one is worse than no measurement: the first ends an investigation, the
+            // second prompts one.
+            Num("yaw", s.Resolved && live ? s.Yaw : float.NaN); Comma();
+            Num("pitch", s.Resolved && live ? s.Pitch : float.NaN); Comma();
+            Num("distanceM", s.Resolved && live ? s.Distance : float.NaN); Comma();
             AppendAimTarget(client, s.ActorId);
             _json.Append('}');
         }
