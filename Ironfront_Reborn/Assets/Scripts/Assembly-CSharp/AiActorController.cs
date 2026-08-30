@@ -1623,8 +1623,42 @@ public class AiActorController : ActorController
 		moveTimeoutAction.Start();
 	}
 
+	/// <summary>
+	/// The on-foot stick. Ledger <b>X-69</b> and <b>X-71</b>: a SUSPENDED controller steers
+	/// nothing, because a claimed body's only writer is <c>ServerPlayer</c>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>One missing guard, two ledger rows.</b> <c>IAiDriver.Suspend</c> sets
+	/// <c>enabled = false</c> when a connection claims this body, and Unity's flag gates the
+	/// engine's own callbacks only -- an override another component CALLS runs regardless. That
+	/// is why <see cref="CarInput"/>, <see cref="BoatInput"/>, <see cref="HelicopterInput"/>,
+	/// <see cref="StartSeated"/>, <see cref="EndSeated"/> and <c>AiWorkAllowed</c> each open with
+	/// this check. This one did not, so on a claimed body it kept returning a real walk vector:
+	/// the server walked the body 518 m across the map while its owner sent no movement input
+	/// (<b>X-71</b>), and the same call reached <c>LocalAvoidanceVelocity</c>, which enumerates
+	/// <c>squad.members</c> on a slot that is squadless by design -- 10,126 NREs in one 600 s
+	/// soak (<b>X-69</b>).
+	/// </para>
+	/// <para>
+	/// <b>Zero, not the relayed axes.</b> <see cref="CarInput"/> returns what the server accepted
+	/// because a vehicle's physics needs a stick either way. On foot there is no equivalent:
+	/// <c>NetMovementAgent</c> applies the accepted input to the <c>CharacterController</c>
+	/// itself, so anything returned here would be a SECOND writer to one position -- which is the
+	/// condition <c>IAiDriver</c> exists to prevent.
+	/// </para>
+	/// <para>
+	/// Above the <c>hasPath</c> branch rather than inside it, for the reason <see cref="CarInput"/>
+	/// states: a claimed body that happens to be pathing is the only state either defect was ever
+	/// observed in.
+	/// </para>
+	/// </remarks>
 	public override Vector3 Velocity()
 	{
+		if (!base.enabled)
+		{
+			return Vector3.zero;
+		}
 		if (hasPath)
 		{
 			float num = 3.2f;
@@ -1642,8 +1676,22 @@ public class AiActorController : ActorController
 		return Vector3.zero;
 	}
 
+	/// <summary>
+	/// The swimming stick. Guarded for the reason <see cref="Velocity"/> is, and in the same
+	/// change: it reads the same path on the same claimed body.
+	/// </summary>
+	/// <remarks>
+	/// No defect was observed through this one -- the shipping map has no water a claimed body
+	/// swims in. It is guarded anyway because leaving the sibling unguarded is precisely how
+	/// <see cref="Velocity"/> survived six hand-applied guards, and the companion test
+	/// <c>EverySteeringOverrideCarriesTheGuardRatherThanAListOfSix</c> now refuses the seventh.
+	/// </remarks>
 	public override Vector3 SwimInput()
 	{
+		if (!base.enabled)
+		{
+			return Vector3.zero;
+		}
 		if (hasPath)
 		{
 			return GetWaypointDeltaBlockable().ToGround().normalized;
@@ -2125,8 +2173,22 @@ public class AiActorController : ActorController
 	{
 	}
 
+	/// <summary>
+	/// Re-arms the path after a ragdoll. Guarded for <see cref="Velocity"/>'s reason, and found
+	/// by its companion test rather than by inspection.
+	/// </summary>
+	/// <remarks>
+	/// Both branches START movement on this body -- <c>Goto</c> issues a new path, and
+	/// <c>RecalculatePath</c> re-issues the one it had. On a claimed body that is X-71's exact
+	/// mechanism arriving through a second door: the brain is suspended, and a ragdoll ending
+	/// hands it the wheel back.
+	/// </remarks>
 	public override void EndRagdoll()
 	{
+		if (!base.enabled)
+		{
+			return;
+		}
 		if (inCover)
 		{
 			Goto(cover.transform.position);
