@@ -109,18 +109,40 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(15f, pose.Position.X, 1);
         }
 
+        /// <summary>
+        /// A vehicle in only ONE of the bracketing pair is held at that snapshot's pose.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This assertion is inverted from the one it replaces</b>, which required both ends
+        /// and returned <see cref="VehicleSampleResult.NotPresent"/> here. Its stated reason was
+        /// sound and its conclusion was not: "a pose blended from one end is a slide in from
+        /// wherever the other end happened to leave it" argues against BLENDING, and the fix does
+        /// not blend — it takes the one real pose. What the old rule actually cost is ledger
+        /// X-64: absence is the steady state past 60 m, not a spawn or a despawn, because
+        /// <c>InterestManager.SendEveryN</c> rate-limits Mid to every 2nd snapshot and Far to
+        /// every 5th, so those vehicles are never in two adjacent worlds and every one of them
+        /// froze permanently.
+        /// </para>
+        /// <para>
+        /// The genuinely-absent case still reports <see cref="VehicleSampleResult.NotPresent"/> —
+        /// see <see cref="AVehicleInNeitherBracketingSnapshotIsStillNotPresent"/>, which is what
+        /// stops this test being satisfied by returning a pose for everything.
+        /// </para>
+        /// </remarks>
         [Fact]
-        public void AVehicleAbsentFromTheBracketingPairIsNotPresent()
+        public void AVehicleInOnlyOneOfTheBracketingPairIsHeldNotDropped()
         {
-            // It spawned or despawned across the pair. A pose blended from one end is a slide in
-            // from wherever the other end happened to leave it.
             var buffer = new VehicleSnapshotInterpolator();
             buffer.Push(World(100, Entry(7, x: 10f)));
             buffer.Push(World(101, Entry(7, x: 20f), Entry(9, x: 50f)));
 
             Assert.Equal(
-                VehicleSampleResult.NotPresent,
-                buffer.TrySample(9, 100.5, out _));
+                VehicleSampleResult.Held,
+                buffer.TrySample(9, 100.5, out VehiclePose pose));
+
+            // The pose it IS in, unblended -- not halfway to an origin it was never at.
+            Assert.Equal(50f, pose.Position.X, 1);
         }
 
         [Fact]
@@ -327,6 +349,80 @@ namespace Ironfront.Net.Replication.Tests
 
             // Nothing can render a vehicle that is 40% on fire.
             Assert.Equal(VehicleStateFlags.None, VehicleSnapshotInterpolator.Blend(in a, in b, 0.4f).Flags);
+        }
+
+        /// <summary>
+        /// A vehicle the server rate-limits to every SECOND snapshot still yields a pose, and
+        /// keeps yielding one. Ledger X-64.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This is the shape no test in this suite had.</b> The one test that touched an
+        /// absent vehicle framed absence as "it spawned or despawned across the pair" — a
+        /// transient. The steady state past <c>InterestManager.NearRadius</c> (60 m) is not
+        /// transient: <c>SendEveryN</c> puts a Mid vehicle in every 2nd snapshot and a Far one in
+        /// every 5th, and <c>VehicleDeltaDecoder</c> rebuilds each world from its own message, so
+        /// such a vehicle is NEVER in two adjacent worlds. Requiring both ends therefore returned
+        /// <c>NotPresent</c> on every frame forever, <c>ClientVehicleStage</c> wrote no pose, and
+        /// the kinematic body hung in the air for the rest of the match.
+        /// </para>
+        /// <para>
+        /// <b>Mutation to run before trusting this test:</b> in
+        /// <c>VehicleSnapshotInterpolator.TrySample</c>, replace the two one-sided branches with
+        /// <c>return VehicleSampleResult.NotPresent;</c> — the original rule. This test must go
+        /// RED. Observed red on 2026-08-31 before the fix was written.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public void ARateLimitedVehicleIsStillSampledRatherThanFrozen()
+        {
+            var buffer = new VehicleSnapshotInterpolator();
+
+            // Vehicle 7 is Near: in every world. Vehicle 9 is Mid: every second world, which is
+            // what InterestManager.SendEveryN[Mid] == 2 produces.
+            for (uint tick = 100; tick <= 110; tick++)
+            {
+                buffer.Push(tick % 2 == 0
+                    ? World(tick, Entry(7, x: tick), Entry(9, x: tick * 2f))
+                    : World(tick, Entry(7, x: tick)));
+            }
+
+            double renderTick = buffer.RenderTick(0.0);
+
+            VehicleSampleResult near = buffer.TrySample(7, renderTick, out VehiclePose nearPose);
+            VehicleSampleResult mid = buffer.TrySample(9, renderTick, out VehiclePose midPose);
+
+            Assert.NotEqual(VehicleSampleResult.NotPresent, near);
+            Assert.NotEqual(VehicleSampleResult.NotPresent, mid);
+
+            // A real pose, not the struct default at the origin -- the failure that would let
+            // "not NotPresent" pass while drawing the vehicle in the wrong place.
+            Assert.True(midPose.Position.X > 1f,
+                $"the rate-limited vehicle sampled to x={midPose.Position.X}, which is the origin, "
+                + "not a held pose");
+            Assert.True(nearPose.Position.X > 1f);
+        }
+
+        /// <summary>
+        /// A vehicle in NEITHER bracketing snapshot is still <see cref="VehicleSampleResult.NotPresent"/>.
+        /// </summary>
+        /// <remarks>
+        /// The companion to the test above, and the half that stops it being satisfied by
+        /// returning a pose for everything. A genuinely departed vehicle must still report no
+        /// pose, because that is what stops <c>ClientVehicleStage</c> drawing a wreck the server
+        /// has forgotten.
+        /// </remarks>
+        [Fact]
+        public void AVehicleInNeitherBracketingSnapshotIsStillNotPresent()
+        {
+            var buffer = new VehicleSnapshotInterpolator();
+
+            for (uint tick = 100; tick <= 110; tick++)
+                buffer.Push(World(tick, Entry(7, x: tick)));
+
+            Assert.Equal(
+                VehicleSampleResult.NotPresent,
+                buffer.TrySample(99, buffer.RenderTick(0.0), out _));
         }
 
         // ------------------------------------------------------------------ helpers

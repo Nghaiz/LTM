@@ -155,6 +155,7 @@ public class CapturePoint : SpawnPoint
 		Vector3 localPosition = flagParent.localPosition;
 		localPosition.y = 1.2f + 4.8f * control;
 		flagParent.localPosition = Vector3.Lerp(flagParent.localPosition, localPosition, 3f * Time.deltaTime);
+		UpdateFlagIndicator();
 	}
 
 	private void UpdateOwner()
@@ -164,7 +165,6 @@ public class CapturePoint : SpawnPoint
 			return;
 		}
 		int num = owner;
-		bool flag = false;
 		List<Actor> list = ActorManager.AliveActorsInRange(base.transform.position, captureRange);
 		Dictionary<int, int> dictionary = new Dictionary<int, int>();
 		isContested = false;
@@ -194,10 +194,6 @@ public class CapturePoint : SpawnPoint
 				{
 					UpdateContestedSpawnpointSafeFlags(item);
 				}
-			}
-			if (!item.aiControlled)
-			{
-				flag = true;
 			}
 		}
 		int num2 = -1;
@@ -237,20 +233,57 @@ public class CapturePoint : SpawnPoint
 		{
 			unsafeAction.Start();
 		}
-		if (flag && !playerWasInRadius)
+		SetFlagVisible(control > 0f);
+	}
+
+	/// <summary>
+	/// Drives the top-left capture indicator from the LOCAL player's distance to this point.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>This lived in <see cref="UpdateOwner"/> and therefore never ran in a networked match.</b>
+	/// That method is started by <c>InvokeRepeating</c> only when <c>NetContext.IsOffline</c>, so
+	/// the V8 split that role-gated the capture arithmetic took the three HUD calls with it. The
+	/// indicator is authored, wired and anchored top-left in <c>Ingame UI Container.prefab</c>,
+	/// and it was simply never turned on. It belongs in <see cref="Update"/>, which runs in every
+	/// role, every frame, and already reads <see cref="control"/> and <c>owner</c>.
+	/// </para>
+	/// <para>
+	/// <b>The subject is the local player, not "any non-AI actor".</b> The old test set its flag
+	/// for any actor with <c>!aiControlled</c> in range, which in single-player is the local
+	/// player by coincidence and in a networked match is any human on the map — so a stranger
+	/// capturing a point would have flashed the indicator on this client's HUD. Asking about
+	/// <c>FpsActorController.instance</c> is the same question the widget is actually answering.
+	/// </para>
+	/// <para>
+	/// Both singletons are null-guarded for <see cref="SetFlagVisible"/>'s reason: a dedicated
+	/// server runs this component with no local player and no HUD.
+	/// </para>
+	/// </remarks>
+	private void UpdateFlagIndicator()
+	{
+		if (IngameUi.instance == null)
+		{
+			return;
+		}
+		FpsActorController local = FpsActorController.instance;
+		bool inRadius = local != null && local.actor != null && !local.actor.dead
+			&& (local.actor.transform.position - base.transform.position).sqrMagnitude
+			   <= captureRange * captureRange;
+
+		if (inRadius && !playerWasInRadius)
 		{
 			IngameUi.instance.ShowFlagIndicator();
 		}
-		else if (!flag && playerWasInRadius)
+		else if (!inRadius && playerWasInRadius)
 		{
 			IngameUi.instance.HideFlagIndicator();
 		}
-		if (flag)
+		if (inRadius)
 		{
 			IngameUi.instance.SetFlagIndicator(control, owner);
 		}
-		SetFlagVisible(control > 0f);
-		playerWasInRadius = flag;
+		playerWasInRadius = inRadius;
 	}
 
 	/// <summary>

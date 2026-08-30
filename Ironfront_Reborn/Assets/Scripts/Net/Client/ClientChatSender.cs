@@ -46,15 +46,43 @@ namespace Ironfront.Net.Unity.Client
     [DisallowMultipleComponent]
     public sealed class ClientChatSender : MonoBehaviour
     {
-        /// <summary>The key that opens the chat line, and sends it once open.</summary>
+        /// <summary>The key that opens the chat line.</summary>
         /// <remarks>
-        /// Return rather than a rebindable input-manager button, unlike
-        /// <c>ClientSeatRequester</c>'s Use key: this is not a gameplay control competing with
-        /// anything a player has already bound, and the input manager has no Return axis
-        /// authored to borrow.
+        /// <para>
+        /// <b>Not Return, and the reason is a shipped defect.</b> This was <c>KeyCode.Return</c>,
+        /// and the remark here used to claim it was "not a gameplay control competing with
+        /// anything a player has already bound". That was wrong: <c>ProjectSettings/InputManager.asset</c>
+        /// binds the <c>Loadout</c> axis to <c>return</c> with <c>enter</c> as its alternate, and
+        /// has since the original import. One press therefore opened the chat line AND toggled
+        /// the deploy screen in the same frame, every time.
+        /// </para>
+        /// <para>
+        /// T for open and <see cref="_sendKey"/> for send is the convention every shooter with a
+        /// chat box uses, so it costs a player nothing to learn. Enter keeps its original meaning
+        /// — deploy — whenever the chat line is closed, which is the state it is in almost always.
+        /// </para>
         /// </remarks>
-        [Tooltip("Opens the chat line, and sends it when the line is already open.")]
-        [SerializeField] private KeyCode _openKey = KeyCode.Return;
+        [Tooltip("Opens the chat line. Not Return: that is the deploy screen's key.")]
+        [SerializeField] private KeyCode _openKey = KeyCode.T;
+
+        /// <summary>The key that sends the line, read only while the line is already open.</summary>
+        /// <remarks>
+        /// Return, because that is what a text field means by Return — and it is safe here in a
+        /// way it is not on <see cref="_openKey"/>: while composing, the deploy toggle in
+        /// <c>FpsActorController</c> is suppressed by <see cref="LocalTextEntry.Composing"/>, so
+        /// the key has exactly one meaning at a time rather than two at once.
+        /// </remarks>
+        [Tooltip("Sends the line. Only read while the chat line is open.")]
+        [SerializeField] private KeyCode _sendKey = KeyCode.Return;
+
+        /// <summary>Abandons the line without sending it.</summary>
+        /// <remarks>
+        /// A chat box with no way out is the failure being fixed here — a player who opens one
+        /// by accident must be able to get their movement keys back without sending a message
+        /// or restarting.
+        /// </remarks>
+        [Tooltip("Closes the chat line and discards the draft.")]
+        [SerializeField] private KeyCode _cancelKey = KeyCode.Escape;
 
         /// <summary>How many recent lines stay on screen.</summary>
         [Tooltip("Lines kept on screen. Older ones fall off the top.")]
@@ -79,6 +107,15 @@ namespace Ironfront.Net.Unity.Client
         private string _draft = string.Empty;
         private bool _composing;
 
+        /// <summary>Set on the frame the line opens, consumed by the first <c>OnGUI</c> after it.</summary>
+        /// <remarks>
+        /// The focus grab has to happen once, not every frame. <c>GUI.FocusControl</c> was being
+        /// called unconditionally on every repaint, which re-seats IMGUI's text-editing state
+        /// continuously and takes the caret with it — so a player could open the box and then
+        /// find their typing landing unpredictably.
+        /// </remarks>
+        private bool _focusPending;
+
         /// <summary><c>C_CHAT</c> messages sent. Zero after typing is the tell.</summary>
         public long MessagesSent { get; private set; }
 
@@ -98,11 +135,30 @@ namespace Ironfront.Net.Unity.Client
 
         /// <summary>True while the chat line has focus and gameplay keys should be ignored.</summary>
         /// <remarks>
-        /// Public because whoever owns input has to be able to ask. Nothing consumes it yet —
-        /// the overlay draws its own text field and Unity's IMGUI keeps focus itself — so this
-        /// is the handle for the moment a real HUD replaces the overlay.
+        /// <b>This used to have no consumer, and could not have had one.</b> The remark here
+        /// said so outright — "nothing consumes it yet" — and the reason it stayed that way is
+        /// structural: this type lives in <c>Ironfront.Net.Unity.Client</c>, whose asmdef sets
+        /// <c>autoReferenced: false</c>, so neither <c>Assembly-CSharp</c> nor the input
+        /// assemblies can name it. The flag that the input path actually reads is
+        /// <see cref="LocalTextEntry.Composing"/>, in the one assembly all of them can see;
+        /// this property is now just the local half of the same state, kept for callers that
+        /// already hold the component.
         /// </remarks>
         public bool IsComposing => _composing;
+
+        /// <summary>
+        /// Moves the composing state, and publishes it where the input path can read it.
+        /// </summary>
+        /// <remarks>
+        /// Every write to <see cref="_composing"/> goes through here. That is the point: the
+        /// two flags drifting apart would leave the player's movement keys suppressed with no
+        /// chat box on screen, which is worse than the defect this replaces.
+        /// </remarks>
+        private void SetComposing(bool composing)
+        {
+            _composing = composing;
+            LocalTextEntry.Composing = composing;
+        }
 
         private void Awake()
         {
@@ -136,33 +192,57 @@ namespace Ironfront.Net.Unity.Client
             _client.Router.OnChat -= OnChat;
 
             // A disconnect mid-compose would otherwise leave the line open across a reconnect,
-            // eating the player's movement keys with no server to send to.
-            _composing = false;
-            _draft     = string.Empty;
+            // eating the player's movement keys with no server to send to. Through SetComposing
+            // so the published flag is cleared too -- this component going away with
+            // LocalTextEntry.Composing left true is a player who can never move again.
+            SetComposing(false);
+            _draft        = string.Empty;
+            _focusPending = false;
         }
 
+        /// <summary>
+        /// Opens on <see cref="_openKey"/>, sends on <see cref="_sendKey"/>, abandons on
+        /// <see cref="_cancelKey"/>.
+        /// </summary>
+        /// <remarks>
+        /// <b>The open key is read only while closed, and the send key only while open.</b> One
+        /// key doing both is what the previous shape did, and it is why moving the open key to a
+        /// letter would not have been enough on its own: with a single key, every character of
+        /// the draft that happened to be that letter would have sent the line mid-word.
+        /// </remarks>
         private void Update()
         {
             if (_client == null || !_client.IsConnected)
             {
-                _composing = false;
+                // Not SetComposing-guarded on a state check: this runs every frame while
+                // disconnected, and publishing false repeatedly is free and idempotent.
+                if (_composing) SetComposing(false);
                 return;
             }
 
             ExpireLines();
 
-            if (!Input.GetKeyDown(_openKey)) return;
-
             if (!_composing)
             {
-                _composing = true;
-                _draft     = string.Empty;
+                if (!Input.GetKeyDown(_openKey)) return;
+                _draft = string.Empty;
+                _focusPending = true;
+                SetComposing(true);
                 return;
             }
 
+            if (Input.GetKeyDown(_cancelKey))
+            {
+                _draft = string.Empty;
+                SetComposing(false);
+                return;
+            }
+
+            if (!Input.GetKeyDown(_sendKey)) return;
+
             Send(_draft);
-            _composing = false;
-            _draft     = string.Empty;
+            _draft = string.Empty;
+            SetComposing(false);
         }
 
         /// <summary>
@@ -289,7 +369,13 @@ namespace Ironfront.Net.Unity.Client
             {
                 GUI.SetNextControlName(DraftControlName);
                 _draft = GUILayout.TextField(_draft, ChatTextMessage.MaxTextCharacters);
-                GUI.FocusControl(DraftControlName);
+
+                // Once, on the frame the line opened. See _focusPending.
+                if (_focusPending && Event.current.type == EventType.Repaint)
+                {
+                    GUI.FocusControl(DraftControlName);
+                    _focusPending = false;
+                }
             }
 
             GUILayout.EndArea();

@@ -233,17 +233,37 @@ namespace Ironfront.Net.Replication.Client
         /// <summary>
         /// Interpolates one actor's position between two snapshots, in world units.
         /// </summary>
-        /// <returns>False when the actor is absent from either snapshot — it spawned or
-        /// despawned across the pair, and a position blended from one end is a slide in from
-        /// wherever the other end happened to leave it.</returns>
+        /// <returns>
+        /// False only when the actor is in NEITHER snapshot. Present in exactly one, its own
+        /// position from that one is returned — held, never blended.
+        /// </returns>
+        /// <remarks>
+        /// <b>Requiring BOTH ends used to be the rule, and it froze every distant body.</b> The
+        /// justification was sound about blending — "a position blended from one end is a slide in
+        /// from wherever the other end happened to leave it" — but the conclusion was too strong,
+        /// because the premise that absence means spawn or despawn is false.
+        /// <c>InterestManager.SendEveryN</c> sends a Mid actor every 2nd snapshot and a Far actor
+        /// every 5th, and <c>DeltaDecoder</c> rebuilds each world from its message alone, so a
+        /// live actor past <c>InterestManager.NearRadius</c> (60 m) is never in two ADJACENT
+        /// worlds. <c>RemoteActorRegistry</c> then wrote no position at all and the body stood
+        /// still — the actor-side twin of ledger X-64, and the reason X-17's fix (seeding the
+        /// position from the spawn message) only ever helped fully-culled actors.
+        /// Taking the single real end, rather than blending toward it, keeps the original
+        /// guarantee and lets a distant body move at the rate its band intends.
+        /// </remarks>
         public static bool TryLerpPosition(
             WorldSnapshot? from, WorldSnapshot? to, double alpha, ushort actorId, out Vec3 position)
         {
             position = default;
 
             if (from == null || to == null) return false;
-            if (!from.TryFind(actorId, out ActorSnapshotEntry a)) return false;
-            if (!to.TryFind(actorId, out ActorSnapshotEntry b)) return false;
+
+            bool inFrom = from.TryFind(actorId, out ActorSnapshotEntry a);
+            bool inTo = to.TryFind(actorId, out ActorSnapshotEntry b);
+
+            if (!inFrom && !inTo) return false;
+            if (!inFrom) { position = PositionOf(in b); return true; }
+            if (!inTo) { position = PositionOf(in a); return true; }
 
             float t = (float)alpha;
             position = new Vec3(
@@ -252,6 +272,17 @@ namespace Ironfront.Net.Replication.Client
                 Lerp(Quantize.UnpackPos(a.PosZ), Quantize.UnpackPos(b.PosZ), t));
             return true;
         }
+
+        /// <summary>One entry's dequantized position, with no blending.</summary>
+        /// <remarks>
+        /// Used for the one-sided case above. Separate from the lerp so that "held" reads as
+        /// held at the call site rather than as a lerp with a degenerate alpha.
+        /// </remarks>
+        private static Vec3 PositionOf(in ActorSnapshotEntry entry)
+            => new Vec3(
+                Quantize.UnpackPos(entry.PosX),
+                Quantize.UnpackPos(entry.PosY),
+                Quantize.UnpackPos(entry.PosZ));
 
         /// <summary>
         /// Interpolates one actor's yaw in degrees, taking the short way round.
@@ -266,8 +297,16 @@ namespace Ironfront.Net.Replication.Client
             yawDegrees = 0f;
 
             if (from == null || to == null) return false;
-            if (!from.TryFind(actorId, out ActorSnapshotEntry a)) return false;
-            if (!to.TryFind(actorId, out ActorSnapshotEntry b)) return false;
+
+            // One-sided presence is held, exactly as in TryLerpPosition and for the same reason.
+            // Splitting the two would leave a distant body's position updating while its facing
+            // stayed pinned at whatever it last had both ends for.
+            bool inFrom = from.TryFind(actorId, out ActorSnapshotEntry a);
+            bool inTo = to.TryFind(actorId, out ActorSnapshotEntry b);
+
+            if (!inFrom && !inTo) return false;
+            if (!inFrom) { yawDegrees = Quantize.UnpackYaw(b.Yaw); return true; }
+            if (!inTo) { yawDegrees = Quantize.UnpackYaw(a.Yaw); return true; }
 
             float ya = Quantize.UnpackYaw(a.Yaw);
             float yb = Quantize.UnpackYaw(b.Yaw);

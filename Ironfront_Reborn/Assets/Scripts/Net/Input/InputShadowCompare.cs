@@ -134,18 +134,24 @@ namespace Ironfront.Net.Unity
             // is the harness's own.
             bool loadoutOpen = NetInputBindings.Environment.LoadoutScreenOpen;
 
-            CompareBool(0, _source.Fire(),
-                (Input.GetButton("Fire1") || Input.GetMouseButton(0)) && !loadoutOpen);
-            CompareBool(1, _source.Aim(),
-                (Input.GetButton("Fire2") || Input.GetMouseButton(1)) && !loadoutOpen);
-            CompareBool(2, _source.Reload(),
-                Input.GetButton("Reload") && !loadoutOpen);
-            CompareBool(3, _source.Crouch(), Input.GetButton("Crouch"));
-            CompareBool(4, _source.Sprint(), Input.GetButton("Sprint"));
+            // On both sides, for the same reason loadoutOpen is on both sides: it is a
+            // suppression term shared by the production path, not part of the transcription
+            // being checked. Present here only so the harness keeps comparing the seam against
+            // the legacy expression rather than against the suppression.
+            bool typing = LocalTextEntry.Composing;
 
-            CompareAxis(5, _source.MoveX, Input.GetAxis("Horizontal"));
-            CompareAxis(6, _source.MoveZ, Input.GetAxis("Vertical"));
-            CompareAxis(7, _source.Lean, Input.GetAxis("Lean"));
+            CompareBool(0, _source.Fire(),
+                (Input.GetButton("Fire1") || Input.GetMouseButton(0)) && !loadoutOpen && !typing);
+            CompareBool(1, _source.Aim(),
+                (Input.GetButton("Fire2") || Input.GetMouseButton(1)) && !loadoutOpen && !typing);
+            CompareBool(2, _source.Reload(),
+                Input.GetButton("Reload") && !loadoutOpen && !typing);
+            CompareBool(3, _source.Crouch(), Input.GetButton("Crouch") && !typing);
+            CompareBool(4, _source.Sprint(), Input.GetButton("Sprint") && !typing);
+
+            CompareAxis(5, _source.MoveX, typing ? 0f : Input.GetAxis("Horizontal"));
+            CompareAxis(6, _source.MoveZ, typing ? 0f : Input.GetAxis("Vertical"));
+            CompareAxis(7, _source.Lean, typing ? 0f : Input.GetAxis("Lean"));
             CompareAxis(8, _source.LookDeltaX, Input.GetAxis("Mouse X"));
             CompareAxis(9, _source.LookDeltaY, Input.GetAxis("Mouse Y"));
         }
