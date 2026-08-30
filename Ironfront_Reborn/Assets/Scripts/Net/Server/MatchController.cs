@@ -74,6 +74,27 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>Raised when the world must be torn down. The spawner subscribes.</summary>
         public event System.Action WorldResetRequested;
 
+        /// <summary>
+        /// Raised AFTER the reset has run, carrying the audit it produced.
+        /// </summary>
+        /// <remarks>
+        /// <b>Why a second event, when <see cref="WorldResetRequested"/> already exists.</b> That
+        /// one fires BEFORE the teardown — it is what tells the spawners to despawn — so a
+        /// measurement taken on it reports the state the reset was about to clear. This one fires
+        /// after, on the same snapshot the log line below is written from, so a recorder and a
+        /// reader cannot reach different verdicts about the same reset.
+        /// <para>
+        /// <b>And why the sink cannot just watch the phase.</b> <c>MatchPhase.Resetting</c> lasts
+        /// one tick and is left inside the same <c>MatchStateMachine.Tick</c> call that performs
+        /// the reset, at this component's execution order of 100. Anything sampling the phase
+        /// later in the frame — <c>HeadlessLoadBootstrap</c> is at 300 — sees either
+        /// <c>WaitingForPlayers</c> or a PRE-reset <c>Resetting</c>, and on a catch-up frame that
+        /// steps no tick it sees neither. Measured on <c>p7-load-move</c>: the server logged three
+        /// resets and a phase-sampled recorder found one, with the wrong state attached to it.
+        /// </para>
+        /// </remarks>
+        public event System.Action<ServerStateSnapshot> MatchResetCompleted;
+
         private void Awake()
         {
             _loop = GetComponent<ServerTickLoop>();
@@ -443,6 +464,7 @@ namespace Ironfront.Net.Unity.Server
             _loop.ResetForNewMatch();
 
             ServerStateSnapshot state = _loop.AuditState();
+            MatchResetCompleted?.Invoke(state);
 
             // IsCleanOfActorState, not IsClean: ResetForNewMatch deliberately keeps its sessions
             // because a reset is not a disconnect, so IsClean's Sessions == 0 could never hold

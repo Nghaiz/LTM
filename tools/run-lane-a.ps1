@@ -49,7 +49,18 @@ param(
     [string] $Secret = "lane-b-harness-secret",
 
     # How long to give the player to load Dustbowl and open its socket before the harness runs.
-    [int] $ServerWarmupSeconds = 20
+    [int] $ServerWarmupSeconds = 20,
+
+    # The SERVER's own lifetime, in seconds. Zero derives it from -Seconds.
+    #
+    # WHY THIS EXISTS. -Seconds reaches the HARNESS only; the server ends on LaneBHarness's own
+    # schedule, whose default is 300 s. So -Seconds 360 did not make a longer run, it made a
+    # TRUNCATED one -- snapshots froze at t+307 s, every client disconnected with LocalRequest,
+    # and the report still printed a full verb table computed over the ~300 s that did happen.
+    # A reader skimming for a pass saw a clean one. Deriving the server's lifetime from the
+    # harness's, with a margin for warm-up and shutdown, is what makes the two agree by
+    # construction instead of by the operator remembering.
+    [int] $ServerTimeoutSeconds = 0
 )
 
 $ErrorActionPreference = "Stop"
@@ -70,8 +81,23 @@ try {
     $ticks     = Join-Path $outDir "$Tag-ticks.jsonl"
     $report    = Join-Path $outDir "$Tag-report.json"
     $capture   = Join-Path $outDir "$Tag-capture.jsonl"
+    $errors    = Join-Path $outDir "$Tag-errors.jsonl"
+    $summary   = "$ticks.summary.json"
 
-    Write-Host "[lane-a] $Tag : $Clients client(s) / $Seconds s / sim=$Sim / loadSeed=$LoadSeed simSeed=$SimSeed"
+    # 15 s of margin over the harness window. Long enough that the server outlives warm-up,
+    # the run and the harness's shutdown -- a server that ends first truncates the run while the
+    # report still looks complete -- and short enough that waiting for its own exit below is
+    # cheap. It has to END ON ITS OWN: see the wait in the finally block.
+    if ($ServerTimeoutSeconds -le 0) {
+        $ServerTimeoutSeconds = $ServerWarmupSeconds + $Seconds + 15
+    }
+    elseif ($ServerTimeoutSeconds -lt ($ServerWarmupSeconds + $Seconds)) {
+        throw "-ServerTimeoutSeconds $ServerTimeoutSeconds is shorter than warm-up + run " +
+              "($ServerWarmupSeconds + $Seconds). The server would end mid-run and the report " +
+              "would still look complete. Raise it, or lower -Seconds."
+    }
+
+    Write-Host "[lane-a] $Tag : $Clients client(s) / $Seconds s / server lifetime ${ServerTimeoutSeconds}s / sim=$Sim / loadSeed=$LoadSeed simSeed=$SimSeed"
 
     # --------------------------------------------------------------- the server
     $env:IRONFRONT_LANEB_ROLE             = "server"
@@ -80,6 +106,8 @@ try {
     $env:IRONFRONT_SHARED_SECRET          = $Secret
     $env:IRONFRONT_LOAD_JSONL             = $ticks
     $env:IRONFRONT_LOAD_SEED              = "$LoadSeed"
+    $env:IRONFRONT_LOAD_ERRORS            = $errors
+    $env:IRONFRONT_LANEB_TIMEOUT          = "$ServerTimeoutSeconds"
 
     $server = Start-Process -FilePath $player -PassThru -NoNewWindow -ArgumentList @(
         "-batchmode", "-nographics", "-logFile", $serverLog)
@@ -111,9 +139,27 @@ try {
         $harnessExit = $LASTEXITCODE
     }
     finally {
-        # Always stop the server, including on a harness crash: a leftover player holds UDP
-        # 27015 and the NEXT run's clients are refused by a server nobody is looking at.
+        # WAIT FIRST, KILL SECOND -- and the order is the whole point.
+        #
+        # Stop-Process -Force takes the player down without OnApplicationQuit, so
+        # HeadlessLoadBootstrap.Close never runs: no summary file, no logByType, and the last
+        # partial buffer of the tick JSONL lost. That is why no lane-A run before this one ever
+        # produced a *.summary.json -- the runner had been killing the writer every time. The
+        # server now ends on its own IRONFRONT_LANEB_TIMEOUT a few seconds after the harness, so
+        # the right move is to let it, and to kill only a server that overstays.
+        #
+        # The kill still has to exist: a leftover player holds UDP 27015 and the NEXT run's
+        # clients are refused by a server nobody is looking at.
+        $graceMs = ($ServerTimeoutSeconds + 60) * 1000
         if (-not $server.HasExited) {
+            Write-Host "[lane-a] waiting up to $([int]($graceMs / 1000)) s for the server to write its summary and exit"
+            $server.WaitForExit($graceMs) | Out-Null
+        }
+
+        if (-not $server.HasExited) {
+            Write-Warning ("[lane-a] the server outstayed its own timeout and was killed. " +
+                           "$summary will be MISSING, so the criterion-11 LogType counts for " +
+                           "this run are UNKNOWN rather than zero.")
             Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
             $server.WaitForExit(10000) | Out-Null
         }
@@ -130,6 +176,15 @@ try {
     #
     # The two named below are printed even at zero. An absent line reads as "not measured";
     # "ArgumentException 0" reads as measured and clean, and those must not look alike.
+    #
+    # AND WHY THE TEXT GREP IS NO LONGER THE WHOLE ANSWER. Unity's -logFile writes a
+    # Debug.LogError message with the same shape as a Debug.Log one -- no level marker anywhere
+    # on the line -- so a pattern anchored on an exception TYPE NAME can only ever find entries
+    # whose text happens to begin with one. "[net] match reset left state behind" is a
+    # LogType.Error and was invisible to it, and criterion 11 grades Error AND Exception.
+    # HeadlessLoadBootstrap subscribes to Application.logMessageReceived, which is the only
+    # place the LogType still exists; its summary carries the authoritative per-type counts and
+    # they are printed below beside the text tally. When the two disagree, the sink is right.
     $exceptionsPath = Join-Path $outDir "$Tag-exceptions.json"
     $tally = [ordered]@{}
 
@@ -155,6 +210,31 @@ try {
         Write-Host ("  {0,-40} {1}" -f $type, $tally[$type]) -ForegroundColor $colour
     }
 
+    # The authoritative half: counted by LogType inside the process, so nothing depends on
+    # how a message happens to be spelled.
+    $logByType = $null
+    if (Test-Path $summary) {
+        try { $logByType = (Get-Content -Raw $summary | ConvertFrom-Json).logByType }
+        catch { Write-Warning "[lane-a] could not read logByType from $summary : $_" }
+    }
+
+    if ($null -eq $logByType) {
+        Write-Warning ("[lane-a] no logByType in $summary -- the per-type counts below are " +
+                       "UNKNOWN, not zero. The sink writes it at shutdown; a server that was " +
+                       "force-killed never got there.")
+    }
+    else {
+        $gradedErrors = [int]$logByType.Error + [int]$logByType.Exception + [int]$logByType.Assert
+        $colour = if ($gradedErrors -gt 0) { "Red" } else { "Green" }
+        Write-Host "[lane-a] $Tag log entries by LogType (the criterion-11 grade):"
+        Write-Host ("  Error {0}  Exception {1}  Assert {2}  | Warning {3}  Log {4}" -f
+                    $logByType.Error, $logByType.Exception, $logByType.Assert,
+                    $logByType.Warning, $logByType.Log) -ForegroundColor $colour
+        if ($gradedErrors -gt 0 -and (Test-Path $errors)) {
+            Write-Host "[lane-a] $Tag bodies -> $errors"
+        }
+    }
+
     [pscustomobject]@{
         tag         = $Tag
         seconds     = $Seconds
@@ -162,6 +242,8 @@ try {
         serverLog   = $serverLog
         total       = $total
         byType      = $tally
+        logByType   = $logByType
+        errorsPath  = $errors
     } | ConvertTo-Json -Depth 4 | Set-Content -Path $exceptionsPath -Encoding utf8
 
     Write-Host "[lane-a] $Tag done, harness exit $harnessExit -> $report"

@@ -13,8 +13,8 @@
 
 ## 1. Where the project actually is
 
-**The netcode is built and green.** `dotnet test` reports 8 of 8 projects, 1,982 assertions,
-0 failed. `SpecChecker` matches 90 protocol constants. `ClientWiringGate` reports 15/15 router
+**The netcode is built and green.** `dotnet test` reports 8 of 8 projects, **2,042 tests**,
+0 failed (re-measured 2026-08-30 by P7; it was 1,982 when this line was written). `SpecChecker` matches 90 protocol constants. `ClientWiringGate` reports 15/15 router
 events subscribed, 13/13 writers called, 9/9 authoring checks clean, and names its three
 remaining gaps out loud rather than passing quietly.
 
@@ -24,14 +24,25 @@ this says something subscribes, not that it renders correctly."* Nothing in CI h
 the screen. The four defects a player hits in the first minute (§ 3) were all invisible to a
 green build, and that is the single most important fact on this page.
 
-**Eighteen ledger rows are open**, and **two are live defects — the first since P1**. Both came
-out of [P5](phases/phase-p5-harness-gaps.md) on 2026-08-30: **X-69**, a 534-exception server-side
-NRE storm in `AiActorController.LocalAvoidanceVelocity` that its own exception gate caught by
-voiding a run, and **X-71**, the server walking a claimed player body 518 m across the map while
-its owner sends no movement input. The rest are harness and authoring gaps: **X-67** and **X-68**
-block E11, **X-70** is two unauthored vehicle prefabs, **X-72** is a checkpoint field that freezes
-without saying so, and **X-28**, **X-37**, **X-61**, **X-63**, **X-64**, **X-66** carry the
-remaining instrument debt.
+**Twenty-two ledger rows are open**, and **three are live defects**. Two came out of
+[P5](phases/phase-p5-harness-gaps.md) on 2026-08-30: **X-69**, an NRE storm in
+`AiActorController.LocalAvoidanceVelocity` that its own exception gate caught by voiding a run —
+[P7](phases/phase-p7-v9-integration.md) has since reproduced it at **10,126 occurrences** in one 600 s run at 16 clients —
+and **X-71**, the server walking a claimed player body 518 m across the map while its owner sends
+no movement input. The third is [P7](phases/phase-p7-v9-integration.md)'s: **X-73**, projectile ids surviving a world reset,
+because `ResetForNewMatch` clears eight tables and not that pool.
+
+**X-73 had been invisible, and X-74 is why.** `IsCleanOfActorState` requires `ActorIdsInUse == 0`
+while the reset deliberately retains every live actor's id, so the audit's ERROR fires at *every*
+round transition on the shipping map — and the line carried X-73's answer the whole time, where
+nothing distinguished it. That is the crying-wolf failure the `IsClean` split already fixed once for
+`Sessions`, one field over, and it is the fourth entry in this project's ledger of measurements that
+looked healthy while being wrong.
+
+The rest are harness and authoring gaps: **X-67** and **X-68** block E11, **X-70** is unauthored
+vehicle prefabs (confirmed still live on four spawners), **X-72** is a checkpoint field that freezes
+without saying so, **X-75** is one actor that left the wire's ±3072 m range, and **X-28**, **X-37**,
+**X-61**, **X-63**, **X-64**, **X-66** carry the remaining instrument debt.
 
 **X-71 and X-72 were found by reviewing P5's report, not its code**, and X-72 is why that report's
 first draft inverted an X-28 finding. `plan.md` § 5 rule 3 is about sentences outliving their
@@ -59,7 +70,7 @@ that README without carrying them would have completed the loss.
 | **M1** Connection | **2 clients see each other moving smoothly** at 100 ms RTT + 5 % loss | ☐ | check 7 → **B-7** → [P4](phases/phase-p4-lane-b-regrade.md) |
 | **M2** Combat | Server-authoritative shooting with lag compensation · health/death/respawn · AI bots replicate | **3 / 3** | checks 1, 13 → **B-1** (P4 § 4.1), **B-2** (P5 § 3.3 — `p5-separation-02` samples a dead body at `alive false / hp 0 / canRespawn true`, with input suppressed on 255 of 255 dead frames) |
 | **M3** Full match | Login → lobby → room → capture point → win/lose → back to lobby, 16 players · **the flow runs with no manual file editing** · **a wrong password gives a clear error** · **disconnecting mid-match returns to the lobby with a message** | ☐ | [P8](phases/phase-p8-capstone-deliverables.md); the 16-player half is [P7](phases/phase-p7-v9-integration.md) |
-| **M4** Polish | Load test with 16 clients · measurement report · documentation · demo video · **0 P0 bugs** · **the 5-scenario measurement table filled in** · **the on/off comparison table for the five netcode techniques filled in** · **30 minutes of continuous play with no crash and no leak** | ☐ | [P7](phases/phase-p7-v9-integration.md) + [P8](phases/phase-p8-capstone-deliverables.md) |
+| **M4** Polish | Load test with 16 clients · measurement report · documentation · demo video · **0 P0 bugs** · **the 5-scenario measurement table filled in** · **the on/off comparison table for the five netcode techniques filled in** · **30 minutes of continuous play with no crash and no leak** | **load test DONE, leak clause FAILING** | [P7](phases/phase-p7-v9-integration.md) ran 16 clients four times and graded all thirteen V9 criteria ([the P7 report](reports/2026-08-30-p7-v9-integration.md)); the *no leak* clause is **measured failing** — **X-73**, and **X-69** is a P0 by any reading at 10,126 exceptions. Documentation, video and the two tables stay [P8](phases/phase-p8-capstone-deliverables.md)'s |
 
 **M2 is met and M1 is a measured failure — neither is ☐ any more, and P4 and P5 are why.** M2's
 last unmet clause was health/death/respawn, ungradeable because no checkpoint had ever sampled a
@@ -99,7 +110,7 @@ and whose bodies do not animate cannot be graded by eye.
 | **P4** | [Lane-B re-grade](phases/phase-p4-lane-b-regrade.md) | B-1, B-2, B-7, B-8, B-9, B-10, B-13, B-15 — and M1, M2 with them | L |
 | **P5** | [Harness gaps](phases/phase-p5-harness-gaps.md) | X-28, X-29, X-37 | M |
 | **P6** | [Scoreboard and chat](phases/phase-p6-scoreboard-and-chat.md) | A13, the Chat opcode | M |
-| **P7** | [V9 integration](phases/phase-p7-v9-integration.md) | B-16, B-17 at 16 clients; the soak | L |
+| **P7** | [V9 integration](phases/phase-p7-v9-integration.md) | **DONE 2026-08-30** — B-17 re-graded and closed at 16; **B-16 re-opened, 22% over budget**; the soak ran 8 rounds and found **X-73** | L |
 | **P8** | [Capstone deliverables](phases/phase-p8-capstone-deliverables.md) | M3 and M4's unowned clauses | L |
 | **P9** | [Deployment and single-owner cleanup](phases/phase-p9-deployment-and-cleanup.md) | the fly.io blocker, four stale handles | S |
 

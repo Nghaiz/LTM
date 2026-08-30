@@ -168,6 +168,15 @@ namespace Ironfront.Net.Unity.Server
         private double _lastPumpMs;
         private bool _running;
 
+        // The two stage spans, split out of the one number RecordTickTime already keeps.
+        // P7 task 4.2: "the netcode is 300 us and the frame is 28 ms" has to be
+        // distinguishable from "the snapshot stage is 20 ms", and a single total cannot say
+        // which. Written here rather than measured by the sink for HeadlessLoadBootstrap's
+        // stated reason -- the sink is a writer, and a second implementation of a number the
+        // loop already has is how a harness ends up grading its own arithmetic.
+        private double _inputStageMs;
+        private double _snapshotStageMs;
+
         /// <summary>So a rebind does not repeat the phase-V2 placeholder-weapon warning.</summary>
         private bool _warnedAboutPlaceholderWeapons;
 
@@ -335,6 +344,26 @@ namespace Ironfront.Net.Unity.Server
 
         /// <summary>Pacing and the tick-time distribution M1 criterion 1 is graded on.</summary>
         public ServerTickScheduler Scheduler => _scheduler;
+
+        /// <summary>
+        /// Milliseconds the last <see cref="RunInputStage"/> took: poll, decode and the input
+        /// half of every owed tick.
+        /// </summary>
+        public double LastInputStageMs => _inputStageMs;
+
+        /// <summary>
+        /// Milliseconds the last <see cref="RunSnapshotStage"/> took: hitbox history, projectile
+        /// stepping and the snapshot build and send.
+        /// </summary>
+        /// <remarks>
+        /// <b>What is in neither.</b> Everything between the two stages runs at Unity's default
+        /// execution order -- actors, the AI, vehicle scripts, <c>MatchController</c> -- so
+        /// <c>Scheduler.TickTimes.Last</c> minus these two is the gameplay span. PhysX is in
+        /// none of the three: every one of these <c>FixedUpdate</c>s runs before Unity steps
+        /// physics, so a tick figure built from them is a SCRIPT figure and P7's report says so
+        /// rather than calling it the frame.
+        /// </remarks>
+        public double LastSnapshotStageMs => _snapshotStageMs;
 
         /// <summary>Inbound message counters, for the HUD and the phase report.</summary>
         public ServerMessageRouter Router => _router;
@@ -561,12 +590,16 @@ namespace Ironfront.Net.Unity.Server
                 for (int i = 0; i < _players.Count; i++)
                     _players[i].Tick(_scheduler.FixedDeltaTime);
             }
+
+            _inputStageMs = NowMs() - _stepStartMs;
         }
 
         /// <summary>Stage 2, at execution order +200. Capture the simulated world and send it.</summary>
         public void RunSnapshotStage()
         {
             if (!_running || Transport == null || _ticksOwedThisStep == 0) return;
+
+            double snapshotStartMs = NowMs();
 
             // The input stage advanced CurrentTick once per owed tick, so by the time this runs
             // it names the LAST of them. Recording every owed tick's history under that one
@@ -601,9 +634,17 @@ namespace Ironfront.Net.Unity.Server
             _ticksOwedThisStep = 0;
 
             // One sample per fixed step that actually ran ticks, covering the input stage, the
-            // physics and AI between the two stages, and the snapshot build. That whole span is
-            // what has to fit inside the tick budget, so it is what p99 is measured on.
-            _scheduler.RecordTickTime(NowMs() - _stepStartMs);
+            // AI and gameplay scripts between the two stages, and the snapshot build. That whole
+            // span is what has to fit inside the tick budget, so it is what p99 is measured on.
+            //
+            // NOT the physics. Every one of these stages is a FixedUpdate, and Unity steps PhysX
+            // after the last of them, so this number is the SCRIPT span and P7 reports it under
+            // that name -- with Time.unscaledDeltaTime recorded beside it as the frame that does
+            // include physics. Calling a script span "the tick" is how a p99 passes while the
+            // frame it lives in is over budget.
+            double nowMs = NowMs();
+            _snapshotStageMs = nowMs - snapshotStartMs;
+            _scheduler.RecordTickTime(nowMs - _stepStartMs);
         }
 
         /// <summary>

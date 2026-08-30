@@ -71,6 +71,25 @@ namespace Ironfront.Net.Unity.Server
         /// </remarks>
         public const string SeedVariable = "IRONFRONT_LOAD_SEED";
 
+        /// <summary>
+        /// Path of the log-entry sink: one JSONL record per <see cref="LogType.Error"/>,
+        /// <see cref="LogType.Exception"/> or <see cref="LogType.Assert"/> the process emits.
+        /// Defaults to <see cref="OutputVariable"/> with <c>.errors.jsonl</c> appended.
+        /// </summary>
+        /// <remarks>
+        /// <b>Criterion 11 grades the log, not the exit code</b>, and a Unity player survives
+        /// many exceptions by logging them and carrying on with a broken object. That much was
+        /// already known. What was not covered is that <c>-logFile</c> writes an
+        /// <c>Debug.LogError</c> message with the same shape as a <c>Debug.Log</c> one -- no
+        /// level marker anywhere on the line -- so <c>run-lane-a.ps1</c>'s type tally could only
+        /// ever find entries whose TEXT began with an exception type name. An error raised by
+        /// the game's own code (<c>"[net] match reset left state behind"</c>) was invisible to
+        /// it. Subscribing to <see cref="Application.logMessageReceived"/> is the only place the
+        /// <see cref="LogType"/> still exists, so the tally is taken here and the log is left to
+        /// be the human-readable copy.
+        /// </remarks>
+        public const string ErrorsVariable = "IRONFRONT_LOAD_ERRORS";
+
         /// <summary>Seed used when <see cref="SeedVariable"/> is unset.</summary>
         /// <remarks>12345 to match <c>SimulatorConfig.RandomSeed</c>'s default, so a run
         /// described only as "the defaults" is one configuration rather than two.</remarks>
@@ -116,17 +135,26 @@ namespace Ironfront.Net.Unity.Server
             new Dictionary<ushort, ConnectionBytes>();
 
         private ServerTickLoop _loop;
+        private MatchController _match;
         private ITransportServer _transport;
         private StreamWriter _writer;
+        private StreamWriter _errorWriter;
 
         private string _outputPath;
         private string _summaryPath;
+        private string _errorsPath;
         private int _seed;
+
+        // Counted by LogType, which is the only axis on which criterion 11 is stated. Indexed by
+        // (int)LogType, so the array is as long as the enum and no entry can be forgotten.
+        private readonly long[] _logCounts = new long[5];
+        private long _errorEntriesWritten;
 
         private uint _lastTick;
         private int _recordsSinceFlush;
 
         private long _records;
+        private long _resets;
         private long _ticksCovered;
         private long _connectionMismatchRecords;
         private double _maxStepMs;
@@ -134,6 +162,18 @@ namespace Ironfront.Net.Unity.Server
 
         private long _lastEntriesConsidered, _lastEntriesRefreshed, _lastEntriesHeld;
         private long _lastEntriesCulled, _lastEntriesShed;
+
+        /// <summary>
+        /// Error records written to disk before the sink stops writing bodies and only counts.
+        /// </summary>
+        /// <remarks>
+        /// X-69 put 534 NullReferenceExceptions in one run's log, each with a stack trace. A cap
+        /// keeps a storm from turning the evidence file into hundreds of megabytes, and the
+        /// TALLY is uncapped -- so a run that trips the cap still reports its true count, which
+        /// is the number criterion 11 is graded on. A truncated file that under-reported the
+        /// count would be the exact failure this sink exists to prevent.
+        /// </remarks>
+        private const int MaxErrorRecords = 500;
 
         private struct ConnectionBytes
         {
@@ -189,14 +229,130 @@ namespace Ironfront.Net.Unity.Server
             _summaryPath = Environment.GetEnvironmentVariable(SummaryVariable);
             if (string.IsNullOrWhiteSpace(_summaryPath)) _summaryPath = _outputPath + ".summary.json";
 
+            _errorsPath = Environment.GetEnvironmentVariable(ErrorsVariable);
+            if (string.IsNullOrWhiteSpace(_errorsPath)) _errorsPath = _outputPath + ".errors.jsonl";
+
             _seed = ReadSeed();
             UnityEngine.Random.InitState(_seed);
 
             if (!TryOpenWriter()) { enabled = false; return; }
 
+            // Before anything else can throw. A sink that starts counting after the first
+            // subsystem has already booted would report a clean run whose first exception it
+            // simply was not there for -- and Awake is the earliest point at which this
+            // component exists at all.
+            _errorWriter = TryOpenErrors();
+            Application.logMessageReceived += OnLogMessage;
+
             Debug.Log(
-                $"[load] recording to {_outputPath} (summary {_summaryPath}), "
-                + $"{SeedVariable}={_seed}");
+                $"[load] recording to {_outputPath} (summary {_summaryPath}, "
+                + $"errors {_errorsPath}), {SeedVariable}={_seed}");
+        }
+
+        /// <summary>
+        /// Opens the error sink, or returns null having said why.
+        /// </summary>
+        /// <remarks>
+        /// A null writer does NOT disable the tally: <see cref="OnLogMessage"/> still counts by
+        /// <see cref="LogType"/>, and the summary still carries those counts. Losing the bodies
+        /// costs triage detail; losing the counts would cost the criterion.
+        /// </remarks>
+        private StreamWriter TryOpenErrors()
+        {
+            try
+            {
+                string directory = Path.GetDirectoryName(Path.GetFullPath(_errorsPath));
+                if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+
+                return new StreamWriter(_errorsPath, append: false, Utf8NoBom) { AutoFlush = true };
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[load] could not open '{_errorsPath}': {ex.Message}. "
+                                 + "The per-type tally is still taken; the bodies are not kept.");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Tallies every log entry by type and writes the bodies of the ones criterion 11 grades.
+        /// </summary>
+        /// <remarks>
+        /// <b><see cref="LogType.Warning"/> and <see cref="LogType.Log"/> are counted and not
+        /// written.</b> The count is what distinguishes "the sink was attached and the run was
+        /// clean" from "the sink was never attached" — a zero beside a zero says nothing, and a
+        /// zero beside 40,000 Log entries says the subscription was live.
+        /// <b>AutoFlush is on</b> because the failure being recorded is exactly the one that may
+        /// take the process down before <see cref="Close"/> runs.
+        /// </remarks>
+        private void OnLogMessage(string condition, string stackTrace, LogType type)
+        {
+            int index = (int)type;
+            if ((uint)index < (uint)_logCounts.Length) _logCounts[index]++;
+
+            if (type != LogType.Error && type != LogType.Exception && type != LogType.Assert)
+                return;
+
+            if (_errorWriter == null || _errorEntriesWritten >= MaxErrorRecords) return;
+
+            try
+            {
+                var record = new StringBuilder(256);
+                record.Append("{\"type\":\"").Append(type).Append('"')
+                      .Append(",\"tick\":").Append(_loop == null ? 0u : _loop.CurrentTick)
+                      .Append(",\"atSec\":")
+                      .Append(Time.realtimeSinceStartupAsDouble.ToString(
+                          "0.###", CultureInfo.InvariantCulture))
+                      .Append(",\"condition\":").Append(Quote(condition))
+                      .Append(",\"site\":").Append(Quote(FirstStackLine(stackTrace)))
+                      .Append('}');
+
+                _errorWriter.WriteLine(record.ToString());
+                _errorEntriesWritten++;
+            }
+            catch (Exception)
+            {
+                // Deliberately silent: logging from inside a log handler is how a single error
+                // becomes an unbounded recursion, and the tally above has already recorded it.
+                _errorWriter = null;
+            }
+        }
+
+        /// <summary>The first frame of a stack trace, which is the site worth triaging to.</summary>
+        private static string FirstStackLine(string stackTrace)
+        {
+            if (string.IsNullOrEmpty(stackTrace)) return string.Empty;
+
+            int end = stackTrace.IndexOf('\n');
+            string line = end < 0 ? stackTrace : stackTrace.Substring(0, end);
+            return line.TrimEnd('\r');
+        }
+
+        /// <summary>Minimal JSON string escaping — enough for a log line and a stack frame.</summary>
+        private static string Quote(string value)
+        {
+            var quoted = new StringBuilder(64);
+            quoted.Append('"');
+
+            for (int i = 0; value != null && i < value.Length; i++)
+            {
+                char c = value[i];
+                switch (c)
+                {
+                    case '"': quoted.Append("\\\""); break;
+                    case '\\': quoted.Append("\\\\"); break;
+                    case '\n': quoted.Append("\\n"); break;
+                    case '\r': quoted.Append("\\r"); break;
+                    case '\t': quoted.Append("\\t"); break;
+                    default:
+                        if (c < ' ') quoted.Append("\\u").Append(((int)c).ToString("x4"));
+                        else quoted.Append(c);
+                        break;
+                }
+            }
+
+            quoted.Append('"');
+            return quoted.ToString();
         }
 
         private static int ReadSeed()
@@ -279,6 +435,8 @@ namespace Ironfront.Net.Unity.Server
             if (loop == null || loop.Transport == null) return false;
 
             _loop = loop;
+            _match = loop.GetComponent<MatchController>();
+            if (_match != null) _match.MatchResetCompleted += OnMatchResetCompleted;
             _transport = loop.Transport;
             _transport.OnClientConnected += OnClientConnected;
             _transport.OnClientDisconnected += OnClientDisconnected;
@@ -292,10 +450,59 @@ namespace Ironfront.Net.Unity.Server
             // first Editor run of this component, which is what running it was for.
             _lastTick = loop.CurrentTick;
 
+            // Said out loud when absent, because a null one costs the phase field and the
+            // phase field is what separates "mid-round" from "at reset" in the soak grading.
+            // Silent, the records would simply all read phase 0 and the audit rows below would
+            // be ungradeable for a reason nothing in the artifact explains.
+            if (_match == null)
+                Debug.LogWarning(
+                    "[load] no MatchController beside the tick loop: every record will carry "
+                    + "phase 0, and the five-match soak cannot be graded from this run.");
+
             Debug.Log(
                 $"[load] attached to {_loop.GetType().Name} over "
                 + $"{_transport.GetType().Name} at tick {_loop.CurrentTick}");
             return true;
+        }
+
+        /// <summary>
+        /// Writes one <c>"reset"</c> record per completed reset, carrying the post-reset audit.
+        /// </summary>
+        /// <remarks>
+        /// This is the ONLY trustworthy count of resets in the file, and the only place the
+        /// audit is sampled at the moment criterion 13 is about. The per-tick records still
+        /// carry an audit — that is what proves each pool ROSE during the round — but their
+        /// phase field cannot locate a reset (see <c>MatchController.MatchResetCompleted</c>).
+        /// <para>
+        /// <c>liveActors</c> is recorded beside the audit because <c>ActorIdsInUse</c> is NOT
+        /// expected to be zero on a map whose actors outlive the round: Dustbowl retains all 56
+        /// deliberately (<c>ServerTickLoop.ResetForNewMatch</c> passes them so the pool cannot
+        /// re-offer an id still held). Without the live count beside it, a correct retention and
+        /// a genuine leak are the same number.
+        /// </para>
+        /// </remarks>
+        private void OnMatchResetCompleted(
+            Ironfront.Net.Replication.Server.ServerStateSnapshot audit)
+        {
+            if (_writer == null) return;
+
+            _resets++;
+
+            _line.Length = 0;
+            _line.Append("{\"reset\":").Append(_resets)
+                 .Append(",\"t\":").Append(_loop == null ? 0u : _loop.CurrentTick)
+                 .Append(",\"liveActors\":").Append(ServerActorRegistry.Instance.Count)
+                 .Append(",\"liveVehicles\":").Append(ServerVehicleRegistry.Instance.Count);
+
+            AppendAuditOf(audit);
+
+            _line.Append('}');
+            _writer.WriteLine(_line.ToString());
+
+            // Flushed at once: a reset record is the evidence for criterion 13, and the run it
+            // belongs to may not survive to the next scheduled flush.
+            _writer.Flush();
+            _recordsSinceFlush = 0;
         }
 
         private void OnClientConnected(ushort connectionId, ConnectionInfo info)
@@ -328,10 +535,30 @@ namespace Ironfront.Net.Unity.Server
             _lastEntriesCulled = interest.EntriesCulled;
             _lastEntriesShed = interest.EntriesShed;
 
+            // The stage split, and the frame the stages live in.
+            //
+            // stepMicros is the SCRIPT span -- input stage, the gameplay and AI between the two
+            // stages, and the snapshot build. Every one of those is a FixedUpdate, and Unity
+            // steps PhysX after the last of them, so none of the three includes physics.
+            // frameMicros is Time.unscaledDeltaTime for the frame this fixed step belongs to,
+            // which does. P7 task 4.2 asks for exactly this distinction: "the netcode is 300 us
+            // and the frame is 28 ms" and "the snapshot stage is 20 ms" have different remedies,
+            // and one total cannot tell them apart.
+            double inputMs = _loop.LastInputStageMs;
+            double snapshotMs = _loop.LastSnapshotStageMs;
+            double gameplayMs = stepMs - inputMs - snapshotMs;
+            if (gameplayMs < 0.0) gameplayMs = 0.0;
+
             _line.Length = 0;
             _line.Append("{\"t\":").Append(tick)
                  .Append(",\"nTicks\":").Append(ticks)
                  .Append(",\"stepMicros\":").Append((long)Math.Round(stepMs * 1000.0))
+                 .Append(",\"inputMicros\":").Append((long)Math.Round(inputMs * 1000.0))
+                 .Append(",\"gameplayMicros\":").Append((long)Math.Round(gameplayMs * 1000.0))
+                 .Append(",\"snapshotMicros\":").Append((long)Math.Round(snapshotMs * 1000.0))
+                 .Append(",\"frameMicros\":")
+                 .Append((long)Math.Round(Time.unscaledDeltaTime * 1000000.0))
+                 .Append(",\"phase\":").Append(_match == null ? 0 : (int)_match.Match.Phase)
                  .Append(",\"actors\":").Append(ServerActorRegistry.Instance.Count)
                  .Append(",\"vehicles\":").Append(ServerVehicleRegistry.Instance.Count)
                  .Append(",\"players\":").Append(_loop.PlayerCount)
@@ -342,6 +569,7 @@ namespace Ironfront.Net.Unity.Server
                  .Append(",\"entriesCulled\":").Append(culledDelta)
                  .Append(",\"entriesShed\":").Append(shedDelta);
 
+            AppendAudit();
             AppendConnectionBytes();
 
             // The one place this component can lie is by counting fewer connections than the
@@ -365,6 +593,55 @@ namespace Ironfront.Net.Unity.Server
                 _writer.Flush();
                 _recordsSinceFlush = 0;
             }
+        }
+
+        /// <summary>
+        /// Appends <c>"audit":[…]</c> — the twelve counts a match reset is supposed to have
+        /// emptied — and <c>"auditClean"</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why per record and not only at the reset.</b> The soak's risk is that its new
+        /// fields read zero from pools that were never populated, and a counter that cannot rise
+        /// cannot fall meaningfully (`green-that-proves-nothing.md`). Grading that needs the
+        /// mid-round value as well as the post-reset one, so the sink writes it every record and
+        /// the grader asserts non-zero DURING a round before asserting zero after it. Sampling
+        /// only at the boundary would produce exactly the vacuous pass the risk names.
+        /// </para>
+        /// <para>
+        /// <b>Positional, in the order below</b>, for the reason <c>perConn</c> is: twelve
+        /// key names at 30 Hz is most of the file. The order is
+        /// <c>[actorIdsInUse, actorIdsFree, actorIdsQuarantined, hitboxHistoryActors,
+        /// interestPairs, spawnAckPairs, sessions, vehicleIdsInUse, vehicleIdsQuarantined,
+        /// vehicleInterestPairs, vehiclesRegistered, mountedWeapons, turrets, projectileIds]</c>
+        /// and <c>tools/grade-v9.py</c> names the same order in one place.
+        /// </para>
+        /// <para>
+        /// <b><c>auditClean</c> is the loop's own predicate</b>, not a re-derivation: it is
+        /// <c>IsCleanOfActorState</c>, the same one <c>MatchController</c> logs against, so a
+        /// grader reading this file and a reader reading the log cannot reach different verdicts.
+        /// </para>
+        /// </remarks>
+        private void AppendAudit() => AppendAuditOf(_loop.AuditState());
+
+        /// <summary>The positional audit array, for a snapshot from either sampling point.</summary>
+        private void AppendAuditOf(Ironfront.Net.Replication.Server.ServerStateSnapshot audit)
+        {
+            _line.Append(",\"audit\":[").Append(audit.ActorIdsInUse)
+                 .Append(',').Append(audit.ActorIdsFree)
+                 .Append(',').Append(audit.ActorIdsQuarantined)
+                 .Append(',').Append(audit.HitboxHistoryActors)
+                 .Append(',').Append(audit.InterestPairs)
+                 .Append(',').Append(audit.SpawnAckPairs)
+                 .Append(',').Append(audit.Sessions)
+                 .Append(',').Append(audit.VehicleIdsInUse)
+                 .Append(',').Append(audit.VehicleIdsQuarantined)
+                 .Append(',').Append(audit.VehicleInterestPairs)
+                 .Append(',').Append(audit.VehiclesRegistered)
+                 .Append(',').Append(audit.MountedWeaponsTracked)
+                 .Append(',').Append(audit.TurretsTracked)
+                 .Append(',').Append(audit.ProjectileIdsInUse)
+                 .Append("],\"auditClean\":").Append(audit.IsCleanOfActorState ? 1 : 0);
         }
 
         /// <summary>
@@ -432,6 +709,21 @@ namespace Ironfront.Net.Unity.Server
         /// </summary>
         private void Close()
         {
+            Application.logMessageReceived -= OnLogMessage;
+
+            if (_errorWriter != null)
+            {
+                try { _errorWriter.Flush(); _errorWriter.Dispose(); }
+                catch (Exception) { /* the tally in the summary is the evidence, not this file */ }
+                _errorWriter = null;
+            }
+
+            if (_match != null)
+            {
+                _match.MatchResetCompleted -= OnMatchResetCompleted;
+                _match = null;
+            }
+
             if (_transport != null)
             {
                 _transport.OnClientConnected -= OnClientConnected;
@@ -462,6 +754,7 @@ namespace Ironfront.Net.Unity.Server
                    .Append(",\n  \"seedVariable\": \"").Append(SeedVariable).Append('"')
                    .Append(",\n  \"records\": ").Append(_records)
                    .Append(",\n  \"ticksCovered\": ").Append(_ticksCovered)
+                   .Append(",\n  \"resets\": ").Append(_resets)
                    .Append(",\n  \"connectionMismatchRecords\": ").Append(_connectionMismatchRecords)
                    .Append(",\n  \"stepMs\": {")
                    .Append("\"mean\": ")
@@ -487,7 +780,23 @@ namespace Ironfront.Net.Unity.Server
             // describes the last eight seconds rather than the run, and a summary that printed
             // one would be answering a different question from the one phase 4 asks. The exact
             // per-step microseconds are in the JSONL; that is what the run p99 is computed from.
-            summary.Append("\n  ],\n  \"note\": ")
+            // The tally criterion 11 is graded on, by LogType, every type printed even at
+            // zero. An absent line reads as "not measured"; "Exception: 0" reads as measured and
+            // clean, and those must never look alike -- the same rule run-lane-a.ps1 states for
+            // its own two named types.
+            summary.Append("\n  ],\n  \"logByType\": {")
+                   .Append("\"Error\": ").Append(_logCounts[(int)LogType.Error])
+                   .Append(", \"Assert\": ").Append(_logCounts[(int)LogType.Assert])
+                   .Append(", \"Warning\": ").Append(_logCounts[(int)LogType.Warning])
+                   .Append(", \"Log\": ").Append(_logCounts[(int)LogType.Log])
+                   .Append(", \"Exception\": ").Append(_logCounts[(int)LogType.Exception])
+                   .Append('}')
+                   .Append(",\n  \"errorEntriesWritten\": ").Append(_errorEntriesWritten)
+                   .Append(",\n  \"errorRecordCap\": ").Append(MaxErrorRecords)
+                   .Append(",\n  \"errorsPath\": \"")
+                   .Append(_errorsPath == null ? "" : _errorsPath.Replace("\\", "/"))
+                   .Append('"')
+                   .Append(",\n  \"note\": ")
                    .Append("\"stepMicros per record is the p99 input; the histogram is indicative\"")
                    .Append("\n}\n");
 
