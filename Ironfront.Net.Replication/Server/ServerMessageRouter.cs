@@ -64,8 +64,23 @@ namespace Ironfront.Net.Replication.Server
         /// </summary>
         public IVehicleInputHandler? VehicleInputs { get; set; }
 
+        /// <summary>
+        /// Where a parsed C_CHAT goes. Null leaves the message counted and otherwise ignored.
+        /// Phase P6 task 3.3.
+        /// </summary>
+        /// <remarks>
+        /// Before P6 this opcode fell through to <see cref="UnknownMessages"/>, which is why no
+        /// client could ship a sender for it: a chat message would have been counted as
+        /// corruption on every send. The route lands before the sender, deliberately and in
+        /// that order.
+        /// </remarks>
+        public IChatHandler? Chat { get; set; }
+
         /// <summary>C_SEAT_REQUEST messages received, whether accepted or refused.</summary>
         public long SeatRequestsReceived { get; private set; }
+
+        /// <summary>C_CHAT messages that parsed. Refused empty or over-long lines are not here.</summary>
+        public long ChatTextMessagesReceived { get; private set; }
 
         /// <summary>C_VEHICLE_INPUT messages that parsed and were clamped.</summary>
         public long VehicleInputsAccepted { get; private set; }
@@ -92,9 +107,16 @@ namespace Ironfront.Net.Replication.Server
 
         /// <summary>
         /// Messages whose type this router does not handle. Expected to be non-zero as the
-        /// protocol grows — C_PING, C_CHAT and the rest are routed elsewhere — so it is a
-        /// counter rather than a warning.
+        /// protocol grows — C_PING and C_LOADOUT_SELECT are the two left, and both are named
+        /// gaps in <c>ClientSenderCoverageRunner.KnownUnsentMessages</c> — so it is a counter
+        /// rather than a warning.
         /// </summary>
+        /// <remarks>
+        /// <b>C_CHAT left this counter at P6</b> and the order it left in is the point: the
+        /// route landed first, so the client sender that followed never had a send counted as
+        /// corruption. An opcode with a sender and no route is a write-only path, which is what
+        /// the gate's own retire condition for X-8 refused to allow.
+        /// </remarks>
         public long UnknownMessages { get; private set; }
 
         /// <summary>
@@ -167,6 +189,29 @@ namespace Ironfront.Net.Replication.Server
                         }
                         else
                         {
+                            MalformedMessages++;
+                        }
+
+                        break;
+
+                    case ClientMessageType.Chat:
+                        if (ChatTextMessage.TryParseClient(body, out ReadOnlySpan<byte> chatText))
+                        {
+                            ChatTextMessagesReceived++;
+
+                            // The span is handed straight on rather than decoded here: this
+                            // class is allocation-free after construction, and a string per
+                            // chat message inside the tick loop is exactly the kind of small,
+                            // steady allocation that only shows up as a hitch an hour in.
+                            Chat?.OnChat(session, chatText);
+                            handled++;
+                        }
+                        else
+                        {
+                            // An empty or over-long line is malformed, not unknown. A client
+                            // sending zero bytes of text is asking for a blank row on every
+                            // player's screen, and counting that as corruption is the honest
+                            // answer -- the sender clipped wrong or somebody is probing.
                             MalformedMessages++;
                         }
 

@@ -33,11 +33,15 @@ namespace Ironfront.Net.Unity.Server
         /// What S_PLAYER_LIST calls this player. See <see cref="DisplayName"/> for where it comes
         /// from and what it is not.
         /// </param>
+        /// <param name="playerId">
+        /// The master's account id from the signed join ticket, or 0. See <see cref="PlayerId"/>.
+        /// </param>
         public ServerPlayer(
             ushort connectionId, ushort actorId, ServerCombatBridge combat = null,
-            string displayName = null)
+            string displayName = null, uint playerId = 0)
         {
             Session = new ClientSession(connectionId, actorId);
+            PlayerId = playerId;
             _combat = combat;
             _moveThroughCollision = MoveThroughCollision;
             _moveDetached = MoveDetached;
@@ -76,6 +80,27 @@ namespace Ironfront.Net.Unity.Server
         /// </para>
         /// </remarks>
         public string DisplayName { get; }
+
+        /// <summary>
+        /// The master's account id for this connection, or 0 when it carried no signed ticket.
+        /// Phase P6, checklist A13.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Captured at the join and kept, because <c>ConnectionInfo</c> is not.</b> The
+        /// transport hands the info struct to <c>OnClientConnected</c> and nothing retains it;
+        /// the end-of-match report needs this id long afterwards, when the only handle left is
+        /// the actor. It travels beside <see cref="DisplayName"/>, which is captured from the
+        /// same struct at the same moment for the same reason.
+        /// </para>
+        /// <para>
+        /// <b>0 is honest, not missing.</b> A loopback session, a lane-B harness client and a
+        /// development stub all join without a ticket. See
+        /// <c>ServerTickLoop.PlayerIdForActor</c> for why the report says 0 rather than
+        /// substituting the actor id.
+        /// </para>
+        /// </remarks>
+        public uint PlayerId { get; }
 
         /// <summary>The authoritative state. This, not the transform, is the truth.</summary>
         public ClientSession Session { get; }

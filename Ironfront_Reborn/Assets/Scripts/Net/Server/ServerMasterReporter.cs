@@ -121,15 +121,72 @@ namespace Ironfront.Net.Unity.Server
                       + (winningTeam == TeamId.None ? "draw" : $"team {winningTeam}"));
         }
 
+        /// <summary>
+        /// Fills <see cref="_scores"/> from the match's tally. Phase P6 task 3.2, checklist A13.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The empty list survives, and its original reason with it.</b> Before P6 nothing
+        /// tallied kills at all, and reporting an empty list was chosen over reporting zeroes
+        /// for every player because the master stores what it is given, and rows of all-zero
+        /// scores are indistinguishable from a match where nobody scored. That reasoning was
+        /// right and it still binds: a player who neither killed nor died is OMITTED rather than
+        /// reported at zero, so a match nobody scored in still produces no rows — the difference
+        /// is that now it is because nothing happened, not because nothing was counted.
+        /// </para>
+        /// <para>
+        /// <b>The population is connected players, not the tally's id space.</b> Bots kill and
+        /// die and land in <see cref="MatchScoreTally"/> like anybody else, and a bot has no
+        /// account for <c>MatchPlayerResult.PlayerId</c> to name. Walking the players is what
+        /// keeps the report to rows the master can do something with, and it is also what makes
+        /// the id resolution a single lookup per row rather than a reverse search.
+        /// </para>
+        /// <para>
+        /// <b>Ticket accounting is untouched.</b> <c>MatchController.ReportDeath</c> still costs
+        /// the dying team a ticket, on the same call that feeds this tally
+        /// (<c>ServerTickLoop.EmitDeath</c>). This is a second reader of one resolved death, not
+        /// a second path.
+        /// </para>
+        /// </remarks>
         private void CollectScores()
         {
             _scores.Clear();
 
-            // Per-player kill/death accounting is not tracked yet — S_DEATH carries the killer
-            // but nothing tallies it. Reporting an empty list is deliberate over reporting
-            // zeroes for every player: the master stores what it is given, and rows of
-            // all-zero scores are indistinguishable from a match where nobody scored.
-            // Checklist item A13.
+            if (_loop == null) return;
+
+            MatchScoreTally tally = _loop.Scores;
+
+            IReadOnlyList<ServerTickLoop.ServerPlayerScoreRow> rows = _loop.ScoreRows;
+            for (int i = 0; i < rows.Count; i++)
+            {
+                ushort actorId = rows[i].ActorId;
+                if (tally.IsUntouched(actorId)) continue;
+
+                int kills = tally.KillsOf(actorId);
+
+                _scores.Add(new MatchPlayerScore(
+                    rows[i].PlayerId,
+                    kills,
+                    tally.DeathsOf(actorId),
+
+                    // Computed at the use site, never stored: there is no scoring rule beyond
+                    // kills yet, and a Score field kept alongside Kills would be a second copy
+                    // of one number that the first rule to arrive would immediately desynchronise
+                    // (code-conventions.md, "No Derived Fields"). When objectives start scoring,
+                    // the rule lands in MatchStateMachine with every other rule and this line
+                    // reads it.
+                    kills * PointsPerKill));
+            }
         }
+
+        /// <summary>
+        /// What one kill is worth on the end-of-match report.
+        /// </summary>
+        /// <remarks>
+        /// Named rather than inlined as a bare <c>1</c>, so that the moment a capture or an
+        /// assist is worth points there is one place already asking the question. It is not a
+        /// balance number and does not belong in a config: nothing reads it but the line above.
+        /// </remarks>
+        private const int PointsPerKill = 1;
     }
 }

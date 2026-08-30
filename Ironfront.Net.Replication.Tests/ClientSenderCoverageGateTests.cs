@@ -97,14 +97,22 @@ namespace Ironfront.Net.Replication.Tests
         /// </summary>
         /// <remarks>
         /// This is what stops KnownUnsentMessages from becoming the graveyard the whole
-        /// exemption pattern is prone to. Chat is exempt on the shipped tree; the moment
-        /// somebody gives it a sender, the entry describing it as unsent has to go in the same
-        /// commit (pinned-baseline-test-companion.md — assert BOTH directions).
+        /// exemption pattern is prone to. The exemplar was Chat until phase P6 shipped
+        /// ClientChatSender; this test is what would have caught a P6 that added the sender and
+        /// left the entry behind, and repointing it at Ping is part of closing the row rather
+        /// than a chore (pinned-baseline-test-companion.md — assert BOTH directions).
         /// </remarks>
         [Fact]
         public void G10FailsWhenAnExemptionOutlivesTheGapItDescribes()
         {
             Assert.Contains(
+                ClientSenderCoverageRunner.KnownUnsentMessages,
+                e => e.OpcodeName == "Ping");
+
+            // And the retired one is gone. The direction above catches an exemption that
+            // outlives its gap only for opcodes still ON the list; nothing would have noticed
+            // Chat's entry surviving its own sender except this line.
+            Assert.DoesNotContain(
                 ClientSenderCoverageRunner.KnownUnsentMessages,
                 e => e.OpcodeName == "Chat");
 
@@ -112,8 +120,8 @@ namespace Ironfront.Net.Replication.Tests
             var error = new StringWriter();
 
             int exit = RunAgainst(
-                new[] { "Chat" },
-                "class C { void Say(W writer) { writer.WriteMessage(ClientMessageType.Chat, body); } }",
+                new[] { "Ping" },
+                "class C { void Say(W writer) { writer.WriteMessage(ClientMessageType.Ping, body); } }",
                 output, error);
 
             Assert.Equal(1, exit);
@@ -128,13 +136,13 @@ namespace Ironfront.Net.Replication.Tests
             var error = new StringWriter();
 
             int exit = RunAgainst(
-                new[] { "Chat" },
+                new[] { "Ping" },
                 "class C { void Nothing() { } }",
                 output, error);
 
             Assert.Equal(0, exit);
             Assert.Contains("KNOWN GAP", output.ToString());
-            Assert.Contains("ClientMessageType.Chat", output.ToString());
+            Assert.Contains("ClientMessageType.Ping", output.ToString());
         }
 
         /// <summary>Every exemption carries a reason naming the ledger row that owns it.</summary>

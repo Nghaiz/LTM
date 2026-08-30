@@ -18,8 +18,9 @@ namespace Ironfront.Tools.ClientWiringGate
     /// <c>ClientMessageRouter</c> event that loses its last subscriber fails the build. G6 grades
     /// the server's outbound half — a <c>ServerEventWriter.Write*</c> with no caller fails the
     /// build. Nothing graded the client's OUTBOUND half, and that is where opcodes have actually
-    /// been going missing: <c>Chat</c>, <c>LoadoutSelect</c> and <c>Ping</c> have never had a
-    /// sender (<b>X-8</b>), and <c>SeatRequest</c> — which the server fully routes, with a
+    /// been going missing: <c>Chat</c>, <c>LoadoutSelect</c> and <c>Ping</c> had never had a
+    /// sender (<b>X-8</b>) — <c>Chat</c> has one at P6, the other two are still named gaps below
+    /// — and <c>SeatRequest</c> — which the server fully routes, with a
     /// handler waiting in <c>ServerSeatBridge</c> — had none either (<b>X-30</b>), which blocked
     /// lane-B checks B-7 and B-13 because no client could ask for a seat.
     /// </para>
@@ -78,16 +79,21 @@ namespace Ironfront.Tools.ClientWiringGate
         /// </remarks>
         public static readonly (string OpcodeName, string Reason)[] KnownUnsentMessages =
         {
-            ("Chat",
-             "the server does not route it either — ServerMessageRouter.Route has no case, so it "
-             + "falls to default: UnknownMessages++. A sender today would ship a write-only path "
-             + "the server counts as corruption. Retire this entry when Chat gets a handler AND a "
-             + "sender, not before. Ledger X-8."),
+            // Chat's entry was DELETED by phase P6, on this gate's own instruction, and the
+            // order it named is the order the work went in: "Retire this entry when Chat gets a
+            // handler AND a sender, not before." ServerMessageRouter.Route grew a case first, so
+            // the sender that followed never had a send counted as corruption; ClientChatSender
+            // is the sender, and NetClientBootstrap.EnsureChatSender is what makes it wired
+            // rather than merely present. Named here rather than removed from the paragraph
+            // above so the next reader can see what closing a row looks like: three uncovered
+            // opcodes became two, and the one whose blocker was a MISSING ROUTE went by landing
+            // the route.
 
             ("LoadoutSelect",
-             "same as Chat: unrouted, so a sender would increment UnknownMessages on every send. "
-             + "It is also the other half of X-14 — a networked human cannot change weapon "
-             + "server-side — and belongs with whatever decides that. Ledger X-8, X-14."),
+             "unrouted, so a sender would increment UnknownMessages on every send. It is also "
+             + "the other half of X-14 — a networked human cannot change weapon server-side — "
+             + "and belongs with whatever decides that, which is why P6 routed Chat and left "
+             + "this one alone. Ledger X-8, X-14."),
 
             ("Ping",
              "unrouted, and RTT is already measured a layer down — Connection.SmoothedRttMs, "
