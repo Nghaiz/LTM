@@ -72,7 +72,7 @@ namespace Ironfront.Net.Unity.Client
         private NetClientBootstrap _client;
         private NetClientCombatPresenter _names;
 
-        private readonly List<Line> _lines = new List<Line>(16);
+        private readonly List<ChatLine> _lines = new List<ChatLine>(16);
         private readonly byte[] _body = new byte[ChatTextMessage.MaxClientBodySize];
         private readonly byte[] _payload = new byte[ProtocolConstants.MAX_PAYLOAD];
 
@@ -242,7 +242,7 @@ namespace Ironfront.Net.Unity.Client
         {
             MessagesReceived++;
 
-            _lines.Add(new Line(NameOf(actorId), text, Time.time + _lineLifetimeSeconds));
+            _lines.Add(new ChatLine(NameOf(actorId), text, Time.time + _lineLifetimeSeconds));
 
             // Bounded from the front, so a busy match cannot grow this list for the length of
             // the round. The lifetime usually gets there first; this is what covers the case
@@ -298,13 +298,21 @@ namespace Ironfront.Net.Unity.Client
         private const string DraftControlName = "ironfront.chat.draft";
 
         /// <summary>One line on screen, with the moment it stops being shown.</summary>
-        private readonly struct Line
+        /// <remarks>
+        /// <b>Not <c>Line</c>.</b> Assembly-CSharp declares <c>Pathfinding.RVO.Line</c>, and the
+        /// layering gate matches predefined-assembly type names by name — it cannot see that a
+        /// private nested struct in this file is not a reference to that one, and
+        /// <c>Ironfront.Net.Unity.Client</c> could not reference Assembly-CSharp even if it
+        /// wanted to. Renaming removes the ambiguity outright, which is better than adding a
+        /// "not-a-reference" baseline row that a future reader would have to re-check.
+        /// </remarks>
+        private readonly struct ChatLine
         {
             public readonly string Speaker;
             public readonly string Text;
             public readonly float ExpiresAt;
 
-            public Line(string speaker, string text, float expiresAt)
+            public ChatLine(string speaker, string text, float expiresAt)
             {
                 Speaker   = speaker;
                 Text      = text;
