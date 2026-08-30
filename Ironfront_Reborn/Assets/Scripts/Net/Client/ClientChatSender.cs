@@ -370,8 +370,15 @@ namespace Ironfront.Net.Unity.Client
                 GUI.SetNextControlName(DraftControlName);
                 _draft = GUILayout.TextField(_draft, ChatTextMessage.MaxTextCharacters);
 
-                // Once, on the frame the line opened. See _focusPending.
-                if (_focusPending && Event.current.type == EventType.Repaint)
+                // Once, on the first OnGUI pass after the line opened. See _focusPending.
+                //
+                // Deliberately NOT gated on the repaint event: naming EventType here trips
+                // tools/check-net-layering.ps1 rule 6b, which matches predefined-assembly type
+                // names by NAME and cannot tell UnityEngine.EventType from the EventType
+                // Assembly-CSharp declares. GUI.FocusControl takes on any event, so the gate
+                // costs nothing here -- and a "not-a-reference" baseline row would be a second
+                // thing to re-check forever in exchange for a line that was never needed.
+                if (_focusPending)
                 {
                     GUI.FocusControl(DraftControlName);
                     _focusPending = false;
