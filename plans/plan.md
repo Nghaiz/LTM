@@ -24,7 +24,7 @@ this says something subscribes, not that it renders correctly."* Nothing in CI h
 the screen. The four defects a player hits in the first minute (§ 3) were all invisible to a
 green build, and that is the single most important fact on this page.
 
-**Twenty-two ledger rows are open**, and **three are live defects**. Two came out of
+**Twenty-four ledger rows are open**, and **four are live defects**. Two came out of
 [P5](phases/phase-p5-harness-gaps.md) on 2026-08-30: **X-69**, an NRE storm in
 `AiActorController.LocalAvoidanceVelocity` that its own exception gate caught by voiding a run —
 [P7](phases/phase-p7-v9-integration.md) has since reproduced it at **10,126 occurrences** in one 600 s run at 16 clients —
@@ -39,9 +39,16 @@ nothing distinguished it. That is the crying-wolf failure the `IsClean` split al
 `Sessions`, one field over, and it is the fourth entry in this project's ledger of measurements that
 looked healthy while being wrong.
 
+The fourth is [P8](phases/phase-p8-capstone-deliverables.md)'s: **X-76**, `UdpTransportServer.ServerTick`
+copied into every `CONNECT_ACCEPTED` and assigned nowhere, so every client has seeded its input clock at
+tick 0 against a server at tick N. It is the sibling of the `MapId` gap P8 closed one line above it, and
+**it was found by deleting that fix to watch the new gate go red** — a detector observed failing found a
+second instance of what it was written for, which is the whole argument for § 5 rule 4.
+
 The rest are harness and authoring gaps: **X-67** and **X-68** block E11, **X-70** is unauthored
 vehicle prefabs (confirmed still live on four spawners), **X-72** is a checkpoint field that freezes
-without saying so, **X-75** is one actor that left the wire's ±3072 m range, and **X-28**, **X-37**,
+without saying so, **X-75** is one actor that left the wire's ±3072 m range, **X-77** is the room-state
+push no client listens to, and **X-28**, **X-37**,
 **X-61**, **X-63**, **X-64**, **X-66** carry the remaining instrument debt.
 
 **X-71 and X-72 were found by reviewing P5's report, not its code**, and X-72 is why that report's
@@ -69,8 +76,8 @@ that README without carrying them would have completed the loss.
 | **M0** Foundation | Protocol spec v1.0 frozen · headless build runs · network simulator working · CI compiles all projects | **4 / 4** | done |
 | **M1** Connection | **2 clients see each other moving smoothly** at 100 ms RTT + 5 % loss | ☐ | check 7 → **B-7** → [P4](phases/phase-p4-lane-b-regrade.md) |
 | **M2** Combat | Server-authoritative shooting with lag compensation · health/death/respawn · AI bots replicate | **3 / 3** | checks 1, 13 → **B-1** (P4 § 4.1), **B-2** (P5 § 3.3 — `p5-separation-02` samples a dead body at `alive false / hp 0 / canRespawn true`, with input suppressed on 255 of 255 dead frames) |
-| **M3** Full match | Login → lobby → room → capture point → win/lose → back to lobby, 16 players · **the flow runs with no manual file editing** · **a wrong password gives a clear error** · **disconnecting mid-match returns to the lobby with a message** | ☐ | [P8](phases/phase-p8-capstone-deliverables.md); the 16-player half is [P7](phases/phase-p7-v9-integration.md) |
-| **M4** Polish | Load test with 16 clients · measurement report · documentation · demo video · **0 P0 bugs** · **the 5-scenario measurement table filled in** · **the on/off comparison table for the five netcode techniques filled in** · **30 minutes of continuous play with no crash and no leak** | **load test DONE, leak clause FAILING** | [P7](phases/phase-p7-v9-integration.md) ran 16 clients four times and graded all thirteen V9 criteria ([the P7 report](reports/2026-08-30-p7-v9-integration.md)); the *no leak* clause is **measured failing** — **X-73**, and **X-69** is a P0 by any reading at 10,126 exceptions. Documentation, video and the two tables stay [P8](phases/phase-p8-capstone-deliverables.md)'s |
+| **M3** Full match | Login → lobby → room → capture point → win/lose → back to lobby, 16 players · **the flow runs with no manual file editing** · **a wrong password gives a clear error** · **disconnecting mid-match returns to the lobby with a message** | **wired, ungraded** | [P8](phases/phase-p8-capstone-deliverables.md) found the flow **had never been wired into Unity at all** — `MasterSession` was constructed only in a test project, `LobbyShellOverlay.Bind` had no caller under `Assets/`, and no client code loaded a scene, so `Menu.unity` drew *"Lobby shell: unbound"* and stopped. `ClientFlowBootstrap` closes it and the ten interventions are enumerated in [`../docs/m3-flow-manual-interventions.md`](../docs/m3-flow-manual-interventions.md); **two remain open** (X-77, and no edge out of `RoomLobby`). It stays ungraded because the clause asks for **someone who did not build it** to run it |
+| **M4** Polish | Load test with 16 clients · measurement report · documentation · demo video · **0 P0 bugs** · **the 5-scenario measurement table filled in** · **the on/off comparison table for the five netcode techniques filled in** · **30 minutes of continuous play with no crash and no leak** | **load test DONE · 0-P0 FAILING · tables partial · soak + video OWED** | [P7](phases/phase-p7-v9-integration.md) ran 16 clients four times and graded all thirteen V9 criteria ([the P7 report](reports/2026-08-30-p7-v9-integration.md)). [P8](phases/phase-p8-capstone-deliverables.md) defined **P0 in writing before grading it** ([`../docs/p0-definition.md`](../docs/p0-definition.md)) and grades the clause **FAILING on X-69**; both tables now hold a figure or a stated reason in every cell ([`../docs/capstone-measurement-tables.md`](../docs/capstone-measurement-tables.md)), with **5 of 11 measurable cells owed** and one row blocked on the VPS that has never existed. The 30-minute soak has a one-command runner and a grader (`tools/run-soak.ps1`, `tools/grade_soak.py`) and **has not been run**; the demo video is the same 30 minutes and is owed with it |
 
 **M2 is met and M1 is a measured failure — neither is ☐ any more, and P4 and P5 are why.** M2's
 last unmet clause was health/death/respawn, ungradeable because no checkpoint had ever sampled a
@@ -111,7 +118,7 @@ and whose bodies do not animate cannot be graded by eye.
 | **P5** | [Harness gaps](phases/phase-p5-harness-gaps.md) | X-28, X-29, X-37 | M |
 | **P6** | [Scoreboard and chat](phases/phase-p6-scoreboard-and-chat.md) | A13, the Chat opcode | M |
 | **P7** | [V9 integration](phases/phase-p7-v9-integration.md) | **DONE 2026-08-30** — B-17 re-graded and closed at 16; **B-16 re-opened, 22% over budget**; the soak ran 8 rounds and found **X-73** | L |
-| **P8** | [Capstone deliverables](phases/phase-p8-capstone-deliverables.md) | M3 and M4's unowned clauses | L |
+| **P8** | [Capstone deliverables](phases/phase-p8-capstone-deliverables.md) | **DONE 2026-08-30** — the client flow wired (it never had been), P0 defined and graded, both tables filled, the soak harness built. Filed **X-76**, **X-77** | L |
 | **P9** | [Deployment and single-owner cleanup](phases/phase-p9-deployment-and-cleanup.md) | the fly.io blocker, four stale handles | S |
 
 **P5 blocks the *closing* of P4's rows, not its run.** Run lane B first; X-28's single spawn point

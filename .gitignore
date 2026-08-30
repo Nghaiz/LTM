@@ -241,3 +241,7 @@ unity-editmode-results.xml
 # The tools/ python helpers (recount_debt_ledger.py and friends) leave bytecode caches.
 __pycache__/
 *.pyc
+
+# Written by the Ironfront/Net/Wire client flow Editor command on every run.
+# The wiring it reports lands in Menu.unity, which IS committed; this is the receipt.
+Ironfront_Reborn/wire-client-flow.txt

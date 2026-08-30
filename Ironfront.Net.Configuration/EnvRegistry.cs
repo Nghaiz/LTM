@@ -251,6 +251,22 @@ namespace Ironfront.Net.Configuration
             "both instances on the default produces a killfeed nobody can read.",
             "player");
 
+        /// <summary>Master server a client build dials before it can see a room list.</summary>
+        public static readonly EnvVar ClientMasterHost = new EnvVar(
+            "IRONFRONT_CLIENT_MASTER_HOST", "Game client", "game client",
+            "The master server a client logs in against. Distinct from IRONFRONT_MASTER_HOST,\n" +
+            "which is what a GAME SERVER dials to register itself -- the two are the same box\n" +
+            "in most deployments and different ones whenever a client reaches the master\n" +
+            "through a public name while the game servers reach it over a private network.\n" +
+            "UNSET keeps the scene's field, so nothing changes in the Editor.",
+            "127.0.0.1");
+
+        /// <summary>Master server port the client dials.</summary>
+        public static readonly EnvVar ClientMasterPort = new EnvVar(
+            "IRONFRONT_CLIENT_MASTER_PORT", "Game client", "game client",
+            "Matches the master's IRONFRONT_MASTER_PORT.",
+            "27020");
+
         /// <summary>The V5-D6 driver-prediction fallback, as one flag.</summary>
         public static readonly EnvVar ClientPredictLocalVehicle = new EnvVar(
             "IRONFRONT_CLIENT_PREDICT_VEHICLE", "Game client", "game client",
@@ -457,6 +473,7 @@ namespace Ironfront.Net.Configuration
             GameServerUdpPort, GameServerTransport, GameServerMaxConnections, GameServerMaxPlayers,
             GameServerPublicIp, GameServerMapIds, GameServerScene, GameServerAcceptUnsignedTickets,
             ClientHost, ClientPort, ClientVerbose, ClientPredictLocalVehicle,
+            ClientMasterHost, ClientMasterPort,
             ClientPlayerId, ClientDisplayName,
             LogLevel, StructuredLog,
             TlsCertificatePath, TlsCertificatePassword,

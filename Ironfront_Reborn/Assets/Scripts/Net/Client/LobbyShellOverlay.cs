@@ -107,6 +107,24 @@ namespace Ironfront.Net.Unity.Client
         public bool Visible => _visible;
 
         /// <summary>
+        /// Whether this component calls <c>MasterSession.Tick</c> every frame.
+        /// </summary>
+        /// <remarks>
+        /// <b>Exactly one caller may.</b> <c>Tick</c> ages the connect timeout by
+        /// <c>Time.unscaledDeltaTime</c>, so two callers halve it -- a ten-second budget spent in
+        /// five, reported to the player as a game server that did not answer. The serialized
+        /// field says as much in its tooltip; this makes it settleable in code, which is what
+        /// <see cref="ClientFlowBootstrap"/> needs: it ticks during the match, when this
+        /// component may not even be in the loaded scene, so it takes ownership at bind time
+        /// rather than trusting whoever authored the checkbox.
+        /// </remarks>
+        public bool TicksSession
+        {
+            get => _tickSession;
+            set => _tickSession = value;
+        }
+
+        /// <summary>
         /// Binds the session and the flow machine this shell drives.
         /// </summary>
         /// <remarks>
@@ -127,6 +145,49 @@ namespace Ironfront.Net.Unity.Client
         {
             _session = null;
             _flow = null;
+        }
+
+        /// <summary>
+        /// Draws the shell again after the match hid it.
+        /// </summary>
+        /// <remarks>
+        /// <b>The M3 disconnect clause needs this and had nothing to call.</b>
+        /// <see cref="Update"/> sets <c>_visible</c> false on reaching <c>InMatch</c> and
+        /// nothing ever set it back, so a client dropped mid-match had its flow returned to the
+        /// lobby, its error line filled in -- and both written to an overlay that was not being
+        /// drawn. The player saw a frozen map and no message. Shift+F2 brought it back, which is
+        /// a debug key, not an answer.
+        /// </remarks>
+        public void Show() => _visible = true;
+
+        /// <summary>Puts one line on the shell's error row, over anything the session set.</summary>
+        /// <remarks>
+        /// For failures the session never sees: a map missing from the build, a port that will
+        /// not parse. <c>MasterSession.LastError</c> stays authoritative for everything the
+        /// master or the transport reported.
+        /// </remarks>
+        public void ReportError(string message) => _shellError = message ?? string.Empty;
+
+        /// <summary>
+        /// Seeds the master host and port the login screen starts on.
+        /// </summary>
+        /// <remarks>
+        /// Called by <see cref="ClientFlowBootstrap"/> with the environment already layered over
+        /// the scene's values, so a packaged build can be pointed at a different master with a
+        /// variable instead of a scene edit -- which is one of the manual interventions P8 task
+        /// 3.2 exists to remove. The player can still type over it; this is only what the field
+        /// starts as.
+        /// </remarks>
+        public void ApplyMasterEndpoint(string host, int port)
+        {
+            if (!string.IsNullOrWhiteSpace(host)) _masterHost = host.Trim();
+            if (port > 0 && port <= ushort.MaxValue) _masterPort = port;
+
+            // Rewritten unconditionally, not only when empty: EnsurePortText seeds these from
+            // the serialized fields and may already have run in Awake, and a stale port string
+            // is what the player would then be shown and would then dial.
+            _masterPortText = _masterPort.ToString();
+            _directPortText = _directPort.ToString();
         }
 
         /// <summary>Seeds the editable port text from the serialized fields.</summary>
@@ -150,6 +211,12 @@ namespace Ironfront.Net.Unity.Client
 
             // Once the match is up the real HUD owns the screen. The toggle still brings this
             // back for debugging, which is the point of it being a toggle.
+            //
+            // Leaving the match does NOT undo this here, and deliberately: a player who pressed
+            // Shift+F2 during a match to hide the shell would have it forced back on by a state
+            // change they did not ask for. ClientFlowBootstrap calls Show() on exactly the two
+            // edges where the player is owed the screen back -- InMatch -> Lobby and
+            // MatchEnd -> Lobby.
             if (_flow != null && _flow.State == GameFlowState.InMatch) _visible = false;
         }
 
@@ -233,6 +300,15 @@ namespace Ironfront.Net.Unity.Client
 
         // ------------------------------------------------------------------ screens
 
+        /// <summary>
+        /// The pre-login screen, reached only when nothing moved the flow off Booting.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="ClientFlowBootstrap"/> makes that transition in its own <c>Awake</c>, so a
+        /// player never sees this. It stays for the case the shell is bound by hand -- a test
+        /// rig, or a scene with no bootstrap on it -- where a flow parked at Booting would
+        /// otherwise draw a panel with no controls at all.
+        /// </remarks>
         private void DrawBooting()
         {
             GUILayout.Label("Ironfront - debug lobby shell");

@@ -114,6 +114,26 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>The address and ticket from the last successful join.</summary>
         public PendingJoin PendingJoin { get; private set; } = PendingJoin.None;
 
+        /// <summary>
+        /// The map the joined room is being played on, or 0 when nothing named one.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The client cannot load the right scene without it.</b> <c>JOIN</c> answers with an
+        /// address, a port and a ticket — the three things needed to reach the server, and none
+        /// of the one thing needed to render what it is simulating. The id is on
+        /// <c>RoomInfo</c>, which the browser already holds, so it is taken from the row the
+        /// player pressed Join on rather than added to the wire.
+        /// </para>
+        /// <para>
+        /// <b>Zero means "nobody said", and is not a map.</b> A direct dial never passes through
+        /// a room, and a room list fetched before this build knew about map ids carries an
+        /// unset ushort. Both leave it 0 so the caller can say which map it fell back to instead
+        /// of loading one silently — see <c>MapCatalog.SceneOrDefault</c>.
+        /// </para>
+        /// </remarks>
+        public ushort JoinedMapId { get; private set; }
+
         /// <summary>The last failure, already phrased for a player. Empty when nothing failed.</summary>
         public string LastError { get; private set; } = string.Empty;
 
@@ -281,6 +301,11 @@ namespace Ironfront.Net.Unity.Client
                     return false;
                 }
 
+                // Read off the browser's own row rather than the join response, which does not
+                // carry a map. Set only after PendingJoin is known good, so a failed join can
+                // never leave a map id pointing at a room this client is not in.
+                JoinedMapId = MapIdOf(roomId);
+
                 LastError = string.Empty;
                 _flow.Transition(GameFlowState.RoomLobby);
                 return true;
@@ -345,6 +370,10 @@ namespace Ironfront.Net.Unity.Client
         public void ConnectDirect(string host, int port)
         {
             _junctionDrivesFlow = false;
+
+            // No room, so no map. Cleared rather than left over from an earlier join: a direct
+            // dial after a room join would otherwise load the previous room's map.
+            JoinedMapId = 0;
 
             // NOT Array.Empty: Connection.BeginConnect rejects a ticket that is not exactly 64
             // bytes before it sends anything, so an empty one never reaches the server that was
@@ -524,6 +553,20 @@ namespace Ironfront.Net.Unity.Client
         {
             LastError = message;
             OnError?.Invoke(message);
+        }
+
+        /// <summary>The map id the newest room list gives for <paramref name="roomId"/>, or 0.</summary>
+        /// <remarks>
+        /// A linear scan over at most a screenful of rooms, run once per join. A dictionary here
+        /// would have to be rebuilt on every refresh to save nothing measurable.
+        /// </remarks>
+        private ushort MapIdOf(int roomId)
+        {
+            RoomInfo[] rooms = Rooms;
+            for (int i = 0; i < rooms.Length; i++)
+                if (rooms[i].RoomId == roomId) return rooms[i].MapId;
+
+            return 0;
         }
 
         /// <summary>

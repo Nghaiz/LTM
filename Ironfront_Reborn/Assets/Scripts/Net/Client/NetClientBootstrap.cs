@@ -208,10 +208,22 @@ namespace Ironfront.Net.Unity.Client
             if (_transport != null) return;
             if (Config == null) ResolveConfiguration();   // Connect() is public and may precede Awake.
 
+            // An offer from the shell scene, which dialled this server with the master's signed
+            // ticket before loading the map. Checked AFTER ExternalTransport so a test or a
+            // loopback rig that assigned one explicitly still wins.
+            bool adopted = false;
+            ConnectResult adoptedResult = default;
+
             if (ExternalTransport != null)
             {
                 _transport = ExternalTransport;
                 _ownsTransport = false;
+            }
+            else if (MatchTransportHandoff.TryTake(out ITransportClient handed, out adoptedResult))
+            {
+                _transport = handed;
+                _ownsTransport = false;
+                adopted = true;
             }
             else
             {
@@ -223,7 +235,18 @@ namespace Ironfront.Net.Unity.Client
             _transport.OnConnected += OnConnected;
             _transport.OnDisconnected += OnDisconnected;
 
-            _transport.Connect(Config.Host, Config.Port, BuildJoinTicket());
+            if (!adopted)
+            {
+                _transport.Connect(Config.Host, Config.Port, BuildJoinTicket());
+                return;
+            }
+
+            // Already connected, and the accept happened before this component existed. Replaying
+            // the callback by hand is what settles ConnectionId, NetContext.CurrentTick and the
+            // prediction clock's seed -- dialling again would be a second JOIN against a server
+            // that has already seated this player, and the server answers that with
+            // AlreadyConnected.
+            OnConnected(adoptedResult);
         }
 
         /// <summary>

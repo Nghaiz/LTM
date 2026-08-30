@@ -237,6 +237,82 @@ namespace Ironfront.Client.Flow.Tests
             Assert.Contains("did not name a game server", h.Session.LastError);
         }
 
+        // --------------------------------------------------------- the joined map
+
+        [Fact]
+        public async Task JoiningARoomRemembersTheMapItIsPlayedOn()
+        {
+            // P8 task 3.2. JOIN answers with an address, a port and a ticket -- everything needed
+            // to REACH the server and nothing needed to RENDER what it is simulating. The id is
+            // on the browser's own row, so it is taken from there rather than added to the wire.
+            var h = new Harness();
+            h.Master.NextRooms = new[]
+            {
+                new RoomInfo { RoomId = 1, Name = "one", MapId = 2, Players = 0, MaxPlayers = 16 },
+                new RoomInfo { RoomId = 2, Name = "two", MapId = 1, Players = 0, MaxPlayers = 16 },
+            };
+
+            await h.AtRoomBrowserAsync();
+            Assert.True(await h.Session.JoinRoomAsync(2, null));
+
+            Assert.Equal((ushort)1, h.Session.JoinedMapId);
+        }
+
+        [Fact]
+        public async Task ARoomTheBrowserNeverListedLeavesTheMapUnnamed()
+        {
+            // 0 is "nobody said", not a map. The client falls back rather than loading a world
+            // the server is not simulating -- every symptom of which reads as a replication
+            // fault: bodies with no ground under them, a capture point nobody can reach.
+            var h = new Harness();
+            h.Master.NextRooms = new[]
+            {
+                new RoomInfo { RoomId = 1, Name = "one", MapId = 2, Players = 0, MaxPlayers = 16 },
+            };
+
+            await h.AtRoomBrowserAsync();
+            Assert.True(await h.Session.JoinRoomAsync(77, null));
+
+            Assert.Equal((ushort)0, h.Session.JoinedMapId);
+        }
+
+        [Fact]
+        public async Task AFailedJoinDoesNotLeaveAMapIdPointingAtARoomWeAreNotIn()
+        {
+            var h = new Harness();
+            h.Master.NextRooms = new[]
+            {
+                new RoomInfo { RoomId = 1, Name = "one", MapId = 2, Players = 0, MaxPlayers = 16 },
+            };
+
+            await h.AtRoomBrowserAsync();
+            h.Master.NextJoin = new JoinResult { Ok = false, ErrorCode = (int)ErrorCode.RoomFull };
+
+            Assert.False(await h.Session.JoinRoomAsync(1, null));
+
+            Assert.Equal((ushort)0, h.Session.JoinedMapId);
+        }
+
+        [Fact]
+        public async Task ADirectDialClearsTheMapOfTheRoomItCameAfter()
+        {
+            // A direct connect never passes through a room, so carrying the previous join's map
+            // forward would load the last room's world against an unrelated server.
+            var h = new Harness();
+            h.Master.NextRooms = new[]
+            {
+                new RoomInfo { RoomId = 1, Name = "one", MapId = 2, Players = 0, MaxPlayers = 16 },
+            };
+
+            await h.AtRoomBrowserAsync();
+            await h.Session.JoinRoomAsync(1, null);
+            Assert.NotEqual((ushort)0, h.Session.JoinedMapId);
+
+            h.Session.ConnectDirect("198.51.100.4", 27015);
+
+            Assert.Equal((ushort)0, h.Session.JoinedMapId);
+        }
+
         // --------------------------------------------------------- the junction
 
         [Fact]
