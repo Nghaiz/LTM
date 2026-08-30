@@ -382,6 +382,32 @@ namespace Ironfront.Net.Unity.Server
                 + "MapCatalog.All if this scene is meant to be playable.");
         }
 
+        /// <summary>
+        /// Points the transport at the live simulation tick, so every CONNECT_ACCEPTED announces
+        /// where the server actually is.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A source rather than a value, and the difference is the whole defect.</b> X-76:
+        /// <c>UdpTransportServer.ServerTick</c> was declared, copied into every accept, and
+        /// assigned nowhere -- so every client seeded <c>NetPredictionClock.InputTick</c> at 0
+        /// against a server at tick N, and its first inputs were stamped with ticks the server
+        /// had already spent. Writing the tick here once at startup would have satisfied the
+        /// gate and kept the bug: the tick advances 60 times a second, and an accept is not a
+        /// startup event.
+        /// </para>
+        /// <para>
+        /// The lambda closes over <c>TickLoop</c>, which is assigned above this call and lives
+        /// as long as the transport does. Before the loop starts, <c>CurrentTick</c> is 0 --
+        /// which is honest, because that is where the server is.
+        /// </para>
+        /// </remarks>
+        private void AnnounceTick(UdpTransportServer udp)
+        {
+            ServerTickLoop loop = TickLoop;
+            udp.ServerTickSource = () => loop != null ? loop.CurrentTick : 0u;
+        }
+
         /// <summary>Creates the transport (unless one was injected) and starts the loop.</summary>
         public void StartServer()
         {
@@ -397,6 +423,7 @@ namespace Ironfront.Net.Unity.Server
                 Udp = udp;
 
                 AnnounceMap(udp);
+                AnnounceTick(udp);
                 RegisterTicketValidator(udp);
 
                 try

@@ -69,24 +69,16 @@ namespace Ironfront.Tools.ClientWiringGate
         /// <c>KnownUncalledWriters</c>.
         /// </para>
         /// <para>
-        /// <c>ServerTick</c> is here because P8 found it in exactly the state <c>MapId</c> was
-        /// in — declared, copied into every accept, assigned nowhere — and fixing it is a
-        /// behavioural change this phase did not measure.
-        /// <c>NetClientBootstrap.OnConnected</c> seeds <c>NetContext.CurrentTick</c> and
-        /// <c>NetPredictionClock.SeedInputTick</c> from it, so every client has started its
-        /// input clock at 0 against a server at tick N, and what that costs prediction is a
-        /// question with a number attached that nobody has taken. Filed rather than patched
-        /// silently.
+        /// <b>The list is empty, and that is the point.</b> It held one entry --
+        /// <c>ServerTick</c>, found by P8 in exactly the state <c>MapId</c> was in: declared,
+        /// copied into every accept, assigned nowhere, so every client seeded its prediction
+        /// clock at 0 against a server at tick N. X-76 closed it by wiring
+        /// <c>ServerTickSource</c>, and the companion above is what forced the entry out rather
+        /// than leaving it to rot into a record of the past.
         /// </para>
         /// </remarks>
         public static readonly (string Name, string Reason)[] KnownUnwrittenAnnouncements =
-        {
-            ("ServerTick",
-             "declared, copied into every CONNECT_ACCEPTED, and assigned nowhere -- so every "
-             + "accept announces tick 0, and NetClientBootstrap.OnConnected seeds the prediction "
-             + "clock from it. Found by P8 task 3.2 alongside MapId; the fix changes how the "
-             + "input clock starts and needs its own measurement. See the debt ledger."),
-        };
+            Array.Empty<(string, string)>();
 
         /// <summary>
         /// The announced values that are settable on the transport: the accept payload's fields
@@ -150,7 +142,7 @@ namespace Ironfront.Tools.ClientWiringGate
             // kept. Without this the list becomes a record of the past rather than of the present.
             foreach ((string name, string _) in KnownUnwrittenAnnouncements)
             {
-                if (!written.Contains(name)) continue;
+                if (!Covered(written, name)) continue;
 
                 error.WriteLine(
                     $"[announcement-coverage] FAIL - {name} IS assigned in {ScopedFileName} but is "
@@ -163,7 +155,7 @@ namespace Ironfront.Tools.ClientWiringGate
 
             foreach (string name in announced)
             {
-                if (written.Contains(name)) continue;
+                if (Covered(written, name)) continue;
 
                 if (exempt.TryGetValue(name, out string? reason))
                 {
@@ -193,6 +185,32 @@ namespace Ironfront.Tools.ClientWiringGate
 
             return worst;
         }
+
+        /// <summary>
+        /// The suffix a pull-shaped writer carries: <c>ServerTick</c> is announced,
+        /// <c>ServerTickSource</c> is what supplies it.
+        /// </summary>
+        public const string SourceSuffix = "Source";
+
+        /// <summary>
+        /// Whether an announcement has a writer -- assigned directly, or wired through a
+        /// <c>&lt;Name&gt;Source</c> provider.
+        /// </summary>
+        /// <remarks>
+        /// <b>The source form is not a loophole; it is the only correct form for a value that
+        /// moves.</b> X-76's fix wired <c>ServerTickSource</c> so every accept reads the LIVE
+        /// tick, and this gate -- matching the literal name -- went on reporting a known gap
+        /// that had just been closed. That is this gate's own failure mode pointed the other
+        /// way: a green that proves nothing becomes a red that means nothing, and either one
+        /// ends an investigation with the wrong answer. Observed: the fix was wired, the runner
+        /// re-run, and it still printed KNOWN GAP.
+        ///
+        /// A settable <c>&lt;Name&gt;</c> must still exist for the announcement to be graded at
+        /// all -- the announced set is derived from settable properties -- so this widens which
+        /// assignment counts, never which names are checked.
+        /// </remarks>
+        private static bool Covered(HashSet<string> written, string name)
+            => written.Contains(name) || written.Contains(name + SourceSuffix);
 
         /// <summary>
         /// Unity entry points, which are called by the engine rather than from this file.

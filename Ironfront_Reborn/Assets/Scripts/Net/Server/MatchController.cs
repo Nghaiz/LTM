@@ -469,6 +469,13 @@ namespace Ironfront.Net.Unity.Server
             // IsCleanOfActorState, not IsClean: ResetForNewMatch deliberately keeps its sessions
             // because a reset is not a disconnect, so IsClean's Sessions == 0 could never hold
             // here and this line fired on every round transition with anyone connected.
+            //
+            // That split fixed the sessions term and left the SAME failure one field over:
+            // ActorIdsInUse was compared against 0 while the reset was deliberately told to
+            // retain Dustbowl's 41 scene-resident bots, so this ERROR fired at every round
+            // transition anyway -- and hid a real projectile-id leak behind it for the life of
+            // the process. The predicate now compares against the retained count and the
+            // rendered snapshot names every failing term. X-73, X-74.
             if (state.IsCleanOfActorState) return;
 
             // Phase-03 trap 1. Logged rather than asserted: the leak this catches shows up on

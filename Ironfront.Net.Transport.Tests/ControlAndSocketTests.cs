@@ -211,6 +211,51 @@ namespace Ironfront.Net.Transport.Tests
         }
 
         [Fact]
+        public void ConnectAcceptedCarriesTheTickAtAcceptTimeNotAtStartupTime()
+        {
+            // X-76. ServerTick was a settable snapshot: whatever it held when somebody last
+            // wrote it. Nobody ever did, so every accept announced 0 and every client seeded
+            // NetPredictionClock.InputTick at 0 against a server at tick N. Writing it once at
+            // startup would only have moved the lie -- the tick advances 60 times a second, so
+            // an accept 90 seconds in must carry 5,400, not whatever was true at bind time.
+            uint tick = 0;
+            using var server = new UdpTransportServer { ServerTickSource = () => tick };
+            using var client = new UdpTransportClient();
+            ConnectResult result = default;
+            server.OnValidateTicket += _ => true;
+            client.OnConnected += value => result = value;
+            server.Start(0, 4);
+
+            tick = 5400;
+
+            client.Connect("127.0.0.1", server.Port, new byte[ProtocolConstants.JOIN_TICKET_SIZE]);
+
+            Pump(server, client, () => client.State == ConnectionState.Connected, 2000);
+
+            Assert.Equal(5400u, result.ServerTick);
+        }
+
+        [Fact]
+        public void TheStaticServerTickStillAppliesWhenNoSourceIsWired()
+        {
+            // The property is kept settable, and not only for the tests that use it: it is the
+            // name G11 grades the announcement by, and a get-only property would drop out of
+            // that gate's intersection -- so the announcement would stop being checked at the
+            // moment it started being correct.
+            using var server = new UdpTransportServer { ServerTick = 77 };
+            using var client = new UdpTransportClient();
+            ConnectResult result = default;
+            server.OnValidateTicket += _ => true;
+            client.OnConnected += value => result = value;
+            server.Start(0, 4);
+            client.Connect("127.0.0.1", server.Port, new byte[ProtocolConstants.JOIN_TICKET_SIZE]);
+
+            Pump(server, client, () => client.State == ConnectionState.Connected, 2000);
+
+            Assert.Equal(77u, result.ServerTick);
+        }
+
+        [Fact]
         public void TransportStatsExposeRatesAndDiagnosticsAfterAWindow()
         {
             using var server = new UdpTransportServer();

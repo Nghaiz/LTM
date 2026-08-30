@@ -78,8 +78,32 @@ namespace Ironfront.Net.Transport
         /// </summary>
         public bool AckBitfieldEnabled { get; set; } = true;
 
-        /// <summary>Server simulation tick copied into CONNECT_ACCEPTED.</summary>
+        /// <summary>
+        /// Server simulation tick copied into CONNECT_ACCEPTED when no
+        /// <see cref="ServerTickSource"/> is wired.
+        /// </summary>
+        /// <remarks>
+        /// Kept settable deliberately. G11 grades a CONNECT_ACCEPTED announcement by
+        /// intersecting the payload's fields with this type's SETTABLE properties, so making
+        /// this get-only would silently drop it from the gate -- the announcement would stop
+        /// being checked at exactly the moment it started being correct.
+        /// </remarks>
         public uint ServerTick { get; set; }
+
+        /// <summary>
+        /// Reads the live simulation tick at the moment a handshake is accepted. Wired by
+        /// <c>NetServerBootstrap</c> to the tick loop's scheduler.
+        /// </summary>
+        /// <remarks>
+        /// <b>A pull, not a push, and X-76 is why a push would not have been enough.</b> The
+        /// tick advances 60 times a second, so the value belongs to the accept and not to
+        /// whoever last wrote a field: a server 90 seconds up must announce 5,400 to a client
+        /// joining now. <see cref="ServerTick"/> was assigned nowhere at all, so every accept
+        /// ever sent announced 0 and every client seeded its input clock there -- but a single
+        /// assignment at startup would only have relocated the error, and the tests that
+        /// followed it would have looked green.
+        /// </remarks>
+        public Func<uint>? ServerTickSource { get; set; }
 
         /// <summary>Map identifier copied into CONNECT_ACCEPTED.</summary>
         public ushort MapId { get; set; }
@@ -444,7 +468,9 @@ namespace Ironfront.Net.Transport
             EndPoint endpoint, ushort responseSequence, ushort connectionId, uint playerId)
         {
             Span<byte> payload = stackalloc byte[ConnectAcceptedPayload.Size];
-            new ConnectAcceptedPayload(connectionId, ServerTick, MapId, playerId).Write(payload);
+            // The live tick when a source is wired; the static field otherwise. X-76.
+            uint tick = ServerTickSource?.Invoke() ?? ServerTick;
+            new ConnectAcceptedPayload(connectionId, tick, MapId, playerId).Write(payload);
             SendControl(
                 endpoint,
                 PacketType.ConnectAccepted,
