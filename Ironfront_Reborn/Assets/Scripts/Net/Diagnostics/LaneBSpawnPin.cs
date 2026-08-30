@@ -88,28 +88,68 @@ namespace Ironfront.Net.Unity.Diagnostics
             out int index,
             out string message)
         {
-            index = -1;
+            Outcome outcome = EvaluatePerTeam(
+                requested, directoryInstalled, directoryCount, final, out int[] slots, out message);
+
+            index = slots != null && slots.Length > 0 ? slots[0] : -1;
+            return outcome;
+        }
+
+        /// <summary>
+        /// The per-team form. <c>"3"</c> pins slot 3 for every team; <c>"3,7"</c> pins 3 for
+        /// team 0 and 7 for team 1.
+        /// </summary>
+        /// <remarks>
+        /// <b>Ledger X-63.</b> One slot for both teams cannot work on a map whose every spawn
+        /// point is team-owned: <c>ChooseSpawnIndex</c> returns -1 for the team that does not
+        /// own it and that actor is never placed, so the option stopped pinning runs and started
+        /// voiding them. The single-value form is kept — it is still correct on a map with
+        /// neutral spawn points, and <c>PinnedSpawnPointDirectory</c> refuses at construction
+        /// when it is not.
+        /// </remarks>
+        public static Outcome EvaluatePerTeam(
+            string requested,
+            bool directoryInstalled,
+            int directoryCount,
+            bool final,
+            out int[] indices,
+            out string message)
+        {
+            indices = null;
             message = null;
 
             if (string.IsNullOrWhiteSpace(requested)) return Outcome.NotRequested;
 
-            if (!int.TryParse(
-                    requested.Trim(),
-                    NumberStyles.Integer,
-                    CultureInfo.InvariantCulture,
-                    out int parsed))
+            string[] parts = requested.Split(',');
+            var parsedSlots = new int[parts.Length == 1 ? 2 : parts.Length];
+            int parsed = -1;
+
+            for (int i = 0; i < parts.Length; i++)
             {
-                message = $"IRONFRONT_LANEB_SPAWN_INDEX='{requested}' is not an integer. "
-                          + CoinFlipTail;
-                return Outcome.Failed;
+                if (!int.TryParse(
+                        parts[i].Trim(),
+                        NumberStyles.Integer,
+                        CultureInfo.InvariantCulture,
+                        out int slot))
+                {
+                    message = $"IRONFRONT_LANEB_SPAWN_INDEX='{requested}' is not an integer, or "
+                              + "a comma-separated integer per team. " + CoinFlipTail;
+                    return Outcome.Failed;
+                }
+
+                // Negative is a request nothing can satisfy, so it does not wait for a count.
+                if (slot < 0)
+                {
+                    message = $"IRONFRONT_LANEB_SPAWN_INDEX={slot} is negative. " + CoinFlipTail;
+                    return Outcome.Failed;
+                }
+
+                parsedSlots[i] = slot;
+                if (slot > parsed) parsed = slot;
             }
 
-            // Negative is a request nothing can satisfy, so it does not wait for a count.
-            if (parsed < 0)
-            {
-                message = $"IRONFRONT_LANEB_SPAWN_INDEX={parsed} is negative. " + CoinFlipTail;
-                return Outcome.Failed;
-            }
+            // One value means "the same slot for every team", which is what it has always meant.
+            if (parts.Length == 1) parsedSlots[1] = parsedSlots[0];
 
             if (!directoryInstalled)
             {
@@ -139,7 +179,7 @@ namespace Ironfront.Net.Unity.Diagnostics
                 return Outcome.Failed;
             }
 
-            index = parsed;
+            indices = parsedSlots;
             return Outcome.Pinned;
         }
     }

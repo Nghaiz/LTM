@@ -64,9 +64,53 @@ public class MinimapUi : MonoBehaviour
 		minimapTargetAnchor = new Vector2(minimap.rectTransform.anchorMin.x, minimap.rectTransform.anchorMax.y);
 	}
 
+	/// <summary>
+	/// An extra "hold the map open" signal, OR'd with the keyboard. Null for a shipped build.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Ledger X-61.</b> The map opened only while <c>Input.GetKey(KeyCode.M)</c> was true, and
+	/// a scripted lane-B client cannot produce a physical key — so no run could ever grade a
+	/// minimap check, and the icons shipped in P3 have no screenshot proving they draw. The
+	/// instrument was not missing; the map simply could not be opened by the only thing that
+	/// runs in a lane-B client.
+	/// </para>
+	/// <para>
+	/// <b>A seam on the GAME side, not a workaround in the harness</b> — <c>plan.md</c> § 5
+	/// rule 2 forbids the harness patching around a game behaviour, because a harness that works
+	/// around something grades itself. This is the same shape the project already uses for every
+	/// other scripted input: <c>FpsActorController.SetInputSource</c> and
+	/// <c>NetPredictionClock.CombatButtonSource</c>. Nothing about the shipped behaviour changes
+	/// — a null source leaves the keyboard as the only way in.
+	/// </para>
+	/// <para>
+	/// Static, because a lane-B client installs it before any <c>MinimapUi</c> exists: the map is
+	/// part of the in-match HUD and the harness runs from before the match is joined.
+	/// </para>
+	/// </remarks>
+	public static System.Func<bool> HoldSource;
+
+	/// <summary>
+	/// How far the map is open, 0 closed to 1 fully open. Read-only; there is no setter.
+	/// </summary>
+	/// <remarks>
+	/// <b>Without this the seam above proves nothing.</b> A programme could hold the map open and
+	/// no artifact could say whether it opened, which is the shape of green this project has been
+	/// caught by three times. The same arrangement as
+	/// <c>NetClientLocalCombatDriver.IsInputSuppressedByDeath</c>: a read-only accessor on
+	/// shipped gameplay code, exposing a flag the gameplay itself already writes, so the harness
+	/// reads a value rather than inferring one.
+	///
+	/// Static and <c>-1</c> when there is no map, for <c>SetMarker</c>'s reason: the callers are
+	/// outside this assembly and hold no instance. Zero is a real value meaning "closed", and a
+	/// HUD that does not exist is not a closed map.
+	/// </remarks>
+	public static float CurrentOpenness => instance != null ? instance.minimapOpenness : -1f;
+
 	private void Update()
 	{
-		float target = ((!Input.GetKey(KeyCode.M)) ? 0f : 1f);
+		bool held = Input.GetKey(KeyCode.M) || (HoldSource != null && HoldSource());
+		float target = (!held) ? 0f : 1f;
 		minimapOpenness = Mathf.MoveTowards(minimapOpenness, target, Time.deltaTime * 20f);
 		ingameParent.anchorMin = new Vector2(0f, Mathf.Lerp(-1f, 0f, minimapOpenness));
 		ingameParent.anchorMax = new Vector2(1f, Mathf.Lerp(0f, 1f, minimapOpenness));

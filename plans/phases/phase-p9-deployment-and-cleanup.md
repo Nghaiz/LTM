@@ -87,6 +87,40 @@ already gone. Sweep the tree for the other three names and for role language —
 
 ---
 
+## 4.7 — Status after P10, 2026-08-31
+
+| # | Criterion | Verdict |
+|---|---|---|
+| 1 | fly.io game server deployed, or a written won't-do with a reopening condition | **MET** — `infra/fly/README.md` § "DECIDED 2026-08-31", three reopening conditions. Step 2 of the unblock is a recurring paid IPv4 bought to add a second way to run a server the compose VM already runs |
+| 2 | Azure steps in `docs/operations.md`, hand-off gone | **MET** — moved first and verified in its new home, then deleted. The four acceptance checks and the error table were what `operations.md` lacked |
+| 3 | Two-people criterion retired with a single-owner risk statement | **MET** — replaced by "what could not be rebuilt if the one account were lost". Five of six rows are regenerable from code; the backup container is the one that is not |
+| 4 | `branch-protection.md` matches the API, verified in that order | **MET** — `GET /rulesets/21395850` read first, then written. The page's summary table said two rules while its own § below said three |
+| 5 | Alert drill · 72-hour chart · login → join → UDP end to end · process CPU | **1 of 4 MET, 3 DEFERRED with reasons — see below** |
+| 6 | `cpuPercent: -1` still sent on the heartbeat, reason still recorded | **MET** — and pinned by a test (`TheHeartbeatsDeliberateMinusOneIsNotDisturbed`) that asserts `MetricsSnapshot.ToJson` contains no field named `cpuPercent` at all |
+| 7 | No teammate name or role-assignment language outside git history | **MET** — swept |
+
+### The three items in criterion 5 that are not done, and why each is deferred rather than skipped
+
+**72-hour chart — DEFERRED, and it cannot be otherwise.** It takes 72 hours. The sampler that
+feeds it now also records `processCpuPercent` and `cpuSampleWindowSec`, so when it is run the
+chart carries CPU as well as RAM. **Reopening condition:** run it against the compose VM and hold
+the window open; nothing else blocks it.
+
+**Alert drill — DEFERRED.** It needs a deployed game server to kill and an alert webhook to
+receive the result, and both live on the Azure VM rather than on this machine. Killing a local
+process proves the timer fires, not that the alert reaches anybody, and the second half is the
+part that has never been tested. **Reopening condition:** next deployment to the VM.
+
+**Login → join → UDP end to end — DEFERRED, and closer than it was.** M2 criterion 14 has been
+carried since phase 02. The client half that made it untestable is now wired: X-77 gave
+`MasterSession` the room-state consumer, so `RoomLobby → ConnectingGame` no longer needs a human
+pressing a debug button, and M3 intervention #10 gave the flow a way back out of a room. What
+remains is running a master, a game server and a client together and watching one account walk
+the whole path. **Reopening condition:** none — this is now ordinary work that a session with
+thirty spare minutes can do, and it is the highest-value of the three.
+
+---
+
 ## 5. Acceptance
 
 | # | Criterion |

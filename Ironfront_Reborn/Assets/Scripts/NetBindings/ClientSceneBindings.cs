@@ -100,6 +100,15 @@ namespace Ironfront.Net.Unity.Bindings
 
         /// <inheritdoc/>
         public void RemoveMarker(Transform subject) => MinimapUi.RemoveMarker(subject);
+
+        /// <inheritdoc />
+        public void SetHoldSource(System.Func<bool> source) => MinimapUi.HoldSource = source;
+
+        /// <inheritdoc />
+        public float Openness => MinimapUi.CurrentOpenness;
+
+        /// <inheritdoc />
+        public bool HoldRequested => MinimapUi.HoldSource != null && MinimapUi.HoldSource();
     }
 
     /// <summary>

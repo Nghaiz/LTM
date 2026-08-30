@@ -114,6 +114,23 @@ namespace Ironfront.Net.Unity.Diagnostics
         public Solution Last { get; private set; }
 
         /// <summary>
+        /// The frame <see cref="Last"/> was computed on, or -1 before any solve.
+        /// </summary>
+        /// <remarks>
+        /// <b>Ledger X-72.</b> <see cref="Last"/> is a CACHE, and the checkpoint recorder reads
+        /// it. A step that stops aiming stops calling <see cref="Solve"/>, so the cache keeps
+        /// answering with whatever was true when it was last filled — and the artifact wrote
+        /// <c>resolved: true</c> with a frozen <c>distanceM</c> at every later checkpoint. A dead
+        /// reading was indistinguishable from a live one, which is how a real displacement was
+        /// read as "did not recur" and an X-28 finding was inverted for a day.
+        ///
+        /// Nothing here fixes the caching, which is deliberate and load-bearing (three callers
+        /// want one answer per frame). What was missing is that the reading did not carry its
+        /// own age.
+        /// </remarks>
+        public int LastSolvedFrame => _solvedFrame;
+
+        /// <summary>
         /// Solves for one player name against the local actor's current eye position.
         /// </summary>
         /// <remarks>

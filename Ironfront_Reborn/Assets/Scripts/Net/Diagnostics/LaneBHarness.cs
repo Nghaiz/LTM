@@ -280,12 +280,12 @@ namespace Ironfront.Net.Unity.Diagnostics
 
             ISpawnPointDirectory inner = NetServerBindings.SpawnPoints;
 
-            LaneBSpawnPin.Outcome outcome = LaneBSpawnPin.Evaluate(
+            LaneBSpawnPin.Outcome outcome = LaneBSpawnPin.EvaluatePerTeam(
                 Read(SpawnIndexVariable),
                 inner != null,
                 inner != null ? inner.Count : 0,
                 final,
-                out int index,
+                out int[] slots,
                 out string message);
 
             switch (outcome)
@@ -305,17 +305,33 @@ namespace Ironfront.Net.Unity.Diagnostics
                     return;
             }
 
-            var pinned = new PinnedSpawnPointDirectory(inner, index);
+            PinnedSpawnPointDirectory pinned;
+            try
+            {
+                pinned = new PinnedSpawnPointDirectory(inner, slots);
+            }
+            catch (ArgumentException ex)
+            {
+                // X-63. The directory refuses a pin that starves a team, and it does so HERE
+                // rather than letting ChooseSpawnIndex return -1 ninety seconds into the run
+                // and leave one actor unplaced. Reported once, like every other pin failure.
+                if (!_spawnPinReported)
+                {
+                    _spawnPinReported = true;
+                    Debug.LogError("[lane-b] spawn pin refused: " + ex.Message);
+                }
+                return;
+            }
+
             NetServerBindings.SpawnPoints = pinned;
             _spawnPinned = true;
 
             Debug.Log(
-                $"[lane-b] spawn pinned to index {index} of {inner.Count} at "
-                + $"{inner.GetSpawnPosition(index)} - every player spawns here, so the pair is "
-                + "adjacent on every run. "
-                + $"team0Eligible={pinned.IsEligible(index, 0)} "
-                + $"team1Eligible={pinned.IsEligible(index, 1)} "
-                + "(a false here starves that team and MoveToSpawnPoint will warn).");
+                $"[lane-b] spawn pinned per team to [{string.Join(", ", slots)}] of "
+                + $"{inner.Count} point(s): team0 at {inner.GetSpawnPosition(pinned.PinnedIndexFor(0))}, "
+                + $"team1 at {inner.GetSpawnPosition(pinned.PinnedIndexFor(1))}. "
+                + "Both were checked eligible before this line ran, so a starved team is now a "
+                + "refusal at the top rather than an unplaced actor mid-run (X-63).");
         }
 
         /// <summary>
@@ -621,6 +637,12 @@ namespace Ironfront.Net.Unity.Diagnostics
 
             local.SetInputSource(_source);
 
+            // X-61. The map opens only while a key is held, and a scripted client has no
+            // keyboard -- so this is the only way a lane-B run can ever see it open. Installed
+            // here beside every other scripted input source, and cleared in Finish so a second
+            // programme in the same process does not inherit the first one's cursor.
+            NetClientBindings.Minimap?.SetHoldSource(() => _cursor != null && _cursor.HoldMinimap);
+
             NetPredictionClock clock = NetPredictionClock.Current
                 ?? FindFirstObjectByType<NetPredictionClock>(FindObjectsInactive.Include);
 
@@ -750,6 +772,11 @@ namespace Ironfront.Net.Unity.Diagnostics
         {
             if (_finished) return;
             _finished = true;
+
+            // Released with the run. A static that outlives its cursor would leave the next
+            // programme in the same process reading a dead one -- the shape of stale reference
+            // X-72 is about, and cheaper to prevent here than to diagnose in an artifact.
+            NetClientBindings.Minimap?.SetHoldSource(null);
 
             Debug.Log($"[lane-b] {_label} finished exit={exitCode} reason='{reason}' "
                       + $"elapsed={_elapsed:F1}s checkpoints={(_recorder?.Count ?? 0)}");
