@@ -641,7 +641,7 @@ namespace Ironfront.Net.Unity.Diagnostics
             // keyboard -- so this is the only way a lane-B run can ever see it open. Installed
             // here beside every other scripted input source, and cleared in Finish so a second
             // programme in the same process does not inherit the first one's cursor.
-            MinimapUi.HoldSource = () => _cursor != null && _cursor.HoldMinimap;
+            NetClientBindings.Minimap?.SetHoldSource(() => _cursor != null && _cursor.HoldMinimap);
 
             NetPredictionClock clock = NetPredictionClock.Current
                 ?? FindFirstObjectByType<NetPredictionClock>(FindObjectsInactive.Include);
@@ -776,7 +776,7 @@ namespace Ironfront.Net.Unity.Diagnostics
             // Released with the run. A static that outlives its cursor would leave the next
             // programme in the same process reading a dead one -- the shape of stale reference
             // X-72 is about, and cheaper to prevent here than to diagnose in an artifact.
-            MinimapUi.HoldSource = null;
+            NetClientBindings.Minimap?.SetHoldSource(null);
 
             Debug.Log($"[lane-b] {_label} finished exit={exitCode} reason='{reason}' "
                       + $"elapsed={_elapsed:F1}s checkpoints={(_recorder?.Count ?? 0)}");

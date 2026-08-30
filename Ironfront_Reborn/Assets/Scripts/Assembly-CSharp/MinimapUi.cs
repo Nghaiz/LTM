@@ -100,8 +100,12 @@ public class MinimapUi : MonoBehaviour
 	/// <c>NetClientLocalCombatDriver.IsInputSuppressedByDeath</c>: a read-only accessor on
 	/// shipped gameplay code, exposing a flag the gameplay itself already writes, so the harness
 	/// reads a value rather than inferring one.
+	///
+	/// Static and <c>-1</c> when there is no map, for <c>SetMarker</c>'s reason: the callers are
+	/// outside this assembly and hold no instance. Zero is a real value meaning "closed", and a
+	/// HUD that does not exist is not a closed map.
 	/// </remarks>
-	public float Openness => minimapOpenness;
+	public static float CurrentOpenness => instance != null ? instance.minimapOpenness : -1f;
 
 	private void Update()
 	{

@@ -60,5 +60,38 @@ namespace Ironfront.Net.Unity
         /// previous one's team colour.
         /// </remarks>
         void RemoveMarker(Transform subject);
-    }
+    
+        /// <summary>
+        /// Installs an extra "hold the map open" signal, OR'd with the player's keyboard.
+        /// Null clears it.
+        /// </summary>
+        /// <remarks>
+        /// <b>Ledger X-61.</b> The map opens only while a key is held, and a scripted lane-B
+        /// client has no keyboard — so no run could ever open it, and the icons this interface
+        /// draws have never been proven to render. Routed through this seam rather than named
+        /// directly because <c>Net/Diagnostics</c> is an asmdef and <c>MinimapUi</c> lives in
+        /// the predefined assembly, which no asmdef may reference.
+        /// </remarks>
+        void SetHoldSource(System.Func<bool> source);
+
+        /// <summary>
+        /// How far the map is open, 0 closed to 1 open, or -1 when no map exists.
+        /// </summary>
+        /// <remarks>
+        /// Without this the hold above proves nothing: a request that had no effect and a
+        /// request never made render identically. -1 rather than 0 for a missing HUD, because
+        /// zero is a real value meaning "closed".
+        /// </remarks>
+        float Openness { get; }
+
+        /// <summary>
+        /// Whether the installed hold source is asking for the map right now.
+        /// </summary>
+        /// <remarks>
+        /// The EFFECTIVE request, read from the same place the map reads it — not the
+        /// programme's intent re-derived by the recorder. Those two differ exactly when the
+        /// wiring is broken, which is the case worth catching.
+        /// </remarks>
+        bool HoldRequested { get; }
+}
 }

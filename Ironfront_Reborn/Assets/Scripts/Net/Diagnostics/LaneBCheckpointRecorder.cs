@@ -385,15 +385,14 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// </remarks>
         private void AppendMinimap()
         {
-            MinimapUi map = UnityEngine.Object.FindFirstObjectByType<MinimapUi>(
-                FindObjectsInactive.Exclude);
+            IMinimapMarkers map = NetClientBindings.Minimap;
+            float openness = map != null ? map.Openness : -1f;
 
             _json.Append("\"minimap\":{");
-            _json.Append("\"present\":").Append(map != null ? "true" : "false"); Comma();
-            _json.Append("\"held\":")
-                 .Append(MinimapUi.HoldSource != null && MinimapUi.HoldSource() ? "true" : "false");
+            _json.Append("\"present\":").Append(openness >= 0f ? "true" : "false"); Comma();
+            _json.Append("\"held\":").Append(map != null && map.HoldRequested ? "true" : "false");
             Comma();
-            Num("openness", map != null ? map.Openness : -1f);
+            Num("openness", openness);
             _json.Append('}');
         }
 
