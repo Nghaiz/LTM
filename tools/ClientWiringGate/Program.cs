@@ -130,10 +130,21 @@ namespace Ironfront.Tools.ClientWiringGate
                 Console.Out,
                 Console.Error);
 
+            // G11 grades the SERVER's announcements and is scoped to NetServerBootstrap.cs, so
+            // it reads the same file set G1-G10 do -- DefaultRoots covers Assets/Scripts.
+            int announcements = AnnouncementCoverageRunner.Run(
+                AnnouncementCoverageRunner.AnnouncedPropertyNames(),
+                files,
+                Console.Out,
+                Console.Error);
+
             // Every half always runs, and the worst code wins. Short-circuiting on the source
             // half would hide every authoring gap behind one dead event, and 2 outranks 1
             // because "could not tell" must never be reported as "found nothing".
-            return Math.Max(source, Math.Max(assets, Math.Max(writers, senders)));
+            return Math.Max(source,
+                   Math.Max(assets,
+                   Math.Max(writers,
+                   Math.Max(senders, announcements))));
         }
 
         /// <summary>

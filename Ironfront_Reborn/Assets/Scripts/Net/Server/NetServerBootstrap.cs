@@ -7,6 +7,7 @@ using Ironfront.Net.Replication.Server;
 using Ironfront.Net.Transport;
 using Ironfront.Net.Transport.Loopback;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Ironfront.Net.Unity.Server
 {
@@ -338,6 +339,49 @@ namespace Ironfront.Net.Unity.Server
             }
         }
 
+        /// <summary>
+        /// Tells the transport which map it is simulating, so <c>CONNECT_ACCEPTED</c> can say so.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b><c>UdpTransportServer.MapId</c> had no writer anywhere in the repository.</b> The
+        /// field existed, <c>SendAccepted</c> copied it into every accept, and it was 0 on every
+        /// connection ever made — so the one message that could have told a client which world it
+        /// was joining told it nothing. Found by P8 task 3.2, which needed exactly that answer:
+        /// a client cannot load the right scene without it, and until now no client loaded a
+        /// scene at all.
+        /// </para>
+        /// <para>
+        /// <b>Derived from the loaded scene, not from configuration.</b> The scene is the ground
+        /// truth about what this process is simulating — it is what the physics, the spawn points
+        /// and the capture points come from. Reading <c>IRONFRONT_GAMESERVER_SCENE</c> here
+        /// instead would announce the map somebody *asked* for, which is the same value right up
+        /// until the load falls back or a person opens a different scene in the Editor, and then
+        /// it is confidently wrong.
+        /// </para>
+        /// <para>
+        /// A scene with no catalog row leaves the id at 0 and warns. That is honest — 0 already
+        /// means "nobody said" on the client — and inventing an id here would have the server
+        /// naming a map no client can resolve.
+        /// </para>
+        /// </remarks>
+        private void AnnounceMap(UdpTransportServer udp)
+        {
+            string scene = SceneManager.GetActiveScene().name;
+
+            if (MapCatalog.TryGetId(scene, out ushort mapId))
+            {
+                udp.MapId = mapId;
+                return;
+            }
+
+            Debug.LogWarning(
+                $"[net] scene '{scene}' has no row in MapCatalog, so CONNECT_ACCEPTED will "
+                + "announce map 0. A client joining through the master will fall back to the "
+                + "room's map id, and a direct-connect client to the default map. Add a row to "
+                + "MapCatalog.All if this scene is meant to be playable.");
+        }
+
         /// <summary>Creates the transport (unless one was injected) and starts the loop.</summary>
         public void StartServer()
         {
@@ -352,6 +396,7 @@ namespace Ironfront.Net.Unity.Server
                 _ownsTransport = true;
                 Udp = udp;
 
+                AnnounceMap(udp);
                 RegisterTicketValidator(udp);
 
                 try

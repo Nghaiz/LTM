@@ -24,6 +24,20 @@ namespace Ironfront.Net.Configuration
         /// <summary>Log the first snapshot and every connection state change.</summary>
         public bool Verbose { get; set; } = true;
 
+        /// <summary>The master server this client logs in against.</summary>
+        /// <remarks>
+        /// <b>It is configuration for the same reason <see cref="Host"/> is.</b> Until P8 the
+        /// master endpoint existed only as a serialized field on the lobby shell, so pointing a
+        /// build at a different master meant opening the Menu scene in the Editor and typing --
+        /// a manual file edit in the middle of the M3 flow, which is the clause P8 grades. A
+        /// player typing the address into the shell's own field still wins; this is the default
+        /// that field starts from.
+        /// </remarks>
+        public string MasterHost { get; set; } = "127.0.0.1";
+
+        /// <summary>The master server's TCP port.</summary>
+        public int MasterPort { get; set; } = 27020;
+
         /// <summary>
         /// Whether the client predicts the vehicle it is driving. V5-D6.
         /// </summary>
@@ -121,6 +135,12 @@ namespace Ironfront.Net.Configuration
 
             Port    = EnvParse.Port(EnvRegistry.ClientPort.Read(read), Port, EnvRegistry.ClientPort.Name);
             Verbose = EnvParse.Flag(EnvRegistry.ClientVerbose.Read(read), Verbose);
+
+            string masterHost = EnvParse.Trimmed(EnvRegistry.ClientMasterHost.Read(read));
+            if (masterHost.Length > 0) MasterHost = masterHost;
+
+            MasterPort = EnvParse.Port(
+                EnvRegistry.ClientMasterPort.Read(read), MasterPort, EnvRegistry.ClientMasterPort.Name);
 
             PredictLocalVehicle = EnvParse.Flag(
                 EnvRegistry.ClientPredictLocalVehicle.Read(read), PredictLocalVehicle);

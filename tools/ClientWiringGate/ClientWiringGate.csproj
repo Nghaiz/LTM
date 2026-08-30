@@ -54,6 +54,10 @@
   <ItemGroup>
     <!-- The event list comes from the real type, not from a copy of it. -->
     <ProjectReference Include="..\..\Ironfront.Net.Replication\Ironfront.Net.Replication.csproj" />
+    <!-- G11 derives the announced set from ConnectAcceptedPayload and UdpTransportServer by
+         reflection, so it must compile against both rather than restate their shapes. -->
+    <ProjectReference Include="..\..\Ironfront.Net.Protocol\Ironfront.Net.Protocol.csproj" />
+    <ProjectReference Include="..\..\Ironfront.Net.Transport\Ironfront.Net.Transport.csproj" />
   </ItemGroup>
 
 </Project>
