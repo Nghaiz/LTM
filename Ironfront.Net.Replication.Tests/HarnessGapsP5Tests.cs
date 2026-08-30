@@ -50,8 +50,8 @@ namespace Ironfront.Net.Replication.Tests
                 "public bool IsInputSuppressedByDeath => _inputSuppressedByDeath;", driver);
 
             string recorder = UnitySource("Net/Diagnostics/LaneBCheckpointRecorder.cs");
-            Assert.Contains("\\\"inputSuppressedByDeath\\\":", recorder);
-            Assert.Contains("driver.IsInputSuppressedByDeath", recorder);
+            AssertLiveCode(recorder, "\\\"inputSuppressedByDeath\\\":");
+            AssertLiveCode(recorder, "driver.IsInputSuppressedByDeath");
         }
 
         /// <summary>
@@ -73,11 +73,25 @@ namespace Ironfront.Net.Replication.Tests
 
             // IsAlive, not !suppressed: deriving deadness from the suppression flag would make
             // "dead with input" — the failure this grades — inexpressible.
-            Assert.Contains("if (!_driver.State.IsAlive)", sampler);
+            AssertLiveCode(sampler, "if (!_driver.State.IsAlive)");
+
+            // I8: the predicate alone is not the guard. Swapping the two branch BODIES so that
+            // _windowSuppressed++ also sits under !IsAlive leaves every other assertion green
+            // and makes suppressedFrames == deadFrames true BY CONSTRUCTION -- which is exactly
+            // the headline evidence the report offers. Pin the association, not the condition.
+            AssertLiveCode(sampler, "if (_driver.IsInputSuppressedByDeath)");
+            Assert.Matches(
+                new Regex(@"if \(_driver\.IsInputSuppressedByDeath\)\s*\r?\n\s*\{\s*\r?\n"
+                          + @"\s*_windowSuppressed\+\+;\s*\r?\n\s*_runSuppressed\+\+;"),
+                sampler);
+            Assert.Matches(
+                new Regex(@"if \(!_driver\.State\.IsAlive\)\s*\r?\n\s*\{\s*\r?\n"
+                          + @"\s*_windowDead\+\+;\s*\r?\n\s*_runDead\+\+;"),
+                sampler);
 
             string recorder = UnitySource("Net/Diagnostics/LaneBCheckpointRecorder.cs");
-            Assert.Contains("Num(\"deadFrames\", window.DeadFrames)", recorder);
-            Assert.Contains("Num(\"suppressedFrames\", window.SuppressedFrames)", recorder);
+            AssertLiveCode(recorder, "Num(\"deadFrames\", window.DeadFrames)");
+            AssertLiveCode(recorder, "Num(\"suppressedFrames\", window.SuppressedFrames)");
         }
 
         /// <summary>
@@ -94,9 +108,52 @@ namespace Ironfront.Net.Replication.Tests
         {
             string harness = UnitySource("Net/Diagnostics/LaneBHarness.cs");
 
-            Assert.Contains("_deathInput = new LaneBDeathInputSampler();", harness);
-            Assert.Contains("_deathInput?.Sample();", harness);
-            Assert.Contains("_deathInput);", harness);
+            AssertLiveCode(harness, "_deathInput = new LaneBDeathInputSampler();");
+            AssertLiveCode(harness, "_deathInput?.Sample();");
+
+            // Not Contains("_deathInput);") -- that pins a fragment, says nothing about WHICH
+            // call it lands in, and breaks on a harmless reflow. Pin the recorder construction
+            // carrying it, which is the fact that matters.
+            Assert.Matches(
+                new Regex(@"new LaneBCheckpointRecorder\([^;]*_deathInput\s*\)", RegexOptions.Singleline),
+                harness);
+        }
+
+        /// <summary>
+        /// The sampler refuses a driver that structurally cannot answer, and reports per window.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b><c>Exclude</c>, not <c>Include</c>.</b> A disabled <c>NetClientLocalCombatDriver</c>
+        /// unsubscribes from <c>OnDied</c> and calls <c>RestoreInput()</c> on the way out, so its
+        /// flag is pinned false for good. Latching one gives <c>frames &gt; 0</c>,
+        /// <c>deadFrames 0</c>, <c>suppressedFrames 0</c>, <c>driverPresent true</c> — which is
+        /// indistinguishable from a healthy client that never died, the exact silent zero
+        /// <c>DriverPresent</c> exists to prevent.
+        /// </para>
+        /// <para>
+        /// <b><c>DriverPresent</c> must describe the WINDOW.</b> A run-level flag that is set once
+        /// and never reset would let a window whose driver vanished halfway still claim an answer,
+        /// with a silently short frame count and nothing saying how many frames were expected.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public void TheDeathInputSamplerRefusesADriverThatCannotAnswer()
+        {
+            string sampler = UnitySource("Net/Diagnostics/LaneBDeathInputSampler.cs");
+
+            AssertLiveCode(sampler, "FindObjectsInactive.Exclude");
+            Assert.DoesNotContain("FindObjectsInactive.Include", sampler);
+
+            // Re-resolved when it is disabled after being found, not only when destroyed.
+            AssertLiveCode(sampler, "if (!_driver.isActiveAndEnabled)");
+
+            // Per-window, and drained with the counters.
+            AssertLiveCode(sampler, "_windowResolved = true;");
+            AssertLiveCode(sampler, "_windowResolved = false;");
+            Assert.Matches(
+                new Regex(@"new DeathInputWindow\([^;]*_windowResolved\s*\)", RegexOptions.Singleline),
+                sampler);
         }
 
         /// <summary>
@@ -119,14 +176,17 @@ namespace Ironfront.Net.Replication.Tests
         public void ARespawnStepIsFollowedByACapture()
         {
             var offenders = new List<string>();
+            int programmesWithRespawn = 0;
 
             foreach (string path in ProgrammeFiles())
             {
                 List<JsonElement> steps = Steps(path);
+                bool hasRespawn = false;
 
                 for (int i = 0; i < steps.Count; i++)
                 {
                     if (!Flag(steps[i], "respawn")) continue;
+                    hasRespawn = true;
 
                     bool captureAfter = steps
                         .Skip(i + 1)
@@ -134,7 +194,19 @@ namespace Ironfront.Net.Replication.Tests
 
                     if (!captureAfter) offenders.Add($"{Path.GetFileName(path)} step {i}");
                 }
+
+                if (hasRespawn) programmesWithRespawn++;
             }
+
+            // THE COMPLETENESS FLOOR, and without it this sweep is a green that proves nothing:
+            // exactly 4 of 25 programmes raise a respawn edge, so renaming the flag in the
+            // harness and the programmes together leaves the loop finding nothing, offenders
+            // empty, and the gate passing forever while no programme ever captures a respawn
+            // landing again. A count cannot be renamed away.
+            Assert.True(programmesWithRespawn >= 4,
+                $"only {programmesWithRespawn} programme(s) raise a respawn edge — expected at "
+                + "least 4. Either the flag was renamed (in which case this sweep is now "
+                + "vacuous and must be re-pointed) or victim programmes were deleted.");
 
             Assert.True(offenders.Count == 0,
                 "a respawn edge with no capture after it — the artifact cannot show the "
@@ -164,16 +236,22 @@ namespace Ironfront.Net.Replication.Tests
         [Fact]
         public void TheE11SetTogglesSeatZeroBeforeTheTurret()
         {
-            int holder = FirstStepWith(ProgrammePath("e11-driver.json"), "seatToggle");
-            int gunner = FirstStepWith(ProgrammePath("e11-observer-b.json"), "seatToggle");
+            // SECONDS, not step indices. The two programmes are separate files with separate
+            // step durations, so index order is not execution order: shortening the gunner's
+            // 90 s walk to 60 s makes it toggle at 75 s against the holder's 97 s — the gunner
+            // takes seat 0, no turret is ever mounted — while the indices are still 3 < 4 and an
+            // index comparison stays green. That is verbatim the failure this test exists to
+            // catch, and the index form did not catch it.
+            double holder = FirstToggleSeconds(ProgrammePath("e11-driver.json"));
+            double gunner = FirstToggleSeconds(ProgrammePath("e11-observer-b.json"));
 
             Assert.True(holder >= 0, "e11-driver.json never toggles a seat");
             Assert.True(gunner >= 0, "e11-observer-b.json never toggles a seat");
 
             Assert.True(holder < gunner,
-                $"e11-driver must book seat 0 before e11-observer-b asks (holder step {holder}, "
-                + $"gunner step {gunner}) — otherwise the gunner takes seat 0 and no turret is "
-                + "ever mounted, so check 5 grades nothing and says nothing");
+                $"e11-driver must book seat 0 before e11-observer-b asks (holder toggles at "
+                + $"{holder:F1}s, gunner at {gunner:F1}s) — otherwise the gunner takes seat 0 and "
+                + "no turret is ever mounted, so check 5 grades nothing and says nothing");
 
             // The witness never toggles: a third occupant would take the seat under test.
             Assert.Equal(-1, FirstStepWith(ProgrammePath("e11-observer-a.json"), "seatToggle"));
@@ -232,6 +310,14 @@ namespace Ironfront.Net.Replication.Tests
 
             Assert.True(withdraw >= 0, "separation-driver.json never walks away from its target");
             Assert.True(approach >= 0, "separation-driver.json never approaches");
+
+            // A withdraw has to last long enough to buy distance. moveZ -1.0 for 0.1 s satisfies
+            // the ordering below and leaves the shooter exactly where the spawn put it.
+            double seconds = steps[withdraw].GetProperty("seconds").GetDouble();
+            Assert.True(seconds >= 5.0,
+                $"the withdraw step lasts {seconds:F1}s — too short to clear a 6 m hold distance "
+                + "from a ~4 m spawn separation, so ApproachMoveZ would still be 0 on the "
+                + "approach's first frame");
             Assert.True(withdraw < approach,
                 $"the withdraw (step {withdraw}) must precede the approach (step {approach}), or "
                 + "the shooter starts inside holdDistanceMeters and ApproachMoveZ is 0 from the "
@@ -264,6 +350,18 @@ namespace Ironfront.Net.Replication.Tests
             // The whole guard, so the declaration and the assignment cannot drift apart.
             Assert.Contains("if ($LogShots) { $env:IRONFRONT_LOG_SHOTS = \"1\" }", runner);
 
+            // And it must run BEFORE the server is launched. An env var set afterwards is
+            // inert -- the process already has its environment -- and nothing about the line
+            // itself would say so.
+            // Anchored on the PLAYER launch specifically. The first Start-Process in the file
+            // is the Unity build, which runs before any environment is set up and is not what
+            // this ordering is about.
+            int guard = runner.IndexOf("if ($LogShots) {", StringComparison.Ordinal);
+            int launch = runner.IndexOf("Start-Process -FilePath $player", StringComparison.Ordinal);
+            Assert.True(guard >= 0 && launch >= 0 && guard < launch,
+                $"the -LogShots guard (offset {guard}) must precede the first player launch "
+                + $"(offset {launch}); an environment variable set afterwards never reaches it");
+
             // Emitted by the server only; a client never reaches ServerCombatBridge.
             string bridge = UnitySource("Net/Server/ServerCombatBridge.cs");
             Assert.Contains("IRONFRONT_LOG_SHOTS", bridge);
@@ -284,9 +382,15 @@ namespace Ironfront.Net.Replication.Tests
         public void ThePresenterDoesNotClaimAnUnownedCombatState()
         {
             string presenter = UnitySource("Net/Client/NetClientCombatPresenter.cs");
-
             Assert.DoesNotContain("no Unity component holds one yet", presenter);
-            Assert.Contains("NetClientLocalCombatDriver declares itself", presenter);
+
+            // THE COMPANION, and the reason this test is not just a spell-check. Deleting the
+            // driver's own ClientCombatState tomorrow would make the CORRECTED sentence the new
+            // stale one, and a prose-only assertion would stay green through it. Pin the fact
+            // the sentence asserts, not the sentence.
+            string driver = UnitySource("Net/Client/NetClientLocalCombatDriver.cs");
+            AssertLiveCode(driver, "private readonly ClientCombatState _state");
+            AssertLiveCode(driver, "public ClientCombatState State => _state;");
         }
 
         // ---------------------------------------------------------------- helpers
@@ -317,6 +421,48 @@ namespace Ironfront.Net.Replication.Tests
 
         private static int FirstStepWith(string path, string flag) =>
             Steps(path).FindIndex(s => Flag(s, flag));
+
+        /// <summary>
+        /// Elapsed seconds at which the first <c>seatToggle</c> step BEGINS, or -1.
+        /// </summary>
+        /// <remarks>
+        /// The programme's own clock: <c>ScriptedInputCursor</c> advances step by step in real
+        /// time, so what orders two clients against each other is accumulated duration, never
+        /// step index.
+        /// </remarks>
+        private static double FirstToggleSeconds(string path)
+        {
+            double elapsed = 0;
+
+            foreach (JsonElement step in Steps(path))
+            {
+                if (Flag(step, "seatToggle")) return elapsed;
+                elapsed += step.TryGetProperty("seconds", out JsonElement sec) ? sec.GetDouble() : 0;
+            }
+
+            return -1;
+        }
+
+        /// <summary>
+        /// Asserts <paramref name="needle"/> appears on a line that is not commented out.
+        /// </summary>
+        /// <remarks>
+        /// <b>Plain <c>Assert.Contains</c> is satisfied by a commented-out line</b>, and
+        /// commenting-out is the first mutation anybody reaches for — it is the one this phase
+        /// used on <c>OnDied</c>. A pin that survives its own project's favourite mutation is
+        /// decoration.
+        /// </remarks>
+        private static void AssertLiveCode(string source, string needle)
+        {
+            bool live = source
+                .Split('\n')
+                .Any(line => line.Contains(needle, StringComparison.Ordinal)
+                             && !line.TrimStart().StartsWith("//", StringComparison.Ordinal));
+
+            Assert.True(live,
+                $"'{needle}' is absent, or present only on a commented-out line — which is the "
+                + "mutation this assertion exists to catch");
+        }
 
         private static bool Flag(JsonElement step, string name) =>
             step.TryGetProperty(name, out JsonElement value)

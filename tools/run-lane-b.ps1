@@ -279,8 +279,11 @@ try {
     $env:IRONFRONT_LANEB_ROLE = "server"
     $env:IRONFRONT_LANEB_LABEL = "server"
 
-    # Server-only: ServerCombatBridge is the one emitter, and the clients never reach it. Set
-    # on the server's environment rather than the common one so a client log stays readable.
+    # ServerCombatBridge is the one emitter and the clients never reach it, so this is
+    # server-only in EFFECT rather than in scope: $env: is the runner's own process
+    # environment and every later Start-Process inherits it, clients included. Harmless --
+    # a client that never calls LogShot prints nothing -- but the variable is not confined
+    # to the server process and a reader should not think it is.
     if ($LogShots) { $env:IRONFRONT_LOG_SHOTS = "1" } else { $env:IRONFRONT_LOG_SHOTS = $null }
     $env:IRONFRONT_GAMESERVER_TRANSPORT = "udp"
     $env:IRONFRONT_GAMESERVER_UDP_PORT = "$Port"

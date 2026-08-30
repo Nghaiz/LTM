@@ -1,9 +1,13 @@
 {
   "name": "separation-victim",
   "comment": [
-    "X-28's TARGET. Stands where it spawned and faces the shooter, so the only thing that",
-    "moves the pair apart is the shooter's own withdraw step -- a target that also walked",
+    "X-28's TARGET. Commands no movement and faces the shooter, so the only thing this",
+    "programme moves apart is the shooter's own withdraw step -- a target that also walked",
     "would make the resulting distance a sum of two unknowns.",
+    "IT DOES NOT FOLLOW THAT IT STAYS PUT. In p5-separation-02 and -03 the SERVER walked this",
+    "body 518 m and 509 m from its spawn while this file commanded nothing (X-71), and after",
+    "that the engagement is over whatever the programme says. Read localActor against its own",
+    "spawn before trusting any distance in a run of this set.",
     "",
     "victim-input-held is X-29's probe and it is deliberately a step that DEMANDS input while",
     "dead: moveZ 1.0 and fire, held for six seconds. If the death path suppressed input the",

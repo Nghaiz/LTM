@@ -24,12 +24,19 @@ this says something subscribes, not that it renders correctly."* Nothing in CI h
 the screen. The four defects a player hits in the first minute (§ 3) were all invisible to a
 green build, and that is the single most important fact on this page.
 
-**Sixteen ledger rows are open**, and **one is a live defect for the first time since P1** —
-**X-69**, a 534-exception server-side NRE storm in `AiActorController.LocalAvoidanceVelocity` that
-[P5](phases/phase-p5-harness-gaps.md) found on 2026-08-30 when its own exception gate voided a run.
-The rest are harness gaps and authoring gaps: **X-67** and **X-68** block E11, **X-70** is two
-unauthored vehicle prefabs, and **X-28**, **X-37**, **X-61**, **X-63**, **X-64**, **X-66** carry
-the remaining instrument debt.
+**Eighteen ledger rows are open**, and **two are live defects — the first since P1**. Both came
+out of [P5](phases/phase-p5-harness-gaps.md) on 2026-08-30: **X-69**, a 534-exception server-side
+NRE storm in `AiActorController.LocalAvoidanceVelocity` that its own exception gate caught by
+voiding a run, and **X-71**, the server walking a claimed player body 518 m across the map while
+its owner sends no movement input. The rest are harness and authoring gaps: **X-67** and **X-68**
+block E11, **X-70** is two unauthored vehicle prefabs, **X-72** is a checkpoint field that freezes
+without saying so, and **X-28**, **X-37**, **X-61**, **X-63**, **X-64**, **X-66** carry the
+remaining instrument debt.
+
+**X-71 and X-72 were found by reviewing P5's report, not its code**, and X-72 is why that report's
+first draft inverted an X-28 finding. `plan.md` § 5 rule 3 is about sentences outliving their
+measurement; this is the neighbouring failure — a measurement that stopped being current while the
+sentence stayed true-looking.
 [`debt-ledger.md`](debt-ledger.md) is the source of truth; this file does not restate it.
 
 **Eight of those verification rows were last graded against blockers that have since closed.**

@@ -611,11 +611,18 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// <para>
         /// <b>A WINDOW, not the instant, and both are written.</b> The instantaneous
         /// <c>inputSuppressedByDeath</c> beside this answers "is input suppressed right now",
-        /// which across all 21 checkpoints of <c>p4-pointblank-01</c> would have read
-        /// <c>false</c> every time — the record showed <c>alive: true</c> at every one of them
-        /// while the killfeed proved both players died repeatedly, because the dead window is
-        /// shorter than the checkpoint cadence. This window ORs every frame in between, so a
-        /// death that opened and closed between two captures is still counted.
+        /// and a death can open and close between two captures: across all 21 checkpoints of
+        /// <c>p4-pointblank-01</c> the record showed <c>alive: true</c> every time while the
+        /// killfeed proved both players died repeatedly. This window counts every frame in
+        /// between, so a death that fell between two captures is still counted.
+        /// </para>
+        /// <para>
+        /// <b>The instant is not useless and the claim is deliberately narrow.</b> "A capture
+        /// never lands inside the dead window" would be false — <c>p5-separation-02</c>'s
+        /// <c>killed</c> capture landed on one and read <c>inputSuppressedByDeath: true</c>,
+        /// and seven lane-B artifacts predating this field already carried a checkpoint with
+        /// <c>alive: false</c>. The claim is only that the instant cannot be RELIED on: over
+        /// those same runs it caught 1 of the 6 windows in which a death occurred.
         /// </para>
         /// <para>
         /// <b><c>deadFrames</c> is what stops a vacuous pass.</b> Zero suppressed frames means

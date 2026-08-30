@@ -3,14 +3,19 @@
 - **Phase:** [`../phases/phase-p5-harness-gaps.md`](../phases/phase-p5-harness-gaps.md)
 - **Date:** 2026-08-30 · **Branch base:** `develop` · **Branch:** `p5-harness-gaps`
 - **Closes:** **X-29** · **Addresses:** **X-28**, **X-65** · **X-37** advances but does not close
-- **Files:** **X-67**, **X-68**, **X-69**, **X-70**
+- **Files:** **X-67**, **X-68**, **X-69**, **X-70**, **X-71**, **X-72**
+- **Corrected 2026-08-30 after adversarial review** — four claims in the first draft were
+  refuted by the artifacts they cited. They are retracted in place, in § 3.1, § 3.3, § 4.2 and
+  § 4.3, rather than quietly edited out; § 4.3's retraction inverts a ledger finding back the
+  way it was, and the defect behind it is now § 4.4.
 
 ---
 
 ## 1. The run set
 
-Seven runs, one of them a deliberate mutation. Every run's exception count comes from
-`tools/analyse_lane_b.py --gate`, and one run is **void** on it.
+Eight runs, one of them a deliberate mutation and one taken after the review to exercise the
+corrected sampler. Every run's exception count comes from `tools/analyse_lane_b.py --gate`, and
+one run is **void** on it.
 
 | Run | Set | Search | Gate | What it is for |
 |---|---|---|---|---|
@@ -20,6 +25,7 @@ Seven runs, one of them a deliberate mutation. Every run's exception count comes
 | `p5-separation-01` | `separation` | — | **GREEN** | graded: criteria 4, 5 |
 | `p5-separation-02` | `separation` | — | **GREEN** | graded: check 13 in full, criteria 3, 4, 5, 6 |
 | `p5-separation-03` | `separation` | — | **RED — 534** | **VOID**, § 6.3 |
+| `p5-separation-04` | `separation` | — | **GREEN** | post-review: exercises the corrected sampler; **X-71 recurs** |
 | `p5-mutation-noinputsuppress` | `separation` | — | — | the mutation of § 3.2 |
 
 `p5-separation-03` is not quoted for any verdict. Its server threw 534 `NullReferenceException`s
@@ -143,18 +149,31 @@ in `OnDied`. It is now exposed read-only as `IsInputSuppressedByDeath` and recor
   the shape `LaneBAllocationSampler` already uses), carrying `frames`, `deadFrames`,
   `suppressedFrames` and `driverPresent`.
 
-**The instant alone would have measured nothing, and this run proves it.** Across the two
-gradeable separation runs `inputSuppressedByDeath` reads `false` at *every* checkpoint — the exact
-blindness P4 § 4.2 reported, where `combat.alive` was `true` at all 21 checkpoints while the
-killfeed proved repeated deaths. The window caught what the instant could not:
+**The instant cannot be relied on, and the window catches what it misses.**
+
+> **RETRACTED.** The first draft said `inputSuppressedByDeath` reads `false` at *every*
+> checkpoint, and *"the instant alone would have measured nothing"*. That is false, and it is
+> refuted by the very run the next section celebrates: `p5-separation-02`'s `killed` checkpoint
+> reads `inputSuppressedByDeath: true`. The instant caught **1 of the 6 windows** in which a death
+> occurred; it read `false` at the other 62 checkpoints. The window is the better instrument by a
+> wide margin, and that is all the evidence supports.
 
 | Run | window | `deadFrames` | `suppressedFrames` |
 |---|---|---|---|
 | `p5-separation-01` | `in-range` / `firing` / `killed` | 21 / 3 / 26 | **21 / 3 / 26** |
 | `p5-separation-02` | `in-range` / `killed` / `victim-input-held` | 15 / 255 / 203 | **15 / 255 / 203** |
 
-**816 dead frames across three runs; the two columns are equal in every window.** A dead player's
-movement and fire input were suppressed on every frame they were dead.
+**The two columns are equal in every window**, and that holds beyond the table: across **all 81
+windows of all three separation runs, on all three clients**, `suppressedFrames == deadFrames`
+without a single exception — the void run 03 included. A dead player's movement and fire input were
+suppressed on every frame they were dead.
+
+> **Scoping the count.** The first draft's "816 dead frames across three runs" is arithmetic
+> nobody can reproduce from the table above it: it sums OBS-B alone across three runs *including
+> the void one*, and excludes the other clients'. The honest figures, each recomputed from the
+> records: **523** dead frames in the table above, **823** over all clients and all three runs, and
+> **530** over the two gradeable runs. The equality claim is what matters, and it holds at every one
+> of those scopes.
 
 `deadFrames` is beside `suppressedFrames` and not instead of it because zero suppression means one
 of two opposite things — nobody died, or somebody died and kept their input — and without the dead
@@ -183,10 +202,21 @@ alive: false    health: 0    canRespawn: true
 deathInput: { deadFrames: 255, suppressedFrames: 255 }
 ```
 
-**This is the first checkpoint in the project's history that samples a dead body.** P4 § 4.2 said
-what would have to exist — *"a programme that holds a body dead across a scheduled checkpoint"* —
-and the `separation` set's six-second `killed` step is it. Death, input disable, and the respawn
-screen are all three recorded, on one artifact.
+> **RETRACTED.** The first draft called this *"the first checkpoint in the project's history that
+> samples a dead body"*. It is not: `grep -l '"alive":false' artifacts/lane-b/*/*.jsonl` returns
+> **seven** artifacts predating this phase — `o3-grenade-03`, `r1-grenade-01`, `r6-combat-01`,
+> `x25-torso-aim-02`, `x27-pinned-01`, `x31-diag-03`, `x49-after` — and two of them hold **five
+> consecutive** dead checkpoints. P4 § 4.2's observation was about `p4-pointblank-01`; generalising
+> it to the project was an error, and the same over-generalisation had been written into three
+> source files as *"the dead window is shorter than the checkpoint cadence"*. All three are
+> corrected.
+
+**What is new here is the input term, not the dead body.** Sampling a corpse was never the missing
+thing — X-29's complaint was that *"nothing in the record says whether a dead player's movement and
+fire input are suppressed"*, and none of those seven artifacts answers it, because the field did not
+exist. `p5-separation-02`'s `killed` checkpoint is the first that carries **all three** of check
+13's terms at once: death, the input suppression, and the respawn screen. That is what closes the
+row, and it does not depend on the retracted claim.
 
 ### 3.4 The respawn landing
 
@@ -199,7 +229,9 @@ programme cannot reintroduce it.
 
 The landing itself is on `p5-separation-02`: `killed` captures the body at `alive false / hp 0`
 (`observer-b-06-killed.png`) and `victim-input-held` captures it at `alive true / hp 100`
-(`observer-b-07-victim-input-held.png`), with 203 dead frames in the window between. **Stated
+(`observer-b-07-victim-input-held.png`), with 203 dead frames in the window between.
+`p5-separation-04` captures it again and more sharply — `victim-input-held` at `alive false / hp 0`,
+then `respawn-window` at `alive true / hp 100` with 129 dead frames between them. **Stated
 precisely:** the game auto-respawned inside that window, earlier than the scripted edge, so the
 pair above is the landing evidence and the `respawned` capture is the structural fix that makes a
 post-respawn artifact possible at all.
@@ -244,14 +276,31 @@ reachable by `-LogShots` rather than by knowing to set `IRONFRONT_LOG_SHOTS` by 
 |---|---|---|---|
 | `p5-separation-01` | 300 | **300** | — |
 | `p5-separation-02` | 300 | **30** | actors 1 (150), 2 (66), 10 (46), 11 (8) |
+| `p5-separation-04` | 300 | **86** | actors 8 (181), 17 (33) |
 
-**1 of 2 gradeable runs.** Criterion 4 asked for N of N and did not get it.
+**1 of 3 gradeable runs.** Criterion 4 asked for N of N and did not get it — and in **both**
+failures the target had walked out of the engagement under X-71 (§ 4.4).
 
-**But the witness half of X-28 is closed.** OBS-A is actor **42**, and 42 appears as the resolver's
-nearest target in **0 of 600 shot lines**. The row's complaint — *"the resolver's nearest target is
-actor 43 while the shooter aims at 42"* — does not recur. What stands in the line instead is **AI
-bots**: actors 1, 2, 10, 11 in run 02, and actor 17 on 222 of 300 lines in the void run 03. That
-is a different row (**X-68**'s neighbour), and it is what a spawn-point choice cannot fix.
+**The witness does not appear**: OBS-A is actor **42**, and 42 is nowhere in the shooter's 600
+`[shot] actor=41` lines. The row's complaint — *"the resolver's nearest target is actor 43 while the
+shooter aims at 42"* — does not recur.
+
+> **RE-DIAGNOSED.** The first draft attributed run 02's 30/300 to *"AI bots stand in the line"*, as
+> though bots wandering through were an independent finding. The artifact says otherwise, and the
+> shot log says it cleanly: the **first 30 lines resolve actor 43 and then it never appears again**
+> — one contiguous block, not a scatter. By the `firing` capture the target was **134 m from its own
+> spawn and still walking** (§ 4.4). The bots are not intruding on the engagement; they are simply
+> the nearest thing left once the target has gone. Run 02's 30/300 is a **consequence** of X-71, not
+> a separate cause — and `p5-separation-04`, taken after the review, reproduces the pair exactly:
+> 86/300 on target, and the same 519 m walk. The honest reading of criterion 4 is that **one run in
+> three held its geometry, and the two that did not failed for one reason**.
+
+> **Two scope corrections.** "0 of 600" covers the shooter's `[shot] actor=41` lines only — OBS-B
+> fires too, and `nearest[actor=42` appears 128 times in its own lines. And the witness's clearance
+> is not yet attributable to the programme: OBS-A is **554.9 / 557.0 / 958.8 m** away at the
+> `spawned` capture, *before* its 22-second sprint runs a single frame. On these three runs the
+> witness was cleared by spawn geometry; the walk-out step is untested, because nothing has yet put
+> it near the line.
 
 ### 4.3 Criterion 6 — the third party is REPRODUCED, and it is a bot
 
@@ -269,8 +318,72 @@ diagnosis is that **65535 is the bot sentinel and the third party is an AI bot**
 `cause: "Bullet"` with `environment: true` is the same gap reaching a player victim: a bot's bullet
 is rendered as an act of the world.
 
-**The 1.6 km respawn displacement did not recur.** The victim stayed within 6 m of the shooter
-across both gradeable runs. Stated as "did not recur in 2 gradeable runs", never as fixed.
+> **RETRACTED, and it inverts a ledger finding.** The first draft said *"the 1.6 km respawn
+> displacement did not recur — the victim stayed within 6 m of the shooter across both gradeable
+> runs."* **It recurred, in 2 of 3 runs, and I read it off a frozen field.** True shooter-to-target
+> distance, computed from the two clients' own `localActor` blocks in `p5-separation-02`: 39.8 m at
+> `approaching`, then **44 → 138 → 290 → 380 → 458 → 486 m**. `p5-separation-03` is the same shape
+> at 509 m, and `p5-separation-04` — run after the review — at 519 m. Only `p5-separation-01` is
+> clean (max 4.5 m), so this is **3 of 4 runs**. It is § 4.4, and it is the most consequential thing
+> in the phase.
+
+### 4.4 The victim is walked away by the server, and it is not a respawn (X-71)
+
+The displacement above is not client-side drift and not a respawn teleport. **The server's own
+authoritative position for OBS-B walks continuously**, and the client is corrected to follow it:
+
+| capture | OBS-B from its own spawn | server-authoritative X / Z | `alive` | `corrections` |
+|---|---|---|---|---|
+| `approaching` | 0.00 m | 2083.4 / 1140.2 | true | 11 |
+| `in-range` | **40.01 m** | 2049.1 / 1161.0 | **true** | 64 |
+| `firing` | **134.34 m** | 1975.0 / 1219.7 | **true** | 159 |
+| `killed` | 321.35 m | 1828.2 / 1335.7 | false | 339 |
+| `respawned` | **517.88 m** | 1479.5 / 1348.5 | true | **763** |
+
+`p5-separation-04` repeats it independently after the fix pass: 0 → 27 → 95 → 266 → 364 → 452 →
+**518.77 m**, `corrections` 0 → **759**, and again already 95 m along at `firing` with `health 100`.
+**Three of four runs.**
+
+Three things this rules out. It is **not a respawn**: the drift is monotonic and continuous, and it
+is already 134 m along **while the body is alive**. It is **not prediction drift**: the *server's*
+number is the one moving. And it is **not the programme**: `separation-observer-b.json` commands no
+movement at all until `victim-input-held`, and the shooter — which does send movement input — stays
+within 34 m of its spawn in the same run.
+
+**The suspect is named in the codebase's own remark.** `NetServerActor.Claim()` suspends the bot
+brain when a body is handed to a connection, and says why:
+
+> *"Server movement for a claimed body runs through `ServerPlayer` and `NetMovementAgent`; an
+> `AiActorController` still running is a second writer to the same `CharacterController`, and the
+> client is predicting against only one of the two."*
+
+A claimed body being walked by a second writer, with corrections climbing 11 → 763, is that sentence
+describing itself. **Stated as a hypothesis, not a conclusion** — the suspend was not traced in a
+debugger, and OBS-B dies and respawns during the window, so a `Release()`/`Claim()` cycle that fails
+to re-suspend is the obvious thing to look at first.
+
+**X-28's 1.6 km case is very likely this, mis-attributed.** That row records the victim as having
+*"respawned 1.6 km from the pinned point"*; here the same displacement is measured **before** the
+death, so "respawned N km away" was a reading taken after the fact of a body that had been walking
+the whole time.
+
+### 4.5 `aim.distanceM` freezes, and it is why the first draft was wrong (X-72)
+
+This is the field the first draft read the victim's distance off, and it lies by standing still:
+
+| capture | true distance | `aim.distanceM` |
+|---|---|---|
+| `in-range` | 43.96 m | **5.92** |
+| `firing` | **138.50 m** | **5.92** |
+| `killed` | 289.88 m | **37.11** |
+| `respawned` | **486.30 m** | **37.11** |
+
+It pins at 5.92 for two captures and at 37.11 for four, while the true separation climbs by two
+orders of magnitude. `aim.target.inSnapshot` goes `false` at the last two captures while
+`aim.resolved` stays `true` and the stale proxy is still written — so **a frozen reading renders
+identically to a live one**, which is precisely the failure class this phase's own `deathInput`
+design argues against. Every distance in a lane-B record should be checked against the two clients'
+`localActor` blocks before it is quoted. Filed as **X-72**.
 
 ---
 
@@ -299,10 +412,43 @@ Each was mutated at its own subject and observed RED — ten mutations, because 
 `if ($LogShots)` read an undeclared variable — `$null` in PowerShell, therefore falsy, so the shot
 log would silently stop working and every X-28 run afterwards would grade nothing. This is exactly
 the trap `ALostLinkIsRecordedAndFailsTheRun` documents in the same suite, reproduced by someone
-who had read that remark and wrote the weaker assertion anyway. Replaced with a word-boundary
-`Assert.Matches` plus the whole guard expression; both mutations now go red.
+who had read that remark and wrote the weaker assertion anyway.
 
-Full suite: **8 of 8 projects, 2,033 assertions, 0 failed.** `tools/ci.ps1` passes every gate.
+### 5.1 And one round of mutation was not enough
+
+Adversarial review found **four more** gates that would pass under a plausible edit, all of the
+same family: an assertion aimed at something adjacent to the fact it claims to guard. Each is now
+fixed and each was watched failing under exactly the edit that would have walked past it.
+
+| Gate | The edit it would have survived | Now |
+|---|---|---|
+| `TheE11SetTogglesSeatZeroBeforeTheTurret` | Shortening the gunner's walk 90 s → 60 s makes it toggle **first** and take seat 0 — no turret, ever — while step indices stay 3 < 4 | compares **cumulative seconds**, not indices |
+| `TheDeathInputWindowCannotPassVacuously` | Counting `_windowSuppressed++` under `!IsAlive` makes `suppressedFrames == deadFrames` true **by construction** — the report's own headline evidence | regex-pins each counter to its own predicate |
+| `ARespawnStepIsFollowedByACapture` | Renaming the `respawn` flag makes the sweep find nothing, so `offenders` is empty and it passes forever | carries a **completeness floor** (≥ 4 of 25 programmes) |
+| `ThePresenterDoesNotClaimAnUnownedCombatState` | Deleting the driver's `ClientCombatState` makes the *corrected* sentence the new stale one | asserts the driver still holds one |
+
+Two more, same shape: the wiring pin matched a fragment (`"_deathInput);"`) rather than the recorder
+construction, and the `-LogShots` guard was pinned without its **position** — moved below the player
+launch it is inert, because a process already has its environment. Both now pin the association.
+
+**And a whole class of them was comment-blind.** Five source-text pins used plain `Assert.Contains`,
+which a commented-out line still satisfies — while commenting-out is the exact mutation technique
+this phase used on `OnDied` in § 3.2. They now go through `AssertLiveCode`, which ignores lines
+beginning `//`.
+
+**Ten tests, twenty-one mutations across two rounds** — nine in the first (eight red, one
+survived), two more re-mutating the gate that survived, and ten in the second, every one red. The
+first round's green was not wrong; it was incomplete, and only an adversary looking for the gap
+found it.
+
+Full suite: **8 of 8 projects, 2,034 assertions, 0 failed.** `tools/ci.ps1` passes every gate.
+
+**And the corrected instrument was exercised, not just compiled.** `p5-separation-04` was run after
+the fixes with the rebuilt player: `driverPresent` true at every capture, `frames` accruing,
+`deadFrames == suppressedFrames` in all five windows that saw a death (12/12, 9/9, 394/394, 129/129,
+192/192), gate green. The `frames` count also equals `allocation.frames` at every window of every
+p5 run — the two samplers tick from the same `Update`, so a divergence would be the tell for the
+dropped-frame hazard the per-window `DriverPresent` fix addresses.
 
 ---
 
@@ -314,6 +460,8 @@ Full suite: **8 of 8 projects, 2,033 assertions, 0 failed.** `tools/ci.ps1` pass
 | **X-68** | `AiActorController.cs:648` seats a bot in the nearest vehicle within 4 m, so the project's only `MountedTurret` (tank seat 1) is contested. Blocks E11 / B-5 |
 | **X-69** | Server-side `NullReferenceException` in `AiActorController.LocalAvoidanceVelocity:1658` — **534** in one run, 0 in the other six. Voided `p5-separation-03` |
 | **X-70** | `Vehicle Spawner (2)` and `(4)` produce `quadbike` and `helicopter` **with no network id**, so no client ever sees them; `Vehicle Spawner (1)` gives up after 30 blocked attempts on an obstructed pad |
+| **X-71** | A claimed (player) body is walked across the map by the server — 518, 509 and 519 m in three of four runs, monotonic, **beginning while alive** — with `corrections` climbing 11 → 763. `NetServerActor.Claim()`'s own remark names the mechanism it exists to prevent. Very likely X-28's "respawned 1.6 km away", mis-attributed |
+| **X-72** | `aim.distanceM` freezes at a stale value (5.92 while the target is 138 m away; 37.11 while it is 486 m) and `aim.resolved` stays `true` after `inSnapshot` goes `false`. A frozen reading is indistinguishable from a live one, and it is what made § 4.3's retracted claim look true |
 
 None was fixed. § 4 of the phase file puts any game defect these runs surface out of scope.
 
@@ -326,12 +474,20 @@ None was fixed. § 4 of the phase file puts any game defect these runs surface o
 | 1 | B-5 carries a verdict from a run of a real E11 programme | **NOT MET.** The programme exists and ran three times; the verdict is a third NOT GRADED. The reason is now two measured blockers (X-67, X-68) instead of an absent programme — § 2.6 |
 | 2 | Check 13's input-suppression term recorded, separately from `driverEnabled` | **MET** — `combat.deathInput` + `combat.inputSuppressedByDeath`, `driverEnabled` untouched (§ 3.1) |
 | 3 | An artifact exists showing a respawn landing | **MET** — `p5-separation-02`, `observer-b-06-killed.png` (`alive false / hp 0`) → `observer-b-07-victim-input-held.png` (`alive true / hp 100`), § 3.4 |
-| 4 | Resolver's nearest target is the intended target in every run, count quoted | **NOT MET — 1 of 2 gradeable runs** (300/300 and 30/300). The witness is cleared at **0 of 600**; AI bots take its place (§ 4.2) |
-| 5 | Shooter starts outside `holdDistanceMeters`, non-zero `ApproachMoveZ` on the first frame | **MET, 2 of 2** — 42.29 m and 39.72 m against a 6 m hold (§ 4.1) |
-| 6 | X-28's third-party half reproduced and diagnosed, or reported not-recurring with a count | **MET — reproduced and diagnosed.** Three kills by `killerActorId 65535`; it is a bot (§ 4.3) |
+| 4 | Resolver's nearest target is the intended target in every run, count quoted | **NOT MET — 1 of 3 gradeable runs** (300/300, 30/300, 86/300). The witness is cleared at 0 of the shooter's 900 lines, but both failures are X-71 carrying the target out of the engagement, not bots intruding (§ 4.2) |
+| 5 | Shooter starts outside `holdDistanceMeters`, non-zero `ApproachMoveZ` on the first frame | **MET, 2 of 2** — 42.29 m and 39.72 m against a 6 m hold, both confirmed against independent position arithmetic to < 0.1 m (§ 4.1) |
+| 6 | X-28's third-party half reproduced and diagnosed, or reported not-recurring with a count | **MET, and the displacement half too.** Three `killerActorId 65535` kills — a bot (§ 4.3). The 1.6 km displacement **recurred in 2 of 3 runs** and now has a named mechanism (§ 4.4); the first draft reported it as not-recurring and that is retracted |
 | 7 | No fix reaches into game code to make a harness programme work | **MET.** Two shipped-code edits: a read-only getter, and a comment correction. Both blockers were filed, not routed around |
 
 Five of seven. Criteria 1 and 4 are misses and are reported as misses.
+
+**And the phase's own instrument was not exempt from the phase's own rule.** Four load-bearing
+claims in the first draft were refuted by the artifacts they cited, one of them inverting a ledger
+finding from "recurred" to "did not recur" — the exact decay this consolidation exists to end,
+committed by the document written to end it. All four are retracted above, in place. The mechanism
+that caught them was an adversarial pass with a mandate to check every number against its artifact,
+and nothing cheaper would have: each wrong claim was internally consistent, and three of the four
+were read off a field (`aim.distanceM`) that had frozen without saying so.
 
 ---
 
@@ -349,6 +505,8 @@ Five of seven. Criteria 1 and 4 are misses and are reported as misses.
 | **X-68** | — | new |
 | **X-69** | — | new |
 | **X-70** | — | new |
+| **X-71** | — | new — the server walks a claimed body; **X-28's displacement half re-opens on it** |
+| **X-72** | — | new — `aim.distanceM` freezes |
 
 ---
 
@@ -361,4 +519,8 @@ Five of seven. Criteria 1 and 4 are misses and are reported as misses.
   request seat index 1 directly. Both would have produced a green E11 run that graded a path no
   player takes.
 - **No further separation runs were taken to inflate criterion 4's denominator.** The count is 1
-  of 2 and the qualitative answer — bots, not the witness — would not change with more.
+  of 2 and is reported as such. The first draft added that "the qualitative answer would not change
+  with more runs"; that was an unsupported claim and is withdrawn — with X-71 identified, more runs
+  would say something, and they belong to whichever phase takes that row.
+- **X-71 and X-72 were not fixed.** X-71 is a replication defect with its own detector to write, and
+  X-72 is a recorder change that would invalidate no existing artifact but wants a run to prove it.

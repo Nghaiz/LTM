@@ -16,12 +16,19 @@ namespace Ironfront.Net.Unity.Diagnostics
     /// One window of death-driven input suppression, as it was observed frame by frame.
     /// </summary>
     /// <remarks>
-    /// <b>A window, for the same reason <see cref="AllocationWindow"/> is one.</b> The dead
-    /// state is shorter than the checkpoint cadence -- across all 21 checkpoints of
+    /// <b>A window, for the same reason <see cref="AllocationWindow"/> is one.</b> A death can
+    /// open and close between two captures: across all 21 checkpoints of
     /// <c>p4-pointblank-01</c> the record read <c>alive: true</c> every time while the killfeed
-    /// proved both players died repeatedly -- so an instantaneous read at a checkpoint samples
-    /// the case only by luck. A window that ORs every frame between two checkpoints cannot miss
-    /// a death that happened inside it.
+    /// proved both players died repeatedly. An instantaneous read therefore samples the case
+    /// only when the capture lands inside the dead window; a window that counts every frame
+    /// between two captures cannot miss one.
+    /// <para>
+    /// <b>Stated narrowly on purpose.</b> "The dead window is always shorter than the cadence"
+    /// would be false -- seven lane-B artifacts predating this sampler DO carry a checkpoint
+    /// with <c>alive: false</c>, and <c>p5-separation-02</c>'s <c>killed</c> capture landed on
+    /// one too. The claim is only that an instant cannot be relied on, which is weaker and
+    /// true: over the same two runs the instant caught 1 of 6 windows in which a death occurred.
+    /// </para>
     /// </remarks>
     public readonly struct DeathInputWindow
     {
@@ -98,16 +105,19 @@ namespace Ironfront.Net.Unity.Diagnostics
     /// <para>
     /// <b>Resolved lazily and re-resolved while null.</b> The driver is added by
     /// <c>NetClientBootstrap</c> after this sampler is constructed, and a cached reference to a
-    /// destroyed component would silently stop counting -- which would render as a healthy
-    /// "never died". Once found the reference is kept, because a per-frame
-    /// <c>FindFirstObjectByType</c> across a 40-actor scene is a cost this instrument has no
-    /// reason to pay.
+    /// destroyed or disabled component would silently stop counting -- which would render as a
+    /// healthy "never died". Unity's overloaded <c>==</c> reports a destroyed component as null,
+    /// so the destroyed case re-resolves on its own; the DISABLED case does not, and is checked
+    /// explicitly. Once found and while it stays enabled the reference is kept, because a
+    /// per-frame <c>FindFirstObjectByType</c> across a 40-actor scene is a cost this instrument
+    /// has no reason to pay.
     /// </para>
     /// </remarks>
     public sealed class LaneBDeathInputSampler
     {
         private NetClientLocalCombatDriver _driver;
         private bool _everResolved;
+        private bool _windowResolved;
 
         private long _windowFrames;
         private long _windowSuppressed;
@@ -117,7 +127,15 @@ namespace Ironfront.Net.Unity.Diagnostics
         private long _runSuppressed;
         private long _runDead;
 
-        /// <summary>The whole run so far, undrained. Reported once in the summary.</summary>
+        /// <summary>
+        /// The whole run so far, undrained.
+        /// </summary>
+        /// <remarks>
+        /// <b>Nothing reads this yet</b>, and it is kept rather than deleted for the shape
+        /// <c>LaneBAllocationSampler.Run</c> already has: a run total is what a summary line
+        /// would want, and the per-window figures cannot be re-summed once drained. Said out
+        /// loud so the next reader does not assume a consumer exists.
+        /// </remarks>
         public DeathInputWindow Run =>
             new DeathInputWindow(_runFrames, _runSuppressed, _runDead, _everResolved);
 
@@ -126,13 +144,28 @@ namespace Ironfront.Net.Unity.Diagnostics
         {
             if (_driver == null)
             {
+                // Exclude, NOT Include. A disabled NetClientLocalCombatDriver unsubscribes
+                // from OnDied/OnRespawned and calls RestoreInput() on the way out, so its flag
+                // is pinned false for good. Latching one would report frames > 0, deadFrames 0,
+                // suppressedFrames 0, driverPresent true -- indistinguishable from a healthy
+                // client that never died, which is the exact silent zero DriverPresent exists
+                // to prevent. An enabled driver is the only one that can answer.
                 _driver = Object.FindFirstObjectByType<NetClientLocalCombatDriver>(
-                    FindObjectsInactive.Include);
+                    FindObjectsInactive.Exclude);
 
                 if (_driver == null) return;
 
                 _everResolved = true;
             }
+
+            // Re-resolved next frame if it has since been disabled, for the same reason.
+            if (!_driver.isActiveAndEnabled)
+            {
+                _driver = null;
+                return;
+            }
+
+            _windowResolved = true;
 
             _windowFrames++;
             _runFrames++;
@@ -164,11 +197,12 @@ namespace Ironfront.Net.Unity.Diagnostics
         public DeathInputWindow TakeWindow()
         {
             var window = new DeathInputWindow(
-                _windowFrames, _windowSuppressed, _windowDead, _everResolved);
+                _windowFrames, _windowSuppressed, _windowDead, _windowResolved);
 
             _windowFrames = 0;
             _windowSuppressed = 0;
             _windowDead = 0;
+            _windowResolved = false;
 
             return window;
         }
