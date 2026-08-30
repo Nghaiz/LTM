@@ -18,7 +18,17 @@ namespace Ironfront.Client.Flow.Tests
     /// </remarks>
     public sealed class GameFlowControllerTests
     {
-        /// <summary>Every edge in the phase-03 diagram, transcribed by hand.</summary>
+        /// <summary>
+        /// Every edge in the phase-03 diagram, transcribed by hand, plus the one deviation this
+        /// project has made from it.
+        /// </summary>
+        /// <remarks>
+        /// <c>RoomLobby -&gt; RoomBrowser</c> ("left the room") is NOT in the phase-03 diagram.
+        /// It was added because its absence meant a client that joined a room could only leave
+        /// by quitting the process -- one of M3's two open manual interventions -- while
+        /// <c>MspMessageType.RoomLeaveRequest</c> already existed on both ends. Recorded here so
+        /// the deviation is a written decision rather than a table quietly ahead of its diagram.
+        /// </remarks>
         private static readonly (GameFlowState From, GameFlowState To)[] DiagramEdges =
         {
             (GameFlowState.Booting,        GameFlowState.LoginScreen),
@@ -30,6 +40,7 @@ namespace Ironfront.Client.Flow.Tests
             (GameFlowState.JoiningRoom,    GameFlowState.RoomLobby),       // ROOM_JOIN_RES ok
             (GameFlowState.JoiningRoom,    GameFlowState.RoomBrowser),     // error (room full...)
             (GameFlowState.RoomLobby,      GameFlowState.ConnectingGame),  // match is starting
+            (GameFlowState.RoomLobby,      GameFlowState.RoomBrowser),     // left the room
             (GameFlowState.ConnectingGame, GameFlowState.InMatch),         // CONNECT_ACCEPTED
             (GameFlowState.ConnectingGame, GameFlowState.RoomLobby),       // connection failed
             (GameFlowState.InMatch,        GameFlowState.MatchEnd),        // S_MATCH_STATE Ended

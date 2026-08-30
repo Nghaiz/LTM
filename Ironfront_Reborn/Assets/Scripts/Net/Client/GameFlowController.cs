@@ -86,13 +86,22 @@ namespace Ironfront.Net.Unity.Client
         /// array index and a two-element scan with nothing hashed and nothing allocated.
         /// </para>
         /// <para>
-        /// <b>Two edges a reader may expect are deliberately absent, because the diagram does
-        /// not have them:</b> there is no way out of <see cref="GameFlowState.RoomLobby"/>
-        /// except into <see cref="GameFlowState.ConnectingGame"/> (so no "leave room"), and no
-        /// edge from the lobby side back to <see cref="GameFlowState.LoginScreen"/> (so a
-        /// master disconnect while browsing rooms has nowhere to go). Both are real gaps in the
-        /// specification rather than oversights here, and adding them silently would put this
-        /// table and the diagram out of sync — which is the one thing the table must never be.
+        /// <b>Where this table deviates from the phase-03 diagram, and why.</b>
+        /// <see cref="GameFlowState.RoomLobby"/> also leads back to
+        /// <see cref="GameFlowState.RoomBrowser"/>. The diagram has no "leave room" and that
+        /// absence was documented here rather than papered over -- until it turned out to be one
+        /// of M3's two open manual interventions, with the wire already built on both ends
+        /// (<c>MspMessageType.RoomLeaveRequest</c>). The edge is added here AND in the
+        /// transcription in <c>GameFlowControllerTests.DiagramEdges</c>, in the same change,
+        /// because that pair of tests exists precisely to catch a helpful edge added by hand.
+        /// </para>
+        /// <para>
+        /// <b>One edge a reader may expect is still deliberately absent</b>, because the diagram
+        /// does not have it: nothing leads from the lobby side back to
+        /// <see cref="GameFlowState.LoginScreen"/>, so a master disconnect while browsing rooms
+        /// has nowhere to go. That is a real gap in the specification rather than an oversight
+        /// here, and adding it silently would put this table and the diagram out of sync -- which
+        /// is the one thing the table must never be.
         /// </para>
         /// </remarks>
         private static readonly GameFlowState[][] Allowed = BuildTable();
@@ -115,7 +124,15 @@ namespace Ironfront.Net.Unity.Client
             table[(int)GameFlowState.JoiningRoom] =
                 new[] { GameFlowState.RoomLobby, GameFlowState.RoomBrowser };
 
-            table[(int)GameFlowState.RoomLobby] = new[] { GameFlowState.ConnectingGame };
+            // RoomLobby --> RoomBrowser: the player left the room. An edge the phase-03 diagram
+            // does not have, added deliberately -- without it a client that joined a room could
+            // only leave by quitting the process, which was one of M3's two open manual
+            // interventions. The wire existed on both ends already
+            // (MspMessageType.RoomLeaveRequest). The transcription in GameFlowControllerTests is
+            // updated with it, because that pair of tests exists to catch exactly this kind of
+            // helpful hand-added edge.
+            table[(int)GameFlowState.RoomLobby] =
+                new[] { GameFlowState.ConnectingGame, GameFlowState.RoomBrowser };
 
             // ConnectingGame --> RoomLobby: connection failed
             table[(int)GameFlowState.ConnectingGame] =

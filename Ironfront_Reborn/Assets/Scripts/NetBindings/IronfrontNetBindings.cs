@@ -358,11 +358,14 @@ namespace Ironfront.Net.Unity.Bindings
             _vehicle.Die();
         }
 
+        /// <inheritdoc />
+        /// <remarks>
+        /// Delegated rather than re-derived. Two copies of one lookup is how the client and the
+        /// server came to measure a seat request from different origins (X-67), and the fix is
+        /// worth nothing if this class keeps its own.
+        /// </remarks>
         public Vector3 GetSeatPosition(int seatIndex)
-        {
-            Seat seat = SeatAt(seatIndex);
-            return seat != null ? seat.transform.position : Vector3.positiveInfinity;
-        }
+            => _vehicle != null ? _vehicle.GetSeatPosition(seatIndex) : Vector3.positiveInfinity;
 
         /// <inheritdoc />
         public bool TryEnterSeat(GameObject actorObject, int seatIndex)

@@ -5,6 +5,7 @@ using System.IO;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using Ironfront.MasterClient;
+using Ironfront.Net.Protocol;
 using Ironfront.Net.Transport;
 
 namespace Ironfront.Net.Unity.Client
@@ -82,6 +83,46 @@ namespace Ironfront.Net.Unity.Client
 
             _game.OnConnected += OnGameConnected;
             _game.OnDisconnected += OnGameDisconnected;
+            _master.OnRoomStatePush += OnRoomStatePushed;
+        }
+
+        /// <summary>
+        /// The master says our room's match has begun, so dial the game server. X-77.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The only automatic edge out of <c>RoomLobby</c>.</b> The master's half of this
+        /// worked from the day it was written -- <c>MspMessageDispatcher.HandleMatchStarted</c>
+        /// sets <c>InMatch</c> and broadcasts the room -- but the event was declared, raised,
+        /// and subscribed by nothing outside a test fake. So the room lobby's one exit was the
+        /// shell's "Enter match now (debug)" button: a human pressing a key the flow should not
+        /// need, and one of M3's two remaining manual interventions.
+        /// </para>
+        /// <para>
+        /// <b>Three guards, each for a push that really arrives.</b> The master BROADCASTS room
+        /// state, so a push about a room we are not in is ordinary and must be ignored. The
+        /// push also repeats on every member change and on a retransmit, so it must be
+        /// idempotent -- reaching <c>Transition</c> twice would throw
+        /// <c>IllegalGameFlowTransitionException</c> out of a network callback. And an
+        /// unrecognised state byte from a newer master is not an edge; <c>Lifecycle</c> returns
+        /// the raw value rather than throwing precisely so this reads as "not one I act on".
+        /// </para>
+        /// <para>
+        /// <c>Starting</c> counts as well as <c>InMatch</c>: the room is calling its members in,
+        /// and waiting for the second edge would put every client a broadcast behind the match
+        /// it is joining.
+        /// </para>
+        /// </remarks>
+        private void OnRoomStatePushed(RoomState room)
+        {
+            if (room == null) return;
+            if (room.RoomId != JoinedRoomId || JoinedRoomId == 0) return;
+            if (_flow.State != GameFlowState.RoomLobby) return;
+
+            if (room.Lifecycle != RoomLifecycleState.Starting
+                && room.Lifecycle != RoomLifecycleState.InMatch) return;
+
+            EnterMatch();
         }
 
         /// <summary>Seconds to wait for the game server. Lower it for a LAN, never past 60.</summary>
@@ -133,6 +174,18 @@ namespace Ironfront.Net.Unity.Client
         /// </para>
         /// </remarks>
         public ushort JoinedMapId { get; private set; }
+
+        /// <summary>
+        /// The room this client is in, or 0. Set beside <see cref="JoinedMapId"/> and cleared
+        /// with it, for the same reason: a failed join must not leave either pointing at a room
+        /// this client is not in.
+        /// </summary>
+        /// <remarks>
+        /// Needed because the master BROADCASTS room state (X-77). Without an id to compare
+        /// against, a push about somebody else's room would drag this client into a match it
+        /// never joined.
+        /// </remarks>
+        public int JoinedRoomId { get; private set; }
 
         /// <summary>The last failure, already phrased for a player. Empty when nothing failed.</summary>
         public string LastError { get; private set; } = string.Empty;
@@ -305,6 +358,7 @@ namespace Ironfront.Net.Unity.Client
                 // carry a map. Set only after PendingJoin is known good, so a failed join can
                 // never leave a map id pointing at a room this client is not in.
                 JoinedMapId = MapIdOf(roomId);
+                JoinedRoomId = roomId;
 
                 LastError = string.Empty;
                 _flow.Transition(GameFlowState.RoomLobby);
@@ -325,6 +379,55 @@ namespace Ironfront.Net.Unity.Client
         }
 
         // ------------------------------------------------------------------ the junction
+
+        /// <summary>
+        /// Leaves the room and returns to the browser. The one edge out of <c>RoomLobby</c> that
+        /// is not into a match.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A client that joined a room could not leave it: the transition table had no
+        /// <c>RoomLobby -&gt; RoomBrowser</c> edge, so the only way back was to quit the process.
+        /// The wire for it existed on both ends the whole time --
+        /// <c>MspMessageType.RoomLeaveRequest</c> is sent by <c>MasterClient.LeaveRoomAsync</c>
+        /// and handled by <c>MspMessageDispatcher</c>.
+        /// </para>
+        /// <para>
+        /// <b>Refuses rather than throws when the flow has moved on.</b> The button lives on the
+        /// room screen, but a click queued one frame before a match start lands after it, and an
+        /// <c>IllegalGameFlowTransitionException</c> out of a UI callback is a crash rather than
+        /// a declined action.
+        /// </para>
+        /// <para>
+        /// The join is cleared with the room, for <see cref="JoinRoomAsync"/>'s reason read
+        /// backwards: <see cref="PendingJoin"/> carries a signed ticket for a room the master has
+        /// just removed us from, and leaving it behind would let <see cref="EnterMatch"/> dial a
+        /// game server for it.
+        /// </para>
+        /// </remarks>
+        public async Task<bool> LeaveRoomAsync()
+        {
+            if (_flow.State != GameFlowState.RoomLobby) return false;
+
+            try
+            {
+                await _master.LeaveRoomAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is MasterServerException || IsLinkFailure(ex))
+            {
+                // The room is left locally either way. A master that did not hear us drops the
+                // membership on disconnect, and stranding the player on a room screen they have
+                // already left is the worse of the two failures.
+                Fail("Lost the connection to the master server.");
+            }
+
+            PendingJoin = PendingJoin.None;
+            JoinedRoomId = 0;
+            JoinedMapId = 0;
+
+            _flow.Transition(GameFlowState.RoomBrowser);
+            return true;
+        }
 
         /// <summary>
         /// Dials the game server with the ticket from the last join. phase-03 task 3.
@@ -374,6 +477,7 @@ namespace Ironfront.Net.Unity.Client
             // No room, so no map. Cleared rather than left over from an earlier join: a direct
             // dial after a room join would otherwise load the previous room's map.
             JoinedMapId = 0;
+            JoinedRoomId = 0;
 
             // NOT Array.Empty: Connection.BeginConnect rejects a ticket that is not exactly 64
             // bytes before it sends anything, so an empty one never reaches the server that was
@@ -499,6 +603,8 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>Unsubscribes from the transport. Call before dropping the session.</summary>
         public void Dispose()
         {
+            _master.OnRoomStatePush -= OnRoomStatePushed;
+
             _game.OnConnected -= OnGameConnected;
             _game.OnDisconnected -= OnGameDisconnected;
         }

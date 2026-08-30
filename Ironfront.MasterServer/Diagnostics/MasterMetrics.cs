@@ -10,6 +10,7 @@ using Ironfront.MasterServer.Dispatch;
 using Ironfront.MasterServer.GameServers;
 using Ironfront.MasterServer.Lobby;
 using Ironfront.MasterServer.Net;
+using Ironfront.Net.Protocol;
 
 namespace Ironfront.MasterServer.Diagnostics
 {
@@ -50,6 +51,36 @@ namespace Ironfront.MasterServer.Diagnostics
         public long WorkingSetMb { get; init; }
         public int Gen2Collections { get; init; }
         public int ThreadCount { get; init; }
+
+        /// <summary>
+        /// This process's CPU use over <see cref="CpuSampleWindowSec"/>, as a percentage of ONE
+        /// core-second per wall-second — so 100 means one core saturated, and a machine with
+        /// four cores can legitimately report up to 400.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This is not the heartbeat's <c>cpuPercent</c>, and it does not reopen X-7.</b> That
+        /// field is deliberately <c>-1</c> on the wire because a fabricated matchmaking input is
+        /// worse than an absent one, and <c>AverageTickMs</c> replaced it as the sort key. This
+        /// is an OBSERVABILITY metric on the metrics endpoint: nothing routes on it, and adding
+        /// it here does not put anything back on the heartbeat. P9 task 4.5 asks for exactly that
+        /// distinction.
+        /// </para>
+        /// <para>
+        /// <b>Read it with <see cref="CpuSampleWindowSec"/> beside it.</b> The first sample after
+        /// start has no previous sample to difference against, so it reports the process
+        /// LIFETIME average and says so through the window. A rate over a 3-second window and a
+        /// rate over a 40-minute one are different quantities, and rendering them identically is
+        /// how "unknown" comes to look like "healthy".
+        /// </para>
+        /// </remarks>
+        public double ProcessCpuPercent { get; init; }
+
+        /// <summary>
+        /// How many seconds <see cref="ProcessCpuPercent"/> was averaged over. Equal to the
+        /// process uptime on the first sample.
+        /// </summary>
+        public double CpuSampleWindowSec { get; init; }
 
         /// <summary>
         /// The exact JSON <c>nc localhost 27001</c> prints. Hand-written rather than
@@ -106,6 +137,8 @@ namespace Ironfront.MasterServer.Diagnostics
                 writer.WriteNumber("workingSetMB", WorkingSetMb);
                 writer.WriteNumber("gen2Collections", Gen2Collections);
                 writer.WriteNumber("threadCount", ThreadCount);
+                writer.WriteNumber("processCpuPercent", Math.Round(ProcessCpuPercent, 2));
+                writer.WriteNumber("cpuSampleWindowSec", Math.Round(CpuSampleWindowSec, 1));
                 writer.WriteEndObject();
 
                 writer.WriteEndObject();
@@ -119,7 +152,7 @@ namespace Ironfront.MasterServer.Diagnostics
             "tsUtc,uptimeSec,connCurrent,connPeak,connAccepted,connRefused,connTimedOut," +
             "accountsTotal,onlineNow,roomsActive,roomsInMatch,queued," +
             "gsRegistered,gsHealthy,gsAllocated,loginsPerMin,errorsPerMin," +
-            "workingSetMB,gen2,threads";
+            "workingSetMB,gen2,threads,processCpuPercent,cpuWindowSec";
 
         /// <summary>One CSV row, for the 72-hour durability chart (phase 03 task 5).</summary>
         public string ToCsvRow(DateTimeOffset timestampUtc)
@@ -145,6 +178,8 @@ namespace Ironfront.MasterServer.Diagnostics
             Append(row, WorkingSetMb);
             Append(row, Gen2Collections);
             Append(row, ThreadCount);
+            Append(row, ProcessCpuPercent);
+            Append(row, CpuSampleWindowSec);
             return row.ToString();
         }
 
@@ -215,6 +250,8 @@ namespace Ironfront.MasterServer.Diagnostics
             long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             Process process = Process.GetCurrentProcess();
 
+            SampleCpu(process, out double cpuPercent, out double cpuWindowSec);
+
             int roomsActive = 0;
             int roomsInMatch = 0;
             foreach (Room room in _lobby.Rooms)
@@ -256,7 +293,53 @@ namespace Ironfront.MasterServer.Diagnostics
                 WorkingSetMb    = process.WorkingSet64 / (1024 * 1024),
                 Gen2Collections = GC.CollectionCount(2),
                 ThreadCount     = process.Threads.Count,
+
+                ProcessCpuPercent  = cpuPercent,
+                CpuSampleWindowSec = cpuWindowSec,
             };
+        }
+
+        // The previous CPU reading, so the next one can be a RATE rather than a total. Logic
+        // thread only, like the collector that owns them.
+        private TimeSpan _lastCpuTime = TimeSpan.MinValue;
+        private DateTimeOffset _lastCpuSampleUtc;
+
+        /// <summary>
+        /// Differences this process's CPU time against the previous sample.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A rate, not a total: <c>TotalProcessorTime</c> only ever rises, so reporting it raw
+        /// would show a number that grows forever on a healthy server and answers no question
+        /// anybody has. Divided by <see cref="Environment.ProcessorCount"/> it would instead hide
+        /// a saturated core on a many-core box, so it is deliberately NOT divided — 100 means one
+        /// core busy, and the reader is told the machine's core count by its own inventory.
+        /// </para>
+        /// <para>
+        /// <b>The window is returned with the number.</b> On the first call there is nothing to
+        /// difference against, so this reports the process lifetime average over the whole
+        /// uptime. That is a real measurement and a useless alarm, and the only thing that keeps
+        /// the two distinguishable downstream is the window travelling beside the value.
+        /// </para>
+        /// </remarks>
+        private void SampleCpu(Process process, out double cpuPercent, out double cpuWindowSec)
+        {
+            DateTimeOffset nowUtc = DateTimeOffset.UtcNow;
+            TimeSpan cpuNow = process.TotalProcessorTime;
+
+            if (_lastCpuTime == TimeSpan.MinValue)
+            {
+                cpuWindowSec = Math.Max(0.001, (nowUtc - process.StartTime.ToUniversalTime()).TotalSeconds);
+                cpuPercent   = cpuNow.TotalSeconds / cpuWindowSec * 100.0;
+            }
+            else
+            {
+                cpuWindowSec = Math.Max(0.001, (nowUtc - _lastCpuSampleUtc).TotalSeconds);
+                cpuPercent   = (cpuNow - _lastCpuTime).TotalSeconds / cpuWindowSec * 100.0;
+            }
+
+            _lastCpuTime      = cpuNow;
+            _lastCpuSampleUtc = nowUtc;
         }
     }
 }

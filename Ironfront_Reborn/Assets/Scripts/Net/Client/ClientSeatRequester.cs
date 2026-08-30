@@ -278,7 +278,19 @@ namespace Ironfront.Net.Unity.Client
                 if (!_registry.TryFind(ids[i], out NetClientVehicle vehicle)) continue;
                 if (!vehicle.Exists || vehicle.SeatCount == 0) continue;
 
-                float squared = (vehicle.Body.Transform.position - from).sqrMagnitude;
+                // The SEAT, not the hull. X-67: this used vehicle.Body.Transform.position, the
+                // hull origin, against the same SeatArbiter.MaxSeatReachMetres the server applies
+                // to Vehicle.GetSeatPosition -- so on a long vehicle the client offered a seat
+                // the server then refused as "Too far from the seat." One implementation now
+                // answers both sides.
+                Vector3 seat = vehicle.Body.GetSeatPosition(DriverSeatIndex);
+
+                // A seat that cannot be located is not offered. Falling back to the hull here
+                // would restore exactly the disagreement this reads the seat to avoid.
+                if (float.IsInfinity(seat.x) || float.IsInfinity(seat.y) || float.IsInfinity(seat.z))
+                    continue;
+
+                float squared = (seat - from).sqrMagnitude;
                 if (squared > bestSquared) continue;
 
                 bestSquared = squared;

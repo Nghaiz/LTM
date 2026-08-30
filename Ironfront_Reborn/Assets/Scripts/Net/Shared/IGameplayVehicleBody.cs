@@ -44,6 +44,32 @@ namespace Ironfront.Net.Unity
         /// <summary>The vehicle's transform, for pose reads that do not go through the body.</summary>
         Transform Transform { get; }
 
+        /// <summary>
+        /// World position of one seat, or a coordinate with an infinite component when there is
+        /// no such seat.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>On the shared seam, and on this one, because the reach check has two readers.</b>
+        /// The server judges a seat request against <c>GetSeatPosition(seatIndex)</c>; the client
+        /// decides which seat to OFFER. X-67 is those two measuring different things -- the
+        /// client used <see cref="Transform"/>'s position, the hull origin, against the same 6 m
+        /// constant the server applied to the seat. A client standing beside a tank could be
+        /// shown a prompt the server then refused.
+        /// </para>
+        /// <para>
+        /// One implementation, on <c>Vehicle</c> itself, is what makes that disagreement
+        /// impossible rather than merely fixed: <c>VehicleGameplaySource.GetSeatPosition</c>
+        /// delegates here rather than carrying a second copy of the same lookup.
+        /// </para>
+        /// <para>
+        /// Callers must test the result for an infinite component. It is not an exception
+        /// because a seat index arriving from the wire is untrusted input, and it is not a
+        /// nullable because this is on a per-request path.
+        /// </para>
+        /// </remarks>
+        Vector3 GetSeatPosition(int seatIndex);
+
         /// <summary>The body the interpolator and the corrector write, or null without one.</summary>
         Rigidbody Rigidbody { get; }
 

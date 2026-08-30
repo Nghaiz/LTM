@@ -64,7 +64,9 @@ terraform output public_ip_address
 
 # 2. DNS: point your domain's A record at that IP; wait for `dig +short <domain>`.
 
-# 3. On the VM (cloud-init has installed Docker/Compose/az/certbot and made /opt/ironfront):
+# 3. On the VM, confirm cloud-init actually finished before doing anything else:
+cat /opt/ironfront/.bootstrap-done                # must exist
+#    Missing -> sudo tail -50 /var/log/cloud-init-output.log, and stop here.
 sudo ./tools/issue-cert.sh <domain>              # Let's Encrypt -> /opt/ironfront/tls/master.pfx
 
 # 4. Deliver config: create /opt/ironfront/.env from .env.example, fill in the pinned image
@@ -80,6 +82,53 @@ GHCR_USER=<user> GHCR_TOKEN=<read:packages PAT> ./deploy.sh up
 Nothing secret is ever in Terraform, cloud-init, the images or git — the shared secret, TLS
 password and GHCR token are placed on the VM out of band (see § 3 and
 [`infra/compose/.env.example`](../infra/compose/.env.example)).
+
+### Verifying a deployment — four checks, all four
+
+**`Up` does not mean working.** A container reporting `Up` with no port open is the failure that
+cost three days to find, and only these four distinguish the two states.
+
+**1 — the master is listening, with a valid certificate**
+
+```bash
+openssl s_client -connect master.ironfront.<domain>:27000 -servername master.ironfront.<domain>   </dev/null 2>&1 | grep -E "subject=|Verify return code"
+```
+
+Must report `Verify return code: 0 (ok)`.
+
+**2 — the game server has actually opened its UDP ports.** The most important of the four.
+
+```bash
+sudo ss -lunp | grep -E '2701[56]'
+```
+
+Both 27015 and 27016 must appear. Neither means the server is running a scene with no
+`NetServerBootstrap` in it — check `docker compose logs game-server-1 | grep '\[server\]'`, and
+suspect `IRONFRONT_GAMESERVER_SCENE` first.
+
+**3 — the game servers registered with the master**
+
+```bash
+curl -s http://127.0.0.1:27001/metrics | grep -iE 'gameserver|healthy|registered'
+```
+
+Two servers, registered and healthy. Zero means a mismatched `IRONFRONT_SHARED_SECRET`, an
+invalid certificate, or an `IRONFRONT_GAMESERVER_MASTER_TLS_TARGET_HOST` that does not match the
+name on it.
+
+**4 — widen the UDP receive buffer.** Measured, not precautionary.
+
+The server reports `socket receive buffer clamped to 425984 B (asked for 1048576 B)`: the kernel
+default is below what it asks for, **so packets will be dropped under load**. Re-measured
+2026-08-26 against the pinned `gameserver-v0.3.0` image and still true to the digit, so a
+deployment that has not done this is not finished.
+
+```bash
+echo 'net.core.rmem_max = 1048576' | sudo tee /etc/sysctl.d/60-ironfront.conf
+sudo sysctl --system
+cd /opt/ironfront && ./deploy.sh up               # restart to pick the new buffer up
+docker compose logs game-server-1 | grep -c 'clamped'   # expect 0
+```
 
 **The clock.** joinTickets carry a timestamp and expire after 60 seconds, so a drifting clock
 produces random, unexplained join failures with no other symptom. Azure VMs sync time by
@@ -334,6 +383,11 @@ test rig can be exempted — not so the defaults can drift.
 | Container "running" but nothing works | crash loop hidden by `restart: unless-stopped` | `docker compose logs --tail 100 master`; `docker inspect --format '{{.RestartCount}}' ironfront-master-1` |
 | `connections.refused` climbing | per-IP or total cap firing | expected under a flood; unexpected behind a NAT where many players share one address |
 | Logins slow (seconds) when many people arrive at once | bcrypt cost 11 runs on the single logic thread | expected; see [the report chapter](report-chapter-master-server.md) § Z.8.3. Not a fault — a measured limit |
+| Container `Up`, `ss` shows no 27015 | the server is in a scene with no `NetServerBootstrap` | fix `IRONFRONT_GAMESERVER_SCENE` |
+| `[server] scene 'X' is not in the build` | wrong scene name | only `Dustbowl` and `Island` ship |
+| Client gets `CONNECT_DENIED` reason 3 | the joinTicket was signed with a different secret | sync `IRONFRONT_SHARED_SECRET` across **all three** services and restart every one |
+| `clamped` still logged after widening the buffer | the container was not restarted | `./deploy.sh up` again |
+| Client connects, then drops after ~1 s | an image from before the transport fix | check the pinned digest is the newer build |
 
 ### Rolling back a bad deploy
 

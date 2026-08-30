@@ -5,14 +5,6 @@ using Ironfront.Net.Protocol;
 
 namespace Ironfront.MasterServer.Lobby
 {
-    public enum RoomLifecycleState : byte
-    {
-        Waiting = 0,
-        Starting = 1,
-        InMatch = 2,
-        Ending = 3,
-    }
-
     public sealed class RoomMember
     {
         public required int PlayerId { get; init; }

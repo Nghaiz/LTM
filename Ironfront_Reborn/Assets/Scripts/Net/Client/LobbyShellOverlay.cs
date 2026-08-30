@@ -387,15 +387,18 @@ namespace Ironfront.Net.Unity.Client
             GUILayout.Label($"In room. Game server: {_session.PendingJoin}");
             GUILayout.Label("Waiting for the match to start.");
 
-            // phase-03 has the server signal this. The button is here because a shell that can
-            // only wait cannot demonstrate the junction, which is the thing worth demonstrating.
+            // The server signals this now: MasterSession subscribes to OnRoomStatePush and
+            // calls EnterMatch itself when the room reaches Starting or InMatch (X-77). The
+            // button stays because a shell that can only wait cannot demonstrate the junction
+            // on demand, and it is idempotent with the automatic path -- both go through
+            // EnterMatch, and the flow refuses the second.
             GUI.enabled = !_busy;
             if (GUILayout.Button("Enter match now (debug)")) Guard(() => _session.EnterMatch());
-            GUI.enabled = true;
 
-            // NOTE: no Leave button. The phase-03 diagram has no edge out of RoomLobby except
-            // ConnectingGame, so drawing one would call a transition the table refuses. See the
-            // open question in PR #68.
+            // The Leave button the note here used to say could not exist. The table now carries
+            // RoomLobby -> RoomBrowser, so this calls a transition it accepts.
+            if (GUILayout.Button("Leave room")) Submit(_session.LeaveRoomAsync());
+            GUI.enabled = true;
         }
 
         private void DrawConnecting()

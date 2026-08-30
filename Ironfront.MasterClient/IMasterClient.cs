@@ -19,7 +19,29 @@ namespace Ironfront.MasterClient
     public sealed class MasterServerException : Exception { public MasterServerException(int errorCode, string message) : base(message) { ErrorCode = errorCode; } public int ErrorCode { get; } }
     public sealed class JoinResult { public bool Ok { get; set; } public int ErrorCode { get; set; } public string GameServerIp { get; set; } = string.Empty; public int GameServerPort { get; set; } public byte[] JoinTicket { get; set; } = Array.Empty<byte>(); }
     public sealed class RoomMember { public int PlayerId { get; set; } public string Name { get; set; } = string.Empty; public byte Team { get; set; } public bool Ready { get; set; } }
-    public sealed class RoomState { public int RoomId { get; set; } public RoomMember[] Members { get; set; } = Array.Empty<RoomMember>(); public byte State { get; set; } }
+    public sealed class RoomState
+    {
+        public int RoomId { get; set; }
+
+        public RoomMember[] Members { get; set; } = Array.Empty<RoomMember>();
+
+        /// <summary>The raw wire byte. Kept as the serialized shape; read it through
+        /// <see cref="Lifecycle"/>.</summary>
+        public byte State { get; set; }
+
+        /// <summary>
+        /// What <see cref="State"/> means. X-77: without this the client received the master's
+        /// room pushes and could not act on them, so the one edge out of the room lobby was a
+        /// debug button a human had to press.
+        /// </summary>
+        /// <remarks>
+        /// An unknown byte reads as the value itself rather than throwing -- a master newer than
+        /// this client must not crash it, and a state nobody recognises is correctly "not one of
+        /// the ones I act on".
+        /// </remarks>
+        public Ironfront.Net.Protocol.RoomLifecycleState Lifecycle
+            => (Ironfront.Net.Protocol.RoomLifecycleState)State;
+    }
     public sealed class ChatMessage { public byte Channel { get; set; } public int FromPlayerId { get; set; } public string FromName { get; set; } = string.Empty; public string Text { get; set; } = string.Empty; public long Timestamp { get; set; } }
 
     public interface IMasterClient : IDisposable

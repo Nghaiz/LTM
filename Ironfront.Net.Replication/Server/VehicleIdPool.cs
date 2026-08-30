@@ -70,6 +70,14 @@ namespace Ironfront.Net.Replication.Server
         }
 
         /// <summary>Ids currently held by a live vehicle.</summary>
+        /// <summary>How many ids this pool can ever hand out. <c>MAX_VEHICLES</c> in practice.</summary>
+        /// <remarks>
+        /// Exposed so a refusal can be reported against its own ceiling. X-70 was investigated
+        /// for a day against the wrong cause because the log line that announced an unreplicated
+        /// spawn could not say whether the pool was full.
+        /// </remarks>
+        public ushort Capacity => _capacity;
+
         public int InUseCount => _inUse.Count;
 
         /// <summary>Ids cooling down and not yet reissuable.</summary>

@@ -78,6 +78,24 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 	/// <summary>This prefab's vehicle-type id. 0 means unauthored, and never ships.</summary>
 	public byte NetworkId => networkId;
 
+	/// <summary>
+	/// World position of one seat, or <c>Vector3.positiveInfinity</c> when there is no such seat.
+	/// </summary>
+	/// <remarks>
+	/// <b>The single implementation both ends of the reach check read.</b> The server judges a
+	/// seat request against this; the client picks which seat to offer using the same call.
+	/// Before X-67 there were two measurements -- this one on the server and the hull origin on
+	/// the client -- against one 6 m constant, so a player standing beside a tank could be shown
+	/// a prompt the server then refused with "Too far from the seat."
+	/// </remarks>
+	public Vector3 GetSeatPosition(int seatIndex)
+	{
+		if (seats == null || seatIndex < 0 || seatIndex >= seats.Length) return Vector3.positiveInfinity;
+
+		Seat seat = seats[seatIndex];
+		return seat != null ? seat.transform.position : Vector3.positiveInfinity;
+	}
+
 	public float maxHealth = 1000f;
 
 	public float crashDamageSpeedThrehshold = 2f;
@@ -545,7 +563,27 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 	/// </remarks>
 	public void SetNetworkDriven(bool value)
 	{
-		if (NetworkDriven == value)
+		// Re-resolved rather than trusted. Awake caches this, and Awake has NOT run when a
+		// prefab is instantiated inactive -- which is exactly when the replication layer binds
+		// its proxy and calls this. Ledger X-64.
+		if (rigidbody == null) rigidbody = GetComponent<Rigidbody>();
+
+		// The flag AND the body. The old form returned early on the flag alone, so a call that
+		// arrived before the Rigidbody was resolved recorded NetworkDriven = true, skipped the
+		// isKinematic write, and made every later call a no-op -- the handover was recorded as
+		// done and had never happened. The body then ran local PhysX against the incoming
+		// snapshots for the rest of the match: it settled somewhere near the pad and stayed
+		// there while ApplyRemote's writes were overwritten by the solver every step.
+		//
+		// That is X-64 exactly, and the remark above predicted it before it was measured --
+		// "jitter that looks exactly like a network problem and is not. Nothing above this layer
+		// can diagnose that, because every number on the wire is correct." One observer read
+		// vehicle 15 as 303 m behind with vehicleInterpStalled 0, vehicleBaselineMiss 0 and 74
+		// snapshots applied over the interval; its copy was 9 m off before anyone drove.
+		//
+		// Comparing against the body makes this self-healing: the next call re-applies rather
+		// than confirming a state nothing ever reached.
+		if (NetworkDriven == value && rigidbody != null && rigidbody.isKinematic == value)
 		{
 			return;
 		}
@@ -555,7 +593,16 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 		if (rigidbody != null)
 		{
 			rigidbody.isKinematic = value;
+			return;
 		}
+
+		// Errors over silent fallbacks. A replicated vehicle with no Rigidbody cannot be handed
+		// over at all, and the failure is invisible from the wire -- which is what made the last
+		// one cost two lane-B runs and a milestone.
+		Debug.LogError(
+			$"[net] vehicle '{name}' has no Rigidbody, so it cannot be handed to the replication "
+			+ "layer. Its rendered copy will run local physics against every incoming snapshot "
+			+ "and drift, while the wire reports no fault at all.");
 	}
 
 	/// <summary>

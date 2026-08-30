@@ -65,14 +65,28 @@ namespace Ironfront.Net.Unity.Server
         {
             uint now = _currentTick();
 
+            // Measured before the request is built, so the three ways a measurement can be
+            // IMPOSSIBLE are answered as themselves rather than as a distance. X-67.
+            SeatChangeResult? unmeasurable = TryMeasureSeatReach(
+                session.ActorId, message.VehicleId, message.SeatIndex, out float distanceSquared);
+
             var request = new SeatRequest(
                 session.ConnectionId,
                 session.ActorId,
                 message.VehicleId,
                 message.SeatIndex,
                 message.Action,
-                DistanceSquaredToSeat(session.ActorId, message.VehicleId, message.SeatIndex),
+                distanceSquared,
                 clientTick: 0);
+
+            // Only Enter is refused on it: DecideLeave answers from where the actor actually is
+            // and never reads the distance, so a leave request for a vehicle the registry has
+            // already dropped must still be allowed to put the player back on foot.
+            if (unmeasurable.HasValue && message.Action == SeatAction.Enter)
+            {
+                _send(SeatDecision.Refuse(in request, unmeasurable.Value));
+                return;
+            }
 
             SeatDecision decision = _arbiter.Decide(in request, now);
 
@@ -103,25 +117,65 @@ namespace Ironfront.Net.Unity.Server
         }
 
         /// <summary>
-        /// How far the actor is from the seat, squared.
+        /// How far the actor is from the seat, squared, or the reason no such distance exists.
         /// </summary>
+        /// <returns>
+        /// <c>null</c> when the distance is real. Otherwise the refusal that describes what was
+        /// actually wrong.
+        /// </returns>
         /// <remarks>
+        /// <para>
         /// <b>Measured on the server, from the server's own transforms.</b> Taking it from the
         /// request would let a client claim it is standing next to any vehicle on the map, which
-        /// is the whole reason the arbiter has a reach check. An unresolvable actor or vehicle
-        /// reports <see cref="float.MaxValue"/> so the request is refused rather than admitted
-        /// on a missing measurement.
+        /// is the whole reason the arbiter has a reach check.
+        /// </para>
+        /// <para>
+        /// <b>Three failures used to render as one, and X-67 is what that cost.</b> An
+        /// unresolvable actor and an unresolvable vehicle each returned
+        /// <see cref="float.MaxValue"/>, and a seat index with no <c>Seat</c> behind it returned
+        /// <c>Vector3.positiveInfinity</c> from <c>GetSeatPosition</c> -- so all three arrived at
+        /// the arbiter as an enormous distance and came back to the player as
+        /// <see cref="SeatChangeResult.RejectedTooFar"/>, reading <i>"Too far from the seat."</i>
+        /// P5 measured four such refusals with the client standing 3.70-4.27 m from the hull
+        /// against a 6 m limit, and no artifact could say which of the four possible causes it
+        /// was -- an unknown actor, an unknown vehicle, a missing seat, or a genuine reach
+        /// failure from a seat that really is more than 6 m away.
+        /// </para>
+        /// <para>
+        /// <see cref="SeatChangeResult.RejectedNoSuchSeat"/> already existed and its own
+        /// documentation says <i>"No such vehicle, or no such seat index on it"</i>. It was never
+        /// sent from here. Now it is, and a <c>RejectedTooFar</c> means what it says.
+        /// </para>
+        /// <para>
+        /// <b>This does not by itself close X-67.</b> The row is filed as the client and the
+        /// server measuring from different origins -- the client from
+        /// <c>vehicle.Body.Transform.position</c>, the server from
+        /// <c>vehicle.GetSeatPosition(seatIndex)</c> -- and that hypothesis is still UNPROVEN,
+        /// because the artifacts that would distinguish it record no distance and no cause. What
+        /// this changes is that the next run can tell them apart.
+        /// </para>
         /// </remarks>
-        private float DistanceSquaredToSeat(ushort actorId, ushort vehicleId, byte seatIndex)
+        private SeatChangeResult? TryMeasureSeatReach(
+            ushort actorId, ushort vehicleId, byte seatIndex, out float distanceSquared)
         {
+            distanceSquared = float.MaxValue;
+
             if (!_actors.TryFind(actorId, out NetServerActor actor) || actor == null)
-                return float.MaxValue;
+                return SeatChangeResult.RejectedNoSuchSeat;
 
             if (!_vehicles.TryFind(vehicleId, out IGameplayVehicleSource vehicle))
-                return float.MaxValue;
+                return SeatChangeResult.RejectedNoSuchSeat;
 
             Vector3 seat = vehicle.GetSeatPosition(seatIndex);
-            return (seat - actor.transform.position).sqrMagnitude;
+
+            // GetSeatPosition's own miss value. Checked rather than allowed to propagate: an
+            // infinite coordinate subtracts to an infinite distance, which is a comparison the
+            // arbiter answers "too far" without anything being far away.
+            if (float.IsInfinity(seat.x) || float.IsInfinity(seat.y) || float.IsInfinity(seat.z))
+                return SeatChangeResult.RejectedNoSuchSeat;
+
+            distanceSquared = (seat - actor.transform.position).sqrMagnitude;
+            return null;
         }
     }
 }

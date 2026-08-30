@@ -96,7 +96,15 @@ namespace Ironfront.Client.Flow.Tests
             => Task.FromResult(new RegisterResult(true, 0));
         public Task<CreateRoomResult> CreateRoomAsync(CreateRoomRequest request, CancellationToken ct = default)
             => Task.FromResult(new CreateRoomResult(true, 1, 0));
-        public Task LeaveRoomAsync(CancellationToken ct = default) => Task.CompletedTask;
+        /// <summary>How many times the session asked the master to leave the room.</summary>
+        public int LeaveRoomCalls { get; private set; }
+
+        public Task LeaveRoomAsync(CancellationToken ct = default)
+        {
+            Throw();
+            LeaveRoomCalls++;
+            return Task.CompletedTask;
+        }
         public Task SetReadyAsync(bool ready, CancellationToken ct = default) => Task.CompletedTask;
         public Task SendChatAsync(byte channel, string text, CancellationToken ct = default) => Task.CompletedTask;
         public Task<MatchmakeResult> MatchmakeAsync(ushort preferredMapId, CancellationToken ct = default)
@@ -104,6 +112,10 @@ namespace Ironfront.Client.Flow.Tests
         public Task CancelMatchmakeAsync(CancellationToken ct = default) => Task.CompletedTask;
 
         public void Dispose() => State = MasterConnectionState.Disconnected;
+
+        /// <summary>Pushes one room state, as the master does on a lifecycle change.</summary>
+        internal void PushRoomState(int roomId, RoomLifecycleState state)
+            => OnRoomStatePush?.Invoke(new RoomState { RoomId = roomId, State = (byte)state });
 
         /// <summary>Keeps the compiler from warning that the push events are never raised.</summary>
         internal void RaisePushes()
