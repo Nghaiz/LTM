@@ -363,13 +363,13 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Hadolint (master Dockerfile)
-        uses: hadolint/hadolint-action@v3.4.0
+        uses: hadolint/hadolint-action@v3.5.0
         with:
           dockerfile: infra/docker/master.Dockerfile
           failure-threshold: error
 
       - name: Hadolint (game-server Dockerfile)
-        uses: hadolint/hadolint-action@v3.4.0
+        uses: hadolint/hadolint-action@v3.5.0
         with:
           dockerfile: infra/docker/gameserver.Dockerfile
           failure-threshold: error
