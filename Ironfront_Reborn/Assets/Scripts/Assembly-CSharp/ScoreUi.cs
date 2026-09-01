@@ -17,8 +17,9 @@ using UnityEngine.UI;
 /// Two sources feed it and they never mix. Offline, <see cref="MatchScoreboard"/> raises
 /// <c>Changed</c> and <see cref="UpdateUi"/> redraws. On a networked client,
 /// <see cref="SetAuthoritativeState"/> writes the server's totals straight to the text fields
-/// and never touches the offline scoreboard — routing them through it would re-enter the
-/// multiplier and double-drive the win check (V10 D11).
+/// and the bars, and never touches the offline scoreboard — routing them through it would
+/// re-enter the multiplier and double-drive the win check (V10 D11). Both paths lay out the
+/// bars through the same <see cref="ApplyScoreBars"/>, so the two pictures cannot disagree.
 /// </para>
 /// </remarks>
 public class ScoreUi : MonoBehaviour
@@ -87,6 +88,12 @@ public class ScoreUi : MonoBehaviour
 
 	private int lastHumanPlayerCount = -1;
 
+	// P11. The bars are geometry over (blueScore, redScore, victoryPoints), so victoryPoints has
+	// to join the early-return comparison below: a host that changes the victory margin between
+	// rounds moves every bar without moving either score, and a comparison that does not see it
+	// would leave the bar drawn to the previous round's scale.
+	private int lastVictoryPoints = -1;
+
 	/// <summary>
 	/// Draws the victory banner. Driven by <see cref="MatchScoreboard.Ended"/>.
 	/// </summary>
@@ -153,16 +160,21 @@ public class ScoreUi : MonoBehaviour
 	/// </param>
 	/// <param name="secondsRemaining">
 	/// Whole seconds left in the phase, or a negative value meaning "this phase has no timer" —
-	/// <c>MatchPhase.Playing</c> ends on tickets, not a clock, and rendering it as "0:00" would
-	/// tell every player the round is over. A negative value hides the timer instead.
+	/// <c>MatchPhase.Playing</c> ends on the score margin, not a clock, and rendering it as
+	/// "0:00" would tell every player the round is over. A negative value hides the timer.
+	/// </param>
+	/// <param name="victoryPoints">
+	/// The lead a side needs to win, from <c>S_MATCH_STATE</c>. The bars are meaningless without
+	/// it — both branches of <see cref="ApplyScoreBars"/> divide by it — and it is a
+	/// host-editable match setting, so it is sent rather than assumed.
 	/// </param>
 	/// <remarks>
 	/// <para>
 	/// <b>Checklist E5 — the phase and timer elements are authored; the human count is not.</b>
 	/// <see cref="phaseText"/> and <see cref="phaseTimerText"/> are dedicated elements on the
 	/// shipped prefab as of 2026-08-19 (ledger A-9), so the flag-text fallback below no longer
-	/// runs there. <see cref="blueScoreText"/> / <see cref="redScoreText"/> take the tickets (the
-	/// networked equivalent of the score they already show). The fallback to
+	/// runs there. <see cref="blueScoreText"/> / <see cref="redScoreText"/> take the server's
+	/// scores, which since P11 are the same ascending quantity they already showed offline. The fallback to
 	/// <see cref="blueFlagsText"/> / <see cref="redFlagsText"/> survives only for a prefab that
 	/// predates the authoring, and must be deleted when capture points land (V10 task 8, blocked
 	/// on V8 task 1) — from then on those labels are live and borrowing them collides.
@@ -178,7 +190,8 @@ public class ScoreUi : MonoBehaviour
 	/// </para>
 	/// </remarks>
 	public static void SetAuthoritativeState(
-		int phase, int tickets0, int tickets1, int secondsRemaining, int humanPlayerCount)
+		int phase, int score0, int score1, int secondsRemaining, int humanPlayerCount,
+		int victoryPoints)
 	{
 		if (instance == null)
 		{
@@ -186,27 +199,35 @@ public class ScoreUi : MonoBehaviour
 		}
 		if (instance.hasAuthoritativeState
 			&& instance.lastPhase == phase
-			&& instance.lastTickets0 == tickets0
-			&& instance.lastTickets1 == tickets1
+			&& instance.lastTickets0 == score0
+			&& instance.lastTickets1 == score1
 			&& instance.lastSecondsRemaining == secondsRemaining
-			&& instance.lastHumanPlayerCount == humanPlayerCount)
+			&& instance.lastHumanPlayerCount == humanPlayerCount
+			&& instance.lastVictoryPoints == victoryPoints)
 		{
 			return;
 		}
 		instance.hasAuthoritativeState = true;
 		instance.lastPhase = phase;
-		instance.lastTickets0 = tickets0;
-		instance.lastTickets1 = tickets1;
+		instance.lastTickets0 = score0;
+		instance.lastTickets1 = score1;
 		instance.lastSecondsRemaining = secondsRemaining;
 		instance.lastHumanPlayerCount = humanPlayerCount;
+		instance.lastVictoryPoints = victoryPoints;
 		if (instance.blueScoreText != null)
 		{
-			instance.blueScoreText.text = tickets0.ToString();
+			instance.blueScoreText.text = score0.ToString();
 		}
 		if (instance.redScoreText != null)
 		{
-			instance.redScoreText.text = tickets1.ToString();
+			instance.redScoreText.text = score1.ToString();
 		}
+		// P11, audit F3. The bars are the most prominent element on the scoreboard and until now
+		// nothing networked ever touched them: blueBar, redBar and intercept were written only by
+		// UpdateUi, the OFFLINE renderer, so a networked client watched a bar driven by an
+		// offline scoreboard that never scored. Same geometry as the offline path, by
+		// construction -- ApplyScoreBars is the one copy.
+		ApplyScoreBars(instance, score0, score1, victoryPoints);
 		Text phaseTarget = instance.phaseText != null ? instance.phaseText : instance.blueFlagsText;
 		if (phaseTarget != null)
 		{
@@ -314,22 +335,60 @@ public class ScoreUi : MonoBehaviour
 		redScoreText.text = redScore.ToString();
 		blueFlagsText.text = board.BlueFlags.ToString();
 		redFlagsText.text = board.RedFlags.ToString();
+		ApplyScoreBars(this, blueScore, redScore, victoryPoints);
+	}
+
+	/// <summary>
+	/// Positions <see cref="blueBar"/>, <see cref="redBar"/> and <see cref="intercept"/> for one
+	/// pair of scores. The ONE copy of the bar geometry.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Why it is extracted (P11 task 3.5).</b> Two renderers now write these three elements —
+	/// <see cref="UpdateUi"/> for the offline scoreboard and
+	/// <see cref="SetAuthoritativeState"/> for the server's numbers. A second copy of this
+	/// arithmetic would let the offline and networked bars disagree about where a given score
+	/// sits, which is the same "one copy" discipline the score rule itself now follows one layer
+	/// down, in <c>ConquestScoreRule</c>.
+	/// </para>
+	/// <para>
+	/// <b>Two branches, and each is doing something.</b> Early in a round the two scores are far
+	/// apart from the margin, so the bars are drawn INDEPENDENTLY — each side's own progress
+	/// toward <paramref name="victoryPoints"/>, growing from its own end, with a gap in the
+	/// middle and no intercept marker. Once the combined score reaches the margin the gap has
+	/// closed and the display becomes a single MARGIN bar: one boundary, centred at parity,
+	/// reaching an end when a side is <paramref name="victoryPoints"/> clear. The
+	/// <c>1f -</c> on the red anchor is what makes red grow leftward from the right edge, and
+	/// the <c>Clamp01</c> holds the boundary on screen when a lead overshoots the margin between
+	/// the last award and the end of the round.
+	/// </para>
+	/// <para>
+	/// Ported verbatim from the offline renderer rather than rebuilt from the formula, because
+	/// the working copy is the specification here.
+	/// </para>
+	/// </remarks>
+	private static void ApplyScoreBars(ScoreUi ui, int blueScore, int redScore, int victoryPoints)
+	{
+		if (ui.blueBar == null || ui.redBar == null || ui.intercept == null)
+		{
+			return;
+		}
 		bool flag = blueScore + redScore >= victoryPoints;
-		intercept.enabled = flag;
+		ui.intercept.enabled = flag;
 		if (!flag)
 		{
 			float x = (float)blueScore / (float)victoryPoints;
 			float x2 = 1f - (float)redScore / (float)victoryPoints;
-			blueBar.rectTransform.anchorMax = new Vector2(x, 1f);
-			redBar.rectTransform.anchorMin = new Vector2(x2, 0f);
+			ui.blueBar.rectTransform.anchorMax = new Vector2(x, 1f);
+			ui.redBar.rectTransform.anchorMin = new Vector2(x2, 0f);
 		}
 		else
 		{
 			float x3 = Mathf.Clamp01((float)(blueScore - redScore + victoryPoints) / (float)(2 * victoryPoints));
-			blueBar.rectTransform.anchorMax = new Vector2(x3, 1f);
-			redBar.rectTransform.anchorMin = new Vector2(x3, 0f);
-			intercept.rectTransform.anchorMin = new Vector2(x3, 0f);
-			intercept.rectTransform.anchorMax = new Vector2(x3, 1f);
+			ui.blueBar.rectTransform.anchorMax = new Vector2(x3, 1f);
+			ui.redBar.rectTransform.anchorMin = new Vector2(x3, 0f);
+			ui.intercept.rectTransform.anchorMin = new Vector2(x3, 0f);
+			ui.intercept.rectTransform.anchorMax = new Vector2(x3, 1f);
 		}
 	}
 

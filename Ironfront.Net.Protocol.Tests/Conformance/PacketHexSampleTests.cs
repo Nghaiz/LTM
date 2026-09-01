@@ -281,6 +281,69 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(0x50, (byte)ServerMessageType.SeatChange);
         }
 
+        // -------------------------------------------------------- S_MATCH_STATE 0x45 (v5)
+
+        // Written out from the layout, not captured from the implementation. Little-endian
+        // throughout, and in declaration order:
+        //   phase                 u8   02  = MatchPhase.Playing
+        //   score0                u16  8A 00 = 138        ASCENDING (was a descending ticket
+        //   score1                u16  2C 00 = 44          count before v5 -- same two byte
+        //                                                  positions, inverted meaning)
+        //   phaseSecondsRemaining u16  00 00 = 0          Playing has no clock
+        //   humanPlayerCount      u8   0C  = 12
+        //   victoryPoints         u16  C8 00 = 200        NEW in v5, appended -> Size 8 -> 10
+        private const string MatchStateHex = "02 8A 00 2C 00 00 00 0C C8 00";
+
+        [Fact]
+        public void MatchState_Serializes_ToTheExpectedBytes()
+        {
+            var message = new MatchStateMessage(
+                MatchPhase.Playing, score0: 138, score1: 44,
+                phaseSecondsRemaining: 0, humanPlayerCount: 12, victoryPoints: 200);
+
+            Span<byte> buffer = stackalloc byte[MatchStateMessage.Size];
+            Assert.Equal(MatchStateMessage.Size, message.Write(buffer));
+            Assert.Equal(MatchStateHex, Hex.ToHex(buffer));
+        }
+
+        [Fact]
+        public void MatchState_Parses_FromTheExpectedBytes()
+        {
+            byte[] bytes = Hex.FromHex(MatchStateHex);
+
+            Assert.True(MatchStateMessage.TryParse(bytes, out MatchStateMessage message));
+            Assert.Equal(MatchPhase.Playing, message.Phase);
+            Assert.Equal(138, message.Score0);
+            Assert.Equal(44, message.Score1);
+            Assert.Equal(0, message.PhaseSecondsRemaining);
+            Assert.Equal(12, message.HumanPlayerCount);
+            Assert.Equal(200, message.VictoryPoints);
+        }
+
+        [Fact]
+        public void MatchState_IsTenBytes()
+            => Assert.Equal(10, MatchStateMessage.Size);
+
+        /// <summary>
+        /// The half of the v5 bump that a size check cannot see. A v4 sender packed its two
+        /// bytes at the same offsets, so these ten bytes parse cleanly -- and mean the opposite
+        /// thing. That is why the version was bumped for the meaning as well as for the size:
+        /// the failure this pins is silent, and a mismatched PROTOCOL_VERSION turns it into
+        /// CONNECT_DENIED code 2 instead.
+        /// </summary>
+        [Fact]
+        public void MatchState_TenBytesFromAV4SenderWouldDecodeBackwards()
+        {
+            // A v4 server one second into a round: tickets 199 / 200, DESCENDING. Read as v5
+            // those same bytes say team 1 is a point ahead on an ascending score, when in truth
+            // team 1 had just lost somebody.
+            byte[] v4Bytes = Hex.FromHex("02 C7 00 C8 00 00 00 0C C8 00");
+
+            Assert.True(MatchStateMessage.TryParse(v4Bytes, out MatchStateMessage message));
+            Assert.Equal(199, message.Score0);
+            Assert.Equal(200, message.Score1);
+        }
+
         [Fact]
         public void PacketTypeValues_MatchSpecSection3()
         {

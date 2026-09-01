@@ -180,7 +180,8 @@ namespace Ironfront.Net.Unity.Client
                 : -1;
 
             NetClientBindings.Objectives?.SetAuthoritativeState(
-                (int)state.Phase, state.Tickets0, state.Tickets1, secondsRemaining, state.HumanPlayerCount);
+                (int)state.Phase, state.Score0, state.Score1, secondsRemaining,
+                state.HumanPlayerCount, state.VictoryPoints);
         }
 
         private void SetDimmed(bool dimmed)

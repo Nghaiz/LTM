@@ -136,7 +136,7 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
             // moved to 2; the vehicle wire (§ 4.10) moved it again to 3. Either way a client on
             // an older version gets CONNECT_DENIED code 2 rather than a subtly mis-parsed stream,
             // which is the whole reason the number exists.
-            Assert.Equal(4, ProtocolConstants.PROTOCOL_VERSION);   // 3 -> 4 in X-53: Quantize's position WINDOW moved (-1024..3072), so the same i16 decodes to a different metre. Same bytes, different meaning -- exactly what the version is for.
+            Assert.Equal(5, ProtocolConstants.PROTOCOL_VERSION);   // 3 -> 4 in X-53: Quantize's position WINDOW moved (-1024..3072), so the same i16 decodes to a different metre. Same bytes, different meaning -- exactly what the version is for. 4 -> 5 in P11: S_MATCH_STATE grew victoryPoints (Size 8 -> 10) AND tickets0/1 became ascending score0/1 at the same offsets -- again same bytes, different meaning. Neither bump touched the layout this test pins, which is why the layout constants beside it did not move.
         }
     }
 }

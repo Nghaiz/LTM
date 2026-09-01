@@ -30,8 +30,13 @@ namespace Ironfront.Net.Unity
         /// rather than rendering a zero — a sentinel the caller relies on, so it is documented
         /// here and not only at the call site.
         /// </param>
+        /// <param name="victoryPoints">
+        /// The lead a side needs to win. Carried because the score bar cannot be drawn without
+        /// it and it is a per-match host setting, not a constant — P11.
+        /// </param>
         void SetAuthoritativeState(
-            int phase, int tickets0, int tickets1, int secondsRemaining, int humanPlayerCount);
+            int phase, int score0, int score1, int secondsRemaining, int humanPlayerCount,
+            int victoryPoints);
 
         /// <summary>
         /// Sets the scoreboard's opacity, dimming every label it owns.

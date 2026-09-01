@@ -118,9 +118,10 @@ namespace Ironfront.Net.Unity.Bindings
     {
         /// <inheritdoc/>
         public void SetAuthoritativeState(
-            int phase, int tickets0, int tickets1, int secondsRemaining, int humanPlayerCount)
+            int phase, int score0, int score1, int secondsRemaining, int humanPlayerCount,
+            int victoryPoints)
             => ScoreUi.SetAuthoritativeState(
-                phase, tickets0, tickets1, secondsRemaining, humanPlayerCount);
+                phase, score0, score1, secondsRemaining, humanPlayerCount, victoryPoints);
 
         /// <inheritdoc/>
         /// <remarks>

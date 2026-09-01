@@ -156,8 +156,9 @@ namespace Ironfront.Net.Replication.Tests
 
         /// <summary>
         /// The eliminated side must be reported as the LOSER. <c>MatchStateMessage.WinningTeam</c>
-        /// is derived from the two ticket counts, so a team wiped off the map while holding 180
-        /// tickets would otherwise be broadcast as the winner of the round it just lost.
+        /// is derived from the two scores against the victory margin, so a team wiped off the map
+        /// while merely level on points would otherwise be broadcast as an undecided round it had
+        /// in fact just lost.
         /// </summary>
         [Fact]
         public void TheEliminatedTeamIsTheOneThatLoses()
@@ -175,8 +176,13 @@ namespace Ironfront.Net.Replication.Tests
             machine.Tick(Tick, 1, ReadOnlySpan<ActorPresence>.Empty);
 
             Assert.Equal(TeamId.Team1, winner);
-            Assert.Equal(0, machine.Tickets0);
-            Assert.True(machine.Tickets1 > 0, "team 1 lost tickets it never spent");
+
+            // Elimination is expressed by MOVING THE SCORE, so the survivor is exactly the
+            // victory margin clear -- which is what makes the broadcast scoreboard legible and
+            // what keeps WinningTeam honest without a second end path. The loser's own score is
+            // never touched: it did not spend anything by being wiped out.
+            Assert.Equal(0, machine.Score0);
+            Assert.Equal(machine.VictoryPoints, machine.Score1);
         }
 
         [Fact]

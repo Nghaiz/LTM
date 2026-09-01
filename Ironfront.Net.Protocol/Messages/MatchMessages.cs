@@ -18,47 +18,78 @@ namespace Ironfront.Net.Protocol
     /// </para>
     /// <para>
     /// <b>What is deliberately absent.</b> There is no <c>winningTeam</c> field. The winner is
-    /// whichever team still has tickets when the phase becomes
-    /// <see cref="MatchPhase.Ended"/>, which the client can read off the two ticket counts it
-    /// is already being sent — a stored copy is a derived field that can disagree with its own
-    /// source (conventions: "No Derived Fields"). <see cref="WinningTeam"/> computes it.
+    /// whichever team leads by <see cref="VictoryPoints"/> once the phase becomes
+    /// <see cref="MatchPhase.Ended"/>, which the client can read off the numbers it is already
+    /// being sent — a stored copy is a derived field that can disagree with its own source
+    /// (conventions: "No Derived Fields"). <see cref="WinningTeam"/> computes it, through the
+    /// same <see cref="ConquestScoreRule.Decide"/> the server ends the match with, so the two
+    /// can no longer disagree.
     /// </para>
     /// <para>
-    /// Sent on any phase change and otherwise at most once a second, so 8 bytes on channel 2
+    /// <b>v5 (phase P11) inverted the meaning of two of these bytes.</b> <c>tickets0</c> /
+    /// <c>tickets1</c> descended from 200 and are now <see cref="Score0"/> / <see cref="Score1"/>
+    /// ascending from 0, and <see cref="VictoryPoints"/> was appended, taking
+    /// <see cref="Size"/> 8 → 10. Either half alone would bump
+    /// <see cref="ProtocolConstants.PROTOCOL_VERSION"/>: the size changed, AND an old client
+    /// reading a new server would render an ascending score as a ticket count, so a match
+    /// opening 0/0 reads as "both sides have already lost" and the winner answers backwards for
+    /// the whole round. That is worse than a decode failure because it LOOKS like it works —
+    /// a version mismatch produces <c>CONNECT_DENIED</c> code 2 instead, which is a refusal a
+    /// player can be shown.
+    /// </para>
+    /// <para>
+    /// <b>Why <see cref="VictoryPoints"/> crosses the wire</b> rather than being a shared
+    /// constant: the client cannot draw the score bar without it. <c>ScoreUi</c>'s renderer is
+    /// a two-branch geometry and both branches divide by it, and it is a host-editable match
+    /// setting (<c>MainMenu</c>), not a constant, so it cannot live in
+    /// <see cref="ProtocolConstants"/> and cannot be assumed. Sending it beside the two numbers
+    /// it scales keeps them un-drift-able. A separate one-shot match-config message would put
+    /// the scale and the scaled values in two packets that can arrive out of order, and would
+    /// give a late joiner a bar it cannot draw.
+    /// </para>
+    /// <para>
+    /// Sent on any phase change and otherwise at most once a second, so 10 bytes on channel 2
     /// is not a bandwidth line item.
     /// </para>
     /// </remarks>
     public readonly struct MatchStateMessage
     {
-        /// <summary>u8 + u16 + u16 + u16 + u8 = 8 bytes.</summary>
-        public const int Size = 8;
+        /// <summary>u8 + u16 + u16 + u16 + u8 + u16 = 10 bytes.</summary>
+        public const int Size = 10;
 
         public readonly MatchPhase Phase;
 
-        /// <summary>Tickets remaining, team 0. Clamped to 0.</summary>
-        public readonly ushort Tickets0;
+        /// <summary>Score, team 0. ASCENDS from 0.</summary>
+        public readonly ushort Score0;
 
-        /// <summary>Tickets remaining, team 1. Clamped to 0.</summary>
-        public readonly ushort Tickets1;
+        /// <summary>Score, team 1. ASCENDS from 0.</summary>
+        public readonly ushort Score1;
 
         /// <summary>
         /// Whole seconds left in the current phase, rounded up. 0 in
-        /// <see cref="MatchPhase.Playing"/>, which has no timer — it ends on tickets.
+        /// <see cref="MatchPhase.Playing"/>, which has no timer — it ends on the score margin.
         /// </summary>
         public readonly ushort PhaseSecondsRemaining;
 
         /// <summary>Humans connected, for the "waiting for N more players" line.</summary>
         public readonly byte HumanPlayerCount;
 
+        /// <summary>
+        /// The lead one team needs over the other to win. Host-editable per match, which is why
+        /// it is sent rather than assumed.
+        /// </summary>
+        public readonly ushort VictoryPoints;
+
         public MatchStateMessage(
-            MatchPhase phase, ushort tickets0, ushort tickets1,
-            ushort phaseSecondsRemaining, byte humanPlayerCount)
+            MatchPhase phase, ushort score0, ushort score1,
+            ushort phaseSecondsRemaining, byte humanPlayerCount, ushort victoryPoints)
         {
             Phase                 = phase;
-            Tickets0              = tickets0;
-            Tickets1              = tickets1;
+            Score0                = score0;
+            Score1                = score1;
             PhaseSecondsRemaining = phaseSecondsRemaining;
             HumanPlayerCount      = humanPlayerCount;
+            VictoryPoints         = victoryPoints;
         }
 
         /// <summary>
@@ -66,14 +97,20 @@ namespace Ironfront.Net.Protocol
         /// <see cref="TeamId.Team1"/>, or <see cref="TeamId.None"/> while it is undecided or
         /// genuinely drawn.
         /// </summary>
+        /// <remarks>
+        /// <b>The margin, not the larger number.</b> Before P11 this read
+        /// <c>Tickets0 &gt; Tickets1</c>, which is meaningless under a margin rule: it can name
+        /// a winner in a match that is not over, and the server then ends the round by a rule
+        /// the message does not know. The tie case needs no branch of its own — it falls out of
+        /// <see cref="ConquestScoreRule.Decide"/> as <see cref="TeamId.None"/>.
+        /// </remarks>
         public byte WinningTeam
         {
             get
             {
                 if (Phase != MatchPhase.Ended && Phase != MatchPhase.Resetting)
                     return TeamId.None;
-                if (Tickets0 == Tickets1) return TeamId.None;
-                return Tickets0 > Tickets1 ? TeamId.Team0 : TeamId.Team1;
+                return ConquestScoreRule.Decide(Score0, Score1, VictoryPoints);
             }
         }
 
@@ -81,10 +118,11 @@ namespace Ironfront.Net.Protocol
         {
             var w = new SpanWriter(dst);
             w.WriteU8((byte)Phase);
-            w.WriteU16(Tickets0);
-            w.WriteU16(Tickets1);
+            w.WriteU16(Score0);
+            w.WriteU16(Score1);
             w.WriteU16(PhaseSecondsRemaining);
             w.WriteU8(HumanPlayerCount);
+            w.WriteU16(VictoryPoints);
             return w.Ok ? w.Position : -1;
         }
 
@@ -100,15 +138,16 @@ namespace Ironfront.Net.Protocol
 
             var r = new SpanReader(src);
             byte phase       = r.ReadU8();
-            ushort tickets0  = r.ReadU16();
-            ushort tickets1  = r.ReadU16();
+            ushort score0    = r.ReadU16();
+            ushort score1    = r.ReadU16();
             ushort seconds   = r.ReadU16();
             byte humans      = r.ReadU8();
+            ushort victory   = r.ReadU16();
             if (!r.Ok) return false;
             if (phase > (byte)MatchPhase.Resetting) return false;
 
             message = new MatchStateMessage(
-                (MatchPhase)phase, tickets0, tickets1, seconds, humans);
+                (MatchPhase)phase, score0, score1, seconds, humans, victory);
             return true;
         }
     }

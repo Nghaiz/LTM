@@ -1,6 +1,6 @@
 # Protocol Specification — Ironfront Reborn
 
-**Version: 4.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 4`
+**Version: 5.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 5`
 
 > This is the contract every side of the wire is written against. Every offset, every enum value
 > and every quantization constant in this document is **mandatory**. Client and server may not
@@ -47,7 +47,7 @@
 public static class ProtocolConstants
 {
     public const ushort PROTOCOL_ID       = 0x4946;  // 'IF' — filters out junk packets
-    public const byte   PROTOCOL_VERSION  = 4;
+    public const byte   PROTOCOL_VERSION  = 5;
 
     public const int    MTU_SAFE          = 1200;    // safe through any router
     public const int    GSP_HEADER_SIZE   = 16;
@@ -277,7 +277,7 @@ repeat messageCount times:
 | `0x42` | `S_DESPAWN_ACTOR` | 2 | An actor disappeared |
 | `0x43` | `S_HIT_CONFIRM` | 2 | Hit confirmation (for the hitmarker) |
 | `0x44` | `S_DEATH` | 2 | Someone died, with a force vector for the local ragdoll |
-| `0x45` | `S_MATCH_STATE` | 2 | Score, time, match state |
+| `0x45` | `S_MATCH_STATE` | 2 | Score, victory margin, time, match state |
 | `0x46` | `S_CAPTURE_POINT` | 2 | A capture point changed state |
 | `0x47` | `S_CHAT` | 2 | Chat broadcast |
 | `0x48` | `S_PONG` | 0 | Ping reply, echoes the client timestamp |
@@ -1386,6 +1386,9 @@ Added at v3.0.0:
 
 | **3.0.0** | Week 3 | the replication track | **The vehicle wire.** Six new opcodes (0x21, 0x4C–0x50) and 0x26 promoted from reserved; new `VehicleSnapshotEntry` with its own `u16` change mask (new § 4.10); smallest-three quaternion packing in `Quantize` (§ 4.4); `SnapshotField.SeatInfo` finished on the actor entry, moving the full seated entry 20 → 23 B and the admitted-actor ceiling 58 → 50; new `VehicleIds` value space (new § 4.9), SpecChecker now gates spec ↔ code ↔ vehicle prefab; `S_PLAYER_LIST` (0x4B) given the struct, writer and router case it was declared without (new § 4.11) | **Yes** | (this PR) |
 | **3.0.0** (amended, Week 3) | Week 3 | the replication track | **The projectile wire, finished by V7.** `S_PROJECTILE_SPAWN` 19 → 20 bytes: gained `u16 projectileId` and `u8 remainingLifetimeDeciseconds`, and narrowed `spawnTick` from `u32` to its low 16 bits (§ 4.10). `ProjectileKind` renamed `Supply` → `AmmoBag` and appended `Medipack` = 5, `Bullet` = 6. `InputButtons` bit 7 `ThrowGrenade` → `Reserved7` (§ 4.2), no byte moved. **Amends the v3.0.0 row above rather than opening a 4.0.0**, per brainstorm D7: one protocol bump covers the whole vehicle-and-world track, the client and server ship together, and v3 has not been released to anything. The bytes did change relative to the row above, which is why this row exists rather than the edit being silent | **Yes** (inside v3) | (this PR) |
+
+| **4.0.0** | 2026-08-28 | the replication track | **The position window MOVED; it did not widen.** `Quantize.POS_MIN` `-2048f` → `-1024f` and `POS_MAX` `2048f` → `3072f`, with `POS_RANGE` unchanged at 4096 — the diff's own trailing comment reads `// 4096, unchanged` — so the resolution stays 6.25 cm and an encoded position stays 6 bytes. Reason and measurements are in § 4.4's note, cited rather than restated; ledger **X-53**. **Back-filled 2026-09-01 by P11 § 3.4a** (ledger **X-79**): the bump was live in `ProtocolConstants.cs` and in this file's header from the day it shipped, but condition 3 was never met, and nothing mechanical would ever have noticed because `SpecChecker` parses the § 1 fenced block and not this table. Reconstructed from `git show 9172920`, whose only files under `Ironfront.Net.Protocol/` are `ProtocolConstants.cs` and `Quantize.cs`; **nothing here is inferred beyond that diff and the commit message**, and no other v4 change is claimed because none is evidenced | **Yes** — in the commit's own words, *"a v3 client cannot talk to it, because the same i16 now decodes to a different metre"* | #222 |
+| **5.0.0** | 2026-09-01 | the client track | **`S_MATCH_STATE` (0x45) now carries the game's own win condition.** `Size` **8 → 10**: `tickets0`/`tickets1` become `score0`/`score1` at the same two offsets, and a `u16 victoryPoints` is appended. `WinningTeam` stops being `Tickets0 > Tickets1` — meaningless under a margin rule, since it can name a winner in a match that is not over — and becomes `ConquestScoreRule.Decide(score0, score1, victoryPoints)`, the same function the server ends the round with. `victoryPoints` crosses the wire because it is a host-editable match setting, not a constant, and both branches of the client's score-bar geometry divide by it. Phase **P11**; the score model and the layout are [`team-multiplayer-contracts.md`](team-multiplayer-contracts.md) §§ 1–2 | **Yes** — twice over, and either half alone would suffice: the size changed, AND the meaning of two unchanged byte positions INVERTED. A v4 client reading a v5 server renders an ascending score as a descending ticket count, so a round opening 0/0 reads as "both sides have already lost" and the winner answers backwards all match — a failure that *looks* like it works. `CONNECT_DENIED` code 2 is the outcome we want instead | (this PR) |
 
 > Every change after the freeze must add a row to this table and clear the gate below.
 > **Bump `PROTOCOL_VERSION` only when the bytes on the wire change** — a client and server with
