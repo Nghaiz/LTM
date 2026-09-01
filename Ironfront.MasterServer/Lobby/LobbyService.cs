@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Ironfront.MasterServer.Auth;
+using Ironfront.MasterServer.Diagnostics;
 using Ironfront.Net.Protocol;
 
 namespace Ironfront.MasterServer.Lobby
@@ -272,6 +273,10 @@ namespace Ironfront.MasterServer.Lobby
                 room.StartDeadlineUnixMs = 0;
                 room.State = RoomLifecycleState.Starting;
                 _startedThisTick.Add(room);
+
+                MasterLog.Warn(
+                    $"room {room.RoomId} -> Starting: countdown expired with {room.Members.Count} "
+                    + $"member(s) ready on game server {room.AssignedGameServerId}");
             }
 
             for (int i = 0; i < _startedThisTick.Count; i++) RoomChanged?.Invoke(_startedThisTick[i]);
@@ -322,11 +327,28 @@ namespace Ironfront.MasterServer.Lobby
             if (ShouldStart(room))
             {
                 if (room.State == RoomLifecycleState.Waiting && !room.IsCountingDown)
+                {
                     room.StartDeadlineUnixMs = nowUnixMs + StartCountdownMs;
+
+                    // P14 criterion 3 is graded from this log and the Starting line below. A
+                    // room that never starts is otherwise indistinguishable from a room whose
+                    // countdown was never armed, and those have completely different causes.
+                    MasterLog.Warn(
+                        $"room {room.RoomId} start countdown armed: {room.Members.Count} member(s), "
+                        + $"all ready, minimum {room.MinPlayersToStart}, firing in {StartCountdownMs} ms");
+                }
                 return;
             }
 
+            bool wasArmed = room.IsCountingDown || room.State == RoomLifecycleState.Starting;
             CancelStart(room);
+
+            if (wasArmed)
+            {
+                MasterLog.Warn(
+                    $"room {room.RoomId} start cancelled: {ReadyCount(room)}/{room.Members.Count} ready, "
+                    + $"minimum {room.MinPlayersToStart}");
+            }
         }
 
         /// <summary>
@@ -355,6 +377,13 @@ namespace Ironfront.MasterServer.Lobby
             if (room.Members.Count < room.MinPlayersToStart) return false;
             foreach (RoomMember member in room.Members) if (!member.Ready) return false;
             return true;
+        }
+
+        private static int ReadyCount(Room room)
+        {
+            int ready = 0;
+            foreach (RoomMember member in room.Members) if (member.Ready) ready++;
+            return ready;
         }
 
         public bool TryGetRoom(int playerId, out Room? room)

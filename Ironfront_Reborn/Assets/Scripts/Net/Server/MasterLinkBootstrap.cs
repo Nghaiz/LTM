@@ -148,6 +148,29 @@ namespace Ironfront.Net.Unity.Server
 
             var reporter = new GameServerMatchReporter(new GameServerLink(), ownsLink: true);
 
+            // ASSIGNED BEFORE THE AWAIT, AND THAT ORDER IS THE WHOLE FIX (P14).
+            //
+            // GameServerLink follows the Poll() contract: ReceiveLoopAsync only ENQUEUES each
+            // frame, and HandleOnMainThread -- which is what calls _pending.TrySetResult and so
+            // completes RegisterAsync -- runs solely from Poll(). The only caller of Poll() is
+            // this component's Update(), through _link. Assigning _link after the await
+            // therefore deadlocked by construction: the registration response sat in the queue,
+            // nothing drained it, the await never returned, _link was never assigned, and
+            // SetReporter was never called.
+            //
+            // The symptom was silent and looked like health. The master logged GS_REGISTER and
+            // counted the server healthy off its registration timestamp, so `run-e2e.ps1` saw
+            // "1 healthy game server" and passed -- while the reporter stayed NullMatchReporter,
+            // no heartbeat was ever sent, and no match start or end was ever reported. Every
+            // harness finished inside the registry's grace window, so nothing outlived the lie
+            // until P14 asked a room to wait ten seconds and then start.
+            //
+            // The same order fixes AdoptServerIdOnValidator below. Poll() runs on Unity's main
+            // thread, TrySetResult resumes the continuation on the completing thread, so
+            // FindObjectOfType is reached on the main thread rather than on a pool thread that
+            // would have thrown into a discarded Task.
+            _link = reporter;
+
             try
             {
                 ServerId = await reporter.ConnectAndRegisterAsync(
@@ -162,6 +185,7 @@ namespace Ironfront.Net.Unity.Server
                 // master that is down must not stop a match from running -- that is the whole
                 // point of the standalone contingency, and it is worth more than a stack trace.
                 Debug.LogWarning($"[net] master link: registration failed, staying standalone. {ex.Message}");
+                _link = null;
                 reporter.Dispose();
                 return;
             }
@@ -169,11 +193,11 @@ namespace Ironfront.Net.Unity.Server
             if (ServerId == 0)
             {
                 Debug.LogWarning("[net] master link: the master refused registration. Staying standalone.");
+                _link = null;
                 reporter.Dispose();
                 return;
             }
 
-            _link = reporter;
             _reporter.SetReporter(reporter);
 
             AdoptServerIdOnValidator();

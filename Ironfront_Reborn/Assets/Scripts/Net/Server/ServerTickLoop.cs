@@ -1669,6 +1669,28 @@ namespace Ironfront.Net.Unity.Server
             _byConnection.Remove(connectionId);
             _players.Remove(player);
 
+            // THE LAST PLAYER OUT RELEASES THE ROOM, and this mirrors the master exactly: it
+            // frees a game server when the room empties (LobbyService.RoomRemoved ->
+            // GameServerRegistry.Release), and then hands that same server to the next room.
+            //
+            // Releasing only on MatchEnded is not enough, and the end-to-end run proved it: a
+            // server that adopted a room, played no match and lost its player stayed pinned to
+            // a room the master had already deleted, and then refused every ticket for its NEXT
+            // allocation with the two-rooms anomaly line. The refusal was right; the room it was
+            // defending no longer existed.
+            //
+            // The invariant this settles: the identity is held while at least one player of that
+            // room is connected, and released the moment none is. So the anomaly it guards --
+            // two rooms on one server -- still needs a live player from the first room to be
+            // observable, which is exactly when a release would be wrong.
+            if (_players.Count == 0 && RoomIdentity.HasRoom)
+            {
+                Debug.Log(
+                    $"[net] last player left room {RoomIdentity.RoomId}; releasing it so the next "
+                    + "allocation can be adopted");
+                RoomIdentity.Release();
+            }
+
             // After the removal, so the table no longer names the leaver. Sending the stale one
             // would leave every remaining client able to render a name for an actor that has
             // just been despawned.
