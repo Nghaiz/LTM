@@ -1,3 +1,5 @@
+using Ironfront.Net.Protocol;
+
 /// <summary>
 /// The offline match's score, flag count and win condition — the state that used to live inside
 /// <see cref="ScoreUi"/>. debt-closure phase 2 task 2c, ledger C-4, closing V8 D9.
@@ -108,11 +110,17 @@ public sealed class MatchScoreboard
 		{
 			return;
 		}
-		if (BlueScore >= RedScore + VictoryPoints)
+
+		// One call, not two comparisons. The margin test is ConquestScoreRule's, so the offline
+		// match and the networked one cannot end at different moments -- which they did, in
+		// opposite directions, until P11. Blue is team 0: Actor.Die passes the VICTIM's team,
+		// and a team-1 death is what credits blue.
+		byte winner = ConquestScoreRule.Decide(BlueScore, RedScore, VictoryPoints);
+		if (winner == TeamId.Team0)
 		{
 			Win(true);
 		}
-		else if (RedScore >= BlueScore + VictoryPoints)
+		else if (winner == TeamId.Team1)
 		{
 			Win(false);
 		}
@@ -158,9 +166,14 @@ public sealed class MatchScoreboard
 	}
 
 	/// <summary>A team's score multiplier at this flag count.</summary>
+	/// <remarks>
+	/// A forwarder since P11, and kept rather than deleted for two reasons: <see cref="ScoreUi"/>
+	/// and existing tests name it, and a forwarder is what makes "one copy of the rule" checkable
+	/// by grep -- the implementation appears once, every other site resolves to it.
+	/// </remarks>
 	public static int ScoreMultiplier(int flags)
 	{
-		return flags;
+		return ConquestScoreRule.ScoreMultiplier(flags);
 	}
 
 	/// <summary>Zeroes everything. Called when a match starts.</summary>

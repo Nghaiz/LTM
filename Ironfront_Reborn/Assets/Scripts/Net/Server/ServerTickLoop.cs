@@ -1180,10 +1180,27 @@ namespace Ironfront.Net.Unity.Server
 
         /// <summary>Reports a death to the match, once, for the score and the win condition.</summary>
         /// <remarks>
+        /// <para>
         /// Resolved through the registry rather than taken as a team argument so the caller
         /// cannot get the team wrong — the actor knows which side it was on, and passing that
         /// through the combat path would mean threading a team byte through code that has no
         /// other use for one.
+        /// </para>
+        /// <para>
+        /// <b>The VICTIM's team is what is passed, and that is not an oversight.</b>
+        /// <c>MatchStateMachine.ReportDeath</c> awards the team OPPOSITE the one named here —
+        /// the game's own rule, keyed on the victim and never on the killer, which is exactly
+        /// what makes a team-kill score for the enemy. Changing this to the killer's team would
+        /// invert the scoreboard and quietly repeal the friendly-fire penalty. Before P11 the
+        /// machine subtracted a ticket from this team instead; the argument did not change, the
+        /// rule on the other side of it did.
+        /// </para>
+        /// <para>
+        /// <b>This is the death edge and the only scoring call.</b> The single-fire property is
+        /// structural — <c>ServerActorDamageSink.ApplyDamage</c> has already flipped
+        /// <c>IsAlive</c> false, so a second hit on the same actor never reaches here. Do not
+        /// add a scoring call in the damage path.
+        /// </para>
         /// </remarks>
         public void ReportDeathToMatch(ushort victimActorId)
         {

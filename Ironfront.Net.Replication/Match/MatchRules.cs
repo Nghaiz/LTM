@@ -7,13 +7,16 @@ namespace Ironfront.Net.Replication.Match
     /// <para>
     /// Separate from <see cref="MatchStateMachine"/> so a test can state which rule it is
     /// exercising by name rather than by a literal, and so the two places that need
-    /// <see cref="StartTickets"/> — the machine and the reset audit — cannot drift apart.
+    /// <see cref="VictoryPoints"/> — the machine and the reset audit — cannot drift apart.
     /// </para>
     /// <para>
     /// These are game-design values, not protocol values, so they deliberately do NOT live in
     /// <c>ProtocolConstants</c>: changing the warmup length must not be a protocol change.
-    /// The one number that crosses the wire, the capture ownership threshold, lives on
-    /// <c>CapturePointMessage</c> instead, next to the byte it is a threshold on.
+    /// Two of them are SENT rather than shared, and neither moves here: the capture ownership
+    /// threshold lives on <c>CapturePointMessage</c>, next to the byte it is a threshold on,
+    /// and <see cref="VictoryPoints"/> is written into every <c>S_MATCH_STATE</c> beside the
+    /// two scores it scales — because a client cannot draw the score bar without it and a host
+    /// can change it per match, so it can be neither assumed nor made constant.
     /// </para>
     /// </remarks>
     public sealed class MatchRules
@@ -28,23 +31,28 @@ namespace Ironfront.Net.Replication.Match
         public float PostMatchSeconds { get; set; } = 20f;
 
         /// <summary>
-        /// Tickets each team starts with. The original <c>GameManager.victoryPoints</c>.
-        /// </summary>
-        public int StartTickets { get; set; } = 200;
-
-        /// <summary>Tickets a team loses when one of its actors dies.</summary>
-        public int TicketsPerDeath { get; set; } = 1;
-
-        /// <summary>
-        /// Tickets per second the losing side bleeds, per capture point of advantage.
+        /// The lead one team needs over the other to win. The original
+        /// <c>GameManager.victoryPoints</c>.
         /// </summary>
         /// <remarks>
-        /// At 0.5 and a three-point lead, a 200-ticket team is bled dry in roughly two
-        /// minutes, which is the right order for a demo round and is what the phase-03 load
-        /// scenario ("20 minutes of play") assumes when it expects several matches inside the
-        /// window.
+        /// <b>The number did not change; the verb did.</b> This was <c>StartTickets</c>, and its
+        /// own remark already called it "the original <c>GameManager.victoryPoints</c>" — the
+        /// same 200, under the wrong verb. P11 stopped it counting DOWN from 200 to zero and
+        /// made it the ASCENDING margin the offline match has always used
+        /// (<c>MatchScoreboard.VictoryPoints</c>), so the networked and offline runtimes stop
+        /// playing two different games. Renamed rather than reused in place, because a field
+        /// called <c>tickets</c> holding a score is how the next reader re-introduces the bug.
         /// </remarks>
-        public float BleedPerPointPerSecond { get; set; } = 0.5f;
+        public int VictoryPoints { get; set; } = 200;
+
+        /// <summary>Points a team is awarded when an actor of the OTHER team dies.</summary>
+        /// <remarks>
+        /// Multiplied by the SCORING team's capture-point count before it lands — see
+        /// <c>ConquestScoreRule.Award</c>. The award is keyed on the victim's team and on
+        /// nothing else, so a team-kill hands the enemy a point; that is deliberate and is the
+        /// whole friendly-fire penalty.
+        /// </remarks>
+        public int PointsPerKill { get; set; } = 1;
 
         /// <summary>
         /// Seconds a released actor id stays unusable. Phase-03 trap 2: a client with stale

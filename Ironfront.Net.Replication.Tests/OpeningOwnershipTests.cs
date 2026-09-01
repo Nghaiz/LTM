@@ -38,7 +38,7 @@ namespace Ironfront.Net.Replication.Tests
             MinPlayersToStart = 2,
             WarmupSeconds     = 1f,
             PostMatchSeconds  = 1f,
-            StartTickets      = 5,
+            VictoryPoints     = 5,
         };
 
         private static CapturePointState[] TwoBasesAndAMiddle() => new[]
@@ -149,8 +149,13 @@ namespace Ironfront.Net.Replication.Tests
             Advance(match, 3f, humans: 2);             // well past EliminationGraceSeconds
 
             Assert.Equal(MatchPhase.Playing, match.Phase);
-            Assert.True(match.Tickets0 > 0, "team 0 still has tickets");
-            Assert.True(match.Tickets1 > 0, "team 1 still has tickets");
+
+            // Nobody scored, so nobody leads by the margin. Under the ticket rule this read
+            // "still has tickets"; under the margin rule the equivalent claim is that the round
+            // is still undecided, which is what the phase above already says and what these two
+            // make concrete.
+            Assert.Equal(0, match.Score0);
+            Assert.Equal(0, match.Score1);
         }
 
         /// <summary>
@@ -170,8 +175,12 @@ namespace Ironfront.Net.Replication.Tests
             Advance(match, 1.2f, humans: 2);
             Advance(match, 3f,   humans: 2);
 
-            Assert.Equal(0, match.Tickets0);
-            Assert.Equal(0, match.Tickets1);
+            // A draw: elimination hit both sides, so neither score was moved to the margin and
+            // the round ended anyway. Scores stay where they were rather than being zeroed --
+            // under an ascending rule zero is the OPENING value, so zeroing would have said
+            // "nothing happened" rather than "it ended".
+            Assert.Equal(MatchPhase.Ended, match.Phase);
+            Assert.Equal(TeamId.None, match.ToMessage().WinningTeam);
             Assert.Equal(1, announced);
         }
     }

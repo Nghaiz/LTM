@@ -6,6 +6,7 @@ using Ironfront.Net.Replication.Movement;
 using Ironfront.Net.Replication.Server;
 using Ironfront.Net.Transport;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace Ironfront.Net.Unity.Server
 {
@@ -49,7 +50,13 @@ namespace Ironfront.Net.Unity.Server
         [SerializeField] private int _minPlayersToStart = 2;
         [SerializeField] private float _warmupSeconds = 20f;
         [SerializeField] private float _postMatchSeconds = 20f;
-        [SerializeField] private int _startTickets = 200;
+        // Renamed from _startTickets by P11 -- the number never changed (200) but the verb did:
+        // it was the ticket pool each side spent DOWN, and is now the ascending margin one side
+        // must lead by, which is what GameManager.victoryPoints has always meant offline.
+        // FormerlySerializedAs keeps Dustbowl's authored 200 rather than silently reverting the
+        // scene to the field default.
+        [FormerlySerializedAs("_startTickets")]
+        [SerializeField] private int _victoryPoints = 200;
 
         private ServerTickLoop _loop;
         private MatchStateMachine _match;
@@ -104,7 +111,7 @@ namespace Ironfront.Net.Unity.Server
                 MinPlayersToStart = _minPlayersToStart,
                 WarmupSeconds     = _warmupSeconds,
                 PostMatchSeconds  = _postMatchSeconds,
-                StartTickets      = _startTickets,
+                VictoryPoints     = _victoryPoints,
             };
 
             _actorIds = new ActorIdPool(
@@ -444,7 +451,7 @@ namespace Ironfront.Net.Unity.Server
 
         private void OnPhaseChanged(MatchPhase phase)
             => Debug.Log($"[net] match phase -> {phase} "
-                         + $"({_match.Tickets0} / {_match.Tickets1} tickets)");
+                         + $"({_match.Score0} / {_match.Score1}, win by {_match.VictoryPoints})");
 
         private void OnResetRequested()
         {

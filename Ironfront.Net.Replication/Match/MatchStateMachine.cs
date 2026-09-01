@@ -28,21 +28,21 @@ namespace Ironfront.Net.Replication.Match
     }
 
     /// <summary>
-    /// The authoritative match lifecycle: warmup, play, ticket bleed, win condition, reset.
-    /// Phase-03 tasks 1-3.
+    /// The authoritative match lifecycle: warmup, play, scoring, win condition, reset.
+    /// Phase-03 tasks 1-3; re-pointed at the game's own rule by P11.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Engine-free for the reason every server rule in this library is
     /// (decision C-01-6): a MonoBehaviour cannot be reached from CI, so "does the match end
-    /// when a team runs out of tickets" and "is the world clean after five rounds" are
+    /// when a team leads by the victory margin" and "is the world clean after five rounds" are
     /// answerable from <c>dotnet test</c> instead of from somebody watching a build.
     /// </para>
     /// <para>
     /// <b>The machine owns no world state.</b> It does not despawn actors, free ids or clear
     /// history — it raises <see cref="ResetRequested"/> and the host does that, because the
     /// things needing cleanup live in the engine. Everything the machine <i>does</i> own
-    /// (phase, timers, tickets, capture points) it clears itself, so a host that forgets to
+    /// (phase, timers, scores, capture points) it clears itself, so a host that forgets to
     /// subscribe gets a visibly stuck round rather than a subtly leaking one.
     /// </para>
     /// <para>
@@ -60,15 +60,19 @@ namespace Ironfront.Net.Replication.Match
     /// </para>
     /// <list type="bullet">
     /// <item><description>
-    /// <b>Score and the <c>victoryPoints</c> race.</b> <c>ScoreUi.AddScore</c> accumulates per
-    /// kill and declares a winner at a score gap. The networked match is decided by tickets
-    /// instead, so there is nothing here to port to — porting it would give the server two
-    /// competing win conditions, which is the shape of the bug V8 exists to close.
+    /// <b>Score and the <c>victoryPoints</c> race are now OWNED HERE — P11 closed this bullet,
+    /// and it is kept only to say so.</b> V8 read the networked match as ticket-based and
+    /// concluded there was "nothing here to port to". That was the defect, not the resolution:
+    /// the two runtimes were playing different games, and the ticket rule was the one nothing
+    /// else in the project implements. <see cref="ReportDeath"/> now accumulates upward through
+    /// <see cref="ConquestScoreRule.Award"/> and the round ends on
+    /// <see cref="ConquestScoreRule.Decide"/> — the same statics <c>MatchScoreboard</c> calls,
+    /// so there is one rule rather than two competing win conditions.
     /// </description></item>
     /// <item><description>
     /// <b><c>ScoreMultiplier(flags)</c> returns the flag count</b>, so a team holding no flags
     /// scores zero for every kill and a team being eliminated cannot score its way out.
-    /// Faithful to the original, and irrelevant to a ticket-based match.
+    /// Faithful to the original — and, since P11, live here too rather than irrelevant.
     /// </description></item>
     /// <item><description>
     /// <b><c>GameManager</c>'s modes are five loose booleans</b> (<c>reverseMode</c>,
@@ -94,8 +98,17 @@ namespace Ironfront.Net.Replication.Match
         private readonly List<byte> _dirtyPoints;
 
         private float _phaseTimer;
-        private float _ticketsFloat0;
-        private float _ticketsFloat1;
+
+        // ASCENDING score accumulators, starting at 0 -- not tickets. Integers, not floats:
+        // nothing subtracts from them and nothing accrues continuously any more (P11 deleted
+        // the bleed), so the float accumulator that existed to carry sub-ticket bleed would now
+        // be a fraction that can never be non-zero.
+        private int _score0;
+        private int _score1;
+
+        /// <summary>Both teams eliminated at once: the round is over and nobody won.</summary>
+        private bool _drawn;
+
         private float _sinceLastBroadcast;
         private byte _lastBroadcastHumans;
         /// <summary>
@@ -113,7 +126,7 @@ namespace Ironfront.Net.Replication.Match
 
         /// <summary>
         /// Seconds between unsolicited <c>S_MATCH_STATE</c> messages while nothing changes.
-        /// A phase change or a ticket change sends immediately regardless.
+        /// A phase change or a score change sends immediately regardless.
         /// </summary>
         public const float HeartbeatBroadcastSeconds = 1f;
 
@@ -122,9 +135,6 @@ namespace Ironfront.Net.Replication.Match
             _rules  = rules ?? MatchRules.Default;
             _points = points ?? Array.Empty<CapturePointState>();
             _dirtyPoints = new List<byte>(_points.Length);
-
-            _ticketsFloat0 = _rules.StartTickets;
-            _ticketsFloat1 = _rules.StartTickets;
         }
 
         /// <summary>Raised when the phase changes. The argument is the NEW phase.</summary>
@@ -173,9 +183,14 @@ namespace Ironfront.Net.Replication.Match
         /// <summary>Capture points whose value moved enough to be worth a message this tick.</summary>
         public IReadOnlyList<byte> DirtyCapturePoints => _dirtyPoints;
 
-        public int Tickets0 => (int)Math.Ceiling(_ticketsFloat0);
+        /// <summary>Team 0's score. Ascends from 0; never spent.</summary>
+        public int Score0 => _score0;
 
-        public int Tickets1 => (int)Math.Ceiling(_ticketsFloat1);
+        /// <summary>Team 1's score. Ascends from 0; never spent.</summary>
+        public int Score1 => _score1;
+
+        /// <summary>The lead one team needs over the other to win. Crosses the wire.</summary>
+        public int VictoryPoints => _rules.VictoryPoints;
 
         /// <summary>Humans connected, as last reported to <see cref="Tick"/>.</summary>
         public int HumanPlayerCount { get; private set; }
@@ -190,24 +205,55 @@ namespace Ironfront.Net.Replication.Match
         public bool MatchStateIsDirty { get; private set; }
 
         /// <summary>
-        /// Records a death. Costs the dead actor's own team a ticket — the Ravenfield rule,
-        /// where dying is what drains you, not killing.
+        /// Records a death, and awards the victim's OPPONENT for it.
         /// </summary>
+        /// <param name="team">The team of the actor that died.</param>
         /// <remarks>
-        /// Ignored outside <see cref="MatchPhase.Playing"/>. A warmup kill that quietly cost a
-        /// ticket would make the scoreboard disagree with the round before it began, and the
-        /// natural place for that to surface is a match that ends slightly early for no visible
-        /// reason.
+        /// <para>
+        /// <b>The direction reversed in P11 and that is the whole defect.</b> This used to
+        /// subtract a ticket from the victim's own side — the Ravenfield rule, which nothing
+        /// else in this project implements. The game's own rule, the one
+        /// <c>MatchScoreboard.AddScore</c> implements and <c>Actor.Die</c> feeds, awards the
+        /// team OPPOSITE the victim's. The three invariants, each cheap to state and expensive
+        /// to lose:
+        /// </para>
+        /// <list type="number">
+        /// <item><description>
+        /// <b>One award, to the team opposite the victim's, keyed on the victim's team and on
+        /// nothing else.</b> No branch below reads the killer, deliberately: friendly fire
+        /// therefore scores for the enemy, which is the intended penalty and a stiffer one than
+        /// a blocked shot. <b>Bots count the same as humans.</b>
+        /// </description></item>
+        /// <item><description>
+        /// <b>Only an actual death scores, and a death scores once.</b> The single-fire edge is
+        /// structural rather than a convention: <c>ServerActorDamageSink.ApplyDamage</c> flips
+        /// <c>IsAlive</c> false, so the next call for the same actor reports <c>died:false</c>
+        /// and never reaches here. <b>Do not add a scoring call in the damage path.</b>
+        /// </description></item>
+        /// <item><description>
+        /// <b>The award is multiplied by the SCORING team's capture-point count</b>, through
+        /// <see cref="ConquestScoreRule.Award"/> — the same static the offline scoreboard calls.
+        /// Holding ground is what makes a kill worth anything.
+        /// </description></item>
+        /// </list>
+        /// <para>
+        /// Ignored outside <see cref="MatchPhase.Playing"/>. A warmup kill that quietly scored
+        /// would make the scoreboard disagree with the round before it began, and the natural
+        /// place for that to surface is a match that ends slightly early for no visible reason.
+        /// </para>
         /// </remarks>
         public void ReportDeath(byte team)
         {
             if (Phase != MatchPhase.Playing) return;
 
-            if (team == TeamId.Team0) _ticketsFloat0 -= _rules.TicketsPerDeath;
-            else if (team == TeamId.Team1) _ticketsFloat1 -= _rules.TicketsPerDeath;
+            if (team == TeamId.Team0)
+                _score1 += ConquestScoreRule.Award(
+                    _rules.PointsPerKill, OwnedPointCount(TeamId.Team1));
+            else if (team == TeamId.Team1)
+                _score0 += ConquestScoreRule.Award(
+                    _rules.PointsPerKill, OwnedPointCount(TeamId.Team0));
             else return;
 
-            ClampTickets();
             MatchStateIsDirty = true;
         }
 
@@ -277,13 +323,12 @@ namespace Ironfront.Net.Replication.Match
                 case MatchPhase.Playing:
                     _playingElapsed += deltaSeconds;
                     UpdateCapturePoints(actors, deltaSeconds);
-                    DrainTickets(deltaSeconds);
                     ApplyElimination();
                     // A live round is NOT abandoned when the humans leave. The bots are still
                     // fighting, the match still resolves, and the master still gets its
                     // GS_MATCH_ENDED — which is what keeps the server's advertised state honest
                     // rather than stuck mid-round.
-                    if (_ticketsFloat0 <= 0f || _ticketsFloat1 <= 0f) EnterPhase(MatchPhase.Ended);
+                    if (IsDecided()) EnterPhase(MatchPhase.Ended);
                     break;
 
                 case MatchPhase.Ended:
@@ -312,10 +357,11 @@ namespace Ironfront.Net.Replication.Match
         public MatchStateMessage ToMessage()
             => new MatchStateMessage(
                 Phase,
-                (ushort)Math.Max(0, Math.Min(Tickets0, ushort.MaxValue)),
-                (ushort)Math.Max(0, Math.Min(Tickets1, ushort.MaxValue)),
+                (ushort)Math.Max(0, Math.Min(_score0, ushort.MaxValue)),
+                (ushort)Math.Max(0, Math.Min(_score1, ushort.MaxValue)),
                 (ushort)Math.Min(Math.Ceiling(PhaseSecondsRemaining), ushort.MaxValue),
-                (byte)Math.Min(HumanPlayerCount, byte.MaxValue));
+                (byte)Math.Min(HumanPlayerCount, byte.MaxValue),
+                (ushort)Math.Max(0, Math.Min(_rules.VictoryPoints, ushort.MaxValue)));
 
         /// <summary>
         /// Records that the current match state has been broadcast. Separate from
@@ -379,52 +425,75 @@ namespace Ironfront.Net.Replication.Match
             }
         }
 
-        private void DrainTickets(float deltaSeconds)
+        /// <summary>Capture points <paramref name="team"/> currently holds.</summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This replaced the ticket bleed, and the replacement is the point of P11.</b>
+        /// <c>DrainTickets</c> counted the same two numbers and subtracted 0.5 tickets a second
+        /// from the side holding fewer. Under the margin rule the flag count is already in the
+        /// score, through <see cref="ConquestScoreRule.Award"/> — holding more points makes
+        /// every kill worth more, which is the offline game's own answer and the reason the
+        /// bleed had nothing left to do.
+        /// </para>
+        /// <para>
+        /// <b>The bleed was DELETED rather than kept as an ascending trickle, and that is a
+        /// decision with a cost.</b> It was the only pressure that made a stalemate resolve on
+        /// its own, so two evenly-matched sides that stop killing each other now play until
+        /// somebody scores. That is exactly what the offline match does — it has no bleed
+        /// either — and matching the offline rule is the whole purpose of this phase; a second
+        /// pressure the offline game does not have would have re-opened the divergence one
+        /// mechanism over. Elimination remains as the second way a round ends.
+        /// </para>
+        /// </remarks>
+        private int OwnedPointCount(byte team)
         {
-            int owned0 = 0, owned1 = 0;
+            int owned = 0;
             for (int i = 0; i < _points.Length; i++)
-            {
-                byte owner = _points[i].OwningTeam;
-                if (owner == TeamId.Team0) owned0++;
-                else if (owner == TeamId.Team1) owned1++;
-            }
+                if (_points[i].OwningTeam == team) owned++;
 
-            if (owned0 == owned1) return;
-
-            float rate = Math.Abs(owned0 - owned1) * _rules.BleedPerPointPerSecond * deltaSeconds;
-
-            int before0 = Tickets0, before1 = Tickets1;
-            if (owned0 > owned1) _ticketsFloat1 -= rate;
-            else _ticketsFloat0 -= rate;
-
-            ClampTickets();
-
-            // Only dirty when the WHOLE ticket count moved. The float bleeds continuously but
-            // the wire carries integers, so flagging every tick would put a message on channel 2
-            // thirty times a second to say a number that has not changed.
-            if (Tickets0 != before0 || Tickets1 != before1) MatchStateIsDirty = true;
+            return owned;
         }
+
+        /// <summary>Whether the round is over, by either of the two win conditions.</summary>
+        /// <remarks>
+        /// <see cref="_drawn"/> is not folded into the margin test because a draw is precisely
+        /// the state the margin test reports as "nobody has won yet" — reading it off the scores
+        /// alone would leave a both-teams-eliminated round running forever, which is the
+        /// unbounded end/reset loop X-53 was.
+        /// </remarks>
+        private bool IsDecided()
+            => _drawn
+            || ConquestScoreRule.Decide(_score0, _score1, _rules.VictoryPoints) != TeamId.None;
 
         /// <summary>
         /// A team holding no spawn points has lost. Phase-V8 task 4.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <b>Expressed as zeroing the loser's tickets, not as a separate end path.</b> The
-        /// round then ends through the line immediately below the call site, so the phase
-        /// change, <see cref="MatchEnded"/>, the broadcast and the reset all behave exactly as
-        /// they do for ticket exhaustion — there is no second way for a match to end that a
-        /// handler could have been written against and forgotten.
+        /// <b>Expressed as moving the SCORE, not as a separate end path.</b> The round then
+        /// ends through the line immediately below the call site, so the phase change,
+        /// <see cref="MatchEnded"/>, the broadcast and the reset all behave exactly as they do
+        /// for a margin win — there is no second way for a match to end that a handler could
+        /// have been written against and forgotten. Before P11 the same idea was expressed as
+        /// zeroing the loser's TICKETS; the direction changed, the design did not.
         /// </para>
         /// <para>
-        /// It also keeps <c>MatchStateMessage.WinningTeam</c> honest without a wire change.
-        /// The winner is derived from the two ticket counts, so an eliminated team that still
-        /// had 180 tickets would otherwise be broadcast as the <i>winner</i> of the round it
-        /// just lost.
+        /// It also keeps <c>MatchStateMessage.WinningTeam</c> honest. The winner is derived from
+        /// the two scores against the victory margin, so a team wiped off the map while merely
+        /// level on points would otherwise be broadcast as an undecided round it had in fact
+        /// just lost. Raising the survivor to exactly the margin — rather than to some larger
+        /// number — is what makes the broadcast score legible: the scoreboard reads as "won by
+        /// the victory margin", which is what happened.
         /// </para>
         /// <para>
-        /// Both teams at zero — a degenerate map, or a mid-match teardown — zeroes both, which
-        /// reads as a draw rather than awarding the round to whichever index is tested first.
+        /// <see cref="Math.Max(int,int)"/> guards the survivor's own score: a team already
+        /// further ahead than the margin does not have its score pulled DOWN by winning.
+        /// </para>
+        /// <para>
+        /// Both teams eliminated — a degenerate map, or a mid-match teardown — is a draw, and
+        /// it cannot be expressed in the scores at all: any pair of numbers either meets a
+        /// margin (naming a winner) or does not (leaving the round running forever). So it sets
+        /// <see cref="_drawn"/> and leaves the scores alone.
         /// </para>
         /// </remarks>
         private void ApplyElimination()
@@ -447,16 +516,14 @@ namespace Ironfront.Net.Replication.Match
                 BothTeamsEliminated?.Invoke();
             }
 
-            if (eliminated0) _ticketsFloat0 = 0f;
-            if (eliminated1) _ticketsFloat1 = 0f;
+            if (eliminated0 && eliminated1)
+                _drawn = true;
+            else if (eliminated0)
+                _score1 = Math.Max(_score1, _score0 + _rules.VictoryPoints);
+            else
+                _score0 = Math.Max(_score0, _score1 + _rules.VictoryPoints);
 
             MatchStateIsDirty = true;
-        }
-
-        private void ClampTickets()
-        {
-            if (_ticketsFloat0 < 0f) _ticketsFloat0 = 0f;
-            if (_ticketsFloat1 < 0f) _ticketsFloat1 = 0f;
         }
 
         private void EnterPhase(MatchPhase phase)
@@ -489,9 +556,10 @@ namespace Ironfront.Net.Replication.Match
 
         private void PerformReset()
         {
-            _ticketsFloat0 = _rules.StartTickets;
-            _ticketsFloat1 = _rules.StartTickets;
-            _phaseTimer    = 0f;
+            _score0     = 0;
+            _score1     = 0;
+            _drawn      = false;
+            _phaseTimer = 0f;
 
             for (int i = 0; i < _points.Length; i++) _points[i].Reset();
             _dirtyPoints.Clear();
