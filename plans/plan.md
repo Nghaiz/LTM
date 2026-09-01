@@ -118,12 +118,64 @@ and whose bodies do not animate cannot be graded by eye.
 | **P8** | [Capstone deliverables](phases/phase-p8-capstone-deliverables.md) | **DONE 2026-08-30** — the client flow wired (it never had been), P0 defined and graded, both tables filled, the soak harness built. Filed **X-76**, **X-77** | L |
 | **P9** | [Deployment and single-owner cleanup](phases/phase-p9-deployment-and-cleanup.md) | **DONE 2026-09-01** — 6 of 7 criteria MET 2026-08-31; criterion 5 now **3 of 4** (SS 4.8): the login -> join -> UDP walk and the alert drill are gated scripts, only the 72-hour chart stays deferred. The walk found **three defects that made M2 criterion 14 unverifiable**, chief among them a registered game server being reaped as unauthenticated 30 s after connecting | S |
 | **P10** | [The P1-P8 debt sweep](reports/2026-08-31-p10-debt-sweep.md) | **DONE 2026-08-31** — nine ledger rows closed (open **24 -> 14**), **three re-diagnosed and still open**, the M4 soak run and MET. Filed no new rows | L |
+| **P11** | [The win condition the netcode never had](phases/phase-p11-win-condition.md) | the networked match's divergence from the game's own rule; `PROTOCOL_VERSION` 4 -> 5 | L |
+| **P12** | [Which side am I on](phases/phase-p12-which-side-am-i-on.md) | F5, F3, F6, and half of the surplus-AI row | M |
+| **P13** | [The team the lobby chose](phases/phase-p13-team-into-the-match.md) | F2 on the wire; the lopsided-strand defect (server audit #2) | M |
+| **P14** | [The room that never starts the match](phases/phase-p14-room-starts-the-match.md) | `Ready`, `Starting`, `GsMatchStarted`, the hand-typed `roomId`, the debug button | M |
+| **P15** | [The menu with no way in](phases/phase-p15-the-menu-with-no-way-in.md) | F1 — the CRITICAL one; login, register, Practice demoted | L |
+| **P16** | [The room you can see](phases/phase-p16-the-room-you-can-see.md) | the room browser, create-room, the lobby room, choosing a side | L |
+| **P17** | [The readout a player fights with](phases/phase-p17-in-match-readout.md) | F7, F8 — team readout, Tab scoreboard, deploy screen | L |
+| **P18** | [Island, made playable](phases/phase-p18-island.md) | F4 — sixteen missing scripts on the map the owner ranks first | L |
 
 **P5 blocks the *closing* of P4's rows, not its run.** Run lane B first; X-28's single spawn point
 and X-29's missing measurements will show up in the artifacts as they always have, and fixing them
 before a run means fixing them against a guess.
 
 ---
+
+## 4.1 The player-facing multiplayer surface was never scoped — not descoped
+
+Two findings from 2026-09-01, and neither is on the ledger's 42 pre-existing rows. All of them
+were searched for "team select", "choose team", "lobby ui", "main menu": **zero hits**. That is
+not an oversight in the ledger; the ledger is built from documents and gates, and both of these
+are visible only on a screen.
+
+**One — a player cannot reach multiplayer.** Build order is Splash -> Menu -> Island -> Dustbowl.
+The Menu scene's Canvas is the original single-player menu and touches the network stack nowhere;
+the multiplayer shell is authored in the same scene, draws from `OnGUI()` behind **Shift+F2**, and
+has **zero Button `onClick` targets**. Its own header says it is *"not a replacement for the
+Canvas UI ... looking finished would only invite someone to ship it."* So the player's experience
+and the code are each correct and they are two different programs.
+
+**Two — the netcode's win condition diverged from the game's own rule.** `MatchScoreboard`
+implements the rule the game has: score **ascends** on kills, each point multiplied by the scoring
+team's flag count, and a team wins by leading `VictoryPoints`. `MatchStateMachine` instead
+**descends** 200 tickets, charges the **victim's own side**, bleeds by flag differential, and ends
+at zero. `MatchStateMessage.WinningTeam` then picks `Tickets0 > Tickets1`, which is meaningless
+under a margin rule. Nothing was broken *within* either implementation, which is exactly why 2,103
+green tests and 90 matched protocol constants had nothing to say about it — **a divergence between
+two correct things is invisible to any gate that checks one of them.**
+
+**Three defects that make the two teams unreadable are the same shape**: the local client always
+believes it is team 0 (`Player Fps Actor.prefab:757`), the score labels are overwritten by offline
+data on every capture flip, and the networked minimap shows every enemy where the offline blip
+filtered to friendlies. All three are green in `ClientWiringGate`, which retires on **subscription**
+and says so at `GateRunner.cs:72-75`.
+
+**Friendly fire is intended and is NOT a defect.** The 2026-09-01 brainstorm and the server audit
+both ranked an ungated `ServerActorDamageSink.ApplyDamage` as the top finding. The owner cancelled
+it: `ApplyDamage` ignoring `attackerId` is correct behaviour. The penalty for a team-kill is
+economic — under the margin rule the kill credits the **enemy** a point, because `Actor.cs:905`
+scores on the victim's team — and that is stiffer and more legible than a blocked shot. Recorded
+in [`00-shared/team-multiplayer-contracts.md`](00-shared/team-multiplayer-contracts.md) SS 1.4 so
+nobody re-files it.
+
+**P11-P18 are cooked ONE AT A TIME, in separate sessions.** Each phase file is self-contained by
+construction: goal, file-ownership globs, steps, acceptance, risks. Anything two phases must agree
+on lives in [`00-shared/team-multiplayer-contracts.md`](00-shared/team-multiplayer-contracts.md)
+and is linked, never copied. The order is fixed by the owner: **D (P11, P12) -> A (P13) -> B (P14)
+-> C (P15, P16, P17) -> E (P18)**.
+
 
 ## 5. Standing rules
 
@@ -140,7 +192,17 @@ These outlived the documents that carried them, and each one was learned by bein
 5. **Rebuild and commit the plugin DLLs in the same PR as any `Ironfront.Net.*` source change.**
    `Assets/Plugins/Ironfront.Net.*.dll` are build artifacts that live in git; Unity reads them, not
    the source. `tools/build-libs.ps1`.
-6. **Name what comes out.** Anything added to core scope names what leaves in exchange. Core scope
+6. **A screen is graded on a screenshot.** Every phase from P11 on carries at least one acceptance
+   criterion observable on screen or in a captured artifact — a screenshot, a lane-B record, a
+   two-client run. **A green suite is not evidence for player-facing work.** This is rule 1 with a
+   deliverable attached, and it exists because § 1's `ClientWiringGate` was green throughout the
+   period in which there was no way into multiplayer at all.
+7. **Every "this does not exist" states the paths it searched.** A negative result is a claim about
+   a search, not about the tree. The three 2026-09-01 reports carry verified scope lines; reuse
+   them rather than re-deriving, and when a report and the source disagree, measure — **X-78** and
+   the two refuted claims in [P18](phases/phase-p18-island.md) § 1.2 are what happens when nobody
+   does.
+8. **Name what comes out.** Anything added to core scope names what leaves in exchange. Core scope
    is infantry, one map, Conquest, bots, health/death/respawn, prediction + lag compensation, the
    TCP master server, and the scoreboard. Vehicles were originally *out* and grew in through
    V4–V6; nothing else grows in without an exchange.
