@@ -116,7 +116,7 @@ and whose bodies do not animate cannot be graded by eye.
 | **P6** | [Scoreboard and chat](phases/phase-p6-scoreboard-and-chat.md) | A13, the Chat opcode | M |
 | **P7** | [V9 integration](phases/phase-p7-v9-integration.md) | **DONE 2026-08-30** — B-17 re-graded and closed at 16; **B-16 re-opened, 22% over budget**; the soak ran 8 rounds and found **X-73** | L |
 | **P8** | [Capstone deliverables](phases/phase-p8-capstone-deliverables.md) | **DONE 2026-08-30** — the client flow wired (it never had been), P0 defined and graded, both tables filled, the soak harness built. Filed **X-76**, **X-77** | L |
-| **P9** | [Deployment and single-owner cleanup](phases/phase-p9-deployment-and-cleanup.md) | **DONE 2026-08-31** — 6 of 7 criteria MET; criterion 5 is 1 of 4, the other three DEFERRED with reopening conditions (SS 4.7) | S |
+| **P9** | [Deployment and single-owner cleanup](phases/phase-p9-deployment-and-cleanup.md) | **DONE 2026-09-01** — 6 of 7 criteria MET 2026-08-31; criterion 5 now **3 of 4** (SS 4.8): the login -> join -> UDP walk and the alert drill are gated scripts, only the 72-hour chart stays deferred. The walk found **three defects that made M2 criterion 14 unverifiable**, chief among them a registered game server being reaped as unauthenticated 30 s after connecting | S |
 | **P10** | [The P1-P8 debt sweep](reports/2026-08-31-p10-debt-sweep.md) | **DONE 2026-08-31** — nine ledger rows closed (open **24 -> 14**), **three re-diagnosed and still open**, the M4 soak run and MET. Filed no new rows | L |
 
 **P5 blocks the *closing* of P4's rows, not its run.** Run lane B first; X-28's single spawn point

@@ -187,7 +187,13 @@ namespace Ironfront.Net.Configuration
         public static readonly EnvVar GameServerMapIds = new EnvVar(
             "IRONFRONT_GAMESERVER_MAP_IDS", "Game server", "game server",
             "Comma-separated map ids this server can host, driving the matchmaker's\n" +
-            "preferred-map filter. Empty means no preference.");
+            "preferred-map filter. REQUIRED, and at least one id: GameServerRegistry.TryRegister\n" +
+            "refuses a registration whose map list is empty, so a server started without this\n" +
+            "is turned away and then closed 30 s later as an unauthenticated connection. This\n" +
+            "line used to read 'Empty means no preference', which is the opposite of what the\n" +
+            "code does; infra/compose/.env.example shipped it empty, so a by-the-book compose\n" +
+            "deployment could never register a game server at all. Dustbowl is 1.",
+            "1");
 
         /// <summary>The map scene a dedicated server hosts.</summary>
         public static readonly EnvVar GameServerScene = new EnvVar(

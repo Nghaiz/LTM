@@ -43,7 +43,18 @@ namespace Ironfront.MasterServer.Tests
         private readonly string _databasePath;
         private readonly X509Certificate2? _certificate;
 
-        public Phase03ServerHarness(bool tls = false, bool metrics = false, int maxConnectionsPerIp = 64)
+        /// <param name="configure">
+        /// Last word over the listener options, so a test can hand in a <see cref="HeldClock"/>
+        /// and assert on the timeout sweep. <see cref="MasterHostHarness"/> has had this since
+        /// the phase-00 timing tests; this harness lacked it, which is one reason the sweep was
+        /// only ever exercised against a listener with no dispatcher behind it -- and so never
+        /// against a registered game server.
+        /// </param>
+        public Phase03ServerHarness(
+            bool tls = false,
+            bool metrics = false,
+            int maxConnectionsPerIp = 64,
+            Action<TcpListenerHostOptions>? configure = null)
         {
             _databasePath = Path.Combine(
                 Path.GetTempPath(), $"ironfront-p03-{Guid.NewGuid():N}.db");
@@ -58,15 +69,16 @@ namespace Ironfront.MasterServer.Tests
             GameServers = new GameServerRegistry(SharedSecret);
             Dispatcher  = new MspMessageDispatcher(Auth, Lobby, GameServers, Database, SharedSecret);
 
-            Host = new TcpListenerHost(
-                new TcpListenerHostOptions
-                {
-                    BindAddress         = IPAddress.Loopback,
-                    Port                = 0,
-                    ServerCertificate   = _certificate,
-                    MaxConnectionsPerIp = maxConnectionsPerIp,
-                },
-                Dispatcher);
+            var hostOptions = new TcpListenerHostOptions
+            {
+                BindAddress         = IPAddress.Loopback,
+                Port                = 0,
+                ServerCertificate   = _certificate,
+                MaxConnectionsPerIp = maxConnectionsPerIp,
+            };
+            configure?.Invoke(hostOptions);
+
+            Host = new TcpListenerHost(hostOptions, Dispatcher);
 
             Host.Start();
             _hostLoop = Host.RunAsync(_cts.Token);
