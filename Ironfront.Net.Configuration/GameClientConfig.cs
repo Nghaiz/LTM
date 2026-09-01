@@ -93,6 +93,20 @@ namespace Ironfront.Net.Configuration
         /// </remarks>
         public const uint ReservedIdCeiling = 1024;
 
+        /// <summary>
+        /// The side this client's SELF-MINTED join ticket claims, on the runs with no master
+        /// server in them. 0 or 1.
+        /// </summary>
+        /// <remarks>
+        /// <b>Never consulted in a real join.</b> The master server's lobby balances teams and
+        /// signs the answer into the ticket it issues; this value only reaches the wire on the
+        /// standalone path, where the client mints its own ticket because there is no master to
+        /// ask. It exists so a scripted run can put clients on opposite sides — leaving every
+        /// instance on the default produces a run in which nobody has an opponent, and the
+        /// server, claiming bodies by team, would hand them all one side and refuse the ninth.
+        /// </remarks>
+        public byte Team { get; set; }
+
         private static uint DeriveDefaultPlayerId()
         {
             // Process id, not a random draw: two clients started a second apart get different
@@ -153,6 +167,11 @@ namespace Ironfront.Net.Configuration
 
             string displayName = EnvParse.Trimmed(EnvRegistry.ClientDisplayName.Read(read));
             if (displayName.Length > 0) DisplayName = displayName;
+
+            // Range-checked at the mint site, not here. JoinTicket.MaxTeam is the authority on
+            // what a legal team is, and this project deliberately references NOTHING -- adding
+            // a reference to Protocol to re-state a bound would trade the leaf for a duplicate.
+            Team = EnvParse.Byte(EnvRegistry.ClientTeam.Read(read), Team, EnvRegistry.ClientTeam.Name);
 
             return this;
         }

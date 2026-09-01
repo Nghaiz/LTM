@@ -209,10 +209,16 @@ if (-not (Test-Path $player)) {
 # --------------------------------------------------------------------------------------
 if ($Smoke) { $Set = "smoke" }
 
+# TEAMS ARE EXPLICIT, and alternate the way a balanced lobby hands them out. Since
+# PROTOCOL_VERSION 6 the game server claims a body BY TEAM rather than by the first free slot,
+# so a roster that left every client on the default would put all three on team 0 -- a run in
+# which nobody has an opponent, and, once the pool's 8-a-side capacity is reached, a run that
+# refuses joins with a half-empty server. There is no master server in a lane-B run, so each
+# client mints its own ticket and this is where the side comes from.
 $clients = @(
-    @{ Label = "driver";     PlayerId = 5001; Name = "DRIVER" }
-    @{ Label = "observer-a"; PlayerId = 5002; Name = "OBS-A"  }
-    @{ Label = "observer-b"; PlayerId = 5003; Name = "OBS-B"  }
+    @{ Label = "driver";     PlayerId = 5001; Name = "DRIVER"; Team = 0 }
+    @{ Label = "observer-a"; PlayerId = 5002; Name = "OBS-A";  Team = 1 }
+    @{ Label = "observer-b"; PlayerId = 5003; Name = "OBS-B";  Team = 0 }
 )
 
 # Per-label first, shared second. The smoke has one programme for all three because it proves
@@ -262,6 +268,7 @@ function Set-CommonEnvironment {
 function Clear-ClientEnvironment {
     foreach ($n in @("IRONFRONT_LANEB_ROLE", "IRONFRONT_LANEB_LABEL", "IRONFRONT_LANEB_PROGRAMME",
                      "IRONFRONT_CLIENT_PLAYER_ID", "IRONFRONT_CLIENT_DISPLAY_NAME",
+                     "IRONFRONT_CLIENT_TEAM",
                      "IRONFRONT_LANEB_SPAWN_INDEX", "IRONFRONT_LANEB_WEAPON", "IRONFRONT_LANEB_GEAR",
                      "IRONFRONT_GAMESERVER_TRANSPORT", "IRONFRONT_GAMESERVER_UDP_PORT")) {
         Remove-Item "env:$n" -ErrorAction SilentlyContinue
@@ -331,6 +338,7 @@ try {
         $env:IRONFRONT_LANEB_PROGRAMME = $c.ProgrammePath
         $env:IRONFRONT_CLIENT_PLAYER_ID = "$($c.PlayerId)"
         $env:IRONFRONT_CLIENT_DISPLAY_NAME = $c.Name
+        $env:IRONFRONT_CLIENT_TEAM = "$($c.Team)"
         $env:IRONFRONT_CLIENT_HOST = "127.0.0.1"
         $env:IRONFRONT_CLIENT_PORT = "$Port"
 
@@ -465,7 +473,7 @@ $run = [ordered]@{
     spawnIndex     = $SpawnIndex
     pinnedWeapon   = $(if ($Weapon) { $Weapon } else { $null })
     pinnedGear     = $(if ($Gear) { $Gear } else { $null })
-    clients        = $clients | ForEach-Object { @{ label = $_.Label; playerId = $_.PlayerId; displayName = $_.Name; programme = $_.Programme } }
+    clients        = $clients | ForEach-Object { @{ label = $_.Label; playerId = $_.PlayerId; displayName = $_.Name; team = $_.Team; programme = $_.Programme } }
     failures       = $failures
     passed         = ($failures.Count -eq 0)
 }

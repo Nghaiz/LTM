@@ -1557,6 +1557,15 @@ namespace Ironfront.Net.Unity.Server
                 return;
             }
 
+            // P13 criterion 4 is graded on THIS line, and on purpose: after P12 the client can
+            // display its own team, and a client that displays the team it was told is not
+            // evidence that the team it was told is the team it has. Both numbers are printed
+            // rather than one, so the line distinguishes "the ticket said 1 and the body is 1"
+            // from "the ticket said 1 and the body is 0" — which is the whole defect.
+            Debug.Log(
+                $"[net] conn {connectionId} player {info.PlayerId} joined on team {ticketTeam} "
+                + $"(ticket) -> actor {actor.ActorId} team {actor.Team} (body)");
+
             var player = new ServerPlayer(
                 connectionId, actor.ActorId, _combat, DisplayNameFor(in info, actor.ActorId),
                 info.PlayerId)
