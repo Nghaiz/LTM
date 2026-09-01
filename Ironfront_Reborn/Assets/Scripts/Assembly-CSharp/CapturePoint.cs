@@ -471,7 +471,20 @@ public class CapturePoint : SpawnPoint
 			flagRenderer.material.color = Color.Lerp(ColorScheme.TeamColor(team), Color.black, 0.2f);
 		}
 		// debt-closure phase 2 task 2c. See Actor.Die for why this is no longer the HUD's call.
-		MatchScoreboard.Current.AddFlag(num2, num);
+		//
+		// P12 D-2: offline only, the same gate line 147 puts on this file's own arithmetic.
+		// SetOwner is reached from ApplyAuthoritativeOwner -- the SERVER-DRIVEN capture path --
+		// so on a networked client every flip fed the local scoreboard, and ScoreUi.UpdateUi
+		// then painted those locally-counted numbers over the server's. The server's own flag
+		// count for the kill multiplier lives in MatchStateMachine.OwnedPointCount, not here,
+		// so nothing authoritative reads what this gate stops writing.
+		//
+		// The two MinimapUi calls below are deliberately NOT gated: they are how a client
+		// RENDERS a flip it was told about, which is exactly what it should be doing.
+		if (NetContext.IsOffline)
+		{
+			MatchScoreboard.Current.AddFlag(num2, num);
+		}
 		MinimapUi.UpdateSpawnPointButtons();
 		// debt-closure phase 2 task 2d, ledger C-6: the point now carries a minimap marker that
 		// recolours as it flips. SetMarker is idempotent by subject, so calling it on every flip

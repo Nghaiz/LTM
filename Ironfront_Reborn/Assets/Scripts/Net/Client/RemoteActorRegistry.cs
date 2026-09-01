@@ -149,6 +149,8 @@ namespace Ironfront.Net.Unity.Client
                 return;
             }
 
+            byte localTeam = ResolveLocalTeam();
+
             foreach (KeyValuePair<ushort, Transform> pair in _live)
             {
                 if (SnapshotInterpolator.TryLerpPosition(from, to, alpha, pair.Key, out Vec3 p))
@@ -167,8 +169,12 @@ namespace Ironfront.Net.Unity.Client
                 // colour is written every frame rather than once. SetMarker is idempotent by
                 // subject -- a repeat recolours in place -- so this costs one dictionary hit
                 // and one Color assignment per live actor and never stacks a second icon.
-                NetClientBindings.Minimap?.SetBodyMarker(
-                    pair.Value, CapturePointOwnership.ToSpawnPointOwner(view.Team));
+                //
+                // P12 D-3: and only for friendlies. Both directions are written every frame
+                // because a team is replicated state that can change under us -- a body that
+                // stops qualifying must lose the icon it was given, or the enemy blip this
+                // filter exists to remove simply freezes on screen instead.
+                ApplyMinimapMarker(pair.Value, view.Team, localTeam);
             }
         }
 
@@ -208,17 +214,21 @@ namespace Ironfront.Net.Unity.Client
             t.gameObject.SetActive(true);
             _live[message.ActorId] = t;
 
-            // P3 task 3.4. The icon is bound HERE, at the neutral colour, rather than waiting
-            // for the first snapshot to reveal the team: SpawnActorMessage does not carry a
-            // team, and an actor past InterestManager.CullRadius may never appear in a snapshot
-            // at all (see the placement comment above). Waiting would leave exactly those
-            // actors -- the far ones, the ones a minimap is FOR -- with no icon. The colour is
-            // corrected in Update the moment a snapshot names the team.
+            // P3 task 3.4. The icon is bound HERE rather than waiting for the first snapshot,
+            // because an actor past InterestManager.CullRadius may never appear in a snapshot at
+            // all (see the placement comment above). Waiting would leave exactly those actors --
+            // the far ones, the ones a minimap is FOR -- with no icon.
+            //
+            // P12 D-3 corrects this comment as well as the call. It read "SpawnActorMessage does
+            // not carry a team", and it does: ServerTickLoop.AnnounceNewActors constructs it as
+            // `new SpawnActorMessage(actor.ActorId, actor.Team, ...)`. That is why the neutral -1
+            // is gone -- the team is known at the spawn, so the filter can be applied at the
+            // spawn, and a body that is never in a snapshot is filtered rather than drawn.
             //
             // Ledger A-2 is not touched: nothing here registers a proxy with ActorManager, so
             // ActorManager.Player still resolves to the local body. That is the whole reason
             // this goes through MinimapUi.SetMarker (Transform-keyed) and not AddActorBlip.
-            NetClientBindings.Minimap?.SetBodyMarker(t, -1);
+            ApplyMinimapMarker(t, message.Team, ResolveLocalTeam());
 
             RemoteActorView view = t.GetComponent<RemoteActorView>();
             if (view != null)
@@ -236,6 +246,81 @@ namespace Ironfront.Net.Unity.Client
                     + "is client-track item E1 -- add the component to the prefab.");
             }
         }
+
+        /// <summary>
+        /// Gives <paramref name="subject"/> a minimap icon if this client should see it, and
+        /// takes the icon away if it should not. P12 <b>D-3</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The networked minimap showed every enemy.</b> The registry marked every live
+        /// remote actor and <c>MinimapUi.SetMarker</c> has no team test, so a client saw the
+        /// position of every hostile inside <c>InterestManager.CullRadius</c> — a regression
+        /// against the offline game's OWN rule, which <c>ActorBlip.LateUpdate</c> states as
+        /// <c>actor.team == FpsActorController.playerTeam || actor.IsHighlighted()</c>.
+        /// </para>
+        /// <para>
+        /// <b>Filtered here, not in <c>MinimapUi.SetMarker</c>.</b> That method is a generic
+        /// keyed setter — capture points and spawn points go through it too — so teaching it
+        /// about teams would hand every future caller a rule it never asked for.
+        /// </para>
+        /// <para>
+        /// <b>The <c>IsHighlighted()</c> half of the offline rule is NOT implemented, and it is
+        /// not an omission.</b> Nothing carries a highlight bit across the wire:
+        /// <c>ActorSnapshotEntry</c> (<c>Ironfront.Net.Protocol/Messages/SnapshotMessage.cs</c>,
+        /// fields <c>ActorId</c>, <c>ChangeMask</c>, position, <c>Yaw</c>, <c>Pitch</c>,
+        /// velocity, <c>StateFlags</c>, <c>Health</c>, <c>WeaponId</c>, <c>AmmoInClip</c>,
+        /// <c>Team</c>, <c>VehicleId</c>, <c>SeatIndex</c>) has no such field, and neither does
+        /// <c>SpawnActorMessage</c>. So spotting an enemy is already impossible over the
+        /// network, for a reason that predates this filter and is not fixed by weakening it. A
+        /// disjunct over a value that can only ever be false would be a seam with no producer,
+        /// which reads as working and is not. <b>When a spotted bit lands, this predicate is
+        /// where it goes</b> — and until then the gap is recorded rather than papered over.
+        /// </para>
+        /// <para>
+        /// <b>An unresolved local team marks nothing.</b> Before the first snapshot names this
+        /// client's side there is no way to tell friend from enemy, and the failure directions
+        /// are not symmetric: marking everything shows the enemy positions this exists to hide,
+        /// while marking nothing costs a blank minimap for the fraction of a second before the
+        /// team arrives. <c>MinimapUi.UpdateSpawnPointButtons</c> takes the same branch for the
+        /// same reason.
+        /// </para>
+        /// </remarks>
+        private static void ApplyMinimapMarker(Transform subject, byte team, byte localTeam)
+        {
+            IMinimapMarkers minimap = NetClientBindings.Minimap;
+            if (minimap == null) return;
+
+            if (ShouldMarkOnMinimap(team, localTeam))
+                minimap.SetBodyMarker(subject, CapturePointOwnership.ToSpawnPointOwner(team));
+            else
+                minimap.RemoveMarker(subject);
+        }
+
+        /// <summary>
+        /// This client's own team, or <see cref="TeamId.None"/> when it is not known yet.
+        /// </summary>
+        /// <remarks>
+        /// Resolved ONCE per <see cref="Update"/> and passed down, not asked per actor: the
+        /// answer walks the snapshot dictionary, and a run carrying fifty-odd remote bodies would
+        /// otherwise repeat that walk fifty-odd times a frame for a value that cannot change
+        /// within one.
+        /// </remarks>
+        private static byte ResolveLocalTeam()
+            => NetPresenterGate.TryResolveLocalTeam(out byte team) ? team : TeamId.None;
+
+        /// <summary>
+        /// Whether a body on <paramref name="team"/> belongs on the minimap of a client on
+        /// <paramref name="localTeam"/>.
+        /// </summary>
+        /// <remarks>
+        /// Pure, and split out of <see cref="ApplyMinimapMarker"/> for exactly that reason: the
+        /// whole of P12 D-3 is this one rule, and a rule that needs a <c>Transform</c>, a marker
+        /// sink and a live snapshot to observe is a rule that gets quietly widened later. See
+        /// <c>RemoteActorMinimapFilterTests</c>.
+        /// </remarks>
+        internal static bool ShouldMarkOnMinimap(byte team, byte localTeam)
+            => team != TeamId.None && localTeam != TeamId.None && team == localTeam;
 
         private void OnDespawn(DespawnActorMessage message)
         {

@@ -149,6 +149,40 @@ namespace Ironfront.Net.Unity
         bool IsDriving(IGameplayActorPresence actor);
 
         /// <summary>
+        /// The team the rig's body is fighting for, or <c>-1</c> when there is no body to ask.
+        /// </summary>
+        /// <remarks>
+        /// Maps to <c>FpsActorController.playerTeam</c>. Read before <see cref="SetTeam"/> so the
+        /// apply is a transition rather than a per-frame write — see that member.
+        /// </remarks>
+        int Team { get; }
+
+        /// <summary>
+        /// Puts the rig's body on <paramref name="team"/>, recolouring it. A no-op when the rig
+        /// is absent.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Maps to <c>Actor.SetTeam</c> — <b>the same method the offline path uses</b>, so the
+        /// skinned-renderer recolour comes with it rather than being reimplemented on this side.
+        /// P12 D-1: nothing client-side ever set the local body's team from the server, so a
+        /// team-1 player saw their own body in blue and every <c>actor.team == playerTeam</c>
+        /// test in the game answered for the wrong side.
+        /// </para>
+        /// <para>
+        /// <b>Here rather than at the caller because <c>Actor</c> cannot be named from
+        /// <c>Net/Client</c></b> — the assembly boundary, and <c>check-net-layering.ps1</c> RULE
+        /// 6b, forbid it. This is the same reason the server's body factory is a delegate
+        /// (<c>NetServerBindings.PlayerBodyFactory</c>) rather than a prefab reference.
+        /// </para>
+        /// <para>
+        /// <b>Not authority.</b> It is called BECAUSE the snapshot says which side this player is
+        /// on, never to assert it — the same contract <see cref="EnterDeployedView"/> carries.
+        /// </para>
+        /// </remarks>
+        void SetTeam(int team);
+
+        /// <summary>
         /// The rig's world position, for distance falloff. <see cref="Vector3.zero"/> when
         /// absent.
         /// </summary>

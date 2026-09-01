@@ -104,6 +104,18 @@ namespace Ironfront.Net.Unity.Bindings
         }
 
         /// <inheritdoc/>
+        public int Team => FpsActorController.playerTeam;
+
+        /// <inheritdoc/>
+        public void SetTeam(int team)
+        {
+            FpsActorController local = FpsActorController.instance;
+            if (local == null || local.actor == null) return;
+
+            local.actor.SetTeam(team);
+        }
+
+        /// <inheritdoc/>
         public Vector3 Position
         {
             get
