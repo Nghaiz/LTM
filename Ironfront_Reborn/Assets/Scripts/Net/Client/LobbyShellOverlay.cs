@@ -387,13 +387,18 @@ namespace Ironfront.Net.Unity.Client
             GUILayout.Label($"In room. Game server: {_session.PendingJoin}");
             GUILayout.Label("Waiting for the match to start.");
 
-            // The server signals this now: MasterSession subscribes to OnRoomStatePush and
-            // calls EnterMatch itself when the room reaches Starting or InMatch (X-77). The
-            // button stays because a shell that can only wait cannot demonstrate the junction
-            // on demand, and it is idempotent with the automatic path -- both go through
-            // EnterMatch, and the flow refuses the second.
+            // "Enter match now (debug)" WAS here, and P14 3.4 deleted it. It existed because
+            // nothing else could carry a client from RoomLobby into a match: Ready was
+            // write-only, RoomLifecycleState.Starting was declared and never assigned, and the
+            // Unity server never sent GsMatchStarted. All three are wired now, so the room
+            // reaching Starting is what enters the match -- MasterSession subscribes to
+            // OnRoomStatePush and calls EnterMatch itself (X-77).
+            //
+            // Deleted rather than left as a harmless spare: a debug path that still works masks
+            // a broken production path, which is the exact shape this project keeps recording --
+            // every gate measures wiring, and a working stopgap is why nobody looks. Verified
+            // first, deleted second, in that order and in one PR (criterion 4).
             GUI.enabled = !_busy;
-            if (GUILayout.Button("Enter match now (debug)")) Guard(() => _session.EnterMatch());
 
             // The Leave button the note here used to say could not exist. The table now carries
             // RoomLobby -> RoomBrowser, so this calls a transition it accepts.

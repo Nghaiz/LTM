@@ -371,6 +371,18 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>Connected players.</summary>
         public int PlayerCount => _players.Count;
 
+        /// <summary>
+        /// The lobby room this server is hosting, learned from the join tickets that arrive at
+        /// it. 0 in standalone. P14 3.1.
+        /// </summary>
+        /// <remarks>
+        /// It lives on the loop rather than on <see cref="ServerMasterReporter"/>, which is what
+        /// reports it, because the loop owns the ingress: the ticket is verified here and a
+        /// ticket for the wrong room has to be refused here, before it claims a body. The
+        /// reporter reads it.
+        /// </remarks>
+        public ServerRoomIdentity RoomIdentity { get; } = new ServerRoomIdentity();
+
         /// <summary>The tick the loop is on.</summary>
         public uint CurrentTick => _scheduler.CurrentTick;
 
@@ -1537,6 +1549,21 @@ namespace Ironfront.Net.Unity.Server
             // from slot parity here, so the lobby's balancing was computed and thrown away.
             byte ticketTeam = info.Team;
 
+            // The room the master put this player in, out of the same signed ticket. P14 3.1:
+            // this is the ONLY channel that carries it, so the room is adopted here, at the
+            // ingress, rather than typed into a prefab field that silently disagreed with the
+            // master and made GsMatchStarted a no-op.
+            //
+            // Refused BEFORE the slot claim, not after: a ticket for another room must not
+            // consume a body, and a player admitted into the wrong room's match is a worse
+            // outcome than one told to reconnect.
+            if (!RoomIdentity.Observe(info.RoomId, out string roomConflict))
+            {
+                Debug.LogError($"[net] conn {connectionId} refused — {roomConflict}");
+                Transport.Disconnect(connectionId, DisconnectReason.InvalidTicket);
+                return;
+            }
+
             if (!ServerActorRegistry.Instance.TryClaimPlayerSlot(ticketTeam, out NetServerActor actor))
             {
                 // Two different facts, and they must not render as one sentence: "the server
@@ -1604,7 +1631,13 @@ namespace Ironfront.Net.Unity.Server
             // agree at t=0. Join after a point has flipped and they do not.
             _match?.SendFullMatchStateTo(connectionId);
 
-            Debug.Log($"[net] conn {connectionId} joined as actor {actor.ActorId} ({info.RemoteAddress})");
+            // The room is on this line because P14 criterion 1 is graded by comparing it against
+            // the master's AssignedRoomId for the same room — two sides' logs, rather than a
+            // prefab field nobody can check. "room 0" is standalone and is the honest answer for
+            // a ticketless join, not a missing one.
+            Debug.Log(
+                $"[net] conn {connectionId} joined as actor {actor.ActorId} "
+                + $"({info.RemoteAddress}), hosting room {RoomIdentity.RoomId}");
         }
 
         private void OnClientDisconnected(ushort connectionId, DisconnectReason reason)

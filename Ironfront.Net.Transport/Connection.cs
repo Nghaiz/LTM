@@ -151,6 +151,19 @@ namespace Ironfront.Net.Transport
         public byte Team { get; internal set; }
 
         /// <summary>
+        /// The lobby room from the same signed ticket <see cref="PlayerId"/>,
+        /// <see cref="DisplayName"/> and <see cref="Team"/> came from. 0 when there was no
+        /// ticket to read.
+        /// </summary>
+        /// <remarks>
+        /// The fourth field taken out of the one post-verify <c>JoinTicket.TryReadFields</c>
+        /// call, and the one that lets a game server learn which room it is hosting without a
+        /// master → game-server message that does not exist. See
+        /// <c>Ironfront.Net.Replication.Server.ServerRoomIdentity</c>.
+        /// </remarks>
+        public ushort RoomId { get; internal set; }
+
+        /// <summary>
         /// Datagrams discarded because a v1-reserved flag bit was set.
         /// </summary>
         /// <remarks>
