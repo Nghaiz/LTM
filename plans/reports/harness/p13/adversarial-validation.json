@@ -17,5 +17,10 @@
     "Criterion 6's literal screenshot. The refusal is proven from BOTH sides at runtime (server log and client log) in two controlled runs, and the two sentences are pinned by a test — but no image was captured: a refused lane-B client renders no frame, and LobbyShellOverlay, which draws MasterSession.LastError in red, is on the master-server shell flow rather than the standalone path lane-B uses.",
     "Criterion 7 against a genuinely old BINARY. Tested against undefined codes 8, 9 and 255 on today's build, which exercises the same default arm a v5 build would take for code 7. No v5 binary was rebuilt to be shot at.",
     "ServerTickLoop's ServerFull arm. The contrast run's third client was refused BY THE TRANSPORT at capacity and never reached OnClientConnected — no conn 3 line in that server log. The player-facing contrast is real and proven; that particular branch is not what proved it."
+  ],
+  "unverifiedClaims": [
+    "That ConnectDenyReason.TeamFull = 7 is deliverable to a player. It is not: no code path sends it, because the slot claim runs after the handshake. Documented in the spec and reserved; the reachable refusal is DisconnectReason.TeamFull.",
+    "That ServerTickLoop's ServerFull arm was exercised. It was not — the transport reached capacity first and the third client never reached OnClientConnected.",
+    "That the criterion 6 refusal was seen by a human on screen. It was read from two logs, not from an image."
   ]
 }

@@ -16,12 +16,12 @@
     "2131 tests across 8 projects, counted by project rather than trusted from the exit code — dotnet test exits 0 when a project fails to BUILD.",
     "Four PROTOCOL_VERSION pins updated by EXTENDING their existing trailing comment with the 5 -> 6 cause, not by re-pinning to whatever the run reported. Each pin's own layout (channel envelope, PlayerList, S_EXPLOSION, S_SEAT_CHANGE) is untouched by P13 and still asserted beside the version.",
     "Unity EditMode 109/111. The 2 failures are SpawnPointSelectionTests and are pre-existing: the test, PinnedSpawnPointDirectory and ServerCombatBridge are byte-identical to develop, and the throw is Assembly-CSharp constructor validation with no dependency on any rebuilt DLL.",
-    "Release()'s in-place free, the pool's i % 2 alternation and the AvailableForPlayers / IsClaimed predicates are unchanged, as step 3.2 requires. The live TeamFull run shows the walk skipping the team-1 body: conn 2 took actor 43, not the free actor 42."
+    "Release()'s in-place free, the pool's i % 2 alternation and the AvailableForPlayers / IsClaimed predicates are unchanged, as step 3.2 requires. The live TeamFull run shows the walk skipping the team-1 body: conn 2 took actor 43, not the free actor 42.",
+    "RISK — ConnectDenyReason.TeamFull = 7 has NO SENDER. The slot claim happens after the handshake, so the reachable refusal is DisconnectReason.TeamFull; code 7 is a documented spec value reserved for a handshake-stage team check that does not exist yet. Present, not wired — stated rather than implied.",
+    "RISK — ServerTickLoop's ServerFull arm is defensive and the transport normally pre-empts it: the pool is sized from MaxConnections, so transport capacity is reached first. The ServerFull contrast run above was refused BY THE TRANSPORT — no conn 3 line reached the server log. That was equally true before P13; it is recorded so nobody reads the contrast as proof of that branch.",
+    "RISK — Ironfront.Net.Transport was edited although phase section 2 does not list it, because OnClientConnected reads ConnectionInfo rather than the ticket.",
+    "RISK — Connection.MapDeniedReason went private -> internal with InternalsVisibleTo, to test a branch no server can reach."
   ],
-  "risks": [
-    "ConnectDenyReason.TeamFull = 7 has NO SENDER. The slot claim happens after the handshake, so the reachable refusal is DisconnectReason.TeamFull; code 7 is a documented spec value reserved for a handshake-stage team check that does not exist yet. Present, not wired — stated rather than implied.",
-    "ServerTickLoop's ServerFull arm is defensive and the transport normally pre-empts it: the pool is sized from MaxConnections, so transport capacity is reached first. The ServerFull contrast run above was refused BY THE TRANSPORT — no conn 3 line reached the server log. That was equally true before P13; it is recorded so nobody reads the contrast as proof of that branch.",
-    "Ironfront.Net.Transport was edited although phase section 2 does not list it, because OnClientConnected reads ConnectionInfo rather than the ticket.",
-    "Connection.MapDeniedReason went private -> internal with InternalsVisibleTo, to test a branch no server can reach."
-  ]
+  "blockingReasons": [],
+  "contractStatus": "CHANGED"
 }

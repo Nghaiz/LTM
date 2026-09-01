@@ -2,19 +2,7 @@
   "skill": "t1k-cook",
   "mode": "code",
   "task": "P13 'the team the lobby chose, carried into the match' — the master server's lobby balances teams on every join and then throws the answer away, because the joinTicket's 32 signed bytes were exactly full. The game server re-derived a side from slot parity, so a player's team was an accident of join order. Carry a u8 team in the ticket, claim a body BY TEAM, and refuse a full side with a code distinguishable from a full server.",
-  "scoutSummary": "P11 HAS shipped — ProtocolConstants.PROTOCOL_VERSION is already 5, the spec header reads 5.0.0, and the changelog carries a 5.0.0 row for P11's S_MATCH_STATE change (commit 91492d7, #241). Contracts section 3.2 requires this check before writing the changelog row: P11 shipped, so P13 is 5 -> 6 on its own, not an amendment. Two scout findings changed the work. FIRST: the phase says OnClientConnected 'already has the verified ticket'. It does not — ConnectionInfo carries only PlayerId and DisplayName, both extracted by the transport at the handshake (ledger X-36's precedent). The team has to ride ConnectionInfo the same way, which means Ironfront.Net.Transport is in scope although section 2 does not list it. SECOND: the failing claim path calls Transport.Disconnect(connectionId, DisconnectReason.ServerFull), not CONNECT_DENIED — the slot claim happens AFTER the handshake, so ConnectDenyReason.TeamFull alone would be a value nothing on the failing path could ever send.",
-  "affectedContracts": [
-    "plans/00-shared/team-multiplayer-contracts.md sections 3-4 — the ticket layout and the team value space",
-    "plans/00-shared/protocol-spec.md section 12 (ticket), section 3.2 (deny codes), section 15 (changelog + freeze gate)",
-    "JoinTicket.Issue / TryReadFields — signature change, 8 call sites across 6 projects",
-    "ServerActorRegistry.TryClaimPlayerSlot — signature change, gains the team",
-    "ConnectionInfo — new Team field, new widest constructor"
-  ],
-  "conventions": [
-    "pinned-baseline-test-companion.md — four PROTOCOL_VERSION pins asserted 5; each carries a trailing comment naming every bump and its cause, extended rather than re-pinned",
-    "development-principles.md SSOT — JoinTicket.MaxTeam is the single authority on a legal team; Ironfront.Net.Configuration references nothing and does not restate it",
-    "check-net-layering.ps1 — Ironfront.Net.Configuration is a leaf with zero project references"
-  ],
+  "scoutSummary": "P11 HAS shipped — ProtocolConstants.PROTOCOL_VERSION is already 5, the spec header reads 5.0.0, and the changelog carries a 5.0.0 row for P11's S_MATCH_STATE change (commit 91492d7, #241). Contracts section 3.2 requires this check before writing the changelog row: P11 shipped, so P13 is 5 -> 6 on its own, not an amendment. Two scout findings changed the work. FIRST: the phase says OnClientConnected 'already has the verified ticket'. It does not — ConnectionInfo carries only PlayerId and DisplayName, both extracted by the transport at the handshake (ledger X-36's precedent). The team has to ride ConnectionInfo the same way, which means Ironfront.Net.Transport is in scope although section 2 does not list it. SECOND: the failing claim path calls Transport.Disconnect(connectionId, DisconnectReason.ServerFull), not CONNECT_DENIED — the slot claim happens AFTER the handshake, so ConnectDenyReason.TeamFull alone would be a value nothing on the failing path could ever send. Contracts consulted: plans/00-shared/team-multiplayer-contracts.md sections 3-4 — the ticket layout and the team value space; plans/00-shared/protocol-spec.md section 12 (ticket), section 3.2 (deny codes), section 15 (changelog + freeze gate); JoinTicket.Issue / TryReadFields — signature change, 8 call sites across 6 projects; ServerActorRegistry.TryClaimPlayerSlot — signature change, gains the team; ConnectionInfo — new Team field, new widest constructor. Conventions applied: pinned-baseline-test-companion.md — four PROTOCOL_VERSION pins asserted 5; each carries a trailing comment naming every bump and its cause, extended rather than re-pinned; development-principles.md SSOT — JoinTicket.MaxTeam is the single authority on a legal team; Ironfront.Net.Configuration references nothing and does not restate it; check-net-layering.ps1 — Ironfront.Net.Configuration is a leaf with zero project references.",
   "blastRadius": [
     "Ironfront.Net.Protocol/Security/JoinTicket.cs — layout, Issue, TryReadFields, MaxTeam",
     "Ironfront.Net.Protocol/Enums/GspEnums.cs — ConnectDenyReason.TeamFull = 7",
@@ -33,5 +21,31 @@
     "Ironfront_Reborn/Assets/Plugins/*.dll — rebuilt; Unity reads the DLLs, not the sources",
     "plans/00-shared/protocol-spec.md — sections 12, 3.2, 15",
     "tools/run-lane-b.ps1 + .env.example — scripted runs and the generated template"
+  ],
+  "acceptanceCriteria": [
+    "1 — ticket issued for team 1 verifies as team 1; a tampered team byte fails BadSignature; Size still 64 and SignedPayloadSize still 32",
+    "2 — a 16-character name and a name whose 15th byte is mid-sequence both round-trip without a replacement glyph, both named in the report",
+    "3 — hex-sample test pins the 64 ticket bytes; SpecChecker green; sections 12 and 3.2 updated; a section 15 row states whether the version moved and why",
+    "4 — two clients assigned different teams land on that team, verified against the SERVER's log rather than the client's belief",
+    "5 — the section 1.1 sequence leaves one human per side, not two on team 0 (reworded by the owner 2026-09-02; the original one-departure wording was unreachable)",
+    "6 — a join onto a full side is refused with TeamFull, shown distinguishably from 'server full'",
+    "7 — an old client receiving code 7 shows a generic refusal, not silence and not the wrong reason",
+    "8 — tools/ci.ps1 green"
+  ],
+  "touchpoints": [
+    "JoinTicket.Issue / TryReadFields — signature change, 8 call sites across 6 projects",
+    "ServerActorRegistry.TryClaimPlayerSlot — gains the team argument; ServerTickLoop is its only production caller",
+    "ConnectionInfo — new Team field and a new widest constructor; built by UdpTransportServer and LoopbackTransport",
+    "MspMessageDispatcher room-join handler — now reads the member back to sign its balanced team",
+    "Connection.MapDeniedReason — the unknown-code arm, reachable by no server in the repository",
+    "run-lane-b.ps1 client roster and every runner that mints its own ticket (JoinTicketSource, NetClientBootstrap)"
+  ],
+  "publicContracts": [
+    "protocol-spec.md section 12 — the joinTicket layout. CHANGED: displayName 16 -> 15, u8 team at offset 16.",
+    "protocol-spec.md section 3.2 — CONNECT_DENIED codes. CHANGED: code 7 TeamFull added; no byte moved.",
+    "protocol-spec.md section 15 — a 6.0.0 changelog row, Wire change? Yes.",
+    "ProtocolConstants.PROTOCOL_VERSION — 5 -> 6, in the code, the fenced block and the prose header.",
+    "team-multiplayer-contracts.md sections 3-4 — implemented exactly as specified; not amended.",
+    "DisconnectReason — TeamFull = 9 and Refused = 10 appended; existing values unmoved."
   ]
 }
