@@ -785,7 +785,18 @@ namespace Ironfront.Net.Transport
             if (notify) Disconnected?.Invoke(reason);
         }
 
-        private static DisconnectReason MapDeniedReason(ConnectDenyReason reason)
+        /// <summary>
+        /// Maps a CONNECT_DENIED reason code onto the disconnect reason the client reports.
+        /// </summary>
+        /// <remarks>
+        /// <b>Internal rather than private so the unknown-code branch can be tested.</b> That
+        /// branch is the whole of P13 criterion 7 and it is unreachable from the public API:
+        /// no server in this repository sends a code the client does not know, which is
+        /// precisely why the branch existed for five protocol versions while mapping every
+        /// unrecognised code to <see cref="DisconnectReason.InvalidTicket"/> — a WRONG reason,
+        /// not an unknown one.
+        /// </remarks>
+        internal static DisconnectReason MapDeniedReason(ConnectDenyReason reason)
             => reason switch
             {
                 ConnectDenyReason.ServerFull => DisconnectReason.ServerFull,

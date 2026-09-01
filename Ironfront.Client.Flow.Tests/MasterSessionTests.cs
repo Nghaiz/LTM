@@ -376,6 +376,53 @@ namespace Ironfront.Client.Flow.Tests
         }
 
         [Fact]
+        public async Task AFullSIDEDoesNotReadLikeAFullSERVER()
+        {
+            // P13 criterion 6, the rendering half. "The server is full" has no remedy;
+            // "your side is full" has one the player can act on — switch sides. Rendering
+            // them as the same sentence throws away the only actionable half, which is the
+            // entire reason ConnectDenyReason.TeamFull and DisconnectReason.TeamFull exist
+            // rather than reusing code 1.
+            Harness teamFull = await new Harness().AtRoomLobbyAsync();
+            teamFull.Session.EnterMatch();
+            teamFull.Game.Drop(DisconnectReason.TeamFull);
+
+            Harness serverFull = await new Harness().AtRoomLobbyAsync();
+            serverFull.Session.EnterMatch();
+            serverFull.Game.Drop(DisconnectReason.ServerFull);
+
+            Assert.Contains("TeamFull", teamFull.Session.LastError);
+            Assert.Contains("ServerFull", serverFull.Session.LastError);
+            Assert.NotEqual(serverFull.Session.LastError, teamFull.Session.LastError);
+
+            // Both still land the player somewhere they can act, rather than in a frozen
+            // world nobody is updating.
+            Assert.Equal(GameFlowState.RoomLobby, teamFull.Flow.State);
+            Assert.Equal(GameFlowState.RoomLobby, serverFull.Flow.State);
+        }
+
+        [Fact]
+        public async Task AnUnknownRefusalSaysNothingItCannotKnow()
+        {
+            // P13 criterion 7. A build that predates a deny code must degrade to a GENERIC
+            // refusal — not to silence, and not to a WRONG reason. Connection.MapDeniedReason
+            // used to send every unrecognised code to InvalidTicket, so a player whose side
+            // was full was told their ticket was invalid and went off to re-log in.
+            //
+            // DisconnectReason.Refused is what an unknown code becomes now. This asserts the
+            // client renders it as its own sentence rather than borrowing another code's.
+            Harness refused = await new Harness().AtRoomLobbyAsync();
+            refused.Session.EnterMatch();
+            refused.Game.Drop(DisconnectReason.Refused);
+
+            Assert.Contains("Refused", refused.Session.LastError);
+            Assert.DoesNotContain("InvalidTicket", refused.Session.LastError);
+            Assert.DoesNotContain("ServerFull", refused.Session.LastError);
+            Assert.DoesNotContain("TeamFull", refused.Session.LastError);
+            Assert.Equal(GameFlowState.RoomLobby, refused.Flow.State);
+        }
+
+        [Fact]
         public async Task AcceptingDoesNotEnterTheMatchUntilTheSceneIsUp()
         {
             // phase-03 task 3 puts the InMatch transition in the scene load's completion

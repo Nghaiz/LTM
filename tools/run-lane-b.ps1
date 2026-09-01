@@ -55,6 +55,23 @@ param(
     # -Set smoke, and it wins if both are given.
     [switch] $Smoke,
 
+    # Override the roster's per-client teams, in roster order: -ClientTeams 0,0,0 puts all
+    # three on team 0. Empty (the default) keeps the roster's own alternating 0,1,0.
+    #
+    # Since PROTOCOL_VERSION 6 the server claims a body BY TEAM, so "everyone on one side" is
+    # the only way to reach a TeamFull refusal -- P13 criterion 6 needs exactly that, and so
+    # will any check that wants a lopsided match. Length must equal the client count; a
+    # mismatch throws rather than silently applying to a prefix.
+    [int[]] $ClientTeams = @(),
+
+    # Cap the server's transport slots, which caps the pool and therefore the per-side
+    # capacity: the pool alternates as it fills, so N slots is N/2 bodies a side. 0 (the
+    # default) leaves the server's own configuration alone.
+    #
+    # MaxPlayers is set to the same number, because GameServerConfig refuses a MaxConnections
+    # below it -- the matchmaker would otherwise send more players than the transport accepts.
+    [int] $MaxConnections = 0,
+
     # Which programme set to run. Each client looks for tools/lane-b/<set>-<label>.json and
     # falls back to tools/lane-b/<set>.json when there is no per-label file -- which is how the
     # smoke keeps running one programme on all three while a check set gives each client its
@@ -221,6 +238,19 @@ $clients = @(
     @{ Label = "observer-b"; PlayerId = 5003; Name = "OBS-B";  Team = 0 }
 )
 
+if ($ClientTeams.Count -gt 0) {
+    if ($ClientTeams.Count -ne $clients.Count) {
+        throw "-ClientTeams has $($ClientTeams.Count) entries and the roster has $($clients.Count). " +
+              "Give one per client, in roster order, or omit it."
+    }
+    for ($i = 0; $i -lt $clients.Count; $i++) {
+        if ($ClientTeams[$i] -lt 0 -or $ClientTeams[$i] -gt 1) {
+            throw "-ClientTeams[$i] is $($ClientTeams[$i]); legal teams are 0 and 1."
+        }
+        $clients[$i].Team = $ClientTeams[$i]
+    }
+}
+
 # Per-label first, shared second. The smoke has one programme for all three because it proves
 # bring-up rather than a check; a check set gives each client its own, because the roles are
 # not interchangeable.
@@ -294,6 +324,15 @@ try {
     if ($LogShots) { $env:IRONFRONT_LOG_SHOTS = "1" } else { $env:IRONFRONT_LOG_SHOTS = $null }
     $env:IRONFRONT_GAMESERVER_TRANSPORT = "udp"
     $env:IRONFRONT_GAMESERVER_UDP_PORT = "$Port"
+
+    # Both, not just MaxConnections: GameServerConfig throws when MaxConnections is below
+    # MaxPlayers, on the grounds that the matchmaker would send more players than the
+    # transport will accept.
+    if ($MaxConnections -gt 0) {
+        $env:IRONFRONT_GAMESERVER_MAX_CONNECTIONS = "$MaxConnections"
+        $env:IRONFRONT_GAMESERVER_MAX_PLAYERS = "$MaxConnections"
+        Write-Host "[lane-b] server capped to $MaxConnections slots ($([int]($MaxConnections / 2)) bodies a side)"
+    }
     # Server only: the clients place nobody, so the variable would be inert on them and only
     # make the three logs disagree about what the run was configured to do.
     if ($SpawnIndex -ge 0) { $env:IRONFRONT_LANEB_SPAWN_INDEX = "$SpawnIndex" }

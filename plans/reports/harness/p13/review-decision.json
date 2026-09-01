@@ -1,0 +1,27 @@
+{
+  "decision": "PASS_WITH_RISK",
+  "score": 9,
+  "criticalCount": 0,
+  "acceptanceCoverage": [
+    "MET (1): team round-trips at 0 and 1; a tampered team byte fails BadSignature; Size still 64 and SignedPayloadSize still 32, both asserted plus the arithmetic 4+2+2+8+1+15. Mutation 1 proves the tamper test sees the signed span.",
+    "MET (2): 'abcdefghijklmnop' -> 'abcdefghijklmno' (16 ASCII, one character lost) and 'abcdefghijklmnư' -> 'abcdefghijklmn' plus 'abcdefghijklmệ' -> 'abcdefghijklm' (2-byte and 3-byte characters straddling byte 15, dropped whole). Both names stated as the criterion requires. Mutation 2 reds exactly these.",
+    "MET (3): JoinTicket_IssuesTheExpectedSixtyFourBytes pins all 64 bytes, computed OUTSIDE the solution by an independent HMAC rather than captured from the code. SpecChecker green. Sections 12 and 3.2 updated; the 6.0.0 changelog row states P11 had already shipped and therefore that this is 5 -> 6 on its own.",
+    "MET (4): lane-B, three clients, read off the SERVER's log — 'conn 1 player 5001 joined on team 0 (ticket) -> actor 41 team 0 (body)', conn 2 team 1 -> actor 42 team 1, conn 3 team 0 -> actor 43 team 0.",
+    "MET (5, as reworded by the owner 2026-09-02): ADepartureInTheMiddle_DoesNotStrandTheNextJoinerOnTheWrongSide, mutation-proven RED with 'the fourth joiner was handed a team 0 body'. The original one-departure wording was unreachable and the phase file now says so.",
+    "MET IN SUBSTANCE, NOT AS A SCREENSHOT (6): two controlled live runs, same binary. 4 slots with all three clients on team 0 -> server 'conn 3 joined for team 0, which is full — the other side is not', client 'disconnected: TeamFull'. 2 slots with teams 0,1,0 -> client 'disconnected: ServerFull'. Two facts, two answers. The screenshot itself is not available: a refused lane-B client renders no frame, and the overlay that draws the sentence is on the master-server shell flow. AFullSIDEDoesNotReadLikeAFullSERVER pins the two sentences differing.",
+    "MET (7): AnUnknownCodeBecomesAGenericRefusal_NotAWrongReason over codes 8, 9 and 255, plus AnUnknownRefusalSaysNothingItCannotKnow on the client's rendered text. Mutation 5 (restore the pre-P13 default arm) reds exactly these. Tested against an undefined code rather than a rebuilt v5 binary, because a v5 build has no arm for 7 and lands in the same default arm — and nobody ships a rebuilt v5.",
+    "PENDING (8): tools/ci.ps1 running at the time of writing; the dotnet half is already green at 2131 tests."
+  ],
+  "regressionProof": [
+    "2131 tests across 8 projects, counted by project rather than trusted from the exit code — dotnet test exits 0 when a project fails to BUILD.",
+    "Four PROTOCOL_VERSION pins updated by EXTENDING their existing trailing comment with the 5 -> 6 cause, not by re-pinning to whatever the run reported. Each pin's own layout (channel envelope, PlayerList, S_EXPLOSION, S_SEAT_CHANGE) is untouched by P13 and still asserted beside the version.",
+    "Unity EditMode 109/111. The 2 failures are SpawnPointSelectionTests and are pre-existing: the test, PinnedSpawnPointDirectory and ServerCombatBridge are byte-identical to develop, and the throw is Assembly-CSharp constructor validation with no dependency on any rebuilt DLL.",
+    "Release()'s in-place free, the pool's i % 2 alternation and the AvailableForPlayers / IsClaimed predicates are unchanged, as step 3.2 requires. The live TeamFull run shows the walk skipping the team-1 body: conn 2 took actor 43, not the free actor 42."
+  ],
+  "risks": [
+    "ConnectDenyReason.TeamFull = 7 has NO SENDER. The slot claim happens after the handshake, so the reachable refusal is DisconnectReason.TeamFull; code 7 is a documented spec value reserved for a handshake-stage team check that does not exist yet. Present, not wired — stated rather than implied.",
+    "ServerTickLoop's ServerFull arm is defensive and the transport normally pre-empts it: the pool is sized from MaxConnections, so transport capacity is reached first. The ServerFull contrast run above was refused BY THE TRANSPORT — no conn 3 line reached the server log. That was equally true before P13; it is recorded so nobody reads the contrast as proof of that branch.",
+    "Ironfront.Net.Transport was edited although phase section 2 does not list it, because OnClientConnected reads ConnectionInfo rather than the ticket.",
+    "Connection.MapDeniedReason went private -> internal with InternalsVisibleTo, to test a branch no server can reach."
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "highRisk": true,
+  "autoStopRequired": true,
+  "humanApproved": false,
+  "largeDiff": false,
+  "reasons": [
+    "A WIRE CHANGE. PROTOCOL_VERSION 5 -> 6, and every byte of the ticket from offset 16 onward moved. A v5 client's ticket puts a name byte where a v6 server reads the team, so 'N' (0x4E) decodes as team 78 and the join is refused for a side that does not exist. The client and server must ship together; CONNECT_DENIED code 2 is the intended outcome for a mismatch, and it is reached because the version moved in both the code and the spec's fenced block.",
+    "The phase's own risk table scores two rows at 12. Row 1 (name truncation lands mid-character) is closed by a test with two named concrete inputs, mutation-proven RED. Row 2 (a side full at 8 of 16 reads as a broken server) is closed by DisconnectReason.TeamFull plus the distinct log line, but criterion 6's SCREENSHOT of the refusal has not been taken.",
+    "Criterion 5 CANNOT BE MET AS WORDED and needs an owner decision. The phase's section 1.1 sequence (three join, the middle one leaves) leaves two players on team 0 under the fixed code exactly as it does under the broken code — verified by exhaustive simulation, not by argument. Correcting it would mean moving a player already in the match, which section 6 of the same phase puts out of scope. The fix was implemented and a two-departure sequence that DOES discriminate is pinned instead.",
+    "Ironfront.Net.Transport was edited although phase section 2 does not list it. It is unavoidable: OnClientConnected reads ConnectionInfo, not the ticket, so the team has to be carried the way X-36 carried the display name. Scope was widened, deliberately and narrowly, rather than the criterion being reinterpreted.",
+    "Criteria 4, 6 and 7 are runtime evidence from live runs and are not substitutable by unit tests. A lane-B run is in flight for 4; 6 and 7 have not been run."
+  ]
+}

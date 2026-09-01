@@ -1,0 +1,81 @@
+{
+  "commands": [
+    {
+      "command": "dotnet test Ironfront.sln",
+      "status": "pass",
+      "exitCode": 0,
+      "timestamp": "2026-09-02T00:20:00+07:00",
+      "summary": "2131 passed, 0 failed across all 8 test projects (Protocol 290, Replication 1397, Transport 103, MasterServer 90, Configuration 73, Flow 98, Input 39, LoadHarness 41). Project count checked explicitly rather than trusting the exit code: dotnet test exits 0 when a project fails to BUILD, so 8 'Passed!' lines were counted."
+    },
+    {
+      "command": "dotnet run --project tools/SpecChecker",
+      "status": "pass",
+      "exitCode": 0,
+      "timestamp": "2026-09-02T00:12:00+07:00",
+      "summary": "OK — 90 constants match protocol-spec.md, including PROTOCOL_VERSION 6 in the section 1 fenced block. Freeze-gate condition 1. Condition 4's other half (the prose header at the top of the file) is not parsed by SpecChecker and was checked by eye: it reads 6.0.0 / PROTOCOL_VERSION = 6."
+    },
+    {
+      "command": "Unity EditMode: ServerPlayerSlotPoolTests",
+      "status": "pass",
+      "exitCode": 0,
+      "timestamp": "2026-09-02T01:05:00+07:00",
+      "summary": "14/14 passed, including the three new ones: EveryClaim_LandsOnTheTeamItAskedFor, OneSideFillsAtHalfCapacity_AndTheServerIsNotFull, ADepartureInTheMiddle_DoesNotStrandTheNextJoinerOnTheWrongSide."
+    },
+    {
+      "command": "Unity EditMode: full suite",
+      "status": "fail",
+      "exitCode": 1,
+      "timestamp": "2026-09-02T01:12:00+07:00",
+      "summary": "109/111. The 2 failures are SpawnPointSelectionTests.APinnedDirectoryNarrowsAndNeverWidens and .PinningAnEmptySlotChoosesNothingRatherThanFallingBack, and they are PRE-EXISTING, not P13. Proof rather than assertion: that test file, PinnedSpawnPointDirectory.cs and ServerCombatBridge.cs are all byte-identical to develop (git diff --quiet develop -- <path>), and the throw is a constructor validation in Assembly-CSharp with no dependency on any rebuilt DLL. They survive on develop because tools/ci.ps1 step 4 runs a Unity batch-mode COMPILE, not the EditMode suite."
+    },
+    {
+      "command": "MUTATION 1 — swap OffsetTeam and OffsetDisplayName in JoinTicket",
+      "status": "pass",
+      "exitCode": 0,
+      "timestamp": "2026-09-02T00:30:00+07:00",
+      "summary": "RED, and only in the 2 hex-sample tests; the other 288 passed — INCLUDING every team round-trip test, because both halves of a round trip move together. This is the whole reason freeze-gate condition 2 asks for a hex sample and not a round trip."
+    },
+    {
+      "command": "MUTATION 2 — delete the UTF-8 back-off loop in WriteDisplayName",
+      "status": "pass",
+      "exitCode": 0,
+      "timestamp": "2026-09-02T00:33:00+07:00",
+      "summary": "RED, and only in the two AMultiByteCharacterStraddlingByte15IsDroppedWhole cases ('abcdefghijklmnư' and 'abcdefghijklmệ'). Without the loop the cut lands mid-sequence and the name decodes with U+FFFD."
+    },
+    {
+      "command": "MUTATION 3 — drop connection.Team = ticketTeam in UdpTransportServer",
+      "status": "pass",
+      "exitCode": 0,
+      "timestamp": "2026-09-02T00:36:00+07:00",
+      "summary": "RED, and only in ATicketsTeamReachesTheServersConnectionInfo(team: 1). The parser still round-trips perfectly — this is the wiring half, the exact trap the display name fell into for four phases."
+    },
+    {
+      "command": "MUTATION 4 — remove the candidate.Team != team guard in TryClaimPlayerSlot",
+      "status": "pass",
+      "exitCode": 0,
+      "timestamp": "2026-09-02T01:10:00+07:00",
+      "summary": "RED in exactly 2 tests. ADepartureInTheMiddle reported 'the fourth joiner was handed a team 0 body ... Expected: 1, But was: 0', and OneSideFillsAtHalfCapacity reported 'team 0 admitted a 9th player'. Both are the shipped defect, reproduced on demand."
+    },
+    {
+      "command": "python — exhaustive strategy comparison (2-8 joins x every departure slot x 0-3 further joins)",
+      "status": "pass",
+      "exitCode": 0,
+      "timestamp": "2026-09-02T00:48:00+07:00",
+      "summary": "ZERO single-departure sequences distinguish first-fit from a team-keyed claim. The phase's own section 1.1 example ({0,1,2}, slot 1 leaves) leaves two players on team 0 under BOTH strategies and gives the fourth joiner a team-1 body under both. Two departures are needed; the test uses that sequence instead."
+    },
+    {
+      "command": "pwsh -NoProfile -File tools/ci.ps1",
+      "status": "pass",
+      "exitCode": 0,
+      "timestamp": "2026-09-02T02:05:00+07:00",
+      "summary": "CI PASSED in 05:02, INCLUDING step 4 (Unity batch-mode compile) — the Editor was closed for it, since Unity batchmode runs one at a time. Build with warnings-as-errors, full dotnet test, SpecChecker (90 constants), .meta consistency, duplicate-assembly check, harness-no-decoder, net-layering, diagnostics-strip, style, analyzers and commit-scope all green; both commit subjects conform. One WARNING: the run exceeded the 5-minute budget in conventions.md section 5 by 2 seconds."
+    },
+    {
+      "command": "lane-B — TeamFull and ServerFull contrast runs",
+      "status": "pass",
+      "exitCode": 0,
+      "timestamp": "2026-09-02T01:50:00+07:00",
+      "summary": "Criterion 6, both halves, same client binary. 4 slots with clients on teams 0,0,0: server logged 'conn 3 joined for team 0, which is full — the other side is not' and the client logged 'disconnected: TeamFull'. 2 slots with teams 0,1,0: the client logged 'disconnected: ServerFull'. The first run also shows the team-keyed walk directly — conn 2 took actor 43, skipping the FREE actor 42, because 42 is a team-1 body. Caveat recorded in adversarial-validation.missingProof: the ServerFull refusal came from the TRANSPORT at capacity (no conn 3 line reached the server log), not from ServerTickLoop's own ServerFull arm."
+    }
+  ]
+}

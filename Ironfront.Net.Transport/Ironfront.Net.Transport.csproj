@@ -25,4 +25,16 @@
     <ProjectReference Include="..\Ironfront.Net.Protocol\Ironfront.Net.Protocol.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      Connection.MapDeniedReason's unknown-code branch is unreachable from the public API:
+      no server here sends a code the client does not know. That is exactly how it spent five
+      protocol versions mapping every unrecognised code to InvalidTicket, telling a player
+      their ticket was bad when their side was full. P13 criterion 7 is that branch.
+    -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>Ironfront.Net.Transport.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
 </Project>
