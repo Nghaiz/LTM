@@ -196,6 +196,8 @@ namespace Ironfront.Net.Unity.Client
             // ClientCombatState has no clock of its own, by the same decision KillfeedModel made.
             _state.Tick(Time.time);
 
+            ApplyLocalTeam();
+
             // X-16: PredictFire had zero production callers, so predictedShots was 0 at every
             // lane-B checkpoint while the server emptied a magazine — the field could not be
             // read as evidence about anything.
@@ -241,6 +243,65 @@ namespace Ironfront.Net.Unity.Client
         {
             IInputSource input = NetClientBindings.LocalPlayer.InputSource;
             return input != null && input.RespawnPressed;
+        }
+
+        /// <summary>
+        /// Puts the local body on the team the server says it is on. P12 <b>D-1</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The value already arrived; nothing handed it to the body.</b>
+        /// <see cref="NetClientPresenterGuard.TryResolveLocalTeam"/> has read
+        /// <c>ActorSnapshotEntry.Team</c> for the local actor since V10, and had exactly one
+        /// consumer — the minimap's spawn buttons. Meanwhile the body kept the team its prefab
+        /// authored, so a team-1 player rendered blue, every <c>actor.team == playerTeam</c> test
+        /// in <c>Assembly-CSharp</c> answered for the wrong side, and no error was ever raised.
+        /// </para>
+        /// <para>
+        /// <b>Polled, not event-driven, and that IS the design.</b> The body and the first
+        /// snapshot arrive in either order — the rig spawns from <c>GameManager.StartGame</c>
+        /// while the team comes off the wire — so an apply hung on either single event fires when
+        /// the other half may not exist. A poll applies on whichever comes second without having
+        /// to know which one that was.
+        /// </para>
+        /// <para>
+        /// <b>Idempotent by comparison, not by luck.</b> <c>Actor.SetTeam</c> writes
+        /// <c>material.color</c> on two skinned renderers, which instantiates a material the
+        /// first time; calling it every frame would be a per-frame write for a value that
+        /// changes at most once a life. The equality test is what makes a per-frame poll free.
+        /// </para>
+        /// <para>
+        /// <b>Networked only.</b> Offline there is no snapshot and the resolver is unregistered,
+        /// so this would be a no-op anyway — the guard is here so that reads as a decision rather
+        /// than an accident, matching the three <c>NetContext.IsOffline</c> gates in
+        /// <c>CapturePoint</c>, <c>MinimapUi</c> and <c>Projectile</c>. Offline's own answer is
+        /// set in <c>FpsActorController.Awake</c>.
+        /// </para>
+        /// </remarks>
+        /// <remarks>
+        /// <b>Reads the team through <c>NetPresenterGate</c>, not through
+        /// <c>NetClientPresenterGuard</c> directly</b>, even though the guard is in this same
+        /// assembly. The gate reads the resolver the guard registers at <c>BeforeSceneLoad</c>,
+        /// so production resolves the identical value — and a test can register its own resolver
+        /// and observe this method without a bootstrap, a router or a decoded snapshot. A rule
+        /// that can only be observed by standing up a whole client is a rule with no detector.
+        /// </remarks>
+        internal static void ApplyLocalTeam()
+        {
+            if (NetContext.IsOffline) return;
+
+            ILocalPlayerRig rig = NetClientBindings.LocalPlayer;
+            if (!rig.Exists) return;
+
+            // A team of TeamId.None is "not known yet", not an answer. Writing it would swap one
+            // wrong team for another and would then compare unequal forever, re-writing the
+            // material every frame.
+            if (!NetPresenterGate.TryResolveLocalTeam(out byte team)) return;
+            if (team == TeamId.None) return;
+
+            if (rig.Team == team) return;
+
+            rig.SetTeam(team);
         }
 
         /// <summary>

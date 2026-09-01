@@ -902,7 +902,17 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		// debt-closure phase 2 task 2c: the scoreboard, not the HUD. ScoreUi.AddScore opened
 		// with "if (instance == null) return;", so on a headless server this kill scored nothing
 		// at all -- V8 D9's recorded divergence, and the reason it was invisible.
-		MatchScoreboard.Current.AddScore((team == 1) ? 1 : 0, (team == 0) ? 1 : 0);
+		//
+		// P12 D-2: offline only, the gate its three siblings already carry (CapturePoint.cs:147,
+		// MinimapUi.cs:195, Projectile.cs:214). A networked client runs Die() for every death it
+		// is told about, so without this it kept its own private tally -- and ScoreUi.UpdateUi
+		// then painted that tally over the server's authoritative numbers. The server keeps its
+		// own team score in MatchStateMachine.ReportDeath, not here, so nothing authoritative
+		// reads what this gate stops writing.
+		if (Ironfront.Net.Unity.NetContext.IsOffline)
+		{
+			MatchScoreboard.Current.AddScore((team == 1) ? 1 : 0, (team == 0) ? 1 : 0);
+		}
 	}
 
 	public virtual Vector3 Position()

@@ -754,7 +754,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dbe4d2a6e91eb90db84d1482ed545a1c, type: 3}
   m_Name:
   m_EditorClassIdentifier:
-  team: 0
+  team: -1
   controller: {fileID: 114102216800199386}
   ragdoll: {fileID: 114353983025207796}
   animator: {fileID: 95145038102674612}

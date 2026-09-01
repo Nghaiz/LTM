@@ -164,6 +164,17 @@ namespace Ironfront.Tools.ClientWiringGate
                 "reached only from Update(), a local-only per-frame path; the local player IS the "
                 + "subject of the read"),
 
+            // The same shape again, added with P12 D-1's local-team apply. Reached only from
+            // Update(); the rig it reads and writes is THIS client's own body, and the team it
+            // writes came from the snapshot entry for THIS client's own actor id -- so there is
+            // no remote actor in scope for an IsLocalActor guard to be about. It is resolved per
+            // frame for the same reason the two neighbours are: the body is spawned, killed and
+            // respawned independently of this component. Same instruction as the others: if a
+            // per-actor caller ever reaches this helper, delete this entry and guard the read.
+            ("/NetClientLocalCombatDriver.cs", "ApplyLocalTeam",
+                "reached only from Update(), a local-only per-frame path; the local player IS the "
+                + "subject of both the read and the write"),
+
             // The same shape as the entry above, added with PredictFire's caller (ledger X-16).
             // Reached only from Update(); the trigger it reads is the local player's own, and
             // there is no actor id in scope to guard against. The same instruction applies: if a
@@ -532,6 +543,122 @@ namespace Ironfront.Tools.ClientWiringGate
             }
 
             return findings;
+        }
+
+        /// <summary>
+        /// The engine-side directory G15 governs: the legacy game, where the offline scoreboard
+        /// lives and where every mutator call site is.
+        /// </summary>
+        private const string EngineDirectory = "/Assembly-CSharp/";
+
+        /// <summary>
+        /// Files G15 does not govern. <c>MatchScoreboard</c> DECLARES the mutators; a call from
+        /// inside the type is the type doing its job, and gating it there would be wrong rather
+        /// than merely noisy.
+        /// </summary>
+        private static readonly string[] DeltaScoreGuardExclusions = { "/MatchScoreboard.cs" };
+
+        /// <summary>
+        /// The predicate that makes an engine-side delta-score mutation legitimate. Matched on
+        /// the member name so <c>Ironfront.Net.Unity.NetContext.IsOffline</c> and the
+        /// <c>using</c>-shortened <c>NetContext.IsOffline</c> are both recognised.
+        /// </summary>
+        private const string OfflineGuardMember = "IsOffline";
+
+        /// <summary>
+        /// G15 - an engine-side <c>MatchScoreboard.AddScore</c> / <c>AddFlag</c> reached on a
+        /// networked path, because nothing gates it on <c>NetContext.IsOffline</c> (P12 D-2).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The sibling of G5, over the same two members, from the other side.</b> G5 stops a
+        /// <c>Net/Client</c> presenter routing the server's TOTALS through delta mutators. This
+        /// stops the reverse: the legacy engine keeping its own private tally while a networked
+        /// client is running, which <c>ScoreUi.UpdateUi</c> then paints over the server's
+        /// numbers. Both rules read <see cref="DeltaScoreMembers"/> — one list, so the two can
+        /// never come to disagree about which members are delta mutators.
+        /// </para>
+        /// <para>
+        /// <b>Why a gate and not a review note.</b> Both call sites P12 fixed —
+        /// <c>Actor.Die</c> and <c>CapturePoint.SetOwner</c> — were reached from paths the
+        /// SERVER drives, and the symptom was a wrong number on a HUD rather than an exception.
+        /// Three sibling call sites already carried the guard (<c>CapturePoint</c> line 147,
+        /// <c>MinimapUi</c>, <c>Projectile</c>), which is exactly the shape a reviewer reads as
+        /// "this file already handles that" and moves on.
+        /// </para>
+        /// <para>
+        /// <b>What it does NOT prove.</b> It matches the lexical guard, not reachability: a call
+        /// wrapped in <c>if (NetContext.IsOffline)</c> passes even if that branch is dead, and a
+        /// call guarded by an equivalent predicate spelled another way fails. The first is
+        /// harmless, the second is the maintenance cost, and both are preferable to a rule that
+        /// tries to evaluate role at compile time and quietly answers "maybe".
+        /// </para>
+        /// </remarks>
+        public static IReadOnlyList<GateFinding> FindUnguardedEngineScoreMutation(
+            SyntaxTree tree, string path)
+        {
+            var findings = new List<GateFinding>();
+            string normalized = Normalize(path);
+
+            if (IsExcludedFromScan(path)) return findings;
+            if (!normalized.Contains(EngineDirectory, StringComparison.Ordinal)) return findings;
+            if (IsInScope(path, DeltaScoreGuardExclusions)) return findings;
+
+            foreach (InvocationExpressionSyntax invocation in tree.GetRoot()
+                         .DescendantNodes()
+                         .OfType<InvocationExpressionSyntax>())
+            {
+                if (invocation.Expression is not MemberAccessExpressionSyntax member) continue;
+
+                string called = member.Name.Identifier.ValueText;
+                if (Array.IndexOf(DeltaScoreMembers, called) < 0) continue;
+
+                // The receiver must name the scoreboard. `AddScore` is a common enough verb that
+                // an unqualified match would rope in anything that happens to share the name.
+                if (!member.Expression.ToString().Contains("MatchScoreboard", StringComparison.Ordinal))
+                    continue;
+
+                if (IsInsideOfflineGuard(invocation)) continue;
+
+                findings.Add(new GateFinding(
+                    "G15", path, LineOf(invocation),
+                    $"'MatchScoreboard.{called}' is called with no NetContext.IsOffline guard. "
+                    + "It is a DELTA mutator on the OFFLINE scoreboard, so on a networked client "
+                    + "this keeps a private tally that ScoreUi.UpdateUi then paints over the "
+                    + "server's authoritative numbers (P12 D-2). Wrap it in "
+                    + "`if (NetContext.IsOffline)`, as CapturePoint.cs:147, MinimapUi and "
+                    + "Projectile already do."));
+            }
+
+            return findings;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="node"/> sits in the TRUE branch of an
+        /// <c>if (… IsOffline …)</c>.
+        /// </summary>
+        /// <remarks>
+        /// <b>The true branch specifically, not merely "inside an if that mentions IsOffline".</b>
+        /// A call in the <c>else</c> of an offline test is the networked path — precisely the
+        /// case this rule exists to catch — and a containment check that ignored which branch it
+        /// was in would clear it. That is the difference between a gate and decoration.
+        /// </remarks>
+        private static bool IsInsideOfflineGuard(SyntaxNode node)
+        {
+            for (SyntaxNode? current = node; current != null; current = current.Parent)
+            {
+                if (current.Parent is not IfStatementSyntax ifStatement) continue;
+                if (!ReferenceEquals(ifStatement.Statement, current)) continue;
+
+                bool mentionsOffline = ifStatement.Condition
+                    .DescendantNodesAndSelf()
+                    .OfType<SimpleNameSyntax>()
+                    .Any(name => name.Identifier.ValueText == OfflineGuardMember);
+
+                if (mentionsOffline) return true;
+            }
+
+            return false;
         }
 
         /// <summary>

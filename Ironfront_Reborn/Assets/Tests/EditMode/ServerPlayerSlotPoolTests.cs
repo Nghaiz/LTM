@@ -304,6 +304,66 @@ namespace Ironfront.Net.Unity.Server.Tests
             Assert.AreEqual(1, driver.Resumes, "releasing a body left it an inert mannequin");
         }
 
+        /// <summary>
+        /// A pool body's bot brain is parked from creation, not from the claim. P12 <b>D-4</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>ServerPlayerSlotPool.Fill</c> builds <c>Config.MaxConnections</c> bodies at Start
+        /// and AI was suspended only on <c>Claim()</c>, so at 16 slots with two humans fourteen
+        /// extra AI-driven, shootable, scoring bodies stood on top of the map's authored 20/20 —
+        /// split 7/7 by the pool's own <c>i % 2</c>. A 1v1 was really a 21v21.
+        /// </para>
+        /// <para>
+        /// <b>Worse than merely surplus, which is why the count is not the only assertion worth
+        /// making.</b> X-18 holds an unclaimed slot out of both the announce and the snapshot, so
+        /// those fourteen were invisible to every client while still shooting at it. No client
+        /// could have reported them and no screenshot could have shown them.
+        /// </para>
+        /// </remarks>
+        [Test]
+        public void PoolBodies_AreParkedFromCreationRatherThanFromTheClaim()
+        {
+            var driver = new FakeAiDriver();
+            NetServerActor actor = CreateBody(0);
+            actor.BindAiDriver(driver);
+
+            Assert.AreEqual(0, driver.Suspends, "nothing should park a body before it is a slot.");
+
+            actor.MarkAvailableForPlayers();
+
+            Assert.AreEqual(1, driver.Suspends,
+                "an unclaimed player slot was left AI-driven — D-4.");
+            Assert.AreEqual(0, driver.Resumes);
+        }
+
+        /// <summary>
+        /// Claiming an already-parked slot does not re-park it, and releasing still resumes.
+        /// </summary>
+        /// <remarks>
+        /// The lifecycle P12 changes is only the state a slot STARTS in. <c>Release</c> still
+        /// hands the body back to the bots, for the reason <c>IAiDriver.Resume</c> gives: a slot
+        /// is reused across a match, and without it every disconnect would leave one more inert
+        /// mannequin standing in the map. Pinning the call COUNTS is what makes that a decision
+        /// rather than an accident of ordering — a re-park on claim would be a redundant
+        /// <c>enabled</c> write on every join.
+        /// </remarks>
+        [Test]
+        public void ParkedSlot_IsNotReparkedOnClaimAndStillResumesOnRelease()
+        {
+            var driver = new FakeAiDriver();
+            NetServerActor actor = CreateBody(0);
+            actor.BindAiDriver(driver);
+            actor.MarkAvailableForPlayers();
+
+            Assert.IsTrue(_registry.TryClaimPlayerSlot(out NetServerActor claimed));
+            Assert.AreSame(actor, claimed);
+            Assert.AreEqual(1, driver.Suspends, "claiming re-parked an already-parked slot.");
+
+            _registry.ReleaseSlot(claimed);
+            Assert.AreEqual(1, driver.Resumes, "releasing a body left it an inert mannequin");
+        }
+
         /// <summary>A body with no bot brain claims without incident.</summary>
         /// <remarks>
         /// Null is a real answer, not a failure: the local player's avatar and every bare test

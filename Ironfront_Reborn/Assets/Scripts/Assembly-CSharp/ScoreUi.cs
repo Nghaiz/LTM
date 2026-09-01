@@ -1,3 +1,4 @@
+using Ironfront.Net.Unity;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -307,10 +308,39 @@ public class ScoreUi : MonoBehaviour
 		// already scored, and Reset() here would throw those points away. Resetting belongs to
 		// whatever starts a match, not to whatever draws it.
 		MatchScoreboard board = MatchScoreboard.Current;
-		board.Changed += UpdateUi;
+
+		// P12 D-2. `Changed` is the OFFLINE renderer and it is subscribed only offline.
+		//
+		// UpdateUi paints both score labels from the local MatchScoreboard. On a networked
+		// client that board is fed by nothing authoritative, so every repaint overwrote the
+		// server's numbers -- and SetAuthoritativeState early-returns on unchanged inputs, so
+		// they were not restored until the server's own totals next moved. A capture flip was
+		// enough to leave the wrong score on screen indefinitely.
+		//
+		// NOT SUBSCRIBING is the shape, rather than subscribing and early-returning inside
+		// UpdateUi -- and the next reader will assume the latter, which is why this says so.
+		// The early-return shape buys exactly one thing: surviving a mid-session flip between
+		// offline and networked. This project has no such flip; NetContext.Role is set once at
+		// startup. Paying for it would mean a handler on a per-flip event that must stay inert,
+		// which is a thing to get wrong for a case that cannot happen.
+		//
+		// OnDestroy mirrors this. An unsubscribe of a handler that was never added is harmless
+		// in C#, but a pair that does not match is a pair that lies to the next reader.
+		if (NetContext.IsOffline)
+		{
+			board.Changed += UpdateUi;
+		}
+
 		board.Ended += OnMatchEnded;
 		board.Scored += OnScored;
-		UpdateUi();
+
+		// The first paint is offline's too. Networked, the labels stay at their authored value
+		// until the first S_MATCH_STATE arrives, which is the honest reading: this client has
+		// not been told the score yet.
+		if (NetContext.IsOffline)
+		{
+			UpdateUi();
+		}
 	}
 
 	private void OnDestroy()
@@ -320,7 +350,13 @@ public class ScoreUi : MonoBehaviour
 			instance = null;
 		}
 		MatchScoreboard board = MatchScoreboard.Current;
-		board.Changed -= UpdateUi;
+
+		// Mirrors Awake's gate. See it for why the subscription is conditional at all.
+		if (NetContext.IsOffline)
+		{
+			board.Changed -= UpdateUi;
+		}
+
 		board.Ended -= OnMatchEnded;
 		board.Scored -= OnScored;
 	}

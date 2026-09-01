@@ -129,9 +129,21 @@ namespace Ironfront.Net.Unity.Server
                 }
 
                 body.Team = team;
+
+                // Also parks the bot brain -- P12 D-4. See NetServerActor.MarkAvailableForPlayers
+                // for why an unclaimed slot must not be AI-driven, and why it is done there
+                // rather than here (one type owns the driver).
                 body.MarkAvailableForPlayers();
                 _bodies.Add(body);
             }
+
+            // The count criterion 5 is graded on, printed rather than inferred. A run's body
+            // total is bots + slots, and until P12 every slot was ALSO a bot -- so a log that
+            // reported only the slot count could not distinguish the fixed world from the broken
+            // one. Naming the parked bodies is what makes this line evidence.
+            Debug.Log(
+                $"[net] player slot pool filled: {_bodies.Count} claimable bodies, "
+                + $"all parked (bot brain suspended until claimed). Map bots are unaffected.");
 
             return true;
         }

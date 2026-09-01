@@ -276,8 +276,39 @@ namespace Ironfront.Net.Unity.Diagnostics
             //
             // authoritativeX/Y/Z is what the snapshot actually carries, so the artifact can be
             // compared against the server log line without a second run.
+            AppendLocalTeam(local);
             AppendLocalPrediction(client, local);
             _json.Append('}');
+        }
+
+        /// <summary>
+        /// The two halves of P12 <b>D-1</b>: what the server says this client's team is, and what
+        /// its body actually believes.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Both, because either alone grades nothing.</b> <c>snapshotTeam</c> was already
+        /// arriving and being read before P12 — <c>NetPresenterGate.TryResolveLocalTeam</c> has
+        /// resolved it since V10 — and <c>localBodyTeam</c> was already 0 on every client for
+        /// every player. A record carrying one of them shows a plausible number either way; the
+        /// finding is that they DISAGREE, and only the pair can carry it.
+        /// </para>
+        /// <para>
+        /// <c>-1</c> in <c>localBodyTeam</c> is the rig reporting no body, and <c>255</c> in
+        /// <c>snapshotTeam</c> is <see cref="TeamId.None"/> — "the server has not said yet".
+        /// Neither is a failure on its own: a checkpoint taken before the first snapshot is
+        /// expected to show them, which is why the assertion is that they agree ONCE
+        /// <c>snapshotTeam</c> is a real team, not that they agree at every checkpoint.
+        /// </para>
+        /// </remarks>
+        private void AppendLocalTeam(ILocalPlayerRig local)
+        {
+            byte snapshotTeam = NetPresenterGate.TryResolveLocalTeam(out byte team)
+                ? team
+                : TeamId.None;
+
+            Num("localBodyTeam", local.Team); Comma();
+            Num("snapshotTeam", snapshotTeam); Comma();
         }
 
         private void AppendLocalPrediction(NetClientBootstrap client, ILocalPlayerRig local)

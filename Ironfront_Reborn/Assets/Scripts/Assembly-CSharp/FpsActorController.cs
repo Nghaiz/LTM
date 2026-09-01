@@ -49,7 +49,44 @@ public class FpsActorController : ActorController
 
 	public static FpsActorController instance;
 
-	public static int playerTeam = -1;
+	/// <summary>
+	/// The team the human at this keyboard is fighting for, or <see cref="UNKNOWN_TEAM"/> when
+	/// there is no local body to ask.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>A property over the body, not a field latched at <c>Awake</c> — P12 D-1.</b> This was
+	/// <c>public static int playerTeam = -1;</c> assigned once from <c>actor.team</c> in
+	/// <c>Awake</c>. On a networked client the body's team arrives with the first snapshot,
+	/// which is always AFTER <c>Awake</c>, so the latch held the prefab's authored value for the
+	/// whole session: every reader below answered for the wrong side and nothing errored.
+	/// </para>
+	/// <para>
+	/// Reading through to the body is the fix rather than a second write, because a second write
+	/// only moves the question to "did that one run late enough". There is exactly one answer to
+	/// "what team is the local player on" and it lives on the local player. The three readers —
+	/// <c>ActorBlip.LateUpdate</c>, <c>AiActorController</c> twice — are unchanged and now
+	/// cannot observe a stale value at all.
+	/// </para>
+	/// <para>
+	/// <b><see cref="UNKNOWN_TEAM"/> is still <c>-1</c>, deliberately.</b> That is the value the
+	/// shipped code used and the value <c>AiActorController</c>'s own comment names; the wire's
+	/// <c>TeamId.None</c> (255) is a different sentinel for a different layer and
+	/// <c>MinimapUi</c> is where the two meet. What matters to every reader here is only that it
+	/// is neither 0 nor 1 — a sentinel of 0 is exactly the bug P12 closes.
+	/// </para>
+	/// </remarks>
+	public static int playerTeam
+	{
+		get
+		{
+			FpsActorController local = instance;
+			return local != null && local.actor != null ? local.actor.team : UNKNOWN_TEAM;
+		}
+	}
+
+	/// <summary>The team value meaning "no local body, or its team has not arrived yet".</summary>
+	public const int UNKNOWN_TEAM = -1;
 
 	public Camera fpCamera;
 
@@ -156,7 +193,27 @@ public class FpsActorController : ActorController
 	private void Awake()
 	{
 		instance = this;
-		playerTeam = actor.team;
+
+		// P12 D-1. The prefab used to author `team: 0` on this body, and that literal was the
+		// ONLY thing that ever set the local player's team: GameManager.StartGame instantiates
+		// the rig and nothing calls SetTeam on it (ActorManager.CreateAIActor does that for
+		// bots, IronfrontNetBindings.CreatePlayerBody for server-side bodies). On a networked
+		// client the literal was simply wrong — a team-1 player believed it was team 0 — so the
+		// prefab now authors UNKNOWN_TEAM and the answer comes from whoever knows it.
+		//
+		// Offline, that is here, and the literal 0 is the same one MinimapUi.UpdateSpawnPointButtons
+		// already carries for the same reason (V10 D16): the human is always team 0 in
+		// single-player, so this keeps offline byte-for-byte what it was. Networked, the answer
+		// comes from the snapshot via NetClientLocalCombatDriver — deliberately not from here,
+		// because it has not arrived yet at Awake and that is the whole defect.
+		//
+		// SetTeam rather than a bare field write: it also recolours the two skinned renderers,
+		// which is what the prefab's authored literal never did.
+		if (NetContext.IsOffline && actor != null && actor.team == UNKNOWN_TEAM)
+		{
+			actor.SetTeam(0);
+		}
+
 		controller = GetComponent<FirstPersonController>();
 		characterController = GetComponent<CharacterController>();
 		thirdpersonRenderers = actor.ragdoll.AnimatedRenderers();

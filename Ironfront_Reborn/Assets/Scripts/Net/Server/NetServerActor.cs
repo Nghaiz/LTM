@@ -544,7 +544,63 @@ namespace Ironfront.Net.Unity.Server
         /// prefab.
         /// </para>
         /// </remarks>
-        internal void MarkAvailableForPlayers() => _availableForPlayers = true;
+        internal void MarkAvailableForPlayers()
+        {
+            _availableForPlayers = true;
+
+            // P12 D-4. A player slot's bot brain is parked FROM CREATION, not from the claim.
+            //
+            // ServerPlayerSlotPool.Fill builds Config.MaxConnections of these at Start and every
+            // one was a live AI character until somebody claimed it. At MaxConnections 16 with
+            // two humans that is fourteen extra AI-driven, shootable, SCORING bodies standing on
+            // top of the map's authored 20/20 -- split 7/7 by the pool's own `i % 2` -- so a 1v1
+            // was really a 21v21. Worse than merely surplus: X-18 holds an unclaimed slot out of
+            // both the announce and the snapshot, so those fourteen were invisible to every
+            // client while still shooting at it.
+            //
+            // This is the cheaper half of D-4. Sizing the pool to the room's MaxPlayers instead
+            // of the fixed MaxConnections needs a real room and lands in P14; parking the brain
+            // needs neither and is available now.
+            //
+            // IAiDriver.Suspend is the existing seam and the existing mechanism -- the same one
+            // Claim uses -- deliberately rather than a second suspension concept.
+            SetAiDriverSuspended(true);
+        }
+
+        /// <summary>
+        /// Parks or unparks the bot brain, doing nothing when it is already in that state.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Transition-tracked, because the callers now overlap.</b> A pool body is marked
+        /// available and then claimed, and both want it suspended;
+        /// <c>AiActorController.enabled</c> is not a free write to repeat, and — more to the
+        /// point — collapsing the repeat is what keeps <see cref="Claim"/> and
+        /// <see cref="Release"/> emitting exactly one driver call each, which is the count
+        /// <c>ServerPlayerSlotPoolTests</c> already pins.
+        /// </para>
+        /// <para>
+        /// <b><see cref="Release"/> still resumes, and that is deliberate.</b> The invariant is
+        /// "a body that has been handed to a connection is not bot-driven", not "a player slot is
+        /// never bot-driven" — <c>IAiDriver.Resume</c>'s own remark gives the reason: a slot is
+        /// reused across a match, and without the resume every disconnect would leave one more
+        /// inert mannequin standing in the map. What P12 changes is only the state a slot starts
+        /// in, which nothing set before.
+        /// </para>
+        /// </remarks>
+        private void SetAiDriverSuspended(bool suspended)
+        {
+            if (_aiDriver == null || !_aiDriver.Exists) return;
+            if (suspended == _aiDriverSuspended) return;
+
+            _aiDriverSuspended = suspended;
+
+            if (suspended) _aiDriver.Suspend();
+            else _aiDriver.Resume();
+        }
+
+        /// <summary>Whether <see cref="SetAiDriverSuspended"/> has the brain parked.</summary>
+        private bool _aiDriverSuspended;
 
         /// <summary>
         /// Hands this body to a connection, and stops the bot brain steering it.
@@ -560,7 +616,10 @@ namespace Ironfront.Net.Unity.Server
         {
             IsClaimed = true;
 
-            if (_aiDriver != null && _aiDriver.Exists) _aiDriver.Suspend();
+            // Already parked when this body came from the slot pool (P12 D-4), so on that path
+            // this is a no-op. Still called, because Claim's contract is "the bot brain is not
+            // steering after this returns" and that must not depend on who built the body.
+            SetAiDriverSuspended(true);
         }
 
         /// <summary>Takes the body back and returns it to the bot brain.</summary>
@@ -568,7 +627,7 @@ namespace Ironfront.Net.Unity.Server
         {
             IsClaimed = false;
 
-            if (_aiDriver != null && _aiDriver.Exists) _aiDriver.Resume();
+            SetAiDriverSuspended(false);
         }
     }
 }

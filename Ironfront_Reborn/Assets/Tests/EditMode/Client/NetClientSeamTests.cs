@@ -234,6 +234,8 @@ namespace Ironfront.Net.Unity.Client.Tests
             public void DisableInput() { }
             public void EnterDeployedView() { }
             public bool IsDriving(IGameplayActorPresence actor) => false;
+            public int Team { get; private set; } = -1;
+            public void SetTeam(int team) => Team = team;
             public Vector3 Position => Vector3.zero;
             public float YawDegrees => 0f;
             public bool CanApplyScreenshake => false;

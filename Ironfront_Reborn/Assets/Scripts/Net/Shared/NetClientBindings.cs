@@ -209,6 +209,8 @@ namespace Ironfront.Net.Unity
             public void DisableInput() { }
             public void EnterDeployedView() { }
             public bool IsDriving(IGameplayActorPresence actor) => false;
+            public int Team => -1;
+            public void SetTeam(int team) { }
             public Vector3 Position => Vector3.zero;
             public float YawDegrees => 0f;
             public bool CanApplyScreenshake => false;

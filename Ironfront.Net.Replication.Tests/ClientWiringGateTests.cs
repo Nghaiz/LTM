@@ -226,6 +226,83 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void TheEngineNeverTalliesTheOfflineScoreboardOnANetworkedPath()
+        {
+            // G15's red path (P12 D-2), the mirror of G5 above. That rule stops a Net/Client
+            // presenter feeding the server's TOTALS through delta mutators; this one stops the
+            // legacy engine keeping its own tally while a networked client is running, which
+            // ScoreUi.UpdateUi then paints over the server's numbers.
+            //
+            // Both call sites P12 fixed -- Actor.Die and CapturePoint.SetOwner -- were reached
+            // from paths the SERVER drives, and three sibling call sites in the same tree already
+            // carried the guard. That is the shape a reviewer reads as "this file already handles
+            // that", which is why it is a gate.
+            IReadOnlyList<GateFinding> findings = ClientWiringDetectors
+                .FindUnguardedEngineScoreMutation(
+                    Parse(
+                        @"class A { void Die() { MatchScoreboard.Current.AddScore(1, 0); } }",
+                        ActorPath),
+                    ActorPath);
+
+            GateFinding finding = Assert.Single(findings);
+            Assert.Equal("G15", finding.RuleId);
+
+            // The green twin: the guard its three siblings already carry.
+            Assert.Empty(ClientWiringDetectors.FindUnguardedEngineScoreMutation(
+                Parse(
+                    @"class A { void Die() { if (NetContext.IsOffline) "
+                    + @"{ MatchScoreboard.Current.AddScore(1, 0); } } }",
+                    ActorPath),
+                ActorPath));
+
+            // Fully-qualified reads the same. The engine tree mixes both spellings -- Actor.cs
+            // has no `using Ironfront.Net.Unity` and CapturePoint.cs does -- so a rule that only
+            // recognised one would be green on half the files it governs for no stated reason.
+            Assert.Empty(ClientWiringDetectors.FindUnguardedEngineScoreMutation(
+                Parse(
+                    @"class A { void Die() { if (Ironfront.Net.Unity.NetContext.IsOffline) "
+                    + @"{ MatchScoreboard.Current.AddScore(1, 0); } } }",
+                    ActorPath),
+                ActorPath));
+        }
+
+        [Fact]
+        public void TheOfflineGuardMustBeTheBranchTheMutationIsIn()
+        {
+            // The half of G15 that is easy to get wrong and impossible to notice: a containment
+            // check that merely asked "is there an enclosing if that mentions IsOffline" would
+            // clear a mutation sitting in the ELSE -- which is the NETWORKED path, and precisely
+            // the case the rule exists to catch. A gate that passes its own defect is decoration.
+            IReadOnlyList<GateFinding> findings = ClientWiringDetectors
+                .FindUnguardedEngineScoreMutation(
+                    Parse(
+                        @"class A { void Die() { if (NetContext.IsOffline) { } "
+                        + @"else { MatchScoreboard.Current.AddFlag(1, 0); } } }",
+                        ActorPath),
+                    ActorPath);
+
+            GateFinding finding = Assert.Single(findings);
+            Assert.Equal("G15", finding.RuleId);
+        }
+
+        [Fact]
+        public void TheScoreboardsOwnMutatorsAreNotGoverned()
+        {
+            // MatchScoreboard DECLARES AddScore and AddFlag. A call from inside the type is the
+            // type doing its job; gating it there would be wrong rather than merely noisy, so the
+            // exclusion is asserted rather than left to the fact that nothing happens to call
+            // them today.
+            const string scoreboardPath =
+                "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/MatchScoreboard.cs";
+
+            Assert.Empty(ClientWiringDetectors.FindUnguardedEngineScoreMutation(
+                Parse(
+                    @"class MatchScoreboard { void R() { MatchScoreboard.Current.AddScore(0, 0); } }",
+                    scoreboardPath),
+                scoreboardPath));
+        }
+
+        [Fact]
         public void TheGateFailsWhenItScansZeroFiles()
         {
             // A gate that passes because it looked at nothing is worse than no gate: it reports
