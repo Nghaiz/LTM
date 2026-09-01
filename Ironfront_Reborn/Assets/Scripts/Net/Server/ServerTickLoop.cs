@@ -1531,14 +1531,40 @@ namespace Ironfront.Net.Unity.Server
         {
             if (_byConnection.ContainsKey(connectionId)) return;
 
-            if (!ServerActorRegistry.Instance.TryClaimPlayerSlot(out NetServerActor actor))
+            // The side the master server put this player on, carried in the signed join ticket
+            // and parsed by the transport beside the playerId and the display name. Before
+            // P13 nothing read it — the ticket had no such byte — and the team was re-derived
+            // from slot parity here, so the lobby's balancing was computed and thrown away.
+            byte ticketTeam = info.Team;
+
+            if (!ServerActorRegistry.Instance.TryClaimPlayerSlot(ticketTeam, out NetServerActor actor))
             {
+                // Two different facts, and they must not render as one sentence: "the server
+                // is full" has no remedy, "your side is full" has one the player can act on.
+                bool serverFull = !ServerActorRegistry.Instance.HasFreePlayerSlotOnAnyTeam();
+
                 Debug.LogError(
-                    $"[net] conn {connectionId} joined with no free player slot. Mark more "
-                    + "NetServerActors as available for players.");
-                Transport.Disconnect(connectionId, DisconnectReason.ServerFull);
+                    serverFull
+                        ? $"[net] conn {connectionId} joined with no free player slot on any "
+                          + "team. Mark more NetServerActors as available for players."
+                        : $"[net] conn {connectionId} joined for team {ticketTeam}, which is "
+                          + "full — the other side is not. Refused with TeamFull rather than "
+                          + "ServerFull so the client can say which it was.");
+
+                Transport.Disconnect(
+                    connectionId,
+                    serverFull ? DisconnectReason.ServerFull : DisconnectReason.TeamFull);
                 return;
             }
+
+            // P13 criterion 4 is graded on THIS line, and on purpose: after P12 the client can
+            // display its own team, and a client that displays the team it was told is not
+            // evidence that the team it was told is the team it has. Both numbers are printed
+            // rather than one, so the line distinguishes "the ticket said 1 and the body is 1"
+            // from "the ticket said 1 and the body is 0" — which is the whole defect.
+            Debug.Log(
+                $"[net] conn {connectionId} player {info.PlayerId} joined on team {ticketTeam} "
+                + $"(ticket) -> actor {actor.ActorId} team {actor.Team} (body)");
 
             var player = new ServerPlayer(
                 connectionId, actor.ActorId, _combat, DisplayNameFor(in info, actor.ActorId),

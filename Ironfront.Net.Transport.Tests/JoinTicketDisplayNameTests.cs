@@ -59,6 +59,48 @@ namespace Ironfront.Net.Transport.Tests
             Assert.Equal(5001u, seen.PlayerId);
         }
 
+        [Theory]
+        [InlineData((byte)0)]
+        [InlineData((byte)1)]
+        public void ATicketsTeamReachesTheServersConnectionInfo(byte team)
+        {
+            // The same trap the display name fell into, one field over: a parser unit test
+            // would be green while the byte was discarded one line later with an `out _`, and
+            // ConnectionInfo is the ONLY place ServerTickLoop can read a team from. Without
+            // this assertion the whole chain — lobby balances, ticket carries, server claims —
+            // could be broken in the middle and every other test would still pass.
+            using var server = new UdpTransportServer();
+            using var client = new UdpTransportClient();
+
+            server.OnValidateTicket += _ => true;
+            server.Start(0, 4);
+
+            ushort connectionId = 0;
+            server.OnClientConnected += (id, _) => connectionId = id;
+
+            client.Connect("127.0.0.1", server.Port, Ticket("Bob", playerId: 5002, team: team));
+            Pump(server, client, () => client.State == ConnectionState.Connected, 2000);
+            Pump(server, client, () => connectionId != 0, 2000);
+
+            ConnectionInfo seen = server.GetInfo(connectionId);
+
+            Assert.Equal(team, seen.Team);
+            Assert.Equal(5002u, seen.PlayerId);
+            Assert.Equal("Bob", seen.DisplayName);
+        }
+
+        [Fact]
+        public void AConnectionWithNoTicketToReadReportsTeamZero()
+        {
+            // The loopback and the development stub carry no team, and 0 is the side the first
+            // slot has always had — so a ticketless join behaves exactly as it did before the
+            // field existed. Pinned because "0" here is a default, and a default that nobody
+            // asserts is indistinguishable from a value that got lost.
+            Assert.Equal(
+                0,
+                new ConnectionInfo(1, "loopback", 0f, ConnectionState.Connected).Team);
+        }
+
         [Fact]
         public void AHostileDisplayNameIsSanitizedBeforeItLeavesTheTransport()
         {
@@ -129,7 +171,7 @@ namespace Ironfront.Net.Transport.Tests
                     .DisplayName);
         }
 
-        private static byte[] Ticket(string displayName, uint playerId)
+        private static byte[] Ticket(string displayName, uint playerId, byte team = 0)
         {
             var ticket = new byte[ProtocolConstants.JOIN_TICKET_SIZE];
 
@@ -139,6 +181,7 @@ namespace Ironfront.Net.Transport.Tests
                 serverId: 0,
                 roomId: 0,
                 expiresAtUnixMs: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 30_000,
+                team: team,
                 displayName: displayName,
                 sharedSecret: Secret) > 0);
 

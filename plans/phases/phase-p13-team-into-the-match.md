@@ -43,6 +43,22 @@ occupancy is a prefix only until somebody in the middle leaves.
 > Three joiners take slots {0,1,2} = teams {0,1,0}. The slot-1 player disconnects. The live set is
 > {0,2} = **two players, both on team 0, nobody on team 1.** Nothing corrects it.
 
+**Corrected 2026-09-02, during implementation — the example above does not discriminate.** Both
+strategies were simulated exhaustively (2–8 joins × every departure slot × 0–3 further joins
+after it) against the lobby's own balancer, and **zero single-departure sequences** end with
+different live teams. For {0,1,2} with slot 1 leaving, first-fit and a team-keyed claim BOTH
+leave two players on team 0, and BOTH hand the fourth joiner a team-1 body. The 2v0 state named
+above is reached under the fix as well; removing it would mean moving a player already in the
+match, which § 6 puts out of scope.
+
+The sequence that DOES discriminate needs **two** departures, because first-fit only diverges
+once the lowest free index stops agreeing with the side the lobby chose:
+
+> Three joiners take teams {0,1,0}. **The first two leave.** One player remains, on team 0, so
+> the lobby puts the next joiner on team 1. First-fit hands them the lowest free index — slot 0,
+> a **team 0 body** — and both humans are now on one side with nobody opposing them. A
+> team-keyed claim gives them slot 1, and the match is 1v1.
+
 Claiming **by team** fixes the arrival case and this case with the same code, which is why they
 are one task and not two.
 
@@ -163,7 +179,7 @@ already recorded — implemented server-side with **zero Unity callers**.
 | 2 | A 16-character name and a name with a multi-byte character on the 15th byte both round-trip without a replacement glyph | test, with the two names named in the report |
 | 3 | Hex-sample test pins the 64 ticket bytes; `SpecChecker` green; § 12 and § 3.2 updated; a § 15 row states whether the version moved and why | `tools/ci.ps1` + diff |
 | 4 | **Two clients, each assigned a different team by the master, land on that team in the match** — verified against the server's own log, not against what the client believes | lane-B record + server log |
-| 5 | **The three-join, middle-disconnect sequence from § 1.1 leaves one human per side**, not two on team 0 | scripted run, the sequence stated |
+| 5 | **The two-departure sequence from § 1.1 leaves one human per side**, not two on team 0. (Reworded 2026-09-02: the original one-departure wording was unreachable — see § 1.1's correction, and § 6, which puts mid-match rebalancing out of scope) | unit test + the mutation that reds it |
 | 6 | **A join onto a full side is refused with `TeamFull`, and the client shows a message distinguishable from "server full"** | screenshot of the refusal |
 | 7 | An old client receiving code 7 shows a generic refusal, not silence and not the wrong reason | one deliberate old-client run |
 | 8 | `tools/ci.ps1` green | CI |

@@ -299,6 +299,16 @@ namespace Ironfront.Net.Unity.Client
             // every test that exercised this method used a loopback transport.
             if (string.IsNullOrEmpty(secret)) return PendingJoin.CreateUnsignedTicket();
 
+            // Checked before Issue, because Issue answers a bad team with the same -1 it uses
+            // for a short buffer and an empty secret -- and the throw below would then blame a
+            // byte count for what is a one-character typo in an environment variable.
+            if (Config.Team > JoinTicket.MaxTeam)
+            {
+                throw new InvalidOperationException(
+                    $"[net] {EnvRegistry.ClientTeam.Name}={Config.Team} is not a team. Legal "
+                    + "values are 0 and 1; TeamId.None is not one a joining player can hold.");
+            }
+
             var ticket = new byte[ProtocolConstants.JOIN_TICKET_SIZE];
 
             int written = JoinTicket.Issue(
@@ -309,6 +319,9 @@ namespace Ironfront.Net.Unity.Client
                 serverId: 0,
                 roomId: 0,
                 expiresAtUnixMs: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + JoinTicket.ValidityMs,
+                // Only ever reaches the wire on this standalone path. A real join carries the
+                // side the MASTER's lobby balanced, signed into the ticket it issued.
+                team: Config.Team,
                 displayName: Config.DisplayName,
                 sharedSecret: System.Text.Encoding.UTF8.GetBytes(secret));
 
@@ -325,7 +338,7 @@ namespace Ironfront.Net.Unity.Client
             {
                 Debug.Log(
                     $"[net] join ticket signed for player {Config.PlayerId} "
-                    + $"as '{Config.DisplayName}'");
+                    + $"as '{Config.DisplayName}' on team {Config.Team}");
             }
 
             return ticket;

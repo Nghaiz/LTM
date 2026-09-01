@@ -146,7 +146,7 @@ namespace Ironfront.Net.Replication.Server
             // attacker-controlled bytes, which is what TryReadFields' own remarks warn about.
             if (!JoinTicket.TryReadFields(
                     ticket, out uint id, out ushort ticketServerId, out _,
-                    out long expiresAtUnixMs, out _))
+                    out long expiresAtUnixMs, out _, out _))
                 return Reject(TicketRejection.Malformed, out reason);
 
             if (_serverId != 0 && ticketServerId != _serverId)

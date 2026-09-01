@@ -9,7 +9,20 @@ namespace Ironfront.MasterServer.Lobby
     {
         public required int PlayerId { get; init; }
         public required string DisplayName { get; init; }
-        public byte Team { get; init; }
+        /// <summary>
+        /// The side this member is on. Auto-balanced on join (see <c>NewMember</c>), and
+        /// settable so the lobby can change it afterwards.
+        /// </summary>
+        /// <remarks>
+        /// <b>Settable, and as of P13 nobody sets it but the auto-balance.</b> It was
+        /// <c>init</c>-only, which made a lobby side-switch impossible to express at all —
+        /// the field could not change after construction. The switch message and the UI that
+        /// sends it are P16's; this is the field they need and deliberately nothing more. A
+        /// settable field with no second writer is a small honest gap; a half-built endpoint
+        /// with no caller is the shape <c>Register</c>/<c>RoomCreate</c>/<c>Chat</c> already
+        /// took, and none of those has a Unity caller to this day.
+        /// </remarks>
+        public byte Team { get; set; }
         public bool Ready { get; set; }
     }
 

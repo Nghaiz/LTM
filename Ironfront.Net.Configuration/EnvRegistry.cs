@@ -252,10 +252,25 @@ namespace Ironfront.Net.Configuration
         /// <summary>The name that self-minted ticket carries into the killfeed.</summary>
         public static readonly EnvVar ClientDisplayName = new EnvVar(
             "IRONFRONT_CLIENT_DISPLAY_NAME", "Game client", "game client",
-            "The displayName written into that ticket, truncated to 16 UTF-8 bytes. This is\n" +
+            "The displayName written into that ticket, truncated to 15 UTF-8 bytes (16 until\n" +
+            "PROTOCOL_VERSION 6 took a byte for the team). BYTES, not characters: a\n" +
+            "Vietnamese name costs two or three per accented vowel. This is\n" +
             "where a killfeed line gets its name, so a scripted two-client run that leaves\n" +
             "both instances on the default produces a killfeed nobody can read.",
             "player");
+
+        /// <summary>The side that self-minted ticket claims.</summary>
+        public static readonly EnvVar ClientTeam = new EnvVar(
+            "IRONFRONT_CLIENT_TEAM", "Game client", "game client",
+            "The team written into the join ticket a client mints for itself, on the runs with\n" +
+            "no master server in them. 0 or 1; anything else is refused rather than clamped,\n" +
+            "because a clamp would put the client on a side nobody chose and look like a\n" +
+            "server-side balancing decision. In a real join the MASTER supplies this and the\n" +
+            "value here is never consulted -- the lobby balances teams and signs the answer\n" +
+            "into the ticket. It exists so a scripted run can put two clients on opposite\n" +
+            "sides without a master server standing behind them; leaving both on the default\n" +
+            "produces a run in which nobody has an opponent.",
+            "0");
 
         /// <summary>Master server a client build dials before it can see a room list.</summary>
         public static readonly EnvVar ClientMasterHost = new EnvVar(
@@ -480,7 +495,7 @@ namespace Ironfront.Net.Configuration
             GameServerPublicIp, GameServerMapIds, GameServerScene, GameServerAcceptUnsignedTickets,
             ClientHost, ClientPort, ClientVerbose, ClientPredictLocalVehicle,
             ClientMasterHost, ClientMasterPort,
-            ClientPlayerId, ClientDisplayName,
+            ClientPlayerId, ClientDisplayName, ClientTeam,
             LogLevel, StructuredLog,
             TlsCertificatePath, TlsCertificatePassword,
             MetricsPort, MetricsBind, MetricsHost, MetricsCsvPath, MetricsCsvIntervalSeconds,
