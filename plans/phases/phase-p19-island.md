@@ -215,7 +215,7 @@ Two clients, on Island, through the P15/P16 menu. This is the phase, and § 4 is
 | 3 | **Screenshot: capture points on Island change hands and the flag renders**, on both clients | before/after pair |
 | 4 | **Screenshot: the score moves on Island and the bar tracks it** (P11's rule, on this map) | screenshot |
 | 5 | **A match on Island reaches a winner** — by margin or by spawn-point elimination; state which | lane-B record + server log |
-| 6 | The opening flag count per team on Island is measured and stated, and the `ScoreMultiplier` question from P11 § 3.2 is answered **for this map** | server log |
+| 6 | **`opening ownership adopted: 2 of 5 capture point(s) start owned` appears in the server log, and the `no capture point ... authored to either team` error does not** — Island opens `0, 1, -1, -1, -1`, so both sides start with a base and at multiplier x1 | server log |
 | 7 | `_prefabsByKind` on the installer and the presenter hold the same guids in the same order, verified element by element | diff or listing in the report |
 | 8 | The authored `LevelBounds` box contains the measured playable extents and fits −1024..3072 m; both numbers stated | report |
 | 9 | The per-scene gate was observed **RED** against Island before authoring and is green after; one mutation confirms it can still fail | gate output, both runs |

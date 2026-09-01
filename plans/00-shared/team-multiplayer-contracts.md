@@ -50,16 +50,43 @@ Four properties of that rule, each load-bearing and each easy to lose in a migra
    intended — see § 1.4) a team-kill therefore hands a point to the enemy. That is the correct
    penalty and it is already implemented; nothing needs adding for it.
 3. **Each point is multiplied by the scoring team's flag count**, and `ScoreMultiplier` is the
-   identity function. **A team holding zero capture points scores zero per kill.** This is the
-   single most dangerous detail in the migration: a networked match whose flag counts open at
-   0/0 accrues no score at all and can never reach the victory margin. Dustbowl opens 1/1
-   (Oasis to team 0, Fortress to team 1) and four points neutral, so the offline game never
-   exhibits it. Any phase touching this must assert the opening flag counts on the server.
+   identity function — so a team holding zero capture points scores zero per kill. **That is the
+   rule, not a bug**: it is reachable only by losing every point mid-match, and it is what makes
+   holding ground worth more than trading kills. **Both shipped maps open one point per side** —
+   Dustbowl `1, -1, -1, 0, -1, -1` (Fortress team 1, Oasis team 0), Island `0, 1, -1, -1, -1`
+   (Backside team 0, Landing team 1), read out of the scene YAML — so a match opens 1/1 at
+   multiplier x1 with 0 points each. A map that hands neither side a base is already caught, loudly,
+   by `MatchController.cs:199-205`.
 4. **Victory is a MARGIN, not a total.** `own >= other + VictoryPoints`. `VictoryPoints`
    defaults to 200 (`GameManager.cs:31`) and is editable at `MainMenu.cs:87`.
    `MatchScoreboard.DefaultVictoryPoints` is **100** (`:78`) and applies only when no
    `GameManager` exists — a test or a bare scene. The two numbers differ on purpose; do not
    "fix" one to match the other.
+
+### 1.1a The scoring event, pinned
+
+Three invariants. They are cheap to state and expensive to lose in a port.
+
+1. **A death awards ONE point to the team OPPOSITE the victim's, keyed on the victim's team and on
+   nothing else.** The killer's identity does not enter into it — which is why
+   `ServerActorDamageSink.ApplyDamage` accepting `attackerId` and never reading it is correct, and
+   why friendly fire scores for the enemy (§ 1.4). **Bots count the same as humans:** killing a
+   friendly bot scores for the enemy too.
+2. **Only an actual death scores. Damage that does not kill scores nothing**, and a death scores
+   exactly once. The single-fire property is **structural, not a convention**:
+   `ServerActorDamageSink.ApplyDamage` flips `victim.IsAlive = false` at `:92` and its own remark
+   says why — *"the next call for the same actor takes the IsAlive branch above and reports
+   died:false. That is what makes the edge single-fire without anyone having to remember to make
+   it so."* **So do not add a scoring call in the damage path.** The hook is the death edge.
+3. **The two runtimes score through different call paths and must therefore share a RULE, not a
+   call.** Offline, `Actor.Die()` calls `AddScore` at `Actor.cs:905`. **The server never calls
+   `Actor.Die()` at all** — `ServerActorDamageSink.cs:86-90` says it is private and *"reaches for
+   IngameUi and ScoreUi, neither of which exists on a headless server."* The server's hook is
+   `ServerTickLoop.ReportDeathToMatch(victimActorId)` (`:1188`), reached from `:1114`, which today
+   calls `_match.ReportDeath(victim.Team)` at `:1194`. **That hook point is correct and does not
+   move; only its direction changes** — it currently drains the victim's own tickets and must
+   award `1 - victim.Team`. This is the concrete reason § 1.3 extracts a shared pure rule instead
+   of routing one runtime through the other's method.
 
 There is a **second win condition**, and it is not the margin: losing every spawn point.
 `MatchScoreboard.cs:139-146` — `!ActorManager.HasSpawnPoint(0)` ⇒ red wins, and vice versa,
@@ -138,6 +165,10 @@ This paragraph exists so nobody re-files it. If you are reading the server audit
 sections are **superseded here**. The penalty for a team-kill is economic, not mechanical: under
 § 1.1 property 2 the kill credits the enemy a point, which is a stiffer and more legible penalty
 than a blocked shot.
+
+Restated against § 1.1a so it cannot be misread: the score is keyed on the **victim's** team, so a
+team-kill credits the enemy one point. No branch anywhere reads the killer. **Bots are not special
+either** — killing a friendly bot scores for the enemy exactly as killing a friendly human does.
 
 `AiActorController.cs:1060` still makes bots refuse to fire on their own side. That is bot
 target-selection, not a damage gate, and it is left alone.

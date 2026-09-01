@@ -35,17 +35,16 @@ Two consequences that are worse than "the numbers differ":
   `(blueScore − redScore + victoryPoints) / (2 × victoryPoints)` — a **margin** bar. It has been
   fed ticket counts. Even when the numbers were right, the picture was of a different rule.
 
-### 1.1 The trap that will silently kill this phase
+### 1.1 The opening-ownership invariant is already held — do not build a check for it
 
-`MatchScoreboard.ScoreMultiplier(flags) => flags` (`:160-163`) is the identity function, so
-
-> **a team holding zero capture points scores zero per kill.**
-
-Offline this never shows: Dustbowl opens with Oasis owned by team 0 and Fortress by team 1, so
-both sides open on 1. On the server, if the capture points are not yet owned when `Playing`
-begins, both scores stay pinned at 0, no margin is ever reached, and the match runs forever
-looking like nothing is broken. **Step 3.2 asserts the opening flag counts before anything else,
-and acceptance criterion 3 grades it.** Do not skip it because the offline game works.
+`MatchScoreboard.ScoreMultiplier(flags) => flags` (`:160-163`) is the identity function, so a team
+holding zero capture points scores zero per kill. That is the rule rather than a hazard, and the
+case where **both** sides open on zero cannot occur on either shipped map and is already caught
+loudly: `MatchController.cs:199-205` logs an error when no point is authored to either team, and
+its own remark names the real consequence — `ApplyElimination` reads two zero spawn-point counts
+as a double wipe-out *"one second into Playing -- the loop X-53 was."* Both maps open one point per
+side (Dustbowl `1, -1, -1, 0, -1, -1`; Island `0, 1, -1, -1, -1`), so a match opens 1/1 at
+multiplier x1.
 
 ---
 
@@ -101,23 +100,24 @@ existing `MatchScoreboard` test goes red, the extraction is wrong, not the test.
 Assembly-CSharp already imports `Ironfront.Net.Replication.Match` (`CapturePoint.cs`,
 `MatchScoreboard.cs`), so no asmdef changes and no new reference is introduced.
 
-### 3.2 — Assert the opening flag counts on the server, BEFORE changing the score (S)
+### 3.2 — Pin the scoring event before porting it (S)
 
-Read § 1.1 again. Before any score code changes, establish on the server what
-`MatchStateMachine`'s capture-point ownership is at the instant `Playing` begins, on **Dustbowl**:
+Read [contracts § 1.1a](../00-shared/team-multiplayer-contracts.md#11a-the-scoring-event-pinned)
+and hold all three invariants through the port. Restated here only as the checklist:
 
-- If both teams open on ≥ 1 owned point, the multiplier is safe and the migration proceeds.
-- If either opens on 0, the multiplier pins that side's score at 0 forever and **the migration
-  must carry an answer** — a floor of 1 in `ScoreMultiplier`, or an opening-ownership fix, or an
-  explicit "no score before first capture" design. Decide it here, with the measurement in hand.
-  Do not decide it from the offline game's behaviour, which cannot exhibit the case.
-
-`MatchController.cs:178-205` already logs an error when no capture point is authored to either
-team, naming Dustbowl's Oasis (team 0) and Fortress (team 1). That log is the cheapest place to
-take this reading.
-
-**Record the answer in the phase's report.** P19 (Island) depends on it: an Island authored with
-no team-owned capture point reproduces exactly this, on a map with no offline history to hide it.
+- **One point to the team OPPOSITE the victim's, keyed on the victim's team and nothing else.**
+  No branch reads the killer. Friendly fire therefore scores for the enemy, and **bots count the
+  same as humans**.
+- **Only an actual death scores; a death scores once.** Damage that does not kill scores nothing.
+  The single-fire edge is structural — `ServerActorDamageSink.ApplyDamage` flips
+  `victim.IsAlive = false` (`:92`) so the next call reports `died:false`, and its remark says that
+  is *"what makes the edge single-fire without anyone having to remember to make it so."*
+  **Do not add a scoring call in the damage path.**
+- **The hook does not move.** `ServerTickLoop.ReportDeathToMatch(victimActorId)` (`:1188`, reached
+  from `:1114`) is already the death edge; only the direction of `:1194` changes. And note the
+  server **never calls `Actor.Die()`** (`ServerActorDamageSink.cs:86-90` — it is private and
+  reaches for `IngameUi`/`ScoreUi`), which is exactly why 3.1 extracts a shared rule rather than
+  routing one runtime through the other's method.
 
 ### 3.3 — Migrate `MatchStateMachine` to the margin rule (L)
 
@@ -131,10 +131,10 @@ Six edits, and they are one change — none is separately shippable:
    `team == Team0` ⇒ team 1 scores; `team == Team1` ⇒ team 0 scores. Each award goes through
    `ConquestScoreRule.Award(points, flagsOfScoringTeam)`. The `Phase != Playing` early-return
    (`:204`) stays, and its remark stays with it.
-   **This is where friendly fire pays.** `Actor.cs:905` already credits the victim's opponent, so
-   a team-kill hands the enemy a point on both runtimes once this lands. No gate, by owner
-   decision — see
-   [contracts § 1.4](../00-shared/team-multiplayer-contracts.md#14-friendly-fire--deliberately-not-gated).
+   All three invariants from § 3.2 apply to this edit and it is the only place they can be lost.
+   **This is where friendly fire pays:** the award is keyed on the victim's team, so a team-kill
+   hands the enemy a point — no gate, by owner decision
+   ([contracts § 1.4](../00-shared/team-multiplayer-contracts.md#14-friendly-fire--deliberately-not-gated)).
 3. **Flags become a multiplier, not a bleed.** `DrainTickets` (`:382-394`) counts owned points per
    team and subtracts from the side with fewer. Under the margin rule the flag count is already
    in the score through `Award`. Deleting `DrainTickets` outright removes the only pressure that
@@ -247,7 +247,7 @@ Criteria 3, 5 and 6 are the ones that cannot be satisfied by a green suite.
 |---|---|---|
 | 1 | `ConquestScoreRule` is the only implementation of the multiplier and the margin test. `grep -rn "ScoreMultiplier\|>= .*+ *VictoryPoints"` finds the rule once and forwarders elsewhere | grep output in the report |
 | 2 | Every pre-existing `MatchScoreboard` and `ScoreUi` offline test passes **unchanged** | `dotnet test`, 8 projects |
-| 3 | **The opening flag count per team on Dustbowl is measured, stated, and its consequence for `ScoreMultiplier` answered** — not inferred from the offline game | server log excerpt in the report |
+| 3 | **Two-client artifact: a TEAM-KILL moves the OPPOSING side's score up by one, and a non-lethal hit moves neither side.** Graded on the captured numbers, not on the damage log | lane-B record or screenshot pair, with the shot and the score before/after |
 | 4 | A hex-sample test pins the 10 bytes of `S_MATCH_STATE` v5; `SpecChecker` green; § 15 has a 5.0.0 row; `PROTOCOL_VERSION` reads 5 in the fenced block **and** the prose header | `tools/ci.ps1` + the diff |
 | 4a | **§ 15 has a 4.0.0 row as well as a 5.0.0 row.** The 4.0.0 row names commit `9172920` / PR #222, the `POS_MIN`/`POS_MAX` move with `POS_RANGE` unchanged, and "Wire change? Yes"; anything not evidenced by that commit is stated as unestablished rather than filled in. Ledger **X-79** closed and `recount_debt_ledger.py --check` passes | diff + the recount |
 | 5 | **Two-client run: both clients' score numbers ascend, agree with each other, and agree with the server's log.** A kill moves the killer's side up, not the victim's side down | lane-B record + screenshot |
@@ -262,7 +262,7 @@ Criteria 3, 5 and 6 are the ones that cannot be satisfied by a green suite.
 
 | Risk | L | I | Score | Mitigation |
 |---|---|---|---|---|
-| Zero-flag multiplier pins both scores at 0; match never ends and looks fine | 4 | 5 | **20** | Step 3.2 measures it before any score code changes; criterion 3 grades it |
+| A second scoring call added in the damage path, so a multi-hit kill scores twice | 3 | 4 | 12 | Step 3.2 invariant 2; the `IsAlive` flip already makes the edge single-fire, and criterion 3's non-lethal half would catch a damage-path call |
 | Bleed deleted, stalemates never resolve, and nobody notices until a long run | 3 | 4 | 12 | Step 3.3 edit 3 forces the decision to be recorded; criterion 7 needs a match that actually ends |
 | Version bumped in the fenced block but not the prose header — SpecChecker stays green | 3 | 3 | 9 | Condition 4 is explicitly by-eye; it has drifted on this project before (`protocol-spec.md:1412`) |
 | `ScoreUi` conflict with P12 | 3 | 2 | 6 | P11 owns `SetAuthoritativeState`; P12 owns `Awake`/`UpdateUi`. Land P11 first |
@@ -270,8 +270,10 @@ Criteria 3, 5 and 6 are the ones that cannot be satisfied by a green suite.
 | Plugin DLLs not rebuilt; Editor compiles against the old struct | 2 | 4 | 8 | Step 3.6, standing rule 5 |
 | The back-filled 4.0.0 row invents content the commit does not evidence | 2 | 4 | 8 | 3.4a quotes the diff and the commit message, and requires "unestablished" in writing over a guess |
 
-Nothing scores ≥ 15 except the multiplier trap, and step 3.2 is its mandated mitigation — it runs
-**first**, not alongside.
+Nothing scores ≥ 15. The risk that used to sit at 20 — a zero-flag multiplier pinning both scores
+at 0 — was **withdrawn on 2026-09-01 as a phantom**: both shipped maps open one point per side and
+`MatchController.cs:199-205` already catches the case loudly (§ 1.1). A risk table that keeps a
+hazard which cannot occur teaches the next reader to discount the ones that can.
 
 ---
 
