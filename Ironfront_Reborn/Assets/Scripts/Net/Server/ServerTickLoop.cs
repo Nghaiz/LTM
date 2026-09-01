@@ -1531,12 +1531,29 @@ namespace Ironfront.Net.Unity.Server
         {
             if (_byConnection.ContainsKey(connectionId)) return;
 
-            if (!ServerActorRegistry.Instance.TryClaimPlayerSlot(out NetServerActor actor))
+            // The side the master server put this player on, carried in the signed join ticket
+            // and parsed by the transport beside the playerId and the display name. Before
+            // P13 nothing read it — the ticket had no such byte — and the team was re-derived
+            // from slot parity here, so the lobby's balancing was computed and thrown away.
+            byte ticketTeam = info.Team;
+
+            if (!ServerActorRegistry.Instance.TryClaimPlayerSlot(ticketTeam, out NetServerActor actor))
             {
+                // Two different facts, and they must not render as one sentence: "the server
+                // is full" has no remedy, "your side is full" has one the player can act on.
+                bool serverFull = !ServerActorRegistry.Instance.HasFreePlayerSlotOnAnyTeam();
+
                 Debug.LogError(
-                    $"[net] conn {connectionId} joined with no free player slot. Mark more "
-                    + "NetServerActors as available for players.");
-                Transport.Disconnect(connectionId, DisconnectReason.ServerFull);
+                    serverFull
+                        ? $"[net] conn {connectionId} joined with no free player slot on any "
+                          + "team. Mark more NetServerActors as available for players."
+                        : $"[net] conn {connectionId} joined for team {ticketTeam}, which is "
+                          + "full — the other side is not. Refused with TeamFull rather than "
+                          + "ServerFull so the client can say which it was.");
+
+                Transport.Disconnect(
+                    connectionId,
+                    serverFull ? DisconnectReason.ServerFull : DisconnectReason.TeamFull);
                 return;
             }
 

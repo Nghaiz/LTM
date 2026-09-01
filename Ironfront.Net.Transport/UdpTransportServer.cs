@@ -365,7 +365,7 @@ namespace Ironfront.Net.Transport
             if (!JoinTicket.TryReadFields(
                     response.JoinTicket,
                     out uint playerId, out ushort _, out ushort _, out long _,
-                    out string ticketDisplayName))
+                    out byte ticketTeam, out string ticketDisplayName))
             {
                 SendDenied(remote, header.Sequence, ConnectDenyReason.InvalidTicket);
                 return;
@@ -399,6 +399,11 @@ namespace Ironfront.Net.Transport
                 ackBitfieldEnabled: AckBitfieldEnabled);
             connection.PlayerId = playerId;
             connection.DisplayName = PlayerNameSanitizer.Sanitize(ticketDisplayName);
+
+            // Same parse, same trust boundary. Carried verbatim rather than validated here:
+            // the tick loop is the layer that owns what a side means and it refuses a team it
+            // has no body for, which is a louder answer than a rewrite in the transport.
+            connection.Team = ticketTeam;
             connection.AttachSender(SendRaw);
             connection.ActivateServer(connectionId, _nowMs);
             connection.MessageReceived += payload => OnMessage?.Invoke(connectionId, payload);
@@ -549,7 +554,8 @@ namespace Ironfront.Net.Transport
                 connection.State,
                 connection.PlayerId,
                 connection.Stats,
-                connection.DisplayName);
+                connection.DisplayName,
+                connection.Team);
 
         private static EndPoint CloneEndpoint(EndPoint endpoint)
         {

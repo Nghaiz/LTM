@@ -111,6 +111,11 @@ namespace Ironfront.Net.LoadHarness
                 serverId: 0,
                 roomId: 0,
                 expiresAtUnixMs: expiresAt,
+
+                // Alternating, so a harness run fills both sides the way a balanced lobby
+                // would. All-zero would put every synthetic client on team 0 and a team-keyed
+                // claim would then refuse half of them — a capacity limit the harness invented.
+                team: (byte)(clientIndex % 2),
                 displayName: $"harness-{clientIndex}",
                 sharedSecret: _secret);
 

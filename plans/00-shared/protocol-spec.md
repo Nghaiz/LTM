@@ -1,6 +1,6 @@
 # Protocol Specification — Ironfront Reborn
 
-**Version: 5.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 5`
+**Version: 6.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 6`
 
 > This is the contract every side of the wire is written against. Every offset, every enum value
 > and every quantization constant in this document is **mandatory**. Client and server may not
@@ -47,7 +47,7 @@
 public static class ProtocolConstants
 {
     public const ushort PROTOCOL_ID       = 0x4946;  // 'IF' — filters out junk packets
-    public const byte   PROTOCOL_VERSION  = 5;
+    public const byte   PROTOCOL_VERSION  = 6;
 
     public const int    MTU_SAFE          = 1200;    // safe through any router
     public const int    GSP_HEADER_SIZE   = 16;
@@ -232,6 +232,21 @@ Retry: CONNECT_REQUEST is resent every 250 ms, up to 20 times (5 seconds), then 
 | 4 | Banned |
 | 5 | Server shutting down |
 | 6 | Already connected (duplicate playerId) |
+| 7 | Your team is full (the other side may not be) — see below |
+
+**Code 7 is not code 1.** "The server is full" has no remedy; "your side is full" has one the
+player can act on, so rendering them as the same sentence throws away the only actionable half.
+Adding the value **moves no byte** — the reason field was already a `u8` — so it is not a wire
+change on its own, the same call § 4.9 makes for weapon ids.
+
+**A client that predates code 7 must degrade to a GENERIC refusal**, not to silence and not to a
+wrong reason. `Connection.MapDeniedReason` maps any unrecognised code to `DisconnectReason.Refused`
+rather than to `InvalidTicket`: a player told their ticket is invalid re-logs in, and the real
+answer was that their side was full.
+
+> **The slot claim happens after the handshake**, so this refusal reaches the client as a
+> `DisconnectReason`, not as `CONNECT_DENIED`. `DisconnectReason.TeamFull` = 9 is the counterpart,
+> and without it code 7 would be a value nothing on the failing path could ever send.
 
 ---
 
@@ -1280,9 +1295,29 @@ joinTicket (64 bytes):
   u16  serverId
   u16  roomId
   u64  expiresAtUnixMs        (valid for 60 seconds from issue)
-  u8[16] displayNameUtf8      (truncated/padded to 16 bytes)
+  u8   team                   0 or 1. TeamId.None is NOT a legal value here
+  u8[15] displayNameUtf8      (truncated/padded to 15 bytes)
   u8[32] hmac                 = HMAC-SHA256(the first 32 payload bytes, SHARED_SECRET)[0..32]
 ```
+
+**The team byte came out of the name, not out of spare room** — there was none: the signed payload
+was exactly 32 bytes and the ticket exactly 64. So `displayName` went 16 → 15 and `team` took the
+byte. `Size` is still 64, the signed span is still the first 32 bytes, and the HMAC still covers
+exactly those. This is what makes it a wire change and why v6 exists.
+
+**Why `team` sits before the name.** The name stays the trailing run, so a truncation bug loses a
+name character rather than the team byte — a wrong character in a killfeed is cosmetic, a wrong
+side is the match. Being inside the signed 32 bytes is the other half: a team byte outside the
+HMAC would let a player choose their side by editing one byte of their own ticket.
+
+**15 bytes is not 15 characters.** A Vietnamese name costs two or three bytes per accented vowel.
+A multi-byte character straddling the 15th byte must be dropped **whole**; a cut through the middle
+of a UTF-8 sequence decodes to U+FFFD and the player carries a replacement glyph all match.
+
+**Where the byte comes from.** The master server's lobby balances teams on join
+(`LobbyService.NewMember`) and writes the answer into the ticket. The game server claims a body on
+that side (`ServerActorRegistry.TryClaimPlayerSlot(team, …)`) rather than re-deriving a side from
+slot parity — which is what it did until v6, so a player's team was an accident of join order.
 
 - The master server issues the ticket when it replies with `ROOM_JOIN_RES`.
 - The client passes the ticket through verbatim in `CONNECT_REQUEST`.
@@ -1389,6 +1424,7 @@ Added at v3.0.0:
 
 | **4.0.0** | 2026-08-28 | the replication track | **The position window MOVED; it did not widen.** `Quantize.POS_MIN` `-2048f` → `-1024f` and `POS_MAX` `2048f` → `3072f`, with `POS_RANGE` unchanged at 4096 — the diff's own trailing comment reads `// 4096, unchanged` — so the resolution stays 6.25 cm and an encoded position stays 6 bytes. Reason and measurements are in § 4.4's note, cited rather than restated; ledger **X-53**. **Back-filled 2026-09-01 by P11 § 3.4a** (ledger **X-79**): the bump was live in `ProtocolConstants.cs` and in this file's header from the day it shipped, but condition 3 was never met, and nothing mechanical would ever have noticed because `SpecChecker` parses the § 1 fenced block and not this table. Reconstructed from `git show 9172920`, whose only files under `Ironfront.Net.Protocol/` are `ProtocolConstants.cs` and `Quantize.cs`; **nothing here is inferred beyond that diff and the commit message**, and no other v4 change is claimed because none is evidenced | **Yes** — in the commit's own words, *"a v3 client cannot talk to it, because the same i16 now decodes to a different metre"* | #222 |
 | **5.0.0** | 2026-09-01 | the client track | **`S_MATCH_STATE` (0x45) now carries the game's own win condition.** `Size` **8 → 10**: `tickets0`/`tickets1` become `score0`/`score1` at the same two offsets, and a `u16 victoryPoints` is appended. `WinningTeam` stops being `Tickets0 > Tickets1` — meaningless under a margin rule, since it can name a winner in a match that is not over — and becomes `ConquestScoreRule.Decide(score0, score1, victoryPoints)`, the same function the server ends the round with. `victoryPoints` crosses the wire because it is a host-editable match setting, not a constant, and both branches of the client's score-bar geometry divide by it. Phase **P11**; the score model and the layout are [`team-multiplayer-contracts.md`](team-multiplayer-contracts.md) §§ 1–2 | **Yes** — twice over, and either half alone would suffice: the size changed, AND the meaning of two unchanged byte positions INVERTED. A v4 client reading a v5 server renders an ascending score as a descending ticket count, so a round opening 0/0 reads as "both sides have already lost" and the winner answers backwards all match — a failure that *looks* like it works. `CONNECT_DENIED` code 2 is the outcome we want instead | (this PR) |
+| **6.0.0** | 2026-09-01 | the client track | **The joinTicket now carries the team, so the lobby's balancing reaches the match.** `displayName` **16 → 15** bytes and a `u8 team` takes the freed byte at offset 16, ahead of the name (§ 12). `JOIN_TICKET_SIZE` stays **64**, `SignedPayloadSize` stays **32**, and the HMAC still covers exactly the first 32 bytes — the byte came out of the name, not out of spare room, because there was none. Team sits before the name so a truncation bug costs a name character rather than a side, and inside the signed span so a side cannot be forged by editing one byte. Also adds `ConnectDenyReason.TeamFull` = 7 (§ 3.2) and its post-handshake counterpart `DisconnectReason.TeamFull` = 9 — **that value adds no byte and would not bump the version on its own**; it is in this row because it shipped with the layout change, not because it caused it. Phase **P13**; the layout and the value space are [`team-multiplayer-contracts.md`](team-multiplayer-contracts.md) §§ 3–4. **P11 had already shipped when this landed** (v5 is live in `ProtocolConstants.cs` and in this table), so this is 5 → 6 on its own rather than an amendment to the v5 row — the check § 3.2 of the contracts demands, answered | **Yes** — every byte from offset 16 onward moved. A v5 client's ticket puts a name byte where a v6 server reads the team, so `"N"` (0x4E) decodes as team 78 and the join is refused for a side that does not exist; a v6 ticket read by a v5 server renders every name one character short with a leading ``. `CONNECT_DENIED` code 2 is the outcome we want instead | (this PR) |
 
 > Every change after the freeze must add a row to this table and clear the gate below.
 > **Bump `PROTOCOL_VERSION` only when the bytes on the wire change** — a client and server with

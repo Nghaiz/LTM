@@ -26,9 +26,23 @@ namespace Ironfront.Net.Protocol
     ///   u16    serverId
     ///   u16    roomId
     ///   u64    expiresAtUnixMs        (valid for 60 seconds from issue)
-    ///   u8[16] displayNameUtf8        (truncated/padded to 16 bytes)
+    ///   u8     team                   0 or 1; TeamId.None is not a legal ticket value
+    ///   u8[15] displayNameUtf8        (truncated/padded to 15 bytes)
     ///   u8[32] hmac                   = HMAC-SHA256(the first 32 payload bytes, SHARED_SECRET)
     /// </code>
+    /// <para>
+    /// <b>The team byte came out of the name, not out of spare room.</b> There was none: the
+    /// signed payload was exactly 32 bytes and the ticket exactly 64, both asserted. So
+    /// <see cref="DisplayNameSize"/> went 16 → 15 and <c>team</c> took the byte, which is why
+    /// this is a wire change and why <c>PROTOCOL_VERSION</c> moved with it.
+    /// </para>
+    /// <para>
+    /// <b>Team sits BEFORE the name deliberately.</b> The name stays the trailing run, so a
+    /// truncation bug loses a name character rather than the team byte — a wrong character in
+    /// a killfeed is cosmetic; a wrong side is the match. It is inside the signed 32 bytes for
+    /// the same reason: a forgeable side selection is a player choosing which team to join by
+    /// editing a byte.
+    /// </para>
     /// <para>
     /// The master server issues the ticket in ROOM_JOIN_RES; the client passes it through
     /// verbatim in CONNECT_REQUEST; the game server verifies it locally with the shared
@@ -57,7 +71,19 @@ namespace Ironfront.Net.Protocol
 
         public const int HmacSize = 32;
 
-        public const int DisplayNameSize = 16;
+        /// <summary>
+        /// 15 since PROTOCOL_VERSION 6 — one byte shorter than the freeze, to make room for
+        /// <c>team</c> without growing the ticket. 15 BYTES, not 15 characters: a Vietnamese
+        /// name costs two bytes per accented vowel and fits fewer.
+        /// </summary>
+        public const int DisplayNameSize = 15;
+
+        /// <summary>
+        /// The highest legal team value in a ticket. <c>TeamId.None</c> is legal in
+        /// <c>S_MATCH_STATE.WinningTeam</c> and in a spawn point's owner; it is NOT legal
+        /// here, because a joining player is on a side.
+        /// </summary>
+        public const byte MaxTeam = 1;
 
         /// <summary>Ticket lifetime, per protocol-spec.md section 12.</summary>
         public const long ValidityMs = 60_000;
@@ -67,7 +93,8 @@ namespace Ironfront.Net.Protocol
         private const int OffsetServerId    = 4;
         private const int OffsetRoomId      = 6;
         private const int OffsetExpiresAt   = 8;
-        private const int OffsetDisplayName = 16;
+        private const int OffsetTeam        = 16;
+        private const int OffsetDisplayName = 17;
         private const int OffsetHmac        = 32;
 
         /// <summary>
@@ -78,17 +105,24 @@ namespace Ironfront.Net.Protocol
         /// Absolute expiry. Callers normally pass <c>nowUnixMs + </c>
         /// <see cref="ValidityMs"/>.
         /// </param>
+        /// <param name="team">
+        /// The side the master server put this player on. 0 or 1; anything higher is refused
+        /// with -1 rather than clamped, because a clamp would silently put a player on team 0
+        /// and the caller would never learn it had a bug.
+        /// </param>
         public static int Issue(
             Span<byte> dst,
             uint playerId,
             ushort serverId,
             ushort roomId,
             long expiresAtUnixMs,
+            byte team,
             string? displayName,
             ReadOnlySpan<byte> sharedSecret)
         {
             if (dst.Length < Size) return -1;
             if (sharedSecret.Length == 0) return -1;
+            if (team > MaxTeam) return -1;
 
             dst.Slice(0, Size).Clear();
 
@@ -96,6 +130,7 @@ namespace Ironfront.Net.Protocol
             Endian.WriteU16LE(dst, OffsetServerId, serverId);
             Endian.WriteU16LE(dst, OffsetRoomId, roomId);
             Endian.WriteU64LE(dst, OffsetExpiresAt, unchecked((ulong)expiresAtUnixMs));
+            dst[OffsetTeam] = team;
             WriteDisplayName(dst.Slice(OffsetDisplayName, DisplayNameSize), displayName);
 
             ComputeHmac(dst.Slice(0, SignedPayloadSize), sharedSecret,
@@ -141,12 +176,14 @@ namespace Ironfront.Net.Protocol
             out ushort serverId,
             out ushort roomId,
             out long expiresAtUnixMs,
+            out byte team,
             out string displayName)
         {
             playerId        = 0;
             serverId        = 0;
             roomId          = 0;
             expiresAtUnixMs = 0;
+            team            = 0;
             displayName     = string.Empty;
 
             if (ticket.Length < Size) return false;
@@ -155,6 +192,12 @@ namespace Ironfront.Net.Protocol
             serverId        = Endian.ReadU16LE(ticket, OffsetServerId);
             roomId          = Endian.ReadU16LE(ticket, OffsetRoomId);
             expiresAtUnixMs = unchecked((long)Endian.ReadU64LE(ticket, OffsetExpiresAt));
+
+            // Returned raw, not validated against MaxTeam. Issue refuses to write anything
+            // higher, so a VERIFIED ticket carrying one means the master server is broken —
+            // and the claim path answers that honestly by finding no body on that side,
+            // rather than this reader quietly rewriting it to 0.
+            team            = ticket[OffsetTeam];
             displayName     = ReadDisplayName(ticket.Slice(OffsetDisplayName, DisplayNameSize));
             return true;
         }

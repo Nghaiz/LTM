@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using Xunit;
 
 namespace Ironfront.Net.Protocol.Tests
@@ -150,6 +151,7 @@ namespace Ironfront.Net.Protocol.Tests
         [InlineData(ConnectDenyReason.Banned, "04")]
         [InlineData(ConnectDenyReason.ServerShuttingDown, "05")]
         [InlineData(ConnectDenyReason.AlreadyConnected, "06")]
+        [InlineData(ConnectDenyReason.TeamFull, "07")]
         public void ConnectDenied_EveryReasonCode_RoundTrips(
             ConnectDenyReason reason, string expectedHex)
         {
@@ -160,6 +162,82 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.True(ConnectDeniedPayload.TryParse(
                 Hex.FromHex(expectedHex), out ConnectDeniedPayload parsed));
             Assert.Equal(reason, parsed.Reason);
+        }
+
+        // -------------------------------------------------------- joinTicket (§ 12, 64 bytes)
+
+        /// <summary>
+        /// playerId 4242, serverId 7, roomId 99, expiry 1_800_000_060_000, team 1,
+        /// name "Nghaiz", signed with <see cref="TicketSecret"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Freeze-gate condition 2 for PROTOCOL_VERSION 6.</b> The ticket changed shape —
+        /// a <c>u8 team</c> at offset 16 and <c>displayName</c> 16 → 15 — and until this
+        /// existed nothing pinned its bytes: the round-trip tests would pass unchanged if the
+        /// team byte moved to offset 17 and the name to 16, because both halves of the
+        /// round trip would move together. A hex sample is the only test that cannot.
+        /// </para>
+        /// <para>
+        /// The 32 signature bytes are pinned too, so this also fails if the HMAC ever covers a
+        /// different span than the first 32 payload bytes.
+        /// </para>
+        /// <para>
+        /// <b>Not captured from this implementation's output</b>, per this file's contract.
+        /// The 32 payload bytes were laid out by hand from § 12's table; the 32 signature
+        /// bytes came from an independent HMAC-SHA256 over exactly those bytes, computed
+        /// outside this solution. A sample copied from the code under test proves only that
+        /// the code agrees with itself.
+        /// </para>
+        /// </remarks>
+        private const string JoinTicketHex =
+            "92 10 00 00 07 00 63 00 60 3A 5D 18 A3 01 00 00 01 4E 67 68 61 69 7A 00 00 00 00 00 00 00 00 00 23 14 0F 7F E9 0B 2F 7D 93 97 96 09 1C D5 D7 94 64 2F AE 6E 25 6F F6 F7 B2 4A 44 1D 4F C9 97 3B";
+
+        private static readonly byte[] TicketSecret =
+            Encoding.UTF8.GetBytes("test-shared-secret-not-for-production");
+
+        [Fact]
+        public void JoinTicket_IssuesTheExpectedSixtyFourBytes()
+        {
+            var ticket = new byte[JoinTicket.Size];
+
+            Assert.Equal(JoinTicket.Size, JoinTicket.Issue(
+                ticket,
+                playerId: 4242,
+                serverId: 7,
+                roomId: 99,
+                expiresAtUnixMs: 1_800_000_060_000L,
+                team: 1,
+                displayName: "Nghaiz",
+                sharedSecret: TicketSecret));
+
+            Assert.Equal(JoinTicketHex, Hex.ToHex(ticket));
+
+            // And the byte at offset 16 is the team, read left-to-right in declaration order:
+            // 8 bytes of expiry end at 15, so 17 is where the name starts.
+            Assert.Equal(1, ticket[16]);
+            Assert.Equal((byte)'N', ticket[17]);
+        }
+
+        [Fact]
+        public void JoinTicket_TheSampleVerifiesAndReadsBack()
+        {
+            byte[] ticket = Hex.FromHex(JoinTicketHex);
+
+            Assert.Equal(
+                TicketVerifyResult.Valid,
+                JoinTicket.Verify(ticket, TicketSecret, 1_800_000_000_000L));
+
+            Assert.True(JoinTicket.TryReadFields(
+                ticket, out uint playerId, out ushort serverId, out ushort roomId,
+                out long expiresAt, out byte team, out string displayName));
+
+            Assert.Equal(4242u, playerId);
+            Assert.Equal(7, serverId);
+            Assert.Equal(99, roomId);
+            Assert.Equal(1_800_000_060_000L, expiresAt);
+            Assert.Equal(1, team);
+            Assert.Equal("Nghaiz", displayName);
         }
 
         // ---------------------------------------------------------- S_HIT_CONFIRM 0x43

@@ -80,7 +80,7 @@ namespace Ironfront.Net.Replication.Tests
 
             Assert.Equal(TicketVerifyResult.Valid, JoinTicket.Verify(ticket, Secret, Now()));
             Assert.True(JoinTicket.TryReadFields(
-                ticket, out uint playerId, out _, out _, out _, out string displayName));
+                ticket, out uint playerId, out _, out _, out _, out _, out string displayName));
 
             Assert.Equal(7u, playerId);
             Assert.Equal("lane-b-two", displayName);
@@ -107,7 +107,7 @@ namespace Ironfront.Net.Replication.Tests
                 {
                     Assert.Equal(TicketVerifyResult.Valid, JoinTicket.Verify(ticket, Secret, Now()));
                     Assert.True(JoinTicket.TryReadFields(
-                        ticket, out uint playerId, out _, out _, out _, out _));
+                        ticket, out uint playerId, out _, out _, out _, out _, out _));
                     return playerId;
                 })
                 .ToArray();
@@ -278,6 +278,7 @@ namespace Ironfront.Net.Replication.Tests
                 serverId: 0,
                 roomId: 0,
                 expiresAtUnixMs: Now() + JoinTicket.ValidityMs,
+                team: 0,
                 displayName: config.DisplayName,
                 sharedSecret: Secret);
 

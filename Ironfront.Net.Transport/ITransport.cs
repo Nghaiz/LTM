@@ -22,6 +22,22 @@ namespace Ironfront.Net.Transport
         Banned           = 6,
         TransportError   = 7,
         AlreadyConnected = 8,
+
+        /// <summary>
+        /// The side named by the join ticket had no free body. The counterpart of
+        /// <c>ConnectDenyReason.TeamFull</c>, and needed separately because the slot claim
+        /// happens AFTER the handshake: by then the server disconnects rather than denying,
+        /// so a deny code alone could never reach the player.
+        /// </summary>
+        TeamFull         = 9,
+
+        /// <summary>
+        /// Refused for a reason this build does not know. The generic fallback for an
+        /// unrecognised <c>ConnectDenyReason</c> — a wrong specific reason reads as
+        /// authoritative and sends the player chasing the wrong fix, so an unknown code
+        /// must say only what is true: the server refused it.
+        /// </summary>
+        Refused          = 10,
     }
 
     /// <summary>Handed to the client when a handshake completes.</summary>
@@ -82,6 +98,25 @@ namespace Ironfront.Net.Transport
         /// </remarks>
         public readonly string DisplayName;
 
+        /// <summary>
+        /// The side the master server put this player on, read out of the same signed ticket
+        /// <see cref="PlayerId"/> and <see cref="DisplayName"/> came from. 0 or 1.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This is what makes the lobby's balancing arrive.</b> Before it, the game server
+        /// re-derived a side from slot parity, so a player's team was an accident of join
+        /// order and the lobby's answer was computed and thrown away.
+        /// </para>
+        /// <para>
+        /// <b>0 on a transport with no ticket to read</b> — the loopback has none, and a
+        /// development stub carries a ticket whose payload is all zeroes. That is the same
+        /// side the first slot has always had, so a ticketless join behaves exactly as it did
+        /// before this field existed; it is a default, not a decision.
+        /// </para>
+        /// </remarks>
+        public readonly byte Team;
+
         public ConnectionInfo(
             ushort connectionId, string remoteAddress, float smoothedRttMs, ConnectionState state)
             : this(connectionId, remoteAddress, smoothedRttMs, state, 0, default)
@@ -95,7 +130,7 @@ namespace Ironfront.Net.Transport
             ConnectionState state,
             uint playerId,
             TransportStats stats)
-            : this(connectionId, remoteAddress, smoothedRttMs, state, playerId, stats, string.Empty)
+            : this(connectionId, remoteAddress, smoothedRttMs, state, playerId, stats, string.Empty, 0)
         {
         }
 
@@ -107,6 +142,19 @@ namespace Ironfront.Net.Transport
             uint playerId,
             TransportStats stats,
             string displayName)
+            : this(connectionId, remoteAddress, smoothedRttMs, state, playerId, stats, displayName, 0)
+        {
+        }
+
+        public ConnectionInfo(
+            ushort connectionId,
+            string remoteAddress,
+            float smoothedRttMs,
+            ConnectionState state,
+            uint playerId,
+            TransportStats stats,
+            string displayName,
+            byte team)
         {
             ConnectionId  = connectionId;
             RemoteAddress = remoteAddress;
@@ -115,6 +163,7 @@ namespace Ironfront.Net.Transport
             PlayerId      = playerId;
             Stats         = stats;
             DisplayName   = displayName ?? string.Empty;
+            Team          = team;
         }
     }
 

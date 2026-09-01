@@ -139,6 +139,18 @@ namespace Ironfront.Net.Transport
         public string DisplayName { get; internal set; } = string.Empty;
 
         /// <summary>
+        /// The side from the same signed ticket <see cref="PlayerId"/> and
+        /// <see cref="DisplayName"/> came from. 0 when there was no ticket to read.
+        /// </summary>
+        /// <remarks>
+        /// Set once on the handshake, out of the one <c>JoinTicket.TryReadFields</c> call that
+        /// already ran after the HMAC verified — so carrying the team costs no second parse,
+        /// no new opcode and no extra round trip. It is trustworthy for exactly the same
+        /// reason the other two are: the master signed it and the signature checked out.
+        /// </remarks>
+        public byte Team { get; internal set; }
+
+        /// <summary>
         /// Datagrams discarded because a v1-reserved flag bit was set.
         /// </summary>
         /// <remarks>
@@ -780,7 +792,14 @@ namespace Ironfront.Net.Transport
                 ConnectDenyReason.ProtocolVersionMismatch => DisconnectReason.ProtocolMismatch,
                 ConnectDenyReason.Banned => DisconnectReason.Banned,
                 ConnectDenyReason.AlreadyConnected => DisconnectReason.AlreadyConnected,
-                _ => DisconnectReason.InvalidTicket,
+                ConnectDenyReason.InvalidTicket => DisconnectReason.InvalidTicket,
+                ConnectDenyReason.TeamFull => DisconnectReason.TeamFull,
+
+                // Anything this build does not recognise, including a code added after it
+                // shipped. It used to fall to InvalidTicket, which is a WRONG reason rather
+                // than an unknown one: a player told their ticket is invalid re-logs in, and
+                // the real answer was that their side was full. Say only what is true.
+                _ => DisconnectReason.Refused,
             };
 
         private static ulong CreateSalt()

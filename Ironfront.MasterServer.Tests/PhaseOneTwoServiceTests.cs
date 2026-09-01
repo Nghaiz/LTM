@@ -76,6 +76,95 @@ namespace Ironfront.MasterServer.Tests
             Assert.Equal((byte)0, created.Room.Members[2].Team);
         }
 
+        /// <summary>
+        /// The team the lobby balanced onto a member is the team its join ticket carries.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The step that did not exist.</b> The lobby computed a side on every join and
+        /// then had nowhere to put it: the ticket's 32 signed bytes were exactly full, so the
+        /// game server re-derived a team from slot parity and the lobby's answer was thrown
+        /// away. This asserts the two lines the dispatcher now runs between them — find the
+        /// member the join created, and sign THAT member's team into the ticket.
+        /// </para>
+        /// <para>
+        /// <b>Scope, stated rather than implied.</b> This drives <c>LobbyService</c> and
+        /// <c>JoinTicket</c> directly, not <c>MspMessageDispatcher</c> over a socket — there is
+        /// no dispatcher-level RoomJoin harness in this project to extend. It pins the contract
+        /// the dispatcher implements; it does not prove the dispatcher calls it. What proves
+        /// that end to end is criterion 4's two-client lane-B run, read off the SERVER's log.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public void TheTeamTheLobbyBalancedIsTheTeamTheTicketCarries()
+        {
+            var lobby = new LobbyService();
+            Session host = SessionFor(1, "Một");
+            Session guest = SessionFor(2, "Hai");
+
+            ServiceResult created = lobby.CreateRoom(
+                host, new RoomCreateRequest("Balanced", 1, 4, 0, false, null));
+            Assert.True(created.Ok);
+            Assert.True(lobby.JoinRoom(guest, created.Room!.RoomId, null).Ok);
+
+            byte[] secret = System.Text.Encoding.UTF8.GetBytes(SharedSecret);
+
+            foreach (RoomMember member in created.Room.Members)
+            {
+                var ticket = new byte[JoinTicket.Size];
+                Assert.Equal(JoinTicket.Size, JoinTicket.Issue(
+                    ticket,
+                    playerId: (uint)member.PlayerId,
+                    serverId: 7,
+                    roomId: (ushort)created.Room.RoomId,
+                    expiresAtUnixMs: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 60_000,
+                    team: member.Team,
+                    displayName: member.DisplayName,
+                    sharedSecret: secret));
+
+                Assert.True(JoinTicket.TryReadFields(
+                    ticket, out uint playerId, out _, out _, out _,
+                    out byte team, out _));
+
+                Assert.Equal((uint)member.PlayerId, playerId);
+                Assert.Equal(member.Team, team);
+            }
+
+            // The two members are on opposite sides, so the loop above proved both values
+            // rather than proving 0 twice.
+            Assert.Equal((byte)0, created.Room.Members[0].Team);
+            Assert.Equal((byte)1, created.Room.Members[1].Team);
+        }
+
+        /// <summary>
+        /// <c>RoomMember.Team</c> can be written after construction.
+        /// </summary>
+        /// <remarks>
+        /// It was <c>{ get; init; }</c>, which made a lobby side-switch impossible to express
+        /// at all — the field could not change once the member existed, so no endpoint could
+        /// have been written against it. The switch message and the UI that sends it are P16's;
+        /// this is the field they need and deliberately nothing more. The test exists because a
+        /// property whose only observable difference is that it COMPILES has nothing else to
+        /// catch a revert.
+        /// </remarks>
+        [Fact]
+        public void AMembersTeamCanBeChangedAfterTheJoin()
+        {
+            var lobby = new LobbyService();
+            Session host = SessionFor(1, "Một");
+
+            ServiceResult created = lobby.CreateRoom(
+                host, new RoomCreateRequest("Switchable", 1, 4, 0, false, null));
+            Assert.True(created.Ok);
+
+            RoomMember member = created.Room!.Members[0];
+            Assert.Equal((byte)0, member.Team);
+
+            member.Team = 1;
+
+            Assert.Equal((byte)1, created.Room.Members[0].Team);
+        }
+
         [Fact]
         public void RegistryAuthenticatesOwnerAndReleasesAssignedRoomOnDisconnect()
         {

@@ -244,8 +244,38 @@ namespace Ironfront.MasterServer.Dispatch
                 return;
             }
 
+            // The side the lobby just balanced this player onto. Read back off the member the
+            // join created rather than recomputed, so the ticket carries the decision the room
+            // actually holds — and so a later side-switch is picked up by construction.
+            //
+            // Until P13 this was computed and thrown away: the ticket had no room for it, and
+            // the game server re-derived a team from slot parity. The lobby's answer never
+            // arrived, so a player's side was an accident of join order.
+            RoomMember? member = joined.Room.Members.Find(m => m.PlayerId == session.PlayerId);
+            if (member is null)
+            {
+                // JoinRoom said Ok, so the member is in the list. If it is not, issuing a
+                // ticket for a side nobody chose is worse than refusing the join.
+                Send(connection, MspMessageType.RoomJoinResponse, new { ok = false, gameServerIp = string.Empty, gameServerPort = 0, joinTicket = string.Empty, errorCode = (ushort)ErrorCode.InternalServerError });
+                return;
+            }
+
             var ticket = new byte[JoinTicket.Size];
-            JoinTicket.Issue(ticket, (uint)session.PlayerId, server.ServerId, (ushort)room.RoomId, now + JoinTicket.ValidityMs, session.DisplayName, _sharedSecret);
+            int ticketBytes = JoinTicket.Issue(ticket, (uint)session.PlayerId, server.ServerId, (ushort)room.RoomId, now + JoinTicket.ValidityMs, member.Team, session.DisplayName, _sharedSecret);
+            if (ticketBytes != JoinTicket.Size)
+            {
+                // Issue refuses a team above 1 and an empty secret. Both are configuration or
+                // logic faults on this side; sending the all-zero buffer as a ticket would
+                // make them look like a client problem sixty seconds later.
+                StructuredLog.Event("room_join_ticket_failed", new
+                {
+                    playerId = session.PlayerId,
+                    roomId = room.RoomId,
+                    team = member.Team,
+                });
+                Send(connection, MspMessageType.RoomJoinResponse, new { ok = false, gameServerIp = string.Empty, gameServerPort = 0, joinTicket = string.Empty, errorCode = (ushort)ErrorCode.InternalServerError });
+                return;
+            }
 
             // The ticket itself is not logged. It is a signed bearer credential the game
             // server accepts for 60 seconds, so a log line containing one is a log line that
@@ -255,6 +285,7 @@ namespace Ironfront.MasterServer.Dispatch
                 playerId = session.PlayerId,
                 roomId = room.RoomId,
                 serverId = server.ServerId,
+                team = member.Team,
             });
 
             Send(connection, MspMessageType.RoomJoinResponse, new { ok = true, gameServerIp = server.PublicIp, gameServerPort = server.UdpPort, joinTicket = Convert.ToBase64String(ticket), errorCode = (ushort)ErrorCode.Ok });

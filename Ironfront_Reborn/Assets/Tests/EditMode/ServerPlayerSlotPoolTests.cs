@@ -109,11 +109,11 @@ namespace Ironfront.Net.Unity.Server.Tests
             Assert.IsTrue(_pool.Fill(MaxConnections, CreateBody, _registry), "pool did not fill");
 
             Assert.IsTrue(
-                _registry.TryClaimPlayerSlot(out NetServerActor first),
+                _registry.TryClaimPlayerSlot(0, out NetServerActor first),
                 "connection 1 found no free player slot");
 
             Assert.IsTrue(
-                _registry.TryClaimPlayerSlot(out NetServerActor second),
+                _registry.TryClaimPlayerSlot(1, out NetServerActor second),
                 "connection 2 found no free player slot — this is the phase-3A defect, back");
 
             Assert.AreNotSame(first, second, "both connections were handed the same body");
@@ -136,18 +136,28 @@ namespace Ironfront.Net.Unity.Server.Tests
 
             var claimed = new HashSet<ushort>();
 
+            // Alternating sides, because that is what a balanced lobby sends and because a
+            // team-keyed claim only reaches capacity when both sides are asked for. All-zero
+            // would fill 8 and then refuse with 8 bodies standing idle -- correct behaviour,
+            // but it would not exercise the capacity this pin is about.
             for (int i = 0; i < MaxConnections; i++)
             {
                 Assert.IsTrue(
-                    _registry.TryClaimPlayerSlot(out NetServerActor actor),
+                    _registry.TryClaimPlayerSlot((byte)(i % 2), out NetServerActor actor),
                     $"connection {i + 1} of {MaxConnections} found no free player slot");
 
                 Assert.IsTrue(claimed.Add(actor.ActorId), $"actor {actor.ActorId} handed out twice");
             }
 
             Assert.IsFalse(
-                _registry.TryClaimPlayerSlot(out NetServerActor _),
+                _registry.TryClaimPlayerSlot(0, out NetServerActor _),
                 $"connection {MaxConnections + 1} was admitted; the pool exceeds transport capacity");
+            Assert.IsFalse(
+                _registry.TryClaimPlayerSlot(1, out NetServerActor _),
+                "the other side was not full either; the pool exceeds transport capacity");
+            Assert.IsFalse(
+                _registry.HasFreePlayerSlotOnAnyTeam(),
+                "a full pool still reported a free body somewhere");
         }
 
         // ------------------------------------------------------------------ pin 2
@@ -296,7 +306,7 @@ namespace Ironfront.Net.Unity.Server.Tests
             var driver = new FakeAiDriver();
             actor.BindAiDriver(driver);
 
-            Assert.IsTrue(_registry.TryClaimPlayerSlot(out NetServerActor claimed));
+            Assert.IsTrue(_registry.TryClaimPlayerSlot(0, out NetServerActor claimed));
             Assert.AreSame(actor, claimed);
             Assert.AreEqual(1, driver.Suspends, "claiming a body left its AI driving");
 
@@ -356,7 +366,7 @@ namespace Ironfront.Net.Unity.Server.Tests
             actor.BindAiDriver(driver);
             actor.MarkAvailableForPlayers();
 
-            Assert.IsTrue(_registry.TryClaimPlayerSlot(out NetServerActor claimed));
+            Assert.IsTrue(_registry.TryClaimPlayerSlot(0, out NetServerActor claimed));
             Assert.AreSame(actor, claimed);
             Assert.AreEqual(1, driver.Suspends, "claiming re-parked an already-parked slot.");
 
@@ -376,7 +386,7 @@ namespace Ironfront.Net.Unity.Server.Tests
             NetServerActor actor = CreateBody(0);
             actor.MarkAvailableForPlayers();
 
-            Assert.IsTrue(_registry.TryClaimPlayerSlot(out NetServerActor claimed));
+            Assert.IsTrue(_registry.TryClaimPlayerSlot(0, out NetServerActor claimed));
             Assert.AreSame(actor, claimed);
             Assert.IsTrue(claimed.IsClaimed);
         }
@@ -391,6 +401,149 @@ namespace Ironfront.Net.Unity.Server.Tests
             public void Suspend() => Suspends++;
 
             public void Resume() => Resumes++;
+        }
+        // --------------------------------------------------------------- P13: claim by team
+
+        /// <summary>
+        /// The side the ticket names is the side the body is on. Criterion 4's unit half.
+        /// </summary>
+        /// <remarks>
+        /// Goes RED the moment <c>TryClaimPlayerSlot</c> stops consulting the team — which is
+        /// what it did for four phases: a first-fit walk took the lowest free index and the
+        /// side was whatever parity that index happened to have, so the lobby balanced teams
+        /// and the answer was thrown away at the door.
+        /// </remarks>
+        [Test]
+        public void EveryClaim_LandsOnTheTeamItAskedFor()
+        {
+            Assert.IsTrue(_pool.Fill(MaxConnections, CreateBody, _registry), "pool did not fill");
+
+            for (int i = 0; i < MaxConnections; i++)
+            {
+                byte want = (byte)(i % 2);
+                Assert.IsTrue(
+                    _registry.TryClaimPlayerSlot(want, out NetServerActor actor),
+                    $"connection {i + 1} found no free body on team {want}");
+
+                Assert.AreEqual(
+                    want, actor.Team,
+                    $"connection {i + 1} asked for team {want} and was given team {actor.Team}");
+            }
+        }
+
+        /// <summary>
+        /// Everyone asking for the same side fills that side and then stops — with the other
+        /// side still empty. Criterion 6's unit half.
+        /// </summary>
+        /// <remarks>
+        /// <b>This is the intended behaviour, not a defect</b>, and it is exactly why
+        /// <c>ConnectDenyReason.TeamFull</c> and <c>DisconnectReason.TeamFull</c> exist. A
+        /// server refusing a player with eight empty bodies standing on the other side must
+        /// say which of the two facts it is, because only one of them has a remedy.
+        /// </remarks>
+        [Test]
+        public void OneSideFillsAtHalfCapacity_AndTheServerIsNotFull()
+        {
+            Assert.IsTrue(_pool.Fill(MaxConnections, CreateBody, _registry), "pool did not fill");
+
+            int perSide = MaxConnections / 2;
+
+            for (int i = 0; i < perSide; i++)
+            {
+                Assert.IsTrue(
+                    _registry.TryClaimPlayerSlot(0, out NetServerActor _),
+                    $"team 0 joiner {i + 1} of {perSide} found no body");
+            }
+
+            Assert.IsFalse(
+                _registry.TryClaimPlayerSlot(0, out NetServerActor _),
+                $"team 0 admitted a {perSide + 1}th player; the pool holds {perSide} a side");
+
+            // The distinction the player is owed: this refusal is NOT "the server is full".
+            Assert.IsTrue(
+                _registry.HasFreePlayerSlotOnAnyTeam(),
+                "a full side was reported as a full server — TeamFull would render as "
+                + "ServerFull and the player would be told a remediless lie");
+
+            Assert.IsTrue(
+                _registry.TryClaimPlayerSlot(1, out NetServerActor other),
+                "the empty side refused a joiner");
+            Assert.AreEqual(1, other.Team);
+        }
+
+        /// <summary>
+        /// The strand: a departure in the middle of the live set, then a joiner the lobby put
+        /// on the empty side. Criterion 5, and the server audit's ranked finding #2.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The mechanism.</b> <c>Release()</c> frees a body at its own index while a
+        /// first-fit refill takes the LOWEST free one, so occupancy is a prefix only until
+        /// somebody in the middle leaves. Once it is not a prefix, the parity of the lowest
+        /// free index stops agreeing with the side the lobby chose — and a first-fit claim
+        /// hands the joiner a body of the wrong team with nothing to say so.
+        /// </para>
+        /// <para>
+        /// <b>This sequence needs TWO departures, and § 1.1's own one-departure example does
+        /// not discriminate.</b> Exhaustively simulating both strategies (2–8 joins, every
+        /// departure slot, 0–3 further joins) yields ZERO single-departure sequences where
+        /// first-fit and a team-keyed claim end up with different live teams: for
+        /// {0,1,2} then slot 1 leaving, BOTH leave two players on team 0 and BOTH give the
+        /// fourth joiner a team-1 body. The 2v0 state § 1.1 names is reached under this fix
+        /// too — correcting it would mean moving a player already in the match, which § 6 of
+        /// the same phase puts out of scope. What the fix does close is the sequence below.
+        /// </para>
+        /// <para>
+        /// <b>The mutation that proves it fails.</b> Drop the <c>candidate.Team != team</c>
+        /// guard from <c>TryClaimPlayerSlot</c> and the final assertion goes RED with two
+        /// players on team 0 and nobody opposing them.
+        /// </para>
+        /// </remarks>
+        [Test]
+        public void ADepartureInTheMiddle_DoesNotStrandTheNextJoinerOnTheWrongSide()
+        {
+            Assert.IsTrue(_pool.Fill(MaxConnections, CreateBody, _registry), "pool did not fill");
+
+            // Three joiners, teams as the lobby's balancer hands them out: 0, then 1, then 0
+            // (it breaks a 1-1 tie towards team 0).
+            Assert.IsTrue(_registry.TryClaimPlayerSlot(0, out NetServerActor first));
+            Assert.IsTrue(_registry.TryClaimPlayerSlot(1, out NetServerActor second));
+            Assert.IsTrue(_registry.TryClaimPlayerSlot(0, out NetServerActor third));
+
+            Assert.AreEqual(0, first.Team);
+            Assert.AreEqual(1, second.Team, "the second joiner did not land on team 1");
+            Assert.AreEqual(0, third.Team);
+
+            // The first two leave. The live set is now a HOLE followed by one player, which is
+            // the state a prefix-assuming refill gets wrong.
+            _registry.ReleaseSlot(first);
+            _registry.ReleaseSlot(second);
+            Assert.IsFalse(first.IsClaimed, "Release left the body claimed");
+            Assert.IsFalse(second.IsClaimed, "Release left the body claimed");
+
+            // One player remains, on team 0. The lobby therefore puts the next joiner on
+            // team 1 — the only assignment that gives them somebody to fight.
+            Assert.IsTrue(third.IsClaimed);
+            Assert.AreEqual(0, third.Team);
+
+            Assert.IsTrue(
+                _registry.TryClaimPlayerSlot(1, out NetServerActor fourth),
+                "the fourth joiner found no body on team 1, though one was just released");
+
+            Assert.AreEqual(
+                1, fourth.Team,
+                "the fourth joiner was handed a team 0 body: both humans are now on one side "
+                + "with nobody opposing them. This is the strand, and it is what a first-fit "
+                + "claim does here — it takes the lowest free index, which is team 0's");
+
+            Assert.AreSame(
+                second, fourth,
+                "the released team-1 body was not the one reused; Release must free in place "
+                + "so the body returning to the pool is still the right side's body");
+
+            // One human per side, which is the whole point of carrying the lobby's answer.
+            Assert.AreEqual(0, third.Team);
+            Assert.AreEqual(1, fourth.Team);
         }
     }
 }
