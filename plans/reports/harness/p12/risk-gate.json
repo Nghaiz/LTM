@@ -1,0 +1,12 @@
+{
+  "highRisk": true,
+  "autoStopRequired": true,
+  "humanApproved": false,
+  "largeDiff": false,
+  "reasons": [
+    "The phase's own risk table scores one row at 16: the local team applied before the body exists, or after Awake latched playerTeam, leaves the body the wrong colour with NO error raised. Mitigated structurally — playerTeam is now a property, so there is no latch to race — and pinned by LocalTeamApply_SurvivesTheTeamArrivingBeforeTheBody, which drives both arrival orders.",
+    "Three of the phase's seven acceptance criteria (1, 3, 4) are SCREENSHOTS from a live two-client run, and criterion 5 is a server log line from a live run. None have been taken. The code-level detectors are green and were each observed red, but the phase states plainly that no test on this project has ever been able to see a mis-coloured body — so the screenshot criteria are not substitutable and the phase is not fully accepted until a human runs lane-B.",
+    "Touches the shipped offline single-player path in three files (Actor.Die, CapturePoint.SetOwner, ScoreUi.Awake/OnDestroy). Offline behaviour is asserted by unit tests and by the unchanged-by-construction argument, but no offline run has been performed this session.",
+    "Changes a public static field to a property (FpsActorController.playerTeam) in the legacy predefined assembly, which no dotnet test can compile. Verified instead against the LIVE Unity domain by reflection: playerTeam field=False, property=True."
+  ]
+}
