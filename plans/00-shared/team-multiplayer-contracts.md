@@ -341,3 +341,60 @@ pick a side) is P16.
 | `S_MATCH_STATE` v5 | **P11** | `NetClientObjectivePresenter` → `ScoreUi.SetAuthoritativeState` (P11, P17) |
 | `joinTicket.team` | **P13** | `ServerTickLoop.OnClientConnected`, `ServerActorRegistry.TryClaimPlayerSlot` (P13); produced from `RoomMember.Team` (P13), chosen by the player (P16) |
 | `TeamId` / `ColorScheme.TeamColor` | already exists | P12 (local team, minimap), P16 (roster columns), P17 (HUD readout, scoreboard rows) |
+
+---
+
+## 6. Where the new UI code lives — the assembly seal
+
+**P15, P16 and P17 all build Canvas UI that needs both halves of the codebase. They cannot put it
+in one assembly, and the reason is structural.**
+
+### 6.1 The seal, measured
+
+```
+Ironfront.Net.Unity.Client.asmdef   references: [ Shared, Input ]     autoReferenced: FALSE
+Ironfront.Net.Unity.Shared.asmdef   references: [ ]                   autoReferenced: TRUE
+Assembly-CSharp (predefined)        references: [ EditorHarness, Input, Server, Shared ]
+```
+
+Two consequences, both one-way and both hard:
+
+- **`Net/Client/` cannot name any Assembly-CSharp type.** No `ColorScheme`, no `GameManager`, no
+  `ActorManager`, no `MainMenu`, no `ScoreUi`. `tools/check-net-layering.ps1` RULE 6a fails the
+  build on the *type name*, not on a resolved reference — so `EventType` in a `Net/Client` file
+  fails even though it names nothing legacy. **Only CI and that script catch this;
+  `dotnet build` never will**, because `Assets/Scripts/Net/Shared` has zero references and the
+  Unity compile is the only thing that sees the real graph.
+- **Assembly-CSharp cannot name any `Net/Client` type either.** The Client asmdef is
+  `autoReferenced: false` and absent from the predefined manifest above. This surprises people —
+  the seal is two-way.
+
+`UnityEngine.UI` (`Button`, `Text`, `InputField`, `Canvas`, `Image`) is in neither camp and is
+available to both. Only *project* types are sealed.
+
+### 6.2 The pattern that already solves it
+
+It is in the repo and it works. `Net/Shared` (autoReferenced, so **both** sides see it) declares
+the seam; `Net/Client` calls through it; `Assets/Scripts/NetBindings/` — which is Assembly-CSharp —
+implements it with real legacy types and registers itself:
+
+```
+Net/Shared/IObjectiveHud.cs        the interface
+Net/Shared/NetClientBindings.cs    the registry:  NetClientBindings.Objectives?.…
+Net/Client/NetClientObjectivePresenter.cs:182     calls through the registry
+NetBindings/ClientSceneBindings.cs:120-122        implements it over ScoreUi
+```
+
+Eleven of these already exist (`IMinimapMarkers`, `IHitmarkerHud`, `ILocalPlayerRig`, …). **Add to
+the set; do not invent a rival mechanism, and do not move `Net/Client` code into Assembly-CSharp to
+dodge the seal.**
+
+### 6.3 The two new seams Block C needs
+
+| Seam | Declared in | Implemented in | Why |
+|---|---|---|---|
+| `ITeamPalette` | `Net/Shared` | `NetBindings/`, over `ColorScheme.TeamColor` | Every roster row, scoreboard row and team readout is coloured by team, and `ColorScheme` is Assembly-CSharp. A hardcoded blue/red in the UI would be a second copy of the mapping (contracts § 4) |
+| `IPracticeLauncher` | `Net/Shared` | `NetBindings/`, over `MainMenu`/`GameManager`/`ActorManager` | The Practice entry starts the offline bot match, which is entirely legacy. `Net/Client` must not name `MainMenu.StartLevel` |
+
+**Placement rule for Block C:** the new menu screens are network-flow UI and live in
+`Net/Client/`. Anything they need from the legacy game crosses at one of the two seams above.
