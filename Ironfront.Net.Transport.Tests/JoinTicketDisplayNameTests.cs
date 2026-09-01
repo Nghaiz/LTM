@@ -90,6 +90,50 @@ namespace Ironfront.Net.Transport.Tests
         }
 
         [Fact]
+        public void ATicketsRoomReachesTheServersConnectionInfo()
+        {
+            // P14 3.1, and the same trap two fields over. This is the ONLY channel that tells a
+            // game server which room the master allocated it to — every GS/master opcode runs
+            // the other way — so if the ushort is discarded here with an `out _`, the server
+            // falls back to reporting room 0, HandleMatchStarted's OwnsRoom guard drops the
+            // report silently, and the room stays Waiting for ever with nothing to point at.
+            using var server = new UdpTransportServer();
+            using var client = new UdpTransportClient();
+
+            server.OnValidateTicket += _ => true;
+            server.Start(0, 4);
+
+            ushort connectionId = 0;
+            server.OnClientConnected += (id, _) => connectionId = id;
+
+            client.Connect("127.0.0.1", server.Port, Ticket("Bob", playerId: 5003, team: 1, roomId: 4242));
+            Pump(server, client, () => client.State == ConnectionState.Connected, 2000);
+            Pump(server, client, () => connectionId != 0, 2000);
+
+            ConnectionInfo seen = server.GetInfo(connectionId);
+
+            Assert.Equal((ushort)4242, seen.RoomId);
+
+            // Beside the fields it shares a parse with, so a regression that swapped two of the
+            // four out-parameters cannot pass by matching on one number alone.
+            Assert.Equal((byte)1, seen.Team);
+            Assert.Equal(5003u, seen.PlayerId);
+        }
+
+        [Fact]
+        public void AConnectionWithNoTicketToReadReportsRoomZero()
+        {
+            // 0 means "this join names no room", and ServerRoomIdentity treats it as such
+            // rather than as a room called zero: the loopback carries no ticket and a
+            // development stub carries a zeroed payload, and neither may blank the room a
+            // server is already hosting. Pinned because an unasserted default is
+            // indistinguishable from a value that got lost.
+            Assert.Equal(
+                (ushort)0,
+                new ConnectionInfo(1, "loopback", 0f, ConnectionState.Connected).RoomId);
+        }
+
+        [Fact]
         public void AConnectionWithNoTicketToReadReportsTeamZero()
         {
             // The loopback and the development stub carry no team, and 0 is the side the first
@@ -171,7 +215,7 @@ namespace Ironfront.Net.Transport.Tests
                     .DisplayName);
         }
 
-        private static byte[] Ticket(string displayName, uint playerId, byte team = 0)
+        private static byte[] Ticket(string displayName, uint playerId, byte team = 0, ushort roomId = 0)
         {
             var ticket = new byte[ProtocolConstants.JOIN_TICKET_SIZE];
 
@@ -179,7 +223,7 @@ namespace Ironfront.Net.Transport.Tests
                 ticket,
                 playerId: playerId,
                 serverId: 0,
-                roomId: 0,
+                roomId: roomId,
                 expiresAtUnixMs: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 30_000,
                 team: team,
                 displayName: displayName,

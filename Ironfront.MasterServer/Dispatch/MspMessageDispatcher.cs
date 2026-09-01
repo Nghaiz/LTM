@@ -132,6 +132,14 @@ namespace Ironfront.MasterServer.Dispatch
             Logins.Advance(nowUnixMs);
             Errors.Advance(nowUnixMs);
             _auth.ReapExpiredSessions(nowUnixMs);
+
+            // P14 3.3. The start countdown is the master's clock, not a client's: a client-side
+            // one lets a single client start the match early for everybody, and the side a
+            // player is on locks the moment their ticket is issued. Rooms that expire into
+            // Starting are announced through RoomChanged, which BroadcastRoom is already
+            // subscribed to.
+            _lobby.Tick(nowUnixMs);
+
             foreach (MatchmakeResult result in _matchmaking.Tick(nowUnixMs))
                 PushMatchmakeResult(result);
             foreach (int roomId in _gameServers.Prune(nowUnixMs))
@@ -223,6 +231,18 @@ namespace Ironfront.MasterServer.Dispatch
                     return;
                 }
                 room.AssignedGameServerId = server.ServerId;
+
+                // P14 3.5. The seat count was a request until a server was allocated; now it is
+                // one. The game server sizes its body pool on the MaxPlayers it declared in
+                // GsRegister — the only capacity number that crosses between them, since every
+                // opcode here runs game-server → master — so a room advertising more seats than
+                // the allocated server declared is advertising ServerFull.
+                if (_lobby.ClampToServerCapacity(room, server.MaxPlayers))
+                {
+                    MasterLog.Warn(
+                        $"room {room.RoomId} seats lowered to {room.MaxPlayers}: game server "
+                        + $"{server.ServerId} advertised {server.MaxPlayers}");
+                }
             }
             else if (!_gameServers.TryGet(room.AssignedGameServerId, out server) || server is null || !server.IsHealthy(now))
             {
@@ -444,7 +464,8 @@ namespace Ironfront.MasterServer.Dispatch
 
         private void SetReady(ClientConnection connection, Session session, ReadyRequest request)
         {
-            ServiceResult result = _lobby.SetReady(session.PlayerId, request.Ready);
+            ServiceResult result = _lobby.SetReady(
+                session.PlayerId, request.Ready, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             if (!result.Ok) SendError(connection, result.ErrorCode, "Cannot change ready state.");
         }
 

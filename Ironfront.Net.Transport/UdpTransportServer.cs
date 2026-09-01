@@ -364,7 +364,7 @@ namespace Ironfront.Net.Transport
             // this is the ingress; every later reader would otherwise have to remember.
             if (!JoinTicket.TryReadFields(
                     response.JoinTicket,
-                    out uint playerId, out ushort _, out ushort _, out long _,
+                    out uint playerId, out ushort _, out ushort ticketRoomId, out long _,
                     out byte ticketTeam, out string ticketDisplayName))
             {
                 SendDenied(remote, header.Sequence, ConnectDenyReason.InvalidTicket);
@@ -404,6 +404,13 @@ namespace Ironfront.Net.Transport
             // the tick loop is the layer that owns what a side means and it refuses a team it
             // has no body for, which is a louder answer than a rewrite in the transport.
             connection.Team = ticketTeam;
+
+            // Same parse again, and the field that used to be discarded beside the team. It is
+            // what tells this server which room the master allocated it to — the only channel
+            // that carries the number, since every game-server/master opcode runs the other
+            // way. Carried verbatim; the tick loop's ServerRoomIdentity owns what a second
+            // room's ticket means.
+            connection.RoomId = ticketRoomId;
             connection.AttachSender(SendRaw);
             connection.ActivateServer(connectionId, _nowMs);
             connection.MessageReceived += payload => OnMessage?.Invoke(connectionId, payload);
@@ -555,7 +562,8 @@ namespace Ironfront.Net.Transport
                 connection.PlayerId,
                 connection.Stats,
                 connection.DisplayName,
-                connection.Team);
+                connection.Team,
+                connection.RoomId);
 
         private static EndPoint CloneEndpoint(EndPoint endpoint)
         {

@@ -256,24 +256,80 @@ namespace Ironfront.Net.Unity.Server
         /// actually walk, so a disagreement between the log and the world is now a disagreement
         /// this method reports rather than one it prints.
         /// </para>
+        /// <para>
+        /// <b>It sizes on <c>MaxPlayers</c>, not <c>MaxConnections</c> — P14 3.5.</b> They were
+        /// always two different numbers and the pool was reading the wrong one.
+        /// <c>MaxConnections</c> is the TRANSPORT cap, deliberately at or above the advertised
+        /// player count so spectators and reconnect churn have somewhere to go
+        /// (<c>IRONFRONT_GAMESERVER_MAX_CONNECTIONS</c> says exactly that).
+        /// <c>MaxPlayers</c> is the player count this server ADVERTISES to the master in
+        /// <c>GsRegister</c> — the number the matchmaker fills — so it is the number of bodies a
+        /// room can ever need. Every slot above it was a body nobody could claim.
+        /// </para>
+        /// <para>
+        /// <b>Why not the room's own <c>MaxPlayers</c>, which is what 3.5 asked for.</b> Nothing
+        /// carries it here. Capacity already flows the other way — the game server declares
+        /// <c>MaxPlayers</c> at <c>GsRegister</c> and the master stores it on
+        /// <c>GameServerRecord</c> — and the signed ticket's 32-byte payload is exactly full
+        /// (4+2+2+8+1+15), so a room capacity could only arrive via a new opcode or a
+        /// <c>PROTOCOL_VERSION</c> move. The master closes the gap from its end instead: at
+        /// allocation it clamps <c>Room.MaxPlayers</c> to the allocated server's advertised
+        /// figure, so a room can never advertise a seat this pool will not have built. Owner
+        /// ruling, 2026-09-02.
+        /// </para>
+        /// <para>
+        /// <b>Odd rounds DOWN to even.</b> Claiming is team-keyed since P13
+        /// (<c>TryClaimPlayerSlot(team)</c>) and the pool alternates 0,1,0,1 — so an odd count
+        /// hands one side an extra seat, and the last player on the short side is refused with
+        /// <c>TeamFull</c> while a free body stands on the other. Rounded here AND at the room,
+        /// so the lobby never advertises a number this server will not honour.
+        /// </para>
         /// </remarks>
         private void FillPlayerSlots()
         {
-            SlotPool.Fill(Config.MaxConnections, CreatePlayerBody);
+            int slots = EvenPlayerSlots(Config.MaxPlayers);
+
+            if (slots != Config.MaxPlayers)
+            {
+                Debug.LogWarning(
+                    $"[net] {EnvRegistry.GameServerMaxPlayers.Name} is {Config.MaxPlayers}, which "
+                    + $"is odd; building {slots} slots instead. Team-keyed claiming alternates "
+                    + "sides, so the odd seat would belong to one team and refuse the other's "
+                    + "last player with TeamFull beside a free body.");
+            }
+
+            SlotPool.Fill(slots, CreatePlayerBody);
 
             int claimable = ServerActorRegistry.Instance.ClaimableCount;
 
-            if (claimable != Config.MaxConnections)
+            if (claimable != slots)
             {
                 Debug.LogError(
-                    $"[net] {claimable} claimable player bodies against {Config.MaxConnections} "
-                    + "admitted connections. The server will refuse the difference with "
-                    + "ServerFull. This is the phase-3A defect, not a warning about one.");
+                    $"[net] {claimable} claimable player bodies against {slots} advertised "
+                    + "player slots. The server will refuse the difference with ServerFull. "
+                    + "This is the phase-3A defect, not a warning about one.");
                 return;
             }
 
-            Debug.Log($"[net] {claimable} player slots ready");
+            // MaxConnections is printed beside it because the two are now visibly different
+            // numbers, and a reader who remembers the old line would otherwise read a drop from
+            // 16 to 8 as a regression rather than as the transport headroom it always was.
+            Debug.Log(
+                $"[net] {claimable} player slots ready (advertised MaxPlayers "
+                + $"{Config.MaxPlayers}, transport MaxConnections {Config.MaxConnections})");
         }
+
+        /// <summary>
+        /// Rounds an advertised player count down to an even number of team-keyed slots.
+        /// </summary>
+        /// <remarks>
+        /// Down, never up: rounding up would build a seat the deployment did not ask for and
+        /// the master was never told about. A configured 0 or 1 stays as it is and is refused
+        /// by <c>ServerPlayerSlotPool.Fill</c>, which already says what a server admitting
+        /// nobody means — a second opinion here would only race it.
+        /// </remarks>
+        internal static int EvenPlayerSlots(int advertised)
+            => advertised < 2 ? advertised : advertised - (advertised % 2);
 
         /// <summary>
         /// One player-slot body, built by the game's own spawn path on the far side of the seam.

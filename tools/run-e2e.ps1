@@ -73,6 +73,19 @@ param(
     # Run only the positive walk. The verdict then says the gate is ungraded, because it is.
     [switch] $SkipNegative,
 
+    # Also run the P14 room-start walk: three accounts in one room, all mark ready, and the two
+    # players are carried into a live match by the master's room-state push. Opt-in because it
+    # has to clear the master's start countdown and the match machine's warmup, which the
+    # single-account walks do not wait for.
+    [switch] $RoomStart,
+
+    # Budget for that walk. Countdown (10s) + warmup (20s) + both dials, with slack.
+    [int] $RoomStartTimeoutSec = 240,
+
+    # What the game server advertises to the master, and therefore how many claimable bodies it
+    # builds (P14 3.5). 0 leaves the env alone and takes the 16 default.
+    [int] $GameServerMaxPlayers = 0,
+
     [switch] $KeepLogs
 )
 
@@ -85,6 +98,7 @@ $masterErr = Join-Path $outDir "master.err.log"
 $serverLog = Join-Path $outDir "game-server.log"
 $walkLog   = Join-Path $outDir "walk.log"
 $negLog    = Join-Path $outDir "walk-negative.log"
+$roomStartLog = Join-Path $outDir "walk-room-start.log"
 $dbPath    = Join-Path $outDir "e2e.db"
 
 $processes = @()
@@ -187,6 +201,14 @@ try {
         IRONFRONT_METRICS_BIND  = "127.0.0.1"
         IRONFRONT_DB_PATH       = $dbPath
         IRONFRONT_LOG_LEVEL     = "Debug"
+
+        # Every account in this script logs in from 127.0.0.1, so they all share one bucket.
+        # The shipped default is 5/minute and the room-start walk alone registers and logs in
+        # THREE accounts on top of the two walks above it -- which surfaced as
+        # "'e2e_rs_alpha' could not log in (errorCode 9001)", a rate limit reported as a login
+        # failure and easily misread as a broken account. The env var's own summary says
+        # "raise it on a test rig"; this is the test rig.
+        IRONFRONT_LOGIN_RATE_PER_MINUTE = "60"
     }
     foreach ($k in $masterEnv.Keys) { Set-Item -Path "Env:$k" -Value $masterEnv[$k] }
 
@@ -223,6 +245,16 @@ try {
     # THE LOAD-BEARING LINE. With this at 1 the negative run below is admitted and the whole
     # gate degrades to "a UDP port is open". Set explicitly rather than relied on as a default.
     $env:IRONFRONT_GAMESERVER_ACCEPT_UNSIGNED_TICKETS = "0"
+
+    # P14 3.5. The slot pool sizes on MaxPlayers, not MaxConnections -- so this is now the
+    # number of claimable bodies the run will build, and it is set explicitly rather than left
+    # at the 16 default precisely so the startup line has something to be compared against.
+    # An odd value is a deliberate probe: the server must round it DOWN to even, because
+    # claiming is team-keyed and the odd seat would belong to one side.
+    if ($GameServerMaxPlayers -gt 0) {
+        $env:IRONFRONT_GAMESERVER_MAX_PLAYERS = "$GameServerMaxPlayers"
+        Write-Host "[e2e] game server will advertise MaxPlayers $GameServerMaxPlayers"
+    }
 
     Write-Host "[e2e] starting the game server (udp $UdpPort, scene $Scene, signed tickets required)"
     $server = Start-Process -FilePath $player -PassThru `
@@ -275,11 +307,44 @@ try {
         $negative = $LASTEXITCODE
     }
 
+    # ---- 5b. the room-start walk (P14) -----------------------------------------------------
+    #
+    # WHAT THIS ADDS THAT THE WALKS ABOVE DO NOT. Both of them drive ONE account and dial the
+    # game server themselves, so they prove the protocol path and say nothing about who decided
+    # to take it. P14 moved that decision into the lobby: two players mark ready, the master
+    # counts down and pushes Starting, and the clients dial on the push. This walk makes the
+    # only call a player makes -- SetReady -- and requires the match to happen anyway.
+    #
+    # It runs against the SAME master and game server the walks above used, so a pass here is
+    # not a second deployment's result.
+    # NOT $roomStart: that is this script's own -RoomStart switch parameter, and assigning an
+    # Int32 to it throws AFTER the walk has already run -- so the walk passes and the script
+    # reports a conversion error. run-lane-b.ps1 carries the same note for -Build.
+    $roomStartExit = 0
+    if ($RoomStart) {
+        Write-Host ""
+        Write-Host "[e2e] --- room-start walk (two players ready themselves into a match) ---"
+        & dotnet run --project (Join-Path $repoRoot "Ironfront.Tools.E2E/Ironfront.Tools.E2E.csproj") `
+            -c $Configuration --no-build -- `
+            --master-host 127.0.0.1 --master-port $MasterPort --map-id $MapId `
+            --room-start --timeout $RoomStartTimeoutSec `
+            2>&1 | Tee-Object -FilePath $roomStartLog
+        $roomStartExit = $LASTEXITCODE
+    }
+
     # ---- 6. verdict -----------------------------------------------------------------------
     Write-Host ""
     if ($positive -ne 0) {
         Write-Host "[e2e] FAIL -- the positive walk exited $positive. See $walkLog."
         exit $positive
+    }
+
+    if ($RoomStart -and $roomStartExit -ne 0) {
+        Write-Host "[e2e] FAIL -- the room-start walk exited ${roomStartExit}. See $roomStartLog."
+        Write-Host "      5 = the room never reached Starting: the ready rule did not fire."
+        Write-Host "      6 = it started and the master never saw the match begin, which is what"
+        Write-Host "          a game server reporting a room it was not allocated looks like."
+        exit $roomStartExit
     }
 
     if ($SkipNegative) {

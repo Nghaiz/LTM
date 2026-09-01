@@ -117,6 +117,27 @@ namespace Ironfront.Net.Transport
         /// </remarks>
         public readonly byte Team;
 
+        /// <summary>
+        /// The lobby room the master put this player in, read out of the same signed ticket
+        /// <see cref="PlayerId"/>, <see cref="DisplayName"/> and <see cref="Team"/> came from.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This is how a game server learns which room it is hosting.</b> Every opcode
+        /// between the game server and the master runs game-server → master; nothing pushes an
+        /// allocation the other way. The room number arrives here instead, inside the signed
+        /// payload, which is why P14 needed no new opcode — see
+        /// <c>Ironfront.Net.Replication.Server.ServerRoomIdentity</c>.
+        /// </para>
+        /// <para>
+        /// <b>0 on a transport with no ticket to read</b>, exactly as <see cref="Team"/> is:
+        /// the loopback carries none and a development stub carries a zeroed payload. 0 means
+        /// "this join names no room", and the room identity treats it as such rather than as a
+        /// room called zero.
+        /// </para>
+        /// </remarks>
+        public readonly ushort RoomId;
+
         public ConnectionInfo(
             ushort connectionId, string remoteAddress, float smoothedRttMs, ConnectionState state)
             : this(connectionId, remoteAddress, smoothedRttMs, state, 0, default)
@@ -155,6 +176,20 @@ namespace Ironfront.Net.Transport
             TransportStats stats,
             string displayName,
             byte team)
+            : this(connectionId, remoteAddress, smoothedRttMs, state, playerId, stats, displayName, team, 0)
+        {
+        }
+
+        public ConnectionInfo(
+            ushort connectionId,
+            string remoteAddress,
+            float smoothedRttMs,
+            ConnectionState state,
+            uint playerId,
+            TransportStats stats,
+            string displayName,
+            byte team,
+            ushort roomId)
         {
             ConnectionId  = connectionId;
             RemoteAddress = remoteAddress;
@@ -164,6 +199,7 @@ namespace Ironfront.Net.Transport
             Stats         = stats;
             DisplayName   = displayName ?? string.Empty;
             Team          = team;
+            RoomId        = roomId;
         }
     }
 

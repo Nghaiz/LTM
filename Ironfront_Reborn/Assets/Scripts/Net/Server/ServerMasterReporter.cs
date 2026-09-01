@@ -42,10 +42,6 @@ namespace Ironfront.Net.Unity.Server
     [RequireComponent(typeof(MatchController))]
     public sealed class ServerMasterReporter : MonoBehaviour
     {
-        [Header("Identity")]
-        [Tooltip("Room this server is hosting, as assigned by the master. 0 in standalone.")]
-        [SerializeField] private int _roomId;
-
         [Header("Heartbeat")]
         [SerializeField] private float _heartbeatSeconds = HeartbeatPacer.DefaultIntervalSeconds;
 
@@ -62,6 +58,27 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>The id the master assigned, or 0 in standalone mode.</summary>
         public ushort ServerId => Reporter.ServerId;
 
+        /// <summary>
+        /// The room this server is hosting, or 0 in standalone. P14 3.1.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>It replaced a <c>[SerializeField] private int _roomId</c>, and that is the whole
+        /// of task 3.1.</b> The authored number was stamped onto every match report, and
+        /// <c>MspMessageDispatcher.HandleMatchStarted</c> drops a report whose room the sending
+        /// server does not own — with no error and no log. So a hand-typed room did not merely
+        /// look untidy: it made <see cref="IMatchReporter.MatchStarted"/> a no-op and left the
+        /// room <c>Waiting</c> for ever, which is why 3.1 lands before 3.2 rather than beside
+        /// it.
+        /// </para>
+        /// <para>
+        /// Read from the loop rather than held here: the loop verifies the tickets, so it is
+        /// where a second room's ticket has to be refused. See
+        /// <see cref="ServerTickLoop.RoomIdentity"/>.
+        /// </para>
+        /// </remarks>
+        public int RoomId => _loop == null ? 0 : _loop.RoomIdentity.RoomId;
+
         private void Awake()
         {
             _loop       = GetComponent<ServerTickLoop>();
@@ -71,14 +88,20 @@ namespace Ironfront.Net.Unity.Server
 
         private void OnEnable()
         {
-            if (_controller != null && _controller.Match != null)
-                _controller.Match.MatchEnded += OnMatchEnded;
+            if (_controller == null || _controller.Match == null) return;
+
+            _controller.Match.MatchEnded   -= OnMatchEnded;
+            _controller.Match.PhaseChanged -= OnPhaseChanged;
+            _controller.Match.MatchEnded   += OnMatchEnded;
+            _controller.Match.PhaseChanged += OnPhaseChanged;
         }
 
         private void OnDisable()
         {
-            if (_controller != null && _controller.Match != null)
-                _controller.Match.MatchEnded -= OnMatchEnded;
+            if (_controller == null || _controller.Match == null) return;
+
+            _controller.Match.MatchEnded   -= OnMatchEnded;
+            _controller.Match.PhaseChanged -= OnPhaseChanged;
         }
 
         /// <summary>
@@ -112,13 +135,59 @@ namespace Ironfront.Net.Unity.Server
                 _controller.Match.Phase));
         }
 
+        /// <summary>
+        /// Sends <c>GsMatchStarted</c> on entry to <see cref="MatchPhase.Playing"/>. P14 3.2.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Playing, not Warmup.</b> The machine runs
+        /// <c>WaitingForPlayers → Warmup → Playing</c>, and <c>Warmup</c> can drop BACK to
+        /// <c>WaitingForPlayers</c> when the human count falls under the minimum — its own
+        /// remark says why: a round started for one player is over before anyone can join.
+        /// Reporting a start on <c>Warmup</c> would leave the master holding <c>InMatch</c> for
+        /// a match that never began, and a room in <c>InMatch</c> refuses joiners. <c>Playing</c>
+        /// is the phase that does not go backwards.
+        /// </para>
+        /// <para>
+        /// <b>It fires on every entry, and that is correct.</b> The master ends a match by
+        /// releasing the server and putting the room back to <c>Waiting</c>
+        /// (<c>HandleMatchEnded</c>), so a second round's start has to be announced too, and
+        /// <c>HandleMatchStarted</c> is idempotent — it assigns a state it may already hold.
+        /// </para>
+        /// <para>
+        /// Everything below this call is already built and already tested:
+        /// <c>GameServerMatchReporter.MatchStarted</c> → <c>GameServerLink</c> →
+        /// <c>GsMatchStarted</c> (0x0103) → <c>HandleMatchStarted</c> →
+        /// <c>room.State = InMatch</c> → <c>BroadcastRoom</c>. Nothing had ever called it.
+        /// </para>
+        /// </remarks>
+        private void OnPhaseChanged(MatchPhase phase)
+        {
+            if (phase != MatchPhase.Playing) return;
+
+            int roomId = RoomId;
+            Reporter.MatchStarted(roomId);
+
+            // Both numbers, for the same reason P13's join line prints two: criterion 1 is
+            // graded by comparing this against the master's AssignedRoomId, and a line that
+            // said only "match started" could not be compared with anything.
+            Debug.Log($"[net] match started, reported for room {roomId} as server {ServerId}");
+        }
+
         private void OnMatchEnded(byte winningTeam)
         {
             CollectScores();
-            Reporter.MatchEnded(_roomId, _scores);
+            Reporter.MatchEnded(RoomId, _scores);
 
             Debug.Log($"[net] match ended, winner "
                       + (winningTeam == TeamId.None ? "draw" : $"team {winningTeam}"));
+
+            // The master releases the game server on GsMatchEnded, so this process is
+            // allocatable again and the next room's tickets must be free to be adopted. Without
+            // this, the first room a server ever hosted would be the only one it could host:
+            // every later allocation's tickets would be refused by a server that is in fact
+            // free. Ordered after the report, which still needs the room it is reporting.
+            if (_loop != null) _loop.RoomIdentity.Release();
         }
 
         /// <summary>

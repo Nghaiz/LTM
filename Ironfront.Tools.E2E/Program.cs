@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
@@ -43,6 +44,13 @@ namespace Ironfront.Tools.E2E
         private const int ExitLoginFailed = 2;
         private const int ExitJoinFailed = 3;
         private const int ExitUdpFailed = 4;
+
+        /// <summary>--room-start only: the room never reached <c>Starting</c>. P14 criterion 2.</summary>
+        private const int ExitNeverStarted = 5;
+
+        /// <summary>--room-start only: it started, and the master never saw the match begin.</summary>
+        private const int ExitNeverInMatch = 6;
+
         private const int ExitUsage = 64;
 
         /// <summary>A 64-char hex string is what <c>AuthService.IsValidSha256</c> accepts.</summary>
@@ -79,7 +87,9 @@ namespace Ironfront.Tools.E2E
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(options.TimeoutSeconds));
             try
             {
-                return await WalkAsync(options, cts.Token).ConfigureAwait(false);
+                return options.RoomStart
+                    ? await WalkRoomStartAsync(options, cts.Token).ConfigureAwait(false)
+                    : await WalkAsync(options, cts.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -268,6 +278,327 @@ namespace Ironfront.Tools.E2E
             Console.WriteLine();
             Console.WriteLine("E2E PASS — one account walked login -> join -> UDP and is receiving a match.");
             return ExitPass;
+        }
+
+        /// <summary>
+        /// The P14 walk: two accounts sit in a room, mark themselves ready, and are carried
+        /// into a live match by the master's own room-state push. Criterion 2, which the phase
+        /// calls "the phase".
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>What it is allowed to touch, and why that is the whole assertion.</b> After the
+        /// joins, the ONLY call this harness makes is <c>SetReadyAsync(true)</c>. There is no
+        /// "enter match" call, no key press, and no debug button — the button it replaces was
+        /// deleted in the same commit. If the room never reaches <c>Starting</c>, nothing here
+        /// can rescue the walk, which is exactly the property being graded.
+        /// </para>
+        /// <para>
+        /// <b>Three accounts, not two.</b> Creating a room joins you to it, so the creator is a
+        /// member and the start rule requires EVERY member ready. The host therefore readies
+        /// too. It also has to stay connected: <c>LobbyService.LeaveRoom</c> deletes a room the
+        /// moment its last member leaves, and a disconnect leaves.
+        /// </para>
+        /// <para>
+        /// <b>Its own accounts and its own room.</b> Run after the positive walk in the same
+        /// master process, the shared host account would already be in the <c>e2e</c> room and
+        /// answer <c>AlreadyInAnotherRoom</c>, and that room may sit in a state
+        /// <c>CanJoinRoom</c> refuses. Distinct names cost nothing and make the mode
+        /// order-independent.
+        /// </para>
+        /// <para>
+        /// <b>Leg 5 waits for <c>InMatch</c>, and that is not a formality.</b> <c>Starting</c>
+        /// is the master's decision; <c>InMatch</c> is the game server reporting back through
+        /// <c>GsMatchStarted</c>, and that report is dropped in silence unless the room the
+        /// server names is the room the master allocated it. So leg 5 is what proves the server
+        /// learned its room from the join ticket — the half of P14 that no unit test can reach,
+        /// because the failure it guards against has no error and no log.
+        /// </para>
+        /// </remarks>
+        private static async Task<int> WalkRoomStartAsync(Options options, CancellationToken ct)
+        {
+            using var host    = new Ironfront.MasterClient.MasterClient();
+            using var alpha   = new Ironfront.MasterClient.MasterClient();
+            using var beta    = new Ironfront.MasterClient.MasterClient();
+            using var gameA   = new UdpTransportClient();
+            using var gameB   = new UdpTransportClient();
+
+            IMasterClient[] all = { host, alpha, beta };
+
+            // The master answers a refused SetReady with an ERROR_PUSH and nothing else — no
+            // return value, because SetReadyAsync is a send rather than a request. A harness
+            // that does not subscribe therefore reports "the ready rule did not fire" for a
+            // request the master rejected outright, which is a different bug entirely and sends
+            // the reader to the wrong file.
+            string[] labels = { "host", "alpha", "beta" };
+            for (int i = 0; i < all.Length; i++)
+            {
+                string label = labels[i];
+                all[i].OnError += (code, message) =>
+                    Console.WriteLine($"       (master error to {label}: {code} {message})");
+            }
+
+            // ---- leg 1: the master is reachable ------------------------------------------
+            var stopwatch = Stopwatch.StartNew();
+            try
+            {
+                foreach (IMasterClient client in all)
+                    await client.ConnectAsync(options.MasterHost, options.MasterPort, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Leg(1, "master", false, $"could not reach {options.MasterHost}:{options.MasterPort} — {ex.Message}");
+                return ExitMasterUnreachable;
+            }
+
+            Leg(1, "master", true, $"three connections in {stopwatch.ElapsedMilliseconds} ms");
+
+            // ---- leg 2: three accounts log in --------------------------------------------
+            stopwatch.Restart();
+            string hostName  = options.RoomStartHostUsername;
+            string alphaName = options.RoomStartAlphaUsername;
+            string betaName  = options.RoomStartBetaUsername;
+
+            try
+            {
+                await LoginAsync(host,  hostName,  ct).ConfigureAwait(false);
+                await LoginAsync(alpha, alphaName, ct).ConfigureAwait(false);
+                await LoginAsync(beta,  betaName,  ct).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Leg(2, "login", false, ex.Message);
+                return ExitLoginFailed;
+            }
+
+            Leg(2, "login", true, $"{hostName}, {alphaName}, {betaName} in {stopwatch.ElapsedMilliseconds} ms");
+
+            // ---- leg 3: a room, and a signed ticket for each player -----------------------
+            stopwatch.Restart();
+            int roomId;
+            JoinResult joinedA;
+            JoinResult joinedB;
+            try
+            {
+                CreateRoomResult created = await PumpAsync(
+                    host,
+                    host.CreateRoomAsync(
+                        new CreateRoomRequest
+                        {
+                            Name = options.RoomStartRoomName,
+                            MapId = options.MapId,
+                            MaxPlayers = options.RoomStartMaxPlayers,
+                        },
+                        ct),
+                    ct).ConfigureAwait(false);
+
+                if (!created.Ok)
+                    throw new InvalidOperationException($"the host could not create a room (errorCode {created.ErrorCode})");
+
+                roomId  = created.RoomId;
+                joinedA = await PumpAsync(alpha, alpha.JoinRoomAsync(roomId, null, ct), ct).ConfigureAwait(false);
+                joinedB = await PumpAsync(beta,  beta.JoinRoomAsync(roomId, null, ct),  ct).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Leg(3, "room", false, $"could not seat two players — {ex.Message}");
+                return ExitJoinFailed;
+            }
+
+            if (!joinedA.Ok || !joinedB.Ok)
+            {
+                int code = joinedA.Ok ? joinedB.ErrorCode : joinedA.ErrorCode;
+                Leg(3, "room", false, $"a join was refused, errorCode {code} — {ExplainJoinError(code)}");
+                return ExitJoinFailed;
+            }
+
+            if (joinedA.JoinTicket.Length != ProtocolConstants.JOIN_TICKET_SIZE ||
+                joinedB.JoinTicket.Length != ProtocolConstants.JOIN_TICKET_SIZE)
+            {
+                Leg(3, "room", false, "a join said ok and issued no usable ticket");
+                return ExitJoinFailed;
+            }
+
+            Leg(3, "room", true, $"room {roomId} holds 3 members; both players hold a signed ticket for " +
+                                 $"{joinedA.GameServerIp}:{joinedA.GameServerPort}, {stopwatch.ElapsedMilliseconds} ms");
+
+            // ---- leg 4: ready, and nothing else, until the room says Starting -------------
+            var seenByAlpha = new List<RoomLifecycleState>();
+            var seenByBeta  = new List<RoomLifecycleState>();
+            alpha.OnRoomStatePush += state => Record(seenByAlpha, state.Lifecycle);
+            beta.OnRoomStatePush  += state => Record(seenByBeta,  state.Lifecycle);
+
+            stopwatch.Restart();
+            await PumpVoidAsync(host,  host.SetReadyAsync(true, ct),  ct).ConfigureAwait(false);
+            await PumpVoidAsync(alpha, alpha.SetReadyAsync(true, ct), ct).ConfigureAwait(false);
+            await PumpVoidAsync(beta,  beta.SetReadyAsync(true, ct),  ct).ConfigureAwait(false);
+
+            Console.WriteLine($"       (all three ready; the master holds the countdown — no client does)");
+
+            bool started = await PumpUntilAsync(
+                all,
+                () => seenByAlpha.Contains(RoomLifecycleState.Starting)
+                   && seenByBeta.Contains(RoomLifecycleState.Starting),
+                options.ReadyWaitSeconds,
+                ct).ConfigureAwait(false);
+
+            if (!started)
+            {
+                Leg(4, "ready", false,
+                    $"no Starting push within {options.ReadyWaitSeconds}s. " +
+                    $"alpha saw [{Describe(seenByAlpha)}], beta saw [{Describe(seenByBeta)}]. " +
+                    "The ready rule did not fire, or the state was not broadcast.");
+                return ExitNeverStarted;
+            }
+
+            Leg(4, "ready", true, $"both clients observed Starting {stopwatch.ElapsedMilliseconds} ms after " +
+                                  "the last ready — no key press, no debug button");
+
+            // ---- leg 5: both dial in, and the master is told the match began ---------------
+            stopwatch.Restart();
+            UdpOutcome outcomeA = await DialAsync(
+                gameA, joinedA.GameServerIp, joinedA.GameServerPort, joinedA.JoinTicket, options, ct)
+                .ConfigureAwait(false);
+            UdpOutcome outcomeB = await DialAsync(
+                gameB, joinedB.GameServerIp, joinedB.GameServerPort, joinedB.JoinTicket, options, ct)
+                .ConfigureAwait(false);
+
+            if (!outcomeA.Connected || !outcomeB.Connected)
+            {
+                Leg(5, "match", false,
+                    $"alpha: {(outcomeA.Connected ? "in" : outcomeA.Detail)}; " +
+                    $"beta: {(outcomeB.Connected ? "in" : outcomeB.Detail)}");
+                return ExitUdpFailed;
+            }
+
+            if (!outcomeA.ReceivedPayload || !outcomeB.ReceivedPayload)
+            {
+                // Named per client, not "at least one". They fail for different reasons — a
+                // refused body, a room the server will not adopt, a server simulating nothing —
+                // and a message that will not say which one went quiet sends the reader to the
+                // wrong half of the log.
+                Leg(5, "match", false,
+                    $"alpha {(outcomeA.ReceivedPayload ? $"received {outcomeA.PayloadsReceived}" : "received NOTHING")}"
+                    + $" ({outcomeA.Detail}); "
+                    + $"beta {(outcomeB.ReceivedPayload ? $"received {outcomeB.PayloadsReceived}" : "received NOTHING")}"
+                    + $" ({outcomeB.Detail})");
+                return ExitUdpFailed;
+            }
+
+            // Both are connected, so the match machine has its two humans and will leave Warmup
+            // for Playing. That entry is what sends GsMatchStarted, and the master turns it into
+            // InMatch only if the room the server names is the room it allocated.
+            bool inMatch = await PumpUntilAsync(
+                all,
+                () => seenByAlpha.Contains(RoomLifecycleState.InMatch)
+                   && seenByBeta.Contains(RoomLifecycleState.InMatch),
+                options.MatchWaitSeconds,
+                ct,
+                gameA,
+                gameB).ConfigureAwait(false);
+
+            if (!inMatch)
+            {
+                Leg(5, "match", false,
+                    $"both players are in and receiving snapshots, but no InMatch push arrived within " +
+                    $"{options.MatchWaitSeconds}s. alpha saw [{Describe(seenByAlpha)}], beta saw " +
+                    $"[{Describe(seenByBeta)}]. Either the server never entered Playing, or its " +
+                    "GsMatchStarted named a room the master did not allocate it — which " +
+                    "HandleMatchStarted drops in silence.");
+                return ExitNeverInMatch;
+            }
+
+            Leg(5, "match", true,
+                $"alpha connectionId {outcomeA.ConnectionId} playerId {outcomeA.MyPlayerId}, " +
+                $"beta connectionId {outcomeB.ConnectionId} playerId {outcomeB.MyPlayerId}; " +
+                $"room reached InMatch in {stopwatch.ElapsedMilliseconds} ms");
+
+            Console.WriteLine();
+            Console.WriteLine($"       alpha room-state sequence: {Describe(seenByAlpha)}");
+            Console.WriteLine($"       beta  room-state sequence: {Describe(seenByBeta)}");
+            Console.WriteLine();
+            Console.WriteLine("E2E ROOM-START PASS — two players marked ready and were carried into a live " +
+                              "match by the room's own state push.");
+            return ExitPass;
+        }
+
+        /// <summary>Appends a lifecycle value, collapsing the repeats a re-broadcast produces.</summary>
+        private static void Record(List<RoomLifecycleState> seen, RoomLifecycleState state)
+        {
+            if (seen.Count > 0 && seen[^1] == state) return;
+            seen.Add(state);
+        }
+
+        private static string Describe(List<RoomLifecycleState> seen)
+            => seen.Count == 0 ? "nothing" : string.Join(" -> ", seen);
+
+        /// <summary>
+        /// <see cref="PumpAsync{T}"/> for the calls that answer with an acknowledgement rather
+        /// than a value. <c>SetReadyAsync</c> is one, and it is the only call the room-start
+        /// walk makes after the joins.
+        /// </summary>
+        private static async Task PumpVoidAsync(IMasterClient client, Task task, CancellationToken ct)
+        {
+            int yields = 0;
+            while (!task.IsCompleted)
+            {
+                client.Poll();
+                if (yields++ < PollYieldsBeforeSleeping) await Task.Yield();
+                else await Task.Delay(1, ct).ConfigureAwait(false);
+            }
+
+            client.Poll();
+            await task.ConfigureAwait(false);
+        }
+
+        /// <summary>Registers (ignoring "already exists") and then logs in, which is the assertion.</summary>
+        private static async Task LoginAsync(IMasterClient client, string username, CancellationToken ct)
+        {
+            try
+            {
+                await PumpAsync(client, client.RegisterAsync(username, PasswordHash, username, ct), ct)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // A re-run against a surviving database. Login is what has to work.
+            }
+
+            LoginResult login = await PumpAsync(client, client.LoginAsync(username, PasswordHash, ct), ct)
+                .ConfigureAwait(false);
+
+            if (!login.Ok)
+                throw new InvalidOperationException($"'{username}' could not log in (errorCode {login.ErrorCode})");
+        }
+
+        /// <summary>
+        /// Polls every client until <paramref name="condition"/> holds or the budget runs out.
+        /// </summary>
+        /// <remarks>
+        /// The UDP clients are polled too, and must be: a game server drops a peer that stops
+        /// acknowledging, so a walk that waited on a TCP push while ignoring its own UDP
+        /// connections would be timed out by the very server it is waiting to hear about.
+        /// </remarks>
+        private static async Task<bool> PumpUntilAsync(
+            IMasterClient[] clients,
+            Func<bool> condition,
+            int budgetSeconds,
+            CancellationToken ct,
+            params UdpTransportClient[] transports)
+        {
+            var deadline = Stopwatch.StartNew();
+            var budget = TimeSpan.FromSeconds(budgetSeconds);
+
+            while (deadline.Elapsed < budget)
+            {
+                for (int i = 0; i < clients.Length; i++) clients[i].Poll();
+                for (int i = 0; i < transports.Length; i++) transports[i].Poll();
+                if (condition()) return true;
+                await Task.Delay(10, ct).ConfigureAwait(false);
+            }
+
+            for (int i = 0; i < clients.Length; i++) clients[i].Poll();
+            return condition();
         }
 
         /// <summary>
@@ -488,6 +819,38 @@ namespace Ironfront.Tools.E2E
             public bool Negative { get; private set; }
             public bool ShowHelp { get; private set; }
 
+            /// <summary>The P14 walk: two players ready themselves into a match. Criterion 2.</summary>
+            public bool RoomStart { get; private set; }
+
+            /// <summary>
+            /// Accounts and room for <see cref="RoomStart"/>, deliberately distinct from the
+            /// single-account walk's. Sharing them would make the mode order-dependent: the
+            /// host would already be in the other room, and answer AlreadyInAnotherRoom.
+            /// </summary>
+            public string RoomStartHostUsername { get; private set; } = "e2e_rs_host";
+            public string RoomStartAlphaUsername { get; private set; } = "e2e_rs_alpha";
+            public string RoomStartBetaUsername { get; private set; } = "e2e_rs_beta";
+            public string RoomStartRoomName { get; private set; } = "e2e room start";
+
+            /// <summary>
+            /// Seats the created room asks for. Odd on purpose is worth trying by hand: the
+            /// master rounds it down and the lobby then advertises the number it will honour.
+            /// </summary>
+            public byte RoomStartMaxPlayers { get; private set; } = 8;
+
+            /// <summary>
+            /// Budget for the Starting push after the last ready. Must clear the master's
+            /// countdown (10s by default) with room to spare, or this grades the clock rather
+            /// than the rule.
+            /// </summary>
+            public int ReadyWaitSeconds { get; private set; } = 45;
+
+            /// <summary>
+            /// Budget for InMatch after both players are connected. It has to clear the match
+            /// machine's warmup, which is 20s on the authored controller.
+            /// </summary>
+            public int MatchWaitSeconds { get; private set; } = 90;
+
             public static Options Parse(string[] args)
             {
                 var options = new Options();
@@ -497,6 +860,10 @@ namespace Ironfront.Tools.E2E
                     {
                         case "-h" or "--help": options.ShowHelp = true; return options;
                         case "--negative": options.Negative = true; break;
+                        case "--room-start": options.RoomStart = true; break;
+                        case "--room-start-seats": options.RoomStartMaxPlayers = byte.Parse(Next(args, ref i)); break;
+                        case "--ready-wait": options.ReadyWaitSeconds = int.Parse(Next(args, ref i)); break;
+                        case "--match-wait": options.MatchWaitSeconds = int.Parse(Next(args, ref i)); break;
                         case "--master-host": options.MasterHost = Next(args, ref i); break;
                         case "--master-port": options.MasterPort = int.Parse(Next(args, ref i)); break;
                         case "--username": options.Username = Next(args, ref i); break;
@@ -537,7 +904,19 @@ namespace Ironfront.Tools.E2E
   --negative               corrupt the ticket and REQUIRE the game server to refuse it
   --help                   this text
 
-  Exit: 0 pass · 1 master unreachable · 2 login failed · 3 join failed · 4 UDP failed · 64 usage
+  --room-start             the P14 walk instead: three accounts sit in one room, all mark
+                           ready, and the two players are carried into a live match by the
+                           master's room-state push. After the joins it calls NOTHING but
+                           SetReady — no enter-match call, no debug button.
+  --room-start-seats <n>   seats the created room asks for; default 8. An odd number is
+                           worth trying: the master rounds it down and advertises the even one
+  --ready-wait <sec>       budget for the Starting push after the last ready; default 45
+                           (the master's countdown is 10)
+  --match-wait <sec>       budget for InMatch after both players connect; default 90
+                           (it has to clear the match machine's 20s warmup)
+
+  Exit: 0 pass · 1 master unreachable · 2 login failed · 3 join failed · 4 UDP failed
+        5 never reached Starting · 6 never reached InMatch · 64 usage
 
   Orchestrated by tools/run-e2e.ps1, which stands up the master and game server first
   and runs the negative case as well as the positive one.");
