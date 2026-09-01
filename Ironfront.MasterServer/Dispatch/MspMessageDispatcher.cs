@@ -282,6 +282,41 @@ namespace Ironfront.MasterServer.Dispatch
                 request.MapIds ?? Array.Empty<ushort>(),
                 now,
                 out GameServerRecord? server);
+
+            // A game server proves itself with the shared secret, not with a player login, so
+            // it never gets a Session and IsAuthenticated stayed false for its whole life. The
+            // unauthenticated reaper in TcpListenerHost then closed it 30 seconds after accept
+            // -- every time, on every deployment -- and with the link gone its heartbeats
+            // stopped, CountHealthy fell to zero, and every RoomJoinRequest answered
+            // NoGameServerAvailable. That is why the end-to-end login -> join -> UDP walk (M2
+            // criterion 14) could never be completed: no game server could stay registered
+            // long enough to be allocated.
+            //
+            // It survived because every game-server test drives GameServerRegistry directly.
+            // The registry was always right; the connection carrying it was reaped.
+            //
+            // Marked ONLY on success. A connection that sent a wrong secret must keep its
+            // 30-second deadline -- otherwise any peer could hold a slot indefinitely by
+            // sending one bogus GS_REGISTER, which is precisely the Slowloris case that
+            // deadline exists to stop. From here the connection is judged by the heartbeat
+            // timeout instead, which is the right clock: game servers heartbeat every ~5s.
+            if (ok) connection.MarkAuthenticated();
+
+            // A refused registration was previously silent on this side: the operator saw only
+            // "closed: not authenticated within 30s" thirty seconds later, which names the
+            // symptom and not one thing about the cause. The secret itself is never logged --
+            // only whether one arrived and how long it was, which separates "no secret reached
+            // us" from "a different secret reached us" without putting either on disk.
+            if (MasterLog.DebugEnabled)
+            {
+                MasterLog.Debug(
+                    $"conn #{connection.Id}: GS_REGISTER {(ok ? "accepted" : "REFUSED")} — " +
+                    $"secret {(string.IsNullOrEmpty(request.ServerSecret) ? "absent" : $"{request.ServerSecret.Length} chars")}, " +
+                    $"endpoint {endpoint}:{request.UdpPort}, maxPlayers {request.MaxPlayers}, " +
+                    $"maps [{string.Join(",", request.MapIds ?? Array.Empty<ushort>())}], " +
+                    $"serverId {server?.ServerId ?? 0}");
+            }
+
             Send(connection, MspMessageType.GsRegisterResponse, new { ok, serverId = server?.ServerId ?? 0 });
         }
 

@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The end-to-end walk: one account, login -> join -> UDP, as a pass/fail gate.
+
+    WHY THIS IS NOT A MODE OF Ironfront.Tools.LoadTest, which already logs in and joins rooms:
+    that tool answers "how does the master behave under N concurrent bots?" and reports latency
+    percentiles. This one answers "can a single account reach a match at all?" and answers it
+    with an exit code. Folding a gate into a measurement tool makes its exit code mean two
+    things, and the CI caller cannot then tell a slow master from an unreachable one.
+
+    It deliberately composes the SAME two collaborators Unity's MasterSession composes -
+    IMasterClient for the TCP half and ITransportClient for the UDP half - so the path it walks
+    is the shipped one rather than a stand-in. What it does NOT cover is the Unity flow machine
+    on top of them; see tools/run-e2e.ps1's header for that boundary stated plainly.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Ironfront.Tools.E2E</RootNamespace>
+    <AssemblyName>Ironfront.Tools.E2E</AssemblyName>
+    <Description>End-to-end login -> join -> UDP walk, as a pass/fail gate (M2 criterion 14).</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ironfront.MasterClient\Ironfront.MasterClient.csproj" />
+    <ProjectReference Include="..\Ironfront.Net.Configuration\Ironfront.Net.Configuration.csproj" />
+    <ProjectReference Include="..\Ironfront.Net.Protocol\Ironfront.Net.Protocol.csproj" />
+    <ProjectReference Include="..\Ironfront.Net.Transport\Ironfront.Net.Transport.csproj" />
+  </ItemGroup>
+
+</Project>

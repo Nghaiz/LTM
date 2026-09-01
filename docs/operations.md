@@ -315,6 +315,22 @@ Test it the way criterion 8 asks — stop a game server and wait a minute for th
 docker compose stop game-server-1
 ```
 
+That is the real drill and nothing replaces it, because it is the only version that proves the
+message reaches **your** webhook. Rehearse it first with `tools/alert-drill.sh`, which runs
+`alert.sh` against a receiver it starts itself (`tools/webhook_sink.py`) and grades three cases:
+
+```bash
+bash tools/alert-drill.sh          # master down -> alert; no game server -> alert; healthy -> silence
+```
+
+The third case is the one that matters. Without it, an `alert.sh` that posted on every run
+would pass the first two and you would learn nothing. Evidence lands in
+`artifacts/alert-drill/received.jsonl` — the bodies as the receiver saw them.
+
+**If the drill refuses to start**, something is already listening on its metrics port, usually a
+master leaked by an earlier run. It says so rather than running, because case A asserts that
+nothing answers there and a run with that premise broken grades the wrong thing.
+
 ---
 
 ## 7. Durability
@@ -367,6 +383,47 @@ IRONFRONT_LOGIN_RATE_PER_MINUTE=500
 `./deploy.sh restart-master` to apply, and **put them back afterwards**. They are the
 anti-flood and anti-brute-force defences, and the only reason they are configurable is so a
 test rig can be exempted — not so the defaults can drift.
+
+---
+
+## 8a. The end-to-end walk
+
+Load testing answers "how does the master behave under N bots". This answers the different and
+more basic question: **can one account reach a live match at all?**
+
+```powershell
+pwsh tools/run-e2e.ps1
+```
+
+It stands up a master and a headless game server on non-production ports, then walks one
+account through the four legs and exits non-zero naming the first that broke:
+
+```
+[1/4] master  OK    connected in 38 ms
+[2/4] login   OK    playerId 1
+[3/4] join    OK    room 1 -> 127.0.0.1:45522, 64-byte signed ticket
+[4/4] udp     OK    connectionId 1, mapId 1, 9 payload(s) in 122 ms
+```
+
+Then it runs the whole thing **again** with one byte of the ticket flipped and requires the game
+server to refuse it. Skip that half (`-SkipNegative`) and the verdict says so, because a run
+that never checks a bad ticket is only proving a UDP port is open.
+
+Leg 4 waits for an actual snapshot, not just a handshake. A server that admits a client into a
+match it is not simulating is a real failure mode this project has shipped, and a
+handshake-only assertion is green for it.
+
+**What it does not cover:** Unity's client UI. It composes the same `IMasterClient` and
+`ITransportClient` that `MasterSession` composes, so the wire path is the shipped one, but the
+flow machine and lobby shell above them are covered by `Ironfront.Client.Flow.Tests`. Say "the
+protocol path is verified end to end", not "the client is".
+
+### Two failures it will show you, both of which shipped
+
+| Leg 3 says | Meaning |
+|---|---|
+| `errorCode 3000` NoGameServerAvailable | No registered server advertises the room's map. Almost always `IRONFRONT_GAMESERVER_MAP_IDS` — it is **required and must list at least one id**. Empty is refused, not "no preference", and `.env.example` shipped it blank until 2026-09-01 |
+| the server never becomes healthy | Look for `[net] master link: registered as server` in the game-server log. If the master's log says `GS_REGISTER REFUSED`, it now prints the endpoint, player cap and advertised maps beside it |
 
 ---
 

@@ -95,7 +95,7 @@ already gone. Sweep the tree for the other three names and for role language —
 | 2 | Azure steps in `docs/operations.md`, hand-off gone | **MET** — moved first and verified in its new home, then deleted. The four acceptance checks and the error table were what `operations.md` lacked |
 | 3 | Two-people criterion retired with a single-owner risk statement | **MET** — replaced by "what could not be rebuilt if the one account were lost". Five of six rows are regenerable from code; the backup container is the one that is not |
 | 4 | `branch-protection.md` matches the API, verified in that order | **MET** — `GET /rulesets/21395850` read first, then written. The page's summary table said two rules while its own § below said three |
-| 5 | Alert drill · 72-hour chart · login → join → UDP end to end · process CPU | **1 of 4 MET, 3 DEFERRED with reasons — see below** |
+| 5 | Alert drill · 72-hour chart · login → join → UDP end to end · process CPU | **1 of 4 MET on 2026-08-31; 3 of 4 MET on 2026-09-01 — see § 4.8** |
 | 6 | `cpuPercent: -1` still sent on the heartbeat, reason still recorded | **MET** — and pinned by a test (`TheHeartbeatsDeliberateMinusOneIsNotDisturbed`) that asserts `MetricsSnapshot.ToJson` contains no field named `cpuPercent` at all |
 | 7 | No teammate name or role-assignment language outside git history | **MET** — swept |
 
@@ -118,6 +118,67 @@ pressing a debug button, and M3 intervention #10 gave the flow a way back out of
 remains is running a master, a game server and a client together and watching one account walk
 the whole path. **Reopening condition:** none — this is now ordinary work that a session with
 thirty spare minutes can do, and it is the highest-value of the three.
+
+---
+
+## 4.8 — Status after P9 criterion 5, 2026-09-01
+
+Two of the three deferred items are now done. The third is unchanged and unchangeable in a
+session. What matters more than the count is what the first one found on its way.
+
+| Item | Verdict |
+|---|---|
+| **Login → join → UDP end to end** | **MET.** `tools/run-e2e.ps1` + `Ironfront.Tools.E2E` walk it and grade it. Evidence from the passing run: `login OK playerId 1` → `join OK room 1 -> 127.0.0.1:45522, 64-byte signed ticket` → `udp OK connectionId 1, mapId 1, 9 payload(s) in 122 ms`. The negative run, with one byte of the ticket flipped, is **refused with `InvalidTicket`** — so the pass is about ticket validation and not about a UDP port being open |
+| **Alert drill** | **MET, with a stated boundary.** `tools/alert-drill.sh` fires `alert.sh` at a real receiver (`tools/webhook_sink.py`) and grades three cases: master down → condition 1 arrives; real master with no game server → condition 2 arrives; a healthy snapshot → **nothing** arrives. The delivery half — `notify()` building a body, curling it, something receiving it — had never once been observed before this |
+| **72-hour chart** | **DEFERRED, unchanged.** It takes 72 hours. Reopening condition as written in § 4.7 |
+
+### The E2E harness found three defects on its first real run, and none of them were hypothetical
+
+M2 criterion 14 was never merely unverified. It was **unverifiable**, because the path was
+broken in three places at once and every one of them was silent.
+
+1. **A registered game server was reaped 30 seconds after it connected.**
+   `ClientConnection.IsAuthenticated` was set only by `SetSession` — a *player* login. A game
+   server proves itself with the shared secret in `GS_REGISTER` and never gets a session, so its
+   connection stayed unauthenticated for its whole life and `TcpListenerHost`'s sweep closed it,
+   every time, on every deployment. Heartbeats then stopped, `CountHealthy` fell to zero, and
+   every `RoomJoinRequest` answered `NoGameServerAvailable`. `MarkAuthenticated()` had existed
+   for exactly this purpose with **zero callers**. Fixed, and pinned by
+   `GameServerConnectionLifetimeTests` — including the other direction, that a *refused*
+   registration still gets reaped, or the fix would be a Slowloris hole.
+
+2. **`IRONFRONT_GAMESERVER_MAP_IDS` shipped empty, and empty is rejected.**
+   `EnvRegistry` documented "Empty means no preference"; `GameServerRegistry.TryRegister`
+   refuses any registration whose map list is empty. `infra/compose/.env.example` shipped
+   `IRONFRONT_GAMESERVER_1_MAP_IDS=` blank. **A compose deployment done exactly by the book
+   could never register a game server.** Both the documentation and the shipped default are now
+   corrected to `1` (Dustbowl).
+
+3. **The master said nothing about why a registration was refused.** The operator saw
+   `closed: not authenticated within 30s` half a minute later, which names the symptom and not
+   one thing about the cause. `GS_REGISTER` now logs accepted/REFUSED with the endpoint, the
+   player cap, the advertised maps and whether a secret arrived — never the secret itself.
+
+**Why the existing tests were all green through this.** Every game-server test drove
+`GameServerRegistry` directly, and the registry was always right. The timeout sweep had its own
+tests, but against a bare listener with no dispatcher behind it. No test in the suite had ever
+put a *registered game server* and the *sweep* in one process, so both halves were correct and
+the seam between them was where the product was broken. That is the gap an end-to-end walk
+exists to cover, and it found it on the first run.
+
+### What the E2E gate does not claim
+
+It does not drive Unity's client UI. The harness composes the same two collaborators
+`MasterSession` composes — `IMasterClient` and `ITransportClient` — so the wire path is the
+shipped one, but the flow machine, the lobby shell and the scene load sit above them and are
+covered by `Ironfront.Client.Flow.Tests`. The honest sentence is "the protocol path is verified
+end to end", not "the client is".
+
+The alert drill's cases A and B run against a real master process; case C, the silence control,
+is served by a stub snapshot, because making a real master report a healthy game server means
+running one and Unity is too expensive to boot for an assertion that nothing happens. The drill
+tests `alert.sh`, which is the artifact that had never been exercised. A real webhook on the VM
+is still the performance; this is the rehearsal.
 
 ---
 
