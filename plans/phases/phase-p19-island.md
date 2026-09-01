@@ -1,7 +1,7 @@
-# Phase P18 — Island, made playable
+# Phase P19 — Island, made playable
 
 - **Plan:** [`../plan.md`](../plan.md) · **Block:** E · **Size:** L · **Effort:** 1 session
-- **Depends on:** **P11–P17 landed.** Island is authored last on purpose: every component below is
+- **Depends on:** **P11–P18 landed.** Island is authored last on purpose: every component below is
   configured the way the preceding phases left it, and authoring a scene against a moving target
   means authoring it twice.
 - **Owner's ruling (2026-09-01):** *"Island must be made fully playable in multiplayer. It is the

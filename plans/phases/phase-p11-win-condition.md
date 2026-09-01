@@ -116,7 +116,7 @@ Read § 1.1 again. Before any score code changes, establish on the server what
 team, naming Dustbowl's Oasis (team 0) and Fortress (team 1). That log is the cheapest place to
 take this reading.
 
-**Record the answer in the phase's report.** P18 (Island) depends on it: an Island authored with
+**Record the answer in the phase's report.** P19 (Island) depends on it: an Island authored with
 no team-owned capture point reproduces exactly this, on a map with no offline history to hide it.
 
 ### 3.3 — Migrate `MatchStateMachine` to the margin rule (L)
@@ -171,6 +171,46 @@ Then clear the freeze gate — all four conditions, listed with their checks in
 **Condition 4 is checked by eye**: `SpecChecker` parses only the fenced block, and the prose
 header and the fenced block have already drifted once on this project.
 
+### 3.4a — Back-fill the missing 4.0.0 changelog row (S)
+
+**Owner ruling, 2026-09-01: P11 patches this rather than leaving it open.** The reasoning is that
+P11 is already editing § 15 and is therefore the right person at the right time. This closes ledger
+row **X-79**.
+
+§ 15's changelog holds rows for 1.0.0, 2.0.0, 2.0.1, 3.0.0 and 3.0.0 (amended) — and **nothing for
+4.0.0**, although the header and `ProtocolConstants.cs:16` both say 4. So the live v4 bump cleared
+three of its own four gate conditions and not the third.
+
+**The content is established, not invented.** It was reconstructed from the commit that made the
+bump, and every clause below is quoted or measured rather than inferred:
+
+- **Commit** `9172920`, `fix(replication): the match plays and bodies stand on the ground`, **PR
+  #222**, 2026-08-28.
+- **Files touched in `Ironfront.Net.Protocol/`:** `ProtocolConstants.cs`
+  (`PROTOCOL_VERSION 3 → 4`), `Quantize.cs`, and `plans/00-shared/protocol-spec.md`. Nothing else.
+- **The wire change:** `Quantize.POS_MIN` `−2048f → −1024f` and `POS_MAX` `2048f → 3072f`.
+  `POS_RANGE` stays **4096** — the diff's own trailing comment says `// 4096, unchanged` — so the
+  resolution stays 6.25 cm and the encoded size stays 6 bytes. **The window moved; it did not
+  widen.**
+- **Why:** § 4.4's existing note (`protocol-spec.md:420-429`) already carries the reasoning and is
+  the source to cite — Dustbowl's authored play volume is `(650, −50, 620) .. (2350, 650, 2220)`,
+  so 302 m of x and 172 m of z were unrepresentable, *including the Oasis capture point at
+  `x = 2085.6`, team 0's opening base*; everything out there encoded to exactly `2048.00` on every
+  client. Ledger **X-53**.
+- **Wire change? YES.** The commit message states the consequence in its own words: *"a v3 client
+  cannot talk to it, because the same i16 now decodes to a different metre."*
+
+Write the row from that. **Do not restate § 4.4's note in the row** — cite it, the way the 2.0.1
+row cites its new § 4.8.
+
+**Two things this task must NOT do.** It must not invent a reason for anything the commit does not
+evidence; if some part of the v4 change cannot be established from `git show 9172920` or the spec
+body, **say so in the row** rather than filling the gap. And it must not renumber, reword or
+re-date any existing row — this adds one missing row and changes nothing else.
+
+Close **X-79** in `plans/debt-ledger.md` in the same PR, and re-run
+`python tools/recount_debt_ledger.py --check` so the roll-up stays honest.
+
 ### 3.5 — Draw the right bar (M)
 
 `ScoreUi.SetAuthoritativeState` (`:180`) grows a `victoryPoints` parameter and, for the first
@@ -209,6 +249,7 @@ Criteria 3, 5 and 6 are the ones that cannot be satisfied by a green suite.
 | 2 | Every pre-existing `MatchScoreboard` and `ScoreUi` offline test passes **unchanged** | `dotnet test`, 8 projects |
 | 3 | **The opening flag count per team on Dustbowl is measured, stated, and its consequence for `ScoreMultiplier` answered** — not inferred from the offline game | server log excerpt in the report |
 | 4 | A hex-sample test pins the 10 bytes of `S_MATCH_STATE` v5; `SpecChecker` green; § 15 has a 5.0.0 row; `PROTOCOL_VERSION` reads 5 in the fenced block **and** the prose header | `tools/ci.ps1` + the diff |
+| 4a | **§ 15 has a 4.0.0 row as well as a 5.0.0 row.** The 4.0.0 row names commit `9172920` / PR #222, the `POS_MIN`/`POS_MAX` move with `POS_RANGE` unchanged, and "Wire change? Yes"; anything not evidenced by that commit is stated as unestablished rather than filled in. Ledger **X-79** closed and `recount_debt_ledger.py --check` passes | diff + the recount |
 | 5 | **Two-client run: both clients' score numbers ascend, agree with each other, and agree with the server's log.** A kill moves the killer's side up, not the victim's side down | lane-B record + screenshot |
 | 6 | **Screenshot: the score bar moves with the server's numbers**, and the bar's position matches the margin the numbers imply | screenshot, both branches of `:317` if reachable in one run |
 | 7 | A match reaches `Ended` by the margin rule, and `WinningTeam` names the side that was ahead by `VictoryPoints` — verified against the server's own end decision | lane-B record |
@@ -227,6 +268,7 @@ Criteria 3, 5 and 6 are the ones that cannot be satisfied by a green suite.
 | `ScoreUi` conflict with P12 | 3 | 2 | 6 | P11 owns `SetAuthoritativeState`; P12 owns `Awake`/`UpdateUi`. Land P11 first |
 | The offline path regresses while nobody is playing offline | 2 | 4 | 8 | Criterion 2 — pre-existing tests pass **unchanged**, not adjusted |
 | Plugin DLLs not rebuilt; Editor compiles against the old struct | 2 | 4 | 8 | Step 3.6, standing rule 5 |
+| The back-filled 4.0.0 row invents content the commit does not evidence | 2 | 4 | 8 | 3.4a quotes the diff and the commit message, and requires "unestablished" in writing over a guess |
 
 Nothing scores ≥ 15 except the multiplier trap, and step 3.2 is its mandated mitigation — it runs
 **first**, not alongside.
@@ -243,5 +285,5 @@ Nothing scores ≥ 15 except the multiplier trap, and step 3.2 is its mandated m
   P17 and builds from `PlayerListMessage`, not from here.
 - **`GameManager.victoryPoints`' ownership.** Ledger C-5 records it among five unowned loose
   values; this phase reads it and does not relocate it.
-- **The missing 4.0.0 changelog row.** Noted in contracts § 2.3; back-filling it is the owner's
-  call, not this phase's.
+- **Renumbering, rewording or re-dating any existing § 15 row.** Task 3.4a adds the one missing
+  4.0.0 row and touches nothing else in that table.

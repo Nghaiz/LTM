@@ -219,11 +219,14 @@ cannot draw until the next config broadcast.
 | 3 | A § 15 changelog row with "Wire change?" filled in | add the **5.0.0** row |
 | 4 | `PROTOCOL_VERSION` bumped in the § 1 fenced block **and** the prose header line | condition 1 covers only the fenced block; check the header by eye (this is why the spec spells it out — the two drifted for the whole of v2's life) |
 
-> **A gap found while writing this file, and left as a note rather than a task.** § 15's changelog
-> has rows for 1.0.0, 2.0.0, 2.0.1 and 3.0.0 (amended). **There is no 4.0.0 row**, though the
-> header and the code both say 4. So condition 3 was not met for the v4 bump. P11 adds the 5.0.0
-> row for its own change; whether to back-fill a 4.0.0 row is the owner's call, not P11's — see
-> the decisions list in `plans/plan.md` § 4.
+> **A gap found while writing this file. Owner ruled 2026-09-01: P11 patches it.** § 15's
+> changelog has rows for 1.0.0, 2.0.0, 2.0.1 and 3.0.0 (amended). **There is no 4.0.0 row**, though
+> the header and the code both say 4 — so condition 3 was never met for the v4 bump, and nothing
+> mechanical will ever notice, because `SpecChecker` parses the § 1 fenced block and not § 15.
+> **P11 writes BOTH rows**: the missing 4.0.0 (reconstructed from commit `9172920` / PR #222 — the
+> `POS_MIN`/`POS_MAX` window move with `POS_RANGE` unchanged, ledger **X-53**) and its own 5.0.0.
+> The reconstruction and its evidence are in [P11 § 3.4a](../phases/phase-p11-win-condition.md);
+> ledger row **X-79** closes with it.
 
 ### 2.4 What must change together
 
@@ -339,6 +342,7 @@ pick a side) is P16.
 |---|---|---|
 | `ConquestScoreRule` | **P11** | `MatchScoreboard` (offline), `MatchStateMachine` (server), `MatchStateMessage.WinningTeam` |
 | `S_MATCH_STATE` v5 | **P11** | `NetClientObjectivePresenter` → `ScoreUi.SetAuthoritativeState` (P11, P17) |
+| `S_PLAYER_SCORES` (0x51) | **P18** | the Tab scoreboard (P18). Per-player kills/deaths only — the TEAM score stays in `S_MATCH_STATE`, per spec § 4.11's surviving reasoning |
 | `joinTicket.team` | **P13** | `ServerTickLoop.OnClientConnected`, `ServerActorRegistry.TryClaimPlayerSlot` (P13); produced from `RoomMember.Team` (P13), chosen by the player (P16) |
 | `TeamId` / `ColorScheme.TeamColor` | already exists | P12 (local team, minimap), P16 (roster columns), P17 (HUD readout, scoreboard rows) |
 

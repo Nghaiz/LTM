@@ -124,8 +124,9 @@ and whose bodies do not animate cannot be graded by eye.
 | **P14** | [The room that never starts the match](phases/phase-p14-room-starts-the-match.md) | `Ready`, `Starting`, `GsMatchStarted`, the hand-typed `roomId`, the debug button | M |
 | **P15** | [The menu with no way in](phases/phase-p15-the-menu-with-no-way-in.md) | F1 — the CRITICAL one; login, register, Practice demoted | L |
 | **P16** | [The room you can see](phases/phase-p16-the-room-you-can-see.md) | the room browser, create-room, the lobby room, choosing a side | L |
-| **P17** | [The readout a player fights with](phases/phase-p17-in-match-readout.md) | F7, F8 — team readout, Tab scoreboard, deploy screen | L |
-| **P18** | [Island, made playable](phases/phase-p18-island.md) | F4 — sixteen missing scripts on the map the owner ranks first | L |
+| **P17** | [The readout a player fights with](phases/phase-p17-in-match-readout.md) | F8, and half of F7 — team readout, deploy screen, the killfeed onto the HUD | M |
+| **P18** | [The scoreboard, with real numbers on it](phases/phase-p18-scoreboard.md) | the rest of F7 — `S_PLAYER_SCORES` (0x51) and the Tab scoreboard | L |
+| **P19** | [Island, made playable](phases/phase-p19-island.md) | F4 — sixteen missing scripts on the map the owner ranks first | L |
 
 **P5 blocks the *closing* of P4's rows, not its run.** Run lane B first; X-28's single spawn point
 and X-29's missing measurements will show up in the artifacts as they always have, and fixing them
@@ -170,11 +171,20 @@ scores on the victim's team — and that is stiffer and more legible than a bloc
 in [`00-shared/team-multiplayer-contracts.md`](00-shared/team-multiplayer-contracts.md) SS 1.4 so
 nobody re-files it.
 
-**P11-P18 are cooked ONE AT A TIME, in separate sessions.** Each phase file is self-contained by
+**P11-P19 are cooked ONE AT A TIME, in separate sessions.** Each phase file is self-contained by
 construction: goal, file-ownership globs, steps, acceptance, risks. Anything two phases must agree
 on lives in [`00-shared/team-multiplayer-contracts.md`](00-shared/team-multiplayer-contracts.md)
 and is linked, never copied. The order is fixed by the owner: **D (P11, P12) -> A (P13) -> B (P14)
--> C (P15, P16, P17) -> E (P18)**.
+-> C (P15, P16, P17, P18) -> E (P19)**.
+
+**The scoreboard is its own phase because the owner ruled the numbers ship.** Per-player kills and
+deaths were going to be deferred behind a names-only roster; that was overridden on 2026-09-01.
+Two measurements then forced the split rather than a bigger P17: the server **already** counts them
+(`MatchScoreTally.KillsOf`/`DeathsOf`, live at `ServerTickLoop.cs:1207`), and they **cannot** be
+added to `S_PLAYER_LIST` — that entry is 18 B, `1 + 64 x 18 = 1153` against a `MAX_CHANNEL_PAYLOAD`
+of **1181**, so even one extra byte per entry overflows the un-fragmented guarantee § 4.11 relies
+on. So it needs a new opcode, a spec section, a hex sample and a changelog row: a protocol phase,
+not a UI task. [P18](phases/phase-p18-scoreboard.md) § 1 carries the arithmetic.
 
 
 ## 5. Standing rules
@@ -200,7 +210,7 @@ These outlived the documents that carried them, and each one was learned by bein
 7. **Every "this does not exist" states the paths it searched.** A negative result is a claim about
    a search, not about the tree. The three 2026-09-01 reports carry verified scope lines; reuse
    them rather than re-deriving, and when a report and the source disagree, measure — **X-78** and
-   the two refuted claims in [P18](phases/phase-p18-island.md) § 1.2 are what happens when nobody
+   the two refuted claims in [P19](phases/phase-p19-island.md) § 1.2 are what happens when nobody
    does.
 8. **Name what comes out.** Anything added to core scope names what leaves in exchange. Core scope
    is infantry, one map, Conquest, bots, health/death/respawn, prediction + lag compensation, the
