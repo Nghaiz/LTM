@@ -87,6 +87,9 @@ namespace Ironfront.Tools.E2E
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(options.TimeoutSeconds));
             try
             {
+                if (options.Partner)
+                    return await WalkPartnerAsync(options, cts.Token).ConfigureAwait(false);
+
                 return options.RoomStart
                     ? await WalkRoomStartAsync(options, cts.Token).ConfigureAwait(false)
                     : await WalkAsync(options, cts.Token).ConfigureAwait(false);
@@ -315,6 +318,171 @@ namespace Ironfront.Tools.E2E
         /// because the failure it guards against has no error and no log.
         /// </para>
         /// </remarks>
+        /// <summary>
+        /// Be the SECOND player in a room somebody else made. P16 criterion 2.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why this exists at all.</b> P16 shipped a room browser, a create-room form and a
+        /// room lobby, and criterion 2 grades them with a second player present: the roster has
+        /// to show both, both have to mark ready, and both have to be carried into the match.
+        /// Every other walk in this file creates its own room, so none of them can be the other
+        /// half of that -- and lane B skips the menu entirely, because IRONFRONT_LANEB_ROLE
+        /// makes ClientFlowBootstrap bypass it. So the UI had no way to be graded by anything.
+        /// </para>
+        /// <para>
+        /// <b>It joins rather than creates, and that is the whole point.</b> The room is
+        /// expected to be sitting there already, made by a human pressing CREATE on the shipped
+        /// form. Finding none is a FAILURE and not an invitation to make one -- a harness that
+        /// quietly created its own room would pass while grading nothing, which is exactly the
+        /// shape of green this project keeps finding.
+        /// </para>
+        /// </remarks>
+        private static async Task<int> WalkPartnerAsync(Options options, CancellationToken ct)
+        {
+            using var partner = new Ironfront.MasterClient.MasterClient();
+            using var game    = new UdpTransportClient();
+
+            IMasterClient[] all = { partner };
+
+            partner.OnError += (code, message) =>
+                Console.WriteLine($"       (master error to partner: {code} {message})");
+
+            var stopwatch = Stopwatch.StartNew();
+            try
+            {
+                await partner.ConnectAsync(options.MasterHost, options.MasterPort, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Leg(1, "master", false, $"could not reach {options.MasterHost}:{options.MasterPort} - {ex.Message}");
+                return ExitMasterUnreachable;
+            }
+
+            Leg(1, "master", true, $"connected in {stopwatch.ElapsedMilliseconds} ms");
+
+            stopwatch.Restart();
+            try
+            {
+                await LoginAsync(partner, options.Username, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Leg(2, "login", false, ex.Message);
+                return ExitLoginFailed;
+            }
+
+            Leg(2, "login", true, $"{options.Username} in {stopwatch.ElapsedMilliseconds} ms");
+
+            // ---- leg 3: the room the OTHER player made ------------------------------------
+            stopwatch.Restart();
+            RoomInfo[] rooms = await PumpAsync(partner, partner.GetRoomsAsync(ct), ct).ConfigureAwait(false);
+            RoomInfo? target = null;
+            foreach (RoomInfo room in rooms)
+            {
+                if (room.RoomId == 0 || !room.IsJoinable) continue;
+                target = room;
+                break;
+            }
+
+            if (target is null)
+            {
+                Leg(3, "room", false,
+                    $"the master lists {rooms.Length} room(s) and none is joinable. This walk is the " +
+                    "SECOND player -- the first one has to have created a room from the UI first. " +
+                    "It will not create one, because a room it made itself would prove nothing.");
+                return ExitJoinFailed;
+            }
+
+            JoinResult joined = await PumpAsync(
+                partner, partner.JoinRoomAsync(target.RoomId, null, ct), ct).ConfigureAwait(false);
+
+            if (!joined.Ok)
+            {
+                Leg(3, "room", false, $"join refused, errorCode {joined.ErrorCode} - {ExplainJoinError(joined.ErrorCode)}");
+                return ExitJoinFailed;
+            }
+
+            if (joined.JoinTicket.Length != ProtocolConstants.JOIN_TICKET_SIZE)
+            {
+                Leg(3, "room", false, "the join said ok and issued no usable ticket");
+                return ExitJoinFailed;
+            }
+
+            Leg(3, "room", true,
+                $"joined '{target.Name}' (room {target.RoomId}) as player 2; ticket for " +
+                $"{joined.GameServerIp}:{joined.GameServerPort}, {stopwatch.ElapsedMilliseconds} ms");
+
+            // ---- leg 4: ready, then wait for the OTHER player to ready too ----------------
+            var seen = new List<RoomLifecycleState>();
+            partner.OnRoomStatePush += state => Record(seen, state.Lifecycle);
+
+            stopwatch.Restart();
+            await PumpVoidAsync(partner, partner.SetReadyAsync(true, ct), ct).ConfigureAwait(false);
+            Console.WriteLine("       (player 2 is ready; waiting for the human to press READY on the room lobby)");
+
+            bool started = await PumpUntilAsync(
+                all, () => seen.Contains(RoomLifecycleState.Starting), options.ReadyWaitSeconds, ct)
+                .ConfigureAwait(false);
+
+            if (!started)
+            {
+                Leg(4, "ready", false,
+                    $"no Starting push within {options.ReadyWaitSeconds}s. Saw [{Describe(seen)}]. " +
+                    "Either the other player never marked ready, or the room's ready rule did not fire.");
+                return ExitNeverStarted;
+            }
+
+            Leg(4, "ready", true, $"Starting observed {stopwatch.ElapsedMilliseconds} ms after this ready");
+
+            // ---- the ticket is re-requested, because the shipped client re-requests --------
+            //
+            // A ticket lives JoinTicket.ValidityMs (60s) from the moment it is minted, and the
+            // wait here is a HUMAN pressing READY on another machine -- unbounded by
+            // construction. The ticket from leg 3 is therefore routinely expired by the time
+            // the room starts, and the game server answers InvalidTicket.
+            //
+            // MasterSession.EnterMatchWithFreshTicketAsync does exactly this on the Starting
+            // push, so a harness that dialled with the stale ticket would be failing where the
+            // real client succeeds -- and would report it as a product defect. It also means
+            // this leg now EXERCISES P16's ticket-refresh path: the master treats a re-join
+            // from an existing member as a refresh rather than answering AlreadyInAnotherRoom.
+            //
+            // Observed before this was added: leg 5 refused with InvalidTicket after a 62s
+            // wait, against a client that had entered the same match without trouble.
+            JoinResult refreshed = await PumpAsync(
+                partner, partner.JoinRoomAsync(target.RoomId, null, ct), ct).ConfigureAwait(false);
+
+            if (!refreshed.Ok || refreshed.JoinTicket.Length != ProtocolConstants.JOIN_TICKET_SIZE)
+            {
+                Leg(5, "match", false,
+                    $"the ticket refresh on Starting was refused, errorCode {refreshed.ErrorCode} - " +
+                    ExplainJoinError(refreshed.ErrorCode));
+                return ExitJoinFailed;
+            }
+
+            joined = refreshed;
+
+            // ---- leg 5: in the match ------------------------------------------------------
+            stopwatch.Restart();
+            UdpOutcome outcome = await DialAsync(
+                game, joined.GameServerIp, joined.GameServerPort, joined.JoinTicket, options, ct)
+                .ConfigureAwait(false);
+
+            if (!outcome.Connected || !outcome.ReceivedPayload)
+            {
+                Leg(5, "match", false, outcome.Connected ? $"connected, received NOTHING ({outcome.Detail})" : outcome.Detail);
+                return ExitUdpFailed;
+            }
+
+            Leg(5, "match", true,
+                $"in the match, {outcome.PayloadsReceived} payload(s) in {stopwatch.ElapsedMilliseconds} ms");
+
+            Console.WriteLine();
+            Console.WriteLine("E2E PARTNER PASS - joined a room made from the UI, readied, and was carried into the match.");
+            return ExitPass;
+        }
+
         private static async Task<int> WalkRoomStartAsync(Options options, CancellationToken ct)
         {
             using var host    = new Ironfront.MasterClient.MasterClient();
@@ -812,6 +980,20 @@ namespace Ironfront.Tools.E2E
             /// <summary>The account that creates the room and sits in it. See ResolveRoomAsync.</summary>
             public string HostUsername { get; private set; } = "e2e_host";
             public string RoomName { get; private set; } = "e2e";
+
+            /// <summary>
+            /// Join the room that ALREADY EXISTS, ready up, and be the second player in
+            /// somebody else's match. P16 criterion 2.
+            /// </summary>
+            /// <remarks>
+            /// The other walks are self-contained: they create every account and every room
+            /// they use, which is what makes them a gate and also what makes them unable to
+            /// grade a UI. Criterion 2 asks whether a HUMAN driving the shipped screens is
+            /// joined by a second player, sees them on the roster, and is carried into the
+            /// match -- and no harness that insists on creating its own room can stand on the
+            /// other side of that. This mode supplies the second player and nothing else.
+            /// </remarks>
+            public bool Partner { get; private set; }
             public ushort MapId { get; private set; } = 1;
             public int TimeoutSeconds { get; private set; } = 90;
             public int ConnectWaitSeconds { get; private set; } = 15;
@@ -861,6 +1043,7 @@ namespace Ironfront.Tools.E2E
                         case "-h" or "--help": options.ShowHelp = true; return options;
                         case "--negative": options.Negative = true; break;
                         case "--room-start": options.RoomStart = true; break;
+                        case "--partner": options.Partner = true; break;
                         case "--room-start-seats": options.RoomStartMaxPlayers = byte.Parse(Next(args, ref i)); break;
                         case "--ready-wait": options.ReadyWaitSeconds = int.Parse(Next(args, ref i)); break;
                         case "--match-wait": options.MatchWaitSeconds = int.Parse(Next(args, ref i)); break;

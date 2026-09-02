@@ -36,7 +36,6 @@ namespace Ironfront.Net.Replication.Tests
         private const string CatalogInstaller     = "1e1d8de547d73f847a33a9a802368cbe";
         private const string RemoteActorRegistry  = "634c065cc04a4199fe8636d1062a58c8";
         private const string RemoteActorView      = "076337bd4a5a4397a34c31257050ba36";
-        private const string LobbyShellOverlay    = "3a9b866060cb47f1af22ca5125dd4d71";
         private const string ProjectileComponent  = "75280d5bb60068b2fabefd8e2004397e";
         private const string ScoreUi              = "47bac8ff82521e88b577c05861af19e4";
         private const string ThrowableWeapon      = "441fac300879ede440ac8541efaa1c65";
@@ -358,26 +357,6 @@ namespace Ironfront.Net.Replication.Tests
                     Assert.False(string.IsNullOrWhiteSpace(entry.Reason));
                     Assert.Contains("Ledger", entry.Reason, StringComparison.OrdinalIgnoreCase);
                 });
-        }
-
-        // ------------------------------------------------------------------------ X-5, lobby
-
-        [Fact]
-        public void ALobbyShellInNoSceneIsReported()
-        {
-            Assert.Contains(
-                AssetWiringDetectors.LobbyShellOverlayIsInAScene(Fixture(Scene(withPresenters: true))),
-                f => f.Message.Contains("in no scene"));
-        }
-
-        [Fact]
-        public void ALobbyShellInASceneIsClean()
-        {
-            UnityAssetIndex index = Fixture(
-                Scene(withPresenters: true)
-                + Component(anchor: 800, gameObject: 801, script: LobbyShellOverlay, body: "  _masterPort: 27020"));
-
-            Assert.Empty(AssetWiringDetectors.LobbyShellOverlayIsInAScene(index));
         }
 
         // --------------------------------------------------------------- X-2, server catalog

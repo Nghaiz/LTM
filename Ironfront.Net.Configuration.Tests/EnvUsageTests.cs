@@ -65,6 +65,39 @@ namespace Ironfront.Net.Configuration.Tests
             Assert.DoesNotContain(EnvRegistry.TlsCertificatePassword.Name + "  password for the bundle; never printed (default", usage, StringComparison.Ordinal);
         }
 
+        /// <summary>
+        /// The client's master port defaults to the master's own, and nothing may re-state it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>An identity assertion, deliberately not a pin on 27000.</b> A test reading
+        /// <c>Assert.Equal("27000", ClientMasterPort.DefaultValue)</c> would pass just as
+        /// happily if both sides were changed to the wrong number together, and would have to
+        /// be edited on every legitimate port change -- so it would be edited without thought.
+        /// This asserts the RELATIONSHIP the docstring claims, so it stays true across any
+        /// future port and fails the moment the two drift apart again.
+        /// </para>
+        /// <para>
+        /// It exists because they did drift. The client said 27020 while the master bound
+        /// 27000, across five separate re-statements of the number and two shipped scenes that
+        /// disagreed with each other, and a client build with no override dialled a port
+        /// nothing listened on. The failure was silent at every layer -- the connect attempt
+        /// surfaced no message a player could act on -- so no test and no operator ever saw it.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public void TheClientDialsThePortTheMasterBinds()
+        {
+            Assert.Equal(EnvRegistry.MasterPort.DefaultValue, EnvRegistry.ClientMasterPort.DefaultValue);
+
+            // The C# default every client-side field starts from is the same number again.
+            // Without this the registry could agree with itself while the code shipped another
+            // value, which is the exact shape of the original defect.
+            Assert.Equal(
+                GameClientConfig.DefaultMasterPort.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                EnvRegistry.MasterPort.DefaultValue);
+        }
+
         [Fact]
         public void AnUnknownReaderRendersNothingRatherThanEverything()
         {

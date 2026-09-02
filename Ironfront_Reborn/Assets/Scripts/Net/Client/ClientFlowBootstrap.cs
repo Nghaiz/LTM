@@ -17,10 +17,10 @@ namespace Ironfront.Net.Unity.Client
     /// <b>This component is what M3 was missing, and nothing else was.</b> Every decision in the
     /// flow was already written and already under test: <c>GameFlowController</c> holds the
     /// transition table, <c>MasterSession</c> drives login, the room browser, the join and the
-    /// junction, <c>MasterErrorText</c> phrases every refusal, and <c>LobbyShellOverlay</c>
+    /// junction, <c>MasterErrorText</c> phrases every refusal, and the Canvas menu
     /// draws all of it. What did not exist was anyone to construct them. P8's audit found
     /// <c>MasterSession</c> instantiated in exactly one place in the repository —
-    /// <c>Ironfront.Client.Flow.Tests</c> — <c>LobbyShellOverlay.Bind</c> with zero callers
+    /// <c>Ironfront.Client.Flow.Tests</c> — the debug overlay with zero callers
     /// under <c>Assets/</c>, <c>MasterSession.OnSceneReady</c> with zero callers outside the
     /// tests, and no client code anywhere calling <c>SceneManager.LoadScene</c>. The shell in
     /// <c>Menu.unity</c> drew the words "Lobby shell: unbound" and there was no way past them.
@@ -58,20 +58,19 @@ namespace Ironfront.Net.Unity.Client
         [Tooltip("Defaults, overridable with IRONFRONT_CLIENT_MASTER_HOST and " +
                  "IRONFRONT_CLIENT_MASTER_PORT, and by the player typing in the shell.")]
         [SerializeField] private string _masterHost = "127.0.0.1";
-        [SerializeField] private int _masterPort = 27020;
+        [SerializeField] private int _masterPort = GameClientConfig.DefaultMasterPort;
 
         [Header("Diagnostics")]
         [SerializeField] private bool _verbose = true;
 
         // Fully qualified: this file's own namespace starts with `Ironfront`, so a bare
         // `MasterClient` binds to the NAMESPACE Ironfront.MasterClient rather than to the class
-        // inside it -- CS0118, and the same enclosing-namespace collision LobbyShellOverlay
+        // inside it -- CS0118, and the same enclosing-namespace collision the old overlay
         // documents for `Action`.
         private Ironfront.MasterClient.MasterClient _master;
         private UdpTransportClient _game;
         private MasterSession _session;
         private GameFlowController _flow;
-        private LobbyShellOverlay _shell;
         private Menu.MenuScreenController _menu;
 
         private bool _loadingMatch;
@@ -96,12 +95,6 @@ namespace Ironfront.Net.Unity.Client
             // time. The survivor is the one holding the live master link.
             if (Current != null && Current != this)
             {
-                // Hidden before the destroy, because Destroy is deferred to the end of the frame
-                // and an unbound overlay draws "Lobby shell: unbound" from its own OnGUI in the
-                // meantime -- over the bound one, on the frame the player returns to the menu.
-                LobbyShellOverlay duplicate = GetComponent<LobbyShellOverlay>();
-                if (duplicate != null) duplicate.enabled = false;
-
                 Destroy(gameObject);
                 return;
             }
@@ -134,30 +127,6 @@ namespace Ironfront.Net.Unity.Client
 
             SceneManager.sceneLoaded += OnSceneLoaded;
 
-            _shell = GetComponent<LobbyShellOverlay>();
-            if (_shell == null) _shell = FindAnyObjectByType<LobbyShellOverlay>();
-
-            if (_shell != null)
-            {
-                GameClientConfig config = ResolveConfig();
-                _shell.ApplyMasterEndpoint(config.MasterHost, config.MasterPort);
-
-                // This bootstrap ticks the session, including during a match when the shell may
-                // not be in the loaded scene at all. Two tickers age the connect timeout twice
-                // as fast, so ownership is taken here rather than left to a serialized checkbox.
-                _shell.TicksSession = false;
-
-                _shell.Bind(_session, _flow);
-            }
-            else if (_verbose)
-            {
-                // Not fatal: the flow is driveable from code and the tests do exactly that. It
-                // IS fatal to a player, so it is a warning rather than a silence.
-                Debug.LogWarning(
-                    "[flow] no LobbyShellOverlay found. The flow is running with nothing drawing "
-                    + "it, so a player has no way to log in.");
-            }
-
             BindMenuCanvas();
 
             // NO Booting -> LoginScreen here any more, and that is a deliberate reversal. It was
@@ -178,10 +147,10 @@ namespace Ironfront.Net.Unity.Client
         /// <para>
         /// <b>Found, not required.</b> A build with no Canvas menu — a headless client, the
         /// lane-B harness's scene, a test rig — is a supported configuration and gets a warning
-        /// rather than a failure, exactly as the shell does above. The two are independent: this
-        /// bootstrap binds whichever of them is present, and binding both is the normal case
-        /// while <c>LobbyShellOverlay</c> is still the only route to the room browser (3.2
-        /// constraint 5).
+        /// rather than a failure. It is the ONLY UI since P17 retired the debug overlay, so
+        /// a rendered build without it has no way in -- which is what the P16 screen
+        /// detectors in ClientWiringGate now assert, in place of the check that used to
+        /// assert the overlay was in a scene.
         /// </para>
         /// <para>
         /// <b>The endpoint is pushed, not re-resolved.</b> The menu has no host or port fields of
@@ -450,10 +419,6 @@ namespace Ironfront.Net.Unity.Client
             if (current != GameFlowState.Lobby) return;
             if (previous != GameFlowState.InMatch && previous != GameFlowState.MatchEnd) return;
 
-            // The shell hid itself on the way into the match. Nothing used to turn it back on,
-            // so the disconnect message was rendered to an invisible overlay.
-            if (_shell != null) _shell.Show();
-
             // NOT re-subscribed here. SceneManager.LoadScene is deferred to the end of the
             // frame, so the match scene's NetClientBootstrap is still alive and still subscribed
             // at this point -- taking the socket back now would route every payload TWICE until
@@ -494,11 +459,19 @@ namespace Ironfront.Net.Unity.Client
             _game.OnMessage += OnGamePayload;
         }
 
-        /// <summary>Puts one line in front of the player, whether or not a shell is drawing.</summary>
+        /// <summary>Puts one line in front of the player, on the shipped screens.</summary>
+        /// <remarks>
+        /// Routed to <c>MenuScreenController.ShowError</c> since P17 retired
+        /// <c>LobbyShellOverlay</c>. That is a strict improvement rather than a
+        /// like-for-like swap: the overlay was behind Shift+F2 and hid itself on the way
+        /// into a match, so a disconnect notice was routinely drawn to something invisible.
+        /// The log line stays unconditional -- a headless or harness run has no menu, and
+        /// that is a supported configuration, not a reason to lose the message.
+        /// </remarks>
         private void ReportToShell(string message)
         {
             Debug.LogWarning($"[flow] {message}");
-            if (_shell != null) _shell.ReportError(message);
+            if (_menu != null) _menu.ShowError(message);
         }
     }
 }

@@ -25,7 +25,7 @@ namespace Ironfront.Net.Unity.EditorTools
     /// </para>
     /// <para>
     /// <b>Re-running REBUILDS rather than reporting and skipping</b>, which is the opposite call
-    /// from <see cref="WireClientFlow"/> and worth saying why. That script adds one component to
+    /// from the retired WireClientFlow tool and worth saying why. That script added one component to
     /// an object a human authored, so leaving it alone is respecting authored work. This script
     /// IS the authoring for its whole subtree — every object under <see cref="RootName"/> was
     /// written by it — so a deterministic rebuild is what makes the scene a function of this
@@ -169,7 +169,6 @@ namespace Ironfront.Net.Unity.EditorTools
 
             if (!HideLegacyMenu(log)) return false;
 
-            HideDebugShell(log);
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
@@ -868,56 +867,6 @@ namespace Ironfront.Net.Unity.EditorTools
             property.arraySize = values.Length;
             for (int i = 0; i < values.Length; i++)
                 property.GetArrayElementAtIndex(i).objectReferenceValue = values[i];
-        }
-
-        /// <summary>
-        /// Starts the debug lobby shell hidden, which is what its own header always described.
-        /// </summary>
-        /// <remarks>
-        /// <para>
-        /// <b>Hidden, emphatically NOT removed</b> (3.2 constraint 5, criterion 8). Shift+F2 still
-        /// toggles it, <c>Bind</c> still runs, and it is still the only route to the room browser
-        /// until P16 lands one. Only the authored starting value of <c>_visible</c> changes.
-        /// </para>
-        /// <para>
-        /// <b>Why it needs changing at all.</b> The scene had <c>_visible: 1</c> because the shell
-        /// WAS the user interface — there was nothing else to look at, so starting visible was
-        /// correct. With a Canvas behind it, an IMGUI panel drawn from the top-left over the
-        /// Title screen is the first thing a player sees, and the phase's own description of the
-        /// shell — "behind Shift+F2" — stops being true of the shipped scene.
-        /// </para>
-        /// <para>
-        /// The C# field initializer stays <c>true</c> and is deliberately not touched: a shell
-        /// dropped into a scene with no menu should still draw itself, which is the debugging
-        /// affordance it exists for. What changes is this scene's authored value.
-        /// </para>
-        /// </remarks>
-        private static void HideDebugShell(StringBuilder log)
-        {
-            LobbyShellOverlay shell = Object.FindAnyObjectByType<LobbyShellOverlay>(
-                FindObjectsInactive.Include);
-
-            if (shell == null)
-            {
-                // Not a failure: WireClientFlow already fails loudly on a Menu scene with no
-                // shell, and duplicating that verdict here would give one fault two voices.
-                log.AppendLine("debug shell: none in this scene; nothing to hide.");
-                return;
-            }
-
-            var so = new SerializedObject(shell);
-            SerializedProperty visible = so.FindProperty("_visible");
-
-            if (visible == null)
-            {
-                log.AppendLine("debug shell: no '_visible' field any more; left as authored.");
-                return;
-            }
-
-            visible.boolValue = false;
-            so.ApplyModifiedPropertiesWithoutUndo();
-            log.AppendLine("debug shell: starts hidden, still toggled by Shift+F2, NOT removed "
-                           + "(3.2 constraint 5).");
         }
 
         /// <summary>

@@ -50,9 +50,11 @@ namespace Ironfront.Net.Unity.Client.Menu
     /// one thing none of the views should be able to reach past.
     /// </para>
     /// <para>
-    /// <b>It does not replace <c>LobbyShellOverlay</c> and does not touch it</b> (3.2 constraint
-    /// 5). The shell is still the only route to the room browser until P16 lands one, and both
-    /// read the same flow machine, so they agree by construction.
+    /// <b>It is the only UI.</b> P15 wrote this beside the Shift+F2 debug overlay and did not
+    /// touch it; P16 gave these screens a room browser, a create-room form and a room lobby,
+    /// and P17 retired the overlay once a two-player match had been played through them end
+    /// to end. A rendered build with no MenuScreenController now has no way into a match at
+    /// all, which is why ClientWiringGate asserts these screens are authored and assigned.
     /// </para>
     /// </remarks>
     [DisallowMultipleComponent]
@@ -591,7 +593,7 @@ namespace Ironfront.Net.Unity.Client.Menu
         public string MasterHost { get; set; } = "127.0.0.1";
 
         /// <summary>The master's port. Set by <c>ClientFlowBootstrap</c>.</summary>
-        public int MasterPort { get; set; } = 27020;
+        public int MasterPort { get; set; } = Ironfront.Net.Configuration.GameClientConfig.DefaultMasterPort;
 
         /// <summary>The TLS policy, or null for the plaintext LAN path.</summary>
         public Ironfront.MasterClient.MasterClientTlsOptions? MasterTls { get; set; }

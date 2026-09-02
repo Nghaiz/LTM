@@ -34,7 +34,8 @@ namespace Ironfront.Tools.ClientWiringGate
     /// <c>LobbyShellOverlayFieldsAreAssigned</c> likewise: E9 is a scene-hygiene note, all three
     /// fields carry their intended defaults as C# initializers, and there is no assignment to
     /// assert (ledger <b>A-12</b>, VOID). What was actually wrong with the lobby shell is that
-    /// the component is in no scene at all — <see cref="LobbyShellOverlayIsInAScene"/>, ledger
+    /// the component was in no scene at all. That check was retired with the overlay in
+    /// P17; the P16 menu-screen detectors assert "there is a way in" now. Ledger
     /// <b>X-5</b>. A check that cannot fail is worse than no check, because absence prompts
     /// investigation and a false green ends it.
     /// </para>
@@ -53,7 +54,6 @@ namespace Ironfront.Tools.ClientWiringGate
         private const string CosmeticTracerPoolGuid      = "188a29154b294b60bc5577fb9b082e01";
         private const string RemoteActorRegistryGuid     = "634c065cc04a4199fe8636d1062a58c8";
         private const string RemoteActorViewGuid         = "076337bd4a5a4397a34c31257050ba36";
-        private const string LobbyShellOverlayGuid       = "3a9b866060cb47f1af22ca5125dd4d71";
         private const string ScoreUiGuid                 = "47bac8ff82521e88b577c05861af19e4";
         private const string MinimapUiGuid               = "c159207211a5c0a8e6a51a845c493a8a";
         private const string CapturePointGuid            = "11005de75c307d114b42494cef599182";
@@ -118,7 +118,7 @@ namespace Ironfront.Tools.ClientWiringGate
         /// is their correct state and a check demanding otherwise could only ever be red.
         /// <c>RemoteActorView</c> and <c>LobbyShellOverlay</c> are components, but they belong to
         /// the remote-actor prefab and the lobby scene respectively, and are checked there
-        /// (<see cref="RemoteActorPrefabIsAuthored"/>, <see cref="LobbyShellOverlayIsInAScene"/>).
+        /// (<see cref="RemoteActorPrefabIsAuthored"/>).
         /// X-1's real content is the four presenters below.
         /// </para>
         /// </remarks>
@@ -562,30 +562,6 @@ namespace Ironfront.Tools.ClientWiringGate
                     + "unassignable by construction (ledger A-5, X-1)."));
 
             return findings;
-        }
-
-        /// <summary>
-        /// <b>X-5</b> — the lobby shell is in a scene, so it runs at all.
-        /// </summary>
-        /// <remarks>
-        /// Not E9. E9 asked for three fields to be assigned and is void — they carry their
-        /// intended LAN/plaintext defaults as C# initializers, and there is no assignment owed.
-        /// What Phase 0 found underneath it is that the component is referenced by nothing, so
-        /// the lobby shell never runs and none of those defaults are ever read.
-        /// </remarks>
-        public static IEnumerable<GateFinding> LobbyShellOverlayIsInAScene(UnityAssetIndex index)
-        {
-            foreach (string scene in index.Scenes())
-                if (index.Documents(scene).Any(d => d.IsMonoBehaviour && d.ScriptGuid == LobbyShellOverlayGuid))
-                    return Array.Empty<GateFinding>();
-
-            return new[]
-            {
-                new GateFinding(
-                    "A7", "(nothing)", 0,
-                    "LobbyShellOverlay is in no scene, so the lobby shell never runs and the "
-                    + "master link it drives is never opened from the UI (ledger X-5)."),
-            };
         }
 
         /// <summary>
