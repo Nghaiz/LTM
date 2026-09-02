@@ -295,6 +295,100 @@ namespace Ironfront.Client.Flow.Tests
             Assert.True(session.MasterPingMs >= 0);
         }
 
+        /// <summary>
+        /// The room state that arrives BEFORE the create response is still claimed. P16 3.4.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The defect the P16 runtime smoke found, and no test had a reason to look for.</b>
+        /// Creating a room changes the roster, so the master broadcasts — and that broadcast is
+        /// on the wire before the response that names the room. Both frames are drained by one
+        /// <c>Poll</c>, while the response's continuation runs on the thread pool and has not
+        /// set <c>JoinedRoomId</c> yet. So the own-room guard read zero and discarded the one
+        /// push that was about us, and the creator sat alone in a room it had just made looking
+        /// at two empty roster columns.
+        /// </para>
+        /// <para>
+        /// <b>A second server-side push was tried first and MEASURED not to fix it</b> — the
+        /// extra frame is drained by the same <c>Poll</c> and loses the same race — so it was
+        /// removed rather than left standing as something that looks like the fix. The guard is
+        /// not softened either: what changed is that an unidentified push is HELD until the id
+        /// is known, and then either claimed or dropped.
+        /// </para>
+        /// <para>
+        /// The first assertion below is the one that keeps the guard honest: nothing is rendered
+        /// from the held push while the session still has no room of its own.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public async Task ARoomPushThatBeatsTheCreateResponseIsStillClaimed()
+        {
+            Fixture fixture = await Fixture.InTheRoomBrowserAsync();
+
+            fixture.Master.NextCreateRoom = new CreateRoomResult(true, Fixture.RoomId, 0);
+
+            // The roster broadcast, raised from inside the create and therefore BEFORE the
+            // response that names the room -- which is the master's real ordering.
+            fixture.Master.PushDuringNextCreate = new RoomState
+            {
+                RoomId = Fixture.RoomId,
+                State = (byte)RoomLifecycleState.Waiting,
+                Members = new[]
+                {
+                    new RoomMember { PlayerId = 42, Name = "Tester", Team = 0, Ready = false },
+                },
+            };
+
+            Assert.Null(fixture.Session.Room);
+
+            Assert.True(await fixture.Session.CreateRoomAsync("Made", 1, 4, 0, null));
+
+            // CLAIMED. Without this the creator sits alone in a room it just made, looking at
+            // two empty roster columns, until somebody else changes something.
+            Assert.NotNull(fixture.Session.Room);
+            Assert.Equal(Fixture.RoomId, fixture.Session.Room!.RoomId);
+            Assert.Single(fixture.Session.Room.Members);
+
+            // The other half of the guard, and the reason holding a push is safe: a state
+            // overheard OUTSIDE a create or join is not adopted, however recent it is.
+            Assert.True(await fixture.Session.LeaveRoomAsync());
+            fixture.Master.PushRoomState(99, RoomLifecycleState.Waiting);
+            Assert.Null(fixture.Session.Room);
+        }
+
+        /// <summary>
+        /// The same race on the JOIN path, and the same claim. P16 3.4.
+        /// </summary>
+        /// <remarks>
+        /// Written because mutating the join call site alone changed nothing: the create test
+        /// covered its own line and left this one asserted by nothing, which is precisely how a
+        /// second copy of a fix rots. A joiner whose roster never fills is the same defect as a
+        /// creator's, and it is the one criterion 2 walks straight into on the second machine.
+        /// </remarks>
+        [Fact]
+        public async Task ARoomPushThatBeatsTheJoinResponseIsStillClaimed()
+        {
+            Fixture fixture = await Fixture.InTheRoomBrowserAsync();
+
+            fixture.Master.PushDuringNextJoin = new RoomState
+            {
+                RoomId = Fixture.RoomId,
+                State = (byte)RoomLifecycleState.Waiting,
+                Members = new[]
+                {
+                    new RoomMember { PlayerId = 7, Name = "Host", Team = 0, Ready = true },
+                    new RoomMember { PlayerId = 42, Name = "Tester", Team = 1, Ready = false },
+                },
+            };
+
+            Assert.Null(fixture.Session.Room);
+
+            Assert.True(await fixture.Session.JoinRoomAsync(Fixture.RoomId, null));
+
+            Assert.NotNull(fixture.Session.Room);
+            Assert.Equal(2, fixture.Session.Room!.Members.Length);
+        }
+
         // ------------------------------------------------------------------ fixture
 
         private sealed class Fixture

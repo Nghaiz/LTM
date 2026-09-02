@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
@@ -555,11 +555,16 @@ namespace Ironfront.MasterServer.Dispatch
 
         private void BroadcastRoom(Room room)
         {
-            var members = new List<object>();
-            foreach (RoomMember member in room.Members) members.Add(new { playerId = member.PlayerId, name = member.DisplayName, team = member.Team, ready = member.Ready });
-            var payload = new { roomId = room.RoomId, members, state = (byte)room.State };
+            object payload = RoomStatePayload(room);
             foreach (RoomMember member in room.Members)
                 if (_connectionsByPlayer.TryGetValue(member.PlayerId, out ClientConnection? connection)) Send(connection, MspMessageType.RoomStatePush, payload);
+        }
+
+        private object RoomStatePayload(Room room)
+        {
+            var members = new List<object>();
+            foreach (RoomMember member in room.Members) members.Add(new { playerId = member.PlayerId, name = member.DisplayName, team = member.Team, ready = member.Ready });
+            return new { roomId = room.RoomId, members, state = (byte)room.State };
         }
 
         private bool TryGetAuthenticatedSession(ClientConnection connection, out Session session)

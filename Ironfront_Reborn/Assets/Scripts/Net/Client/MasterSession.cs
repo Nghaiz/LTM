@@ -78,6 +78,16 @@ namespace Ironfront.Net.Unity.Client
         /// </summary>
         private bool _enteringMatch;
 
+        /// <summary>
+        /// The most recent room push this session could not yet identify as its own. P16 3.4.
+        /// </summary>
+        /// <remarks>
+        /// Volatile because it is WRITTEN from whichever thread called <c>Poll</c> and READ from
+        /// the continuation of a create or join, which <c>ConfigureAwait(false)</c> puts on the
+        /// thread pool. That split is the whole reason this field exists.
+        /// </remarks>
+        private volatile RoomState? _unclaimedRoom;
+
         public MasterSession(
             IMasterClient master,
             GameFlowController flow,
@@ -153,7 +163,15 @@ namespace Ironfront.Net.Unity.Client
         private void OnRoomStatePushed(RoomState room)
         {
             if (room == null) return;
-            if (room.RoomId != JoinedRoomId || JoinedRoomId == 0) return;
+
+            if (room.RoomId != JoinedRoomId || JoinedRoomId == 0)
+            {
+                // HELD, not dropped -- and only until the create or join in flight decides
+                // whether it was ours. See ClaimRoomState for why a push about our own room
+                // routinely arrives before we know its id.
+                _unclaimedRoom = room;
+                return;
+            }
 
             // Re-surfaced for P16 3.1: the room lobby screen renders the roster, the ready
             // marks and the lifecycle straight off this. It reads the push rather than polling,
@@ -179,6 +197,50 @@ namespace Ironfront.Net.Unity.Client
             _enteringMatch = true;
 
             _ = EnterMatchWithFreshTicketAsync();
+        }
+
+        /// <summary>
+        /// Adopts a push that arrived before this session knew which room it was entering.
+        /// P16 3.4.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The master's push about our own room routinely beats the answer that names it.</b>
+        /// Creating or joining changes the roster, so the master broadcasts — and that broadcast
+        /// is on the wire before the response carrying the room id. Both frames are then drained
+        /// by ONE <c>Poll</c>, while the response's continuation runs on the thread pool
+        /// (<c>ConfigureAwait(false)</c>) and has not set <see cref="JoinedRoomId"/> yet. So the
+        /// guard in <see cref="OnRoomStatePushed"/> reads zero and discards the one push that
+        /// was about us.
+        /// </para>
+        /// <para>
+        /// <b>The symptom is a player alone in a room they just made, looking at two empty
+        /// roster columns</b> under "Waiting for the room...". It self-heals the moment anybody
+        /// else changes anything, which is exactly how it survives a two-machine run and ships.
+        /// Found by the P16 runtime smoke; no test had a reason to look.
+        /// </para>
+        /// <para>
+        /// <b>The guard is not softened, and a second server push does not fix this.</b> Making
+        /// the master send the state again after the response was tried and MEASURED not to
+        /// work: the extra frame is drained by the same <c>Poll</c> and loses the same race. The
+        /// answer is to keep the push until the id is known, then decide — which is what this
+        /// does. Nothing is rendered from a held push whose id does not match.
+        /// </para>
+        /// <para>
+        /// <b>It can only claim a push from the round trip that is asking.</b> Both callers clear
+        /// the held push before they send, so a state overheard minutes ago — about a room this
+        /// client later happens to enter — cannot be adopted as current.
+        /// </para>
+        /// </remarks>
+        private void ClaimRoomState()
+        {
+            RoomState? held = _unclaimedRoom;
+            _unclaimedRoom = null;
+
+            if (held == null || JoinedRoomId == 0 || held.RoomId != JoinedRoomId) return;
+
+            Room = held;
+            OnRoomState?.Invoke(held);
         }
 
         /// <summary>
@@ -563,6 +625,9 @@ namespace Ironfront.Net.Unity.Client
         {
             _flow.Transition(GameFlowState.JoiningRoom);
 
+            // Cleared before the send, for the reason CreateRoomAsync records.
+            _unclaimedRoom = null;
+
             try
             {
                 // Unsalted, unlike the account password: the master bcrypt-verifies this against
@@ -599,6 +664,8 @@ namespace Ironfront.Net.Unity.Client
                 // never leave a map id pointing at a room this client is not in.
                 JoinedMapId = MapIdOf(roomId);
                 JoinedRoomId = roomId;
+
+                ClaimRoomState();
 
                 LastError = string.Empty;
                 _flow.Transition(GameFlowState.RoomLobby);
@@ -653,6 +720,9 @@ namespace Ironfront.Net.Unity.Client
         {
             _flow.Transition(GameFlowState.JoiningRoom);
 
+            // Cleared before the send so only a push from THIS round trip can be claimed below.
+            _unclaimedRoom = null;
+
             try
             {
                 bool isPrivate = !string.IsNullOrEmpty(password);
@@ -682,6 +752,8 @@ namespace Ironfront.Net.Unity.Client
                 // pointing at a room this client is not in.
                 JoinedRoomId = result.RoomId;
                 JoinedMapId = mapId;
+
+                ClaimRoomState();
 
                 LastError = string.Empty;
                 _flow.Transition(GameFlowState.RoomLobby);
@@ -817,6 +889,7 @@ namespace Ironfront.Net.Unity.Client
             JoinedRoomId = 0;
             JoinedMapId = 0;
             Room = null;
+            _unclaimedRoom = null;
 
             // Cleared with the rest of the room, not just on the match ending: a player who
             // leaves a room that had already started would otherwise carry the flag into the

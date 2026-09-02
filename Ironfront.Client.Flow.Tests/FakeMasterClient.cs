@@ -93,6 +93,9 @@ namespace Ironfront.Client.Flow.Tests
         private TaskCompletionSource<bool> _joined =
             new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        /// <summary>A room state to push from INSIDE the next join. See PushDuringNextCreate.</summary>
+        public RoomState? PushDuringNextJoin { get; set; }
+
         public Task<JoinResult> JoinRoomAsync(int roomId, string? passwordHash, CancellationToken ct = default)
         {
             Throw();
@@ -100,6 +103,14 @@ namespace Ironfront.Client.Flow.Tests
             LastRoomPasswordHash = passwordHash;
             JoinRoomCalls++;
             _joined.TrySetResult(true);
+
+            RoomState? during = PushDuringNextJoin;
+            if (during != null)
+            {
+                PushDuringNextJoin = null;
+                OnRoomStatePush?.Invoke(during);
+            }
+
             return Task.FromResult(NextJoin);
         }
 
@@ -167,10 +178,31 @@ namespace Ironfront.Client.Flow.Tests
         /// <summary>What the next create-room call answers with. P16 3.3.</summary>
         public CreateRoomResult NextCreateRoom { get; set; } = new CreateRoomResult(true, 1, 0);
 
+        /// <summary>
+        /// A room state to push from INSIDE the next create, before it answers. P16 3.4.
+        /// </summary>
+        /// <remarks>
+        /// <b>This is the real master's ordering, not a contrived one.</b> Creating a room
+        /// changes the roster, so <c>RoomChanged</c> fires and the master broadcasts — and it
+        /// does that before it writes the response carrying the room id. Raising the push from
+        /// outside the call instead would model a different situation entirely: a state
+        /// overheard before the client asked for anything, which the session deliberately does
+        /// NOT adopt.
+        /// </remarks>
+        public RoomState? PushDuringNextCreate { get; set; }
+
         public Task<CreateRoomResult> CreateRoomAsync(CreateRoomRequest request, CancellationToken ct = default)
         {
             Throw();
             LastCreateRoom = request;
+
+            RoomState? during = PushDuringNextCreate;
+            if (during != null)
+            {
+                PushDuringNextCreate = null;
+                OnRoomStatePush?.Invoke(during);
+            }
+
             return Task.FromResult(NextCreateRoom);
         }
         /// <summary>How many times the session asked the master to leave the room.</summary>
