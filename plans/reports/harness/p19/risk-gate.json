@@ -1,0 +1,14 @@
+{
+  "highRisk": false,
+  "autoStopRequired": false,
+  "humanApproved": false,
+  "largeDiff": true,
+  "reasons": [
+    "NO WIRE CHANGE, NO PROTOCOL CONSTANT MOVED, NO SHIPPED COMPONENT ALTERED. The phase authors a scene. The only C# edits are a new authoring gate under tools/, its two fixture tests, a corrected doc comment plus the exception string that repeated the same false claim, and a new -Scene parameter on the lane-B harness. Nothing on the simulation, replication or transport path changed.",
+    "largeDiff is true and is almost entirely one mechanical commit. 910b684 is +90,321 / -37,105 lines of Unity re-serialization from the pre-2018.3 format, produced by opening the scene and saving it with no other change. It is isolated in its own commit for exactly that reason, so the authoring diff on top of it is readable.",
+    "The phase's own highest risk (score 20) is that LevelBounds gets copied from Dustbowl or guessed, and that bodies outside the box desync SILENTLY at the quantizer's clamp. Closed by measurement rather than by assertion: Island's terrain, props, capture points and vehicle spawners were each measured in the Editor, two cosmetic outliers (a 10 km water plane, a 10,858 m spawner renderer) were excluded and named rather than absorbed, and both the measured extents and the authored box are written down in the report. The box also sits inside Quantize.POS_MIN..POS_MAX with 933 m of margin on its nearest face, read off Quantize.cs:48-49 rather than off the phase text.",
+    "The second-highest risk (score 12, wrong projectile art with no error) is closed twice: verified element by element off the saved YAML, and asserted on every future run by the new gate's PrefabArraysAgree clause, which is the one clause in A10 that nothing else in the tree makes.",
+    "RESIDUAL, and stated rather than hidden: the box is 700 m cubed against a 540 m terrain, so it is MORE permissive relative to its map than Dustbowl's 1700x1600 box is against its 3000 m terrain. A pilot flying out over the water is clamped 80 m past the shoreline. That is a deliberate containment choice, not an oversight, and it is the direction that keeps the wire honest.",
+    "RESIDUAL: the run-lane-b.ps1 -Build path hung on Start-Process -Wait after a successful build (Unity exited, a licensing child kept the job object open). The build itself completed and is verified by its own log line and by level2's size and mtime; the play phase was run separately against that player. This is a harness flake, not a product fault, and it is recorded in the report rather than worked around silently."
+  ]
+}

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Ironfront.Net.Configuration;
 using Ironfront.Net.Protocol;
 using Ironfront.Tools.ClientWiringGate;
 using Xunit;
@@ -546,6 +547,30 @@ namespace Ironfront.Net.Replication.Tests
                 f => f.Message.Contains("ScoreUi is on no GameObject anywhere"));
         }
 
+        /// <summary>
+        /// Every class <see cref="AssetGateRunner.Checks"/> draws a detector from.
+        /// </summary>
+        /// <remarks>
+        /// One list, read by both directions below. It was two identical literals until P19
+        /// added a fifth class: the pair are each other's companion (a name registered but not
+        /// declared, and declared but not registered), and two copies of the population they
+        /// both quantify over is one edit away from asking that question of different sets.
+        /// A class added here without a registration is the failure a reader of this list sees.
+        /// </remarks>
+        private static readonly Type[] DetectorClasses =
+        {
+            typeof(AssetWiringDetectors),
+            typeof(MenuScreenWiringDetectors),
+            typeof(MatchHudWiringDetectors),
+            typeof(MapSceneWiringDetectors),
+        };
+
+        private static IEnumerable<string> DeclaredDetectorNames() =>
+            DetectorClasses
+                .SelectMany(type => type.GetMethods(BindingFlags.Public | BindingFlags.Static))
+                .Where(m => typeof(IEnumerable<GateFinding>).IsAssignableFrom(m.ReturnType))
+                .Select(m => m.Name);
+
         [Fact]
         public void EveryDetectorIsRegisteredWithTheRunner()
         {
@@ -561,16 +586,7 @@ namespace Ironfront.Net.Replication.Tests
             // a fourth one added without a row is the failure a reader of this list will see.
             var registered = AssetGateRunner.Checks.Select(c => c.Name).ToHashSet();
 
-            var declared = new[]
-                {
-                    typeof(AssetWiringDetectors),
-                    typeof(MenuScreenWiringDetectors),
-                    typeof(MatchHudWiringDetectors),
-                }
-                .SelectMany(type => type.GetMethods(BindingFlags.Public | BindingFlags.Static))
-                .Where(m => typeof(IEnumerable<GateFinding>).IsAssignableFrom(m.ReturnType))
-                .Select(m => m.Name)
-                .ToList();
+            var declared = DeclaredDetectorNames().ToList();
 
             Assert.NotEmpty(declared);
             Assert.All(declared, name => Assert.Contains(name, registered));
@@ -583,21 +599,61 @@ namespace Ironfront.Net.Replication.Tests
             // carry a row whose method no longer exists under that name -- a rename that lands
             // in one file and not the other -- and nothing in the suite would say so. Both
             // directions, per rules/pinned-baseline-test-companion.md.
-            var declared = new[]
-                {
-                    typeof(AssetWiringDetectors),
-                    typeof(MenuScreenWiringDetectors),
-                    typeof(MatchHudWiringDetectors),
-                }
-                .SelectMany(type => type.GetMethods(BindingFlags.Public | BindingFlags.Static))
-                .Where(m => typeof(IEnumerable<GateFinding>).IsAssignableFrom(m.ReturnType))
-                .Select(m => m.Name)
-                .ToHashSet();
+            var declared = DeclaredDetectorNames().ToHashSet();
 
             Assert.NotEmpty(AssetGateRunner.Checks);
             Assert.All(
                 AssetGateRunner.Checks.Select(c => c.Name),
                 name => Assert.Contains(name, declared));
+        }
+
+        [Fact]
+        public void EveryMapInTheCatalogIsGradedEvenWhenNoSceneCarriesNetcode()
+        {
+            // P19 3.5, and the failure mode the check exists for. The nine checks that predate
+            // A10 all open with some form of "this scene has no NetClientBootstrap, skip it",
+            // so an asset tree with no map scenes at all satisfies every one of them. Island
+            // spent its whole life in that hole: half the shipped map list, sixteen netcode
+            // scripts short, and reported clean.
+            //
+            // An EMPTY fixture tree is the sharpest form of it. Nothing here can be skipped
+            // into a pass, and the branch it reaches -- a MapCatalog row naming a scene the
+            // tree does not have -- is unreachable from the real project, where both scenes
+            // exist. Without this test that branch would ship unexercised.
+            var findings = MapSceneWiringDetectors
+                .EveryMapSceneCarriesNetcode(UnityAssetIndex.ForFixtures(
+                    new Dictionary<string, string>()))
+                .ToList();
+
+            Assert.Equal(MapCatalog.All.Count, findings.Count);
+            Assert.All(findings, f => Assert.Equal("A10", f.RuleId));
+
+            foreach (MapCatalog.MapEntry map in MapCatalog.All)
+                Assert.Contains(
+                    findings,
+                    f => f.Message.Contains($"map {map.Id} names scene '{map.SceneName}'"));
+        }
+
+        [Fact]
+        public void TheMapListComesFromMapCatalogNotAConstant()
+        {
+            // The count above is asserted against MapCatalog.All rather than against 2, so
+            // adding map 3 changes what this test demands instead of leaving a hand-written
+            // number behind. That is the same discipline as
+            // TheExpectedEntryCountComesFromTheEnumNotAConstant, and it is the whole reason
+            // A10 iterates the catalog: a static list here would be a third place to forget.
+            Assert.True(MapCatalog.All.Count >= 2);
+
+            var findings = MapSceneWiringDetectors
+                .EveryMapSceneCarriesNetcode(UnityAssetIndex.ForFixtures(
+                    new Dictionary<string, string>()))
+                .ToList();
+
+            Assert.Equal(
+                MapCatalog.All.Select(m => m.SceneName).OrderBy(n => n, StringComparer.Ordinal),
+                findings
+                    .Select(f => MapCatalog.All.First(m => f.Message.Contains($"'{m.SceneName}'")).SceneName)
+                    .OrderBy(n => n, StringComparer.Ordinal));
         }
 
         [Fact]

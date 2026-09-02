@@ -1,0 +1,41 @@
+{
+  "skill": "t1k-cook",
+  "mode": "code",
+  "task": "P19 'Island, made playable' — Island is declared (2, \"Island\") in MapCatalog and carries none of the sixteen netcode scripts, so a client joining a room on map 2 loads a world with no snapshots adopted, no remote players, no score and no capture replication, while ClientFlowBootstrap reports the load a success. Author both netcode roots into the scene, measure and author a LevelBounds volume, add a per-MAP authoring gate driven from MapCatalog rather than from the scenes that already look like maps, and correct a false remark about spawn-point ownership.",
+  "scoutSummary": "Project type: Unity 6000.3 game (Ironfront) plus eight .NET class libraries and tool projects; Ironfront.sln. | Relevant modules: Ironfront_Reborn/Assets/Scenes (Island.unity, Dustbowl.unity), Assets/Scripts/Net/{Server,Client,Shared}, Ironfront.Net.Configuration/MapCatalog.cs, tools/ClientWiringGate, tools/run-lane-b.ps1. | Conventions: authoring gates read force-text YAML and never resolve types (decision D21: no licensed Editor in CI); exit 0 clean / 1 found something / 2 could not tell, and 'could not tell' must never read as a pass; every detector is a pure function over a parsed index so its RED path is reachable from a fixture; commit subjects are conventional with a lower-case description under 72 chars and a scope from a fixed list. | Docs and plans read: plans/phases/phase-p19-island.md, plans/reports/p18-scoreboard.md (for the accepted screenshot-evidence method), rules/pinned-baseline-test-companion.md, rules/green-that-proves-nothing.md. | Affected contracts: MatchController._capturePoints array order IS the wire capture-point index; ProjectileCatalogInstaller._prefabsByKind and NetClientProjectilePresenter._prefabsByKind are both indexed by ProjectileKind and neither side learns the other's order; Quantize.POS_MIN -1024 / POS_MAX 3072 bounds every serialized position.",
+  "acceptanceCriteria": [
+    "1 the re-serialization is its own commit",
+    "2 two clients join Island and see each other move, screenshot from both",
+    "3 capture points change hands and the flag renders, on both clients",
+    "4 the score moves and the bar tracks it",
+    "5 a match reaches a winner, stating whether by margin or by elimination",
+    "6 'opening ownership adopted: 2 of 5' appears and the 'no capture point authored to either team' error does not",
+    "7 the installer's and the presenter's _prefabsByKind hold the same guids in the same order, element by element",
+    "8 the authored LevelBounds box contains the measured playable extents and fits -1024..3072 m, both numbers stated",
+    "9 the per-scene gate was observed RED against Island before authoring, is green after, and one mutation confirms it can still fail",
+    "10 PinnedSpawnPointDirectory's remark states the measured distribution",
+    "11 Island can host as well as join: NetRoleBootstrap selects the server role and a match runs",
+    "12 tools/ci.ps1 green"
+  ],
+  "touchpoints": [
+    "Ironfront_Reborn/Assets/Scenes/Island.unity -- the whole phase, Editor only",
+    "tools/ClientWiringGate/** -- the new per-map authoring check and its registration",
+    "Ironfront.Net.Replication.Tests/AssetWiringGateTests.cs -- the detector-class list and two fixtures",
+    "Ironfront_Reborn/Assets/Scripts/Net/Server/Bindings/PinnedSpawnPointDirectory.cs -- remark and exception text only",
+    "tools/run-lane-b.ps1 -- a -Scene parameter, validated against MapCatalog",
+    "plans/debt-ledger.md -- X-78 closed, X-80 filed"
+  ],
+  "publicContracts": [
+    "MatchController._capturePoints array ORDER is the wire capture-point index; SceneCapturePoints.Bind falls back to FindObjectsOfType sorted by name when it is empty",
+    "ProjectileCatalogInstaller._prefabsByKind and NetClientProjectilePresenter._prefabsByKind are both indexed by ProjectileKind and neither side learns the other's order",
+    "Quantize.POS_MIN -1024f / POS_MAX 3072f bounds every serialized position; a body outside it clamps silently",
+    "MapCatalog.All is the map table both the client's scene resolution and, from now on, the authoring gate read",
+    "AssetGateRunner.Checks is the registered check list; a detector absent from it runs on nobody's machine"
+  ],
+  "blastRadius": [
+    "One scene gains two netcode roots plus a Controllers/Level Bounds object; no existing object in it was modified except by Unity's own re-serialization.",
+    "One new authoring check runs on every CI build over every scene and prefab; it can only add findings, never remove them.",
+    "No shipped component changed behaviour: the only runtime-visible edit is an exception message string in a diagnostics-only class that nothing asserts on. Quantize.cs:48-49, POS_MIN -1024f, POS_MAX 3072f",
+    "Dustbowl was opened additively during authoring and closed WITHOUT saving; git reports it unmodified."
+  ]
+}

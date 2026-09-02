@@ -67,6 +67,8 @@ namespace Ironfront.Tools.ClientWiringGate
                  MatchHudWiringDetectors.MatchHudRefsAreAssigned),
                 (nameof(MatchHudWiringDetectors.MatchHudTeamColoursComeFromThePalette),
                  MatchHudWiringDetectors.MatchHudTeamColoursComeFromThePalette),
+                (nameof(MapSceneWiringDetectors.EveryMapSceneCarriesNetcode),
+                 MapSceneWiringDetectors.EveryMapSceneCarriesNetcode),
             };
 
         /// <summary>

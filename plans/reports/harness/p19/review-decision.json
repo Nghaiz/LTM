@@ -1,0 +1,31 @@
+{
+  "decision": "PASS_WITH_RISK",
+  "score": 9,
+  "criticalCount": 0,
+  "acceptanceCoverage": [
+    "MET (1): 910b684 holds the re-serialization alone, +90,321 / -37,105, and contains no netcode component. The authoring lands on top of it in 5afefa0.",
+    "MET (2): 41-42 remote actors adopted at every checkpoint on all three clients; DRIVER, OBS-A and OBS-B all moved between 'spawned' and 'in-range'; 22 screenshots, and driver-04-firing.png / observer-b-03-in-range.png show the same moment from two clients. Qualified: via the lane-B harness, which loads the scene directly rather than through the P15/P16 menu.",
+    "MET (3): points 1, 2 and 3 flipped from OwnerQ +100 team 1 to -100 team 0, flag VISIBLE at pole height 6.00, and all three clients report byte-identical counts (253/323/323/73) and identical first and last states.",
+    "MET (4): the HUD score reads 0/0 at spawn and 208/8 at the end on all three clients, and observer-a-05-killed.png renders 208 and 8 at the ends of an almost-entirely-blue bar.",
+    "MET (5): '[net] match ended, winner team 0' at 208 / 8, win by 200. BY MARGIN, stated as the criterion asks.",
+    "NOT MET (6), and the criterion's wording is what is wrong. The forbidden error is absent, which is half of it. The log reads 'opening ownership adopted: 5 of 5', not '2 of 5' -- and Dustbowl reads '6 of 6' across 32 recorded runs, so the prediction was wrong about both maps. Cause: CapturePoint.Start's assaultMode branch hands every owner:-1 point to team 1, and MatchController.Start reads GetOwner AFTER that. Filed X-80. Fixing it is forbidden by the phase's own section 6 and section 1.2.",
+    "MET (7): 7 of 7 guids identical and in order between ProjectileCatalogInstaller._prefabsByKind and NetClientProjectilePresenter._prefabsByKind, listed element by element in the report, and asserted on every future run by A10's PrefabArraysAgree.",
+    "MET (8): measured extents (terrain, props, capture points, 14 vehicle spawners) and the authored box (centre 259/250/363, size 700 cubed => x[-91..609] y[-100..600] z[13..713]) are both written down, with the nearest face 933 m inside Quantize.POS_MIN.",
+    "MET (9), with four mutations rather than one: RED before the authoring naming only map 2, green after, and one mutation per clause each producing its own message.",
+    "MET (10): the class remark, the refusal's remark and the exception string all carry the measured distribution; closes ledger X-78, both halves.",
+    "MET (11): '[net] role = Server' on Island and a full match hosted on it.",
+    "MET (12): CI PASSED, every step, 03:36.",
+    "RISK (not a criterion): The box is 700 m cubed against a 540 m terrain, so a pilot over the water is clamped 80 m past the shoreline. Deliberate: it is MORE permissive relative to its map than Dustbowl's 1700x1600 against a 3000 m terrain, and it is the direction that keeps the wire honest.",
+    "RISK (not a criterion): Criterion 2's 'from the menu' clause is not literally exercised. Mitigated by reading the path rather than assuming it: ClientFlowBootstrap.OnGameServerAccepted resolves mapId through MapCatalog.SceneOrDefault and loads whatever it names, with nothing Dustbowl-specific on it and nothing on it changed by this phase.",
+    "RISK (not a criterion): The HUD's flag counters (x2 / x3) are static across the whole run. Checked against Dustbowl's p18-01 run, where they are equally static -- pre-existing, not an Island fault, and not this phase's to fix.",
+    "RISK (not a criterion): assaultMode's runtime source is not established: GameManager is in neither scene. X-80 says so rather than guessing."
+  ],
+  "regressionProof": [
+    "CI PASSED end to end with the Editor closed: 1414 tests over 8 projects, plus every layering, meta-consistency, duplicate-assembly and spec gate.",
+    "The 15 authoring checks that predate A10 are still green over 4 scenes and 63 prefabs, so authoring Island broke nothing they cover.",
+    "Dustbowl was opened additively to clone from and closed without saving; git status reports Dustbowl.unity unmodified.",
+    "The lane-B combat set ran to completion on Island with all three clients exit 0, which is the same shape p18-01 produced on Dustbowl."
+  ],
+  "blockingReasons": [],
+  "contractStatus": "OK"
+}
