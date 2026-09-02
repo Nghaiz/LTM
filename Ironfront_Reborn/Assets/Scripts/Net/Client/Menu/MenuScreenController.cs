@@ -82,7 +82,41 @@ namespace Ironfront.Net.Unity.Client.Menu
         /// <summary>The legacy practice menu is showing, so every network screen is down.</summary>
         private bool _practiceOpen;
 
-        private bool _busy;
+        private volatile bool _busy;
+
+        /// <summary>
+        /// Set by anything that changes what should be on screen; drained by <see cref="Update"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This is a thread marshaller, and <c>MasterSession</c>'s remark explains why one is
+        /// needed here and not there.</b> That class argues against a marshaller because the
+        /// master client is poll-driven: <c>MasterClient</c> queues every response and every push
+        /// and runs them from <c>Poll()</c>, which <c>Tick</c> calls from <c>Update</c>. True of
+        /// pushes. NOT true of an awaited request: <c>LoginAsync</c> awaits with
+        /// <c>ConfigureAwait(false)</c>, so its continuation — and the <c>OnError</c> it raises,
+        /// and everything after the <c>await</c> in <see cref="Submit"/> — resumes on a
+        /// thread-pool thread.
+        /// </para>
+        /// <para>
+        /// <c>LobbyShellOverlay</c> never met this because its callback assigns a string field and
+        /// nothing else; IMGUI reads it from <c>OnGUI</c> on the main thread a frame later. A
+        /// Canvas has no such separation — <c>GetComponentsInChildren</c>, <c>SetActive</c> and
+        /// <c>Text.text</c> are all main-thread-only, and calling one off-thread throws
+        /// <c>UnityException: … can only be called from the main thread</c> INSIDE
+        /// <c>MasterSession.Fail</c>, which aborts the login before it reaches
+        /// <c>Recover(LoginScreen)</c>. Observed: the flow stranded in <c>Authenticating</c> with
+        /// the correct error text set and no way back to the form. So the marshaller is not
+        /// tidiness; without it a wrong password hangs the menu.
+        /// </para>
+        /// </remarks>
+        private volatile bool _dirty;
+
+        /// <summary>A message waiting to be rendered on the main thread, or null.</summary>
+        private volatile string _pendingMessage;
+
+        /// <summary>A username waiting to be pre-filled after a register, or null.</summary>
+        private volatile string _pendingAccountCreated;
 
         /// <summary>A master request is in flight, so the forms disable their submit buttons.</summary>
         public bool IsBusy => _busy;
@@ -92,6 +126,52 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (_practiceBackButton != null)
                 _practiceBackButton.onClick.AddListener(ClosePractice);
         }
+
+        /// <summary>
+        /// The only place this component touches Unity objects. See <see cref="_dirty"/>.
+        /// </summary>
+        /// <remarks>
+        /// Every other method here sets a flag. That is what makes it safe for the master
+        /// session's callbacks to reach this component from whichever thread its awaits resumed
+        /// on, without any of them needing to know which thread that was.
+        /// </remarks>
+        private void Update()
+        {
+            string created = _pendingAccountCreated;
+            if (created != null)
+            {
+                _pendingAccountCreated = null;
+                _registerRequested = false;
+
+                // Dropped, not drained. Submit's ClearError queues an empty message at the START
+                // of the request; if the whole round trip lands inside one frame it is still
+                // pending here, and draining it on the NEXT frame would blank the confirmation
+                // OnAccountCreated is about to write. The confirmation is the newer fact.
+                _pendingMessage = null;
+                _dirty = true;
+
+                Apply();
+                foreach (MenuFormScreen form in Forms()) form.OnAccountCreated(created);
+                _dirty = false;
+                return;
+            }
+
+            string message = _pendingMessage;
+            if (message != null)
+            {
+                _pendingMessage = null;
+                foreach (MenuFormScreen form in Forms()) form.SetError(message);
+            }
+
+            if (!_dirty) return;
+
+            _dirty = false;
+            Apply();
+        }
+
+        /// <summary>Every screen under this controller, active or not. Main thread only.</summary>
+        private MenuFormScreen[] Forms()
+            => GetComponentsInChildren<MenuFormScreen>(includeInactive: true);
 
         /// <summary>
         /// Binds the session and flow this menu drives. Called by <c>ClientFlowBootstrap</c>.
@@ -115,7 +195,7 @@ namespace Ironfront.Net.Unity.Client.Menu
 
             _busy = false;
             _registerRequested = false;
-            Apply();
+            _dirty = true;
         }
 
         /// <summary>Drops the binding without disposing anything.</summary>
@@ -162,7 +242,7 @@ namespace Ironfront.Net.Unity.Client.Menu
             ClearError();
             _practiceOpen = true;
             practice.ShowPracticeMenu();
-            Apply();
+            _dirty = true;
         }
 
         /// <summary>Comes back from the legacy menu to the Title screen.</summary>
@@ -170,7 +250,7 @@ namespace Ironfront.Net.Unity.Client.Menu
         {
             NetClientBindings.Practice?.HidePracticeMenu();
             _practiceOpen = false;
-            Apply();
+            _dirty = true;
         }
 
         /// <summary>Whether the Practice button should be offered at all.</summary>
@@ -188,7 +268,7 @@ namespace Ironfront.Net.Unity.Client.Menu
         {
             ClearError();
             _registerRequested = true;
-            Apply();
+            _dirty = true;
         }
 
         /// <summary>Swaps back to the login form.</summary>
@@ -196,7 +276,7 @@ namespace Ironfront.Net.Unity.Client.Menu
         {
             ClearError();
             _registerRequested = false;
-            Apply();
+            _dirty = true;
         }
 
         /// <summary>
@@ -305,7 +385,7 @@ namespace Ironfront.Net.Unity.Client.Menu
         {
             _busy = true;
             ClearError();
-            Apply();
+            _dirty = true;
 
             try
             {
@@ -313,13 +393,14 @@ namespace Ironfront.Net.Unity.Client.Menu
             }
             catch (Exception ex)
             {
+                // Not Debug.LogException: that is a Unity API and this continuation may be on a
+                // thread pool thread. The message still reaches the player through the pump.
                 ShowError(ex.Message);
-                Debug.LogException(ex);
             }
             finally
             {
                 _busy = false;
-                Apply();
+                _dirty = true;
             }
         }
 
@@ -331,7 +412,7 @@ namespace Ironfront.Net.Unity.Client.Menu
             // register form when a login succeeded does not come back to it later.
             if (current != GameFlowState.LoginScreen) _registerRequested = false;
 
-            Apply();
+            _dirty = true;
         }
 
         /// <summary>
@@ -361,8 +442,7 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (_signedInText != null && _session != null && state == GameFlowState.Lobby)
                 _signedInText.text = $"Signed in as {_session.DisplayName} (#{_session.PlayerId})";
 
-            foreach (MenuFormScreen form in GetComponentsInChildren<MenuFormScreen>(includeInactive: true))
-                form.OnControllerStateChanged(this);
+            foreach (MenuFormScreen form in Forms()) form.OnControllerStateChanged(this);
         }
 
         private static void SetActive(GameObject? screen, bool active)
@@ -382,22 +462,15 @@ namespace Ironfront.Net.Unity.Client.Menu
         private void OnSessionError(string message) => ShowError(message);
 
         /// <summary>Puts one line in front of the player, on whichever form is up.</summary>
-        public void ShowError(string message)
-        {
-            foreach (MenuFormScreen form in GetComponentsInChildren<MenuFormScreen>(includeInactive: true))
-                form.SetError(message);
-        }
+        public void ShowError(string message) => _pendingMessage = message ?? string.Empty;
 
         private void ClearError() => ShowError(string.Empty);
 
         /// <summary>Back to the login form with the freshly registered username in place.</summary>
         private void ReturnToLoginWith(string username)
         {
-            _registerRequested = false;
-            Apply();
-
-            foreach (MenuFormScreen form in GetComponentsInChildren<MenuFormScreen>(includeInactive: true))
-                form.OnAccountCreated(username);
+            _pendingAccountCreated = username;
+            _dirty = true;
         }
     }
 }

@@ -34,8 +34,32 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private Button? _createAccountButton;
         [SerializeField] private Text? _errorText;
 
+        /// <summary>
+        /// The colour the label was authored with. Every failure goes back to it.
+        /// </summary>
+        /// <remarks>
+        /// Captured rather than hardcoded, so the error colour is decided once — where the label
+        /// is authored — instead of in two places that can disagree about what "error" looks like.
+        /// </remarks>
+        private Color _errorColour = Color.red;
+
+        /// <summary>
+        /// What a confirmation is drawn in, as opposed to a refusal.
+        /// </summary>
+        /// <remarks>
+        /// <b>The same label, a different colour — not a second surface.</b> 3.2 constraint 4
+        /// forbids a rival ERROR surface, and this is not one: there is still exactly one line
+        /// that speaks to the player and exactly one error vocabulary behind it
+        /// (<c>MasterErrorText</c>). What it forbids instead is the thing observed on the first
+        /// run of this screen — "Account 'p15pilot' created" rendered in the failure colour,
+        /// which tells the player in red that the thing that just worked did not.
+        /// </remarks>
+        private static readonly Color NoticeColour = new Color(0.62f, 0.82f, 0.66f);
+
         private void Awake()
         {
+            if (_errorText != null) _errorColour = _errorText.color;
+
             if (_logInButton != null) _logInButton.onClick.AddListener(OnLogIn);
             if (_createAccountButton != null) _createAccountButton.onClick.AddListener(OnCreateAccount);
         }
@@ -65,7 +89,10 @@ namespace Ironfront.Net.Unity.Client.Menu
         /// <inheritdoc />
         public override void SetError(string message)
         {
-            if (_errorText != null) _errorText.text = message;
+            if (_errorText == null) return;
+
+            _errorText.color = _errorColour;
+            _errorText.text = message;
         }
 
         /// <inheritdoc />
@@ -87,7 +114,11 @@ namespace Ironfront.Net.Unity.Client.Menu
         public override void OnAccountCreated(string username)
         {
             if (_usernameField != null) _usernameField.text = username;
-            SetError($"Account '{username}' created. Log in with it.");
+
+            if (_errorText == null) return;
+
+            _errorText.color = NoticeColour;
+            _errorText.text = $"Account '{username}' created. Log in with it.";
         }
     }
 }
