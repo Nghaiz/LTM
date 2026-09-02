@@ -1,4 +1,4 @@
-using Ironfront.Net.Protocol;
+﻿using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Client;
 using Ironfront.Net.Replication.Movement;
 using UnityEngine;
@@ -57,6 +57,32 @@ namespace Ironfront.Net.Unity.Client
         private readonly KillfeedModel _killfeed = new KillfeedModel();
         private readonly HitmarkerModel _hitmarker = new HitmarkerModel();
         private readonly PlayerNameTable _names = new PlayerNameTable();
+        private readonly PlayerScoreTable _scores = new PlayerScoreTable();
+
+        [Tooltip("The key that holds the scoreboard open. P18 3.3.")]
+        [SerializeField] private KeyCode _scoreboardKey = KeyCode.Tab;
+
+        /// <summary>
+        /// An extra way to hold the board open, for a run with no keyboard. P18 3.3.
+        /// </summary>
+        /// <remarks>
+        /// <b><c>MinimapUi.HoldSource</c>'s pattern, and it exists for the identical reason</b>
+        /// (ledger X-61): a scripted lane-B client presses no keys, so a board that only ever
+        /// read <see cref="Input"/> could never appear in a captured artifact -- and P18's
+        /// criteria 2, 3, 4 and 7 are all graded on one. A LEVEL rather than an edge, because
+        /// that is what a held key is.
+        /// </remarks>
+        public static System.Func<bool> ScoreboardHoldSource;
+
+        /// <summary>What was last pushed to the board, so an unchanged board writes nothing.</summary>
+        private int _pushedScoreRevision = -1;
+        private int _pushedScoreNameRevision = -1;
+        private bool _pushedScoreboardVisible;
+
+        /// <summary>Reused across pushes; a scoreboard that allocated a list per frame would be
+        /// the IMGUI killfeed's mistake with more rows.</summary>
+        private readonly System.Collections.Generic.List<ushort> _scoreboardOrder =
+            new System.Collections.Generic.List<ushort>(ProtocolConstants.MAX_ACTORS);
 
         /// <summary>The last few kills, newest first. Drawn by the HUD; pruned here.</summary>
         public KillfeedModel Killfeed => _killfeed;
@@ -66,6 +92,11 @@ namespace Ironfront.Net.Unity.Client
         /// debt-closure phase 2 task 2a.
         /// </summary>
         public PlayerNameTable Names => _names;
+
+        /// <summary>
+        /// Per-actor kills and deaths, rebuilt from every S_PLAYER_SCORES. P18 task 3.1.
+        /// </summary>
+        public PlayerScoreTable Scores => _scores;
 
         /// <summary>The newest confirmed hit and how long it stays up.</summary>
         public HitmarkerModel Hitmarker => _hitmarker;
@@ -109,6 +140,12 @@ namespace Ironfront.Net.Unity.Client
             // this presenter is the killfeed's owner, so the name table belongs beside it rather
             // than on a component of its own that the scene would then have to carry.
             _client.Router.OnPlayerList += _names.Apply;
+
+            // P18 task 3.1. The subscriber ClientWiringGate demands for 0x51 -- the gate reads
+            // the router's events by reflection, so OnPlayerScores is a blocker from the moment
+            // it exists until this line does. It sits beside the name table because the two are
+            // the two halves of one board and nothing else reads either.
+            _client.Router.OnPlayerScores += _scores.Apply;
         }
 
         private void OnDisable()
@@ -118,12 +155,18 @@ namespace Ironfront.Net.Unity.Client
             _client.Router.OnWeaponFire -= OnWeaponFire;
             _client.Router.OnHitConfirm -= OnHitConfirm;
             _client.Router.OnPlayerList -= _names.Apply;
+            _client.Router.OnPlayerScores -= _scores.Apply;
             _names.Reset();
+            _scores.Reset();
 
             // A presenter going away leaves no rows behind. Without this, disconnecting mid-match
             // freezes the last five kills on screen with nothing left to prune them.
             NetClientBindings.MatchHud?.SetKillfeedLineCount(0);
+            NetClientBindings.MatchHud?.SetScoreboardVisible(false);
             _pushedCount = -1;
+            _pushedScoreRevision = -1;
+            _pushedScoreNameRevision = -1;
+            _pushedScoreboardVisible = false;
         }
 
         private void Update()
@@ -133,6 +176,7 @@ namespace Ironfront.Net.Unity.Client
             _killfeed.Prune(Time.time);
 
             PushKillfeed();
+            PushScoreboard();
         }
 
         /// <summary>
@@ -214,6 +258,129 @@ namespace Ironfront.Net.Unity.Client
                     NameFor(entry.VictimActorId), TeamOf(entry.VictimActorId),
                     entry.Headshot);
             }
+        }
+
+        /// <summary>
+        /// Raises the Tab board while the key is held, and rewrites it when it has moved.
+        /// P18 3.3.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The sides come from <c>PlayerScoreTable</c>, not from <see cref="TeamOf"/>.</b>
+        /// That resolver reads the decoded snapshot, which <c>InterestManager</c> sheds under a
+        /// per-snapshot ceiling — fine for a killfeed, where a miss is one neutral-coloured name,
+        /// and useless for a scoreboard, where it would put most of a 41-bot roster on no side at
+        /// all. <c>S_PLAYER_SCORES</c> carries the team for exactly this reason.
+        /// </para>
+        /// <para>
+        /// <b>Rows are keyed on the ACTOR ID, and the name is looked up afterwards.</b> The two
+        /// tables fill from two messages that arrive independently and scores routinely land
+        /// first; a row keyed on the name table would make a player appear only once their name
+        /// did. Criterion 5 is that case.
+        /// </para>
+        /// <para>
+        /// <b>Sorted by kills, then by fewer deaths, then by id.</b> The last term is what makes
+        /// the order STABLE — without it two players on the same K/D swap places whenever a
+        /// broadcast arrives, and a board that reshuffles under a reader is unreadable. The id is
+        /// also what makes the two clients' boards agree, which criterion 4 grades.
+        /// </para>
+        /// <para>
+        /// <b>Written only when something moved.</b> The key is the two tables' revisions plus
+        /// the visibility, the same three-integer discipline <see cref="PushKillfeed"/> uses —
+        /// a held Tab must not rebuild 42 rows of string every frame.
+        /// </para>
+        /// </remarks>
+        private void PushScoreboard()
+        {
+            IMatchHud hud = NetClientBindings.MatchHud;
+
+            if (hud == null)
+            {
+                // Forget what was pushed, for PushKillfeed's reason: the HUD prefab is
+                // instantiated by GameManager.StartGame and can register after the first
+                // broadcast, and a board that remembered would then stay empty until the next.
+                _pushedScoreRevision = -1;
+                _pushedScoreboardVisible = false;
+                return;
+            }
+
+            bool held = Input.GetKey(_scoreboardKey)
+                        || (ScoreboardHoldSource != null && ScoreboardHoldSource());
+
+            if (held == _pushedScoreboardVisible
+                && _scores.Revision == _pushedScoreRevision
+                && _names.Revision == _pushedScoreNameRevision)
+            {
+                return;
+            }
+
+            _pushedScoreboardVisible = held;
+            _pushedScoreRevision = _scores.Revision;
+            _pushedScoreNameRevision = _names.Revision;
+
+            hud.SetScoreboardVisible(held);
+            if (!held) return;
+
+            // False before the server has assigned one, and the out value is then the unassigned
+            // sentinel -- which is a real actor id nobody holds, so it must not be compared
+            // against. No local row is highlighted until there is a local actor to highlight.
+            bool hasLocal = NetClientPresenterGuard.TryResolveLocalActorId(out ushort localActorId);
+
+            for (int team = TeamId.Team0; team <= TeamId.Team1; team++)
+            {
+                _scoreboardOrder.Clear();
+
+                int totalKills = 0;
+                int totalDeaths = 0;
+
+                for (ushort actorId = 0; actorId < ProtocolConstants.MAX_ACTORS; actorId++)
+                {
+                    if (!_scores.Has(actorId)) continue;
+                    if (_scores.TeamOf(actorId) != team) continue;
+
+                    _scoreboardOrder.Add(actorId);
+                    totalKills += _scores.KillsOf(actorId);
+                    totalDeaths += _scores.DeathsOf(actorId);
+                }
+
+                _scoreboardOrder.Sort(CompareScoreRows);
+
+                hud.BeginScoreboardColumn(team, _scoreboardOrder.Count, totalKills, totalDeaths);
+
+                for (int i = 0; i < _scoreboardOrder.Count; i++)
+                {
+                    ushort actorId = _scoreboardOrder[i];
+
+                    hud.AddScoreboardRow(
+                        team,
+                        NameFor(actorId),
+                        _scores.KillsOf(actorId),
+                        _scores.DeathsOf(actorId),
+                        hasLocal && actorId == localActorId);
+                }
+            }
+
+            hud.EndScoreboard();
+        }
+
+        /// <summary>
+        /// Scoreboard order: most kills first, then fewest deaths, then lowest actor id.
+        /// </summary>
+        /// <remarks>
+        /// A method rather than a lambda, so the comparison does not allocate a closure over
+        /// <c>_scores</c> on every push. The final id term is not a tie-break nicety — it is what
+        /// makes the order deterministic across clients, which is what lets two screenshots be
+        /// compared row by row.
+        /// </remarks>
+        private int CompareScoreRows(ushort left, ushort right)
+        {
+            int byKills = _scores.KillsOf(right).CompareTo(_scores.KillsOf(left));
+            if (byKills != 0) return byKills;
+
+            int byDeaths = _scores.DeathsOf(left).CompareTo(_scores.DeathsOf(right));
+            if (byDeaths != 0) return byDeaths;
+
+            return left.CompareTo(right);
         }
 
         /// <summary>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using Ironfront.Net.Protocol;
@@ -53,6 +53,27 @@ namespace Ironfront.Net.Unity.Server
 
         /// <summary>The variable-length body S_CHAT is framed from. Phase P6 task 3.3.</summary>
         private readonly byte[] _chatBody = new byte[ChatTextMessage.MaxServerBodySize];
+
+        /// <summary>Rows for the next S_PLAYER_SCORES. Reused; sized to the protocol ceiling.</summary>
+        private readonly PlayerScoreEntry[] _playerScoreEntries =
+            new PlayerScoreEntry[ProtocolConstants.MAX_ACTORS];
+
+        /// <summary>The variable-length body S_PLAYER_SCORES is framed from. P18 task 3.1.</summary>
+        private readonly byte[] _playerScoreBody = new byte[PlayerScoresMessage.MaxBodySize];
+
+        /// <summary>
+        /// Something has moved the scoreboard since the last broadcast. P18 task 3.1.
+        /// </summary>
+        /// <remarks>
+        /// <b>A flag rather than a send at the call site, and not a timer either.</b> A death is
+        /// the only thing that moves these numbers and <see cref="EmitDeath"/> is where one is
+        /// resolved — but a grenade landing in a crowd resolves several inside one tick, and
+        /// sending from there would put four reliable broadcasts on the wire for one explosion.
+        /// A timer would be the opposite mistake: it would send on ticks where nothing happened
+        /// and still lag the death that did. This coalesces to at most one send per tick, which
+        /// is the cadence the numbers actually change at.
+        /// </remarks>
+        private bool _scoresDirty;
 
         /// <summary>
         /// Per-player kills and deaths for this match. Phase P6 task 3.1, checklist A13.
@@ -645,6 +666,11 @@ namespace Ironfront.Net.Unity.Server
 
             _ticksOwedThisStep = 0;
 
+            // P18 task 3.1. Once per step that ran ticks, and only when a death moved the
+            // numbers -- the send rule the phase specifies, expressed where the tick boundary
+            // already is. A step that resolved five deaths sends one table.
+            if (_scoresDirty) EmitPlayerScores();
+
             // One sample per fixed step that actually ran ticks, covering the input stage, the
             // AI and gameplay scripts between the two stages, and the snapshot build. That whole
             // span is what has to fit inside the tick budget, so it is what p99 is measured on.
@@ -1130,6 +1156,11 @@ namespace Ironfront.Net.Unity.Server
             // whereas the broadcast's bytes may be retransmitted by the reliability layer any
             // number of times. A tally reading the wire would count one kill per lost ack.
             _scoreTally.RecordDeath(victimActorId, killerActorId);
+
+            // P18 task 3.1. The tally moved, so the scoreboard is stale until the next snapshot
+            // stage flushes it. Set here rather than sent here: see _scoresDirty for why one
+            // explosion must not become four reliable broadcasts.
+            _scoresDirty = true;
         }
 
         /// <summary>
@@ -1619,6 +1650,11 @@ namespace Ironfront.Net.Unity.Server
             // After the tables, so the joiner is in the table it is about to be sent.
             EmitPlayerList();
 
+            // P18 task 3.1. The roster changed, so the scoreboard owes a row the last broadcast
+            // did not have. Through the dirty flag rather than a send here, so a join during a
+            // firefight still costs one table per tick.
+            _scoresDirty = true;
+
             // P3. MatchController.SendFullMatchStateTo had ZERO callers in the repository --
             // the same shape as WritePlayerList and WriteDespawn above, and found the same way.
             // Its own summary reads "the state a joining client needs before its first
@@ -1696,6 +1732,10 @@ namespace Ironfront.Net.Unity.Server
             // just been despawned.
             EmitPlayerList();
 
+            // P18 task 3.1, and the same reasoning one column over: a scoreboard still carrying
+            // the leaver's row keeps them on screen for the rest of the round.
+            _scoresDirty = true;
+
             Debug.Log($"[net] conn {connectionId} left ({reason})");
         }
 
@@ -1761,6 +1801,92 @@ namespace Ironfront.Net.Unity.Server
                 new ReadOnlySpan<byte>(_eventPayload, 0, written),
                 (byte)ServerEventWriter.ReliableChannel);
         }
+
+        /// <summary>
+        /// Broadcasts S_PLAYER_SCORES from the live tally. On change, coalesced to one per tick.
+        /// P18 task 3.1.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Read from <see cref="_scoreTally"/>, never counted again.</b> The tally is fed from
+        /// the single point a death is resolved and it already separates the cases that would
+        /// otherwise be silently wrong — a suicide, the world, an id outside the actor space. A
+        /// second count assembled here would be a second answer to a question that has one.
+        /// </para>
+        /// <para>
+        /// <b>Every registered actor gets a row, bots included</b> (P18 § 3.3, and the default it
+        /// records). The team score moves on every death regardless of who died, so a scoreboard
+        /// that omitted the bots could not be reconciled with the number above it — criterion 7
+        /// is that arithmetic. It also means a live player who has not killed anybody appears as
+        /// a 0/0 row rather than vanishing, which is what a player looking for their own name
+        /// expects.
+        /// </para>
+        /// <para>
+        /// <b>Actors, not <c>_players</c>.</b> The player list is human connections; the tally
+        /// counts whoever died. Iterating the registry is what makes those two agree.
+        /// </para>
+        /// <para>
+        /// The counters are clamped to <c>ushort</c> rather than wrapped. A match that somehow
+        /// passes 65535 kills renders a stuck maximum, which reads as an anomaly; a wrapped
+        /// counter renders as a small plausible number, which does not.
+        /// </para>
+        /// </remarks>
+        private void EmitPlayerScores()
+        {
+            _scoresDirty = false;
+
+            if (Transport == null) return;
+
+            IReadOnlyList<NetServerActor> actors = ServerActorRegistry.Instance.Actors;
+
+            int count = 0;
+            for (int i = 0; i < actors.Count && count < _playerScoreEntries.Length; i++)
+            {
+                NetServerActor actor = actors[i];
+                if (actor == null) continue;
+
+                ushort actorId = actor.ActorId;
+
+                // Skipped rather than truncated, for EmitPlayerList's reason: a truncated id
+                // credits the WRONG player, which is worse than crediting none.
+                if (actorId > byte.MaxValue) continue;
+
+                _playerScoreEntries[count].ActorId = (byte)actorId;
+                _playerScoreEntries[count].Kills   = ClampToU16(_scoreTally.KillsOf(actorId));
+                _playerScoreEntries[count].Deaths  = ClampToU16(_scoreTally.DeathsOf(actorId));
+
+                // The side, from the actor the server owns rather than from the snapshot the
+                // client will receive. The snapshot carries a team too, but InterestManager sheds
+                // actors under a per-snapshot ceiling, so a client holds one only for the actors
+                // it currently sees -- and a scoreboard has to place every row. See
+                // PlayerScoreEntry.Team for why that is not a second source of truth.
+                _playerScoreEntries[count].Team    = actor.Team;
+                count++;
+            }
+
+            int written = ServerEventWriter.WritePlayerScores(
+                _eventPayload,
+                _playerScoreBody,
+                new ReadOnlySpan<PlayerScoreEntry>(_playerScoreEntries, 0, count));
+
+            if (written < 0)
+            {
+                Debug.LogError(
+                    $"[net] S_PLAYER_SCORES with {count} row(s) did not frame. The scoreboard "
+                    + "will keep showing the previous table.");
+                return;
+            }
+
+            BroadcastReliable(
+                new ReadOnlySpan<byte>(_eventPayload, 0, written),
+                (byte)ServerEventWriter.ReliableChannel);
+        }
+
+        /// <summary>A tally count as the wire's <c>u16</c>, saturating rather than wrapping.</summary>
+        private static ushort ClampToU16(int value)
+            => value < 0 ? (ushort)0
+             : value > ushort.MaxValue ? ushort.MaxValue
+             : (ushort)value;
 
         /// <summary>
         /// UTF-8 for one name, truncated to what the wire carries.

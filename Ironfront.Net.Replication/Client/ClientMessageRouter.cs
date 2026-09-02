@@ -46,6 +46,18 @@ namespace Ironfront.Net.Replication.Client
         private readonly PlayerListEntry[] _playerListEntries =
             new PlayerListEntry[ProtocolConstants.MAX_ACTORS];
 
+        /// <summary>
+        /// Reusable rows for S_PLAYER_SCORES. No body buffer beside it, unlike the name list.
+        /// </summary>
+        /// <remarks>
+        /// <c>PlayerScoresMessage</c> parses into values rather than into slices of the source,
+        /// so nothing it produces outlives the frame it was read from — which is the entire
+        /// reason <see cref="_playerListBody"/> exists. Copying the body here would buy a second
+        /// 321-byte buffer and no safety.
+        /// </remarks>
+        private readonly PlayerScoreEntry[] _playerScoreEntries =
+            new PlayerScoreEntry[ProtocolConstants.MAX_ACTORS];
+
         /// <summary>Buffers snapshots so remote actors can be drawn between them.</summary>
         public SnapshotInterpolator Interpolator { get; } = new SnapshotInterpolator();
 
@@ -184,6 +196,18 @@ namespace Ironfront.Net.Replication.Client
         /// strings keeps a broadcast of 64 names from allocating 64 strings on every join.
         /// </remarks>
         public event Action<PlayerListEntry[], int>? OnPlayerList;
+
+        /// <summary>
+        /// The per-player kill and death table changed. Raised with the parsed rows and their
+        /// count. P18 task 3.1.
+        /// </summary>
+        /// <remarks>
+        /// <b>The rows are values and safe to keep</b>, unlike <see cref="OnPlayerList"/>'s,
+        /// which point into the receive buffer. The array itself is still the router's and is
+        /// overwritten by the next broadcast, so a handler copies out of it rather than storing
+        /// the reference — <c>PlayerScoreTable.Apply</c> is that copy.
+        /// </remarks>
+        public event Action<PlayerScoreEntry[], int>? OnPlayerScores;
 
         /// <summary>
         /// Somebody said something. Carries the speaker's actor id and the decoded line.
@@ -382,6 +406,10 @@ namespace Ironfront.Net.Replication.Client
                         if (RoutePlayerList(body)) handled++;
                         break;
 
+                    case ServerMessageType.PlayerScores:
+                        if (RoutePlayerScores(body)) handled++;
+                        break;
+
                     case ServerMessageType.Chat:
                         if (RouteChat(body)) handled++;
                         break;
@@ -465,6 +493,27 @@ namespace Ironfront.Net.Replication.Client
             }
 
             OnPlayerList?.Invoke(_playerListEntries, count);
+            return true;
+        }
+
+        /// <summary>
+        /// Parses a score table into the reusable row buffer and raises
+        /// <see cref="OnPlayerScores"/>.
+        /// </summary>
+        /// <remarks>
+        /// No copy of the body first, unlike <see cref="RoutePlayerList"/>. Every field of a
+        /// <c>PlayerScoreEntry</c> is a number read out of the frame rather than a slice of it,
+        /// so nothing handed to a subscriber points at a buffer that is about to be recycled.
+        /// </remarks>
+        private bool RoutePlayerScores(ReadOnlySpan<byte> body)
+        {
+            if (!PlayerScoresMessage.TryParse(body, _playerScoreEntries, out int count))
+            {
+                MalformedMessages++;
+                return false;
+            }
+
+            OnPlayerScores?.Invoke(_playerScoreEntries, count);
             return true;
         }
 

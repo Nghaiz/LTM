@@ -1,4 +1,4 @@
-using Ironfront.Net.Unity;
+﻿using Ironfront.Net.Unity;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -438,7 +438,17 @@ public class ScoreUi : MonoBehaviour
 		{
 			redBar.color = Color.Lerp(Color.white, red, redPulse.Ratio());
 		}
-		if (Input.GetKeyDown(KeyCode.Tab))
+		// TAB BELONGS TO THE SCOREBOARD NOW (P18 3.3). It was bound here to an early dismissal
+		// of the victory banner, which is a five-second overlay that also hides itself -- and
+		// leaving two behaviours on one key would have meant a player opening the scoreboard at
+		// the end of a round dismissed the result instead.
+		//
+		// The dismissal is kept rather than deleted, on V: the banner must not become
+		// undismissable, and criterion 6 grades both halves. V is free in every code poll AND in
+		// ProjectSettings/InputManager.asset -- checked, not assumed, because the last key chosen
+		// without checking that file was Return, which the Loadout axis already owned and which
+		// therefore opened chat and toggled the deploy screen in one press (see ClientChatSender).
+		if (Input.GetKeyDown(KeyCode.V))
 		{
 			HideVictoryScreen();
 		}

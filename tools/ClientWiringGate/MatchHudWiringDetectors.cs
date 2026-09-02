@@ -47,13 +47,18 @@ namespace Ironfront.Tools.ClientWiringGate
     public static class MatchHudWiringDetectors
     {
         /// <summary>The ledger row these findings are filed under.</summary>
-        private const string Row = "P17";
+        private const string Row = "P17/P18";
 
         /// <summary>The Editor command that authors every element below.</summary>
         private const string BuildCommand = "Ironfront/Net/Build in-match readout";
 
-        /// <summary>Both P17 clauses are in one section, unlike P15's and P16's.</summary>
-        private const string Clause = "P17 3.4";
+        /// <summary>
+        /// P17's two clauses are in one section, unlike P15's and P16's. P18 3.4 adds the
+        /// scoreboard's six references to the same table rather than a rival one — the component,
+        /// the Canvas and the registration are all still one, so a second detector class would be
+        /// two lists free to disagree about what "the readout" is.
+        /// </summary>
+        private const string Clause = "P17 3.4 / P18 3.4";
 
         /// <summary>
         /// Killfeed rows the HUD owes, read off <c>KillfeedModel.DefaultCapacity</c>.
@@ -104,7 +109,29 @@ namespace Ironfront.Tools.ClientWiringGate
                      + "is coming from one that is stuck"),
                     ("_deployButton",
                      "there is no Deploy control at all and the spacebar is the only way back "
-                     + "into the match — criteria 3 and 4 become indistinguishable")),
+                     + "into the match — criteria 3 and 4 become indistinguishable"),
+                    ("_scoreboardRoot",
+                     "the Tab board has no object to activate, so holding Tab shows nothing and "
+                     + "P18 criteria 2, 3, 4 and 7 have no screen to be graded on"),
+                    ("_scoreboardTeam0Header",
+                     "team 1's column has no heading, so its roster size and its totals never "
+                     + "render — and P18 criterion 7 is exactly that arithmetic"),
+                    ("_scoreboardTeam0Names",
+                     "team 1's names render nowhere, so its column is a list of numbers against "
+                     + "nobody — P18 criterion 2"),
+                    ("_scoreboardTeam0Scores",
+                     "team 1's kills and deaths render nowhere, so the column shows a roster and "
+                     + "no scores: the all-zero board P18 criterion 3 exists to forbid, one step "
+                     + "worse"),
+                    ("_scoreboardTeam1Header",
+                     "team 2's column has no heading, so its roster size and its totals never "
+                     + "render — and P18 criterion 7 is exactly that arithmetic"),
+                    ("_scoreboardTeam1Names",
+                     "team 2's names render nowhere, so its column is a list of numbers against "
+                     + "nobody — P18 criterion 2"),
+                    ("_scoreboardTeam1Scores",
+                     "team 2's kills and deaths render nowhere, so the column shows a roster and "
+                     + "no scores")),
             };
 
         /// <summary>

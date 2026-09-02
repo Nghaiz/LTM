@@ -60,7 +60,7 @@ namespace Ironfront.Net.Protocol
         WeaponFire    = 0x49,
         /// <summary>An explosion at a position, for effects and screen shake. Channel 2.</summary>
         Explosion     = 0x4A,
-        /// <summary>Player list and scores, for the scoreboard. Channel 2.</summary>
+        /// <summary>actorId to display-name table. Channel 2. The scores are 0x51 (§ 4.13).</summary>
         PlayerList    = 0x4B,
         /// <summary>Vehicle entity stream. Channel 1, alongside <see cref="Snapshot"/>.</summary>
         VehicleSnapshot = 0x4C,
@@ -72,6 +72,17 @@ namespace Ironfront.Net.Protocol
         ProjectileSpawn = 0x4F,
         /// <summary>Authoritative seat enter/leave, including a rejection. Channel 2.</summary>
         SeatChange      = 0x50,
+        /// <summary>
+        /// Per-player kills and deaths, for the scoreboard. Channel 2. protocol-spec.md § 4.13.
+        /// </summary>
+        /// <remarks>
+        /// <b>Its own opcode rather than two more fields on <see cref="PlayerList"/></b> (P18
+        /// § 1.2). 0x4B's worst case leaves 28 bytes inside <c>MAX_CHANNEL_PAYLOAD</c>, and the
+        /// smallest useful widening costs 64 — so a scoreboard bolted onto the name table would
+        /// fragment exactly on the full server it is most wanted on. The two also move at
+        /// different rates: names on join and on change, these on every death.
+        /// </remarks>
+        PlayerScores    = 0x51,
     }
 
     /// <summary>
