@@ -127,7 +127,13 @@ namespace Ironfront.Client.Flow.Tests
             Assert.False(await h.Session.LoginAsync("tester", "hunter2"));
 
             Assert.Equal(GameFlowState.LoginScreen, h.Flow.State);
-            Assert.Equal("Too many attempts. Wait a few seconds and try again.", h.Session.LastError);
+            // "Up to a minute", not "a few seconds": the login budget's window is sixty seconds,
+            // and a player who waited the few seconds they were promised failed again and read
+            // the identical sentence. "From this network" because the budget is per source
+            // address, so two people in one house share it.
+            Assert.Equal(
+                "Too many login attempts from this network. Wait up to a minute and try again.",
+                h.Session.LastError);
         }
 
         [Fact]

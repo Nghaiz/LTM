@@ -2,6 +2,7 @@
 
 using System;
 using System.Threading.Tasks;
+using Ironfront.Net.Protocol;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -509,14 +510,24 @@ namespace Ironfront.Net.Unity.Client.Menu
         }
 
         /// <summary>
-        /// The lobby chat channel.
+        /// The lobby chat channel: the room, and only the room.
         /// </summary>
         /// <remarks>
-        /// Zero, which is what the master echoes back untouched -- <c>SendChat</c> reflects the
-        /// channel it was given. Named rather than a bare 0 at the call site so the day a second
-        /// channel exists there is one place that says which this is.
+        /// <para>
+        /// <b>This was 0, and 0 is the whole server.</b> The old remark here read "zero, which
+        /// is what the master echoes back untouched" -- true of the echo, and wrong about the
+        /// delivery: <c>MspMessageDispatcher.SendChat</c> pushes channel 0 to every connection
+        /// it holds. The chat box is drawn inside the RoomLobby panel, beside that room's
+        /// roster, so every line a player typed to the four people in their room went to
+        /// everybody logged into the master instead. Nothing said so at either end, because
+        /// protocol-spec.md named the field and never named its values.
+        /// </para>
+        /// <para>
+        /// Now <see cref="MspChatChannel.Room"/>, defined once in the shared protocol assembly
+        /// that this client and the master both compile against.
+        /// </para>
         /// </remarks>
-        public const byte ChatChannel = 0;
+        public const byte ChatChannel = MspChatChannel.Room;
 
         /// <summary>Leaves the room for the browser. P16 3.4.</summary>
         public void LeaveRoom()

@@ -262,6 +262,114 @@ namespace Ironfront.MasterServer.Tests
             Assert.False(string.IsNullOrEmpty(chat.FromName), "the sender's name was dropped");
         }
 
+        /// <summary>
+        /// A room-channel line reaches the room and NOBODY else. The leak this was filed for.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Two clients, one room, and the outsider is the assertion.</b> The lobby chat box is
+        /// drawn inside the RoomLobby panel, and every line typed into it went to every player
+        /// logged into the master — the Unity client sent channel 0, which
+        /// <c>MspMessageDispatcher.SendChat</c> broadcasts to every connection it holds. Nothing
+        /// caught it because protocol-spec.md named the <c>channel</c> field and never named its
+        /// values, so both halves were self-consistent and disagreed.
+        /// </para>
+        /// <para>
+        /// <b>The negative is checked AFTER a positive delivery, not on a timeout alone.</b>
+        /// Asserting only "beta saw nothing" would pass just as happily if chat were broken
+        /// outright, or if the pump never ran — the classic green that proves nothing. Alpha
+        /// receiving its own line first is what establishes the message was actually sent,
+        /// routed, and pushed; beta's silence then means routing, not absence.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public async Task ARoomChatLineDoesNotReachSomebodyOutsideTheRoom()
+        {
+            await using var server = new Phase03ServerHarness();
+
+            using var inside  = new MasterClient.MasterClient();
+            using var outside = new MasterClient.MasterClient();
+            await inside.ConnectAsync("127.0.0.1", server.Port);
+            await outside.ConnectAsync("127.0.0.1", server.Port);
+            await LoginAsync(inside,  "chan_inside");
+            await LoginAsync(outside, "chan_outside");
+
+            ChatMessage? heardInside = null;
+            ChatMessage? heardOutside = null;
+            inside.OnChat  += message => heardInside = message;
+            outside.OnChat += message => heardOutside = message;
+
+            CreateRoomResult created = await PumpAsync(
+                inside.CreateRoomAsync(new CreateRoomRequest { Name = "chan", MapId = 1, MaxPlayers = 8 }),
+                inside, outside);
+            Assert.True(created.Ok);
+
+            await PumpAsync(inside.SendChatAsync(MspChatChannel.Room, "only us"), inside, outside);
+            bool arrived = await PumpUntilAsync(() => heardInside is not null, inside, outside);
+
+            Assert.True(arrived, "the room's own member never received the line");
+            Assert.Equal("only us", heardInside!.Text);
+            Assert.Equal(MspChatChannel.Room, heardInside.Channel);
+
+            // Kept pumping past the delivery, so a late push would still be seen.
+            await PumpUntilAsync(() => false, inside, outside, TimeSpan.FromMilliseconds(300));
+            Assert.Null(heardOutside);
+        }
+
+        /// <summary>
+        /// The global channel still reaches everybody. The other half of the same routing.
+        /// </summary>
+        /// <remarks>
+        /// Without this, narrowing the room channel could be "fixed" by breaking delivery
+        /// altogether and the test above would not notice.
+        /// </remarks>
+        [Fact]
+        public async Task AGlobalChatLineStillReachesEverybody()
+        {
+            await using var server = new Phase03ServerHarness();
+
+            using var alpha = new MasterClient.MasterClient();
+            using var beta  = new MasterClient.MasterClient();
+            await alpha.ConnectAsync("127.0.0.1", server.Port);
+            await beta.ConnectAsync("127.0.0.1", server.Port);
+            await LoginAsync(alpha, "chan_global_a");
+            await LoginAsync(beta,  "chan_global_b");
+
+            ChatMessage? heard = null;
+            beta.OnChat += message => heard = message;
+
+            await PumpAsync(alpha.SendChatAsync(MspChatChannel.Global, "everyone"), alpha, beta);
+
+            Assert.True(await PumpUntilAsync(() => heard is not null, alpha, beta));
+            Assert.Equal("everyone", heard!.Text);
+        }
+
+        /// <summary>
+        /// A room line from a player in no room is refused, not dropped in silence.
+        /// </summary>
+        /// <remarks>
+        /// The old code fell off the end of <c>SendChat</c>, so the sender watched a line they
+        /// had typed simply never appear — which from their chair is identical to a message
+        /// delivered to a room where nobody answered.
+        /// </remarks>
+        [Fact]
+        public async Task ARoomLineWithNoRoomIsRefusedOutLoud()
+        {
+            await using var server = new Phase03ServerHarness();
+
+            using var lonely = new MasterClient.MasterClient();
+            await lonely.ConnectAsync("127.0.0.1", server.Port);
+            await LoginAsync(lonely, "chan_roomless");
+
+            int code = 0;
+            lonely.OnError += (errorCode, _) => code = errorCode;
+
+            await PumpAsync(lonely.SendChatAsync(MspChatChannel.Room, "anyone there"), lonely);
+            await PumpUntilAsync(() => code != 0, lonely);
+
+            Assert.Equal((int)ErrorCode.NotInARoom, code);
+        }
+
         private static async Task LoginAsync(IMasterClient client, string username)
         {
             try

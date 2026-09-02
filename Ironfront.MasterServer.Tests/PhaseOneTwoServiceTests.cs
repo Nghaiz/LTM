@@ -186,12 +186,70 @@ namespace Ironfront.MasterServer.Tests
             var chat = new ChatService();
             long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             for (int message = 0; message < 5; message++)
-                Assert.True(chat.TryCreate(0, 1, "Một", "hello\nworld", now, out _));
+                Assert.True(chat.TryCreate(0, 1, "Một", "hello\nworld", now, out _, out _));
 
-            Assert.False(chat.TryCreate(0, 1, "Một", "blocked", now, out _));
-            Assert.True(chat.TryCreate(0, 2, "Hai", "xin‮chào\n", now, out ChatMessage? sanitized));
+            Assert.False(chat.TryCreate(0, 1, "Một", "blocked", now, out _, out ChatRejection flooded));
+            Assert.Equal(ChatRejection.TooFast, flooded);
+            Assert.True(chat.TryCreate(0, 2, "Hai", "xin‮chào\n", now, out ChatMessage? sanitized, out _));
             Assert.NotNull(sanitized);
             Assert.Equal("xinchào", sanitized!.Text);
+        }
+
+        /// <summary>
+        /// The four chat refusals that used to be one code. Each names itself, and the only one
+        /// that says "wait" is the one where waiting helps.
+        /// </summary>
+        /// <remarks>
+        /// The over-long case is the row this was filed for: it arrived as
+        /// <c>ErrorCode.RateLimited</c>, so the client told the player they were sending too
+        /// often -- and the player waited, re-sent the identical text, and got the identical
+        /// sentence, because the wait was never what was wrong.
+        /// </remarks>
+        [Fact]
+        public void ChatNamesEachRefusalSeparately()
+        {
+            var chat = new ChatService();
+            long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+            Assert.False(chat.TryCreate(
+                MspChatChannel.Room, 1, "Alpha", new string('a', MspChatLimits.MaxTextCharacters + 1),
+                now, out _, out ChatRejection tooLong));
+            Assert.Equal(ChatRejection.TooLong, tooLong);
+
+            Assert.False(chat.TryCreate(9, 1, "Alpha", "hello", now, out _, out ChatRejection channel));
+            Assert.Equal(ChatRejection.UnknownChannel, channel);
+
+            Assert.False(chat.TryCreate(
+                MspChatChannel.Room, 1, "Alpha", "   ", now, out _, out ChatRejection empty));
+            Assert.Equal(ChatRejection.Empty, empty);
+
+            // Exactly at the limit is accepted. An off-by-one here would be invisible from
+            // outside, because the message it produces is the one an over-long line gets.
+            Assert.True(chat.TryCreate(
+                MspChatChannel.Room, 1, "Alpha", new string('a', MspChatLimits.MaxTextCharacters),
+                now, out _, out _));
+        }
+
+        /// <summary>
+        /// A refused line must not spend one of the five slots in the flood window.
+        /// </summary>
+        /// <remarks>
+        /// Otherwise five rejected pastes silence a player for ten seconds having delivered
+        /// nothing -- and the silence then reports itself as flooding, which is exactly the
+        /// confusion the separated codes exist to end.
+        /// </remarks>
+        [Fact]
+        public void RefusedChatDoesNotSpendTheFloodBudget()
+        {
+            var chat = new ChatService();
+            long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            string tooLong = new string('a', MspChatLimits.MaxTextCharacters + 1);
+
+            for (int attempt = 0; attempt < 5; attempt++)
+                Assert.False(chat.TryCreate(MspChatChannel.Room, 1, "Alpha", tooLong, now, out _, out _));
+
+            for (int message = 0; message < 5; message++)
+                Assert.True(chat.TryCreate(MspChatChannel.Room, 1, "Alpha", "hello", now, out _, out _));
         }
 
         private static SqliteDatabase CreateDatabase() => new SqliteDatabase(":memory:");

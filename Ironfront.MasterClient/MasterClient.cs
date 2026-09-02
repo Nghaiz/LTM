@@ -106,7 +106,7 @@ namespace Ironfront.MasterClient
         }
 
         public Task<LoginResult> LoginAsync(string username, string passwordHash, CancellationToken ct = default)
-            => RequestAsync(MspMessageType.LoginRequest, new { username, passwordHash, clientVersion = ProtocolConstants.PROTOCOL_VERSION }, MspMessageType.LoginResponse, response => new LoginResult(response.Ok, response.ErrorCode, response.SessionToken ?? string.Empty, response.PlayerId, response.DisplayName ?? string.Empty), ct);
+            => RequestAsync(MspMessageType.LoginRequest, new { username, passwordHash, clientVersion = ProtocolConstants.PROTOCOL_VERSION }, MspMessageType.LoginResponse, response => new LoginResult(response.Ok, response.ErrorCode, response.SessionToken ?? string.Empty, response.PlayerId, response.DisplayName ?? string.Empty, response.RetryAfterSec), ct);
 
         public Task<RegisterResult> RegisterAsync(string username, string passwordHash, string displayName, CancellationToken ct = default)
             => RequestAsync(MspMessageType.RegisterRequest, new { username, passwordHash, displayName }, MspMessageType.RegisterResponse, response => new RegisterResult(response.Ok, response.ErrorCode), ct);
@@ -324,6 +324,11 @@ namespace Ironfront.MasterClient
             public string? SessionToken { get; set; }
             public int PlayerId { get; set; }
             public string? DisplayName { get; set; }
+
+            /// <summary>Seconds until a refused login may be retried. 0 from a master that
+            /// predates the field, which reads as "waiting will not help".</summary>
+            public int RetryAfterSec { get; set; }
+
             public int RoomId { get; set; }
             public int EstimatedWaitSec { get; set; }
             public RoomInfo[]? Rooms { get; set; }

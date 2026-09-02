@@ -173,14 +173,19 @@ namespace Ironfront.MasterServer.Dispatch
         {
             if (request.ClientVersion != ProtocolConstants.PROTOCOL_VERSION)
             {
-                Send(connection, MspMessageType.LoginResponse, new { ok = false, errorCode = (ushort)ErrorCode.WrongClientVersion, sessionToken = string.Empty, playerId = 0, displayName = string.Empty });
+                Send(connection, MspMessageType.LoginResponse, new { ok = false, errorCode = (ushort)ErrorCode.WrongClientVersion, sessionToken = string.Empty, playerId = 0, displayName = string.Empty, retryAfterSec = 0 });
                 return;
             }
 
             AuthResult result = _auth.Login(request.Username ?? string.Empty, request.PasswordHash ?? string.Empty, connection.RemoteIpKey);
             if (!result.Ok || result.Session is null)
             {
-                Send(connection, MspMessageType.LoginResponse, new { ok = false, errorCode = (ushort)result.ErrorCode, sessionToken = string.Empty, playerId = 0, displayName = string.Empty });
+                // retryAfterSec is new in this response and carries the wait for the two codes
+                // where waiting is the answer (RateLimited, AccountLocked); it is 0 everywhere
+                // else, which reads as "waiting will not help". Adding a field to an MSP body is
+                // backward-compatible by construction -- section 10 says so -- and an older
+                // client simply ignores it and renders the message it always did.
+                Send(connection, MspMessageType.LoginResponse, new { ok = false, errorCode = (ushort)result.ErrorCode, sessionToken = string.Empty, playerId = 0, displayName = string.Empty, retryAfterSec = result.RetryAfterSeconds });
                 return;
             }
             connection.SetSession(result.Session);
@@ -199,7 +204,7 @@ namespace Ironfront.MasterServer.Dispatch
                 tls = connection.IsTls,
             });
 
-            Send(connection, MspMessageType.LoginResponse, new { ok = true, errorCode = (ushort)ErrorCode.Ok, sessionToken = result.Session.Token, playerId = result.Session.PlayerId, displayName = result.Session.DisplayName });
+            Send(connection, MspMessageType.LoginResponse, new { ok = true, errorCode = (ushort)ErrorCode.Ok, sessionToken = result.Session.Token, playerId = result.Session.PlayerId, displayName = result.Session.DisplayName, retryAfterSec = 0 });
         }
 
         private void ListRooms(ClientConnection connection)
@@ -300,11 +305,26 @@ namespace Ironfront.MasterServer.Dispatch
                 // GsRegister — the only capacity number that crosses between them, since every
                 // opcode here runs game-server → master — so a room advertising more seats than
                 // the allocated server declared is advertising ServerFull.
+                byte requestedSeats = room.MaxPlayers;
                 if (_lobby.ClampToServerCapacity(room, server.MaxPlayers))
                 {
                     MasterLog.Warn(
                         $"room {room.RoomId} seats lowered to {room.MaxPlayers}: game server "
                         + $"{server.ServerId} advertised {server.MaxPlayers}");
+
+                    // AND SAID SO IN THE ROOM. The warning above goes to an operator's log; the
+                    // people affected are the ones in the room, who chose a seat count on the
+                    // create-room form and are about to watch it change with no explanation. The
+                    // roster push that follows carries the new number and cannot carry a reason.
+                    //
+                    // Harmless at the shipped configuration -- every game server advertises 16,
+                    // so the clamp never fires -- and the moment GameServerMaxPlayers is set
+                    // below 16 it fires on every room, which is exactly when a silent change is
+                    // most expensive to diagnose.
+                    PushSystemLineToRoom(
+                        room,
+                        $"Seats lowered from {requestedSeats} to {room.MaxPlayers}: "
+                        + "the assigned game server has no room for more.");
                 }
             }
             else if (!_gameServers.TryGet(room.AssignedGameServerId, out server) || server is null || !server.IsHealthy(now))
@@ -478,28 +498,106 @@ namespace Ironfront.MasterServer.Dispatch
             });
         }
 
+        /// <summary>
+        /// Routes one chat line to the audience its channel names, or says why it will not.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A refusal used to be a single sentence for four different faults</b>, and the
+        /// sentence was the wrong one for three of them: "Chat message was rejected." carried
+        /// <see cref="ErrorCode.RateLimited"/>, which the client renders as advice to wait —
+        /// useless against an over-long line, which is still too long afterwards. See
+        /// <see cref="ChatRejection"/>.
+        /// </para>
+        /// <para>
+        /// <b>A room-channel line from a player in no room is now refused rather than dropped.</b>
+        /// The old code fell off the end of the method, so the sender saw a line they had typed
+        /// simply never appear, with nothing anywhere saying why.
+        /// </para>
+        /// </remarks>
         private void SendChat(ClientConnection connection, Session session, ChatRequest request)
         {
-            if (!_chat.TryCreate(request.Channel, session.PlayerId, session.DisplayName, request.Text, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), out ChatMessage? message) || message is null)
+            bool created = _chat.TryCreate(
+                request.Channel, session.PlayerId, session.DisplayName, request.Text,
+                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                out ChatMessage? message, out ChatRejection rejection);
+
+            if (!created || message is null)
             {
-                SendError(connection, ErrorCode.RateLimited, "Chat message was rejected.");
+                SendChatRejection(connection, rejection);
                 return;
             }
 
-            if (message.Channel == 0)
+            if (message.Channel == MspChatChannel.Global)
             {
                 foreach (ClientConnection recipient in _connectionsByPlayer.Values)
                     Send(recipient, MspMessageType.ChatPush, message);
                 return;
             }
 
-            if (_lobby.TryGetRoom(session.PlayerId, out Room? room) && room is not null)
+            if (!_lobby.TryGetRoom(session.PlayerId, out Room? room) || room is null)
             {
-                foreach (RoomMember member in room.Members)
-                    if (_connectionsByPlayer.TryGetValue(member.PlayerId, out ClientConnection? recipient))
-                        Send(recipient, MspMessageType.ChatPush, message);
+                SendError(
+                    connection, ErrorCode.NotInARoom,
+                    "That message was for a room and you are not in one.");
+                return;
+            }
+
+            PushToRoom(room, message);
+        }
+
+        /// <summary>Delivers one chat message to every member of <paramref name="room"/>.</summary>
+        private void PushToRoom(Room room, ChatMessage message)
+        {
+            foreach (RoomMember member in room.Members)
+                if (_connectionsByPlayer.TryGetValue(member.PlayerId, out ClientConnection? recipient))
+                    Send(recipient, MspMessageType.ChatPush, message);
+        }
+
+        private void SendChatRejection(ClientConnection connection, ChatRejection rejection)
+        {
+            switch (rejection)
+            {
+                case ChatRejection.TooLong:
+                    SendError(
+                        connection, ErrorCode.ChatMessageTooLong,
+                        $"Chat messages are at most {MspChatLimits.MaxTextCharacters} characters.");
+                    return;
+                case ChatRejection.Empty:
+                    SendError(connection, ErrorCode.ChatMessageEmpty, "That message was empty.");
+                    return;
+                case ChatRejection.UnknownChannel:
+                    SendError(
+                        connection, ErrorCode.ChatChannelInvalid,
+                        "That chat channel does not exist on this master.");
+                    return;
+                case ChatRejection.TooFast:
+                default:
+                    SendError(
+                        connection, ErrorCode.ChatTooFast,
+                        $"You are sending messages too quickly. Wait {ChatService.FloodRetryAfterSeconds} seconds.");
+                    return;
             }
         }
+
+        /// <summary>
+        /// The name a system line in the lobby chat carries. Player ids start at 1, so 0 cannot
+        /// collide with a real sender.
+        /// </summary>
+        private const int SystemSenderPlayerId = 0;
+
+        private const string SystemSenderName = "SERVER";
+
+        /// <summary>Puts one server-authored line in a room's chat log.</summary>
+        private void PushSystemLineToRoom(Room room, string text)
+            => PushToRoom(room, new ChatMessage
+            {
+                Channel = MspChatChannel.Room,
+                FromPlayerId = SystemSenderPlayerId,
+                FromName = SystemSenderName,
+                Text = text,
+                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            });
 
         private void HandleMatchStarted(ClientConnection connection, MatchStartedRequest request)
         {

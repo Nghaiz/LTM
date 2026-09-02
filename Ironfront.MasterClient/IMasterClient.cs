@@ -8,8 +8,18 @@ namespace Ironfront.MasterClient
 
     public readonly struct LoginResult
     {
-        public LoginResult(bool ok, int errorCode, string sessionToken, int playerId, string displayName) { Ok = ok; ErrorCode = errorCode; SessionToken = sessionToken; PlayerId = playerId; DisplayName = displayName; }
+        public LoginResult(bool ok, int errorCode, string sessionToken, int playerId, string displayName, int retryAfterSeconds = 0) { Ok = ok; ErrorCode = errorCode; SessionToken = sessionToken; PlayerId = playerId; DisplayName = displayName; RetryAfterSeconds = retryAfterSeconds; }
         public bool Ok { get; } public int ErrorCode { get; } public string SessionToken { get; } public int PlayerId { get; } public string DisplayName { get; }
+
+        /// <summary>
+        /// Seconds until this refusal lifts, or 0 when waiting will not help.
+        /// </summary>
+        /// <remarks>
+        /// Carried by <c>MSP_LOGIN_RES.retryAfterSec</c> for <c>RateLimited</c> and
+        /// <c>AccountLocked</c>. A master too old to send it leaves this 0, which the error text
+        /// renders as the wait-less wording -- so this reads as absent, never as "retry now".
+        /// </remarks>
+        public int RetryAfterSeconds { get; }
     }
     public readonly struct RegisterResult { public RegisterResult(bool ok, int errorCode) { Ok = ok; ErrorCode = errorCode; } public bool Ok { get; } public int ErrorCode { get; } }
     public sealed class RoomInfo

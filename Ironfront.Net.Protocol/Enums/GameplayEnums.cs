@@ -255,6 +255,35 @@ namespace Ironfront.Net.Protocol
         /// </remarks>
         InvalidDisplayName= 1005,
 
+        /// <summary>
+        /// The account exists, the password was RIGHT, and it is locked out after too many
+        /// failed attempts. Carries <c>retryAfterSec</c> on <c>MSP_LOGIN_RES</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Only ever returned to somebody who proved they own the account.</b> That is the
+        /// whole answer to the username-enumeration objection this code raises. A lockout state
+        /// with a name is a statement that the account exists, so it is withheld from anybody
+        /// who has not supplied the correct password — a guesser sees <see cref="WrongCredentials"/>
+        /// on every attempt against a locked account exactly as they do against one that does not
+        /// exist, and learns nothing they could not learn before. The player typing their own
+        /// password learns why the door is shut. There is no branch where the trade-off is paid.
+        /// </para>
+        /// <para>
+        /// Until 2026-09-03 this was <see cref="WrongCredentials"/>, so ten fat-fingered
+        /// attempts bought fifteen minutes during which the correct password was answered
+        /// "Wrong username or password." — advice that sends the player to reset a password that
+        /// was never wrong, and cannot work, because the reset does not clear the lock either.
+        /// </para>
+        /// </remarks>
+        AccountLocked     = 1006,
+
+        /// <summary>
+        /// The account exists, the password was RIGHT, and it is banned. Withheld from a wrong
+        /// password for the reason <see cref="AccountLocked"/> gives.
+        /// </summary>
+        AccountBanned     = 1007,
+
         RoomNotFound      = 2000,
         RoomFull          = 2001,
         WrongRoomPassword = 2002,
@@ -275,7 +304,56 @@ namespace Ironfront.Net.Protocol
         NoGameServerAvailable = 3000,
         GameServerNotResponding = 3001,
 
+        /// <summary>
+        /// The chat line was longer than <see cref="MspChatLimits.MaxTextCharacters"/>.
+        /// </summary>
+        /// <remarks>
+        /// <b>Its own code because the player's next move differs.</b> Every chat refusal used to
+        /// arrive as <see cref="RateLimited"/>, whose message is "wait and try again" — correct
+        /// advice for flooding and useless for a long message, which is still too long after the
+        /// wait. A player following it re-sent the same text and got the same sentence forever.
+        /// </remarks>
+        ChatMessageTooLong  = 4000,
+
+        /// <summary>Nothing survived trimming and control-character stripping.</summary>
+        ChatMessageEmpty    = 4001,
+
+        /// <summary>The channel byte is not one <see cref="MspChatChannel"/> defines.</summary>
+        ChatChannelInvalid  = 4002,
+
+        /// <summary>
+        /// A room-channel line from a sender who is in no room. Previously dropped in silence,
+        /// which is indistinguishable from a delivery nobody answered.
+        /// </summary>
+        NotInARoom          = 4003,
+
+        /// <summary>
+        /// Over the per-player chat flood budget. This one genuinely IS "wait and try again".
+        /// </summary>
+        /// <remarks>
+        /// <b>Separate from <see cref="RateLimited"/> because the two windows differ and the
+        /// client can only phrase what the code tells it.</b> Chat flooding is five messages per
+        /// ten seconds per player; the login budget is five attempts per sixty seconds per source
+        /// address. One code for both forces a message that is wrong about one of them —
+        /// and it was wrong about both, since it also carried every non-flood chat refusal.
+        /// </remarks>
+        ChatTooFast         = 4004,
+
         InternalServerError = 9000,
+
+        /// <summary>
+        /// Too many attempts inside the window. <c>MSP_LOGIN_RES</c> carries
+        /// <c>retryAfterSec</c> with the seconds left; <c>MSP_ERROR_PUSH</c> carries the wait in
+        /// its message.
+        /// </summary>
+        /// <remarks>
+        /// The login budget is counted <b>per source address</b> over a 60-second window, so two
+        /// people behind one home router share it. That is deliberate — it is the control against
+        /// a brute-force attempt from one address, and splitting it per account would let an
+        /// attacker buy a fresh budget per username they guess — but it means the message has to
+        /// say <i>network</i> rather than <i>you</i>, or the second person in the house reads a
+        /// true statement as a lie.
+        /// </remarks>
         RateLimited         = 9001,
     }
 }

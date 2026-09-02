@@ -17,13 +17,31 @@ namespace Ironfront.MasterServer.Auth
 
     public readonly struct AuthResult
     {
-        public AuthResult(bool ok, ErrorCode errorCode, Session? session)
+        public AuthResult(bool ok, ErrorCode errorCode, Session? session, int retryAfterSeconds = 0)
         {
-            Ok = ok; ErrorCode = errorCode; Session = session;
+            Ok = ok; ErrorCode = errorCode; Session = session; RetryAfterSeconds = retryAfterSeconds;
         }
         public bool Ok { get; }
         public ErrorCode ErrorCode { get; }
         public Session? Session { get; }
+
+        /// <summary>
+        /// Seconds until this refusal stops applying, or 0 when waiting does not help.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The number, not an adjective.</b> The client rendered every
+        /// <see cref="ErrorCode.RateLimited"/> as "Wait a few seconds and try again" against a
+        /// window of sixty, and a lockout — reported as a wrong password — as nothing at all.
+        /// A player who waits the few seconds they were promised, fails again, and is told the
+        /// same thing has been given a loop rather than an instruction.
+        /// </para>
+        /// <para>
+        /// Rounded UP, so a wait this reports as over really is over. Reporting 0 on a 400 ms
+        /// remainder would invite an immediate retry that fails for the same reason.
+        /// </para>
+        /// </remarks>
+        public int RetryAfterSeconds { get; }
     }
 
     internal sealed class RateWindow
@@ -125,26 +143,91 @@ namespace Ironfront.MasterServer.Auth
             return new RegisterResult(inserted, inserted ? ErrorCode.Ok : ErrorCode.UsernameTaken);
         }
 
+        /// <summary>
+        /// Verifies a credential and mints a session, or says why it would not.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Four different refusals used to leave here as one code.</b> A wrong password, an
+        /// account that does not exist, a banned account and one locked out after ten failures
+        /// all returned <see cref="ErrorCode.WrongCredentials"/>, and the client rendered all
+        /// four as "Wrong username or password." Two of those four are the OPPOSITE of a wrong
+        /// password: the lock is armed by failures and lasts fifteen minutes, during which the
+        /// correct password is refused with advice to go and change it — advice that cannot
+        /// work, because a password change does not clear the lock either.
+        /// </para>
+        /// <para>
+        /// <b>The name is spent only on somebody who proved they own the account.</b> Naming a
+        /// lock or a ban admits the account exists, so both are withheld unless the supplied
+        /// password VERIFIED. Along the guessing path — the only path an enumerator has — every
+        /// answer is still <see cref="ErrorCode.WrongCredentials"/>, identical to a username
+        /// nobody has registered, so this leaks nothing that was not already leakable. That is
+        /// why the trade-off did not need to be traded: the honest message and the silent one
+        /// are not on the same branch. <c>LockedAccountRefusesAWrongPasswordAsCredentials</c>
+        /// pins it.
+        /// </para>
+        /// <para>
+        /// <b>The order of the two named states is ban before lock.</b> A banned account that is
+        /// also mid-lockout is banned; telling its owner to wait fifteen minutes would be false.
+        /// </para>
+        /// </remarks>
         public AuthResult Login(string username, string passwordHash, uint ip)
         {
             long now = UnixMs();
-            if (!AllowAttempt(ip, now)) return new AuthResult(false, ErrorCode.RateLimited, null);
+            if (!AllowAttempt(ip, now))
+                return new AuthResult(false, ErrorCode.RateLimited, null, RateRetryAfterSeconds(ip, now));
             if (!IsValidUsername(username)) return new AuthResult(false, ErrorCode.InvalidUsername, null);
             if (!IsValidSha256(passwordHash)) return new AuthResult(false, ErrorCode.WrongCredentials, null);
 
             AccountRecord? account = _database.FindAccount(username);
+
+            // Runs against a dummy hash for an account that does not exist, so the bcrypt cost is
+            // paid either way and the answer cannot be timed. Unchanged, and load-bearing.
             bool verified = BCrypt.Net.BCrypt.Verify(passwordHash, account?.PasswordHash ?? DummyHash);
-            if (account is null || !verified || account.IsBanned || account.LockedUntil > now)
+
+            if (account is null || !verified)
             {
+                // A failure against a live, unlocked, unbanned account is what arms the lock.
+                // A failure against a locked one does NOT extend it — the fifteen minutes are
+                // punishment for the ten attempts already made, not a treadmill that a
+                // still-guessing attacker can keep the owner on indefinitely.
                 if (account is not null && !account.IsBanned && account.LockedUntil <= now)
                     _database.RecordLoginFailure(account.PlayerId, MaxFailedLogins, now + LockDurationMs);
+
                 return new AuthResult(false, ErrorCode.WrongCredentials, null);
             }
+
+            if (account.IsBanned) return new AuthResult(false, ErrorCode.AccountBanned, null);
+
+            if (account.LockedUntil > now)
+                return new AuthResult(
+                    false, ErrorCode.AccountLocked, null, SecondsUntil(account.LockedUntil, now));
 
             _database.RecordLoginSuccess(account.PlayerId, now);
             Session session = CreateSession(account.PlayerId, account.DisplayName, ip, now);
             return new AuthResult(true, ErrorCode.Ok, session);
         }
+
+        /// <summary>Whole seconds from <paramref name="now"/> to <paramref name="deadline"/>, rounded up.</summary>
+        private static int SecondsUntil(long deadline, long now)
+        {
+            long remaining = deadline - now;
+            return remaining <= 0 ? 0 : (int)((remaining + 999) / 1000);
+        }
+
+        /// <summary>
+        /// Seconds until this address's login budget resets. Reads the window; never opens one.
+        /// </summary>
+        /// <remarks>
+        /// Called only after <see cref="AllowAttempt"/> has already refused, so the window it
+        /// reads is guaranteed to exist and to be the one that did the refusing. It must not
+        /// create a window of its own — doing so from a refusal path would restart the clock the
+        /// caller is asking about.
+        /// </remarks>
+        private int RateRetryAfterSeconds(uint ip, long now)
+            => _rates.TryGetValue(ip, out RateWindow? window)
+                ? SecondsUntil(window.StartedAt + 60_000, now)
+                : 0;
 
         public bool TryGetSession(string token, uint ip, out Session? session)
         {
