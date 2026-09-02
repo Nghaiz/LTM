@@ -27,6 +27,12 @@ namespace Ironfront.Net.Unity.Server
         private readonly ServerCombatBridge _combat;
 
         /// <summary>
+        /// Watches this body for the X-82 descent. One float comparison per tick when nothing is
+        /// wrong; see <see cref="FallDiagnostics"/> for why it is on by default.
+        /// </summary>
+        private readonly FallDiagnostics _fallDiagnostics = new FallDiagnostics();
+
+        /// <summary>
         /// The wire's own representable cube — <c>Quantize.POS_MIN</c>..<c>POS_MAX</c> on every
         /// axis. Ledger <b>X-75</b>.
         /// </summary>
@@ -233,6 +239,12 @@ namespace Ironfront.Net.Unity.Server
             // Mirror the authoritative result back so the agent's stance height tracks the
             // crouch the server actually applied. Tick() would step the simulation twice.
             agent.ApplyAuthoritativeState(in Session.State);
+
+            // AFTER the move and BEFORE the containment, deliberately. After, because the
+            // question is what collision just did; before, because EnforceWireVolume can kill or
+            // teleport the body, and a sample taken past that would describe the correction
+            // rather than the fall it was correcting. Ledger X-82.
+            _fallDiagnostics.Sample(Session.ActorId, agent, in Session.State);
 
             EnforceWireVolume(agent);
         }

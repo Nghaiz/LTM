@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="7" result="Failed(Child)" total="7" passed="3" failed="4" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-09-02 22:58:55Z" end-time="2026-09-02 22:58:55Z" duration="0.0834139">
+  <test-suite type="TestSuite" id="1000" name="Ravenfield" fullname="Ravenfield" runstate="Runnable" testcasecount="127" result="Failed" site="Child" start-time="2026-09-02 22:58:55Z" end-time="2026-09-02 22:58:55Z" duration="0.083414" total="7" passed="3" failed="4" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <failure>
+      <message><![CDATA[One or more child tests had errors]]></message>
+    </failure>
+    <test-suite type="Assembly" id="1162" name="Ironfront.Net.Unity.Server.Tests.dll" fullname="D:/Coding/LTM/Ironfront_Reborn/Library/ScriptAssemblies/Ironfront.Net.Unity.Server.Tests.dll" runstate="Runnable" testcasecount="109" result="Failed" site="Child" start-time="2026-09-02 22:58:55Z" end-time="2026-09-02 22:58:55Z" duration="0.074303" total="7" passed="3" failed="4" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="37572" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <failure>
+        <message><![CDATA[One or more child tests had errors]]></message>
+      </failure>
+      <test-suite type="TestSuite" id="1163" name="Ironfront" fullname="Ironfront" runstate="Runnable" testcasecount="109" result="Failed" site="Child" start-time="2026-09-02 22:58:55Z" end-time="2026-09-02 22:58:55Z" duration="0.073627" total="7" passed="3" failed="4" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <failure>
+          <message><![CDATA[One or more child tests had errors]]></message>
+        </failure>
+        <test-suite type="TestSuite" id="1164" name="Net" fullname="Ironfront.Net" runstate="Runnable" testcasecount="109" result="Failed" site="Child" start-time="2026-09-02 22:58:55Z" end-time="2026-09-02 22:58:55Z" duration="0.073192" total="7" passed="3" failed="4" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <failure>
+            <message><![CDATA[One or more child tests had errors]]></message>
+          </failure>
+          <test-suite type="TestSuite" id="1165" name="Unity" fullname="Ironfront.Net.Unity" runstate="Runnable" testcasecount="109" result="Failed" site="Child" start-time="2026-09-02 22:58:55Z" end-time="2026-09-02 22:58:55Z" duration="0.072567" total="7" passed="3" failed="4" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <failure>
+              <message><![CDATA[One or more child tests had errors]]></message>
+            </failure>
+            <test-suite type="TestSuite" id="1166" name="Server" fullname="Ironfront.Net.Unity.Server" runstate="Runnable" testcasecount="109" result="Failed" site="Child" start-time="2026-09-02 22:58:55Z" end-time="2026-09-02 22:58:55Z" duration="0.071728" total="7" passed="3" failed="4" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <failure>
+                <message><![CDATA[One or more child tests had errors]]></message>
+              </failure>
+              <test-suite type="TestSuite" id="1167" name="Tests" fullname="Ironfront.Net.Unity.Server.Tests" runstate="Runnable" testcasecount="109" result="Failed" site="Child" start-time="2026-09-02 22:58:55Z" end-time="2026-09-02 22:58:55Z" duration="0.071035" total="7" passed="3" failed="4" inconclusive="0" skipped="0" asserts="0">
+                <properties />
+                <failure>
+                  <message><![CDATA[One or more child tests had errors]]></message>
+                </failure>
+                <test-suite type="TestFixture" id="1062" name="GroundSnapTests" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" testcasecount="7" result="Failed" site="Child" start-time="2026-09-02 22:58:55Z" end-time="2026-09-02 22:58:55Z" duration="0.067306" total="7" passed="3" failed="4" inconclusive="0" skipped="0" asserts="0">
+                  <properties />
+                  <failure>
+                    <message><![CDATA[One or more child tests had errors]]></message>
+                  </failure>
+                  <test-case id="1064" name="APlayerStandingThereIsNotGround" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests.APlayerStandingThereIsNotGround" methodname="APlayerStandingThereIsNotGround" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" seed="524129701" result="Failed" start-time="2026-09-02 22:58:55Z" end-time="2026-09-02 22:58:55Z" duration="0.031209" asserts="0">
+                    <properties>
+                      <property name="retryIteration" value="0" />
+                      <property name="repeatIteration" value="0" />
+                    </properties>
+                    <failure>
+                      <message><![CDATA[  snapped onto the body on the Player layer
+  Expected: 0.0d +/- 0.05000000074505806d
+  But was:  1.5d
+]]></message>
+                      <stack-trace><![CDATA[at Ironfront.Net.Unity.Server.Tests.GroundSnapTests.APlayerStandingThereIsNotGround () [0x0003b] in D:\Coding\LTM\Ironfront_Reborn\Assets\Tests\EditMode\GroundSnapTests.cs:66
+]]></stack-trace>
+                    </failure>
+                  </test-case>
+                  <test-case id="1066" name="ATriggerVolumeIsNotGround" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests.ATriggerVolumeIsNotGround" methodname="ATriggerVolumeIsNotGround" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" seed="1034922191" result="Failed" start-time="2026-09-02 22:58:55Z" end-time="2026-09-02 22:58:55Z" duration="0.003850" asserts="0">
+                    <properties>
+                      <property name="retryIteration" value="0" />
+                      <property name="repeatIteration" value="0" />
+                    </properties>
+                    <failure>
+                      <message><![CDATA[  snapped onto a trigger volume
+  Expected: 0.0d +/- 0.05000000074505806d
+  But was:  1.5d
+]]></message>
+                      <stack-trace><![CDATA[at Ironfront.Net.Unity.Server.Tests.GroundSnapTests.ATriggerVolumeIsNotGround () [0x00049] in D:\Coding\LTM\Ironfront_Reborn\Assets\Tests\EditMode\GroundSnapTests.cs:97
+]]></stack-trace>
+                    </failure>
+                  </test-case>
+                  <test-case id="1067" name="GroundFarBelowIsAMissRatherThanAPlacement" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests.GroundFarBelowIsAMissRatherThanAPlacement" methodname="GroundFarBelowIsAMissRatherThanAPlacement" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" seed="1254822208" result="Failed" start-time="2026-09-02 22:58:55Z" end-time="2026-09-02 22:58:55Z" duration="0.003222" asserts="0">
+                    <properties>
+                      <property name="retryIteration" value="0" />
+                      <property name="repeatIteration" value="0" />
+                    </properties>
+                    <failure>
+                      <message><![CDATA[  reported a successful snap onto ground 80 m below
+  Expected: False
+  But was:  True
+]]></message>
+                      <stack-trace><![CDATA[at Ironfront.Net.Unity.Server.Tests.GroundSnapTests.GroundFarBelowIsAMissRatherThanAPlacement () [0x0000d] in D:\Coding\LTM\Ironfront_Reborn\Assets\Tests\EditMode\GroundSnapTests.cs:114
+]]></stack-trace>
+                    </failure>
+                  </test-case>
+                  <test-case id="1069" name="GroundInsideTheWindowStillSnaps" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests.GroundInsideTheWindowStillSnaps" methodname="GroundInsideTheWindowStillSnaps" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" seed="1642962973" result="Passed" start-time="2026-09-02 22:58:55Z" end-time="2026-09-02 22:58:55Z" duration="0.003325" asserts="0">
+                    <properties>
+                      <property name="retryIteration" value="0" />
+                      <property name="repeatIteration" value="0" />
+                    </properties>
+                  </test-case>
+                  <test-case id="1068" name="NothingUnderneathIsAMiss" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests.NothingUnderneathIsAMiss" methodname="NothingUnderneathIsAMiss" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" seed="337750682" result="Passed" start-time="2026-09-02 22:58:55Z" end-time="2026-09-02 22:58:55Z" duration="0.000674" asserts="0">
+                    <properties>
+                      <property name="retryIteration" value="0" />
+                      <property name="repeatIteration" value="0" />
+                    </properties>
+                  </test-case>
+                  <test-case id="1063" name="SnapsToGroundUnderThePoint" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests.SnapsToGroundUnderThePoint" methodname="SnapsToGroundUnderThePoint" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" seed="1569306905" result="Passed" start-time="2026-09-02 22:58:55Z" end-time="2026-09-02 22:58:55Z" duration="0.000604" asserts="0">
+                    <properties>
+                      <property name="retryIteration" value="0" />
+                      <property name="repeatIteration" value="0" />
+                    </properties>
+                  </test-case>
+                  <test-case id="1065" name="WaterIsNotGround" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests.WaterIsNotGround" methodname="WaterIsNotGround" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" seed="1745508361" result="Failed" start-time="2026-09-02 22:58:55Z" end-time="2026-09-02 22:58:55Z" duration="0.001542" asserts="0">
+                    <properties>
+                      <property name="retryIteration" value="0" />
+                      <property name="repeatIteration" value="0" />
+                    </properties>
+                    <failure>
+                      <message><![CDATA[  snapped onto water
+  Expected: 0.0d +/- 0.05000000074505806d
+  But was:  1.5d
+]]></message>
+                      <stack-trace><![CDATA[at Ironfront.Net.Unity.Server.Tests.GroundSnapTests.WaterIsNotGround () [0x0003a] in D:\Coding\LTM\Ironfront_Reborn\Assets\Tests\EditMode\GroundSnapTests.cs:76
+]]></stack-trace>
+                    </failure>
+                    <output><![CDATA[Saving results to: C:/Users/Nghaiz/AppData/LocalLow/SteelRaven7/Ravenfield\TestResults.xml
+]]></output>
+                  </test-case>
+                </test-suite>
+              </test-suite>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
