@@ -160,8 +160,8 @@ intended.** `ServerActorDamageSink.ApplyDamage` accepting `attackerId` and never
 **correct behaviour**, not the defect the server audit ranked #1.
 
 This paragraph exists so nobody re-files it. If you are reading the server audit
-(`plans/reports/review-server-team-audit.md` § 3, ranked finding #1) or the brainstorm
-(`plans/reports/2026-09-01-multiplayer-readiness-brainstorm.md` § 2.4 D-a and § 5 block D), those
+(`git show 509c70d:plans/reports/review-server-team-audit.md` § 3, ranked finding #1) or the brainstorm
+(`git show 509c70d:plans/reports/2026-09-01-multiplayer-readiness-brainstorm.md` § 2.4 D-a and § 5 block D), those
 sections are **superseded here**. The penalty for a team-kill is economic, not mechanical: under
 § 1.1 property 2 the kill credits the enemy a point, which is a stiffer and more legible penalty
 than a blocked shot.
@@ -256,7 +256,7 @@ cannot draw until the next config broadcast.
 > mechanical will ever notice, because `SpecChecker` parses the § 1 fenced block and not § 15.
 > **P11 writes BOTH rows**: the missing 4.0.0 (reconstructed from commit `9172920` / PR #222 — the
 > `POS_MIN`/`POS_MAX` window move with `POS_RANGE` unchanged, ledger **X-53**) and its own 5.0.0.
-> The reconstruction and its evidence are in [P11 § 3.4a](../phases/phase-p11-win-condition.md);
+> The reconstruction and its evidence are in P11 § 3.4a *(file deleted -- `git show 509c70d:plans/phases/phase-p11-win-condition.md`)*;
 > ledger row **X-79** closes with it.
 
 ### 2.4 What must change together

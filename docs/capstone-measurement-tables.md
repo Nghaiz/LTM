@@ -1,6 +1,6 @@
 # The two capstone tables — the 5 scenarios, and the netcode on/off comparison
 
-[P8](../plans/phases/phase-p8-capstone-deliverables.md) tasks 3.4 and the M4 clauses **"the
+P8 *(file deleted -- `git show 509c70d:plans/phases/phase-p8-capstone-deliverables.md`)* tasks 3.4 and the M4 clauses **"the
 5-scenario measurement table filled in"** and **"the on/off comparison table for the five netcode
 techniques filled in"**. Acceptance criteria 4 and 5 both permit a cell to hold **a figure or a
 stated reason**, and this file honours that literally: no cell is blank, and every reason names
@@ -34,7 +34,7 @@ average.**
 | 2 | as above | as above | **6,251 B/s** worst client, **5,624 B/s** mean (`p7-load-move`) | **~65 B** mean (Y.2.5, shipped config) | `EntriesShed` **0**; tick p99 **5,097 µs** |
 | 3 | 100 ms by construction (`IRONFRONT_SIM=typical` is 50 ms one-way, 5 % loss — this row's parameters exactly) | — | — | — | **owed**; see § 1.3 |
 | 4 | 200 ms by construction (`IRONFRONT_SIM=bad` is 100 ms one-way, 15 % loss) | — | — | — | **owed**; see § 1.3 |
-| 5 | **blocked: there is no VPS.** fly.io carries no UDP over public IPv6 and wants a bind to `fly-global-services` while `UdpPeer.cs:92` binds `IPAddress.Any`. This is [P9](../plans/phases/phase-p9-deployment-and-cleanup.md)'s blocker, and it has been the same blocker since 2026-08-13 | blocked | blocked | blocked | blocked |
+| 5 | **blocked: there is no VPS.** fly.io carries no UDP over public IPv6 and wants a bind to `fly-global-services` while `UdpPeer.cs:92` binds `IPAddress.Any`. This is P9 *(file deleted -- `git show 509c70d:plans/phases/phase-p9-deployment-and-cleanup.md`)*'s blocker, and it has been the same blocker since 2026-08-13 | blocked | blocked | blocked | blocked |
 
 **Row 2's figures are at 16 clients + 40 bots, not 16 + 32.** P7 ran 56 actors either way; the
 split differs and the row is stated at what was actually run rather than rounded to what the spec
@@ -42,7 +42,7 @@ asked for.
 
 ### 1.2 Why rows 1 and 2 are "partial" and not "done"
 
-Bandwidth and snapshot size are measured and trustworthy — [the P7 report](../plans/reports/2026-08-30-p7-v9-integration.md)
+Bandwidth and snapshot size are measured and trustworthy — the P7 report *(file deleted -- `git show 509c70d:plans/reports/2026-08-30-p7-v9-integration.md`)*
 § 3 and § 4 carry them with sample sizes. **RTT and FPS are not measured anywhere.** That is an
 instrument gap, not a run gap: `ITransportClient.SmoothedRttMs` exists and
 `NetClientBootstrap.SmoothedRttMs` surfaces it, and no harness writes either into an artifact. A
@@ -79,7 +79,7 @@ The two sources disagree, and this is worth recording rather than resolving sile
 
 - **The deleted capstone spec** lists client prediction, entity interpolation, delta compression,
   **interest management**, lag compensation.
-- **[P8](../plans/phases/phase-p8-capstone-deliverables.md) § 2** lists interpolation,
+- **P8 *(file deleted -- `git show 509c70d:plans/phases/phase-p8-capstone-deliverables.md`)* § 2** lists interpolation,
   prediction, **reconciliation**, lag compensation, delta compression.
 
 The table below carries **all six**, because the spec's fifth and P8's third are different
@@ -149,7 +149,7 @@ would be the failure [`plan.md`](../plans/plan.md) § 5 rule 3 exists to prevent
 
 - [`report-chapter-state-synchronization.md`](report-chapter-state-synchronization.md) § Y.2.5 and
   § Y.4.5 — the source of every measured figure above
-- [`../plans/reports/2026-08-30-p7-v9-integration.md`](../plans/reports/2026-08-30-p7-v9-integration.md)
+- `../plans/reports/2026-08-30-p7-v9-integration.md` *(file deleted -- `git show 509c70d:plans/reports/2026-08-30-p7-v9-integration.md`)*
   — the 16-client bandwidth and tick figures
 - [`p0-definition.md`](p0-definition.md) — M4's third clause
 - [`m3-flow-manual-interventions.md`](m3-flow-manual-interventions.md) — M3's three

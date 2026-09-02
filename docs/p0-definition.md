@@ -1,6 +1,6 @@
 # P0 — what it means, before anything is graded against it
 
-Written 2026-08-30 for [P8](../plans/phases/phase-p8-capstone-deliverables.md) task 3.1, which
+Written 2026-08-30 for P8 *(file deleted -- `git show 509c70d:plans/phases/phase-p8-capstone-deliverables.md`)* task 3.1, which
 exists because M4's clause **"0 P0 bugs"** could not be graded without it. An ungraded severity
 scale grades everything as pass: with no definition, every open row is arguably not-P0 and the
 clause is met by saying so. This file is written **before** the grading in § 4, and the order is

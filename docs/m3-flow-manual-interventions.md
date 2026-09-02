@@ -1,6 +1,6 @@
 # The M3 flow — every place a human had to intervene
 
-[P8](../plans/phases/phase-p8-capstone-deliverables.md) task 3.2. The clause being graded is
+P8 *(file deleted -- `git show 509c70d:plans/phases/phase-p8-capstone-deliverables.md`)* task 3.2. The clause being graded is
 M3's **"the flow runs with no manual file editing"**: login → lobby → room → capture point →
 win/lose → back to lobby, without editing a config file, a scene, or an env var between steps.
 

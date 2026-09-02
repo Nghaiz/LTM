@@ -25,7 +25,7 @@ the screen. The four defects a player hits in the first minute (§ 3) were all i
 green build, and that is the single most important fact on this page.
 
 **Fourteen ledger rows are open**, and **three are live defects** — down from twenty-four and
-four, by [P10](reports/2026-08-31-p10-debt-sweep.md) on 2026-08-31.
+four, by P10 *(file deleted -- `git show 509c70d:plans/reports/2026-08-31-p10-debt-sweep.md`)* on 2026-08-31.
 
 **Nine rows closed, and two pairs turned out to be one defect each.** **X-69** (an NRE storm P7
 reproduced at 10,126 occurrences in one 600 s run) and **X-71** (the server walking a claimed
@@ -73,8 +73,8 @@ that README without carrying them would have completed the loss.
 | **M0** Foundation | Protocol spec v1.0 frozen · headless build runs · network simulator working · CI compiles all projects | **4 / 4** | done |
 | **M1** Connection | **2 clients see each other moving smoothly** at 100 ms RTT + 5 % loss | **ungraded — the 2026-08-30 FAIL is WITHDRAWN** | check 7 → **B-7**; the grade rested on `p4-vehicle-02`, whose observer had fallen 580 m under the map before the first vehicle checkpoint and was therefore outside `InterestManager.CullRadius` (500 m), so the vehicle it saw diverge was simply not being sent to it. P20 re-ran check 7's condition three times and could not get a driver into a seat, so this is open rather than answered |
 | **M2** Combat | Server-authoritative shooting with lag compensation · health/death/respawn · AI bots replicate | **3 / 3** | checks 1, 13 → **B-1** (P4 § 4.1), **B-2** (P5 § 3.3 — `p5-separation-02` samples a dead body at `alive false / hp 0 / canRespawn true`, with input suppressed on 255 of 255 dead frames) |
-| **M3** Full match | Login → lobby → room → capture point → win/lose → back to lobby, 16 players · **the flow runs with no manual file editing** · **a wrong password gives a clear error** · **disconnecting mid-match returns to the lobby with a message** | **wired, ungraded** | [P8](phases/phase-p8-capstone-deliverables.md) found the flow **had never been wired into Unity at all** — `MasterSession` was constructed only in a test project, `LobbyShellOverlay.Bind` had no caller under `Assets/`, and no client code loaded a scene, so `Menu.unity` drew *"Lobby shell: unbound"* and stopped. `ClientFlowBootstrap` closes it and the ten interventions are enumerated in [`../docs/m3-flow-manual-interventions.md`](../docs/m3-flow-manual-interventions.md); **both are now closed** by [P10](reports/2026-08-31-p10-debt-sweep.md) — X-77 wired the room-state consumer, and `RoomLobby -> RoomBrowser` was added to the table and to its transcribed diagram together. It stays ungraded because the clause asks for **someone who did not build it** to run it, and nothing else now stands in that person's way |
-| **M4** Polish | Load test with 16 clients · measurement report · documentation · demo video · **0 P0 bugs** · **the 5-scenario measurement table filled in** · **the on/off comparison table for the five netcode techniques filled in** · **30 minutes of continuous play with no crash and no leak** | **load test DONE · soak MET · 0-P0 re-gradeable · tables partial · video OWED** | [P7](phases/phase-p7-v9-integration.md) ran 16 clients four times and graded all thirteen V9 criteria ([the P7 report](reports/2026-08-30-p7-v9-integration.md)). [P8](phases/phase-p8-capstone-deliverables.md) defined **P0 in writing before grading it** ([`../docs/p0-definition.md`](../docs/p0-definition.md)) and grades the clause **FAILING on X-69**; both tables now hold a figure or a stated reason in every cell ([`../docs/capstone-measurement-tables.md`](../docs/capstone-measurement-tables.md)), with **5 of 11 measurable cells owed** and one row blocked on the VPS that has never existed. **The 30-minute soak has now been RUN and is MET** ([P10](reports/2026-08-31-p10-debt-sweep.md)): `p10-soak-02`, 1,809 s, no crash, working set 369 -> 390 MB inside the band, and **zero `NullReferenceException`** against P7's 10,126 -- so the **0-P0 clause is re-gradeable**, X-69 having been its only failing row. **The first attempt was VOID and the runner graded it anyway** -- a stale server held UDP 27015, so it sampled a process that never started and reported three verdicts about it; `run-soak.ps1` now refuses that, mutation-tested. The demo video is the same 30 minutes and is still owed |
+| **M3** Full match | Login → lobby → room → capture point → win/lose → back to lobby, 16 players · **the flow runs with no manual file editing** · **a wrong password gives a clear error** · **disconnecting mid-match returns to the lobby with a message** | **wired, ungraded** | P8 *(file deleted -- `git show 509c70d:plans/phases/phase-p8-capstone-deliverables.md`)* found the flow **had never been wired into Unity at all** — `MasterSession` was constructed only in a test project, `LobbyShellOverlay.Bind` had no caller under `Assets/`, and no client code loaded a scene, so `Menu.unity` drew *"Lobby shell: unbound"* and stopped. `ClientFlowBootstrap` closes it and the ten interventions are enumerated in [`../docs/m3-flow-manual-interventions.md`](../docs/m3-flow-manual-interventions.md); **both are now closed** by P10 *(file deleted -- `git show 509c70d:plans/reports/2026-08-31-p10-debt-sweep.md`)* — X-77 wired the room-state consumer, and `RoomLobby -> RoomBrowser` was added to the table and to its transcribed diagram together. It stays ungraded because the clause asks for **someone who did not build it** to run it, and nothing else now stands in that person's way |
+| **M4** Polish | Load test with 16 clients · measurement report · documentation · demo video · **0 P0 bugs** · **the 5-scenario measurement table filled in** · **the on/off comparison table for the five netcode techniques filled in** · **30 minutes of continuous play with no crash and no leak** | **load test DONE · soak MET · 0-P0 re-gradeable · tables partial · video OWED** | P7 *(file deleted -- `git show 509c70d:plans/phases/phase-p7-v9-integration.md`)* ran 16 clients four times and graded all thirteen V9 criteria (the P7 report *(file deleted -- `git show 509c70d:plans/reports/2026-08-30-p7-v9-integration.md`)*). P8 *(file deleted -- `git show 509c70d:plans/phases/phase-p8-capstone-deliverables.md`)* defined **P0 in writing before grading it** ([`../docs/p0-definition.md`](../docs/p0-definition.md)) and grades the clause **FAILING on X-69**; both tables now hold a figure or a stated reason in every cell ([`../docs/capstone-measurement-tables.md`](../docs/capstone-measurement-tables.md)), with **5 of 11 measurable cells owed** and one row blocked on the VPS that has never existed. **The 30-minute soak has now been RUN and is MET** (P10 *(file deleted -- `git show 509c70d:plans/reports/2026-08-31-p10-debt-sweep.md`)*): `p10-soak-02`, 1,809 s, no crash, working set 369 -> 390 MB inside the band, and **zero `NullReferenceException`** against P7's 10,126 -- so the **0-P0 clause is re-gradeable**, X-69 having been its only failing row. **The first attempt was VOID and the runner graded it anyway** -- a stale server held UDP 27015, so it sampled a process that never started and reported three verdicts about it; `run-soak.ps1` now refuses that, mutation-tested. The demo video is the same 30 minutes and is still owed |
 
 **M1's failure was withdrawn on 2026-09-02, and this paragraph is what it used to say.** The
 sentence below read "M1 is a measured failure … with a located cause (**X-64**, one observer's copy
@@ -87,7 +87,7 @@ vehicle is not replicated to it at all, which is why the copy froze with `stalle
 
 **M2 is met and M1 WAS recorded as a measured failure — and P4 and P5 are why.** M2's
 last unmet clause was health/death/respawn, ungradeable because no checkpoint had ever sampled a
-dead body; [P5](phases/phase-p5-harness-gaps.md) § 3.3 samples one. **M1 is ☐ here only because
+dead body; P5 *(file deleted -- `git show 509c70d:plans/phases/phase-p5-harness-gaps.md`)* § 3.3 samples one. **M1 is ☐ here only because
 this table has no FAIL cell**: P4 § 4.4 measured it failing, with a located cause (**X-64**, one
 observer's copy of a hull freezes 303 m behind while its own snapshot counters keep advancing) —
 read the row as "measured, and failing", not as "not yet tried".
@@ -102,10 +102,10 @@ on screen.
 
 | Symptom | Located at | Phase |
 |---|---|---|
-| Bodies slide; legs never move | `RemoteActorView.cs:258-265` sets six animator bools and a pitch float, and never `movement x` / `movement y` — the two parameters `Actor.cs:706-707` drives the local body with | [P2](phases/phase-p2-locomotion.md) |
-| ~~Flags do not render — only the pole~~ **CLOSED 2026-08-30** | **Not `CapturePoint.cs:294` as filed.** Every `HQ Flag` on Dustbowl referenced mesh guid `195886543318f6a41bd0575b175957e7` and material guid `2aaff793b776d0b45b232fc08ea42a5f`, and **no asset in the project carries either** — Unity loads a dangling guid as null, so the renderer had no mesh and no material. `QualitySettings` defaults to 5, so `Awake` selected exactly that object on every client. The ownership path was measured on the wire and is correct | [P3](phases/phase-p3-flag-and-minimap.md) — gated by `CapturePointFlagsCanDraw`, observed RED (11 findings) before the authoring |
-| No friendly / enemy / self icons on the minimap — **path shipped 2026-08-30, picture still owed** | `MinimapUi.AddActorBlip` has exactly one caller — `ActorManager.cs:58`, in `Register` — and remote networked bodies deliberately never register (ledger **A-2**). Icons now go through the new `IMinimapMarkers` seam, keyed by `Transform`; it ran 41–42 times per client on a real run with no warning. **No screenshot proves it**: `MinimapUi.Update` reads `Input.GetKey(KeyCode.M)`, which no lane-B client can produce (**X-61**) | [P3](phases/phase-p3-flag-and-minimap.md) → **X-61** to [P5](phases/phase-p5-harness-gaps.md) |
-| ~~Exceptions beyond counting in the log~~ **CLOSED 2026-08-29** | **X-59** (`ActorGameplaySource.IsDead` wrote the flag and left the alive register, so a respawn double-added) and **X-60** (`PushAntiStuckEvent` dereferenced `squad.squadVehicle`, **not** a null squad as filed) | [P1](phases/phase-p1-exception-storm.md) — a 151 s lane-A run now reports **0** exceptions of any type, against 39 before |
+| Bodies slide; legs never move | `RemoteActorView.cs:258-265` sets six animator bools and a pitch float, and never `movement x` / `movement y` — the two parameters `Actor.cs:706-707` drives the local body with | P2 *(file deleted -- `git show 509c70d:plans/phases/phase-p2-locomotion.md`)* |
+| ~~Flags do not render — only the pole~~ **CLOSED 2026-08-30** | **Not `CapturePoint.cs:294` as filed.** Every `HQ Flag` on Dustbowl referenced mesh guid `195886543318f6a41bd0575b175957e7` and material guid `2aaff793b776d0b45b232fc08ea42a5f`, and **no asset in the project carries either** — Unity loads a dangling guid as null, so the renderer had no mesh and no material. `QualitySettings` defaults to 5, so `Awake` selected exactly that object on every client. The ownership path was measured on the wire and is correct | P3 *(file deleted -- `git show 509c70d:plans/phases/phase-p3-flag-and-minimap.md`)* — gated by `CapturePointFlagsCanDraw`, observed RED (11 findings) before the authoring |
+| No friendly / enemy / self icons on the minimap — **path shipped 2026-08-30, picture still owed** | `MinimapUi.AddActorBlip` has exactly one caller — `ActorManager.cs:58`, in `Register` — and remote networked bodies deliberately never register (ledger **A-2**). Icons now go through the new `IMinimapMarkers` seam, keyed by `Transform`; it ran 41–42 times per client on a real run with no warning. **No screenshot proves it**: `MinimapUi.Update` reads `Input.GetKey(KeyCode.M)`, which no lane-B client can produce (**X-61**) | P3 *(file deleted -- `git show 509c70d:plans/phases/phase-p3-flag-and-minimap.md`)* → **X-61** to P5 *(file deleted -- `git show 509c70d:plans/phases/phase-p5-harness-gaps.md`)* |
+| ~~Exceptions beyond counting in the log~~ **CLOSED 2026-08-29** | **X-59** (`ActorGameplaySource.IsDead` wrote the flag and left the alive register, so a respawn double-added) and **X-60** (`PushAntiStuckEvent` dereferenced `squad.squadVehicle`, **not** a null squad as filed) | P1 *(file deleted -- `git show 509c70d:plans/phases/phase-p1-exception-storm.md`)* — a 151 s lane-A run now reports **0** exceptions of any type, against 39 before |
 
 ---
 
@@ -117,25 +117,25 @@ and whose bodies do not animate cannot be graded by eye.
 
 | # | Phase | Closes | Size |
 |---|---|---|---|
-| **P1** | [Exception storm](phases/phase-p1-exception-storm.md) | X-59, X-60 | S |
-| **P2** | [Remote locomotion](phases/phase-p2-locomotion.md) | the sliding bodies | M |
-| **P3** | [Flag and minimap](phases/phase-p3-flag-and-minimap.md) | the pole, the missing icons | M |
-| **P4** | [Lane-B re-grade](phases/phase-p4-lane-b-regrade.md) | B-1, B-2, B-7, B-8, B-9, B-10, B-13, B-15 — and M1, M2 with them | L |
-| **P5** | [Harness gaps](phases/phase-p5-harness-gaps.md) | X-28, X-29, X-37 | M |
-| **P6** | [Scoreboard and chat](phases/phase-p6-scoreboard-and-chat.md) | A13, the Chat opcode | M |
-| **P7** | [V9 integration](phases/phase-p7-v9-integration.md) | **DONE 2026-08-30** — B-17 re-graded and closed at 16; **B-16 re-opened, 22% over budget**; the soak ran 8 rounds and found **X-73** | L |
-| **P8** | [Capstone deliverables](phases/phase-p8-capstone-deliverables.md) | **DONE 2026-08-30** — the client flow wired (it never had been), P0 defined and graded, both tables filled, the soak harness built. Filed **X-76**, **X-77** | L |
-| **P9** | [Deployment and single-owner cleanup](phases/phase-p9-deployment-and-cleanup.md) | **DONE 2026-09-01** — 6 of 7 criteria MET 2026-08-31; criterion 5 now **3 of 4** (SS 4.8): the login -> join -> UDP walk and the alert drill are gated scripts, only the 72-hour chart stays deferred. The walk found **three defects that made M2 criterion 14 unverifiable**, chief among them a registered game server being reaped as unauthenticated 30 s after connecting | S |
-| **P10** | [The P1-P8 debt sweep](reports/2026-08-31-p10-debt-sweep.md) | **DONE 2026-08-31** — nine ledger rows closed (open **24 -> 14**), **three re-diagnosed and still open**, the M4 soak run and MET. Filed no new rows | L |
-| **P11** | [The win condition the netcode never had](phases/phase-p11-win-condition.md) | the networked match's divergence from the game's own rule; `PROTOCOL_VERSION` 4 -> 5 | L |
-| **P12** | [Which side am I on](phases/phase-p12-which-side-am-i-on.md) | F5, F3, F6, and half of the surplus-AI row | M |
-| **P13** | [The team the lobby chose](phases/phase-p13-team-into-the-match.md) | F2 on the wire; the lopsided-strand defect (server audit #2) | M |
-| **P14** | [The room that never starts the match](phases/phase-p14-room-starts-the-match.md) | `Ready`, `Starting`, `GsMatchStarted`, the hand-typed `roomId`, the debug button | M |
-| **P15** | [The menu with no way in](phases/phase-p15-the-menu-with-no-way-in.md) | F1 — the CRITICAL one; login, register, Practice demoted | L |
-| **P16** | [The room you can see](phases/phase-p16-the-room-you-can-see.md) | the room browser, create-room, the lobby room, choosing a side | L |
-| **P17** | [The readout a player fights with](phases/phase-p17-in-match-readout.md) | F8, and half of F7 — team readout, deploy screen, the killfeed onto the HUD | M |
-| **P18** | [The scoreboard, with real numbers on it](phases/phase-p18-scoreboard.md) | the rest of F7 — `S_PLAYER_SCORES` (0x51) and the Tab scoreboard | L |
-| **P19** | [Island, made playable](phases/phase-p19-island.md) | F4 — sixteen missing scripts on the map the owner ranks first | L |
+| **P1** | Exception storm *(file deleted -- `git show 509c70d:plans/phases/phase-p1-exception-storm.md`)* | X-59, X-60 | S |
+| **P2** | Remote locomotion *(file deleted -- `git show 509c70d:plans/phases/phase-p2-locomotion.md`)* | the sliding bodies | M |
+| **P3** | Flag and minimap *(file deleted -- `git show 509c70d:plans/phases/phase-p3-flag-and-minimap.md`)* | the pole, the missing icons | M |
+| **P4** | Lane-B re-grade *(file deleted -- `git show 509c70d:plans/phases/phase-p4-lane-b-regrade.md`)* | B-1, B-2, B-7, B-8, B-9, B-10, B-13, B-15 — and M1, M2 with them | L |
+| **P5** | Harness gaps *(file deleted -- `git show 509c70d:plans/phases/phase-p5-harness-gaps.md`)* | X-28, X-29, X-37 | M |
+| **P6** | Scoreboard and chat *(file deleted -- `git show 509c70d:plans/phases/phase-p6-scoreboard-and-chat.md`)* | A13, the Chat opcode | M |
+| **P7** | V9 integration *(file deleted -- `git show 509c70d:plans/phases/phase-p7-v9-integration.md`)* | **DONE 2026-08-30** — B-17 re-graded and closed at 16; **B-16 re-opened, 22% over budget**; the soak ran 8 rounds and found **X-73** | L |
+| **P8** | Capstone deliverables *(file deleted -- `git show 509c70d:plans/phases/phase-p8-capstone-deliverables.md`)* | **DONE 2026-08-30** — the client flow wired (it never had been), P0 defined and graded, both tables filled, the soak harness built. Filed **X-76**, **X-77** | L |
+| **P9** | Deployment and single-owner cleanup *(file deleted -- `git show 509c70d:plans/phases/phase-p9-deployment-and-cleanup.md`)* | **DONE 2026-09-01** — 6 of 7 criteria MET 2026-08-31; criterion 5 now **3 of 4** (SS 4.8): the login -> join -> UDP walk and the alert drill are gated scripts, only the 72-hour chart stays deferred. The walk found **three defects that made M2 criterion 14 unverifiable**, chief among them a registered game server being reaped as unauthenticated 30 s after connecting | S |
+| **P10** | The P1-P8 debt sweep *(file deleted -- `git show 509c70d:plans/reports/2026-08-31-p10-debt-sweep.md`)* | **DONE 2026-08-31** — nine ledger rows closed (open **24 -> 14**), **three re-diagnosed and still open**, the M4 soak run and MET. Filed no new rows | L |
+| **P11** | The win condition the netcode never had *(file deleted -- `git show 509c70d:plans/phases/phase-p11-win-condition.md`)* | the networked match's divergence from the game's own rule; `PROTOCOL_VERSION` 4 -> 5 | L |
+| **P12** | Which side am I on *(file deleted -- `git show 509c70d:plans/phases/phase-p12-which-side-am-i-on.md`)* | F5, F3, F6, and half of the surplus-AI row | M |
+| **P13** | The team the lobby chose *(file deleted -- `git show 509c70d:plans/phases/phase-p13-team-into-the-match.md`)* | F2 on the wire; the lopsided-strand defect (server audit #2) | M |
+| **P14** | The room that never starts the match *(file deleted -- `git show 509c70d:plans/phases/phase-p14-room-starts-the-match.md`)* | `Ready`, `Starting`, `GsMatchStarted`, the hand-typed `roomId`, the debug button | M |
+| **P15** | The menu with no way in *(file deleted -- `git show 509c70d:plans/phases/phase-p15-the-menu-with-no-way-in.md`)* | F1 — the CRITICAL one; login, register, Practice demoted | L |
+| **P16** | The room you can see *(file deleted -- `git show 509c70d:plans/phases/phase-p16-the-room-you-can-see.md`)* | the room browser, create-room, the lobby room, choosing a side | L |
+| **P17** | The readout a player fights with *(file deleted -- `git show 509c70d:plans/phases/phase-p17-in-match-readout.md`)* | F8, and half of F7 — team readout, deploy screen, the killfeed onto the HUD | M |
+| **P18** | The scoreboard, with real numbers on it *(file deleted -- `git show 509c70d:plans/phases/phase-p18-scoreboard.md`)* | the rest of F7 — `S_PLAYER_SCORES` (0x51) and the Tab scoreboard | L |
+| **P19** | Island, made playable *(file deleted -- `git show 509c70d:plans/phases/phase-p19-island.md`)* | F4 — sixteen missing scripts on the map the owner ranks first | L |
 
 **P5 blocks the *closing* of P4's rows, not its run.** Run lane B first; X-28's single spawn point
 and X-29's missing measurements will show up in the artifacts as they always have, and fixing them
@@ -193,7 +193,7 @@ Two measurements then forced the split rather than a bigger P17: the server **al
 added to `S_PLAYER_LIST` — that entry is 18 B, `1 + 64 x 18 = 1153` against a `MAX_CHANNEL_PAYLOAD`
 of **1181**, so even one extra byte per entry overflows the un-fragmented guarantee § 4.11 relies
 on. So it needs a new opcode, a spec section, a hex sample and a changelog row: a protocol phase,
-not a UI task. [P18](phases/phase-p18-scoreboard.md) § 1 carries the arithmetic.
+not a UI task. P18 *(file deleted -- `git show 509c70d:plans/phases/phase-p18-scoreboard.md`)* § 1 carries the arithmetic.
 
 
 ## 5. Standing rules
@@ -219,7 +219,7 @@ These outlived the documents that carried them, and each one was learned by bein
 7. **Every "this does not exist" states the paths it searched.** A negative result is a claim about
    a search, not about the tree. The three 2026-09-01 reports carry verified scope lines; reuse
    them rather than re-deriving, and when a report and the source disagree, measure — **X-78** and
-   the two refuted claims in [P19](phases/phase-p19-island.md) § 1.2 are what happens when nobody
+   the two refuted claims in P19 *(file deleted -- `git show 509c70d:plans/phases/phase-p19-island.md`)* § 1.2 are what happens when nobody
    does.
 8. **Name what comes out.** Anything added to core scope names what leaves in exchange. Core scope
    is infantry, one map, Conquest, bots, health/death/respawn, prediction + lag compensation, the
@@ -235,6 +235,15 @@ These outlived the documents that carried them, and each one was learned by bein
 - **The nine finished tracks are deleted, not archived.** `git show 68acdd9:plans/…` recovers any
   of them. A directory of executed instructions reads to the next person as work outstanding —
   which is what produced 228 files and the ledger drift this plan exists to end.
+- **`plans/phases/` and `plans/reports/` were deleted on 2026-09-02 by P20**, on the same
+  reasoning and by the same convention: 55 files, every one of them an executed instruction or a
+  finished write-up. `git show 509c70d:plans/phases/...` and
+  `git show 509c70d:plans/reports/...` recover any of them, and the 136 references that
+  pointed into those trees — 101 markdown links and 35 backticked paths across this file, the
+  ledger, the shared contracts and five `docs/` pages — were rewritten to exactly that form
+  rather than left dangling. Every rewritten reference was checked by running the command.
+  The workflow-gate artifacts under `plans/reports/harness/` went with them; that gate no-ops
+  when no artifact directory resolves, and it had been reporting against a stale P19 pointer.
 - **The four-developer coordination material is gone for good**: role plans, dependency maps,
   sync points, per-track ownership tables, hand-off documents. Its technical content moved to
   [`docs/architecture.md`](../docs/architecture.md) and
