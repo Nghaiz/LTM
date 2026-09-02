@@ -121,6 +121,19 @@ namespace Ironfront.Net.Unity.Server
             new HitscanTarget[ProtocolConstants.MAX_ACTORS];
         private int _projectileTargetCount;
         private readonly SpawnAckTracker _spawnAcks = new SpawnAckTracker();
+
+        /// <summary>
+        /// Which vehicles each viewer has been told about. Ledger <b>X-64</b>.
+        /// </summary>
+        /// <remarks>
+        /// A second <see cref="SpawnAckTracker"/> rather than a new type: the tracker is a
+        /// viewer-by-target pair table over two <c>ushort</c>s and does not care that the second
+        /// one names a vehicle. Sharing ONE instance with <see cref="_spawnAcks"/> would be the
+        /// bug, though -- actor 15 and vehicle 15 are different objects with the same number, and
+        /// one table would report a vehicle as already announced because an actor with its id
+        /// had been.
+        /// </remarks>
+        private readonly SpawnAckTracker _vehicleSpawnAcks = new SpawnAckTracker();
         private readonly LagCompensator _lagCompensator;
 
         private readonly ServerRespawnGate _respawnGate = new ServerRespawnGate();
@@ -788,6 +801,7 @@ namespace Ironfront.Net.Unity.Server
                 ClientSession session = _players[i].Session;
 
                 AnnounceNewActors(session);
+                AnnounceNewVehicles(session);
 
                 // Interest management picks which actors this client is sent and how often. The
                 // per-client view is what the encoder files as its baseline, so a client can
@@ -1055,6 +1069,106 @@ namespace Ironfront.Net.Unity.Server
                     reliable: true);
             }
         }
+
+        /// <summary>
+        /// Sends S_VEHICLE_SPAWN for every live vehicle this client has not been told about yet.
+        /// Ledger <b>X-64</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Vehicles had no catch-up at all, and actors have had one for phases.</b> The only
+        /// sender of <c>S_VEHICLE_SPAWN</c> in the repository is
+        /// <c>ServerVehicleLifecycleSink.OnVehicleSpawned</c>, which calls
+        /// <c>BroadcastReliable</c> -- to whoever is connected at that instant. Nothing replayed
+        /// it. So a client that joined AFTER a vehicle spawned was never told that vehicle
+        /// exists, and <c>IReliablePayloadSender</c>'s own remark had already written down what
+        /// that costs: <i>"a client that misses the spawn has no vehicle to apply the snapshots
+        /// that follow it to."</i>
+        /// </para>
+        /// <para>
+        /// <b>This is what P20 measured in the one uncontaminated run.</b> At t = 47 s, two
+        /// clients standing on the SAME pinned spawn point held different vehicle sets -- OBS-B
+        /// listed four vehicles and had seen vehicle 15 since t = 5 s, while the driver listed
+        /// zero -- and every client's set GREW over the run, 0 to 4 to 14 to 16. That is not an
+        /// interpolator and not a cull radius; it is each client only ever learning about the
+        /// vehicles that happened to spawn after it connected.
+        /// </para>
+        /// <para>
+        /// <b>The CURRENT pose is sent, not the spawn pose</b>, which is the whole lesson of
+        /// X-17 one object over. <c>AnnounceNewActors</c> announces
+        /// <c>actor.Capture()</c> for exactly this reason: a position that was true when the
+        /// object spawned is harmless inside the viewer's interest radius, where snapshots
+        /// overwrite it every frame, and is the ONLY position the client ever has outside
+        /// <c>InterestManager.CullRadius</c>. Replaying a stored spawn message would have put a
+        /// late joiner's copy of a driven vehicle back on its pad and left it there -- which is
+        /// the frozen-copy symptom X-64 is named after.
+        /// </para>
+        /// </remarks>
+        private void AnnounceNewVehicles(ClientSession session)
+        {
+            ServerVehicleRegistry vehicles = ServerVehicleRegistry.Instance;
+            if (vehicles == null || Transport == null) return;
+
+            VehicleRegistry registry = vehicles.Registry;
+            ushort[] liveIds = registry.LiveIds;
+
+            // LiveCount, NOT liveIds.Length. The array is capacity-sized and its own remark says
+            // "valid for LiveCount" -- Remove is a swap-remove, so every entry past the count is
+            // a STALE id belonging to a vehicle that has already despawned. Walking the whole
+            // array would announce those, and the client would build a proxy for a vehicle that
+            // no longer exists and never receive a despawn for it.
+            int liveCount = registry.LiveCount;
+
+            for (int i = 0; i < liveCount && i < liveIds.Length; i++)
+            {
+                ushort vehicleId = liveIds[i];
+                if (vehicleId == 0) continue;
+
+                if (!registry.TryGetState(vehicleId, out VehicleState state)) continue;
+                if (!vehicles.TryFind(vehicleId, out IGameplayVehicleSource source)) continue;
+                if (source == null || !source.Exists) continue;
+
+                if (!_vehicleSpawnAcks.MarkSpawnSent(session.ActorId, vehicleId)) continue;
+
+                source.ReadPose(out Vector3 position, out Quaternion rotation, out _, out _);
+
+                var message = new VehicleSpawnMessage(
+                    vehicleId,
+                    state.Kind,
+                    source.NetworkTypeId,
+                    Quantize.PackPos(position.x),
+                    Quantize.PackPos(position.y),
+                    Quantize.PackPos(position.z),
+                    Quantize.PackQuat(rotation.x, rotation.y, rotation.z, rotation.w),
+                    state.SeatCount,
+                    flags: 0);
+
+                int written = ServerEventWriter.WriteVehicleSpawn(_eventPayload, in message);
+                if (written < 0)
+                {
+                    Debug.LogError($"[net] vehicle spawn for {vehicleId} did not frame");
+                    continue;
+                }
+
+                Transport.Send(
+                    session.ConnectionId,
+                    (byte)ServerEventWriter.ReliableChannel,
+                    new ReadOnlySpan<byte>(_eventPayload, 0, written),
+                    reliable: true);
+
+                VehicleSpawnsAnnounced++;
+            }
+        }
+
+        /// <summary>
+        /// Catch-up vehicle spawns sent to clients that joined after the spawn. Ledger X-64.
+        /// </summary>
+        /// <remarks>
+        /// Zero on a run where every client connected before the first vehicle -- which is the
+        /// shape a single-client test has, and is exactly why this defect survived. A lane-B run
+        /// with three staggered joins should see it non-zero.
+        /// </remarks>
+        public long VehicleSpawnsAnnounced { get; private set; }
 
         /// <summary>
         /// Sends one already-framed payload to every connected client on a reliable channel.
@@ -1553,6 +1667,13 @@ namespace Ironfront.Net.Unity.Server
             // incarnation's re-entry cooldown and be refused a seat it never left.
             _vehicleInterest.ForgetViewer(actorId);
             _seatArbiter.Forget(actorId);
+
+            // A departing VIEWER leaks one vehicle row per vehicle it was ever told about, for
+            // the same reason the line above exists. Forget takes an id and clears it from BOTH
+            // sides of the pair, which is also what makes a reissued vehicle id safe: without it
+            // the new vehicle would inherit the previous incarnation's "already announced" rows
+            // and stream to a client that was never told it exists. X-64.
+            _vehicleSpawnAcks.Forget(actorId);
 
             // Both halves: the installed input source, and the axes it was last handed. An id
             // that is reissued would otherwise inherit the previous occupant's throttle for the
