@@ -1,0 +1,74 @@
+{
+  "commands": [
+    {
+      "command": "pwsh tools/ci.ps1",
+      "status": "pass",
+      "exitCode": 0,
+      "timestamp": "2026-09-02T15:13:00+07:00",
+      "summary": "CI PASSED in 03:36. Every step green: 1. Build, 2. Test, 3. Protocol constants, 3b .meta consistency, 3c no duplicate assemblies, 3d harness owns no decoder, 3e Assembly-CSharp does not reach the server assembly, 3f Net/Diagnostics compiles out, style, analyzers, 4. Unity compile check. Run with the Unity Editor CLOSED, which the first run was not."
+    },
+    {
+      "command": "pwsh tools/ci.ps1 (first attempt, Editor open)",
+      "status": "fail",
+      "exitCode": 1,
+      "timestamp": "2026-09-02T14:41:00+07:00",
+      "summary": "Two steps failed and both were understood before being re-run. '4. Unity compile check' aborted with 'another Unity instance is running with this project open' -- a batchmode/Editor collision, not a code fault. '2. Test' failed ONE assertion out of 1414: AssetWiringGateTests.EveryRegisteredCheckNamesADeclaredDetector, because registering A10 added a 16th check whose declaring class was absent from that test's hand-written list. That one was real and was fixed rather than worked around."
+    },
+    {
+      "command": "dotnet test Ironfront.Net.Replication.Tests --filter AssetWiringGateTests",
+      "status": "pass",
+      "exitCode": 0,
+      "timestamp": "2026-09-02T14:48:00+07:00",
+      "summary": "71 passed, 0 failed (69 before the two new P19 fixtures). The detector-class list is now single-sourced across both directions of the companion pair rather than duplicated per test."
+    },
+    {
+      "command": "dotnet run --project tools/ClientWiringGate (BEFORE the authoring)",
+      "status": "pass",
+      "exitCode": 1,
+      "timestamp": "2026-09-02T14:26:00+07:00",
+      "summary": "OBSERVED RED ON PURPOSE, recorded as a pass because failing here is the required outcome. A10 RED against Island: 3 findings, ALL naming map 2, ZERO naming map 1. 'has no NetServer object', 'has no NetClient object', 'no LevelBounds in this scene'. Saved to plans/reports/harness/p19/gate-red-before-authoring.txt. This is criterion 9's first half and is why the gate was committed before the authoring."
+    },
+    {
+      "command": "dotnet run --project tools/ClientWiringGate (AFTER the authoring)",
+      "status": "pass",
+      "exitCode": 0,
+      "timestamp": "2026-09-02T14:33:00+07:00",
+      "summary": "16 authoring check(s) clean across 4 scene(s) and 63 prefab(s)."
+    },
+    {
+      "command": "four mutations of Island.unity, each followed by the gate and a restore",
+      "status": "pass",
+      "exitCode": 1,
+      "timestamp": "2026-09-02T14:38:00+07:00",
+      "summary": "One mutation per clause, each producing its own message and exit 1: (1) _registry -> {fileID: 0} => 'is null (fileID: 0)'; (2) client-side _prefabsByKind kinds 0/1 swapped => 'kind 0 is prefab X on the server and Y on the client'; (3) ServerSnapshotStage re-homed off the NetServer object => 'is not on the NetServer object (&1940902172)'; (4) Level Bounds MeshRenderer re-homed => 'carries no Renderer. LevelBounds.Awake calls GetComponent<Renderer>().enabled = false'. Restored via a scratchpad backup after each; git status clean and the gate back to exit 0. NOTE: the first mutation attempt used 'git checkout --' to restore and silently reverted the then-uncommitted authoring along with the mutation. Detected within one run, the Editor still held the scene in memory, and the authoring was committed BEFORE the mutations were redone."
+    },
+    {
+      "command": "pwsh tools/run-lane-b.ps1 -Scene Island -Set combat -TimeoutSeconds 300",
+      "status": "pass",
+      "exitCode": 0,
+      "timestamp": "2026-09-02T15:04:00+07:00",
+      "summary": "All 3 clients completed their programme (7/8/7 checkpoints, exit 0). Server: '[net] role = Server', 'server ready slots=16 port=27015'. Match ran Warmup -> Playing -> Ended with '[net] match ended, winner team 0' at 208/8, win by 200. 41-42 remote actors adopted on every client. Capture points 1, 2 and 3 flipped team 1 -> team 0, flag VISIBLE at pole 6.00, all three clients byte-identical. HUD score 0/0 -> 208/8 on all three. 22 screenshots under artifacts/lane-b/p19-island/."
+    },
+    {
+      "command": "pwsh tools/run-lane-b.ps1 -Build -Scene Island (first attempt)",
+      "status": "fail",
+      "exitCode": 1,
+      "timestamp": "2026-09-02T14:55:00+07:00",
+      "summary": "The BUILD succeeded -- '[build] lane-B windows player complete -> build/windows/Ironfront.exe (393971579 bytes, 69 warning(s))', and level2 (Island) was rewritten at 14:54 growing 4,157,364 -> 4,264,272 bytes. The SCRIPT then hung: Start-Process -Wait did not return after Unity exited, most likely holding on a licensing child in the same job object. Killed after 5 minutes of silence and the play phase run separately against that player. Harness flake, not a product fault."
+    },
+    {
+      "command": "python tools/recount_debt_ledger.py --check",
+      "status": "pass",
+      "exitCode": 0,
+      "timestamp": "2026-09-02T15:08:00+07:00",
+      "summary": "Roll-up in the file agrees with the recount after X-78 CLOSED and X-80 filed: open 15 (unchanged), closed 20 -> 21, total 45 -> 46."
+    },
+    {
+      "command": "pwsh tools/check-commit-scope.ps1",
+      "status": "pass",
+      "exitCode": 0,
+      "timestamp": "2026-09-02T15:15:00+07:00",
+      "summary": "One subject was reported BAD ('feat(client): Island authored...' starts with a capital) and was reworded before the push rather than carried as an advisory warning."
+    }
+  ]
+}
