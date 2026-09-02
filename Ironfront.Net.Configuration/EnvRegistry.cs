@@ -285,8 +285,12 @@ namespace Ironfront.Net.Configuration
         /// <summary>Master server port the client dials.</summary>
         public static readonly EnvVar ClientMasterPort = new EnvVar(
             "IRONFRONT_CLIENT_MASTER_PORT", "Game client", "game client",
-            "Matches the master's IRONFRONT_MASTER_PORT.",
-            "27020");
+            "Matches the master's IRONFRONT_MASTER_PORT, and takes its default FROM it\n" +
+            "rather than restating the number. The two had drifted -- this said 27020\n" +
+            "while the master bound 27000 -- so a client build with no override dialled\n" +
+            "a port nothing listened on, and the attempt surfaced nothing a player could\n" +
+            "act on. The line above claimed the match the whole time; only data disagreed.",
+            MasterPort.DefaultValue);
 
         /// <summary>The V5-D6 driver-prediction fallback, as one flag.</summary>
         public static readonly EnvVar ClientPredictLocalVehicle = new EnvVar(

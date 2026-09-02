@@ -35,8 +35,21 @@ namespace Ironfront.Net.Configuration
         /// </remarks>
         public string MasterHost { get; set; } = "127.0.0.1";
 
+        /// <summary>
+        /// The port every client-side default starts from. Equal to the master's own default
+        /// by construction, and asserted so in <c>EnvRegistryTests</c>.
+        /// </summary>
+        /// <remarks>
+        /// <b>It exists because the number was written out five times and drifted.</b> The
+        /// client defaults said 27020 while the master bound 27000, so a build with no
+        /// override dialled a closed port -- and the two shipped scenes disagreed with each
+        /// other, Dustbowl on 27000 and Menu on 27020. A default repeated per call site is a
+        /// default that will differ per call site; this is the one place it is written.
+        /// </remarks>
+        public const int DefaultMasterPort = 27000;
+
         /// <summary>The master server's TCP port.</summary>
-        public int MasterPort { get; set; } = 27020;
+        public int MasterPort { get; set; } = DefaultMasterPort;
 
         /// <summary>
         /// Whether the client predicts the vehicle it is driving. V5-D6.
