@@ -147,12 +147,26 @@ namespace Ironfront.Net.Unity.Server
         /// sent from here. Now it is, and a <c>RejectedTooFar</c> means what it says.
         /// </para>
         /// <para>
-        /// <b>This does not by itself close X-67.</b> The row is filed as the client and the
-        /// server measuring from different origins -- the client from
-        /// <c>vehicle.Body.Transform.position</c>, the server from
-        /// <c>vehicle.GetSeatPosition(seatIndex)</c> -- and that hypothesis is still UNPROVEN,
-        /// because the artifacts that would distinguish it record no distance and no cause. What
-        /// this changes is that the next run can tell them apart.
+        /// <b>X-67's filed cause is REFUTED, and the fourth case above is the real one.</b> The
+        /// row was filed as the client and the server measuring from different origins -- the
+        /// client from <c>vehicle.Body.Transform.position</c>, the server from
+        /// <c>vehicle.GetSeatPosition(seatIndex)</c>. Two things falsify it. That difference was
+        /// removed in <c>c0923f4</c> (2026-08-31), one day AFTER the run the row cites, so it
+        /// has not been testable against HEAD since before the row was last re-read; both ends
+        /// now call the one <c>Vehicle.GetSeatPosition</c>. And the run's own artifacts carry
+        /// the answer: <c>p5-e11-03</c>'s <c>server.log</c> logs <i>"actor 43 at
+        /// (2093.31,-1024.67,1150.45) -- outside +/-3072 m"</i>, and
+        /// <c>observer-b-checkpoints.jsonl</c> records <c>localActor.authoritativeY</c> at
+        /// -1008.62 BEFORE the first of the four requests. The server measured ~1037 m to a
+        /// seat at y = 12.9 and refused correctly. An origin mismatch cannot produce that: 4.08 m
+        /// plus any hull-to-seat offset is still under 6 m, and the refusal was three orders of
+        /// magnitude out.
+        /// </para>
+        /// <para>
+        /// So the residual defect is not a mismatch but a body that is nowhere rendering as a
+        /// body that is far -- fixed below by
+        /// <see cref="SeatChangeResult.RejectedActorUnplaced"/>. The fall itself belongs to
+        /// <b>X-75</b>, of which this run is the second recorded occurrence.
         /// </para>
         /// </remarks>
         private SeatChangeResult? TryMeasureSeatReach(
@@ -174,7 +188,24 @@ namespace Ironfront.Net.Unity.Server
             if (float.IsInfinity(seat.x) || float.IsInfinity(seat.y) || float.IsInfinity(seat.z))
                 return SeatChangeResult.RejectedNoSuchSeat;
 
-            distanceSquared = (seat - actor.transform.position).sqrMagnitude;
+            Vector3 actorAt = actor.transform.position;
+
+            // The fourth unmeasurable case, and the one that cost a day. X-67 was filed as a
+            // client/server origin mismatch on the strength of four RejectedTooFar in
+            // p5-e11-03; the client stood 4.08 m from the hull and the server measured
+            // ~1037 m, because ITS copy of that body was at y = -1024.67 -- on POS_MIN, having
+            // fallen out of the world (X-75). "Too far" was arithmetically true and told the
+            // player to walk closer to a vehicle they were already touching.
+            //
+            // A body outside the wire's range is not far away, it is nowhere: its position has
+            // saturated, so every distance computed from it is a distance to the clamp rather
+            // than to the body. Refuse with a code that says that.
+            if (Quantize.PositionSaturates(actorAt.x)
+                || Quantize.PositionSaturates(actorAt.y)
+                || Quantize.PositionSaturates(actorAt.z))
+                return SeatChangeResult.RejectedActorUnplaced;
+
+            distanceSquared = (seat - actorAt).sqrMagnitude;
             return null;
         }
     }

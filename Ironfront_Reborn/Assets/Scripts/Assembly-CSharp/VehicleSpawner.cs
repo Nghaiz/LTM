@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.World;
 using Ironfront.Net.Unity.Server;
@@ -71,6 +72,29 @@ public class VehicleSpawner : MonoBehaviour
 	/// <summary>So a pad that cannot replicate says so once, not once per respawn forever.</summary>
 	private bool warnedAboutUnreplicatedSpawn;
 
+	/// <summary>
+	/// The network ids of vehicles this pad spawned and then SUPERSEDED -- still alive, still
+	/// replicated, no longer <see cref="lastSpawnedVehicle"/>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>X-70, the half that made the exhaustion permanent.</b> A <c>respawnType</c> of
+	/// <c>AfterMoved</c> schedules a replacement the moment the first driver enters, so the
+	/// original is alive and driven away when <see cref="SpawnVehicle"/> overwrites
+	/// <see cref="lastSpawnedVehicle"/> and <see cref="AnnounceSpawn"/> overwrites
+	/// <see cref="lastSpawnedVehicleNetId"/>. When that superseded vehicle later died,
+	/// <see cref="VehicleDied"/>'s <c>vehicle == lastSpawnedVehicle</c> guard was false, so
+	/// <c>ReportDespawned</c> never ran: the id was held for the rest of the round and every
+	/// client kept a ghost vehicle that was never removed and never updated again.
+	/// </para>
+	/// <para>
+	/// Keyed by the component rather than held on <c>Vehicle</c> for the same reason
+	/// <see cref="lastSpawnedVehicleNetId"/> is: the despawn has to be reportable from a
+	/// callback that fires as the object goes away.
+	/// </para>
+	/// </remarks>
+	private readonly Dictionary<Vehicle, ushort> supersededNetIds = new Dictionary<Vehicle, ushort>();
+
 	// Cached once. A fresh lambda per Update would allocate one delegate per frame per spawner,
 	// which on a map with thirty spawners is thirty allocations every frame for a predicate
 	// that never changes.
@@ -122,10 +146,18 @@ public class VehicleSpawner : MonoBehaviour
 		{
 			// Once, on the tick the budget ran out -- not once a second forever, which is what
 			// the unbounded coroutine effectively did to anyone reading the log.
+			// spawnerId, not just name: Dustbowl authors 'Vehicle Spawner (2)' FOUR times and
+			// 'Vehicle Spawner (1)' twice, so the name alone cannot say which pad to go and
+			// look at -- which is the whole reason spawnerId exists. X-70.
+			//
+			// And the blocker is NAMED. spawnCollisions[0] has held the answer all along and
+			// the message threw it away, so 'the pad is obstructed' could never say by what:
+			// a ragdoll, a standing bot's hitbox, or a vehicle parked on it.
 			Debug.LogWarning(
-				$"[net] vehicle spawner '{name}' gave up after {scheduler.MaxBlockedRetries} "
-				+ "blocked attempts; the pad is obstructed. It re-arms on the next vehicle "
-				+ "death or world reset.");
+				$"[net] vehicle spawner '{name}' (id {spawnerId}) gave up after "
+				+ $"{scheduler.MaxBlockedRetries} blocked attempts; the pad is obstructed by "
+				+ $"{DescribeBlocker()}. It re-arms on the next vehicle death or world reset "
+				+ "-- but NOT on an AfterMoved pad, whose vehicle has already been used.");
 		}
 	}
 
@@ -177,6 +209,15 @@ public class VehicleSpawner : MonoBehaviour
 			return;
 		}
 
+		// Hand the outgoing vehicle its own id BEFORE the fields that hold it are overwritten.
+		// X-70: without this the id is orphaned -- never released, never despawned -- because
+		// VehicleDied's guard compares against lastSpawnedVehicle, which is about to change.
+		if (lastSpawnedVehicle != null && lastSpawnedVehicleNetId != 0)
+		{
+			supersededNetIds[lastSpawnedVehicle] = lastSpawnedVehicleNetId;
+			lastSpawnedVehicleNetId = 0;
+		}
+
 		lastSpawnedVehicle = ((GameObject)UnityEngine.Object.Instantiate(prefab, base.transform.position, base.transform.rotation)).GetComponent<Vehicle>();
 		lastSpawnedVehicle.SetSpawner(this);
 		lastSpawnedVehicleHasBeenUsed = false;
@@ -221,18 +262,79 @@ public class VehicleSpawner : MonoBehaviour
 		// branch for a prefab that had carried an id since the commit which introduced the
 		// field. A message that offers a choice is a message that gets chosen wrongly.
 		Debug.LogError(
-			$"[net] vehicle spawner '{name}' produced '{prefab.name}' (networkId "
-			+ $"{lastSpawnedVehicle.NetworkId}) with no network id, so no client will ever see "
-			+ $"it. {NetVehicleLifecycle.DescribeSpawnRefusal()}");
+			$"[net] vehicle spawner '{name}' (id {spawnerId}) produced '{prefab.name}' "
+			+ $"(networkId {lastSpawnedVehicle.NetworkId}) with no network id, so no client "
+			+ $"will ever see it. {NetVehicleLifecycle.DescribeSpawnRefusal()}");
 	}
 
 	private bool SpawnIsBlocked()
 	{
+		// X-70's capacity half, and it is a BLOCK rather than a refusal on purpose. An
+		// AfterMoved pad schedules its replacement the moment the first driver enters, while
+		// the original is alive and still holding its id -- so such a pad needs two ids at
+		// once, and Dustbowl's four of them take peak demand to 14 + 4 = 18 against a
+		// MAX_VEHICLES of 16. Spawning anyway produced a vehicle with id 0: solid on the
+		// server, invisible to every client, forever.
+		//
+		// Deferring instead reuses the retry budget the obstruction case already has, so the
+		// replacement arrives a few seconds later once a quarantined id drains -- which is the
+		// difference between a late vehicle and a phantom one. Raising MAX_VEHICLES is the
+		// other way and is NOT free: VehicleSnapshotMessage sizes the wire body against it.
+		if (WouldNeedASecondId() && !NetVehicleLifecycle.CanReplicateAnotherVehicle)
+		{
+			return true;
+		}
+
 		return Physics.OverlapSphereNonAlloc(base.transform.position, collisionCheckRadius, spawnCollisions, 5376) > 0;
+	}
+
+	/// <summary>
+	/// Names whatever is sitting on the pad, for the gave-up line.
+	/// </summary>
+	/// <remarks>
+	/// <c>spawnCollisions[0]</c> is filled by the <c>OverlapSphereNonAlloc</c> in
+	/// <see cref="SpawnIsBlocked"/> and was discarded. A message that says "obstructed"
+	/// without saying by what is the same instrument failure X-70 itself was: it cannot
+	/// distinguish a ragdoll from a parked vehicle, so the reader guesses.
+	/// </remarks>
+	private string DescribeBlocker()
+	{
+		Collider blocker = spawnCollisions != null && spawnCollisions.Length > 0
+			? spawnCollisions[0]
+			: null;
+
+		if (blocker == null) return "something that is no longer there";
+
+		return $"'{blocker.gameObject.name}' (layer {LayerMask.LayerToName(blocker.gameObject.layer)})";
+	}
+
+	/// <summary>
+	/// Whether the next spawn would have to hold an id ALONGSIDE the one this pad already
+	/// holds, rather than after it was released.
+	/// </summary>
+	/// <remarks>
+	/// True exactly when the vehicle this pad last produced is still alive and still
+	/// replicated. A pad whose vehicle has died released its id on the way out, so its
+	/// replacement re-uses capacity rather than adding to it -- gating that one too would
+	/// stall the ordinary respawn every time the pool ran hot.
+	/// </remarks>
+	private bool WouldNeedASecondId()
+	{
+		return lastSpawnedVehicle != null && lastSpawnedVehicleNetId != 0;
 	}
 
 	public void VehicleDied(Vehicle vehicle)
 	{
+		// A superseded vehicle -- alive and driven away when this pad respawned. Its id is the
+		// one X-70 leaked: released here, and its despawn put on the wire, so the clients that
+		// have been rendering it since stop. Checked before the lastSpawnedVehicle branch
+		// because the two sets are disjoint and this one used to fall through it entirely.
+		if (vehicle != null && supersededNetIds.TryGetValue(vehicle, out ushort supersededId))
+		{
+			supersededNetIds.Remove(vehicle);
+			NetVehicleLifecycle.ReportDespawned(supersededId, VehicleDespawnReason.Destroyed);
+		}
+
 		if (vehicle == lastSpawnedVehicle)
 		{
 			// Before the scheduler, because ReportVehicleDied is what may schedule the

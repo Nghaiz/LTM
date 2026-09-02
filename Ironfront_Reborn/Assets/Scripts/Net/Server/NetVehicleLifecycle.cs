@@ -79,6 +79,32 @@ namespace Ironfront.Net.Unity.Server
                    + $" free={ids.FreeCount} capacity={ids.Capacity}";
         }
 
+        /// <summary>
+        /// Whether the id pool could replicate one more vehicle right now.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>X-70's capacity half.</b> <c>MAX_VEHICLES</c> is 16 and both shipping maps author
+        /// 14 pads, which <c>VehicleIdPool</c>'s own remark reasoned left two spare. It counts
+        /// PADS, not live vehicles. Four of Dustbowl's pads are <c>AfterMoved</c>: they schedule
+        /// a replacement the moment the first driver enters, while the original is alive and
+        /// still holding its id, so those pads need TWO ids at once. Peak demand is 14 + 4 = 18
+        /// against a capacity of 16, and the last two spawns are refused.
+        /// </para>
+        /// <para>
+        /// <b>True on a client and offline</b>, where the null sink means there is no pool to be
+        /// out of: the spawner must keep producing vehicles in single-player, and 0 is a normal
+        /// id there rather than a refusal.
+        /// </para>
+        /// <para>
+        /// Reads <c>FreeCount</c> without draining quarantine, so it is conservative by exactly
+        /// the ids that are about to come back. A pad that defers one tick too long respawns a
+        /// tick later; a pad that spawns anyway produces a vehicle no client can ever see.
+        /// </para>
+        /// </remarks>
+        public static bool CanReplicateAnotherVehicle
+            => !(_sink is ServerVehicleLifecycleSink server) || server.Ids.FreeCount > 0;
+
         /// <summary>Installs the server's sink. Called from <c>ServerTickLoop.Bind</c>.</summary>
         public static void Install(IVehicleLifecycleSink sink)
             => _sink = sink ?? NullVehicleLifecycleSink.Instance;

@@ -179,6 +179,38 @@ namespace Ironfront.Net.Protocol
         /// </para>
         /// </remarks>
         RejectedLockedOut  = 7,
+
+        /// <summary>
+        /// The actor's authoritative position is outside the wire's representable range, so no
+        /// distance to the seat can be measured at all.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Added in V5 because "too far" was a lie four times in one run.</b> In
+        /// <c>p5-e11-03</c> a client stood 4.08 m from a hull and was refused four times with
+        /// <see cref="RejectedTooFar"/>. The refusal was arithmetically correct and completely
+        /// misleading: the server's copy of that body sat at y = -1024.67 — on
+        /// <c>Quantize.POS_MIN</c>, having fallen out of the world — so the measured distance
+        /// was ~1037 m, roughly 29,900x the limit. Ledger <b>X-67</b> was filed against a
+        /// client/server origin mismatch on the strength of that message and spent a day being
+        /// investigated in the wrong direction; the mismatch it named had already been closed
+        /// in <c>c0923f4</c> the day after the run.
+        /// </para>
+        /// <para>
+        /// <b>A body that is nowhere is not a body that is far.</b> The remedy for
+        /// <see cref="RejectedTooFar"/> is "walk closer", and it cannot work here — the
+        /// position the client is walking is not the position being measured. Ledger
+        /// <b>X-75</b> owns the fall itself; this code exists so the next occurrence names it
+        /// rather than sending a player to walk at a vehicle they are already touching.
+        /// </para>
+        /// <para>
+        /// <b>Appending a value is not a wire change</b>, for the reason
+        /// <see cref="RejectedLockedOut"/> states in full: <c>S_SEAT_CHANGE</c> stays 6 bytes,
+        /// <c>result</c> stays a <c>u8</c>, and
+        /// <see cref="ProtocolConstants.PROTOCOL_VERSION"/> is unchanged.
+        /// </para>
+        /// </remarks>
+        RejectedActorUnplaced = 8,
     }
 
     /// <summary>What is being launched, carried by <c>S_PROJECTILE_SPAWN</c>.</summary>

@@ -62,8 +62,8 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier:
   spawnTime: 0.1
-  team0Bots: 20
-  team1Bots: 20
+  team0Bots: 16
+  team1Bots: 16
   actorPrefab: {fileID: 1576652965907357, guid: 8dca75998d685bf4395acf5abb1b472b, type: 2}
 --- !u!114 &114924296564444106
 MonoBehaviour:

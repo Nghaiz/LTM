@@ -107,6 +107,21 @@ namespace Ironfront.Net.Unity.Diagnostics
         private readonly LaneBExplosionLog _explosions = new LaneBExplosionLog();
 
         /// <summary>
+        /// The route cursor for whichever step is live, or null when that step has none.
+        /// Ledger <b>X-66</b>.
+        /// </summary>
+        /// <remarks>
+        /// Rebuilt whenever <see cref="_routeCursorStepIndex"/> disagrees with
+        /// <c>_cursor.StepIndex</c> — see <see cref="RouteCursorFor"/>. A step that carries no
+        /// <c>route</c> leaves this null and <c>BuildMoveInput</c> falls straight through to the
+        /// existing <c>approach</c> branch, unchanged.
+        /// </remarks>
+        private ScriptedRouteCursor _routeCursor;
+
+        /// <summary>The <c>_cursor.StepIndex</c> <see cref="_routeCursor"/> was built for, or -1.</summary>
+        private int _routeCursorStepIndex = -1;
+
+        /// <summary>
         /// Check 10's instrument, or null on the server role. Ledger <b>X-33</b>.
         /// </summary>
         /// <remarks>
@@ -280,12 +295,12 @@ namespace Ironfront.Net.Unity.Diagnostics
 
             ISpawnPointDirectory inner = NetServerBindings.SpawnPoints;
 
-            LaneBSpawnPin.Outcome outcome = LaneBSpawnPin.EvaluatePerTeam(
+            LaneBSpawnPin.Outcome outcome = LaneBSpawnPin.EvaluateRotationsPerTeam(
                 Read(SpawnIndexVariable),
                 inner != null,
                 inner != null ? inner.Count : 0,
                 final,
-                out int[] slots,
+                out int[][] rotations,
                 out string message);
 
             switch (outcome)
@@ -308,7 +323,7 @@ namespace Ironfront.Net.Unity.Diagnostics
             PinnedSpawnPointDirectory pinned;
             try
             {
-                pinned = new PinnedSpawnPointDirectory(inner, slots);
+                pinned = new PinnedSpawnPointDirectory(inner, rotations);
             }
             catch (ArgumentException ex)
             {
@@ -326,12 +341,19 @@ namespace Ironfront.Net.Unity.Diagnostics
             NetServerBindings.SpawnPoints = pinned;
             _spawnPinned = true;
 
+            // Read through the INNER directory, not `pinned`, deliberately: PinnedSpawnPointDirectory
+            // .GetSpawnPosition advances the matching team's rotation cursor on every call (that
+            // is the X-28 fix), and this log line is not a placement. Reading through `inner`
+            // reports the first draw without consuming it.
             Debug.Log(
-                $"[lane-b] spawn pinned per team to [{string.Join(", ", slots)}] of "
-                + $"{inner.Count} point(s): team0 at {inner.GetSpawnPosition(pinned.PinnedIndexFor(0))}, "
-                + $"team1 at {inner.GetSpawnPosition(pinned.PinnedIndexFor(1))}. "
-                + "Both were checked eligible before this line ran, so a starved team is now a "
-                + "refusal at the top rather than an unplaced actor mid-run (X-63).");
+                $"[lane-b] spawn pinned per team to team0=[{string.Join(", ", rotations[0])}] "
+                + $"team1=[{string.Join(", ", rotations[1])}] of {inner.Count} point(s), "
+                + "first draw team0 at " + $"{inner.GetSpawnPosition(rotations[0][0])}, "
+                + $"team1 at {inner.GetSpawnPosition(rotations[1][0])}. Both were checked "
+                + "eligible on EVERY rotation slot before this line ran, so a starved team is "
+                + "now a refusal at the top rather than an unplaced actor mid-run (X-63). A "
+                + "rotation of more than one slot spreads successive same-team placements "
+                + "instead of stacking them on one (X-28).");
         }
 
         /// <summary>
@@ -686,9 +708,38 @@ namespace Ironfront.Net.Unity.Diagnostics
 
             if (step == null) return new MoveInput(0f, 0f, yaw, false, false, false);
 
+            float moveX = step.moveX;
             float moveZ = step.moveZ;
 
-            if ((step.approach || step.approachVehicle) && _source != null)
+            // Route steering, BEFORE the approach branch below, and handed over to it UNCHANGED
+            // once the last corner is passed. X-66: ApproachMoveZ alone only ever walks a
+            // straight line at the target, which stalls infantry on terrain a straight line
+            // does not clear; a route is the authored detour around it.
+            bool routeActive = false;
+            ScriptedRouteCursor route = RouteCursorFor(step);
+
+            if (route != null)
+            {
+                ILocalPlayerRig local = NetClientBindings.LocalPlayer;
+
+                if (local.Exists && route.Advance(local.Position.x, local.Position.z))
+                {
+                    routeActive = true;
+
+                    // Facing stays whatever `yaw` above already resolved to (the solved aim, or
+                    // the cursor's own) -- only the legs are steered by the route. Sending a yaw
+                    // that disagrees with the controller's own aim is exactly what this method's
+                    // class remark elsewhere forbids.
+                    ScriptedAim.SteerToward(
+                        local.Position.x, local.Position.z,
+                        route.CurrentCornerX, route.CurrentCornerZ, yaw,
+                        out moveX, out moveZ);
+                }
+                // Local actor not resolvable yet, or the route is already finished: fall through
+                // to the step's own moveX/moveZ (or the approach branch below), unchanged.
+            }
+
+            if (!routeActive && (step.approach || step.approachVehicle) && _source != null)
             {
                 ScriptedTargetSolver.Solution aim = _source.Aim();
 
@@ -719,10 +770,55 @@ namespace Ironfront.Net.Unity.Diagnostics
             // grenade-driver.json carried "switchWeaponSlot": 2 and the server received
             // buttons=0x0001, Fire alone, on 60 of 60 frames (artifacts/lane-b/x31-diag-04).
             return new MoveInput(
-                step.moveX, moveZ, yaw,
+                moveX, moveZ, yaw,
                 step.jump, step.sprint, step.crouch,
                 step.fire, step.aim, step.reload,
                 step.use, step.switchWeaponSlot);
+        }
+
+        /// <summary>
+        /// The route cursor for <paramref name="step"/>, rebuilt the moment the live step
+        /// changes and null for a step that carries no <c>route</c>. Ledger <b>X-66</b>.
+        /// </summary>
+        /// <remarks>
+        /// Keyed on <c>_cursor.StepIndex</c> rather than on step identity: <c>ScriptedInputStep</c>
+        /// carries no id of its own, and the cursor already recreates its notion of "the live
+        /// step" the same way (<c>ScriptedInputCursor.Current</c>). A programme never repeats the
+        /// same step object twice in a row, so the index alone is enough to tell "still on this
+        /// step" from "a new step just started".
+        /// </remarks>
+        private ScriptedRouteCursor RouteCursorFor(ScriptedInputStep step)
+        {
+            if (_routeCursorStepIndex != _cursor.StepIndex)
+            {
+                _routeCursorStepIndex = _cursor.StepIndex;
+                _routeCursor = BuildRouteCursor(step);
+            }
+
+            return _routeCursor;
+        }
+
+        /// <summary>
+        /// Unpacks a step's authored <see cref="ScriptedRouteWaypoint"/> array into the parallel
+        /// <c>float[]</c> pair <see cref="ScriptedRouteCursor"/> takes. That class stays engine-
+        /// and model-free (see its own remark on why) so this conversion happens here, the one
+        /// place that already knows both the JSON-facing type and the pure-arithmetic one.
+        /// </summary>
+        private static ScriptedRouteCursor BuildRouteCursor(ScriptedInputStep step)
+        {
+            ScriptedRouteWaypoint[] corners = step.route;
+            if (corners == null || corners.Length == 0) return null;
+
+            var xs = new float[corners.Length];
+            var zs = new float[corners.Length];
+
+            for (int i = 0; i < corners.Length; i++)
+            {
+                xs[i] = corners[i].x;
+                zs[i] = corners[i].z;
+            }
+
+            return new ScriptedRouteCursor(xs, zs, step.routeCornerRadiusMeters);
         }
 
         private void DrainCheckpoints()

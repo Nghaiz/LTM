@@ -4,7 +4,13 @@
     { "seconds": 5.0, "yawDegrees": 0 },
     { "checkpoint": "spawned", "seconds": 2.0, "yawDegrees": 0 },
     { "checkpoint": "approach", "seconds": 150.0,
-      "aimAtPlayer": "OBS-A", "approach": true, "holdDistanceMeters": 6.0, "sprint": true },
+      "aimAtPlayer": "OBS-A", "approach": true, "holdDistanceMeters": 6.0, "sprint": true,
+      "routeCornerRadiusMeters": 8.0,
+      "route": [
+        { "x": 1845.05, "z": 1053.07 },
+        { "x": 1691.75, "z": 1151.07 },
+        { "x": 1668.71, "z": 1308.11 }
+      ] },
     { "checkpoint": "in-range", "seconds": 3.0,
       "aimAtPlayer": "OBS-A", "approach": true, "holdDistanceMeters": 6.0, "aim": true },
     { "checkpoint": "firing", "seconds": 8.0,

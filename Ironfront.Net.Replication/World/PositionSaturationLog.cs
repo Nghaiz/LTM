@@ -58,7 +58,30 @@ namespace Ironfront.Net.Replication.World
         /// </summary>
         /// <returns>True when it saturated, so a caller may log or act on the individual event.</returns>
         public static bool Observe(bool isVehicle, ushort id, in Vec3 position)
+            => Observe(isVehicle, id, in position, out _);
+
+        /// <summary>
+        /// The same recording <see cref="Observe(bool, ushort, in Vec3)"/> does, plus whether
+        /// THIS entity has not saturated before since the last <see cref="Reset"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>X-75.</b> A caller that reports once per PROCESS — as the lane-B harness did —
+        /// hides every entity after the first: <c>p7-load-combat-server.log</c>'s final counter
+        /// read <c>posSaturated=2604/2ent</c>, two distinct entities, and the report named only
+        /// one of them because the flag it gated on was never per-entity to begin with.
+        /// </para>
+        /// <para>
+        /// <paramref name="isFirstForThisEntity"/> is exactly <c>Seen.Add(...)</c>'s own return —
+        /// a caller does not need a second set of its own to ask "have I already reported this
+        /// one", because this log already keeps that set for <see cref="DistinctEntities"/>.
+        /// </para>
+        /// </remarks>
+        /// <returns>True when it saturated, so a caller may log or act on the individual event.</returns>
+        public static bool Observe(bool isVehicle, ushort id, in Vec3 position, out bool isFirstForThisEntity)
         {
+            isFirstForThisEntity = false;
+
             if (!Quantize.PositionSaturates(position.X)
                 && !Quantize.PositionSaturates(position.Y)
                 && !Quantize.PositionSaturates(position.Z))
@@ -67,7 +90,7 @@ namespace Ironfront.Net.Replication.World
             }
 
             Count++;
-            Seen.Add((isVehicle, id));
+            isFirstForThisEntity = Seen.Add((isVehicle, id));
             First ??= string.Format(
                 CultureInfo.InvariantCulture,
                 "{0} {1} at ({2:F2},{3:F2},{4:F2}) — outside +/-{5:F0} m, so it replicates on the "

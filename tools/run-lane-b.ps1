@@ -101,7 +101,12 @@ param(
     # recorded runs under artifacts/lane-b (grep "placed at spawn point"), so any of the six is
     # a valid pin. Which one barely matters: every player lands on whichever is chosen, so the
     # pair is co-located either way. 0 is as good a default as any.
-    [int] $SpawnIndex = -1,
+    # A STRING, not an int, since X-28. LaneBSpawnPin has always parsed a per-team form
+    # ("3,7" = team 0 on slot 3, team 1 on slot 7) and a rotation form ("3|4|5,7" = team 0
+    # cycles 3, 4, 5), and neither could ever be typed here because this parameter was [int] --
+    # so the only reachable pin was the one that puts every client on ONE point, which IS X-28.
+    # Empty leaves the draw alone, matching the old -1.
+    [string] $SpawnIndex = "",
 
     # Which map to run on, by SCENE NAME. Every process reads it through
     # IRONFRONT_LANEB_SCENE, and DedicatedServerSceneBootstrap loads it.
@@ -371,11 +376,11 @@ try {
     }
     # Server only: the clients place nobody, so the variable would be inert on them and only
     # make the three logs disagree about what the run was configured to do.
-    if ($SpawnIndex -ge 0) { $env:IRONFRONT_LANEB_SPAWN_INDEX = "$SpawnIndex" }
+    if ($SpawnIndex -ne "") { $env:IRONFRONT_LANEB_SPAWN_INDEX = "$SpawnIndex" }
     if ($Weapon)            { $env:IRONFRONT_LANEB_WEAPON = $Weapon }
     if ($Gear)              { $env:IRONFRONT_LANEB_GEAR = $Gear }
 
-    $spawnNote = if ($SpawnIndex -ge 0) { "spawn=pinned:$SpawnIndex" } else { "spawn=sampled (X-22: this run is a coin flip)" }
+    $spawnNote = if ($SpawnIndex -ne "") { "spawn=pinned:$SpawnIndex" } else { "spawn=sampled (X-22: this run is a coin flip)" }
     $weaponNote = if ($Weapon) { "weapon=pinned:$Weapon" } else { "weapon=drawn (X-27: not comparable to another run)" }
     if ($Gear) { $weaponNote += ", gear=pinned:$Gear" }
     Write-Host "[lane-b] starting the server (port $Port, sim=$Sim/$SimSeed, $spawnNote, $weaponNote)"
@@ -531,6 +536,45 @@ foreach ($c in $clients) {
     if ($summary.playerId -ne $c.PlayerId) {
         $failures += "$($c.Label): joined as player $($summary.playerId), not $($c.PlayerId)"
     }
+}
+
+# THE SERVER'S OWN COMPLAINT IS PART OF THE VERDICT. X-75.
+#
+# Every row above reads a per-process summary, and no summary has a field for "a body left the
+# world". So p5-e11-03 recorded "passed": true with "failures": [] while its server log said
+# `actor 43 at (2093.31,-1024.67,1150.45) -- outside +/-3072 m` -- a live player 1,036 m under
+# the terrain, whose four seat requests were then refused as "too far" and read by a human as a
+# seat-reach defect (X-67, filed against the wrong cause on the strength of that green).
+#
+# Graded from the log, against the standing rule that the verdict comes from summaries, because
+# the alternative is adding a field to every process summary for a condition the SERVER is the
+# only witness to. The marker is a fixed prefix the server emits, not prose.
+# THREE DIFFERENT THINGS share the [bounds] prefix and only one of them is a run failure.
+# Matching the bare prefix would fail 14 of the 100 recorded runs for a STATIC config warning
+# that names no entity at all -- a gate that cries wolf on nearly every run is a gate that gets
+# ignored, which is how this fault survived in the first place.
+$serverLogPath = Join-Path $outDir "server.log"
+if (Test-Path $serverLogPath) {
+    # An ENTITY left the world. This is the failure.
+    $escaped = @(Select-String -Path $serverLogPath -Pattern '\[bounds\].*: (actor|vehicle) \d+')
+    if ($escaped.Count -gt 0) {
+        $failures += "server: a replicated entity left the wire's +/-3072 m position range and " +
+                     "was CLAMPED onto the boundary, so every client rendered it somewhere it " +
+                     "is not and any distance measured from it is a distance to the clamp " +
+                     "(X-75). $($escaped.Count) line(s); first: $($escaped[0].Line.Trim())"
+    }
+
+    # The authored volume reaching past the wire range is a MAP CONFIG finding, not an event:
+    # it fires identically on a run where nothing went wrong. Surfaced, never graded.
+    $volume = @(Select-String -Path $serverLogPath -Pattern 'authored LevelBounds volume')
+    if ($volume.Count -gt 0) {
+        Write-Host ("[lane-b] note: this map's authored LevelBounds volume reaches past the " +
+                    "wire's position range, so bodies out there desync permanently. Not " +
+                    "graded -- it is true of the map before the run starts.") -ForegroundColor Yellow
+    }
+} else {
+    $failures += "server: no server.log at $serverLogPath, so the out-of-world check could " +
+                 "not run. Absence of the file is not absence of the fault."
 }
 
 Write-Host ""

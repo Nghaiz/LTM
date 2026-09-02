@@ -2,6 +2,7 @@ using System;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Movement;
 using Ironfront.Net.Replication.Server;
+using Ironfront.Net.Replication.World;
 using UnityEngine;
 
 namespace Ironfront.Net.Unity.Server
@@ -24,6 +25,62 @@ namespace Ironfront.Net.Unity.Server
         private readonly Func<Vec3, Vec3> _moveThroughCollision;
         private readonly Func<Vec3, Vec3> _moveDetached;
         private readonly ServerCombatBridge _combat;
+
+        /// <summary>
+        /// The wire's own representable cube — <c>Quantize.POS_MIN</c>..<c>POS_MAX</c> on every
+        /// axis. Ledger <b>X-75</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Not the authored <c>LevelBounds</c> volume, and that is deliberate.</b>
+        /// <c>LevelBounds</c> compiles into <c>Assembly-CSharp</c>, which no asmdef can
+        /// reference — the same wall <c>NetServerBindings</c>' resolvers exist to cross for
+        /// other seams, and no such seam exists for the play volume today. The wire's own range
+        /// needs no seam: it is the same <c>Quantize.POS_MIN</c>/<c>POS_MAX</c>
+        /// <c>SnapshotBuilder</c> already clamps every position against, so a body this volume
+        /// contains is a body <see cref="PlayVolume.FitsOnTheWire"/> can encode. That is a
+        /// narrower promise than "inside the level" — Dustbowl's authored floor sits at
+        /// <c>y = -50</c>, nowhere near this cube's <c>y = -1024</c> — but it is the promise
+        /// X-75 is actually about: an actor "leaves the wire's position range and is silently
+        /// clamped onto the boundary," not an actor that merely fell below the map's own floor
+        /// while still on the wire.
+        /// </para>
+        /// </remarks>
+        private static readonly PlayVolume _wireVolume = BuildWireVolume();
+
+        private static PlayVolume BuildWireVolume()
+        {
+            float centre = (Quantize.POS_MIN + Quantize.POS_MAX) / 2f;
+            return new PlayVolume(
+                new Vec3(centre, centre, centre),
+                new Vec3(Quantize.POS_RANGE, Quantize.POS_RANGE, Quantize.POS_RANGE));
+        }
+
+        /// <summary>
+        /// How far below the wire's floor a body must fall before it counts as having fallen out
+        /// of the world. <b>Zero, and it must stay zero.</b>
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Any slack at all re-creates the bug it was meant to soften.</b> This check runs
+        /// before the clamp, so a body that is below the floor but inside the slack falls
+        /// through to <see cref="PlayVolume.TryClamp"/> and is pushed back UP to the floor. Next
+        /// tick gravity moves it down by one tick's fall and the same thing happens again. The
+        /// recorded descent rate is ~0.517 m per tick, so a slack of 1 m meant the body could
+        /// never get far enough below the floor in a single tick to be judged fallen: it would
+        /// have oscillated at the boundary, alive, forever — which IS X-75, at a different y.
+        /// </para>
+        /// <para>
+        /// All four recorded falls landed between -1024.03 and -1025.07, i.e. inside exactly
+        /// that window. So the slack would have covered every occurrence on record.
+        /// </para>
+        /// <para>
+        /// Zero is also correct on its own terms rather than merely safe: <c>POS_MIN</c> is
+        /// -1024 m and both shipping maps sit near y = 0, so there is no floating-point noise to
+        /// absorb. A body below the wire floor has unambiguously left the world.
+        /// </para>
+        /// </remarks>
+        private const float FloorDeathSlackMetres = 0f;
 
         /// <param name="combat">
         /// Where accepted frames go for their combat half. Null leaves this player moving but
@@ -176,6 +233,88 @@ namespace Ironfront.Net.Unity.Server
             // Mirror the authoritative result back so the agent's stance height tracks the
             // crouch the server actually applied. Tick() would step the simulation twice.
             agent.ApplyAuthoritativeState(in Session.State);
+
+            EnforceWireVolume(agent);
+        }
+
+        /// <summary>
+        /// Keeps this player's authoritative position inside <see cref="_wireVolume"/> after a
+        /// tick's movement has run. Ledger <b>X-75</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Two different faults, two different responses.</b> A body that has fallen through
+        /// collision (ledger X-15's free-fall, or a hole in the map's geometry) is not somewhere
+        /// <see cref="PlayVolume.TryClamp"/> can usefully pull it back to — there is nothing
+        /// under it to stand on, and clamping would leave it hanging in empty air on the wire's
+        /// floor forever. It is killed instead, as an environment death, so the normal respawn
+        /// path puts it back on solid ground. A body that has merely crossed the wire's
+        /// horizontal or vertical CEILING — a helicopter flown far enough, an actor pushed
+        /// through a wall — has somewhere sane to go back to, so it is clamped and stopped
+        /// exactly as <c>Vehicle.KeepInsideLevelBounds</c> already does for vehicles (E-6).
+        /// </para>
+        /// <para>
+        /// <b>The clamp teleports through the movement API, never a raw transform write.</b>
+        /// <see cref="NetMovementAgent.Teleport"/> disables the <c>CharacterController</c>
+        /// around the position assignment and resets velocity, which is exactly what a
+        /// direct <c>transform.position = ...</c> would skip — the controller would fight the
+        /// write and the body would land somewhere else. <see cref="ClientSession.State"/> is
+        /// updated to match so next tick's <see cref="InputAuthority.ApplyPendingInput"/> — which
+        /// reads the session, not the agent — starts from the corrected position rather than
+        /// re-deriving the crossing on its very next step.
+        /// </para>
+        /// </remarks>
+        private void EnforceWireVolume(NetMovementAgent agent)
+        {
+            Vec3 position = Session.State.Position;
+
+            if (_wireVolume.IsBelowFloor(in position, FloorDeathSlackMetres))
+            {
+                KillForFallingOutOfTheWorld();
+                return;
+            }
+
+            if (!_wireVolume.TryClamp(in position, out Vec3 contained)) return;
+
+            Session.State.Position = contained;
+            Session.State.Velocity = Vec3.Zero;
+            agent.Teleport(MovementSimulation.ToUnity(contained), resetVelocity: true);
+        }
+
+        /// <summary>
+        /// Reports an environment death for a body that fell through collision and is now below
+        /// the wire's own floor, then asks the combat bridge to put it back on its feet. Ledger
+        /// <b>X-75</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The wire death, not <c>Actor.Damage</c>.</b> There is no attacker and no impact
+        /// point — this is exactly the shape <see cref="DeathMessage.EnvironmentKiller"/> and
+        /// <see cref="CauseOfDeath.Fall"/> exist for (see the killfeed and score-tally tests
+        /// that already exercise both). Setting <c>Health</c>/<c>IsAlive</c> directly rather than
+        /// routing through the gameplay actor's own damage method matches the flag-only death
+        /// <see cref="ServerCombatBridge.TryRespawn"/>'s own revival already performs on the far
+        /// side of the same seam — that method sets <c>Health</c> and <c>IsAlive</c> the same
+        /// way, in the same direction, for the same reason: this assembly cannot name
+        /// <c>Actor.Damage</c>.
+        /// </para>
+        /// <para>
+        /// <b><see cref="ServerCombatBridge.TryRespawn"/> is gated by the same respawn cooldown
+        /// every other death uses</b> (<c>_respawnGate.MayRespawn</c>), so a call here can be
+        /// declined exactly as a client's own respawn request can be — this death does not get a
+        /// faster respawn than a bullet does, nor should it.
+        /// </para>
+        /// </remarks>
+        private void KillForFallingOutOfTheWorld()
+        {
+            if (Actor == null || !Actor.IsAlive) return;
+
+            Actor.Health = 0f;
+            Actor.IsAlive = false;
+
+            ServerCombatEvents.ReportDeath(Actor, Vector3.zero, CauseOfDeath.Fall);
+
+            _combat?.TryRespawn(this);
         }
 
         /// <summary>
