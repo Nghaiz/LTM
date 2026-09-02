@@ -1,0 +1,48 @@
+{
+  "name": "sbclose-witness",
+  "steps": [
+    {
+      "seconds": 5.0,
+      "yawDegrees": 90
+    },
+    {
+      "checkpoint": "spawned",
+      "seconds": 3.0,
+      "aimAtPlayer": "DRIVER"
+    },
+    {
+      "checkpoint": "in-range",
+      "seconds": 5.0,
+      "aimAtPlayer": "DRIVER"
+    },
+    {
+      "checkpoint": "firing",
+      "seconds": 10.0,
+      "aimAtPlayer": "DRIVER"
+    },
+    {
+      "checkpoint": "killed",
+      "seconds": 6.0,
+      "aimAtPlayer": "DRIVER"
+    },
+    {
+      "checkpoint": "victim-input-held",
+      "seconds": 6.0,
+      "aimAtPlayer": "DRIVER"
+    },
+    {
+      "checkpoint": "respawn-window",
+      "seconds": 10.0,
+      "aimAtPlayer": "DRIVER"
+    },
+    {
+      "seconds": 4.0,
+      "holdScoreboard": true
+    },
+    {
+      "checkpoint": "scoreboard",
+      "seconds": 8.0,
+      "holdScoreboard": true
+    }
+  ]
+}

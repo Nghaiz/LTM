@@ -305,11 +305,11 @@ namespace Ironfront.Net.Unity.EditorTools
             // that disarms them.
             backdrop.raycastTarget = false;
 
-            Text heading = Label(panel, "Heading", "SCOREBOARD", 44, TextAnchor.UpperCenter);
-            Centre(heading.GetComponent<RectTransform>(), new Vector2(0f, 400f), new Vector2(900f, 56f));
+            Text heading = Label(panel, "Heading", "SCOREBOARD", 40, TextAnchor.UpperCenter);
+            Centre(heading.GetComponent<RectTransform>(), new Vector2(0f, 460f), new Vector2(900f, 48f));
 
-            left = BuildScoreboardColumn(panel, "Team 0", -480f);
-            right = BuildScoreboardColumn(panel, "Team 1", 480f);
+            left = BuildScoreboardColumn(panel, "Team 0", -440f);
+            right = BuildScoreboardColumn(panel, "Team 1", 440f);
 
             log.AppendLine(
                 "scoreboard: two columns of " + MatchHud.ScoreboardRowsPerTeam
@@ -322,51 +322,65 @@ namespace Ironfront.Net.Unity.EditorTools
         private static ScoreboardColumn BuildScoreboardColumn(
             GameObject panel, string name, float centreX)
         {
-            const float ColumnWidth = 760f;
-            const float RowHeight = 26f;
+            const float ColumnWidth = 720f;
+            const float ScoresWidth = 150f;
+            const float HeaderTop = 400f;
+            const float BodyTop = 356f;
 
-            // Tall enough for every row the HUD will ever write, read off the same constant the
-            // HUD caps at. A short rect clips the bottom of a full column, and a clipped
-            // scoreboard is one whose totals cannot be checked against what is on it.
+            // Sized so the FULL column fits the 1080-tall reference frame, rather than picked to
+            // look right at three rows. A 21-a-side map fills 21 of these and a full one fills
+            // ScoreboardRowsPerTeam; at 22 px the body ends at y = -348, comfortably above the
+            // bottom edge. The first authoring of this used 26 px from y = 280 and ran 32 rows
+            // straight off the screen — caught on the captured artifact, which is the only place
+            // a layout fault of this kind is visible at all.
+            const float RowHeight = 22f;
+            const int RowFontSize = 19;
+
             float bodyHeight = MatchHud.ScoreboardRowsPerTeam * RowHeight;
 
-            Text header = Label(panel, name + " Header", string.Empty, 30, TextAnchor.UpperLeft);
-            Centre(
+            Text header = Label(panel, name + " Header", string.Empty, 26, TextAnchor.UpperLeft);
+            TopLeftBlock(
                 header.GetComponent<RectTransform>(),
-                new Vector2(centreX, 320f), new Vector2(ColumnWidth, 40f));
+                centreX - ColumnWidth * 0.5f, HeaderTop, ColumnWidth, 34f);
 
-            Text names = Label(panel, name + " Names", string.Empty, 24, TextAnchor.UpperLeft);
+            // The names take the left of the column and the scores the right of the SAME column,
+            // rather than each getting half the screen: a name and its score belong to one row,
+            // and 400 px of empty desert between them is a row the eye cannot follow.
+            Text names = Label(panel, name + " Names", string.Empty, RowFontSize, TextAnchor.UpperLeft);
             names.supportRichText = true;
             names.verticalOverflow = VerticalWrapMode.Truncate;
-            Centre(
+            TopLeftBlock(
                 names.GetComponent<RectTransform>(),
-                new Vector2(centreX - 130f, 280f - bodyHeight * 0.5f),
-                new Vector2(ColumnWidth - 260f, bodyHeight));
+                centreX - ColumnWidth * 0.5f, BodyTop,
+                ColumnWidth - ScoresWidth - 20f, bodyHeight);
 
-            Text scores = Label(panel, name + " Scores", string.Empty, 24, TextAnchor.UpperRight);
+            Text scores = Label(panel, name + " Scores", string.Empty, RowFontSize, TextAnchor.UpperRight);
             scores.verticalOverflow = VerticalWrapMode.Truncate;
-            Centre(
+            TopLeftBlock(
                 scores.GetComponent<RectTransform>(),
-                new Vector2(centreX + 250f, 280f - bodyHeight * 0.5f),
-                new Vector2(240f, bodyHeight));
-
-            // Both bodies hang from the SAME top edge with the same font size, which is what makes
-            // line N of one sit beside line N of the other. Anchoring them independently is how
-            // two-column text drifts by a row and puts a score against the wrong name.
-            TopAlign(names.GetComponent<RectTransform>());
-            TopAlign(scores.GetComponent<RectTransform>());
+                centreX + ColumnWidth * 0.5f - ScoresWidth, BodyTop,
+                ScoresWidth, bodyHeight);
 
             return new ScoreboardColumn(header, names, scores);
         }
 
-        /// <summary>Pins a rect's top edge where it already is, so growth runs downward.</summary>
-        private static void TopAlign(RectTransform rect)
+        /// <summary>
+        /// Places a rect by its TOP-LEFT corner, in the panel's centred coordinates.
+        /// </summary>
+        /// <remarks>
+        /// Both bodies of a column are placed this way with the same <c>top</c> and the same font
+        /// size, which is what makes line N of one sit beside line N of the other. Placing them
+        /// by centre — as the first authoring did — moves the taller one's first line, so a
+        /// column with more rows silently puts every score against the wrong name.
+        /// </remarks>
+        private static void TopLeftBlock(
+            RectTransform rect, float left, float top, float width, float height)
         {
-            Vector2 size = rect.sizeDelta;
-            Vector2 position = rect.anchoredPosition;
-
-            rect.pivot = new Vector2(0.5f, 1f);
-            rect.anchoredPosition = new Vector2(position.x, position.y + size.y * 0.5f);
+            rect.anchorMin = new Vector2(0.5f, 0.5f);
+            rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.pivot = new Vector2(0f, 1f);
+            rect.sizeDelta = new Vector2(width, height);
+            rect.anchoredPosition = new Vector2(left, top);
         }
 
         // ------------------------------------------------------------------ helpers

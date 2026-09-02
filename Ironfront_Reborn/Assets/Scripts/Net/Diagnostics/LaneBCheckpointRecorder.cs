@@ -1238,8 +1238,51 @@ namespace Ironfront.Net.Unity.Diagnostics
             => _json.Append('"').Append(key).Append("\":")
                     .Append(value.ToString(CultureInfo.InvariantCulture));
 
+        /// <summary>
+        /// JSON-escapes one string value, control characters included.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The control characters are the half this was missing, and the cost was the file
+        /// format.</b> Backslash and quote were escaped; a raw newline was not — so a UI label
+        /// carrying one (<c>ScoreUi.blueFlagsText</c> reads <c>"2\n"</c> off the prefab) split
+        /// its record across physical lines and every JSONL reader in the world rejected it.
+        /// Found while reading P18's own scoreboard artifact back: 25 of 119 records on one file
+        /// would not parse, and the block this phase added was inside them.
+        /// </para>
+        /// <para>
+        /// <b>Everything below U+0020, not just the three familiar ones.</b> RFC 8259 requires
+        /// it, and the reason to be exhaustive rather than to escape <c>\n \r \t</c> is that the
+        /// next label to break this would carry something rarer and would look, again, like a
+        /// truncated file rather than an escaping bug.
+        /// </para>
+        /// </remarks>
         private static string Escape(string value)
-            => string.IsNullOrEmpty(value) ? string.Empty : value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        {
+            if (string.IsNullOrEmpty(value)) return string.Empty;
+
+            var escaped = new StringBuilder(value.Length + 8);
+
+            foreach (char c in value)
+            {
+                switch (c)
+                {
+                    case '\\': escaped.Append("\\\\"); break;
+                    case '"':  escaped.Append("\\\""); break;
+                    case '\n': escaped.Append("\\n");  break;
+                    case '\r': escaped.Append("\\r");  break;
+                    case '\t': escaped.Append("\\t");  break;
+                    case '\b': escaped.Append("\\b");  break;
+                    case '\f': escaped.Append("\\f");  break;
+                    default:
+                        if (c < ' ') escaped.Append("\\u").Append(((int)c).ToString("x4"));
+                        else escaped.Append(c);
+                        break;
+                }
+            }
+
+            return escaped.ToString();
+        }
 
         private static string Sanitize(string value)
         {

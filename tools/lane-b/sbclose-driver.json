@@ -1,0 +1,55 @@
+{
+  "name": "sbclose-shooter",
+  "steps": [
+    {
+      "seconds": 5.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "spawned",
+      "seconds": 3.0,
+      "aimAtPlayer": "OBS-B"
+    },
+    {
+      "checkpoint": "in-range",
+      "seconds": 5.0,
+      "aimAtPlayer": "OBS-B",
+      "approach": true,
+      "holdDistanceMeters": 6.0,
+      "aim": true
+    },
+    {
+      "checkpoint": "firing",
+      "seconds": 10.0,
+      "aimAtPlayer": "OBS-B",
+      "approach": true,
+      "holdDistanceMeters": 6.0,
+      "aim": true,
+      "fire": true
+    },
+    {
+      "checkpoint": "killed",
+      "seconds": 6.0,
+      "aimAtPlayer": "OBS-B"
+    },
+    {
+      "checkpoint": "victim-input-held",
+      "seconds": 6.0,
+      "aimAtPlayer": "OBS-B"
+    },
+    {
+      "checkpoint": "respawn-window",
+      "seconds": 10.0,
+      "aimAtPlayer": "OBS-B"
+    },
+    {
+      "seconds": 4.0,
+      "holdScoreboard": true
+    },
+    {
+      "checkpoint": "scoreboard",
+      "seconds": 8.0,
+      "holdScoreboard": true
+    }
+  ]
+}
