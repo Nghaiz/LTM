@@ -4,7 +4,8 @@
     "references": [
         "Ironfront.Net.Unity.Shared",
         "Ironfront.Net.Unity.Client",
-        "Ironfront.Net.Unity.Server"
+        "Ironfront.Net.Unity.Server",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [
         "Editor"

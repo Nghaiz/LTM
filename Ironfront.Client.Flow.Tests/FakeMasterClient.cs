@@ -92,8 +92,45 @@ namespace Ironfront.Client.Flow.Tests
 
         public void Poll() => PollCount++;
 
+        /// <summary>
+        /// Records what the session sent, so a test can compare it with what login sends. P15.
+        /// </summary>
+        /// <remarks>
+        /// <c>Throw()</c> is called first, exactly as <see cref="LoginAsync"/> does it: the link
+        /// failures and <c>MasterServerException</c>s a test arms are supposed to reach register
+        /// too, and a fake that could not fail would make the register error paths untestable.
+        /// </remarks>
         public Task<RegisterResult> RegisterAsync(string username, string passwordHash, string displayName, CancellationToken ct = default)
-            => Task.FromResult(new RegisterResult(true, 0));
+        {
+            Throw();
+            RegisterCalls++;
+            LastRegisterUsername = username;
+            LastRegisterPasswordHash = passwordHash;
+            LastRegisterDisplayName = displayName;
+            return Task.FromResult(NextRegister);
+        }
+
+        /// <summary>What the next <see cref="RegisterAsync"/> answers.</summary>
+        public RegisterResult NextRegister { get; set; } = new RegisterResult(true, 0);
+
+        /// <summary>How many times the session asked the master to register.</summary>
+        public int RegisterCalls { get; private set; }
+
+        /// <summary>The username the last register sent.</summary>
+        public string? LastRegisterUsername { get; private set; }
+
+        /// <summary>
+        /// The hash the last register sent, for comparison with <c>LastPasswordHash</c>.
+        /// </summary>
+        /// <remarks>
+        /// A separate field rather than reusing the login one, because criterion 4's whole
+        /// question is whether the TWO agree — and a single shared field would be overwritten by
+        /// whichever call happened last, making the test pass by construction.
+        /// </remarks>
+        public string? LastRegisterPasswordHash { get; private set; }
+
+        /// <summary>The display name the last register sent.</summary>
+        public string? LastRegisterDisplayName { get; private set; }
         public Task<CreateRoomResult> CreateRoomAsync(CreateRoomRequest request, CancellationToken ct = default)
             => Task.FromResult(new CreateRoomResult(true, 1, 0));
         /// <summary>How many times the session asked the master to leave the room.</summary>

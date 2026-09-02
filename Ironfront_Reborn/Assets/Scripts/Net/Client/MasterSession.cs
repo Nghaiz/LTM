@@ -275,6 +275,79 @@ namespace Ironfront.Net.Unity.Client
         }
 
         /// <summary>
+        /// Creates an account, hashing the password with the same function login uses. P15 3.1.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The wire half has been there all along.</b>
+        /// <c>IMasterClient.RegisterAsync</c> is declared, implemented over
+        /// <c>MspMessageType.RegisterRequest</c>, and tested server-side; what did not exist was
+        /// a caller. Until this wrapper the only way to create an account was a harness —
+        /// <c>run-e2e.ps1</c> composes <c>IMasterClient</c> itself, and the room-creation leg of
+        /// it has to open a SECOND account for exactly this reason.
+        /// </para>
+        /// <para>
+        /// <b>It does not move the flow, and that is the answer to 3.1's question.</b> A
+        /// successful register leaves the client on <c>LoginScreen</c> with the username it just
+        /// claimed, and the player logs in with it. The alternative — registering and logging in
+        /// in one step — buys one click and costs a state transition that has to be right in
+        /// both the success and the half-success case (account created, login refused), and
+        /// there is no edge in the table for "already Authenticating when the register answers".
+        /// Coming back to the login screen also tells the player something the auto-login cannot:
+        /// that the account now exists and those are the credentials for it.
+        /// </para>
+        /// <para>
+        /// <b>The hash is <see cref="PasswordHasher.Hash"/>, the same call
+        /// <see cref="LoginAsync"/> makes</b>, salted with the same username. Two hashing paths
+        /// is how an account gets created that cannot log in — a wrong-password error with the
+        /// correct password, which is close to undebuggable from the player's side. Criterion 4
+        /// grades this end to end rather than as two separate tests, so a divergence here fails
+        /// as "the account I just made will not let me in".
+        /// </para>
+        /// <para>
+        /// <see cref="IsLoggedIn"/> is <b>unchanged</b> by this call, success or failure: it
+        /// reads <see cref="SessionToken"/>, and a register answer carries no token. That is
+        /// stated rather than left to be inferred because it is the post-condition a caller is
+        /// most likely to assume the other way.
+        /// </para>
+        /// </remarks>
+        /// <param name="displayName">
+        /// Shown to other players. Blank means "use the username", which the master applies —
+        /// the client does not substitute it here, because then a master that decided otherwise
+        /// and this client would disagree about the player's own name.
+        /// </param>
+        public async Task<bool> RegisterAsync(string username, string password, string? displayName = null)
+        {
+            try
+            {
+                string hash = PasswordHasher.Hash(password, username);
+
+                RegisterResult result = await _master
+                    .RegisterAsync(username, hash, displayName ?? string.Empty)
+                    .ConfigureAwait(false);
+
+                if (!result.Ok)
+                {
+                    Fail(MasterErrorText.DescribeFailure(result.ErrorCode));
+                    return false;
+                }
+
+                LastError = string.Empty;
+                return true;
+            }
+            catch (MasterServerException ex)
+            {
+                Fail(MasterErrorText.DescribeFailure(ex.ErrorCode));
+                return false;
+            }
+            catch (Exception ex) when (IsLinkFailure(ex))
+            {
+                Fail("Lost the connection to the master server.");
+                return false;
+            }
+        }
+
+        /// <summary>
         /// Moves to the room browser and fetches the list. <c>Lobby -> RoomBrowser</c>.
         /// </summary>
         /// <remarks>

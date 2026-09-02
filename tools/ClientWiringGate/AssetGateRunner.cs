@@ -59,6 +59,8 @@ namespace Ironfront.Tools.ClientWiringGate
                  AssetWiringDetectors.MinimapMarkerPrefabsAreAuthored),
                 (nameof(AssetWiringDetectors.CapturePointFlagsCanDraw),
                  AssetWiringDetectors.CapturePointFlagsCanDraw),
+                (nameof(MenuScreenWiringDetectors.MenuScreenRefsAreAssigned),
+                 MenuScreenWiringDetectors.MenuScreenRefsAreAssigned),
             };
 
         /// <summary>

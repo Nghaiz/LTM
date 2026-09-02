@@ -245,4 +245,5 @@ __pycache__/
 # Written by the Ironfront/Net/Wire client flow Editor command on every run.
 # The wiring it reports lands in Menu.unity, which IS committed; this is the receipt.
 Ironfront_Reborn/wire-client-flow.txt
+Ironfront_Reborn/build-menu-canvas.txt
 tmp/Ravenfield
