@@ -116,6 +116,10 @@ function Stop-Started {
 # Reads the master's metrics endpoint. It is a RAW TCP socket that writes one JSON document and
 # closes -- not HTTP -- which is why this is a socket read and not Invoke-RestMethod. Same shape
 # tools/alert.sh reads with /dev/tcp.
+# One regex, used by BOTH health reads. Written twice they would drift, and the second
+# reader is a GATE -- a pattern that quietly stops matching turns it green for ever.
+$healthyPattern = '"gameServers"\s*:\s*\{[^}]*"healthy"\s*:\s*([1-9][0-9]*)'
+
 function Read-Metrics {
     param([int] $Port)
 
@@ -272,9 +276,10 @@ try {
         }
 
         $metrics = Read-Metrics -Port $MetricsPort
-        if ($metrics -and $metrics -match '"gameServers"\s*:\s*\{[^}]*"healthy"\s*:\s*([1-9][0-9]*)') {
+        if ($metrics -and $metrics -match $healthyPattern) {
             Write-Host "[e2e] the master reports $($Matches[1]) healthy game server(s)"
             $healthy = $true
+            $healthyFirstSeen = Get-Date
             break
         }
         Start-Sleep -Milliseconds 750
@@ -332,11 +337,57 @@ try {
         $roomStartExit = $LASTEXITCODE
     }
 
+    # ---- 5c. the heartbeat gate ------------------------------------------------------------
+    #
+    # WHY THE CHECK IN STEP 4 IS NOT THIS CHECK. GameServerRegistry.TryRegister seeds
+    # LastHeartbeatAt with the registration time, and IsHealthy is `now - LastHeartbeatAt <=
+    # 15_000`. So a server that registers and then NEVER SENDS A HEARTBEAT reads healthy for a
+    # full 15 seconds, and step 4 -- which polls within a second or two of registration --
+    # cannot tell the two apart. Every walk above finishes inside that window.
+    #
+    # That is not hypothetical. It is the exact false pass MasterLinkBootstrap's own remarks
+    # describe: before P14 the registration await deadlocked, the reporter stayed
+    # NullMatchReporter, no heartbeat was ever sent -- and this script printed "1 healthy game
+    # server" and PASSED. The bug survived because the harness could not express the difference
+    # between "it registered" and "it is still talking".
+    #
+    # MUTATION-PROVED on the real artifact (2026-09-02): server alive at t=14s gave healthy=1;
+    # killing the process and waiting 20s gave healthy=0. Control and mutant differ, so this
+    # check can go red.
+    $heartbeatOk = $true
+    if ($healthyFirstSeen) {
+        # 16, not 15: the window is a <= on whole milliseconds, and a check landing exactly on
+        # the boundary would be a coin flip rather than a gate.
+        $remaining = 16 - ((Get-Date) - $healthyFirstSeen).TotalSeconds
+        if ($remaining -gt 0) {
+            Write-Host ("[e2e] waiting {0:N1}s for the master 15s health window to lapse" -f $remaining)
+            Start-Sleep -Seconds ([Math]::Ceiling($remaining))
+        }
+
+        $late = Read-Metrics -Port $MetricsPort
+        if ($late -and $late -match $healthyPattern) {
+            Write-Host "[e2e] still $($Matches[1]) healthy game server(s) past the window -- heartbeats are flowing"
+        }
+        else {
+            $heartbeatOk = $false
+        }
+    }
+
     # ---- 6. verdict -----------------------------------------------------------------------
     Write-Host ""
     if ($positive -ne 0) {
         Write-Host "[e2e] FAIL -- the positive walk exited $positive. See $walkLog."
         exit $positive
+    }
+
+    if (-not $heartbeatOk) {
+        Write-Host "[e2e] FAIL -- the game server stopped being healthy once the 15s window lapsed."
+        Write-Host "      It registered and then went quiet: GS_REGISTER arrived, GS_HEARTBEAT did not."
+        Write-Host "      Look in $serverLog for '[net] reporting to master as server'. If that line is"
+        Write-Host "      present the link was made, so the fault is downstream of it -- in"
+        Write-Host "      ServerMasterReporter.Update, or GameServerMatchReporter.Heartbeat, which drops"
+        Write-Host "      into DroppedWhileDisconnected without a word when the link is not Connected."
+        exit 7
     }
 
     if ($RoomStart -and $roomStartExit -ne 0) {
