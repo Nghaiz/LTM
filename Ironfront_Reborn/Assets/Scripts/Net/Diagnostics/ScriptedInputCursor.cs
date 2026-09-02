@@ -1,4 +1,4 @@
-// Diagnostics are compiled OUT of a shipping client build.
+﻿// Diagnostics are compiled OUT of a shipping client build.
 //
 // The sense is INVERTED on purpose. Unity's BuildPlayerOptions.extraScriptingDefines can only
 // ADD symbols, never subtract one, so a positive IRONFRONT_DIAGNOSTICS would have to be off in
@@ -224,6 +224,16 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// frame through <c>MinimapUi.HoldSource</c>. Ledger X-61.
         /// </remarks>
         public bool HoldMinimap => Current != null && Current.holdMinimap;
+
+        /// <summary>
+        /// Whether the live step holds the Tab scoreboard open. A level, so it is not consumed.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="HoldMinimap"/>'s reasoning verbatim, one overlay across:
+        /// <c>NetClientCombatPresenter</c> polls this every frame through
+        /// <c>ScoreboardHoldSource</c>. P18 3.3.
+        /// </remarks>
+        public bool HoldScoreboard => Current != null && Current.holdScoreboard;
 
         public bool TryTakeCheckpoint(out ScriptedCheckpoint checkpoint)
         {

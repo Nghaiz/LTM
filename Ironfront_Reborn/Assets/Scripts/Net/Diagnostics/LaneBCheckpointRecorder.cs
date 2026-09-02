@@ -215,6 +215,8 @@ namespace Ironfront.Net.Unity.Diagnostics
             Comma();
             AppendCombat();
             Comma();
+            AppendScoreboard();
+            Comma();
             AppendSeatRequests();
             Comma();
             AppendHud();
@@ -573,6 +575,97 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// frame rather than a feed one frame staler than the screenshot beside it.
         /// </para>
         /// </remarks>
+        /// <summary>
+        /// The Tab board's own rows, as this client holds them. P18 criteria 3, 4, 5 and 7.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The screenshot beside this record cannot be graded on its own, and that is the
+        /// whole reason this block exists.</b> Criterion 3 refuses an all-zero column, criterion
+        /// 4 asks whether two clients agree with each other and with the server's tally, and
+        /// criterion 7 is arithmetic between a column's total and the team score. All three want
+        /// NUMBERS, and a PNG at 1080p read by eye is not where a disagreement of one kill is
+        /// found.
+        /// </para>
+        /// <para>
+        /// <b>Read from <c>PlayerScoreTable</c>, which is what the board renders from.</b> Not
+        /// from the snapshot and not from a second count: a record assembled from a different
+        /// source than the pixels would agree with the server while the screen disagreed, which
+        /// is the failure this artifact exists to catch.
+        /// </para>
+        /// <para>
+        /// <b><c>held</c> travels with the rows.</b> A board nobody raised has the same rows as
+        /// one nobody could see, and only this field tells them apart — so a run that forgot
+        /// <c>holdScoreboard</c> reads as unconfigured rather than as a board that failed to
+        /// draw.
+        /// </para>
+        /// </remarks>
+        private void AppendScoreboard()
+        {
+            var presenter = Object.FindFirstObjectByType<NetClientCombatPresenter>(
+                FindObjectsInactive.Include);
+
+            _json.Append("\"scoreboard\":");
+
+            if (presenter == null) { _json.Append("null"); return; }
+
+            PlayerScoreTable scores = presenter.Scores;
+            PlayerNameTable names = presenter.Names;
+
+            _json.Append('{');
+
+            _json.Append("\"held\":")
+                 .Append(NetClientCombatPresenter.ScoreboardHoldSource != null
+                         && NetClientCombatPresenter.ScoreboardHoldSource()
+                         ? "true" : "false");
+            Comma();
+
+            Num("scoredActors", scores.Count); Comma();
+            Num("scoreRevision", scores.Revision); Comma();
+
+            int allKills = 0;
+            int allDeaths = 0;
+
+            _json.Append("\"rows\":[");
+
+            bool first = true;
+            for (ushort actorId = 0; actorId < ProtocolConstants.MAX_ACTORS; actorId++)
+            {
+                if (!scores.Has(actorId)) continue;
+
+                if (!first) _json.Append(',');
+                first = false;
+
+                allKills += scores.KillsOf(actorId);
+                allDeaths += scores.DeathsOf(actorId);
+
+                _json.Append('{');
+                Num("actorId", actorId); Comma();
+
+                // The table's own null for an unnamed actor, not a manufactured "actor 7". A
+                // record that invented the fallback could not show criterion 5's case -- a row
+                // that exists before its name does.
+                string name = names.NameOf(actorId);
+                if (name == null) _json.Append("\"name\":null");
+                else Str("name", name);
+                Comma();
+
+                Num("kills", scores.KillsOf(actorId)); Comma();
+                Num("deaths", scores.DeathsOf(actorId)); Comma();
+                Num("team", scores.TeamOf(actorId));
+                _json.Append('}');
+            }
+
+            _json.Append("],");
+
+            // Summed here rather than left to whoever reads the file, so criterion 3's question
+            // -- is any number on this board non-zero -- is answered by one field.
+            Num("totalKills", allKills); Comma();
+            Num("totalDeaths", allDeaths);
+
+            _json.Append('}');
+        }
+
         private void AppendCombat()
         {
             var driver = Object.FindFirstObjectByType<NetClientLocalCombatDriver>(
