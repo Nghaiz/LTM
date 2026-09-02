@@ -37,6 +37,53 @@ namespace Ironfront.Net.Unity.Client
         public static string Describe(int errorCode) => Describe((ErrorCode)errorCode);
 
         /// <summary>
+        /// A player-facing sentence for a failed request, using the master's own wait when it
+        /// sent one.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The wait used to be an adjective this file invented.</b> Every
+        /// <see cref="ErrorCode.RateLimited"/> rendered as "Wait a few seconds and try again"
+        /// against a window of SIXTY, so a player who did as they were told failed again and was
+        /// told the same thing -- an instruction that reads as a loop. The master now sends the
+        /// number (<c>MSP_LOGIN_RES.retryAfterSec</c>), and a number the player can act on beats
+        /// a guess this layer is in no position to make.
+        /// </para>
+        /// <para>
+        /// <b>Zero falls back to the wordless form rather than saying "0 seconds".</b> A master
+        /// older than the field sends nothing, and "try again in 0 seconds" would be both wrong
+        /// and unfollowable.
+        /// </para>
+        /// </remarks>
+        public static string DescribeFailure(int errorCode, int retryAfterSeconds)
+        {
+            if (errorCode == (int)ErrorCode.Ok) return Unknown;
+            if (retryAfterSeconds <= 0) return Describe((ErrorCode)errorCode);
+
+            string wait = FormatWait(retryAfterSeconds);
+
+            switch ((ErrorCode)errorCode)
+            {
+                case ErrorCode.RateLimited:
+                    return "Too many login attempts from this network. Try again in " + wait + ".";
+                case ErrorCode.AccountLocked:
+                    return "That password is right, but the account is locked after too many "
+                           + "failed attempts. Try again in " + wait + ".";
+                default:
+                    return Describe((ErrorCode)errorCode);
+            }
+        }
+
+        /// <summary>Whole seconds as something a player reads without converting it.</summary>
+        private static string FormatWait(int seconds)
+        {
+            if (seconds < 60) return seconds + (seconds == 1 ? " second" : " seconds");
+
+            int minutes = (seconds + 59) / 60;
+            return minutes + (minutes == 1 ? " minute" : " minutes");
+        }
+
+        /// <summary>
         /// A player-facing sentence for a request that failed, whatever code it carried.
         /// </summary>
         /// <remarks>
@@ -70,6 +117,15 @@ namespace Ironfront.Net.Unity.Client
                     return "This build is out of date. Update the game and try again.";
                 case ErrorCode.InvalidDisplayName:
                     return "Display names are at most 32 characters. Leave it blank to use your username.";
+                case ErrorCode.AccountLocked:
+                    // Names the state and, crucially, does NOT send the player to change their
+                    // password -- which is what "Wrong username or password." did, and which
+                    // cannot clear a lock. The wait itself comes from the master; this is the
+                    // wording used when it sent no number.
+                    return "That password is right, but the account is locked after too many "
+                           + "failed attempts. Wait a few minutes and try again.";
+                case ErrorCode.AccountBanned:
+                    return "This account is banned.";
 
                 // ----- rooms (2000-2004)
                 case ErrorCode.RoomNotFound:
@@ -94,11 +150,37 @@ namespace Ironfront.Net.Unity.Client
                 case ErrorCode.GameServerNotResponding:
                     return "The game server is not responding. Try another room.";
 
+                // ----- chat (4000-4003)
+                case ErrorCode.ChatMessageTooLong:
+                    // The number, because the fix is to shorten it and a player cannot shorten
+                    // to an unstated target. This refusal used to arrive as RateLimited, so the
+                    // advice was to wait -- and the same text failed identically afterwards.
+                    return "That message is too long. Chat is at most "
+                           + MspChatLimits.MaxTextCharacters + " characters.";
+                case ErrorCode.ChatMessageEmpty:
+                    return "There was nothing to send.";
+                case ErrorCode.ChatChannelInvalid:
+                    return "This build asked for a chat channel the server does not have.";
+                case ErrorCode.NotInARoom:
+                    return "That message was for a room and you are not in one.";
+                case ErrorCode.ChatTooFast:
+                    return "You are sending messages too quickly. Wait a few seconds.";
+
                 // ----- the master itself (9000-9001)
                 case ErrorCode.InternalServerError:
                     return "The master server hit an internal error. Try again.";
                 case ErrorCode.RateLimited:
-                    return "Too many attempts. Wait a few seconds and try again.";
+                    // Login only, since chat flooding got its own code -- one code for both
+                    // windows (60 s per address, 10 s per player) forces a sentence that is
+                    // wrong about one of them.
+                    //
+                    // "From this network", because the budget is counted per SOURCE ADDRESS:
+                    // two people behind one home router share it, and "you" reads to the second
+                    // of them as a plain falsehood on their very first attempt. "Up to a minute"
+                    // is the real window -- it was "a few seconds", which sent players away to
+                    // wait and fail again. Where the master sends the exact remainder,
+                    // DescribeFailure(code, retryAfterSeconds) renders that number instead.
+                    return "Too many login attempts from this network. Wait up to a minute and try again.";
 
                 default:
                     // A code from a newer master than this build knows. Showing the number

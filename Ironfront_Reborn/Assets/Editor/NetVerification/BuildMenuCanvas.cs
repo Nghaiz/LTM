@@ -502,6 +502,13 @@ namespace Ironfront.Net.Unity.EditorTools
             chatLog.resizeTextForBestFit = false;
 
             InputField chatField = Field(panel, "ChatInput", "Say something", new Vector2(-180f, -370f), password: false);
+
+            // The master's own limit, so the field cannot accept a line the master will refuse.
+            // Nothing capped this before, and the refusal that came back was reported as "you are
+            // sending too often" -- so a player who pasted a long message waited, re-sent the
+            // identical text, and got the identical sentence. Read from the shared protocol
+            // constant rather than typed here: two places holding one number is how they drift.
+            chatField.characterLimit = MspChatLimits.MaxTextCharacters;
             Button chatSend = MakeButton(
                 panel, "ChatSend", "SEND", new Vector2(280f, -370f), new Vector2(240f, 60f));
 

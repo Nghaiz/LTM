@@ -61,6 +61,80 @@ namespace Ironfront.Client.Flow.Tests
             Assert.Contains("4242", text);
         }
 
+        /// <summary>
+        /// A lockout must not send the player to change a password that was right.
+        /// </summary>
+        /// <remarks>
+        /// The whole cost of collapsing four refusals into <c>WrongCredentials</c> landed here:
+        /// the message told a locked-out player their password was wrong, so they changed it,
+        /// and the lock — which a password change does not clear — refused them for the rest of
+        /// the fifteen minutes. This asserts the two things the message must not do.
+        /// </remarks>
+        [Fact]
+        public void ALockoutDoesNotBlameThePassword()
+        {
+            string text = MasterErrorText.Describe(ErrorCode.AccountLocked);
+
+            Assert.Contains("locked", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Wrong username or password", text);
+        }
+
+        /// <summary>
+        /// The rate-limit message must not promise a wait shorter than the window.
+        /// </summary>
+        /// <remarks>
+        /// It said "a few seconds" against sixty. A player who followed it failed again and read
+        /// the same sentence, which is a loop rather than an instruction. It must also say
+        /// <i>network</i>, because the budget is per source address and two people behind one
+        /// router share it — "you" is simply false for the second of them.
+        /// </remarks>
+        [Fact]
+        public void TheLoginRateLimitNamesItsRealWindowAndItsRealScope()
+        {
+            string text = MasterErrorText.Describe(ErrorCode.RateLimited);
+
+            Assert.Contains("minute", text);
+            Assert.Contains("network", text);
+            Assert.DoesNotContain("few seconds", text);
+        }
+
+        /// <summary>
+        /// Given the master's own number, the message states it instead of an adjective.
+        /// </summary>
+        [Fact]
+        public void AKnownWaitIsRenderedAsTheNumber()
+        {
+            Assert.Contains(
+                "47 seconds",
+                MasterErrorText.DescribeFailure((int)ErrorCode.RateLimited, 47));
+
+            Assert.Contains(
+                "15 minutes",
+                MasterErrorText.DescribeFailure((int)ErrorCode.AccountLocked, 15 * 60));
+
+            // Zero is a master too old to send the field, not an invitation to retry now.
+            Assert.Equal(
+                MasterErrorText.Describe(ErrorCode.RateLimited),
+                MasterErrorText.DescribeFailure((int)ErrorCode.RateLimited, 0));
+        }
+
+        /// <summary>
+        /// An over-long chat line must not be described as sending too often.
+        /// </summary>
+        /// <remarks>
+        /// Both arrived as <c>RateLimited</c>, so the advice was to wait — and the same text was
+        /// still too long afterwards. The message carries the limit, because "shorter" is not an
+        /// instruction a player can follow without a target.
+        /// </remarks>
+        [Fact]
+        public void AnOverLongChatLineSaysHowLongIsAllowed()
+        {
+            string text = MasterErrorText.Describe(ErrorCode.ChatMessageTooLong);
+
+            Assert.Contains(MspChatLimits.MaxTextCharacters.ToString(), text);
+            Assert.DoesNotContain("too quickly", text);
+        }
+
         [Fact]
         public void TheUsernameRuleInTheMessageMatchesTheOneTheServerEnforces()
         {

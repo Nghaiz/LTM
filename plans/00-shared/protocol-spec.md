@@ -1309,7 +1309,7 @@ compatibility.
 | Value | Name | Direction | Body |
 |---|---|---|---|
 | `0x0001` | `LOGIN_REQ` | C→M | `{username, passwordHash, clientVersion}` |
-| `0x0002` | `LOGIN_RES` | M→C | `{ok, errorCode, sessionToken, playerId, displayName}` |
+| `0x0002` | `LOGIN_RES` | M→C | `{ok, errorCode, sessionToken, playerId, displayName, retryAfterSec}` |
 | `0x0003` | `REGISTER_REQ` | C→M | `{username, passwordHash, displayName}` |
 | `0x0004` | `REGISTER_RES` | M→C | `{ok, errorCode}` |
 | `0x0010` | `ROOM_LIST_REQ` | C→M | `{}` |
@@ -1321,13 +1321,51 @@ compatibility.
 | `0x0016` | `ROOM_LEAVE_REQ` | C→M | `{}` |
 | `0x0017` | `ROOM_STATE_PUSH` | M→C | `{roomId, members:[{playerId, name, team, ready}], state}` |
 | `0x0018` | `ROOM_READY_REQ` | C→M | `{ready}` |
-| `0x0020` | `CHAT_SEND` | C→M | `{channel, text}` |
+| `0x0020` | `CHAT_SEND` | C→M | `{channel, text}` — see § 11.1 |
 | `0x0021` | `CHAT_PUSH` | M→C | `{channel, fromPlayerId, fromName, text, timestamp}` |
 | `0x0030` | `MATCHMAKE_REQ` | C→M | `{preferredMapId}` |
 | `0x0031` | `MATCHMAKE_RES` | M→C | `{ok, roomId, estimatedWaitSec}` |
 | `0x0032` | `MATCHMAKE_CANCEL` | C→M | `{}` |
 | `0x00F0` | `HEARTBEAT` | C→M | `{}` — every 15s |
 | `0x00F1` | `ERROR_PUSH` | M→C | `{code, message}` |
+
+### 11.1 Chat channels
+
+The `channel` byte decides **who receives the line**. This table did not exist until 2026-09-03,
+and its absence was not a documentation gap — it was the defect. The master routed `0` to every
+connection it held and everything else to the sender's room; the Unity lobby sent `0` with a
+comment reading *"zero, which is what the master echoes back untouched"*. Both halves were
+internally consistent, neither was reading the spec wrong, and every line typed into a room-lobby
+chat box went to every player on the server.
+
+| Value | Name | Audience |
+|---|---|---|
+| `0` | Global | Every player logged into the master, whatever room they are in |
+| `1` | Room | The members of the sender's room, and nobody else |
+
+Any other value is refused with `4002`. A `1` from a sender who is in no room is refused with
+`4003` — the master used to drop it in silence, which the sender could not tell from a message
+nobody answered.
+
+`CHAT_PUSH` echoes the channel it was sent on. A push carrying `fromPlayerId = 0` and
+`fromName = "SERVER"` is a line the master authored itself (for example, a room whose seat count
+was lowered to the assigned game server's capacity); player ids start at 1, so this cannot collide
+with a real sender.
+
+**Length.** A line is at most **200 characters**, measured before control-character stripping.
+Longer is refused with `4000`, which is deliberately not the rate-limit code: the fix for a long
+line is to shorten it, and "wait and try again" is the one instruction that cannot work.
+
+`Ironfront.Net.Protocol.MspChatChannel` and `MspChatLimits` are the shared definitions of both;
+the client and the master compile against them rather than each holding their own copy.
+
+## 11.2 Retry-after
+
+`LOGIN_RES.retryAfterSec` is the **whole seconds until the refusal lifts**, or `0` when waiting
+does not help. It is populated for `9001` (the per-address login budget's window, 60 s) and `1006`
+(an account lockout, 15 min), and is `0` for every other code. A master that predates the field
+sends nothing and the client reads `0`, so an old master degrades to the wordless message rather
+than to "retry now".
 
 **Game Server ↔ Master**
 
@@ -1406,6 +1444,8 @@ expires after 60 seconds and only works for one specific server.
 | 1003 | Session expired, log in again |
 | 1004 | Wrong client version |
 | 1005 | Invalid display name (supplied and over 32 characters). **Blank is not this** — a blank display name is accepted and the master stores the username |
+| 1006 | Account locked after too many failed attempts. **Only ever returned when the supplied password was CORRECT** — see below |
+| 1007 | Account banned. Same rule: only returned on a correct password |
 | 2000 | Room doesn't exist |
 | 2001 | Room is full |
 | 2002 | Wrong room password |
@@ -1414,8 +1454,21 @@ expires after 60 seconds and only works for one specific server.
 | 2005 | The side change would leave the two sides differing by more than one |
 | 3000 | No game server available |
 | 3001 | Game server not responding |
+| 4000 | Chat message longer than 200 characters (§ 11.1) |
+| 4001 | Chat message empty after trimming and control-character stripping |
+| 4002 | Chat channel is not one this master defines (§ 11.1) |
+| 4003 | A room-channel chat line from a sender who is in no room |
 | 9000 | Internal server error |
-| 9001 | Rate limited, try again later |
+| 9001 | Rate limited. Carries `retryAfterSec` on `LOGIN_RES`; the login budget is **per source address** over 60 s |
+
+**Why 1006 and 1007 are withheld from a wrong password.** Naming either state admits the account
+exists, so both are returned only to a request whose password VERIFIED. Along the guessing path —
+the only path an enumerator has — every answer is still `1000`, identical to a username nobody has
+registered, so nothing leaks that was not already leakable. The player typing their own password
+learns why the door is shut. Before this, all four of *wrong password*, *no such account*, *banned*
+and *locked* left the master as `1000`: ten fat-fingered attempts bought fifteen minutes during
+which the correct password was answered "Wrong username or password", advice that sends the player
+to reset a password that was never wrong and does not clear the lock either.
 
 ---
 

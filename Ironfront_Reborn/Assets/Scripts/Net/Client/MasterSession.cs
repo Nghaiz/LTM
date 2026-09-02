@@ -468,7 +468,10 @@ namespace Ironfront.Net.Unity.Client
 
                 if (!result.Ok)
                 {
-                    Fail(MasterErrorText.DescribeFailure(result.ErrorCode));
+                    // The master's own wait, not an adjective: a lockout is fifteen minutes and
+                    // the login budget's window is sixty seconds, and the screen used to promise
+                    // "a few seconds" for both.
+                    Fail(MasterErrorText.DescribeFailure(result.ErrorCode, result.RetryAfterSeconds));
                     Recover(GameFlowState.LoginScreen);
                     return false;
                 }

@@ -76,6 +76,13 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (_readyButton != null) _readyButton.onClick.AddListener(OnReady);
             if (_leaveButton != null) _leaveButton.onClick.AddListener(OnLeave);
             if (_chatSendButton != null) _chatSendButton.onClick.AddListener(OnSendChat);
+
+            // Belt to BuildMenuCanvas's braces. That builder sets the same limit when it
+            // GENERATES the canvas, which does nothing for a canvas already serialized in a
+            // scene -- and a scene asset is exactly what ships. Setting it here means the cap
+            // holds on every existing canvas without a rebuild, and re-setting an already
+            // correct value costs one comparison at Awake.
+            if (_chatField != null) _chatField.characterLimit = MspChatLimits.MaxTextCharacters;
         }
 
         /// <summary>
