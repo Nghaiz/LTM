@@ -86,6 +86,43 @@ namespace Ironfront.Net.Unity
         public static IMinimapMarkers Minimap { get; set; }
 
         /// <summary>
+        /// How a team is coloured, or null when nothing has registered one. P15.
+        /// </summary>
+        /// <remarks>
+        /// Read through <see cref="TeamColourRgb"/> rather than directly, so no caller has to
+        /// carry its own fallback colour — see that method for why the fallback is grey.
+        /// </remarks>
+        public static ITeamPalette TeamPalette { get; set; }
+
+        /// <summary>
+        /// The way into the offline bot match, or null on a build with no legacy menu. P15.
+        /// </summary>
+        /// <remarks>
+        /// Nullable rather than a null object, unlike <see cref="LocalPlayer"/>: the caller's
+        /// question is "should the Practice button exist at all", and a stand-in answering
+        /// <c>IsAvailable == false</c> would be a second way of spelling null with nothing gained.
+        /// </remarks>
+        public static IPracticeLauncher Practice { get; set; }
+
+        /// <summary>
+        /// The colour for <paramref name="team"/> as <c>0xRRGGBB</c>, or a neutral grey when no
+        /// palette is registered.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Grey rather than a guessed blue or red.</b> The absent case is a Menu scene that
+        /// loaded before the bindings registered, and picking one of the two real team colours
+        /// there would render a wrong team's colour that looks entirely plausible — the failure
+        /// would be invisible. Grey is visibly "nobody said", which is the truth.
+        /// </para>
+        /// </remarks>
+        public static int TeamColourRgb(int team)
+            => TeamPalette != null ? TeamPalette.TeamColourRgb(team) : NeutralTeamColourRgb;
+
+        /// <summary>What <see cref="TeamColourRgb"/> answers with no palette registered.</summary>
+        public const int NeutralTeamColourRgb = 0x9E9E9E;
+
+        /// <summary>
         /// Reads a projectile catalogue off the authored prefab array. Phase C4b.
         /// </summary>
         /// <remarks>
@@ -183,6 +220,8 @@ namespace Ironfront.Net.Unity
             Decals = null;
             Objectives = null;
             Minimap = null;
+            TeamPalette = null;
+            Practice = null;
             ProjectileCatalogReader = null;
             LocalTeam = null;
             ExplosionPredictor = null;

@@ -72,6 +72,7 @@ namespace Ironfront.Net.Unity.Client
         private MasterSession _session;
         private GameFlowController _flow;
         private LobbyShellOverlay _shell;
+        private Menu.MenuScreenController _menu;
 
         private bool _loadingMatch;
         private string _loadingScene = string.Empty;
@@ -157,17 +158,67 @@ namespace Ironfront.Net.Unity.Client
                     + "it, so a player has no way to log in.");
             }
 
-            // Booting -> LoginScreen. The shell's own Start button did this before, which meant
-            // the first thing a player saw was a button whose only job was to admit they had
-            // launched the game.
-            _flow.Transition(GameFlowState.LoginScreen);
+            BindMenuCanvas();
 
-            if (_verbose) Debug.Log("[flow] client flow up; login screen ready.");
+            // NO Booting -> LoginScreen here any more, and that is a deliberate reversal. It was
+            // added because the only UI was a debug overlay whose Booting screen held one button
+            // "whose only job was to admit they had launched the game" -- true of that overlay.
+            // P15 puts a real Title screen on Booting, where the player chooses multiplayer or
+            // practice, and skipping past it would skip the screen this whole phase exists to
+            // add. The edge is unchanged: Booting -> LoginScreen is still the only one out of
+            // Booting, and MenuScreenController.GoToMultiplayer is what takes it now. The shell's
+            // own DrawBooting Start button takes the same edge, so the two agree.
+            if (_verbose) Debug.Log("[flow] client flow up; title screen ready.");
+        }
+
+        /// <summary>
+        /// Finds the Canvas menu in the scene and binds it to this flow. P15 3.2 constraint 6.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Found, not required.</b> A build with no Canvas menu — a headless client, the
+        /// lane-B harness's scene, a test rig — is a supported configuration and gets a warning
+        /// rather than a failure, exactly as the shell does above. The two are independent: this
+        /// bootstrap binds whichever of them is present, and binding both is the normal case
+        /// while <c>LobbyShellOverlay</c> is still the only route to the room browser (3.2
+        /// constraint 5).
+        /// </para>
+        /// <para>
+        /// <b>The endpoint is pushed, not re-resolved.</b> The menu has no host or port fields of
+        /// its own: this component already resolves them from the scene, the environment and
+        /// <c>.env</c>, and a second pair on the Canvas would be a second answer to "which
+        /// master" with nothing keeping them in step.
+        /// </para>
+        /// <para>
+        /// <c>FindObjectsInactive.Include</c> because the menu Canvas may be authored inactive —
+        /// and because the controller's own <c>Bind</c> is what first decides which screen is up,
+        /// so it must be reachable before anything has activated it.
+        /// </para>
+        /// </remarks>
+        private void BindMenuCanvas()
+        {
+            _menu = FindAnyObjectByType<Menu.MenuScreenController>(FindObjectsInactive.Include);
+
+            if (_menu == null)
+            {
+                if (_verbose)
+                    Debug.Log("[flow] no MenuScreenController in this scene; the Canvas menu is "
+                              + "not driving this run.");
+                return;
+            }
+
+            GameClientConfig config = ResolveConfig();
+            _menu.MasterHost = config.MasterHost;
+            _menu.MasterPort = config.MasterPort;
+
+            _menu.Bind(_session, _flow);
         }
 
         private void OnDestroy()
         {
             if (!ReferenceEquals(Current, this)) return;
+
+            if (_menu != null) _menu.Unbind();
 
             SceneManager.sceneLoaded -= OnSceneLoaded;
 

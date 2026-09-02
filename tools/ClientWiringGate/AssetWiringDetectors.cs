@@ -1398,7 +1398,7 @@ namespace Ironfront.Tools.ClientWiringGate
             return index.Documents(path);
         }
 
-        private static IEnumerable<(UnityAssetDocument Document, string Path)> Instances(
+        internal static IEnumerable<(UnityAssetDocument Document, string Path)> Instances(
             UnityAssetIndex index, string scriptGuid)
         {
             foreach (string path in index.Scenes().Concat(index.Prefabs()))
@@ -1413,7 +1413,7 @@ namespace Ironfront.Tools.ClientWiringGate
             classId is 64 or 65 or 68 or 135 or 136 or 144 or 146 or 154 or 61;
 
         /// <summary>Repo-relative, so the output is the same on every machine.</summary>
-        private static string Rel(UnityAssetIndex index, string path)
+        internal static string Rel(UnityAssetIndex index, string path)
         {
             string root = Directory.GetParent(index.AssetsRoot)?.Parent?.FullName ?? string.Empty;
             return root.Length > 0 && path.StartsWith(root, StringComparison.OrdinalIgnoreCase)

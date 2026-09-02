@@ -3,7 +3,8 @@
     "rootNamespace": "Ironfront.Net.Unity.Client",
     "references": [
         "Ironfront.Net.Unity.Shared",
-        "Ironfront.Net.Unity.Input"
+        "Ironfront.Net.Unity.Input",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
