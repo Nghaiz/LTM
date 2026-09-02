@@ -166,25 +166,64 @@ namespace Ironfront.Net.Unity.Server.Tests
         [Test]
         public void APinnedDirectoryNarrowsAndNeverWidens()
         {
-            // Pinning index 0, which team 0 owns. Team 1 must still get nothing rather than be
-            // handed a point the team rule forbids: the pin removes candidates, it does not
-            // grant eligibility.
-            var points = new PinnedSpawnPointDirectory(new FakeSpawnPoints(0, -1, -1), 0);
+            // Pinning index 0 for team 0, which owns it, and index 2 (owner -1) for team 1.
+            // The pin REMOVES candidates; it never grants eligibility, so team 1 must land on
+            // its own pinned slot and never on the one team 0 owns.
+            var points = new PinnedSpawnPointDirectory(
+                new FakeSpawnPoints(0, -1, -1), new[] { 0, 2 });
 
             Assert.AreEqual(0, ServerCombatBridge.ChooseSpawnIndex(points, 0));
-            Assert.AreEqual(-1, ServerCombatBridge.ChooseSpawnIndex(points, 1),
-                "the pin widened eligibility - a pinned point owned by one team must starve the "
-                + "other, loudly, rather than silently admit it");
+            Assert.AreEqual(2, ServerCombatBridge.ChooseSpawnIndex(points, 1),
+                "the pin narrowed team 1 to a slot it cannot use");
+
+            for (int draw = 0; draw < 50; draw++)
+            {
+                Assert.AreNotEqual(0, ServerCombatBridge.ChooseSpawnIndex(points, 1),
+                    "the pin widened eligibility - team 1 was handed a point team 0 owns");
+            }
+        }
+
+        /// <summary>
+        /// A pin that starves a team is refused when it is set, not discovered mid-run.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This assertion used to read the other way: it constructed the starving pin and
+        /// checked that the starved team drew -1 at RUNTIME, "loudly". X-63 changed the
+        /// decision — the refusal moved to construction, so a bad pin fails at the top of the
+        /// run rather than ninety seconds in, once the operator can still fix the flag. The
+        /// test was never updated and had been failing on develop ever since, which is why it
+        /// is rewritten here rather than re-pinned.
+        /// </para>
+        /// </remarks>
+        [Test]
+        public void APinThatStarvesATeamIsRefusedAtConstruction()
+        {
+            ArgumentException thrown = Assert.Throws<ArgumentException>(
+                () => new PinnedSpawnPointDirectory(new FakeSpawnPoints(0, -1, -1), 0));
+
+            // Loudly still means loudly: the message has to name the team that would starve.
+            StringAssert.Contains("team 1", thrown.Message);
         }
 
         [Test]
         public void PinningAnEmptySlotChoosesNothingRatherThanFallingBack()
         {
-            // A fallback to sampling here would be the exact failure X-22 describes: a run that
-            // quietly stopped being deterministic. -1 trips MoveToSpawnPoint's existing warning.
-            var points = new PinnedSpawnPointDirectory(new FakeSpawnPoints(-1, null, -1), 1);
+            // A fallback to sampling would be the exact failure X-22 describes: a run that
+            // quietly stopped being deterministic. Pinning a slot with no point behind it is
+            // refused where the operator can still act on it (X-63) -- and what matters is
+            // that it never silently widens back to a draw.
+            ArgumentException thrown = Assert.Throws<ArgumentException>(
+                () => new PinnedSpawnPointDirectory(new FakeSpawnPoints(-1, null, -1), 1));
 
-            Assert.AreEqual(-1, ServerCombatBridge.ChooseSpawnIndex(points, 0));
+            StringAssert.Contains("1", thrown.Message);
+
+            // And the narrowing itself still holds for a slot that DOES exist: pinning slot 0
+            // gives slot 0 and nothing else, rather than falling back to sampling 0 or 2.
+            var pinned = new PinnedSpawnPointDirectory(new FakeSpawnPoints(-1, null, -1), 0);
+
+            for (int draw = 0; draw < 50; draw++)
+                Assert.AreEqual(0, ServerCombatBridge.ChooseSpawnIndex(pinned, 0));
         }
 
         [Test]
