@@ -113,47 +113,14 @@ function Stop-Started {
     }
 }
 
-# Reads the master's metrics endpoint. It is a RAW TCP socket that writes one JSON document and
-# closes -- not HTTP -- which is why this is a socket read and not Invoke-RestMethod. Same shape
-# tools/alert.sh reads with /dev/tcp.
-# One regex, used by BOTH health reads. Written twice they would drift, and the second
-# reader is a GATE -- a pattern that quietly stops matching turns it green for ever.
-$healthyPattern = '"gameServers"\s*:\s*\{[^}]*"healthy"\s*:\s*([1-9][0-9]*)'
-
-function Read-Metrics {
-    param([int] $Port)
-
-    $client = New-Object System.Net.Sockets.TcpClient
-    try {
-        $client.Connect("127.0.0.1", $Port)
-        $reader = New-Object System.IO.StreamReader($client.GetStream())
-        return $reader.ReadToEnd()
-    }
-    catch { return $null }
-    finally { $client.Dispose() }
-}
-
-function Wait-ForTcpPort {
-    param([int] $Port, [int] $Seconds, [string] $What)
-
-    $deadline = (Get-Date).AddSeconds($Seconds)
-    while ((Get-Date) -lt $deadline) {
-        $client = New-Object System.Net.Sockets.TcpClient
-        try { $client.Connect("127.0.0.1", $Port); return $true }
-        catch { Start-Sleep -Milliseconds 300 }
-        finally { $client.Dispose() }
-    }
-
-    Write-Host "[e2e] $What never opened port $Port within ${Seconds}s"
-    return $false
-}
+. (Join-Path $PSScriptRoot "lib/local-stack.ps1")
 
 try {
     # ---- 0. preconditions ---------------------------------------------------------------
     $player = Join-Path $repoRoot $PlayerPath
     if (-not (Test-Path $player)) {
         Write-Host "[e2e] SKIP -- no player build at $PlayerPath."
-        Write-Host "       Build one with: pwsh tools/run-lane-b.ps1 -Build"
+        Write-Host "       Build one with: pwsh tools/build-player.ps1"
         Write-Host "       This is a SKIP and not a FAIL on purpose: an absent artifact is not a"
         Write-Host "       broken system, and a red here would train the reader to ignore reds."
         exit 3
@@ -163,18 +130,10 @@ try {
     # would then pass against processes this script neither started nor configured -- including,
     # possibly, one with ticket validation off. Checked rather than assumed: tools/alert-drill.sh
     # misgraded itself twice for exactly this before it grew the same guard.
-    foreach ($busy in @(@{ Port = $MasterPort; What = "a master" },
-                        @{ Port = $MetricsPort; What = "a metrics endpoint" })) {
-        $probe = New-Object System.Net.Sockets.TcpClient
-        try {
-            $probe.Connect("127.0.0.1", $busy.Port)
-            Write-Host "[e2e] REFUSING TO RUN: $($busy.What) is already listening on 127.0.0.1:$($busy.Port)."
-            Write-Host "      This run would grade a process it did not start. Usually a leak from an"
-            Write-Host "      earlier run: Get-Process Ironfront.MasterServer,Ironfront | Stop-Process -Force"
-            exit 1
-        }
-        catch { }
-        finally { $probe.Dispose() }
+    if (-not (Assert-TcpPortsFree -Tag "e2e" -Ports @(
+            @{ Port = $MasterPort;  What = "a master" },
+            @{ Port = $MetricsPort; What = "a metrics endpoint" }))) {
+        exit 1
     }
 
     if (Test-Path $outDir) { Remove-Item -Recurse -Force $outDir }
@@ -224,7 +183,7 @@ try {
         -RedirectStandardOutput $masterLog -RedirectStandardError $masterErr
     $processes += @{ Label = "master"; Process = $master }
 
-    if (-not (Wait-ForTcpPort -Port $MasterPort -Seconds 60 -What "the master")) {
+    if (-not (Wait-ForTcpPort -Port $MasterPort -Seconds 60 -What "the master" -Tag "e2e")) {
         throw "the master never opened $MasterPort. See $masterLog and $masterErr."
     }
     Write-Host "[e2e] master is listening"
@@ -276,7 +235,7 @@ try {
         }
 
         $metrics = Read-Metrics -Port $MetricsPort
-        if ($metrics -and $metrics -match $healthyPattern) {
+        if ($metrics -and $metrics -match $IronfrontHealthyPattern) {
             Write-Host "[e2e] the master reports $($Matches[1]) healthy game server(s)"
             $healthy = $true
             $healthyFirstSeen = Get-Date
@@ -365,7 +324,7 @@ try {
         }
 
         $late = Read-Metrics -Port $MetricsPort
-        if ($late -and $late -match $healthyPattern) {
+        if ($late -and $late -match $IronfrontHealthyPattern) {
             Write-Host "[e2e] still $($Matches[1]) healthy game server(s) past the window -- heartbeats are flowing"
         }
         else {
