@@ -88,13 +88,40 @@ namespace Ironfront.MasterServer.Auth
         /// </summary>
         public int ActiveSessionCount => _sessions.Count;
 
+        /// <summary>
+        /// Longest display name the master stores. A username is at most 16 characters
+        /// (<see cref="IsValidUsername"/>), so the blank-name fallback can never exceed it.
+        /// </summary>
+        private const int MaxDisplayNameLength = 32;
+
         public RegisterResult Register(string username, string passwordHash, string displayName)
         {
             if (!IsValidUsername(username)) return new RegisterResult(false, ErrorCode.InvalidUsername);
-            if (!IsValidSha256(passwordHash) || string.IsNullOrWhiteSpace(displayName) || displayName.Length > 32)
-                return new RegisterResult(false, ErrorCode.WrongCredentials);
+            if (!IsValidSha256(passwordHash)) return new RegisterResult(false, ErrorCode.WrongCredentials);
+
+            // THE MASTER'S OWN RULE for a blank display name, which until 2026-09-03 did not
+            // exist while two places in the client promised it did: the Canvas labels the field
+            // "Display name (optional)" (BuildMenuCanvas.cs:273) and MenuRegisterScreen's
+            // docstring says "Left blank, the master applies its own rule." Blank was in fact
+            // REFUSED -- and refused as WrongCredentials, so a player who left the optional
+            // field alone was told "Wrong username or password." on a form that has no
+            // credentials to be wrong yet. Account creation failed 100% of the time.
+            //
+            // Trimmed before the emptiness test, so "   " is blank rather than a three-space
+            // name: whitespace is what an accidental keypress leaves behind, and a lobby row
+            // rendering as nothing at all is the same defect one screen later.
+            string name = (displayName ?? string.Empty).Trim();
+            if (name.Length == 0) name = username;
+
+            // A name that was SUPPLIED and is unusable is a different answer, and gets a
+            // different code (ErrorCode.InvalidDisplayName, protocol-spec.md SS 13). The
+            // credential codes stay for credentials -- see the malformed-hash line above, which
+            // is what WrongCredentials genuinely describes.
+            if (name.Length > MaxDisplayNameLength)
+                return new RegisterResult(false, ErrorCode.InvalidDisplayName);
+
             string stored = BCrypt.Net.BCrypt.HashPassword(passwordHash, BcryptCost);
-            bool inserted = _database.InsertAccount(username, stored, displayName.Trim(), UnixMs());
+            bool inserted = _database.InsertAccount(username, stored, name, UnixMs());
             return new RegisterResult(inserted, inserted ? ErrorCode.Ok : ErrorCode.UsernameTaken);
         }
 

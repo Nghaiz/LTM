@@ -25,10 +25,19 @@ namespace Ironfront.Net.Unity.Client.Menu
     /// this screen's.
     /// </para>
     /// <para>
-    /// <b>Display name is optional and is not defaulted here.</b> Left blank, the master applies
-    /// its own rule. Substituting the username client-side would mean a master that decided
-    /// otherwise and this client disagreeing about the player's own name, with the client's
-    /// version being the one on screen.
+    /// <b>Display name is optional and is not defaulted here.</b> Left blank, the master
+    /// applies its own rule — it stores the username. Substituting it client-side would mean a
+    /// master that decided otherwise and this client disagreeing about the player's own name,
+    /// with the client's version being the one on screen.
+    /// </para>
+    /// <para>
+    /// <b>That rule did not exist until 2026-09-03, and this paragraph was the promise it
+    /// broke.</b> <c>AuthService.Register</c> refused a blank display name and reported the
+    /// refusal as <c>WrongCredentials</c>, so every attempt to create an account — on a form
+    /// whose own label reads "Display name (optional)" — answered "Wrong username or password."
+    /// Nothing was wrong with the username or the password, and there was no way for a player
+    /// to find that out. Found by playing the game; invisible to 2,103 green tests, because
+    /// every one of them passed a display name.
     /// </para>
     /// </remarks>
     [DisallowMultipleComponent]
