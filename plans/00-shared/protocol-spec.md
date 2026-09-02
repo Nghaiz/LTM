@@ -1,6 +1,6 @@
 # Protocol Specification — Ironfront Reborn
 
-**Version: 6.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 6`
+**Version: 7.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 7`
 
 > This is the contract every side of the wire is written against. Every offset, every enum value
 > and every quantization constant in this document is **mandatory**. Client and server may not
@@ -47,7 +47,7 @@
 public static class ProtocolConstants
 {
     public const ushort PROTOCOL_ID       = 0x4946;  // 'IF' — filters out junk packets
-    public const byte   PROTOCOL_VERSION  = 6;
+    public const byte   PROTOCOL_VERSION  = 7;
 
     public const int    MTU_SAFE          = 1200;    // safe through any router
     public const int    GSP_HEADER_SIZE   = 16;
@@ -304,6 +304,7 @@ repeat messageCount times:
 | `0x4E` | `S_VEHICLE_DESPAWN` | 2 | A vehicle left the world |
 | `0x4F` | `S_PROJECTILE_SPAWN` | 2 | A projectile was launched, with its flight parameters |
 | `0x50` | `S_SEAT_CHANGE` | 2 | Authoritative seat enter/leave, including a rejection |
+| `0x51` | `S_PLAYER_SCORES` | 2 | Per-player kills, deaths and side, see § 4.13 |
 
 ### 4.2. `C_INPUT` (0x20) — byte layout
 
@@ -954,10 +955,22 @@ repeat playerCount times:
 by this sentence, because raising `MAX_ACTORS` past 256 would truncate ids silently and the symptom
 would be a scoreboard naming the wrong player.
 
-**Names only, no scores**, despite what the § 4.1 row used to promise. Score and match time already
-travel in `S_MATCH_STATE` (0x45); a second copy here would be a second source of truth for the
-number that changes most often. Worst case is `1 + 64 × 18 = 1153 B`, inside one un-fragmented
-channel-2 payload.
+**Names only, and the scoreboard's numbers are in § 4.13 rather than here.** Two reasons, and
+either alone would settle it.
+
+*The arithmetic.* Worst case is `1 + 64 × 18 = 1153 B` against a `MAX_CHANNEL_PAYLOAD` of 1181 — so
+this message has **28 bytes of headroom in total**. One extra `u8` per row costs 64 and already
+overflows; the `u16` kills-and-deaths pair costs 128. Widening a row here would have traded the
+un-fragmented guarantee for a scoreboard, on the map with the most players, which is exactly when it
+matters.
+
+*The cadence.* Names are sent on join and on change because names do not move; kills and deaths move
+on every death. Two messages let each keep its own send rule.
+
+**The team score still does not go here, and that reasoning is untouched.** Score and match time
+travel in `S_MATCH_STATE` (0x45); a second copy of them would be a second source of truth for the
+number that changes most often. § 4.13 does not carry it — per-player kills and deaths travelled
+nowhere at all before that section existed, so it adds a number with no second source.
 
 An over-long name is **refused, not truncated**: cutting UTF-8 at a fixed byte count splits
 multi-byte code points and renders as replacement characters. The caller clips at a character
@@ -1002,6 +1015,54 @@ because a client cannot verify the game server.
 be the message that fragments. A sender clips at 60 *characters*, where a boundary can be found
 without splitting a multi-byte code point; a line that still exceeds 120 bytes after that — 60
 characters of Vietnamese will — is dropped and counted, not cut.
+
+### 4.13. `S_PLAYER_SCORES` (0x51) — byte layout
+
+The per-player half of the scoreboard. The server has counted kills and deaths since phase P6
+(`MatchScoreTally`, fed from the single point a death is resolved), and until P18 those numbers had
+no way off the server: the only reader was the end-of-match report to the master. This is the
+message that carries them to a client. Sent **on change, coalesced to at most one per tick** — a
+death is the only thing that moves them, and a grenade in a crowd resolves several inside one tick.
+
+```
+u8   playerCount
+repeat playerCount times:
+    u8   actorId
+    u16  kills
+    u16  deaths
+    u8   team                 0, 1, or 255 for none
+```
+
+Worst case `1 + 64 × 6 = 385 B`, comfortably inside one un-fragmented channel-2 payload (1181).
+
+**A new opcode rather than a wider § 4.11**, for the two reasons that section now states: 0x4B has
+28 bytes of headroom and a different send cadence.
+
+**`u16` counters, not `u8`.** A bot on a 40-bot map over a long session passes 255 deaths, and a
+wrapped counter renders as a plausible small number rather than as an error — the failure mode that
+reads as working. Two bytes per row buys a counter that cannot lie, at 128 B of a 385 B worst case.
+The server saturates rather than wraps if a match ever reaches 65535.
+
+**`actorId` is a `u8` here**, as in § 4.11 and for the same reason — ids are allocated from
+`0 … MAX_ACTORS − 1` and `MAX_ACTORS` is 64. Both are pinned by the same conformance test rather
+than by two, because it is one bound.
+
+**`team` is here although § 4.3's actor entry already carries one**, and that is deliberate rather
+than an oversight. `InterestManager` emits actors in relevance buckets under a per-snapshot ceiling
+with a shed cursor (§ 7.3), so a client holds a team only for the actors it currently sees — on a
+41-bot map, a small minority. A scoreboard columned from the snapshot would put most of the roster
+on no side at all. This is the same authoritative assignment, for the actors a board has to place,
+which is all of them. It is **not** the second source of truth § 4.11 refuses: that objection is
+about the team score, a single number that changes many times a match; this is a per-actor value
+that changes at most once a life and is written from one answer in one tick loop.
+
+**Bots get rows.** The tally counts them — they kill and die like anybody else — and the team score
+moves on every death regardless of who died. A scoreboard omitting them could not be reconciled with
+the number above it, which is the arithmetic P18 criterion 7 grades.
+
+**A row for an actor no `S_PLAYER_LIST` has named is normal, not an error.** The two messages arrive
+independently and scores routinely land first. A client keys its rows on `actorId` and falls back to
+rendering the id; a client keying on the name table would make a player appear and disappear.
 
 ---
 
@@ -1425,6 +1486,7 @@ Added at v3.0.0:
 | **4.0.0** | 2026-08-28 | the replication track | **The position window MOVED; it did not widen.** `Quantize.POS_MIN` `-2048f` → `-1024f` and `POS_MAX` `2048f` → `3072f`, with `POS_RANGE` unchanged at 4096 — the diff's own trailing comment reads `// 4096, unchanged` — so the resolution stays 6.25 cm and an encoded position stays 6 bytes. Reason and measurements are in § 4.4's note, cited rather than restated; ledger **X-53**. **Back-filled 2026-09-01 by P11 § 3.4a** (ledger **X-79**): the bump was live in `ProtocolConstants.cs` and in this file's header from the day it shipped, but condition 3 was never met, and nothing mechanical would ever have noticed because `SpecChecker` parses the § 1 fenced block and not this table. Reconstructed from `git show 9172920`, whose only files under `Ironfront.Net.Protocol/` are `ProtocolConstants.cs` and `Quantize.cs`; **nothing here is inferred beyond that diff and the commit message**, and no other v4 change is claimed because none is evidenced | **Yes** — in the commit's own words, *"a v3 client cannot talk to it, because the same i16 now decodes to a different metre"* | #222 |
 | **5.0.0** | 2026-09-01 | the client track | **`S_MATCH_STATE` (0x45) now carries the game's own win condition.** `Size` **8 → 10**: `tickets0`/`tickets1` become `score0`/`score1` at the same two offsets, and a `u16 victoryPoints` is appended. `WinningTeam` stops being `Tickets0 > Tickets1` — meaningless under a margin rule, since it can name a winner in a match that is not over — and becomes `ConquestScoreRule.Decide(score0, score1, victoryPoints)`, the same function the server ends the round with. `victoryPoints` crosses the wire because it is a host-editable match setting, not a constant, and both branches of the client's score-bar geometry divide by it. Phase **P11**; the score model and the layout are [`team-multiplayer-contracts.md`](team-multiplayer-contracts.md) §§ 1–2 | **Yes** — twice over, and either half alone would suffice: the size changed, AND the meaning of two unchanged byte positions INVERTED. A v4 client reading a v5 server renders an ascending score as a descending ticket count, so a round opening 0/0 reads as "both sides have already lost" and the winner answers backwards all match — a failure that *looks* like it works. `CONNECT_DENIED` code 2 is the outcome we want instead | (this PR) |
 | **6.0.0** | 2026-09-01 | the client track | **The joinTicket now carries the team, so the lobby's balancing reaches the match.** `displayName` **16 → 15** bytes and a `u8 team` takes the freed byte at offset 16, ahead of the name (§ 12). `JOIN_TICKET_SIZE` stays **64**, `SignedPayloadSize` stays **32**, and the HMAC still covers exactly the first 32 bytes — the byte came out of the name, not out of spare room, because there was none. Team sits before the name so a truncation bug costs a name character rather than a side, and inside the signed span so a side cannot be forged by editing one byte. Also adds `ConnectDenyReason.TeamFull` = 7 (§ 3.2) and its post-handshake counterpart `DisconnectReason.TeamFull` = 9 — **that value adds no byte and would not bump the version on its own**; it is in this row because it shipped with the layout change, not because it caused it. Phase **P13**; the layout and the value space are [`team-multiplayer-contracts.md`](team-multiplayer-contracts.md) §§ 3–4. **P11 had already shipped when this landed** (v5 is live in `ProtocolConstants.cs` and in this table), so this is 5 → 6 on its own rather than an amendment to the v5 row — the check § 3.2 of the contracts demands, answered | **Yes** — every byte from offset 16 onward moved. A v5 client's ticket puts a name byte where a v6 server reads the team, so `"N"` (0x4E) decodes as team 78 and the join is refused for a side that does not exist; a v6 ticket read by a v5 server renders every name one character short with a leading ``. `CONNECT_DENIED` code 2 is the outcome we want instead | (this PR) |
+| **7.0.0** | 2026-09-02 | the client track | **The scoreboard's numbers reach the client.** New opcode `S_PLAYER_SCORES` (0x51, § 4.13): `u8 playerCount`, then per row `u8 actorId`, `u16 kills`, `u16 deaths`, `u8 team` — 6 B a row, worst case `1 + 64 × 6 = 385 B`. `MatchScoreTally` has counted these since P6 and no message carried them; this is that message, sent on change and coalesced to one per tick. **Not bolted onto `S_PLAYER_LIST`**, whose worst case leaves 28 bytes inside `MAX_CHANNEL_PAYLOAD` while the smallest useful widening costs 64 — § 4.11's "names only" sentence is amended to say so and to keep its `S_MATCH_STATE` reasoning, which is untouched: the team score does not move. The `u8 team` duplicates § 4.3's actor-entry field on purpose, because `InterestManager` sheds actors and a client therefore knows sides only for what it can see (§ 4.13). Phase **P18**; the scoreboard is [`team-multiplayer-contracts.md`](team-multiplayer-contracts.md) § 6's assembly seal applied to a HUD element. **v6 had shipped when this landed** (it is live in `ProtocolConstants.cs` and in the row above), so this is 6 → 7 on its own rather than an amendment to the v6 row — the check P18 § 3.1 demands, answered | **Yes** — a new opcode, on the **3.0.0** row's precedent, where six of them were recorded as a wire change. Milder than any bump before it: a v6 client receiving 0x51 counts it in `UnknownMessages` and drops it, so nothing decodes wrongly. It is still a bump, because the alternative is a fleet where "which opcodes does the other end know" has no answer on the wire, and because the freeze gate's own precedent says new opcodes are a wire change | (this PR) |
 
 > Every change after the freeze must add a row to this table and clear the gate below.
 > **Bump `PROTOCOL_VERSION` only when the bytes on the wire change** — a client and server with

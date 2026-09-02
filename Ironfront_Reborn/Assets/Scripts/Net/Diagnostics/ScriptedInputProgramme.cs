@@ -278,6 +278,18 @@ namespace Ironfront.Net.Unity.Diagnostics
         public bool holdMinimap = false;
 
         /// <summary>
+        /// Holds the Tab scoreboard open for the whole step, as a player holding it would.
+        /// </summary>
+        /// <remarks>
+        /// <b>X-61's shape, one overlay across.</b> The board is raised by a held key that a
+        /// scripted client cannot produce, so without this no lane-B run could ever capture it —
+        /// and P18's criteria 2, 3, 4 and 7 are all graded on a captured board. A LEVEL rather
+        /// than an edge, for <see cref="holdMinimap"/>'s reason: a checkpoint inside the step
+        /// catches it open.
+        /// </remarks>
+        public bool holdScoreboard = false;
+
+        /// <summary>
         /// Weapon slot to select, 0..3. Negative means "leave the weapon alone".
         /// </summary>
         /// <remarks>

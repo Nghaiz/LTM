@@ -862,6 +862,102 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(PlayerListHex, Hex.ToHex(buffer.AsSpan(0, written)));
         }
 
+        // ------------------------------------------------- S_PLAYER_SCORES 0x51 (13 B)
+        //   u8 count 2
+        //   row 1  u8 actorId 5 · u16 kills 3 · u16 deaths 1 · u8 team 0
+        //             -> 05 03 00 01 00 00
+        //   row 2  u8 actorId 9 · u16 kills 0 · u16 deaths 4 · u8 team 1
+        //             -> 09 00 00 04 00 01
+        //
+        // The two u16s are little-endian, like every other multi-byte field in GSP (§ 0), which
+        // is what the 03 00 rather than 00 03 in row 1 is pinning.
+        private const string PlayerScoresHex =
+            "02 05 03 00 01 00 00 09 00 00 04 00 01";
+
+        [Fact]
+        public void PlayerScores_Serializes_ToTheExpectedBytes()
+        {
+            var entries = new[]
+            {
+                new PlayerScoreEntry { ActorId = 5, Kills = 3, Deaths = 1, Team = TeamId.Team0 },
+                new PlayerScoreEntry { ActorId = 9, Kills = 0, Deaths = 4, Team = TeamId.Team1 },
+            };
+
+            var buffer = new byte[PlayerScoresMessage.MaxBodySize];
+            int written = PlayerScoresMessage.Write(buffer, entries);
+
+            Assert.Equal(13, written);
+            Assert.Equal(PlayerScoresMessage.SizeFor(entries.Length), written);
+            Assert.Equal(PlayerScoresHex, Hex.ToHex(buffer.AsSpan(0, written)));
+        }
+
+        [Fact]
+        public void PlayerScores_Parses_FromTheExpectedBytes()
+        {
+            byte[] bytes = Hex.FromHex(PlayerScoresHex);
+            var parsed = new PlayerScoreEntry[ProtocolConstants.MAX_ACTORS];
+
+            Assert.True(PlayerScoresMessage.TryParse(bytes, parsed, out int count));
+
+            Assert.Equal(2, count);
+
+            Assert.Equal(5, parsed[0].ActorId);
+            Assert.Equal(3, parsed[0].Kills);
+            Assert.Equal(1, parsed[0].Deaths);
+            Assert.Equal(TeamId.Team0, parsed[0].Team);
+
+            Assert.Equal(9, parsed[1].ActorId);
+            Assert.Equal(0, parsed[1].Kills);
+            Assert.Equal(4, parsed[1].Deaths);
+            Assert.Equal(TeamId.Team1, parsed[1].Team);
+        }
+
+        /// <summary>
+        /// A truncated body is refused rather than read past its end.
+        /// </summary>
+        /// <remarks>
+        /// The header promises two rows and only one follows. Without this the parser would be
+        /// pinned only on well-formed input, which is the half that never arrives from a broken
+        /// sender.
+        /// </remarks>
+        [Fact]
+        public void PlayerScores_Refuses_ABodyShorterThanItsCount()
+        {
+            byte[] bytes = Hex.FromHex(PlayerScoresHex);
+            var parsed = new PlayerScoreEntry[ProtocolConstants.MAX_ACTORS];
+
+            Assert.False(PlayerScoresMessage.TryParse(
+                bytes.AsSpan(0, bytes.Length - 1), parsed, out int count));
+
+            Assert.Equal(0, count);
+        }
+
+        /// <summary>
+        /// The whole table fits one un-fragmented channel-2 payload, at every player count.
+        /// </summary>
+        /// <remarks>
+        /// This is P18 § 1.2's arithmetic as an assertion rather than as a table in a document.
+        /// It is the check that would have gone red on the design this phase rejected — putting
+        /// the same two counters on <c>S_PLAYER_LIST</c>, whose worst case already leaves 28
+        /// bytes — and it is derived from the constants so that raising MAX_ACTORS re-runs the
+        /// sum rather than leaving a stale 385 behind.
+        /// </remarks>
+        [Fact]
+        public void PlayerScores_WorstCase_FitsOneUnfragmentedPayload()
+        {
+            Assert.Equal(
+                PlayerScoresMessage.HeaderSize
+                    + ProtocolConstants.MAX_ACTORS * PlayerScoresMessage.EntrySize,
+                PlayerScoresMessage.MaxBodySize);
+
+            Assert.True(
+                PlayerScoresMessage.MaxBodySize <= ProtocolConstants.MAX_CHANNEL_PAYLOAD,
+                $"S_PLAYER_SCORES worst case is {PlayerScoresMessage.MaxBodySize} B against a "
+                + $"{ProtocolConstants.MAX_CHANNEL_PAYLOAD} B budget. Widening a row costs "
+                + $"{ProtocolConstants.MAX_ACTORS} B per byte — see P18 § 1.2 for why the "
+                + "un-fragmented guarantee is worth more than the field.");
+        }
+
         [Fact]
         public void PlayerList_Parses_FromTheExpectedBytes()
         {

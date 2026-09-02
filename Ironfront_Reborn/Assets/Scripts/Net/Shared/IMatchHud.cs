@@ -93,6 +93,58 @@ namespace Ironfront.Net.Unity
         void HideDeploy();
 
         /// <summary>
+        /// Raises or lowers the Tab scoreboard. P18 3.3.
+        /// </summary>
+        /// <remarks>
+        /// A level, not a toggle — the caller polls a held key and passes what it read, so the
+        /// board cannot end up inverted after a frame the HUD missed. Same shape as
+        /// <c>MinimapUi.HoldSource</c>, which is the other held-open overlay in this game.
+        /// </remarks>
+        void SetScoreboardVisible(bool visible);
+
+        /// <summary>
+        /// Starts one side's column and states its totals. P18 3.3.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Called before that team's rows, and it clears them.</b> The three scoreboard calls
+        /// are ordered: this, then <see cref="AddScoreboardRow"/> once per row in display order,
+        /// then <see cref="EndScoreboard"/> once for the whole board. An explicit terminator
+        /// rather than the killfeed's count-then-index shape, because a column here is composed
+        /// into one multi-line label and the HUD has to know when the last row has arrived.
+        /// </para>
+        /// <para>
+        /// <b><paramref name="playerCount"/> is the true roster size, which can exceed the rows
+        /// that follow.</b> A column renders at most what it was authored for; stating the count
+        /// separately is what makes a truncated column visible instead of silent.
+        /// </para>
+        /// <para>
+        /// <b>The totals are on screen because criterion 7 is arithmetic.</b> A scoreboard whose
+        /// columns cannot be added up and compared with the team score above them cannot be
+        /// reconciled with it, and an unreconcilable scoreboard is decoration.
+        /// </para>
+        /// </remarks>
+        void BeginScoreboardColumn(int team, int playerCount, int totalKills, int totalDeaths);
+
+        /// <summary>
+        /// Appends one row to a side's column, in display order.
+        /// </summary>
+        /// <param name="name">
+        /// Already resolved by the caller, and never null — an actor no <c>S_PLAYER_LIST</c> has
+        /// named still gets a row, under whatever the caller falls back to. The scoreboard is
+        /// keyed on actor id precisely so that a name arriving second does not make a player
+        /// appear and disappear (P18 criterion 5).
+        /// </param>
+        /// <param name="local">
+        /// Whether this row is the viewing player, so their own line can be picked out of a
+        /// 21-row column.
+        /// </param>
+        void AddScoreboardRow(int team, string name, int kills, int deaths, bool local);
+
+        /// <summary>Ends the board and paints it. Called once, after both columns.</summary>
+        void EndScoreboard();
+
+        /// <summary>
         /// Whether the Deploy control was pressed since this was last asked, clearing the edge.
         /// </summary>
         /// <remarks>

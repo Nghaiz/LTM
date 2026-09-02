@@ -643,6 +643,13 @@ namespace Ironfront.Net.Unity.Diagnostics
             // programme in the same process does not inherit the first one's cursor.
             NetClientBindings.Minimap?.SetHoldSource(() => _cursor != null && _cursor.HoldMinimap);
 
+            // P18 3.3, and the identical reason one overlay across: the Tab board opens only
+            // while a key is held, so this is the only way a lane-B run can capture one. Set
+            // directly rather than through a binding because the presenter is in the same
+            // assembly as this harness -- MinimapUi is Assembly-CSharp and needs the seam.
+            NetClientCombatPresenter.ScoreboardHoldSource =
+                () => _cursor != null && _cursor.HoldScoreboard;
+
             NetPredictionClock clock = NetPredictionClock.Current
                 ?? FindFirstObjectByType<NetPredictionClock>(FindObjectsInactive.Include);
 
@@ -777,6 +784,7 @@ namespace Ironfront.Net.Unity.Diagnostics
             // programme in the same process reading a dead one -- the shape of stale reference
             // X-72 is about, and cheaper to prevent here than to diagnose in an artifact.
             NetClientBindings.Minimap?.SetHoldSource(null);
+            NetClientCombatPresenter.ScoreboardHoldSource = null;
 
             Debug.Log($"[lane-b] {_label} finished exit={exitCode} reason='{reason}' "
                       + $"elapsed={_elapsed:F1}s checkpoints={(_recorder?.Count ?? 0)}");

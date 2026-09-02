@@ -41,7 +41,15 @@ namespace Ironfront.Tools.ClientWiringGate
         // because the two halves are one conversation and a sender whose own line never appears
         // reads as a server that dropped it. Ledger X-8's Chat half; it does not belong in
         // KnownUnwiredEvents either.
-        public const int ExpectedRouterEventCount = 16;
+        //
+        // 17 since P18: OnPlayerScores, subscribed by NetClientCombatPresenter into a
+        // PlayerScoreTable -- the numbers half of the Tab board, beside the name table that is
+        // its other half. It has a production subscriber, so it does not belong in
+        // KnownUnwiredEvents either. Note what this count does NOT prove: G1 retires an event on
+        // SUBSCRIPTION, and the whole of P18 exists because a subscribed opcode that draws
+        // nothing is exactly the defect this gate reports green on. P18 criterion 3 is what
+        // grades the pixels.
+        public const int ExpectedRouterEventCount = 17;
 
         /// <summary>
         /// Events knowingly unwired, each with the reason and the work that unblocks it. An entry

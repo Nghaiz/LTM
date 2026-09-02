@@ -167,6 +167,40 @@ namespace Ironfront.Net.Replication.Server
         }
 
         /// <summary>
+        /// Writes S_PLAYER_SCORES as a channel-2 payload. Broadcast, on change. P18 task 3.1.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Beside <see cref="WritePlayerList"/> and not inside it.</b> The two carry different
+        /// facts at different rates — names on join and on change, scores on every death — and
+        /// the name table has 28 bytes of headroom left inside one un-fragmented channel-2
+        /// payload, which the smallest useful score field already overruns (P18 § 1.2).
+        /// </para>
+        /// <para>
+        /// Reliable, for <see cref="WritePlayerList"/>'s reason: nothing re-sends this on a
+        /// timer, so a client that misses one keeps a stale scoreboard until the next death.
+        /// </para>
+        /// <para>
+        /// <paramref name="bodyScratch"/> is the caller's rather than a <c>stackalloc</c>, the
+        /// same way both variable-length writers on this class take one. It is far smaller here
+        /// (<see cref="PlayerScoresMessage.MaxBodySize"/>, 321 B), and it is the caller's anyway
+        /// so that the three read alike and the buffer is sized once at construction.
+        /// </para>
+        /// </remarks>
+        public static int WritePlayerScores(
+            Span<byte> destination,
+            Span<byte> bodyScratch,
+            ReadOnlySpan<PlayerScoreEntry> entries)
+        {
+            int bodyLength = PlayerScoresMessage.Write(bodyScratch, entries);
+            return bodyLength < 0
+                ? -1
+                : Frame(
+                    destination, ReliableChannel, ServerMessageType.PlayerScores,
+                    bodyScratch.Slice(0, bodyLength));
+        }
+
+        /// <summary>
         /// Writes S_CHAT as a channel-2 payload. Broadcast. Phase P6 task 3.3.
         /// </summary>
         /// <remarks>

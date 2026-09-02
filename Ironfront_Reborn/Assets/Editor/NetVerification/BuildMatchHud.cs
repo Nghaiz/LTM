@@ -130,6 +130,8 @@ namespace Ironfront.Net.Unity.EditorTools
                 Text[] killfeed = BuildKillfeed(root, log);
                 GameObject deploy = BuildDeployScreen(
                     root, out Text killer, out Text timer, out Button deployButton, log);
+                GameObject scoreboard = BuildScoreboard(root, out ScoreboardColumn left,
+                    out ScoreboardColumn right, log);
 
                 var so = new SerializedObject(hud);
                 Assign(so, "_teamReadoutText", team);
@@ -138,12 +140,20 @@ namespace Ironfront.Net.Unity.EditorTools
                 Assign(so, "_deployKillerText", killer);
                 Assign(so, "_deployTimerText", timer);
                 Assign(so, "_deployButton", deployButton);
+                Assign(so, "_scoreboardRoot", scoreboard);
+                Assign(so, "_scoreboardTeam0Header", left.Header);
+                Assign(so, "_scoreboardTeam0Names", left.Names);
+                Assign(so, "_scoreboardTeam0Scores", left.Scores);
+                Assign(so, "_scoreboardTeam1Header", right.Header);
+                Assign(so, "_scoreboardTeam1Names", right.Names);
+                Assign(so, "_scoreboardTeam1Scores", right.Scores);
                 so.ApplyModifiedPropertiesWithoutUndo();
 
                 // The authored state is what a reader of the prefab sees, and what the offline
                 // game gets if MatchHud.Awake never runs. Down is the only safe one: an overlay
                 // authored visible is ledger X-48's failure, one screen over.
                 deploy.SetActive(false);
+                scoreboard.SetActive(false);
 
                 PrefabUtility.SaveAsPrefabAsset(contents, PrefabPath);
                 log.AppendLine("saved: " + PrefabPath);
@@ -248,6 +258,129 @@ namespace Ironfront.Net.Unity.EditorTools
 
             log.AppendLine("deploy screen: heading, killer, countdown and one button.");
             return panel;
+        }
+
+        /// <summary>The three labels one side's column is made of.</summary>
+        private readonly struct ScoreboardColumn
+        {
+            public ScoreboardColumn(Text header, Text names, Text scores)
+            {
+                Header = header;
+                Names = names;
+                Scores = scores;
+            }
+
+            public Text Header { get; }
+            public Text Names { get; }
+            public Text Scores { get; }
+        }
+
+        /// <summary>P18 3.3 — the Tab scoreboard: two columns over a backdrop.</summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Two multi-line labels per side, not a label per row.</b> <c>MatchHud</c>'s own
+        /// remark carries the reason: a row is a LINE in both labels, so a long name cannot push
+        /// its score out of alignment, and a 21-a-side board is six references rather than 126.
+        /// </para>
+        /// <para>
+        /// <b>Authored in the neutral ink, like every other element here.</b> The side colours are
+        /// <c>ITeamPalette</c>'s and are written at runtime; a red and a blue baked in would be
+        /// the second copy of a mapping the game already owns, which is what
+        /// <c>MatchHudTeamColoursComeFromThePalette</c> forbids (contracts § 6.3).
+        /// </para>
+        /// </remarks>
+        private static GameObject BuildScoreboard(
+            GameObject root, out ScoreboardColumn left, out ScoreboardColumn right,
+            StringBuilder log)
+        {
+            var panel = new GameObject("Scoreboard", typeof(RectTransform), typeof(Image));
+            panel.transform.SetParent(root.transform, worldPositionStays: false);
+            Stretch(panel.GetComponent<RectTransform>());
+
+            var backdrop = panel.GetComponent<Image>();
+            backdrop.color = Backdrop;
+
+            // Raycast target OFF, unlike the deploy screen's. This board comes up while the
+            // player is alive and still shooting; swallowing their clicks would be a scoreboard
+            // that disarms them.
+            backdrop.raycastTarget = false;
+
+            Text heading = Label(panel, "Heading", "SCOREBOARD", 40, TextAnchor.UpperCenter);
+            Centre(heading.GetComponent<RectTransform>(), new Vector2(0f, 460f), new Vector2(900f, 48f));
+
+            left = BuildScoreboardColumn(panel, "Team 0", -440f);
+            right = BuildScoreboardColumn(panel, "Team 1", 440f);
+
+            log.AppendLine(
+                "scoreboard: two columns of " + MatchHud.ScoreboardRowsPerTeam
+                + " rows each, from ProtocolConstants.MAX_ACTORS.");
+
+            return panel;
+        }
+
+        /// <summary>One side's heading, name column and score column.</summary>
+        private static ScoreboardColumn BuildScoreboardColumn(
+            GameObject panel, string name, float centreX)
+        {
+            const float ColumnWidth = 720f;
+            const float ScoresWidth = 150f;
+            const float HeaderTop = 400f;
+            const float BodyTop = 356f;
+
+            // Sized so the FULL column fits the 1080-tall reference frame, rather than picked to
+            // look right at three rows. A 21-a-side map fills 21 of these and a full one fills
+            // ScoreboardRowsPerTeam; at 22 px the body ends at y = -348, comfortably above the
+            // bottom edge. The first authoring of this used 26 px from y = 280 and ran 32 rows
+            // straight off the screen — caught on the captured artifact, which is the only place
+            // a layout fault of this kind is visible at all.
+            const float RowHeight = 22f;
+            const int RowFontSize = 19;
+
+            float bodyHeight = MatchHud.ScoreboardRowsPerTeam * RowHeight;
+
+            Text header = Label(panel, name + " Header", string.Empty, 26, TextAnchor.UpperLeft);
+            TopLeftBlock(
+                header.GetComponent<RectTransform>(),
+                centreX - ColumnWidth * 0.5f, HeaderTop, ColumnWidth, 34f);
+
+            // The names take the left of the column and the scores the right of the SAME column,
+            // rather than each getting half the screen: a name and its score belong to one row,
+            // and 400 px of empty desert between them is a row the eye cannot follow.
+            Text names = Label(panel, name + " Names", string.Empty, RowFontSize, TextAnchor.UpperLeft);
+            names.supportRichText = true;
+            names.verticalOverflow = VerticalWrapMode.Truncate;
+            TopLeftBlock(
+                names.GetComponent<RectTransform>(),
+                centreX - ColumnWidth * 0.5f, BodyTop,
+                ColumnWidth - ScoresWidth - 20f, bodyHeight);
+
+            Text scores = Label(panel, name + " Scores", string.Empty, RowFontSize, TextAnchor.UpperRight);
+            scores.verticalOverflow = VerticalWrapMode.Truncate;
+            TopLeftBlock(
+                scores.GetComponent<RectTransform>(),
+                centreX + ColumnWidth * 0.5f - ScoresWidth, BodyTop,
+                ScoresWidth, bodyHeight);
+
+            return new ScoreboardColumn(header, names, scores);
+        }
+
+        /// <summary>
+        /// Places a rect by its TOP-LEFT corner, in the panel's centred coordinates.
+        /// </summary>
+        /// <remarks>
+        /// Both bodies of a column are placed this way with the same <c>top</c> and the same font
+        /// size, which is what makes line N of one sit beside line N of the other. Placing them
+        /// by centre — as the first authoring did — moves the taller one's first line, so a
+        /// column with more rows silently puts every score against the wrong name.
+        /// </remarks>
+        private static void TopLeftBlock(
+            RectTransform rect, float left, float top, float width, float height)
+        {
+            rect.anchorMin = new Vector2(0.5f, 0.5f);
+            rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.pivot = new Vector2(0f, 1f);
+            rect.sizeDelta = new Vector2(width, height);
+            rect.anchoredPosition = new Vector2(left, top);
         }
 
         // ------------------------------------------------------------------ helpers
