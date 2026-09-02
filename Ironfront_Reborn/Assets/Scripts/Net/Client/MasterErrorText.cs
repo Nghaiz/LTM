@@ -57,7 +57,7 @@ namespace Ironfront.Net.Unity.Client
                 case ErrorCode.Ok:
                     return "OK.";
 
-                // ----- accounts (1000-1004)
+                // ----- accounts (1000-1005)
                 case ErrorCode.WrongCredentials:
                     return "Wrong username or password.";
                 case ErrorCode.UsernameTaken:
@@ -68,6 +68,8 @@ namespace Ironfront.Net.Unity.Client
                     return "Your session expired. Please log in again.";
                 case ErrorCode.WrongClientVersion:
                     return "This build is out of date. Update the game and try again.";
+                case ErrorCode.InvalidDisplayName:
+                    return "Display names are at most 32 characters. Leave it blank to use your username.";
 
                 // ----- rooms (2000-2004)
                 case ErrorCode.RoomNotFound:

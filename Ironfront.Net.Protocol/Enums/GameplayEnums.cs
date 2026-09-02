@@ -243,6 +243,18 @@ namespace Ironfront.Net.Protocol
         SessionExpired    = 1003,
         WrongClientVersion= 1004,
 
+        /// <summary>A display name was supplied and is not usable. Blank is NOT this: it is
+        /// accepted, and the master falls back to the username.</summary>
+        /// <remarks>
+        /// Its own code rather than <see cref="WrongCredentials"/>, for the reason
+        /// <see cref="TeamsWouldUnbalance"/> records: the client renders the refusal, and this
+        /// one names a field the player can fix. Until 2026-09-03 a display-name problem was
+        /// reported as WrongCredentials, so the register screen answered every attempt with
+        /// "Wrong username or password." on a form where no credentials existed yet -- which
+        /// sent the player to re-type a password that was never the problem.
+        /// </remarks>
+        InvalidDisplayName= 1005,
+
         RoomNotFound      = 2000,
         RoomFull          = 2001,
         WrongRoomPassword = 2002,
