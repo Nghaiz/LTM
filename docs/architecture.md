@@ -263,12 +263,26 @@ Don't send every actor to every client. With 48 actors, each client really only 
 
 | Zone | Condition | Update rate |
 |---|---|---|
-| Near | < 60 m, or currently in view | Every snapshot (20 Hz) |
-| Mid | 60–150 m | 10 Hz |
-| Far | 150–300 m | 4 Hz, position only (for the minimap) |
-| Culled | > 300 m and not visible | Not sent |
+| Near | < 60 m | Every snapshot (20 Hz) |
+| Mid | 60–100 m | 10 Hz |
+| Far | 100–500 m | 4 Hz |
+| Culled | > 500 m, and outside the 15° view cone | Not sent |
 
-Teammates are always at Mid or better (needed for the minimap and the command map).
+Teammates within 200 m are lifted to Mid — a floor, not a cap — for the minimap and the
+command map.
+
+**Two corrections landed here on 2026-09-02, and the second one is the reason the first was
+found.** The Far band was written as 150–300 m with everything past 300 m culled; the shipped
+`CullRadius` has been **500 m** since the band was implemented, and `ShootableThreshold` is
+`Far` precisely so a target between a rifle's 300 m reach and that cull distance keeps hitbox
+history. So this table had been describing a narrower world than the code for some time, and
+nothing compared them.
+
+The Mid boundary then moved 150 → 100 m for ledger **B-16**. The worst client measured
+**6,419 B/s against a 5,120 B/s budget** at the criterion's own population (16 clients + 32
+bots = 48 actors), about 70% of it the actor snapshot stream. Dropping the population from 56
+actors to 48 did not move that number at all — 6,251 B/s at 56, 6,419 at 48 — so the overrun
+was never an actor-count result, and cutting bodies further would not have paid.
 
 **Estimated saving:** from ~15 KB/s down to ~7 KB/s per client.
 

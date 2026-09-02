@@ -549,6 +549,37 @@ foreach ($c in $clients) {
 # Graded from the log, against the standing rule that the verdict comes from summaries, because
 # the alternative is adding a field to every process summary for a condition the SERVER is the
 # only witness to. The marker is a fixed prefix the server emits, not prose.
+# A PROGRAMME THAT NEVER DID ITS OWN JOB IS NOT A PASS.
+#
+# p20-vehicle-01 and -02 both reported "passed": true with drivenVehicleId 0 on every checkpoint
+# of every client: nobody ever got into a vehicle. Every existing row was structurally incapable
+# of noticing -- exit 0, six checkpoints captured, seeds right, link held. So a "vehicle" run
+# that never seated a driver graded exactly like one that did, which is the same shape of green
+# as the [bounds] blindness below and the disconnected-client blindness above it.
+#
+# Keyed off the checkpoint names the programme itself declares, so a set that never mentions
+# driving is not asked to prove any.
+$wantsDriving = $false
+$sawDriving   = $false
+foreach ($c in $clients) {
+    $cpPath = Join-Path $outDir "$($c.Label)-checkpoints.jsonl"
+    if (-not (Test-Path $cpPath)) { continue }
+
+    foreach ($line in (Get-Content $cpPath)) {
+        if (-not $line.Trim()) { continue }
+        $cp = $line | ConvertFrom-Json
+        if ($cp.checkpoint -match '^(driving|driven)$') { $wantsDriving = $true }
+        if ($cp.drivenVehicleId -and $cp.drivenVehicleId -ne 0) { $sawDriving = $true }
+    }
+}
+if ($wantsDriving -and -not $sawDriving) {
+    $failures += "programme: a checkpoint named 'driving'/'driven' was captured, but no client " +
+                 "ever reported a non-zero drivenVehicleId -- nobody got into a vehicle, so " +
+                 "every vehicle figure in this run describes bodies nobody was driving. Check " +
+                 "how far the driver spawned from a pad: an unpinned run is a coin flip (X-22), " +
+                 "and 'approach' walks in a straight line (X-66)."
+}
+
 # THREE DIFFERENT THINGS share the [bounds] prefix and only one of them is a run failure.
 # Matching the bare prefix would fail 14 of the 100 recorded runs for a STATIC config warning
 # that names no entity at all -- a gate that cries wolf on nearly every run is a gate that gets
