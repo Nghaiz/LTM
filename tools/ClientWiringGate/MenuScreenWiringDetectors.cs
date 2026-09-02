@@ -552,7 +552,13 @@ namespace Ironfront.Tools.ClientWiringGate
             UnityAssetIndex index)
         {
             const string Source = "Scripts/Net/Client/Menu/MenuRoomLobbyScreen.cs";
-            const string PaletteCall = "NetClientBindings.TeamColourRgb";
+
+            // The open paren, and doc comments stripped before the search. Both learned by
+            // mutation: deleting the CALL left the identical string standing in this screen's
+            // own <remarks>, so the first draft of this clause was satisfied by a sentence
+            // ABOUT the call and reported clean on a roster that no longer asked the palette
+            // anything. A check a comment can satisfy is decoration.
+            const string PaletteCall = "NetClientBindings.TeamColourRgb(";
 
             var findings = new List<GateFinding>();
 
@@ -564,7 +570,7 @@ namespace Ironfront.Tools.ClientWiringGate
                     $"no '{Source}' to read, so criterion 10's runtime half cannot be graded. "
                     + "Has the screen moved?");
 
-            if (!File.ReadAllText(sourceFile).Contains(PaletteCall, StringComparison.Ordinal))
+            if (!CodeOf(sourceFile).Contains(PaletteCall, StringComparison.Ordinal))
                 findings.Add(new GateFinding(
                     Row, Source, 0,
                     $"MenuRoomLobbyScreen no longer calls {PaletteCall}, so the roster renders "
@@ -633,17 +639,46 @@ namespace Ironfront.Tools.ClientWiringGate
             return findings;
         }
 
-        /// <summary>One field's references, whether it is a single reference or an array.</summary>
+        /// <summary>
+        /// One field's references, whether it is a single reference or an array.
+        /// </summary>
+        /// <remarks>
+        /// <b>The single form is tried FIRST, and the order is not cosmetic.</b>
+        /// <c>ReferenceArray</c> returns an EMPTY list for a single-reference field — the key
+        /// exists, so it is not absent, and the line after it is the next key, so no entries are
+        /// read. Asking the array first therefore swallowed both roster headings silently: this
+        /// detector read the sixteen rows and neither heading, and a team colour painted onto a
+        /// heading passed. Found by mutation, which is the only thing that could have found it.
+        /// <c>Reference</c> is safe on an array field by contrast — the value after the colon is
+        /// empty rather than a brace, so it returns null and the array branch is taken.
+        /// </remarks>
         private static IEnumerable<UnityObjectRef> Referenced(
             UnityAssetDocument document, string field)
         {
-            IReadOnlyList<UnityObjectRef>? array = document.ReferenceArray(field);
-            if (array != null) return array;
-
             UnityObjectRef? single = document.Reference(field);
-            return single == null
-                ? System.Array.Empty<UnityObjectRef>()
-                : new[] { single.Value };
+            if (single != null) return new[] { single.Value };
+
+            return document.ReferenceArray(field) ?? (IEnumerable<UnityObjectRef>)System.Array.Empty<UnityObjectRef>();
+        }
+
+        /// <summary>
+        /// A source file with its doc comments removed, so a check cannot be satisfied by prose.
+        /// </summary>
+        /// <remarks>
+        /// Only <c>///</c> lines are stripped, not <c>//</c> ones: an ordinary comment sits
+        /// beside code and rarely restates an API call, while a <c>&lt;see cref&gt;</c> or a
+        /// <c>&lt;c&gt;</c> tag names one by design. Stripping both would be more thorough and
+        /// would also delete the line a reader is most likely to be looking for when this fires.
+        /// </remarks>
+        private static string CodeOf(string file)
+        {
+            var code = new System.Text.StringBuilder();
+
+            foreach (string line in File.ReadLines(file))
+                if (!line.TrimStart().StartsWith("///", StringComparison.Ordinal))
+                    code.Append(line).Append('\n');
+
+            return code.ToString();
         }
 
         /// <summary>
