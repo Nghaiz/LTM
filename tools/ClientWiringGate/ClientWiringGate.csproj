@@ -58,6 +58,11 @@
          reflection, so it must compile against both rather than restate their shapes. -->
     <ProjectReference Include="..\..\Ironfront.Net.Protocol\Ironfront.Net.Protocol.csproj" />
     <ProjectReference Include="..\..\Ironfront.Net.Transport\Ironfront.Net.Transport.csproj" />
+    <!-- P19's per-map check is driven from MapCatalog.All rather than a list of scene names, so
+         a map added there inherits the gate with no edit here. That is the whole point of the
+         check: the nine that predate it skip a scene that carries no netcode, and reported
+         Island clean for as long as Island had none. -->
+    <ProjectReference Include="..\..\Ironfront.Net.Configuration\Ironfront.Net.Configuration.csproj" />
   </ItemGroup>
 
 </Project>
