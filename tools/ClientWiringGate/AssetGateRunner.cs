@@ -49,8 +49,6 @@ namespace Ironfront.Tools.ClientWiringGate
                  AssetWiringDetectors.RemoteActorPrefabIsAuthored),
                 (nameof(AssetWiringDetectors.TracerPrefabIsCosmeticOnly),
                  AssetWiringDetectors.TracerPrefabIsCosmeticOnly),
-                (nameof(AssetWiringDetectors.LobbyShellOverlayIsInAScene),
-                 AssetWiringDetectors.LobbyShellOverlayIsInAScene),
                 (nameof(AssetWiringDetectors.ScoreUiTextRefsAreAssigned),
                  AssetWiringDetectors.ScoreUiTextRefsAreAssigned),
                 (nameof(AssetWiringDetectors.ThrowReleaseDelayMatchesTheThrowClip),

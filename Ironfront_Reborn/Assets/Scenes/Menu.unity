@@ -146641,38 +146641,14 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1082731684}
-  - component: {fileID: 1082731683}
   - component: {fileID: 1082731685}
   m_Layer: 0
-  m_Name: Lobby Shell
+  m_Name: Client Flow
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1082731683
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1082731682}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3a9b866060cb47f1af22ca5125dd4d71, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Ironfront.Net.Unity.Client.LobbyShellOverlay
-  _visible: 0
-  _requireShift: 1
-  _toggleKey: 283
-  _masterHost: 127.0.0.1
-  _masterPort: 27020
-  _masterTls: 0
-  _masterTlsTargetHost: 
-  _masterTlsPinnedFingerprint: 
-  _directHost: 127.0.0.1
-  _directPort: 27015
-  _tickSession: 0
 --- !u!4 &1082731684
 Transform:
   m_ObjectHideFlags: 0
@@ -146701,7 +146677,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Ironfront.Net.Unity.Client::Ironfront.Net.Unity.Client.ClientFlowBootstrap
   _masterHost: 127.0.0.1
-  _masterPort: 27020
+  _masterPort: 27000
   _verbose: 1
 --- !u!1 &1104983399
 GameObject:

@@ -59,12 +59,20 @@ answer was never filled in.
 
 ## 3. What is wired now
 
-`Menu.unity`'s `Lobby Shell` object carries `LobbyShellOverlay` **and** `ClientFlowBootstrap`.
-The bootstrap detaches to the root, marks itself `DontDestroyOnLoad`, and owns the master link,
-the flow machine and the game transport for the life of the process. The scene edit was made by
-`Ironfront/Net/Wire client flow into Menu` — an idempotent Editor command
-(`Assets/Editor/NetVerification/WireClientFlow.cs`), not a drag, because a component somebody
-adds by hand is a component that is missing in the next clone.
+> **Superseded 2026-09-02 (P17).** `LobbyShellOverlay` is deleted. Sections 1 and 2 below are
+> kept as the record of what was wrong and why — they are history, not the current wiring.
+
+`Menu.unity`'s `Client Flow` object (named `Lobby Shell` until the overlay was retired) carries
+`ClientFlowBootstrap` alone. The bootstrap detaches to the root, marks itself
+`DontDestroyOnLoad`, and owns the master link, the flow machine and the game transport for the
+life of the process.
+
+The UI is the Canvas menu (`MenuScreenController` and its P15/P16 screens) and nothing else.
+`WireClientFlow.cs` went with the overlay: its whole job was to find the shell and put the
+bootstrap on it, and the bootstrap is now authored in the scene. What replaced BOTH as the
+guard against an unauthored scene is the P16 menu-screen detector set in
+`tools/ClientWiringGate` — a check that the screens exist and their references resolve, rather
+than a check that a debug overlay is present.
 
 The route, end to end:
 
