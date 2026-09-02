@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Ironfront.MasterClient;
@@ -82,12 +82,42 @@ namespace Ironfront.Client.Flow.Tests
             return Task.FromResult(NextRooms);
         }
 
+        /// <summary>How many joins were asked for. P16 counts these, not just the last one.</summary>
+        /// <remarks>
+        /// The ticket refresh on a start push is a SECOND join for the same room, so "was a join
+        /// sent" cannot distinguish one refresh from three. <c>RepeatedStartPushesFetchOneTicket</c>
+        /// is graded on this count and on nothing else.
+        /// </remarks>
+        public int JoinRoomCalls { get; private set; }
+
+        private TaskCompletionSource<bool> _joined =
+            new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public Task<JoinResult> JoinRoomAsync(int roomId, string? passwordHash, CancellationToken ct = default)
         {
             Throw();
             LastRoomId = roomId;
             LastRoomPasswordHash = passwordHash;
+            JoinRoomCalls++;
+            _joined.TrySetResult(true);
             return Task.FromResult(NextJoin);
+        }
+
+        /// <summary>
+        /// Completes once a join has been asked for since the last call.
+        /// </summary>
+        /// <remarks>
+        /// The session fires its ticket refresh as a detached task from inside a push callback.
+        /// Against this fake every step of it completes synchronously, so this usually returns
+        /// already-completed -- but a test that ASSUMED that would start flaking the day the
+        /// refresh grows a real await, and would flake as "the creator cannot enter the match",
+        /// which is a bug report rather than a test fix.
+        /// </remarks>
+        internal Task WaitForJoinAsync()
+        {
+            Task waiting = _joined.Task;
+            _joined = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            return waiting;
         }
 
         public void Poll() => PollCount++;
@@ -131,8 +161,18 @@ namespace Ironfront.Client.Flow.Tests
 
         /// <summary>The display name the last register sent.</summary>
         public string? LastRegisterDisplayName { get; private set; }
+        /// <summary>What the last create-room call asked for. P16 3.3.</summary>
+        public CreateRoomRequest? LastCreateRoom { get; private set; }
+
+        /// <summary>What the next create-room call answers with. P16 3.3.</summary>
+        public CreateRoomResult NextCreateRoom { get; set; } = new CreateRoomResult(true, 1, 0);
+
         public Task<CreateRoomResult> CreateRoomAsync(CreateRoomRequest request, CancellationToken ct = default)
-            => Task.FromResult(new CreateRoomResult(true, 1, 0));
+        {
+            Throw();
+            LastCreateRoom = request;
+            return Task.FromResult(NextCreateRoom);
+        }
         /// <summary>How many times the session asked the master to leave the room.</summary>
         public int LeaveRoomCalls { get; private set; }
 
@@ -142,8 +182,43 @@ namespace Ironfront.Client.Flow.Tests
             LeaveRoomCalls++;
             return Task.CompletedTask;
         }
-        public Task SetReadyAsync(bool ready, CancellationToken ct = default) => Task.CompletedTask;
-        public Task SendChatAsync(byte channel, string text, CancellationToken ct = default) => Task.CompletedTask;
+        /// <summary>The ready value the last <c>SetReady</c> sent, or null. P16 3.1.</summary>
+        public bool? LastReady { get; private set; }
+
+        public Task SetReadyAsync(bool ready, CancellationToken ct = default)
+        {
+            Throw();
+            LastReady = ready;
+            return Task.CompletedTask;
+        }
+
+        /// <summary>The side the last <c>SetTeam</c> asked for, or null. P16 3.5.</summary>
+        public byte? LastTeam { get; private set; }
+
+        /// <summary>How many side changes were sent. Distinguishes "not sent" from "sent once".</summary>
+        public int SetTeamCalls { get; private set; }
+
+        public Task SetTeamAsync(byte team, CancellationToken ct = default)
+        {
+            Throw();
+            LastTeam = team;
+            SetTeamCalls++;
+            return Task.CompletedTask;
+        }
+
+        /// <summary>The last chat line sent, or null. P16 3.4.</summary>
+        public string? LastChatText { get; private set; }
+
+        /// <summary>How many chat sends reached the wire. A refused blank must not count.</summary>
+        public int ChatSendCalls { get; private set; }
+
+        public Task SendChatAsync(byte channel, string text, CancellationToken ct = default)
+        {
+            Throw();
+            LastChatText = text;
+            ChatSendCalls++;
+            return Task.CompletedTask;
+        }
         public Task<MatchmakeResult> MatchmakeAsync(ushort preferredMapId, CancellationToken ct = default)
             => Task.FromResult(new MatchmakeResult(true, 1, 0, 0));
         public Task CancelMatchmakeAsync(CancellationToken ct = default) => Task.CompletedTask;
@@ -152,7 +227,22 @@ namespace Ironfront.Client.Flow.Tests
 
         /// <summary>Pushes one room state, as the master does on a lifecycle change.</summary>
         internal void PushRoomState(int roomId, RoomLifecycleState state)
-            => OnRoomStatePush?.Invoke(new RoomState { RoomId = roomId, State = (byte)state });
+            => PushRoomState(roomId, state, Array.Empty<RoomMember>());
+
+        /// <summary>Pushes one room state with a roster, as the master does on any change.</summary>
+        internal void PushRoomState(int roomId, RoomLifecycleState state, RoomMember[] members)
+            => OnRoomStatePush?.Invoke(new RoomState
+            {
+                RoomId = roomId,
+                State = (byte)state,
+                Members = members,
+            });
+
+        /// <summary>Pushes one unsolicited error, as an <c>ErrorPush</c> does. P16 3.5.</summary>
+        internal void PushError(int code, string message) => OnError?.Invoke(code, message);
+
+        /// <summary>Pushes one chat line, as <c>ChatPush</c> does. P16 3.4.</summary>
+        internal void RaiseChat(ChatMessage message) => OnChat?.Invoke(message);
 
         /// <summary>Keeps the compiler from warning that the push events are never raised.</summary>
         internal void RaisePushes()

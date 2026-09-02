@@ -1,6 +1,7 @@
-#nullable enable
+﻿#nullable enable
 
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Sockets;
 using System.Threading.Tasks;
@@ -70,6 +71,13 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>Whether the junction in flight came through the master, or was a direct dial.</summary>
         private bool _junctionDrivesFlow;
 
+        /// <summary>
+        /// A ticket fetch for the starting match is in flight, or the dial has begun. Reset on
+        /// every path that leaves the room or the match, so a second match in one session is not
+        /// locked out by the first.
+        /// </summary>
+        private bool _enteringMatch;
+
         public MasterSession(
             IMasterClient master,
             GameFlowController flow,
@@ -84,6 +92,35 @@ namespace Ironfront.Net.Unity.Client
             _game.OnConnected += OnGameConnected;
             _game.OnDisconnected += OnGameDisconnected;
             _master.OnRoomStatePush += OnRoomStatePushed;
+            _master.OnChat += OnChatPushed;
+            _master.OnError += OnErrorPushed;
+        }
+
+        /// <summary>
+        /// An unsolicited <c>ErrorPush</c> — a refusal of something sent fire-and-forget. P16 3.5.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Nothing was subscribed to this before P16, and that was a hole rather than a
+        /// choice.</b> <c>MasterClient</c> raises <c>OnError</c> for every <c>ErrorPush</c> and
+        /// additionally faults the pending request, so a refusal of a REQUEST always surfaced as
+        /// a <see cref="MasterServerException"/> at its caller. Ready, leave and now team are
+        /// sent with no response opcode, so their refusals arrive here and nowhere else — and
+        /// with no subscriber they were dropped on the floor. P16 3.5 requires the team refusals
+        /// to reach the screen, and this is the path they take.
+        /// </para>
+        /// <para>
+        /// <b>Phrased from the code, not from the server's message.</b>
+        /// <see cref="MasterErrorText"/> is the client's one place for player-facing wording; the
+        /// master's own string is an operator's sentence ("Cannot change team.") and says less
+        /// than the code does.
+        /// </para>
+        /// </remarks>
+        private void OnErrorPushed(int code, string message) => Fail(MasterErrorText.DescribeFailure(code));
+
+        private void OnChatPushed(ChatMessage message)
+        {
+            if (message != null) OnChat?.Invoke(message);
         }
 
         /// <summary>
@@ -117,12 +154,90 @@ namespace Ironfront.Net.Unity.Client
         {
             if (room == null) return;
             if (room.RoomId != JoinedRoomId || JoinedRoomId == 0) return;
+
+            // Re-surfaced for P16 3.1: the room lobby screen renders the roster, the ready
+            // marks and the lifecycle straight off this. It reads the push rather than polling,
+            // and it reads it THROUGH this class rather than adding a second subscriber to
+            // _master -- two subscribers would see the same push in an unspecified order, and
+            // the screen would sometimes draw a roster for a room this session had already
+            // decided was not ours.
+            Room = room;
+            OnRoomState?.Invoke(room);
+
             if (_flow.State != GameFlowState.RoomLobby) return;
 
             if (room.Lifecycle != RoomLifecycleState.Starting
                 && room.Lifecycle != RoomLifecycleState.InMatch) return;
 
-            EnterMatch();
+            // The push repeats -- on every member change, and on a retransmit -- and the flow
+            // stays RoomLobby across the await below, so the state check above stops guarding
+            // once the ticket fetch is asynchronous. Without this flag a second push would
+            // start a second fetch and a second EnterMatch, and the second reaches
+            // Transition(ConnectingGame) from ConnectingGame: an exception out of a network
+            // callback.
+            if (_enteringMatch) return;
+            _enteringMatch = true;
+
+            _ = EnterMatchWithFreshTicketAsync();
+        }
+
+        /// <summary>
+        /// Fetches a ticket for the room we are already in, then dials the game server. P16 3.4.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Always re-fetched, never reused, and both reasons are P16's.</b> A room's CREATOR
+        /// holds no ticket at all — <c>RoomCreate</c> adds them to the roster and allocates no
+        /// game server, because none exists until somebody joins — so without this the player
+        /// who made the room could not enter it. And a ticket carries the member's TEAM as the
+        /// roster held it when the ticket was minted, so a player who used P16's side-switch
+        /// control would arrive at the game server on their old side: the two rosters in
+        /// criterion 3 would agree with each other and disagree with the match.
+        /// </para>
+        /// <para>
+        /// <b>The master answers a member's re-request with a fresh ticket</b> rather than
+        /// <c>AlreadyInAnotherRoom</c> — see <c>MspMessageDispatcher.JoinRoom</c>, which is where
+        /// that arm and its reasoning live. Nothing here special-cases the creator; there is one
+        /// path and everybody takes it.
+        /// </para>
+        /// <para>
+        /// <b>A failure lands back in the room lobby, not in a dial.</b> <c>EnterMatch</c> would
+        /// otherwise be called with a stale or empty <see cref="PendingJoin"/> and fail ten
+        /// seconds later as a UDP timeout, blaming the game server for a master-side refusal.
+        /// </para>
+        /// </remarks>
+        private async Task EnterMatchWithFreshTicketAsync()
+        {
+            try
+            {
+                int roomId = JoinedRoomId;
+                JoinResult result = await _master.JoinRoomAsync(roomId, null).ConfigureAwait(false);
+
+                if (!result.Ok)
+                {
+                    Fail(MasterErrorText.DescribeFailure(result.ErrorCode));
+                    _enteringMatch = false;
+                    return;
+                }
+
+                var join = new PendingJoin(result.GameServerIp, result.GameServerPort, result.JoinTicket);
+                if (!join.IsValid)
+                {
+                    Fail("The master server did not name a game server for that room.");
+                    _enteringMatch = false;
+                    return;
+                }
+
+                PendingJoin = join;
+                EnterMatch();
+            }
+            catch (Exception ex) when (ex is MasterServerException || IsLinkFailure(ex))
+            {
+                Fail(ex is MasterServerException master
+                    ? MasterErrorText.DescribeFailure(master.ErrorCode)
+                    : "Lost the connection to the master server.");
+                _enteringMatch = false;
+            }
         }
 
         /// <summary>Seconds to wait for the game server. Lower it for a LAN, never past 60.</summary>
@@ -204,6 +319,50 @@ namespace Ironfront.Net.Unity.Client
 
         /// <summary><see cref="LastError"/> changed. Drives the error line on the login screen.</summary>
         public event Action<string>? OnError;
+
+        /// <summary>
+        /// The master pushed the state of the room this client is in. P16 3.1.
+        /// </summary>
+        /// <remarks>
+        /// Raised only for OUR room — the master broadcasts, and a push about somebody else's
+        /// room is ordinary traffic that no screen should draw. Every P16 room-lobby element is
+        /// driven from this: the two roster columns, the ready marks, the host controls and the
+        /// countdown. There is no polling anywhere in that screen, which is what stops two
+        /// clients rendering different rosters.
+        /// </remarks>
+        public event Action<RoomState>? OnRoomState;
+
+        /// <summary>A lobby chat line arrived. P16 3.4.</summary>
+        public event Action<ChatMessage>? OnChat;
+
+        /// <summary>
+        /// The last room state the master pushed for our room, or null. P16 3.4.
+        /// </summary>
+        /// <remarks>
+        /// Held as well as raised so a screen that becomes visible between pushes has something
+        /// to draw. A room lobby that rendered nothing until the next member change would look
+        /// broken for as long as nobody moved.
+        /// </remarks>
+        public RoomState? Room { get; private set; }
+
+        /// <summary>
+        /// This client's round trip to the MASTER on the last room-list refresh, in
+        /// milliseconds, or -1 before the first one. P16 3.2.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>It is not a per-room ping, and the browser must not label it as one</b> (owner
+        /// decision, 2026-09-02). A room has no game server until somebody joins it —
+        /// <c>MspMessageDispatcher</c> allocates one on the FIRST join — so there is no host to
+        /// ping for an empty room, and measuring one would mean allocating a server for every
+        /// listed room merely to be looked at.
+        /// </para>
+        /// <para>
+        /// What this measures is the request the browser already makes, so it costs nothing, and
+        /// it is the latency the player can actually observe before committing to anything.
+        /// </para>
+        /// </remarks>
+        public int MasterPingMs { get; private set; } = -1;
 
         // ------------------------------------------------------------------ master server
 
@@ -368,7 +527,15 @@ namespace Ironfront.Net.Unity.Client
         {
             try
             {
+                long startedTicks = Stopwatch.GetTimestamp();
                 Rooms = await _master.GetRoomsAsync().ConfigureAwait(false) ?? Array.Empty<RoomInfo>();
+
+                // Measured around the request the browser was making anyway (P16 3.2). Rounded
+                // up rather than truncated so a fast LAN reads "1 ms" instead of "0 ms", which
+                // is indistinguishable from "not measured".
+                double elapsedMs = (Stopwatch.GetTimestamp() - startedTicks) * 1000.0 / Stopwatch.Frequency;
+                MasterPingMs = (int)Math.Ceiling(elapsedMs);
+
                 LastError = string.Empty;
                 return true;
             }
@@ -451,6 +618,158 @@ namespace Ironfront.Net.Unity.Client
             }
         }
 
+        /// <summary>
+        /// Creates a room and puts this client in it. P16 3.1 and 3.3.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The first caller <c>RoomCreate</c> has ever had from the game.</b> The opcode, the
+        /// handler and the server-side tests have existed since the lobby was written; what was
+        /// missing was a client. That is why <c>run-e2e.ps1</c> composes
+        /// <see cref="IMasterClient"/> itself and opens a second account merely to make a room.
+        /// </para>
+        /// <para>
+        /// <b>The flow moves exactly as a join does</b> -- <c>RoomBrowser -&gt; JoiningRoom -&gt;
+        /// RoomLobby</c> -- because the outcome is the same: this client is now a member of a
+        /// room, and the room lobby is what draws that. No edge is added to the transition table.
+        /// </para>
+        /// <para>
+        /// <b>No <see cref="PendingJoin"/> is set, and that is correct rather than
+        /// incomplete.</b> A room has no game server until somebody joins it, so there is no
+        /// address and no ticket to hold yet. Both are fetched when the room starts -- see
+        /// <see cref="EnterMatchWithFreshTicketAsync"/>, which is the same path every other
+        /// member takes.
+        /// </para>
+        /// <para>
+        /// <b>The caller hashes nothing.</b> A private room's password is hashed here with
+        /// <see cref="PasswordHasher.HashRoomPassword"/>, the same unsalted function
+        /// <see cref="JoinRoomAsync"/> uses -- the master bcrypt-verifies a joiner's hash against
+        /// the creator's, so the two call sites must agree byte for byte. One hasher, three call
+        /// sites (P16 3.2).
+        /// </para>
+        /// </remarks>
+        public async Task<bool> CreateRoomAsync(
+            string name, ushort mapId, byte maxPlayers, byte botCount, string? password)
+        {
+            _flow.Transition(GameFlowState.JoiningRoom);
+
+            try
+            {
+                bool isPrivate = !string.IsNullOrEmpty(password);
+
+                var request = new CreateRoomRequest
+                {
+                    Name = name ?? string.Empty,
+                    MapId = mapId,
+                    MaxPlayers = maxPlayers,
+                    BotCount = botCount,
+                    IsPrivate = isPrivate,
+                    PasswordHash = isPrivate ? PasswordHasher.HashRoomPassword(password!) : null,
+                };
+
+                CreateRoomResult result = await _master.CreateRoomAsync(request).ConfigureAwait(false);
+
+                if (!result.Ok || result.RoomId == 0)
+                {
+                    Fail(MasterErrorText.DescribeFailure(result.ErrorCode));
+                    Recover(GameFlowState.RoomBrowser);
+                    return false;
+                }
+
+                // Taken from the form rather than from a room-list row, because the list this
+                // client holds predates the room it just made. Both are set together and only on
+                // success, for the reason JoinRoomAsync records: neither may ever be left
+                // pointing at a room this client is not in.
+                JoinedRoomId = result.RoomId;
+                JoinedMapId = mapId;
+
+                LastError = string.Empty;
+                _flow.Transition(GameFlowState.RoomLobby);
+                return true;
+            }
+            catch (MasterServerException ex)
+            {
+                Fail(MasterErrorText.DescribeFailure(ex.ErrorCode));
+                Recover(GameFlowState.RoomBrowser);
+                return false;
+            }
+            catch (Exception ex) when (IsLinkFailure(ex))
+            {
+                Fail("Lost the connection to the master server.");
+                Recover(GameFlowState.RoomBrowser);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Marks this client ready, or not ready. P16 3.1.
+        /// </summary>
+        /// <remarks>
+        /// The answer is the next <see cref="OnRoomState"/>, not this task: the ready mark the
+        /// screen draws is the master's, and P14's countdown is armed by the master's own rule
+        /// over the whole roster. A client that drew its own tick before the push would show
+        /// itself ready in a room that had refused it.
+        /// </remarks>
+        public Task<bool> SetReadyAsync(bool ready) => FireAsync(_master.SetReadyAsync(ready));
+
+        /// <summary>
+        /// Asks the master to move this client to <paramref name="team"/>. P16 3.5.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Never predicted.</b> The master is the only writer of a member's side, and it can
+        /// refuse -- the sides would differ by more than one, or the room has left
+        /// <c>Waiting</c>. A client that moved its own row and then had to move it back would
+        /// show two clients disagreeing for exactly as long as the round trip took, which is the
+        /// thing criterion 3 is graded on.
+        /// </para>
+        /// <para>
+        /// A refusal arrives as an <c>ErrorPush</c> and reaches the screen through
+        /// <see cref="OnErrorPushed"/>. There is no second error channel.
+        /// </para>
+        /// </remarks>
+        public Task<bool> SetTeamAsync(byte team) => FireAsync(_master.SetTeamAsync(team));
+
+        /// <summary>Sends a lobby chat line. P16 3.1 and 3.4.</summary>
+        /// <remarks>
+        /// Whitespace is refused here rather than sent, so an accidental Enter does not put a
+        /// blank line carrying the sender's name in front of everybody in the room.
+        /// </remarks>
+        public Task<bool> SendChatAsync(byte channel, string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return Task.FromResult(false);
+
+            return FireAsync(_master.SendChatAsync(channel, text.Trim()));
+        }
+
+        /// <summary>
+        /// Awaits a fire-and-forget MSP send, turning its failure into <see cref="LastError"/>.
+        /// </summary>
+        /// <remarks>
+        /// These three opcodes have no response, so the task completes when the bytes are
+        /// written and a REFUSAL never lands here -- it arrives later as an <c>ErrorPush</c>.
+        /// What this catches is the link failing under the write, which would otherwise be an
+        /// unobserved task exception and a control that had silently stopped working.
+        /// </remarks>
+        private async Task<bool> FireAsync(Task send)
+        {
+            try
+            {
+                await send.ConfigureAwait(false);
+                return true;
+            }
+            catch (MasterServerException ex)
+            {
+                Fail(MasterErrorText.DescribeFailure(ex.ErrorCode));
+                return false;
+            }
+            catch (Exception ex) when (IsLinkFailure(ex))
+            {
+                Fail("Lost the connection to the master server.");
+                return false;
+            }
+        }
+
         // ------------------------------------------------------------------ the junction
 
         /// <summary>
@@ -497,6 +816,12 @@ namespace Ironfront.Net.Unity.Client
             PendingJoin = PendingJoin.None;
             JoinedRoomId = 0;
             JoinedMapId = 0;
+            Room = null;
+
+            // Cleared with the rest of the room, not just on the match ending: a player who
+            // leaves a room that had already started would otherwise carry the flag into the
+            // NEXT room and be locked out of its start push.
+            _enteringMatch = false;
 
             _flow.Transition(GameFlowState.RoomBrowser);
             return true;
@@ -625,6 +950,7 @@ namespace Ironfront.Net.Unity.Client
             _connecting = false;
             Inbound.Clear();
             PendingJoin = PendingJoin.None;
+            _enteringMatch = false;
 
             // The real transport raises OnDisconnected synchronously from inside Disconnect()
             // (Connection.Disconnect -> Fail(reason, notify: true)), so the handler below runs
@@ -677,6 +1003,8 @@ namespace Ironfront.Net.Unity.Client
         public void Dispose()
         {
             _master.OnRoomStatePush -= OnRoomStatePushed;
+            _master.OnChat -= OnChatPushed;
+            _master.OnError -= OnErrorPushed;
 
             _game.OnConnected -= OnGameConnected;
             _game.OnDisconnected -= OnGameDisconnected;
@@ -721,6 +1049,11 @@ namespace Ironfront.Net.Unity.Client
         private void FailJunction(string message)
         {
             Fail(message);
+
+            // The dial failed, so the room is still ours and its next start push must be acted
+            // on. Left set, the player would be dropped back into a room lobby whose start
+            // button silently no longer worked (P16 3.4).
+            _enteringMatch = false;
 
             if (_junctionDrivesFlow && _flow.State == GameFlowState.ConnectingGame)
                 Recover(GameFlowState.RoomLobby);

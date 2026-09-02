@@ -1,4 +1,5 @@
-using System.Text;
+﻿using System.Text;
+using Ironfront.Net.Protocol;
 using Ironfront.Net.Unity.Client;
 using Ironfront.Net.Unity.Client.Menu;
 using UnityEditor;
@@ -133,7 +134,10 @@ namespace Ironfront.Net.Unity.EditorTools
             GameObject login = BuildLogin(root, controller, log);
             GameObject register = BuildRegister(root, controller, log);
             GameObject authenticating = BuildAuthenticating(root);
-            GameObject lobby = BuildLobby(root, out Text signedIn);
+            GameObject lobby = BuildLobby(root, out Text signedIn, out Button browseRooms);
+            GameObject browser = BuildRoomBrowser(root, controller, log);
+            GameObject createRoom = BuildCreateRoom(root, controller, log);
+            GameObject roomLobby = BuildRoomLobby(root, controller, log);
             GameObject backBar = BuildPracticeBackBar(root, out Button backButton);
 
             var so = new SerializedObject(controller);
@@ -142,6 +146,10 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_registerScreen", register);
             Assign(so, "_authenticatingScreen", authenticating);
             Assign(so, "_lobbyScreen", lobby);
+            Assign(so, "_roomBrowserScreen", browser);
+            Assign(so, "_createRoomScreen", createRoom);
+            Assign(so, "_roomLobbyScreen", roomLobby);
+            Assign(so, "_browseRoomsButton", browseRooms);
             Assign(so, "_practiceBackBar", backBar);
             Assign(so, "_practiceBackButton", backButton);
             Assign(so, "_signedInText", signedIn);
@@ -154,6 +162,9 @@ namespace Ironfront.Net.Unity.EditorTools
             register.SetActive(false);
             authenticating.SetActive(false);
             lobby.SetActive(false);
+            browser.SetActive(false);
+            createRoom.SetActive(false);
+            roomLobby.SetActive(false);
             backBar.SetActive(false);
 
             if (!HideLegacyMenu(log)) return false;
@@ -294,22 +305,242 @@ namespace Ironfront.Net.Unity.EditorTools
             return panel;
         }
 
-        private static GameObject BuildLobby(GameObject root, out Text signedIn)
+        private static GameObject BuildLobby(GameObject root, out Text signedIn, out Button browseRooms)
         {
             GameObject panel = Panel(root, "Lobby");
 
             Label(panel, "Heading", "SIGNED IN", 48, new Vector2(0f, 160f), new Vector2(700f, 70f));
             signedIn = Label(panel, "SignedIn", string.Empty, 34, new Vector2(0f, 60f), new Vector2(900f, 70f));
 
-            // Says what is missing rather than showing an empty screen. P16 replaces this label
-            // with the room browser; until then the shell is still the only route on, and a
-            // player who has just proved criterion 2 is owed an explanation of why the screen
-            // stops here.
-            Label(panel, "Note",
-                  "The room browser arrives in P16. Shift+F2 opens the debug lobby shell.",
-                  26, new Vector2(0f, -40f), new Vector2(1100f, 70f));
+            // P16 3.2: the one edge out of Lobby the transition table has. Before this button the
+            // signed-in screen was terminal for anyone not pressing Shift+F2, which is F2 in the
+            // player-facing audit -- an account you can make and then do nothing with.
+            browseRooms = MakeButton(
+                panel, "BrowseRooms", "BROWSE ROOMS", new Vector2(0f, -50f), new Vector2(460f, 84f));
 
             return panel;
+        }
+
+        // ------------------------------------------------------------------ P16: the room screens
+
+        /// <summary>The room browser: eight rows, a refresh, a create, a password prompt.</summary>
+        private static GameObject BuildRoomBrowser(
+            GameObject root, MenuScreenController controller, StringBuilder log)
+        {
+            GameObject panel = Panel(root, "RoomBrowser");
+
+            Label(panel, "Heading", "ROOMS", 44, new Vector2(-540f, 420f), new Vector2(400f, 64f));
+
+            // Labelled "master", never "ping": see MasterSession.MasterPingMs. A number with no
+            // subject is the one thing this readout must not be.
+            Text ping = Label(panel, "Ping", "master --", 26, new Vector2(560f, 420f), new Vector2(320f, 50f));
+
+            int rows = MenuRoomBrowserScreen.Rows;
+            var buttons = new Object[rows];
+            var labels = new Object[rows];
+
+            for (int i = 0; i < rows; i++)
+            {
+                float y = 330f - (i * 78f);
+                Button row = MakeButton(
+                    panel, "Row" + i, string.Empty, new Vector2(0f, y), new Vector2(1500f, 68f),
+                    out Text caption);
+
+                caption.alignment = TextAnchor.MiddleLeft;
+                caption.resizeTextForBestFit = false;
+                caption.fontSize = 28;
+                Inset(caption.GetComponent<RectTransform>());
+
+                buttons[i] = row;
+                labels[i] = caption;
+            }
+
+            Text overflow = Label(
+                panel, "Overflow", string.Empty, 24, new Vector2(0f, -320f), new Vector2(1500f, 44f));
+
+            Button refresh = MakeButton(
+                panel, "Refresh", "REFRESH", new Vector2(-380f, -390f), new Vector2(380f, 70f));
+            Button create = MakeButton(
+                panel, "CreateRoom", "CREATE ROOM", new Vector2(380f, -390f), new Vector2(380f, 70f));
+
+            Text error = Label(
+                panel, "Error", string.Empty, 28, new Vector2(0f, -470f), new Vector2(1500f, 60f));
+            error.color = ErrorInk;
+
+            GameObject prompt = BuildPasswordPrompt(
+                panel, out InputField password, out Button promptJoin, out Button promptCancel);
+
+            MenuRoomBrowserScreen screen = panel.AddComponent<MenuRoomBrowserScreen>();
+            var so = new SerializedObject(screen);
+            Assign(so, "_controller", controller);
+            AssignArray(so, "_roomButtons", buttons);
+            AssignArray(so, "_roomLabels", labels);
+            Assign(so, "_refreshButton", refresh);
+            Assign(so, "_createRoomButton", create);
+            Assign(so, "_pingText", ping);
+            Assign(so, "_overflowText", overflow);
+            Assign(so, "_errorText", error);
+            Assign(so, "_passwordPrompt", prompt);
+            Assign(so, "_passwordField", password);
+            Assign(so, "_passwordJoinButton", promptJoin);
+            Assign(so, "_passwordCancelButton", promptCancel);
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            prompt.SetActive(false);
+
+            log.AppendLine("room browser: " + rows + " rows, master-ping readout, password prompt.");
+            return panel;
+        }
+
+        /// <summary>The private-room password prompt, drawn over the browser.</summary>
+        private static GameObject BuildPasswordPrompt(
+            GameObject parent, out InputField password, out Button join, out Button cancel)
+        {
+            GameObject prompt = Panel(parent, "PasswordPrompt");
+
+            Label(prompt, "Heading", "PRIVATE ROOM", 40, new Vector2(0f, 140f), new Vector2(700f, 60f));
+
+            password = Field(prompt, "Password", "Room password", new Vector2(0f, 50f), password: true);
+
+            join = MakeButton(prompt, "Join", "JOIN", new Vector2(-160f, -50f), new Vector2(280f, 68f));
+            cancel = MakeButton(prompt, "Cancel", "Cancel", new Vector2(160f, -50f), new Vector2(280f, 68f));
+
+            return prompt;
+        }
+
+        /// <summary>The create-room form: exactly CreateRoomRequest's six fields.</summary>
+        private static GameObject BuildCreateRoom(
+            GameObject root, MenuScreenController controller, StringBuilder log)
+        {
+            GameObject panel = Panel(root, "CreateRoom");
+
+            Label(panel, "Heading", "CREATE ROOM", 48, new Vector2(0f, 330f), new Vector2(900f, 70f));
+
+            InputField name = Field(panel, "Name", "Room name", new Vector2(0f, 230f), password: false);
+            Dropdown map = MakeDropdown(panel, "Map", new Vector2(0f, 155f));
+
+            InputField maxPlayers = Field(
+                panel, "MaxPlayers", "Players (even, 2-" + ProtocolConstants.MAX_PLAYERS + ")",
+                new Vector2(0f, 80f), password: false);
+            maxPlayers.contentType = InputField.ContentType.IntegerNumber;
+
+            InputField bots = Field(panel, "BotCount", "Bots", new Vector2(0f, 5f), password: false);
+            bots.contentType = InputField.ContentType.IntegerNumber;
+
+            Toggle isPrivate = MakeToggle(panel, "Private", "Private room", new Vector2(0f, -70f));
+            InputField password = Field(
+                panel, "Password", "Room password", new Vector2(0f, -140f), password: true);
+
+            Button create = MakeButton(
+                panel, "Create", "CREATE", new Vector2(-160f, -240f), new Vector2(300f, 74f));
+            Button back = MakeButton(
+                panel, "Back", "Back", new Vector2(160f, -240f), new Vector2(300f, 74f));
+
+            Text error = Label(
+                panel, "Error", string.Empty, 28, new Vector2(0f, -330f), new Vector2(1100f, 90f));
+            error.color = ErrorInk;
+
+            MenuCreateRoomScreen screen = panel.AddComponent<MenuCreateRoomScreen>();
+            var so = new SerializedObject(screen);
+            Assign(so, "_controller", controller);
+            Assign(so, "_nameField", name);
+            Assign(so, "_mapDropdown", map);
+            Assign(so, "_maxPlayersField", maxPlayers);
+            Assign(so, "_botCountField", bots);
+            Assign(so, "_privateToggle", isPrivate);
+            Assign(so, "_passwordField", password);
+            Assign(so, "_createButton", create);
+            Assign(so, "_backButton", back);
+            Assign(so, "_errorText", error);
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            log.AppendLine("create room: criterion 8's even-seats check renders on its error line.");
+            return panel;
+        }
+
+        /// <summary>The room: two roster columns, side, ready, chat, leave.</summary>
+        private static GameObject BuildRoomLobby(
+            GameObject root, MenuScreenController controller, StringBuilder log)
+        {
+            GameObject panel = Panel(root, "RoomLobby");
+
+            Text heading = Label(
+                panel, "Heading", string.Empty, 44, new Vector2(0f, 440f), new Vector2(1400f, 66f));
+            Text status = Label(
+                panel, "Status", string.Empty, 28, new Vector2(0f, 380f), new Vector2(1400f, 50f));
+
+            // NO colour is set on either heading or any row here. Both are written at runtime
+            // from ITeamPalette (criterion 10); authoring one would be the second copy of the
+            // team-colour mapping that contracts 6.3 exists to prevent.
+            Text zeroHeading = Label(
+                panel, "TeamZeroHeading", "TEAM 1", 34, new Vector2(-420f, 310f), new Vector2(560f, 56f));
+            Text oneHeading = Label(
+                panel, "TeamOneHeading", "TEAM 2", 34, new Vector2(420f, 310f), new Vector2(560f, 56f));
+
+            int perSide = MenuRoomLobbyScreen.RowsPerSide;
+            var zeroRows = new Object[perSide];
+            var oneRows = new Object[perSide];
+
+            for (int i = 0; i < perSide; i++)
+            {
+                float y = 250f - (i * 52f);
+                zeroRows[i] = RosterRow(panel, "TeamZeroRow" + i, new Vector2(-420f, y));
+                oneRows[i] = RosterRow(panel, "TeamOneRow" + i, new Vector2(420f, y));
+            }
+
+            Button switchSide = MakeButton(
+                panel, "SwitchSide", "SWITCH SIDE", new Vector2(-420f, -190f), new Vector2(400f, 74f),
+                out Text switchLabel);
+            Button ready = MakeButton(
+                panel, "Ready", "READY", new Vector2(420f, -190f), new Vector2(400f, 74f),
+                out Text readyLabel);
+            Button leave = MakeButton(
+                panel, "Leave", "LEAVE ROOM", new Vector2(0f, -430f), new Vector2(340f, 62f));
+
+            Text chatLog = Label(
+                panel, "ChatLog", string.Empty, 24, new Vector2(0f, -290f), new Vector2(1400f, 130f));
+            chatLog.alignment = TextAnchor.LowerLeft;
+            chatLog.resizeTextForBestFit = false;
+
+            InputField chatField = Field(panel, "ChatInput", "Say something", new Vector2(-180f, -370f), password: false);
+            Button chatSend = MakeButton(
+                panel, "ChatSend", "SEND", new Vector2(280f, -370f), new Vector2(240f, 60f));
+
+            Text error = Label(
+                panel, "Error", string.Empty, 26, new Vector2(0f, -490f), new Vector2(1400f, 56f));
+            error.color = ErrorInk;
+
+            MenuRoomLobbyScreen screen = panel.AddComponent<MenuRoomLobbyScreen>();
+            var so = new SerializedObject(screen);
+            Assign(so, "_controller", controller);
+            Assign(so, "_teamZeroHeading", zeroHeading);
+            Assign(so, "_teamOneHeading", oneHeading);
+            AssignArray(so, "_teamZeroRows", zeroRows);
+            AssignArray(so, "_teamOneRows", oneRows);
+            Assign(so, "_switchSideButton", switchSide);
+            Assign(so, "_switchSideLabel", switchLabel);
+            Assign(so, "_readyButton", ready);
+            Assign(so, "_readyLabel", readyLabel);
+            Assign(so, "_leaveButton", leave);
+            Assign(so, "_headingText", heading);
+            Assign(so, "_statusText", status);
+            Assign(so, "_errorText", error);
+            Assign(so, "_chatLog", chatLog);
+            Assign(so, "_chatField", chatField);
+            Assign(so, "_chatSendButton", chatSend);
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            log.AppendLine("room lobby: " + perSide + " rows per side, colours left to ITeamPalette.");
+            return panel;
+        }
+
+        /// <summary>One roster line. Left-aligned and fixed-size, so names do not jump about.</summary>
+        private static Text RosterRow(GameObject parent, string name, Vector2 position)
+        {
+            Text row = Label(parent, name, string.Empty, 28, position, new Vector2(560f, 46f));
+            row.alignment = TextAnchor.MiddleLeft;
+            row.resizeTextForBestFit = false;
+            return row;
         }
 
         private static GameObject BuildPracticeBackBar(GameObject root, out Button backButton)
@@ -371,6 +602,21 @@ namespace Ironfront.Net.Unity.EditorTools
 
         private static Button MakeButton(
             GameObject parent, string name, string caption, Vector2 position, Vector2 size)
+            => MakeButton(parent, name, caption, position, size, out Text _);
+
+        /// <summary>
+        /// A button, and its caption, for the callers that re-write the caption at runtime.
+        /// </summary>
+        /// <remarks>
+        /// P16's Switch-side and Ready buttons both change what they say -- "SIDES LOCKED",
+        /// "NOT READY" -- so the caption is a reference the screen holds rather than a string
+        /// authored once. Finding it with GetComponentInChildren at runtime would work and would
+        /// be ungradeable: the wiring gate reads serialized references, and a caption found by
+        /// search is not one.
+        /// </remarks>
+        private static Button MakeButton(
+            GameObject parent, string name, string caption, Vector2 position, Vector2 size,
+            out Text captionText)
         {
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(parent.transform, worldPositionStays: false);
@@ -386,7 +632,125 @@ namespace Ironfront.Net.Unity.EditorTools
                                   Vector2.zero, size);
             Stretch(caption2.GetComponent<RectTransform>());
 
+            captionText = caption2;
             return button;
+        }
+
+        /// <summary>A checkbox with a caption beside it.</summary>
+        private static Toggle MakeToggle(
+            GameObject parent, string name, string caption, Vector2 position)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent.transform, worldPositionStays: false);
+            Centre(go.GetComponent<RectTransform>(), position, new Vector2(560f, 50f));
+
+            var boxObject = new GameObject("Box", typeof(RectTransform));
+            boxObject.transform.SetParent(go.transform, worldPositionStays: false);
+            Centre(boxObject.GetComponent<RectTransform>(), new Vector2(-250f, 0f), new Vector2(40f, 40f));
+            Image box = boxObject.AddComponent<Image>();
+            box.color = new Color(0.12f, 0.14f, 0.18f, 1f);
+
+            var markObject = new GameObject("Mark", typeof(RectTransform));
+            markObject.transform.SetParent(boxObject.transform, worldPositionStays: false);
+            Centre(markObject.GetComponent<RectTransform>(), Vector2.zero, new Vector2(26f, 26f));
+            Image mark = markObject.AddComponent<Image>();
+            mark.color = Ink;
+
+            Text label = Label(go, "Caption", caption, 28, new Vector2(30f, 0f), new Vector2(460f, 44f));
+            label.alignment = TextAnchor.MiddleLeft;
+            label.resizeTextForBestFit = false;
+
+            Toggle toggle = go.AddComponent<Toggle>();
+            toggle.targetGraphic = box;
+            toggle.graphic = mark;
+            toggle.isOn = false;
+
+            return toggle;
+        }
+
+        /// <summary>
+        /// An empty dropdown. Its options are filled at runtime from <c>MapCatalog</c>.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately NOT authored with the map names: the catalogue is the single source of
+        /// them, and a list baked into a scene would be a second copy that goes stale the first
+        /// time a map is added -- with no compiler and no gate able to notice.
+        /// </remarks>
+        private static Dropdown MakeDropdown(GameObject parent, string name, Vector2 position)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent.transform, worldPositionStays: false);
+            Centre(go.GetComponent<RectTransform>(), position, new Vector2(560f, 60f));
+
+            Image background = go.AddComponent<Image>();
+            background.color = new Color(0.12f, 0.14f, 0.18f, 1f);
+
+            Text caption = Label(go, "Label", string.Empty, 30, Vector2.zero, new Vector2(540f, 48f));
+            caption.alignment = TextAnchor.MiddleLeft;
+            caption.resizeTextForBestFit = false;
+            Inset(caption.GetComponent<RectTransform>());
+
+            var templateObject = new GameObject("Template", typeof(RectTransform));
+            templateObject.transform.SetParent(go.transform, worldPositionStays: false);
+            RectTransform templateRect = templateObject.GetComponent<RectTransform>();
+            templateRect.anchorMin = new Vector2(0f, 0f);
+            templateRect.anchorMax = new Vector2(1f, 0f);
+            templateRect.pivot = new Vector2(0.5f, 1f);
+            templateRect.anchoredPosition = Vector2.zero;
+            templateRect.sizeDelta = new Vector2(0f, 160f);
+            Image templateBackground = templateObject.AddComponent<Image>();
+            templateBackground.color = new Color(0.10f, 0.12f, 0.16f, 1f);
+            ScrollRect scroll = templateObject.AddComponent<ScrollRect>();
+
+            var viewportObject = new GameObject("Viewport", typeof(RectTransform));
+            viewportObject.transform.SetParent(templateObject.transform, worldPositionStays: false);
+            RectTransform viewport = viewportObject.GetComponent<RectTransform>();
+            Stretch(viewport);
+            viewportObject.AddComponent<Mask>().showMaskGraphic = false;
+            viewportObject.AddComponent<Image>().color = Color.white;
+
+            var contentObject = new GameObject("Content", typeof(RectTransform));
+            contentObject.transform.SetParent(viewportObject.transform, worldPositionStays: false);
+            RectTransform content = contentObject.GetComponent<RectTransform>();
+            content.anchorMin = new Vector2(0f, 1f);
+            content.anchorMax = new Vector2(1f, 1f);
+            content.pivot = new Vector2(0.5f, 1f);
+            content.sizeDelta = new Vector2(0f, 52f);
+
+            var itemObject = new GameObject("Item", typeof(RectTransform));
+            itemObject.transform.SetParent(contentObject.transform, worldPositionStays: false);
+            RectTransform itemRect = itemObject.GetComponent<RectTransform>();
+            itemRect.anchorMin = new Vector2(0f, 0.5f);
+            itemRect.anchorMax = new Vector2(1f, 0.5f);
+            itemRect.sizeDelta = new Vector2(0f, 52f);
+            Toggle item = itemObject.AddComponent<Toggle>();
+
+            var itemBackgroundObject = new GameObject("Item Background", typeof(RectTransform));
+            itemBackgroundObject.transform.SetParent(itemObject.transform, worldPositionStays: false);
+            Stretch(itemBackgroundObject.GetComponent<RectTransform>());
+            Image itemBackground = itemBackgroundObject.AddComponent<Image>();
+            itemBackground.color = new Color(0.16f, 0.20f, 0.26f, 1f);
+
+            Text itemLabel = Label(itemObject, "Item Label", string.Empty, 28, Vector2.zero, new Vector2(540f, 44f));
+            itemLabel.alignment = TextAnchor.MiddleLeft;
+            itemLabel.resizeTextForBestFit = false;
+            Inset(itemLabel.GetComponent<RectTransform>());
+
+            item.targetGraphic = itemBackground;
+
+            scroll.content = content;
+            scroll.viewport = viewport;
+            scroll.horizontal = false;
+
+            Dropdown dropdown = go.AddComponent<Dropdown>();
+            dropdown.targetGraphic = background;
+            dropdown.captionText = caption;
+            dropdown.template = templateRect;
+            dropdown.itemText = itemLabel;
+
+            templateObject.SetActive(false);
+
+            return dropdown;
         }
 
         private static InputField Field(
@@ -475,6 +839,35 @@ namespace Ironfront.Net.Unity.EditorTools
                     + "than assigning by hand.");
 
             property.objectReferenceValue = value;
+        }
+
+        /// <summary>
+        /// Assigns a serialized array of object references, resizing it to match.
+        /// </summary>
+        /// <remarks>
+        /// Resized rather than assumed: the field's initialiser sets a length in C#, but a
+        /// component added to a REBUILT object deserializes whatever the previous authoring
+        /// held. Setting the size here means the array is exactly as long as the rows this run
+        /// created, so the gate's per-entry check has one entry per authored row and a shrunk
+        /// screen cannot leave a stale reference on the end.
+        /// </remarks>
+        private static void AssignArray(SerializedObject so, string field, Object[] values)
+        {
+            SerializedProperty property = so.FindProperty(field);
+            if (property == null)
+                throw new System.InvalidOperationException(
+                    so.targetObject.GetType().Name + " has no serialized field '" + field
+                    + "'. The builder and the component have drifted; fix the builder rather "
+                    + "than assigning by hand.");
+
+            if (!property.isArray)
+                throw new System.InvalidOperationException(
+                    so.targetObject.GetType().Name + "." + field + " is not an array, so the "
+                    + "builder is assigning it the wrong way round.");
+
+            property.arraySize = values.Length;
+            for (int i = 0; i < values.Length; i++)
+                property.GetArrayElementAtIndex(i).objectReferenceValue = values[i];
         }
 
         /// <summary>

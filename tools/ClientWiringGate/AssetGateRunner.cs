@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -61,6 +61,10 @@ namespace Ironfront.Tools.ClientWiringGate
                  AssetWiringDetectors.CapturePointFlagsCanDraw),
                 (nameof(MenuScreenWiringDetectors.MenuScreenRefsAreAssigned),
                  MenuScreenWiringDetectors.MenuScreenRefsAreAssigned),
+                (nameof(MenuScreenWiringDetectors.RoomLobbyTeamColoursComeFromThePalette),
+                 MenuScreenWiringDetectors.RoomLobbyTeamColoursComeFromThePalette),
+                (nameof(MenuScreenWiringDetectors.RowCountsMatchTheScreens),
+                 MenuScreenWiringDetectors.RowCountsMatchTheScreens),
             };
 
         /// <summary>

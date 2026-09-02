@@ -125,6 +125,8 @@ namespace Ironfront.MasterClient
 
         public Task SetReadyAsync(bool ready, CancellationToken ct = default) => SendAsync(MspMessageType.RoomReadyRequest, new { ready }, ct);
 
+        public Task SetTeamAsync(byte team, CancellationToken ct = default) => SendAsync(MspMessageType.RoomTeamRequest, new { team }, ct);
+
         public Task SendChatAsync(byte channel, string text, CancellationToken ct = default)
             => SendAsync(MspMessageType.ChatSend, new { channel, text }, ct);
 

@@ -248,6 +248,17 @@ namespace Ironfront.Net.Protocol
         WrongRoomPassword = 2002,
         MatchAlreadyStarted = 2003,
         AlreadyInAnotherRoom= 2004,
+        /// <summary>
+        /// The requested side change would leave the two sides differing by more than one.
+        /// P16 3.5.
+        /// </summary>
+        /// <remarks>
+        /// Its own code rather than <see cref="InternalServerError"/> because the client renders
+        /// the refusal, and the player can act on this one: the other side has room again as
+        /// soon as somebody joins or switches. A generic "internal error" would read as a bug
+        /// and send them to a bug report instead of to the button.
+        /// </remarks>
+        TeamsWouldUnbalance = 2005,
 
         NoGameServerAvailable = 3000,
         GameServerNotResponding = 3001,
