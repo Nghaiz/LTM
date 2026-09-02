@@ -77,7 +77,7 @@ try {
     $player = Join-Path $repoRoot "$PlayerDirectory/Ironfront.exe"
     if (-not (Test-Path $player)) {
         throw "no player at $player. Build it with the Editor CLOSED: " +
-              "pwsh tools/run-lane-b.ps1 -Build"
+              "pwsh tools/build-player.ps1"
     }
 
     $runDirectory = Join-Path $repoRoot "$OutputDirectory/$Tag"

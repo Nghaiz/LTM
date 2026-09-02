@@ -248,3 +248,6 @@ Ironfront_Reborn/wire-client-flow.txt
 Ironfront_Reborn/build-menu-canvas.txt
 Ironfront_Reborn/build-match-hud.txt
 tmp/Ravenfield
+# tools/playtest-local.ps1 -- the local playtest stack: account database and process logs.
+# Consumer state from a hand-run session, never an artifact anyone reads later.
+tmp/playtest/

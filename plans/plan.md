@@ -111,6 +111,13 @@ on screen.
 
 ## 4. Phases
 
+**How to run the thing, since P21 (2026-09-03).** `pwsh tools/build-player.ps1` builds the
+Windows player and stops; `pwsh tools/playtest-local.ps1 -Clients 4` stands up a master, a game
+server and four playable windows on one machine. Before P21 there was no build-only door and no
+local master, so a human playtest needed the sandbox VM and a full lane-B run — which is a large
+part of why M3 has stayed ungraded while its code has been wired since P8.
+
+
 Ordered so that each one makes the next measurable. P1–P3 are what make the game watchable; P4
 cannot produce an honest verdict until they land, because a run whose log is 60 exceptions deep
 and whose bodies do not animate cannot be graded by eye.
@@ -136,6 +143,8 @@ and whose bodies do not animate cannot be graded by eye.
 | **P17** | The readout a player fights with *(file deleted -- `git show 509c70d:plans/phases/phase-p17-in-match-readout.md`)* | F8, and half of F7 — team readout, deploy screen, the killfeed onto the HUD | M |
 | **P18** | The scoreboard, with real numbers on it *(file deleted -- `git show 509c70d:plans/phases/phase-p18-scoreboard.md`)* | the rest of F7 — `S_PLAYER_SCORES` (0x51) and the Tab scoreboard | L |
 | **P19** | Island, made playable *(file deleted -- `git show 509c70d:plans/phases/phase-p19-island.md`)* | F4 — sixteen missing scripts on the map the owner ranks first | L |
+| **P20** | The P11-P19 debt sweep | **DONE 2026-09-02** — four rows re-diagnosed against the wrong cause; `plans/phases/` and `plans/reports/` deleted | L |
+| **P21** | [Four windows you can actually play in](phases/phase-p21-local-playtest.md) | the build-only door, the local master, and `play-lan.ps1`'s deleted menu — **and with them M3's grader** | M |
 
 **P5 blocks the *closing* of P4's rows, not its run.** Run lane B first; X-28's single spawn point
 and X-29's missing measurements will show up in the artifacts as they always have, and fixing them
