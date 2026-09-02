@@ -93,11 +93,27 @@ param(
     # outside the scene's count logs an error and leaves the run UNPINNED rather than failing --
     # see LaneBHarness.PinSpawnPointIfRequested.
     #
+    # Dustbowl has SIX slots and Island FIVE, and every one of Dustbowl's has placed a real
+    # player across the recorded runs; on Island only slots 0 and 1 name a team, so any of the
+    # other three starves nobody either (P19 section 3.6).
+    #
     # Dustbowl has SIX slots, 0..5, and every one of them has placed a real player across the
     # recorded runs under artifacts/lane-b (grep "placed at spawn point"), so any of the six is
     # a valid pin. Which one barely matters: every player lands on whichever is chosen, so the
     # pair is co-located either way. 0 is as good a default as any.
     [int] $SpawnIndex = -1,
+
+    # Which map to run on, by SCENE NAME. Every process reads it through
+    # IRONFRONT_LANEB_SCENE, and DedicatedServerSceneBootstrap loads it.
+    #
+    # This was hardcoded to "Dustbowl" until P19, which is why no lane-B run had ever exercised
+    # the other shipped map -- and why nobody noticed that Island carried no netcode at all. A
+    # harness that can only run one of two maps grades one of two maps, however green it is.
+    #
+    # Validated against MapCatalog rather than a list here: a typo would otherwise load nothing,
+    # every client would sit on Menu, and the run would produce an empty artifact that reads
+    # like a failed check rather than like a mistyped flag.
+    [string] $Scene = "Dustbowl",
 
     # Pin the primary weapon every server-spawned body is armed with, by NAME.
     #
@@ -175,6 +191,26 @@ $player   = Join-Path $repoRoot (Join-Path $PlayerDirectory "Ironfront.exe")
 $outDir   = if ([System.IO.Path]::IsPathRooted($OutputDirectory)) { $OutputDirectory }
             else { Join-Path $repoRoot $OutputDirectory }
 $progDir  = Join-Path $repoRoot "tools/lane-b"
+
+# -Scene is checked against MapCatalog's own rows rather than a list kept here, so a map added
+# there becomes runnable with no edit to this script and a map removed stops being accepted.
+# Reading the source beats hardcoding the two names we have today; it is the same
+# data-driven-over-hardcoded rule the P19 authoring gate is built on.
+$catalog = Join-Path $repoRoot "Ironfront.Net.Configuration/MapCatalog.cs"
+if (Test-Path $catalog) {
+    $maps = [regex]::Matches(
+        (Get-Content $catalog -Raw),
+        'new MapEntry\(\s*\d+\s*,\s*"([^"]+)"') | ForEach-Object { $_.Groups[1].Value }
+
+    if ($maps.Count -eq 0) {
+        throw "could not read any map row out of $catalog. -Scene cannot be validated, and a " +
+              "run on a scene that does not load produces an empty artifact that reads like a " +
+              "failed check."
+    }
+    if ($maps -notcontains $Scene) {
+        throw "-Scene '$Scene' is not a map in MapCatalog. Valid: $($maps -join ', ')."
+    }
+}
 
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
@@ -275,7 +311,7 @@ function Set-CommonEnvironment {
     $env:IRONFRONT_LANEB_ARTIFACTS = $outDir
     $env:IRONFRONT_LANEB_UNITY_SEED = "$UnitySeed"
     $env:IRONFRONT_LANEB_TIMEOUT = "$TimeoutSeconds"
-    $env:IRONFRONT_LANEB_SCENE = "Dustbowl"
+    $env:IRONFRONT_LANEB_SCENE = $Scene
     $env:IRONFRONT_SHARED_SECRET = $SharedSecret
 
     # The roster, because the server does not know "OBS-A". It never parses the join ticket, so
