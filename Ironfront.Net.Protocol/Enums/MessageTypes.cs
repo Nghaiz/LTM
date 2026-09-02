@@ -96,6 +96,27 @@ namespace Ironfront.Net.Protocol
         RoomStatePush     = 0x0017,
         RoomReadyRequest  = 0x0018,
 
+        /// <summary>
+        /// The client asks to move to the other side. Body <c>{ "team": 0|1 }</c>. P16 3.5.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Its own opcode rather than a field on <see cref="RoomReadyRequest"/></b> (owner
+        /// decision, 2026-09-02). Ready and team are independent facts about a member, and
+        /// carrying the team on the ready body means neither can move without asserting the
+        /// other — a player switching sides would have to re-send a ready value they did not
+        /// change, and a nullable sentinel to avoid that is the field admitting it wanted to be
+        /// a message. 0x0019 was free at the end of the room range.
+        /// </para>
+        /// <para>
+        /// <b>Not a <c>PROTOCOL_VERSION</c> bump.</b> That constant governs the binary UDP game
+        /// protocol; MSP bodies are UTF-8 JSON (protocol-spec.md § 11) and an unknown opcode is
+        /// answered with an <see cref="ErrorPush"/> rather than a desync, so an older master and
+        /// a newer client still talk.
+        /// </para>
+        /// </remarks>
+        RoomTeamRequest   = 0x0019,
+
         ChatSend = 0x0020,
         ChatPush = 0x0021,
 

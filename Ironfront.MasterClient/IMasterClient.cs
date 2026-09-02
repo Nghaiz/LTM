@@ -12,7 +12,55 @@ namespace Ironfront.MasterClient
         public bool Ok { get; } public int ErrorCode { get; } public string SessionToken { get; } public int PlayerId { get; } public string DisplayName { get; }
     }
     public readonly struct RegisterResult { public RegisterResult(bool ok, int errorCode) { Ok = ok; ErrorCode = errorCode; } public bool Ok { get; } public int ErrorCode { get; } }
-    public sealed class RoomInfo { public int RoomId { get; set; } public string Name { get; set; } = string.Empty; public ushort MapId { get; set; } public int Players { get; set; } public byte MaxPlayers { get; set; } public byte State { get; set; } }
+    public sealed class RoomInfo
+    {
+        public int RoomId { get; set; }
+
+        public string Name { get; set; } = string.Empty;
+
+        public ushort MapId { get; set; }
+
+        public int Players { get; set; }
+
+        public byte MaxPlayers { get; set; }
+
+        public byte State { get; set; }
+
+        /// <summary>
+        /// The room asks for a password. P16 3.2.
+        /// </summary>
+        /// <remarks>
+        /// A projection of <c>Room.IsPrivate</c>, which the master has held since the lobby was
+        /// written and used at <c>FindJoinableRoom</c> — it was simply never sent. The browser
+        /// needs it to draw the lock and to prompt for a password before the join rather than
+        /// after the refusal.
+        /// </remarks>
+        public bool IsPrivate { get; set; }
+
+        /// <summary>
+        /// <see cref="State"/> read as the enum, never re-derived. P16 3.2.
+        /// </summary>
+        /// <remarks>
+        /// The cast does NOT validate, matching <see cref="RoomState.Lifecycle"/> and for the
+        /// same reason recorded there: a master newer than this client can name a state this
+        /// build has no member for, and an unrecognised value must read as itself so the caller
+        /// can say "not one I act on" rather than throwing out of a list row.
+        /// </remarks>
+        public Ironfront.Net.Protocol.RoomLifecycleState Lifecycle
+            => (Ironfront.Net.Protocol.RoomLifecycleState)State;
+
+        /// <summary>
+        /// A player who is not already in a room can enter this one. P16 3.2.
+        /// </summary>
+        /// <remarks>
+        /// Mirrors the master's own <c>CanJoinRoom</c> refusals that are visible from a list row
+        /// — full, and not <c>Waiting</c>. The password check is deliberately absent: the client
+        /// cannot evaluate it, and a private room IS joinable with the right password.
+        /// </remarks>
+        public bool IsJoinable
+            => Lifecycle == Ironfront.Net.Protocol.RoomLifecycleState.Waiting
+               && Players < MaxPlayers;
+    }
     public sealed class CreateRoomRequest { public string Name { get; set; } = string.Empty; public ushort MapId { get; set; } public byte MaxPlayers { get; set; } public byte BotCount { get; set; } public bool IsPrivate { get; set; } public string? PasswordHash { get; set; } }
     public readonly struct CreateRoomResult { public CreateRoomResult(bool ok, int roomId, int errorCode) { Ok = ok; RoomId = roomId; ErrorCode = errorCode; } public bool Ok { get; } public int RoomId { get; } public int ErrorCode { get; } }
     public readonly struct MatchmakeResult { public MatchmakeResult(bool ok, int roomId, int estimatedWaitSec, int errorCode) { Ok = ok; RoomId = roomId; EstimatedWaitSec = estimatedWaitSec; ErrorCode = errorCode; } public bool Ok { get; } public int RoomId { get; } public int EstimatedWaitSec { get; } public int ErrorCode { get; } }
@@ -60,6 +108,18 @@ namespace Ironfront.MasterClient
         Task<JoinResult> JoinRoomAsync(int roomId, string? passwordHash, CancellationToken ct = default);
         Task LeaveRoomAsync(CancellationToken ct = default);
         Task SetReadyAsync(bool ready, CancellationToken ct = default);
+
+        /// <summary>
+        /// Asks the master to move this player to <paramref name="team"/>. P16 3.5.
+        /// </summary>
+        /// <remarks>
+        /// Fire-and-forget, like <see cref="SetReadyAsync"/>: the answer is the next
+        /// <see cref="OnRoomStatePush"/>, and a refusal arrives on <see cref="OnError"/> as an
+        /// <c>ErrorPush</c>. The master is the only writer of a member's side, so a client that
+        /// predicted the move would have to un-predict it on a refusal — and the two clients in
+        /// criterion 3 would disagree for as long as that took.
+        /// </remarks>
+        Task SetTeamAsync(byte team, CancellationToken ct = default);
         Task SendChatAsync(byte channel, string text, CancellationToken ct = default);
         Task<MatchmakeResult> MatchmakeAsync(ushort preferredMapId, CancellationToken ct = default);
         Task CancelMatchmakeAsync(CancellationToken ct = default);

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
@@ -77,6 +77,12 @@ namespace Ironfront.MasterServer.Dispatch
                     {
                         ReadyRequest request = Deserialize<ReadyRequest>(body);
                         if (TryGetAuthenticatedSession(connection, out Session readySession)) SetReady(connection, readySession, request);
+                        break;
+                    }
+                    case MspMessageType.RoomTeamRequest:
+                    {
+                        TeamRequest request = Deserialize<TeamRequest>(body);
+                        if (TryGetAuthenticatedSession(connection, out Session teamSession)) SetTeam(connection, teamSession, request);
                         break;
                     }
                     case MspMessageType.GsRegister:
@@ -200,7 +206,11 @@ namespace Ironfront.MasterServer.Dispatch
         {
             var rooms = new List<object>();
             foreach (Room room in _lobby.Rooms)
-                rooms.Add(new { roomId = room.RoomId, name = room.Name, mapId = room.MapId, players = room.Members.Count, maxPlayers = room.MaxPlayers, state = (byte)room.State });
+                // isPrivate is a projection of a value the room has always held, added in P16
+                // 3.2 so the browser can draw the lock and ask for the password BEFORE the join
+                // rather than after WrongRoomPassword. The hash itself is never sent: it is the
+                // credential, and a client that had it would not need to be asked.
+                rooms.Add(new { roomId = room.RoomId, name = room.Name, mapId = room.MapId, players = room.Members.Count, maxPlayers = room.MaxPlayers, state = (byte)room.State, isPrivate = room.IsPrivate });
             Send(connection, MspMessageType.RoomListResponse, new { rooms });
         }
 
@@ -210,16 +220,69 @@ namespace Ironfront.MasterServer.Dispatch
             Send(connection, MspMessageType.RoomCreateResponse, new { ok = result.Ok, roomId = result.Room?.RoomId ?? 0, errorCode = (ushort)result.ErrorCode });
         }
 
+        /// <summary>
+        /// Answers a join with a game server, a port and a signed ticket — and re-answers one
+        /// for a player already in the room. P16 3.4.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>An existing member asking again is a TICKET REFRESH, not a second join</b>, and
+        /// without that arm two players in P16 criterion 2 cannot reach the match at all:
+        /// </para>
+        /// <list type="number">
+        /// <item>The room's CREATOR is added to the room by <c>RoomCreate</c>, which allocates no
+        /// game server and mints no ticket — there is no server to allocate until somebody
+        /// joins. Coming back through the front door got them
+        /// <see cref="ErrorCode.AlreadyInAnotherRoom"/>, so the creator could never enter the
+        /// match they made. This is why <c>run-e2e.ps1</c> opens a SECOND account merely to
+        /// create a room: the creator was never a player.</item>
+        /// <item>A ticket carries the member's TEAM, read off the roster when it is issued. P16
+        /// adds a side-switch control, and a ticket minted at join time holds the side the
+        /// player had BEFORE the switch — so the game server would seat them on the side the
+        /// lobby no longer shows, and criterion 3 would pass on two screens while being wrong in
+        /// the match.</item>
+        /// </list>
+        /// <para>
+        /// Both are answered by one mechanism rather than two: the client re-requests on the
+        /// <c>Starting</c> push and is issued a ticket carrying whatever the roster says at that
+        /// moment. See <c>MasterSession.OnRoomStatePushed</c>.
+        /// </para>
+        /// <para>
+        /// <b>This is not "reconnect to a running match"</b>, which P16 § 6 puts out of scope.
+        /// That is an OUTSIDER entering a room in <c>InMatch</c>, and
+        /// <see cref="LobbyService.CanJoinRoom"/> still refuses it — the branch below is only
+        /// reached by somebody the roster already holds.
+        /// </para>
+        /// </remarks>
         private void JoinRoom(ClientConnection connection, Session session, JoinRoomRequest request)
         {
-            ServiceResult eligibility = _lobby.CanJoinRoom(session, request.RoomId, request.Password);
-            if (!eligibility.Ok || eligibility.Room is null)
+            bool alreadyMember = _lobby.IsMember(request.RoomId, session.PlayerId);
+            Room? existing = null;
+
+            if (alreadyMember)
             {
-                Send(connection, MspMessageType.RoomJoinResponse, new { ok = false, gameServerIp = string.Empty, gameServerPort = 0, joinTicket = string.Empty, errorCode = (ushort)eligibility.ErrorCode });
-                return;
+                // No CanJoinRoom: every one of its refusals is about ADMITTING somebody. A
+                // member is already admitted, and the room being full of — or started by — the
+                // very people it is about to seat is not a reason to refuse them a ticket.
+                if (!_lobby.TryGetRoomById(request.RoomId, out existing) || existing is null)
+                {
+                    Send(connection, MspMessageType.RoomJoinResponse, new { ok = false, gameServerIp = string.Empty, gameServerPort = 0, joinTicket = string.Empty, errorCode = (ushort)ErrorCode.RoomNotFound });
+                    return;
+                }
+            }
+            else
+            {
+                ServiceResult eligibility = _lobby.CanJoinRoom(session, request.RoomId, request.Password);
+                if (!eligibility.Ok || eligibility.Room is null)
+                {
+                    Send(connection, MspMessageType.RoomJoinResponse, new { ok = false, gameServerIp = string.Empty, gameServerPort = 0, joinTicket = string.Empty, errorCode = (ushort)eligibility.ErrorCode });
+                    return;
+                }
+
+                existing = eligibility.Room;
             }
 
-            Room room = eligibility.Room;
+            Room room = existing;
             long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             GameServerRecord? server;
             if (room.AssignedGameServerId == 0)
@@ -252,16 +315,19 @@ namespace Ironfront.MasterServer.Dispatch
                 return;
             }
 
-            ServiceResult joined = _lobby.JoinRoom(session, request.RoomId, request.Password);
-            if (!joined.Ok || joined.Room is null)
+            if (!alreadyMember)
             {
-                if (room.Members.Count == 1)
+                ServiceResult joined = _lobby.JoinRoom(session, request.RoomId, request.Password);
+                if (!joined.Ok || joined.Room is null)
                 {
-                    _gameServers.Release(server.ServerId, room.RoomId);
-                    room.AssignedGameServerId = 0;
+                    if (room.Members.Count == 1)
+                    {
+                        _gameServers.Release(server.ServerId, room.RoomId);
+                        room.AssignedGameServerId = 0;
+                    }
+                    Send(connection, MspMessageType.RoomJoinResponse, new { ok = false, gameServerIp = string.Empty, gameServerPort = 0, joinTicket = string.Empty, errorCode = (ushort)joined.ErrorCode });
+                    return;
                 }
-                Send(connection, MspMessageType.RoomJoinResponse, new { ok = false, gameServerIp = string.Empty, gameServerPort = 0, joinTicket = string.Empty, errorCode = (ushort)joined.ErrorCode });
-                return;
             }
 
             // The side the lobby just balanced this player onto. Read back off the member the
@@ -271,7 +337,11 @@ namespace Ironfront.MasterServer.Dispatch
             // Until P13 this was computed and thrown away: the ticket had no room for it, and
             // the game server re-derived a team from slot parity. The lobby's answer never
             // arrived, so a player's side was an accident of join order.
-            RoomMember? member = joined.Room.Members.Find(m => m.PlayerId == session.PlayerId);
+            // Read off `room` rather than a join result, because on the refresh arm above there
+            // was no join — and because `room` is the SAME object either way, so a side switch
+            // that landed a moment ago is on it. That is what makes the ticket carry the side
+            // the roster shows rather than the side the player had when they first arrived.
+            RoomMember? member = room.Members.Find(m => m.PlayerId == session.PlayerId);
             if (member is null)
             {
                 // JoinRoom said Ok, so the member is in the list. If it is not, issuing a
@@ -469,13 +539,32 @@ namespace Ironfront.MasterServer.Dispatch
             if (!result.Ok) SendError(connection, result.ErrorCode, "Cannot change ready state.");
         }
 
+        /// <summary>
+        /// Routes a side change to the lobby, and its refusal back as an ErrorPush. P16 3.5.
+        /// </summary>
+        /// <remarks>
+        /// No response opcode: the success answer is the RoomStatePush <c>SetTeam</c> raises,
+        /// which every member needs anyway, and a private "ok" beside a broadcast that says the
+        /// same thing is the second channel P16 3.5 refuses to invent.
+        /// </remarks>
+        private void SetTeam(ClientConnection connection, Session session, TeamRequest request)
+        {
+            ServiceResult result = _lobby.SetTeam(session.PlayerId, request.Team);
+            if (!result.Ok) SendError(connection, result.ErrorCode, "Cannot change team.");
+        }
+
         private void BroadcastRoom(Room room)
+        {
+            object payload = RoomStatePayload(room);
+            foreach (RoomMember member in room.Members)
+                if (_connectionsByPlayer.TryGetValue(member.PlayerId, out ClientConnection? connection)) Send(connection, MspMessageType.RoomStatePush, payload);
+        }
+
+        private object RoomStatePayload(Room room)
         {
             var members = new List<object>();
             foreach (RoomMember member in room.Members) members.Add(new { playerId = member.PlayerId, name = member.DisplayName, team = member.Team, ready = member.Ready });
-            var payload = new { roomId = room.RoomId, members, state = (byte)room.State };
-            foreach (RoomMember member in room.Members)
-                if (_connectionsByPlayer.TryGetValue(member.PlayerId, out ClientConnection? connection)) Send(connection, MspMessageType.RoomStatePush, payload);
+            return new { roomId = room.RoomId, members, state = (byte)room.State };
         }
 
         private bool TryGetAuthenticatedSession(ClientConnection connection, out Session session)
@@ -511,6 +600,7 @@ namespace Ironfront.MasterServer.Dispatch
         private sealed class CreateRoomWireRequest { public string? Name { get; set; } public ushort MapId { get; set; } public byte MaxPlayers { get; set; } public byte BotCount { get; set; } public bool IsPrivate { get; set; } public string? Password { get; set; } }
         private sealed class JoinRoomRequest { public int RoomId { get; set; } public string? Password { get; set; } }
         private sealed class ReadyRequest { public bool Ready { get; set; } }
+        private sealed class TeamRequest { public byte Team { get; set; } }
         private sealed class GameServerRegistration { public string? ServerSecret { get; set; } public string? PublicIp { get; set; } public int UdpPort { get; set; } public byte MaxPlayers { get; set; } public ushort[]? MapIds { get; set; } }
         private sealed class GameServerHeartbeatRequest { public ushort ServerId { get; set; } public byte CurrentPlayers { get; set; } public float CpuPercent { get; set; } public float AverageTickMs { get; set; } public byte State { get; set; } }
         private sealed class ChatRequest { public byte Channel { get; set; } public string? Text { get; set; } }

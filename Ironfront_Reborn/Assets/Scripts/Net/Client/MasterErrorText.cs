@@ -80,6 +80,11 @@ namespace Ironfront.Net.Unity.Client
                     return "That match has already started.";
                 case ErrorCode.AlreadyInAnotherRoom:
                     return "You are already in another room. Leave it first.";
+                case ErrorCode.TeamsWouldUnbalance:
+                    // Says what the player can do about it. The side is full because a room
+                    // splits its seats in half, and the wait is for somebody to leave that side
+                    // -- not for the room to fill, which is the opposite reading.
+                    return "That side is full. Wait for a slot on it, or stay where you are.";
 
                 // ----- game servers (3000-3001)
                 case ErrorCode.NoGameServerAvailable:
