@@ -86,6 +86,19 @@ namespace Ironfront.Net.Unity
         public static IMinimapMarkers Minimap { get; set; }
 
         /// <summary>
+        /// The in-match readout, or null when this build draws none. P17.
+        /// </summary>
+        /// <remarks>
+        /// Registered by the HUD component on <c>Ingame UI Container.prefab</c>, which
+        /// <c>GameManager</c> instantiates at runtime — so unlike the eleven seams above it, this
+        /// one is registered from the CLIENT assembly rather than from <c>Assembly-CSharp</c>.
+        /// The slot exists all the same, and for the reason <see cref="IMatchHud"/> gives: the
+        /// presenters are authored into the scene and the HUD is not, so neither can hold a
+        /// reference to the other and a per-frame scene search is the only alternative.
+        /// </remarks>
+        public static IMatchHud MatchHud { get; set; }
+
+        /// <summary>
         /// How a team is coloured, or null when nothing has registered one. P15.
         /// </summary>
         /// <remarks>
@@ -220,6 +233,7 @@ namespace Ironfront.Net.Unity
             Decals = null;
             Objectives = null;
             Minimap = null;
+            MatchHud = null;
             TeamPalette = null;
             Practice = null;
             ProjectileCatalogReader = null;

@@ -44,8 +44,15 @@ namespace Ironfront.Net.Unity.Client
 
         private NetClientBootstrap _client;
 
-        [Tooltip("Draw the killfeed with IMGUI. A stopgap until a real HUD element reads it.")]
+        [Tooltip("Push the killfeed to the HUD. Off leaves the rows blank for a clean capture.")]
         [SerializeField] private bool _drawKillfeed = true;
+
+        // What was last pushed to the HUD, so Update writes strings only when the visible feed
+        // has actually changed. -1 is "nothing pushed yet", which is also what a HUD arriving
+        // late resets this to -- see PushKillfeed.
+        private int _pushedCount = -1;
+        private long _pushedTotalKills = -1;
+        private int _pushedNameRevision = -1;
 
         private readonly KillfeedModel _killfeed = new KillfeedModel();
         private readonly HitmarkerModel _hitmarker = new HitmarkerModel();
@@ -112,6 +119,11 @@ namespace Ironfront.Net.Unity.Client
             _client.Router.OnHitConfirm -= OnHitConfirm;
             _client.Router.OnPlayerList -= _names.Apply;
             _names.Reset();
+
+            // A presenter going away leaves no rows behind. Without this, disconnecting mid-match
+            // freezes the last five kills on screen with nothing left to prune them.
+            NetClientBindings.MatchHud?.SetKillfeedLineCount(0);
+            _pushedCount = -1;
         }
 
         private void Update()
@@ -119,50 +131,106 @@ namespace Ironfront.Net.Unity.Client
             // KillfeedModel deliberately has no clock of its own, so expiry is the caller's to
             // run. Once a frame, before anything reads it.
             _killfeed.Prune(Time.time);
+
+            PushKillfeed();
         }
 
         /// <summary>
-        /// Draws the killfeed with names. debt-closure phase 2 task 2a, acceptance criterion 3.
+        /// Rewrites the HUD's killfeed when the visible feed has changed. P17 3.3.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <b>IMGUI, and deliberately a stopgap.</b> <c>KillfeedModel</c> shipped in phase-02 and
-        /// has had no consumer in the entire repository since — the model is exercised by tests
-        /// and drawn by nothing, so "the killfeed" has never actually appeared on screen. A real
-        /// HUD element belongs on <c>Ingame UI Container.prefab</c>, and phase 2 owns no prefabs
-        /// or scenes (they are Phase 1's), so this draws from the presenter that already holds
-        /// the model and already sits on the <c>NetClient</c> object. Delete it when a HUD
-        /// element reads <see cref="Killfeed"/> and <see cref="Names"/> instead.
+        /// <b>This replaces an IMGUI drawer, and the replacement was specified by the thing it
+        /// replaces.</b> That drawer's remark said "delete it when a HUD element reads
+        /// <see cref="Killfeed"/> and <see cref="Names"/> instead", and also that it allocated
+        /// its strings every frame — "the honest cost of the stopgap ... the replacement does
+        /// not have this problem". So this writes only on a change, and the change key is three
+        /// cheap integers rather than a comparison of the rendered text.
         /// </para>
         /// <para>
-        /// <b>Nothing here is allocated per frame except the strings IMGUI needs.</b> That is the
-        /// honest cost of the stopgap and the second reason it is one; five lines at 60 Hz is
-        /// not a per-tick path, and the replacement does not have this problem.
+        /// <b>Why the name revision is in the key.</b> S_PLAYER_LIST arrives on join and on
+        /// change, routinely AFTER the first kills of a match. Without it a feed whose lines
+        /// read "actor 7" would keep reading "actor 7" for the rest of those lines' lives, and
+        /// the one message that could have fixed them would have been ignored because the count
+        /// did not move.
+        /// </para>
+        /// <para>
+        /// <b>A team is NOT in the key, and that is a stated limit.</b> Teams are resolved when
+        /// a line is written, from the decoded snapshot; an actor whose team changed after its
+        /// line was drawn keeps the old colour until the feed next changes. A team changes at
+        /// most once a life and a line lives five seconds, so the window is narrow — and closing
+        /// it would mean re-resolving 64 actors every frame to detect a change that a kill will
+        /// push out of the feed anyway.
+        /// </para>
+        /// <para>
+        /// <b><c>_drawKillfeed</c> off is a count of zero, not a skipped push.</b> Returning
+        /// early would leave whatever was on screen when it was switched off, which is worse
+        /// than either state: a lane-B run turning it off wants the rows blank.
         /// </para>
         /// </remarks>
-        private void OnGUI()
+        private void PushKillfeed()
         {
-            if (!_drawKillfeed) return;
-            if (_killfeed.Count == 0) return;
+            IMatchHud hud = NetClientBindings.MatchHud;
 
-            const float width = 420f;
-            const float lineHeight = 20f;
+            if (hud == null)
+            {
+                // The HUD prefab is instantiated by GameManager.StartGame, which can land after
+                // the first kills. Forgetting what was pushed is what makes the feed appear in
+                // full the frame a HUD registers, rather than staying empty until the next kill.
+                _pushedCount = -1;
+                return;
+            }
 
-            for (int i = 0; i < _killfeed.Count; i++)
+            int count = _drawKillfeed ? _killfeed.Count : 0;
+
+            if (count == _pushedCount
+                && _killfeed.TotalKills == _pushedTotalKills
+                && _names.Revision == _pushedNameRevision)
+            {
+                return;
+            }
+
+            _pushedCount = count;
+            _pushedTotalKills = _killfeed.TotalKills;
+            _pushedNameRevision = _names.Revision;
+
+            hud.SetKillfeedLineCount(count);
+
+            for (int i = 0; i < count; i++)
             {
                 KillfeedEntry entry = _killfeed[i];
 
-                string killer = entry.KilledByEnvironment
-                    ? "The world"
-                    : NameFor(entry.KillerActorId);
+                string killer = entry.KilledByEnvironment ? "The world" : NameFor(entry.KillerActorId);
 
-                string line = killer + (entry.Headshot ? " ▸ " : " → ") + NameFor(entry.VictimActorId);
+                // The world has no side. TeamId.None reaches the HUD, which draws it neutrally
+                // -- the same answer NetClientBindings.TeamColourRgb gives for an unknown team,
+                // and for the same reason: a guessed blue or red would look entirely plausible.
+                int killerTeam = entry.KilledByEnvironment
+                    ? TeamId.None
+                    : TeamOf(entry.KillerActorId);
 
-                GUI.Label(
-                    new Rect(Screen.width - width - 12f, 12f + i * lineHeight, width, lineHeight),
-                    line);
+                hud.SetKillfeedLine(
+                    i, killer, killerTeam,
+                    NameFor(entry.VictimActorId), TeamOf(entry.VictimActorId),
+                    entry.Headshot);
             }
         }
+
+        /// <summary>
+        /// The team the snapshot gives this actor, or <c>TeamId.None</c> when it does not carry
+        /// one.
+        /// </summary>
+        /// <remarks>
+        /// A miss is a NORMAL outcome and not a defect — a kill outside this client's interest
+        /// radius names two actors this client never spawned. The resolver is
+        /// <c>NetClientPresenterGuard</c>'s, the same one the local readout and the minimap read
+        /// through, so there is one answer to "what team is that actor on" rather than a second
+        /// one growing inside the killfeed.
+        /// </remarks>
+        private static int TeamOf(ushort actorId)
+            => NetClientPresenterGuard.TryResolveActorTeam(actorId, out byte team)
+                ? team
+                : TeamId.None;
 
         /// <summary>
         /// The name S_PLAYER_LIST gave this actor, or the id when no broadcast named it.
