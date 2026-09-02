@@ -4,8 +4,8 @@ using UnityEngine;
 namespace Ironfront.Net.Unity.Server
 {
     /// <summary>
-    /// An <see cref="ISpawnPointDirectory"/> that reports exactly one slot eligible, so that
-    /// <c>ServerCombatBridge.ChooseSpawnIndex</c> has nothing left to sample between.
+    /// An <see cref="ISpawnPointDirectory"/> that narrows each team to an ordered ROTATION of
+    /// slots, one of which <c>ServerCombatBridge.ChooseSpawnIndex</c> reports back at a time.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -25,9 +25,21 @@ namespace Ironfront.Net.Unity.Server
     /// spawn without perturbing anything else the seed governs.
     /// </para>
     /// <para>
-    /// <b>Every player spawns on the same point</b> when one index is pinned, which is the
-    /// intent: adjacent bodies make the 95 s approach in <c>tools/lane-b/combat-driver.json</c>
-    /// a formality rather than the thing the run is really testing.
+    /// <b>One slot pinned puts every same-team player in each other's fire — ledger X-28.</b> A
+    /// single index means every body placed for that team lands on the exact same point, so two
+    /// or three same-team clients spawn stacked and start shooting through one another before
+    /// any check that names an enemy has a chance to matter. A ROTATION — an ordered list of
+    /// slots per team, advanced one placement at a time — spreads successive placements across
+    /// distinct points while staying exactly as deterministic as the single-slot pin: the same
+    /// sequence of placements always draws the same sequence of slots, in the same order, no
+    /// RNG involved on either side. A single-element rotation (the original pin) is simply the
+    /// rotation with nowhere else to go.
+    /// </para>
+    /// <para>
+    /// <b>Every player spawns on an authored point</b> when a rotation is pinned, which is the
+    /// intent: adjacent (or close, for a multi-slot rotation) bodies make the 95 s approach in
+    /// <c>tools/lane-b/combat-driver.json</c> a formality rather than the thing the run is
+    /// really testing.
     /// </para>
     /// <para>
     /// <b>The failure this causes on the shipping map, and when you learn about it.</b>
@@ -60,17 +72,20 @@ namespace Ironfront.Net.Unity.Server
     /// on one of those four Dustbowl indices or three Island indices <b>starves nobody</b>. The
     /// hazard is real and it is narrow — 2 of 6 indices, not 6 of 6 — and the refusal below
     /// still catches it, because it asks <c>IsEligible</c> rather than counting anything.
-    /// <b>Nothing here was re-tuned on the strength of the corrected count</b>: the per-team pin
-    /// and the construction-time refusal are both right whether the hazardous fraction is a
-    /// third or all of them.
+    /// <b>Nothing here was re-tuned on the strength of the corrected count</b>: the per-team
+    /// rotation and the construction-time refusal are both right whether the hazardous fraction
+    /// is a third or all of them.
     /// </para>
     /// <para>
-    /// <b>A pin per team, and a refusal at construction.</b> The option still exists because
-    /// what X-22 needed it for has not gone away; it now takes one index per team, so each side
-    /// gets a slot it may actually use. And the starvation is detected when the directory is
-    /// BUILT rather than when an actor fails to spawn ninety seconds in — a run that voids
-    /// itself at the top costs a minute, and one that voids itself in the middle costs the whole
-    /// run plus the reading of it.
+    /// <b>A rotation per team, and a refusal at construction.</b> The option still exists
+    /// because what X-22 needed it for has not gone away; it now takes an ordered list of
+    /// indices per team, so each side gets slots it may actually use, spread across distinct
+    /// points rather than stacked on one (X-28). And the starvation is detected when the
+    /// directory is BUILT rather than when an actor fails to spawn ninety seconds in — a run
+    /// that voids itself at the top costs a minute, and one that voids itself in the middle
+    /// costs the whole run plus the reading of it. Every slot in every team's rotation is
+    /// checked, not merely the first: a rotation with one bad slot buried three deep would
+    /// otherwise starve a placement in the middle of a run instead of at the top.
     /// </para>
     /// <para>
     /// This class still does not paper over anything with a fallback to sampling: a run that
@@ -87,12 +102,24 @@ namespace Ironfront.Net.Unity.Server
     public sealed class PinnedSpawnPointDirectory : ISpawnPointDirectory
     {
         private readonly ISpawnPointDirectory _inner;
-        private readonly int[] _pinnedByTeam;
+
+        /// <summary>
+        /// One ordered rotation of slots per team, indexed by team number. A one-element
+        /// rotation is what the original single-slot pin has always meant.
+        /// </summary>
+        private readonly int[][] _rotationByTeam;
+
+        /// <summary>
+        /// How far each team's rotation has advanced, indexed by team number. Advanced only by
+        /// <see cref="GetSpawnPosition"/> — see that method's own remark for why that call, and
+        /// only that call, is the right moment.
+        /// </summary>
+        private readonly int[] _cursorByTeam;
 
         /// <param name="inner">The real directory. Eligibility and positions still come from it.</param>
         /// <param name="index">The slot pinned for every team.</param>
         public PinnedSpawnPointDirectory(ISpawnPointDirectory inner, int index)
-            : this(inner, new[] { index, index })
+            : this(inner, new[] { new[] { index }, new[] { index } })
         {
         }
 
@@ -102,29 +129,73 @@ namespace Ironfront.Net.Unity.Server
         /// cannot work on a map whose every spawn point is team-owned.
         /// </param>
         public PinnedSpawnPointDirectory(ISpawnPointDirectory inner, int[] pinnedByTeam)
+            : this(inner, PerTeamSingleSlotRotations(pinnedByTeam))
+        {
+        }
+
+        /// <param name="inner">The real directory. Eligibility and positions still come from it.</param>
+        /// <param name="rotationByTeam">
+        /// One ORDERED rotation of slots per team, indexed by team number. Ledger X-28: a
+        /// rotation of more than one slot spreads successive same-team placements across
+        /// distinct points instead of stacking them on one. X-63 still applies to every slot in
+        /// every team's rotation, not merely the first one drawn.
+        /// </param>
+        public PinnedSpawnPointDirectory(ISpawnPointDirectory inner, int[][] rotationByTeam)
         {
             if (inner == null) throw new ArgumentNullException(nameof(inner));
-            if (pinnedByTeam == null || pinnedByTeam.Length == 0)
-                throw new ArgumentException("at least one team's slot is required", nameof(pinnedByTeam));
-
-            for (int team = 0; team < pinnedByTeam.Length; team++)
+            if (rotationByTeam == null || rotationByTeam.Length == 0)
             {
-                if (pinnedByTeam[team] >= 0) continue;
+                throw new ArgumentException(
+                    "at least one team's rotation is required", nameof(rotationByTeam));
+            }
 
-                throw new ArgumentOutOfRangeException(
-                    nameof(pinnedByTeam), pinnedByTeam[team],
-                    $"team {team}'s pinned spawn index is a slot, never the -1 that "
-                    + "ChooseSpawnIndex returns for 'no eligible point'");
+            for (int team = 0; team < rotationByTeam.Length; team++)
+            {
+                int[] rotation = rotationByTeam[team];
+                if (rotation == null || rotation.Length == 0)
+                {
+                    throw new ArgumentException(
+                        $"team {team}'s rotation has no slots", nameof(rotationByTeam));
+                }
+
+                for (int slotIndex = 0; slotIndex < rotation.Length; slotIndex++)
+                {
+                    if (rotation[slotIndex] >= 0) continue;
+
+                    throw new ArgumentOutOfRangeException(
+                        nameof(rotationByTeam), rotation[slotIndex],
+                        $"team {team}'s rotation slot {slotIndex} is never the -1 that "
+                        + "ChooseSpawnIndex returns for 'no eligible point'");
+                }
             }
 
             _inner = inner;
-            _pinnedByTeam = pinnedByTeam;
+            _rotationByTeam = rotationByTeam;
+            _cursorByTeam = new int[rotationByTeam.Length];
 
             RefuseIfAnyTeamIsStarved();
         }
 
+        private static int[][] PerTeamSingleSlotRotations(int[] pinnedByTeam)
+        {
+            if (pinnedByTeam == null || pinnedByTeam.Length == 0)
+            {
+                // Deferred to the shared constructor's own check so there is exactly one
+                // message for "no rotation at all", regardless of which overload was called.
+                return Array.Empty<int[]>();
+            }
+
+            var rotations = new int[pinnedByTeam.Length][];
+            for (int team = 0; team < pinnedByTeam.Length; team++)
+            {
+                rotations[team] = new[] { pinnedByTeam[team] };
+            }
+
+            return rotations;
+        }
+
         /// <summary>
-        /// Throws when a team's pinned slot is not one that team may spawn on.
+        /// Throws when a team's rotation names a slot that team may not spawn on.
         /// </summary>
         /// <remarks>
         /// <b>X-63, and the whole point of doing it here.</b> Without this the starvation shows
@@ -134,31 +205,47 @@ namespace Ironfront.Net.Unity.Server
         /// remark lists them), so pinning one index starves a side on a third of the shipping
         /// indices rather than on all of them. This asks <c>IsEligible</c> rather than counting,
         /// so the refusal is exactly as correct at 2-of-6 as the old remark assumed it was at
-        /// 6-of-6.
+        /// 6-of-6. <b>Every slot in every team's rotation is checked</b>, not only the first one
+        /// drawn — a bad slot three deep in a rotation would otherwise starve a placement in the
+        /// middle of a run rather than refuse at the top.
         /// </remarks>
         private void RefuseIfAnyTeamIsStarved()
         {
-            for (int team = 0; team < _pinnedByTeam.Length; team++)
+            for (int team = 0; team < _rotationByTeam.Length; team++)
             {
-                int slot = _pinnedByTeam[team];
-                if (_inner.IsEligible(slot, team)) continue;
+                int[] rotation = _rotationByTeam[team];
 
-                throw new ArgumentException(
-                    $"spawn slot {slot} is not eligible for team {team}, so that team would "
-                    + "never be placed and the run would grade nothing. Two of Dustbowl's six "
-                    + "spawn points and two of Island's five name a team; the rest are owner -1 "
-                    + "and eligible for both (ledger X-63). Pass one slot per team, e.g. "
-                    + "IRONFRONT_LANEB_SPAWN_INDEX=3,7, or pin an owner -1 index.",
-                    nameof(_pinnedByTeam));
+                for (int slotIndex = 0; slotIndex < rotation.Length; slotIndex++)
+                {
+                    int slot = rotation[slotIndex];
+                    if (_inner.IsEligible(slot, team)) continue;
+
+                    throw new ArgumentException(
+                        $"spawn slot {slot} (rotation position {slotIndex}) is not eligible for "
+                        + $"team {team}, so that team would never be placed and the run would "
+                        + "grade nothing. Two of Dustbowl's six spawn points and two of Island's "
+                        + "five name a team; the rest are owner -1 and eligible for both (ledger "
+                        + "X-63). Pass one rotation per team, e.g. "
+                        + "IRONFRONT_LANEB_SPAWN_INDEX=3|4|5,7|8, or pin only owner -1 indices.",
+                        nameof(_rotationByTeam));
+                }
             }
         }
 
-        /// <summary>Team 0's slot. Kept for callers and logs that pin one index for both.</summary>
-        public int PinnedIndex => _pinnedByTeam[0];
+        /// <summary>Team 0's current slot. Kept for callers and logs that pin one index for both.</summary>
+        public int PinnedIndex => PinnedIndexFor(0);
 
-        /// <summary>The slot pinned for <paramref name="team"/>, or -1 for an unknown team.</summary>
+        /// <summary>
+        /// The slot <paramref name="team"/>'s rotation is currently sitting on, or -1 for an
+        /// unknown team. Advances only when <see cref="GetSpawnPosition"/> consumes it.
+        /// </summary>
         public int PinnedIndexFor(int team)
-            => team >= 0 && team < _pinnedByTeam.Length ? _pinnedByTeam[team] : -1;
+        {
+            if (team < 0 || team >= _rotationByTeam.Length) return -1;
+
+            int[] rotation = _rotationByTeam[team];
+            return rotation[_cursorByTeam[team] % rotation.Length];
+        }
 
         /// <inheritdoc />
         public int Count => _inner.Count;
@@ -172,6 +259,45 @@ namespace Ironfront.Net.Unity.Server
             => index == PinnedIndexFor(team) && _inner.IsEligible(index, team);
 
         /// <inheritdoc />
-        public Vector3 GetSpawnPosition(int index) => _inner.GetSpawnPosition(index);
+        /// <remarks>
+        /// <para>
+        /// <b>The rotation advance point, and it is not a guess.</b>
+        /// <c>ServerCombatBridge.MoveToSpawnPoint</c> calls this exactly once per placement, on
+        /// the winning index <c>ChooseSpawnIndex</c> already resolved — never during selection
+        /// itself, which <c>SpawnPointSelectionTests.ChoosingAPointDoesNotAskAnyPointForItsPosition</c>
+        /// pins. Advancing here, and only here, means a rotation moves exactly once per body
+        /// actually placed — not once per candidate sampled, and not once per frame the pin
+        /// happens to be asked whether it is still pinned.
+        /// </para>
+        /// <para>
+        /// <b>Which team's cursor moves is read back off the value itself.</b> This method takes
+        /// an index, not a team — <see cref="ISpawnPointDirectory"/> does not carry one — so the
+        /// team advanced is whichever one's CURRENT slot equals <paramref name="index"/>. That is
+        /// unambiguous in the ordinary case: <paramref name="index"/> only ever arrives here as
+        /// the return of <c>ChooseSpawnIndex(this, team)</c>, and eligibility already requires
+        /// <c>index == PinnedIndexFor(team)</c>, so it names that team's current slot and no
+        /// other team's — <b>unless</b> two teams' rotations happen to sit on the very same
+        /// index at once (both -1-owned, both authored to visit it on the same placement), in
+        /// which case the first matching team advances and the rest stand still for this call.
+        /// That tie is a rare, self-inflicted authoring choice rather than a hazard this class
+        /// papers over.
+        /// </para>
+        /// </remarks>
+        public Vector3 GetSpawnPosition(int index)
+        {
+            AdvanceRotationOf(index);
+            return _inner.GetSpawnPosition(index);
+        }
+
+        private void AdvanceRotationOf(int index)
+        {
+            for (int team = 0; team < _rotationByTeam.Length; team++)
+            {
+                if (PinnedIndexFor(team) != index) continue;
+
+                _cursorByTeam[team]++;
+                return;
+            }
+        }
     }
 }

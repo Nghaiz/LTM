@@ -195,7 +195,7 @@ what the old criterion asked for.
 subscription end to end, and nobody has restored a backup and logged in with a recovered account.
 The images half of the old table IS done — both GHCR packages are public, published from one
 `images.yml` run, and the game-server image has been pulled by digest and confirmed listening on
-`27015/udp` (see [P9](../plans/phases/phase-p9-deployment-and-cleanup.md) § 1). The restore
+`27015/udp` (see P9 *(file deleted -- `git show 509c70d:plans/phases/phase-p9-deployment-and-cleanup.md`)* § 1). The restore
 rehearsal is the item that stays open, and it is the one that guards the one irreplaceable row.
 
 ---
@@ -208,4 +208,4 @@ rehearsal is the item that stays open, and it is the one that guards the one irr
 - [`infra/tls/README.md`](../infra/tls/README.md) — certificates
 - [`report-chapter-master-server.md`](report-chapter-master-server.md) — design rationale and measurements
 - [`branch-protection.md`](branch-protection.md) — repository settings
-- **The bus-factor table this document served is deleted**, and § 5 no longer asks for two people. See [P9](../plans/phases/phase-p9-deployment-and-cleanup.md) § 2 and task 4.3
+- **The bus-factor table this document served is deleted**, and § 5 no longer asks for two people. See P9 *(file deleted -- `git show 509c70d:plans/phases/phase-p9-deployment-and-cleanup.md`)* § 2 and task 4.3

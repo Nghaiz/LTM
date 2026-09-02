@@ -109,5 +109,34 @@ namespace Ironfront.Net.Replication.World
 
             return true;
         }
+
+        /// <summary>
+        /// True when <paramref name="point"/> has fallen out of the world — below the floor by
+        /// more than <paramref name="slackMetres"/> — as distinct from merely crossing a wall.
+        /// Ledger <b>X-75</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A separate question from <see cref="Contains"/>, on purpose.</b> A body that has
+        /// fallen through collision needs a death and a respawn — the position it is falling
+        /// through is not one <see cref="TryClamp"/> can usefully pull it back to, because there
+        /// is nothing under it to stand on. A body that merely crossed a wall or a ceiling is a
+        /// live position one axis away from legal, and <see cref="TryClamp"/> is exactly right
+        /// for it. Conflating the two would either clamp a falling body onto empty air forever,
+        /// or kill a vehicle for grazing the map's edge.
+        /// </para>
+        /// <para>
+        /// <b>Only the Y axis, and only downward.</b> "Below the floor" has no X/Z equivalent —
+        /// there is no floor to fall through sideways, only a wall to cross, which
+        /// <see cref="Contains"/> already reports.
+        /// </para>
+        /// <para>
+        /// <b>Slack is the caller's, not this method's.</b> Floating-point noise and a body
+        /// resting exactly on the floor would otherwise flicker across the boundary every tick.
+        /// This method applies whatever slack it is given; it does not choose one.
+        /// </para>
+        /// </remarks>
+        public bool IsBelowFloor(in Vec3 point, float slackMetres)
+            => point.Y < Min.Y - slackMetres;
     }
 }

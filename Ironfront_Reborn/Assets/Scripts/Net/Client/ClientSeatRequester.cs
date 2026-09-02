@@ -479,6 +479,9 @@ namespace Ironfront.Net.Unity.Client
                 case SeatChangeResult.RejectedTooFar:        return "Too far from the seat.";
                 case SeatChangeResult.RejectedNoSuchSeat:    return "No such seat.";
                 case SeatChangeResult.RejectedLockedOut:     return "Just left — wait a moment.";
+                // Deliberately does NOT say "too far": walking closer cannot help, because the
+                // position the player is walking is not the one the server measured. X-67.
+                case SeatChangeResult.RejectedActorUnplaced: return "Your body is out of position on the server.";
                 default:                                     return "Seat refused.";
             }
         }

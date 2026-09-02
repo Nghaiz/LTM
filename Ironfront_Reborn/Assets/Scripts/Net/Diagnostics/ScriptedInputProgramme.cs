@@ -105,6 +105,24 @@ namespace Ironfront.Net.Unity.Diagnostics
     }
 
     /// <summary>
+    /// One authored world XZ corner of a <see cref="ScriptedInputStep.route"/>. Ledger
+    /// <b>X-66</b>.
+    /// </summary>
+    /// <remarks>
+    /// A plain field-pair class rather than a tuple or a <c>Vector2</c>: <c>JsonUtility</c>
+    /// needs public fields and <see cref="SerializableAttribute"/> to parse it from the
+    /// programme JSON, and a <c>Vector2</c> would pull <c>UnityEngine</c> into this file — the
+    /// same reason <see cref="ScriptedInputProgramme"/>'s own remark gives for staying engine
+    /// free.
+    /// </remarks>
+    [Serializable]
+    public sealed class ScriptedRouteWaypoint
+    {
+        public float x;
+        public float z;
+    }
+
+    /// <summary>
     /// One held-input state and how long it is held for.
     /// </summary>
     /// <remarks>
@@ -170,6 +188,46 @@ namespace Ironfront.Net.Unity.Diagnostics
 
         /// <summary>How close <see cref="approach"/> gets before it stops. Metres.</summary>
         public float holdDistanceMeters = 8f;
+
+        /// <summary>
+        /// Optional authored waypoints to walk, corner by corner, before <see cref="approach"/>
+        /// takes over for the final close. Ledger <b>X-66</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why <see cref="approach"/> alone is not enough.</b> That verb steers in a straight
+        /// line at whatever <see cref="aimAtPlayer"/> resolves to, every frame — the correct
+        /// answer on flat ground and a stall against terrain the straight line does not clear
+        /// (Dustbowl's ridge). Neither Unity NavMesh nor the A* Pathfinding Project is an option
+        /// here: this project carries no baked <c>NavMeshData</c>, and A* lives in
+        /// <c>Assembly-CSharp</c>, which <c>Ironfront.Net.Unity.Diagnostics.asmdef</c> cannot
+        /// reference. An authored route is the shape that is actually reachable from this file.
+        /// </para>
+        /// <para>
+        /// <b>Consumed BEFORE <see cref="approach"/>, and handed over to it unchanged once the
+        /// last corner is passed.</b> While a corner remains, <c>LaneBHarness.BuildMoveInput</c>
+        /// steers toward it with <see cref="ScriptedAim.SteerToward"/>; once every corner is
+        /// behind the walker, the step's own <see cref="approach"/> flag (if set) runs exactly
+        /// as it always has, closing the last stretch onto <see cref="aimAtPlayer"/> itself.
+        /// </para>
+        /// <para>
+        /// <b>Facing is unaffected.</b> <c>BuildMoveInput</c>'s own remark forbids sending a yaw
+        /// that disagrees with the controller's solved aim, so a route step still faces whatever
+        /// <see cref="aimAtPlayer"/> resolves to (or the step's declared yaw when nothing
+        /// resolves) — only the movement axes come from the route.
+        /// </para>
+        /// <para>
+        /// Empty or <see langword="null"/> means no route: the step behaves exactly as it did
+        /// before this field existed.
+        /// </para>
+        /// </remarks>
+        public ScriptedRouteWaypoint[] route = null;
+
+        /// <summary>
+        /// How close to a route corner before <see cref="route"/> advances to the next one, or
+        /// hands over to <see cref="approach"/> after the last. Metres.
+        /// </summary>
+        public float routeCornerRadiusMeters = 4f;
 
         /// <summary>
         /// Walk toward the nearest replicated VEHICLE instead of toward a player, stopping at

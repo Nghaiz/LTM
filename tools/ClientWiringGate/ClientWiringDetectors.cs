@@ -1004,14 +1004,43 @@ namespace Ironfront.Tools.ClientWiringGate
         /// G4 it deliberately does NOT model polarity: it answers "is there a guard at all", and
         /// claiming to catch an inverted one would be a green that proves nothing.
         /// </remarks>
-        /// <summary>Files G9 grades. See <see cref="FindUnpinnedLevelBoundsCall"/>.</summary>
-        private static readonly string[] LevelBoundsScope = { "/Vehicle.cs" };
+        /// <summary>
+        /// Files G9 grades, as (path match, caller method, call it must make, whether that call
+        /// must sit behind a server-role test) rows. See
+        /// <see cref="FindUnpinnedLevelBoundsCall"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A table rather than one hardcoded pair, since X-75.</b> <c>Vehicle.cs</c> and
+        /// <c>ServerPlayer.cs</c> both keep a body inside the wire's range, but they do it
+        /// through different seams for a reason G9's own remarks already give: <c>Vehicle</c>
+        /// calls <c>LevelBounds.ClampInside</c> because it can — it compiles into
+        /// <c>Assembly-CSharp</c> alongside <c>LevelBounds</c>. <c>ServerPlayer</c> lives in the
+        /// <c>Ironfront.Net.Unity.Server</c> asmdef, which cannot reference
+        /// <c>Assembly-CSharp</c> at all, so it clamps against <c>PlayVolume</c> built from
+        /// <c>Quantize.POS_MIN</c>/<c>POS_MAX</c> directly — the wire's own range, needing no
+        /// seam. One row per shape, not one rule per file.
+        /// </para>
+        /// <para>
+        /// <b>The server-role clause is per-row, not universal.</b> <c>Vehicle.KeepInsideLevelBounds</c>
+        /// runs from <c>FixedUpdate</c> on every instance in the scene, client and server alike,
+        /// so it needs an explicit <c>NetContext.IsServer</c> guard or a client fights its own
+        /// snapshot corrections at the boundary. <c>ServerPlayer</c> has no client-side
+        /// counterpart at all — it is constructed only for a connection this process is
+        /// authoritative for — so requiring the same textual guard there would be grading code
+        /// for a race that cannot happen on that path.
+        /// </para>
+        /// </remarks>
+        private static readonly (string PathMatch, string CallerMethod, string CalleeMethod, bool RequiresServerRoleGuard)[]
+            LevelBoundsCalls =
+        {
+            ("/Vehicle.cs",     "KeepInsideLevelBounds", "ClampInside", true),
+            ("/ServerPlayer.cs", "EnforceWireVolume",     "TryClamp",   false),
+        };
 
-        /// <summary>The method the bounds call has to live inside.</summary>
-        private const string LevelBoundsCaller = "KeepInsideLevelBounds";
-
-        /// <summary>The call itself, and the role guard it must sit behind.</summary>
-        private const string LevelBoundsMethod = "ClampInside";
+        /// <summary>Files G9 grades, ignoring which row governs them. See <see cref="LevelBoundsCalls"/>.</summary>
+        private static readonly string[] LevelBoundsScope =
+            Array.ConvertAll(LevelBoundsCalls, row => row.PathMatch);
 
         /// <summary>Whether G9 governs this file at all. See <see cref="LevelBoundsScope"/>.</summary>
         public static bool IsLevelBoundsScoped(string path) =>
@@ -1053,21 +1082,34 @@ namespace Ironfront.Tools.ClientWiringGate
             var findings = new List<GateFinding>();
 
             if (IsExcludedFromScan(path)) return findings;
-            if (!IsInScope(path, LevelBoundsScope)) return findings;
+
+            string normalized = Normalize(path);
+            (string PathMatch, string CallerMethod, string CalleeMethod, bool RequiresServerRoleGuard)? row = null;
+            foreach (var candidate in LevelBoundsCalls)
+            {
+                if (!normalized.Contains(candidate.PathMatch, StringComparison.Ordinal)) continue;
+                row = candidate;
+                break;
+            }
+
+            if (row == null) return findings;
+
+            string callerName = row.Value.CallerMethod;
+            string calleeName = row.Value.CalleeMethod;
 
             MethodDeclarationSyntax? caller = tree.GetRoot()
                 .DescendantNodes()
                 .OfType<MethodDeclarationSyntax>()
-                .FirstOrDefault(m => m.Identifier.ValueText == LevelBoundsCaller);
+                .FirstOrDefault(m => m.Identifier.ValueText == callerName);
 
             if (caller == null)
             {
                 findings.Add(new GateFinding(
                     "G9", path, 0,
-                    $"No '{LevelBoundsCaller}' method. LevelBounds.IsInside had zero callers for "
+                    $"No '{callerName}' method. LevelBounds.IsInside had zero callers for "
                     + "the whole of V5 and a body past the wire's ±2048 m desynced silently; if "
                     + "this method was renamed, move G9 with it in the same commit rather than "
-                    + "letting the boundary go ungraded (ledger E-6)."));
+                    + "letting the boundary go ungraded (ledger E-6 / X-75)."));
                 return findings;
             }
 
@@ -1075,25 +1117,25 @@ namespace Ironfront.Tools.ClientWiringGate
             InvocationExpressionSyntax? clamp = caller.DescendantNodes()
                 .OfType<InvocationExpressionSyntax>()
                 .FirstOrDefault(i => i.Expression is MemberAccessExpressionSyntax member
-                                     && member.Name.Identifier.ValueText == LevelBoundsMethod);
+                                     && member.Name.Identifier.ValueText == calleeName);
 
             if (clamp == null)
             {
                 findings.Add(new GateFinding(
                     "G9", path, LineOf(caller),
-                    $"{LevelBoundsCaller} calls no LevelBounds.{LevelBoundsMethod}. Without it a "
-                    + "vehicle leaving the play area keeps being simulated at a position the "
-                    + "snapshot encoder clamps, so every client sees it pinned to the boundary "
-                    + "forever and nothing is logged (ledger E-6)."));
+                    $"{callerName} calls no .{calleeName}(...). Without it a body leaving the "
+                    + "play area keeps being simulated at a position the snapshot encoder "
+                    + "clamps, so every client sees it pinned to the boundary forever and "
+                    + "nothing is logged (ledger E-6 / X-75)."));
                 return findings;
             }
 
-            // Clause 2 - and it is behind a server-role test.
-            if (!HasGuardAbove(clamp, MentionsServerRoleTest))
+            // Clause 2 - and, where this row requires it, it is behind a server-role test.
+            if (row.Value.RequiresServerRoleGuard && !HasGuardAbove(clamp, MentionsServerRoleTest))
                 findings.Add(new GateFinding(
                     "G9", path, LineOf(clamp),
-                    $"LevelBounds.{LevelBoundsMethod} runs with no server-role guard above it. "
-                    + "The clamp writes a rigidbody position; on a client it fights the snapshot "
+                    $"{calleeName} runs with no server-role guard above it. "
+                    + "The clamp writes a position; on a client it fights the snapshot "
                     + "corrections arriving for the same body, which presents as the rubber-band "
                     + "this rule exists to prevent (ledger E-6)."));
 

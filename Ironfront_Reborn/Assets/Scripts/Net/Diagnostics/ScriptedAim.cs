@@ -195,6 +195,86 @@ namespace Ironfront.Net.Unity.Diagnostics
             => Horizontal(toX - fromX, toZ - fromZ);
 
         /// <summary>
+        /// Strafe and forward axes for a client walking toward a route corner while its body
+        /// faces <paramref name="facingYawDegrees"/> — never the bearing to the corner itself.
+        /// Ledger <b>X-66</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why this exists at all.</b> <see cref="ApproachMoveZ"/> only ever points a client
+        /// straight at its target and holds forward, which is a straight line. Dustbowl's ridge
+        /// is not, so an infantry approach along it stalls on the terrain — the failure this
+        /// method is here to route around, literally.
+        /// </para>
+        /// <para>
+        /// <b>Quantized to eight octants, not proportional — same reasoning as
+        /// <see cref="ApproachMoveZ"/>'s own remark.</b> A proportional axis creeps for the last
+        /// few metres of a leg at a speed the movement model does not reproduce identically
+        /// under loss, so two runs of the same route would end at different positions — the one
+        /// property lane B is buying. Snapping to the nearest of eight held-key combinations
+        /// (the same vocabulary a keyboard offers: forward, forward-right, right, ...) keeps the
+        /// output exactly as reproducible as a straight approach.
+        /// </para>
+        /// <para>
+        /// <b>Facing-relative, not world-relative — this is the whole point of the parameter.</b>
+        /// <c>BuildMoveInput</c>'s own remark forbids sending a yaw that disagrees with the
+        /// controller's solved aim: the body keeps looking at whatever <c>aimAtPlayer</c>
+        /// resolved to, and the legs walk toward the corner independently, exactly as a human
+        /// strafing while keeping a target in their sights would. So the bearing to the corner is
+        /// rotated into the facing's own frame before it is quantized — walking due east while
+        /// facing north is a pure strafe (moveX = 1, moveZ = 0), not a diagonal.
+        /// </para>
+        /// <para>
+        /// <b>The frame matches <see cref="YawDegrees"/></b>: 0 faces +Z and grows toward +X, and
+        /// a relative bearing of 0 (straight ahead) is octant boundary-centred rather than
+        /// boundary-edged, so a corner dead ahead reads as pure forward rather than landing
+        /// exactly between two octants and depending on floating-point rounding to pick one.
+        /// </para>
+        /// </remarks>
+        /// <param name="fromX">The walker's current X.</param>
+        /// <param name="fromZ">The walker's current Z.</param>
+        /// <param name="toX">The corner's X.</param>
+        /// <param name="toZ">The corner's Z.</param>
+        /// <param name="facingYawDegrees">
+        /// The body's facing — the solved aim yaw when one is resolved, exactly as
+        /// <c>BuildMoveInput</c> already sends on the wire.
+        /// </param>
+        /// <param name="moveX">Strafe axis, one of -1, 0, 1.</param>
+        /// <param name="moveZ">Forward axis, one of -1, 0, 1.</param>
+        public static void SteerToward(
+            float fromX, float fromZ, float toX, float toZ, float facingYawDegrees,
+            out float moveX, out float moveZ)
+        {
+            float dx = toX - fromX;
+            float dz = toZ - fromZ;
+
+            // Already at the corner: no direction to quantize, and holding still is the correct
+            // answer rather than an arbitrary octant.
+            if (dx == 0f && dz == 0f) { moveX = 0f; moveZ = 0f; return; }
+
+            float bearing = WrapDegrees(RadiansToDegrees((float)Math.Atan2(dx, dz)));
+            float relative = WrapDegrees(bearing - facingYawDegrees);
+
+            // Eight 45-degree wedges, centred on 0/45/90/.../315 rather than edged there, so a
+            // corner exactly ahead (relative == 0) lands in the middle of the "forward" wedge
+            // instead of on the boundary between "forward" and "forward-left".
+            int octant = ((int)Math.Floor((relative + 22.5f) / 45f)) % 8;
+            if (octant < 0) octant += 8;
+
+            (moveX, moveZ) = octant switch
+            {
+                0 => (0f, 1f),   // forward
+                1 => (1f, 1f),   // forward-right
+                2 => (1f, 0f),   // right
+                3 => (1f, -1f),  // back-right
+                4 => (0f, -1f),  // back
+                5 => (-1f, -1f), // back-left
+                6 => (-1f, 0f),  // left
+                _ => (-1f, 1f),  // forward-left (octant 7)
+            };
+        }
+
+        /// <summary>
         /// Index of the nearest candidate within <paramref name="maxMetres"/>, or <c>-1</c>.
         /// What <c>ScriptedTargetSolver.SolveNearestVehicle</c> picks with. Ledger <b>X-44</b>.
         /// </summary>
@@ -273,6 +353,101 @@ namespace Ironfront.Net.Unity.Diagnostics
         {
             float wrapped = degrees % 360f;
             return wrapped < 0f ? wrapped + 360f : wrapped;
+        }
+    }
+
+    /// <summary>
+    /// Walks a <see cref="ScriptedInputStep.route"/> corner by corner, advancing past any corner
+    /// already within its hold radius. Ledger <b>X-66</b>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Pure, like the rest of <see cref="ScriptedAim"/>.</b> This holds no Unity type and no
+    /// reference to the harness that owns a walker's live position — <see cref="Advance"/> is
+    /// handed that position every call rather than reading it, so the class stays reachable by
+    /// <c>dotnet test</c> through the same <c>&lt;Compile Include&gt;</c> arrangement as its
+    /// file.
+    /// </para>
+    /// <para>
+    /// <b>Parallel <c>float[]</c> arrays, not <c>ScriptedRouteWaypoint[]</c> — the same choice
+    /// <see cref="ScriptedAim.NearestIndexWithin"/> makes, and for the same reason.</b>
+    /// <c>ScriptedRouteWaypoint</c> is declared in <c>ScriptedInputProgramme.cs</c>, and
+    /// <c>Ironfront.Net.LoadHarness</c> links THIS file alone, without that one, to keep its own
+    /// scripted-aim seam free of the programme model. A route type here would have made that
+    /// standalone link fail to compile — this class stays reachable from both link sites by
+    /// staying engine- and model-free, exactly like the rest of the file.
+    /// </para>
+    /// <para>
+    /// <b>Only ever advances.</b> <see cref="CornerIndex"/> is monotonic: a corner already
+    /// passed is never re-entered, even if the walker is later blown back within its radius —
+    /// re-triggering a corner that way would let one leg of a route repeat depending on how a
+    /// run's timing happened to land, which is exactly the kind of run-to-run divergence the
+    /// rest of lane B's arithmetic is built to avoid.
+    /// </para>
+    /// </remarks>
+    public sealed class ScriptedRouteCursor
+    {
+        private readonly float[] _xs;
+        private readonly float[] _zs;
+        private readonly float _cornerRadiusMeters;
+        private int _index;
+
+        /// <param name="xs">Each corner's X, in order. Must hold at least one corner.</param>
+        /// <param name="zs">Each corner's Z, in order. Same length as <paramref name="xs"/>.</param>
+        /// <param name="cornerRadiusMeters">
+        /// How close <see cref="Advance"/> must read before it moves past a corner.
+        /// </param>
+        public ScriptedRouteCursor(float[] xs, float[] zs, float cornerRadiusMeters)
+        {
+            if (xs == null || xs.Length == 0)
+            {
+                throw new ArgumentException("a route needs at least one corner", nameof(xs));
+            }
+
+            if (zs == null || zs.Length != xs.Length)
+            {
+                throw new ArgumentException(
+                    $"zs must hold exactly as many corners as xs ({xs.Length})", nameof(zs));
+            }
+
+            _xs = xs;
+            _zs = zs;
+            _cornerRadiusMeters = cornerRadiusMeters;
+            _index = 0;
+        }
+
+        /// <summary>True once every corner has been passed.</summary>
+        public bool Finished => _index >= _xs.Length;
+
+        /// <summary>The corner currently being steered toward. 0-based, saturates at the route's length.</summary>
+        public int CornerIndex => _index;
+
+        /// <summary>The live corner's X, or 0 once <see cref="Finished"/>.</summary>
+        public float CurrentCornerX => Finished ? 0f : _xs[_index];
+
+        /// <summary>The live corner's Z, or 0 once <see cref="Finished"/>.</summary>
+        public float CurrentCornerZ => Finished ? 0f : _zs[_index];
+
+        /// <summary>
+        /// Advances past every corner already within radius of <paramref name="fromX"/>,
+        /// <paramref name="fromZ"/>.
+        /// </summary>
+        /// <returns>
+        /// True while a corner remains to steer toward; false once the route is
+        /// <see cref="Finished"/>, so the caller can hand over to <c>approach</c> in the same
+        /// call that discovers the route is spent.
+        /// </returns>
+        public bool Advance(float fromX, float fromZ)
+        {
+            while (!Finished)
+            {
+                float distance = ScriptedAim.PlanarDistance(fromX, fromZ, _xs[_index], _zs[_index]);
+                if (distance > _cornerRadiusMeters) return true;
+
+                _index++;
+            }
+
+            return false;
         }
     }
 }

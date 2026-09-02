@@ -70,12 +70,65 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Contains("RejectedNoSuchSeat", body, StringComparison.Ordinal);
 
             // Three of them: unknown actor, unknown vehicle, unlocatable seat.
+            //
+            // If this reads 4, do NOT re-pin it. A fourth unmeasurable case gets its OWN code,
+            // the way RejectedActorUnplaced did -- raising this number is how "no such seat"
+            // becomes the second message that means four different things, which is the exact
+            // defect X-67 was filed for.
             Assert.Equal(3, Regex.Matches(body, "RejectedNoSuchSeat").Count);
 
             // And the infinite coordinate is CHECKED rather than allowed to subtract into an
             // infinite distance, which is a comparison the arbiter answers "too far" without
             // anything being far away.
             Assert.Matches(new Regex(@"float\.IsInfinity"), body);
+        }
+
+        /// <summary>
+        /// X-67, the fourth case -- and the one the row was actually filed against, having
+        /// mistaken it for an origin mismatch.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// In <c>p5-e11-03</c> a client stood 4.08 m from a hull and was refused four times with
+        /// <c>RejectedTooFar</c>. The server's copy of that body was at y = -1024.67 -- on
+        /// <c>Quantize.POS_MIN</c>, having fallen out of the world -- so it measured ~1037 m and
+        /// refused correctly. The message was true and useless: the remedy it implies is "walk
+        /// closer", and the position the player walks is not the one being measured.
+        /// </para>
+        /// <para>
+        /// Observed RED against the pre-fix tree: <c>TryMeasureSeatReach</c> at
+        /// <c>b940e9f</c> contains neither token.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public void AnActorOutsideTheWirePositionRangeIsNotReportedAsDistance()
+        {
+            string body = StripComments(MethodBody(
+                ReadUnitySource(Bridge),
+                "private SeatChangeResult? TryMeasureSeatReach("));
+
+            // The saturation is CHECKED, not allowed to subtract into a distance-to-the-clamp.
+            Assert.Contains("PositionSaturates", body, StringComparison.Ordinal);
+
+            // And it answers with its own code rather than borrowing one that would lie.
+            Assert.Contains("RejectedActorUnplaced", body, StringComparison.Ordinal);
+
+            // Never as "too far": that is the message this case was mis-rendered as for a day.
+            Assert.DoesNotContain("RejectedTooFar", body, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// The client can say what the new refusal means. A code the client renders as the
+        /// default "Seat refused." is a code that has not arrived anywhere useful.
+        /// </summary>
+        [Fact]
+        public void TheClientNamesTheUnplacedRefusalRatherThanFallingThrough()
+        {
+            string body = MethodBody(
+                ReadUnitySource(Requester),
+                "private static string RefusalText(");
+
+            Assert.Contains("RejectedActorUnplaced", body, StringComparison.Ordinal);
         }
 
         [Fact]

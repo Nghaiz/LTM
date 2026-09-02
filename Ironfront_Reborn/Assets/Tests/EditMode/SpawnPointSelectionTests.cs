@@ -1,5 +1,7 @@
+using System;
 using NUnit.Framework;
 using UnityEngine;
+using Ironfront.Net.Unity.Diagnostics;
 
 namespace Ironfront.Net.Unity.Server.Tests
 {
@@ -103,45 +105,125 @@ namespace Ironfront.Net.Unity.Server.Tests
 
         // ---- PinnedSpawnPointDirectory - the X-22 fix -----------------------------------
 
+        /// <summary>
+        /// Retired (X-28): a single pinned slot puts every same-team player on the exact same
+        /// point, which stacks same-team clients on top of one another and puts them in each
+        /// other's fire before any check that names an ENEMY has a chance to matter. Per
+        /// <c>pinned-baseline-test-companion.md</c> this is inverted, not re-pinned:
+        /// <see cref="APinnedDirectoryRotatesThroughItsSlotsAcrossPlacements"/> below asserts the
+        /// rotation a three-element pin now produces instead of the constant a single-element
+        /// one used to.
+        /// </summary>
         [Test]
-        public void APinnedDirectoryReturnsThatIndexOnEveryDraw()
+        public void APinnedDirectoryRotatesThroughItsSlotsAcrossPlacements()
         {
-            // The mirror of SamplingReachesEveryEligiblePointRatherThanAlwaysTheFirst, and the
-            // whole point of X-22: with one candidate, Random.Range(0, 1) has a single value, so
-            // the result does not depend on where in the draw sequence this call landed. That is
-            // what a seed alone could not deliver - three clients join over a real socket at
-            // times nobody controls.
-            var points = new PinnedSpawnPointDirectory(new FakeSpawnPoints(-1, -1, -1), 2);
+            // Team 0 rotates 3, 4, 5; team 1 stays on its own single slot, 0. Every point is
+            // owner -1 (any team), so nothing here starves.
+            var points = new PinnedSpawnPointDirectory(
+                new FakeSpawnPoints(-1, -1, -1, -1, -1, -1),
+                new[] { new[] { 3, 4, 5 }, new[] { 0 } });
 
-            for (int attempt = 0; attempt < 300; attempt++)
+            int[] expected = { 3, 4, 5, 3, 4, 5, 3 };
+            for (int placement = 0; placement < expected.Length; placement++)
             {
-                Assert.AreEqual(2, ServerCombatBridge.ChooseSpawnIndex(points, 0),
-                    $"attempt {attempt} escaped the pin - the run is a coin flip again");
+                int chosen = ServerCombatBridge.ChooseSpawnIndex(points, 0);
+                Assert.AreEqual(expected[placement], chosen,
+                    $"placement {placement} chose {chosen}, expected {expected[placement]} - "
+                    + "the rotation stopped advancing or wrapped wrong");
+
+                // A real placement always asks for the position exactly once
+                // (ChoosingAPointDoesNotAskAnyPointForItsPosition, below) - and that call is
+                // what advances PinnedSpawnPointDirectory's rotation cursor (X-28). Without it
+                // the cursor never moves and every placement would repeat slot 3.
+                points.GetSpawnPosition(chosen);
             }
+
+            // Team 1's one-element rotation never had anywhere else to go, and never widened
+            // into team 0's slots.
+            Assert.AreEqual(0, ServerCombatBridge.ChooseSpawnIndex(points, 1));
+        }
+
+        /// <summary>
+        /// X-63 extended to a rotation: every slot in every team's list is checked at
+        /// construction, not merely the first one drawn — a bad slot buried three deep would
+        /// otherwise starve a placement in the middle of a run instead of refusing at the top.
+        /// </summary>
+        [Test]
+        public void ARotationContainingASlotTheOtherTeamCannotUseThrowsAtConstruction()
+        {
+            // Team 0's rotation is [0, 1, 2]; index 1 belongs to team 1 alone (owner 1), so
+            // team 0 would be starved the moment its rotation reaches that slot.
+            var points = new FakeSpawnPoints(-1, 1, -1);
+
+            var ex = Assert.Throws<ArgumentException>(() =>
+                new PinnedSpawnPointDirectory(points, new[] { new[] { 0, 1, 2 }, new[] { 1 } }));
+
+            StringAssert.Contains("X-63", ex.Message);
+            StringAssert.Contains("slot 1", ex.Message);
+            StringAssert.Contains("team 0", ex.Message);
         }
 
         [Test]
         public void APinnedDirectoryNarrowsAndNeverWidens()
         {
-            // Pinning index 0, which team 0 owns. Team 1 must still get nothing rather than be
-            // handed a point the team rule forbids: the pin removes candidates, it does not
-            // grant eligibility.
-            var points = new PinnedSpawnPointDirectory(new FakeSpawnPoints(0, -1, -1), 0);
+            // Pinning index 0 for team 0, which owns it, and index 2 (owner -1) for team 1.
+            // The pin REMOVES candidates; it never grants eligibility, so team 1 must land on
+            // its own pinned slot and never on the one team 0 owns.
+            var points = new PinnedSpawnPointDirectory(
+                new FakeSpawnPoints(0, -1, -1), new[] { 0, 2 });
 
             Assert.AreEqual(0, ServerCombatBridge.ChooseSpawnIndex(points, 0));
-            Assert.AreEqual(-1, ServerCombatBridge.ChooseSpawnIndex(points, 1),
-                "the pin widened eligibility - a pinned point owned by one team must starve the "
-                + "other, loudly, rather than silently admit it");
+            Assert.AreEqual(2, ServerCombatBridge.ChooseSpawnIndex(points, 1),
+                "the pin narrowed team 1 to a slot it cannot use");
+
+            for (int draw = 0; draw < 50; draw++)
+            {
+                Assert.AreNotEqual(0, ServerCombatBridge.ChooseSpawnIndex(points, 1),
+                    "the pin widened eligibility - team 1 was handed a point team 0 owns");
+            }
+        }
+
+        /// <summary>
+        /// A pin that starves a team is refused when it is set, not discovered mid-run.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This assertion used to read the other way: it constructed the starving pin and
+        /// checked that the starved team drew -1 at RUNTIME, "loudly". X-63 changed the
+        /// decision — the refusal moved to construction, so a bad pin fails at the top of the
+        /// run rather than ninety seconds in, once the operator can still fix the flag. The
+        /// test was never updated and had been failing on develop ever since, which is why it
+        /// is rewritten here rather than re-pinned.
+        /// </para>
+        /// </remarks>
+        [Test]
+        public void APinThatStarvesATeamIsRefusedAtConstruction()
+        {
+            ArgumentException thrown = Assert.Throws<ArgumentException>(
+                () => new PinnedSpawnPointDirectory(new FakeSpawnPoints(0, -1, -1), 0));
+
+            // Loudly still means loudly: the message has to name the team that would starve.
+            StringAssert.Contains("team 1", thrown.Message);
         }
 
         [Test]
         public void PinningAnEmptySlotChoosesNothingRatherThanFallingBack()
         {
-            // A fallback to sampling here would be the exact failure X-22 describes: a run that
-            // quietly stopped being deterministic. -1 trips MoveToSpawnPoint's existing warning.
-            var points = new PinnedSpawnPointDirectory(new FakeSpawnPoints(-1, null, -1), 1);
+            // A fallback to sampling would be the exact failure X-22 describes: a run that
+            // quietly stopped being deterministic. Pinning a slot with no point behind it is
+            // refused where the operator can still act on it (X-63) -- and what matters is
+            // that it never silently widens back to a draw.
+            ArgumentException thrown = Assert.Throws<ArgumentException>(
+                () => new PinnedSpawnPointDirectory(new FakeSpawnPoints(-1, null, -1), 1));
 
-            Assert.AreEqual(-1, ServerCombatBridge.ChooseSpawnIndex(points, 0));
+            StringAssert.Contains("1", thrown.Message);
+
+            // And the narrowing itself still holds for a slot that DOES exist: pinning slot 0
+            // gives slot 0 and nothing else, rather than falling back to sampling 0 or 2.
+            var pinned = new PinnedSpawnPointDirectory(new FakeSpawnPoints(-1, null, -1), 0);
+
+            for (int draw = 0; draw < 50; draw++)
+                Assert.AreEqual(0, ServerCombatBridge.ChooseSpawnIndex(pinned, 0));
         }
 
         [Test]
@@ -174,6 +256,111 @@ namespace Ironfront.Net.Unity.Server.Tests
             ServerCombatBridge.ChooseSpawnIndex(points, 0);
 
             Assert.AreEqual(0, points.PositionsRequested);
+        }
+
+        // ---- ScriptedAim.SteerToward - the X-66 route-steering arithmetic ----------------
+
+        [Test]
+        public void SteeringDueEastWhileFacingNorthIsAPureRightStrafe()
+        {
+            // Facing yaw 0 is "north" in ScriptedAim's own frame (faces +Z). A corner due east
+            // (+X, same Z) is a pure strafe: legs move right, the body keeps facing forward.
+            ScriptedAim.SteerToward(
+                fromX: 0f, fromZ: 0f, toX: 10f, toZ: 0f, facingYawDegrees: 0f,
+                out float moveX, out float moveZ);
+
+            Assert.AreEqual(1f, moveX, 0.001f);
+            Assert.AreEqual(0f, moveZ, 0.001f);
+        }
+
+        [Test]
+        public void SteeringAtACornerTheBodyAlreadyFacesIsPureForward()
+        {
+            // Facing yaw 90 (east) with a corner due east of the walker: the bearing to the
+            // corner and the facing agree, so the quantized direction is pure forward.
+            ScriptedAim.SteerToward(
+                fromX: 0f, fromZ: 0f, toX: 10f, toZ: 0f, facingYawDegrees: 90f,
+                out float moveX, out float moveZ);
+
+            Assert.AreEqual(0f, moveX, 0.001f);
+            Assert.AreEqual(1f, moveZ, 0.001f);
+        }
+
+        [Test]
+        public void SteeringAtTheWalkersOwnPositionHoldsStill()
+        {
+            ScriptedAim.SteerToward(
+                fromX: 5f, fromZ: 5f, toX: 5f, toZ: 5f, facingYawDegrees: 37f,
+                out float moveX, out float moveZ);
+
+            Assert.AreEqual(0f, moveX);
+            Assert.AreEqual(0f, moveZ);
+        }
+
+        [Test]
+        public void SteeringOutputIsAlwaysOneOfTheEightQuantizedAxisValues()
+        {
+            float[] allowed = { -1f, 0f, 1f };
+
+            for (float bearingDeg = 0f; bearingDeg < 360f; bearingDeg += 7f)
+            {
+                double radians = bearingDeg * Math.PI / 180.0;
+                float toX = (float)Math.Sin(radians) * 10f;
+                float toZ = (float)Math.Cos(radians) * 10f;
+
+                ScriptedAim.SteerToward(
+                    0f, 0f, toX, toZ, facingYawDegrees: 0f, out float moveX, out float moveZ);
+
+                Assert.Contains(moveX, allowed, $"bearing {bearingDeg} produced moveX={moveX}");
+                Assert.Contains(moveZ, allowed, $"bearing {bearingDeg} produced moveZ={moveZ}");
+            }
+        }
+
+        // ---- ScriptedRouteCursor - the X-66 route cursor ----------------------------------
+
+        [Test]
+        public void ARouteCursorAdvancesOnceTheWalkerEntersTheCornersRadius()
+        {
+            var route = new ScriptedRouteCursor(
+                xs: new[] { 10f, 10f }, zs: new[] { 0f, 10f }, cornerRadiusMeters: 2f);
+
+            Assert.AreEqual(0, route.CornerIndex);
+            Assert.IsTrue(route.Advance(0f, 0f),
+                "far from the first corner - the route must not report finished");
+            Assert.AreEqual(0, route.CornerIndex,
+                "still outside the radius - must not have advanced yet");
+
+            Assert.IsTrue(route.Advance(9f, 0f),
+                "inside the first corner's radius - must advance to the second corner");
+            Assert.AreEqual(1, route.CornerIndex);
+        }
+
+        [Test]
+        public void ARouteCursorReportsFinishedOnceTheLastCornerIsPassed()
+        {
+            var route = new ScriptedRouteCursor(
+                xs: new[] { 0f }, zs: new[] { 0f }, cornerRadiusMeters: 1f);
+
+            Assert.IsFalse(route.Advance(0f, 0f), "already inside the only corner's radius");
+            Assert.IsTrue(route.Finished);
+            Assert.AreEqual(0f, route.CurrentCornerX);
+            Assert.AreEqual(0f, route.CurrentCornerZ);
+        }
+
+        [Test]
+        public void ARouteCursorNeverRegressesEvenIfTheWalkerRetreats()
+        {
+            var route = new ScriptedRouteCursor(
+                xs: new[] { 10f, 20f }, zs: new[] { 0f, 0f }, cornerRadiusMeters: 1f);
+
+            route.Advance(10f, 0f); // consumes the first corner
+            Assert.AreEqual(1, route.CornerIndex);
+
+            // Walking back onto the ALREADY-PASSED first corner must not re-trigger it: the
+            // cursor is monotonic, exactly like ScriptedInputCursor's own StepIndex.
+            route.Advance(10f, 0f);
+            Assert.AreEqual(1, route.CornerIndex,
+                "the cursor regressed - a corner already passed was re-entered");
         }
     }
 }

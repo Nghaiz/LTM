@@ -182,6 +182,132 @@ namespace Ironfront.Net.Unity.Diagnostics
             indices = parsedSlots;
             return Outcome.Pinned;
         }
+
+        /// <summary>
+        /// The rotation form. <c>"3"</c> pins slot 3 for every team, as a one-element rotation;
+        /// <c>"3,7"</c> pins 3 for team 0 and 7 for team 1, each a one-element rotation;
+        /// <c>"3|4|5,7|8"</c> rotates team 0 through 3, 4, 5 and team 1 through 7, 8 — one slot
+        /// per placement, in order. Ledger <b>X-28</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A rotation, not a wider pin.</b> A single shared slot puts every same-team player
+        /// on the exact same point, which is how three same-team clients end up in each other's
+        /// fire before any check that names an ENEMY has a chance to matter. Comma still
+        /// separates teams and now pipe separates that team's ordered slots — a new separator
+        /// rather than overloading comma, so the existing single-value and two-value forms keep
+        /// meaning exactly what they have always meant (one-element rotations).
+        /// </para>
+        /// <para>
+        /// <b>A separate method from <see cref="EvaluatePerTeam"/>, deliberately.</b> That
+        /// method's <c>out int[] indices</c> shape is exercised by
+        /// <c>LaneBSpawnPinTests</c> (a project this diagnostics folder does not own) and is
+        /// still what <see cref="Evaluate"/> is built from; changing its shape to carry a
+        /// rotation would have broken that suite's compile for no behavioural gain. This method
+        /// carries the new shape (<c>int[][]</c>) instead of widening the old one.
+        /// </para>
+        /// <para>
+        /// Retry/failure semantics are identical to <see cref="EvaluatePerTeam"/> — see that
+        /// method's own remark for why a directory that has not filled its spawn-point array yet
+        /// is a RETRY rather than a FAILED, up to the ready line.
+        /// </para>
+        /// </remarks>
+        /// <param name="requested">Raw <c>IRONFRONT_LANEB_SPAWN_INDEX</c>, as read.</param>
+        /// <param name="directoryInstalled">Whether an <c>ISpawnPointDirectory</c> exists yet.</param>
+        /// <param name="directoryCount">What that directory reports RIGHT NOW.</param>
+        /// <param name="final">
+        /// True on the last attempt — the frame the server announces its slots, after which a
+        /// client can join and spawn. A <see cref="Outcome.Retry"/> is impossible here.
+        /// </param>
+        /// <param name="rotationsByTeam">
+        /// One ordered rotation of slots per team, on <see cref="Outcome.Pinned"/> only.
+        /// </param>
+        /// <param name="message">The line to log, on <see cref="Outcome.Failed"/> only.</param>
+        public static Outcome EvaluateRotationsPerTeam(
+            string requested,
+            bool directoryInstalled,
+            int directoryCount,
+            bool final,
+            out int[][] rotationsByTeam,
+            out string message)
+        {
+            rotationsByTeam = null;
+            message = null;
+
+            if (string.IsNullOrWhiteSpace(requested)) return Outcome.NotRequested;
+
+            string[] teamParts = requested.Split(',');
+            var parsedTeams = new int[teamParts.Length == 1 ? 2 : teamParts.Length][];
+            int maxSlot = -1;
+
+            for (int team = 0; team < teamParts.Length; team++)
+            {
+                string[] slotParts = teamParts[team].Split('|');
+                var slots = new int[slotParts.Length];
+
+                for (int s = 0; s < slotParts.Length; s++)
+                {
+                    if (!int.TryParse(
+                            slotParts[s].Trim(),
+                            NumberStyles.Integer,
+                            CultureInfo.InvariantCulture,
+                            out int slot))
+                    {
+                        message = $"IRONFRONT_LANEB_SPAWN_INDEX='{requested}' is not an integer, "
+                                  + "or a '|'-separated rotation, per comma-separated team. "
+                                  + CoinFlipTail;
+                        return Outcome.Failed;
+                    }
+
+                    // Negative is a request nothing can satisfy, so it does not wait for a count.
+                    if (slot < 0)
+                    {
+                        message = $"IRONFRONT_LANEB_SPAWN_INDEX={slot} is negative. " + CoinFlipTail;
+                        return Outcome.Failed;
+                    }
+
+                    slots[s] = slot;
+                    if (slot > maxSlot) maxSlot = slot;
+                }
+
+                parsedTeams[team] = slots;
+            }
+
+            // One team's worth of rotation means "the same rotation for every team", the same
+            // meaning a single value has always carried.
+            if (teamParts.Length == 1) parsedTeams[1] = (int[])parsedTeams[0].Clone();
+
+            if (!directoryInstalled)
+            {
+                if (!final) return Outcome.Retry;
+
+                message = $"IRONFRONT_LANEB_SPAWN_INDEX={maxSlot} but no ISpawnPointDirectory is "
+                          + "installed by the time the server announces its slots, so there is "
+                          + "nothing to pin. A scene with no ActorManager installs none. "
+                          + CoinFlipTail;
+                return Outcome.Failed;
+            }
+
+            if (directoryCount <= 0)
+            {
+                if (!final) return Outcome.Retry;
+
+                message = $"IRONFRONT_LANEB_SPAWN_INDEX={maxSlot} but the spawn directory still "
+                          + "reports 0 points at the ready line — ActorManager.StartGame() never "
+                          + "filled the array. " + CoinFlipTail;
+                return Outcome.Failed;
+            }
+
+            if (maxSlot >= directoryCount)
+            {
+                message = $"IRONFRONT_LANEB_SPAWN_INDEX={maxSlot} is outside the scene's "
+                          + $"{directoryCount} spawn point(s). " + CoinFlipTail;
+                return Outcome.Failed;
+            }
+
+            rotationsByTeam = parsedTeams;
+            return Outcome.Pinned;
+        }
     }
 }
 #endif
