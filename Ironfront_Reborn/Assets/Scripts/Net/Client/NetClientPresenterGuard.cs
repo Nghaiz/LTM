@@ -143,6 +143,42 @@ namespace Ironfront.Net.Unity.Client
         }
 
         /// <summary>
+        /// Any actor's team, read from the replicated snapshot entry for that actor. P17 3.3.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The generalisation of <see cref="TryResolveLocalTeam"/>, not a second path to the
+        /// same answer.</b> That method is this one applied to
+        /// <see cref="TryResolveLocalActorId"/>, and it is deliberately NOT rewritten to call
+        /// this: it reaches the LOCAL team, which <c>NetPresenterGate</c> publishes to
+        /// <c>Assembly-CSharp</c> through a registered resolver, and collapsing the two would put
+        /// a per-actor question behind a seam whose whole contract is "this client's own side".
+        /// </para>
+        /// <para>
+        /// <b>False is a normal outcome.</b> The killfeed names two actors per line and either
+        /// can be outside this client's interest radius, in which case the snapshot never carried
+        /// them. The caller draws that neutrally; it must not fall back to team 0, which is the
+        /// V10 D17 bug one element over.
+        /// </para>
+        /// </remarks>
+        public static bool TryResolveActorTeam(ushort actorId, out byte team)
+        {
+            team = TeamId.None;
+
+            if (actorId == LocalActorIdentity.UnassignedActorId) return false;
+
+            NetClientBootstrap client = NetClientBootstrap.Current;
+            if (client == null) return false;
+
+            WorldSnapshot snapshot = client.Router.Decoder.Current;
+            if (snapshot == null) return false;
+            if (!snapshot.TryFind(actorId, out ActorSnapshotEntry entry)) return false;
+
+            team = entry.Team;
+            return true;
+        }
+
+        /// <summary>
         /// Resolves the client bootstrap, logging once at warning when it is missing.
         /// </summary>
         /// <remarks>

@@ -28,11 +28,13 @@ namespace Ironfront.Net.Unity.Client
     /// different jobs on the same object.
     /// </para>
     /// <para>
-    /// <b>The death screen is IMGUI and deliberately a stopgap</b>, for the reason
-    /// <c>NetClientCombatPresenter.OnGUI</c> gives: a real element belongs on
-    /// <c>Ingame UI Container.prefab</c> and phase 2 owns no prefabs or scenes. What is NOT a
-    /// stopgap is the state behind it — the countdown, the gate and the request are the shipped
-    /// library model, so replacing the drawing does not touch any of it.
+    /// <b>The death screen was IMGUI and is now the HUD's deploy screen</b> (P17 3.2). The state
+    /// behind it never was a stopgap — the countdown, the gate and the request are the shipped
+    /// library model — so replacing the drawing touched none of it. What DID change is who
+    /// decides the screen is up: it is driven from <c>ClientCombatState.IsAlive</c> once a frame
+    /// rather than from <see cref="OnDied"/>, so a respawn this client did not request closes it
+    /// too (P17 criterion 5), and a death whose S_DEATH lands after the snapshot's IsAlive bit
+    /// still names its killer when the message arrives.
     /// </para>
     /// </remarks>
     [DefaultExecutionOrder(-50)]
@@ -43,11 +45,45 @@ namespace Ironfront.Net.Unity.Client
         [Tooltip("Pressed to respawn once the death countdown has elapsed.")]
         [SerializeField] private KeyCode _respawnKey = KeyCode.Space;
 
-        [Tooltip("Draw the death screen with IMGUI. A stopgap until a HUD element reads the state.")]
+        [Tooltip("Raise the deploy screen on death. Off leaves the respawn key working.")]
         [SerializeField] private bool _drawDeathScreen = true;
 
         private NetClientBootstrap _client;
         private readonly ClientCombatState _state = new ClientCombatState();
+
+        /// <summary>
+        /// The killfeed's name table, for the one string the deploy screen needs.
+        /// </summary>
+        /// <remarks>
+        /// <b>Borrowed rather than duplicated.</b> S_PLAYER_LIST has one consumer by design —
+        /// <c>NetClientCombatPresenter</c> owns the table, and the wiring gate's exemption for
+        /// that event retires on THAT subscription — so a second table here would be a second
+        /// thing to keep in step with the wire. Both components sit on the object carrying
+        /// <c>NetClientBootstrap</c>: this one is added there by
+        /// <c>NetClientBootstrap.EnsureLocalCombatDriver</c>, and the asset gate's A1 check
+        /// requires the presenter there. Absent is survivable — the screen then names the
+        /// killer by actor id, which is what the killfeed rendered before names existed.
+        /// </remarks>
+        private NetClientCombatPresenter _names;
+
+        /// <summary>Who killed this client last, for the deploy screen. P17 3.2.</summary>
+        private ushort _lastKillerActorId;
+        private bool _lastKillerWasEnvironment;
+        private int _lastKillerTeam = TeamId.None;
+
+        /// <summary>Whether the deploy screen is raised, so show and hide each fire once.</summary>
+        private bool _deployShown;
+
+        /// <summary>
+        /// Set when a death names a killer the screen has not shown yet.
+        /// </summary>
+        /// <remarks>
+        /// The snapshot's IsAlive bit and S_DEATH are produced on the same tick and either can
+        /// arrive first (<c>ClientCombatState.ApplyDeath</c>'s own remark). Snapshot-first raises
+        /// the screen with no killer named; this is what makes the message that follows rewrite
+        /// the line rather than leaving it blank for the whole countdown.
+        /// </remarks>
+        private bool _killerLabelStale;
 
         /// <summary>
         /// The local player's combat state. The one production instance in the build.
@@ -102,7 +138,10 @@ namespace Ironfront.Net.Unity.Client
                     nameof(NetClientLocalCombatDriver), out _client))
             {
                 enabled = false;
+                return;
             }
+
+            _names = GetComponent<NetClientCombatPresenter>();
         }
 
         private void OnEnable()
@@ -132,6 +171,14 @@ namespace Ironfront.Net.Unity.Client
             // holding a controller that never comes alive again.
             RestoreInput();
             _state.Reset();
+
+            // A disconnect while dead otherwise leaves the deploy screen up with nothing left
+            // running to take it down -- the mirror of the input the line above gives back.
+            if (_deployShown)
+            {
+                _deployShown = false;
+                NetClientBindings.MatchHud?.HideDeploy();
+            }
         }
 
         /// <summary>
@@ -198,6 +245,8 @@ namespace Ironfront.Net.Unity.Client
 
             ApplyLocalTeam();
 
+            SyncMatchHud();
+
             // X-16: PredictFire had zero production callers, so predictedShots was 0 at every
             // lane-B checkpoint while the server emptied a magazine — the field could not be
             // read as evidence about anything.
@@ -224,8 +273,14 @@ namespace Ironfront.Net.Unity.Client
             // Short-circuit order matters for the scripted source, whose RespawnPressed consumes
             // its edge when read. A real key press leaves that edge unconsumed, which is the
             // harmless direction: the scripted press then fires on the next frame instead.
+            //
+            // The Deploy button is the third way in and is read LAST, for ScriptedRespawnPressed's
+            // reason: it consumes its edge, and a key press that has already satisfied this
+            // condition leaves the button's press unconsumed for the next frame -- which is the
+            // harmless direction. The button is only interactable while CanRequestRespawn is
+            // true (see TickDeploy), so it cannot post an edge the gate would refuse.
             if (!_state.IsAlive && _state.CanRequestRespawn(Time.time)
-                && (Input.GetKeyDown(_respawnKey) || ScriptedRespawnPressed()))
+                && (Input.GetKeyDown(_respawnKey) || ScriptedRespawnPressed() || DeployPressed()))
             {
                 RequestRespawn();
             }
@@ -390,7 +445,24 @@ namespace Ironfront.Net.Unity.Client
         /// without that filter would kill the local player on every death in the match, which is
         /// the failure <c>ClientCombatState.LocalActorId</c>'s remark describes.
         /// </remarks>
-        private void OnDeathMessage(DeathMessage message) => _state.ApplyDeath(in message, Time.time);
+        private void OnDeathMessage(DeathMessage message)
+        {
+            if (!_state.ApplyDeath(in message, Time.time)) return;
+
+            // Recorded here rather than read in OnDied, because OnDied is raised from INSIDE
+            // ApplyDeath -- the killer would not be stored yet. The deploy screen is raised from
+            // Update off the alive flag, so this lands before the frame that renders it, and a
+            // snapshot-first death gets its killer named on the frame S_DEATH arrives.
+            _lastKillerActorId = message.KillerActorId;
+            _lastKillerWasEnvironment = message.KilledByEnvironment;
+            _lastKillerTeam = message.KilledByEnvironment
+                ? TeamId.None
+                : (NetClientPresenterGuard.TryResolveActorTeam(message.KillerActorId, out byte team)
+                    ? team
+                    : TeamId.None);
+
+            _killerLabelStale = true;
+        }
 
         /// <summary>
         /// Takes input away from the corpse.
@@ -467,19 +539,83 @@ namespace Ironfront.Net.Unity.Client
             local.EnableInput();
         }
 
-        /// <summary>The death screen. See the class remark for why this is IMGUI.</summary>
-        private void OnGUI()
+        /// <summary>
+        /// Drives the in-match readout: the local team, and the deploy screen. P17 3.1 and 3.2.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The team is resolved through <c>NetPresenterGate</c>, which is where P12 reads
+        /// it.</b> Not a second resolution path: it is the same method against the same
+        /// registered resolver, called once more per frame. § 3.1 makes that mandatory, and the
+        /// reason is what this element is FOR — it exists to make a wrong team visible, and an
+        /// element that answers the question by its own route can be wrong on its own.
+        /// </para>
+        /// <para>
+        /// <b>Pushed every frame rather than on a change.</b> The HUD compares before it writes
+        /// (<c>MatchHud.SetLocalTeam</c>), so the cost here is one snapshot lookup, and keeping
+        /// the change detection on the far side is what lets a HUD that registers late get the
+        /// team on its first frame instead of waiting for the next one to differ.
+        /// </para>
+        /// <para>
+        /// <b>Visibility is <c>IsAlive</c>, never the button.</b> Criterion 5 is a respawn the
+        /// player did not ask for — a server force-respawn, a match reset — and a screen closed
+        /// by its own Deploy control survives exactly that and blocks the player. Driving both
+        /// edges off the same flag the input suppression uses is what makes the two agree.
+        /// </para>
+        /// </remarks>
+        private void SyncMatchHud()
         {
+            IMatchHud hud = NetClientBindings.MatchHud;
+            if (hud == null) return;
+
+            hud.SetLocalTeam(
+                NetPresenterGate.TryResolveLocalTeam(out byte team) ? team : TeamId.None);
+
             if (!_drawDeathScreen) return;
-            if (_state.IsAlive) return;
 
-            float remaining = _state.SecondsUntilRespawn(Time.time);
+            if (_state.IsAlive)
+            {
+                if (!_deployShown) return;
 
-            string line = remaining > 0f
-                ? "You are dead. Respawn in " + Mathf.CeilToInt(remaining) + "s"
-                : "You are dead. Press " + _respawnKey + " to respawn.";
+                _deployShown = false;
+                hud.HideDeploy();
+                return;
+            }
 
-            GUI.Label(new Rect(0f, Screen.height * 0.5f - 12f, Screen.width, 24f), line);
+            if (!_deployShown || _killerLabelStale)
+            {
+                _deployShown = true;
+                _killerLabelStale = false;
+                hud.ShowDeploy(KillerLabel(), _lastKillerTeam);
+            }
+
+            hud.TickDeploy(
+                _state.SecondsUntilRespawn(Time.time), _state.CanRequestRespawn(Time.time));
+        }
+
+        /// <summary>
+        /// What the deploy screen calls whoever killed this client.
+        /// </summary>
+        /// <remarks>
+        /// The fallback is the killfeed's, verbatim: an id when no S_PLAYER_LIST has named that
+        /// actor. Manufacturing something friendlier would make a genuinely missing name
+        /// indistinguishable from a real one, which is the reason <c>PlayerNameTable</c> returns
+        /// null and leaves the wording to its caller.
+        /// </remarks>
+        private string KillerLabel()
+        {
+            if (_lastKillerWasEnvironment) return "The world";
+
+            string fallback = "actor " + _lastKillerActorId;
+
+            return _names != null ? _names.Names.NameOr(_lastKillerActorId, fallback) : fallback;
+        }
+
+        /// <summary>Whether the HUD's Deploy control was pressed, clearing the edge.</summary>
+        private static bool DeployPressed()
+        {
+            IMatchHud hud = NetClientBindings.MatchHud;
+            return hud != null && hud.ConsumeDeployPressed();
         }
     }
 }

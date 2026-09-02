@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -552,16 +552,63 @@ namespace Ironfront.Net.Replication.Tests
             // AssetGateRunner's own remark claims this guard exists; until now it did not. A
             // check that is a method and not a list entry is a file that runs on nobody's
             // machine.
+            //
+            // P17 widened the POPULATION, and the widening is the point. This read
+            // AssetWiringDetectors alone while two more detector classes had shipped beside it
+            // (P15's menu screens, P16's palette check), so a detector added to either could be
+            // left unregistered and this test would still be green -- it was answering the right
+            // question over the wrong set. Every class the runner draws from is listed here, and
+            // a fourth one added without a row is the failure a reader of this list will see.
             var registered = AssetGateRunner.Checks.Select(c => c.Name).ToHashSet();
 
-            var declared = typeof(AssetWiringDetectors)
-                .GetMethods(BindingFlags.Public | BindingFlags.Static)
+            var declared = new[]
+                {
+                    typeof(AssetWiringDetectors),
+                    typeof(MenuScreenWiringDetectors),
+                    typeof(MatchHudWiringDetectors),
+                }
+                .SelectMany(type => type.GetMethods(BindingFlags.Public | BindingFlags.Static))
                 .Where(m => typeof(IEnumerable<GateFinding>).IsAssignableFrom(m.ReturnType))
                 .Select(m => m.Name)
                 .ToList();
 
             Assert.NotEmpty(declared);
             Assert.All(declared, name => Assert.Contains(name, registered));
+        }
+
+        [Fact]
+        public void EveryRegisteredCheckNamesADeclaredDetector()
+        {
+            // The other direction, and it is not the same test. The one above lets the runner
+            // carry a row whose method no longer exists under that name -- a rename that lands
+            // in one file and not the other -- and nothing in the suite would say so. Both
+            // directions, per rules/pinned-baseline-test-companion.md.
+            var declared = new[]
+                {
+                    typeof(AssetWiringDetectors),
+                    typeof(MenuScreenWiringDetectors),
+                    typeof(MatchHudWiringDetectors),
+                }
+                .SelectMany(type => type.GetMethods(BindingFlags.Public | BindingFlags.Static))
+                .Where(m => typeof(IEnumerable<GateFinding>).IsAssignableFrom(m.ReturnType))
+                .Select(m => m.Name)
+                .ToHashSet();
+
+            Assert.NotEmpty(AssetGateRunner.Checks);
+            Assert.All(
+                AssetGateRunner.Checks.Select(c => c.Name),
+                name => Assert.Contains(name, declared));
+        }
+
+        [Fact]
+        public void TheKillfeedRowCountComesFromTheModelNotAConstant()
+        {
+            // P17 3.4. Same discipline as TheExpectedEntryCountComesFromTheEnumNotAConstant:
+            // raising KillfeedModel.DefaultCapacity must change what the gate demands of the
+            // authored prefab, or the newest kills get rows and the oldest silently do not.
+            Assert.Equal(
+                Ironfront.Net.Replication.Client.KillfeedModel.DefaultCapacity,
+                MatchHudWiringDetectors.KillfeedRowCount);
         }
 
         // --------------------------------------------------------------------------- helpers

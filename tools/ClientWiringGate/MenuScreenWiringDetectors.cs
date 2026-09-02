@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace Ironfront.Tools.ClientWiringGate
 {
@@ -57,6 +58,18 @@ namespace Ironfront.Tools.ClientWiringGate
         /// <summary>The ledger row these findings are filed under.</summary>
         private const string Row = "P15";
 
+        /// <summary>The Editor command that authors the menu Canvas.</summary>
+        private const string DefaultBuildCommand = "Ironfront/Net/Build multiplayer menu Canvas";
+
+        /// <summary>Where the single-reference rule is written down. P15 declared it.</summary>
+        private const string DefaultFieldClause = "P15 3.4";
+
+        /// <summary>Where the array rule is written down. P16 added it, one section later.</summary>
+        private const string DefaultArrayClause = "P16 3.7";
+
+        /// <summary>Where the menu Canvas is authored, for a screen that is on nothing.</summary>
+        private const string DefaultAbsentClause = "P15 3.2";
+
         /// <summary>
         /// A screen: the script that draws it, and every reference that must be authored on it.
         /// </summary>
@@ -66,7 +79,7 @@ namespace Ironfront.Tools.ClientWiringGate
         /// gate whose message is generic costs the reader the investigation the gate was supposed
         /// to have done.
         /// </remarks>
-        private readonly struct Screen
+        internal readonly struct Screen
         {
             public Screen(string name, string sourcePath, params (string Field, string Consequence)[] fields)
                 : this(name, sourcePath, System.Array.Empty<(string, int, string)>(), fields)
@@ -78,12 +91,57 @@ namespace Ironfront.Tools.ClientWiringGate
                 string sourcePath,
                 (string Field, int Length, string Consequence)[] arrays,
                 params (string Field, string Consequence)[] fields)
+                : this(Row, DefaultBuildCommand, DefaultFieldClause, DefaultArrayClause,
+                       DefaultAbsentClause, name, sourcePath, arrays, fields)
             {
+            }
+
+            /// <summary>
+            /// The full form, for a screen that is not one of P15's menu panels.
+            /// </summary>
+            /// <remarks>
+            /// <b>The ledger row and the repair command travel WITH the screen</b>, added by P17
+            /// when the in-match HUD reused this grading. The alternative was a second copy of
+            /// <see cref="Grade"/> and <see cref="GradeArrays"/> under a different constant, and
+            /// two copies of a check are two checks that can disagree about what they forbid —
+            /// which is the failure this file's own remarks keep describing one level down.
+            /// </remarks>
+            public Screen(
+                string row,
+                string buildCommand,
+                string fieldClause,
+                string arrayClause,
+                string absentClause,
+                string name,
+                string sourcePath,
+                (string Field, int Length, string Consequence)[] arrays,
+                params (string Field, string Consequence)[] fields)
+            {
+                LedgerRow = row;
+                BuildCommand = buildCommand;
+                FieldClause = fieldClause;
+                ArrayClause = arrayClause;
+                AbsentClause = absentClause;
                 Name = name;
                 SourcePath = sourcePath;
                 Arrays = arrays;
                 Fields = fields;
             }
+
+            /// <summary>What findings about this screen are filed under.</summary>
+            public string LedgerRow { get; }
+
+            /// <summary>The Editor command that authors this screen, named in every finding.</summary>
+            public string BuildCommand { get; }
+
+            /// <summary>The plan clause a single-reference finding cites.</summary>
+            public string FieldClause { get; }
+
+            /// <summary>The plan clause an array finding cites. Not the same section.</summary>
+            public string ArrayClause { get; }
+
+            /// <summary>The plan clause cited when the screen is on no GameObject at all.</summary>
+            public string AbsentClause { get; }
 
             public string Name { get; }
 
@@ -346,10 +404,25 @@ namespace Ironfront.Tools.ClientWiringGate
         /// </para>
         /// </remarks>
         public static IEnumerable<GateFinding> MenuScreenRefsAreAssigned(UnityAssetIndex index)
+            => GradeScreens(index, Screens);
+
+        /// <summary>
+        /// Grades every field and array on <paramref name="screens"/>, and reports a screen that
+        /// is on no GameObject at all.
+        /// </summary>
+        /// <remarks>
+        /// <b>Shared with P17's in-match HUD rather than copied for it.</b> The three clauses
+        /// this file's header describes were earned by mutation against <c>ScoreUi</c>, and a
+        /// second copy of them under a different constant is two checks free to disagree about
+        /// what they forbid. What differs per screen — the ledger row, the plan clause, the
+        /// Editor command that repairs it — travels on the <see cref="Screen"/> itself.
+        /// </remarks>
+        internal static IEnumerable<GateFinding> GradeScreens(
+            UnityAssetIndex index, IEnumerable<Screen> screens)
         {
             var findings = new List<GateFinding>();
 
-            foreach (Screen screen in Screens)
+            foreach (Screen screen in screens)
             {
                 string guid = ScriptGuid(index, screen.SourcePath);
                 int seen = 0;
@@ -363,16 +436,16 @@ namespace Ironfront.Tools.ClientWiringGate
 
                 if (seen == 0)
                     findings.Add(new GateFinding(
-                        Row, "(nothing)", 0,
+                        screen.LedgerRow, "(nothing)", 0,
                         $"{screen.Name} is on no GameObject in any scene or prefab, so its "
                         + "references are unassignable by construction and that screen does not "
-                        + "exist. Run 'Ironfront/Net/Build multiplayer menu Canvas' (P15 3.2)."));
+                        + $"exist. Run '{screen.BuildCommand}' ({screen.AbsentClause})."));
             }
 
             return findings;
         }
 
-        private static IEnumerable<GateFinding> Grade(
+        internal static IEnumerable<GateFinding> Grade(
             UnityAssetIndex index, Screen screen, UnityAssetDocument document, string path)
         {
             var findings = new List<GateFinding>();
@@ -386,8 +459,8 @@ namespace Ironfront.Tools.ClientWiringGate
                 if (maybe == null || maybe.Value.IsNull)
                 {
                     findings.Add(new GateFinding(
-                        Row, AssetWiringDetectors.Rel(index, path), 0,
-                        $"{screen.Name}.{field} is unassigned, so {consequence} (P15 3.4)."));
+                        screen.LedgerRow, AssetWiringDetectors.Rel(index, path), 0,
+                        $"{screen.Name}.{field} is unassigned, so {consequence} ({screen.FieldClause})."));
                     continue;
                 }
 
@@ -408,11 +481,11 @@ namespace Ironfront.Tools.ClientWiringGate
 
                 if (!resolves)
                     findings.Add(new GateFinding(
-                        Row, AssetWiringDetectors.Rel(index, path), 0,
+                        screen.LedgerRow, AssetWiringDetectors.Rel(index, path), 0,
                         $"{screen.Name}.{field} names fileID {assigned.FileId}, which no object "
                         + $"in {AssetWiringDetectors.Rel(index, target)} carries. Unity loads "
                         + $"that as null, so {consequence} — and it reads exactly like the "
-                        + "unassigned case at runtime (P15 3.4)."));
+                        + $"unassigned case at runtime ({screen.FieldClause})."));
 
                 foreach ((string other, string _) in screen.Fields)
                 {
@@ -425,15 +498,181 @@ namespace Ironfront.Tools.ClientWiringGate
                                        StringComparison.OrdinalIgnoreCase)) continue;
 
                     findings.Add(new GateFinding(
-                        Row, AssetWiringDetectors.Rel(index, path), 0,
+                        screen.LedgerRow, AssetWiringDetectors.Rel(index, path), 0,
                         $"{screen.Name}.{field} points at the same object as {other}. Two "
                         + "controls cannot be one object: whichever is written last wins, so "
                         + $"this does not add a control — it takes one over, and {consequence} "
-                        + "(P15 3.4)."));
+                        + $"({screen.FieldClause})."));
+                }
+            }
+
+            findings.AddRange(GradeDeclaredTypes(index, screen, document, path));
+
+            return findings;
+        }
+
+        /// <summary>
+        /// Reports a reference that resolves to a component of the WRONG declared type.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The fourth clause, added by P17 against a hole it confirmed by mutation.</b> The
+        /// three clauses above are "assigned", "resolves", "not already driven" — and a
+        /// <c>Button</c> field pointed at a <c>Text</c> passes all three. It resolves to a real
+        /// anchor, no other field names it, and Unity loads a type mismatch as <b>null</b>: the
+        /// Deploy control then does nothing, which is the unassigned case the first clause exists
+        /// to catch, wearing a resolving fileID. Pointed at the deploy screen's own heading
+        /// label, the gate reported clean.
+        /// </para>
+        /// <para>
+        /// <b>The expected type is read from the SOURCE, and the guid from a sibling.</b>
+        /// <c>ScoreUiTextRefsAreAssigned</c> learned not to hardcode a component guid — uGUI's
+        /// <c>Text</c> carries one in the legacy DLL form and another in the package form, and
+        /// this tree is mid-migration — so what is compared is AGREEMENT: two fields declared
+        /// as different C# types may not resolve to the same script. A field declared as
+        /// <c>GameObject</c> needs no oracle at all and is checked directly, because a
+        /// <c>GameObject</c> is class 1 and a component never is.
+        /// </para>
+        /// <para>
+        /// <b>What this still cannot see.</b> A field pointed at a component type NO other field
+        /// on the screen declares — a <c>Button</c> field aimed at the <c>Image</c> beside it —
+        /// has nothing to disagree with and passes. Closing that means pinning uGUI's guids,
+        /// which is what the paragraph above says goes wrong. Recorded rather than silently
+        /// left: the residual gap is one component type deep, and the mutation that motivated
+        /// this clause is caught.
+        /// </para>
+        /// </remarks>
+        private static IEnumerable<GateFinding> GradeDeclaredTypes(
+            UnityAssetIndex index, Screen screen, UnityAssetDocument document, string path)
+        {
+            var findings = new List<GateFinding>();
+
+            IReadOnlyDictionary<string, string> declared = DeclaredTypes(index, screen);
+            if (declared.Count == 0) return findings;
+
+            // Script guid -> the declared C# type that first claimed it, on THIS screen.
+            var claimedBy = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach ((string field, string consequence) in AllFields(screen))
+            {
+                if (!declared.TryGetValue(field, out string? type)) continue;
+
+                foreach (UnityObjectRef reference in ReferencesOf(document, field))
+                {
+                    if (reference.IsNull) continue;
+
+                    // Same-asset references only: one that leaves the asset is already reported
+                    // by the resolves clause above.
+                    if (reference.Guid != null) continue;
+
+                    UnityAssetDocument? resolved = index.Documents(path)
+                        .FirstOrDefault(d => d.AnchorId == reference.FileId);
+
+                    if (resolved == null) continue;
+
+                    if (string.Equals(type, "GameObject", StringComparison.Ordinal))
+                    {
+                        if (resolved.ClassId == 1) continue;
+
+                        findings.Add(new GateFinding(
+                            screen.LedgerRow, AssetWiringDetectors.Rel(index, path), 0,
+                            $"{screen.Name}.{field} is declared as a GameObject and names fileID "
+                            + $"{reference.FileId}, which is a class-{resolved.ClassId} object. "
+                            + $"Unity loads that as null, so {consequence} — and it reads exactly "
+                            + $"like the unassigned case at runtime ({screen.FieldClause})."));
+                        continue;
+                    }
+
+                    string? script = resolved.ScriptGuid;
+                    if (script == null) continue;
+
+                    if (!claimedBy.TryGetValue(script, out string? owner))
+                    {
+                        claimedBy.Add(script, type);
+                        continue;
+                    }
+
+                    if (string.Equals(owner, type, StringComparison.Ordinal)) continue;
+
+                    findings.Add(new GateFinding(
+                        screen.LedgerRow, AssetWiringDetectors.Rel(index, path), 0,
+                        $"{screen.Name}.{field} is declared as a {type} and names fileID "
+                        + $"{reference.FileId}, whose component is the same script this screen's "
+                        + $"{owner} fields point at. Unity loads a type mismatch as null, so "
+                        + $"{consequence} — and an anchor that resolves is still the unassigned "
+                        + $"case at runtime ({screen.FieldClause})."));
                 }
             }
 
             return findings;
+        }
+
+        /// <summary>Every graded field on a screen, single references and arrays alike.</summary>
+        private static IEnumerable<(string Field, string Consequence)> AllFields(Screen screen)
+        {
+            foreach ((string field, string consequence) in screen.Fields)
+                yield return (field, consequence);
+
+            foreach ((string field, int _, string consequence) in screen.Arrays)
+                yield return (field, consequence);
+        }
+
+        /// <summary>
+        /// The C# type each graded field is declared as, read off the screen's own source.
+        /// </summary>
+        /// <remarks>
+        /// Read rather than listed in the table beside the consequence, so a field whose type
+        /// changes cannot leave a stale expectation behind — the failure mode of every
+        /// transcribed constant this file already argues against. A field the pattern cannot
+        /// find is simply not graded here; the other three clauses still apply to it.
+        /// </remarks>
+        private static IReadOnlyDictionary<string, string> DeclaredTypes(
+            UnityAssetIndex index, Screen screen)
+        {
+            string source = Path.Combine(
+                index.AssetsRoot, screen.SourcePath.Replace('/', Path.DirectorySeparatorChar));
+
+            if (!File.Exists(source))
+                throw new AssetGateUnknownException(
+                    $"no '{screen.SourcePath}' to read, so {screen.Name}'s field types cannot be "
+                    + "resolved and a reference of the wrong type cannot be graded. Has the "
+                    + "screen moved?");
+
+            var types = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            foreach (string line in File.ReadLines(source))
+            {
+                Match match = DeclaredField.Match(line);
+                if (!match.Success) continue;
+
+                types[match.Groups["field"].Value] = match.Groups["type"].Value;
+            }
+
+            return types;
+        }
+
+        /// <summary>
+        /// <c>[SerializeField] private Button? _logInButton;</c>, and its array form.
+        /// </summary>
+        /// <remarks>
+        /// The nullable annotation and any array brackets are stripped, so <c>Text[]</c> and
+        /// <c>Text?</c> both read as <c>Text</c> — an entry of an array resolves to the element
+        /// type either way.
+        /// </remarks>
+        private static readonly Regex DeclaredField = new Regex(
+            @"\[SerializeField\]\s+private\s+(?<type>[A-Za-z_][A-Za-z0-9_]*)\??(?:\[\])?\s+"
+            + @"(?<field>_[A-Za-z0-9_]+)\s*(?:=|;)",
+            RegexOptions.Compiled);
+
+        /// <summary>One field's references, single or array.</summary>
+        private static IEnumerable<UnityObjectRef> ReferencesOf(
+            UnityAssetDocument document, string field)
+        {
+            UnityObjectRef? single = document.Reference(field);
+            if (single != null) return new[] { single.Value };
+
+            return document.ReferenceArray(field)
+                   ?? (IEnumerable<UnityObjectRef>)System.Array.Empty<UnityObjectRef>();
         }
 
         /// <summary>
@@ -445,7 +684,7 @@ namespace Ironfront.Tools.ClientWiringGate
         /// rows, contains no null and no duplicate and is still a screen that hides players from
         /// the two people comparing screenshots.
         /// </remarks>
-        private static IEnumerable<GateFinding> GradeArrays(
+        internal static IEnumerable<GateFinding> GradeArrays(
             UnityAssetIndex index, Screen screen, UnityAssetDocument document, string path)
         {
             var findings = new List<GateFinding>();
@@ -458,20 +697,20 @@ namespace Ironfront.Tools.ClientWiringGate
                 if (entries == null)
                 {
                     findings.Add(new GateFinding(
-                        Row, rel, 0,
+                        screen.LedgerRow, rel, 0,
                         $"{screen.Name}.{field} is not an authored array at all, so "
-                        + $"{consequence} (P16 3.7)."));
+                        + $"{consequence} ({screen.ArrayClause})."));
                     continue;
                 }
 
                 if (entries.Count != length)
                 {
                     findings.Add(new GateFinding(
-                        Row, rel, 0,
+                        screen.LedgerRow, rel, 0,
                         $"{screen.Name}.{field} holds {entries.Count} entries and the screen "
                         + $"needs {length}. Nothing in the asset is null and nothing is "
                         + $"duplicated, so no other clause here can see it -- and "
-                        + $"{consequence} (P16 3.7)."));
+                        + $"{consequence} ({screen.ArrayClause})."));
                     continue;
                 }
 
@@ -484,9 +723,9 @@ namespace Ironfront.Tools.ClientWiringGate
                     if (entry.IsNull)
                     {
                         findings.Add(new GateFinding(
-                            Row, rel, 0,
+                            screen.LedgerRow, rel, 0,
                             $"{screen.Name}.{field}[{i}] is unassigned, so {consequence} "
-                            + "(P16 3.7)."));
+                            + $"({screen.ArrayClause})."));
                         continue;
                     }
 
@@ -500,19 +739,19 @@ namespace Ironfront.Tools.ClientWiringGate
 
                     if (!index.Documents(target).Any(d => d.AnchorId == entry.FileId))
                         findings.Add(new GateFinding(
-                            Row, rel, 0,
+                            screen.LedgerRow, rel, 0,
                             $"{screen.Name}.{field}[{i}] names fileID {entry.FileId}, which no "
                             + $"object in {AssetWiringDetectors.Rel(index, target)} carries. "
                             + $"Unity loads that as null, so {consequence} -- and it reads "
-                            + "exactly like the unassigned case at runtime (P16 3.7)."));
+                            + $"exactly like the unassigned case at runtime ({screen.ArrayClause})."));
 
                     string key = entry.Guid + "/" + entry.FileId;
                     if (seen.TryGetValue(key, out int first))
                         findings.Add(new GateFinding(
-                            Row, rel, 0,
+                            screen.LedgerRow, rel, 0,
                             $"{screen.Name}.{field}[{i}] points at the same object as [{first}]. "
                             + "Two rows cannot be one object: whichever is written last wins, so "
-                            + $"this row does not exist and {consequence} (P16 3.7)."));
+                            + $"this row does not exist and {consequence} ({screen.ArrayClause})."));
                     else
                         seen.Add(key, i);
                 }
@@ -770,7 +1009,7 @@ namespace Ironfront.Tools.ClientWiringGate
         /// finding above, which would send a reader looking for an unauthored Canvas when the
         /// real fault is a moved source file.
         /// </remarks>
-        private static string ScriptGuid(UnityAssetIndex index, string sourcePath)
+        internal static string ScriptGuid(UnityAssetIndex index, string sourcePath)
         {
             string meta = Path.Combine(index.AssetsRoot, sourcePath.Replace('/', Path.DirectorySeparatorChar))
                           + ".meta";

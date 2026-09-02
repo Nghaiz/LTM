@@ -246,4 +246,5 @@ __pycache__/
 # The wiring it reports lands in Menu.unity, which IS committed; this is the receipt.
 Ironfront_Reborn/wire-client-flow.txt
 Ironfront_Reborn/build-menu-canvas.txt
+Ironfront_Reborn/build-match-hud.txt
 tmp/Ravenfield

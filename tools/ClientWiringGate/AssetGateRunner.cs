@@ -63,6 +63,10 @@ namespace Ironfront.Tools.ClientWiringGate
                  MenuScreenWiringDetectors.RoomLobbyTeamColoursComeFromThePalette),
                 (nameof(MenuScreenWiringDetectors.RowCountsMatchTheScreens),
                  MenuScreenWiringDetectors.RowCountsMatchTheScreens),
+                (nameof(MatchHudWiringDetectors.MatchHudRefsAreAssigned),
+                 MatchHudWiringDetectors.MatchHudRefsAreAssigned),
+                (nameof(MatchHudWiringDetectors.MatchHudTeamColoursComeFromThePalette),
+                 MatchHudWiringDetectors.MatchHudTeamColoursComeFromThePalette),
             };
 
         /// <summary>
