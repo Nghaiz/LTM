@@ -172,5 +172,24 @@ namespace Ironfront.Net.Unity.Bindings
 
             local.actor.KnockOver(force, bone);
         }
+
+        /// <inheritdoc/>
+        public void GetChosenLoadout(
+            out byte primary, out byte secondary, out byte gear1, out byte gear2, out byte gear3)
+        {
+            primary = secondary = gear1 = gear2 = gear3 = 0;
+
+            FpsActorController local = FpsActorController.instance;
+            if (local == null) return;
+
+            WeaponManager.LoadoutSet loadout = local.GetLoadout();
+            if (loadout == null) return;
+
+            primary   = WeaponManager.NetworkIdOf(loadout.primary);
+            secondary = WeaponManager.NetworkIdOf(loadout.secondary);
+            gear1     = WeaponManager.NetworkIdOf(loadout.gear1);
+            gear2     = WeaponManager.NetworkIdOf(loadout.gear2);
+            gear3     = WeaponManager.NetworkIdOf(loadout.gear3);
+        }
     }
 }
