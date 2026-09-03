@@ -281,6 +281,22 @@ namespace Ironfront.Net.Unity.Server
             NetServerActor actor = player.Actor;
             if (actor == null) return false;
 
+            // A LIVING body has nothing to respawn from, and moving it would be a teleport the
+            // player did not ask for. The respawn gate cannot express this: it times a DEATH, so
+            // for a body that has never died it reports the cooldown as long elapsed and says
+            // yes. Both production callers already arrive with a dead body -- the ordinary death
+            // path, and ServerPlayer.KillForFallingOutOfTheWorld, which sets IsAlive false on the
+            // line above its call -- so this refuses nothing that used to be granted.
+            //
+            // What it does refuse is a DUPLICATE first-deploy request that crosses its own
+            // placement in flight. The client re-sends that request until it observes the body
+            // placed (NetClientLocalCombatDriver.ResendDeployUntilPlaced, ledger X-86), and
+            // ISpawnRequestHandler.OnSpawnRequested routes every request after the first one here
+            // -- so without this line the repair for a DROPPED request would have introduced a
+            // rarer bug in its place: a player yanked back to a spawn point a moment after
+            // deploying. The two halves are one fix and neither is correct alone.
+            if (actor.IsAlive) return false;
+
             ClientSession session = player.Session;
             float now = _loop.CurrentTick / (float)ProtocolConstants.SIM_TICK_RATE;
 
