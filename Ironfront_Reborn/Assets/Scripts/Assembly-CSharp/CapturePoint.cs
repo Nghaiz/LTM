@@ -506,6 +506,12 @@ public class CapturePoint : SpawnPoint
 		return base.GetSpawnPosition();
 	}
 
+	/// <summary>
+	/// Picks a contested-safe child, ground-snapped. Same defect as X-81's container-branch
+	/// fix, one field over: this used to return <c>contestedSpawnpointContainer.GetChild(...)
+	/// .position</c> verbatim. Shares <see cref="SpawnPoint.SnappedContainerChildPosition"/>
+	/// rather than a second snap/warn implementation.
+	/// </summary>
 	private Vector3 GetSafeSpawnPosition()
 	{
 		int childCount = contestedSpawnpointContainer.childCount;
@@ -519,9 +525,9 @@ public class CapturePoint : SpawnPoint
 			int num2 = (num + i) % childCount;
 			if (contestedSpawnpointIsSafe[num2])
 			{
-				return contestedSpawnpointContainer.GetChild(num2).position;
+				return SnappedContainerChildPosition(contestedSpawnpointContainer.GetChild(num2));
 			}
 		}
-		return contestedSpawnpointContainer.GetChild(num).position;
+		return SnappedContainerChildPosition(contestedSpawnpointContainer.GetChild(num));
 	}
 }

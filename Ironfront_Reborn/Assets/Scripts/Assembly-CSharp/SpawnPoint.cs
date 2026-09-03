@@ -86,15 +86,24 @@ public class SpawnPoint : MonoBehaviour
 		return authored;
 	}
 
-	/// <summary>Container children already reported for their ground-snap outcome, so each warns once.</summary>
-	private static readonly HashSet<string> _warnedContainerChildren = new HashSet<string>();
+	/// <summary>
+	/// Container children already reported for their ground-snap outcome, so each warns once.
+	/// </summary>
+	/// <remarks>
+	/// Keyed by <see cref="UnityEngine.Object.GetInstanceID"/> rather than by name: this set is
+	/// shared by every container field a subclass owns (<see cref="spawnpointContainer"/> here,
+	/// <c>CapturePoint.contestedSpawnpointContainer</c> in the subclass), and a name string
+	/// cannot tell two different containers' identically-named children apart. An instance ID
+	/// always can.
+	/// </remarks>
+	protected static readonly HashSet<int> _warnedContainerChildren = new HashSet<int>();
 
 	/// <summary>
 	/// How far a container-authored child may sit from its ground-snapped position before the
 	/// correction is worth a warning. Small mesh irregularities correct by centimetres; this
 	/// keeps those silent while still catching an authored point that is metres off the ground.
 	/// </summary>
-	private const float ContainerSnapWarnDistanceMetres = 1f;
+	protected const float ContainerSnapWarnDistanceMetres = 1f;
 
 	public Vector3 RandomSpawnPointPosition()
 	{
@@ -115,18 +124,22 @@ public class SpawnPoint : MonoBehaviour
 	/// re-implementing the raycast rule <see cref="RandomPosition"/> already applies to the
 	/// jittered path.
 	/// </summary>
-	private Vector3 SnappedContainerChildPosition(Transform child)
+	/// <remarks>
+	/// <c>protected</c>, not <c>private</c>: <c>CapturePoint.GetSafeSpawnPosition()</c> read its
+	/// own <c>contestedSpawnpointContainer</c> child with the identical unsnapped pattern -- the
+	/// same defect, one container field over -- and shares this method rather than a second copy
+	/// of the snap/warn rule.
+	/// </remarks>
+	protected Vector3 SnappedContainerChildPosition(Transform child)
 	{
 		Vector3 authored = child.position;
 
 		if (!Ironfront.Net.Unity.GroundSnap.TrySnap(authored, out Vector3 grounded))
 		{
 			// Same fallback RandomPosition() uses on a miss: hand back the authored point,
-			// loudly, rather than a silently unsnapped placement. Keyed per-child (not per
-			// SpawnPoint name) because one container holds several independently authored
-			// children, and warned once each for the same "sixty times a second is the same
-			// as never" reason RandomPosition() documents.
-			if (_warnedContainerChildren.Add(name + "/" + child.name + "#miss"))
+			// loudly, rather than a silently unsnapped placement. Warned once per child for the
+			// same "sixty times a second is the same as never" reason RandomPosition() documents.
+			if (_warnedContainerChildren.Add(child.GetInstanceID()))
 			{
 				Debug.LogWarning(
 					$"[spawn] '{name}' child '{child.name}' at {authored} found no ground "
@@ -141,7 +154,7 @@ public class SpawnPoint : MonoBehaviour
 
 		float correction = Vector3.Distance(authored, grounded);
 		if (correction > ContainerSnapWarnDistanceMetres
-			&& _warnedContainerChildren.Add(name + "/" + child.name + "#corrected"))
+			&& _warnedContainerChildren.Add(child.GetInstanceID()))
 		{
 			Debug.LogWarning(
 				$"[spawn] '{name}' child '{child.name}' authored at {authored} was "
