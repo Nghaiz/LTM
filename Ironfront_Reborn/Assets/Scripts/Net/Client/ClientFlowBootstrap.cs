@@ -327,8 +327,22 @@ namespace Ironfront.Net.Unity.Client
             _loadingMatch = true;
             _loadingScene = scene;
 
-            // The one line in the codebase that KNOWS this process is a client: the server has
-            // accepted, the transport is offered, and the map is about to load. Every map scene
+            // The one line on the SHIPPED ROUTE INTO A MATCH that knows this process is a client:
+            // the server has accepted, the transport is offered, and the map is about to load.
+            // Both the matchmade join and MasterSession.ConnectDirect funnel through here --
+            // OnGameServerConnected has exactly one raise site and this class is its only
+            // subscriber -- so no shipped join reaches a map scene without passing this.
+            //
+            // NOT "the one line in the codebase", which is what this comment first claimed and is
+            // false. NetClientBootstrap ships `_connectOnStart: 1` with `127.0.0.1:27015`
+            // serialized into Island.unity and Dustbowl.unity, so a process that STARTS in a map
+            // scene rather than loading one dials a server without ever coming through here. That
+            // is an Editor Play session, and a headless one cannot exist
+            // (DedicatedServerSceneBootstrap declares any non-lane-B batch process a dedicated
+            // server, and NetClientBootstrap then refuses to dial). The cover for that shape is
+            // IRONFRONT_ROLE, which play-lan.ps1, run-soak.ps1 and playtest-local.ps1 all set; a
+            // bare Editor Play on a map scene is still uncovered and is a known gap, not a
+            // guarantee this line makes. Every map scene
             // carries an active NetServer AND an active NetClient, so a process that reaches here
             // without saying so is a listen server -- NetServerBootstrap wins the Awake race,
             // binds UDP 27015 against the server it just joined, and NetClientPresenterGuard
