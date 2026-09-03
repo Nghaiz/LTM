@@ -131,6 +131,8 @@ namespace Ironfront.Net.Unity.Client
         {
             if (!_view.Apply(in message)) return;
 
+            RecomputeCapturePointCounts();
+
             ICapturePointDirectory points = NetSceneBindings.CapturePoints;
             if (points == null) return;
 
@@ -155,6 +157,34 @@ namespace Ironfront.Net.Unity.Client
 
             points.ApplyAuthoritativeOwner(
                 message.PointId, spawnOwner, control, message.IsContested);
+        }
+
+        /// <summary>
+        /// Tallies <see cref="_view"/>'s known points by owner and pushes the two counts to the
+        /// HUD. The client-side twin of <c>MatchStateMachine.OwnedPointCount</c> -- ownership is
+        /// already fully replicated per point (this method runs off the same message
+        /// <see cref="OnCapturePoint"/> just latched), so summing it here needs no new wire
+        /// field and cannot disagree with the server's own tally.
+        /// </summary>
+        /// <remarks>
+        /// Neutral (<see cref="TeamId.None"/>) and never-reported points count toward neither
+        /// team, the same as the server's <c>OwnedPointCount</c>.
+        /// </remarks>
+        private void RecomputeCapturePointCounts()
+        {
+            int blue = 0;
+            int red = 0;
+
+            for (int i = 0; i < _view.Capacity; i++)
+            {
+                if (!_view.IsKnown(i)) continue;
+
+                byte owner = _view.OwningTeam(i);
+                if (owner == TeamId.Team0) blue++;
+                else if (owner == TeamId.Team1) red++;
+            }
+
+            NetClientBindings.Objectives?.SetCapturePointCounts(blue, red);
         }
 
         private void Update()

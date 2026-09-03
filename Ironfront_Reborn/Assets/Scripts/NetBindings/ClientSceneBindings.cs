@@ -124,6 +124,10 @@ namespace Ironfront.Net.Unity.Bindings
                 phase, score0, score1, secondsRemaining, humanPlayerCount, victoryPoints);
 
         /// <inheritdoc/>
+        public void SetCapturePointCounts(int blueCount, int redCount)
+            => ScoreUi.SetCapturePointCounts(blueCount, redCount);
+
+        /// <inheritdoc/>
         /// <remarks>
         /// <b>Every label the scoreboard owns, in one place.</b> The netcode used to name six of
         /// them at its own call site; the standing rule is that dimming only SOME is worse than
