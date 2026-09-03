@@ -2,6 +2,7 @@
   "name": "scoreboard-witness",
   "steps": [
     {
+      "respawn": true,
       "seconds": 5.0,
       "yawDegrees": 90,
       "moveX": 1.0

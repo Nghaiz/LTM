@@ -1,7 +1,7 @@
 {
   "name": "turret-driver",
   "steps": [
-    { "seconds": 5.0, "yawDegrees": 0 },
+    { "respawn": true, "seconds": 5.0, "yawDegrees": 0 },
     { "checkpoint": "spawned", "seconds": 2.0, "yawDegrees": 0 },
     { "checkpoint": "walking-to-vehicle", "seconds": 40.0,
       "approachVehicle": true, "vehicleSearchMetres": 200.0,

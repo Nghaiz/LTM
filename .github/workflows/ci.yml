@@ -154,6 +154,23 @@ jobs:
         shell: pwsh
         run: pwsh tools/check-diagnostics-exclusion.ps1
 
+      # plans/debt-ledger.md derives its roll-up from its own rows, and says so in the file:
+      # "--check exits non-zero the moment this table disagrees with the rows, so the next drift
+      # is a failing command rather than a careful reading." That promise was never wired to
+      # anything. The script shipped, no job ran it, and on 2026-09-03 the table was found one
+      # row stale -- group X reading 6 open / 21 closed against the rows' 5 / 22 -- because a
+      # merged PR closed a row and left the total behind. Nothing went red; the file simply
+      # stopped being true, which is the exact failure the tool was written to prevent.
+      #
+      # HARD for the same reason as the four above: no other step in this pipeline reads that
+      # file, so a stale roll-up is invisible everywhere else. It is cheap -- one markdown parse.
+      #
+      # ubuntu only: this reads a UTF-8 markdown file and resolves nothing OS-specific, so the
+      # windows leg would run the identical check against the identical bytes.
+      - name: Check the debt-ledger roll-up still matches its own rows
+        if: matrix.os == 'ubuntu-latest'
+        run: python3 tools/recount_debt_ledger.py --check
+
       # if: always() — the results are most valuable exactly when the previous step failed.
       - name: Upload test results and coverage
         if: always()

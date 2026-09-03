@@ -19,7 +19,7 @@
     "shown a respawn landing. 'respawned' is the first capture after it."
   ],
   "steps": [
-    { "seconds": 5.0, "yawDegrees": 180 },
+    { "respawn": true, "seconds": 5.0, "yawDegrees": 180 },
     { "checkpoint": "spawned", "seconds": 3.0, "aimAtPlayer": "DRIVER" },
     { "checkpoint": "withdrawing", "seconds": 10.0, "aimAtPlayer": "DRIVER" },
     { "checkpoint": "approaching", "seconds": 12.0, "aimAtPlayer": "DRIVER" },

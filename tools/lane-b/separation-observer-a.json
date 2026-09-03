@@ -16,7 +16,7 @@
     "whom, which is the ambiguity check 1 spent three runs on."
   ],
   "steps": [
-    { "seconds": 5.0, "yawDegrees": 90 },
+    { "respawn": true, "seconds": 5.0, "yawDegrees": 90 },
     { "checkpoint": "spawned", "seconds": 3.0, "yawDegrees": 90 },
     { "checkpoint": "withdrawing", "seconds": 10.0,
       "yawDegrees": 90, "moveZ": 1.0, "sprint": true },

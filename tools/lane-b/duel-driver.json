@@ -1,7 +1,7 @@
 {
   "name": "duel-driver",
   "steps": [
-    { "seconds": 5.0, "yawDegrees": 0 },
+    { "respawn": true, "seconds": 5.0, "yawDegrees": 0 },
     { "checkpoint": "spawned", "seconds": 2.0, "yawDegrees": 0 },
     { "checkpoint": "approach", "seconds": 150.0,
       "aimAtPlayer": "OBS-A", "approach": true, "holdDistanceMeters": 6.0, "sprint": true,

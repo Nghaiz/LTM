@@ -2,6 +2,7 @@
   "name": "grenade-witness",
   "steps": [
     {
+      "respawn": true,
       "seconds": 5.0,
       "yawDegrees": 180,
       "moveX": 1.0

@@ -94,6 +94,31 @@ namespace Ironfront.Net.Unity.Client
             => _awaitingFirstDeploy || _state.CanRequestRespawn(nowSeconds);
 
         /// <summary>
+        /// Whether this client still owes a deploy: it has never placed a body, or it is dead.
+        /// </summary>
+        /// <remarks>
+        /// <b>Awaiting the first deploy is not being alive, whatever the predicted state says.</b>
+        /// Both gates below used to read <c>!_state.IsAlive</c> alone, and that deadlocked every
+        /// join from the moment a join stopped placing the body (ledger X-86, first bad commit
+        /// b482d4c, pinned by bisect against 9c8d461). The server parks the claimed body at
+        /// <c>Health 0 / IsAlive false</c> and waits for C_SPAWN_REQUEST -- but it parks it
+        /// WITHOUT a death, so no S_ACTOR_DEATH is ever sent and <c>ClientCombatState</c> keeps
+        /// its opening `alive, health 100`. Measured on the driver at `spawned`:
+        /// <c>combat.alive true</c>, <c>health 100</c>, <c>deathObserved false</c>, while the
+        /// server held the same body parked. So the deploy screen hid itself, RequestRespawn's
+        /// own gate refused, the request was never sent, and the body sat where Instantiate left
+        /// it -- near the world origin, falling, which is the 963 m reading in
+        /// artifacts/lane-b/b7-regrade-02 against 10.08 m one commit earlier.
+        /// <para>
+        /// Deliberately NOT fixed by making the server send a death on join: nobody died, a
+        /// synthetic one would reach the killfeed, the scoreboard and every death presenter, and
+        /// <c>deathObserved</c> is a graded lane-B signal. The client already tracks the state
+        /// this needs.
+        /// </para>
+        /// </remarks>
+        private bool OwesDeploy => _awaitingFirstDeploy || !_state.IsAlive;
+
+        /// <summary>
         /// Set when a death names a killer the screen has not shown yet.
         /// </summary>
         /// <remarks>
@@ -310,11 +335,27 @@ namespace Ironfront.Net.Unity.Client
             // condition leaves the button's press unconsumed for the next frame -- which is the
             // harmless direction. The button is only interactable while CanRequestRespawn is
             // true (see TickDeploy), so it cannot post an edge the gate would refuse.
-            if (!_state.IsAlive && CanDeployNow(Time.time)
+            // _client.IsConnected is part of the GATE, not just of RequestRespawn's own guard,
+            // and the ordering is the whole point: this file's own remark below records that
+            // ScriptedRespawnPressed CONSUMES its edge when read. A press read while the
+            // connection is still coming up is therefore spent forever -- the programme declares
+            // one edge per step and there is no second one -- so the client never deploys even
+            // though the grant survived. Observed as the failure MOVING between clients across
+            // two runs (observer-b at 968.53 in fix-verify-02, observer-a at 950.03 in
+            // fix-verify-03) while the other two grounded, which is the signature of a race
+            // rather than of a per-client defect. Ledger X-86.
+            if (OwesDeploy && CanDeployNow(Time.time)
+                && _client != null && _client.IsConnected
                 && (Input.GetKeyDown(_respawnKey) || ScriptedRespawnPressed() || DeployPressed()))
             {
-                RequestRespawn();
-                _awaitingFirstDeploy = false;
+                // Only retire the grant once the request has actually gone out. RequestRespawn
+                // returns early -- silently, and correctly -- when the connection is not up yet,
+                // and this line used to clear the flag anyway: a client whose deploy edge landed
+                // one frame before its connection completed lost the send AND its only retry, so
+                // it never deployed at all and its body stayed where Instantiate left it. That is
+                // 1 of 3 clients in artifacts/lane-b/fix-verify-02 (observer-b, spawned Y 968.53
+                // against the other two at 9.14 and 24.95). Ledger X-86.
+                if (RequestRespawn()) _awaitingFirstDeploy = false;
             }
         }
 
@@ -435,9 +476,10 @@ namespace Ironfront.Net.Unity.Client
         /// early request as a normal outcome rather than as corruption, so a request that races
         /// the clock by a frame costs nothing.
         /// </remarks>
-        private void RequestRespawn()
+        /// <returns>True when the request was framed and handed to the transport.</returns>
+        private bool RequestRespawn()
         {
-            if (_client == null || !_client.IsConnected) return;
+            if (_client == null || !_client.IsConnected) return false;
 
             // V8, ledger X-11: the body used to be empty. It now carries the loadout THIS
             // client is about to render -- read from the same LoadoutUi selection GetLoadout()
@@ -450,18 +492,20 @@ namespace Ironfront.Net.Unity.Client
                 out byte primary, out byte secondary, out byte gear1, out byte gear2, out byte gear3);
 
             var spawnRequest = new SpawnRequestMessage(primary, secondary, gear1, gear2, gear3);
-            if (spawnRequest.Write(_spawnRequestBody) < 0) return;
+            if (spawnRequest.Write(_spawnRequestBody) < 0) return false;
 
             var writer = new PayloadFrameWriter(_payload, ChannelId.ReliableOrdered);
 
             if (!writer.WriteMessage(
                     ClientMessageType.SpawnRequest,
-                    new System.ReadOnlySpan<byte>(_spawnRequestBody))) return;
-            if (!writer.TryFinish(out int total)) return;
+                    new System.ReadOnlySpan<byte>(_spawnRequestBody))) return false;
+            if (!writer.TryFinish(out int total)) return false;
 
             _client.Send(
                 ChannelId.ReliableOrdered, new System.ReadOnlySpan<byte>(_payload, 0, total),
                 reliable: true);
+
+            return true;
         }
 
         /// <summary>
@@ -620,7 +664,7 @@ namespace Ironfront.Net.Unity.Client
 
             if (!_drawDeathScreen) return;
 
-            if (_state.IsAlive)
+            if (!OwesDeploy)
             {
                 if (!_deployShown) return;
 
