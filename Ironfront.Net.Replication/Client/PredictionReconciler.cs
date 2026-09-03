@@ -108,6 +108,41 @@ namespace Ironfront.Net.Replication.Client
         /// </summary>
         public const int Capacity = ProtocolConstants.SIM_TICK_RATE;
 
+        /// <summary>
+        /// Above this error, authority is adopted with NO replay and the caller is told to
+        /// <see cref="ReconcileResult.Resynchronised"/> — which the Unity side turns into a
+        /// teleport rather than a swept move.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Without a bound, a large error can never converge.</b> A
+        /// <see cref="ReconcileResult.Corrected"/> result is applied by
+        /// <c>NetMovementAgent.ApplyCorrectedState(hardSnap: false)</c>, which is a
+        /// <c>CharacterController.Move</c> — a SWEPT motion that collision stops at the first
+        /// thing in the way. Sweeping a several-hundred-metre delta therefore does not move the
+        /// body to authority; it wedges it against geometry, the same error is computed again on
+        /// the very next snapshot, and the body is shoved every tick for as long as the
+        /// disagreement lasts. That is the juddering an unplaced body shows.
+        /// </para>
+        /// <para>
+        /// <b>This is not hypothetical, and the distance is not small.</b> The player prefab is
+        /// parked near <c>(0, 1000, 0)</c> until the server places it (the same authored spot
+        /// <c>ServerTickLoop</c>'s announce guard names for X-17), so a client whose body has not
+        /// been placed yet sits ~975 m from authority — three orders of magnitude past anything
+        /// a replay can fix.
+        /// </para>
+        /// <para>
+        /// <b>Why this value.</b> The replay can only cover <see cref="Capacity"/> ticks, one
+        /// second at <see cref="ProtocolConstants.SIM_TICK_RATE"/>. The worst divergence that
+        /// second can legitimately hold is both simulations running flat out in OPPOSITE
+        /// directions — <c>2 x <see cref="MovementCore.RunSpeed"/></c>, 13 m — and the factor of
+        /// two on top covers the vertical axis, where a jump and a fall diverge faster than a
+        /// run. Anything beyond that is not a mispredict the ring can replay away, so replaying
+        /// it is the wrong operation regardless of what caused it.
+        /// </para>
+        /// </remarks>
+        public const float ResyncDistanceMetres = 4f * MovementCore.RunSpeed;
+
         private readonly MoveInput[] _inputs = new MoveInput[Capacity];
         private readonly uint[] _ticks = new uint[Capacity];
 
@@ -234,6 +269,17 @@ namespace Ironfront.Net.Replication.Client
                 return ReconcileResult.Agreed;
             }
 
+            // BEFORE the replay path, not after it: past ResyncDistanceMetres the replay is not
+            // merely unnecessary, it is the wrong operation -- see that constant's remark. The
+            // caller applies this result as a teleport, which is the only thing that moves a body
+            // the width of the map.
+            if (BeyondResyncDistance(predictedThen, authoritative.Position))
+            {
+                predicted = authoritative;
+                ResyncCount++;
+                return ReconcileResult.Resynchronised;
+            }
+
             if (!TryFindSlotAfter(lastProcessedInputTick, out long firstUnacked))
             {
                 predicted = authoritative;
@@ -293,6 +339,21 @@ namespace Ironfront.Net.Replication.Client
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Whether the two positions are further apart than a replay could ever close. See
+        /// <see cref="ResyncDistanceMetres"/>.
+        /// </summary>
+        private static bool BeyondResyncDistance(in Vec3 a, in Vec3 b)
+        {
+            float dx = a.X - b.X;
+            float dy = a.Y - b.Y;
+            float dz = a.Z - b.Z;
+
+            // Squared, for the same reason WithinTolerance is: this runs once per snapshot.
+            return dx * dx + dy * dy + dz * dz
+                   > ResyncDistanceMetres * ResyncDistanceMetres;
         }
 
         private static bool WithinTolerance(in Vec3 a, in Vec3 b)

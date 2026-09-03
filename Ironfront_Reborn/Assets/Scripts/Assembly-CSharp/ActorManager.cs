@@ -134,6 +134,29 @@ public class ActorManager : MonoBehaviour
 		// spawnPoints stays: it is a scan of the loaded scene and has nothing to find from Awake.
 		actors = new List<Actor>();
 		spawnPoints = UnityEngine.Object.FindObjectsOfType<SpawnPoint>();
+
+		// A CLIENT is handed its bots by the server and must not manufacture its own.
+		//
+		// GameManager.StartGame's own remark -- "bots, pathfinding, cover and scoring are below
+		// the line and still run" -- was written for the DEDICATED SERVER, the only non-rendering
+		// role that existed when phase-00 criterion 3 was set. The client role arrived later, and
+		// it inherited a line that is wrong for it: ServerTickLoop announces every server-side
+		// actor to every viewer ("bots are unaffected: AvailableForPlayers is set only by the
+		// slot pool"), and RemoteActorRegistry gives each announced actor a pooled proxy. So a
+		// client that also ran FillEmptySlotsWithAI held TWO populations at once -- the server's
+		// bots as proxies, plus team0Bots + team1Bots locally-simulated Actors the server has
+		// never heard of, respawned forever by SpawnWave. The local set cannot damage anyone
+		// (Actor.Damage's ownsHealth guard, ActorManager's isClient explosion guard) but it does
+		// collide, shove and shoot at the player, which is a world that behaves like nothing the
+		// server is reporting.
+		//
+		// Offline and server are untouched: NetContext.Role is Offline until something sets it,
+		// so the original single-player game keeps its bots, and so does the headless server.
+		if (Ironfront.Net.Unity.NetContext.IsClient)
+		{
+			return;
+		}
+
 		FillEmptySlotsWithAI();
 		InvokeRepeating("SpawnWave", 1f, spawnTime);
 	}

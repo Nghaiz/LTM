@@ -346,7 +346,8 @@ namespace Ironfront.Net.Unity.Client
             // rather than of a per-client defect. Ledger X-86.
             if (OwesDeploy && CanDeployNow(Time.time)
                 && _client != null && _client.IsConnected
-                && (Input.GetKeyDown(_respawnKey) || ScriptedRespawnPressed() || DeployPressed()))
+                && (Input.GetKeyDown(_respawnKey) || ScriptedRespawnPressed()
+                    || DeployPressed() || LoadoutDeployPressed()))
             {
                 // Only retire the grant once the request has actually gone out. RequestRespawn
                 // returns early -- silently, and correctly -- when the connection is not up yet,
@@ -664,7 +665,17 @@ namespace Ironfront.Net.Unity.Client
 
             if (!_drawDeathScreen) return;
 
-            if (!OwesDeploy)
+            // IsAlive, NOT OwesDeploy. This panel is the DEATH screen -- its title is authored in
+            // the scene as "YOU WERE KILLED" and MatchHud writes a killer name under it -- so
+            // showing it whenever a deploy is owed showed it on the FIRST spawn too, before any
+            // death, with _lastKillerActorId still at its 0 default. Every player's first sight
+            // of the game was "YOU WERE KILLED / Killed by actor 0" and nobody had been killed.
+            //
+            // The deadlock that made OwesDeploy necessary is fixed where it belongs: the SEND
+            // gate above still uses OwesDeploy, and the first spawn's request now comes from the
+            // loadout screen's own Deploy (LoadoutDeployPressed) -- the screen the player is
+            // actually looking at then, and the one that chose the loadout the request carries.
+            if (_state.IsAlive)
             {
                 if (!_deployShown) return;
 
@@ -707,6 +718,24 @@ namespace Ironfront.Net.Unity.Client
         {
             IMatchHud hud = NetClientBindings.MatchHud;
             return hud != null && hud.ConsumeDeployPressed();
+        }
+
+        /// <summary>
+        /// Whether the LOADOUT screen's Deploy was pressed, clearing the edge. The first spawn's
+        /// button, as distinct from the death screen's.
+        /// </summary>
+        /// <remarks>
+        /// The death screen cannot serve the first spawn: that panel is authored with a "YOU WERE
+        /// KILLED" title and a killer name, and <see cref="_lastKillerActorId"/> is 0 until a
+        /// <c>DeathMessage</c> sets it — so driving it off <see cref="OwesDeploy"/> greeted every
+        /// player with "Killed by actor 0" before anything had happened. The screen is back on
+        /// <c>IsAlive</c> (see <c>SyncMatchHud</c>) and the first deploy comes from here instead,
+        /// which is also the screen where the loadout this request carries was chosen.
+        /// </remarks>
+        private static bool LoadoutDeployPressed()
+        {
+            ILocalPlayerRig local = NetClientBindings.LocalPlayer;
+            return local.Exists && local.ConsumeDeployIntent();
         }
     }
 }

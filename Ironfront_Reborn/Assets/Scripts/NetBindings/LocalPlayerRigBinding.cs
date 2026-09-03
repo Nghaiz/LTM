@@ -95,6 +95,15 @@ namespace Ironfront.Net.Unity.Bindings
         }
 
         /// <inheritdoc/>
+        public bool ConsumeDeployIntent()
+        {
+            FpsActorController local = FpsActorController.instance;
+            if (local == null) return false;
+
+            return local.ConsumeLoadoutDeployPressed();
+        }
+
+        /// <inheritdoc/>
         public bool IsDriving(IGameplayActorPresence actor)
         {
             if (actor == null) return false;
