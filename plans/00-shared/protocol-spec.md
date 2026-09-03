@@ -1,6 +1,6 @@
 # Protocol Specification — Ironfront Reborn
 
-**Version: 7.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 7`
+**Version: 8.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 8`
 
 > This is the contract every side of the wire is written against. Every offset, every enum value
 > and every quantization constant in this document is **mandatory**. Client and server may not
@@ -47,7 +47,7 @@
 public static class ProtocolConstants
 {
     public const ushort PROTOCOL_ID       = 0x4946;  // 'IF' — filters out junk packets
-    public const byte   PROTOCOL_VERSION  = 7;
+    public const byte   PROTOCOL_VERSION  = 8;
 
     public const int    MTU_SAFE          = 1200;    // safe through any router
     public const int    GSP_HEADER_SIZE   = 16;
@@ -277,7 +277,7 @@ repeat messageCount times:
 | `0x20` | `C_INPUT` | 3 (unreliable-seq) | Input frames, see § 4.2 |
 | `0x21` | `C_VEHICLE_INPUT` | 3 (unreliable-seq) | Vehicle axes + turret aim while seated, see § 4.10 |
 | `0x22` | `C_LOADOUT_SELECT` | 2 (reliable-ord) | Weapon selection before spawning |
-| `0x23` | `C_SPAWN_REQUEST` | 2 | Requests a respawn at a spawn point |
+| `0x23` | `C_SPAWN_REQUEST` | 2 | Deploys or respawns, carrying the chosen loadout and spawn point, see § 4.14 |
 | `0x24` | `C_CHAT` | 2 | In-match chat |
 | `0x25` | `C_PING` | 0 (unreliable) | RTT measurement, carries a client timestamp |
 | `0x26` | `C_SEAT_REQUEST` | 2 | Enter/exit a vehicle seat, see § 4.10 |
@@ -1066,6 +1066,39 @@ rendering the id; a client keying on the name table would make a player appear a
 
 ---
 
+### 4.14. `C_SPAWN_REQUEST` (0x23) — byte layout
+
+Empty from the freeze until V8: the router counted the opcode and discarded whatever the body held,
+because deploying and respawning carried no information the server did not already decide for
+itself. Ledger **X-11**. Given a shape now that it carries one:
+
+```
+u8   primary            weapon network id, 0 = slot left empty
+u8   secondary
+u8   gear1
+u8   gear2
+u8   gear3
+u8   spawnPointIndex    index into the server's spawn-point list, 0xFF = no preference
+```
+
+6 bytes. **Drives both a first deploy and every later respawn** — a join no longer places the body
+(§ 3, `ServerTickLoop.OnClientConnected`), so the same message the client already sent on death now
+also arms the very first life, gated server-side by whether this connection has deployed before
+rather than by anything in the message's own shape.
+
+**Weapon slots are network ids, never `WeaponEntry` references or names.** The same boundary
+`ILoadoutDirectory` is built around (§ 4.8's own value space): the game's loadout types compile into
+`Assembly-CSharp`, unreachable from the wire. 0 in a slot is "left empty," matching `WeaponManager`'s
+own reservation of 0 for "no/unknown weapon" — never "arm slot 0 with whatever id 0 resolves to."
+
+**`spawnPointIndex` is validated against the server's own directory, not trusted.** A client naming
+an index outside `0 .. Count-1`, or one `IsEligible` refuses for that actor's team, is treated
+exactly like `0xFF` — the server falls back to its own random-among-eligible draw. `0xFF` is what
+every sender writes today; the field is real and load-bearing the moment a sender starts writing
+something else, and no further wire change is needed when one does.
+
+---
+
 ## 5. Channels
 
 Reliability isn't applied to the whole connection but per channel. Four channels in v1:
@@ -1544,6 +1577,7 @@ Added at v3.0.0:
 | **7.0.0** | 2026-09-02 | the client track | **The scoreboard's numbers reach the client.** New opcode `S_PLAYER_SCORES` (0x51, § 4.13): `u8 playerCount`, then per row `u8 actorId`, `u16 kills`, `u16 deaths`, `u8 team` — 6 B a row, worst case `1 + 64 × 6 = 385 B`. `MatchScoreTally` has counted these since P6 and no message carried them; this is that message, sent on change and coalesced to one per tick. **Not bolted onto `S_PLAYER_LIST`**, whose worst case leaves 28 bytes inside `MAX_CHANNEL_PAYLOAD` while the smallest useful widening costs 64 — § 4.11's "names only" sentence is amended to say so and to keep its `S_MATCH_STATE` reasoning, which is untouched: the team score does not move. The `u8 team` duplicates § 4.3's actor-entry field on purpose, because `InterestManager` sheds actors and a client therefore knows sides only for what it can see (§ 4.13). Phase **P18**; the scoreboard is [`team-multiplayer-contracts.md`](team-multiplayer-contracts.md) § 6's assembly seal applied to a HUD element. **v6 had shipped when this landed** (it is live in `ProtocolConstants.cs` and in the row above), so this is 6 → 7 on its own rather than an amendment to the v6 row — the check P18 § 3.1 demands, answered | **Yes** — a new opcode, on the **3.0.0** row's precedent, where six of them were recorded as a wire change. Milder than any bump before it: a v6 client receiving 0x51 counts it in `UnknownMessages` and drops it, so nothing decodes wrongly. It is still a bump, because the alternative is a fleet where "which opcodes does the other end know" has no answer on the wire, and because the freeze gate's own precedent says new opcodes are a wire change | (this PR) |
 
 | **7.0.1** | 2026-09-03 | the client track | **`ErrorCode.InvalidDisplayName` = 1005, and a blank display name stops being a credential problem.** `AuthService.Register` refused `IsNullOrWhiteSpace(displayName)` and reported it as `WrongCredentials` (1000), so the register screen — whose own field is labelled *"Display name (optional)"* and whose docstring promised *"Left blank, the master applies its own rule"* — answered **every** account creation with "Wrong username or password." on a form that has no credentials yet. Account creation failed 100% of the time. Blank now falls back to the username (the promised rule, written down at last); a name that was supplied and is over 32 characters gets 1005, on the `TeamsWouldUnbalance` precedent that a refusal the player can act on deserves its own code. **Also back-fills § 13's missing `2005` row**, added to the enum by P16 and never to this table. Found by playing the game, not by a gate: every one of the 2,103 tests passed a display name | **No** — no byte moved. `errorCode` is already a `u16` in `REGISTER_RESPONSE`; a value added to its space is invisible to a decoder that never receives it, and an older client renders an unrecognised code as its number rather than misreading it (`MasterErrorText`) | (this PR) |
+| **8.0.0** | 2026-09-03 | the client track | **`C_SPAWN_REQUEST` (0x23) grows a body — see § 4.14.** Empty since the freeze; now `u8` × 5 loadout slots + `u8 spawnPointIndex` = 6 bytes. A join no longer places the body (`ServerTickLoop.OnClientConnected`), so this message now drives the first deploy as well as every later respawn, arming the body from the loadout the client actually chose (`ServerCombatBridge.PlaceAtSpawn`) instead of the server's own `controller.GetLoadout()` draw. Ledger **X-11** | **Yes** — an empty body decoded by the V8 parser's fixed 6-byte read fails `TryParse` outright; a v7 client's spawn/respawn requests would all be counted as malformed rather than silently misread | (this PR) |
 
 > Every change after the freeze must add a row to this table and clear the gate below.
 > **Bump `PROTOCOL_VERSION` only when the bytes on the wire change** — a client and server with

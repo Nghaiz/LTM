@@ -200,6 +200,78 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
             Assert.False(ExplosionMessage.TryParse(truncated, out _));
         }
 
+        // ------------------------------------------------------------------ C_SPAWN_REQUEST
+
+        [Fact]
+        public void SpawnRequestRoundTripsEveryField()
+        {
+            var original = new SpawnRequestMessage(
+                primary: 1, secondary: 7, gear1: 15, gear2: 0, gear3: 3, spawnPointIndex: 4);
+
+            Span<byte> buffer = stackalloc byte[SpawnRequestMessage.Size];
+            Assert.Equal(SpawnRequestMessage.Size, original.Write(buffer));
+            Assert.True(SpawnRequestMessage.TryParse(buffer, out SpawnRequestMessage parsed));
+
+            Assert.Equal(original.Primary, parsed.Primary);
+            Assert.Equal(original.Secondary, parsed.Secondary);
+            Assert.Equal(original.Gear1, parsed.Gear1);
+            Assert.Equal(original.Gear2, parsed.Gear2);
+            Assert.Equal(original.Gear3, parsed.Gear3);
+            Assert.Equal(original.SpawnPointIndex, parsed.SpawnPointIndex);
+        }
+
+        [Fact]
+        public void SpawnRequestIsSixBytes()
+        {
+            Assert.Equal(6, SpawnRequestMessage.Size);
+        }
+
+        [Fact]
+        public void SpawnRequestDefaultsToNoSpawnPointPreference()
+        {
+            // The constructor's default parameter is what every sender writes today -- the
+            // minimap-driven spawn choice is not yet wired across the network (see the type's
+            // own remark) -- so this is the shape every real C_SPAWN_REQUEST currently has.
+            var message = new SpawnRequestMessage(primary: 1, secondary: 0, gear1: 0, gear2: 0, gear3: 0);
+
+            Assert.Equal(SpawnRequestMessage.NoSpawnPointPreference, message.SpawnPointIndex);
+        }
+
+        [Fact]
+        public void SpawnRequestZeroSlotMeansEmptyNotWeaponZero()
+        {
+            // 0 is WeaponManager's reserved "no/unknown weapon" id (protocol-spec.md § 4.8), so a
+            // slot the client left unset must round-trip as 0, not silently substitute a real id.
+            var message = new SpawnRequestMessage(primary: 1, secondary: 0, gear1: 0, gear2: 0, gear3: 0);
+
+            Span<byte> buffer = stackalloc byte[SpawnRequestMessage.Size];
+            message.Write(buffer);
+            Assert.True(SpawnRequestMessage.TryParse(buffer, out SpawnRequestMessage parsed));
+
+            Assert.Equal(0, parsed.Secondary);
+            Assert.Equal(0, parsed.Gear1);
+            Assert.Equal(0, parsed.Gear2);
+            Assert.Equal(0, parsed.Gear3);
+        }
+
+        [Fact]
+        public void SpawnRequestRefusesATooSmallBuffer()
+        {
+            var message = new SpawnRequestMessage(1, 0, 0, 0, 0);
+            Span<byte> tooSmall = stackalloc byte[SpawnRequestMessage.Size - 1];
+
+            Assert.Equal(-1, message.Write(tooSmall));
+        }
+
+        [Fact]
+        public void SpawnRequestRefusesATruncatedPacket()
+        {
+            // The v7 shape this replaces: an EMPTY body. A v7 client talking to this v8 parser
+            // must be counted as malformed rather than silently accepted -- see protocol-spec.md
+            // § 4.14 and the PROTOCOL_VERSION bump this message's own row records.
+            Assert.False(SpawnRequestMessage.TryParse(ReadOnlySpan<byte>.Empty, out _));
+        }
+
         // ------------------------------------------------------------------ msgType table
 
         [Fact]
@@ -224,7 +296,7 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
             //   v3  the vehicle wire (§ 4.10): six new opcodes, a second entity stream, and
             //       SnapshotField.SeatInfo finished on the actor entry. S_EXPLOSION's layout was
             //       not touched by any of it and still is not what moved the number.
-            Assert.Equal(7, ProtocolConstants.PROTOCOL_VERSION);   // 3 -> 4 in X-53: Quantize's position WINDOW moved (-1024..3072), so the same i16 decodes to a different metre. Same bytes, different meaning -- exactly what the version is for. 4 -> 5 in P11: S_MATCH_STATE grew victoryPoints (Size 8 -> 10) AND tickets0/1 became ascending score0/1 at the same offsets -- again same bytes, different meaning. 5 -> 6 in P13: the joinTicket gained a u8 team at offset 16 and displayName shrank 16 -> 15 to pay for it, so every byte from 16 on MOVED -- a layout change, not a reinterpretation. 6 -> 7 in P18: S_PLAYER_SCORES (0x51) is a NEW opcode carrying per-player kills, deaths and side -- the 3.0.0 row's precedent, where six new opcodes were recorded as a wire change. None of the four bumps touched the layout this test pins, which is why the layout constants beside it did not move.
+            Assert.Equal(8, ProtocolConstants.PROTOCOL_VERSION);   // 3 -> 4 in X-53: Quantize's position WINDOW moved (-1024..3072), so the same i16 decodes to a different metre. Same bytes, different meaning -- exactly what the version is for. 4 -> 5 in P11: S_MATCH_STATE grew victoryPoints (Size 8 -> 10) AND tickets0/1 became ascending score0/1 at the same offsets -- again same bytes, different meaning. 5 -> 6 in P13: the joinTicket gained a u8 team at offset 16 and displayName shrank 16 -> 15 to pay for it, so every byte from 16 on MOVED -- a layout change, not a reinterpretation. 6 -> 7 in P18: S_PLAYER_SCORES (0x51) is a NEW opcode carrying per-player kills, deaths and side -- the 3.0.0 row's precedent, where six new opcodes were recorded as a wire change. 7 -> 8, ledger X-11: C_SPAWN_REQUEST (0x23) grew a body -- see SpawnRequestMessageTests -- so a v7 client's empty-bodied request fails the v8 parser's fixed 6-byte read instead of being silently accepted. None of the five bumps touched the layout this test pins, which is why the layout constants beside it did not move.
         }
     }
 }
