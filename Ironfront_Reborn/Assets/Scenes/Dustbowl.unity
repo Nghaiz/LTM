@@ -93078,7 +93078,7 @@ MonoBehaviour:
   contestedSpawnpointContainer: {fileID: 0}
   captureRange: 30
   captureSpeed: 0.2
-  canBeCaptured: 1
+  canBeCaptured: 0
   flagParent: {fileID: 10451}
   lqFlag: {fileID: 4440}
   hqFlag: {fileID: 3429}
@@ -101405,7 +101405,7 @@ MonoBehaviour:
   contestedSpawnpointContainer: {fileID: 0}
   captureRange: 30
   captureSpeed: 0.2
-  canBeCaptured: 1
+  canBeCaptured: 0
   flagParent: {fileID: 8434}
   lqFlag: {fileID: 5090}
   hqFlag: {fileID: 3872}
