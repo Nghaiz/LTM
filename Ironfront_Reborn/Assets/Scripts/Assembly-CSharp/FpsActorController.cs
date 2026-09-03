@@ -567,6 +567,16 @@ public class FpsActorController : ActorController
 		// CloseLoadout also does controller.SetMouseEnabled(true), which is SpawnAt's line.
 		CloseLoadout();
 
+		// X-11's other half. SpawnAt arms a body through SpawnLoadoutWeapons (Actor.cs:266);
+		// this path is the one SpawnAt never runs for a networked body (see this method's own
+		// remark above), and nothing else on the client ever called EquipLoadout either -- its
+		// only production caller was ServerCombatBridge.PlaceAtSpawn, one process over. So the
+		// client's own rendering of its weapon never armed: the deploy screen closed, the body
+		// stood there, and activeWeapon stayed null. EquipLoadout is SpawnLoadoutWeapons() and
+		// nothing else (Actor.cs:313-316), so it writes no transform and does not reopen the
+		// authority split this method's own remark protects.
+		actor.EquipLoadout();
+
 		// Null-guarded where SpawnAt is not. SpawnAt runs from a spawn wave, which cannot happen
 		// before the scene's singletons exist; this runs off a network message, which can arrive
 		// during a scene change. GameManager.cs makes the same argument for its own read.
