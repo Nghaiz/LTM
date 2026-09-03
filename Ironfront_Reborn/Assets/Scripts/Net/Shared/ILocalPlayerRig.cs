@@ -234,5 +234,33 @@ namespace Ironfront.Net.Unity
         /// dead.
         /// </remarks>
         void FellBody(Vector3 force, HumanBodyBones bone);
+
+        /// <summary>
+        /// Reads this rig's currently chosen loadout as weapon network ids, one per slot. 0
+        /// means the slot is empty or unset. All zero when the rig is absent.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Maps to <c>FpsActorController.GetLoadout()</c>, translated through
+        /// <c>WeaponManager.NetworkIdOf</c> — the wire only ever carries an id, never a
+        /// <c>WeaponEntry</c> reference, the same boundary <c>ILoadoutDirectory</c> is built
+        /// around on the server side. This is what <c>NetClientLocalCombatDriver.RequestRespawn</c>
+        /// sends in C_SPAWN_REQUEST, so the server arms the SAME loadout this client is about to
+        /// render — see ledger <b>X-11</b>.
+        /// </para>
+        /// <para>
+        /// <b>Default-implemented as all-empty, deliberately.</b> Every hand-written implementer
+        /// that predates this member — the EditMode fakes under <c>Assets/Tests/EditMode/Client</c>
+        /// among them — must keep compiling without being touched, so a real answer is opt-in via
+        /// an override rather than a breaking abstract member. All-empty is also the honest
+        /// answer for those fakes: none of them models a chosen loadout, so "nothing chosen" is
+        /// what they would return if they did implement it.
+        /// </para>
+        /// </remarks>
+        void GetChosenLoadout(
+            out byte primary, out byte secondary, out byte gear1, out byte gear2, out byte gear3)
+        {
+            primary = secondary = gear1 = gear2 = gear3 = 0;
+        }
     }
 }

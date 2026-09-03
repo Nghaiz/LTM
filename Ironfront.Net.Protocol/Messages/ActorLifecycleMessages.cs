@@ -95,6 +95,107 @@ namespace Ironfront.Net.Protocol
     }
 
     /// <summary>
+    /// C_SPAWN_REQUEST (0x23). protocol-spec.md § 4.1 lists the message; its body was empty
+    /// from the freeze until V8, which gave it this layout. See <see cref="SpawnActorMessage"/>
+    /// for why an out-of-band layout does not itself bump <see cref="ProtocolConstants.PROTOCOL_VERSION"/>
+    /// — this one does, because the bytes on the wire changed: an empty body decoded by a V8
+    /// parser expecting six is <c>MalformedMessages</c>, not a compatible no-op.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>One message drives both a first deploy and every later respawn.</b> ledger X-11. A
+    /// join no longer places the body (<c>ServerTickLoop.OnClientConnected</c>); the client's
+    /// own loadout screen sends this the moment the player deploys, whether that is the first
+    /// life of the match or the twentieth. <c>ServerPlayer.AwaitingFirstDeploy</c> is what tells
+    /// the two apart server-side — this message's shape does not need to.
+    /// </para>
+    /// <para>
+    /// <b>Weapon slots carry network ids, never <c>WeaponEntry</c> references or names.</b> Same
+    /// boundary <c>ILoadoutDirectory</c> and <c>ISpawnPointDirectory</c> are built
+    /// around in <c>Ironfront.Net.Unity.Server</c>: <c>WeaponManager.LoadoutSet</c> and
+    /// <c>WeaponEntry</c> compile into <c>Assembly-CSharp</c>, unreachable from this project and
+    /// from the wire alike. 0 in a slot means "this slot was left empty," not "arm slot 0" —
+    /// <c>WeaponManager</c> reserves 0 for exactly that (protocol-spec.md § 4.8).
+    /// </para>
+    /// <para>
+    /// <b><see cref="SpawnPointIndex"/> is the index <c>ISpawnPointDirectory</c> already
+    /// exposes</b> — the same one <c>ServerCombatBridge.ChooseSpawnIndex</c> samples from — so
+    /// honouring a client's choice costs the server one bounds-and-eligibility check against a
+    /// seam that already existed, never a new one. <see cref="NoSpawnPointPreference"/> is the
+    /// sentinel a client sends to mean "let the server choose," which is what every sender does
+    /// today: the minimap-driven spawn choice offline (<c>MinimapUi.SelectedSpawnPoint</c>) is
+    /// not yet wired to populate this field over the network. The field is real and consumed on
+    /// the server the moment a sender starts populating it with something other than the
+    /// sentinel; until then the server keeps its own random-among-eligible draw exactly as
+    /// before.
+    /// </para>
+    /// </remarks>
+    public readonly struct SpawnRequestMessage
+    {
+        /// <summary>u8 x 5 (loadout slots) + u8 (spawn point index) = 6 bytes.</summary>
+        public const int Size = 6;
+
+        /// <summary>Sent in <see cref="SpawnPointIndex"/> for "no preference, let the server choose."</summary>
+        public const byte NoSpawnPointPreference = 0xFF;
+
+        /// <summary>Weapon network id for the primary slot. 0 = left empty.</summary>
+        public readonly byte Primary;
+        /// <summary>Weapon network id for the secondary slot. 0 = left empty.</summary>
+        public readonly byte Secondary;
+        /// <summary>Weapon network id for the first gear slot. 0 = left empty.</summary>
+        public readonly byte Gear1;
+        /// <summary>Weapon network id for the second gear slot. 0 = left empty.</summary>
+        public readonly byte Gear2;
+        /// <summary>Weapon network id for the third gear slot. 0 = left empty.</summary>
+        public readonly byte Gear3;
+        /// <summary>
+        /// The chosen spawn point's index into the server's <c>ISpawnPointDirectory</c>, or
+        /// <see cref="NoSpawnPointPreference"/>.
+        /// </summary>
+        public readonly byte SpawnPointIndex;
+
+        public SpawnRequestMessage(
+            byte primary, byte secondary, byte gear1, byte gear2, byte gear3,
+            byte spawnPointIndex = NoSpawnPointPreference)
+        {
+            Primary         = primary;
+            Secondary       = secondary;
+            Gear1           = gear1;
+            Gear2           = gear2;
+            Gear3           = gear3;
+            SpawnPointIndex = spawnPointIndex;
+        }
+
+        public int Write(Span<byte> dst)
+        {
+            var w = new SpanWriter(dst);
+            w.WriteU8(Primary);
+            w.WriteU8(Secondary);
+            w.WriteU8(Gear1);
+            w.WriteU8(Gear2);
+            w.WriteU8(Gear3);
+            w.WriteU8(SpawnPointIndex);
+            return w.Ok ? w.Position : -1;
+        }
+
+        public static bool TryParse(ReadOnlySpan<byte> src, out SpawnRequestMessage message)
+        {
+            message = default;
+            var r = new SpanReader(src);
+            byte primary   = r.ReadU8();
+            byte secondary = r.ReadU8();
+            byte gear1     = r.ReadU8();
+            byte gear2     = r.ReadU8();
+            byte gear3     = r.ReadU8();
+            byte spawnIdx  = r.ReadU8();
+            if (!r.Ok) return false;
+
+            message = new SpawnRequestMessage(primary, secondary, gear1, gear2, gear3, spawnIdx);
+            return true;
+        }
+    }
+
+    /// <summary>
     /// S_DESPAWN_ACTOR (0x42). Layout defined here, not in the spec — see
     /// <see cref="SpawnActorMessage"/>.
     /// </summary>

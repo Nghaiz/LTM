@@ -170,14 +170,23 @@ namespace Ironfront.Net.Replication.Server
                         break;
 
                     case ClientMessageType.SpawnRequest:
-                        // The body carries no fields in protocol-spec.md § 4.1, so its contents
-                        // are ignored rather than parsed. Counted as handled either way: the
-                        // gate refusing an early request is a normal outcome, not a malformed
-                        // message, and conflating the two would have an honest client whose
-                        // clock runs a few milliseconds fast show up in the corruption counter.
-                        SpawnRequestsReceived++;
-                        SpawnRequests?.OnSpawnRequested(session);
-                        handled++;
+                        // V8 (ledger X-11): the body used to carry no fields, so its contents
+                        // were ignored rather than parsed. Now it carries the deploying client's
+                        // loadout and spawn point, so a malformed body IS malformed -- most
+                        // commonly a pre-V8 sender's empty one, which PROTOCOL_VERSION already
+                        // refuses at CONNECT time. The gate refusing an early but well-formed
+                        // request is a separate, normal outcome and still is not this.
+                        if (SpawnRequestMessage.TryParse(body, out SpawnRequestMessage spawn))
+                        {
+                            SpawnRequestsReceived++;
+                            SpawnRequests?.OnSpawnRequested(session, in spawn);
+                            handled++;
+                        }
+                        else
+                        {
+                            MalformedMessages++;
+                        }
+
                         break;
 
                     case ClientMessageType.SeatRequest:

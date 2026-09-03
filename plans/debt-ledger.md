@@ -154,8 +154,8 @@ with the rows, so the next drift is a failing command rather than a careful read
 | C - code | 2 | - | - | - | - | 2 |
 | D - unverified claims | - | - | - | 1 | - | 1 |
 | E - ops round 8 | - | - | - | 4 | 1 | 5 |
-| X - found in Phase 0 | 6 | 21 | - | 1 | 1 | 29 |
-| **Total** | **11** | **26** | **0** | **8** | **4** | **49** |
+| X - found in Phase 0 | 5 | 22 | - | 1 | 1 | 29 |
+| **Total** | **10** | **27** | **0** | **8** | **4** | **49** |
 
 **Recomputed at:** **2026-09-02**, by P20 -- and the count is the least interesting thing in it.
 **Open fell 14 -> 11** and closed rose **22 -> 25**, with two rows filed (X-81, X-82) so the total

@@ -368,8 +368,24 @@ namespace Ironfront.Editor.Verification
         /// </summary>
         public static string RequestSpawn(bool fromBot)
         {
+            // V8, ledger X-11: the body is no longer empty -- ServerMessageRouter now requires
+            // SpawnRequestMessage.Size bytes and fails a shorter packet as malformed rather than
+            // silently accepting it. This probe asks for no particular loadout (all zero, "left
+            // empty") and no particular spawn point (NoSpawnPointPreference, the constructor's
+            // own default): it exists to prove the request reaches the server and is granted, not
+            // to arm a specific weapon.
+            //
+            // A heap array rather than a `stackalloc`, for the compiler's reason and not a
+            // stylistic one: a stack-allocated span's ref-safe-to-escape scope is narrower than
+            // the PayloadFrameWriter ref struct it would be passed to, which is CS8350 and
+            // CS8352. NetClientLocalCombatDriver, BaselineAckPolicy and ClientPredictionStage all
+            // send their bodies from an array for the same reason.
+            var spawnRequest = new SpawnRequestMessage(0, 0, 0, 0, 0);
+            byte[] body = new byte[SpawnRequestMessage.Size];
+            if (spawnRequest.Write(body) < 0) return "could not encode C_SPAWN_REQUEST";
+
             var writer = new PayloadFrameWriter(_payload, ChannelId.ReliableOrdered);
-            if (!writer.WriteMessage(ClientMessageType.SpawnRequest, ReadOnlySpan<byte>.Empty))
+            if (!writer.WriteMessage(ClientMessageType.SpawnRequest, new ReadOnlySpan<byte>(body)))
                 return "could not frame C_SPAWN_REQUEST";
             if (!writer.TryFinish(out int total)) return "could not finish C_SPAWN_REQUEST";
 

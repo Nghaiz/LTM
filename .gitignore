@@ -134,6 +134,16 @@ InitTestScene*.unity*
 **/[Aa]ssets/_Recovery/
 **/[Aa]ssets/_Recovery.meta
 
+# The Unity Performance Testing package writes these two into Assets/Resources when a test run
+# starts, so the runner can read the run's metadata back from inside a player build. They describe
+# ONE run on ONE machine -- hardware, player settings, a run id -- and the package rewrites them on
+# the next run. Assets/Resources is otherwise tracked, so without this they show up as untracked
+# noise after every local test run and would eventually be committed by a stray `git add -A`.
+**/[Aa]ssets/[Rr]esources/PerformanceTestRunInfo.json
+**/[Aa]ssets/[Rr]esources/PerformanceTestRunInfo.json.meta
+**/[Aa]ssets/[Rr]esources/PerformanceTestRunSettings.json
+**/[Aa]ssets/[Rr]esources/PerformanceTestRunSettings.json.meta
+
 # Scratch output from tools/unity-run.py and the tools/probe-*.cs snippets it runs. The snippets are
 # tracked; what they write to the project root is not.
 /Ironfront_Reborn/harness-*.txt

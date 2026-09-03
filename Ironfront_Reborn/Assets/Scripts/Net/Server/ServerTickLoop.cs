@@ -1509,11 +1509,23 @@ namespace Ironfront.Net.Unity.Server
         /// client clock running a few milliseconds fast, not a protocol violation, and treating
         /// it as one would disconnect honest players over clock skew.
         /// </remarks>
-        void ISpawnRequestHandler.OnSpawnRequested(ClientSession session)
+        void ISpawnRequestHandler.OnSpawnRequested(ClientSession session, in SpawnRequestMessage message)
         {
             if (!_byConnection.TryGetValue(session.ConnectionId, out ServerPlayer player)) return;
 
-            _combat.TryRespawn(player);
+            // The first request of this connection's life is not a RESPAWN and must not wait
+            // out ServerRespawnGate's cooldown: that clock times a death, and a body that has
+            // never been placed has never died. Granted unconditionally, once, per
+            // ServerPlayer.AwaitingFirstDeploy's own remark; every later request from the same
+            // connection falls through to the ordinary gated path below.
+            if (player.AwaitingFirstDeploy)
+            {
+                player.AwaitingFirstDeploy = false;
+                _combat.PlaceAtSpawn(player, message);
+                return;
+            }
+
+            _combat.TryRespawn(player, message);
         }
 
         /// <summary>
@@ -1751,19 +1763,24 @@ namespace Ironfront.Net.Unity.Server
             { Actor = actor };
             player.SyncFromActor();
 
-            // A JOIN IS A SPAWN, and for four phases this path did not treat it as one. It set
-            // Health and IsAlive, then WeaponId / ResetWeapon / AmmoInClip — the respawn's five
-            // statements in the respawn's order, with the respawn's MoveToSpawnPoint missing from
-            // the middle. So a joining player's body stayed where Instantiate left it: the world
-            // origin, falling, while the snapshot reported it alive on full health and every
-            // other client rendered it standing there.
+            // A JOIN IS NO LONGER A SPAWN. It was, for a while: this path called PlaceAtSpawn
+            // directly, which set Health and IsAlive, then WeaponId / ResetWeapon / AmmoInClip —
+            // and armed the body from the SERVER's own drawn loadout before the client had ever
+            // said what it wanted to hold or where it wanted to stand. The deploy screen never
+            // got a chance to run: S_SPAWN_ACTOR (below, via AnnounceNewActors) reaches the
+            // client on interest alone, gated on nothing here, and used to arrive already
+            // dressed as "you are deployed."
             //
-            // Clearing the previous occupant's corpse (Health 0, dead true) is still done and is
-            // still right — a reused slot must not hand the next player a body that is rejected
-            // as ShooterDead. It just was never the whole job. PlaceAtSpawn carries that comment
-            // and the evidence; SyncFromActor above is now only the pre-spawn seed, superseded a
-            // line later by the real spawn position.
-            _combat.PlaceAtSpawn(player);
+            // The claimed body is parked instead: Health 0, IsAlive false, exactly the corpse
+            // state the OLD comment on this line used to describe as merely "the previous
+            // occupant's leftovers." A reused slot still must not be handed to the next player
+            // alive at its last owner's position, and that is exactly what this now is, honestly,
+            // rather than as a one-tick waypoint on the way to PlaceAtSpawn. The body is placed
+            // and armed for the FIRST time when this connection's own C_SPAWN_REQUEST arrives,
+            // carrying the loadout the client actually chose — see
+            // ISpawnRequestHandler.OnSpawnRequested and ServerPlayer.AwaitingFirstDeploy.
+            actor.Health = 0f;
+            actor.IsAlive = false;
 
             _byConnection.Add(connectionId, player);
             _players.Add(player);

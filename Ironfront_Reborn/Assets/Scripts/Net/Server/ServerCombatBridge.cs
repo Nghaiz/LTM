@@ -276,7 +276,7 @@ namespace Ironfront.Net.Unity.Server
         /// thing this message will ever do, and treating it as a protocol violation would
         /// disconnect honest players over clock skew.
         /// </remarks>
-        public bool TryRespawn(ServerPlayer player)
+        public bool TryRespawn(ServerPlayer player, SpawnRequestMessage? request = null)
         {
             NetServerActor actor = player.Actor;
             if (actor == null) return false;
@@ -288,7 +288,7 @@ namespace Ironfront.Net.Unity.Server
 
             _respawnGate.MarkRespawned(session.ActorId);
 
-            PlaceAtSpawn(player);
+            PlaceAtSpawn(player, request);
             return true;
         }
 
@@ -381,7 +381,7 @@ namespace Ironfront.Net.Unity.Server
         /// Fixing the position without claiming to have fixed the loadout.
         /// </para>
         /// </remarks>
-        public void PlaceAtSpawn(ServerPlayer player)
+        public void PlaceAtSpawn(ServerPlayer player, SpawnRequestMessage? request = null)
         {
             NetServerActor actor = player.Actor;
             if (actor == null) return;
@@ -391,7 +391,25 @@ namespace Ironfront.Net.Unity.Server
             actor.Health = NetServerActor.DefaultSpawnHealth;
             actor.IsAlive = true;
 
-            MoveToSpawnPoint(player);
+            MoveToSpawnPoint(player, request);
+
+            // X-11's second half: a deploy request carries the loadout the CLIENT chose, and
+            // the body must be armed from THAT rather than from the server's own
+            // controller.GetLoadout() draw -- the two disagreeing is the original defect this
+            // whole handshake exists to close. Stamped into NetServerBindings immediately
+            // before EquipLoadout, one-shot-consumed on the far side of the asmdef boundary by
+            // Actor.SpawnLoadoutWeapons -- see DeployLoadoutSelection's own remarks for why this
+            // is a guarded static and not an interface parameter, and for the ordering
+            // guarantees the guard depends on. request == null (a server-initiated respawn with
+            // no client message, e.g. KillForFallingOutOfTheWorld's auto-respawn) leaves nothing
+            // pending, so EquipLoadout falls through to its original behaviour unchanged.
+            if (request.HasValue)
+            {
+                SpawnRequestMessage r = request.Value;
+                NetServerBindings.SetPendingDeploySelection(
+                    new DeployLoadoutSelection(
+                        actor.ActorId, r.Primary, r.Secondary, r.Gear1, r.Gear2, r.Gear3));
+            }
 
             // Arms the body. MoveToSpawnPoint teleports and does not call Actor.SpawnAt, so
             // until 2026-08-21 SpawnLoadoutWeapons never ran for a claimed body and every
@@ -700,7 +718,7 @@ namespace Ironfront.Net.Unity.Server
             Debug.LogWarning(message);
         }
 
-        private static void MoveToSpawnPoint(ServerPlayer player)
+        private static void MoveToSpawnPoint(ServerPlayer player, SpawnRequestMessage? request)
         {
             NetServerActor actor = player.Actor;
             ISpawnPointDirectory spawnPoints = NetServerBindings.SpawnPoints;
@@ -722,7 +740,7 @@ namespace Ironfront.Net.Unity.Server
                 return;
             }
 
-            int chosen = ChooseSpawnIndex(spawnPoints, actor.Team);
+            int chosen = ChooseRequestedOrRandomSpawnIndex(spawnPoints, actor.Team, request);
             if (chosen < 0)
             {
                 WarnOnce(
@@ -773,6 +791,35 @@ namespace Ironfront.Net.Unity.Server
             }
 
             return chosen;
+        }
+
+        /// <summary>
+        /// Honours the deploying client's requested spawn point when it names one this actor's
+        /// team may actually use; falls back to <see cref="ChooseSpawnIndex"/> otherwise.
+        /// </summary>
+        /// <remarks>
+        /// <b>Never trusted outright.</b> <see cref="SpawnRequestMessage.SpawnPointIndex"/> is
+        /// validated against the SAME <see cref="ISpawnPointDirectory"/> the random draw reads —
+        /// out of range or ineligible for this team is treated exactly like
+        /// <see cref="SpawnRequestMessage.NoSpawnPointPreference"/>, which is what every sender
+        /// writes today (see that field's own remark). No client input reaches
+        /// <see cref="ISpawnPointDirectory.GetSpawnPosition"/> unchecked.
+        /// </remarks>
+        internal static int ChooseRequestedOrRandomSpawnIndex(
+            ISpawnPointDirectory spawnPoints, int team, SpawnRequestMessage? request)
+        {
+            if (request.HasValue)
+            {
+                byte requested = request.Value.SpawnPointIndex;
+                if (requested != SpawnRequestMessage.NoSpawnPointPreference
+                    && requested < spawnPoints.Count
+                    && spawnPoints.IsEligible(requested, team))
+                {
+                    return requested;
+                }
+            }
+
+            return ChooseSpawnIndex(spawnPoints, team);
         }
 
         private void EmitWeaponFire(

@@ -75,6 +75,25 @@ namespace Ironfront.Net.Unity.Client
         private bool _deployShown;
 
         /// <summary>
+        /// True until this connection's own first successful <see cref="RequestRespawn"/>.
+        /// </summary>
+        /// <remarks>
+        /// <c>ClientCombatState.CanRequestRespawn</c> requires <c>_deathStamped</c>, which the
+        /// very first snapshot's alive=false transition DOES set (<c>SetAlive</c>'s own remark),
+        /// so a fresh join would otherwise sit behind the same
+        /// <c>RESPAWN_SECONDS</c> cooldown a real death earns -- server-side nothing gates this
+        /// connection's first request at all (<c>ServerPlayer.AwaitingFirstDeploy</c>), so the
+        /// client must not invent a wait the server never asked for. Mirrors that field's name
+        /// and its one-shot shape deliberately; the two are independent flags on independent
+        /// processes, checked at different moments, and are not meant to be unified.
+        /// </remarks>
+        private bool _awaitingFirstDeploy = true;
+
+        /// <summary>Whether a deploy request may be sent right now. See <see cref="_awaitingFirstDeploy"/>.</summary>
+        private bool CanDeployNow(float nowSeconds)
+            => _awaitingFirstDeploy || _state.CanRequestRespawn(nowSeconds);
+
+        /// <summary>
         /// Set when a death names a killer the screen has not shown yet.
         /// </summary>
         /// <remarks>
@@ -125,6 +144,17 @@ namespace Ironfront.Net.Unity.Client
 
         /// <summary>Reused for C_SPAWN_REQUEST. Sized like every other client send buffer.</summary>
         private readonly byte[] _payload = new byte[ProtocolConstants.MAX_PAYLOAD];
+
+        /// <summary>Scratch for the deploy request's body, reused rather than stack-allocated.</summary>
+        /// <remarks>
+        /// A field and not a <c>stackalloc</c>, and the reason is a compiler rule rather than a
+        /// preference: a stack-allocated span's ref-safe-to-escape scope is narrower than the
+        /// <c>PayloadFrameWriter</c> ref struct it would be handed to, so passing one is CS8350
+        /// and CS8352. <c>BaselineAckPolicy</c> and <c>ClientPredictionStage</c> both already
+        /// solve it this way -- a heap array wrapped in a <c>ReadOnlySpan</c> at the call site --
+        /// and this follows them rather than inventing a third shape.
+        /// </remarks>
+        private readonly byte[] _spawnRequestBody = new byte[SpawnRequestMessage.Size];
 
         private void Awake()
         {
@@ -219,16 +249,17 @@ namespace Ironfront.Net.Unity.Client
 
             _state.EquipWeapon(message.WeaponId);
 
-            // Ledger X-48. The message that says "your body is deployed" is also the moment the
-            // client should stop rendering the menu it was deployed FROM. Nothing did this, and
-            // the consequence was total rather than cosmetic: every lane-B frame ever captured —
-            // 90 across five runs — showed the deploy screen, so checks 8 and 9 were ungradeable
-            // by construction and no human had ever seen the game render.
-            //
-            // Here rather than in a presenter because this component already owns exactly this
-            // responsibility: local presentation following the server's authoritative life state
-            // (see OnDied / OnRespawned below). A presenter would be a second owner of it.
-            EnterDeployedView();
+            // Ledger X-11/X-48, and this is the correction to X-48's own comment below: a JOIN
+            // no longer places the body (ServerTickLoop.OnClientConnected), so S_SPAWN_ACTOR now
+            // reaches every client on interest ALONE, before any deploy has happened -- it is
+            // "you now know this actor exists," not "you are deployed." message.Health is the
+            // tell: the server parks a not-yet-deployed body at Health 0, so 0 here means stay on
+            // the deploy screen and let OnRespawned (below, off the snapshot's IsAlive bit) call
+            // EnterDeployedView the moment the server actually confirms a spawn. Non-zero means
+            // this announce named an ALREADY-alive body -- a reconnect mid-life is the only
+            // production case -- and that still deploys immediately, because no further
+            // confirmation is coming for a life already in progress.
+            if (message.Health > 0) EnterDeployedView();
         }
         private void Update()
         {
@@ -279,10 +310,11 @@ namespace Ironfront.Net.Unity.Client
             // condition leaves the button's press unconsumed for the next frame -- which is the
             // harmless direction. The button is only interactable while CanRequestRespawn is
             // true (see TickDeploy), so it cannot post an edge the gate would refuse.
-            if (!_state.IsAlive && _state.CanRequestRespawn(Time.time)
+            if (!_state.IsAlive && CanDeployNow(Time.time)
                 && (Input.GetKeyDown(_respawnKey) || ScriptedRespawnPressed() || DeployPressed()))
             {
                 RequestRespawn();
+                _awaitingFirstDeploy = false;
             }
         }
 
@@ -407,9 +439,24 @@ namespace Ironfront.Net.Unity.Client
         {
             if (_client == null || !_client.IsConnected) return;
 
+            // V8, ledger X-11: the body used to be empty. It now carries the loadout THIS
+            // client is about to render -- read from the same LoadoutUi selection GetLoadout()
+            // already draws from offline -- so the server arms the identical weapons rather
+            // than its own draw. Deliberately NOT populating a spawn point choice: the
+            // minimap-driven selection is not yet wired across the network, so this sends
+            // SpawnRequestMessage.NoSpawnPointPreference (the constructor's own default) and the
+            // server keeps choosing at random among eligible points, exactly as before.
+            NetClientBindings.LocalPlayer.GetChosenLoadout(
+                out byte primary, out byte secondary, out byte gear1, out byte gear2, out byte gear3);
+
+            var spawnRequest = new SpawnRequestMessage(primary, secondary, gear1, gear2, gear3);
+            if (spawnRequest.Write(_spawnRequestBody) < 0) return;
+
             var writer = new PayloadFrameWriter(_payload, ChannelId.ReliableOrdered);
 
-            if (!writer.WriteMessage(ClientMessageType.SpawnRequest, System.ReadOnlySpan<byte>.Empty)) return;
+            if (!writer.WriteMessage(
+                    ClientMessageType.SpawnRequest,
+                    new System.ReadOnlySpan<byte>(_spawnRequestBody))) return;
             if (!writer.TryFinish(out int total)) return;
 
             _client.Send(
@@ -590,7 +637,7 @@ namespace Ironfront.Net.Unity.Client
             }
 
             hud.TickDeploy(
-                _state.SecondsUntilRespawn(Time.time), _state.CanRequestRespawn(Time.time));
+                _state.SecondsUntilRespawn(Time.time), CanDeployNow(Time.time));
         }
 
         /// <summary>

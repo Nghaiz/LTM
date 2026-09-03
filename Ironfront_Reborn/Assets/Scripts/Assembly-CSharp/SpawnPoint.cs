@@ -86,6 +86,25 @@ public class SpawnPoint : MonoBehaviour
 		return authored;
 	}
 
+	/// <summary>
+	/// Container children already reported for their ground-snap outcome, so each warns once.
+	/// </summary>
+	/// <remarks>
+	/// Keyed by <see cref="UnityEngine.Object.GetInstanceID"/> rather than by name: this set is
+	/// shared by every container field a subclass owns (<see cref="spawnpointContainer"/> here,
+	/// <c>CapturePoint.contestedSpawnpointContainer</c> in the subclass), and a name string
+	/// cannot tell two different containers' identically-named children apart. An instance ID
+	/// always can.
+	/// </remarks>
+	protected static readonly HashSet<int> _warnedContainerChildren = new HashSet<int>();
+
+	/// <summary>
+	/// How far a container-authored child may sit from its ground-snapped position before the
+	/// correction is worth a warning. Small mesh irregularities correct by centimetres; this
+	/// keeps those silent while still catching an authored point that is metres off the ground.
+	/// </summary>
+	protected const float ContainerSnapWarnDistanceMetres = 1f;
+
 	public Vector3 RandomSpawnPointPosition()
 	{
 		int childCount = spawnpointContainer.childCount;
@@ -93,7 +112,58 @@ public class SpawnPoint : MonoBehaviour
 		{
 			return RandomPosition();
 		}
-		return spawnpointContainer.GetChild(Random.Range(0, childCount)).position;
+		return SnappedContainerChildPosition(spawnpointContainer.GetChild(Random.Range(0, childCount)));
+	}
+
+	/// <summary>
+	/// Ground-snaps an authored container child. Ledger X-81 closed only the non-container
+	/// branch of <see cref="GetSpawnPosition"/> -- this method used to return
+	/// <c>spawnpointContainer.GetChild(...).position</c> verbatim, with no snap and no warning,
+	/// which is how an authored capture-point child at y=103.5 placed players 42.6 m in the air
+	/// on Dustbowl. Reuses <see cref="Ironfront.Net.Unity.GroundSnap"/> rather than
+	/// re-implementing the raycast rule <see cref="RandomPosition"/> already applies to the
+	/// jittered path.
+	/// </summary>
+	/// <remarks>
+	/// <c>protected</c>, not <c>private</c>: <c>CapturePoint.GetSafeSpawnPosition()</c> read its
+	/// own <c>contestedSpawnpointContainer</c> child with the identical unsnapped pattern -- the
+	/// same defect, one container field over -- and shares this method rather than a second copy
+	/// of the snap/warn rule.
+	/// </remarks>
+	protected Vector3 SnappedContainerChildPosition(Transform child)
+	{
+		Vector3 authored = child.position;
+
+		if (!Ironfront.Net.Unity.GroundSnap.TrySnap(authored, out Vector3 grounded))
+		{
+			// Same fallback RandomPosition() uses on a miss: hand back the authored point,
+			// loudly, rather than a silently unsnapped placement. Warned once per child for the
+			// same "sixty times a second is the same as never" reason RandomPosition() documents.
+			if (_warnedContainerChildren.Add(child.GetInstanceID()))
+			{
+				Debug.LogWarning(
+					$"[spawn] '{name}' child '{child.name}' at {authored} found no ground "
+					+ $"within {Ironfront.Net.Unity.GroundSnap.MaxDistanceMetres} m below its "
+					+ "ray start, so bodies are being placed at the authored point un-snapped "
+					+ "and may be standing in mid-air. Either the point is too far above its "
+					+ "terrain, or the ground under it is on a layer the spawn mask excludes. "
+					+ "See ledger X-81.");
+			}
+			return authored;
+		}
+
+		float correction = Vector3.Distance(authored, grounded);
+		if (correction > ContainerSnapWarnDistanceMetres
+			&& _warnedContainerChildren.Add(child.GetInstanceID()))
+		{
+			Debug.LogWarning(
+				$"[spawn] '{name}' child '{child.name}' authored at {authored} was "
+				+ $"{correction:F1} m off the ground and has been snapped to {grounded}. That "
+				+ "authored position is a scene defect the level author should fix. See ledger "
+				+ "X-81.");
+		}
+
+		return grounded;
 	}
 
 	public virtual bool IsSafe()

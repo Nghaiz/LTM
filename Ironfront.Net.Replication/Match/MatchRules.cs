@@ -85,6 +85,36 @@ namespace Ironfront.Net.Replication.Match
         /// </remarks>
         public float EliminationGraceSeconds { get; set; } = 1f;
 
+        /// <summary>
+        /// Seconds a team's held-spawn-point count must sit at zero, CONTINUOUSLY, before
+        /// <see cref="MatchStateMachine.ApplyElimination"/> treats it as a genuine wipe-out
+        /// rather than a single sampled tick at a boundary. X-85.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why a duration, not an instant read.</b> A held count crosses to zero the moment a
+        /// capture point's ownership crosses the render-facing capture threshold, and one body
+        /// standing on an otherwise-uncontested anchor does that crossing in well under a second
+        /// -- four attackers do it in roughly an eighth of one, at the map's own capture speed.
+        /// <see cref="EliminationGraceSeconds"/> does not help here: it runs once, at the start
+        /// of the round, and has nothing left to say once the round is under way. Requiring the
+        /// zero reading to persist means a genuine loss -- nobody left to retake the anchor --
+        /// still ends the round, while a momentary swing during a contested fight resolves one
+        /// way or the other well inside the window and never reaches it.
+        /// </para>
+        /// <para>
+        /// <b>Defaults to 0 -- instant, the pre-X-85 behaviour -- deliberately.</b> Every
+        /// elimination test that already existed
+        /// (<c>ObjectiveAuthorityTests</c>) constructs a bare <see cref="MatchRules"/> and feeds
+        /// <see cref="MatchStateMachine.SetSpawnPointCounts"/> hand-written integers expecting
+        /// elimination to fire on the very next tick past the grace window; changing this
+        /// library's own default would silently invalidate every one of them. The shipped
+        /// protection lives at the host: <c>MatchController</c> is the one place that opts in,
+        /// with its own serialized default in the 5-10 second range.
+        /// </para>
+        /// </remarks>
+        public float EliminationDwellSeconds { get; set; } = 0f;
+
         /// <summary>The shipped ruleset. Mutating this is a global change; prefer a new instance.</summary>
         public static MatchRules Default => new MatchRules();
     }

@@ -39,11 +39,9 @@ public class ScoreUi : MonoBehaviour
 
 	// V10 task 7, checklist row E5. Authored on the shipped prefab since 2026-08-19 (debt
 	// closure phase 1 task 1.6, ledger A-9): Score UI Canvas/Phase Row/Phase Label and
-	// /Phase Timer. The flag-text fallback below is now dead on the shipped prefab and is kept
-	// only for a prefab that predates the authoring; it has to retire when task 8 lands,
-	// because capture points start writing to those same labels. Pinned by
-	// AssetWiringDetectors.ScoreUiTextRefsAreAssigned, which fails if either field is unset,
-	// names no object, or points at a label something else already drives.
+	// /Phase Timer. Pinned by AssetWiringDetectors.ScoreUiTextRefsAreAssigned, which fails if
+	// either field is unset, names no object, or points at a label something else already
+	// drives.
 	public Text phaseText;
 
 	public Text phaseTimerText;
@@ -171,18 +169,22 @@ public class ScoreUi : MonoBehaviour
 	/// </param>
 	/// <remarks>
 	/// <para>
-	/// <b>Checklist E5 — the phase and timer elements are authored; the human count is not.</b>
+	/// <b>Checklist E5 — the phase and timer elements are authored.</b>
 	/// <see cref="phaseText"/> and <see cref="phaseTimerText"/> are dedicated elements on the
-	/// shipped prefab as of 2026-08-19 (ledger A-9), so the flag-text fallback below no longer
-	/// runs there. <see cref="blueScoreText"/> / <see cref="redScoreText"/> take the server's
-	/// scores, which since P11 are the same ascending quantity they already showed offline. The fallback to
-	/// <see cref="blueFlagsText"/> / <see cref="redFlagsText"/> survives only for a prefab that
-	/// predates the authoring, and must be deleted when capture points land (V10 task 8, blocked
-	/// on V8 task 1) — from then on those labels are live and borrowing them collides.
+	/// shipped prefab as of 2026-08-19 (ledger A-9). <see cref="blueScoreText"/> /
+	/// <see cref="redScoreText"/> take the server's scores, which since P11 are the same
+	/// ascending quantity they already showed offline.
 	/// <see cref="humanCountText"/> is E5's third element, authored by phase 6 task 6.1's sibling
 	/// 6.6 (ledger A-6). The count used to be concatenated into the phase label, which made that
 	/// label's width change every time somebody joined; it now renders on its own and the
 	/// concatenation survives only as a fallback for a prefab that predates the element.
+	/// </para>
+	/// <para>
+	/// <b>V10 task 8 landed — <see cref="blueFlagsText"/> / <see cref="redFlagsText"/> are no
+	/// longer written here.</b> The fallback that used to borrow them for the phase and timer
+	/// labels is deleted; they now have exactly one networked writer,
+	/// <see cref="SetCapturePointCounts"/>, driven by replicated capture-point ownership
+	/// (<c>NetClientObjectivePresenter.OnCapturePoint</c>) rather than by this call.
 	/// </para>
 	/// <para>
 	/// Staleness is not a parameter here — that decision belongs to the presenter, which has the
@@ -229,14 +231,12 @@ public class ScoreUi : MonoBehaviour
 		// offline scoreboard that never scored. Same geometry as the offline path, by
 		// construction -- ApplyScoreBars is the one copy.
 		ApplyScoreBars(instance, score0, score1, victoryPoints);
-		Text phaseTarget = instance.phaseText != null ? instance.phaseText : instance.blueFlagsText;
-		if (phaseTarget != null)
+		if (instance.phaseText != null)
 		{
 			// The count moves OUT of the phase label the moment a dedicated element exists.
 			// Keeping both would render it twice; keeping only the concatenation is the E5 gap
-			// (ledger A-6). The fallback survives for a prefab that predates the authoring, and
-			// retires with the flag-text fallback below it.
-			phaseTarget.text = instance.humanCountText != null
+			// (ledger A-6).
+			instance.phaseText.text = instance.humanCountText != null
 				? PhaseLabel(phase)
 				: PhaseLabel(phase) + (humanPlayerCount > 0 ? " (" + humanPlayerCount + ")" : string.Empty);
 		}
@@ -251,18 +251,53 @@ public class ScoreUi : MonoBehaviour
 				: string.Empty;
 		}
 		// A negative secondsRemaining means this phase has no clock. Blank, never "0:00".
-		Text timerTarget = instance.phaseTimerText != null ? instance.phaseTimerText : instance.redFlagsText;
-		if (timerTarget != null)
+		if (instance.phaseTimerText != null)
 		{
-			timerTarget.text = secondsRemaining >= 0 ? FormatTimer(secondsRemaining) : string.Empty;
+			instance.phaseTimerText.text = secondsRemaining >= 0 ? FormatTimer(secondsRemaining) : string.Empty;
 		}
 		if (instance.phaseText == null || instance.phaseTimerText == null)
 		{
 			Ironfront.Net.Unity.NetPresenterGate.WarnOnce(
 				"scoreui-no-phase-elements",
-				"[net] ScoreUi has no dedicated phase/timer Text, so the networked HUD is "
-				+ "borrowing the flag labels. That collides with capture points the moment V10 "
-				+ "task 8 lands. Client-track item E5 -- assign phaseText and phaseTimerText.");
+				"[net] ScoreUi has no dedicated phase/timer Text, so the networked HUD shows "
+				+ "neither -- V10 task 8 landed and deleted the flag-label fallback that used to "
+				+ "borrow blueFlagsText/redFlagsText for them. Client-track item E5 -- assign "
+				+ "phaseText and phaseTimerText.");
+		}
+	}
+
+	/// <summary>
+	/// Writes the capture-point flag counts -- points currently held by each team.
+	/// Client-track item, V10 task 8.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Recomputed client-side, not sent on the wire.</b> Ownership is already fully
+	/// replicated per point through <c>S_CAPTURE_POINT</c>
+	/// (<c>NetClientObjectivePresenter.OnCapturePoint</c>), so a count derived from it is
+	/// exactly the server's own <c>MatchStateMachine.OwnedPointCount</c> -- no protocol change,
+	/// and no way for the two sides to disagree about a number neither of them sends.
+	/// </para>
+	/// <para>
+	/// <b>These labels used to be the flag-text fallback for the phase and timer.</b> That
+	/// fallback is deleted as of this method landing -- see the remark on
+	/// <see cref="SetAuthoritativeState"/> -- so from here on <see cref="blueFlagsText"/> and
+	/// <see cref="redFlagsText"/> have exactly one writer.
+	/// </para>
+	/// </remarks>
+	public static void SetCapturePointCounts(int blueCount, int redCount)
+	{
+		if (instance == null)
+		{
+			return;
+		}
+		if (instance.blueFlagsText != null)
+		{
+			instance.blueFlagsText.text = blueCount.ToString();
+		}
+		if (instance.redFlagsText != null)
+		{
+			instance.redFlagsText.text = redCount.ToString();
 		}
 	}
 

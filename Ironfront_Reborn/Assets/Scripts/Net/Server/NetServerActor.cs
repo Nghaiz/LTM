@@ -481,6 +481,24 @@ namespace Ironfront.Net.Unity.Server
             ActorStateFlags flags = ActorStateFlags.None;
 
             if (IsAlive) flags |= ActorStateFlags.IsAlive;
+
+            // The producer the bit never had. IsRagdoll was declared, decoded, unit-tested and
+            // set by NOBODY, so it was false in every snapshot ever sent -- and
+            // RemoteActorView.ApplyRagdoll is edge-triggered on it, which made its
+            // RestoreFromRagdoll() teardown unreachable code. A respawned actor kept the limp rig
+            // the client had already switched on through a different door, so bodies stood up
+            // alive and stayed lying down.
+            //
+            // Death is the trigger because it is the only one available and the only one meant:
+            // IGameplayActorSource exposes IsDead and no separate ragdoll signal, the enum's own
+            // remark says "Dead; the client enables its own ragdoll", and ActorStateFlags is 8/8
+            // full so a dedicated bit could not be added without widening the wire.
+            //
+            // Pinned by NetServerActorRagdollFlagTests, which was RED before this line. Its two
+            // assertions are load-bearing in opposite directions: forcing the bit unconditionally
+            // does not make them both pass, it flips which one fails.
+            else flags |= ActorStateFlags.IsRagdoll;
+
             if (IsAiming) flags |= ActorStateFlags.IsAiming;
 
             if (Movement != null)

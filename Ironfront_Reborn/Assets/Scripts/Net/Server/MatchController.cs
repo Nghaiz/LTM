@@ -58,6 +58,18 @@ namespace Ironfront.Net.Unity.Server
         [FormerlySerializedAs("_startTickets")]
         [SerializeField] private int _victoryPoints = 200;
 
+        [Tooltip("Seconds after a round opens before losing every spawn point can end it.")]
+        [SerializeField] private float _eliminationGraceSeconds = 1f;
+
+        [Tooltip(
+            "Seconds a team's held-spawn-point count must sit at zero, CONTINUOUSLY, before "
+            + "elimination fires. X-85: a single sampled tick at the capture-ownership threshold "
+            + "is not a wipe-out, it is a flag mid-flip -- one attacker crosses it in well under "
+            + "a second at a typical map's capture speed. MatchRules' own library default is 0 "
+            + "(instant) so a bare MatchRules keeps every pre-existing engine-free test passing "
+            + "unchanged; THIS is the one place that opts a live server into the protection.")]
+        [SerializeField] private float _eliminationDwellSeconds = 5f;
+
         private ServerTickLoop _loop;
         private MatchStateMachine _match;
         private ActorIdPool _actorIds;
@@ -108,10 +120,12 @@ namespace Ironfront.Net.Unity.Server
 
             var rules = new MatchRules
             {
-                MinPlayersToStart = _minPlayersToStart,
-                WarmupSeconds     = _warmupSeconds,
-                PostMatchSeconds  = _postMatchSeconds,
-                VictoryPoints     = _victoryPoints,
+                MinPlayersToStart      = _minPlayersToStart,
+                WarmupSeconds          = _warmupSeconds,
+                PostMatchSeconds       = _postMatchSeconds,
+                VictoryPoints          = _victoryPoints,
+                EliminationGraceSeconds = _eliminationGraceSeconds,
+                EliminationDwellSeconds = _eliminationDwellSeconds,
             };
 
             _actorIds = new ActorIdPool(
@@ -128,6 +142,7 @@ namespace Ironfront.Net.Unity.Server
             _match.PhaseChanged   += OnPhaseChanged;
             _match.ResetRequested += OnResetRequested;
             _match.BothTeamsEliminated += OnBothTeamsEliminated;
+            _match.SpawnPointCensusDanger += OnSpawnPointCensusDanger;
 
             if (_points != null && points.Length > 0)
                 _slave = new CapturePointSlave(_points, points.Length);
@@ -172,6 +187,18 @@ namespace Ironfront.Net.Unity.Server
                 + "Either the map authors no opening owner, or the host is not adopting it -- "
                 + "look for '[net] opening ownership adopted' above.");
         }
+
+        /// <summary>
+        /// Logs the exact census <see cref="MatchStateMachine.ApplyElimination"/> is deciding
+        /// on, the instant either team's held-spawn-point count crosses to or from zero. Before
+        /// this event existed the score could jump 0 to 200 between two broadcasts with nothing
+        /// recorded to explain why -- a full investigation instead of a five-minute read of this
+        /// line (X-85).
+        /// </summary>
+        private void OnSpawnPointCensusDanger(int team0, int team1)
+            => Debug.Log($"[net] spawn-point census: team0={team0} team1={team1} "
+                         + $"(needs {_eliminationDwellSeconds:F1}s continuously at zero before "
+                         + "elimination fires)");
 
         private void Start()
         {
@@ -224,6 +251,7 @@ namespace Ironfront.Net.Unity.Server
             _match.PhaseChanged   -= OnPhaseChanged;
             _match.ResetRequested -= OnResetRequested;
             _match.BothTeamsEliminated -= OnBothTeamsEliminated;
+            _match.SpawnPointCensusDanger -= OnSpawnPointCensusDanger;
         }
 
         private void FixedUpdate()

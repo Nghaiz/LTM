@@ -89,6 +89,54 @@ namespace Ironfront.Net.Unity.Server
         public static ILoadoutDirectory Loadouts { get; set; }
 
         /// <summary>
+        /// The pending deploy selection set by <c>ServerCombatBridge.PlaceAtSpawn</c>, or null.
+        /// See <see cref="DeployLoadoutSelection"/>'s own remarks for why this exists and the
+        /// guards <see cref="TryConsumeDeploySelection"/> applies around it. Never read directly
+        /// by a caller outside this class — go through that method, which owns the guard.
+        /// </summary>
+        private static DeployLoadoutSelection? _pendingDeploySelection;
+
+        /// <summary>
+        /// Stamps the deploy selection <paramref name="actorId"/>'s next <c>EquipLoadout</c> call
+        /// should arm from. Valid for exactly one consume — see
+        /// <see cref="TryConsumeDeploySelection"/>.
+        /// </summary>
+        public static void SetPendingDeploySelection(DeployLoadoutSelection selection)
+            => _pendingDeploySelection = selection;
+
+        /// <summary>
+        /// Consumes the pending deploy selection for <paramref name="actorId"/>, or answers
+        /// false when there is none. One-shot regardless of outcome: the pending value is
+        /// cleared here whether or not the id matched, so a stale value can never be read twice.
+        /// </summary>
+        /// <remarks>
+        /// A value stamped for a DIFFERENT actor id is refused and logged rather than armed onto
+        /// the wrong body — see <see cref="DeployLoadoutSelection"/>'s own remarks for why that
+        /// window exists and why it must be audible rather than silently absorbed.
+        /// </remarks>
+        public static bool TryConsumeDeploySelection(ushort actorId, out DeployLoadoutSelection selection)
+        {
+            selection = default;
+            if (!_pendingDeploySelection.HasValue) return false;
+
+            DeployLoadoutSelection pending = _pendingDeploySelection.Value;
+            _pendingDeploySelection = null;
+
+            if (pending.ActorId != actorId)
+            {
+                Debug.LogError(
+                    $"[net] a deploy selection stamped for actor {pending.ActorId} was still "
+                    + $"pending when actor {actorId} called EquipLoadout -- two deploys landed "
+                    + "inside each other's window. Refusing to arm the wrong body; falling back "
+                    + "to the server's own draw for this one.");
+                return false;
+            }
+
+            selection = pending;
+            return true;
+        }
+
+        /// <summary>
         /// Resolves the gameplay source for <paramref name="gameObject"/>, or
         /// <see langword="null"/> when nothing is registered or the object has no actor.
         /// </summary>

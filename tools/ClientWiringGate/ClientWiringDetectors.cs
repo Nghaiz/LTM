@@ -183,6 +183,19 @@ namespace Ironfront.Tools.ClientWiringGate
                 "reached only from Update(), a local-only per-frame path; the local player IS the "
                 + "subject of the read"),
 
+            // The fourth of the same shape, added when X-11 gave C_SPAWN_REQUEST a real body.
+            // RequestRespawn used to send an empty body and so touched no singleton at all; it
+            // now reads the loadout THIS client is about to render, which is what brought it
+            // into G4's sight. Verified 2026-09-03: line 316, inside Update(), is its ONLY
+            // caller -- the same Update() that already reaches FirePressed and
+            // ScriptedRespawnPressed above. There is no actor id in scope for an IsLocalActor
+            // guard to be about; the request being sent is this client's own. Same instruction
+            // as the three above: if a per-actor caller ever reaches this helper, delete this
+            // entry and guard the read rather than widening it.
+            ("/NetClientLocalCombatDriver.cs", "RequestRespawn",
+                "reached only from Update(), a local-only per-frame path; the loadout read is "
+                + "this client's own spawn request"),
+
             // The third of the same shape, added with the C_SEAT_REQUEST sender (ledger X-30).
             // Reached only from Update(); it reads THIS client's own input to decide whether the
             // player asked for a seat, and there is no actor id in scope to guard against. The

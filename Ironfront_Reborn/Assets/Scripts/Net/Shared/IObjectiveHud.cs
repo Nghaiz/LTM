@@ -39,6 +39,19 @@ namespace Ironfront.Net.Unity
             int victoryPoints);
 
         /// <summary>
+        /// Writes the capture-point flag counts -- points currently held by each team.
+        /// </summary>
+        /// <remarks>
+        /// A separate call from <see cref="SetAuthoritativeState"/> rather than two more
+        /// parameters on it: <c>MatchStateMessage</c> carries no capture-point field, so the
+        /// count is recomputed client-side from replicated per-point ownership
+        /// (<c>NetClientObjectivePresenter.OnCapturePoint</c>) and pushed on its own cadence -- a
+        /// point flip, not a match-state tick. Widening the fixed signature above would force
+        /// every implementer and caller of it to carry a value most of them do not have.
+        /// </remarks>
+        void SetCapturePointCounts(int blueCount, int redCount);
+
+        /// <summary>
         /// Sets the scoreboard's opacity, dimming every label it owns.
         /// </summary>
         /// <remarks>
