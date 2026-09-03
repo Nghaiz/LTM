@@ -196,6 +196,20 @@ namespace Ironfront.Tools.ClientWiringGate
                 "reached only from Update(), a local-only per-frame path; the loadout read is "
                 + "this client's own spawn request"),
 
+            // The fifth of the same shape, added when the FIRST deploy moved off the death screen
+            // and onto the loadout screen's own Deploy button. The death panel is authored with a
+            // "YOU WERE KILLED" title, so driving it from "a deploy is owed" showed it before any
+            // death had happened -- every player's first sight of the game was a death banner
+            // naming actor 0. Verified 2026-09-04: line 350, inside Update() at line 289, is this
+            // helper's ONLY caller -- the same Update() the four entries above already name. The
+            // edge it reads is a button on THIS client's own loadout screen; there is no actor id
+            // in scope for an IsLocalActor guard to be about. Same instruction as the four above:
+            // if a per-actor caller ever reaches this helper, delete this entry and guard the read
+            // rather than widening it.
+            ("/NetClientLocalCombatDriver.cs", "LoadoutDeployPressed",
+                "reached only from Update(), a local-only per-frame path; the deploy edge is this "
+                + "client's own loadout screen"),
+
             // The third of the same shape, added with the C_SEAT_REQUEST sender (ledger X-30).
             // Reached only from Update(); it reads THIS client's own input to decide whether the
             // player asked for a seat, and there is no actor id in scope to guard against. The

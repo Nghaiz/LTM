@@ -138,6 +138,19 @@ namespace Ironfront.Net.Unity
         void EnterDeployedView();
 
         /// <summary>
+        /// Reads and clears the loadout screen's Deploy edge — the player asking to be put into
+        /// the world for the first time. Maps to
+        /// <c>FpsActorController.ConsumeLoadoutDeployPressed</c>.
+        /// </summary>
+        /// <remarks>
+        /// An EDGE, consumed by the first caller, in the same shape as
+        /// <c>IMatchHud.ConsumeDeployPressed</c>. The loadout screen is the one the player sees
+        /// on their first spawn; the deploy screen is authored as the death screen and must not
+        /// be shown before there has been a death.
+        /// </remarks>
+        bool ConsumeDeployIntent();
+
+        /// <summary>
         /// Whether <paramref name="actor"/> is the body this rig drives.
         /// </summary>
         /// <remarks>

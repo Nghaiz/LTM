@@ -1,4 +1,4 @@
-using Ironfront.Net.Protocol;
+﻿using Ironfront.Net.Protocol;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -270,6 +270,7 @@ namespace Ironfront.Net.Unity.Client.Tests
             public void EnableInput() { }
             public void DisableInput() { }
             public void EnterDeployedView() { }
+            public bool ConsumeDeployIntent() => false;
             public bool IsDriving(IGameplayActorPresence actor) => false;
             public Vector3 Position => Vector3.zero;
             public float YawDegrees => 0f;

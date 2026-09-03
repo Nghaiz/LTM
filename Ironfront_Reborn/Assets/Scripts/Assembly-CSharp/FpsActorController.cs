@@ -512,6 +512,57 @@ public class FpsActorController : ActorController
 		controller.SetMouseEnabled(true);
 	}
 
+	/// <summary>
+	/// Set by <see cref="DeployFromLoadout"/> and cleared by
+	/// <see cref="ConsumeLoadoutDeployPressed"/>. An edge, not a level.
+	/// </summary>
+	private bool loadoutDeployPressed;
+
+	/// <summary>
+	/// The loadout screen's Deploy button, as distinct from every other reason the loadout
+	/// closes.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Why this is not simply <see cref="CloseLoadout"/>.</b> <see cref="EnterDeployedView"/>
+	/// calls <c>CloseLoadout</c> too, and it runs when the SERVER confirms a spawn — so latching
+	/// the edge inside <c>CloseLoadout</c> would post a deploy request in response to the
+	/// server's answer to the previous one. The two callers want different things and only one
+	/// of them is the player asking.
+	/// </para>
+	/// <para>
+	/// <b>Why the edge exists at all.</b> Offline, closing the loadout IS the deploy: a spawn
+	/// wave puts the body down and nothing has to be asked for. On a client the body is placed
+	/// by the server and only <c>C_SPAWN_REQUEST</c> starts that, so this screen — the one the
+	/// player is actually looking at on their first spawn — had no way to send it. The deploy
+	/// screen's own button could not stand in: that panel is authored as the DEATH screen,
+	/// titled in the scene, and showing it before anyone has died is what put "YOU WERE KILLED /
+	/// Killed by actor 0" in front of every player on their first spawn.
+	/// </para>
+	/// <para>
+	/// The request carries the loadout, so reading the edge after <c>LoadoutUi</c> has finalized
+	/// the selection is also what makes the five slots the player just chose the ones that go on
+	/// the wire.
+	/// </para>
+	/// </remarks>
+	public void DeployFromLoadout()
+	{
+		loadoutDeployPressed = true;
+		CloseLoadout();
+	}
+
+	/// <summary>Reads and clears the loadout Deploy edge. See <see cref="DeployFromLoadout"/>.</summary>
+	public bool ConsumeLoadoutDeployPressed()
+	{
+		if (!loadoutDeployPressed)
+		{
+			return false;
+		}
+
+		loadoutDeployPressed = false;
+		return true;
+	}
+
 	public override void SpawnAt(Vector3 position)
 	{
 		SceneryCamera.instance.camera.enabled = false;
