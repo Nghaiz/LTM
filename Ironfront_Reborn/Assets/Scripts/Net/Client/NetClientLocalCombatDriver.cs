@@ -89,6 +89,26 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         private bool _awaitingFirstDeploy = true;
 
+        /// <summary>
+        /// <c>Time.time</c> of the last spawn request that actually went out, or 0 if none has.
+        /// The zero is what keeps <see cref="ResendDeployUntilPlaced"/> from asking before the
+        /// player ever did.
+        /// </summary>
+        private float _lastDeployRequestAt;
+
+        /// <summary>
+        /// How long to wait for the server to answer a first deploy before asking again.
+        /// </summary>
+        /// <remarks>
+        /// A placement is announced within an RTT, and lane-B's loopback RTT is single-digit
+        /// milliseconds, so one second is roughly two orders of magnitude of headroom: it will
+        /// not race a healthy answer, and it still recovers a dropped request inside the time a
+        /// player spends reading the loadout screen. Shorter would narrow the window in which a
+        /// re-send can cross a placement in flight, but that window is already made harmless by
+        /// the server's aliveness guard, so there is nothing to buy by making this tighter.
+        /// </remarks>
+        private const float DeployResendSeconds = 1f;
+
         /// <summary>Whether a deploy request may be sent right now. See <see cref="_awaitingFirstDeploy"/>.</summary>
         private bool CanDeployNow(float nowSeconds)
             => _awaitingFirstDeploy || _state.CanRequestRespawn(nowSeconds);
@@ -284,7 +304,16 @@ namespace Ironfront.Net.Unity.Client
             // this announce named an ALREADY-alive body -- a reconnect mid-life is the only
             // production case -- and that still deploys immediately, because no further
             // confirmation is coming for a life already in progress.
-            if (message.Health > 0) EnterDeployedView();
+            if (message.Health > 0)
+            {
+                // The reconnect-mid-life case is also an answer: this body is placed and alive, so
+                // there is no first deploy left to owe and nothing for ResendDeployUntilPlaced to
+                // keep asking for. OnRespawned will not fire here -- the snapshot's IsAlive bit
+                // never transitions, it was already true when we arrived.
+                _awaitingFirstDeploy = false;
+
+                EnterDeployedView();
+            }
         }
         private void Update()
         {
@@ -349,15 +378,57 @@ namespace Ironfront.Net.Unity.Client
                 && (Input.GetKeyDown(_respawnKey) || ScriptedRespawnPressed()
                     || DeployPressed() || LoadoutDeployPressed()))
             {
-                // Only retire the grant once the request has actually gone out. RequestRespawn
-                // returns early -- silently, and correctly -- when the connection is not up yet,
-                // and this line used to clear the flag anyway: a client whose deploy edge landed
-                // one frame before its connection completed lost the send AND its only retry, so
-                // it never deployed at all and its body stayed where Instantiate left it. That is
-                // 1 of 3 clients in artifacts/lane-b/fix-verify-02 (observer-b, spawned Y 968.53
-                // against the other two at 9.14 and 24.95). Ledger X-86.
-                if (RequestRespawn()) _awaitingFirstDeploy = false;
+                // The grant is NOT retired here. A sent request is not a placed body: the server
+                // drops the request outright when the connection has no ServerPlayer yet
+                // (`ISpawnRequestHandler.OnSpawnRequested`'s first line returns on a
+                // `TryGetValue` miss), and retiring on the send spent the only grant on a
+                // message nobody acted on. Measured as 2 of 3 and 1 of 3 clients left at the
+                // prefab park across repeat runs. The grant is retired where the server ANSWERS
+                // -- OnRespawned, off the snapshot's own IsAlive bit -- and until then the block
+                // below re-sends. Ledger X-86.
+                if (RequestRespawn()) _lastDeployRequestAt = Time.time;
             }
+
+            ResendDeployUntilPlaced();
+        }
+
+        /// <summary>
+        /// Re-sends the first deploy request, once a second, until the server answers it.
+        /// Ledger <b>X-86</b>'s residual.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why a re-send and not a better first send.</b> The request is dropped by the
+        /// server, not lost by the client: `OnSpawnRequested` returns immediately when
+        /// `_byConnection` has no `ServerPlayer` for the session yet, because there is no body to
+        /// place. Nothing on the client can make that arrive earlier — the only repair available
+        /// to the sender is to ask again.
+        /// </para>
+        /// <para>
+        /// <b>Why a duplicate is safe.</b> The server's own `AwaitingFirstDeploy` flag makes the
+        /// FIRST accepted request the placement and sends every later one to
+        /// `ServerCombatBridge.TryRespawn` — which, as of this change, refuses a body that is
+        /// alive. So a re-send that crosses the placement in flight is declined rather than
+        /// teleporting a player who has just deployed. That guard is the half of this fix that
+        /// makes the other half safe, and neither should land alone.
+        /// </para>
+        /// <para>
+        /// <b>Stopping condition is the server's answer, not a count.</b> `_awaitingFirstDeploy`
+        /// is cleared in <see cref="OnRespawned"/>, which fires off the snapshot's IsAlive bit —
+        /// the client observing its own body PLACED. A retry cap would restore exactly the
+        /// failure this closes, so there is none; the cost of the unbounded case is one 8-byte
+        /// message a second against a server that is not placing anybody, which is a condition
+        /// worth being noisy about rather than silent.
+        /// </para>
+        /// </remarks>
+        private void ResendDeployUntilPlaced()
+        {
+            if (!_awaitingFirstDeploy) return;
+            if (_lastDeployRequestAt <= 0f) return;
+            if (_client == null || !_client.IsConnected) return;
+            if (Time.time - _lastDeployRequestAt < DeployResendSeconds) return;
+
+            if (RequestRespawn()) _lastDeployRequestAt = Time.time;
         }
 
         /// <summary>
@@ -590,6 +661,14 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         private void OnRespawned()
         {
+            // The server ANSWERED. This is the placement signal X-86's residual said the client
+            // did not have, and it is trustworthy in the way `combat.alive` is not: it fires on
+            // the snapshot's IsAlive going true, so it reports the server's own view of a body it
+            // has placed, rather than the client's opening assumption about a body it has not.
+            // Retiring the grant here rather than at the send is what stops a dropped request
+            // from being the only one.
+            _awaitingFirstDeploy = false;
+
             _inputSuppressedByDeath = false;
             EnterDeployedView();
         }
