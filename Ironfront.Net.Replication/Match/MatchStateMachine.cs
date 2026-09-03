@@ -120,9 +120,33 @@ namespace Ironfront.Net.Replication.Match
 
         private bool _warnedBothEliminated;
 
+        /// <summary>
+        /// Raised when either team's held spawn-point count crosses to or from zero -- the
+        /// exact census <see cref="ApplyElimination"/> is deciding on. X-85: before this event
+        /// existed, the score could jump 0 to 200 between two broadcasts with nothing logged in
+        /// between, and diagnosing that took a full investigation rather than reading a line. A
+        /// host subscribes and writes it out with the repo's <c>[net]</c> prefix
+        /// (<c>MatchController.OnSpawnPointCensusDanger</c>). Deduplicated to the transition
+        /// tick, not raised every tick a team happens to sit at zero -- that would be one line
+        /// per tick for the whole grace/dwell window on an active map.
+        /// </summary>
+        public event Action<int, int>? SpawnPointCensusDanger;
+
         private int _spawnPoints0 = CountsNotReported;
         private int _spawnPoints1 = CountsNotReported;
         private float _playingElapsed;
+
+        /// <summary>
+        /// Seconds team 0's / team 1's held-spawn-point count has sat at zero, CONTINUOUSLY.
+        /// Reset to zero the instant the count is non-zero again. See
+        /// <see cref="MatchRules.EliminationDwellSeconds"/> for why this exists (X-85).
+        /// </summary>
+        private float _eliminationDwell0;
+        private float _eliminationDwell1;
+
+        /// <summary>The last census reported through <see cref="SpawnPointCensusDanger"/>, deduplicated.</summary>
+        private bool _spawnPointDanger0;
+        private bool _spawnPointDanger1;
 
         /// <summary>
         /// Seconds between unsolicited <c>S_MATCH_STATE</c> messages while nothing changes.
@@ -323,7 +347,7 @@ namespace Ironfront.Net.Replication.Match
                 case MatchPhase.Playing:
                     _playingElapsed += deltaSeconds;
                     UpdateCapturePoints(actors, deltaSeconds);
-                    ApplyElimination();
+                    ApplyElimination(deltaSeconds);
                     // A live round is NOT abandoned when the humans leave. The bots are still
                     // fighting, the match still resolves, and the master still gets its
                     // GS_MATCH_ENDED — which is what keeps the server's advertised state honest
@@ -495,14 +519,51 @@ namespace Ironfront.Net.Replication.Match
         /// margin (naming a winner) or does not (leaving the round running forever). So it sets
         /// <see cref="_drawn"/> and leaves the scores alone.
         /// </para>
+        /// <para>
+        /// <b>X-85: the zero reading must hold, not just be sampled once.</b> A capture point's
+        /// held team crosses to <c>None</c> the instant its ownership fraction crosses the
+        /// render-facing capture threshold, and one attacker does that crossing in well under a
+        /// second at a typical map's capture speed — the reported count went 1 to 0 for exactly
+        /// one flip, not because the anchor was actually lost, but because it was mid-fight. The
+        /// dwell requirement (<see cref="MatchRules.EliminationDwellSeconds"/>) is this file's
+        /// answer to "neutral is not annihilated" as well as to the single-tick read: rather
+        /// than adding a second, asymmetric threshold on the ownership fraction itself — which
+        /// would need to live next to <c>CapturePointMessage.OwnedThreshold</c>, out of this
+        /// file's reach — a duration requirement absorbs the exact same flicker in the time
+        /// domain instead. It reads as: losing an anchor takes a SUSTAINED absence; keeping it
+        /// takes nothing more than being back inside the window by the next tick, which is
+        /// already how <see cref="_eliminationDwell0"/> / <see cref="_eliminationDwell1"/> reset.
+        /// Defaults to 0 (instant) so a bare <see cref="MatchRules"/> keeps its pre-X-85
+        /// behaviour; the shipped protection is <c>MatchController</c>'s own serialized default.
+        /// </para>
         /// </remarks>
-        private void ApplyElimination()
+        private void ApplyElimination(float deltaSeconds)
         {
             if (_playingElapsed <= _rules.EliminationGraceSeconds) return;
             if (_spawnPoints0 == CountsNotReported || _spawnPoints1 == CountsNotReported) return;
 
-            bool eliminated0 = _spawnPoints0 == 0;
-            bool eliminated1 = _spawnPoints1 == 0;
+            bool zero0 = _spawnPoints0 == 0;
+            bool zero1 = _spawnPoints1 == 0;
+
+            // [net] telemetry: exactly once per transition, not once per tick a team happens to
+            // sit at zero -- see SpawnPointCensusDanger's own remark for why this exists.
+            if (zero0 != _spawnPointDanger0 || zero1 != _spawnPointDanger1)
+            {
+                _spawnPointDanger0 = zero0;
+                _spawnPointDanger1 = zero1;
+                SpawnPointCensusDanger?.Invoke(_spawnPoints0, _spawnPoints1);
+            }
+
+            _eliminationDwell0 = zero0 ? _eliminationDwell0 + deltaSeconds : 0f;
+            _eliminationDwell1 = zero1 ? _eliminationDwell1 + deltaSeconds : 0f;
+
+            // The zero0/zero1 term is not redundant with the dwell comparison: a dwell
+            // requirement of exactly 0 (the library default -- see EliminationDwellSeconds'
+            // own remark) resets the accumulator to 0f on every non-zero tick, and 0f >= 0f is
+            // trivially true. Without gating on zero0/zero1 directly, a team that has held its
+            // ground the entire time would read as eliminated on every single tick.
+            bool eliminated0 = zero0 && _eliminationDwell0 >= _rules.EliminationDwellSeconds;
+            bool eliminated1 = zero1 && _eliminationDwell1 >= _rules.EliminationDwellSeconds;
             if (!eliminated0 && !eliminated1) return;
 
             // Both at once is not a match ending, it is a map with no bases -- and read as a
@@ -540,8 +601,18 @@ namespace Ironfront.Net.Replication.Match
             // Reset on ENTRY to Playing, not in PerformReset: ForceReset can drop a live round
             // straight back to WaitingForPlayers without ever passing through PerformReset's
             // caller, and a grace window left running from the previous round would let the
-            // next one end on its own first tick.
-            if (phase == MatchPhase.Playing) _playingElapsed = 0f;
+            // next one end on its own first tick. The dwell accumulators (X-85) and the danger
+            // flags they gate the telemetry event on need the exact same reset, for the exact
+            // same reason -- a dwell timer left running from the previous round's dying seconds
+            // would let the next round end on ITS own first tick instead.
+            if (phase == MatchPhase.Playing)
+            {
+                _playingElapsed      = 0f;
+                _eliminationDwell0   = 0f;
+                _eliminationDwell1   = 0f;
+                _spawnPointDanger0   = false;
+                _spawnPointDanger1   = false;
+            }
 
             MatchStateIsDirty = true;
 
