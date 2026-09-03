@@ -187,14 +187,24 @@ namespace Ironfront.Net.Unity.EditorTools
         /// <summary>3.1 — which side you are on, top-left, above the ammo readout.</summary>
         private static Text BuildTeamReadout(GameObject root, StringBuilder log)
         {
-            Text label = Label(root, "Team Readout", string.Empty, 36, TextAnchor.UpperLeft);
-            RectTransform rect = label.GetComponent<RectTransform>();
+            // Backdrop, the same way BuildDeployScreen and BuildScoreboard back their own text —
+            // a bare Text over the killfeed and minimap underneath it was unreadable at a glance.
+            var panel = new GameObject("Team Readout", typeof(RectTransform), typeof(Image));
+            panel.transform.SetParent(root.transform, worldPositionStays: false);
 
-            rect.anchorMin = new Vector2(0f, 1f);
-            rect.anchorMax = new Vector2(0f, 1f);
-            rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = new Vector2(28f, -24f);
-            rect.sizeDelta = new Vector2(360f, 48f);
+            RectTransform panelRect = panel.GetComponent<RectTransform>();
+            panelRect.anchorMin = new Vector2(0f, 1f);
+            panelRect.anchorMax = new Vector2(0f, 1f);
+            panelRect.pivot = new Vector2(0f, 1f);
+            panelRect.anchoredPosition = new Vector2(36f, -36f);
+            panelRect.sizeDelta = new Vector2(320f, 44f);
+
+            var backdrop = panel.GetComponent<Image>();
+            backdrop.color = Backdrop;
+            backdrop.raycastTarget = false;
+
+            Text label = Label(panel, "Text", string.Empty, 26, TextAnchor.UpperLeft);
+            Stretch(label.GetComponent<RectTransform>());
 
             // Authored EMPTY, deliberately. Criterion 2 is graded on a screenshot at join, and a
             // placeholder string would render as an answer for however long the first snapshot
