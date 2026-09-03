@@ -327,6 +327,37 @@ namespace Ironfront.Net.Unity.Client
             _loadingMatch = true;
             _loadingScene = scene;
 
+            // The one line in the codebase that KNOWS this process is a client: the server has
+            // accepted, the transport is offered, and the map is about to load. Every map scene
+            // carries an active NetServer AND an active NetClient, so a process that reaches here
+            // without saying so is a listen server -- NetServerBootstrap wins the Awake race,
+            // binds UDP 27015 against the server it just joined, and NetClientPresenterGuard
+            // .IsPresentable is false for the whole session, leaving the killfeed, the name table
+            // and the local combat driver dead. Measured on all four of tmp/playtest/client-*.log
+            // from `playtest-local.ps1 -Clients 4`: `role = Server` at :105, `UDP :27015 could not
+            // be bound` at :141, `[v7] ProjectileCatalogInstaller ran before the server tick loop
+            // was bound` at :166.
+            //
+            // DECLARED HERE, and NOT as a default inside NetRoleDeclaration.Resolve, which was the
+            // obvious repair and is wrong. Resolve cannot see intent -- only how the process was
+            // launched -- so "a rendered player build is a client" would also catch
+            // MainMenu.StartLevel, the offline single-player entry that still loads a map directly
+            // with no master. That path works BECAUSE it becomes a local authority; declaring it a
+            // client makes NetServerBootstrap decline and takes the bots, the capture points and
+            // the spawner with it. Keying on behaviour instead of on launch method also means this
+            // holds for every launcher -- the playtest script, a double-clicked exe, an installer
+            // that does not exist yet -- rather than for the ones somebody remembered to configure.
+            //
+            // Both calls, and they are not the same statement (see NetContext): SetRole says what
+            // this process IS RUNNING; DeclareClientProcess says what it was LAUNCHED AS, and that
+            // is the one NetServerBootstrap.Awake reads to decline -- above its own
+            // `if (!NetContext.IsClient) SetRole(Server)`, so the server stands down rather than
+            // racing. Before the LoadScene below, per DeclareClientProcess's own contract: after
+            // the map's Awakes have run the declaration is a statement about a socket that
+            // already exists. Both are idempotent, so re-joining a second match is a no-op.
+            NetContext.SetRole(NetRole.Client);
+            NetContext.DeclareClientProcess();
+
             if (_verbose) Debug.Log($"[flow] server accepted; loading map '{scene}'.");
             SceneManager.LoadScene(scene);
         }

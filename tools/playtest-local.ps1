@@ -307,6 +307,15 @@ try {
     # A distinct id per client is not cosmetic: the server enforces one session per player, and
     # a second client reusing the first's id is refused with a bare InvalidTicket -- which reads
     # as a full server and is not one.
+    # Set BACK ON, having been stripped above so the headless game server could claim its own
+    # role. Belt-and-braces beside the declaration ClientFlowBootstrap now makes at the join:
+    # this one lands in the log at startup ("[net] this process is a client") rather than at the
+    # moment a map loads, so a run that goes wrong says which side each window was on before the
+    # first thing goes wrong. Without either, an undeclared client wins nothing -- every map scene
+    # carries an active NetServer, NetServerBootstrap takes the role, and all four windows bind
+    # UDP :27015 against the server they just joined.
+    $env:IRONFRONT_ROLE = "client"
+
     $env:IRONFRONT_CLIENT_MASTER_HOST = "127.0.0.1"
     $env:IRONFRONT_CLIENT_MASTER_PORT = "$MasterPort"
 

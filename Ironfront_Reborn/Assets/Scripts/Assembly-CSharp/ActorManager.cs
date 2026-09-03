@@ -77,6 +77,29 @@ public class ActorManager : MonoBehaviour
 	private void Awake()
 	{
 		instance = this;
+
+		// ALLOCATED HERE, not in StartGame(). `instance` was assigned in Awake while the three
+		// registries below were built in StartGame(), which GameManager calls from its
+		// sceneLoaded handler -- so between the map's Awakes and that handler there is a window
+		// in which `instance` is non-null and `instance.vehicles` is null. The client's held
+		// snapshot queue releases inside exactly that window
+		// (ClientFlowBootstrap.OnSceneLoaded -> MasterSession.OnSceneReady ->
+		// SnapshotHoldingQueue.Release -> RemoteVehicleRegistry.OnVehicleSpawn -> Instantiate ->
+		// Vehicle.Awake -> RegisterVehicle), and every vehicle in the first batch threw out of
+		// RegisterVehicle: 14 of them in tmp/playtest/client-2.log.
+		//
+		// The tell that this was patched once on the wrong side: DropVehicle and DropActor carry
+		// null guards and RegisterVehicle and RegisterActor do not. Guarding the register half to
+		// match would stop the exception and lose the vehicle -- it would exist as a GameObject
+		// that nothing can damage, enter or clean up, which is worse than the throw because
+		// nothing says so. DecalManager.AddDecal already warns about the same window; this is the
+		// third instance of the shape, so it is fixed at the lifetime rather than at the call.
+		actors = new List<Actor>();
+		vehicles = new List<Vehicle>();
+		aliveActors = new Dictionary<int, List<Actor>>();
+		aliveActors.Add(0, new List<Actor>());
+		aliveActors.Add(1, new List<Actor>());
+
 		AiActorController.SetupParameters();
 		SceneManager.sceneLoaded += OnLevelLoaded;
 		spawnTime = Mathf.Max(0.1f, spawnTime);
@@ -89,12 +112,16 @@ public class ActorManager : MonoBehaviour
 
 	public void StartGame()
 	{
-		actors = new List<Actor>();
+		// The three registries are NOT re-created here, and are NOT cleared here either. Awake
+		// allocates them empty on a fresh per-scene instance and GameManager -- which is
+		// DontDestroyOnLoad -- calls this exactly once per map load, so re-creating them was
+		// always redundant. It stopped being merely redundant once anything registers before this
+		// runs: the client's snapshot release does, and a `new` or a `Clear()` here would drop
+		// precisely the vehicles this change exists to keep. Same end state as the crash, minus
+		// the log line saying so.
+		//
+		// spawnPoints stays: it is a scan of the loaded scene and has nothing to find from Awake.
 		spawnPoints = UnityEngine.Object.FindObjectsOfType<SpawnPoint>();
-		vehicles = new List<Vehicle>();
-		aliveActors = new Dictionary<int, List<Actor>>();
-		aliveActors.Add(0, new List<Actor>());
-		aliveActors.Add(1, new List<Actor>());
 		FillEmptySlotsWithAI();
 		InvokeRepeating("SpawnWave", 1f, spawnTime);
 	}
