@@ -145,6 +145,17 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>Reused for C_SPAWN_REQUEST. Sized like every other client send buffer.</summary>
         private readonly byte[] _payload = new byte[ProtocolConstants.MAX_PAYLOAD];
 
+        /// <summary>Scratch for the deploy request's body, reused rather than stack-allocated.</summary>
+        /// <remarks>
+        /// A field and not a <c>stackalloc</c>, and the reason is a compiler rule rather than a
+        /// preference: a stack-allocated span's ref-safe-to-escape scope is narrower than the
+        /// <c>PayloadFrameWriter</c> ref struct it would be handed to, so passing one is CS8350
+        /// and CS8352. <c>BaselineAckPolicy</c> and <c>ClientPredictionStage</c> both already
+        /// solve it this way -- a heap array wrapped in a <c>ReadOnlySpan</c> at the call site --
+        /// and this follows them rather than inventing a third shape.
+        /// </remarks>
+        private readonly byte[] _spawnRequestBody = new byte[SpawnRequestMessage.Size];
+
         private void Awake()
         {
             if (!NetClientPresenterGuard.IsPresentable)
@@ -439,12 +450,13 @@ namespace Ironfront.Net.Unity.Client
                 out byte primary, out byte secondary, out byte gear1, out byte gear2, out byte gear3);
 
             var spawnRequest = new SpawnRequestMessage(primary, secondary, gear1, gear2, gear3);
-            System.Span<byte> body = stackalloc byte[SpawnRequestMessage.Size];
-            if (spawnRequest.Write(body) < 0) return;
+            if (spawnRequest.Write(_spawnRequestBody) < 0) return;
 
             var writer = new PayloadFrameWriter(_payload, ChannelId.ReliableOrdered);
 
-            if (!writer.WriteMessage(ClientMessageType.SpawnRequest, body)) return;
+            if (!writer.WriteMessage(
+                    ClientMessageType.SpawnRequest,
+                    new System.ReadOnlySpan<byte>(_spawnRequestBody))) return;
             if (!writer.TryFinish(out int total)) return;
 
             _client.Send(
