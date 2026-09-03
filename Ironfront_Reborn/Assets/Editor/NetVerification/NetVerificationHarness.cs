@@ -374,12 +374,18 @@ namespace Ironfront.Editor.Verification
             // empty") and no particular spawn point (NoSpawnPointPreference, the constructor's
             // own default): it exists to prove the request reaches the server and is granted, not
             // to arm a specific weapon.
+            //
+            // A heap array rather than a `stackalloc`, for the compiler's reason and not a
+            // stylistic one: a stack-allocated span's ref-safe-to-escape scope is narrower than
+            // the PayloadFrameWriter ref struct it would be passed to, which is CS8350 and
+            // CS8352. NetClientLocalCombatDriver, BaselineAckPolicy and ClientPredictionStage all
+            // send their bodies from an array for the same reason.
             var spawnRequest = new SpawnRequestMessage(0, 0, 0, 0, 0);
-            Span<byte> body = stackalloc byte[SpawnRequestMessage.Size];
+            byte[] body = new byte[SpawnRequestMessage.Size];
             if (spawnRequest.Write(body) < 0) return "could not encode C_SPAWN_REQUEST";
 
             var writer = new PayloadFrameWriter(_payload, ChannelId.ReliableOrdered);
-            if (!writer.WriteMessage(ClientMessageType.SpawnRequest, body))
+            if (!writer.WriteMessage(ClientMessageType.SpawnRequest, new ReadOnlySpan<byte>(body)))
                 return "could not frame C_SPAWN_REQUEST";
             if (!writer.TryFinish(out int total)) return "could not finish C_SPAWN_REQUEST";
 
