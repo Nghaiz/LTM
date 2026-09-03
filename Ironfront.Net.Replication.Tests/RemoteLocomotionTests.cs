@@ -15,6 +15,15 @@ namespace Ironfront.Net.Replication.Tests
     /// </summary>
     /// <remarks>
     /// <para>
+    /// <b>BLIND TEST AT LINE 156: <c>ActorStateFlags.IsRagdoll</c> is manually constructed.</b>
+    /// This test proves the DECODER reads the bit correctly when it is present.
+    /// It does NOT prove any producer ever sets the bit — the flag is hand-crafted rather than captured from the server.
+    /// </para>
+    /// <para>
+    /// <para>
+    /// <b>BLIND TEST AT LINE 156:</b> <c>ActorStateFlags.IsRagdoll</c> manually constructed.
+    /// Proves the DECODER reads the bit; does NOT prove any producer sets it.
+    /// </para>
     /// <b>The failure this catches is "the parameter is never written", which is what shipped.</b>
     /// <c>RemoteActorView</c> drove seven animator parameters and none of them was
     /// <c>movement x</c>, <c>movement y</c> or <c>moving</c>, so every networked body played its

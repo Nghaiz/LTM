@@ -15,6 +15,10 @@ namespace Ironfront.Net.Replication.Tests
     /// ragdolled and always held the same weapon. These tests grade the mapping that ends that;
     /// whether the animator then draws it is client-track item E1.
     /// </para>
+        /// <para>
+        /// <b>BLIND TESTS: Lines 36, 58, 60 manually construct <c>ActorStateFlags.IsRagdoll</c>.</b>
+        /// These prove the DECODER reads the bit correctly; they do NOT prove any producer sets it.
+        /// </para>
     /// </remarks>
     public sealed class RemoteActorViewStateTests
     {
