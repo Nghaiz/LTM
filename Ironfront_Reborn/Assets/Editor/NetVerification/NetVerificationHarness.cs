@@ -368,8 +368,18 @@ namespace Ironfront.Editor.Verification
         /// </summary>
         public static string RequestSpawn(bool fromBot)
         {
+            // V8, ledger X-11: the body is no longer empty -- ServerMessageRouter now requires
+            // SpawnRequestMessage.Size bytes and fails a shorter packet as malformed rather than
+            // silently accepting it. This probe asks for no particular loadout (all zero, "left
+            // empty") and no particular spawn point (NoSpawnPointPreference, the constructor's
+            // own default): it exists to prove the request reaches the server and is granted, not
+            // to arm a specific weapon.
+            var spawnRequest = new SpawnRequestMessage(0, 0, 0, 0, 0);
+            Span<byte> body = stackalloc byte[SpawnRequestMessage.Size];
+            if (spawnRequest.Write(body) < 0) return "could not encode C_SPAWN_REQUEST";
+
             var writer = new PayloadFrameWriter(_payload, ChannelId.ReliableOrdered);
-            if (!writer.WriteMessage(ClientMessageType.SpawnRequest, ReadOnlySpan<byte>.Empty))
+            if (!writer.WriteMessage(ClientMessageType.SpawnRequest, body))
                 return "could not frame C_SPAWN_REQUEST";
             if (!writer.TryFinish(out int total)) return "could not finish C_SPAWN_REQUEST";
 
