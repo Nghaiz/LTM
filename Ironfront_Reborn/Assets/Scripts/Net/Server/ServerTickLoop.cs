@@ -1509,7 +1509,7 @@ namespace Ironfront.Net.Unity.Server
         /// client clock running a few milliseconds fast, not a protocol violation, and treating
         /// it as one would disconnect honest players over clock skew.
         /// </remarks>
-        void ISpawnRequestHandler.OnSpawnRequested(ClientSession session)
+        void ISpawnRequestHandler.OnSpawnRequested(ClientSession session, in SpawnRequestMessage message)
         {
             if (!_byConnection.TryGetValue(session.ConnectionId, out ServerPlayer player)) return;
 
@@ -1521,11 +1521,11 @@ namespace Ironfront.Net.Unity.Server
             if (player.AwaitingFirstDeploy)
             {
                 player.AwaitingFirstDeploy = false;
-                _combat.PlaceAtSpawn(player);
+                _combat.PlaceAtSpawn(player, message);
                 return;
             }
 
-            _combat.TryRespawn(player);
+            _combat.TryRespawn(player, message);
         }
 
         /// <summary>

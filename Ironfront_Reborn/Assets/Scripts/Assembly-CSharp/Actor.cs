@@ -1,5 +1,6 @@
 ﻿using System;
 using Ironfront.Net.Replication.Vehicles;
+using Ironfront.Net.Unity.Server;
 using UnityEngine;
 
 public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresence
@@ -318,7 +319,7 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 	{
 		hasAmmoBox = false;
 		hasMedipack = false;
-		WeaponManager.LoadoutSet loadout = controller.GetLoadout();
+		WeaponManager.LoadoutSet loadout = ResolveDeployLoadout() ?? controller.GetLoadout();
 		SpawnWeapon(loadout.primary, 0);
 		SpawnWeapon(loadout.secondary, 1);
 		SpawnWeapon(loadout.gear1, 2);
@@ -326,6 +327,32 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		SpawnWeapon(loadout.gear3, 4);
 		SwitchToFirstAvailableWeapon();
 		LogLoadoutSlots();
+	}
+
+	// X-11's other half, and the guarded fallback DeployLoadoutSelection's own remarks describe:
+	// IGameplayActorSource.EquipLoadout takes no loadout argument, and giving it one is one new
+	// forwarding line on NetServerActor.cs, which is out of scope for this change. This is the
+	// documented alternative, not a shortcut taken instead of looking -- see that type's remarks
+	// for the ordering guarantee this depends on and what breaks if it is ever violated.
+	//
+	// Null (not a set with every slot empty) when nothing is pending, so a bot or an offline
+	// actor -- neither of which carries a NetServerActor component to stamp a selection against
+	// -- falls straight through to controller.GetLoadout() exactly as before this change.
+	private WeaponManager.LoadoutSet ResolveDeployLoadout()
+	{
+		NetServerActor networked = GetComponent<NetServerActor>();
+		if (networked == null) return null;
+
+		if (!NetServerBindings.TryConsumeDeploySelection(networked.ActorId, out DeployLoadoutSelection selection))
+			return null;
+
+		var loadout = new WeaponManager.LoadoutSet();
+		WeaponManager.TryGetEntry(selection.Primary, out loadout.primary);
+		WeaponManager.TryGetEntry(selection.Secondary, out loadout.secondary);
+		WeaponManager.TryGetEntry(selection.Gear1, out loadout.gear1);
+		WeaponManager.TryGetEntry(selection.Gear2, out loadout.gear2);
+		WeaponManager.TryGetEntry(selection.Gear3, out loadout.gear3);
+		return loadout;
 	}
 
 	// Ledger X-31. A lane-B run pinned gear1 to FRAG, asked for slot 2 every frame, and the
