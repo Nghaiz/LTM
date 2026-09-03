@@ -3,7 +3,8 @@
   "steps": [
     {
       "seconds": 2.0,
-      "yawDegrees": 0
+      "yawDegrees": 0,
+      "respawn": true
     },
     {
       "checkpoint": "smoke-spawned",

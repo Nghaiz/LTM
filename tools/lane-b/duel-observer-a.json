@@ -1,7 +1,7 @@
 {
   "name": "duel-victim",
   "steps": [
-    { "seconds": 5.0, "yawDegrees": 180 },
+    { "respawn": true, "seconds": 5.0, "yawDegrees": 180 },
     { "checkpoint": "spawned", "seconds": 2.0, "yawDegrees": 180 },
     { "checkpoint": "approach", "seconds": 150.0,
       "aimAtPlayer": "DRIVER", "approach": true, "holdDistanceMeters": 6.0, "sprint": true },

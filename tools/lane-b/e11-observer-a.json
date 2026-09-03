@@ -12,7 +12,7 @@
     "one team does not make the engagement fake."
   ],
   "steps": [
-    { "seconds": 5.0, "yawDegrees": 0 },
+    { "respawn": true, "seconds": 5.0, "yawDegrees": 0 },
     { "checkpoint": "spawned", "seconds": 2.0, "yawDegrees": 0 },
     { "checkpoint": "walking-to-vehicle", "seconds": 90.0,
       "approachVehicle": true, "vehicleSearchMetres": 2000.0,

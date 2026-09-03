@@ -15,7 +15,7 @@
     "badly-timed sample being read as though the seat were permanently unreachable."
   ],
   "steps": [
-    { "seconds": 5.0, "yawDegrees": 0 },
+    { "respawn": true, "seconds": 5.0, "yawDegrees": 0 },
     { "checkpoint": "spawned", "seconds": 2.0, "yawDegrees": 0 },
     { "checkpoint": "walking-to-vehicle", "seconds": 90.0,
       "approachVehicle": true, "vehicleSearchMetres": 2000.0,

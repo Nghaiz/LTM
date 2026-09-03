@@ -1,7 +1,7 @@
 {
   "name": "pointblank-shooter",
   "steps": [
-    { "seconds": 5.0, "yawDegrees": 0 },
+    { "respawn": true, "seconds": 5.0, "yawDegrees": 0 },
     { "checkpoint": "spawned", "seconds": 3.0, "aimAtPlayer": "OBS-B" },
     { "checkpoint": "in-range", "seconds": 5.0,
       "aimAtPlayer": "OBS-B", "approach": true, "holdDistanceMeters": 6.0, "aim": true },

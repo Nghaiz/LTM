@@ -3,7 +3,8 @@
   "steps": [
     {
       "seconds": 5.0,
-      "yawDegrees": 200
+      "yawDegrees": 200,
+      "respawn": true
     },
     {
       "checkpoint": "spawned",

@@ -21,7 +21,7 @@
     "the intended target or the witness."
   ],
   "steps": [
-    { "seconds": 5.0, "yawDegrees": 0 },
+    { "respawn": true, "seconds": 5.0, "yawDegrees": 0 },
     { "checkpoint": "spawned", "seconds": 3.0, "aimAtPlayer": "OBS-B" },
     { "checkpoint": "withdrawing", "seconds": 10.0,
       "aimAtPlayer": "OBS-B", "moveZ": -1.0 },
