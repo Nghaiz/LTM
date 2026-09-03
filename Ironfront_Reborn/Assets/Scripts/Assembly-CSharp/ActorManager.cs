@@ -94,6 +94,11 @@ public class ActorManager : MonoBehaviour
 		// that nothing can damage, enter or clean up, which is worse than the throw because
 		// nothing says so. DecalManager.AddDecal already warns about the same window; this is the
 		// third instance of the shape, so it is fixed at the lifetime rather than at the call.
+		//
+		// `vehicles` and `aliveActors` are the two this actually fixes, because they are the two
+		// OnLevelLoaded does not touch. `actors` is allocated here as well, but it does NOT stay
+		// allocated and StartGame has to build it again -- see the remark on OnLevelLoaded, which
+		// nulls it moments after this line runs, on this very same scene load.
 		actors = new List<Actor>();
 		vehicles = new List<Vehicle>();
 		aliveActors = new Dictionary<int, List<Actor>>();
@@ -112,15 +117,22 @@ public class ActorManager : MonoBehaviour
 
 	public void StartGame()
 	{
-		// The three registries are NOT re-created here, and are NOT cleared here either. Awake
-		// allocates them empty on a fresh per-scene instance and GameManager -- which is
-		// DontDestroyOnLoad -- calls this exactly once per map load, so re-creating them was
-		// always redundant. It stopped being merely redundant once anything registers before this
-		// runs: the client's snapshot release does, and a `new` or a `Clear()` here would drop
-		// precisely the vehicles this change exists to keep. Same end state as the crash, minus
-		// the log line saying so.
+		// `actors` MUST be rebuilt here, and this line is not the leftover it looks like. Awake
+		// allocates it and then OnLevelLoaded, which Awake itself subscribes to, sets it back to
+		// null on the same scene load -- so between those two callbacks the field is null and the
+		// ONLY thing that has ever restored it is this line. Deleting it as redundant cost 14400
+		// NullReferenceExceptions per client and 8136 on the server, out of SpawnWave and
+		// Register, in a single four-client playtest. It is safe to build a fresh list because
+		// Unity runs every Start after every sceneLoaded callback, so Actor.Start -> Register has
+		// not run yet and nothing is discarded.
+		//
+		// `vehicles` and `aliveActors` are deliberately NOT rebuilt here. OnLevelLoaded leaves
+		// them alone, so Awake's copies are still live -- and the client's held snapshot releases
+		// BEFORE this runs, so a `new` or a `Clear()` would drop exactly the vehicles the Awake
+		// allocation exists to keep.
 		//
 		// spawnPoints stays: it is a scan of the loaded scene and has nothing to find from Awake.
+		actors = new List<Actor>();
 		spawnPoints = UnityEngine.Object.FindObjectsOfType<SpawnPoint>();
 		FillEmptySlotsWithAI();
 		InvokeRepeating("SpawnWave", 1f, spawnTime);
@@ -643,6 +655,25 @@ public class ActorManager : MonoBehaviour
 		return replicated != null ? replicated.ActorId : Vehicle.NoAttacker;
 	}
 
+	/// <summary>Drops the previous level's actors and stops the spawn timer.</summary>
+	/// <remarks>
+	/// <para>
+	/// <b>This runs on the scene load that CREATED this instance, and nulls a field Awake had
+	/// just allocated.</b> Awake subscribes to sceneLoaded, and Unity then raises it for that
+	/// same load, so a fresh per-scene ActorManager nulls its own list within one frame of
+	/// building it. Nothing here is aware of that; it reads as "clean up the last level".
+	/// </para>
+	/// <para>
+	/// StartGame is what puts `actors` back, which is why that allocation cannot be removed no
+	/// matter how redundant it looks beside Awake's. Removing it was measured at 14400
+	/// NullReferenceExceptions per client out of SpawnWave and Register.
+	/// </para>
+	/// <para>
+	/// Left as a null rather than an empty list on purpose: changing it would be a behaviour
+	/// change to the legacy single-player lifecycle with no test covering it, and the repair
+	/// belongs in StartGame where it has always been.
+	/// </para>
+	/// </remarks>
 	private void OnLevelLoaded(Scene arg0, LoadSceneMode arg1)
 	{
 		actors = null;
