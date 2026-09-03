@@ -171,6 +171,31 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>The actor this connection drives. Null between claim and spawn.</summary>
         public NetServerActor Actor { get; set; }
 
+        /// <summary>
+        /// True from construction until this connection's own first successful deploy.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A join no longer places the body</b> -- the claimed actor is parked Health 0 /
+        /// IsAlive false, exactly like a fresh corpse, until this connection's own
+        /// C_SPAWN_REQUEST carries a loadout to arm it with. <c>ServerRespawnGate.MayRespawn</c>
+        /// requires a prior <c>MarkDeath</c>, which nothing has stamped for a body that has never
+        /// lived, so the ordinary respawn gate would refuse this player's very first deploy
+        /// forever. This flag is the one-time bypass: true means "grant the next spawn request
+        /// unconditionally," and the handler clears it the instant it does.
+        /// </para>
+        /// <para>
+        /// <b>Per-connection, not per-actor-id.</b> Deliberately not read from
+        /// <c>ServerRespawnGate</c>'s own per-actor-id state, which can be stale: an actor id
+        /// recycled from a player who died mid-match and disconnected without respawning would
+        /// still read "dead" there. This field is fresh on every <c>ServerPlayer</c>, which is
+        /// itself fresh on every connection, so it cannot inherit a stranger's history. The
+        /// worst case on a recycled id is a spurious extra wait behind the ordinary gate once
+        /// this flag is spent -- never a wedge.
+        /// </para>
+        /// </remarks>
+        public bool AwaitingFirstDeploy { get; set; } = true;
+
         /// <summary>Seeds the session from wherever the claimed actor currently stands.</summary>
         public void SyncFromActor()
         {
