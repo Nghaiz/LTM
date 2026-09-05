@@ -234,6 +234,7 @@ namespace Ironfront.Net.Unity.Client.Tests
             public void DisableInput() { }
             public void EnterDeployedView() { }
             public bool ConsumeDeployIntent() => false;
+            public bool IsLoadoutOpen => false;
             public bool IsDriving(IGameplayActorPresence actor) => false;
             public int Team { get; private set; } = -1;
             public void SetTeam(int team) => Team = team;

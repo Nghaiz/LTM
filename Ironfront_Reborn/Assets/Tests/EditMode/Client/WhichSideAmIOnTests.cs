@@ -271,6 +271,7 @@ namespace Ironfront.Net.Unity.Client.Tests
             public void DisableInput() { }
             public void EnterDeployedView() { }
             public bool ConsumeDeployIntent() => false;
+            public bool IsLoadoutOpen => false;
             public bool IsDriving(IGameplayActorPresence actor) => false;
             public Vector3 Position => Vector3.zero;
             public float YawDegrees => 0f;

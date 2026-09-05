@@ -262,6 +262,7 @@ namespace Ironfront.Net.Unity
             public void DisableInput() { }
             public void EnterDeployedView() { }
             public bool ConsumeDeployIntent() => false;
+            public bool IsLoadoutOpen => false;
             public bool IsDriving(IGameplayActorPresence actor) => false;
             public int Team => -1;
             public void SetTeam(int team) { }
