@@ -341,10 +341,26 @@ namespace Ironfront.Net.Unity.Server
         /// declined exactly as a client's own respawn request can be — this death does not get a
         /// faster respawn than a bullet does, nor should it.
         /// </para>
+        /// <para>
+        /// <b>It says so in the log, because a player sees this as "killed by the world" and
+        /// nothing else.</b> Two very different things reach here — a body that walked off the
+        /// authored edge of the map, which is the game working, and a body that left its ground
+        /// standing still (X-82, still open) — and the only way to tell them apart afterwards is
+        /// the position it started falling from. That is what the line records. It is one line per
+        /// death, not per tick: the caller only reaches it while <c>IsAlive</c>, which this method
+        /// clears on its way through.
+        /// </para>
         /// </remarks>
         private void KillForFallingOutOfTheWorld()
         {
             if (Actor == null || !Actor.IsAlive) return;
+
+            Vec3 below = Session.State.Position;
+            Debug.Log(
+                $"[net] actor {Actor.ActorId} (team {Actor.Team}) killed for leaving the world at "
+                + $"({below.X:F2}, {below.Y:F2}, {below.Z:F2}) — below the wire floor. Walking off "
+                + "the authored edge of the map reaches here legitimately; a body that left its "
+                + "ground while standing on it is X-82, and the [fall] lines above say which.");
 
             Actor.Health = 0f;
             Actor.IsAlive = false;

@@ -734,6 +734,15 @@ namespace Ironfront.Net.Unity.Server
             Debug.LogWarning(message);
         }
 
+        /// <summary>
+        /// The <c>SpawnPoint.owner</c> value for a point no team holds, passed to
+        /// <see cref="ChooseSpawnIndex"/> <i>as</i> a team. That is not a trick: eligibility is
+        /// "the point's owner is this team", so asking on behalf of team -1 asks for exactly the
+        /// neutral points, and a directory that decides ownership some other way keeps its own
+        /// answer instead of having this one imposed on it.
+        /// </summary>
+        private const int NeutralOwner = -1;
+
         private static void MoveToSpawnPoint(ServerPlayer player, SpawnRequestMessage? request)
         {
             NetServerActor actor = player.Actor;
@@ -759,17 +768,39 @@ namespace Ironfront.Net.Unity.Server
             int chosen = ChooseRequestedOrRandomSpawnIndex(spawnPoints, actor.Team, request);
             if (chosen < 0)
             {
+                // Every point this team held has been captured. A neutral point is a worse spawn
+                // than a base — it is contested by definition — but it is authored ground, and
+                // the alternative is not "spawn a moment later": it is standing at the prefab
+                // origin, alive on full health, falling, until EnforceWireVolume kills the body
+                // for leaving the world. Losing every flag is a legitimate match state, so this
+                // degrades rather than refuses.
+                chosen = ChooseSpawnIndex(spawnPoints, NeutralOwner);
+                WarnOnce(
+                    "spawn-no-owned-point-team" + actor.Team,
+                    $"[net] team {actor.Team} owns none of the {spawnPoints.Count} spawn points, "
+                    + "so its placements fall back to a neutral one. A team spawning onto "
+                    + "contested ground has already lost the round; this is the match state, not "
+                    + "a spawn bug.");
+            }
+
+            if (chosen < 0)
+            {
                 WarnOnce(
                     "spawn-none-eligible-team" + actor.Team,
                     $"[net] actor {actor.ActorId} (team {actor.Team}) has no eligible spawn point "
-                    + $"among {spawnPoints.Count}, so it stays where it is. SpawnPoint.owner must "
-                    + "be -1 (any team) or match the team.");
+                    + $"among {spawnPoints.Count} and no neutral one either, so it stays where it "
+                    + "is — for a freshly instantiated body that means the prefab origin, and a "
+                    + "fall out of the world. Every SpawnPoint.owner in the scene names some "
+                    + "other team.");
                 return;
             }
 
-            Vector3 position = spawnPoints.GetSpawnPosition(chosen);
+            Vector3 ground = spawnPoints.GetSpawnPosition(chosen);
+            Vector3 position = StandingBodyPosition(ground);
+
             Debug.Log($"[net] actor {actor.ActorId} (team {actor.Team}) placed at spawn point "
-                      + $"{chosen} of {spawnPoints.Count} {position}");
+                      + $"{chosen} of {spawnPoints.Count} {position} "
+                      + $"(ground {ground} + {StandingLiftMetres:F2} m capsule lift)");
 
             // Teleport, not a transform write: it disables the CharacterController around the
             // assignment, which otherwise fights it and lands the actor somewhere else.
@@ -779,8 +810,72 @@ namespace Ironfront.Net.Unity.Server
             Vec3 core = MovementSimulation.ToCore(position);
             player.Session.State.Position = core;
             player.Session.State.Velocity = Vec3.Zero;
+
+            // The lift above is half the STANDING height, so the stance has to agree with it or
+            // the capsule NetMovementAgent.ApplyStanceHeight builds is not the capsule that was
+            // measured. A gameplay spawn calls FpsActorController.ForceEndCrouch for the same
+            // reason; nothing here used to, so a player who died crouching respawned with a
+            // 0.5 m capsule lifted for a 1.8 m one and dropped the difference.
+            player.Session.State.IsCrouching = false;
+
             player.Session.PreviousPosition = core;
         }
+
+        /// <summary>
+        /// How far above the ground a standing body's transform sits.
+        /// </summary>
+        /// <remarks>
+        /// Read from <see cref="MovementCore.HeightFor"/> rather than from the live
+        /// <c>CharacterController</c>, because that is the same source
+        /// <c>NetMovementAgent.ApplyStanceHeight</c> assigns the capsule height FROM — so the two
+        /// cannot drift apart, and a test can check the derivation without a loaded scene.
+        /// </remarks>
+        internal static float StandingLiftMetres => MovementCore.HeightFor(crouching: false) * 0.5f;
+
+        /// <summary>
+        /// Lifts a ground position to where a standing body's transform belongs.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A spawn position is a point on the GROUND; a body's transform is the centre of its
+        /// capsule.</b> <c>SpawnPoint.GetSpawnPosition</c> ends in
+        /// <c>GroundSnap.TrySnap</c>, which returns <c>hit.point</c> — the surface itself — and
+        /// the player prefab's <c>CharacterController</c> is authored with <c>center.y = 0</c> and
+        /// <c>height = 1.8</c>, so its capsule runs from 0.9 m below the transform to 0.9 m above
+        /// it. Teleporting the transform to the surface therefore buries the lower half of the
+        /// capsule in whatever it was standing on. The game's own spawn has always known this:
+        /// <c>FpsActorController.SpawnAt</c> is
+        /// <c>controller.transform.position = position + Vector3.up * (characterController.height / 2f)</c>.
+        /// <see cref="MoveToSpawnPoint"/> is the netcode's stand-in for that call and was missing
+        /// its one arithmetic step.
+        /// </para>
+        /// <para>
+        /// <b>Measured on <c>artifacts/lane-b/predict-01</c>, and it is two symptoms, not one.</b>
+        /// (1) <i>On thick ground the body never stops being corrected.</i> Actor 33 was placed at
+        /// <c>(2085.34, 8.82, 1139.82)</c>; the client's <c>CharacterController</c> de-penetrated
+        /// its buried capsule upward to <c>y = 9.81</c> — ground + 0.9 + the 0.08 skin width — and
+        /// the server went on insisting on 8.83, so <c>[predict]</c> reported
+        /// <c>err = 0.98 m</c> unchanged for 250 consecutive ticks and 197 corrections in ten
+        /// seconds with zero convergence. That is the floating-and-juddering report, and no
+        /// tolerance can absorb it because the disagreement is structural rather than transient.
+        /// (2) <i>On a thin authored floor the body falls through it.</i> Actor 34 was placed on
+        /// spawn point 0 at <c>(1090.03, 103.50, 956.66)</c> — a snap that SUCCEEDED, no X-81
+        /// warning anywhere in the run — and a capsule buried 0.9 m into a surface only
+        /// centimetres thick is a capsule under it, with nothing beneath: <c>[fall]</c> logged
+        /// <c>probe=MISS within 5 m</c> from <c>y = 101.27</c> down to <c>y = -104.71</c>,
+        /// <c>ctrlEnabled=True</c>, <c>bypassed=0</c>, <c>flags=None</c> throughout. That is
+        /// "spawns in a corner, walks off the edge, killed by the world", and it is the mechanism
+        /// ledger <b>X-82</b> left open after ruling out <c>SyncTransforms</c>.
+        /// </para>
+        /// <para>
+        /// <b>Why here and not in <see cref="GroundSnap"/> or <c>SpawnPoint</c>.</b> Both of those
+        /// answer "where is the ground", which is the question the AI wave and the gameplay spawn
+        /// also ask — and <c>FpsActorController.SpawnAt</c> adds this lift itself, so moving it
+        /// down there would double it for every offline spawn in the game.
+        /// </para>
+        /// </remarks>
+        internal static Vector3 StandingBodyPosition(Vector3 ground)
+            => ground + Vector3.up * StandingLiftMetres;
 
         /// <summary>
         /// Picks one spawn slot this team may use, or -1 when the scene offers none.

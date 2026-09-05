@@ -156,11 +156,22 @@ namespace Ironfront.Net.Unity.Bindings
         /// <c>Instantiate</c> guarantees, because it dereferences fields <c>Awake</c> assigns.
         /// </para>
         /// <para>
-        /// <b>The death stamp is what puts the body on the ground.</b> <c>Actor.Awake</c> leaves
-        /// every fresh actor <c>dead</c>, and <c>ActorManager.SpawnWave</c> is what places a
-        /// dead actor at a spawn point. Stamping the current time makes a pool body eligible for
-        /// the first wave, exactly as a bot is; without it the whole pool would stand at the
-        /// prefab's origin waiting for a wave that never selects them.
+        /// <b>The death stamp is a birth certificate, and nothing more.</b> It used to be load
+        /// bearing: <c>Actor.Awake</c> leaves every fresh actor <c>dead</c>, and
+        /// <c>ActorManager.SpawnWave</c> is the only caller of <c>Actor.SpawnAt</c>, so stamping
+        /// the current time was how a pool body got off the prefab's origin and onto the ground —
+        /// "eligible for the first wave, exactly as a bot is". That is no longer true and must
+        /// not be relied on. <c>ServerCombatBridge.PlaceAtSpawn</c> now owns the whole of it
+        /// (health, <c>IsAlive</c>, <c>MoveToSpawnPoint</c>, <c>EquipLoadout</c>) and runs from
+        /// the client's own <c>C_SPAWN_REQUEST</c>, and <c>SpawnWave</c> skips any body whose
+        /// <c>NetServerActor.AvailableForPlayers</c> is set — because a wave that placed a player
+        /// slot also cleared <c>dead</c>, which the client read through the snapshot as "the
+        /// server has deployed me" and so never showed the loadout screen at all.
+        /// </para>
+        /// <para>
+        /// An unclaimed slot therefore stands at the prefab's origin for the whole match, and
+        /// that is the intended state: <c>ServerTickLoop.IsAnnounceable</c> tells no client it
+        /// exists (X-18), and it is <c>dead</c>, so nothing simulates it and it does not fall.
         /// </para>
         /// </remarks>
         private static GameObject CreatePlayerBody(byte team)
@@ -580,13 +591,47 @@ namespace Ironfront.Net.Unity.Bindings
             }
         }
 
+        /// <summary>
+        /// Whether team <paramref name="team"/> may spawn on slot <paramref name="index"/>: the
+        /// point's owner must BE that team.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This used to read <c>point.owner &lt; 0 || point.owner == team</c></b>, on the
+        /// reading that <c>owner &lt; 0</c> means "any team may use it". It does not. Every scene
+        /// spawn point is a capture point — <c>CapturePoint : SpawnPoint</c> is the only subclass
+        /// and <c>ActorManager.spawnPoints</c> is <c>FindObjectsOfType&lt;SpawnPoint&gt;()</c> —
+        /// and for a capture point <c>owner == -1</c> means NEUTRAL: held by nobody, contested,
+        /// out in the middle of the map. The game's own rule has always been the narrow one, and
+        /// this is the line it was supposed to mirror: <c>ActorManager.RandomSpawnPointForTeam</c>
+        /// accepts a point only when <c>owner == team</c>, which is why the AI wave never lands
+        /// on a neutral flag.
+        /// </para>
+        /// <para>
+        /// <b>Measured on Dustbowl, before the change.</b> Two of six points start owned (Oasis →
+        /// team 0, Fortress → team 1); the other four report <c>spawn owner -1</c>. The server
+        /// placed <c>actor 33 (team 0)</c> on point <c>4</c> at <c>(1211.47, 31.00, 1767.14)</c>
+        /// and <c>actor 34 (team 1)</c> on point <c>1</c> at <c>(1150.00, 60.50, 1340.04)</c> —
+        /// both neutral, neither anywhere near the base where that team's own bots spawned.
+        /// </para>
+        /// <para>
+        /// That single line is all three of the symptoms reported on 2026-09-04. <b>The empty
+        /// map:</b> a player dropped alone on a contested flag is further than
+        /// <c>InterestManager.CullRadius</c> (500 m) from every bot, so those bots are culled out
+        /// of the snapshot and their proxies can never be moved (X-17) — terrain and one player,
+        /// exactly as described. <b>Spawning in a corner and falling off the edge:</b> a neutral
+        /// flag sits wherever the map authored it, heightmap rim included, whereas a base is
+        /// authored inland. <b>"Killed by the world":</b> walking off that rim puts the
+        /// authoritative body under the wire floor and <c>ServerPlayer.EnforceWireVolume</c> does
+        /// what it is there to do. Spawning at the team's own base is what stops all three.
+        /// </para>
+        /// </remarks>
         public bool IsEligible(int index, int team)
         {
             SpawnPoint point = At(index);
             if (point == null) return false;
 
-            // owner < 0 means "any team", which is how SpawnPoint.owner already defines it.
-            return point.owner < 0 || point.owner == team;
+            return point.owner == team;
         }
 
         public Vector3 GetSpawnPosition(int index) => At(index).GetSpawnPosition();

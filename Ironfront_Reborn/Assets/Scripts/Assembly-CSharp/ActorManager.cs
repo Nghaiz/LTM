@@ -134,6 +134,29 @@ public class ActorManager : MonoBehaviour
 		// spawnPoints stays: it is a scan of the loaded scene and has nothing to find from Awake.
 		actors = new List<Actor>();
 		spawnPoints = UnityEngine.Object.FindObjectsOfType<SpawnPoint>();
+
+		// A CLIENT DOES NOT POPULATE THE MATCH. Ledger X-82's other half.
+		//
+		// Both lines below are the offline game's roster: FillEmptySlotsWithAI Instantiates
+		// team0Bots + team1Bots actorPrefabs, and the repeating SpawnWave places every dead one at
+		// a spawn point of its own choosing, forever. On a networked client the roster belongs to
+		// the server -- bots included -- and arrives as S_SPAWN_ACTOR plus snapshots, rendered by
+		// RemoteActorRegistry onto bodies this side never spawns.
+		//
+		// Running them anyway is what the 2026-09-04 playtest recorded: 2 [spawn] ground-snap
+		// warnings on client-1 and 10 on client-2, every one with ActorManager.SpawnWave ->
+		// SpawnActorList -> CapturePoint.GetSpawnPosition in its stack -- i.e. each client was
+		// simulating a private war of ~40 AI actors, scoring its own tickets and moving its own
+		// capture points, while snapshots overwrote the same capture points from the server. That
+		// disagreement is the "map does not load right" report: not a broken scene, two
+		// simulations of it in one process.
+		//
+		// Offline is untouched, and so is the server: NetContext.IsClient is false in both.
+		if (Ironfront.Net.Unity.NetContext.IsClient)
+		{
+			return;
+		}
+
 		FillEmptySlotsWithAI();
 		InvokeRepeating("SpawnWave", 1f, spawnTime);
 	}
@@ -165,6 +188,55 @@ public class ActorManager : MonoBehaviour
 		{
 			if (actor.dead && actor.deathTimestamp + 6f < Time.time)
 			{
+				// A BODY A CONNECTION HOLDS IS NOT THE BOT WAVE'S TO SPAWN.
+				//
+				// ServerTickLoop.OnClientConnected parks a claimed slot at Health 0 / IsAlive
+				// false on purpose -- "a join is no longer a spawn" -- so the body is placed and
+				// armed for the FIRST time when that connection's own C_SPAWN_REQUEST arrives,
+				// carrying the loadout the player chose. Actor.dead is exactly what this wave
+				// looks for, and deathTimestamp is whatever the slot's previous occupant left
+				// behind, so on a server that has been up for more than six seconds the wave
+				// respawned the player's body itself, within one spawnTime of the join.
+				//
+				// That is a spawn the deploy path never authorised, and it took the client with
+				// it. Actor.SpawnAt sets dead = false, so the next snapshot reported IsAlive to
+				// a client still waiting to deploy; ClientCombatState.SetAlive raised Respawned,
+				// NetClientLocalCombatDriver.OnRespawned read it as "the server placed this
+				// body" and called EnterDeployedView, and deployedView makes
+				// OpenLoadoutWhileDead return early -- so the loadout screen GameManager opens
+				// one second into the map never appeared, no Deploy was ever pressed, and no
+				// C_SPAWN_REQUEST was ever sent. MoveToSpawnPoint therefore never ran and the
+				// only body the player could see was the Player Fps Actor prefab
+				// GameManager.StartGame instantiates at (0, 1000, 0), falling onto the edge of
+				// the heightmap. Measured on 2026-09-04: client-1.log has "deploy granted for
+				// actor 33" raised from OnSnapshotApplied -> ApplySnapshot -> SetAlive, no
+				// "deploy requested" anywhere, and game-server.log has no "placed at spawn
+				// point" and neither MoveToSpawnPoint warning.
+				//
+				// IsClaimed, not aiControlled: Actor.aiControlled is decided once in Awake from
+				// the controller's type, and a player slot is built from the same AI character
+				// prefab a bot is, so it stays true for the whole match. Release() clears
+				// IsClaimed when the connection goes, which is what hands the slot back to the
+				// bot brain rather than leaving one more inert mannequin standing in the map.
+				//
+				// AvailableForPlayers covers the OTHER half, and the server's own boot line says
+				// what it is for: "player slot pool filled: 16 claimable bodies, all parked (bot
+				// brain suspended until claimed). Map bots are unaffected." A pool body starts
+				// dead with deathTimestamp at its default 0, so six seconds into the match this
+				// wave spawned all sixteen of them -- bodies with a suspended brain, standing
+				// still at a spawn point, invisible to every client because IsAnnounceable
+				// excludes an unclaimed slot, and simulated by the server for the whole round.
+				// The three "server over budget" windows in the same run are that, in part.
+				// Bots leave the flag off, so a map bot still spawns and re-spawns as before.
+				//
+				// Offline is untouched: the local Player Fps Actor carries no NetServerActor, so
+				// GetComponent answers null and the single-player wave behaves as it always has.
+				var replicated = actor.GetComponent<Ironfront.Net.Unity.Server.NetServerActor>();
+				if (replicated != null && (replicated.AvailableForPlayers || replicated.IsClaimed))
+				{
+					continue;
+				}
+
 				list.Add(actor);
 			}
 		}
