@@ -80,6 +80,33 @@ namespace Ironfront.Net.Unity.Server
 
         private void Start()
         {
+            // A PROCESS THAT REFUSED TO START A SERVER MUST NOT ADVERTISE ONE.
+            //
+            // Same question NetServerBootstrap.Awake already answered one component over (AD-1),
+            // and the same answer: IsDeclaredClient, not IsClient, because the ROLE is an Awake
+            // ordering between two components that defer to each other while the DECLARATION has
+            // one meaning and one setter. Offline therefore still advertises, so the Editor
+            // sandbox and the dedicated build behave exactly as they did.
+            //
+            // Measured: a playtest of one master, one headless server and two rendered clients
+            // put THREE servers in the registry. Each client logged "[net] this process is a
+            // client: no local server will be started." and then registered anyway -- serverId 2
+            // and serverId 3, both claiming 127.0.0.1:27015, the port the real server holds --
+            // because everything below decides standalone-vs-linked purely from configuration,
+            // and IRONFRONT_MASTER_HOST is set on a client for the match list it needs. The
+            // matchmaker then had two rooms it could hand a player, neither of which was hosted
+            // by anything: the socket at that address belongs to the headless server, so a client
+            // sent to "server 2" would have joined a stranger's match or nothing at all.
+            //
+            // Above the configuration resolve for AD-1's reason as well: everything below is
+            // server startup, and a client has no business parsing a server's registration.
+            if (NetContext.IsDeclaredClient)
+            {
+                Debug.Log(
+                    "[net] master link: declared client, so this process advertises no server (AD-1).");
+                return;
+            }
+
             // Resolved here rather than shared with NetServerBootstrap's instance on purpose:
             // this component works in a scene that has no NetServerBootstrap, and both read
             // the same variables through the same type, so the two cannot drift the way the

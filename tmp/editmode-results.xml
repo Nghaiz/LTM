@@ -1,29 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
-<test-run id="2" testcasecount="127" result="Passed" total="127" passed="127" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.2444738">
-  <test-suite type="TestSuite" id="1000" name="Ravenfield" fullname="Ravenfield" runstate="Runnable" testcasecount="127" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.244474" total="127" passed="127" failed="0" inconclusive="0" skipped="0" asserts="0">
+<test-run id="2" testcasecount="131" result="Passed" total="131" passed="131" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0,3416326">
+  <test-suite type="TestSuite" id="1000" name="Ravenfield" fullname="Ravenfield" runstate="Runnable" testcasecount="131" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.341633" total="131" passed="131" failed="0" inconclusive="0" skipped="0" asserts="0">
     <properties>
       <property name="platform" value="EditMode" />
     </properties>
-    <test-suite type="Assembly" id="1033" name="Ironfront.Net.Unity.Client.Tests.dll" fullname="D:/Coding/LTM/Ironfront_Reborn/Library/ScriptAssemblies/Ironfront.Net.Unity.Client.Tests.dll" runstate="Runnable" testcasecount="18" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.094518" total="18" passed="18" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <test-suite type="Assembly" id="1033" name="Ironfront.Net.Unity.Client.Tests.dll" fullname="E:/WINDOW/Project/LTM/Ironfront_Reborn/Library/ScriptAssemblies/Ironfront.Net.Unity.Client.Tests.dll" runstate="Runnable" testcasecount="18" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.138213" total="18" passed="18" failed="0" inconclusive="0" skipped="0" asserts="0">
       <properties>
-        <property name="_PID" value="12156" />
+        <property name="_PID" value="20096" />
         <property name="_APPDOMAIN" value="Unity Child Domain" />
         <property name="platform" value="EditMode" />
         <property name="EditorOnly" value="True" />
       </properties>
-      <test-suite type="TestSuite" id="1034" name="Ironfront" fullname="Ironfront" runstate="Runnable" testcasecount="18" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.094057" total="18" passed="18" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <test-suite type="TestSuite" id="1034" name="Ironfront" fullname="Ironfront" runstate="Runnable" testcasecount="18" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.136838" total="18" passed="18" failed="0" inconclusive="0" skipped="0" asserts="0">
         <properties />
-        <test-suite type="TestSuite" id="1035" name="Net" fullname="Ironfront.Net" runstate="Runnable" testcasecount="18" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.093949" total="18" passed="18" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <test-suite type="TestSuite" id="1035" name="Net" fullname="Ironfront.Net" runstate="Runnable" testcasecount="18" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.136212" total="18" passed="18" failed="0" inconclusive="0" skipped="0" asserts="0">
           <properties />
-          <test-suite type="TestSuite" id="1036" name="Unity" fullname="Ironfront.Net.Unity" runstate="Runnable" testcasecount="18" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.093867" total="18" passed="18" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <test-suite type="TestSuite" id="1036" name="Unity" fullname="Ironfront.Net.Unity" runstate="Runnable" testcasecount="18" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.135565" total="18" passed="18" failed="0" inconclusive="0" skipped="0" asserts="0">
             <properties />
-            <test-suite type="TestSuite" id="1037" name="Client" fullname="Ironfront.Net.Unity.Client" runstate="Runnable" testcasecount="18" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.093791" total="18" passed="18" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <test-suite type="TestSuite" id="1037" name="Client" fullname="Ironfront.Net.Unity.Client" runstate="Runnable" testcasecount="18" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.134963" total="18" passed="18" failed="0" inconclusive="0" skipped="0" asserts="0">
               <properties />
-              <test-suite type="TestSuite" id="1038" name="Tests" fullname="Ironfront.Net.Unity.Client.Tests" runstate="Runnable" testcasecount="18" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.093662" total="18" passed="18" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <test-suite type="TestSuite" id="1038" name="Tests" fullname="Ironfront.Net.Unity.Client.Tests" runstate="Runnable" testcasecount="18" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.134260" total="18" passed="18" failed="0" inconclusive="0" skipped="0" asserts="0">
                 <properties />
-                <test-suite type="TestFixture" id="1012" name="DedicatedServerDeclinesLocalClientTests" fullname="Ironfront.Net.Unity.Client.Tests.DedicatedServerDeclinesLocalClientTests" classname="Ironfront.Net.Unity.Client.Tests.DedicatedServerDeclinesLocalClientTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.043875" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <test-suite type="TestFixture" id="1012" name="DedicatedServerDeclinesLocalClientTests" fullname="Ironfront.Net.Unity.Client.Tests.DedicatedServerDeclinesLocalClientTests" classname="Ironfront.Net.Unity.Client.Tests.DedicatedServerDeclinesLocalClientTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.076826" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
                   <properties />
-                  <test-case id="1014" name="DeclaringItSurvivesUntilCleared" fullname="Ironfront.Net.Unity.Client.Tests.DedicatedServerDeclinesLocalClientTests.DeclaringItSurvivesUntilCleared" methodname="DeclaringItSurvivesUntilCleared" classname="Ironfront.Net.Unity.Client.Tests.DedicatedServerDeclinesLocalClientTests" runstate="Runnable" seed="586989016" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.018483" asserts="0">
+                  <test-case id="1014" name="DeclaringItSurvivesUntilCleared" fullname="Ironfront.Net.Unity.Client.Tests.DedicatedServerDeclinesLocalClientTests.DeclaringItSurvivesUntilCleared" methodname="DeclaringItSurvivesUntilCleared" classname="Ironfront.Net.Unity.Client.Tests.DedicatedServerDeclinesLocalClientTests" runstate="Runnable" seed="1799114648" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.028452" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -31,7 +31,7 @@
                     <output><![CDATA[[net] this process is a dedicated server: no local client will be dialled.
 ]]></output>
                   </test-case>
-                  <test-case id="1016" name="DeclaringTheProcessDoesNotClaimTheRole" fullname="Ironfront.Net.Unity.Client.Tests.DedicatedServerDeclinesLocalClientTests.DeclaringTheProcessDoesNotClaimTheRole" methodname="DeclaringTheProcessDoesNotClaimTheRole" classname="Ironfront.Net.Unity.Client.Tests.DedicatedServerDeclinesLocalClientTests" runstate="Runnable" seed="1716955664" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.004807" asserts="0">
+                  <test-case id="1016" name="DeclaringTheProcessDoesNotClaimTheRole" fullname="Ironfront.Net.Unity.Client.Tests.DedicatedServerDeclinesLocalClientTests.DeclaringTheProcessDoesNotClaimTheRole" methodname="DeclaringTheProcessDoesNotClaimTheRole" classname="Ironfront.Net.Unity.Client.Tests.DedicatedServerDeclinesLocalClientTests" runstate="Runnable" seed="633796960" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.009226" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -39,13 +39,13 @@
                     <output><![CDATA[[net] this process is a dedicated server: no local client will be dialled.
 ]]></output>
                   </test-case>
-                  <test-case id="1013" name="TheFlagIsOffUntilSomethingDeclaresIt" fullname="Ironfront.Net.Unity.Client.Tests.DedicatedServerDeclinesLocalClientTests.TheFlagIsOffUntilSomethingDeclaresIt" methodname="TheFlagIsOffUntilSomethingDeclaresIt" classname="Ironfront.Net.Unity.Client.Tests.DedicatedServerDeclinesLocalClientTests" runstate="Runnable" seed="774645743" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000211" asserts="0">
+                  <test-case id="1013" name="TheFlagIsOffUntilSomethingDeclaresIt" fullname="Ironfront.Net.Unity.Client.Tests.DedicatedServerDeclinesLocalClientTests.TheFlagIsOffUntilSomethingDeclaresIt" methodname="TheFlagIsOffUntilSomethingDeclaresIt" classname="Ironfront.Net.Unity.Client.Tests.DedicatedServerDeclinesLocalClientTests" runstate="Runnable" seed="287514677" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000487" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1015" name="TheServerROLEDoesNotMakeTheProcessDedicated" fullname="Ironfront.Net.Unity.Client.Tests.DedicatedServerDeclinesLocalClientTests.TheServerROLEDoesNotMakeTheProcessDedicated" methodname="TheServerROLEDoesNotMakeTheProcessDedicated" classname="Ironfront.Net.Unity.Client.Tests.DedicatedServerDeclinesLocalClientTests" runstate="Runnable" seed="1963762359" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000858" asserts="0">
+                  <test-case id="1015" name="TheServerROLEDoesNotMakeTheProcessDedicated" fullname="Ironfront.Net.Unity.Client.Tests.DedicatedServerDeclinesLocalClientTests.TheServerROLEDoesNotMakeTheProcessDedicated" methodname="TheServerROLEDoesNotMakeTheProcessDedicated" classname="Ironfront.Net.Unity.Client.Tests.DedicatedServerDeclinesLocalClientTests" runstate="Runnable" seed="1272027590" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.002019" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -54,24 +54,15 @@
 ]]></output>
                   </test-case>
                 </test-suite>
-                <test-suite type="TestFixture" id="1017" name="NetClientSeamTests" fullname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests" classname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests" runstate="Runnable" testcasecount="6" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.035708" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <test-suite type="TestFixture" id="1017" name="NetClientSeamTests" fullname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests" classname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests" runstate="Runnable" testcasecount="6" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.033687" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
                   <properties />
-                  <test-case id="1020" name="AbsentRig_IsSafeToCallAndReportsAbsent" fullname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests.AbsentRig_IsSafeToCallAndReportsAbsent" methodname="AbsentRig_IsSafeToCallAndReportsAbsent" classname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests" runstate="Runnable" seed="1192462981" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.006258" asserts="0">
+                  <test-case id="1020" name="AbsentRig_IsSafeToCallAndReportsAbsent" fullname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests.AbsentRig_IsSafeToCallAndReportsAbsent" methodname="AbsentRig_IsSafeToCallAndReportsAbsent" classname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests" runstate="Runnable" seed="134651455" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.013969" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1018" name="IsLocalActor_IsDecidedByRoleAndRig" fullname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests.IsLocalActor_IsDecidedByRoleAndRig" methodname="IsLocalActor_IsDecidedByRoleAndRig" classname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests" runstate="Runnable" seed="1735812124" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001846" asserts="0">
-                    <properties>
-                      <property name="retryIteration" value="0" />
-                      <property name="repeatIteration" value="0" />
-                    </properties>
-                    <output><![CDATA[[net] role = Client
-[net] role = Offline
-]]></output>
-                  </test-case>
-                  <test-case id="1019" name="IsLocalActor_RejectsADestroyedBody" fullname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests.IsLocalActor_RejectsADestroyedBody" methodname="IsLocalActor_RejectsADestroyedBody" classname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests" runstate="Runnable" seed="265550472" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001286" asserts="0">
+                  <test-case id="1018" name="IsLocalActor_IsDecidedByRoleAndRig" fullname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests.IsLocalActor_IsDecidedByRoleAndRig" methodname="IsLocalActor_IsDecidedByRoleAndRig" classname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests" runstate="Runnable" seed="47344832" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.005260" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -80,28 +71,37 @@
 [net] role = Offline
 ]]></output>
                   </test-case>
-                  <test-case id="1023" name="ProjectileCatalog_IsEmptyRatherThanNullWithNoReader" fullname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests.ProjectileCatalog_IsEmptyRatherThanNullWithNoReader" methodname="ProjectileCatalog_IsEmptyRatherThanNullWithNoReader" classname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests" runstate="Runnable" seed="1218251256" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000484" asserts="0">
+                  <test-case id="1019" name="IsLocalActor_RejectsADestroyedBody" fullname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests.IsLocalActor_RejectsADestroyedBody" methodname="IsLocalActor_RejectsADestroyedBody" classname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests" runstate="Runnable" seed="1866596991" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.002823" asserts="0">
+                    <properties>
+                      <property name="retryIteration" value="0" />
+                      <property name="repeatIteration" value="0" />
+                    </properties>
+                    <output><![CDATA[[net] role = Client
+[net] role = Offline
+]]></output>
+                  </test-case>
+                  <test-case id="1023" name="ProjectileCatalog_IsEmptyRatherThanNullWithNoReader" fullname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests.ProjectileCatalog_IsEmptyRatherThanNullWithNoReader" methodname="ProjectileCatalog_IsEmptyRatherThanNullWithNoReader" classname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests" runstate="Runnable" seed="1067853293" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.003504" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1021" name="RegisteredRig_IsTheOneHandedBack" fullname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests.RegisteredRig_IsTheOneHandedBack" methodname="RegisteredRig_IsTheOneHandedBack" classname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests" runstate="Runnable" seed="5283924" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000504" asserts="0">
+                  <test-case id="1021" name="RegisteredRig_IsTheOneHandedBack" fullname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests.RegisteredRig_IsTheOneHandedBack" methodname="RegisteredRig_IsTheOneHandedBack" classname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests" runstate="Runnable" seed="1194430392" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001556" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1022" name="ShowHit_IsSilentWithNoHud" fullname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests.ShowHit_IsSilentWithNoHud" methodname="ShowHit_IsSilentWithNoHud" classname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests" runstate="Runnable" seed="350216941" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000532" asserts="0">
+                  <test-case id="1022" name="ShowHit_IsSilentWithNoHud" fullname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests.ShowHit_IsSilentWithNoHud" methodname="ShowHit_IsSilentWithNoHud" classname="Ironfront.Net.Unity.Client.Tests.NetClientSeamTests" runstate="Runnable" seed="856306764" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001244" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
                 </test-suite>
-                <test-suite type="TestFixture" id="1024" name="WhichSideAmIOnTests" fullname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests" classname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.012330" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <test-suite type="TestFixture" id="1024" name="WhichSideAmIOnTests" fullname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests" classname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.020355" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
                   <properties />
-                  <test-case id="1025" name="LocalBody_TakesTheTeamTheSnapshotReports" fullname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests.LocalBody_TakesTheTeamTheSnapshotReports" methodname="LocalBody_TakesTheTeamTheSnapshotReports" classname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests" runstate="Runnable" seed="1533216199" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.003585" asserts="0">
+                  <test-case id="1025" name="LocalBody_TakesTheTeamTheSnapshotReports" fullname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests.LocalBody_TakesTheTeamTheSnapshotReports" methodname="LocalBody_TakesTheTeamTheSnapshotReports" classname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests" runstate="Runnable" seed="1222925287" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.005938" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -110,22 +110,13 @@
 [net] role = Offline
 ]]></output>
                   </test-case>
-                  <test-case id="1030" name="LocalTeamApply_NeverRunsOffline" fullname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests.LocalTeamApply_NeverRunsOffline" methodname="LocalTeamApply_NeverRunsOffline" classname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests" runstate="Runnable" seed="534752166" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000345" asserts="0">
+                  <test-case id="1030" name="LocalTeamApply_NeverRunsOffline" fullname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests.LocalTeamApply_NeverRunsOffline" methodname="LocalTeamApply_NeverRunsOffline" classname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests" runstate="Runnable" seed="1702636950" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000547" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1029" name="LocalTeamApply_SurvivesTheTeamArrivingBeforeTheBody" fullname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests.LocalTeamApply_SurvivesTheTeamArrivingBeforeTheBody" methodname="LocalTeamApply_SurvivesTheTeamArrivingBeforeTheBody" classname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests" runstate="Runnable" seed="515874273" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001454" asserts="0">
-                    <properties>
-                      <property name="retryIteration" value="0" />
-                      <property name="repeatIteration" value="0" />
-                    </properties>
-                    <output><![CDATA[[net] role = Client
-[net] role = Offline
-]]></output>
-                  </test-case>
-                  <test-case id="1027" name="LocalTeamApply_TreatsTeamZeroAsAnAnswerNotAsAbsence" fullname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests.LocalTeamApply_TreatsTeamZeroAsAnAnswerNotAsAbsence" methodname="LocalTeamApply_TreatsTeamZeroAsAnAnswerNotAsAbsence" classname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests" runstate="Runnable" seed="803579237" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001670" asserts="0">
+                  <test-case id="1029" name="LocalTeamApply_SurvivesTheTeamArrivingBeforeTheBody" fullname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests.LocalTeamApply_SurvivesTheTeamArrivingBeforeTheBody" methodname="LocalTeamApply_SurvivesTheTeamArrivingBeforeTheBody" classname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests" runstate="Runnable" seed="1747861811" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.002841" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -134,7 +125,7 @@
 [net] role = Offline
 ]]></output>
                   </test-case>
-                  <test-case id="1028" name="LocalTeamApply_WritesNothingBeforeTheTeamArrives" fullname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests.LocalTeamApply_WritesNothingBeforeTheTeamArrives" methodname="LocalTeamApply_WritesNothingBeforeTheTeamArrives" classname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests" runstate="Runnable" seed="1949245667" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001369" asserts="0">
+                  <test-case id="1027" name="LocalTeamApply_TreatsTeamZeroAsAnAnswerNotAsAbsence" fullname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests.LocalTeamApply_TreatsTeamZeroAsAnAnswerNotAsAbsence" methodname="LocalTeamApply_TreatsTeamZeroAsAnAnswerNotAsAbsence" classname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests" runstate="Runnable" seed="2049924942" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.002684" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -143,7 +134,7 @@
 [net] role = Offline
 ]]></output>
                   </test-case>
-                  <test-case id="1026" name="LocalTeamApply_WritesOnceAndThenStops" fullname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests.LocalTeamApply_WritesOnceAndThenStops" methodname="LocalTeamApply_WritesOnceAndThenStops" classname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests" runstate="Runnable" seed="328014812" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001151" asserts="0">
+                  <test-case id="1028" name="LocalTeamApply_WritesNothingBeforeTheTeamArrives" fullname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests.LocalTeamApply_WritesNothingBeforeTheTeamArrives" methodname="LocalTeamApply_WritesNothingBeforeTheTeamArrives" classname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests" runstate="Runnable" seed="1859586000" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.002291" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -152,13 +143,22 @@
 [net] role = Offline
 ]]></output>
                   </test-case>
-                  <test-case id="1031" name="Minimap_MarksFriendliesAndNotEnemies" fullname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests.Minimap_MarksFriendliesAndNotEnemies" methodname="Minimap_MarksFriendliesAndNotEnemies" classname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests" runstate="Runnable" seed="1501638570" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000367" asserts="0">
+                  <test-case id="1026" name="LocalTeamApply_WritesOnceAndThenStops" fullname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests.LocalTeamApply_WritesOnceAndThenStops" methodname="LocalTeamApply_WritesOnceAndThenStops" classname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests" runstate="Runnable" seed="384466607" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.002019" asserts="0">
+                    <properties>
+                      <property name="retryIteration" value="0" />
+                      <property name="repeatIteration" value="0" />
+                    </properties>
+                    <output><![CDATA[[net] role = Client
+[net] role = Offline
+]]></output>
+                  </test-case>
+                  <test-case id="1031" name="Minimap_MarksFriendliesAndNotEnemies" fullname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests.Minimap_MarksFriendliesAndNotEnemies" methodname="Minimap_MarksFriendliesAndNotEnemies" classname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests" runstate="Runnable" seed="537081948" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000478" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1032" name="Minimap_MarksNothingWhileEitherTeamIsUnknown" fullname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests.Minimap_MarksNothingWhileEitherTeamIsUnknown" methodname="Minimap_MarksNothingWhileEitherTeamIsUnknown" classname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests" runstate="Runnable" seed="1626313304" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000203" asserts="0">
+                  <test-case id="1032" name="Minimap_MarksNothingWhileEitherTeamIsUnknown" fullname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests.Minimap_MarksNothingWhileEitherTeamIsUnknown" methodname="Minimap_MarksNothingWhileEitherTeamIsUnknown" classname="Ironfront.Net.Unity.Client.Tests.WhichSideAmIOnTests" runstate="Runnable" seed="1758112107" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000329" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -171,98 +171,98 @@
         </test-suite>
       </test-suite>
     </test-suite>
-    <test-suite type="Assembly" id="1162" name="Ironfront.Net.Unity.Server.Tests.dll" fullname="D:/Coding/LTM/Ironfront_Reborn/Library/ScriptAssemblies/Ironfront.Net.Unity.Server.Tests.dll" runstate="Runnable" testcasecount="109" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.139836" total="109" passed="109" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <test-suite type="Assembly" id="1167" name="Ironfront.Net.Unity.Server.Tests.dll" fullname="E:/WINDOW/Project/LTM/Ironfront_Reborn/Library/ScriptAssemblies/Ironfront.Net.Unity.Server.Tests.dll" runstate="Runnable" testcasecount="113" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.184319" total="113" passed="113" failed="0" inconclusive="0" skipped="0" asserts="0">
       <properties>
-        <property name="_PID" value="12156" />
+        <property name="_PID" value="20096" />
         <property name="_APPDOMAIN" value="Unity Child Domain" />
         <property name="platform" value="EditMode" />
         <property name="EditorOnly" value="True" />
       </properties>
-      <test-suite type="TestSuite" id="1163" name="Ironfront" fullname="Ironfront" runstate="Runnable" testcasecount="109" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.139599" total="109" passed="109" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <test-suite type="TestSuite" id="1168" name="Ironfront" fullname="Ironfront" runstate="Runnable" testcasecount="113" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.182404" total="113" passed="113" failed="0" inconclusive="0" skipped="0" asserts="0">
         <properties />
-        <test-suite type="TestSuite" id="1164" name="Net" fullname="Ironfront.Net" runstate="Runnable" testcasecount="109" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.139484" total="109" passed="109" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <test-suite type="TestSuite" id="1169" name="Net" fullname="Ironfront.Net" runstate="Runnable" testcasecount="113" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.180828" total="113" passed="113" failed="0" inconclusive="0" skipped="0" asserts="0">
           <properties />
-          <test-suite type="TestSuite" id="1165" name="Unity" fullname="Ironfront.Net.Unity" runstate="Runnable" testcasecount="109" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.139407" total="109" passed="109" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <test-suite type="TestSuite" id="1170" name="Unity" fullname="Ironfront.Net.Unity" runstate="Runnable" testcasecount="113" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.179391" total="113" passed="113" failed="0" inconclusive="0" skipped="0" asserts="0">
             <properties />
-            <test-suite type="TestSuite" id="1166" name="Server" fullname="Ironfront.Net.Unity.Server" runstate="Runnable" testcasecount="109" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.139329" total="109" passed="109" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <test-suite type="TestSuite" id="1171" name="Server" fullname="Ironfront.Net.Unity.Server" runstate="Runnable" testcasecount="113" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.177487" total="113" passed="113" failed="0" inconclusive="0" skipped="0" asserts="0">
               <properties />
-              <test-suite type="TestSuite" id="1167" name="Tests" fullname="Ironfront.Net.Unity.Server.Tests" runstate="Runnable" testcasecount="109" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.139093" total="109" passed="109" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <test-suite type="TestSuite" id="1172" name="Tests" fullname="Ironfront.Net.Unity.Server.Tests" runstate="Runnable" testcasecount="113" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.175759" total="113" passed="113" failed="0" inconclusive="0" skipped="0" asserts="0">
                 <properties />
-                <test-suite type="TestFixture" id="1039" name="AnnounceableActorTests" fullname="Ironfront.Net.Unity.Server.Tests.AnnounceableActorTests" classname="Ironfront.Net.Unity.Server.Tests.AnnounceableActorTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.005083" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <test-suite type="TestFixture" id="1039" name="AnnounceableActorTests" fullname="Ironfront.Net.Unity.Server.Tests.AnnounceableActorTests" classname="Ironfront.Net.Unity.Server.Tests.AnnounceableActorTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.008380" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
                   <properties />
-                  <test-case id="1042" name="ABotIsAnnouncedThoughItIsNeverClaimed" fullname="Ironfront.Net.Unity.Server.Tests.AnnounceableActorTests.ABotIsAnnouncedThoughItIsNeverClaimed" methodname="ABotIsAnnouncedThoughItIsNeverClaimed" classname="Ironfront.Net.Unity.Server.Tests.AnnounceableActorTests" runstate="Runnable" seed="839282585" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.003403" asserts="0">
+                  <test-case id="1042" name="ABotIsAnnouncedThoughItIsNeverClaimed" fullname="Ironfront.Net.Unity.Server.Tests.AnnounceableActorTests.ABotIsAnnouncedThoughItIsNeverClaimed" methodname="ABotIsAnnouncedThoughItIsNeverClaimed" classname="Ironfront.Net.Unity.Server.Tests.AnnounceableActorTests" runstate="Runnable" seed="1567843257" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.005240" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1041" name="AClaimedPlayerSlotIsAnnounced" fullname="Ironfront.Net.Unity.Server.Tests.AnnounceableActorTests.AClaimedPlayerSlotIsAnnounced" methodname="AClaimedPlayerSlotIsAnnounced" classname="Ironfront.Net.Unity.Server.Tests.AnnounceableActorTests" runstate="Runnable" seed="627483715" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000374" asserts="0">
+                  <test-case id="1041" name="AClaimedPlayerSlotIsAnnounced" fullname="Ironfront.Net.Unity.Server.Tests.AnnounceableActorTests.AClaimedPlayerSlotIsAnnounced" methodname="AClaimedPlayerSlotIsAnnounced" classname="Ironfront.Net.Unity.Server.Tests.AnnounceableActorTests" runstate="Runnable" seed="140588678" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000682" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1043" name="ADestroyedActorIsNotAnnounced" fullname="Ironfront.Net.Unity.Server.Tests.AnnounceableActorTests.ADestroyedActorIsNotAnnounced" methodname="ADestroyedActorIsNotAnnounced" classname="Ironfront.Net.Unity.Server.Tests.AnnounceableActorTests" runstate="Runnable" seed="973072046" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000182" asserts="0">
+                  <test-case id="1043" name="ADestroyedActorIsNotAnnounced" fullname="Ironfront.Net.Unity.Server.Tests.AnnounceableActorTests.ADestroyedActorIsNotAnnounced" methodname="ADestroyedActorIsNotAnnounced" classname="Ironfront.Net.Unity.Server.Tests.AnnounceableActorTests" runstate="Runnable" seed="545681198" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000242" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1040" name="AnUnclaimedPlayerSlotIsNotAnnounced" fullname="Ironfront.Net.Unity.Server.Tests.AnnounceableActorTests.AnUnclaimedPlayerSlotIsNotAnnounced" methodname="AnUnclaimedPlayerSlotIsNotAnnounced" classname="Ironfront.Net.Unity.Server.Tests.AnnounceableActorTests" runstate="Runnable" seed="828273025" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000242" asserts="0">
+                  <test-case id="1040" name="AnUnclaimedPlayerSlotIsNotAnnounced" fullname="Ironfront.Net.Unity.Server.Tests.AnnounceableActorTests.AnUnclaimedPlayerSlotIsNotAnnounced" methodname="AnUnclaimedPlayerSlotIsNotAnnounced" classname="Ironfront.Net.Unity.Server.Tests.AnnounceableActorTests" runstate="Runnable" seed="107359494" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000387" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
                 </test-suite>
-                <test-suite type="TestFixture" id="1044" name="CapturePointSlaveTests" fullname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests" classname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.014079" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <test-suite type="TestFixture" id="1044" name="CapturePointSlaveTests" fullname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests" classname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.016457" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
                   <properties />
-                  <test-case id="1046" name="ANeutralPointLeavesSpawnPointOwnerAtMinusOne" fullname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests.ANeutralPointLeavesSpawnPointOwnerAtMinusOne" methodname="ANeutralPointLeavesSpawnPointOwnerAtMinusOne" classname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests" runstate="Runnable" seed="1836710602" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001604" asserts="0">
+                  <test-case id="1046" name="ANeutralPointLeavesSpawnPointOwnerAtMinusOne" fullname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests.ANeutralPointLeavesSpawnPointOwnerAtMinusOne" methodname="ANeutralPointLeavesSpawnPointOwnerAtMinusOne" classname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests" runstate="Runnable" seed="141844283" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.002032" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1050" name="AResetRewindsTheDividerSoANewRoundOpensOnARefresh" fullname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests.AResetRewindsTheDividerSoANewRoundOpensOnARefresh" methodname="AResetRewindsTheDividerSoANewRoundOpensOnARefresh" classname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests" runstate="Runnable" seed="736620439" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000355" asserts="0">
+                  <test-case id="1050" name="AResetRewindsTheDividerSoANewRoundOpensOnARefresh" fullname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests.AResetRewindsTheDividerSoANewRoundOpensOnARefresh" methodname="AResetRewindsTheDividerSoANewRoundOpensOnARefresh" classname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests" runstate="Runnable" seed="336749393" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000562" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1051" name="AShorterDirectoryDoesNotWalkOffTheEnd" fullname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests.AShorterDirectoryDoesNotWalkOffTheEnd" methodname="AShorterDirectoryDoesNotWalkOffTheEnd" classname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests" runstate="Runnable" seed="73488102" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000513" asserts="0">
+                  <test-case id="1051" name="AShorterDirectoryDoesNotWalkOffTheEnd" fullname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests.AShorterDirectoryDoesNotWalkOffTheEnd" methodname="AShorterDirectoryDoesNotWalkOffTheEnd" classname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests" runstate="Runnable" seed="1253183987" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000744" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1047" name="ControlIsTheMagnitudeSoTheFlagPoleRisesForEitherTeam" fullname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests.ControlIsTheMagnitudeSoTheFlagPoleRisesForEitherTeam" methodname="ControlIsTheMagnitudeSoTheFlagPoleRisesForEitherTeam" classname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests" runstate="Runnable" seed="207839604" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.004754" asserts="0">
+                  <test-case id="1047" name="ControlIsTheMagnitudeSoTheFlagPoleRisesForEitherTeam" fullname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests.ControlIsTheMagnitudeSoTheFlagPoleRisesForEitherTeam" methodname="ControlIsTheMagnitudeSoTheFlagPoleRisesForEitherTeam" classname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests" runstate="Runnable" seed="1594699082" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.006742" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1048" name="PresenceIsRefreshedOnTheDividerAndOwnershipEveryTick" fullname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests.PresenceIsRefreshedOnTheDividerAndOwnershipEveryTick" methodname="PresenceIsRefreshedOnTheDividerAndOwnershipEveryTick" classname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests" runstate="Runnable" seed="267015362" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000330" asserts="0">
+                  <test-case id="1048" name="PresenceIsRefreshedOnTheDividerAndOwnershipEveryTick" fullname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests.PresenceIsRefreshedOnTheDividerAndOwnershipEveryTick" methodname="PresenceIsRefreshedOnTheDividerAndOwnershipEveryTick" classname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests" runstate="Runnable" seed="1056295126" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000549" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1045" name="SpawnPointOwnerMatchesTheAuthorityOnEveryTickIncludingTheFlip" fullname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests.SpawnPointOwnerMatchesTheAuthorityOnEveryTickIncludingTheFlip" methodname="SpawnPointOwnerMatchesTheAuthorityOnEveryTickIncludingTheFlip" classname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests" runstate="Runnable" seed="1699515758" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001767" asserts="0">
+                  <test-case id="1045" name="SpawnPointOwnerMatchesTheAuthorityOnEveryTickIncludingTheFlip" fullname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests.SpawnPointOwnerMatchesTheAuthorityOnEveryTickIncludingTheFlip" methodname="SpawnPointOwnerMatchesTheAuthorityOnEveryTickIncludingTheFlip" classname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests" runstate="Runnable" seed="1483140971" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.002278" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1049" name="TheContestedFlagPersistsBetweenRefreshes" fullname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests.TheContestedFlagPersistsBetweenRefreshes" methodname="TheContestedFlagPersistsBetweenRefreshes" classname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests" runstate="Runnable" seed="946903074" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000321" asserts="0">
+                  <test-case id="1049" name="TheContestedFlagPersistsBetweenRefreshes" fullname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests.TheContestedFlagPersistsBetweenRefreshes" methodname="TheContestedFlagPersistsBetweenRefreshes" classname="Ironfront.Net.Unity.Server.Tests.CapturePointSlaveTests" runstate="Runnable" seed="545922705" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000477" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
                 </test-suite>
-                <test-suite type="TestFixture" id="1052" name="CollisionBypassTests" fullname="Ironfront.Net.Unity.Server.Tests.CollisionBypassTests" classname="Ironfront.Net.Unity.Server.Tests.CollisionBypassTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.018875" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <test-suite type="TestFixture" id="1052" name="CollisionBypassTests" fullname="Ironfront.Net.Unity.Server.Tests.CollisionBypassTests" classname="Ironfront.Net.Unity.Server.Tests.CollisionBypassTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.028708" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
                   <properties />
-                  <test-case id="1055" name="ABypassedMoveDoesNotLeaveStaleCollisionFlags" fullname="Ironfront.Net.Unity.Server.Tests.CollisionBypassTests.ABypassedMoveDoesNotLeaveStaleCollisionFlags" methodname="ABypassedMoveDoesNotLeaveStaleCollisionFlags" classname="Ironfront.Net.Unity.Server.Tests.CollisionBypassTests" runstate="Runnable" seed="1522795296" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.015910" asserts="0">
+                  <test-case id="1055" name="ABypassedMoveDoesNotLeaveStaleCollisionFlags" fullname="Ironfront.Net.Unity.Server.Tests.CollisionBypassTests.ABypassedMoveDoesNotLeaveStaleCollisionFlags" methodname="ABypassedMoveDoesNotLeaveStaleCollisionFlags" classname="Ironfront.Net.Unity.Server.Tests.CollisionBypassTests" runstate="Runnable" seed="788489143" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.023746" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -270,7 +270,7 @@
                     <output><![CDATA[[net] 'body' moved with no collision: its CharacterController is disabled. Motion is being written straight onto the transform, so this body will pass through the world and sink below the server's authoritative position. See ledger X-19. Further occurrences are counted in CollisionBypassedMoves and not logged.
 ]]></output>
                   </test-case>
-                  <test-case id="1054" name="AMoveThroughADisabledControllerIsCountedAndReportedOnce" fullname="Ironfront.Net.Unity.Server.Tests.CollisionBypassTests.AMoveThroughADisabledControllerIsCountedAndReportedOnce" methodname="AMoveThroughADisabledControllerIsCountedAndReportedOnce" classname="Ironfront.Net.Unity.Server.Tests.CollisionBypassTests" runstate="Runnable" seed="2107911486" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001502" asserts="0">
+                  <test-case id="1054" name="AMoveThroughADisabledControllerIsCountedAndReportedOnce" fullname="Ironfront.Net.Unity.Server.Tests.CollisionBypassTests.AMoveThroughADisabledControllerIsCountedAndReportedOnce" methodname="AMoveThroughADisabledControllerIsCountedAndReportedOnce" classname="Ironfront.Net.Unity.Server.Tests.CollisionBypassTests" runstate="Runnable" seed="321974320" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.002397" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -278,16 +278,16 @@
                     <output><![CDATA[[net] 'body' moved with no collision: its CharacterController is disabled. Motion is being written straight onto the transform, so this body will pass through the world and sink below the server's authoritative position. See ledger X-19. Further occurrences are counted in CollisionBypassedMoves and not logged.
 ]]></output>
                   </test-case>
-                  <test-case id="1053" name="AMoveThroughALiveControllerIsNotCountedAsBypassed" fullname="Ironfront.Net.Unity.Server.Tests.CollisionBypassTests.AMoveThroughALiveControllerIsNotCountedAsBypassed" methodname="AMoveThroughALiveControllerIsNotCountedAsBypassed" classname="Ironfront.Net.Unity.Server.Tests.CollisionBypassTests" runstate="Runnable" seed="1041713948" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000382" asserts="0">
+                  <test-case id="1053" name="AMoveThroughALiveControllerIsNotCountedAsBypassed" fullname="Ironfront.Net.Unity.Server.Tests.CollisionBypassTests.AMoveThroughALiveControllerIsNotCountedAsBypassed" methodname="AMoveThroughALiveControllerIsNotCountedAsBypassed" classname="Ironfront.Net.Unity.Server.Tests.CollisionBypassTests" runstate="Runnable" seed="435246211" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000690" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
                 </test-suite>
-                <test-suite type="TestFixture" id="1056" name="DeclaredClientDeclinesLocalServerTests" fullname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests" classname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.005931" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <test-suite type="TestFixture" id="1056" name="DeclaredClientDeclinesLocalServerTests" fullname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests" classname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.008532" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
                   <properties />
-                  <test-case id="1058" name="DeclaringItSurvivesUntilCleared" fullname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests.DeclaringItSurvivesUntilCleared" methodname="DeclaringItSurvivesUntilCleared" classname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests" runstate="Runnable" seed="212381307" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001021" asserts="0">
+                  <test-case id="1058" name="DeclaringItSurvivesUntilCleared" fullname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests.DeclaringItSurvivesUntilCleared" methodname="DeclaringItSurvivesUntilCleared" classname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests" runstate="Runnable" seed="1589544908" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.002142" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -295,7 +295,7 @@
                     <output><![CDATA[[net] this process is a client: no local server will be started.
 ]]></output>
                   </test-case>
-                  <test-case id="1060" name="DeclaringTheProcessDoesNotClaimTheRole" fullname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests.DeclaringTheProcessDoesNotClaimTheRole" methodname="DeclaringTheProcessDoesNotClaimTheRole" classname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests" runstate="Runnable" seed="1959303990" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000803" asserts="0">
+                  <test-case id="1060" name="DeclaringTheProcessDoesNotClaimTheRole" fullname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests.DeclaringTheProcessDoesNotClaimTheRole" methodname="DeclaringTheProcessDoesNotClaimTheRole" classname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests" runstate="Runnable" seed="502048819" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001199" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -303,7 +303,7 @@
                     <output><![CDATA[[net] this process is a client: no local server will be started.
 ]]></output>
                   </test-case>
-                  <test-case id="1059" name="TheClientROLEDoesNotMakeTheProcessADeclaredClient" fullname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests.TheClientROLEDoesNotMakeTheProcessADeclaredClient" methodname="TheClientROLEDoesNotMakeTheProcessADeclaredClient" classname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests" runstate="Runnable" seed="1716091419" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000799" asserts="0">
+                  <test-case id="1059" name="TheClientROLEDoesNotMakeTheProcessADeclaredClient" fullname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests.TheClientROLEDoesNotMakeTheProcessADeclaredClient" methodname="TheClientROLEDoesNotMakeTheProcessADeclaredClient" classname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests" runstate="Runnable" seed="798029577" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001191" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -311,13 +311,13 @@
                     <output><![CDATA[[net] role = Client
 ]]></output>
                   </test-case>
-                  <test-case id="1057" name="TheFlagIsOffUntilSomethingDeclaresIt" fullname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests.TheFlagIsOffUntilSomethingDeclaresIt" methodname="TheFlagIsOffUntilSomethingDeclaresIt" classname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests" runstate="Runnable" seed="285671160" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000169" asserts="0">
+                  <test-case id="1057" name="TheFlagIsOffUntilSomethingDeclaresIt" fullname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests.TheFlagIsOffUntilSomethingDeclaresIt" methodname="TheFlagIsOffUntilSomethingDeclaresIt" classname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests" runstate="Runnable" seed="1492619428" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000250" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1061" name="TheTwoProcessDeclarationsAreIndependent" fullname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests.TheTwoProcessDeclarationsAreIndependent" methodname="TheTwoProcessDeclarationsAreIndependent" classname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests" runstate="Runnable" seed="1351584372" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001279" asserts="0">
+                  <test-case id="1061" name="TheTwoProcessDeclarationsAreIndependent" fullname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests.TheTwoProcessDeclarationsAreIndependent" methodname="TheTwoProcessDeclarationsAreIndependent" classname="Ironfront.Net.Unity.Server.Tests.DeclaredClientDeclinesLocalServerTests" runstate="Runnable" seed="1570730571" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001654" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -327,120 +327,120 @@
 ]]></output>
                   </test-case>
                 </test-suite>
-                <test-suite type="TestFixture" id="1062" name="GroundSnapTests" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.007940" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <test-suite type="TestFixture" id="1062" name="GroundSnapTests" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.010564" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
                   <properties />
-                  <test-case id="1064" name="APlayerStandingThereIsNotGround" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests.APlayerStandingThereIsNotGround" methodname="APlayerStandingThereIsNotGround" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" seed="2408436" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.003416" asserts="0">
+                  <test-case id="1064" name="APlayerStandingThereIsNotGround" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests.APlayerStandingThereIsNotGround" methodname="APlayerStandingThereIsNotGround" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" seed="1425836252" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.004847" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1066" name="ATriggerVolumeIsNotGround" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests.ATriggerVolumeIsNotGround" methodname="ATriggerVolumeIsNotGround" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" seed="1555577509" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000818" asserts="0">
+                  <test-case id="1066" name="ATriggerVolumeIsNotGround" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests.ATriggerVolumeIsNotGround" methodname="ATriggerVolumeIsNotGround" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" seed="1576450670" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001219" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1067" name="GroundFarBelowIsAMissRatherThanAPlacement" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests.GroundFarBelowIsAMissRatherThanAPlacement" methodname="GroundFarBelowIsAMissRatherThanAPlacement" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" seed="1548001099" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000434" asserts="0">
+                  <test-case id="1067" name="GroundFarBelowIsAMissRatherThanAPlacement" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests.GroundFarBelowIsAMissRatherThanAPlacement" methodname="GroundFarBelowIsAMissRatherThanAPlacement" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" seed="371443165" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000548" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1069" name="GroundInsideTheWindowStillSnaps" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests.GroundInsideTheWindowStillSnaps" methodname="GroundInsideTheWindowStillSnaps" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" seed="1528457287" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000355" asserts="0">
+                  <test-case id="1069" name="GroundInsideTheWindowStillSnaps" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests.GroundInsideTheWindowStillSnaps" methodname="GroundInsideTheWindowStillSnaps" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" seed="785294585" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000488" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1068" name="NothingUnderneathIsAMiss" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests.NothingUnderneathIsAMiss" methodname="NothingUnderneathIsAMiss" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" seed="1769559454" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000313" asserts="0">
+                  <test-case id="1068" name="NothingUnderneathIsAMiss" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests.NothingUnderneathIsAMiss" methodname="NothingUnderneathIsAMiss" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" seed="87678916" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000378" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1063" name="SnapsToGroundUnderThePoint" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests.SnapsToGroundUnderThePoint" methodname="SnapsToGroundUnderThePoint" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" seed="1373732787" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000419" asserts="0">
+                  <test-case id="1063" name="SnapsToGroundUnderThePoint" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests.SnapsToGroundUnderThePoint" methodname="SnapsToGroundUnderThePoint" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" seed="919407319" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000454" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1065" name="WaterIsNotGround" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests.WaterIsNotGround" methodname="WaterIsNotGround" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" seed="1956151911" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000429" asserts="0">
+                  <test-case id="1065" name="WaterIsNotGround" fullname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests.WaterIsNotGround" methodname="WaterIsNotGround" classname="Ironfront.Net.Unity.Server.Tests.GroundSnapTests" runstate="Runnable" seed="1969550474" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000533" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
                 </test-suite>
-                <test-suite type="TestFixture" id="1070" name="LoadoutPinTests" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" testcasecount="10" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.005112" total="10" passed="10" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <test-suite type="TestFixture" id="1070" name="LoadoutPinTests" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" testcasecount="10" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.006076" total="10" passed="10" failed="0" inconclusive="0" skipped="0" asserts="0">
                   <properties />
-                  <test-suite type="ParameterizedMethod" id="1077" name="ABlankNameDefersRatherThanArmingNothing" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests.ABlankNameDefersRatherThanArmingNothing" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001302" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+                  <test-suite type="ParameterizedMethod" id="1077" name="ABlankNameDefersRatherThanArmingNothing" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests.ABlankNameDefersRatherThanArmingNothing" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001525" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
                     <properties />
-                    <test-case id="1074" name="ABlankNameDefersRatherThanArmingNothing(&quot;&quot;)" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests.ABlankNameDefersRatherThanArmingNothing(&quot;&quot;)" methodname="ABlankNameDefersRatherThanArmingNothing" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" seed="130096920" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000437" asserts="0">
+                    <test-case id="1074" name="ABlankNameDefersRatherThanArmingNothing(&quot;&quot;)" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests.ABlankNameDefersRatherThanArmingNothing(&quot;&quot;)" methodname="ABlankNameDefersRatherThanArmingNothing" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" seed="1674133591" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000531" asserts="0">
                       <properties>
                         <property name="retryIteration" value="0" />
                         <property name="repeatIteration" value="0" />
                       </properties>
                     </test-case>
-                    <test-case id="1075" name="ABlankNameDefersRatherThanArmingNothing(&quot;   &quot;)" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests.ABlankNameDefersRatherThanArmingNothing(&quot;   &quot;)" methodname="ABlankNameDefersRatherThanArmingNothing" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" seed="1567622556" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000077" asserts="0">
+                    <test-case id="1075" name="ABlankNameDefersRatherThanArmingNothing(&quot;   &quot;)" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests.ABlankNameDefersRatherThanArmingNothing(&quot;   &quot;)" methodname="ABlankNameDefersRatherThanArmingNothing" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" seed="1914171716" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000091" asserts="0">
                       <properties>
                         <property name="retryIteration" value="0" />
                         <property name="repeatIteration" value="0" />
                       </properties>
                     </test-case>
-                    <test-case id="1076" name="ABlankNameDefersRatherThanArmingNothing(null)" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests.ABlankNameDefersRatherThanArmingNothing(null)" methodname="ABlankNameDefersRatherThanArmingNothing" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" seed="14049173" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000051" asserts="0">
+                    <test-case id="1076" name="ABlankNameDefersRatherThanArmingNothing(null)" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests.ABlankNameDefersRatherThanArmingNothing(null)" methodname="ABlankNameDefersRatherThanArmingNothing" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" seed="505466550" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000059" asserts="0">
                       <properties>
                         <property name="retryIteration" value="0" />
                         <property name="repeatIteration" value="0" />
                       </properties>
                     </test-case>
                   </test-suite>
-                  <test-case id="1079" name="ADirectoryThatPinsNothingIsRejected" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests.ADirectoryThatPinsNothingIsRejected" methodname="ADirectoryThatPinsNothingIsRejected" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" seed="1332310143" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001048" asserts="0">
+                  <test-case id="1079" name="ADirectoryThatPinsNothingIsRejected" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests.ADirectoryThatPinsNothingIsRejected" methodname="ADirectoryThatPinsNothingIsRejected" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" seed="1163936017" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001185" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1078" name="ANameIsTrimmed" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests.ANameIsTrimmed" methodname="ANameIsTrimmed" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" seed="1557050671" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000222" asserts="0">
+                  <test-case id="1078" name="ANameIsTrimmed" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests.ANameIsTrimmed" methodname="ANameIsTrimmed" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" seed="1989338376" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000301" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1080" name="AnUnknownSlotDefers" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests.AnUnknownSlotDefers" methodname="AnUnknownSlotDefers" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" seed="1372150446" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000119" asserts="0">
+                  <test-case id="1080" name="AnUnknownSlotDefers" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests.AnUnknownSlotDefers" methodname="AnUnknownSlotDefers" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" seed="1987748041" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000145" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1072" name="AnUnpinnedSlotDefersToTheDraw" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests.AnUnpinnedSlotDefersToTheDraw" methodname="AnUnpinnedSlotDefersToTheDraw" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" seed="249780433" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000123" asserts="0">
+                  <test-case id="1072" name="AnUnpinnedSlotDefersToTheDraw" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests.AnUnpinnedSlotDefersToTheDraw" methodname="AnUnpinnedSlotDefersToTheDraw" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" seed="1428911390" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000140" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1071" name="APinnedSlotReturnsItsName" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests.APinnedSlotReturnsItsName" methodname="APinnedSlotReturnsItsName" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" seed="1480096689" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000108" asserts="0">
+                  <test-case id="1071" name="APinnedSlotReturnsItsName" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests.APinnedSlotReturnsItsName" methodname="APinnedSlotReturnsItsName" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" seed="428958429" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000126" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1081" name="ClearRemovesAnInstalledDirectory" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests.ClearRemovesAnInstalledDirectory" methodname="ClearRemovesAnInstalledDirectory" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" seed="1541756536" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000247" asserts="0">
+                  <test-case id="1081" name="ClearRemovesAnInstalledDirectory" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests.ClearRemovesAnInstalledDirectory" methodname="ClearRemovesAnInstalledDirectory" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" seed="553360629" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000318" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1073" name="EachSlotAnswersWithItsOwnName" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests.EachSlotAnswersWithItsOwnName" methodname="EachSlotAnswersWithItsOwnName" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" seed="1173247918" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000188" asserts="0">
+                  <test-case id="1073" name="EachSlotAnswersWithItsOwnName" fullname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests.EachSlotAnswersWithItsOwnName" methodname="EachSlotAnswersWithItsOwnName" classname="Ironfront.Net.Unity.Server.Tests.LoadoutPinTests" runstate="Runnable" seed="1259789331" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000161" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
                 </test-suite>
-                <test-suite type="TestFixture" id="1082" name="MountedWeaponSeamTests" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" testcasecount="11" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.013731" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <test-suite type="TestFixture" id="1082" name="MountedWeaponSeamTests" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" testcasecount="11" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.016517" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
                   <properties />
-                  <test-case id="1085" name="AClientCannotFireARemoteActorsMountedWeapon" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests.AClientCannotFireARemoteActorsMountedWeapon" methodname="AClientCannotFireARemoteActorsMountedWeapon" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" seed="819485428" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001094" asserts="0">
+                  <test-case id="1085" name="AClientCannotFireARemoteActorsMountedWeapon" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests.AClientCannotFireARemoteActorsMountedWeapon" methodname="AClientCannotFireARemoteActorsMountedWeapon" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" seed="2130425484" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001453" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -448,7 +448,7 @@
                     <output><![CDATA[[net] role = Client
 ]]></output>
                   </test-case>
-                  <test-case id="1086" name="AClientRunsNoGameplayHalf" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests.AClientRunsNoGameplayHalf" methodname="AClientRunsNoGameplayHalf" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" seed="1975242347" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000786" asserts="0">
+                  <test-case id="1086" name="AClientRunsNoGameplayHalf" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests.AClientRunsNoGameplayHalf" methodname="AClientRunsNoGameplayHalf" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" seed="267486968" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000996" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -456,7 +456,7 @@
                     <output><![CDATA[[net] role = Client
 ]]></output>
                   </test-case>
-                  <test-case id="1090" name="ADeclarationDoesNotReArmAHalfEmptyGun" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests.ADeclarationDoesNotReArmAHalfEmptyGun" methodname="ADeclarationDoesNotReArmAHalfEmptyGun" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" seed="192376253" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.003741" asserts="0">
+                  <test-case id="1090" name="ADeclarationDoesNotReArmAHalfEmptyGun" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests.ADeclarationDoesNotReArmAHalfEmptyGun" methodname="ADeclarationDoesNotReArmAHalfEmptyGun" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" seed="1130333397" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.003970" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -464,7 +464,7 @@
                     <output><![CDATA[[net] role = Server
 ]]></output>
                   </test-case>
-                  <test-case id="1092" name="AnUndeclaredTurretFallsBackToLocalAim" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests.AnUndeclaredTurretFallsBackToLocalAim" methodname="AnUndeclaredTurretFallsBackToLocalAim" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" seed="584310169" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001240" asserts="0">
+                  <test-case id="1092" name="AnUndeclaredTurretFallsBackToLocalAim" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests.AnUndeclaredTurretFallsBackToLocalAim" methodname="AnUndeclaredTurretFallsBackToLocalAim" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" seed="1109425054" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001743" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -472,7 +472,7 @@
                     <output><![CDATA[[net] role = Server
 ]]></output>
                   </test-case>
-                  <test-case id="1087" name="AServerRunsNoCosmeticHalf" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests.AServerRunsNoCosmeticHalf" methodname="AServerRunsNoCosmeticHalf" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" seed="1973949731" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000778" asserts="0">
+                  <test-case id="1087" name="AServerRunsNoCosmeticHalf" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests.AServerRunsNoCosmeticHalf" methodname="AServerRunsNoCosmeticHalf" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" seed="515004588" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001000" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -480,7 +480,7 @@
                     <output><![CDATA[[net] role = Server
 ]]></output>
                   </test-case>
-                  <test-case id="1089" name="AServerSpendsAndRefusesThroughTheRegistry" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests.AServerSpendsAndRefusesThroughTheRegistry" methodname="AServerSpendsAndRefusesThroughTheRegistry" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" seed="338358217" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001089" asserts="0">
+                  <test-case id="1089" name="AServerSpendsAndRefusesThroughTheRegistry" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests.AServerSpendsAndRefusesThroughTheRegistry" methodname="AServerSpendsAndRefusesThroughTheRegistry" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" seed="675690609" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001416" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -488,7 +488,7 @@
                     <output><![CDATA[[net] role = Server
 ]]></output>
                   </test-case>
-                  <test-case id="1091" name="AServerTurretResolvesToItsAuthoritativePose" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests.AServerTurretResolvesToItsAuthoritativePose" methodname="AServerTurretResolvesToItsAuthoritativePose" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" seed="1928022900" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001214" asserts="0">
+                  <test-case id="1091" name="AServerTurretResolvesToItsAuthoritativePose" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests.AServerTurretResolvesToItsAuthoritativePose" methodname="AServerTurretResolvesToItsAuthoritativePose" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" seed="1191253766" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001530" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -496,7 +496,7 @@
                     <output><![CDATA[[net] role = Server
 ]]></output>
                   </test-case>
-                  <test-case id="1088" name="AServerWithNoDirectoryDoesNotJamTheGun" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests.AServerWithNoDirectoryDoesNotJamTheGun" methodname="AServerWithNoDirectoryDoesNotJamTheGun" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" seed="1877221582" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000693" asserts="0">
+                  <test-case id="1088" name="AServerWithNoDirectoryDoesNotJamTheGun" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests.AServerWithNoDirectoryDoesNotJamTheGun" methodname="AServerWithNoDirectoryDoesNotJamTheGun" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" seed="336695552" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000885" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -504,154 +504,169 @@
                     <output><![CDATA[[net] role = Server
 ]]></output>
                   </test-case>
-                  <test-case id="1083" name="OfflineMountedWeaponBehaviourIsUnchanged" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests.OfflineMountedWeaponBehaviourIsUnchanged" methodname="OfflineMountedWeaponBehaviourIsUnchanged" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" seed="1169650982" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000234" asserts="0">
+                  <test-case id="1083" name="OfflineMountedWeaponBehaviourIsUnchanged" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests.OfflineMountedWeaponBehaviourIsUnchanged" methodname="OfflineMountedWeaponBehaviourIsUnchanged" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" seed="4685230" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000296" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1084" name="OfflineTurretAimIsAlwaysLocal" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests.OfflineTurretAimIsAlwaysLocal" methodname="OfflineTurretAimIsAlwaysLocal" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" seed="374542537" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000401" asserts="0">
+                  <test-case id="1084" name="OfflineTurretAimIsAlwaysLocal" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests.OfflineTurretAimIsAlwaysLocal" methodname="OfflineTurretAimIsAlwaysLocal" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" seed="1983183362" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000231" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1093" name="TheLocalAimSurvivesUntilTheSeatIsLeft" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests.TheLocalAimSurvivesUntilTheSeatIsLeft" methodname="TheLocalAimSurvivesUntilTheSeatIsLeft" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" seed="1322531030" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000292" asserts="0">
+                  <test-case id="1093" name="TheLocalAimSurvivesUntilTheSeatIsLeft" fullname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests.TheLocalAimSurvivesUntilTheSeatIsLeft" methodname="TheLocalAimSurvivesUntilTheSeatIsLeft" classname="Ironfront.Net.Unity.Server.Tests.MountedWeaponSeamTests" runstate="Runnable" seed="999197709" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000315" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
                 </test-suite>
-                <test-suite type="TestFixture" id="1094" name="NetServerActorSeamTests" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" runstate="Runnable" testcasecount="10" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.007771" total="10" passed="10" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <test-suite type="TestFixture" id="1094" name="NetServerActorRagdollFlagTests" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorRagdollFlagTests" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorRagdollFlagTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.002564" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
                   <properties />
-                  <test-case id="1100" name="ADestroyedGameplayActorFallsBackToTheLocalFields" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests.ADestroyedGameplayActorFallsBackToTheLocalFields" methodname="ADestroyedGameplayActorFallsBackToTheLocalFields" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" runstate="Runnable" seed="410318377" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000993" asserts="0">
+                  <test-case id="1095" name="ADeadActorsSnapshotSetsTheRagdollBit" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorRagdollFlagTests.ADeadActorsSnapshotSetsTheRagdollBit" methodname="ADeadActorsSnapshotSetsTheRagdollBit" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorRagdollFlagTests" runstate="Runnable" seed="1977460987" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001261" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1102" name="AFrameThatSelectsNothingNeverReachesTheSeam" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests.AFrameThatSelectsNothingNeverReachesTheSeam" methodname="AFrameThatSelectsNothingNeverReachesTheSeam" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" runstate="Runnable" seed="2041641124" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000880" asserts="0">
-                    <properties>
-                      <property name="retryIteration" value="0" />
-                      <property name="repeatIteration" value="0" />
-                    </properties>
-                  </test-case>
-                  <test-case id="1101" name="AHeldWeaponSwitchReachesTheSeamOnceAndAReleaseReArmsIt" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests.AHeldWeaponSwitchReachesTheSeamOnceAndAReleaseReArmsIt" methodname="AHeldWeaponSwitchReachesTheSeamOnceAndAReleaseReArmsIt" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" runstate="Runnable" seed="430166363" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001353" asserts="0">
-                    <properties>
-                      <property name="retryIteration" value="0" />
-                      <property name="repeatIteration" value="0" />
-                    </properties>
-                  </test-case>
-                  <test-case id="1104" name="FiringTheCarriedWeaponOfABodyHoldingNothingReportsFalse" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests.FiringTheCarriedWeaponOfABodyHoldingNothingReportsFalse" methodname="FiringTheCarriedWeaponOfABodyHoldingNothingReportsFalse" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" runstate="Runnable" seed="551871418" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000458" asserts="0">
-                    <properties>
-                      <property name="retryIteration" value="0" />
-                      <property name="repeatIteration" value="0" />
-                    </properties>
-                  </test-case>
-                  <test-case id="1103" name="FiringTheCarriedWeaponReachesTheGameplaySeamWithTheShotsOwnDirection" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests.FiringTheCarriedWeaponReachesTheGameplaySeamWithTheShotsOwnDirection" methodname="FiringTheCarriedWeaponReachesTheGameplaySeamWithTheShotsOwnDirection" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" runstate="Runnable" seed="755930964" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000600" asserts="0">
-                    <properties>
-                      <property name="retryIteration" value="0" />
-                      <property name="repeatIteration" value="0" />
-                    </properties>
-                  </test-case>
-                  <test-case id="1098" name="HealthReadsAndWritesTheGameplayActorRatherThanACopy" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests.HealthReadsAndWritesTheGameplayActorRatherThanACopy" methodname="HealthReadsAndWritesTheGameplayActorRatherThanACopy" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" runstate="Runnable" seed="1101588279" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000427" asserts="0">
-                    <properties>
-                      <property name="retryIteration" value="0" />
-                      <property name="repeatIteration" value="0" />
-                    </properties>
-                  </test-case>
-                  <test-case id="1099" name="IsAliveIsTheInverseOfTheGameplayDeadFlag" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests.IsAliveIsTheInverseOfTheGameplayDeadFlag" methodname="IsAliveIsTheInverseOfTheGameplayDeadFlag" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" runstate="Runnable" seed="1923104276" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000385" asserts="0">
-                    <properties>
-                      <property name="retryIteration" value="0" />
-                      <property name="repeatIteration" value="0" />
-                    </properties>
-                  </test-case>
-                  <test-case id="1097" name="WeaponIdFallsBackForAReplicatedObjectThatIsNotAnActor" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests.WeaponIdFallsBackForAReplicatedObjectThatIsNotAnActor" methodname="WeaponIdFallsBackForAReplicatedObjectThatIsNotAnActor" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" runstate="Runnable" seed="1488969444" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000311" asserts="0">
-                    <properties>
-                      <property name="retryIteration" value="0" />
-                      <property name="repeatIteration" value="0" />
-                    </properties>
-                  </test-case>
-                  <test-case id="1096" name="WeaponIdFallsBackToTheSerializedIdWhenNothingIsHeld" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests.WeaponIdFallsBackToTheSerializedIdWhenNothingIsHeld" methodname="WeaponIdFallsBackToTheSerializedIdWhenNothingIsHeld" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" runstate="Runnable" seed="1607884193" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000296" asserts="0">
-                    <properties>
-                      <property name="retryIteration" value="0" />
-                      <property name="repeatIteration" value="0" />
-                    </properties>
-                  </test-case>
-                  <test-case id="1095" name="WeaponIdIsTheIdOfTheWeaponTheActorIsHolding" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests.WeaponIdIsTheIdOfTheWeaponTheActorIsHolding" methodname="WeaponIdIsTheIdOfTheWeaponTheActorIsHolding" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" runstate="Runnable" seed="1239820064" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000262" asserts="0">
+                  <test-case id="1096" name="ALiveStandingActorsSnapshotClearsTheRagdollBit" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorRagdollFlagTests.ALiveStandingActorsSnapshotClearsTheRagdollBit" methodname="ALiveStandingActorsSnapshotClearsTheRagdollBit" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorRagdollFlagTests" runstate="Runnable" seed="1612713198" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000382" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
                 </test-suite>
-                <test-suite type="TestFixture" id="1105" name="OcclusionDescriptionTests" fullname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" classname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" runstate="Runnable" testcasecount="10" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.004007" total="10" passed="10" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <test-suite type="TestFixture" id="1097" name="NetServerActorSeamTests" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" runstate="Runnable" testcasecount="10" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.010028" total="10" passed="10" failed="0" inconclusive="0" skipped="0" asserts="0">
                   <properties />
-                  <test-case id="1114" name="ACounterThatWentBackwardsIsNotTreatedAsFresh" fullname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests.ACounterThatWentBackwardsIsNotTreatedAsFresh" methodname="ACounterThatWentBackwardsIsNotTreatedAsFresh" classname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" runstate="Runnable" seed="1269788505" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000173" asserts="0">
+                  <test-case id="1103" name="ADestroyedGameplayActorFallsBackToTheLocalFields" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests.ADestroyedGameplayActorFallsBackToTheLocalFields" methodname="ADestroyedGameplayActorFallsBackToTheLocalFields" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" runstate="Runnable" seed="1289974139" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001012" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1107" name="AHitAtTheEndpointPrintsAFractionNearOne" fullname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests.AHitAtTheEndpointPrintsAFractionNearOne" methodname="AHitAtTheEndpointPrintsAFractionNearOne" classname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" runstate="Runnable" seed="1053051323" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000836" asserts="0">
+                  <test-case id="1105" name="AFrameThatSelectsNothingNeverReachesTheSeam" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests.AFrameThatSelectsNothingNeverReachesTheSeam" methodname="AFrameThatSelectsNothingNeverReachesTheSeam" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" runstate="Runnable" seed="1410597792" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001094" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1106" name="AMidRayHitPrintsAFractionWellBelowOne" fullname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests.AMidRayHitPrintsAFractionWellBelowOne" methodname="AMidRayHitPrintsAFractionWellBelowOne" classname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" runstate="Runnable" seed="2003876066" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000162" asserts="0">
+                  <test-case id="1104" name="AHeldWeaponSwitchReachesTheSeamOnceAndAReleaseReArmsIt" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests.AHeldWeaponSwitchReachesTheSeamOnceAndAReleaseReArmsIt" methodname="AHeldWeaponSwitchReachesTheSeamOnceAndAReleaseReArmsIt" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" runstate="Runnable" seed="106666018" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001824" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1110" name="AnUnnamedColliderIsNamedRatherThanLeftBlank" fullname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests.AnUnnamedColliderIsNamedRatherThanLeftBlank" methodname="AnUnnamedColliderIsNamedRatherThanLeftBlank" classname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" runstate="Runnable" seed="366402866" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000165" asserts="0">
+                  <test-case id="1107" name="FiringTheCarriedWeaponOfABodyHoldingNothingReportsFalse" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests.FiringTheCarriedWeaponOfABodyHoldingNothingReportsFalse" methodname="FiringTheCarriedWeaponOfABodyHoldingNothingReportsFalse" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" runstate="Runnable" seed="360454389" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000661" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1111" name="AShotThatNothingBlockedSaysSoRatherThanReprintingTheLastOne" fullname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests.AShotThatNothingBlockedSaysSoRatherThanReprintingTheLastOne" methodname="AShotThatNothingBlockedSaysSoRatherThanReprintingTheLastOne" classname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" runstate="Runnable" seed="1273266720" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000108" asserts="0">
+                  <test-case id="1106" name="FiringTheCarriedWeaponReachesTheGameplaySeamWithTheShotsOwnDirection" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests.FiringTheCarriedWeaponReachesTheGameplaySeamWithTheShotsOwnDirection" methodname="FiringTheCarriedWeaponReachesTheGameplaySeamWithTheShotsOwnDirection" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" runstate="Runnable" seed="168975558" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000785" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1112" name="AShotThatWasBlockedPrintsTheDescription" fullname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests.AShotThatWasBlockedPrintsTheDescription" methodname="AShotThatWasBlockedPrintsTheDescription" classname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" runstate="Runnable" seed="1168078721" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000099" asserts="0">
+                  <test-case id="1101" name="HealthReadsAndWritesTheGameplayActorRatherThanACopy" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests.HealthReadsAndWritesTheGameplayActorRatherThanACopy" methodname="HealthReadsAndWritesTheGameplayActorRatherThanACopy" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" runstate="Runnable" seed="876586607" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000521" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1109" name="AZeroLengthRayPrintsNoFractionRatherThanNaN" fullname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests.AZeroLengthRayPrintsNoFractionRatherThanNaN" methodname="AZeroLengthRayPrintsNoFractionRatherThanNaN" classname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" runstate="Runnable" seed="192225347" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000292" asserts="0">
+                  <test-case id="1102" name="IsAliveIsTheInverseOfTheGameplayDeadFlag" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests.IsAliveIsTheInverseOfTheGameplayDeadFlag" methodname="IsAliveIsTheInverseOfTheGameplayDeadFlag" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" runstate="Runnable" seed="1723274105" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000494" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1113" name="ManyOcclusionsInOneShotStillCountAsThisShot" fullname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests.ManyOcclusionsInOneShotStillCountAsThisShot" methodname="ManyOcclusionsInOneShotStillCountAsThisShot" classname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" runstate="Runnable" seed="331807454" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000111" asserts="0">
+                  <test-case id="1100" name="WeaponIdFallsBackForAReplicatedObjectThatIsNotAnActor" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests.WeaponIdFallsBackForAReplicatedObjectThatIsNotAnActor" methodname="WeaponIdFallsBackForAReplicatedObjectThatIsNotAnActor" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" runstate="Runnable" seed="1665738888" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000403" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1115" name="NothingHasBlockedAShotUntilSomethingHas" fullname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests.NothingHasBlockedAShotUntilSomethingHas" methodname="NothingHasBlockedAShotUntilSomethingHas" classname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" runstate="Runnable" seed="2143303622" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000107" asserts="0">
+                  <test-case id="1099" name="WeaponIdFallsBackToTheSerializedIdWhenNothingIsHeld" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests.WeaponIdFallsBackToTheSerializedIdWhenNothingIsHeld" methodname="WeaponIdFallsBackToTheSerializedIdWhenNothingIsHeld" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" runstate="Runnable" seed="315641277" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000364" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1108" name="TheColliderNameSurvivesVerbatim" fullname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests.TheColliderNameSurvivesVerbatim" methodname="TheColliderNameSurvivesVerbatim" classname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" runstate="Runnable" seed="1117144208" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000161" asserts="0">
+                  <test-case id="1098" name="WeaponIdIsTheIdOfTheWeaponTheActorIsHolding" fullname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests.WeaponIdIsTheIdOfTheWeaponTheActorIsHolding" methodname="WeaponIdIsTheIdOfTheWeaponTheActorIsHolding" classname="Ironfront.Net.Unity.Server.Tests.NetServerActorSeamTests" runstate="Runnable" seed="908463749" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000300" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
                 </test-suite>
-                <test-suite type="TestFixture" id="1116" name="ProjectileAuthorityDefaultTests" fullname="Ironfront.Net.Unity.Server.Tests.ProjectileAuthorityDefaultTests" classname="Ironfront.Net.Unity.Server.Tests.ProjectileAuthorityDefaultTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.002107" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <test-suite type="TestFixture" id="1108" name="OcclusionDescriptionTests" fullname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" classname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" runstate="Runnable" testcasecount="10" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.004951" total="10" passed="10" failed="0" inconclusive="0" skipped="0" asserts="0">
                   <properties />
-                  <test-case id="1118" name="AtTheDefaultTheEngineStillOwnsProjectileDamageOnAServer" fullname="Ironfront.Net.Unity.Server.Tests.ProjectileAuthorityDefaultTests.AtTheDefaultTheEngineStillOwnsProjectileDamageOnAServer" methodname="AtTheDefaultTheEngineStillOwnsProjectileDamageOnAServer" classname="Ironfront.Net.Unity.Server.Tests.ProjectileAuthorityDefaultTests" runstate="Runnable" seed="1966356008" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001270" asserts="0">
+                  <test-case id="1117" name="ACounterThatWentBackwardsIsNotTreatedAsFresh" fullname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests.ACounterThatWentBackwardsIsNotTreatedAsFresh" methodname="ACounterThatWentBackwardsIsNotTreatedAsFresh" classname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" runstate="Runnable" seed="850266445" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000242" asserts="0">
+                    <properties>
+                      <property name="retryIteration" value="0" />
+                      <property name="repeatIteration" value="0" />
+                    </properties>
+                  </test-case>
+                  <test-case id="1110" name="AHitAtTheEndpointPrintsAFractionNearOne" fullname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests.AHitAtTheEndpointPrintsAFractionNearOne" methodname="AHitAtTheEndpointPrintsAFractionNearOne" classname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" runstate="Runnable" seed="1091653034" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001016" asserts="0">
+                    <properties>
+                      <property name="retryIteration" value="0" />
+                      <property name="repeatIteration" value="0" />
+                    </properties>
+                  </test-case>
+                  <test-case id="1109" name="AMidRayHitPrintsAFractionWellBelowOne" fullname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests.AMidRayHitPrintsAFractionWellBelowOne" methodname="AMidRayHitPrintsAFractionWellBelowOne" classname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" runstate="Runnable" seed="1495849699" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000213" asserts="0">
+                    <properties>
+                      <property name="retryIteration" value="0" />
+                      <property name="repeatIteration" value="0" />
+                    </properties>
+                  </test-case>
+                  <test-case id="1113" name="AnUnnamedColliderIsNamedRatherThanLeftBlank" fullname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests.AnUnnamedColliderIsNamedRatherThanLeftBlank" methodname="AnUnnamedColliderIsNamedRatherThanLeftBlank" classname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" runstate="Runnable" seed="1554307761" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000185" asserts="0">
+                    <properties>
+                      <property name="retryIteration" value="0" />
+                      <property name="repeatIteration" value="0" />
+                    </properties>
+                  </test-case>
+                  <test-case id="1114" name="AShotThatNothingBlockedSaysSoRatherThanReprintingTheLastOne" fullname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests.AShotThatNothingBlockedSaysSoRatherThanReprintingTheLastOne" methodname="AShotThatNothingBlockedSaysSoRatherThanReprintingTheLastOne" classname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" runstate="Runnable" seed="271929750" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000118" asserts="0">
+                    <properties>
+                      <property name="retryIteration" value="0" />
+                      <property name="repeatIteration" value="0" />
+                    </properties>
+                  </test-case>
+                  <test-case id="1115" name="AShotThatWasBlockedPrintsTheDescription" fullname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests.AShotThatWasBlockedPrintsTheDescription" methodname="AShotThatWasBlockedPrintsTheDescription" classname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" runstate="Runnable" seed="1060356588" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000103" asserts="0">
+                    <properties>
+                      <property name="retryIteration" value="0" />
+                      <property name="repeatIteration" value="0" />
+                    </properties>
+                  </test-case>
+                  <test-case id="1112" name="AZeroLengthRayPrintsNoFractionRatherThanNaN" fullname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests.AZeroLengthRayPrintsNoFractionRatherThanNaN" methodname="AZeroLengthRayPrintsNoFractionRatherThanNaN" classname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" runstate="Runnable" seed="1964839642" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000328" asserts="0">
+                    <properties>
+                      <property name="retryIteration" value="0" />
+                      <property name="repeatIteration" value="0" />
+                    </properties>
+                  </test-case>
+                  <test-case id="1116" name="ManyOcclusionsInOneShotStillCountAsThisShot" fullname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests.ManyOcclusionsInOneShotStillCountAsThisShot" methodname="ManyOcclusionsInOneShotStillCountAsThisShot" classname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" runstate="Runnable" seed="1951451476" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000120" asserts="0">
+                    <properties>
+                      <property name="retryIteration" value="0" />
+                      <property name="repeatIteration" value="0" />
+                    </properties>
+                  </test-case>
+                  <test-case id="1118" name="NothingHasBlockedAShotUntilSomethingHas" fullname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests.NothingHasBlockedAShotUntilSomethingHas" methodname="NothingHasBlockedAShotUntilSomethingHas" classname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" runstate="Runnable" seed="647892727" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000139" asserts="0">
+                    <properties>
+                      <property name="retryIteration" value="0" />
+                      <property name="repeatIteration" value="0" />
+                    </properties>
+                  </test-case>
+                  <test-case id="1111" name="TheColliderNameSurvivesVerbatim" fullname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests.TheColliderNameSurvivesVerbatim" methodname="TheColliderNameSurvivesVerbatim" classname="Ironfront.Net.Unity.Server.Tests.OcclusionDescriptionTests" runstate="Runnable" seed="1978400602" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000192" asserts="0">
+                    <properties>
+                      <property name="retryIteration" value="0" />
+                      <property name="repeatIteration" value="0" />
+                    </properties>
+                  </test-case>
+                </test-suite>
+                <test-suite type="TestFixture" id="1119" name="ProjectileAuthorityDefaultTests" fullname="Ironfront.Net.Unity.Server.Tests.ProjectileAuthorityDefaultTests" classname="Ironfront.Net.Unity.Server.Tests.ProjectileAuthorityDefaultTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.002507" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+                  <properties />
+                  <test-case id="1121" name="AtTheDefaultTheEngineStillOwnsProjectileDamageOnAServer" fullname="Ironfront.Net.Unity.Server.Tests.ProjectileAuthorityDefaultTests.AtTheDefaultTheEngineStillOwnsProjectileDamageOnAServer" methodname="AtTheDefaultTheEngineStillOwnsProjectileDamageOnAServer" classname="Ironfront.Net.Unity.Server.Tests.ProjectileAuthorityDefaultTests" runstate="Runnable" seed="958146597" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001410" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -659,49 +674,49 @@
                     <output><![CDATA[[net] role = Server
 ]]></output>
                   </test-case>
-                  <test-case id="1117" name="TheShippedDefaultIsOff" fullname="Ironfront.Net.Unity.Server.Tests.ProjectileAuthorityDefaultTests.TheShippedDefaultIsOff" methodname="TheShippedDefaultIsOff" classname="Ironfront.Net.Unity.Server.Tests.ProjectileAuthorityDefaultTests" runstate="Runnable" seed="807786181" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000211" asserts="0">
+                  <test-case id="1120" name="TheShippedDefaultIsOff" fullname="Ironfront.Net.Unity.Server.Tests.ProjectileAuthorityDefaultTests.TheShippedDefaultIsOff" methodname="TheShippedDefaultIsOff" classname="Ironfront.Net.Unity.Server.Tests.ProjectileAuthorityDefaultTests" runstate="Runnable" seed="1544829475" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000242" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
                 </test-suite>
-                <test-suite type="TestFixture" id="1119" name="SelfOcclusionTests" fullname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests" classname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.004346" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <test-suite type="TestFixture" id="1122" name="SelfOcclusionTests" fullname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests" classname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.005228" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
                   <properties />
-                  <test-case id="1123" name="AnotherPlayersBoneIsNotPartOfTheVictim" fullname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests.AnotherPlayersBoneIsNotPartOfTheVictim" methodname="AnotherPlayersBoneIsNotPartOfTheVictim" classname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests" runstate="Runnable" seed="904940517" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001072" asserts="0">
+                  <test-case id="1126" name="AnotherPlayersBoneIsNotPartOfTheVictim" fullname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests.AnotherPlayersBoneIsNotPartOfTheVictim" methodname="AnotherPlayersBoneIsNotPartOfTheVictim" classname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests" runstate="Runnable" seed="777047343" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001956" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1120" name="ARigBoneDeepInTheVictimIsPartOfIt" fullname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests.ARigBoneDeepInTheVictimIsPartOfIt" methodname="ARigBoneDeepInTheVictimIsPartOfIt" classname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests" runstate="Runnable" seed="736337770" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000632" asserts="0">
+                  <test-case id="1123" name="ARigBoneDeepInTheVictimIsPartOfIt" fullname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests.ARigBoneDeepInTheVictimIsPartOfIt" methodname="ARigBoneDeepInTheVictimIsPartOfIt" classname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests" runstate="Runnable" seed="259761172" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000501" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1124" name="AVictimThatHasLeftTheWorldExcludesNothing" fullname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests.AVictimThatHasLeftTheWorldExcludesNothing" methodname="AVictimThatHasLeftTheWorldExcludesNothing" classname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests" runstate="Runnable" seed="1877724751" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000381" asserts="0">
+                  <test-case id="1127" name="AVictimThatHasLeftTheWorldExcludesNothing" fullname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests.AVictimThatHasLeftTheWorldExcludesNothing" methodname="AVictimThatHasLeftTheWorldExcludesNothing" classname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests" runstate="Runnable" seed="1268815269" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000354" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1122" name="AWallIsNotPartOfTheVictim" fullname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests.AWallIsNotPartOfTheVictim" methodname="AWallIsNotPartOfTheVictim" classname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests" runstate="Runnable" seed="358687718" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000338" asserts="0">
+                  <test-case id="1125" name="AWallIsNotPartOfTheVictim" fullname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests.AWallIsNotPartOfTheVictim" methodname="AWallIsNotPartOfTheVictim" classname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests" runstate="Runnable" seed="97791383" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000378" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1121" name="TheVictimsOwnRootColliderIsPartOfIt" fullname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests.TheVictimsOwnRootColliderIsPartOfIt" methodname="TheVictimsOwnRootColliderIsPartOfIt" classname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests" runstate="Runnable" seed="403661894" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000570" asserts="0">
+                  <test-case id="1124" name="TheVictimsOwnRootColliderIsPartOfIt" fullname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests.TheVictimsOwnRootColliderIsPartOfIt" methodname="TheVictimsOwnRootColliderIsPartOfIt" classname="Ironfront.Net.Unity.Server.Tests.SelfOcclusionTests" runstate="Runnable" seed="37529884" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000631" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
                 </test-suite>
-                <test-suite type="TestFixture" id="1125" name="ServerPlayerSlotPoolTests" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" testcasecount="14" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.027008" total="14" passed="14" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <test-suite type="TestFixture" id="1128" name="ServerPlayerSlotPoolTests" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" testcasecount="14" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.029510" total="14" passed="14" failed="0" inconclusive="0" skipped="0" asserts="0">
                   <properties />
-                  <test-case id="1139" name="ADepartureInTheMiddle_DoesNotStrandTheNextJoinerOnTheWrongSide" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.ADepartureInTheMiddle_DoesNotStrandTheNextJoinerOnTheWrongSide" methodname="ADepartureInTheMiddle_DoesNotStrandTheNextJoinerOnTheWrongSide" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="1068061277" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.004501" asserts="0">
+                  <test-case id="1142" name="ADepartureInTheMiddle_DoesNotStrandTheNextJoinerOnTheWrongSide" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.ADepartureInTheMiddle_DoesNotStrandTheNextJoinerOnTheWrongSide" methodname="ADepartureInTheMiddle_DoesNotStrandTheNextJoinerOnTheWrongSide" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="1889315656" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.005365" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -709,13 +724,13 @@
                     <output><![CDATA[[net] player slot pool filled: 16 claimable bodies, all parked (bot brain suspended until claimed). Map bots are unaffected.
 ]]></output>
                   </test-case>
-                  <test-case id="1136" name="BodyWithNoBotBrain_ClaimsWithoutThrowing" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.BodyWithNoBotBrain_ClaimsWithoutThrowing" methodname="BodyWithNoBotBrain_ClaimsWithoutThrowing" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="1158498029" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000761" asserts="0">
+                  <test-case id="1139" name="BodyWithNoBotBrain_ClaimsWithoutThrowing" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.BodyWithNoBotBrain_ClaimsWithoutThrowing" methodname="BodyWithNoBotBrain_ClaimsWithoutThrowing" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="860976523" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000438" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1131" name="ClaimableCount_EqualsMaxConnections" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.ClaimableCount_EqualsMaxConnections" methodname="ClaimableCount_EqualsMaxConnections" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="984631465" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001635" asserts="0">
+                  <test-case id="1134" name="ClaimableCount_EqualsMaxConnections" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.ClaimableCount_EqualsMaxConnections" methodname="ClaimableCount_EqualsMaxConnections" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="1042647498" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001928" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -723,7 +738,7 @@
                     <output><![CDATA[[net] player slot pool filled: 16 claimable bodies, all parked (bot brain suspended until claimed). Map bots are unaffected.
 ]]></output>
                   </test-case>
-                  <test-case id="1132" name="ClaimableCount_FollowsTheConfiguredNumber_NotALiteral" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.ClaimableCount_FollowsTheConfiguredNumber_NotALiteral" methodname="ClaimableCount_FollowsTheConfiguredNumber_NotALiteral" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="1675806196" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001155" asserts="0">
+                  <test-case id="1135" name="ClaimableCount_FollowsTheConfiguredNumber_NotALiteral" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.ClaimableCount_FollowsTheConfiguredNumber_NotALiteral" methodname="ClaimableCount_FollowsTheConfiguredNumber_NotALiteral" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="1975290365" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001416" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -731,21 +746,13 @@
                     <output><![CDATA[[net] player slot pool filled: 5 claimable bodies, all parked (bot brain suspended until claimed). Map bots are unaffected.
 ]]></output>
                   </test-case>
-                  <test-case id="1133" name="ClaimSuspendsTheBotBrain_AndReleaseResumesIt" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.ClaimSuspendsTheBotBrain_AndReleaseResumesIt" methodname="ClaimSuspendsTheBotBrain_AndReleaseResumesIt" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="1387416613" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000483" asserts="0">
+                  <test-case id="1136" name="ClaimSuspendsTheBotBrain_AndReleaseResumesIt" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.ClaimSuspendsTheBotBrain_AndReleaseResumesIt" methodname="ClaimSuspendsTheBotBrain_AndReleaseResumesIt" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="192340322" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000701" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1127" name="EveryAdmittedConnection_GetsABody_AndTheNextIsRefused" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.EveryAdmittedConnection_GetsABody_AndTheNextIsRefused" methodname="EveryAdmittedConnection_GetsABody_AndTheNextIsRefused" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="505766333" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.002957" asserts="0">
-                    <properties>
-                      <property name="retryIteration" value="0" />
-                      <property name="repeatIteration" value="0" />
-                    </properties>
-                    <output><![CDATA[[net] player slot pool filled: 16 claimable bodies, all parked (bot brain suspended until claimed). Map bots are unaffected.
-]]></output>
-                  </test-case>
-                  <test-case id="1137" name="EveryClaim_LandsOnTheTeamItAskedFor" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.EveryClaim_LandsOnTheTeamItAskedFor" methodname="EveryClaim_LandsOnTheTeamItAskedFor" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="1905764520" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001793" asserts="0">
+                  <test-case id="1130" name="EveryAdmittedConnection_GetsABody_AndTheNextIsRefused" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.EveryAdmittedConnection_GetsABody_AndTheNextIsRefused" methodname="EveryAdmittedConnection_GetsABody_AndTheNextIsRefused" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="1515846059" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.003522" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -753,7 +760,15 @@
                     <output><![CDATA[[net] player slot pool filled: 16 claimable bodies, all parked (bot brain suspended until claimed). Map bots are unaffected.
 ]]></output>
                   </test-case>
-                  <test-case id="1129" name="ExistingActors_CountAgainstTheHeadroom" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.ExistingActors_CountAgainstTheHeadroom" methodname="ExistingActors_CountAgainstTheHeadroom" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="1659350481" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.002879" asserts="0">
+                  <test-case id="1140" name="EveryClaim_LandsOnTheTeamItAskedFor" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.EveryClaim_LandsOnTheTeamItAskedFor" methodname="EveryClaim_LandsOnTheTeamItAskedFor" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="198188551" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001804" asserts="0">
+                    <properties>
+                      <property name="retryIteration" value="0" />
+                      <property name="repeatIteration" value="0" />
+                    </properties>
+                    <output><![CDATA[[net] player slot pool filled: 16 claimable bodies, all parked (bot brain suspended until claimed). Map bots are unaffected.
+]]></output>
+                  </test-case>
+                  <test-case id="1132" name="ExistingActors_CountAgainstTheHeadroom" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.ExistingActors_CountAgainstTheHeadroom" methodname="ExistingActors_CountAgainstTheHeadroom" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="259190656" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.003116" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -761,7 +776,7 @@
                     <output><![CDATA[[net] 16 player slots will not fit: 60 actors are already registered and MAX_ACTORS is 64. Lower MaxConnections or the bot count. No slots were created — the server will refuse every connection rather than admit a number nobody chose.
 ]]></output>
                   </test-case>
-                  <test-case id="1130" name="FactoryFailingPartWay_RollsBack" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.FactoryFailingPartWay_RollsBack" methodname="FactoryFailingPartWay_RollsBack" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="1938804866" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001330" asserts="0">
+                  <test-case id="1133" name="FactoryFailingPartWay_RollsBack" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.FactoryFailingPartWay_RollsBack" methodname="FactoryFailingPartWay_RollsBack" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="247148905" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001477" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -769,7 +784,7 @@
                     <output><![CDATA[[net] player-body factory returned nothing for slot 3 of 16. Rolling back the 3 already created; a half-filled pool is the drift this pool exists to prevent.
 ]]></output>
                   </test-case>
-                  <test-case id="1138" name="OneSideFillsAtHalfCapacity_AndTheServerIsNotFull" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.OneSideFillsAtHalfCapacity_AndTheServerIsNotFull" methodname="OneSideFillsAtHalfCapacity_AndTheServerIsNotFull" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="1464887605" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001560" asserts="0">
+                  <test-case id="1141" name="OneSideFillsAtHalfCapacity_AndTheServerIsNotFull" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.OneSideFillsAtHalfCapacity_AndTheServerIsNotFull" methodname="OneSideFillsAtHalfCapacity_AndTheServerIsNotFull" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="1565924432" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001736" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -777,19 +792,19 @@
                     <output><![CDATA[[net] player slot pool filled: 16 claimable bodies, all parked (bot brain suspended until claimed). Map bots are unaffected.
 ]]></output>
                   </test-case>
-                  <test-case id="1135" name="ParkedSlot_IsNotReparkedOnClaimAndStillResumesOnRelease" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.ParkedSlot_IsNotReparkedOnClaimAndStillResumesOnRelease" methodname="ParkedSlot_IsNotReparkedOnClaimAndStillResumesOnRelease" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="1849757224" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000650" asserts="0">
+                  <test-case id="1138" name="ParkedSlot_IsNotReparkedOnClaimAndStillResumesOnRelease" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.ParkedSlot_IsNotReparkedOnClaimAndStillResumesOnRelease" methodname="ParkedSlot_IsNotReparkedOnClaimAndStillResumesOnRelease" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="1934767539" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000562" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1134" name="PoolBodies_AreParkedFromCreationRatherThanFromTheClaim" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.PoolBodies_AreParkedFromCreationRatherThanFromTheClaim" methodname="PoolBodies_AreParkedFromCreationRatherThanFromTheClaim" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="1848812622" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000459" asserts="0">
+                  <test-case id="1137" name="PoolBodies_AreParkedFromCreationRatherThanFromTheClaim" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.PoolBodies_AreParkedFromCreationRatherThanFromTheClaim" methodname="PoolBodies_AreParkedFromCreationRatherThanFromTheClaim" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="1041736849" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000580" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1128" name="PoolLargerThanTheRegistryCanHold_CreatesNothing" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.PoolLargerThanTheRegistryCanHold_CreatesNothing" methodname="PoolLargerThanTheRegistryCanHold_CreatesNothing" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="52650700" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001075" asserts="0">
+                  <test-case id="1131" name="PoolLargerThanTheRegistryCanHold_CreatesNothing" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.PoolLargerThanTheRegistryCanHold_CreatesNothing" methodname="PoolLargerThanTheRegistryCanHold_CreatesNothing" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="268671173" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001295" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -797,7 +812,7 @@
                     <output><![CDATA[[net] 65 player slots will not fit: 0 actors are already registered and MAX_ACTORS is 64. Lower MaxConnections or the bot count. No slots were created — the server will refuse every connection rather than admit a number nobody chose.
 ]]></output>
                   </test-case>
-                  <test-case id="1126" name="SecondConnection_ClaimsASlot" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.SecondConnection_ClaimsASlot" methodname="SecondConnection_ClaimsASlot" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="1098984023" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001794" asserts="0">
+                  <test-case id="1129" name="SecondConnection_ClaimsASlot" fullname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests.SecondConnection_ClaimsASlot" methodname="SecondConnection_ClaimsASlot" classname="Ironfront.Net.Unity.Server.Tests.ServerPlayerSlotPoolTests" runstate="Runnable" seed="1559217100" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.002042" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
@@ -806,134 +821,146 @@
 ]]></output>
                   </test-case>
                 </test-suite>
-                <test-suite type="TestFixture" id="1140" name="SpawnPointSelectionTests" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" testcasecount="21" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.020225" total="21" passed="21" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <test-suite type="TestFixture" id="1143" name="SpawnPointSelectionTests" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" testcasecount="23" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.021664" total="23" passed="23" failed="0" inconclusive="0" skipped="0" asserts="0">
                   <properties />
-                  <test-case id="1141" name="AnEmptyDirectoryChoosesNothing" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.AnEmptyDirectoryChoosesNothing" methodname="AnEmptyDirectoryChoosesNothing" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="898073938" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000529" asserts="0">
+                  <test-case id="1144" name="AnEmptyDirectoryChoosesNothing" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.AnEmptyDirectoryChoosesNothing" methodname="AnEmptyDirectoryChoosesNothing" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="1004719332" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000599" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1153" name="APinnedDirectoryDelegatesCountAndPosition" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.APinnedDirectoryDelegatesCountAndPosition" methodname="APinnedDirectoryDelegatesCountAndPosition" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="1197110523" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000964" asserts="0">
+                  <test-case id="1148" name="ANeutralPointBelongsToNobodyAndIsChosenByNobody" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.ANeutralPointBelongsToNobodyAndIsChosenByNobody" methodname="ANeutralPointBelongsToNobodyAndIsChosenByNobody" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="1149527840" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001981" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1149" name="APinnedDirectoryNarrowsAndNeverWidens" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.APinnedDirectoryNarrowsAndNeverWidens" methodname="APinnedDirectoryNarrowsAndNeverWidens" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="40652101" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001342" asserts="0">
+                  <test-case id="1158" name="APinnedDirectoryDelegatesCountAndPosition" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.APinnedDirectoryDelegatesCountAndPosition" methodname="APinnedDirectoryDelegatesCountAndPosition" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="286426337" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001159" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1147" name="APinnedDirectoryRotatesThroughItsSlotsAcrossPlacements" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.APinnedDirectoryRotatesThroughItsSlotsAcrossPlacements" methodname="APinnedDirectoryRotatesThroughItsSlotsAcrossPlacements" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="1273332014" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000478" asserts="0">
+                  <test-case id="1154" name="APinnedDirectoryNarrowsAndNeverWidens" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.APinnedDirectoryNarrowsAndNeverWidens" methodname="APinnedDirectoryNarrowsAndNeverWidens" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="986238213" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000732" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1152" name="APinnedIndexIsASlotAndNeverTheNoPointSentinel" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.APinnedIndexIsASlotAndNeverTheNoPointSentinel" methodname="APinnedIndexIsASlotAndNeverTheNoPointSentinel" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="67364099" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000401" asserts="0">
+                  <test-case id="1152" name="APinnedDirectoryRotatesThroughItsSlotsAcrossPlacements" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.APinnedDirectoryRotatesThroughItsSlotsAcrossPlacements" methodname="APinnedDirectoryRotatesThroughItsSlotsAcrossPlacements" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="1910610360" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000485" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1150" name="APinThatStarvesATeamIsRefusedAtConstruction" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.APinThatStarvesATeamIsRefusedAtConstruction" methodname="APinThatStarvesATeamIsRefusedAtConstruction" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="1440099768" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000814" asserts="0">
+                  <test-case id="1157" name="APinnedIndexIsASlotAndNeverTheNoPointSentinel" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.APinnedIndexIsASlotAndNeverTheNoPointSentinel" methodname="APinnedIndexIsASlotAndNeverTheNoPointSentinel" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="920073980" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000464" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1144" name="APointOwnedByNobodyIsEligibleForEveryTeam" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.APointOwnedByNobodyIsEligibleForEveryTeam" methodname="APointOwnedByNobodyIsEligibleForEveryTeam" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="871322097" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000218" asserts="0">
+                  <test-case id="1155" name="APinThatStarvesATeamIsRefusedAtConstruction" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.APinThatStarvesATeamIsRefusedAtConstruction" methodname="APinThatStarvesATeamIsRefusedAtConstruction" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="522281601" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000756" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1148" name="ARotationContainingASlotTheOtherTeamCannotUseThrowsAtConstruction" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.ARotationContainingASlotTheOtherTeamCannotUseThrowsAtConstruction" methodname="ARotationContainingASlotTheOtherTeamCannotUseThrowsAtConstruction" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="1400399109" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000551" asserts="0">
+                  <test-case id="1153" name="ARotationContainingASlotTheOtherTeamCannotUseThrowsAtConstruction" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.ARotationContainingASlotTheOtherTeamCannotUseThrowsAtConstruction" methodname="ARotationContainingASlotTheOtherTeamCannotUseThrowsAtConstruction" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="395549855" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000443" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1159" name="ARouteCursorAdvancesOnceTheWalkerEntersTheCornersRadius" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.ARouteCursorAdvancesOnceTheWalkerEntersTheCornersRadius" methodname="ARouteCursorAdvancesOnceTheWalkerEntersTheCornersRadius" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="1965844343" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000576" asserts="0">
+                  <test-case id="1164" name="ARouteCursorAdvancesOnceTheWalkerEntersTheCornersRadius" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.ARouteCursorAdvancesOnceTheWalkerEntersTheCornersRadius" methodname="ARouteCursorAdvancesOnceTheWalkerEntersTheCornersRadius" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="597449437" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000610" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1161" name="ARouteCursorNeverRegressesEvenIfTheWalkerRetreats" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.ARouteCursorNeverRegressesEvenIfTheWalkerRetreats" methodname="ARouteCursorNeverRegressesEvenIfTheWalkerRetreats" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="2132851104" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000280" asserts="0">
+                  <test-case id="1166" name="ARouteCursorNeverRegressesEvenIfTheWalkerRetreats" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.ARouteCursorNeverRegressesEvenIfTheWalkerRetreats" methodname="ARouteCursorNeverRegressesEvenIfTheWalkerRetreats" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="323341912" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000231" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1160" name="ARouteCursorReportsFinishedOnceTheLastCornerIsPassed" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.ARouteCursorReportsFinishedOnceTheLastCornerIsPassed" methodname="ARouteCursorReportsFinishedOnceTheLastCornerIsPassed" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="2144259269" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000330" asserts="0">
+                  <test-case id="1165" name="ARouteCursorReportsFinishedOnceTheLastCornerIsPassed" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.ARouteCursorReportsFinishedOnceTheLastCornerIsPassed" methodname="ARouteCursorReportsFinishedOnceTheLastCornerIsPassed" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="1797332975" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000669" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1145" name="ATeamWithNoPointOfItsOwnChoosesNothing" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.ATeamWithNoPointOfItsOwnChoosesNothing" methodname="ATeamWithNoPointOfItsOwnChoosesNothing" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="656841199" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000312" asserts="0">
+                  <test-case id="1149" name="ATeamThatHasLostEveryFlagFallsBackOntoNeutralGround" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.ATeamThatHasLostEveryFlagFallsBackOntoNeutralGround" methodname="ATeamThatHasLostEveryFlagFallsBackOntoNeutralGround" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="2064301468" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.002476" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1154" name="ChoosingAPointDoesNotAskAnyPointForItsPosition" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.ChoosingAPointDoesNotAskAnyPointForItsPosition" methodname="ChoosingAPointDoesNotAskAnyPointForItsPosition" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="283889878" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000227" asserts="0">
+                  <test-case id="1150" name="ATeamWithNoPointOfItsOwnChoosesNothing" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.ATeamWithNoPointOfItsOwnChoosesNothing" methodname="ATeamWithNoPointOfItsOwnChoosesNothing" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="1349895371" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000306" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1143" name="OnlyPointsThisTeamOwnsAreEverChosen" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.OnlyPointsThisTeamOwnsAreEverChosen" methodname="OnlyPointsThisTeamOwnsAreEverChosen" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="1257556762" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.002820" asserts="0">
+                  <test-case id="1147" name="AWildcardSlotIsChosenForEveryTeam" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.AWildcardSlotIsChosenForEveryTeam" methodname="AWildcardSlotIsChosenForEveryTeam" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="1313443450" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000254" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1151" name="PinningAnEmptySlotChoosesNothingRatherThanFallingBack" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.PinningAnEmptySlotChoosesNothingRatherThanFallingBack" methodname="PinningAnEmptySlotChoosesNothingRatherThanFallingBack" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="73638136" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000535" asserts="0">
+                  <test-case id="1159" name="ChoosingAPointDoesNotAskAnyPointForItsPosition" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.ChoosingAPointDoesNotAskAnyPointForItsPosition" methodname="ChoosingAPointDoesNotAskAnyPointForItsPosition" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="1687197707" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000231" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1146" name="SamplingReachesEveryEligiblePointRatherThanAlwaysTheFirst" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.SamplingReachesEveryEligiblePointRatherThanAlwaysTheFirst" methodname="SamplingReachesEveryEligiblePointRatherThanAlwaysTheFirst" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="765892288" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000366" asserts="0">
+                  <test-case id="1146" name="OnlyPointsThisTeamOwnsAreEverChosen" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.OnlyPointsThisTeamOwnsAreEverChosen" methodname="OnlyPointsThisTeamOwnsAreEverChosen" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="1049271334" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001263" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1142" name="SlotsHoldingNoPointAreSkipped" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.SlotsHoldingNoPointAreSkipped" methodname="SlotsHoldingNoPointAreSkipped" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="1089254408" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000199" asserts="0">
+                  <test-case id="1156" name="PinningAnEmptySlotChoosesNothingRatherThanFallingBack" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.PinningAnEmptySlotChoosesNothingRatherThanFallingBack" methodname="PinningAnEmptySlotChoosesNothingRatherThanFallingBack" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="2072084072" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000539" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1156" name="SteeringAtACornerTheBodyAlreadyFacesIsPureForward" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.SteeringAtACornerTheBodyAlreadyFacesIsPureForward" methodname="SteeringAtACornerTheBodyAlreadyFacesIsPureForward" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="953996253" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000819" asserts="0">
+                  <test-case id="1151" name="SamplingReachesEveryEligiblePointRatherThanAlwaysTheFirst" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.SamplingReachesEveryEligiblePointRatherThanAlwaysTheFirst" methodname="SamplingReachesEveryEligiblePointRatherThanAlwaysTheFirst" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="675832182" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000390" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1157" name="SteeringAtTheWalkersOwnPositionHoldsStill" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.SteeringAtTheWalkersOwnPositionHoldsStill" methodname="SteeringAtTheWalkersOwnPositionHoldsStill" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="34792710" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000184" asserts="0">
+                  <test-case id="1145" name="SlotsHoldingNoPointAreSkipped" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.SlotsHoldingNoPointAreSkipped" methodname="SlotsHoldingNoPointAreSkipped" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="1346959630" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000160" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1155" name="SteeringDueEastWhileFacingNorthIsAPureRightStrafe" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.SteeringDueEastWhileFacingNorthIsAPureRightStrafe" methodname="SteeringDueEastWhileFacingNorthIsAPureRightStrafe" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="1338048893" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.000194" asserts="0">
+                  <test-case id="1161" name="SteeringAtACornerTheBodyAlreadyFacesIsPureForward" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.SteeringAtACornerTheBodyAlreadyFacesIsPureForward" methodname="SteeringAtACornerTheBodyAlreadyFacesIsPureForward" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="2133008544" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000973" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
                   </test-case>
-                  <test-case id="1158" name="SteeringOutputIsAlwaysOneOfTheEightQuantizedAxisValues" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.SteeringOutputIsAlwaysOneOfTheEightQuantizedAxisValues" methodname="SteeringOutputIsAlwaysOneOfTheEightQuantizedAxisValues" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="2125000348" result="Passed" start-time="2026-09-02 22:58:03Z" end-time="2026-09-02 22:58:03Z" duration="0.001722" asserts="0">
+                  <test-case id="1162" name="SteeringAtTheWalkersOwnPositionHoldsStill" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.SteeringAtTheWalkersOwnPositionHoldsStill" methodname="SteeringAtTheWalkersOwnPositionHoldsStill" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="1726362183" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000215" asserts="0">
                     <properties>
                       <property name="retryIteration" value="0" />
                       <property name="repeatIteration" value="0" />
                     </properties>
-                    <output><![CDATA[Saving results to: C:/Users/Nghaiz/AppData/LocalLow/SteelRaven7/Ravenfield\TestResults.xml
+                  </test-case>
+                  <test-case id="1160" name="SteeringDueEastWhileFacingNorthIsAPureRightStrafe" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.SteeringDueEastWhileFacingNorthIsAPureRightStrafe" methodname="SteeringDueEastWhileFacingNorthIsAPureRightStrafe" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="1958073272" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.000156" asserts="0">
+                    <properties>
+                      <property name="retryIteration" value="0" />
+                      <property name="repeatIteration" value="0" />
+                    </properties>
+                  </test-case>
+                  <test-case id="1163" name="SteeringOutputIsAlwaysOneOfTheEightQuantizedAxisValues" fullname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests.SteeringOutputIsAlwaysOneOfTheEightQuantizedAxisValues" methodname="SteeringOutputIsAlwaysOneOfTheEightQuantizedAxisValues" classname="Ironfront.Net.Unity.Server.Tests.SpawnPointSelectionTests" runstate="Runnable" seed="2112355350" result="Passed" start-time="2026-09-04 18:46:52Z" end-time="2026-09-04 18:46:52Z" duration="0.001742" asserts="0">
+                    <properties>
+                      <property name="retryIteration" value="0" />
+                      <property name="repeatIteration" value="0" />
+                    </properties>
+                    <output><![CDATA[Saving results to: C:/Users/Trung/AppData/LocalLow/SteelRaven7/Ravenfield\TestResults.xml
 ]]></output>
                   </test-case>
                 </test-suite>

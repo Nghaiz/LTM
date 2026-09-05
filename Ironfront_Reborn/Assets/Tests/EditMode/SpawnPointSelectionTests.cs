@@ -1,6 +1,8 @@
 using System;
 using NUnit.Framework;
 using UnityEngine;
+using Ironfront.Net.Replication.Client;
+using Ironfront.Net.Replication.Movement;
 using Ironfront.Net.Unity.Diagnostics;
 
 namespace Ironfront.Net.Unity.Server.Tests
@@ -16,7 +18,22 @@ namespace Ironfront.Net.Unity.Server.Tests
     /// </remarks>
     public sealed class SpawnPointSelectionTests
     {
-        /// <summary>A directory backed by owner ids; <see langword="null"/> is an empty slot.</summary>
+        /// <summary>
+        /// A directory backed by owner ids; <see langword="null"/> is an empty slot and
+        /// <c>-1</c> is a <b>wildcard</b> slot that every team may use.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The wildcard is this fake's own convenience and NOT the scene's rule.</b>
+        /// <c>ActorManagerSpawnPoints.IsEligible</c> is <c>point.owner == team</c> — a real
+        /// spawn point is a <c>CapturePoint</c> and <c>owner == -1</c> means neutral, not
+        /// "anyone" (see that method's remarks and <see cref="CapturePointOwners"/> below, which
+        /// models the real rule). The wildcard survives here because the
+        /// <see cref="PinnedSpawnPointDirectory"/> tests further down are about rotation and
+        /// refusal rather than ownership, and spelling out a team per slot in each of them would
+        /// bury what they actually assert under bookkeeping.
+        /// </para>
+        /// </remarks>
         private sealed class FakeSpawnPoints : ISpawnPointDirectory
         {
             private readonly int?[] _owners;
@@ -32,7 +49,7 @@ namespace Ironfront.Net.Unity.Server.Tests
             {
                 int? owner = _owners[index];
                 if (owner == null) return false;              // the point == null branch
-                return owner.Value < 0 || owner.Value == team; // owner < 0 means any team
+                return owner.Value < 0 || owner.Value == team; // test-only wildcard, see remarks
             }
 
             public Vector3 GetSpawnPosition(int index)
@@ -40,6 +57,28 @@ namespace Ironfront.Net.Unity.Server.Tests
                 PositionsRequested++;
                 return new Vector3(index, 0f, 0f);
             }
+        }
+
+        /// <summary>
+        /// A directory with the shipping rule — <c>owner == team</c>, exactly what
+        /// <c>ActorManagerSpawnPoints</c> asks of a real <c>CapturePoint</c>.
+        /// </summary>
+        /// <remarks>
+        /// Kept separate from <see cref="FakeSpawnPoints"/> so the two things being pinned stay
+        /// apart: that reservoir sampling honours whatever a directory says, and that the
+        /// directory a live scene installs says <i>neutral ground belongs to nobody</i>.
+        /// </remarks>
+        private sealed class CapturePointOwners : ISpawnPointDirectory
+        {
+            private readonly int[] _owners;
+
+            internal CapturePointOwners(params int[] owners) => _owners = owners;
+
+            public int Count => _owners.Length;
+
+            public bool IsEligible(int index, int team) => _owners[index] == team;
+
+            public Vector3 GetSpawnPosition(int index) => new Vector3(index, 0f, 0f);
         }
 
         [Test]
@@ -70,13 +109,75 @@ namespace Ironfront.Net.Unity.Server.Tests
             }
         }
 
+        /// <summary>
+        /// The sampler asks the directory and does not second-guess it: a slot the directory
+        /// calls eligible for every team is chosen for every team.
+        /// </summary>
+        /// <remarks>
+        /// This test used to be named <c>APointOwnedByNobodyIsEligibleForEveryTeam</c> and was
+        /// read as a statement about the map. It never was one — it exercises
+        /// <see cref="FakeSpawnPoints"/>' test-only wildcard. On a real map an unowned point is a
+        /// NEUTRAL capture point and belongs to nobody;
+        /// <see cref="ANeutralPointBelongsToNobodyAndIsChosenByNobody"/> pins that.
+        /// </remarks>
         [Test]
-        public void APointOwnedByNobodyIsEligibleForEveryTeam()
+        public void AWildcardSlotIsChosenForEveryTeam()
         {
             var points = new FakeSpawnPoints(-1);
 
             for (int team = 0; team < 4; team++)
                 Assert.AreEqual(0, ServerCombatBridge.ChooseSpawnIndex(points, team));
+        }
+
+        /// <summary>
+        /// The shipping rule: a neutral capture point is nobody's spawn. Placing a deploying
+        /// player on one is what emptied the map on 2026-09-04 — alone on a contested flag,
+        /// every bot of their own team 500 m away at the base and therefore culled out of the
+        /// snapshot (X-17), and the flag itself authored out on the heightmap rim.
+        /// </summary>
+        [Test]
+        public void ANeutralPointBelongsToNobodyAndIsChosenByNobody()
+        {
+            // Dustbowl's authored owners: Oasis 0, Fortress 1, and four neutral flags.
+            var points = new CapturePointOwners(0, -1, -1, 1, -1, -1);
+
+            for (int draw = 0; draw < 200; draw++)
+            {
+                Assert.AreEqual(0, ServerCombatBridge.ChooseSpawnIndex(points, 0),
+                    "team 0 was placed somewhere other than the one point it owns");
+                Assert.AreEqual(3, ServerCombatBridge.ChooseSpawnIndex(points, 1),
+                    "team 1 was placed somewhere other than the one point it owns");
+            }
+        }
+
+        /// <summary>
+        /// The fallback in <c>MoveToSpawnPoint</c>: a team that has lost every flag asks on
+        /// behalf of owner -1, and that finds the neutral points and only those.
+        /// </summary>
+        /// <remarks>
+        /// Standing on contested ground beats the alternative, which is not "spawn later" but
+        /// staying at the prefab origin, alive, falling, until the wire-volume guard kills the
+        /// body for leaving the world.
+        /// </remarks>
+        [Test]
+        public void ATeamThatHasLostEveryFlagFallsBackOntoNeutralGround()
+        {
+            var points = new CapturePointOwners(0, -1, 0, -1);
+            var seenNeutral = new bool[4];
+
+            Assert.AreEqual(-1, ServerCombatBridge.ChooseSpawnIndex(points, 1),
+                "team 1 owns nothing here and must draw the no-point sentinel");
+
+            for (int draw = 0; draw < 300; draw++)
+            {
+                int chosen = ServerCombatBridge.ChooseSpawnIndex(points, -1);
+                Assert.That(chosen, Is.EqualTo(1).Or.EqualTo(3),
+                    $"draw {draw} fell back onto index {chosen}, which a team owns");
+                seenNeutral[chosen] = true;
+            }
+
+            Assert.IsTrue(seenNeutral[1] && seenNeutral[3],
+                "the fallback collapsed onto a single neutral point");
         }
 
         [Test]
@@ -101,6 +202,90 @@ namespace Ironfront.Net.Unity.Server.Tests
             Assert.IsTrue(seen[0] && seen[1] && seen[2],
                 $"300 draws only ever reached [{seen[0]}, {seen[1]}, {seen[2]}] — the reservoir "
                 + "sampling has collapsed onto one point");
+        }
+
+        // ---- StandingBodyPosition - the capsule lift a spawn placement owes the ground --------
+
+        /// <summary>
+        /// A ground position is lifted to the capsule's centre, and only vertically.
+        /// </summary>
+        /// <remarks>
+        /// The numbers are the real ones: <c>artifacts/lane-b/predict-01</c> placed actor 33 at
+        /// spawn point 3, ground <c>(2085.34, 8.82, 1139.82)</c>.
+        /// </remarks>
+        [Test]
+        public void AGroundPositionIsLiftedToTheCapsuleCentre()
+        {
+            var ground = new Vector3(2085.34f, 8.82f, 1139.82f);
+
+            Vector3 body = ServerCombatBridge.StandingBodyPosition(ground);
+
+            Assert.AreEqual(ground.x, body.x, 0.0001f, "the lift moved the body horizontally");
+            Assert.AreEqual(ground.z, body.z, 0.0001f, "the lift moved the body horizontally");
+            Assert.AreEqual(ground.y + MovementCore.StandHeight * 0.5f, body.y, 0.0001f);
+        }
+
+        /// <summary>
+        /// The lift is derived from the stance height, not written down twice.
+        /// </summary>
+        /// <remarks>
+        /// <c>NetMovementAgent.ApplyStanceHeight</c> assigns the capsule
+        /// <c>MovementCore.HeightFor(IsCrouching)</c>. If this lift stopped tracking that function
+        /// the placement would be measured against a capsule the agent never builds — which is the
+        /// original defect with an extra step, not a fix.
+        /// </remarks>
+        [Test]
+        public void TheLiftIsHalfTheStanceHeightTheAgentWillBuild()
+        {
+            Assert.AreEqual(
+                MovementCore.HeightFor(crouching: false) * 0.5f,
+                ServerCombatBridge.StandingLiftMetres,
+                0.0001f);
+
+            Assert.AreEqual(0.9f, ServerCombatBridge.StandingLiftMetres, 0.0001f,
+                "the player prefab's CharacterController is height 1.8 with center.y = 0, so the "
+                + "capsule runs 0.9 m below the transform");
+        }
+
+        /// <summary>
+        /// The lift collapses the measured disagreement to inside the reconciler's tolerance.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This is the test that would go red on the pre-fix line, and the only one here that
+        /// pins the CONSEQUENCE rather than the arithmetic. Unplifted, the server held actor 33 at
+        /// <c>y = 8.82</c> while the client's <c>CharacterController</c> de-penetrated the buried
+        /// capsule to <c>y = 9.81</c> — ground + 0.9 + the 0.08 skin width — and
+        /// <see cref="PredictionReconciler.PositionToleranceMetres"/> is 0.25, so every single
+        /// snapshot was a correction: 197 of them in ten seconds, with <c>err = 0.98 m</c>
+        /// unchanged throughout (<c>artifacts/lane-b/predict-01</c>, <c>[predict]</c> lines).
+        /// </para>
+        /// <para>
+        /// Asserted against the tolerance rather than against 0.08 m: what matters is that the
+        /// residual is something the reconciler calls agreement, not that it is any particular
+        /// number. The skin width is Unity's and is not ours to pin.
+        /// </para>
+        /// </remarks>
+        [Test]
+        public void ThePlacedBodyIsWhereCollisionWillLeaveItRatherThanBuriedUnderIt()
+        {
+            const float measuredGroundY = 8.82f;
+            const float measuredSettledY = 9.81f;   // where the client's controller ended up
+
+            float placedY = ServerCombatBridge
+                .StandingBodyPosition(new Vector3(2085.34f, measuredGroundY, 1139.82f)).y;
+
+            float residual = Mathf.Abs(measuredSettledY - placedY);
+
+            Assert.Less(residual, PredictionReconciler.PositionToleranceMetres,
+                $"a body placed at y={placedY:F3} still sits {residual:F3} m from where "
+                + $"collision leaves it ({measuredSettledY:F3}), which is outside the "
+                + $"{PredictionReconciler.PositionToleranceMetres} m tolerance -- so every "
+                + "snapshot is a correction and the body judders for the whole match");
+
+            Assert.Greater(residual, 0f,
+                "the skin width is real: a residual of exactly zero means this test is asserting "
+                + "its own arithmetic rather than the measurement");
         }
 
         // ---- PinnedSpawnPointDirectory - the X-22 fix -----------------------------------
