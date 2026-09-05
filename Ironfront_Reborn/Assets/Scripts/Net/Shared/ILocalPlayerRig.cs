@@ -151,6 +151,27 @@ namespace Ironfront.Net.Unity
         bool ConsumeDeployIntent();
 
         /// <summary>
+        /// Whether the loadout screen is up. Maps to <c>LoadoutUi.IsOpen()</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Read so that the first deploy can be sent WITHOUT a button press once it is clear no
+        /// button is coming, without stepping on the player while they are still choosing. The
+        /// loadout screen closes by three routes and only one of them
+        /// (<c>FpsActorController.DeployFromLoadout</c>) posts <see cref="ConsumeDeployIntent"/>'s
+        /// edge — the "Loadout" axis toggling it shut and <c>EnterDeployedView</c> dismissing it
+        /// do not. A player who closes it with the key rather than the button had, before this,
+        /// no remaining path to <c>C_SPAWN_REQUEST</c> at all and stood in a body the server had
+        /// never placed.
+        /// </para>
+        /// <para>
+        /// <see langword="false"/> where there is no loadout screen: a headless server has no UI,
+        /// which is the same answer <c>LoadoutUi.IsOpen</c> gives when its instance is null.
+        /// </para>
+        /// </remarks>
+        bool IsLoadoutOpen { get; }
+
+        /// <summary>
         /// Whether <paramref name="actor"/> is the body this rig drives.
         /// </summary>
         /// <remarks>

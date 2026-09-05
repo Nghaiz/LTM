@@ -104,6 +104,9 @@ namespace Ironfront.Net.Unity.Bindings
         }
 
         /// <inheritdoc/>
+        public bool IsLoadoutOpen => LoadoutUi.IsOpen();
+
+        /// <inheritdoc/>
         public bool IsDriving(IGameplayActorPresence actor)
         {
             if (actor == null) return false;

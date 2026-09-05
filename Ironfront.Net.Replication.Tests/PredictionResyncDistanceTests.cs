@@ -88,6 +88,69 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void AnUnplacedBodyStillResynchronisesWhenTheAcknowledgementStandsStill()
+        {
+            // Observed RED against the tree of 2026-09-05, which answered Stale here -- and Stale
+            // applies NOTHING, so the body kept the prefab's park for the whole match.
+            //
+            // The case is not contrived. C_INPUT travels unreliable on ChannelId.InputSequenced,
+            // so lastProcessedInputTick standing still is ordinary packet loss; and the server
+            // moves a body for reasons that carry no input at all -- the spawn placement, a
+            // respawn, EnforceWireVolume's teleport. Screening on the acknowledgement alone hid
+            // every one of them, and the client reported it as spawning in the corner of the map,
+            // falling when it walked off the edge, and eventually being killed by the world.
+            var reconciler = new PredictionReconciler();
+
+            var predicted = MoveState.AtRest(new Vec3(0f, 1000f, 0f), grounded: false);
+            var authoritative = MoveState.AtRest(new Vec3(1087.12f, 103.46f, 953.13f), grounded: true);
+
+            for (uint tick = 1; tick <= 5; tick++)
+                reconciler.Record(tick, Forward, predicted.Position);
+
+            // First snapshot: acknowledgement is new, so this is the path the file already pins.
+            Assert.Equal(
+                ReconcileResult.Resynchronised,
+                reconciler.Reconcile(ref predicted, authoritative, 3, Dt));
+
+            // The body free-falls away again while the server's answer -- and its acknowledgement
+            // -- stay exactly where they were. THE SAME tick 3, repeated.
+            predicted = MoveState.AtRest(new Vec3(0f, 940f, 0f), grounded: false);
+
+            ReconcileResult result = reconciler.Reconcile(ref predicted, authoritative, 3, Dt);
+
+            Assert.Equal(ReconcileResult.Resynchronised, result);
+            Assert.Equal(authoritative.Position.X, predicted.Position.X, 4);
+            Assert.Equal(authoritative.Position.Y, predicted.Position.Y, 4);
+            Assert.Equal(authoritative.Position.Z, predicted.Position.Z, 4);
+        }
+
+        [Fact]
+        public void ARepeatedAcknowledgementInsideTheBoundIsStillStale()
+        {
+            // The other half, and it is what keeps the fix above from becoming a teleport on every
+            // duplicate snapshot. Inside the resync bound a repeated acknowledgement really does
+            // mean "nothing new to say", and adopting authority there would throw away the
+            // unacknowledged motion the replay exists to preserve.
+            var reconciler = new PredictionReconciler();
+
+            var authoritative = MoveState.AtRest(new Vec3(0f, 10f, 0f), grounded: true);
+            var predicted = MoveState.AtRest(new Vec3(0f, 10f, 0.5f), grounded: true);
+
+            for (uint tick = 1; tick <= 5; tick++)
+                reconciler.Record(tick, Forward, predicted.Position);
+
+            reconciler.Reconcile(ref predicted, authoritative, 3, Dt);
+
+            var again = MoveState.AtRest(new Vec3(0f, 10f, 1.5f), grounded: true);
+            Vec3 before = again.Position;
+
+            Assert.Equal(ReconcileResult.Stale, reconciler.Reconcile(ref again, authoritative, 3, Dt));
+
+            // Untouched: Stale must not be a correction wearing a different name.
+            Assert.Equal(before.Z, again.Position.Z, 4);
+        }
+
+        [Fact]
         public void TheBoundIsWiderThanTheInputRingCanEverHold()
         {
             // Pins the DERIVATION, not the number. The replay covers Capacity ticks; the widest

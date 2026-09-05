@@ -244,7 +244,37 @@ namespace Ironfront.Net.Replication.Client
             // corrected at all, which is worse than being corrected wrongly because nothing
             // reports it.
             if (_hasAcked && !SequenceMath.IsNewer32(lastProcessedInputTick, _lastAckedTick))
-                return ReconcileResult.Stale;
+            {
+                // A repeated acknowledgement says nothing NEW about the ticks this client sent.
+                // It says nothing about where the SERVER has put the body either -- and the
+                // server moves a body for reasons that have no input behind them at all: the
+                // spawn placement, a respawn, EnforceWireVolume's teleport. None of those
+                // advance lastProcessedInputTick, so screening on the acknowledgement ALONE made
+                // every one of them invisible for as long as it stood still -- and input travels
+                // unreliable on ChannelId.InputSequenced, so standing still is not exotic.
+                //
+                // The body then keeps the parked position GameManager.StartGame instantiates the
+                // player prefab at -- (0, 1000, 0), the spot X-17 names -- because
+                // EnterDeployedView deliberately leaves the position to the server, which makes
+                // THIS the only path that can place it. It free-falls from there into the corner
+                // of the map while the server's copy stands correctly at the base.
+                //
+                // The test below is the one ResyncDistanceMetres was written for -- read its
+                // remark, which describes this exact ~975 m case. It was simply unreachable
+                // behind the early return.
+                //
+                // Position only, and only past ResyncDistanceMetres: inside that radius a stale
+                // acknowledgement really does mean "nothing to do", and adopting authority there
+                // would throw away legitimate unacknowledged motion. _lastAckedTick is left
+                // where it is, because this tick is NOT newer -- claiming it would let the next
+                // genuinely new acknowledgement be misread as stale.
+                if (!BeyondResyncDistance(predicted.Position, authoritative.Position))
+                    return ReconcileResult.Stale;
+
+                predicted = authoritative;
+                ResyncCount++;
+                return ReconcileResult.Resynchronised;
+            }
 
             _lastAckedTick = lastProcessedInputTick;
             _hasAcked = true;

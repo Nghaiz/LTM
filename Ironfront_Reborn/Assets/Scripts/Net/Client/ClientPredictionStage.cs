@@ -59,6 +59,24 @@ namespace Ironfront.Net.Unity.Client
 
         private uint _oldestPendingTick;
 
+        // Prediction telemetry. One line a second, and it exists because every artifact this
+        // component has ever produced was silent about the one thing that matters: whether the
+        // local body is standing where the server put it. A run could look clean while the rig
+        // free-fell from the prefab's parked (0, 1000, 0) and nothing anywhere said so -- the
+        // symptom reached the player as "I spawn in the corner of the map" and reached the log
+        // as nothing at all.
+        private const string LogPredictEnvVar = "IRONFRONT_LOG_PREDICT";
+        private const float PredictReportIntervalSeconds = 1f;
+
+        private bool _logPredict;
+        private float _nextPredictReport;
+        private long _agreed;
+        private long _stale;
+        private ReconcileResult _lastResult;
+        private uint _lastServerTick;
+        private uint _lastAckTick;
+        private Vec3 _lastAuthoritative;
+
         /// <summary>Corrections the server has forced. Non-zero is normal; growing fast is not.</summary>
         public long CorrectionCount => _client != null ? _client.Reconciler.CorrectionCount : 0;
 
@@ -68,6 +86,12 @@ namespace Ironfront.Net.Unity.Client
             _agent = GetComponent<NetMovementAgent>();
             _client = NetClientBootstrap.Current;
             _controller = GetComponent<CharacterController>();
+
+            // On by default, and OFF is the opt-in -- the inverse of the other diagnostics here.
+            // A player who can reproduce the fault cannot be asked to set an environment variable
+            // first, and at one line a second this is a rounding error next to the capture-point
+            // chatter the same log already carries.
+            _logPredict = Environment.GetEnvironmentVariable(LogPredictEnvVar) != "0";
         }
 
         /// <summary>
@@ -212,10 +236,23 @@ namespace Ironfront.Net.Unity.Client
         {
             if (_client == null || _agent == null) return;
 
-            ushort localActor = _client.LocalActorId;
-            if (localActor == 0) return;
+            _lastServerTick = serverTick;
+            _lastAckTick = lastProcessedInputTick;
 
-            if (!_client.Router.Decoder.Current.TryFind(localActor, out ActorSnapshotEntry entry)) return;
+            ushort localActor = _client.LocalActorId;
+            if (localActor == 0)
+            {
+                // Reported rather than returned silently: this is one of the two ways the local
+                // body can go un-placed for a whole match, and it looks identical to the other.
+                ReportPrediction("no-local-actor", hasAuthority: false);
+                return;
+            }
+
+            if (!_client.Router.Decoder.Current.TryFind(localActor, out ActorSnapshotEntry entry))
+            {
+                ReportPrediction("not-in-snapshot", hasAuthority: false);
+                return;
+            }
 
             var authoritative = _agent.State;
             authoritative.Position = new Vec3(
@@ -243,6 +280,60 @@ namespace Ironfront.Net.Unity.Client
                 _agent.ApplyCorrectedState(in predicted, hardSnap: true);
             else if (result == ReconcileResult.Corrected)
                 _agent.ApplyCorrectedState(in predicted, hardSnap: false);
+
+            if (result == ReconcileResult.Agreed) _agreed++;
+            else if (result == ReconcileResult.Stale) _stale++;
+
+            _lastResult = result;
+            _lastAuthoritative = authoritative.Position;
+
+            ReportPrediction(result.ToString(), hasAuthority: true);
+        }
+
+        /// <summary>
+        /// Prints one line a second describing where this client's body is, where the server says
+        /// it is, and what reconciliation did about the difference.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The rig's transform is reported alongside the simulation state, and they are not
+        /// the same number.</b> <c>_agent.State.Position</c> is what prediction believes;
+        /// <c>transform.position</c> is what the camera actually renders from. A correction that
+        /// updates the first and not the second is X-13, and it is invisible in any artifact that
+        /// prints only one of them.
+        /// </para>
+        /// <para>
+        /// <b><c>err</c> is measured against authority, so it is the number to read first.</b>
+        /// A metre or two is the prediction lead. Hundreds of metres means the body was never
+        /// placed — see the stale-acknowledgement branch in <c>PredictionReconciler.Reconcile</c>
+        /// for the mechanism that used to make exactly that unrecoverable.
+        /// </para>
+        /// </remarks>
+        private void ReportPrediction(string result, bool hasAuthority)
+        {
+            if (!_logPredict) return;
+            if (Time.unscaledTime < _nextPredictReport) return;
+
+            _nextPredictReport = Time.unscaledTime + PredictReportIntervalSeconds;
+
+            Vector3 rig = transform.position;
+            Vec3 state = _agent.State.Position;
+            PredictionReconciler reconciler = _client.Reconciler;
+
+            string authority = hasAuthority
+                ? $"srv=({_lastAuthoritative.X:F2}, {_lastAuthoritative.Y:F2}, {_lastAuthoritative.Z:F2}) "
+                  + $"err={(state - _lastAuthoritative).Magnitude:F2}m"
+                : "srv=NONE err=n/a";
+
+            Debug.Log(
+                $"[predict] actor {_client.LocalActorId} tick {_lastServerTick} ack {_lastAckTick} "
+                + $"{result} -- rig=({rig.x:F2}, {rig.y:F2}, {rig.z:F2}) "
+                + $"state=({state.X:F2}, {state.Y:F2}, {state.Z:F2}) {authority} "
+                + $"| agreed {_agreed}, corrected {reconciler.CorrectionCount}, "
+                + $"resync {reconciler.ResyncCount}, stale {_stale} "
+                + $"| actors {_client.Router.Decoder.Current.ActorCount}, "
+                + $"ctrl {(_controller != null && _controller.enabled ? "on" : "off")}, "
+                + $"seated {IsSeated}");
         }
 
         /// <summary>

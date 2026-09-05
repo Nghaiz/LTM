@@ -109,6 +109,38 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         private const float DeployResendSeconds = 1f;
 
+        /// <summary>
+        /// How long a first deploy waits for the player to press something before asking anyway.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Because the press is not guaranteed to be reachable.</b> The first spawn's only
+        /// button is the loadout screen's Deploy (<see cref="LoadoutDeployPressed"/>), and that
+        /// screen is opened by <c>GameManager.StartGame</c>'s <c>Invoke("OpenPlayerLoadout", 1f)</c>
+        /// through <c>FpsActorController.OpenLoadoutWhileDead</c> — which returns early when
+        /// <c>deployedView</c> is set, and closes without posting the edge when the player toggles
+        /// it shut with the "Loadout" axis. Either route left the client with no path to
+        /// <c>C_SPAWN_REQUEST</c> for the rest of the match, standing in a body the server had
+        /// never placed. A deploy the player cannot ask for is not a design decision, so this asks
+        /// on their behalf.
+        /// </para>
+        /// <para>
+        /// Five seconds, and measured from the last frame the loadout screen was up rather than
+        /// from the connect: the screen opens a second after the level does, and this must not
+        /// fire in the gap before it appears, nor while the player is still choosing weapons —
+        /// the request carries that choice (X-11). While it IS up, the grace is pushed forward
+        /// every frame, so the fallback only ever runs when there is no button on screen to press.
+        /// </para>
+        /// </remarks>
+        private const float DeployFallbackGraceSeconds = 5f;
+
+        /// <summary>
+        /// Earliest <c>Time.time</c> at which the unattended first deploy may be sent, or a
+        /// negative value before the first frame has set it. See
+        /// <see cref="DeployFallbackGraceSeconds"/>.
+        /// </summary>
+        private float _deployFallbackNotBefore = -1f;
+
         /// <summary>Whether a deploy request may be sent right now. See <see cref="_awaitingFirstDeploy"/>.</summary>
         private bool CanDeployNow(float nowSeconds)
             => _awaitingFirstDeploy || _state.CanRequestRespawn(nowSeconds);
@@ -120,15 +152,21 @@ namespace Ironfront.Net.Unity.Client
         /// <b>Awaiting the first deploy is not being alive, whatever the predicted state says.</b>
         /// Both gates below used to read <c>!_state.IsAlive</c> alone, and that deadlocked every
         /// join from the moment a join stopped placing the body (ledger X-86, first bad commit
-        /// b482d4c, pinned by bisect against 9c8d461). The server parks the claimed body at
-        /// <c>Health 0 / IsAlive false</c> and waits for C_SPAWN_REQUEST -- but it parks it
-        /// WITHOUT a death, so no S_ACTOR_DEATH is ever sent and <c>ClientCombatState</c> keeps
-        /// its opening `alive, health 100`. Measured on the driver at `spawned`:
-        /// <c>combat.alive true</c>, <c>health 100</c>, <c>deathObserved false</c>, while the
-        /// server held the same body parked. So the deploy screen hid itself, RequestRespawn's
-        /// own gate refused, the request was never sent, and the body sat where Instantiate left
-        /// it -- near the world origin, falling, which is the 963 m reading in
-        /// artifacts/lane-b/b7-regrade-02 against 10.08 m one commit earlier.
+        /// b482d4c, pinned by bisect against 9c8d461). The server parks the claimed body DEAD and
+        /// waits for C_SPAWN_REQUEST -- <c>Actor.Awake</c> writes <c>dead = true</c> and nothing
+        /// clears it until a placement -- but it parks it WITHOUT a death, so no S_ACTOR_DEATH is
+        /// ever sent and <c>ClientCombatState</c> keeps its opening `alive, health 100`. Measured
+        /// on the driver at `spawned`: <c>combat.alive true</c>, <c>health 100</c>,
+        /// <c>deathObserved false</c>, while the server held the same body parked. So the deploy
+        /// screen hid itself, RequestRespawn's own gate refused, the request was never sent, and
+        /// the body sat where Instantiate left it -- near the world origin, falling, which is the
+        /// 963 m reading in artifacts/lane-b/b7-regrade-02 against 10.08 m one commit earlier.
+        /// <para>
+        /// <b>The parked body's HEALTH is 100, not 0</b>, and reading it as 0 is what broke the
+        /// deploy path a second time -- see <see cref="OnSpawnActor"/>. <c>Actor.health</c> is a
+        /// field initializer; <c>SpawnAt</c> is what writes it, and a parked body never runs
+        /// <c>SpawnAt</c>. Only the <c>dead</c> flag distinguishes a parked slot from a live one.
+        /// </para>
         /// <para>
         /// Deliberately NOT fixed by making the server send a death on join: nobody died, a
         /// synthetic one would reach the killfeed, the scoreboard and every death presenter, and
@@ -294,26 +332,36 @@ namespace Ironfront.Net.Unity.Client
 
             _state.EquipWeapon(message.WeaponId);
 
-            // Ledger X-11/X-48, and this is the correction to X-48's own comment below: a JOIN
-            // no longer places the body (ServerTickLoop.OnClientConnected), so S_SPAWN_ACTOR now
-            // reaches every client on interest ALONE, before any deploy has happened -- it is
-            // "you now know this actor exists," not "you are deployed." message.Health is the
-            // tell: the server parks a not-yet-deployed body at Health 0, so 0 here means stay on
-            // the deploy screen and let OnRespawned (below, off the snapshot's IsAlive bit) call
-            // EnterDeployedView the moment the server actually confirms a spawn. Non-zero means
-            // this announce named an ALREADY-alive body -- a reconnect mid-life is the only
-            // production case -- and that still deploys immediately, because no further
-            // confirmation is coming for a life already in progress.
-            if (message.Health > 0)
-            {
-                // The reconnect-mid-life case is also an answer: this body is placed and alive, so
-                // there is no first deploy left to owe and nothing for ResendDeployUntilPlaced to
-                // keep asking for. OnRespawned will not fire here -- the snapshot's IsAlive bit
-                // never transitions, it was already true when we arrived.
-                _awaitingFirstDeploy = false;
-
-                EnterDeployedView();
-            }
+            // Ledger X-11/X-48/X-86. A JOIN no longer places the body
+            // (ServerTickLoop.OnClientConnected), so S_SPAWN_ACTOR now reaches every client on
+            // interest ALONE, before any deploy has happened -- it is "you now know this actor
+            // exists," not "you are deployed."
+            //
+            // WHAT USED TO BE HERE, AND WHY IT WAS WRONG. This method read `message.Health > 0`
+            // as "an already-alive body, so deploy immediately", on the stated belief that "the
+            // server parks a not-yet-deployed body at Health 0". It does not, and never did. A
+            // parked slot is Instantiate'd from actorPrefab, so Actor.health keeps its field
+            // initializer of 100f; the only thing marking it unspawned is Actor.Awake's
+            // `dead = true`, because `health = 100f; dead = false;` is written by SpawnAt, which
+            // a parked body deliberately never runs. NetServerActor.Health is a pass-through to
+            // that same field (D9), so entry.Health is 100 for EVERY parked slot and this branch
+            // fired on EVERY join.
+            //
+            // The cost, measured on tmp/playtest (2026-09-04, one server + two clients): zero
+            // "placed at spawn point" lines in 1312 server log lines, i.e. not one body was ever
+            // placed. EnterDeployedView sets FpsActorController.deployedView, OpenLoadoutWhileDead
+            // returns early on it, and the loadout screen is the ONLY first-spawn Deploy button
+            // (LoadoutDeployPressed) -- so it never opened, no press was ever detected, no
+            // C_SPAWN_REQUEST was ever framed, and ResendDeployUntilPlaced stayed asleep behind
+            // its own `_lastDeployRequestAt <= 0` guard. The body stayed where
+            // GameManager.StartGame put it, (0, 1000, 0), falling a kilometre onto the corner of
+            // the heightmap: the "map loaded wrong, I fall off the edge" report.
+            //
+            // The alive/dead bit is not in S_SPAWN_ACTOR at all -- SpawnFlags carries IsBot and
+            // IsLocalPlayer and nothing else -- so this message CANNOT answer the question it was
+            // being asked. The snapshot can, and does: AdoptAlreadyAliveBody covers the
+            // reconnect-mid-life case off the StateFlags bit, and OnRespawned covers the ordinary
+            // dead->alive transition. Both are the server's own view of a body it has placed.
         }
         private void Update()
         {
@@ -389,7 +437,26 @@ namespace Ironfront.Net.Unity.Client
                 if (RequestRespawn()) _lastDeployRequestAt = Time.time;
             }
 
+            TrackDeployFallbackGrace();
             ResendDeployUntilPlaced();
+        }
+
+        /// <summary>
+        /// Holds the unattended first deploy back while a Deploy button is on screen — or while
+        /// there is nothing to send it to. See <see cref="DeployFallbackGraceSeconds"/>.
+        /// </summary>
+        private void TrackDeployFallbackGrace()
+        {
+            if (!_awaitingFirstDeploy) return;
+
+            bool nothingToPressYet = _client == null || !_client.IsConnected
+                                     || NetClientBindings.LocalPlayer.IsLoadoutOpen;
+
+            // The `< 0f` arm is the first frame: an unset grace must not read as an elapsed one,
+            // or a client that connects before the loadout screen opens would deploy on frame one
+            // with the default loadout and never show the player the screen at all.
+            if (nothingToPressYet || _deployFallbackNotBefore < 0f)
+                _deployFallbackNotBefore = Time.time + DeployFallbackGraceSeconds;
         }
 
         /// <summary>
@@ -420,12 +487,35 @@ namespace Ironfront.Net.Unity.Client
         /// message a second against a server that is not placing anybody, which is a condition
         /// worth being noisy about rather than silent.
         /// </para>
+        /// <para>
+        /// <b>It also sends the FIRST request when no press is coming.</b> This method used to
+        /// return while `_lastDeployRequestAt` was 0, on the reading that asking before the player
+        /// did would be presumptuous. The 2026-09-04 playtest is what that reading cost: the press
+        /// it waited for can only come from the loadout screen, the screen did not open, and so
+        /// the re-sender — the whole repair — was unreachable for the entire match. It now asks
+        /// unprompted once <see cref="DeployFallbackGraceSeconds"/> has elapsed with no Deploy
+        /// button on screen, which is the only state in which there is nothing to be presumptuous
+        /// about.
+        /// </para>
         /// </remarks>
         private void ResendDeployUntilPlaced()
         {
             if (!_awaitingFirstDeploy) return;
-            if (_lastDeployRequestAt <= 0f) return;
             if (_client == null || !_client.IsConnected) return;
+
+            // Nobody has pressed anything. This used to `return` here, which made the whole
+            // re-sender dead code on the run that mattered: the press it waited for came from a
+            // loadout screen that never opened, so `_lastDeployRequestAt` stayed 0 for the whole
+            // match and the server logged zero placements. The grace above is what makes asking
+            // unprompted safe — it only elapses when no Deploy button is on screen.
+            if (_lastDeployRequestAt <= 0f)
+            {
+                if (_deployFallbackNotBefore < 0f || Time.time < _deployFallbackNotBefore) return;
+
+                if (RequestRespawn()) _lastDeployRequestAt = Time.time;
+                return;
+            }
+
             if (Time.time - _lastDeployRequestAt < DeployResendSeconds) return;
 
             if (RequestRespawn()) _lastDeployRequestAt = Time.time;
@@ -577,6 +667,16 @@ namespace Ironfront.Net.Unity.Client
                 ChannelId.ReliableOrdered, new System.ReadOnlySpan<byte>(_payload, 0, total),
                 reliable: true);
 
+            // The client logged NOTHING about deploy, and that is why the 2026-09-04 playtest had
+            // to be solved by reading source instead of logs: three log files, 18,929 lines, and
+            // no way to tell a request that was never sent from one the server never answered.
+            // Rate is bounded by the caller — one press, then at most one per DeployResendSeconds
+            // until the body is placed — so this is not a per-frame line.
+            Debug.Log(
+                $"[net] deploy requested for actor {_state.LocalActorId} "
+                + $"(first deploy: {_awaitingFirstDeploy}, loadout {primary}/{secondary}/"
+                + $"{gear1}/{gear2}/{gear3})");
+
             return true;
         }
 
@@ -598,6 +698,52 @@ namespace Ironfront.Net.Unity.Client
             if (!_client.Router.Decoder.Current.TryFind(localActor, out ActorSnapshotEntry entry)) return;
 
             _state.ApplySnapshot(in entry, Time.time);
+
+            AdoptAlreadyAliveBody(in entry);
+        }
+
+        /// <summary>
+        /// Retires the first-deploy grant when the server's own snapshot says this body is
+        /// ALREADY alive — the reconnect-mid-life case. Ledger <b>X-86</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This is the half of <see cref="OnSpawnActor"/>'s old <c>message.Health &gt; 0</c> test
+        /// that was worth keeping, moved to the one source that can answer it. A reconnect arrives
+        /// mid-life: the snapshot's IsAlive bit is already true when the first one lands, so it
+        /// never transitions and <see cref="OnRespawned"/> — which fires on that edge — never
+        /// runs. Without this the client would owe a deploy for a body it is already standing in,
+        /// and <see cref="ResendDeployUntilPlaced"/> would ask for one every second for the whole
+        /// match.
+        /// </para>
+        /// <para>
+        /// <b>Gated on the field being PRESENT, not on the property alone.</b>
+        /// <c>ClientCombatState.IsAlive</c> opens at <see langword="true"/> because for most of a
+        /// life that is the answer, and <c>DeltaEncoder</c> masks
+        /// <c>SnapshotField.StateFlags</c> only when it changes — so reading the property would
+        /// adopt an unplaced body off a snapshot that said nothing about aliveness at all, which
+        /// is the same shape of mistake as trusting <c>message.Health</c>.
+        /// </para>
+        /// </remarks>
+        private void AdoptAlreadyAliveBody(in ActorSnapshotEntry entry)
+        {
+            if (!_awaitingFirstDeploy) return;
+            if (!entry.Has(SnapshotField.StateFlags)) return;
+            if ((entry.StateFlags & ActorStateFlags.IsAlive) == 0) return;
+
+            _awaitingFirstDeploy = false;
+
+            Debug.Log(
+                $"[net] deploy adopted for actor {_state.LocalActorId}: the snapshot reports this "
+                + "body already alive (reconnect mid-life); no first deploy is owed");
+
+            // Kept in step for the same reason OnSpawnActor does it: EnterDeployedView guards on
+            // IsLocalActor(_state.LocalActorId), Update copies that id once per frame, and at a
+            // router callback it can still be the unassigned zero -- which would reject the one
+            // call that takes the menu down.
+            _state.LocalActorId = _client.LocalActorId;
+
+            EnterDeployedView();
         }
 
         /// <summary>
@@ -667,7 +813,20 @@ namespace Ironfront.Net.Unity.Client
             // has placed, rather than the client's opening assumption about a body it has not.
             // Retiring the grant here rather than at the send is what stops a dropped request
             // from being the only one.
+            bool wasFirstDeploy = _awaitingFirstDeploy;
             _awaitingFirstDeploy = false;
+
+            if (wasFirstDeploy)
+            {
+                // The counterpart to "deploy requested" in RequestRespawn, and the line whose
+                // absence a future playtest should be read for: server-side the same moment logs
+                // "[net] actor N (team T) placed at spawn point ...", so the two together say
+                // whether a missing body is a request that never left or a placement that never
+                // came back.
+                Debug.Log(
+                    $"[net] deploy granted for actor {_state.LocalActorId}: "
+                    + "the server placed this body");
+            }
 
             _inputSuppressedByDeath = false;
             EnterDeployedView();
