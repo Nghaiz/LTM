@@ -16,13 +16,14 @@
 # than letting Unity fail forty seconds in with a lock message buried in a log file.
 #
 # Usage:
-#   $env:UNITY_PATH = "D:\UnityEditor\6000.3.21f1\Editor\Unity.exe"
 #   pwsh tools/build-player.ps1
+#   pwsh tools/build-player.ps1 -UnityPath "D:\UnityEditor\6000.3.21f1\Editor\Unity.exe"
 #   pwsh tools/build-player.ps1 -OutputDirectory build/windows -LogFile tmp/build-player.log
 
 [CmdletBinding()]
 param(
-    # The Unity Editor. Same variable tools/build-server.ps1 and run-lane-b.ps1 read.
+    # The Unity Editor. If omitted, locate the exact project version via Unity Hub.
+    # Same variable tools/build-server.ps1 and run-lane-b.ps1 read.
     [string] $UnityPath = $env:UNITY_PATH,
 
     # Where the player lands. The contract with run-lane-b.ps1, play-lan.ps1 and
@@ -39,10 +40,57 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
-if (-not $UnityPath -or -not (Test-Path $UnityPath)) {
-    throw "UNITY_PATH is not set or does not point at Unity.exe. Set it first:`n" +
-          "  `$env:UNITY_PATH = 'D:\UnityEditor\6000.3.21f1\Editor\Unity.exe'"
+# Read the required Editor version from the project and discover that exact version. Unity Hub
+# supports a secondary install directory (common on machines where C: is small) and records it
+# in a small JSON file. Keep an explicitly supplied valid path first, but do not let a stale
+# UNITY_PATH prevent discovery of a working local installation.
+$versionFile = Join-Path $repoRoot "Ironfront_Reborn/ProjectSettings/ProjectVersion.txt"
+if (-not (Test-Path -LiteralPath $versionFile -PathType Leaf)) {
+    throw "ProjectVersion.txt was not found at $versionFile."
 }
+
+$versionMatch = Select-String -LiteralPath $versionFile -Pattern '^m_EditorVersion:\s*(\S+)' |
+    Select-Object -First 1
+if (-not $versionMatch) {
+    throw "Could not read m_EditorVersion from $versionFile."
+}
+$requiredVersion = $versionMatch.Matches[0].Groups[1].Value
+
+$candidates = @()
+if ($UnityPath) { $candidates += $UnityPath }
+$candidates += "C:/Program Files/Unity/Hub/Editor/$requiredVersion/Editor/Unity.exe"
+$candidates += "C:/Program Files/Unity/Editor/Unity.exe"
+
+if ($env:APPDATA) {
+    $hubSecondary = Join-Path $env:APPDATA "UnityHub/secondaryInstallPath.json"
+    if (Test-Path -LiteralPath $hubSecondary -PathType Leaf) {
+        try {
+            $secondaryRoot = Get-Content -LiteralPath $hubSecondary -Raw | ConvertFrom-Json
+            if ($secondaryRoot) {
+                $candidates += Join-Path $secondaryRoot "$requiredVersion/Editor/Unity.exe"
+            }
+        }
+        catch {
+            Write-Warning "Could not read Unity Hub install directory from ${hubSecondary}: $_"
+        }
+    }
+}
+
+$UnityPath = $candidates |
+    Where-Object {
+        $_ -and
+        (Test-Path -LiteralPath $_ -PathType Leaf) -and
+        ([System.IO.Path]::GetFileName($_) -eq "Unity.exe")
+    } |
+    Select-Object -First 1
+
+if (-not $UnityPath) {
+    $lookedIn = ($candidates | Where-Object { $_ } | Select-Object -Unique) -join "`n  "
+    throw "Unity $requiredVersion was not found. Looked in:`n  $lookedIn`n" +
+          "Install that version in Unity Hub, or pass -UnityPath '<path-to-Unity.exe>'."
+}
+
+$UnityPath = (Resolve-Path -LiteralPath $UnityPath).Path
 
 # The project lock is held by a running Editor whether or not it is THIS project, and Unity's
 # own failure for that case is a batchmode exit with the reason in the log rather than on
