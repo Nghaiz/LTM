@@ -54,8 +54,13 @@ Two warnings are worth stopping for:
 
 | Warning | What it means | Do this |
 |---|---|---|
-| `the tree has uncommitted changes` | the SHA names a commit the binary does **not** match | commit or stash, rebuild |
+| `Ironfront_Reborn has uncommitted changes` | the SHA names a commit the binary does **not** match | commit or stash, rebuild |
 | `no git commit could be read` | the binary will report `dev` and be unidentifiable later | build from a real checkout |
+
+The dirty check looks at `Ironfront_Reborn/` only — Assets, Packages and ProjectSettings are
+what become the binary. A scratch file in `tmp/`, a run under `artifacts/` or an edit to the
+build script itself cannot change what Unity compiles, and counting them would make `-dirty`
+fire on almost every build until nobody read it.
 
 **Judge the build by the managed DLLs, not by `Ironfront.exe`.** Unity keeps the executable and
 rewrites the assemblies, so a green build routinely leaves the `.exe` timestamp untouched. The
@@ -97,7 +102,7 @@ Read it like this:
 |---|---|
 | the SHA you sent | they are running your build |
 | a **different** SHA | an older build; send them the folder again |
-| `-dirty` suffix | built from an uncommitted tree; the SHA is not the whole truth |
+| `-dirty` suffix | `Ironfront_Reborn/` had uncommitted changes; the SHA is not the whole truth |
 | `dev (built from the Editor…)` | not built by `build-player.ps1` — either their own Editor build, or a build predating the stamp |
 | `MIXED BUILD FOLDER` (an error) | two assemblies from different commits — somebody copied files rather than replacing the folder. Nothing measured on this process is trustworthy |
 

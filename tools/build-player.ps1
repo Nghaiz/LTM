@@ -161,11 +161,21 @@ $stampOriginals = @{}
 
 if ($commit) {
     $commit = $commit.Trim()
-    $dirty  = [bool](& git -C $repoRoot status --porcelain)
+    # SCOPED TO THE UNITY PROJECT, not the whole tree. The question this flag answers is
+    # "does $commit describe the code in this binary", and only Ironfront_Reborn/ becomes the
+    # binary -- Assets (including the prebuilt Ironfront.Net.* DLLs under Assets/Plugins),
+    # Packages and ProjectSettings. An untracked scratch file in tmp/, a artifacts/ run or an
+    # edit to this very script cannot change what Unity compiles.
+    #
+    # MEASURED, not reasoned about: the first real build off this mechanism (502d45a,
+    # 2026-09-06) reported -dirty because of two stray test-result XMLs in tmp/. The binary
+    # matched its commit exactly. A flag that fires on scratch is a flag nobody reads by the
+    # second day, which would have cost more than the flag is worth.
+    $dirty  = [bool](& git -C $repoRoot status --porcelain -- Ironfront_Reborn)
     $builtAtUtc = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
     if ($dirty) {
-        Write-Warning ("[build] the tree has uncommitted changes, so $commit names a commit this " +
+        Write-Warning ("[build] Ironfront_Reborn has uncommitted changes, so $commit names a commit this " +
                        "binary does NOT match. The stamp will say so with a -dirty suffix.")
     }
 
