@@ -213,6 +213,14 @@ namespace Ironfront.Net.Unity.Server
                 + $"({1f / Time.fixedDeltaTime:F1} Hz) — the project setting; the netcode's own "
                 + $"tick is {ProtocolConstants.SIM_TICK_RATE} Hz and is unrelated");
 
+            // Printed for the same reason as the line above it: a fact about THIS binary that a
+            // reader would otherwise have to assume. The assumption this one replaces is "the
+            // host is running the build I gave them", and it has already been wrong once — the
+            // X-89/X-90 spawn fix lives in Ironfront.Net.Unity.Server.dll rather than in
+            // Assembly-CSharp.dll, so a host who copied the file they expected to matter kept
+            // the old placement code and the old symptom.
+            ServerBuildStamp.LogAtStartup();
+
             if (_startOnAwake) StartServer();
         }
 
