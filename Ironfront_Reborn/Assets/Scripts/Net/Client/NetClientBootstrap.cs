@@ -171,6 +171,13 @@ namespace Ironfront.Net.Unity.Client
                 return;
             }
 
+            // Placed AFTER the dedicated-server guard on purpose: a server prints a richer line
+            // of its own from ServerBuildStamp, and printing here too would give the same process
+            // two build lines that a reader has to reconcile. A client can only report on the
+            // assemblies it can see, which is the Shared one — the Server assembly is not
+            // referenced from here and is not what a client's own staleness would live in.
+            Debug.Log($"[net] build {BuildStamp.Describe()} (client, shared assembly)");
+
             ResolveConfiguration();
 
             // Not claimed on a machine already running the server. A loopback test puts both in
