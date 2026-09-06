@@ -210,6 +210,21 @@ namespace Ironfront.Tools.ClientWiringGate
                 "reached only from Update(), a local-only per-frame path; the deploy edge is this "
                 + "client's own loadout screen"),
 
+            // The sixth of the same shape, added when the unattended first deploy got a grace
+            // window (ledger X-86's residual). The loadout screen closes by three routes and only
+            // one of them posts the deploy edge, so a player who shut it with the key had no
+            // remaining path to C_SPAWN_REQUEST; this helper decides when it is safe for the
+            // client to send that request itself, and the way it decides is by asking whether a
+            // button is still on screen -- IsLoadoutOpen, on THIS client's own loadout screen.
+            // Verified 2026-09-06: line 440, inside Update() at line 366, is this helper's ONLY
+            // caller -- the same Update() the five entries above already name. There is no actor
+            // id in scope for an IsLocalActor guard to be about. Same instruction as the five
+            // above: if a per-actor caller ever reaches this helper, delete this entry and guard
+            // the read rather than widening it.
+            ("/NetClientLocalCombatDriver.cs", "TrackDeployFallbackGrace",
+                "reached only from Update(), a local-only per-frame path; the loadout screen it "
+                + "asks about is this client's own"),
+
             // The third of the same shape, added with the C_SEAT_REQUEST sender (ledger X-30).
             // Reached only from Update(); it reads THIS client's own input to decide whether the
             // player asked for a seat, and there is no actor id in scope to guard against. The
@@ -1523,7 +1538,23 @@ namespace Ironfront.Tools.ClientWiringGate
             { "/NetClientLocalCombatDriver.cs" };
 
         /// <summary>The handler for the server's "your body is deployed" message.</summary>
-        private const string DeployedViewCaller = "OnSpawnActor";
+        /// <remarks>
+        /// <b>Moved from <c>OnSpawnActor</c> on 2026-09-06, following this rule's own instruction
+        /// to move with the handler rather than be deleted.</b> <c>S_SPAWN_ACTOR</c> stopped being
+        /// able to answer "am I deployed": since a JOIN no longer places the body, that message
+        /// reaches every client on INTEREST alone — "you now know this actor exists", not "you are
+        /// deployed". <c>OnSpawnActor</c> was reading <c>message.Health &gt; 0</c> as the deployed
+        /// bit, and that test fired on EVERY join, because a parked slot is <c>Instantiate</c>'d
+        /// from the prefab and keeps <c>health</c>'s field initializer of 100. The alive/dead bit
+        /// is not in <c>S_SPAWN_ACTOR</c> at all — <c>SpawnFlags</c> carries <c>IsBot</c> and
+        /// <c>IsLocalPlayer</c> and nothing else. <c>AdoptAlreadyAliveBody</c> reads the snapshot's
+        /// own <c>StateFlags</c> bit instead, which is the server's view of a body it has actually
+        /// placed, so it is the handler that can now answer the question this rule asks.
+        /// <b>The pair is still a pair</b>: first placement here, dead→alive in
+        /// <see cref="DeployedViewRespawnCaller"/>, and losing either still leaves a player in the
+        /// menu for a whole life.
+        /// </remarks>
+        private const string DeployedViewCaller = "AdoptAlreadyAliveBody";
 
         /// <summary>The handler for the server's "you are alive again" transition.</summary>
         private const string DeployedViewRespawnCaller = "OnRespawned";
