@@ -261,3 +261,5 @@ tmp/Ravenfield
 # tools/playtest-local.ps1 -- the local playtest stack: account database and process logs.
 # Consumer state from a hand-run session, never an artifact anyone reads later.
 tmp/playtest/
+
+.claude/

@@ -50,11 +50,13 @@ namespace Ironfront.Net.Unity.Server
     /// </para>
     /// <para>
     /// <b>How many indices are actually hazardous, measured rather than asserted.</b> This
-    /// remark used to read "On Dustbowl EVERY spawn point is team-owned, so <b>any</b> single
-    /// pinned index starves one side". That is false, and it was false for as long as it stood
-    /// (P19 § 1.2). The spawn points ARE the capture points — <c>CapturePoint : SpawnPoint</c>
-    /// is the only subclass and <c>ActorManager.spawnPoints</c> is
-    /// <c>FindObjectsOfType&lt;SpawnPoint&gt;()</c> — and their authored owners are:
+    /// remark has now been wrong twice in opposite directions, so both readings are recorded.
+    /// It first read "On Dustbowl EVERY spawn point is team-owned, so <b>any</b> single pinned
+    /// index starves one side"; that was false as authored data (P19 § 1.2). It was then
+    /// corrected to "2 of 6 are hazardous", which was true of the authored owners but rested on
+    /// an eligibility rule that has since been fixed. The spawn points ARE the capture points —
+    /// <c>CapturePoint : SpawnPoint</c> is the only subclass and <c>ActorManager.spawnPoints</c>
+    /// is <c>FindObjectsOfType&lt;SpawnPoint&gt;()</c> — and their authored owners are:
     /// </para>
     /// <list type="bullet">
     /// <item><description>
@@ -67,14 +69,20 @@ namespace Ironfront.Net.Unity.Server
     /// </description></item>
     /// </list>
     /// <para>
-    /// <c>IsEligible</c> is <c>point.owner &lt; 0 || point.owner == team</c>
-    /// (<c>IronfrontNetBindings.cs:583-589</c>): <c>owner &lt; 0</c> means "any team", so a pin
-    /// on one of those four Dustbowl indices or three Island indices <b>starves nobody</b>. The
-    /// hazard is real and it is narrow — 2 of 6 indices, not 6 of 6 — and the refusal below
-    /// still catches it, because it asks <c>IsEligible</c> rather than counting anything.
-    /// <b>Nothing here was re-tuned on the strength of the corrected count</b>: the per-team
-    /// rotation and the construction-time refusal are both right whether the hazardous fraction
-    /// is a third or all of them.
+    /// <c>IsEligible</c> is now <c>point.owner == team</c>
+    /// (<c>IronfrontNetBindings.ActorManagerSpawnPoints.IsEligible</c>), because
+    /// <c>owner == -1</c> on a capture point means NEUTRAL rather than "any team" — that
+    /// misreading is what dropped deploying players onto contested flags on 2026-09-04, and
+    /// <c>ActorManager.RandomSpawnPointForTeam</c> had required <c>owner == team</c> all along.
+    /// So on the shipping maps <b>every</b> index is now hazardous, for one reason or the other:
+    /// pinning a base starves the other side, and pinning a neutral flag starves both. The
+    /// refusal below is unchanged and still catches all of them, because it asks
+    /// <c>IsEligible</c> rather than counting anything — which is the whole reason it survived a
+    /// semantic change to the rule it consults. <b>Nothing here was re-tuned</b>: the per-team
+    /// rotation and the construction-time refusal are right whether the hazardous fraction is a
+    /// third or all of them. What a lane-B operator has to know is narrower than it sounds —
+    /// <c>IRONFRONT_LANEB_SPAWN_INDEX</c> must name a rotation per team out of that team's OWN
+    /// points, and on Dustbowl each side owns exactly one.
     /// </para>
     /// <para>
     /// <b>A rotation per team, and a refusal at construction.</b> The option still exists
@@ -202,10 +210,11 @@ namespace Ironfront.Net.Unity.Server
         /// up as one actor silently never placed, minutes into a run, in a warning inside a
         /// server log nobody reads until the artifact turns out to be ungradeable.
         /// <b>2 of Dustbowl's 6 spawn points and 2 of Island's 5 are team-owned</b> (the class
-        /// remark lists them), so pinning one index starves a side on a third of the shipping
-        /// indices rather than on all of them. This asks <c>IsEligible</c> rather than counting,
-        /// so the refusal is exactly as correct at 2-of-6 as the old remark assumed it was at
-        /// 6-of-6. <b>Every slot in every team's rotation is checked</b>, not only the first one
+        /// remark lists them) and the rest are neutral, so under <c>owner == team</c> eligibility
+        /// EVERY shipping index starves somebody: a base starves the other side, a neutral flag
+        /// starves both. This asks <c>IsEligible</c> rather than counting, so the refusal is
+        /// exactly as correct now as it was under either of the two counts the class remark has
+        /// carried. <b>Every slot in every team's rotation is checked</b>, not only the first one
         /// drawn — a bad slot three deep in a rotation would otherwise starve a placement in the
         /// middle of a run rather than refuse at the top.
         /// </remarks>
@@ -223,10 +232,11 @@ namespace Ironfront.Net.Unity.Server
                     throw new ArgumentException(
                         $"spawn slot {slot} (rotation position {slotIndex}) is not eligible for "
                         + $"team {team}, so that team would never be placed and the run would "
-                        + "grade nothing. Two of Dustbowl's six spawn points and two of Island's "
-                        + "five name a team; the rest are owner -1 and eligible for both (ledger "
-                        + "X-63). Pass one rotation per team, e.g. "
-                        + "IRONFRONT_LANEB_SPAWN_INDEX=3|4|5,7|8, or pin only owner -1 indices.",
+                        + "grade nothing. A slot is eligible only for the team that OWNS it: two "
+                        + "of Dustbowl's six spawn points and two of Island's five name a team, "
+                        + "one each, and every other point is neutral (owner -1) and eligible for "
+                        + "nobody (ledger X-63). Pass one rotation per team, out of that team's "
+                        + "own points, e.g. IRONFRONT_LANEB_SPAWN_INDEX=3,5.",
                         nameof(_rotationByTeam));
                 }
             }
