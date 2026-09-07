@@ -233,7 +233,7 @@ namespace Ironfront.Net.Unity.Client
             RemoteActorView view = t.GetComponent<RemoteActorView>();
             if (view != null)
             {
-                view.Bind(message.ActorId);
+                view.Bind(message.ActorId, message.Team);
                 _views[message.ActorId] = view;
             }
             else

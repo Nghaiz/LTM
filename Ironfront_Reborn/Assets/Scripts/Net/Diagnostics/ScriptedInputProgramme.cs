@@ -348,12 +348,12 @@ namespace Ironfront.Net.Unity.Diagnostics
         public bool holdScoreboard = false;
 
         /// <summary>
-        /// Weapon slot to select, 0..3. Negative means "leave the weapon alone".
+        /// Weapon slot to select, 0..4. Negative means "leave the weapon alone".
         /// </summary>
         /// <remarks>
         /// <para>
-        /// Held for the step, not edged: <c>InputButtons.SwitchWeapon0..3</c> are ordinary bits
-        /// on <c>C_INPUT</c> (protocol-spec § 4.2 bits 11-14) and the server edges them itself.
+        /// Held for the step, not edged: <c>InputButtons.SwitchWeapon0..4</c> are ordinary bits
+        /// on <c>C_INPUT</c> (protocol-spec § 4.2 bits 11-15) and the server edges them itself.
         /// </para>
         /// <para>
         /// <b>This is how a grenade is thrown</b>, and the reason check 4 needs no new wire bit:

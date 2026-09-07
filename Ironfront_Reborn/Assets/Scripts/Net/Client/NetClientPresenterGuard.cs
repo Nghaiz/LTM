@@ -59,7 +59,7 @@ namespace Ironfront.Net.Unity.Client
         /// it was made.
         /// </remarks>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        private static void InstallGateResolvers()
+        internal static void InstallGateResolvers()
             => NetClientBindings.LocalTeam = TryResolveLocalTeam;
 
         /// <summary>

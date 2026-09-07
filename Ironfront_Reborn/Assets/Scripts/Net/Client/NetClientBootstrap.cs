@@ -187,6 +187,16 @@ namespace Ironfront.Net.Unity.Client
 
             Current = this;
 
+            // RuntimeInitializeOnLoadMethod ordering is only guaranteed between load TYPES,
+            // not between methods that both use BeforeSceneLoad.  NetClientBindings.ResetOnLoad
+            // clears the delegate at SubsystemRegistration, and player builds have demonstrated
+            // that the attributed installer is not a sufficient lifetime guarantee: snapshots
+            // carried team 1 while the local body remained at UNKNOWN_TEAM for the whole match.
+            // Re-install after Current is published, at the one production point that owns the
+            // client lifetime.  This is idempotent and deliberately happens before any presenter
+            // or dynamically-added combat driver can ask which side the player is on.
+            NetClientPresenterGuard.InstallGateResolvers();
+
             // The server marks exactly one spawn as local for this connection. Keep that
             // identity at the bootstrap so interpolation can skip it and prediction can
             // reconcile the actor the player actually owns.
@@ -422,10 +432,30 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         private void OnSnapshotApplied(uint serverTick, uint lastProcessedInputTick)
         {
+            // Apply identity-bearing state at the same boundary that made it authoritative.
+            // The old per-frame presenter poll proved too indirect in a real player build: the
+            // recorder could read snapshot team 1 for the whole match while Actor.team stayed
+            // UNKNOWN_TEAM.  Besides rendering both sides blue, that made a locally-spawned
+            // projectile calculate enemy team as 1 - (-1) = 2.  Do this before the ACK so every
+            // later presenter/gameplay update observes the body and snapshot in agreement.
+            ApplyLocalActorTeamFromSnapshot();
+
             if (!BaselineAck.TryBuildAck(Router.Decoder.AckTick, out ReadOnlySpan<byte> payload))
                 return;
 
             Send(BaselineAckPolicy.Channel, payload, reliable: true);
+        }
+
+        private void ApplyLocalActorTeamFromSnapshot()
+        {
+            if (LocalActorId == LocalActorIdentity.UnassignedActorId) return;
+            if (!Router.Decoder.Current.TryFind(LocalActorId, out ActorSnapshotEntry entry)) return;
+            if (entry.Team == TeamId.None) return;
+
+            ILocalPlayerRig rig = NetClientBindings.LocalPlayer;
+            if (!rig.Exists || rig.Team == entry.Team) return;
+
+            rig.SetTeam(entry.Team);
         }
 
         /// <summary>Sends one payload to the server.</summary>

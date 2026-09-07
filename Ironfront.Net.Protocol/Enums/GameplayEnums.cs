@@ -44,7 +44,7 @@ namespace Ironfront.Net.Protocol
         SwitchWeapon1 = 1 << 12,
         SwitchWeapon2 = 1 << 13,
         SwitchWeapon3 = 1 << 14,
-        // Bit 15 reserved.
+        SwitchWeapon4 = 1 << 15,
     }
 
     /// <summary>

@@ -1,6 +1,6 @@
 # Protocol Specification — Ironfront Reborn
 
-**Version: 8.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 8`
+**Version: 9.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 9`
 
 > This is the contract every side of the wire is written against. Every offset, every enum value
 > and every quantization constant in this document is **mandatory**. Client and server may not
@@ -47,7 +47,7 @@
 public static class ProtocolConstants
 {
     public const ushort PROTOCOL_ID       = 0x4946;  // 'IF' — filters out junk packets
-    public const byte   PROTOCOL_VERSION  = 8;
+    public const byte   PROTOCOL_VERSION  = 9;
 
     public const int    MTU_SAFE          = 1200;    // safe through any router
     public const int    GSP_HEADER_SIZE   = 16;
@@ -333,7 +333,7 @@ At 30 Hz: `29 × 30 = 870 B/s` upstream. Negligible.
 | 4 | Crouch | 12 | SwitchWeapon1 |
 | 5 | Sprint | 13 | SwitchWeapon2 |
 | 6 | Prone | 14 | SwitchWeapon3 |
-| 7 | Reserved7 | 15 | reserved |
+| 7 | Reserved7 | 15 | SwitchWeapon4 |
 
 **Bit 7 was `ThrowGrenade`, and V7-D10 retired it rather than implementing it.** It was declared
 at the freeze and never gained a producer or a gameplay consumer. The game has no dedicated
@@ -1578,6 +1578,7 @@ Added at v3.0.0:
 
 | **7.0.1** | 2026-09-03 | the client track | **`ErrorCode.InvalidDisplayName` = 1005, and a blank display name stops being a credential problem.** `AuthService.Register` refused `IsNullOrWhiteSpace(displayName)` and reported it as `WrongCredentials` (1000), so the register screen — whose own field is labelled *"Display name (optional)"* and whose docstring promised *"Left blank, the master applies its own rule"* — answered **every** account creation with "Wrong username or password." on a form that has no credentials yet. Account creation failed 100% of the time. Blank now falls back to the username (the promised rule, written down at last); a name that was supplied and is over 32 characters gets 1005, on the `TeamsWouldUnbalance` precedent that a refusal the player can act on deserves its own code. **Also back-fills § 13's missing `2005` row**, added to the enum by P16 and never to this table. Found by playing the game, not by a gate: every one of the 2,103 tests passed a display name | **No** — no byte moved. `errorCode` is already a `u16` in `REGISTER_RESPONSE`; a value added to its space is invisible to a decoder that never receives it, and an older client renders an unrecognised code as its number rather than misreading it (`MasterErrorText`) | (this PR) |
 | **8.0.0** | 2026-09-03 | the client track | **`C_SPAWN_REQUEST` (0x23) grows a body — see § 4.14.** Empty since the freeze; now `u8` × 5 loadout slots + `u8 spawnPointIndex` = 6 bytes. A join no longer places the body (`ServerTickLoop.OnClientConnected`), so this message now drives the first deploy as well as every later respawn, arming the body from the loadout the client actually chose (`ServerCombatBridge.PlaceAtSpawn`) instead of the server's own `controller.GetLoadout()` draw. Ledger **X-11** | **Yes** — an empty body decoded by the V8 parser's fixed 6-byte read fails `TryParse` outright; a v7 client's spawn/respawn requests would all be counted as malformed rather than silently misread | (this PR) |
+| **9.0.0** | 2026-09-07 | the client track | **The fifth Ravenfield loadout slot can be selected over `C_INPUT`.** Bit 15 changes from reserved to `SwitchWeapon4`; the human keyboard and mouse-wheel path now produces the same absolute slot intent that the server already consumes for slots 0–3. | **Yes** — the bytes are the same width, but bit 15 gained gameplay meaning. A v8 server would silently ignore a v9 client's gear-3 selection and keep firing the previous weapon, so the peers must refuse the mismatch. | (this change) |
 
 > Every change after the freeze must add a row to this table and clear the gate below.
 > **Bump `PROTOCOL_VERSION` only when the bytes on the wire change** — a client and server with

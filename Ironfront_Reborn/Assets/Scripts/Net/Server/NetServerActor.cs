@@ -140,13 +140,13 @@ namespace Ironfront.Net.Unity.Server
         }
 
         /// <summary>
-        /// Applies one frame's weapon selection, edged. <paramref name="slot"/> is 0..3, or
+        /// Applies one frame's weapon selection, edged. <paramref name="slot"/> is 0..4, or
         /// negative for "this frame selects nothing".
         /// </summary>
         /// <remarks>
         /// <para>
         /// <b>The edge lives here because the intent is a HELD bit and the action is not.</b>
-        /// <c>InputButtons.SwitchWeapon0..3</c> ride <c>C_INPUT</c>, which repeats each frame
+        /// <c>InputButtons.SwitchWeapon0..4</c> ride <c>C_INPUT</c>, which repeats each frame
         /// seven times for redundancy, so a slot holding a <c>ToggleableItem</c> would flip in
         /// and out at tick rate if every arrival called through. Storing the last requested slot
         /// on the actor also means it dies with the actor -- no per-connection table to leak.

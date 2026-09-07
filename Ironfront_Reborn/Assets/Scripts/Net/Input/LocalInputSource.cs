@@ -36,6 +36,7 @@ namespace Ironfront.Net.Unity
     {
         private readonly Transform _lookTransform;
         private readonly Func<bool> _aiming;
+        private readonly Func<int> _weaponSlotIntent;
 
         /// <param name="lookTransform">
         /// The transform whose rotation IS the player's aim — the first-person camera or its
@@ -49,10 +50,12 @@ namespace Ironfront.Net.Unity
         /// bool, so the read stays live like every other member here; null means never aiming,
         /// which is what a source with no controller behind it should report.
         /// </param>
-        public LocalInputSource(Transform lookTransform, Func<bool> aiming = null)
+        public LocalInputSource(
+            Transform lookTransform, Func<bool> aiming = null, Func<int> weaponSlotIntent = null)
         {
             _lookTransform = lookTransform;
             _aiming = aiming;
+            _weaponSlotIntent = weaponSlotIntent;
         }
 
         /// <summary>
@@ -126,7 +129,8 @@ namespace Ironfront.Net.Unity
                     jump:   Input.GetButton("Jump"),
                     crouch: Input.GetButton("Crouch"),
                     sprint: Input.GetButton("Sprint"),
-                    use:    Input.GetButton("Use"));
+                    use:    Input.GetButton("Use"),
+                    weaponSlot: _weaponSlotIntent != null ? _weaponSlotIntent() : -1);
             }
         }
 

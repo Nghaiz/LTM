@@ -93,6 +93,16 @@ namespace Ironfront.Net.Unity.Client
         [Tooltip("Rotated by the replicated pitch. Falls back to the animator when unset.")]
         [SerializeField] private Transform _upperBody;
 
+        // The proxy prefab contains one skinned body renderer. Resolved once so team colour is
+        // not a hierarchy scan on the per-snapshot path.
+        private Renderer _teamRenderer;
+        private byte _appliedTeam = TeamId.None;
+
+        // The shipped proxy deliberately has no Actor/Weapon graph. Keep the richer weapon
+        // cosmetic when one is authored, but provide a small code-owned muzzle flash so remote
+        // humans and bots never fire invisibly in today's prefab.
+        private ParticleSystem _fallbackMuzzleFlash;
+
         // Resolved once. Animator.StringToHash allocates nothing but is not free, and this runs
         // for every visible actor every frame.
         //
@@ -219,6 +229,9 @@ namespace Ironfront.Net.Unity.Client
             // have run on the one asset that carries this component.
             ReportUnknownParameters();
 
+            _teamRenderer = GetComponentInChildren<SkinnedMeshRenderer>(true);
+            CreateFallbackMuzzleFlash();
+
             if (_actor == null) return;
 
             _presence = _actor as IGameplayActorPresence;
@@ -311,9 +324,13 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         public void PlayActiveWeaponFireCosmetics()
         {
-            if (_activeWeapon == null || !_activeWeapon.Exists) return;
+            if (_activeWeapon != null && _activeWeapon.Exists)
+            {
+                _activeWeapon.PlayFireCosmetics();
+                return;
+            }
 
-            _activeWeapon.PlayFireCosmetics();
+            if (_fallbackMuzzleFlash != null) _fallbackMuzzleFlash.Emit(1);
         }
 
         /// <summary>
@@ -321,7 +338,7 @@ namespace Ironfront.Net.Unity.Client
         /// snapshot — a pooled transform carries the previous occupant's pose, and leaving it
         /// would show the new player crouched or ragdolled for one frame.
         /// </summary>
-        public void Bind(ushort actorId)
+        public void Bind(ushort actorId, byte team)
         {
             ActorId          = actorId;
             _state           = default;
@@ -329,6 +346,9 @@ namespace Ironfront.Net.Unity.Client
             _ragdollApplied  = false;
             _appliedWeaponId = byte.MaxValue;
             _activeWeapon    = null;
+            _appliedTeam     = TeamId.None;
+
+            ApplyTeam(team);
 
             // Clearing the sample is what makes a respawn not a teleport. The displacement
             // fallback measures this transform against where it was last frame, and a pooled body
@@ -367,6 +387,7 @@ namespace Ironfront.Net.Unity.Client
             _hasState = true;
 
             ApplyWeapon(_state.WeaponId);
+            ApplyTeam(_state.Team);
             ApplyPitch(_state.PitchDegrees);
             SolveLocomotion();
 
@@ -511,6 +532,48 @@ namespace Ironfront.Net.Unity.Client
                     "[net] a remote actor has no weapon to play cosmetics on, so shots will be "
                     + "silent and flashless. Client-track items E1 and E3.");
             }
+        }
+
+        private void ApplyTeam(byte team)
+        {
+            if (team == _appliedTeam) return;
+            _appliedTeam = team;
+            if (_teamRenderer == null) return;
+
+            int rgb = NetClientBindings.TeamColourRgb(team);
+            Color colour = new Color(
+                ((rgb >> 16) & 0xff) / 255f,
+                ((rgb >> 8) & 0xff) / 255f,
+                (rgb & 0xff) / 255f,
+                1f);
+            _teamRenderer.material.color = colour;
+        }
+
+        private void CreateFallbackMuzzleFlash()
+        {
+            Transform parent = _muzzleAnchor != null ? _muzzleAnchor : transform;
+            var flashObject = new GameObject("Network Muzzle Flash");
+            flashObject.transform.SetParent(parent, false);
+
+            _fallbackMuzzleFlash = flashObject.AddComponent<ParticleSystem>();
+            ParticleSystem.MainModule main = _fallbackMuzzleFlash.main;
+            main.playOnAwake = false;
+            main.loop = false;
+            main.duration = 0.05f;
+            main.startLifetime = 0.045f;
+            main.startSpeed = 0.8f;
+            main.startSize = 0.14f;
+            main.startColor = new Color(1f, 0.72f, 0.18f, 1f);
+            main.maxParticles = 4;
+
+            ParticleSystem.EmissionModule emission = _fallbackMuzzleFlash.emission;
+            emission.enabled = false;
+
+            ParticleSystem.ShapeModule shape = _fallbackMuzzleFlash.shape;
+            shape.enabled = true;
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.angle = 12f;
+            shape.radius = 0.015f;
         }
     }
 }

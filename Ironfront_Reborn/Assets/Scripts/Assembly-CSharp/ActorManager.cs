@@ -492,6 +492,14 @@ public class ActorManager : MonoBehaviour
 		{
 			return;
 		}
+		// A network body exists before its first authoritative snapshot can assign team 0/1.
+		// A locally predicted projectile may therefore start during that short UNKNOWN_TEAM
+		// window.  `1 - (-1)` is team 2, which is not a key in aliveActors and used to throw once
+		// per bullet. There is no honest enemy AI to warn until the shooter's team is known.
+		if (p.source.team != 0 && p.source.team != 1)
+		{
+			return;
+		}
 		Ray ray = new Ray(p.transform.position, p.transform.forward);
 		float num = 9999f;
 		RaycastHit hitInfo;

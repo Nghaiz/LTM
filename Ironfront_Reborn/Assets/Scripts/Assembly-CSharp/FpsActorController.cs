@@ -236,7 +236,7 @@ public class FpsActorController : ActorController
 			// actually drives.
 			// Aiming() folds in toggleAim and a latch LocalInputSource cannot see, so it is
 			// handed over as a live delegate rather than duplicated there.
-			inputSource = new LocalInputSource(fpCamera.transform, Aiming);
+			inputSource = new LocalInputSource(fpCamera.transform, Aiming, SampleWeaponSlotIntent);
 			// Temporary, and deliberately unconditional: the harness that says whether the
 			// substitution above was correct. Delete both this line and InputShadowCompare.cs
 			// once a playtest has come back quiet.
@@ -506,6 +506,22 @@ public class FpsActorController : ActorController
 		controller.SetMouseEnabled(false);
 	}
 
+	/// <summary>
+	/// Opens the stock loadout UI for a network player's first life without pretending the
+	/// player died and without granting a spawn locally.  The server still places the body only
+	/// after the UI's Deploy button is consumed by NetClientLocalCombatDriver.
+	/// </summary>
+	public void OpenInitialNetworkLoadout()
+	{
+		if (deployedView || LoadoutUi.IsOpen())
+		{
+			return;
+		}
+
+		DisableInput();
+		OpenLoadout();
+	}
+
 	public void CloseLoadout()
 	{
 		LoadoutUi.Hide();
@@ -618,6 +634,12 @@ public class FpsActorController : ActorController
 		// CloseLoadout also does controller.SetMouseEnabled(true), which is SpawnAt's line.
 		CloseLoadout();
 
+		// Actor.Awake parks every body as dead.  The offline SpawnAt path normally clears that
+		// flag, but the network path intentionally cannot call SpawnAt because it would overwrite
+		// the server-owned transform.  Clear the gameplay half explicitly before arming the
+		// loadout: SwitchToFirstAvailableWeapon itself refuses to run on a dead actor.
+		actor.EnterNetworkDeployedState();
+
 		// X-11's other half. SpawnAt arms a body through SpawnLoadoutWeapons (Actor.cs:266);
 		// this path is the one SpawnAt never runs for a networked body (see this method's own
 		// remark above), and nothing else on the client ever called EquipLoadout either -- its
@@ -627,6 +649,16 @@ public class FpsActorController : ActorController
 		// nothing else (Actor.cs:313-316), so it writes no transform and does not reopen the
 		// authority split this method's own remark protects.
 		actor.EquipLoadout();
+
+		// SpawnAt normally owns these three HUD writes.  A network deploy deliberately skips
+		// SpawnAt because the transform is server-owned, so reproduce only its local presentation
+		// here after the chosen loadout has created an active weapon.
+		if (IngameUi.instance != null)
+		{
+			IngameUi.instance.Show();
+			IngameUi.instance.SetHealth(Mathf.Max(0f, actor.health));
+			actor.UpdateAmmoUi();
+		}
 
 		// Null-guarded where SpawnAt is not. SpawnAt runs from a spawn wave, which cannot happen
 		// before the scene's singletons exist; this runs off a network message, which can arrive
@@ -820,11 +852,10 @@ public class FpsActorController : ActorController
 		}
 	}
 
-	// Everything below is edge-triggered -- GetKeyDown, GetButtonDown, mouseScrollDelta --
-	// and IInputSource reports levels, not edges. Weapon and seat selection do affect gameplay
-	// and phase-00 section 5 books them as debt to be paid in phase 02, when the C_INPUT
-	// weapon-switch bits (11..14) get a consumer. Routing an edge through a level channel now
-	// would either drop presses or fire them twice.
+	// Everything below is edge-triggered -- GetKeyDown, GetButtonDown, mouseScrollDelta.
+	// Weapon selection is predicted here for Ravenfield responsiveness and independently sampled
+	// as an absolute slot by SampleWeaponSlotIntent for the authoritative C_INPUT stream. Seat
+	// selection remains on its dedicated network seam.
 	private void UpdateInput()
 	{
 		// One guard for the whole method rather than eleven. Every read below is a bare key --
@@ -898,6 +929,26 @@ public class FpsActorController : ActorController
 		{
 			actor.PreviousWeapon();
 		}
+	}
+
+	/// <summary>
+	/// Converts the base game's number keys and wheel navigation into the absolute loadout slot
+	/// carried by C_INPUT. Reading Unity's edge APIs more than once in a frame is stable, so this
+	/// remains in lockstep with <see cref="UpdateInput"/>'s immediate local presentation.
+	/// </summary>
+	private int SampleWeaponSlotIntent()
+	{
+		if (LocalTextEntry.Composing) return -1;
+		if (Input.GetKeyDown(KeyCode.Alpha1)) return 0;
+		if (Input.GetKeyDown(KeyCode.Alpha2)) return 1;
+		if (Input.GetKeyDown(KeyCode.Alpha3)) return 2;
+		if (Input.GetKeyDown(KeyCode.Alpha4)) return 3;
+		if (Input.GetKeyDown(KeyCode.Alpha5)) return 4;
+
+		float wheel = Input.mouseScrollDelta.y;
+		if (wheel < 0f) return actor.FindWeaponSlot(1, skipToggleable: true);
+		if (wheel > 0f) return actor.FindWeaponSlot(-1, skipToggleable: false);
+		return -1;
 	}
 
 	private void SampleUseRay()

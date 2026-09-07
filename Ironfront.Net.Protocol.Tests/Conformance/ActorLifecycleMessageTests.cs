@@ -296,7 +296,7 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
             //   v3  the vehicle wire (§ 4.10): six new opcodes, a second entity stream, and
             //       SnapshotField.SeatInfo finished on the actor entry. S_EXPLOSION's layout was
             //       not touched by any of it and still is not what moved the number.
-            Assert.Equal(8, ProtocolConstants.PROTOCOL_VERSION);   // 3 -> 4 in X-53: Quantize's position WINDOW moved (-1024..3072), so the same i16 decodes to a different metre. Same bytes, different meaning -- exactly what the version is for. 4 -> 5 in P11: S_MATCH_STATE grew victoryPoints (Size 8 -> 10) AND tickets0/1 became ascending score0/1 at the same offsets -- again same bytes, different meaning. 5 -> 6 in P13: the joinTicket gained a u8 team at offset 16 and displayName shrank 16 -> 15 to pay for it, so every byte from 16 on MOVED -- a layout change, not a reinterpretation. 6 -> 7 in P18: S_PLAYER_SCORES (0x51) is a NEW opcode carrying per-player kills, deaths and side -- the 3.0.0 row's precedent, where six new opcodes were recorded as a wire change. 7 -> 8, ledger X-11: C_SPAWN_REQUEST (0x23) grew a body -- see SpawnRequestMessageTests -- so a v7 client's empty-bodied request fails the v8 parser's fixed 6-byte read instead of being silently accepted. None of the five bumps touched the layout this test pins, which is why the layout constants beside it did not move.
+            Assert.Equal(9, ProtocolConstants.PROTOCOL_VERSION);
         }
     }
 }

@@ -32,6 +32,11 @@ param(
 
     [string] $LogFile = "",
 
+    # Use only when the complete plugin closure was just built and copied (for example, while
+    # cutting a clean stamped player immediately after committing those binaries). The default
+    # deliberately rebuilds everything so protocol constants cannot be mixed across DLLs.
+    [switch] $SkipLibraryBuild,
+
     # Skip the "is an Editor running" refusal. For the case where the process found is somebody
     # else's Unity on another project -- the check cannot tell them apart.
     [switch] $Force
@@ -39,6 +44,21 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+
+# Rebuild the complete Unity plugin closure before opening the Editor. PROTOCOL_VERSION is a
+# const, so its value is inlined into dependent assemblies such as Ironfront.MasterClient.dll.
+# Copying only Ironfront.Net.Protocol.dll can therefore produce a player whose game protocol is
+# current while its login request still sends the previous version; the master reports that as
+# "This build is out of date." Keeping this inside the player build makes that mixed state
+# impossible on every future build, not merely repaired in the current working tree.
+$libraryBuild = Join-Path $repoRoot "tools/build-libs.ps1"
+if (-not $SkipLibraryBuild) {
+    & $libraryBuild -Configuration Release
+    if ($LASTEXITCODE -ne 0) { throw "the Unity plugin libraries did not build" }
+}
+else {
+    Write-Host "[build] using the already-built Unity plugin closure (-SkipLibraryBuild)"
+}
 
 # Read the required Editor version from the project and discover that exact version. Unity Hub
 # supports a secondary install directory (common on machines where C: is small) and records it

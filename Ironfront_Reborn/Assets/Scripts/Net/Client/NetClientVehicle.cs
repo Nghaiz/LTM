@@ -261,7 +261,16 @@ namespace Ironfront.Net.Unity.Client
             TurretYaw   = pose.TurretYaw;
             TurretPitch = pose.TurretPitch;
 
-            _vehicle.SetHealthAuthoritative(pose.Health * _vehicle.MaxHealth);
+            // Health zero is valid only once the authoritative state machine has entered
+            // Burning or Dead. A newly announced vehicle can briefly be sampled from a sparse
+            // delta with default health before its full baseline arrives; feeding that transient
+            // zero into Vehicle starts the irreversible burn presentation on frame one.
+            bool hasZeroHealthState = (pose.Flags
+                & (VehicleStateFlags.Burning | VehicleStateFlags.Dead)) != 0;
+            if (pose.Health > 0f || hasZeroHealthState)
+            {
+                _vehicle.SetHealthAuthoritative(pose.Health * _vehicle.MaxHealth);
+            }
 
             _vehicle.ApplyReplicatedFlags(
                 (pose.Flags & VehicleStateFlags.InWater) != 0,

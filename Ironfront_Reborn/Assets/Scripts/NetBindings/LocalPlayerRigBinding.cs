@@ -95,6 +95,15 @@ namespace Ironfront.Net.Unity.Bindings
         }
 
         /// <inheritdoc/>
+        public void OpenInitialLoadout()
+        {
+            FpsActorController local = FpsActorController.instance;
+            if (local == null) return;
+
+            local.OpenInitialNetworkLoadout();
+        }
+
+        /// <inheritdoc/>
         public bool ConsumeDeployIntent()
         {
             FpsActorController local = FpsActorController.instance;
@@ -183,6 +192,11 @@ namespace Ironfront.Net.Unity.Bindings
             if (local == null || local.actor == null || local.actor.ragdoll == null) return;
 
             local.actor.KnockOver(force, bone);
+            // KnockOver is also used for recoverable balance damage in the base game and does
+            // not set Actor.dead.  This seam is called only from S_DEATH, so retire the local
+            // gameplay update after the ragdoll impulse has been applied.  The next authoritative
+            // deploy reverses it in EnterNetworkDeployedState.
+            local.actor.MarkNetworkDead();
         }
 
         /// <inheritdoc/>

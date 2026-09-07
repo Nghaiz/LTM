@@ -332,6 +332,13 @@ namespace Ironfront.Net.Unity.Client
 
             _state.EquipWeapon(message.WeaponId);
 
+            // GameManager also schedules this one second after the scene starts, but a network
+            // actor can be announced before or after that timer and scene transitions can cancel
+            // the Invoke.  The spawn message is the reliable point at which this client owns a
+            // local slot, so make the normal Ravenfield loadout screen explicit and idempotent.
+            ILocalPlayerRig rig = NetClientBindings.LocalPlayer;
+            if (_awaitingFirstDeploy && rig.Exists) rig.OpenInitialLoadout();
+
             // Ledger X-11/X-48/X-86. A JOIN no longer places the body
             // (ServerTickLoop.OnClientConnected), so S_SPAWN_ACTOR now reaches every client on
             // interest ALONE, before any deploy has happened -- it is "you now know this actor

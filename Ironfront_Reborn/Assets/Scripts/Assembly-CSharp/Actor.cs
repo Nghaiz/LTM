@@ -315,6 +315,45 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 	{
 		SpawnLoadoutWeapons();
 	}
+
+	/// <summary>
+	/// Restores the local, visual half of a server-authoritative deploy without moving the body.
+	/// </summary>
+	/// <remarks>
+	/// A freshly-instantiated <see cref="Actor"/> starts with <c>dead = true</c>.  The normal
+	/// offline path clears it in <see cref="SpawnAt"/>, but a network client must not call that
+	/// method because it also writes the transform owned by the server.  Leaving the flag set
+	/// makes <see cref="Update"/> return before weapon fire, aiming, reload, animation and weapon
+	/// switching; it is the single reason a deployed network player can see a rifle but cannot
+	/// use any Ravenfield gameplay attached to it.
+	/// </remarks>
+	public void EnterNetworkDeployedState()
+	{
+		ik.turnBody = true;
+		ik.weight = 1f;
+		fallenOver = false;
+		animator.enabled = true;
+		animator.SetLayerWeight(3, 0f);
+		animator.SetTrigger("reset");
+		ragdoll.SetDrive(700f, 3f);
+		balance = 100f;
+		health = 100f;
+		dead = false;
+		ragdoll.InstantAnimate();
+		controller.EndRagdoll();
+		needsResupply = false;
+		animator.SetBool("dead", false);
+		animator.SetBool("seated", false);
+	}
+
+	/// <summary>
+	/// Stops local gameplay simulation after the server reports this actor dead.
+	/// </summary>
+	public void MarkNetworkDead()
+	{
+		dead = true;
+		animator.SetBool("dead", true);
+	}
 	private void SpawnLoadoutWeapons()
 	{
 		hasAmmoBox = false;
@@ -432,6 +471,10 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		}
 		component.FindRenderers(aiControlled);
 		component.Equip(this);
+		if (!aiControlled && (team == 0 || team == 1))
+		{
+			component.SetFirstPersonTeamColor(ColorScheme.TeamColor(team));
+		}
 		component.transform.parent = controller.WeaponParent();
 		component.transform.localPosition = Vector3.zero;
 		component.transform.localRotation = Quaternion.identity;
@@ -1283,15 +1326,8 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		{
 			return;
 		}
-		for (int i = 1; i < 4; i++)
-		{
-			int num = (activeWeaponSlot + i) % 5;
-			if (weapons[num] != null && !weapons[num].IsToggleable())
-			{
-				SwitchWeapon(num);
-				break;
-			}
-		}
+		int slot = FindWeaponSlot(1, skipToggleable: true);
+		if (slot >= 0) SwitchWeapon(slot);
 	}
 
 	public void PreviousWeapon()
@@ -1300,15 +1336,25 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		{
 			return;
 		}
-		for (int i = 1; i < 4; i++)
+		int slot = FindWeaponSlot(-1, skipToggleable: false);
+		if (slot >= 0) SwitchWeapon(slot);
+	}
+
+	/// <summary>
+	/// Resolves the exact absolute slot a mouse-wheel step would select, without changing state.
+	/// The client sends this number to the server so both peers execute the same switch.
+	/// </summary>
+	public int FindWeaponSlot(int direction, bool skipToggleable)
+	{
+		int step = direction < 0 ? -1 : 1;
+		for (int i = 1; i < 5; i++)
 		{
-			int num = (activeWeaponSlot - i + 5) % 5;
-			if (weapons[num] != null)
-			{
-				SwitchWeapon(num);
-				break;
-			}
+			int slot = (activeWeaponSlot + step * i + 5) % 5;
+			Weapon candidate = weapons[slot];
+			if (candidate != null && (!skipToggleable || !candidate.IsToggleable())) return slot;
 		}
+
+		return -1;
 	}
 
 	public void SwitchWeapon(int slot)
@@ -1366,6 +1412,17 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		Color color = ColorScheme.TeamColor(base.team);
 		skinnedRenderer.material.color = color;
 		skinnedRendererRagdoll.material.color = color;
+
+		// The visible FP arms live inside each weapon prefab, not on either actor renderer.
+		// Network team assignment can arrive before or after the loadout is spawned, so recolour
+		// existing weapons here while SpawnWeapon handles the opposite ordering.
+		if (!aiControlled)
+		{
+			foreach (Weapon weapon in weapons)
+			{
+				if (weapon != null) weapon.SetFirstPersonTeamColor(color);
+			}
+		}
 	}
 
 	private bool ControllingVehicle()

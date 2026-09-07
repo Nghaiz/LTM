@@ -34,12 +34,11 @@ namespace Ironfront.Net.Unity
         /// <see cref="IInputSource.Lean"/> axis locally. Packing a bit that no reader sets is
         /// how a protocol field quietly becomes permanently zero.
         /// <para>
-        /// <b>Weapon switch moved out of that list on 2026-08-21</b>, and only because BOTH
-        /// halves landed together: the overload below produces bits 11-14 and
-        /// <c>ServerCombatBridge</c> consumes them. The shipped keyboard path still does not
-        /// produce them -- a human client switches weapons locally and the server is never told,
-        /// which is a real gap and a separate decision (it needs prediction and a UI story), so
-        /// it is recorded rather than half-built here.
+        /// <b>Weapon switch moved out of that list on 2026-08-21</b>, and only because both
+        /// halves landed together: the overload below produces the slot bits and
+        /// <c>ServerCombatBridge</c> consumes them. The human keyboard/wheel path supplies an
+        /// absolute slot through <c>LocalInputSource</c>, keeping the immediate local switch
+        /// while also informing the authoritative server.
         /// </para>
         /// </remarks>
         public static ushort Pack(
@@ -47,7 +46,7 @@ namespace Ironfront.Net.Unity
             => Pack(fire, aim, reload, jump, crouch, sprint, use, weaponSlot: -1);
 
         /// <summary>
-        /// As above, plus a weapon selection. <paramref name="weaponSlot"/> is 0..3; anything
+        /// As above, plus a weapon selection. <paramref name="weaponSlot"/> is 0..4; anything
         /// else selects nothing.
         /// </summary>
         /// <remarks>
@@ -70,8 +69,8 @@ namespace Ironfront.Net.Unity
             if (use)    b |= InputButtons.Use;
 
             // The mapping is InputFrame.SlotBit's, not a copy of it. MoveInput.ToButtons is the
-            // other producer of these four bits and lives in an assembly this one cannot see;
-            // two transcriptions of bits 11-14 is exactly how X-31 happened.
+            // other producer of these five bits and lives in an assembly this one cannot see;
+            // duplicating the wire-bit transcription is exactly how X-31 happened.
             b |= InputFrame.SlotBit(weaponSlot);
 
             return (ushort)b;

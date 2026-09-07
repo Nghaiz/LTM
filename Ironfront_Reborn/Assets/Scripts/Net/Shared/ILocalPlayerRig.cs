@@ -138,6 +138,13 @@ namespace Ironfront.Net.Unity
         void EnterDeployedView();
 
         /// <summary>
+        /// Opens the normal Ravenfield loadout screen while the first network deploy is pending.
+        /// This is presentation only; the Deploy button still produces the intent consumed by
+        /// <see cref="ConsumeDeployIntent"/> and the server remains the spawn authority.
+        /// </summary>
+        void OpenInitialLoadout();
+
+        /// <summary>
         /// Reads and clears the loadout screen's Deploy edge — the player asking to be put into
         /// the world for the first time. Maps to
         /// <c>FpsActorController.ConsumeLoadoutDeployPressed</c>.
