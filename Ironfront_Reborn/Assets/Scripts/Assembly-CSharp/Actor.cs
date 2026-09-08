@@ -937,6 +937,15 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		}
 	}
 
+	/// <summary>Recovers a living authoritative bot whose physical ragdoll never settled.</summary>
+	public void RecoverFromStuckRagdoll()
+	{
+		if (!dead && fallenOver)
+		{
+			InstantGetUp();
+		}
+	}
+
 	private void Die(Vector3 impactForce)
 	{
 		Vector3 point = Position();
@@ -1419,6 +1428,15 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 	public void SetTeam(int team)
 	{
 		base.team = team;
+		// The renderer colour and the replicated team must come from the same assignment. AI
+		// actors are created from a prefab whose NetServerActor serializes team 0; previously this
+		// method only recoloured the server-side mesh, leaving every team-1 bot to advertise team
+		// 0 in snapshots and therefore appear blue on every client.
+		NetServerActor networked = GetComponent<NetServerActor>();
+		if (networked != null)
+		{
+			networked.Team = (byte)team;
+		}
 		Color color = ColorScheme.TeamColor(base.team);
 		skinnedRenderer.material.color = color;
 		skinnedRendererRagdoll.material.color = color;

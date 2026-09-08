@@ -327,6 +327,15 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 
 	protected virtual void FixedUpdate()
 	{
+		// Scene vehicles Awake long before the first spawn wave, so an Awake-only grace period
+		// has already expired when a bot first enters. Keep the deadline ahead while unattended;
+		// the first driver then gets five seconds for suspension/physics to settle instead of
+		// inheriting spawn-pad collision damage and immediately starting the burn effect.
+		if (NetContext.IsServer && !HasDriver())
+		{
+			networkCrashDamageNotBefore = Time.time + 5f;
+		}
+
 		if (rigidbody.linearVelocity.magnitude < 3f)
 		{
 			cannotRamAction.Start();
@@ -990,7 +999,7 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 		// Network vehicles are instantiated into a live PhysX world. Let them settle on their
 		// authored pads before collision damage is authoritative; otherwise touching the ground
 		// or a neighbouring spawn in the first frames starts the burn ladder for every client.
-		if (NetContext.IsServer && Time.time < networkCrashDamageNotBefore)
+		if (NetContext.IsServer && (!HasDriver() || Time.time < networkCrashDamageNotBefore))
 		{
 			return;
 		}

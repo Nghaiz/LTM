@@ -509,7 +509,11 @@ namespace Ironfront.Net.Unity.Client
             if (!HasActor)
             {
                 _activeWeapon = _presentation != null && _presentation.Exists
-                    ? _presentation.EquipWeapon(weaponId, _muzzleAnchor)
+                    ? _presentation.EquipWeapon(
+                        weaponId,
+                        _muzzleAnchor != null && _muzzleAnchor.parent != null
+                            ? _muzzleAnchor.parent
+                            : transform)
                     : null;
                 return;
             }

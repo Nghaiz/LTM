@@ -19,6 +19,7 @@ namespace Ironfront.Net.Unity.Server.Tests
         {
             internal bool HoldsAWeapon = true;
             internal byte HeldWeaponNetworkId = 7;
+            internal Vector3 Velocity = Vector3.zero;
 
             public bool Exists { get; set; } = true;
             public float Health { get; set; } = 100f;
@@ -57,6 +58,13 @@ namespace Ironfront.Net.Unity.Server.Tests
 
                 FiredDirections.Add(new Vector3(directionX, directionY, directionZ));
                 return true;
+            }
+
+            public void GetVelocity(out float x, out float y, out float z)
+            {
+                x = Velocity.x;
+                y = Velocity.y;
+                z = Velocity.z;
             }
         }
 
@@ -239,6 +247,26 @@ namespace Ironfront.Net.Unity.Server.Tests
 
             Assert.IsFalse(actor.FireCarriedWeapon(0f, 0f, 1f));
             Assert.AreEqual(0, gameplay.FiredDirections.Count);
+        }
+
+        [Test]
+        public void CaptureUsesGameplayVelocityForBotsWithoutANetMovementAgent()
+        {
+            var gameplay = new FakeGameplayActor { Velocity = new Vector3(4f, 0f, -1.25f) };
+            NetServerActor actor = CreateActor(gameplay);
+
+            var entry = actor.Capture();
+            var velocity = Ironfront.Net.Replication.SnapshotBuilder.UnpackVelocity(in entry);
+
+            float expectedX = Ironfront.Net.Protocol.Quantize.UnpackVel(
+                Ironfront.Net.Protocol.Quantize.PackVel(4f));
+            Assert.AreEqual(expectedX, velocity.X, 0.001f);
+            Assert.AreEqual(0f, velocity.Y, 0.1f);
+            float expectedZ = Ironfront.Net.Protocol.Quantize.UnpackVel(
+                Ironfront.Net.Protocol.Quantize.PackVel(-1.25f));
+            Assert.AreEqual(expectedZ, velocity.Z, 0.001f);
+            Assert.IsTrue((entry.StateFlags & Ironfront.Net.Protocol.ActorStateFlags.IsSprinting) != 0,
+                "a moving AI actor must not arrive as an idle default-pose proxy");
         }
 
     }

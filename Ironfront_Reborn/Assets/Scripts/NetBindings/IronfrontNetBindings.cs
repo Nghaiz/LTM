@@ -615,6 +615,14 @@ namespace Ironfront.Net.Unity.Bindings
             return true;
         }
 
+        public void GetVelocity(out float x, out float y, out float z)
+        {
+            Vector3 velocity = _actor != null ? _actor.Velocity() : Vector3.zero;
+            x = velocity.x;
+            y = velocity.y;
+            z = velocity.z;
+        }
+
         /// <summary>Selects a weapon slot on the wrapped actor. See the seam for why there are
         /// no guards on this side.</summary>
         public void SwitchWeapon(int slot) => _actor.SwitchWeapon(slot);

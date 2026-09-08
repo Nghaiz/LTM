@@ -437,7 +437,20 @@ namespace Ironfront.Net.Unity.Server
                 ? Movement.State.Position
                 : MovementSimulation.ToCore(transform.position);
 
-            Vec3 velocity = Movement != null ? Movement.State.Velocity : Vec3.Zero;
+            Vec3 velocity;
+            if (Movement != null)
+            {
+                velocity = Movement.State.Velocity;
+            }
+            else if (Source != null)
+            {
+                Source.GetVelocity(out float vx, out float vy, out float vz);
+                velocity = new Vec3(vx, vy, vz);
+            }
+            else
+            {
+                velocity = Vec3.Zero;
+            }
 
             // Through the properties, not the backing fields: both are pass-throughs to the
             // gameplay actor now, and reading _weaponId here is how the weapon id stayed 0 in
@@ -505,15 +518,26 @@ namespace Ironfront.Net.Unity.Server
                     _actorId, out _, out _))
                 flags |= ActorStateFlags.IsSeated;
 
+            Vec3 velocity = Vec3.Zero;
             if (Movement != null)
             {
-                if (Movement.State.IsCrouching) flags |= ActorStateFlags.IsCrouching;
+                velocity = Movement.State.Velocity;
+            }
+            else if (Source != null)
+            {
+                Source.GetVelocity(out float vx, out float vy, out float vz);
+                velocity = new Vec3(vx, vy, vz);
+            }
+
+            if (Movement != null || Source != null)
+            {
+                if (Movement != null && Movement.State.IsCrouching)
+                    flags |= ActorStateFlags.IsCrouching;
 
                 // Sprinting is derived rather than stored: the simulation has no sprint flag on
                 // its state, only a speed, and reporting "moving faster than a walk" is what the
                 // client actually animates from.
-                float horizontal = Movement.State.Velocity.X * Movement.State.Velocity.X
-                                 + Movement.State.Velocity.Z * Movement.State.Velocity.Z;
+                float horizontal = velocity.X * velocity.X + velocity.Z * velocity.Z;
 
                 float walk = MovementSimulation.WalkSpeed;
                 if (horizontal > walk * walk * 1.05f) flags |= ActorStateFlags.IsSprinting;

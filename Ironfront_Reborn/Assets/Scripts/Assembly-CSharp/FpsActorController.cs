@@ -733,6 +733,18 @@ public class FpsActorController : ActorController
 
 	private void FixedUpdate()
 	{
+		// A network client does not own the body's grounded/ragdoll state. Its CharacterController
+		// is deliberately decoupled from the server transform while prediction/reconciliation is
+		// running, so isGrounded can remain false on perfectly valid authoritative terrain. Letting
+		// the offline 1.5-second airborne detector run here made every movement correction call
+		// Actor.FallOver(): the player stood up, moved, fell over, and repeated forever at 100 HP.
+		// Server death/respawn messages already own the client-side ragdoll lifecycle.
+		if (NetContext.IsClient)
+		{
+			hasNotBeenGroundedAction.Start();
+			return;
+		}
+
 		if (!characterController.enabled || characterController.isGrounded || actor.fallenOver || actor.dead || actor.IsSeated())
 		{
 			hasNotBeenGroundedAction.Start();
