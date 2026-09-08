@@ -672,6 +672,23 @@ public class FpsActorController : ActorController
 		}
 
 		EnableInput();
+
+		// The prefab deliberately ships its network clock disabled so an offline game and the
+		// parked pre-deploy body do not start producing C_INPUT.  Lane B used to be the only
+		// caller that enabled it, which made the automated clients move and throw grenades while
+		// the real menu/deploy flow never sent a single input frame.  The visible symptom was a
+		// live first-person weapon that could play its local muzzle flash, but WASD left the body
+		// fixed and a locally thrown grenade never received the server explosion that owns its
+		// detonation.  Deployment is the authority boundary at which this body becomes playable,
+		// so start the clock here and leave it running through death: SimulationEnabled above
+		// turns dead/seated input into neutral frames while keeping acknowledgements current.
+		Ironfront.Net.Unity.NetPredictionClock networkClock =
+			GetComponent<Ironfront.Net.Unity.NetPredictionClock>();
+		if (networkClock != null)
+		{
+			networkClock.enabled = true;
+		}
+
 		FirstPersonCamera();
 		ForceEndCrouch();
 		deployedView = true;

@@ -679,9 +679,10 @@ namespace Ironfront.Net.Unity.Diagnostics
 
             clock.InputSource = BuildMoveInput;
 
-            // Ships disabled (checklist A4). While it is disabled OnTickSimulated never fires,
-            // so ClientPredictionStage sends no C_INPUT and the client is a spectator.
-            clock.enabled = true;
+            // Deliberately do not enable the clock here. It ships disabled while the body is
+            // parked before deploy, and the real FpsActorController deployment path owns the
+            // transition to an input-producing player. Keeping lane B on that same path prevents
+            // automated clients from hiding a regression where keyboard players send no C_INPUT.
 
             _installed = true;
             Debug.Log($"[lane-b] installed programme '{programme.name}' "
