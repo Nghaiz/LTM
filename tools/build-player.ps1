@@ -45,6 +45,17 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
+# Capture source cleanliness BEFORE build-libs replaces the tracked plugin binaries. Managed
+# assemblies contain a new PE/MVID on each successful compilation, so testing afterwards makes
+# every otherwise-clean build report -dirty merely because this script performed its required
+# first step. Real source or prefab edits are still included in this project-scoped snapshot.
+$unityProjectDirtyBeforeLibraryBuild = $false
+try {
+    $unityProjectDirtyBeforeLibraryBuild =
+        [bool](& git -C $repoRoot status --porcelain -- Ironfront_Reborn 2>$null)
+}
+catch { }
+
 # Rebuild the complete Unity plugin closure before opening the Editor. PROTOCOL_VERSION is a
 # const, so its value is inlined into dependent assemblies such as Ironfront.MasterClient.dll.
 # Copying only Ironfront.Net.Protocol.dll can therefore produce a player whose game protocol is
@@ -191,7 +202,7 @@ if ($commit) {
     # 2026-09-06) reported -dirty because of two stray test-result XMLs in tmp/. The binary
     # matched its commit exactly. A flag that fires on scratch is a flag nobody reads by the
     # second day, which would have cost more than the flag is worth.
-    $dirty  = [bool](& git -C $repoRoot status --porcelain -- Ironfront_Reborn)
+    $dirty = $unityProjectDirtyBeforeLibraryBuild
     $builtAtUtc = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
     if ($dirty) {

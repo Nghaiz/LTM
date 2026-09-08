@@ -176,6 +176,8 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 
 	private Action crashDamageCooldown = new Action(0.2f);
 
+	private float networkCrashDamageNotBefore;
+
 	private Action drainClaimAction = new Action(10f);
 
 	[NonSerialized]
@@ -292,6 +294,7 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 
 	protected virtual void Awake()
 	{
+		networkCrashDamageNotBefore = Time.time + 5f;
 		rigidbody = GetComponent<Rigidbody>();
 		audio = GetComponent<AudioSource>();
 		ActorManager.RegisterVehicle(this);
@@ -984,6 +987,13 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 
 	private void OnCollisionEnter(Collision c)
 	{
+		// Network vehicles are instantiated into a live PhysX world. Let them settle on their
+		// authored pads before collision damage is authoritative; otherwise touching the ground
+		// or a neighbouring spawn in the first frames starts the burn ladder for every client.
+		if (NetContext.IsServer && Time.time < networkCrashDamageNotBefore)
+		{
+			return;
+		}
 		float num = Mathf.Abs(Vector3.Dot(c.relativeVelocity, c.contacts[0].normal));
 		if (crashDamageCooldown.TrueDone() && num > crashDamageSpeedThrehshold && c.collider.gameObject.layer != 8 && c.collider.gameObject.layer != 10)
 		{

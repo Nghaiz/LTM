@@ -158,6 +158,7 @@ namespace Ironfront.Net.Unity.Client
         private bool _ragdollApplied;
         private byte _appliedWeaponId = byte.MaxValue;
         private IGameplayWeapon _activeWeapon;
+        private IRemoteActorPresentation _presentation;
 
         /// <summary>The network actor id this body is currently drawing.</summary>
         public ushort ActorId { get; private set; }
@@ -231,6 +232,7 @@ namespace Ironfront.Net.Unity.Client
 
             _teamRenderer = GetComponentInChildren<SkinnedMeshRenderer>(true);
             CreateFallbackMuzzleFlash();
+            _presentation = NetClientBindings.ResolveRemoteActorPresentation(gameObject);
 
             if (_actor == null) return;
 
@@ -506,7 +508,9 @@ namespace Ironfront.Net.Unity.Client
 
             if (!HasActor)
             {
-                _activeWeapon = null;
+                _activeWeapon = _presentation != null && _presentation.Exists
+                    ? _presentation.EquipWeapon(weaponId, _muzzleAnchor)
+                    : null;
                 return;
             }
 
@@ -538,6 +542,10 @@ namespace Ironfront.Net.Unity.Client
         {
             if (team == _appliedTeam) return;
             _appliedTeam = team;
+
+            if (_presentation != null && _presentation.Exists)
+                _presentation.ApplyTeam(team);
+
             if (_teamRenderer == null) return;
 
             int rgb = NetClientBindings.TeamColourRgb(team);

@@ -188,6 +188,7 @@ public class FpsActorController : ActorController
 
 		clock.CombatButtonSource = () => (Ironfront.Net.Protocol.InputButtons)inputSource.Buttons;
 		clock.AimPitchSource = () => inputSource.Pitch;
+		clock.SimulationEnabled = () => inputEnabled && actor != null && !actor.dead && !actor.IsSeated();
 	}
 
 	private void Awake()
@@ -215,6 +216,7 @@ public class FpsActorController : ActorController
 		}
 
 		controller = GetComponent<FirstPersonController>();
+		controller.externalMovementAuthority = NetContext.IsClient;
 		characterController = GetComponent<CharacterController>();
 		thirdpersonRenderers = actor.ragdoll.AnimatedRenderers();
 		fpCameraParent = fpCamera.transform.parent;

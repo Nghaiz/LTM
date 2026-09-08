@@ -74,6 +74,9 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>Whether the deploy screen is raised, so show and hide each fire once.</summary>
         private bool _deployShown;
 
+        /// <summary>True only after this local actor received an explicit S_DEATH.</summary>
+        private bool _hasObservedLocalDeath;
+
         /// <summary>
         /// True until this connection's own first successful <see cref="RequestRespawn"/>.
         /// </summary>
@@ -763,6 +766,11 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         private void OnDeathMessage(DeathMessage message)
         {
+            if (message.VictimActorId != _state.LocalActorId) return;
+
+            // The initial parked snapshot is dead state but is not a kill. Only S_DEATH may
+            // raise the authored "YOU WERE KILLED" overlay.
+            _hasObservedLocalDeath = true;
             if (!_state.ApplyDeath(in message, Time.time)) return;
 
             // Recorded here rather than read in OnDied, because OnDied is raised from INSIDE
@@ -836,6 +844,7 @@ namespace Ironfront.Net.Unity.Client
             }
 
             _inputSuppressedByDeath = false;
+            _hasObservedLocalDeath = false;
             EnterDeployedView();
         }
 
@@ -920,7 +929,7 @@ namespace Ironfront.Net.Unity.Client
             // gate above still uses OwesDeploy, and the first spawn's request now comes from the
             // loadout screen's own Deploy (LoadoutDeployPressed) -- the screen the player is
             // actually looking at then, and the one that chose the loadout the request carries.
-            if (_state.IsAlive)
+            if (_state.IsAlive || !_hasObservedLocalDeath)
             {
                 if (!_deployShown) return;
 

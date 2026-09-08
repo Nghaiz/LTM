@@ -61,6 +61,7 @@ namespace Ironfront.Net.Unity.Bindings
             // to authored assets that this refactor is forbidden from making.
             NetClientBindings.VehicleBodyResolver = ResolveVehicleBody;
             NetClientBindings.ProjectileBodyResolver = ResolveProjectileBody;
+            NetClientBindings.RemoteActorPresentationResolver = ResolveRemoteActorPresentation;
             NetClientBindings.VehiclePrefabs = new SceneVehiclePrefabDirectory();
             NetClientBindings.Decals = new DecalSinkBinding();
             NetClientBindings.Objectives = new ScoreUiObjectiveHud();
@@ -86,6 +87,83 @@ namespace Ironfront.Net.Unity.Bindings
         /// predefined assembly no asmdef may reference. Null on a body that carries none, which
         /// the shadow comparison reads as "cannot score this run". Phase C4d.
         /// </summary>
+        private static IRemoteActorPresentation ResolveRemoteActorPresentation(GameObject gameObject)
+            => gameObject != null ? new RemoteActorPresentationBinding(gameObject) : null;
+
+        /// <summary>
+        /// Gives the lightweight network skeleton the same team materials and authored
+        /// third-person weapon models used by Ravenfield's AI actors.
+        /// </summary>
+        private sealed class RemoteActorPresentationBinding : IRemoteActorPresentation
+        {
+            private readonly GameObject _body;
+            private readonly Renderer[] _teamRenderers;
+            private Weapon _weapon;
+            private byte _weaponId = byte.MaxValue;
+
+            internal RemoteActorPresentationBinding(GameObject body)
+            {
+                _body = body;
+                _teamRenderers = body.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            }
+
+            public bool Exists => _body != null;
+
+            public void ApplyTeam(byte team)
+            {
+                if (!Exists || team == Ironfront.Net.Protocol.TeamId.None) return;
+
+                Color colour = ColorScheme.TeamColor(team);
+                for (int i = 0; i < _teamRenderers.Length; i++)
+                {
+                    Renderer renderer = _teamRenderers[i];
+                    if (renderer != null) renderer.material.color = colour;
+                }
+            }
+
+            public IGameplayWeapon EquipWeapon(byte networkId, Transform weaponParent)
+            {
+                if (_weaponId == networkId && _weapon != null) return _weapon;
+
+                if (_weapon != null) UnityEngine.Object.Destroy(_weapon.gameObject);
+                _weapon = null;
+                _weaponId = networkId;
+
+                if (!Exists || weaponParent == null
+                    || !WeaponManager.TryGetEntry(networkId, out WeaponManager.WeaponEntry entry)
+                    || entry == null || entry.prefab == null)
+                    return null;
+
+                GameObject instance = UnityEngine.Object.Instantiate(entry.prefab);
+                _weapon = instance != null ? instance.GetComponent<Weapon>() : null;
+                if (_weapon == null)
+                {
+                    if (instance != null) UnityEngine.Object.Destroy(instance);
+                    return null;
+                }
+
+                _weapon.NetworkId = networkId;
+                _weapon.gameObject.name = entry.name + " (remote)";
+
+                if (_weapon.animator != null) UnityEngine.Object.Destroy(_weapon.animator);
+                if (_weapon.thirdPersonTransform != null)
+                {
+                    _weapon.thirdPersonTransform.localEulerAngles = new Vector3(0f, 0f, -90f);
+                    _weapon.thirdPersonTransform.localPosition = _weapon.thirdPersonOffset;
+                    float scale = _weapon.thirdPersonScale;
+                    _weapon.thirdPersonTransform.localScale = new Vector3(scale, scale, scale);
+                }
+
+                _weapon.CullFpsObjects();
+                _weapon.FindRenderers(true);
+                _weapon.transform.SetParent(weaponParent, false);
+                _weapon.transform.localPosition = Vector3.zero;
+                _weapon.transform.localRotation = Quaternion.identity;
+                _weapon.Show();
+                return _weapon;
+            }
+        }
+
         private static ILegacyMovementProbe ResolveLegacyMovement(GameObject gameObject)
         {
             if (gameObject == null) return null;

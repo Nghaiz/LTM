@@ -26,8 +26,8 @@ namespace Ironfront.Net.Unity.Server
     public static class ServerCombatEvents
     {
         /// <summary>
-        /// Reports that a non-hitscan damage source killed an actor: a bot's bullet, a
-        /// grenade, a fall, a vehicle.
+        /// Reports that the original gameplay damage path killed an actor: a bot's bullet, a
+        /// grenade, a fall, or a vehicle.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -43,9 +43,16 @@ namespace Ironfront.Net.Unity.Server
         /// </remarks>
         /// <param name="victim">The actor that just died.</param>
         /// <param name="impactForce">The blow that killed it, for each client's own ragdoll.</param>
+        /// <param name="attacker">
+        /// The actor that fired the projectile or caused the blast. Null is reserved for a real
+        /// environmental death, so ordinary bot combat is not mislabeled as "The world".
+        /// </param>
         /// <param name="cause">What killed it, for the killfeed.</param>
         public static void ReportDeath(
-            Component victim, Vector3 impactForce, CauseOfDeath cause = CauseOfDeath.Bullet)
+            Component victim,
+            Vector3 impactForce,
+            Component attacker = null,
+            CauseOfDeath cause = CauseOfDeath.Bullet)
         {
             if (!NetContext.IsServer) return;
             if (victim == null) return;
@@ -56,9 +63,16 @@ namespace Ironfront.Net.Unity.Server
             var replicated = victim.GetComponent<NetServerActor>();
             if (replicated == null) return;
 
+            ushort killerActorId = DeathMessage.EnvironmentKiller;
+            if (attacker != null)
+            {
+                var replicatedAttacker = attacker.GetComponent<NetServerActor>();
+                if (replicatedAttacker != null) killerActorId = replicatedAttacker.ActorId;
+            }
+
             loop.EmitDeath(
                 replicated.ActorId,
-                DeathMessage.EnvironmentKiller,
+                killerActorId,
                 MovementSimulation.ToCore(impactForce),
                 (byte)HitboxType.Body,
                 cause);

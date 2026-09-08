@@ -365,7 +365,7 @@ namespace Ironfront.Net.Unity.Server
             Actor.Health = 0f;
             Actor.IsAlive = false;
 
-            ServerCombatEvents.ReportDeath(Actor, Vector3.zero, CauseOfDeath.Fall);
+            ServerCombatEvents.ReportDeath(Actor, Vector3.zero, cause: CauseOfDeath.Fall);
 
             _combat?.TryRespawn(this);
         }

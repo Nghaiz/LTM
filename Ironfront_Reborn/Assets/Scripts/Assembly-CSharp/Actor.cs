@@ -1040,6 +1040,16 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 	//              feedback that waited for a round trip would feel broken at any real ping.
 	public override bool Damage(float healthDamage, float balanceDamage, bool piercing, Vector3 point, Vector3 direction, Vector3 impactForce)
 	{
+		return DamageAttributed(healthDamage, balanceDamage, piercing, point, direction, impactForce, null);
+	}
+
+	/// <summary>
+	/// The stock damage path plus the actor that caused it. Projectiles and explosions know this
+	/// at their call site; keeping it as an argument prevents a non-lethal hit from leaving stale
+	/// attribution behind for a later fall or collision.
+	/// </summary>
+	public bool DamageAttributed(float healthDamage, float balanceDamage, bool piercing, Vector3 point, Vector3 direction, Vector3 impactForce, Actor attacker)
+	{
 		bool flag = IsSeated() && seat.enclosed;
 		if (!piercing && flag)
 		{
@@ -1070,7 +1080,7 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		if (ownsHealth && health <= 0f)
 		{
 			Die(impactForce);
-			Ironfront.Net.Unity.Server.ServerCombatEvents.ReportDeath(this, impactForce);
+			Ironfront.Net.Unity.Server.ServerCombatEvents.ReportDeath(this, impactForce, attacker);
 		}
 		else if (ragdoll.IsRagdoll())
 		{

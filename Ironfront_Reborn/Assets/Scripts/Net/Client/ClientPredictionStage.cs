@@ -148,6 +148,11 @@ namespace Ironfront.Net.Unity.Client
             if (_controller == null || _controller.enabled) return;
             if (IsSeated) return;
 
+            // A parked/dead body belongs to the loadout or death UI. Re-enabling the capsule
+            // here made it fall from the prefab park before the server granted a deploy.
+            if (NetClientBindings.LocalPlayer.Exists
+                && !NetClientBindings.LocalPlayer.IsInputEnabled) return;
+
             _controller.enabled = true;
         }
 

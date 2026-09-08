@@ -501,6 +501,10 @@ namespace Ironfront.Net.Unity.Server
 
             if (IsAiming) flags |= ActorStateFlags.IsAiming;
 
+            if (ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(
+                    _actorId, out _, out _))
+                flags |= ActorStateFlags.IsSeated;
+
             if (Movement != null)
             {
                 if (Movement.State.IsCrouching) flags |= ActorStateFlags.IsCrouching;

@@ -15,6 +15,11 @@ namespace UnityStandardAssets.Characters.FirstPerson
 		[NonSerialized]
 		public bool inputEnabled = true;
 
+		// NetPredictionClock owns translation on a multiplayer client. This component stays
+		// enabled for mouse-look, head bob and footsteps, but must not move the same capsule too.
+		[NonSerialized]
+		public bool externalMovementAuthority;
+
 		[SerializeField]
 		private bool m_IsWalking;
 
@@ -186,6 +191,12 @@ namespace UnityStandardAssets.Characters.FirstPerson
 		{
 			float speed;
 			GetInput(out speed);
+			if (externalMovementAuthority)
+			{
+				ProgressStepCycle(speed);
+				UpdateCameraPosition(speed);
+				return;
+			}
 			Vector3 forward = cameraParent.forward;
 			forward.y = 0f;
 			forward = forward.normalized;

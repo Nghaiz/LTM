@@ -643,7 +643,7 @@ public class ActorManager : MonoBehaviour
 				// actor's reaction is the snapshot's to describe.
 				if (!isClient)
 				{
-					item.Damage(configuration.damage * num, configuration.balanceDamage * num2, false, item.CenterPosition(), vector.normalized, vector.normalized * configuration.force * num2);
+					item.DamageAttributed(configuration.damage * num, configuration.balanceDamage * num2, false, item.CenterPosition(), vector.normalized, vector.normalized * configuration.force * num2, source);
 					result = true;
 				}
 			}
