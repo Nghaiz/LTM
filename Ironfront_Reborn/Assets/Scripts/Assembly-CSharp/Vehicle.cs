@@ -301,6 +301,19 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 		// Through ApplyHealth like every other write, so there is exactly one assignment to
 		// health in this file and no second copy of the ladder to drift from it.
 		ApplyHealth(maxHealth, 0f, NoAttacker);
+		// Tank and helicopter author their damage smoke with Play On Awake. ApplyHealth's edge
+		// cache also starts false, so a full-health spawn previously saw "false == false" and
+		// never issued Stop(): every fresh vehicle looked as if it was already burning. Seed the
+		// presentation explicitly; later transitions remain edge-triggered in ApplyHealth.
+		damageParticlesOn = false;
+		if (damageParticles != null)
+		{
+			damageParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+		}
+		if (burnParticles != null)
+		{
+			burnParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+		}
 		colliders = GetComponentsInChildren<Collider>();
 		if (HasBlockSensor())
 		{
