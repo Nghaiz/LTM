@@ -285,6 +285,11 @@ try {
         $env:IRONFRONT_GAMESERVER_SCENE     = $spec.Scene
         $env:IRONFRONT_GAMESERVER_MAP_IDS   = "$($spec.MapId)"
         $env:IRONFRONT_GAMESERVER_ACCEPT_UNSIGNED_TICKETS = "0"
+        # Manual playtests are diagnosis runs. These two switches make every accepted/rejected
+        # trigger and loadout adoption visible in game-server*.log, which lets a report such as
+        # "the gun fired but health did not move" be separated into aim, hitbox and state faults.
+        $env:IRONFRONT_LOG_SHOTS             = "1"
+        $env:IRONFRONT_LOG_LOADOUT           = "1"
 
         Write-Host "[playtest] starting game server (udp $($spec.Port), scene $($spec.Scene), map id $($spec.MapId))"
         $server = Start-Process -FilePath $player -PassThru `

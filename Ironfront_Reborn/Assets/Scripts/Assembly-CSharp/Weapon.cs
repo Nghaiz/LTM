@@ -359,7 +359,7 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 		return user.RemoveSpareAmmo(count, slot);
 	}
 
-	private void AmmoChanged()
+	protected void AmmoChanged()
 	{
 		user.AmmoChanged();
 		if (HasActiveAnimator())

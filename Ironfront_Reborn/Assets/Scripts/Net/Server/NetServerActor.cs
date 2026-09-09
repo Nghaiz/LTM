@@ -564,9 +564,22 @@ namespace Ironfront.Net.Unity.Server
         /// </remarks>
         public HitboxSet CaptureHitboxes()
         {
-            Vec3 feet = Movement != null
-                ? Movement.State.Position
-                : MovementSimulation.ToCore(transform.position);
+            Vec3 feet;
+            if (Movement != null)
+            {
+                MoveState state = Movement.State;
+                float halfCapsule = MovementCore.HeightFor(state.IsCrouching) * 0.5f;
+                feet = new Vec3(
+                    state.Position.X,
+                    state.Position.Y - halfCapsule,
+                    state.Position.Z);
+            }
+            else
+            {
+                // The original AI actor uses a feet/root pivot (Actor.SpawnAt writes the ground
+                // position directly), unlike the network player CharacterController above.
+                feet = MovementSimulation.ToCore(transform.position);
+            }
 
             return HitboxSet.Humanoid(in feet);
         }

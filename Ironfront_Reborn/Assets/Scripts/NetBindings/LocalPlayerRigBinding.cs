@@ -200,6 +200,25 @@ namespace Ironfront.Net.Unity.Bindings
         }
 
         /// <inheritdoc/>
+        public void ApplyAuthoritativeCombat(byte health, byte weaponId, byte ammoInClip)
+        {
+            FpsActorController local = FpsActorController.instance;
+            if (local == null || local.actor == null) return;
+
+            Actor actor = local.actor;
+            actor.health = health;
+
+            Weapon weapon = actor.activeWeapon;
+            if (weapon != null && weapon.NetworkId == weaponId)
+                weapon.ammo = ammoInClip;
+
+            // These singleton calls are presentation only and are absent during scene teardown.
+            if (IngameUi.instance == null) return;
+            actor.UpdateHealthUi();
+            if (weapon != null) actor.UpdateAmmoUi();
+        }
+
+        /// <inheritdoc/>
         public void GetChosenLoadout(
             out byte primary, out byte secondary, out byte gear1, out byte gear2, out byte gear3)
         {

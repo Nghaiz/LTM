@@ -277,6 +277,12 @@ namespace Ironfront.Net.Unity
         void FellBody(Vector3 force, HumanBodyBones bone);
 
         /// <summary>
+        /// Applies the server's authoritative health and active-weapon clip to the local Ravenfield
+        /// body and HUD. Implementations without a gameplay body may keep the default no-op.
+        /// </summary>
+        void ApplyAuthoritativeCombat(byte health, byte weaponId, byte ammoInClip) { }
+
+        /// <summary>
         /// Reads this rig's currently chosen loadout as weapon network ids, one per slot. 0
         /// means the slot is empty or unset. All zero when the rig is absent.
         /// </summary>

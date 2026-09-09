@@ -153,7 +153,7 @@ try {
     Write-Host "Copied $($libs.Count) library DLL(s) + $($copiedDeps.Count) dependency/dependencies into $plugin"
 
     foreach ($s in $skipped) {
-        Write-Host "  skipped $s — Unity's netstandard2.1 profile provides it. Re-run with -IncludeBclFacades if Unity reports the types as missing rather than as duplicated."
+        Write-Host "  skipped $s - Unity netstandard2.1 profile provides it. Re-run with -IncludeBclFacades if Unity reports the types as missing rather than as duplicated."
     }
 }
 finally {

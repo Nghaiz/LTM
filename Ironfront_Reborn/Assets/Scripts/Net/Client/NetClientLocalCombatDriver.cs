@@ -709,6 +709,10 @@ namespace Ironfront.Net.Unity.Client
 
             _state.ApplySnapshot(in entry, Time.time);
 
+            ILocalPlayerRig rig = NetClientBindings.LocalPlayer;
+            if (rig != null && rig.Exists)
+                rig.ApplyAuthoritativeCombat(_state.Health, _state.WeaponId, _state.AmmoInClip);
+
             AdoptAlreadyAliveBody(in entry);
         }
 

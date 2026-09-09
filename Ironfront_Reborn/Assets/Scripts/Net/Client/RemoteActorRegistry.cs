@@ -55,6 +55,10 @@ namespace Ironfront.Net.Unity.Client
         private readonly Dictionary<ushort, RemoteActorView> _views =
             new Dictionary<ushort, RemoteActorView>(ProtocolConstants.MAX_ACTORS);
 
+        // Network-player positions are CharacterController centres; original AI positions are
+        // feet/root pivots. S_SPAWN_ACTOR's IsBot bit preserves that distinction for rendering.
+        private readonly HashSet<ushort> _centrePivotActors = new HashSet<ushort>();
+
         /// <summary>Actors currently drawn.</summary>
         public int LiveCount => _live.Count;
 
@@ -153,8 +157,19 @@ namespace Ironfront.Net.Unity.Client
 
             foreach (KeyValuePair<ushort, Transform> pair in _live)
             {
+                bool hasEntry = to.TryFind(pair.Key, out ActorSnapshotEntry entry);
+
                 if (SnapshotInterpolator.TryLerpPosition(from, to, alpha, pair.Key, out Vec3 p))
-                    pair.Value.position = new Vector3(p.X, p.Y, p.Z);
+                {
+                    float y = p.Y;
+                    if (_centrePivotActors.Contains(pair.Key))
+                    {
+                        bool crouching = hasEntry
+                            && (entry.StateFlags & ActorStateFlags.IsCrouching) != 0;
+                        y -= MovementCore.HeightFor(crouching) * 0.5f;
+                    }
+                    pair.Value.position = new Vector3(p.X, y, p.Z);
+                }
 
                 if (SnapshotInterpolator.TryLerpYaw(from, to, alpha, pair.Key, out float yaw))
                     pair.Value.rotation = Quaternion.Euler(0f, yaw, 0f);
@@ -163,7 +178,7 @@ namespace Ironfront.Net.Unity.Client
                 // -- was decoded and discarded until phase-V10. It is read from `to` rather than
                 // interpolated: these are discrete states, and lerping a crouch is meaningless.
                 if (!_views.TryGetValue(pair.Key, out RemoteActorView view) || view == null) continue;
-                if (to.TryFind(pair.Key, out ActorSnapshotEntry entry)) view.Apply(in entry);
+                if (hasEntry) view.Apply(in entry);
 
                 // P3 task 3.4. Team arrives with the snapshot, not with the spawn, so the
                 // colour is written every frame rather than once. SetMarker is idempotent by
@@ -205,14 +220,20 @@ namespace Ironfront.Net.Unity.Client
             // the centimetre. Nothing was wrong with the wire, the interest manager or the
             // decoder. The scripted aim solver reported `resolved: true` and fired 240 rounds
             // into open sky, and a human's crosshair would have done the same.
+            float spawnY = Quantize.UnpackPos(message.PosY);
+            if (!message.IsBot)
+                spawnY -= MovementCore.HeightFor(crouching: false) * 0.5f;
+
             t.position = new Vector3(
                 Quantize.UnpackPos(message.PosX),
-                Quantize.UnpackPos(message.PosY),
+                spawnY,
                 Quantize.UnpackPos(message.PosZ));
             t.rotation = Quaternion.Euler(0f, Quantize.UnpackYaw(message.Yaw), 0f);
 
             t.gameObject.SetActive(true);
             _live[message.ActorId] = t;
+            if (message.IsBot) _centrePivotActors.Remove(message.ActorId);
+            else _centrePivotActors.Add(message.ActorId);
 
             // P3 task 3.4. The icon is bound HERE rather than waiting for the first snapshot,
             // because an actor past InterestManager.CullRadius may never appear in a snapshot at
@@ -328,6 +349,7 @@ namespace Ironfront.Net.Unity.Client
 
             _live.Remove(message.ActorId);
             _views.Remove(message.ActorId);
+            _centrePivotActors.Remove(message.ActorId);
 
             // BEFORE the transform goes back to the pool. The marker is keyed by that
             // transform, and the pool hands the same one to the NEXT actor -- so a marker left

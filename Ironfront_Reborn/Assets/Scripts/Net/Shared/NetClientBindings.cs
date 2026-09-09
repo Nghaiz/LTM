@@ -280,6 +280,7 @@ namespace Ironfront.Net.Unity
             public void ApplyScreenshake(float magnitude, int iterations) { }
             public bool HasFellableBody => false;
             public void FellBody(Vector3 force, HumanBodyBones bone) { }
+            public void ApplyAuthoritativeCombat(byte health, byte weaponId, byte ammoInClip) { }
         }
     }
 }

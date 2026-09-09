@@ -128,6 +128,15 @@ namespace Ironfront.Net.Unity.Client
 
             ProjectileApplyResult result = _tracker.Apply(in message, NetContext.CurrentTick);
 
+            if (message.Kind == ProjectileKind.Grenade)
+            {
+                Debug.Log($"[net] grenade {message.ProjectileId} from actor "
+                          + $"{message.OwnerActorId}: {result.Action}, age "
+                          + $"{result.FastForwardedTicks} ticks, remaining "
+                          + $"{result.RemainingLifetimeSeconds:F2}s, position "
+                          + $"{result.Position.X:F2},{result.Position.Y:F2},{result.Position.Z:F2}");
+            }
+
             if (result.Action == ProjectileApplyAction.Ignore)
             {
                 Despawn(result.ProjectileId);
@@ -154,6 +163,9 @@ namespace Ironfront.Net.Unity.Client
             if (prefab == null)
             {
                 UnrenderableKinds++;
+                if (message.Kind == ProjectileKind.Grenade)
+                    Debug.LogError("[net] grenade spawn has no client prefab; the explosion can "
+                                   + "arrive but the thrown grenade cannot be drawn.");
                 return;
             }
 
@@ -188,6 +200,11 @@ namespace Ironfront.Net.Unity.Client
                 }
 
                 _spawned[result.ProjectileId] = projectile;
+            }
+            else if (message.Kind == ProjectileKind.Grenade)
+            {
+                Debug.LogError($"[net] grenade prefab '{prefab.name}' has no projectile body; "
+                               + "the instantiated mesh cannot follow authoritative flight.");
             }
         }
 

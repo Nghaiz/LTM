@@ -308,8 +308,12 @@ namespace Ironfront.Net.Replication.Tests
         [Fact]
         public void AShotOriginatesAtEyeHeightAndDropsWhenCrouched()
         {
-            var standing = MoveState.AtRest(Vec3.Zero);
-            MoveState crouched = MoveState.AtRest(Vec3.Zero);
+            // MoveState.Position is the centre of the CharacterController capsule. Put both
+            // stances on ground y=0, then assert the resulting world-space eye height.
+            var standing = MoveState.AtRest(
+                new Vec3(0f, MovementCore.StandHeight * 0.5f, 0f));
+            MoveState crouched = MoveState.AtRest(
+                new Vec3(0f, MovementCore.CrouchHeight * 0.5f, 0f));
             crouched.IsCrouching = true;
 
             InputFrame frame = Frame(InputButtons.None);
@@ -342,6 +346,8 @@ namespace Ironfront.Net.Replication.Tests
 
             var crouching = new CombatFixture(victimFeet: elevated);
             crouching.State.IsCrouching = true;
+            crouching.State.Position = new Vec3(
+                0f, MovementCore.CrouchHeight * 0.5f, 0f);
             CombatTickResult miss = crouching.Step(now: 10f, InputButtons.Fire);
 
             Assert.Equal(1, hit.HitCount);
@@ -361,6 +367,8 @@ namespace Ironfront.Net.Replication.Tests
 
             var crouching = new CombatFixture(victimFeet: onTheGround);
             crouching.State.IsCrouching = true;
+            crouching.State.Position = new Vec3(
+                0f, MovementCore.CrouchHeight * 0.5f, 0f);
             CombatTickResult low = crouching.Step(now: 10f, InputButtons.Fire);
 
             Assert.Equal(HitboxType.Head, standing.Hits[0].HitboxType);
@@ -608,7 +616,8 @@ namespace Ironfront.Net.Replication.Tests
                 Authority = new ServerCombatAuthority(Resolver, Sink, RespawnGate);
 
                 Weapon = WeaponRuntimeState.Loaded(in _config);
-                State = MoveState.AtRest(Vec3.Zero);
+                State = MoveState.AtRest(
+                    new Vec3(0f, MovementCore.StandHeight * 0.5f, 0f));
                 Hits = new HitResult[Math.Max(1, _config.ProjectilesPerShot)];
 
                 Sink.SetHealth(Victim, 100f);
