@@ -65,6 +65,11 @@ param(
     # the kind of friction that stops a playtest happening at all.
     [switch] $FreshDb,
 
+    # Per-trigger diagnostics are intentionally opt-in. Unity appends a native stack trace to
+    # every Debug.Log call in a player log; with two held triggers this can generate thousands of
+    # disk writes and starve the UDP pump, making damage and snapshots look seconds late.
+    [switch] $VerboseGameplayLogs,
+
     # Kill a leaked master / game server / clients from an earlier run, then exit.
     [switch] $Stop,
 
@@ -285,11 +290,16 @@ try {
         $env:IRONFRONT_GAMESERVER_SCENE     = $spec.Scene
         $env:IRONFRONT_GAMESERVER_MAP_IDS   = "$($spec.MapId)"
         $env:IRONFRONT_GAMESERVER_ACCEPT_UNSIGNED_TICKETS = "0"
-        # Manual playtests are diagnosis runs. These two switches make every accepted/rejected
-        # trigger and loadout adoption visible in game-server*.log, which lets a report such as
-        # "the gun fired but health did not move" be separated into aim, hitbox and state faults.
-        $env:IRONFRONT_LOG_SHOTS             = "1"
-        $env:IRONFRONT_LOG_LOADOUT           = "1"
+        # Per-trigger logging is useful for a short diagnosis capture, but is far too expensive
+        # for a normal match because Unity also writes a stack trace for every line.
+        if ($VerboseGameplayLogs) {
+            $env:IRONFRONT_LOG_SHOTS   = "1"
+            $env:IRONFRONT_LOG_LOADOUT = "1"
+        }
+        else {
+            Remove-Item Env:IRONFRONT_LOG_SHOTS -ErrorAction SilentlyContinue
+            Remove-Item Env:IRONFRONT_LOG_LOADOUT -ErrorAction SilentlyContinue
+        }
 
         Write-Host "[playtest] starting game server (udp $($spec.Port), scene $($spec.Scene), map id $($spec.MapId))"
         $server = Start-Process -FilePath $player -PassThru `

@@ -218,9 +218,11 @@ namespace Ironfront.Net.Unity.Client
                 return;
             }
 
+            if (!effect.gameObject.activeSelf) effect.gameObject.SetActive(true);
+            effect.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             effect.transform.position = position;
             effect.transform.localScale = Vector3.one * Mathf.Max(radiusMetres, 0.01f);
-            effect.Play();
+            effect.Play(true);
         }
 
         /// <summary>

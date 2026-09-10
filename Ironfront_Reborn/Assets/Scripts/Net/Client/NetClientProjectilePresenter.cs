@@ -180,6 +180,10 @@ namespace Ironfront.Net.Unity.Client
                 // Since C4b the seam simply does not expose it, so that is structural rather
                 // than a comment asking nicely.
                 projectile.SetNetProjectileId(result.ProjectileId);
+                // Instantiate happens before Projectile.Start in this frame. Apply the actual
+                // authoritative velocity now as well as on later re-seats so rigidbody-backed
+                // grenades do not sit invisibly at the spawn point for their first rendered step.
+                projectile.ApplyNetVelocity(ToUnity(result.Velocity));
 
                 // A grenade's fuse counts from the launch tick, so both sides detonate on the
                 // same integer rather than on whichever frame each side's own float crossed.

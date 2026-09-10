@@ -417,6 +417,7 @@ namespace Ironfront.Net.Unity.Client
             // moves health. It stamps a local cooldown and decrements a predicted clip that the
             // next snapshot reconciles.
             if (_state.IsAlive && FirePressed()) _state.PredictFire(Time.time);
+            if (_state.IsAlive && ReloadPressed()) _state.BeginReload(Time.time);
 
             // Two ways in, and the keyboard is still first so a human press costs no lookup.
             //
@@ -649,6 +650,14 @@ namespace Ironfront.Net.Unity.Client
             if (input == null) return false;
 
             return (input.Buttons & (ushort)InputButtons.Fire) != 0;
+        }
+
+        private static bool ReloadPressed()
+        {
+            IInputSource input = NetClientBindings.LocalPlayer.InputSource;
+            if (input == null) return false;
+
+            return (input.Buttons & (ushort)InputButtons.Reload) != 0;
         }
 
         /// <summary>

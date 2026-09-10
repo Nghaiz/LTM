@@ -159,6 +159,7 @@ namespace Ironfront.Net.Unity.Client
         private byte _appliedWeaponId = byte.MaxValue;
         private IGameplayWeapon _activeWeapon;
         private IRemoteActorPresentation _presentation;
+        private bool _hiddenForDeath;
 
         /// <summary>The network actor id this body is currently drawing.</summary>
         public ushort ActorId { get; private set; }
@@ -388,6 +389,15 @@ namespace Ironfront.Net.Unity.Client
             _state    = RemoteActorVisualState.From(in entry);
             _hasState = true;
 
+            // A proxy without the original Actor/ragdoll rig is hidden on its death event. Spawn
+            // announcements are lifetime announcements, not respawn announcements, so the same
+            // proxy must become visible again when a later snapshot says the actor is alive.
+            if (_state.IsAlive && _hiddenForDeath)
+            {
+                _hiddenForDeath = false;
+                _presentation?.SetVisible(true);
+            }
+
             ApplyWeapon(_state.WeaponId);
             ApplyTeam(_state.Team);
             ApplyPitch(_state.PitchDegrees);
@@ -409,6 +419,16 @@ namespace Ironfront.Net.Unity.Client
             }
 
             ApplyRagdoll(_state.IsRagdoll);
+        }
+
+        /// <summary>
+        /// Hides the presentation of a proxy that has no ragdoll while keeping its registry and
+        /// snapshot component alive, so a subsequent respawn can reveal the same actor again.
+        /// </summary>
+        public void HideForDeathFallback()
+        {
+            _hiddenForDeath = true;
+            _presentation?.SetVisible(false);
         }
 
         /// <summary>
@@ -515,6 +535,7 @@ namespace Ironfront.Net.Unity.Client
                             ? _muzzleAnchor.parent
                             : transform)
                     : null;
+                if (_hiddenForDeath) _presentation?.SetVisible(false);
                 return;
             }
 

@@ -308,10 +308,14 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 		damageParticlesOn = false;
 		if (damageParticles != null)
 		{
+			ParticleSystem.MainModule main = damageParticles.main;
+			main.playOnAwake = false;
 			damageParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
 		}
 		if (burnParticles != null)
 		{
+			ParticleSystem.MainModule main = burnParticles.main;
+			main.playOnAwake = false;
 			burnParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
 		}
 		colliders = GetComponentsInChildren<Collider>();
@@ -758,6 +762,15 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 	/// </remarks>
 	public void Damage(float amount, int attackerActorId)
 	{
+		// A dedicated server starts the bot match while rendered clients are still loading. Empty
+		// vehicles at the capture-point pads were therefore being destroyed by bot crossfire before
+		// a human saw the first frame. FixedUpdate keeps this deadline five seconds ahead while the
+		// driver seat is empty; after the first driver enters it becomes a short exit-from-pad grace.
+		// Offline Ravenfield remains unchanged.
+		if (NetContext.IsServer && (!HasDriver() || Time.time < networkCrashDamageNotBefore))
+		{
+			return;
+		}
 		if (NetVehicleAuthority.TryApplyDamage(base.gameObject, amount, attackerActorId))
 		{
 			return;

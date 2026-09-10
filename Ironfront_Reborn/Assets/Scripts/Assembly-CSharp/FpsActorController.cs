@@ -207,6 +207,14 @@ public class FpsActorController : ActorController
 		{
 			buttons |= Ironfront.Net.Protocol.InputButtons.Fire;
 		}
+		// Ravenfield starts auto-reload inside Weapon.AmmoChanged(), not from an input button.
+		// Mirror that already-started reload onto C_INPUT so the server fills the authoritative
+		// clip too; otherwise the local animation spends reserve ammo and the next snapshot puts
+		// the clip straight back to zero. This also covers grenades and launchers.
+		if (actor != null && actor.activeWeapon != null && actor.activeWeapon.reloading)
+		{
+			buttons |= Ironfront.Net.Protocol.InputButtons.Reload;
+		}
 		buttons |= Ironfront.Net.Protocol.InputFrame.SlotBit(pendingNetworkWeaponSlot);
 		return buttons;
 	}

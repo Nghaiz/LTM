@@ -121,6 +121,21 @@ namespace Ironfront.Net.Unity.Bindings
                 }
             }
 
+            public void SetVisible(bool visible)
+            {
+                if (!Exists) return;
+
+                for (int i = 0; i < _teamRenderers.Length; i++)
+                {
+                    Renderer renderer = _teamRenderers[i];
+                    if (renderer != null) renderer.enabled = visible;
+                }
+
+                if (_weapon == null) return;
+                if (visible) _weapon.Show();
+                else _weapon.Hide();
+            }
+
             public IGameplayWeapon EquipWeapon(byte networkId, Transform weaponParent)
             {
                 if (_weaponId == networkId && _weapon != null) return _weapon;

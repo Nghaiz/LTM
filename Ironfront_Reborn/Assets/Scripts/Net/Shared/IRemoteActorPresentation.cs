@@ -11,6 +11,7 @@ namespace Ironfront.Net.Unity
     {
         bool Exists { get; }
         void ApplyTeam(byte team);
+        void SetVisible(bool visible);
         IGameplayWeapon EquipWeapon(byte networkId, Transform weaponParent);
     }
 }
