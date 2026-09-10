@@ -267,6 +267,7 @@ $buildArgs = @(
 )
 
 $started = Get-Date
+$unityExitCode = $null
 
 # -PassThru and then WaitForExit(), NOT -Wait. MEASURED 2026-09-03: Start-Process -Wait waits on
 # the whole descendant tree, and a batchmode Unity leaves something behind that outlives it -- the
@@ -281,6 +282,11 @@ $started = Get-Date
 try {
     $proc = Start-Process -FilePath $UnityPath -ArgumentList $buildArgs -PassThru -NoNewWindow
     $proc.WaitForExit()
+    # Refresh before reading ExitCode. On Windows, Start-Process can otherwise leave the
+    # property empty even though WaitForExit returned; PowerShell then compares that empty
+    # value as non-zero and reports a failed build after Unity already wrote a valid player.
+    $proc.Refresh()
+    $unityExitCode = $proc.ExitCode
 }
 finally {
     # In a finally so a failed build, a thrown check or a Ctrl-C all leave the tree as they found
@@ -294,8 +300,23 @@ finally {
 
 $elapsed = [int]((Get-Date) - $started).TotalSeconds
 
-if ($proc.ExitCode -ne 0) {
-    throw "the Windows player build exited $($proc.ExitCode) after ${elapsed}s. See $LogFile."
+if ($null -eq $unityExitCode) {
+    # Some Unity/Windows combinations release the native process handle before PowerShell can
+    # read ExitCode, even after WaitForExit + Refresh. The editor harness writes this marker only
+    # after BuildPipeline returned success and the complete artifact was measured. Since -logFile
+    # starts a fresh log for this invocation, it is a safe success witness rather than a stale
+    # file-exists check.
+    $completed = Select-String -LiteralPath $LogFile `
+        -SimpleMatch '[build] lane-B windows player complete ->' |
+        Select-Object -Last 1
+    if (-not $completed) {
+        throw "the Windows player build returned no exit code and no completion marker after ${elapsed}s. See $LogFile."
+    }
+    Write-Warning "[build] Unity returned no readable exit code; accepted the harness completion marker."
+}
+
+if ($null -ne $unityExitCode -and $unityExitCode -ne 0) {
+    throw "the Windows player build exited $unityExitCode after ${elapsed}s. See $LogFile."
 }
 
 if (-not (Test-Path $exe)) {

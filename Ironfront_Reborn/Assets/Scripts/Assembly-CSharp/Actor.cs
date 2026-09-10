@@ -579,6 +579,19 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		{
 			return;
 		}
+		// A server-side player slot is instantiated from the AI prefab, then its
+		// AiActorController is disabled when the network connection claims it.  Unity only
+		// stops callbacks on that disabled controller; Actor.Update still calls the controller
+		// directly.  In particular UpdateMovement -> ProjectToGround could call FallOver on a
+		// perfectly healthy network player at a terrain step, enabling the ragdoll as a second
+		// position writer while ServerPlayer continued to simulate its CharacterController.
+		// The transform then fell away from Session.State and eventually pulled the client below
+		// the map.  A suspended AI controller means this body is parked or network-driven, so the
+		// entire legacy AI presentation/gameplay loop must stay parked with it.
+		if (aiControlled && controller != null && !controller.enabled)
+		{
+			return;
+		}
 		if (inWater && !fallenOver)
 		{
 			if (IsSeated())

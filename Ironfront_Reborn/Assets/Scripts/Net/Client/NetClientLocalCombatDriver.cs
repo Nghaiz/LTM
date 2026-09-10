@@ -195,6 +195,19 @@ namespace Ironfront.Net.Unity.Client
         /// </summary>
         public ClientCombatState State => _state;
 
+        /// <summary>
+        /// True only after the server has confirmed this connection's first placement and while
+        /// its authoritative snapshot still says the body is alive.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="ClientCombatState.IsAlive"/> starts true before the first snapshot, so it
+        /// cannot by itself distinguish a live player from the prefab parked behind the initial
+        /// loadout.  ClientPredictionStage uses this combined signal when deciding whether an
+        /// externally disabled collision capsule belongs to a corpse or to a live predicted
+        /// body that must continue colliding with the world.
+        /// </remarks>
+        public bool IsAuthoritativelyDeployed => !_awaitingFirstDeploy && _state.IsAlive;
+
         /// <summary>Whether input was taken away by a death this driver saw.</summary>
         /// <remarks>
         /// Tracked rather than inferred from <c>IsAlive</c>, so this never re-enables input that

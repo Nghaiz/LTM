@@ -145,19 +145,32 @@ namespace Ironfront.Net.Unity.Client
             // raw quantized byte is printed beside the float because they are the two halves
             // of the question: OwnerQ is what crossed the socket, Owner is what it decodes to.
             //
-            // Rate is not a concern. A point sends only when it crosses
-            // MatchRules.CaptureSendThreshold or changes hands, plus once per point on join --
-            // and _view.Apply above has already dropped every repeat.
-            Debug.Log($"[net] capture point {message.PointId}: OwnerQ {message.OwnerQ} "
-                      + $"-> Owner {message.Owner:F2}, OwningTeam {message.OwningTeam} "
-                      + $"-> spawn owner {spawnOwner}, control {control:F2}, "
-                      + $"contested {message.IsContested} -- flag "
-                      + (control > 0f ? "VISIBLE" : "HIDDEN")
-                      + $" at pole height {(1.2f + 4.8f * control):F2}");
+            // The raw wire measurement is opt-in. A point sends once per quantized percent and
+            // Unity's development logger appends a stack trace, making this unexpectedly costly
+            // during ordinary play even though _view.Apply already drops exact repeats.
+            if (CaptureLoggingEnabled)
+            {
+                Debug.Log($"[net] capture point {message.PointId}: OwnerQ {message.OwnerQ} "
+                          + $"-> Owner {message.Owner:F2}, OwningTeam {message.OwningTeam} "
+                          + $"-> spawn owner {spawnOwner}, control {control:F2}, "
+                          + $"contested {message.IsContested} -- flag "
+                          + (control > 0f ? "VISIBLE" : "HIDDEN")
+                          + $" at pole height {(1.2f + 4.8f * control):F2}");
+            }
 
             points.ApplyAuthoritativeOwner(
                 message.PointId, spawnOwner, control, message.IsContested);
         }
+
+        // Capture progress can change once per quantized percent. Unity's player logger adds a
+        // stack trace to every Debug.Log entry in this build, so two clients capturing one point
+        // produced thousands of lines and contributed directly to server/client tick overruns.
+        // Keep the wire diagnostic available for a targeted run without taxing normal play.
+        private static bool CaptureLoggingEnabled
+            => _captureLogging ??= System.Environment.GetEnvironmentVariable(
+                "IRONFRONT_LOG_CAPTURE") == "1";
+
+        private static bool? _captureLogging;
 
         /// <summary>
         /// Tallies <see cref="_view"/>'s known points by owner and pushes the two counts to the

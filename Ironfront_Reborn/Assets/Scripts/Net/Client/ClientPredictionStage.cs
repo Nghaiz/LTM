@@ -50,6 +50,7 @@ namespace Ironfront.Net.Unity.Client
         private NetClientBootstrap _client;
         private CharacterController _controller;
         private ClientVehicleStage _vehicleStage;
+        private NetClientLocalCombatDriver _combatDriver;
 
         private readonly List<InputFrame> _pending = new List<InputFrame>(FramesPerMessage);
         private readonly InputFrame[] _scratch = new InputFrame[FramesPerMessage];
@@ -147,6 +148,21 @@ namespace Ironfront.Net.Unity.Client
         {
             if (_controller == null || _controller.enabled) return;
             if (IsSeated) return;
+
+            if (_combatDriver == null && _client != null)
+                _combatDriver = _client.GetComponent<NetClientLocalCombatDriver>();
+
+            // Authoritative life/deploy state wins over the input flag.  Actor.FallOver and
+            // several UI paths disable both input and the CharacterController in one legacy
+            // operation.  For a live deployed network body, leaving the capsule disabled makes
+            // reconciliation use NetMovementAgent's collision-bypass branch and the body sinks
+            // straight through the map.  A genuine corpse and the initial parked body remain
+            // disabled because neither satisfies this signal.
+            if (_combatDriver != null && _combatDriver.IsAuthoritativelyDeployed)
+            {
+                _controller.enabled = true;
+                return;
+            }
 
             // A parked/dead body belongs to the loadout or death UI. Re-enabling the capsule
             // here made it fall from the prefab park before the server granted a deploy.
