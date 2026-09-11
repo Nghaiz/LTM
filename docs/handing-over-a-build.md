@@ -130,6 +130,7 @@ room browser; this is the quickest way to confirm a build works before anybody e
 
 ## 6. Related
 
+- [multiplayer-server-deploy-handoff-2026-09-11.md](multiplayer-server-deploy-handoff-2026-09-11.md) — trạng thái sửa gameplay, checklist hai player và bàn giao deploy
 - [operations.md](operations.md) — the deployed master server and game servers on Azure
 - [unity-setup.md](unity-setup.md) — getting the Editor and the project to build at all
 - `tools/build-player.ps1` — the build; the stamp rewrite lives here
