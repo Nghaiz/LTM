@@ -233,7 +233,18 @@ try {
 
     # One secret per run, shared by the master and the game server this script starts. It signs
     # the join ticket; a client never sees it.
-    $secret = [Convert]::ToHexString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(24))
+    # Use the instance API and BitConverter rather than the .NET 6 convenience methods. This
+    # script is also invoked by Windows PowerShell 5 on developer machines, where static
+    # RandomNumberGenerator.GetBytes(int) and Convert.ToHexString do not exist.
+    [byte[]] $secretBytes = New-Object byte[] 24
+    $secretRng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $secretRng.GetBytes($secretBytes)
+    }
+    finally {
+        $secretRng.Dispose()
+    }
+    $secret = [BitConverter]::ToString($secretBytes).Replace('-', '')
 
     $masterEnv = @{
         IRONFRONT_SHARED_SECRET = $secret
