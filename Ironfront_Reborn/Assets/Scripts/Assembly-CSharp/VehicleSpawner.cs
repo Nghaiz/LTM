@@ -166,8 +166,8 @@ public class VehicleSpawner : MonoBehaviour
 			Debug.LogWarning(
 				$"[net] vehicle spawner '{name}' (id {spawnerId}) gave up after "
 				+ $"{scheduler.MaxBlockedRetries} blocked attempts; the pad is obstructed by "
-				+ $"{DescribeBlocker()}. It re-arms on the next vehicle death or world reset "
-				+ "-- but NOT on an AfterMoved pad, whose vehicle has already been used.");
+				+ $"{DescribeBlocker()}. Fast retries are paused; the pad will be checked "
+				+ "silently every 10 seconds and also re-arms on lifecycle events.");
 		}
 	}
 

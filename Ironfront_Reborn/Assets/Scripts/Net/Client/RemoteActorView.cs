@@ -122,17 +122,13 @@ namespace Ironfront.Net.Unity.Client
         //
         // P2 corrects the two that select which locomotion clip plays (`crouch` -> `crouched`,
         // `sprint` -> `sprinting`) and adds the three that make it play at all (`moving`,
-        // `movement x`, `movement y`) plus `seated`. `prone`, `aiming` and `pitch` name
-        // parameters that DO NOT EXIST on this controller at all; authoring them is animator
-        // work, not a parameter-write fix, so they are left standing and are now reported once
-        // and loudly by ReportUnknownParameters below rather than failing in silence.
+        // `movement x`, `movement y`) plus `seated`. The controller has no prone, aiming or
+        // pitch parameter, so this view must not write those names: Unity silently ignores them
+        // and emits a warning for every process that loads the proxy.
         private static readonly int _hashCrouch    = Animator.StringToHash("crouched");
-        private static readonly int _hashProne     = Animator.StringToHash("prone");
         private static readonly int _hashSprint    = Animator.StringToHash("sprinting");
-        private static readonly int _hashAim       = Animator.StringToHash("aiming");
         private static readonly int _hashDead      = Animator.StringToHash("dead");
         private static readonly int _hashRagdoll   = Animator.StringToHash("ragdolled");
-        private static readonly int _hashPitch     = Animator.StringToHash("pitch");
         private static readonly int _hashSeated    = Animator.StringToHash("seated");
         private static readonly int _hashMoving    = Animator.StringToHash("moving");
         private static readonly int _hashMovementX = Animator.StringToHash("movement x");
@@ -141,7 +137,7 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>Every parameter name this component writes, for the once-only audit.</summary>
         private static readonly string[] _writtenParameters =
         {
-            "crouched", "prone", "sprinting", "aiming", "dead", "ragdolled", "pitch",
+            "crouched", "sprinting", "dead", "ragdolled",
             "seated", "moving", "movement x", "movement y",
         };
 
@@ -364,9 +360,7 @@ namespace Ironfront.Net.Unity.Client
             if (_animator == null) return;
 
             _animator.SetBool(_hashCrouch,  false);
-            _animator.SetBool(_hashProne,   false);
             _animator.SetBool(_hashSprint,  false);
-            _animator.SetBool(_hashAim,     false);
             _animator.SetBool(_hashDead,    false);
             _animator.SetBool(_hashRagdoll, false);
             _animator.SetBool(_hashSeated,  false);
@@ -405,10 +399,13 @@ namespace Ironfront.Net.Unity.Client
 
             if (_animator != null)
             {
-                _animator.SetBool(_hashCrouch,  _state.Stance == RemoteActorStance.Crouching);
-                _animator.SetBool(_hashProne,   _state.Stance == RemoteActorStance.Prone);
+                // Actor.controller has no prone state. Crouch is its lowest authored stance,
+                // so use that visual fallback instead of leaving a prone remote standing.
+                _animator.SetBool(
+                    _hashCrouch,
+                    _state.Stance == RemoteActorStance.Crouching ||
+                    _state.Stance == RemoteActorStance.Prone);
                 _animator.SetBool(_hashSprint,  _state.IsSprinting);
-                _animator.SetBool(_hashAim,     _state.IsAiming);
                 _animator.SetBool(_hashDead,    !_state.IsAlive);
                 _animator.SetBool(_hashRagdoll, _state.IsRagdoll);
                 _animator.SetBool(_hashSeated,  _state.IsSeated);
@@ -514,7 +511,8 @@ namespace Ironfront.Net.Unity.Client
                 return;
             }
 
-            if (_animator != null) _animator.SetFloat(_hashPitch, pitchDegrees);
+            // The shipped controller has no pitch parameter. A prefab without an authored
+            // upper-body transform keeps its neutral pose instead of issuing a silent no-op.
         }
 
         /// <summary>

@@ -304,10 +304,19 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(VehicleSpawnPhase.GaveUp, scheduler.Phase);
             Assert.Equal(4, scheduler.BlockedRetries);
 
-            // And it never spawns afterwards, even once the pad clears -- it is disarmed, not
-            // merely waiting.
+            // Exhaustion silences the one-second retry storm, but it must not permanently lose
+            // the replacement. A bot or player can move the blocking vehicle later without
+            // producing another lifecycle event.
+            int recoveredSpawns = 0;
             for (int i = 0; i < 600; i++)
-                Assert.False(scheduler.Tick(Tick, Clear).ShouldSpawn);
+            {
+                if (!scheduler.Tick(Tick, Clear).ShouldSpawn) continue;
+                recoveredSpawns++;
+                scheduler.ReportSpawned();
+            }
+
+            Assert.Equal(1, recoveredSpawns);
+            Assert.Equal(VehicleSpawnPhase.Spawned, scheduler.Phase);
         }
 
         [Fact]

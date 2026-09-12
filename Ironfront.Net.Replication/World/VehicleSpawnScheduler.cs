@@ -31,7 +31,7 @@ namespace Ironfront.Net.Replication.World
         /// <summary>Its vehicle is standing on the pad.</summary>
         Spawned = 3,
 
-        /// <summary>The retry budget ran out. Re-armed only by the next lifecycle event.</summary>
+        /// <summary>The retry budget ran out. Probes continue at a low, silent cadence.</summary>
         GaveUp = 4,
     }
 
@@ -67,8 +67,9 @@ namespace Ironfront.Net.Replication.World
     /// <b>The unbounded retry.</b> The original waited on
     /// <c>while (SpawnIsBlocked()) yield return new WaitForSeconds(1f)</c>, so a pad permanently
     /// blocked by a wreck re-tested once a second for the life of the process.
-    /// <see cref="MaxBlockedRetries"/> bounds it; exhaustion is reported once, and the spawner
-    /// re-arms on the next death or first-driver event rather than staying dead forever.
+    /// <see cref="MaxBlockedRetries"/> bounds the one-second retry burst; exhaustion is reported
+    /// once, then the pad is checked at a much lower cadence until it clears. Lifecycle events
+    /// still re-arm it immediately.
     /// </description></item>
     /// <item><description>
     /// <b>The missing re-entrancy guard.</b> <c>spawningQueued</c> was declared and never read
@@ -99,6 +100,12 @@ namespace Ironfront.Net.Replication.World
 
         /// <summary>Seconds between blocked re-tests. Matches the original's <c>WaitForSeconds(1f)</c>.</summary>
         public const float DefaultBlockedRetrySeconds = 1f;
+
+        /// <summary>
+        /// Seconds between silent probes after the normal retry budget is exhausted. This keeps
+        /// a permanently blocked pad cheap without losing a vehicle when the blocker later moves.
+        /// </summary>
+        public const float DefaultDormantProbeSeconds = 10f;
 
         private readonly VehicleRespawnType _respawnType;
         private readonly float _spawnSeconds;
@@ -237,6 +244,18 @@ namespace Ironfront.Net.Replication.World
 
                     return Probe(isSpawnBlocked);
 
+                case VehicleSpawnPhase.GaveUp:
+                    _retryTimer -= deltaSeconds;
+                    if (_retryTimer > 0f) return VehicleSpawnStep.None;
+
+                    if (!isSpawnBlocked())
+                        return new VehicleSpawnStep(shouldSpawn: true, gaveUp: false);
+
+                    // Keep the warning bounded to the transition into GaveUp, while allowing a
+                    // vehicle driven off the pad later to restore the missing replacement.
+                    _retryTimer = DefaultDormantProbeSeconds;
+                    return VehicleSpawnStep.None;
+
                 default:
                     return VehicleSpawnStep.None;
             }
@@ -266,6 +285,7 @@ namespace Ironfront.Net.Replication.World
             if (BlockedRetries < _maxBlockedRetries) return VehicleSpawnStep.None;
 
             Phase = VehicleSpawnPhase.GaveUp;
+            _retryTimer = DefaultDormantProbeSeconds;
             return new VehicleSpawnStep(shouldSpawn: false, gaveUp: true);
         }
     }
