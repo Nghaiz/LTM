@@ -521,7 +521,11 @@ namespace Ironfront.Net.Unity.Client
         /// </summary>
         private void ApplyWeapon(byte weaponId)
         {
-            if (weaponId == _appliedWeaponId) return;
+            bool activeWeaponExists = _activeWeapon != null && _activeWeapon.Exists;
+            if (!RemoteWeaponResolvePolicy.ShouldResolve(
+                    weaponId, _appliedWeaponId, activeWeaponExists))
+                return;
+
             _appliedWeaponId = weaponId;
 
             if (!HasActor)

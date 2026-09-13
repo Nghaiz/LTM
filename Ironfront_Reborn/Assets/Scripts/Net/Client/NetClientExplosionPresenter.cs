@@ -83,6 +83,8 @@ namespace Ironfront.Net.Unity.Client
         // static: a fresh connection should not inherit a previous match's live predictions.
         private readonly ExplosionSuppressor _suppressor = new ExplosionSuppressor();
 
+        private static Material _fallbackParticleMaterial;
+
         /// <summary>
         /// The presenter this client is running, or null off a client. phase-V1 task 3.
         /// </summary>
@@ -96,7 +98,11 @@ namespace Ironfront.Net.Unity.Client
         public static NetClientExplosionPresenter Current { get; private set; }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetCurrentOnLoad() => Current = null;
+        private static void ResetCurrentOnLoad()
+        {
+            Current = null;
+            _fallbackParticleMaterial = null;
+        }
 
         private void Awake()
         {
@@ -150,7 +156,10 @@ namespace Ironfront.Net.Unity.Client
         {
             if (!enabled) return;
 
-            RenderExplosion(position, radiusMetres, kind);
+            if (RenderExplosion(position, radiusMetres, kind))
+                Debug.Log($"[net] predicted local explosion {kind} rendered at "
+                          + $"{position.x:F2},{position.y:F2},{position.z:F2} "
+                          + $"(radius {radiusMetres:F2}m).");
 
             if (NetClientPresenterGuard.TryResolveLocalActorId(out ushort localId))
                 _suppressor.PredictLocal(localId, Time.time);
@@ -171,13 +180,17 @@ namespace Ironfront.Net.Unity.Client
             // same reason PosX/Y/Z go through Quantize.UnpackPos: the packing and its inverse
             // are one decision, and V1 task 1 gave it one home. The emitter rounds UP, so this
             // radius is never smaller than the blast that did the damage.
-            RenderExplosion(
-                position, ExplosionEncoding.UnpackRadiusMetres(message.RadiusMetres), message.Kind);
+            float radiusMetres = ExplosionEncoding.UnpackRadiusMetres(message.RadiusMetres);
+            if (RenderExplosion(position, radiusMetres, message.Kind))
+                Debug.Log($"[net] authoritative explosion {message.Kind} from actor "
+                          + $"{message.SourceActorId} rendered at "
+                          + $"{position.x:F2},{position.y:F2},{position.z:F2} "
+                          + $"(radius {radiusMetres:F2}m).");
         }
 
-        private void RenderExplosion(Vector3 position, float radiusMetres, ExplosionKind kind)
+        private bool RenderExplosion(Vector3 position, float radiusMetres, ExplosionKind kind)
         {
-            PlayEffect(position, radiusMetres, kind);
+            bool drewParticles = PlayEffect(position, radiusMetres, kind);
             ApplyScreenshake(position, radiusMetres);
 
             // debt-closure phase 2 task 2d (ledger C-7): a blast now draws a scorch mark rather
@@ -188,9 +201,10 @@ namespace Ironfront.Net.Unity.Client
             // orientation is a cosmetic detail, not a correctness one.
             NetClientBindings.Decals?.AddScorch(
                 position, Vector3.up, radiusMetres * _decalSizePerMetre);
+            return drewParticles;
         }
 
-        private void PlayEffect(Vector3 position, float radiusMetres, ExplosionKind kind)
+        private bool PlayEffect(Vector3 position, float radiusMetres, ExplosionKind kind)
         {
             int index = (int)kind;
 
@@ -202,7 +216,7 @@ namespace Ironfront.Net.Unity.Client
                     "explosion-unknown-kind:" + index,
                     "[net] NetClientExplosionPresenter received an ExplosionKind with no "
                     + "configured effect slot. Drawing nothing for it rather than throwing.");
-                return;
+                return false;
             }
 
             ParticleSystem effect = _effectsByKind[index];
@@ -215,14 +229,107 @@ namespace Ironfront.Net.Unity.Client
                     "explosion-missing-effect:" + index,
                     "[net] NetClientExplosionPresenter has no ParticleSystem configured for "
                     + $"ExplosionKind {kind}. Client-track item E6.");
-                return;
+                return false;
             }
 
             if (!effect.gameObject.activeSelf) effect.gameObject.SetActive(true);
-            effect.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             effect.transform.position = position;
             effect.transform.localScale = Vector3.one * Mathf.Max(radiusMetres, 0.01f);
-            effect.Play(true);
+
+            // Both shipped map scenes carried non-null placeholder ParticleSystems whose
+            // emission was disabled, looping was enabled, and renderer material was null.
+            // Play() therefore succeeded silently while drawing zero particles. Normalize the
+            // scene object at the last responsible moment; this also keeps old map bundles
+            // compatible with a newly deployed client assembly.
+            if (!ExplosionEffectPlayback.TryPlay(new UnityExplosionEffectSurface(effect)))
+            {
+                NetClientPresenterGuard.WarnOnce(
+                    "explosion-undrawable-effect:" + index,
+                    $"[net] {kind} explosion effect could not obtain a drawable particle "
+                    + "material. The event was received but no particles were rendered.");
+                return false;
+            }
+            return true;
+        }
+
+        private sealed class UnityExplosionEffectSurface : IExplosionEffectSurface
+        {
+            private readonly ParticleSystem _effect;
+            private readonly ParticleSystemRenderer _renderer;
+
+            public UnityExplosionEffectSurface(ParticleSystem effect)
+            {
+                _effect = effect;
+                _renderer = effect.GetComponent<ParticleSystemRenderer>();
+            }
+
+            public bool Looping
+            {
+                get => _effect.main.loop;
+                set
+                {
+                    ParticleSystem.MainModule main = _effect.main;
+                    main.loop = value;
+                }
+            }
+
+            public bool EmissionEnabled
+            {
+                get => _effect.emission.enabled;
+                set
+                {
+                    ParticleSystem.EmissionModule emission = _effect.emission;
+                    emission.enabled = value;
+                }
+            }
+
+            public float EmissionRatePerSecond
+            {
+                get => _effect.emission.rateOverTime.constant;
+                set
+                {
+                    ParticleSystem.EmissionModule emission = _effect.emission;
+                    emission.rateOverTime = new ParticleSystem.MinMaxCurve(value);
+                }
+            }
+
+            public int BurstCount => _effect.emission.burstCount;
+
+            public bool HasDrawableMaterial =>
+                _renderer != null && _renderer.sharedMaterial != null;
+
+            public void SetBurstCount(short count)
+            {
+                ParticleSystem.EmissionModule emission = _effect.emission;
+                emission.SetBursts(new[] { new ParticleSystem.Burst(0f, count) });
+            }
+
+            public bool TryAssignFallbackMaterial()
+            {
+                if (_renderer == null) return false;
+
+                if (_fallbackParticleMaterial == null)
+                {
+                    Shader shader = Shader.Find("Particles/Standard Unlit")
+                                    ?? Shader.Find("Legacy Shaders/Particles/Alpha Blended Premultiply")
+                                    ?? Shader.Find("Sprites/Default");
+                    if (shader == null) return false;
+
+                    _fallbackParticleMaterial = new Material(shader)
+                    {
+                        name = "Ironfront Runtime Explosion Material",
+                    };
+                }
+
+                _renderer.sharedMaterial = _fallbackParticleMaterial;
+                return true;
+            }
+
+            public void Restart()
+            {
+                _effect.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                _effect.Play(true);
+            }
         }
 
         /// <summary>

@@ -2,9 +2,14 @@
 
 Ngày chốt: **2026-09-11**
 
-Commit gameplay: **`1024db4` — `fix(multiplayer): restore timely combat presentation`**
+Commit gameplay mới nhất: **`533af56` — `fix(multiplayer): recover remote poses and vehicle spawns`**
 
-Build Windows đã tạo: **`build/windows/Ironfront.exe`**
+Baseline trước đó: **`1024db4` — `fix(multiplayer): restore timely combat presentation`**
+
+Binary test mới tạo ngày 2026-09-13: **`build/windows/Ironfront.exe`**
+
+Stamp của binary test: **`533af56-dirty`** (có toàn bộ thay đổi ở mục 9; chỉ dùng test nội bộ,
+không dùng phát hành production trước khi build lại từ commit sạch).
 
 Artifact smoke test cuối: **`artifacts/lane-b/20260911-gameplay-sync-final/`**
 
@@ -199,3 +204,86 @@ Gửi cùng một gói gồm:
 Tham khảo thêm [handing-over-a-build.md](handing-over-a-build.md) và
 [operations.md](operations.md). Artifact chuẩn của vòng hiện tại là
 `artifacts/lane-b/20260911-gameplay-sync-final/run.json` với `passed: true`.
+
+## 8. Kết quả playtest thủ công 2 client ngày 2026-09-12
+
+Nguồn kiểm tra là `tmp/playtest/client-1.log`, `client-2.log`, `game-server.log` và
+`game-server-Island.log`, được giữ nguyên sau khi người chơi đóng cả hai client.
+
+- Hai client dùng cùng build `1024db4-dirty`, vào cùng room Dustbowl: actor 33/team 0 và
+  actor 34/team 1. Cả hai thoát bằng `LocalRequest`; không client nào bị server kick.
+- Không có `NullReferenceException`, `MissingReferenceException`, `IndexOutOfRangeException`,
+  `The world -> actor` hoặc `Killed by The world` trong phiên này.
+- Player 2 có một lần chết và được server đặt lại tại spawn point 5. Log client chỉ in
+  `deploy granted` cho first deploy; server đã xác nhận lần placement thứ hai.
+- Cả hai client đều nhận đúng cùng 17 sự kiện grenade spawn, gồm grenade của actor 33, actor 34
+  và bot. Đường truyền server → client cho projectile spawn hoạt động trong phiên này; phần
+  model/effect vẫn phải được nghiệm thu trực quan trên build mới.
+- RTT ban đầu tăng 369–453 ms rồi trở lại trạng thái `GOOD`. Server có bốn cảnh báo vượt ngân
+  sách tick, p99 35,4–49,3 ms và tổng 7 tick bị drop.
+- Ba vehicle spawner Dustbowl và hai vehicle spawner Island hết 30 lần retry khi pad còn bị
+  collider xe chắn. Trước `533af56`, trạng thái này làm mất replacement cho đến hết round.
+- Proxy remote ghi `prone`, `aiming`, `pitch` vào các Animator parameter không tồn tại. Commit
+  `533af56` xóa các no-op này, giữ locomotion trên đúng parameter gốc và dùng crouch làm fallback
+  trực quan cho prone.
+- Remote proxy hiện vẫn không mang Actor/ragdoll rig, nên corpse vật lý giống game offline chưa
+  thể coi là hoàn tất. Fallback hiện tại ẩn body chết và hiện lại khi snapshot respawn đến.
+
+### Thay đổi trong `533af56`
+
+1. Không còn ghi Animator parameter không tồn tại; regression test yêu cầu mọi parameter được
+   ghi phải có trong `Actor.controller`.
+2. Remote prone không còn đứng thẳng mặc định mà dùng pose crouched có sẵn.
+3. Vehicle spawner vẫn giới hạn đợt retry nhanh ở 30 lần nhưng sau đó thăm dò im lặng mỗi 10 giây,
+   tự spawn replacement khi pad trống thay vì mất xe vĩnh viễn.
+
+### Trạng thái xác minh và build
+
+- 51 test liên quan `RemoteLocomotionTests` và `ObjectiveAuthorityTests`: pass 51/51.
+- Toàn bộ `Ironfront.Net.Replication.Tests`: pass 1445/1446; một lỗi nền không liên quan là
+  `ScriptedInputProgrammeTests.TheHarnessInstallsBothInputSeamsAndEnablesTheClock` đang đòi chuỗi
+  `clock.enabled = true`.
+- `Ironfront.Net.Unity.Client.csproj`: build thành công, 0 error (8 warning có sẵn).
+- Hai file Unity thay đổi parse sạch ở C# 9.
+- Lần build cũ không tạo được Windows player vì Unity trả mã 198. Ngày 2026-09-13 Unity license
+  đã hoạt động và player mới được tạo thành công; xem mục 9. Không dùng binary cũ từ trước thời
+  điểm này để nghiệm thu các sửa lỗi.
+
+Dev/release server cần kích hoạt Unity license, checkout `533af56` hoặc commit mới hơn, rồi build
+lại cả Windows client và dedicated server từ cùng một SHA trước khi chạy checklist mục 5.
+
+## 9. Bổ sung ngày 2026-09-13 sau khi đọc log và kiểm tra asset
+
+Log `logs/ironfront-20260912-170625.log` và `170626.log` không phải gameplay run hợp lệ. Cả hai
+client dừng ở intro vì `PlayerPrefs.SetInt("SeenIntro")` ném `PlayerPrefsException` mỗi frame;
+chúng chưa vào menu hay trận. `GotoMenu` hiện bắt lỗi lưu preference, cảnh báo một lần và vẫn
+chuyển scene, nên lỗi registry/read-only không còn khóa client ở intro hoặc tạo hàng nghìn stack
+trace.
+
+Hai nguyên nhân presentation khác đã được tìm thấy và sửa:
+
+1. ParticleSystem grenade/rocket trong cả Dustbowl và Island là placeholder không thể vẽ:
+   emission tắt, không có burst, loop bật và renderer không có material. Presenter giờ chuẩn hóa
+   effect thành one-shot 24 particle, gán material fallback nếu thiếu, clear rồi play. Log mới ghi
+   rõ `predicted local explosion ... rendered` hoặc `authoritative explosion ... rendered` khi
+   effect thực sự được khởi chạy.
+2. Remote weapon đánh dấu id là đã áp dụng ngay cả khi lần lookup đầu thất bại trong lúc
+   `WeaponManager` chưa sẵn sàng. Vì id snapshot không đổi, code cũ không thử lại và remote player
+   đứng với tay không. Presenter giờ chỉ bỏ qua lookup khi cùng id **và** đã có weapon object còn
+   sống; lookup thất bại sẽ tự thử lại ở frame sau.
+
+Xác minh tự động của thay đổi này:
+
+- 5/5 test `ExplosionEffectPlaybackTests` và `RemoteWeaponResolvePolicyTests` pass.
+- `Ironfront.Net.Unity.Client.csproj` build thành công: 0 error, 8 warning có sẵn (obsolete API và
+  nullable trong các file không thuộc thay đổi này).
+- Unity `BuildPipeline` báo `Build Finished, Result: Success`; player mới có kích thước
+  394.038.342 byte và `Assembly-CSharp.dll` được ghi lúc 2026-09-13 11:37:22.
+- Full `dotnet build Assembly-CSharp.csproj` vẫn vướng hai lỗi package Editor ProBuilder
+  `ObjectPool<>` ambiguous. Unity BuildPipeline biên dịch và build player thành công, vì vậy đây
+  không phải lỗi source gameplay mới.
+
+Binary mới cần playtest thủ công theo mục 5. Đặc biệt phải xác nhận trên **cả hai client**: model
+súng remote hiện ra, grenade có model/quỹ đạo/vụ nổ, xe spawn không có damage/burn particle, bot
+hai team xuất hiện đúng màu và damage/kill cập nhật kịp thời. Chỉ đánh dấu các mục đó hoàn tất sau
+khi log và quan sát của chính binary mới đều đạt.
