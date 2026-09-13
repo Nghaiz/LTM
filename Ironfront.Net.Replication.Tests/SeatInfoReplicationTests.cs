@@ -182,16 +182,17 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
-        public void TheAdmittedActorCeilingIsFiftyWithVehiclesAbsent()
+        public void TheAdmittedActorCeilingIsFortyFourWithVehiclesAbsent()
         {
             // (MaxSnapshotBodySize - SnapshotHeader.Size) / MaxEntrySize
-            //   = (1178 - 13) / 23 = 50.65 -> 50.
-            // It was 58 while MaxEntrySize was 20. The 48-actor case the game ships still never
-            // sheds; the margin above it is what task 6 spent, and this is where that shows up.
+            //   = (1178 - 13) / 26 = 44.8 -> 44.
+            // It was 58 at a 20-byte entry and 50 at 23. v10's 5-byte weapon field took it
+            // below the 48-actor case the game ships, so shedding is now load-bearing there
+            // rather than headroom — see SnapshotSheddingTests.
             const int budget = ServerPayloadWriter.MaxSnapshotBodySize;
 
             int ceiling = (budget - SnapshotHeader.Size) / InterestManager.MaxEntrySize;
-            Assert.Equal(50, ceiling);
+            Assert.Equal(44, ceiling);
 
             var interest = new InterestManager();
             var session = new ClientSession(connectionId: 1, actorId: 1);
@@ -208,16 +209,22 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
-        public void TheActorFloorWithAFullVehicleBodyIsTwentyNine()
+        public void TheActorFloorWithAFullVehicleBodyIsSixteen()
         {
-            // The co-residency worst case: the bounded vehicle body takes its 489 bytes first
-            // and the elastic actor body gets what is left. 29 actors is still ~45% above the
-            // ~20 an interest-managed viewer typically sees.
+            // The co-residency worst case: the bounded vehicle body takes its 729 bytes first
+            // and the elastic actor body gets what is left. v10 spent this floor from both
+            // ends at once — MAX_VEHICLES 16 -> 24 took 240 bytes off the budget and the
+            // 5-byte weapon field made each surviving actor 13% dearer — so it fell 29 -> 16,
+            // which is BELOW the ~20 an interest-managed viewer typically sees.
+            //
+            // Derived, not observed: (1178 - 729 - 13) / 26 = 16.7 -> 16. Pinned here because
+            // a floor under the typical view is a shipping decision somebody has to make, not
+            // a rounding difference to discover in a match.
             const int budget =
                 ServerPayloadWriter.MaxSnapshotBodySize - VehicleSnapshotMessage.MaxBodySize;
 
-            Assert.Equal(689, budget);
-            Assert.Equal(29, (budget - SnapshotHeader.Size) / InterestManager.MaxEntrySize);
+            Assert.Equal(449, budget);
+            Assert.Equal(16, (budget - SnapshotHeader.Size) / InterestManager.MaxEntrySize);
         }
 
         // ------------------------------------------------------------------ helpers

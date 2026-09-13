@@ -101,8 +101,9 @@ namespace Ironfront.Net.Replication.Tests
         {
             // Without this the entire experiment could be measuring a codec nobody uses. The
             // byte-aligned full-snapshot configuration must produce the same byte count per
-            // actor as the frozen format: 3 bytes of entry header plus the 20-byte v1 payload,
-            // less the one bit the experimental pitch flag adds and then pads away.
+            // actor as the frozen format, once the two known and constant differences are
+            // accounted for: the experimental pitch flag, and the weapon field v10 widened
+            // on the frozen side only.
             WorldSnapshot world = InterestManagementTests.BuildWorld(4, 100f);
             world.ServerTick = 1;
 
@@ -122,7 +123,17 @@ namespace Ironfront.Net.Replication.Tests
             const int headerDifference = SnapshotHeader.Size - 9;
             int pitchFlagPadding = world.ActorCount;
 
-            Assert.Equal(frozen, experimental + headerDifference - pitchFlagPadding);
+            // The experiment measures a v9-shaped weapon field (weaponId + clip). v10 added a
+            // u16 reserve and a flags byte to the frozen encoder and nothing to this codec, so
+            // the frozen side is three bytes per actor wider. Charged explicitly rather than
+            // by widening the experiment: the phase-04 table's savings were measured against
+            // the v9 payload, and re-encoding it now would silently restate them.
+            const int weaponWidening = 3;
+            int weaponDifference = weaponWidening * world.ActorCount;
+
+            Assert.Equal(
+                frozen,
+                experimental + headerDifference - pitchFlagPadding + weaponDifference);
         }
 
         [Fact]
