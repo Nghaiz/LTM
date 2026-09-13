@@ -5,6 +5,7 @@
     <AssemblyName>Ironfront.MasterClient</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="System.IO.Pipelines" />
     <ProjectReference Include="..\Ironfront.Net.Protocol\Ironfront.Net.Protocol.csproj" />
     <PackageReference Include="System.Text.Json" />
   </ItemGroup>
