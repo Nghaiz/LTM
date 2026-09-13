@@ -769,7 +769,7 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(VehicleField.None, parsed[1].ChangeMask);
         }
 
-        // ------------------------------------- S_SNAPSHOT with SeatInfo, 23-byte entry
+        // ------------------------------------- S_SNAPSHOT with SeatInfo, 26-byte entry
         //
         //   header  u32 serverTick 100 -> 64 00 00 00
         //           u32 lastInput   99 -> 63 00 00 00
@@ -782,15 +782,20 @@ namespace Ironfront.Net.Protocol.Tests
         //           vel    i8  x3  1 / -1 / 0      -> 01 FF 00
         //           flags  u8      IsAlive|IsSeated = 0x81 -> 81
         //           health u8      100             -> 64
-        //           weapon u8+u8   1 / 30          -> 01 1E
+        //           weapon u8+u8+u16+u8
+        //                          id 1 / clip 30 / reserve 0x0123 / flags Reloading
+        //                                          -> 01 1E · 23 01 · 01
         //           team   u8      0               -> 00
         //           seat   u16+u8  vehicleId 7 / seatIndex 2 -> 07 00 · 02
+        //
+        // The reserve is written 23 01 and not 01 23: it is little-endian like every other
+        // multi-byte GSP field, and the two bytes differ so a byte-swap cannot hide here.
         private const string SeatedActorSnapshotHex =
             "64 00 00 00 63 00 00 00 00 00 00 00 01 "
-            + "05 00 FF 00 01 00 02 00 03 00 80 0A 01 FF 00 81 64 01 1E 00 07 00 02";
+            + "05 00 FF 00 01 00 02 00 03 00 80 0A 01 FF 00 81 64 01 1E 23 01 01 00 07 00 02";
 
         [Fact]
-        public void SeatedActorEntry_Serializes_ToTwentyThreeBytes()
+        public void SeatedActorEntry_Serializes_ToTwentySixBytes()
         {
             var entry = new ActorSnapshotEntry
             {
@@ -802,17 +807,18 @@ namespace Ironfront.Net.Protocol.Tests
                 StateFlags = ActorStateFlags.IsAlive | ActorStateFlags.IsSeated,
                 Health = 100,
                 WeaponId = 1, AmmoInClip = 30,
+                SpareAmmoEncoded = 0x0123, WeaponStateFlags = WeaponStateFlags.Reloading,
                 Team = 0,
                 VehicleId = 7, SeatIndex = 2,
             };
 
-            Assert.Equal(23, SnapshotMessage.EntrySize(SnapshotField.Full));
+            Assert.Equal(26, SnapshotMessage.EntrySize(SnapshotField.Full));
 
             var header = new SnapshotHeader(100, 99, 0, 1);
             Span<byte> buffer = stackalloc byte[64];
             int written = SnapshotMessage.Write(buffer, in header, new[] { entry });
 
-            Assert.Equal(SnapshotHeader.Size + 23, written);
+            Assert.Equal(SnapshotHeader.Size + 26, written);
             Assert.Equal(SeatedActorSnapshotHex, Hex.ToHex(buffer.Slice(0, written)));
         }
 
@@ -832,6 +838,15 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(7, parsed[0].VehicleId);
             Assert.Equal(2, parsed[0].SeatIndex);
             Assert.True((parsed[0].StateFlags & ActorStateFlags.IsSeated) != 0);
+
+            // The widened weapon field, read back from the same hand-written bytes. The
+            // seat fields landing correctly above already says the entry was the right
+            // width; these say the three new bytes carry what the spec says they carry.
+            Assert.Equal(1, parsed[0].WeaponId);
+            Assert.Equal(30, parsed[0].AmmoInClip);
+            Assert.Equal(0x0123, parsed[0].SpareAmmoEncoded);
+            Assert.Equal(SpareAmmo.Finite(291), SpareAmmo.Decode(parsed[0].SpareAmmoEncoded));
+            Assert.Equal(WeaponStateFlags.Reloading, parsed[0].WeaponStateFlags);
         }
 
         // ---------------------------------------------------- S_PLAYER_LIST 0x4B (12 B)

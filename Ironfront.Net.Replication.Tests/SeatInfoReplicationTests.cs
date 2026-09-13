@@ -44,7 +44,7 @@ namespace Ironfront.Net.Replication.Tests
 
             var buffer = new byte[512];
             int written = SnapshotBuilder.WriteFull(buffer, world, lastProcessedInputTick: 9);
-            Assert.Equal(SnapshotHeader.Size + 20 + 23, written);
+            Assert.Equal(SnapshotHeader.Size + 23 + 26, written);
 
             var decoder = new DeltaDecoder();
             Assert.Equal(SnapshotReadResult.Applied, decoder.Read(buffer.AsSpan(0, written)));
@@ -173,12 +173,12 @@ namespace Ironfront.Net.Replication.Tests
         // --------------------------------------------------------- the shedding budget
 
         [Fact]
-        public void TheProjectedEntryWidthIsTwentyThree()
+        public void TheProjectedEntryWidthIsTwentySix()
         {
             // Pinned as a number rather than as a formula, so a change to either constant is a
             // red test rather than a bandwidth regression nobody attributes.
-            Assert.Equal(23, InterestManager.MaxEntrySize);
-            Assert.Equal(23, SnapshotMessage.EntrySize(SnapshotField.Full));
+            Assert.Equal(26, InterestManager.MaxEntrySize);
+            Assert.Equal(26, SnapshotMessage.EntrySize(SnapshotField.Full));
         }
 
         [Fact]
