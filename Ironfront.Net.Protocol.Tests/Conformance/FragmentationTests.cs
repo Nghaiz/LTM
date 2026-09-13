@@ -50,10 +50,17 @@ namespace Ironfront.Net.Protocol.Tests
         {
             byte[] snapshot = BuildFullSnapshot();
 
-            // 13 header + 64 actors * 20 bytes = 1293, over the 1184-byte payload limit.
-            Assert.Equal(13 + 64 * 20, snapshot.Length);
-            Assert.Equal(1293, snapshot.Length);
+            // 13 header + 64 actors * 23 bytes = 1485, over the 1184-byte payload limit.
+            Assert.Equal(13 + 64 * 23, snapshot.Length);
+            Assert.Equal(1485, snapshot.Length);
             Assert.True(Fragmenter.NeedsFragmentation(snapshot.Length));
+
+            // The same 64 actors with a seat each — the worst case a join baseline can be,
+            // and still two fragments rather than three.
+            int seated = SnapshotHeader.Size
+                       + ProtocolConstants.MAX_ACTORS * SnapshotMessage.EntrySize(SnapshotField.Full);
+            Assert.Equal(1677, seated);
+            Assert.True(Fragmenter.NeedsFragmentation(seated));
         }
 
         [Fact]

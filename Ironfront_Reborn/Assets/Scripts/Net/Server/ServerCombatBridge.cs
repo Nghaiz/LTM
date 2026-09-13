@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using Ironfront.Net.Protocol;
+using Ironfront.Net.Replication;
 using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Movement;
 using Ironfront.Net.Replication.Server;
@@ -128,14 +129,24 @@ namespace Ironfront.Net.Unity.Server
             // local, and deliberately not a second stored field.
             WeaponConfig weapon = session.WeaponConfig;
 
+            // Protocol 10. The trigger state is the SESSION's, not a local: an effective trigger
+            // is measured against the previous PROCESSED frame, and a fresh one per call makes
+            // every frame a rising edge -- which is the defect, restored by accident.
+            //
+            // The ammo source is the session's too, and it answers "I do not know" when the
+            // loadout slot is unresolved rather than guessing slot 0 (handoff section 4.5).
+            ActorAmmoSource ammo = session.AmmoSourceFrom(_loop.SpareAmmo);
+
             CombatTickResult result = _authority.Step(
                 ref session.Weapon,
+                ref session.Trigger,
                 in weapon,
                 session.ActorId,
                 in frame,
                 in session.State,
                 new ReadOnlySpan<HitscanTarget>(_targets, 0, _targetCount),
-                actor.IsAlive,
+                new ActorFireEligibility(actor.IsAlive, isDeployed: true),
+                in ammo,
                 now,
                 SmoothedRttMs(session.ConnectionId),
                 tick,
@@ -144,7 +155,13 @@ namespace Ironfront.Net.Unity.Server
             // The line that closes the reported bug: the server's clip is now the actor's clip,
             // so a reload or a shot changes SnapshotField.Weapon and the client's _reloadPending
             // finally clears.
-            actor.AmmoInClip = session.Weapon.AmmoInClip;
+            //
+            // Protocol 10 adds the other two thirds of that field. The reserve and the reload
+            // flag were authoritative on the server the whole time and had no way onto the wire,
+            // so the client ran its own Ravenfield pool beside the authoritative clip -- two
+            // sources for one number, and the clip-of-one weapons are where they visibly
+            // disagreed.
+            PublishWeaponState(session, actor, in weapon, in ammo);
 
             LogShot(session, in frame, in result, tick);
 
@@ -167,6 +184,53 @@ namespace Ironfront.Net.Unity.Server
             EmitHitConfirms(session, in result);
 
             if (result.VictimDied) EmitDeath(session, in result);
+        }
+
+        /// <summary>
+        /// Copies the session's authoritative weapon state onto the body the snapshot is built
+        /// from. Handoff section 4.5.
+        /// </summary>
+        /// <remarks>
+        /// <b>Three fields written together, always.</b> <c>DeltaEncoder.ComputeChangeMask</c>
+        /// masks the four weapon parts as one and <c>DeltaDecoder.ApplyEntry</c> replaces or
+        /// carries all four; writing the clip here and the reserve somewhere else would be the
+        /// only way to put a reload flag from one tick beside a clip from another.
+        /// </remarks>
+        private static void PublishWeaponState(
+            ClientSession session, NetServerActor actor, in WeaponConfig config,
+            in ActorAmmoSource ammo)
+        {
+            WeaponSnapshotFields fields =
+                SnapshotBuilder.ResolveWeaponFields(in session.Weapon, in config, in ammo);
+
+            actor.AmmoInClip = fields.AmmoInClip;
+            actor.SpareAmmoEncoded = fields.SpareAmmoEncoded;
+            actor.WeaponStateFlags = fields.StateFlags;
+        }
+
+        /// <summary>
+        /// Points the session at the loadout slot the body's weapon came out of, and says so
+        /// once when it cannot.
+        /// </summary>
+        /// <remarks>
+        /// <b>Rate-limited to the transitions, not to a timer.</b> This runs once per accepted
+        /// input frame per player at 30 Hz, so a per-occurrence log would be thirty identical
+        /// lines a second for as long as the inconsistency lasted. Logging only the edge -- the
+        /// frame on which the slot went from known to unknown -- names it once per occurrence,
+        /// which is the thing worth knowing.
+        /// </remarks>
+        private static void ResolveActiveLoadoutSlot(ClientSession session, byte weaponId)
+        {
+            bool wasKnown = session.HasActiveLoadoutSlot;
+
+            if (session.ResolveActiveLoadoutSlotFrom(weaponId)) return;
+            if (!wasKnown) return;
+
+            Debug.LogWarning(
+                $"[net] actor {session.ActorId} is holding weapon {weaponId}, which is in none "
+                + "of its five loadout slots. The session and the body disagree about the "
+                + "loadout, so its reserve reports no-resupply and its reloads are refused "
+                + "until they agree again.");
         }
 
         /// <summary>Launches this actor's carried projectile weapon. Ledger <b>X-42</b>.</summary>
@@ -357,6 +421,12 @@ namespace Ironfront.Net.Unity.Server
             // one's, so switching away and back no longer hands out a magazine.
             session.SwitchWeaponTo(actor.WeaponId);
 
+            // The new weapon draws from a different pouch, so the slot is re-resolved here
+            // rather than only at spawn. Leaving it pointing at the old slot would have a
+            // grenade reload spend the rifle's magazines -- a double-spend with no error
+            // anywhere, which is precisely what ISpareAmmoPool's seam exists to prevent.
+            ResolveActiveLoadoutSlot(session, actor.WeaponId);
+
             // Unchanged, and still after: this field MIRRORS the session, which is why it could
             // never have supplied the missing half itself.
             actor.AmmoInClip = session.Weapon.AmmoInClip;
@@ -425,6 +495,13 @@ namespace Ironfront.Net.Unity.Server
                 NetServerBindings.SetPendingDeploySelection(
                     new DeployLoadoutSelection(
                         actor.ActorId, r.Primary, r.Secondary, r.Gear1, r.Gear2, r.Gear3));
+
+                // The same five ids, kept on the session. The body can be asked what it is
+                // HOLDING but not which slot that came from, so this table is the only inverse
+                // of that question the server has -- and without it every reserve would have to
+                // be guessed. Handoff section 4.5.
+                session.SetLoadout(r.Primary, r.Secondary, r.Gear1, r.Gear2, r.Gear3);
+                SeedSpareAmmo(session);
             }
 
             // Arms the body. MoveToSpawnPoint teleports and does not call Actor.SpawnAt, so
@@ -444,7 +521,43 @@ namespace Ironfront.Net.Unity.Server
             session.WeaponId = actor.WeaponId;
 
             session.ResetWeapon();
-            actor.AmmoInClip = session.Weapon.AmmoInClip;
+
+            ResolveActiveLoadoutSlot(session, actor.WeaponId);
+
+            ActorAmmoSource spawnAmmo = session.AmmoSourceFrom(_loop.SpareAmmo);
+            WeaponConfig spawnWeapon = session.WeaponConfig;
+            PublishWeaponState(session, actor, in spawnWeapon, in spawnAmmo);
+        }
+
+        /// <summary>
+        /// Fills this player's five spare-ammo slots from the weapon catalogue. V10.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The pool existed and nothing ever put rounds in it.</b> Before protocol 10 the
+        /// infantry reload refilled the clip unconditionally, so every slot sitting at zero was
+        /// invisible; wiring the reload to the pool without this would leave every player unable
+        /// to reload at all, which is a worse bug than the one being closed.
+        /// </para>
+        /// <para>
+        /// <b>The authored figure is the ceiling too.</b> <c>Actor.ResupplyAmmo</c> clamps to
+        /// <c>configuration.spareAmmo</c>, so an ammo bag refills a slot to what the player
+        /// spawned with -- which is exactly the number being written here.
+        /// </para>
+        /// </remarks>
+        private void SeedSpareAmmo(ClientSession session)
+        {
+            for (byte slot = 0; slot < ActorSpareAmmoPool.SlotsPerActor; slot++)
+            {
+                short spare = WeaponCatalog.For(session.LoadoutWeaponAt(slot)).SpareAmmo;
+
+                // Resupply per pulse is left at zero: how much one ammo-bag pulse adds is a per
+                // weapon number this catalogue does not carry yet, and a guess here would be a
+                // balance change wearing a netcode commit's clothes. A zero means the bag adds
+                // nothing, which is what happens today.
+                _loop.SpareAmmo.SetLoadout(
+                    session.ActorId, slot, spare, spare, resupplyPerPulse: 0);
+            }
         }
 
         /// <summary>

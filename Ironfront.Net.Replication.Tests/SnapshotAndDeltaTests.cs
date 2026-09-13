@@ -35,11 +35,12 @@ namespace Ironfront.Net.Replication.Tests
         [Fact]
         public void FullSnapshotSizeMatchesTheSpecBudget()
         {
-            // protocol-spec.md § 4.3: 20 bytes per actor with every v1 field, plus a 13-byte
-            // header. The 64-actor case is 1293 bytes, past the 1184-byte payload limit, so
-            // the join snapshot is expected to fragment.
-            Assert.Equal(20, SnapshotMessage.EntrySize(SnapshotField.FullNoSeat));
-            Assert.Equal(13 + 48 * 20, SnapshotBuilder.FullSizeFor(48));
+            // protocol-spec.md § 4.3: 23 bytes per actor with every on-foot field, plus a
+            // 13-byte header. The 64-actor case is 1485 bytes, past the 1184-byte payload
+            // limit, so the join snapshot is expected to fragment.
+            Assert.Equal(23, SnapshotMessage.EntrySize(SnapshotField.FullNoSeat));
+            Assert.Equal(13 + 48 * 23, SnapshotBuilder.FullSizeFor(48));
+            Assert.Equal(1485, SnapshotBuilder.FullSizeFor(64));
             Assert.True(SnapshotBuilder.FullSizeFor(64) > ProtocolConstants.MAX_PAYLOAD);
         }
 
@@ -425,8 +426,108 @@ namespace Ironfront.Net.Replication.Tests
                 Assert.Equal(want.Health, got.Health);
                 Assert.Equal(want.WeaponId, got.WeaponId);
                 Assert.Equal(want.AmmoInClip, got.AmmoInClip);
+                Assert.Equal(want.SpareAmmoEncoded, got.SpareAmmoEncoded);
+                Assert.Equal(want.WeaponStateFlags, got.WeaponStateFlags);
                 Assert.Equal(want.Team, got.Team);
             }
+        }
+
+        // ------------------------------------- § 10.1: the v10 weapon field through a delta
+        //
+        // These two live here rather than in Ironfront.Net.Protocol.Tests/Conformance/
+        // WeaponFieldTests.cs with the other six § 10.1 cases: DeltaEncoder and DeltaDecoder
+        // are Replication types, and the protocol conformance project references only
+        // Ironfront.Net.Protocol. Giving the referee of the lower layer a reference to the
+        // higher one to host two tests is a worse trade than splitting the section.
+
+        [Fact]
+        public void ASparseDeltaLeavesTheBaselineReserveAndReloadFlagIntact()
+        {
+            // The regression this exists for: a reserve that falls to zero between reloads
+            // because a position-only delta carried no weapon bytes and the decoder wrote the
+            // entry's default over the baseline instead of carrying all four parts forward.
+            var encoder = new DeltaEncoder();
+            var decoder = new DeltaDecoder();
+            var buffer = new byte[1024];
+
+            var world = new WorldSnapshot { ServerTick = 1 };
+            world.Add(WeaponActor(
+                actorId: 5, position: new Vec3(0f, 0f, 0f),
+                spareAmmoEncoded: 0x0123, flags: WeaponStateFlags.Reloading));
+
+            int written = encoder.Write(buffer, world, lastProcessedInputTick: 1);
+            Assert.Equal(SnapshotReadResult.Applied, decoder.Read(buffer.AsSpan(0, written)));
+            encoder.OnClientAck(1);
+
+            // Only the position moves.
+            world.ServerTick = 2;
+            world.Actors[0] = WeaponActor(
+                actorId: 5, position: new Vec3(12f, 0f, 0f),
+                spareAmmoEncoded: 0x0123, flags: WeaponStateFlags.Reloading);
+
+            written = encoder.Write(buffer, world, lastProcessedInputTick: 2);
+
+            // The delta genuinely does not carry bit 5 — otherwise the assertion below would
+            // be satisfied by a delta that resent the weapon field and proved nothing.
+            var parsed = new ActorSnapshotEntry[ProtocolConstants.MAX_ACTORS];
+            Assert.True(SnapshotMessage.TryParse(
+                buffer.AsSpan(0, written), parsed, out _, out int count));
+            Assert.Equal(1, count);
+            Assert.False(parsed[0].Has(SnapshotField.Weapon));
+
+            Assert.Equal(SnapshotReadResult.Applied, decoder.Read(buffer.AsSpan(0, written)));
+            Assert.True(decoder.Current.TryFind(5, out ActorSnapshotEntry after));
+
+            Assert.Equal(0x0123, after.SpareAmmoEncoded);
+            Assert.Equal(WeaponStateFlags.Reloading, after.WeaponStateFlags);
+            Assert.Equal(7, after.AmmoInClip);
+            Assert.Equal(3, after.WeaponId);
+        }
+
+        [Fact]
+        public void ChangeMaskSetsTheWeaponBitWhenOnlyTheReserveMoved()
+        {
+            // Separate from the reload-flag case on purpose. One combined test that changed
+            // both would pass with either comparison missing from ComputeChangeMask, which is
+            // exactly the half-written diff v10 was at risk of shipping.
+            ActorSnapshotEntry before = WeaponActor(5, Vec3.Zero, 0x0123, WeaponStateFlags.None);
+            ActorSnapshotEntry after  = WeaponActor(5, Vec3.Zero, 0x0122, WeaponStateFlags.None);
+
+            SnapshotField mask = DeltaEncoder.ComputeChangeMask(in before, in after);
+
+            Assert.Equal(SnapshotField.Weapon, mask);
+        }
+
+        [Fact]
+        public void ChangeMaskSetsTheWeaponBitWhenOnlyTheReloadFlagMoved()
+        {
+            ActorSnapshotEntry before = WeaponActor(5, Vec3.Zero, 0x0123, WeaponStateFlags.None);
+            ActorSnapshotEntry after  =
+                WeaponActor(5, Vec3.Zero, 0x0123, WeaponStateFlags.Reloading);
+
+            SnapshotField mask = DeltaEncoder.ComputeChangeMask(in before, in after);
+
+            Assert.Equal(SnapshotField.Weapon, mask);
+        }
+
+        private static ActorSnapshotEntry WeaponActor(
+            ushort actorId, Vec3 position, ushort spareAmmoEncoded, WeaponStateFlags flags)
+        {
+            ActorSnapshotEntry entry = SnapshotBuilder.Capture(
+                actorId,
+                position,
+                yawDegrees: 0f,
+                pitchDegrees: 0f,
+                velocity: Vec3.Zero,
+                stateFlags: ActorStateFlags.IsAlive,
+                health: 100f,
+                weaponId: 3,
+                ammoInClip: 7,
+                team: 0);
+
+            entry.SpareAmmoEncoded = spareAmmoEncoded;
+            entry.WeaponStateFlags = flags;
+            return entry;
         }
     }
 }

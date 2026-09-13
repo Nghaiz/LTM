@@ -1,9 +1,40 @@
-using System;
+﻿using System;
 using Ironfront.Net.Protocol;
+using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Movement;
 
 namespace Ironfront.Net.Replication
 {
+    /// <summary>
+    /// The weapon half of one actor's snapshot entry, as
+    /// <see cref="SnapshotBuilder.ResolveWeaponFields"/> resolved it.
+    /// </summary>
+    /// <remarks>
+    /// A struct of the three so a caller cannot carry the clip forward and forget the reserve.
+    /// <c>DeltaEncoder.ComputeChangeMask</c> masks the four weapon parts together and
+    /// <c>DeltaDecoder.ApplyEntry</c> replaces or carries all four - a partial assignment on
+    /// this side would put a reload flag from one tick beside a clip from another.
+    /// </remarks>
+    public readonly struct WeaponSnapshotFields
+    {
+        public WeaponSnapshotFields(
+            byte ammoInClip, ushort spareAmmoEncoded, WeaponStateFlags stateFlags)
+        {
+            AmmoInClip = ammoInClip;
+            SpareAmmoEncoded = spareAmmoEncoded;
+            StateFlags = stateFlags;
+        }
+
+        public byte AmmoInClip { get; }
+
+        public ushort SpareAmmoEncoded { get; }
+
+        public WeaponStateFlags StateFlags { get; }
+
+        /// <summary>The reserve, decoded back. For a HUD, a log, or a test.</summary>
+        public SpareAmmo Reserve => SpareAmmo.Decode(SpareAmmoEncoded);
+    }
+
     /// <summary>
     /// Turns gameplay state into quantized snapshot entries, and writes a full snapshot.
     /// </summary>
@@ -53,7 +84,9 @@ namespace Ironfront.Net.Replication
             byte ammoInClip,
             byte team,
             ushort vehicleId = 0,
-            byte seatIndex = 0)
+            byte seatIndex = 0,
+            ushort spareAmmoEncoded = SpareAmmo.NoResupplyEncoded,
+            WeaponStateFlags weaponStateFlags = WeaponStateFlags.None)
         {
             // Saturation is otherwise invisible: PackPos clamps, and the clamped value decodes
             // to a plausible position on the boundary rather than to anything that looks wrong.
@@ -84,10 +117,44 @@ namespace Ironfront.Net.Replication
                 AmmoInClip = ammoInClip,
                 Team       = team,
 
+                // Default no-resupply rather than zero, because on the wire those are different
+                // facts and only one of them is safe to guess: a HUD reading "no reserve" for a
+                // weapon that has one is a display bug, and a HUD reading "0 rounds" for a
+                // weapon that never had a reserve is a player waiting for an ammo bag that can
+                // never help them. Every caller that knows better passes it.
+                SpareAmmoEncoded = spareAmmoEncoded,
+                WeaponStateFlags = weaponStateFlags,
+
                 VehicleId  = vehicleId,
                 SeatIndex  = seatIndex,
             };
         }
+
+        /// <summary>
+        /// The three weapon numbers an actor's snapshot entry carries, resolved from the
+        /// server's own state. Handoff section 4.5.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>One function, because the reserve has three sources and they disagree.</b> The
+        /// clip is the session's, the reserve is <c>ActorSpareAmmoPool</c>'s keyed by
+        /// <c>(actorId, loadoutSlot)</c>, and whether the weapon has a reserve at all is the
+        /// weapon config's. Resolving them at the call site would put the "which -1 is this?"
+        /// question - the one <see cref="SpareAmmo"/> exists to answer once - back into the
+        /// snapshot builder, and the wrong answer shows up as a HUD reading 65535.
+        /// </para>
+        /// <para>
+        /// <b>Mounted weapons do not come through here.</b> A turret's reserve lives on the
+        /// weapon and would be a different number under the same field; if a turret HUD needs
+        /// one later it gets its own field in the vehicle stream.
+        /// </para>
+        /// </remarks>
+        public static WeaponSnapshotFields ResolveWeaponFields(
+            in WeaponRuntimeState weapon, in WeaponConfig config, in ActorAmmoSource ammo)
+            => new WeaponSnapshotFields(
+                weapon.AmmoInClip,
+                ammo.Reserve(in weapon, in config).Encode(),
+                weapon.Reloading ? WeaponStateFlags.Reloading : WeaponStateFlags.None);
 
         /// <summary>Rounds and clamps a float health into the 0..100 the wire allows.</summary>
         public static byte ClampHealth(float health)

@@ -3,6 +3,29 @@ using Ironfront.Net.Protocol;
 namespace Ironfront.Net.Replication.Combat
 {
     /// <summary>
+    /// Where one actor is in the life cycle the protocol-10 handoff § 7 requires:
+    /// <c>Alive -&gt; Dead/Ragdoll -&gt; RespawnPending -&gt; Alive</c>.
+    /// </summary>
+    /// <remarks>
+    /// Derived from the death stamp and the clock rather than stored beside them, per
+    /// <c>code-conventions.md</c> § "No Derived Fields": a phase field written at each edge is a
+    /// second copy of what <see cref="ServerRespawnGate.IsDead"/> and
+    /// <see cref="ServerRespawnGate.MayRespawn"/> already answer, and the two would disagree on
+    /// exactly the edge that is hard to observe.
+    /// </remarks>
+    public enum ActorLifePhase : byte
+    {
+        /// <summary>No death on record. The only phase in which a shot may be resolved.</summary>
+        Alive = 0,
+
+        /// <summary>Dead, and the respawn delay has not elapsed. The corpse is cleaning up.</summary>
+        Dead = 1,
+
+        /// <summary>Dead, delay elapsed, waiting on a request. Still dead until one arrives.</summary>
+        RespawnPending = 2,
+    }
+
+    /// <summary>
     /// When a dead actor is allowed to come back. The server counterpart of
     /// <c>ClientCombatState.CanRequestRespawn</c>. phase-05 task 1.
     /// </summary>
@@ -39,6 +62,16 @@ namespace Ironfront.Net.Replication.Combat
         /// </remarks>
         public long EarlyRequestsRefused { get; private set; }
 
+        /// <summary>Deaths reported for an actor that was already dead. Handoff § 7.</summary>
+        /// <remarks>
+        /// <b>Not a rounding error the way <see cref="EarlyRequestsRefused"/> is.</b> A second
+        /// death inside one life means two damage paths both resolved the same kill, and before
+        /// <see cref="TryBeginDeath"/> the consequence was two <c>S_DEATH</c> broadcasts, two
+        /// killfeed lines and two tickets off one death. Any non-zero value names a real second
+        /// caller worth finding.
+        /// </remarks>
+        public long DuplicateDeathsSuppressed { get; private set; }
+
         /// <summary>Stamps the death clock. Idempotent within one life.</summary>
         /// <remarks>
         /// The second call for the same death is ignored rather than re-stamping. Death arrives
@@ -47,12 +80,51 @@ namespace Ironfront.Net.Replication.Combat
         /// player as the countdown jumping backwards.
         /// </remarks>
         public void MarkDeath(ushort actorId, float nowSeconds)
+            => TryBeginDeath(actorId, nowSeconds);
+
+        /// <summary>
+        /// Stamps the death clock and reports whether this call is the <b>alive to dead
+        /// edge</b>. Everything a death emits once belongs behind a true from here.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b><see cref="MarkDeath"/> was idempotent and that was not enough.</b> It swallowed
+        /// the second stamp silently, so its caller could not tell a first death from a repeat —
+        /// and the caller is the thing that broadcasts <c>S_DEATH</c>, records the kill and moves
+        /// the ticket. All three ran per call. Returning the edge instead of hiding it is the
+        /// whole change: the gate already knew, it simply did not say.
+        /// </para>
+        /// <para>
+        /// <b>Level-triggered on the record, not edge-triggered on the damage.</b>
+        /// <c>DamageOutcome.Died</c> is already edge-triggered inside one damage path; this is
+        /// what makes two INDEPENDENT damage paths — a hitscan resolution and the engine's own
+        /// <c>Actor.Damage</c> guard, both of which reach the same actor — resolve to one death.
+        /// </para>
+        /// </remarks>
+        /// <returns>True exactly once per life.</returns>
+        public bool TryBeginDeath(ushort actorId, float nowSeconds)
         {
-            if (actorId >= _dead.Length) return;
-            if (_dead[actorId]) return;
+            if (actorId >= _dead.Length) return false;
+
+            if (_dead[actorId])
+            {
+                DuplicateDeathsSuppressed++;
+                return false;
+            }
 
             _dead[actorId] = true;
             _diedAt[actorId] = nowSeconds;
+            return true;
+        }
+
+        /// <summary>Which phase of § 7's transition this actor is in right now.</summary>
+        public ActorLifePhase PhaseOf(ushort actorId, float nowSeconds)
+        {
+            if (actorId >= _dead.Length || !_dead[actorId]) return ActorLifePhase.Alive;
+
+            return nowSeconds - _diedAt[actorId] < RespawnSeconds
+                ? ActorLifePhase.Dead
+                : ActorLifePhase.RespawnPending;
         }
 
         /// <summary>Whether this actor's respawn delay has elapsed.</summary>
@@ -115,6 +187,7 @@ namespace Ironfront.Net.Replication.Combat
             }
 
             EarlyRequestsRefused = 0;
+            DuplicateDeathsSuppressed = 0;
         }
     }
 }

@@ -140,6 +140,147 @@ namespace Ironfront.Net.Replication.Server
         public WeaponRuntimeState Weapon = WeaponRuntimeState.Loaded(WeaponCatalog.Inert);
 
         /// <summary>
+        /// The effective trigger of the most recently PROCESSED input frame, and the sprint
+        /// block that goes with it. Handoff section 5.1.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A field rather than a property for the same reason <see cref="Weapon"/> is one:
+        /// <c>ServerCombatAuthority.Step</c> takes it by <c>ref</c>, and a property would hand
+        /// it a copy whose rising edge is recomputed from nothing every frame - which is the
+        /// defect, restored by accident.
+        /// </para>
+        /// <para>
+        /// <b>Advanced only by a frame that survived the tick dedup.</b> That dedup already
+        /// exists in two places on the accepted-input path - <see cref="EnqueueInput"/> and
+        /// <c>InputAuthority.TryAccept</c> - and this deliberately does not add a third.
+        /// </para>
+        /// </remarks>
+        public EffectiveTrigger Trigger = EffectiveTrigger.Idle;
+
+        /// <summary>
+        /// The loadout slot this player's carried weapon draws its reserve from, when the
+        /// server can say which one it is. Handoff section 4.5.
+        /// </summary>
+        /// <remarks>
+        /// <b>Deliberately not a <c>byte</c> that defaults to 0.</b> Slot 0 is somebody's
+        /// primary, so a session whose slot was never resolved would silently spend and report
+        /// the primary's reserve while holding a grenade. The pair - a flag and a value - is
+        /// what lets <see cref="TryGetAmmoSource"/> answer "I do not know" rather than guess.
+        /// </remarks>
+        public byte ActiveLoadoutSlot { get; private set; }
+
+        /// <summary>False until the server has resolved <see cref="ActiveLoadoutSlot"/>.</summary>
+        public bool HasActiveLoadoutSlot { get; private set; }
+
+        /// <summary>
+        /// The weapon id in each of the five loadout slots, as the deploy request named them.
+        /// </summary>
+        /// <remarks>
+        /// This is what makes <see cref="ActiveLoadoutSlot"/> resolvable at all: the body can be
+        /// asked what it is HOLDING (<c>NetServerActor.WeaponId</c>, via
+        /// <c>Actor.activeWeapon.NetworkId</c>) but not which slot it came out of, and there is
+        /// no gameplay seam that reports one. The server armed the body from this table, so the
+        /// table is the inverse of the question.
+        /// </remarks>
+        private readonly byte[] _loadoutWeaponIds = new byte[Combat.ActorSpareAmmoPool.SlotsPerActor];
+
+        private bool _hasLoadout;
+
+        /// <summary>True once a deploy request has named this player's five slots.</summary>
+        public bool HasLoadout => _hasLoadout;
+
+        /// <summary>The weapon id in one slot, or <see cref="WeaponIds.NONE"/>.</summary>
+        public byte LoadoutWeaponAt(byte slot)
+            => slot < _loadoutWeaponIds.Length ? _loadoutWeaponIds[slot] : WeaponIds.NONE;
+
+        /// <summary>
+        /// Records the loadout the deploy request asked for, in slot order.
+        /// </summary>
+        /// <remarks>
+        /// <b>Deliberately NOT cleared on a server-initiated respawn.</b> An auto-respawn - the
+        /// one that follows falling out of the world - carries no client request, and clearing
+        /// the table there would leave the slot unresolvable and every reload refused for the
+        /// rest of that life. The body is re-armed from the same loadout it deployed with, so
+        /// the stale table is the right answer rather than merely the convenient one; if the
+        /// player deploys again with a different loadout, that request overwrites it.
+        /// </remarks>
+        public void SetLoadout(byte primary, byte secondary, byte gear1, byte gear2, byte gear3)
+        {
+            _loadoutWeaponIds[0] = primary;
+            _loadoutWeaponIds[1] = secondary;
+            _loadoutWeaponIds[2] = gear1;
+            _loadoutWeaponIds[3] = gear2;
+            _loadoutWeaponIds[4] = gear3;
+            _hasLoadout = true;
+        }
+
+        /// <summary>
+        /// Points <see cref="ActiveLoadoutSlot"/> at whichever slot holds
+        /// <paramref name="weaponId"/>, or forgets the slot when none does.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Forgetting is the whole point of the return value.</b> A weapon the body is
+        /// holding that is in none of the five slots means the session and the body disagree
+        /// about the loadout - handoff section 4.5's state inconsistency - and the answer to
+        /// that is no reserve and no reloads, never slot 0.
+        /// </para>
+        /// <para>
+        /// <b>First match wins</b> when a loadout carries the same id twice. The two slots hold
+        /// the same weapon, so they refill the same clip from different pouches; picking the
+        /// lower one is arbitrary but stable, which is what stops the reported reserve flapping
+        /// between two numbers on consecutive snapshots.
+        /// </para>
+        /// </remarks>
+        public bool ResolveActiveLoadoutSlotFrom(byte weaponId)
+        {
+            if (_hasLoadout && weaponId != WeaponIds.NONE)
+            {
+                for (byte slot = 0; slot < _loadoutWeaponIds.Length; slot++)
+                    if (_loadoutWeaponIds[slot] == weaponId)
+                        return SetActiveLoadoutSlot(slot);
+            }
+
+            ForgetActiveLoadoutSlot();
+            return false;
+        }
+
+        /// <summary>Records the slot the body is provably holding.</summary>
+        /// <returns>False, leaving the slot unknown, when the slot is outside the loadout.</returns>
+        public bool SetActiveLoadoutSlot(byte slot)
+        {
+            if (slot >= Combat.ActorSpareAmmoPool.SlotsPerActor)
+            {
+                ForgetActiveLoadoutSlot();
+                return false;
+            }
+
+            ActiveLoadoutSlot = slot;
+            HasActiveLoadoutSlot = true;
+            return true;
+        }
+
+        /// <summary>
+        /// Drops the slot, so reloads are refused and the snapshot reports no-resupply until it
+        /// is resolved again.
+        /// </summary>
+        public void ForgetActiveLoadoutSlot()
+        {
+            ActiveLoadoutSlot = 0;
+            HasActiveLoadoutSlot = false;
+        }
+
+        /// <summary>
+        /// Where this session's reload draws from, or the unknown-slot source when the loadout
+        /// has not been resolved.
+        /// </summary>
+        public Combat.ActorAmmoSource AmmoSourceFrom(Combat.ISpareAmmoPool pool)
+            => HasActiveLoadoutSlot
+                ? Combat.ActorAmmoSource.FromSlot(pool, ActorId, ActiveLoadoutSlot)
+                : Combat.ActorAmmoSource.UnknownSlot(pool, ActorId);
+
+        /// <summary>
         /// Which weapon this player is holding, as <c>NetServerActor.WeaponId</c> reports it.
         /// </summary>
         /// <remarks>
@@ -250,6 +391,13 @@ namespace Ironfront.Net.Replication.Server
         {
             if (weaponId == WeaponId) return;
 
+            // A switch is not a trigger release, but it must read as one: a player who holds
+            // Fire through a weapon change would otherwise have the new weapon's first frame
+            // read as a continuation, and a semi-automatic would never see its rising edge
+            // until they let go. The sprint block is deliberately NOT cleared - it is a fact
+            // about the body, and swapping weapons is not a way out of it.
+            Trigger.ReArm();
+
             if (WeaponId < _parkedWeapons.Length)
             {
                 WeaponRuntimeState outgoing = Weapon;
@@ -278,6 +426,38 @@ namespace Ironfront.Net.Replication.Server
             ResetWeaponPreservingMemory();
         }
 
+        /// <summary>
+        /// Cancels everything the trigger and the reload were in the middle of, at the DEATH
+        /// edge. Handoff section 5.3.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>At the death edge, not at the respawn.</b> <see cref="ResetWeapon"/> is the only
+        /// thing that cleared a running reload, and it runs when the player deploys again -
+        /// which can be seconds later, or never. In between,
+        /// <c>ServerReloadPolicy.CompleteReloadIfElapsed</c> would finish the reload on the
+        /// server's own clock and spend the reserve for it: a corpse drawing rounds out of a
+        /// pouch, and the count arriving on the next snapshot the client can see.
+        /// </para>
+        /// <para>
+        /// <b>The sprint block goes too, and that is not tidiness.</b> A player who died
+        /// sprinting would otherwise carry the remainder of the window into the next life and
+        /// have the first shot of it refused, from a sprint the previous body was doing.
+        /// </para>
+        /// <para>
+        /// <b>The clip is deliberately left alone.</b> What a life ends holding is not this
+        /// method's business - <see cref="ResetWeapon"/> owns what a life STARTS with, and two
+        /// writers of the ammo count is the divergence phase-05 D9 removed for health.
+        /// </para>
+        /// </remarks>
+        public void ClearCombatStateOnDeath()
+        {
+            Weapon.Reloading = false;
+            Weapon.ReloadStartedAt = float.NegativeInfinity;
+
+            Trigger = EffectiveTrigger.Idle;
+        }
+
         /// <summary>Re-arms the weapon with a full clip. Called on spawn and respawn.</summary>
         /// <remarks>
         /// <b><see cref="WeaponId"/> must already be assigned when this runs.</b> The clip size
@@ -295,6 +475,11 @@ namespace Ironfront.Net.Replication.Server
             // and round reset -- want exactly that, and a second method they had to remember to
             // call is a second method one of them would eventually not.
             Array.Clear(_hasParkedWeapon, 0, _hasParkedWeapon.Length);
+
+            // A new life starts with no sprint block and no trigger held. Carrying either
+            // across a death would refuse the first shot of a life for up to
+            // SPRINT_FIRE_BLOCK_SECONDS, from a sprint the previous body was doing.
+            Trigger = EffectiveTrigger.Idle;
 
             ResetWeaponPreservingMemory();
         }

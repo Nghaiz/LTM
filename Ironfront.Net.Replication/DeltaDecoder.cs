@@ -242,10 +242,18 @@ namespace Ironfront.Net.Replication
             if ((mask & SnapshotField.StateFlags) != 0) result.StateFlags = incoming.StateFlags;
             if ((mask & SnapshotField.Health)     != 0) result.Health     = incoming.Health;
 
+            // All four, or none of the four. `result` starts as a copy of the baseline, so
+            // the else-branch is carry-forward by construction — but only as long as nothing
+            // here assigns a part of the field outside this block. Splitting the reserve out
+            // to "assign it always" would write the incoming entry's default 0 over a live
+            // baseline reserve on every sparse delta that does not carry the weapon bit, and
+            // the client would watch its reserve drop to zero between reloads for no reason.
             if ((mask & SnapshotField.Weapon) != 0)
             {
-                result.WeaponId   = incoming.WeaponId;
-                result.AmmoInClip = incoming.AmmoInClip;
+                result.WeaponId         = incoming.WeaponId;
+                result.AmmoInClip       = incoming.AmmoInClip;
+                result.SpareAmmoEncoded = incoming.SpareAmmoEncoded;
+                result.WeaponStateFlags = incoming.WeaponStateFlags;
             }
 
             if ((mask & SnapshotField.Team) != 0) result.Team = incoming.Team;

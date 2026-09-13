@@ -23,13 +23,13 @@ namespace Ironfront.Net.Replication.Vehicles
     /// <para>
     /// <b>An array indexed by id, not a dictionary</b> — <c>ServerRespawnGate</c> set the
     /// precedent in phase-05. Ids are dense, 1-based and capped at
-    /// <see cref="ProtocolConstants.MAX_VEHICLES"/>, so the array is 17 slots and a lookup is a
-    /// bounds check. A dictionary would hash on the hot path to answer a question an index
+    /// <see cref="ProtocolConstants.MAX_VEHICLES"/>, so the array is that many slots plus an
+    /// unused zeroth and a lookup is a bounds check. A dictionary would hash on the hot path to answer a question an index
     /// already answers.
     /// </para>
     /// <para>
     /// <b>A dense id list runs alongside the sparse array</b> so capture walks live vehicles
-    /// rather than 17 slots looking for 3. Removal swaps with the last entry, so the list is
+    /// rather than every slot looking for three. Removal swaps with the last entry, so the list is
     /// unordered — which is fine here and would not be in the interest tracker, where the
     /// admission order is load-bearing.
     /// </para>
@@ -143,7 +143,7 @@ namespace Ironfront.Net.Replication.Vehicles
         /// </summary>
         /// <remarks>
         /// A read-modify-write pair rather than a <c>ref</c> accessor. A <c>ref</c> would be one
-        /// fewer copy of a 40-byte struct on a path that runs at most 16 times a tick, and it
+        /// fewer copy of a 40-byte struct on a path that runs once per live vehicle per tick, and it
         /// would hand every caller a permanent write handle into the registry's backing array —
         /// which is how a second writer of <c>Health</c> appears without anybody deciding to add
         /// one. A damage sink going through a named method is
@@ -188,7 +188,8 @@ namespace Ironfront.Net.Replication.Vehicles
 
         /// <summary>Finds where an actor is sitting, if anywhere.</summary>
         /// <remarks>
-        /// A scan over at most 16 x 8 slots, run once per seat request rather than per tick.
+        /// A scan over at most <c>MAX_VEHICLES</c> x 8 slots, run once per seat request rather
+        /// than per tick.
         /// A reverse index would be a second copy of the same fact, and the failure mode of a
         /// stale reverse index is an actor the arbiter believes is seated in a vehicle that no
         /// longer exists — which is precisely the class of bug V4-D10 removes elsewhere.

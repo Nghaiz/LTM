@@ -210,14 +210,16 @@ namespace Ironfront.Net.Replication.Combat
                 cooldown: 1.5f, spread: 0f, projectilesPerShot: 1, range: 1000f,
                 damage: 80f, force: 130f, clipSize: 8,
                 balanceDamage: 130f,
-                dropoffStartMetres: 248.3f, dropoffEndMetres: 500f, dropoffMinMultiplier: 0.9f);
+                dropoffStartMetres: 248.3f, dropoffEndMetres: 500f, dropoffMinMultiplier: 0.9f,
+                automatic: false);
 
             // dmr.prefab. Semi-auto, 20-round magazine.
             configs[WeaponIds.SIGNAL_DMR] = new WeaponConfig(
                 cooldown: 0.14f, spread: 0.0012f, projectilesPerShot: 1, range: 800f,
                 damage: 38f, force: 100f, clipSize: 20,
                 balanceDamage: 60f,
-                dropoffStartMetres: 149f, dropoffEndMetres: 300f, dropoffMinMultiplier: 0.75f);
+                dropoffStartMetres: 149f, dropoffEndMetres: 300f, dropoffMinMultiplier: 0.75f,
+                automatic: false);
 
             // RFB.prefab (ScopedWeapon). A fast-firing marksman rifle, not the bolt-action the
             // placeholder assumed - 0.1 s and 14 rounds against the guessed 1.5 s and 5.
@@ -227,6 +229,14 @@ namespace Ironfront.Net.Replication.Combat
                 balanceDamage: 85f,
                 dropoffStartMetres: 36f, dropoffEndMetres: 400f, dropoffMinMultiplier: 0.8f);
 
+            // automatic: false on all six entries below and on the sniper and the DMR above.
+            // The evidence is each entry's own comment rather than a judgement made here: the
+            // sniper's says the placeholder was wrong to call it an automatic, the DMR's says
+            // "Semi-auto", and a launcher or a throwable with a clip of one is one press per
+            // shot by construction. EAGLE_76 and RECON_LRR are left automatic because nothing
+            // in the assets read so far says otherwise, and guessing at a cadence is a balance
+            // change wearing a netcode commit's clothes.
+            //
             // Launched. smaw.prefab -> rocket.prefab (Rocket): damage 1000, balanceDamage 400.
             // The placeholder had this as an 8-pellet shotgun doing 12 a pellet.
             //
@@ -237,26 +247,26 @@ namespace Ironfront.Net.Replication.Combat
             configs[WeaponIds.BEU_AW1] = new WeaponConfig(
                 cooldown: 0.05f, spread: 0f, projectilesPerShot: 1, range: 300f,
                 damage: 0f, force: 0f, clipSize: 1,
-                delivery: WeaponDelivery.Projectile);
+                delivery: WeaponDelivery.Projectile, automatic: false);
 
             // javelin.prefab -> javelin missile.prefab (JavelinMissile): damage 2000,
             // balanceDamage 300. The placeholder had this as a marksman rifle doing 40.
             configs[WeaponIds.BIL_SCALPEL] = new WeaponConfig(
                 cooldown: 0.2f, spread: 0f, projectilesPerShot: 1, range: 1000f,
                 damage: 0f, force: 0f, clipSize: 1,
-                delivery: WeaponDelivery.Projectile);
+                delivery: WeaponDelivery.Projectile, automatic: false);
 
             // Thrown. Both -> GrenadeProjectile, impact damage 70, balanceDamage 60; the blast is
             // separate and V7's. One carried, not the two the placeholder assumed.
             configs[WeaponIds.FRAG] = new WeaponConfig(
                 cooldown: 1.3f, spread: 0.01f, projectilesPerShot: 1, range: 40f,
                 damage: 0f, force: 0f, clipSize: 1,
-                delivery: WeaponDelivery.Projectile);
+                delivery: WeaponDelivery.Projectile, automatic: false);
 
             configs[WeaponIds.SPEARHEAD] = new WeaponConfig(
                 cooldown: 1.3f, spread: 0.01f, projectilesPerShot: 1, range: 40f,
                 damage: 0f, force: 0f, clipSize: 1,
-                delivery: WeaponDelivery.Projectile);
+                delivery: WeaponDelivery.Projectile, automatic: false);
 
             // Not weapons, and the assets agree rather than the class name doing the arguing.
             // AMMO_BAG and MEDIPACK resolve a projectile whose damage is literally 0. BINOCS

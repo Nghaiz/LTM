@@ -275,6 +275,28 @@ namespace Ironfront.Net.Unity.Server
         }
 
         /// <summary>
+        /// The reserve this actor's carried weapon reports, already encoded. Protocol 10.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Encoded rather than a count, because the two sentinels do not survive a count.</b>
+        /// <c>SpareAmmo</c> is the only codec for this field - a weapon with no reserve at all
+        /// and one that has spent its reserve are different facts that both look like zero, and
+        /// infinite is a third. Storing a plain number here would put the "which -1 is this?"
+        /// question back on this side of the seam.
+        /// </para>
+        /// <para>
+        /// <b>Defaults to no-resupply, not to zero.</b> A bot or a prop that nobody publishes a
+        /// weapon story for should report "this never refills" rather than "empty pouch", which
+        /// is the reading a player would act on.
+        /// </para>
+        /// </remarks>
+        public ushort SpareAmmoEncoded { get; set; } = SpareAmmo.NoResupplyEncoded;
+
+        /// <summary>Whether a server-accepted reload is running. Protocol 10.</summary>
+        public WeaponStateFlags WeaponStateFlags { get; set; } = Ironfront.Net.Protocol.WeaponStateFlags.None;
+
+        /// <summary>
         /// Staggers the underlying gameplay actor. A no-op for a replicated object that has none
         /// -- a prop or a bare test rig has no balance to lose.
         /// </summary>
@@ -430,9 +452,131 @@ namespace Ironfront.Net.Unity.Server
 
         private void OnDisable() => ServerActorRegistry.Instance.Unregister(this);
 
+        /// <summary>
+        /// The colliders this body had disabled when it died, so a respawn re-enables exactly
+        /// those and not a collider something else had switched off for its own reasons.
+        /// </summary>
+        /// <remarks>
+        /// A list reused across lives rather than a fresh array per death: a body dies a few
+        /// times a minute and the rig does not change between them.
+        /// </remarks>
+        private readonly System.Collections.Generic.List<Collider> _disabledOnDeath =
+            new System.Collections.Generic.List<Collider>();
+
+        /// <summary>
+        /// <see cref="IsAlive"/> as of the previous observation, so the death and respawn edges
+        /// can be detected rather than assumed.
+        /// </summary>
+        /// <remarks>
+        /// <b>An edge and not the setter, because the setter is not the only writer.</b>
+        /// <see cref="IsAlive"/> passes through to <c>Actor.dead</c>, and the ordinary way an
+        /// actor dies is <c>Actor.Damage</c> writing that flag directly — so a corpse cleanup
+        /// hung off this component's setter would never run for a real death, only for the
+        /// server-initiated ones. Observing the flag once per snapshot tick catches every
+        /// writer, including ones this assembly cannot see.
+        /// </remarks>
+        private bool _wasAliveLastObservation = true;
+
+        /// <summary>Whether this body's pad-blocking colliders are currently switched off.</summary>
+        public bool CorpseCollidersDisabled { get; private set; }
+
+        /// <summary>
+        /// Runs the death and respawn edges of protocol-10 handoff § 7: colliders out of the
+        /// way on the way down, back on the way up.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Idempotent, and that is the whole requirement.</b> It compares against the previous
+        /// observation, so being called every tick of a five-minute death does the collider work
+        /// once — and being called twice on the tick of the death does it once too.
+        /// </para>
+        /// <para>
+        /// <b>Internal and driven from <see cref="Capture"/></b>, which already runs once per
+        /// snapshot tick per replicated actor and already reads <see cref="IsAlive"/>. A second
+        /// per-actor sweep somewhere else would be a second place to remember, and an actor that
+        /// is not captured is not replicated — so there is no body this misses that anybody can
+        /// see.
+        /// </para>
+        /// </remarks>
+        internal void ObserveLifeEdge()
+        {
+            bool alive = IsAlive;
+            if (alive == _wasAliveLastObservation) return;
+
+            _wasAliveLastObservation = alive;
+
+            if (alive) RestoreCorpseColliders();
+            else DisableCorpseColliders();
+        }
+
+        /// <summary>
+        /// Switches off every collider on a layer a vehicle pad refuses to spawn into.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Filtered by layer rather than by name or by component type.</b> Island's report
+        /// names one offender, <c>Bone_002</c>, and naming bones would fix that map and no other;
+        /// what actually decides the outcome is the layer, because that is what
+        /// <c>VehicleSpawner</c>'s <c>OverlapSphere</c> mask tests. See
+        /// <see cref="CorpseColliderLedger.SpawnBlockMask"/> for why the mask is restated in the
+        /// library rather than read from the spawner.
+        /// </para>
+        /// <para>
+        /// <b>A collider already disabled is not recorded</b>, so the respawn does not enable
+        /// something that was off before the death — a ragdoll rig whose colliders are switched
+        /// on only while it is limp is exactly that case, and re-enabling its bones on a living
+        /// body would put a second set of hitboxes inside the player.
+        /// </para>
+        /// <para>
+        /// The lookup includes inactive children: a ragdoll rig is commonly parked deactivated,
+        /// and <c>OverlapSphere</c> ignores those anyway — but a rig activated BY the death, one
+        /// frame before this runs, is found either way.
+        /// </para>
+        /// </remarks>
+        private void DisableCorpseColliders()
+        {
+            _disabledOnDeath.Clear();
+
+            Collider[] colliders = GetComponentsInChildren<Collider>(includeInactive: true);
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                Collider collider = colliders[i];
+                if (collider == null) continue;
+                if (!collider.enabled) continue;
+                if (!CorpseColliderLedger.BlocksVehicleSpawn(collider.gameObject.layer)) continue;
+
+                collider.enabled = false;
+                _disabledOnDeath.Add(collider);
+            }
+
+            CorpseCollidersDisabled = true;
+            ServerTickLoop.Current?.Corpses.NoteCollidersDisabled(ActorId);
+        }
+
+        /// <summary>Puts back exactly what <see cref="DisableCorpseColliders"/> took away.</summary>
+        private void RestoreCorpseColliders()
+        {
+            for (int i = 0; i < _disabledOnDeath.Count; i++)
+            {
+                Collider collider = _disabledOnDeath[i];
+                // Destroyed between the death and the respawn -- a ragdoll rig torn down and
+                // rebuilt is the ordinary case, not an error.
+                if (collider == null) continue;
+                collider.enabled = true;
+            }
+
+            _disabledOnDeath.Clear();
+            CorpseCollidersDisabled = false;
+            ServerTickLoop.Current?.NoteRespawned(ActorId);
+        }
+
         /// <summary>Quantizes this actor's current state into a snapshot entry.</summary>
         public ActorSnapshotEntry Capture()
         {
+            // The life edge is read here because this method already runs once per snapshot tick
+            // per replicated actor and already reads IsAlive. See ObserveLifeEdge.
+            ObserveLifeEdge();
+
             Vec3 position = Movement != null
                 ? Movement.State.Position
                 : MovementSimulation.ToCore(transform.position);
@@ -485,7 +629,9 @@ namespace Ironfront.Net.Unity.Server
                 _ammoInClip,
                 _team,
                 vehicleId,
-                seatIndex);
+                seatIndex,
+                SpareAmmoEncoded,
+                WeaponStateFlags);
         }
 
         /// <summary>Packs the gameplay booleans the snapshot carries as one byte.</summary>

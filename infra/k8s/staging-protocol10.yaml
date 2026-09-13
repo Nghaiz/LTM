@@ -1,0 +1,335 @@
+# Ironfront protocol-10 STAGING — master + both shipped maps, on the Kubernetes sandbox.
+#
+# This is the topology § 13.1 of docs/multiplayer-game-server-protocol-handoff-2026-09-13.md
+# asks for before a production cutover: a master and a game server, both speaking protocol 10,
+# on endpoints kept apart from anything serving protocol 9, with both Dustbowl and Island up so
+# the room browser has something to choose between.
+#
+# It is NOT infra/k8s/gameserver-lan.yaml. That file is a single standalone game server with no
+# master at all, which is the right shape for debugging netcode and the wrong shape for proving
+# a version cutover: the master is where PROTOCOL_VERSION is actually enforced
+# (MspMessageDispatcher compares request.ClientVersion and answers WrongClientVersion), so a
+# staging run without one tests the half of the contract that was never in doubt.
+#
+# ---------------------------------------------------------------------------------------
+# WHY IT IS SAFE TO APPLY ON A CLUSTER THAT IS ALREADY RUNNING SOMETHING ELSE
+#
+# Everything lives in the `ironfront` namespace. No ClusterRole, no webhook, no CRD, no change
+# to the apiserver's NodePort range, no CNI change, and nothing that would put Docker on a node
+# whose kubelet is using containerd. The whole footprint leaves with:
+#
+#     kubectl delete namespace ironfront
+#
+# Node-level claims: TCP 27000 and 27001, UDP 27015 and 27016, through hostNetwork. All four
+# were free when this was written — re-check with `ss -lntup | grep -E ':2701?[0156]'` before
+# applying, because a port that has quietly been taken presents as a CrashLoopBackOff on a
+# SocketException, which reads as a server fault rather than a host one.
+#
+# Memory is the real shared resource on this node, not CPU: it has ~11 GB and the other project
+# is using most of it. Requests here are deliberately far below the limits so the scheduler
+# reserves little, and the limits exist to turn "the OOM killer picked a process" into "this pod
+# restarted".
+#
+# ---------------------------------------------------------------------------------------
+# WHY hostNetwork RATHER THAN NodePort, FOR ALL THREE
+#
+# The default NodePort range is 30000-32767. The master's 27000 and the game servers' 27015/27016
+# are outside it, and widening the range is an apiserver flag change on a cluster that belongs to
+# another project. hostNetwork binds exactly the ports the processes already bind, so a client
+# dials 192.168.94.130 with no translation in the path.
+#
+# ---------------------------------------------------------------------------------------
+# WHY THE MASTER IS IN PLAINTEXT HERE, AND WHY THE TICKETS ARE STILL SIGNED
+#
+# EnvRegistry on IRONFRONT_TLS_CERT_PATH: "Empty means PLAINTEXT. That is fine on a LAN and NOT
+# fine on the Internet" — the wire carries a password hash, and to the server the hash is the
+# password. This subnet is a NAT'd VMware host-only network, so plaintext is the sanctioned
+# choice and it keeps a self-signed certificate's fingerprint pin off the critical path of a
+# protocol test.
+#
+# Signed tickets are a different question and the answer is the opposite one.
+# IRONFRONT_GAMESERVER_ACCEPT_UNSIGNED_TICKETS stays "0" here, unlike the LAN file, because the
+# join path with real tickets is part of what staging is meant to prove: a client logs in to the
+# master, is handed a signed ticket, and presents it to a game server that checks the signature.
+# Accepting unsigned tickets would skip that whole exchange and leave the cutover untested in
+# precisely the place a version mismatch surfaces.
+#
+# Ticket signatures cover a 60-second validity window, so the node's clock must be in sync.
+# Check `timedatectl show -p NTPSynchronized` before blaming a rejected ticket on the protocol.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ironfront
+  labels:
+    app.kubernetes.io/part-of: ironfront
+    ironfront.dev/topology: staging-protocol10
+---
+# The shared secret signs joinTickets on the master and verifies them on both game servers, so
+# all three read the same Secret. It is NOT in this file: create it before applying, and let it
+# live only in the cluster.
+#
+#     kubectl -n ironfront create secret generic ironfront-staging \
+#       --from-literal=IRONFRONT_SHARED_SECRET="$(openssl rand -base64 48)"
+#
+# A committed secret is a secret in the repository's history for ever, and a placeholder value
+# committed "just for staging" is the one that ends up in production.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: master-env-p10
+  namespace: ironfront
+data:
+  IRONFRONT_MASTER_PORT: "27000"
+  IRONFRONT_METRICS_PORT: "27001"
+  IRONFRONT_METRICS_BIND: "0.0.0.0"
+  IRONFRONT_DB_PATH: "/data/ironfront.db"
+  IRONFRONT_METRICS_CSV: "/data/durability.csv"
+  IRONFRONT_METRICS_CSV_INTERVAL_SEC: "60"
+  IRONFRONT_LOG_LEVEL: "Info"
+  IRONFRONT_STRUCTURED_LOG: "1"
+  IRONFRONT_MAX_CONNECTIONS_PER_IP: "16"
+  IRONFRONT_MAX_TOTAL_CONNECTIONS: "64"
+  IRONFRONT_LOGIN_RATE_PER_MINUTE: "30"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gameserver-env-p10
+  namespace: ironfront
+data:
+  IRONFRONT_GAMESERVER_TRANSPORT: "udp"
+
+  # hostNetwork, so this is the node's own address and not a Service name. A game server that
+  # cannot reach the master does not fail — MasterLinkBootstrap treats it as standalone and
+  # plays on, unadvertised — which is exactly why this has to be checked in the metrics rather
+  # than assumed from a pod being Running.
+  IRONFRONT_MASTER_HOST: "192.168.94.130"
+  IRONFRONT_MASTER_PORT: "27000"
+  IRONFRONT_GAMESERVER_MASTER_TLS: "0"
+
+  # What the master hands to clients as the address to dial.
+  IRONFRONT_GAMESERVER_PUBLIC_IP: "192.168.94.130"
+
+  IRONFRONT_GAMESERVER_ACCEPT_UNSIGNED_TICKETS: "0"
+  IRONFRONT_GAMESERVER_MAX_PLAYERS: "16"
+  IRONFRONT_GAMESERVER_MAX_CONNECTIONS: "16"
+  IRONFRONT_LOG_LEVEL: "Info"
+  IRONFRONT_STRUCTURED_LOG: "1"
+
+  # Off by default. Per-shot and per-loadout logging writes thousands of lines with stack
+  # traces, which stalls the server process and pushes RTT into the hundreds of milliseconds --
+  # measured at 350-377 ms in the 2026-09-11 session. Latency read off a run with this on is
+  # measuring the logger.
+  IRONFRONT_LOG_SHOTS: "0"
+  IRONFRONT_LOG_LOADOUT: "0"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: master-data
+  namespace: ironfront
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: master
+  namespace: ironfront
+  labels:
+    app.kubernetes.io/name: ironfront-master
+spec:
+  replicas: 1
+  strategy:
+    # Two masters cannot share hostNetwork's 27000, and they cannot share one SQLite file
+    # either. Recreate makes the gap between old and new explicit rather than a stuck rollout.
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ironfront-master
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ironfront-master
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        # The PVC is created root-owned; the master runs as 1654 and must be able to write its
+        # SQLite file into it. fsGroup is what makes the mount group-writable for that uid.
+        fsGroup: 1654
+      containers:
+        - name: master
+          # Pinned by digest at deploy time, never :latest. tools/deploy-staging-p10.ps1
+          # rewrites this line with the digest it just pushed and side-loaded.
+          image: ghcr.io/nghaiz/ironfront-master:staging-p10
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: master-env-p10
+            - secretRef:
+                name: ironfront-staging
+          ports:
+            - name: msp
+              containerPort: 27000
+              protocol: TCP
+            - name: metrics
+              containerPort: 27001
+              protocol: TCP
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1654
+            runAsGroup: 1654
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            # The master's metrics endpoint is real HTTP, so unlike the game servers this one
+            # can be probed honestly.
+            httpGet:
+              path: /metrics
+              port: 27001
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: master-data
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: game-server-dustbowl
+  namespace: ironfront
+  labels:
+    app.kubernetes.io/name: ironfront-game-server
+    ironfront.dev/map: dustbowl
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ironfront-game-server
+      ironfront.dev/map: dustbowl
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ironfront-game-server
+        ironfront.dev/map: dustbowl
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: game-server
+          image: ghcr.io/nghaiz/ironfront-game-server:staging-p10
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: gameserver-env-p10
+            - secretRef:
+                name: ironfront-staging
+          env:
+            # NetServerBootstrap lives in a map scene. Without a scene named here the build
+            # walks Splash -> Menu, binds nothing, and presents as healthy-and-unreachable.
+            - name: IRONFRONT_GAMESERVER_SCENE
+              value: "Dustbowl"
+            - name: IRONFRONT_GAMESERVER_UDP_PORT
+              value: "27015"
+          ports:
+            - name: game-udp
+              containerPort: 27015
+              protocol: UDP
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1654
+            runAsGroup: 1654
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: "300m"
+              memory: "384Mi"
+            limits:
+              cpu: "2"
+              memory: "1500Mi"
+          # No readinessProbe on purpose. A Unity UDP listener cannot be probed honestly over
+          # TCP, and a probe that always passes is worse than none: it reports healthy on
+          # exactly the failure this server has had before, which is binding nothing and
+          # accepting nobody. Read the log line, or the master's registered count.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: game-server-island
+  namespace: ironfront
+  labels:
+    app.kubernetes.io/name: ironfront-game-server
+    ironfront.dev/map: island
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ironfront-game-server
+      ironfront.dev/map: island
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ironfront-game-server
+        ironfront.dev/map: island
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: game-server
+          image: ghcr.io/nghaiz/ironfront-game-server:staging-p10
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: gameserver-env-p10
+            - secretRef:
+                name: ironfront-staging
+          env:
+            - name: IRONFRONT_GAMESERVER_SCENE
+              value: "Island"
+            - name: IRONFRONT_GAMESERVER_UDP_PORT
+              value: "27016"
+          ports:
+            - name: game-udp
+              containerPort: 27016
+              protocol: UDP
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1654
+            runAsGroup: 1654
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: "300m"
+              memory: "384Mi"
+            limits:
+              cpu: "2"
+              memory: "1500Mi"

@@ -137,6 +137,15 @@ namespace Ironfront.Net.Unity.Server
         private readonly LagCompensator _lagCompensator;
 
         private readonly ServerRespawnGate _respawnGate = new ServerRespawnGate();
+
+        /// <summary>
+        /// Which corpses still have colliders a vehicle pad refuses to spawn into. Protocol-10
+        /// handoff § 7; Island logged a pad held for thirty retries by a dead actor's
+        /// <c>Bone_002</c>. Held here rather than on <see cref="NetServerActor"/> because there
+        /// is one deadline for the server, not one per body, and because
+        /// <see cref="ResetForNewMatch"/> has to be able to clear it.
+        /// </summary>
+        private readonly CorpseColliderLedger _corpses = new CorpseColliderLedger();
         private readonly ServerFireResolver _fireResolver;
         private readonly ServerActorDamageSink _damageSink;
         private readonly ServerCombatAuthority _combatAuthority;
@@ -375,6 +384,46 @@ namespace Ironfront.Net.Unity.Server
 
         /// <summary>When a dead actor may come back. Phase-05 task 1.</summary>
         public ServerRespawnGate RespawnGate => _respawnGate;
+
+        /// <summary>The corpse-cleanup record, read by <see cref="NetServerActor"/>'s life edge.</summary>
+        public CorpseColliderLedger Corpses => _corpses;
+
+        /// <summary>
+        /// The respawn edge of protocol-10 handoff § 7: the corpse record is cleared and the
+        /// first snapshot of the new life is made a full one.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why the baseline has to go.</b> A delta snapshot only carries what CHANGED, and a
+        /// respawned body legitimately comes back holding the same weapon on the same team — so
+        /// the entry that announces the new life can be three fields wide. That is enough for a
+        /// client that kept its record, and not enough for one that tore the model down when the
+        /// body died, which is what the client track does. <c>DeltaEncoder.Reset</c> has said
+        /// "used on respawn/rejoin" since phase-02 and had no respawn caller until here.
+        /// </para>
+        /// <para>
+        /// <b>Only the respawning player's own session, and the rest is a stated gap.</b> Every
+        /// OTHER client also has to rebuild that model, and the cheap way to reach them is
+        /// <see cref="SpawnAckTracker.Forget"/>, which withholds the actor until a fresh
+        /// <c>S_SPAWN_ACTOR</c> has gone out — one small reliable message per client rather than
+        /// sixteen full 1677-byte snapshots. It is not done here because re-announcing a spawn
+        /// for an id a client already knows is a client-side behaviour this branch cannot
+        /// exercise, and guessing at it would be the kind of repair that masks its own symptom.
+        /// </para>
+        /// </remarks>
+        public void NoteRespawned(ushort actorId)
+        {
+            _corpses.NoteRespawn(actorId);
+
+            for (int i = 0; i < _players.Count; i++)
+            {
+                ClientSession session = _players[i].Session;
+                if (session.ActorId != actorId) continue;
+
+                session.Encoder.Reset();
+                return;
+            }
+        }
 
         /// <summary>Pacing and the tick-time distribution M1 criterion 1 is graded on.</summary>
         public ServerTickScheduler Scheduler => _scheduler;
@@ -1249,8 +1298,40 @@ namespace Ironfront.Net.Unity.Server
             ushort victimActorId, ushort killerActorId, in Vec3 force, byte hitbox,
             CauseOfDeath cause)
         {
-            _respawnGate.MarkDeath(
-                victimActorId, _scheduler.CurrentTick / (float)ProtocolConstants.SIM_TICK_RATE);
+            float now = _scheduler.CurrentTick / (float)ProtocolConstants.SIM_TICK_RATE;
+
+            // THE DEATH EDGE, and everything below it runs exactly once per life. The gate was
+            // already idempotent -- a second MarkDeath never re-stamped the clock -- but it
+            // swallowed the repeat silently, so this method went on to broadcast a second
+            // S_DEATH, write a second killfeed line and take a second ticket off the team. Two
+            // damage paths reach one actor (ServerCombatBridge's hitscan resolution, and the
+            // engine's own Actor.Damage guard through ServerCombatEvents.ReportDeath), so the
+            // repeat is ordinary rather than exotic. Protocol-10 handoff § 7.
+            if (!_respawnGate.TryBeginDeath(victimActorId, now)) return;
+
+            // The corpse's cleanup deadline starts here, at the same instant the respawn clock
+            // does, so "was this body cleaned up in time" is measured from the one edge rather
+            // than from whenever the collider work happened to be noticed.
+            _corpses.NoteDeath(victimActorId, now);
+
+            // A dead shooter's last shot is forgotten, so the first shot of the next life cannot
+            // read as a redundant copy of it on a tick counter that has come back around.
+            _projectiles?.ForgetShooter(victimActorId);
+
+            // A running reload dies with its owner. Nothing cleared it at THIS edge before --
+            // only ResetWeapon at respawn did -- so a player shot mid-reload kept the timer
+            // running while dead, and the reload completed into a corpse: the snapshot carried
+            // Reloading for the rest of the death, and the reserve was spent on a clip the new
+            // life throws away. The trigger latch goes with it, so a player who died holding
+            // Fire does not fire on the first tick of the next life without releasing first.
+            // Bots have no session and clear their combat state through the authority instead.
+            for (int i = 0; i < _players.Count; i++)
+            {
+                ClientSession session = _players[i].Session;
+                if (session.ActorId != victimActorId) continue;
+                session.ClearCombatStateOnDeath();
+                break;
+            }
 
             var message = new DeathMessage(
                 victimActorId, killerActorId, cause,
@@ -1635,6 +1716,11 @@ namespace Ironfront.Net.Unity.Server
             // the audit owns the reset next to the check for it, so the two cannot drift.
             _stateAudit.ResetForNewMatch(_retainedIds);
             _respawnGate.Reset();
+
+            // Beside the respawn gate, because the two are stamped from the same death edge: a
+            // corpse record surviving into the next round would report a body that no longer
+            // exists as blocking a pad, forever.
+            _corpses.Reset();
 
             // Not the audit's, because neither is a per-pair table: the lockouts are per actor
             // and the burn counters are cumulative. A lockout surviving into the next round would

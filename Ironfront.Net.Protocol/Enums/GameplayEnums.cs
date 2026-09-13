@@ -66,6 +66,39 @@ namespace Ironfront.Net.Protocol
     }
 
     /// <summary>
+    /// The authoritative weapon state bits carried by <see cref="SnapshotField.Weapon"/>.
+    /// protocol-spec.md section 4.3. One byte; bits 1..7 are reserved.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The trigger is deliberately absent. A held trigger is not state the client needs to
+    /// reconstruct — <c>S_WEAPON_FIRE</c> already names each round the server accepted, and a
+    /// bit sampled at the 20 Hz snapshot rate would miss taps between snapshots while implying
+    /// it had seen them.
+    /// </para>
+    /// <para>
+    /// A reserved bit is written 0 by the server and ignored by the client. That is not the
+    /// same as forwards compatibility: giving one of them meaning changes what a peer must do
+    /// with it and so bumps <c>PROTOCOL_VERSION</c>, exactly as adding a field would.
+    /// </para>
+    /// </remarks>
+    [Flags]
+    public enum WeaponStateFlags : byte
+    {
+        None      = 0,
+
+        /// <summary>
+        /// The server has accepted a reload and it has neither completed nor been cancelled.
+        /// </summary>
+        /// <remarks>
+        /// Set at the moment the server accepts the reload, not when the client asks for one:
+        /// a request the server refused (clip already full, no reserve, actor dead) must not
+        /// leave the client playing a reload animation for a reload that is not happening.
+        /// </remarks>
+        Reloading = 1 << 0,
+    }
+
+    /// <summary>
     /// Snapshot changeMask bits. Bit i = 1 means field i is present in this packet.
     /// protocol-spec.md section 4.3.
     /// </summary>
@@ -83,7 +116,20 @@ namespace Ironfront.Net.Protocol
         StateFlags = 1 << 3,
         /// <summary>u8, 0..100. 1 byte.</summary>
         Health     = 1 << 4,
-        /// <summary>u8 weaponId + u8 ammoInClip. 2 bytes.</summary>
+        /// <summary>
+        /// u8 weaponId + u8 ammoInClip + u16 spareAmmoEncoded + u8
+        /// <see cref="WeaponStateFlags"/>. 5 bytes as of v10.
+        /// </summary>
+        /// <remarks>
+        /// It was 2 bytes through v9, and the two it lacked are why a bazooka could read
+        /// <c>0/N</c> on the server and <c>1/N</c> on the client. The reserve and the reload
+        /// state were authoritative on the server and simply never crossed the wire, so the
+        /// client kept its own Ravenfield-side pool beside the clip it was told about: two
+        /// sources of one number, free to disagree, and most visibly wrong on the clip-of-one
+        /// weapons where a single round is the whole magazine. The fields widened this field
+        /// rather than claiming a ninth mask bit because <see cref="SnapshotField"/> has none
+        /// left — see § 4.3 of the spec.
+        /// </remarks>
         Weapon     = 1 << 5,
         /// <summary>u8. Only sent on change (rare). 1 byte.</summary>
         Team       = 1 << 6,

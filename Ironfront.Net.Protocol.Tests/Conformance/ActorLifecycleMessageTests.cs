@@ -296,7 +296,10 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
             //   v3  the vehicle wire (§ 4.10): six new opcodes, a second entity stream, and
             //       SnapshotField.SeatInfo finished on the actor entry. S_EXPLOSION's layout was
             //       not touched by any of it and still is not what moved the number.
-            Assert.Equal(9, ProtocolConstants.PROTOCOL_VERSION);
+            //   v10 the actor entry's weapon field (§ 4.3) went 2 -> 5 bytes and MAX_VEHICLES
+            //       went 16 -> 24. S_SPAWN_ACTOR, S_DESPAWN_ACTOR and S_EXPLOSION all sit
+            //       outside the snapshot entry, so none of their three layouts moved.
+            Assert.Equal(10, ProtocolConstants.PROTOCOL_VERSION);
         }
     }
 }

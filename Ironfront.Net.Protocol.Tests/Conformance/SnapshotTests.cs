@@ -29,13 +29,15 @@ namespace Ironfront.Net.Protocol.Tests
         [Fact]
         public void EntrySizes_MatchTheSpecBudget()
         {
-            // "Full (every field)": 2 + 1 + 6 + 3 + 3 + 1 + 1 + 2 + 1 = 20
-            Assert.Equal(20, SnapshotMessage.EntrySize(SnapshotField.FullNoSeat));
+            // "Full (every field)": 2 + 1 + 6 + 3 + 3 + 1 + 1 + 5 + 1 = 23. The weapon field
+            // went 2 -> 5 bytes in v10 to carry the reserve and the reload flag; the three
+            // extra bytes land here and nowhere else.
+            Assert.Equal(23, SnapshotMessage.EntrySize(SnapshotField.FullNoSeat));
 
             // The seated case, which is what InterestManager now projects against. 3 bytes
             // wider, and the 8 bytes of shedding headroom that costs are the reason it is
             // pinned here rather than left to a bandwidth regression to discover.
-            Assert.Equal(23, SnapshotMessage.EntrySize(SnapshotField.Full));
+            Assert.Equal(26, SnapshotMessage.EntrySize(SnapshotField.Full));
 
             // "Typical delta (pos + rot only)": 2 + 1 + 6 + 3 = 12
             Assert.Equal(12, SnapshotMessage.EntrySize(
@@ -167,6 +169,7 @@ namespace Ironfront.Net.Protocol.Tests
                 StateFlags = ActorStateFlags.IsAlive | ActorStateFlags.IsAiming,
                 Health = 100,
                 WeaponId = 200, AmmoInClip = 30,
+                SpareAmmoEncoded = 0x0123, WeaponStateFlags = WeaponStateFlags.Reloading,
                 Team = 1,
             };
 
@@ -174,7 +177,7 @@ namespace Ironfront.Net.Protocol.Tests
             var header = new SnapshotHeader(1, 1, 0, 1);
 
             Span<byte> buffer = stackalloc byte[SnapshotMessage.SizeFor(entries)];
-            Assert.Equal(13 + 20, SnapshotMessage.Write(buffer, header, entries));
+            Assert.Equal(13 + 23, SnapshotMessage.Write(buffer, header, entries));
 
             var parsed = new ActorSnapshotEntry[1];
             Assert.True(SnapshotMessage.TryParse(buffer, parsed, out _, out int count));
@@ -195,6 +198,10 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(entry.Health, p.Health);
             Assert.Equal(entry.WeaponId, p.WeaponId);
             Assert.Equal(entry.AmmoInClip, p.AmmoInClip);
+            // Both halves of the widened weapon field. A round-trip that only checked the
+            // clip would pass with the reserve and the flags dropped on the floor.
+            Assert.Equal(entry.SpareAmmoEncoded, p.SpareAmmoEncoded);
+            Assert.Equal(entry.WeaponStateFlags, p.WeaponStateFlags);
             Assert.Equal(entry.Team, p.Team);
         }
 

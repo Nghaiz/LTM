@@ -1,6 +1,6 @@
 # Protocol Specification — Ironfront Reborn
 
-**Version: 9.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 9`
+**Version: 10.0.0** · Status: **FROZEN** (end of week 1) · Wire `PROTOCOL_VERSION = 10`
 
 > This is the contract every side of the wire is written against. Every offset, every enum value
 > and every quantization constant in this document is **mandatory**. Client and server may not
@@ -47,7 +47,7 @@
 public static class ProtocolConstants
 {
     public const ushort PROTOCOL_ID       = 0x4946;  // 'IF' — filters out junk packets
-    public const byte   PROTOCOL_VERSION  = 9;
+    public const byte   PROTOCOL_VERSION  = 10;
 
     public const int    MTU_SAFE          = 1200;    // safe through any router
     public const int    GSP_HEADER_SIZE   = 16;
@@ -75,7 +75,7 @@ public static class ProtocolConstants
     public const int    MAX_BOTS          = 32;
     public const int    MAX_ACTORS        = 64;      // = MAX_PLAYERS + MAX_BOTS + headroom
 
-    public const int    MAX_VEHICLES      = 16;     // separate u16 id space, see § 4.10
+    public const int    MAX_VEHICLES      = 24;     // separate u16 id space, see § 4.10
     public const int    VEHICLE_ID_QUARANTINE_TICKS = 150;   // 5 s, same rule as actorId
 }
 ```
@@ -367,13 +367,63 @@ repeat actorCount times:
     [bit2] velocity    i8 × 3    Quantized -64..64 m/s
     [bit3] stateFlags  u8        See below
     [bit4] health      u8        0..100
-    [bit5] weapon      u8 weaponId + u8 ammoInClip
+    [bit5] weapon      u8 weaponId + u8 ammoInClip + u16 spareAmmoEncoded + u8 weaponStateFlags
     [bit6] team        u8        Only sent on change (rare)
     [bit7] seatInfo    u16 vehicleId + u8 seatIndex   (vehicleId 0 = not seated)
 ```
 
 **`changeMask`**: bit i = 1 ⇔ field i is present in this packet. In a full snapshot, every needed
 bit is 1. In a delta snapshot, only the bits for fields that actually changed since `baselineTick`.
+
+An actor on foot with every field present (`FullNoSeat`) is **23 bytes**; seated, **26**. A full
+64-actor snapshot is 1485 bytes unseated and 1677 fully seated — both past `MAX_PAYLOAD`, so both
+fragment, which is the ordinary join case rather than an error (§ 6).
+
+**`weapon` (bit 5) — the four parts, and why they travel together.** Through v9 this field was two
+bytes, `weaponId` and `ammoInClip`, and the reserve was not on the wire at all. The server held the
+authoritative reserve in its spare-ammo pool while the client held Ravenfield's own pool, so the two
+numbers were free to drift, and on a clip-of-one weapon — bazooka, grenade — a single round is the
+whole magazine, which is where the drift became a bazooka that read `0/N` on one side and `1/N` on
+the other. v10 widens the field rather than claiming a ninth `changeMask` bit, because there is no
+ninth bit (below).
+
+```
+u8   weaponId
+u8   ammoInClip
+u16  spareAmmoEncoded     little-endian, like every u16 in this protocol
+u8   weaponStateFlags
+```
+
+`spareAmmoEncoded`:
+
+| Wire value | Meaning |
+|---:|---|
+| `0 .. 65533` | A countable reserve |
+| `65534` (`0xFFFE`) | **No resupply** — no reserve, and no ammo bag will give it one. Distinct from a countable `0`, which is empty but refillable |
+| `65535` (`0xFFFF`) | **Infinite** — reloading does not decrement it |
+
+The sentinels sit at the top of the range because the field is unsigned and there is no below-zero
+to put them in. `Ironfront.Net.Protocol/SpareAmmoWire.cs` is the only place that converts: the
+weapon model spells no-resupply `-1` and infinite `-2`, while a pool's `Remaining` spells infinite
+`-1`, and an inline `(ushort)` cast at each call site turns one of those meanings into the other
+without saying so.
+
+`weaponStateFlags`:
+
+| Bit | Name | Meaning |
+|---:|---|---|
+| 0 | `Reloading` | The server accepted a reload and it has neither completed nor been cancelled |
+| 1–7 | Reserved | Server writes 0; client ignores |
+
+There is deliberately no trigger bit. `S_WEAPON_FIRE` already names every round the server
+accepted, and a trigger sampled at the 20 Hz snapshot rate would miss taps between snapshots while
+implying it had seen them.
+
+**Delta rule for this field: all four parts or none.** A delta that carries bit 5 replaces all four;
+one that does not carries all four forward from the baseline. Assigning the reserve outside that
+branch writes a sparse delta's default `0` over a live baseline, and the client watches its reserve
+fall to zero between reloads for no reason. `DeltaEncoder.ComputeChangeMask` sets bit 5 when **any**
+of the four differs, which includes a reload that spends the reserve without changing the clip.
 
 ### 4.3.1. `actorId` — allocation and lifetime
 
@@ -827,7 +877,7 @@ property that makes `changeMask` safe.
 | **Does it share the `actorId` space?** | **No.** A separate `u16` space, allocated **from 1** | A vehicle is not an actor and never occupies an actorId. `MAX_ACTORS` and `SnapshotHeader.actorCount` are untouched by this section |
 | **What does 0 mean?** | **"No vehicle."** Never assigned | `seatInfo` (§ 4.3.1) must be able to say *left the vehicle*, and it is sent only on change. A sentinel is the only way to express that in a `u16` field |
 | **Is an id reused as soon as a vehicle dies?** | **No — quarantine for 5 seconds** (`VEHICLE_ID_QUARANTINE_TICKS` = 150) | The same reason as § 4.3.1: snapshots and events naming a destroyed vehicle are in flight for up to one interpolation buffer plus retransmits, so reissuing immediately applies a wreck's tail packets to its replacement |
-| **Is `MAX_VEHICLES = 16` enough?** | **Yes**, and the cap is load-bearing | It bounds the vehicle body at `16 × 30 + 9 = 489 B`, which is what lets the elastic actor body be sized against what the bounded one consumed. It also leaves the quarantine window room while a spawner replaces a wreck |
+| **Is `MAX_VEHICLES = 24` enough?** | **Yes at 24**, and the cap is load-bearing | It bounds the vehicle body at `24 × 30 + 9 = 729 B`, which is what lets the elastic actor body be sized against what the bounded one consumed. It also leaves the quarantine window room while a spawner replaces a wreck. **Raised from 16 at v10**: Island exhausted the space in a real match (15/16, then 16/16), after which spawners either lost their vehicle or created one with id 0 that no client can address. Dustbowl peaks above its spawner count because `AfterMoved` keeps a superseded wreck mapped while its replacement is live, so both hold an id. 24 covers the observed peak with six ids of headroom |
 
 #### Co-residency with `S_SNAPSHOT`
 
@@ -1579,6 +1629,7 @@ Added at v3.0.0:
 | **7.0.1** | 2026-09-03 | the client track | **`ErrorCode.InvalidDisplayName` = 1005, and a blank display name stops being a credential problem.** `AuthService.Register` refused `IsNullOrWhiteSpace(displayName)` and reported it as `WrongCredentials` (1000), so the register screen — whose own field is labelled *"Display name (optional)"* and whose docstring promised *"Left blank, the master applies its own rule"* — answered **every** account creation with "Wrong username or password." on a form that has no credentials yet. Account creation failed 100% of the time. Blank now falls back to the username (the promised rule, written down at last); a name that was supplied and is over 32 characters gets 1005, on the `TeamsWouldUnbalance` precedent that a refusal the player can act on deserves its own code. **Also back-fills § 13's missing `2005` row**, added to the enum by P16 and never to this table. Found by playing the game, not by a gate: every one of the 2,103 tests passed a display name | **No** — no byte moved. `errorCode` is already a `u16` in `REGISTER_RESPONSE`; a value added to its space is invisible to a decoder that never receives it, and an older client renders an unrecognised code as its number rather than misreading it (`MasterErrorText`) | (this PR) |
 | **8.0.0** | 2026-09-03 | the client track | **`C_SPAWN_REQUEST` (0x23) grows a body — see § 4.14.** Empty since the freeze; now `u8` × 5 loadout slots + `u8 spawnPointIndex` = 6 bytes. A join no longer places the body (`ServerTickLoop.OnClientConnected`), so this message now drives the first deploy as well as every later respawn, arming the body from the loadout the client actually chose (`ServerCombatBridge.PlaceAtSpawn`) instead of the server's own `controller.GetLoadout()` draw. Ledger **X-11** | **Yes** — an empty body decoded by the V8 parser's fixed 6-byte read fails `TryParse` outright; a v7 client's spawn/respawn requests would all be counted as malformed rather than silently misread | (this PR) |
 | **9.0.0** | 2026-09-07 | the client track | **The fifth Ravenfield loadout slot can be selected over `C_INPUT`.** Bit 15 changes from reserved to `SwitchWeapon4`; the human keyboard and mouse-wheel path now produces the same absolute slot intent that the server already consumes for slots 0–3. | **Yes** — the bytes are the same width, but bit 15 gained gameplay meaning. A v8 server would silently ignore a v9 client's gear-3 selection and keep firing the previous weapon, so the peers must refuse the mismatch. | (this change) |
+| **10.0.0** | 2026-09-14 | the server track | **The reserve, the reload state and eight more vehicle ids.** `S_SNAPSHOT`'s `weapon` field (bit 5) goes 2 → 5 bytes, adding `u16 spareAmmoEncoded` and `u8 weaponStateFlags` (§ 4.3); `MAX_VEHICLES` 16 → 24 (§ 4.10). Also pins the sprint-fire window as a shared constant so both sides refuse the same shots — no byte carries it, but the behaviour on an unchanged `C_INPUT` byte layout changes, which is the other half of what a version means. | **Yes** — every field after bit 5 in an actor entry shifts by three bytes. A v9 client parsing a v10 entry reads the reserve's low byte as `team` and then walks off the end of the entry; the peers must refuse the mismatch rather than try. `MAX_VEHICLES` alone would also do it: a v9 client sizes its vehicle array to 16 and a 24-vehicle snapshot overruns it | (this change) |
 
 > Every change after the freeze must add a row to this table and clear the gate below.
 > **Bump `PROTOCOL_VERSION` only when the bytes on the wire change** — a client and server with

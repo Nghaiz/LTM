@@ -41,7 +41,7 @@ namespace Ironfront.Net.Replication.Tests
         public void TheRefusalReportsTheCounterRatherThanOfferingAChoice()
         {
             string body = StripComments(
-                MethodBody(ReadUnitySource(Spawner), "private void AnnounceSpawn()"));
+                MethodBody(ReadUnitySource(Spawner), "private ushort AnnounceSpawn(Vehicle vehicle)"));
 
             Assert.Contains("DescribeSpawnRefusal", body, StringComparison.Ordinal);
 
