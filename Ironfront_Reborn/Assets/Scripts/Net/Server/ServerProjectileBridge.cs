@@ -51,6 +51,12 @@ namespace Ironfront.Net.Unity.Server
         private readonly ProjectileIdPool _idPool;
 
         /// <summary>
+        /// The record that makes one accepted shot produce one projectile and one blast, even
+        /// when the same shot is offered twice. Protocol-10 handoff § 6.
+        /// </summary>
+        private readonly ProjectileEmissionLedger _emissions = new ProjectileEmissionLedger();
+
+        /// <summary>
         /// Blast radius carried by <c>S_EXPLOSION</c>, in metres. Matches the authored
         /// <c>ExplosionConfiguration.balanceRange</c> default of 9 m, which is the wider of the
         /// two ranges and therefore the one that bounds what a client should draw and shake for.
@@ -196,6 +202,17 @@ namespace Ironfront.Net.Unity.Server
             // event in the game. Returning 0 without a message is the whole of it.
             if (kind == ProjectileKind.Bullet && !_projectiles.StepsKind(kind)) return 0;
 
+            // ONE PROJECTILE PER ACCEPTED SHOT, and the shot is identified by its TICK. Input
+            // redundancy sends the same frame up to three times, and § 16 forbids dropping the
+            // redundancy -- so the same trigger pull can arrive here more than once and must
+            // hand back the projectile it already produced rather than a second one. Handing
+            // back the id rather than 0 matters: 0 is what a hitscan bullet and an exhausted
+            // pool both answer, and the caller stamps it onto the prefab.
+            if (!_emissions.TryClaimLaunch(sourceActorId, tick, kind, out ushort alreadyLaunched))
+            {
+                return alreadyLaunched;
+            }
+
             ushort id = AuthoritativeFlight
                 ? _projectiles.Launch(kind, in origin, in direction, sourceActorId, tick)
                 : (ushort)0;
@@ -207,14 +224,24 @@ namespace Ironfront.Net.Unity.Server
                 // Engine-simulated. It still needs an id -- the client has to despawn the right
                 // prefab when the blast arrives -- so one comes from the same pool and is
                 // released by the projectile itself when it ends.
-                if (!_idPool.TryAcquire(out id)) return 0;
+                if (!_idPool.TryAcquire(out id))
+                {
+                    // The shot happened and produced nothing. Recorded all the same, so a
+                    // redundant copy of it does not get a second attempt at the pool and
+                    // succeed where the first failed -- one trigger pull, one outcome.
+                    _emissions.RecordLaunch(sourceActorId, tick, kind, 0);
+                    return 0;
+                }
 
                 EngineSimulated++;
             }
+
             else
             {
                 remaining = _projectiles.RemainingLifetimeSeconds(id, tick);
             }
+
+            _emissions.RecordLaunch(sourceActorId, tick, kind, id);
 
             // The AUTHORED muzzle velocity, so the client's simulation starts from the same
             // vector the server's did.
@@ -230,8 +257,18 @@ namespace Ironfront.Net.Unity.Server
             float lifetimeSeconds)
         {
             uint tick = _loop.CurrentTick;
+
+            // Launch's reason, one throw over: a thrown bag reaches this from the same input
+            // frame a grenade does.
+            if (!_emissions.TryClaimLaunch(ownerActorId, tick, kind, out ushort alreadyThrown))
+            {
+                return alreadyThrown;
+            }
+
             ushort id = _deployables.Deploy(
                 kind, ownerActorId, in origin, in velocity, lifetimeSeconds, tick);
+
+            _emissions.RecordLaunch(ownerActorId, tick, kind, id);
 
             if (id != 0) Announce(id, kind, ownerActorId, in origin, in velocity, lifetimeSeconds, tick);
             return id;
@@ -300,10 +337,25 @@ namespace Ironfront.Net.Unity.Server
             _projectiles.Reset();
             _deployables.Reset();
             _idPool.Reset();
+            // Beside the pools it shadows, and for the same reason: a ledger that remembered a
+            // previous round's last shot would suppress the first shot of the new one whenever
+            // the tick counter and the actor id both happened to line up.
+            _emissions.Reset();
             ProjectileHitsApplied = 0;
             DetonationsAnnounced  = 0;
             EngineSimulated       = 0;
         }
+
+        /// <summary>
+        /// Forgets an actor's last shot. Called from the death edge, so the first shot of the
+        /// next life is never mistaken for a redundant copy of the last shot of this one.
+        /// </summary>
+        public void ForgetShooter(ushort actorId) => _emissions.ForgetActor(actorId);
+
+        /// <summary>
+        /// The single-emission record, so a test and the state audit can read what it suppressed.
+        /// </summary>
+        public ProjectileEmissionLedger Emissions => _emissions;
 
         /// <summary>
         /// Applies what a terminal event means: damage to an actor, a blast for anything that
@@ -336,6 +388,14 @@ namespace Ironfront.Net.Unity.Server
 
         private void AnnounceExplosion(in ProjectileHit hit)
         {
+            // ONE EXPLOSION PER PROJECTILE. A rocket can reach a blast from two directions --
+            // the stepper's terminal event here, and the engine's own ExplodingProjectile.Explode
+            // through ActorManager -- and today only one of them runs because AuthoritativeFlight
+            // is off. § 16 forbids a second explosion to cover a client that failed to render the
+            // first, and a second one arriving because BOTH paths ran is the same defect with a
+            // more respectable cause.
+            if (!_emissions.TryClaimDetonation(hit.ProjectileId)) return;
+
             var message = new ExplosionMessage(
                 hit.SourceActorId,
                 Quantize.PackPos(hit.Point.X),
