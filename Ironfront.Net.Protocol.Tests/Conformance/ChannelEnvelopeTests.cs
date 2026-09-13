@@ -133,10 +133,11 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
         public void TheProtocolVersionRecordsTheWireChange()
         {
             // Section 5.1 and the widened CONNECT_RESPONSE are both wire changes, so the version
-            // moved to 2; the vehicle wire (§ 4.10) moved it again to 3. Either way a client on
-            // an older version gets CONNECT_DENIED code 2 rather than a subtly mis-parsed stream,
+            // moved to 2; the vehicle wire (§ 4.10) moved it again to 3; the widened weapon
+            // field and the 24-vehicle cap moved it to 10. Either way a client on an older
+            // version gets CONNECT_DENIED code 2 rather than a subtly mis-parsed stream,
             // which is the whole reason the number exists.
-            Assert.Equal(9, ProtocolConstants.PROTOCOL_VERSION);
+            Assert.Equal(10, ProtocolConstants.PROTOCOL_VERSION);
         }
     }
 }
