@@ -235,6 +235,28 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 		}
 	}
 
+	/// <summary>
+	/// Recolours only the first-person arm mesh carried by this weapon prefab.
+	/// </summary>
+	public void SetFirstPersonTeamColor(Color color)
+	{
+		if (user == null || user.aiControlled)
+		{
+			return;
+		}
+
+		Renderer[] children = GetComponentsInChildren<Renderer>(true);
+		foreach (Renderer child in children)
+		{
+			// Every shipped first-person weapon calls this mesh "Arms". Keep the exact
+			// match so weapon finishes and objects such as "Explosion Arms" are untouched.
+			if (child != null && child.gameObject.name == "Arms")
+			{
+				child.material.color = color;
+			}
+		}
+	}
+
 	protected virtual void Update()
 	{
 		if (!stopFireLoop.Done() && audio != null)
@@ -337,7 +359,7 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 		return user.RemoveSpareAmmo(count, slot);
 	}
 
-	private void AmmoChanged()
+	protected void AmmoChanged()
 	{
 		user.AmmoChanged();
 		if (HasActiveAnimator())

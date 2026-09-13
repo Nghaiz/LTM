@@ -142,5 +142,8 @@
         /// the loadout failure it is, rather than as a silent zero.
         /// </returns>
         bool FireCarriedWeapon(float directionX, float directionY, float directionZ);
+
+        /// <summary>Current gameplay velocity, including AI-driven actors without a net movement agent.</summary>
+        void GetVelocity(out float x, out float y, out float z);
     }
 }

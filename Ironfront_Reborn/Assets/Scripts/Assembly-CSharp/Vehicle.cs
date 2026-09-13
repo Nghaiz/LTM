@@ -176,6 +176,8 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 
 	private Action crashDamageCooldown = new Action(0.2f);
 
+	private float networkCrashDamageNotBefore;
+
 	private Action drainClaimAction = new Action(10f);
 
 	[NonSerialized]
@@ -292,12 +294,30 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 
 	protected virtual void Awake()
 	{
+		networkCrashDamageNotBefore = Time.time + 5f;
 		rigidbody = GetComponent<Rigidbody>();
 		audio = GetComponent<AudioSource>();
 		ActorManager.RegisterVehicle(this);
 		// Through ApplyHealth like every other write, so there is exactly one assignment to
 		// health in this file and no second copy of the ladder to drift from it.
 		ApplyHealth(maxHealth, 0f, NoAttacker);
+		// Tank and helicopter author their damage smoke with Play On Awake. ApplyHealth's edge
+		// cache also starts false, so a full-health spawn previously saw "false == false" and
+		// never issued Stop(): every fresh vehicle looked as if it was already burning. Seed the
+		// presentation explicitly; later transitions remain edge-triggered in ApplyHealth.
+		damageParticlesOn = false;
+		if (damageParticles != null)
+		{
+			ParticleSystem.MainModule main = damageParticles.main;
+			main.playOnAwake = false;
+			damageParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+		}
+		if (burnParticles != null)
+		{
+			ParticleSystem.MainModule main = burnParticles.main;
+			main.playOnAwake = false;
+			burnParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+		}
 		colliders = GetComponentsInChildren<Collider>();
 		if (HasBlockSensor())
 		{
@@ -324,6 +344,15 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 
 	protected virtual void FixedUpdate()
 	{
+		// Scene vehicles Awake long before the first spawn wave, so an Awake-only grace period
+		// has already expired when a bot first enters. Keep the deadline ahead while unattended;
+		// the first driver then gets five seconds for suspension/physics to settle instead of
+		// inheriting spawn-pad collision damage and immediately starting the burn effect.
+		if (NetContext.IsServer && !HasDriver())
+		{
+			networkCrashDamageNotBefore = Time.time + 5f;
+		}
+
 		if (rigidbody.linearVelocity.magnitude < 3f)
 		{
 			cannotRamAction.Start();
@@ -733,6 +762,15 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 	/// </remarks>
 	public void Damage(float amount, int attackerActorId)
 	{
+		// A dedicated server starts the bot match while rendered clients are still loading. Empty
+		// vehicles at the capture-point pads were therefore being destroyed by bot crossfire before
+		// a human saw the first frame. FixedUpdate keeps this deadline five seconds ahead while the
+		// driver seat is empty; after the first driver enters it becomes a short exit-from-pad grace.
+		// Offline Ravenfield remains unchanged.
+		if (NetContext.IsServer && (!HasDriver() || Time.time < networkCrashDamageNotBefore))
+		{
+			return;
+		}
 		if (NetVehicleAuthority.TryApplyDamage(base.gameObject, amount, attackerActorId))
 		{
 			return;
@@ -984,6 +1022,13 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 
 	private void OnCollisionEnter(Collision c)
 	{
+		// Network vehicles are instantiated into a live PhysX world. Let them settle on their
+		// authored pads before collision damage is authoritative; otherwise touching the ground
+		// or a neighbouring spawn in the first frames starts the burn ladder for every client.
+		if (NetContext.IsServer && (!HasDriver() || Time.time < networkCrashDamageNotBefore))
+		{
+			return;
+		}
 		float num = Mathf.Abs(Vector3.Dot(c.relativeVelocity, c.contacts[0].normal));
 		if (crashDamageCooldown.TrueDone() && num > crashDamageSpeedThrehshold && c.collider.gameObject.layer != 8 && c.collider.gameObject.layer != 10)
 		{

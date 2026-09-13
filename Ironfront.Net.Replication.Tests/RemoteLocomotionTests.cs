@@ -275,8 +275,7 @@ namespace Ironfront.Net.Replication.Tests
         // ------------------------------------------------------------------ the asset gate
 
         /// <summary>
-        /// Parameters <c>RemoteActorView</c> writes that <c>Actor.controller</c> does not declare,
-        /// pinned as a known gap so the suite is green while it stands.
+        /// Every parameter <c>RemoteActorView</c> writes must exist in <c>Actor.controller</c>.
         /// </summary>
         /// <remarks>
         /// <b>Read from the asset on 2026-08-29</b>, phase-P2 task 3.1. The controller declares
@@ -292,10 +291,8 @@ namespace Ironfront.Net.Replication.Tests
         /// companion assertions in <see cref="NoParameterTheViewWritesIsMissingBeyondTheKnownGap"/>.
         /// </para>
         /// </remarks>
-        private static readonly string[] KnownUndeclaredParameters = { "prone", "aiming", "pitch" };
-
         [Fact]
-        public void NoParameterTheViewWritesIsMissingBeyondTheKnownGap()
+        public void EveryParameterTheViewWritesExistsInTheController()
         {
             // THE GATE THAT WOULD HAVE CAUGHT WHAT SHIPPED. RemoteActorView wrote `crouch` and
             // `sprint`; Actor.controller declares `crouched` and `sprinting`. A typo in an
@@ -303,46 +300,19 @@ namespace Ironfront.Net.Replication.Tests
             // Animator.SetBool against an absent hash returns without complaint -- so text is the
             // only place it can be caught in CI at all.
             //
-            // BOTH DIRECTIONS, in one test, because either alone is half a gate: the first lets
-            // the gap grow, the second lets the pin become a graveyard nobody re-checks.
             HashSet<string> declared = ControllerParameters();
-            var known = new HashSet<string>(KnownUndeclaredParameters, StringComparer.Ordinal);
-
             var missing = new List<string>();
             foreach (string written in ViewParameters())
             {
                 if (!declared.Contains(written)) missing.Add(written);
             }
 
-            var undocumented = new List<string>();
-            foreach (string name in missing)
-            {
-                if (!known.Contains(name)) undocumented.Add(name);
-            }
-
-            var silentlyFixed = new List<string>();
-            foreach (string name in KnownUndeclaredParameters)
-            {
-                if (!missing.Contains(name)) silentlyFixed.Add(name);
-            }
-
             Assert.True(
-                undocumented.Count == 0,
-                "RemoteActorView writes animator parameters Actor.controller does not declare, "
-                + "and they are not in the known gap: " + string.Join(", ", undocumented)
-                + ". Every such write is a SILENT no-op, so the pose it carries is never drawn -- "
-                + "this is the exact shape of the defect phase-P2 closed. A RISE here is a "
-                + "regression: fix the name or add the parameter. DO NOT add it to "
-                + "KnownUndeclaredParameters to make this green -- that converts a live bug into "
-                + "a permanent baseline.");
-
-            Assert.True(
-                silentlyFixed.Count == 0,
-                "KnownUndeclaredParameters names parameters that Actor.controller now declares, "
-                + "or that RemoteActorView no longer writes: " + string.Join(", ", silentlyFixed)
-                + ". That is GOOD NEWS read backwards -- the gap closed. Delete those entries from "
-                + "the array. When it empties, delete the array and assert `missing.Count == 0` "
-                + "outright, so a future miss reads as the regression it is.");
+                missing.Count == 0,
+                "RemoteActorView writes animator parameters Actor.controller does not declare: "
+                + string.Join(", ", missing)
+                + ". Animator silently ignores those writes, so remove the writes or author a "
+                + "controller state that consumes each parameter.");
         }
 
         [Fact]
@@ -375,6 +345,18 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Contains("Animator.StringToHash(\"moving\")", source);
             Assert.Contains("Animator.StringToHash(\"movement x\")", source);
             Assert.Contains("Animator.StringToHash(\"movement y\")", source);
+        }
+
+        [Fact]
+        public void ProneUsesTheControllersLowestAvailableStance()
+        {
+            string apply = MethodBody(
+                ViewSource(), "public void Apply(in ActorSnapshotEntry entry)");
+
+            Assert.Matches(
+                @"_state\.Stance\s*==\s*RemoteActorStance\.Crouching\s*\|\|\s*"
+                + @"_state\.Stance\s*==\s*RemoteActorStance\.Prone",
+                apply);
         }
 
         [Fact]

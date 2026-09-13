@@ -81,6 +81,12 @@ public class CapturePoint : SpawnPoint
 
 	private bool playerWasInRadius;
 
+	private Transform rigidFlagVisual;
+
+	private Quaternion rigidFlagBaseRotation;
+
+	private float rigidFlagPhase;
+
 	protected override void Awake()
 	{
 		base.Awake();
@@ -112,6 +118,18 @@ public class CapturePoint : SpawnPoint
 			lqFlag.SetActive(true);
 			hqFlag.SetActive(false);
 			flagRenderer = lqFlag.GetComponent<Renderer>();
+		}
+
+		// Island's HQ flags have Cloth, but Dustbowl and every lower quality level use a rigid
+		// mesh. Give that fallback a small deterministic pole-side sway so a network match does
+		// not render a cardboard flag. Cloth visuals retain their authored solver motion.
+		GameObject activeFlag = flagRenderer != null ? flagRenderer.gameObject : null;
+		if (activeFlag != null && activeFlag.GetComponent<Cloth>() == null)
+		{
+			rigidFlagVisual = activeFlag.transform;
+			rigidFlagBaseRotation = rigidFlagVisual.localRotation;
+			rigidFlagPhase = base.transform.position.x * 0.031f
+				+ base.transform.position.z * 0.017f;
 		}
 	}
 
@@ -155,6 +173,12 @@ public class CapturePoint : SpawnPoint
 		Vector3 localPosition = flagParent.localPosition;
 		localPosition.y = 1.2f + 4.8f * control;
 		flagParent.localPosition = Vector3.Lerp(flagParent.localPosition, localPosition, 3f * Time.deltaTime);
+		if (rigidFlagVisual != null)
+		{
+			float wave = Mathf.Sin(Time.time * 3.2f + rigidFlagPhase) * 7f
+				+ Mathf.Sin(Time.time * 6.7f + rigidFlagPhase * 1.9f) * 2f;
+			rigidFlagVisual.localRotation = rigidFlagBaseRotation * Quaternion.Euler(0f, wave, wave * 0.35f);
+		}
 		UpdateFlagIndicator();
 	}
 

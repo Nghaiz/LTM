@@ -1046,10 +1046,16 @@ namespace Ironfront.Net.Unity.Server
                 if (!_spawnAcks.MarkSpawnSent(session.ActorId, actor.ActorId)) continue;
 
                 ActorSnapshotEntry entry = actor.Capture();
+                SpawnFlags spawnFlags = actor.Movement == null
+                    ? SpawnFlags.IsBot
+                    : SpawnFlags.None;
+                if (actor.ActorId == session.ActorId)
+                    spawnFlags |= SpawnFlags.IsLocalPlayer;
+
                 var message = new SpawnActorMessage(
                     actor.ActorId,
                     actor.Team,
-                    actor.ActorId == session.ActorId ? SpawnFlags.IsLocalPlayer : SpawnFlags.None,
+                    spawnFlags,
                     entry.PosX, entry.PosY, entry.PosZ,
                     entry.Yaw,
                     entry.Health,

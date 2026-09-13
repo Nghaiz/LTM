@@ -339,7 +339,19 @@ namespace Ironfront.Net.Unity
             if (Controller == null) return;
 
             float wanted = MovementCore.HeightFor(State.IsCrouching);
-            if (!Mathf.Approximately(_controller.height, wanted)) _controller.height = wanted;
+            if (Mathf.Approximately(_controller.height, wanted)) return;
+
+            // CharacterController.center is authored at zero, so changing only height moves
+            // both ends around the transform. A crouch would lift the feet by 0.65 m and an
+            // uncrouch would bury them by the same amount. Keep the feet fixed by moving the
+            // capsule centre by half the height delta on both the Unity and deterministic copies.
+            float centreDelta = (wanted - _controller.height) * 0.5f;
+            _controller.height = wanted;
+            transform.position += Vector3.up * centreDelta;
+            State.Position = new Vec3(
+                State.Position.X,
+                State.Position.Y + centreDelta,
+                State.Position.Z);
         }
     }
 }

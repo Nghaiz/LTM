@@ -129,6 +129,16 @@ public class VehicleSpawner : MonoBehaviour
 
 	private void Start()
 	{
+		// A network client receives authoritative vehicles through RemoteVehicleRegistry. Running
+		// the scene spawner here as well creates a second physical vehicle on the same pad. The two
+		// rigidbodies explode apart, take crash damage and appear to be burning on the first frame.
+		// Offline keeps the original spawner; the dedicated/listen server remains the sole owner.
+		if (Ironfront.Net.Unity.NetContext.IsClient)
+		{
+			enabled = false;
+			return;
+		}
+
 		RequestFirstSpawn();
 	}
 
@@ -156,8 +166,8 @@ public class VehicleSpawner : MonoBehaviour
 			Debug.LogWarning(
 				$"[net] vehicle spawner '{name}' (id {spawnerId}) gave up after "
 				+ $"{scheduler.MaxBlockedRetries} blocked attempts; the pad is obstructed by "
-				+ $"{DescribeBlocker()}. It re-arms on the next vehicle death or world reset "
-				+ "-- but NOT on an AfterMoved pad, whose vehicle has already been used.");
+				+ $"{DescribeBlocker()}. Fast retries are paused; the pad will be checked "
+				+ "silently every 10 seconds and also re-arms on lifecycle events.");
 		}
 	}
 

@@ -38,14 +38,16 @@ namespace Ironfront.Net.Transport
         /// Wall-clock budget for delivering one reliable packet, from its first send.
         /// </summary>
         /// <remarks>
-        /// Tied to <see cref="ProtocolConstants.TIMEOUT_MS"/> on purpose, and the tie is the
-        /// point: a connection already has exactly one rule for "this peer is gone", and a
-        /// second, tighter, differently-expressed rule hidden inside the reliable channel is
-        /// how one of them fires on a peer the other considers perfectly healthy. Expressing
-        /// the budget in attempts made its wall-clock meaning depend on the RTO — smallest
-        /// precisely when the connection is youngest and least is known about it.
+        /// A wall-clock deadline rather than an attempt budget keeps its meaning independent of
+        /// the RTO. It is intentionally longer than the no-traffic timeout: a Unity client can
+        /// remain connected while synchronously loading a scene and be unable to drain the
+        /// reliable catch-up burst. The liveness rule still removes a genuinely silent peer;
+        /// this longer delivery deadline gives a live loading peer time to acknowledge ordered
+        /// data without changing that liveness rule.
         /// </remarks>
-        public const double AbandonAfterMs = ProtocolConstants.TIMEOUT_MS;
+        // The manual 2026-09-09 run took 10.94 s to load client 2 and abandoned its opening
+        // reliable burst at 10.34 s. Three liveness windows cover that bounded scene load.
+        public const double AbandonAfterMs = ProtocolConstants.TIMEOUT_MS * 3.0;
 
         private const float MinRtoMs = 30f;
         private const float MaxRtoMs = 1000f;

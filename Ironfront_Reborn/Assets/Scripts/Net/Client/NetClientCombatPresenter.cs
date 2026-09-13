@@ -481,8 +481,9 @@ namespace Ironfront.Net.Unity.Client
             NetClientPresenterGuard.WarnOnce(
                 "death-no-rig",
                 "[net] a remote actor died but its prefab carries no Actor with a ragdoll rig, "
-                + "so the corpse cannot be felled. Hiding the body instead. Client-track item E1.");
-            view.gameObject.SetActive(false);
+                + "so the corpse cannot be felled. Hiding its renderers until the respawn snapshot. "
+                + "Client-track item E1.");
+            view.HideForDeathFallback();
         }
 
         /// <summary>

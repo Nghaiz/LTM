@@ -383,6 +383,12 @@ namespace Ironfront.Net.Unity.Diagnostics
                         Str("mode", mode); Comma();
                     }
 
+                    bool hasState = registry.TryGetAuthoritativeState(
+                        id, out float health, out VehicleStateFlags flags);
+                    Num("health", hasState ? health : float.NaN); Comma();
+                    Bool("burning", hasState && (flags & VehicleStateFlags.Burning) != 0); Comma();
+                    Bool("dead", hasState && (flags & VehicleStateFlags.Dead) != 0); Comma();
+
                     bool posed = registry.TryGetTurretPose(id, out float ty, out float tp);
                     Num("turretYaw", posed ? ty : float.NaN); Comma();
                     Num("turretPitch", posed ? tp : float.NaN);

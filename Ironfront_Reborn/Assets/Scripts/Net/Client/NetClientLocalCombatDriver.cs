@@ -74,6 +74,9 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>Whether the deploy screen is raised, so show and hide each fire once.</summary>
         private bool _deployShown;
 
+        /// <summary>True only after this local actor received an explicit S_DEATH.</summary>
+        private bool _hasObservedLocalDeath;
+
         /// <summary>
         /// True until this connection's own first successful <see cref="RequestRespawn"/>.
         /// </summary>
@@ -191,6 +194,19 @@ namespace Ironfront.Net.Unity.Client
         /// The local player's combat state. The one production instance in the build.
         /// </summary>
         public ClientCombatState State => _state;
+
+        /// <summary>
+        /// True only after the server has confirmed this connection's first placement and while
+        /// its authoritative snapshot still says the body is alive.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="ClientCombatState.IsAlive"/> starts true before the first snapshot, so it
+        /// cannot by itself distinguish a live player from the prefab parked behind the initial
+        /// loadout.  ClientPredictionStage uses this combined signal when deciding whether an
+        /// externally disabled collision capsule belongs to a corpse or to a live predicted
+        /// body that must continue colliding with the world.
+        /// </remarks>
+        public bool IsAuthoritativelyDeployed => !_awaitingFirstDeploy && _state.IsAlive;
 
         /// <summary>Whether input was taken away by a death this driver saw.</summary>
         /// <remarks>
@@ -332,6 +348,13 @@ namespace Ironfront.Net.Unity.Client
 
             _state.EquipWeapon(message.WeaponId);
 
+            // GameManager also schedules this one second after the scene starts, but a network
+            // actor can be announced before or after that timer and scene transitions can cancel
+            // the Invoke.  The spawn message is the reliable point at which this client owns a
+            // local slot, so make the normal Ravenfield loadout screen explicit and idempotent.
+            ILocalPlayerRig rig = NetClientBindings.LocalPlayer;
+            if (_awaitingFirstDeploy && rig.Exists) rig.OpenInitialLoadout();
+
             // Ledger X-11/X-48/X-86. A JOIN no longer places the body
             // (ServerTickLoop.OnClientConnected), so S_SPAWN_ACTOR now reaches every client on
             // interest ALONE, before any deploy has happened -- it is "you now know this actor
@@ -394,6 +417,7 @@ namespace Ironfront.Net.Unity.Client
             // moves health. It stamps a local cooldown and decrements a predicted clip that the
             // next snapshot reconciles.
             if (_state.IsAlive && FirePressed()) _state.PredictFire(Time.time);
+            if (_state.IsAlive && ReloadPressed()) _state.BeginReload(Time.time);
 
             // Two ways in, and the keyboard is still first so a human press costs no lookup.
             //
@@ -628,6 +652,14 @@ namespace Ironfront.Net.Unity.Client
             return (input.Buttons & (ushort)InputButtons.Fire) != 0;
         }
 
+        private static bool ReloadPressed()
+        {
+            IInputSource input = NetClientBindings.LocalPlayer.InputSource;
+            if (input == null) return false;
+
+            return (input.Buttons & (ushort)InputButtons.Reload) != 0;
+        }
+
         /// <summary>
         /// Sends C_SPAWN_REQUEST. The body carries no fields (protocol-spec § 4.1).
         /// </summary>
@@ -699,6 +731,10 @@ namespace Ironfront.Net.Unity.Client
 
             _state.ApplySnapshot(in entry, Time.time);
 
+            ILocalPlayerRig rig = NetClientBindings.LocalPlayer;
+            if (rig != null && rig.Exists)
+                rig.ApplyAuthoritativeCombat(_state.Health, _state.WeaponId, _state.AmmoInClip);
+
             AdoptAlreadyAliveBody(in entry);
         }
 
@@ -756,6 +792,11 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         private void OnDeathMessage(DeathMessage message)
         {
+            if (message.VictimActorId != _state.LocalActorId) return;
+
+            // The initial parked snapshot is dead state but is not a kill. Only S_DEATH may
+            // raise the authored "YOU WERE KILLED" overlay.
+            _hasObservedLocalDeath = true;
             if (!_state.ApplyDeath(in message, Time.time)) return;
 
             // Recorded here rather than read in OnDied, because OnDied is raised from INSIDE
@@ -829,6 +870,7 @@ namespace Ironfront.Net.Unity.Client
             }
 
             _inputSuppressedByDeath = false;
+            _hasObservedLocalDeath = false;
             EnterDeployedView();
         }
 
@@ -913,7 +955,7 @@ namespace Ironfront.Net.Unity.Client
             // gate above still uses OwesDeploy, and the first spawn's request now comes from the
             // loadout screen's own Deploy (LoadoutDeployPressed) -- the screen the player is
             // actually looking at then, and the one that chose the loadout the request carries.
-            if (_state.IsAlive)
+            if (_state.IsAlive || !_hasObservedLocalDeath)
             {
                 if (!_deployShown) return;
 

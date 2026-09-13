@@ -17,7 +17,7 @@ namespace Ironfront.Net.Replication.Tests
     /// <remarks>
     /// <para>
     /// <b>X-31 is row X-3 happening a second time, to the same struct, one bit-group over.</b>
-    /// <c>InputButtons</c> declared <c>SwitchWeapon0..3</c> and <c>Use</c>;
+    /// <c>InputButtons</c> declared the weapon-slot bits and <c>Use</c>;
     /// <c>ServerCombatBridge</c> read <c>frame.WeaponSlot</c> and called
     /// <c>ApplyWeaponSwitchIntent</c>; and <see cref="MoveInput.ToButtons"/> — the one place a
     /// <see cref="MoveInput"/> becomes buttons — had never heard of either. Five bits with a
@@ -25,7 +25,7 @@ namespace Ironfront.Net.Replication.Tests
     /// </para>
     /// <para>
     /// <b>Why the packer being right was not enough, and why that misled the investigation for
-    /// two days.</b> <c>InputButtonPacker.Pack</c> HAS produced bits 11-14 since 2026-08-21, and
+    /// two days.</b> <c>InputButtonPacker.Pack</c> HAS produced slot bits since 2026-08-21, and
     /// <c>ScriptedInputSource.Buttons</c> HAS passed <c>step.switchWeaponSlot</c> into it — both
     /// were read back from source and both are correct. But that packer reaches the wire only
     /// through <c>NetPredictionClock.DefaultInput</c>, and a lane-B client assigns
@@ -106,7 +106,7 @@ namespace Ironfront.Net.Replication.Tests
         /// </remarks>
         [Theory]
         [InlineData(-1)]
-        [InlineData(4)]
+        [InlineData(5)]
         [InlineData(int.MinValue)]
         public void AnOutOfRangeSlotSelectsNothing(int slot)
         {
@@ -157,7 +157,7 @@ namespace Ironfront.Net.Replication.Tests
         /// <remarks>
         /// <c>InputButtonPacker</c> (Ironfront.Net.Unity) and <see cref="MoveInput.ToButtons"/>
         /// (Ironfront.Net.Replication) live in assemblies that cannot reference each other, so
-        /// before <see cref="InputFrame.SlotBit"/> the only way for both to speak bits 11-14 was
+        /// before <see cref="InputFrame.SlotBit"/> the only way for both to speak slot bits was
         /// to transcribe them twice — and X-3 and X-31 are both what happens when one
         /// transcription learns a bit and the other does not. The packer is not reachable from
         /// here (it is Unity source), so this grades the shared half both now call.

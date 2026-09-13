@@ -57,10 +57,11 @@ Two warnings are worth stopping for:
 | `Ironfront_Reborn has uncommitted changes` | the SHA names a commit the binary does **not** match | commit or stash, rebuild |
 | `no git commit could be read` | the binary will report `dev` and be unidentifiable later | build from a real checkout |
 
-The dirty check looks at `Ironfront_Reborn/` only — Assets, Packages and ProjectSettings are
-what become the binary. A scratch file in `tmp/`, a run under `artifacts/` or an edit to the
-build script itself cannot change what Unity compiles, and counting them would make `-dirty`
-fire on almost every build until nobody read it.
+The dirty check snapshots `Ironfront_Reborn/` before the script rebuilds its tracked plugin
+DLLs — Assets, Packages and ProjectSettings are what become the binary. Recompiled DLLs receive
+new PE identities even from unchanged source, so their build-generated difference must not turn
+an initially clean checkout into a false `-dirty`. A scratch file in `tmp/`, a run under
+`artifacts/` or an edit to the build script itself cannot change what Unity compiles either.
 
 **Judge the build by the managed DLLs, not by `Ironfront.exe`.** Unity keeps the executable and
 rewrites the assemblies, so a green build routinely leaves the `.exe` timestamp untouched. The
@@ -121,13 +122,15 @@ starting point.
 ## 5. Play a match
 
 Once everybody has the same build, `tools/play-lan.ps1` and `tools/playtest-local.ps1` stand up
-the stack. `playtest-local.ps1 -Clients 4` runs master, game server and four client windows on one
-machine, which is the quickest way to confirm a build works before anybody else downloads it.
+the stack. `playtest-local.ps1 -Clients 4` runs the master, one game server for **each shipped
+map** (Dustbowl and Island), and four client windows on one machine. Both rooms must appear in the
+room browser; this is the quickest way to confirm a build works before anybody else downloads it.
 
 ---
 
 ## 6. Related
 
+- [multiplayer-server-deploy-handoff-2026-09-11.md](multiplayer-server-deploy-handoff-2026-09-11.md) — trạng thái sửa gameplay, checklist hai player và bàn giao deploy
 - [operations.md](operations.md) — the deployed master server and game servers on Azure
 - [unity-setup.md](unity-setup.md) — getting the Editor and the project to build at all
 - `tools/build-player.ps1` — the build; the stamp rewrite lives here

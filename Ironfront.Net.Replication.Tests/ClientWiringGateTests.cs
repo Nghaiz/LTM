@@ -428,7 +428,7 @@ namespace Ironfront.Net.Replication.Tests
             IReadOnlyList<GateFinding> findings =
                 ClientWiringDetectors.FindUnguardedLocalSingletonTouches(
                     Parse(
-                        "class D { void OnSpawnActor(M m) "
+                        "class D { void OnRemoteActor(M m) "
                         + "{ IngameUi.instance.SetHealth(1f); } }",
                         path),
                     path);

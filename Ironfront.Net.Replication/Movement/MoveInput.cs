@@ -28,7 +28,7 @@ namespace Ironfront.Net.Replication.Movement
     /// <para>
     /// <b><see cref="WeaponSlot"/> and <see cref="Use"/> arrived on 2026-08-27 as debt-ledger row
     /// X-31, and X-31 is X-3 happening a second time to the same struct.</b> <c>InputButtons</c>
-    /// declared <c>SwitchWeapon0..3</c> and <c>Use</c>, <c>ServerCombatBridge</c> read the slot and
+    /// declared the weapon-slot bits and <c>Use</c>, <c>ServerCombatBridge</c> read the slot and
     /// called <c>ApplyWeaponSwitchIntent</c> — and <see cref="ToButtons"/>, the one place a
     /// <see cref="MoveInput"/> becomes buttons, had never heard of either. The bits could only
     /// reach the wire through <c>NetPredictionClock.DefaultInput</c>, which a scripted client
@@ -67,7 +67,7 @@ namespace Ironfront.Net.Replication.Movement
         public readonly bool Use;
 
         /// <summary>
-        /// Weapon slot this tick selects, 0..3. Negative selects nothing.
+        /// Weapon slot this tick selects, 0..4. Negative selects nothing.
         /// </summary>
         /// <remarks>
         /// <b>An int rather than four bools</b>, because the wire is four mutually exclusive bits
@@ -178,7 +178,7 @@ namespace Ironfront.Net.Replication.Movement
             if (Use)    buttons |= InputButtons.Use;
 
             // Exactly one slot bit, or none, and the mapping is InputFrame's rather than a
-            // fifth transcription of bits 11-14 here. That transcription is what X-3 and X-31
+            // additional transcription of bits 11-15 here. That transcription is what X-3 and X-31
             // both are.
             buttons |= InputFrame.SlotBit(WeaponSlot);
 

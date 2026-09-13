@@ -51,6 +51,17 @@ namespace Ironfront.Net.Unity.Client.Tests
 
         // ------------------------------------------------------------------ D-1: the local team
 
+        [Test]
+        public void ClientBootstrapCanRestoreTheTeamResolverAfterStaticReset()
+        {
+            NetClientBindings.LocalTeam = null;
+
+            NetClientPresenterGuard.InstallGateResolvers();
+
+            Assert.IsNotNull(NetClientBindings.LocalTeam,
+                "a player build that clears static bindings would keep every local body at team -1.");
+        }
+
         /// <summary>
         /// A client the server put on team 1 puts its own body on team 1.
         /// </summary>
@@ -270,6 +281,7 @@ namespace Ironfront.Net.Unity.Client.Tests
             public void EnableInput() { }
             public void DisableInput() { }
             public void EnterDeployedView() { }
+            public void OpenInitialLoadout() { }
             public bool ConsumeDeployIntent() => false;
             public bool IsLoadoutOpen => false;
             public bool IsDriving(IGameplayActorPresence actor) => false;

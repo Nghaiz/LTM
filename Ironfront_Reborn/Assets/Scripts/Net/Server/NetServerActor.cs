@@ -140,13 +140,13 @@ namespace Ironfront.Net.Unity.Server
         }
 
         /// <summary>
-        /// Applies one frame's weapon selection, edged. <paramref name="slot"/> is 0..3, or
+        /// Applies one frame's weapon selection, edged. <paramref name="slot"/> is 0..4, or
         /// negative for "this frame selects nothing".
         /// </summary>
         /// <remarks>
         /// <para>
         /// <b>The edge lives here because the intent is a HELD bit and the action is not.</b>
-        /// <c>InputButtons.SwitchWeapon0..3</c> ride <c>C_INPUT</c>, which repeats each frame
+        /// <c>InputButtons.SwitchWeapon0..4</c> ride <c>C_INPUT</c>, which repeats each frame
         /// seven times for redundancy, so a slot holding a <c>ToggleableItem</c> would flip in
         /// and out at tick rate if every arrival called through. Storing the last requested slot
         /// on the actor also means it dies with the actor -- no per-connection table to leak.
@@ -437,7 +437,20 @@ namespace Ironfront.Net.Unity.Server
                 ? Movement.State.Position
                 : MovementSimulation.ToCore(transform.position);
 
-            Vec3 velocity = Movement != null ? Movement.State.Velocity : Vec3.Zero;
+            Vec3 velocity;
+            if (Movement != null)
+            {
+                velocity = Movement.State.Velocity;
+            }
+            else if (Source != null)
+            {
+                Source.GetVelocity(out float vx, out float vy, out float vz);
+                velocity = new Vec3(vx, vy, vz);
+            }
+            else
+            {
+                velocity = Vec3.Zero;
+            }
 
             // Through the properties, not the backing fields: both are pass-throughs to the
             // gameplay actor now, and reading _weaponId here is how the weapon id stayed 0 in
@@ -501,15 +514,30 @@ namespace Ironfront.Net.Unity.Server
 
             if (IsAiming) flags |= ActorStateFlags.IsAiming;
 
+            if (ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(
+                    _actorId, out _, out _))
+                flags |= ActorStateFlags.IsSeated;
+
+            Vec3 velocity = Vec3.Zero;
             if (Movement != null)
             {
-                if (Movement.State.IsCrouching) flags |= ActorStateFlags.IsCrouching;
+                velocity = Movement.State.Velocity;
+            }
+            else if (Source != null)
+            {
+                Source.GetVelocity(out float vx, out float vy, out float vz);
+                velocity = new Vec3(vx, vy, vz);
+            }
+
+            if (Movement != null || Source != null)
+            {
+                if (Movement != null && Movement.State.IsCrouching)
+                    flags |= ActorStateFlags.IsCrouching;
 
                 // Sprinting is derived rather than stored: the simulation has no sprint flag on
                 // its state, only a speed, and reporting "moving faster than a walk" is what the
                 // client actually animates from.
-                float horizontal = Movement.State.Velocity.X * Movement.State.Velocity.X
-                                 + Movement.State.Velocity.Z * Movement.State.Velocity.Z;
+                float horizontal = velocity.X * velocity.X + velocity.Z * velocity.Z;
 
                 float walk = MovementSimulation.WalkSpeed;
                 if (horizontal > walk * walk * 1.05f) flags |= ActorStateFlags.IsSprinting;
@@ -536,9 +564,22 @@ namespace Ironfront.Net.Unity.Server
         /// </remarks>
         public HitboxSet CaptureHitboxes()
         {
-            Vec3 feet = Movement != null
-                ? Movement.State.Position
-                : MovementSimulation.ToCore(transform.position);
+            Vec3 feet;
+            if (Movement != null)
+            {
+                MoveState state = Movement.State;
+                float halfCapsule = MovementCore.HeightFor(state.IsCrouching) * 0.5f;
+                feet = new Vec3(
+                    state.Position.X,
+                    state.Position.Y - halfCapsule,
+                    state.Position.Z);
+            }
+            else
+            {
+                // The original AI actor uses a feet/root pivot (Actor.SpawnAt writes the ground
+                // position directly), unlike the network player CharacterController above.
+                feet = MovementSimulation.ToCore(transform.position);
+            }
 
             return HitboxSet.Humanoid(in feet);
         }

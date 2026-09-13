@@ -138,6 +138,13 @@ namespace Ironfront.Net.Unity
         void EnterDeployedView();
 
         /// <summary>
+        /// Opens the normal Ravenfield loadout screen while the first network deploy is pending.
+        /// This is presentation only; the Deploy button still produces the intent consumed by
+        /// <see cref="ConsumeDeployIntent"/> and the server remains the spawn authority.
+        /// </summary>
+        void OpenInitialLoadout();
+
+        /// <summary>
         /// Reads and clears the loadout screen's Deploy edge — the player asking to be put into
         /// the world for the first time. Maps to
         /// <c>FpsActorController.ConsumeLoadoutDeployPressed</c>.
@@ -268,6 +275,12 @@ namespace Ironfront.Net.Unity
         /// dead.
         /// </remarks>
         void FellBody(Vector3 force, HumanBodyBones bone);
+
+        /// <summary>
+        /// Applies the server's authoritative health and active-weapon clip to the local Ravenfield
+        /// body and HUD. Implementations without a gameplay body may keep the default no-op.
+        /// </summary>
+        void ApplyAuthoritativeCombat(byte health, byte weaponId, byte ammoInClip) { }
 
         /// <summary>
         /// Reads this rig's currently chosen loadout as weapon network ids, one per slot. 0

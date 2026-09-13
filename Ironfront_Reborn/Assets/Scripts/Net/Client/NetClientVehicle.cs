@@ -245,6 +245,12 @@ namespace Ironfront.Net.Unity.Client
         /// <inheritdoc cref="TurretYaw"/>
         internal float TurretPitch { get; private set; }
 
+        /// <summary>The normalized health from the last authoritative pose.</summary>
+        internal float AuthoritativeHealth { get; private set; }
+
+        /// <summary>The state flags from the last authoritative pose.</summary>
+        internal VehicleStateFlags AuthoritativeFlags { get; private set; }
+
         /// <summary>
         /// Health, burning, in-water and the subtype tail: the parts of the snapshot that are
         /// statements about the world rather than about where the vehicle is.
@@ -260,8 +266,19 @@ namespace Ironfront.Net.Unity.Client
             // predicts the hull, never the gunner's traverse.
             TurretYaw   = pose.TurretYaw;
             TurretPitch = pose.TurretPitch;
+            AuthoritativeHealth = pose.Health;
+            AuthoritativeFlags = pose.Flags;
 
-            _vehicle.SetHealthAuthoritative(pose.Health * _vehicle.MaxHealth);
+            // Health zero is valid only once the authoritative state machine has entered
+            // Burning or Dead. A newly announced vehicle can briefly be sampled from a sparse
+            // delta with default health before its full baseline arrives; feeding that transient
+            // zero into Vehicle starts the irreversible burn presentation on frame one.
+            bool hasZeroHealthState = (pose.Flags
+                & (VehicleStateFlags.Burning | VehicleStateFlags.Dead)) != 0;
+            if (pose.Health > 0f || hasZeroHealthState)
+            {
+                _vehicle.SetHealthAuthoritative(pose.Health * _vehicle.MaxHealth);
+            }
 
             _vehicle.ApplyReplicatedFlags(
                 (pose.Flags & VehicleStateFlags.InWater) != 0,

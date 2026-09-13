@@ -898,7 +898,8 @@ namespace Ironfront.Tools.ClientWiringGate
                         "A9", Rel(index, prefabPath), 0,
                         "the ThrowableWeapon serializes no configuration.releaseDelay, so it "
                         + "runs on Weapon.Configuration's class default while its own clip "
-                        + $"releases at {expected:F6} s. The server would schedule the throw at a "
+                        + $"releases at {expected.ToString("F6", CultureInfo.InvariantCulture)} s. "
+                        + "The server would schedule the throw at a "
                         + "time this weapon's animation never reaches (ledger D-1)."));
                     continue;
                 }
@@ -914,9 +915,13 @@ namespace Ironfront.Tools.ClientWiringGate
 
                 findings.Add(new GateFinding(
                     "A9", Rel(index, prefabPath), 0,
-                    $"configuration.releaseDelay is {delay:F7} s but this weapon's throw clip "
-                    + $"raises SpawnThrowable at {expected:F7} s of wall clock. A networked "
-                    + $"client throws at {expected:F7} s and the server at {delay:F7} s, so the "
+                    "configuration.releaseDelay is "
+                    + $"{delay.ToString("F7", CultureInfo.InvariantCulture)} s but this weapon's "
+                    + "throw clip raises SpawnThrowable at "
+                    + $"{expected.ToString("F7", CultureInfo.InvariantCulture)} s of wall clock. "
+                    + "A networked client throws at "
+                    + $"{expected.ToString("F7", CultureInfo.InvariantCulture)} s and the server at "
+                    + $"{delay.ToString("F7", CultureInfo.InvariantCulture)} s, so the "
                     + "projectile leaves the hand at two different moments in the same throw "
                     + "(ledger D-1)."));
             }

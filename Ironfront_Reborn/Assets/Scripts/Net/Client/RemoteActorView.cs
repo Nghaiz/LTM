@@ -93,6 +93,16 @@ namespace Ironfront.Net.Unity.Client
         [Tooltip("Rotated by the replicated pitch. Falls back to the animator when unset.")]
         [SerializeField] private Transform _upperBody;
 
+        // The proxy prefab contains one skinned body renderer. Resolved once so team colour is
+        // not a hierarchy scan on the per-snapshot path.
+        private Renderer _teamRenderer;
+        private byte _appliedTeam = TeamId.None;
+
+        // The shipped proxy deliberately has no Actor/Weapon graph. Keep the richer weapon
+        // cosmetic when one is authored, but provide a small code-owned muzzle flash so remote
+        // humans and bots never fire invisibly in today's prefab.
+        private ParticleSystem _fallbackMuzzleFlash;
+
         // Resolved once. Animator.StringToHash allocates nothing but is not free, and this runs
         // for every visible actor every frame.
         //
@@ -112,17 +122,13 @@ namespace Ironfront.Net.Unity.Client
         //
         // P2 corrects the two that select which locomotion clip plays (`crouch` -> `crouched`,
         // `sprint` -> `sprinting`) and adds the three that make it play at all (`moving`,
-        // `movement x`, `movement y`) plus `seated`. `prone`, `aiming` and `pitch` name
-        // parameters that DO NOT EXIST on this controller at all; authoring them is animator
-        // work, not a parameter-write fix, so they are left standing and are now reported once
-        // and loudly by ReportUnknownParameters below rather than failing in silence.
+        // `movement x`, `movement y`) plus `seated`. The controller has no prone, aiming or
+        // pitch parameter, so this view must not write those names: Unity silently ignores them
+        // and emits a warning for every process that loads the proxy.
         private static readonly int _hashCrouch    = Animator.StringToHash("crouched");
-        private static readonly int _hashProne     = Animator.StringToHash("prone");
         private static readonly int _hashSprint    = Animator.StringToHash("sprinting");
-        private static readonly int _hashAim       = Animator.StringToHash("aiming");
         private static readonly int _hashDead      = Animator.StringToHash("dead");
         private static readonly int _hashRagdoll   = Animator.StringToHash("ragdolled");
-        private static readonly int _hashPitch     = Animator.StringToHash("pitch");
         private static readonly int _hashSeated    = Animator.StringToHash("seated");
         private static readonly int _hashMoving    = Animator.StringToHash("moving");
         private static readonly int _hashMovementX = Animator.StringToHash("movement x");
@@ -131,7 +137,7 @@ namespace Ironfront.Net.Unity.Client
         /// <summary>Every parameter name this component writes, for the once-only audit.</summary>
         private static readonly string[] _writtenParameters =
         {
-            "crouched", "prone", "sprinting", "aiming", "dead", "ragdolled", "pitch",
+            "crouched", "sprinting", "dead", "ragdolled",
             "seated", "moving", "movement x", "movement y",
         };
 
@@ -148,6 +154,8 @@ namespace Ironfront.Net.Unity.Client
         private bool _ragdollApplied;
         private byte _appliedWeaponId = byte.MaxValue;
         private IGameplayWeapon _activeWeapon;
+        private IRemoteActorPresentation _presentation;
+        private bool _hiddenForDeath;
 
         /// <summary>The network actor id this body is currently drawing.</summary>
         public ushort ActorId { get; private set; }
@@ -218,6 +226,10 @@ namespace Ironfront.Net.Unity.Client
             // prefab has `_actor: {fileID: 0}` -- so behind that early return it would never
             // have run on the one asset that carries this component.
             ReportUnknownParameters();
+
+            _teamRenderer = GetComponentInChildren<SkinnedMeshRenderer>(true);
+            CreateFallbackMuzzleFlash();
+            _presentation = NetClientBindings.ResolveRemoteActorPresentation(gameObject);
 
             if (_actor == null) return;
 
@@ -311,9 +323,13 @@ namespace Ironfront.Net.Unity.Client
         /// </remarks>
         public void PlayActiveWeaponFireCosmetics()
         {
-            if (_activeWeapon == null || !_activeWeapon.Exists) return;
+            if (_activeWeapon != null && _activeWeapon.Exists)
+            {
+                _activeWeapon.PlayFireCosmetics();
+                return;
+            }
 
-            _activeWeapon.PlayFireCosmetics();
+            if (_fallbackMuzzleFlash != null) _fallbackMuzzleFlash.Emit(1);
         }
 
         /// <summary>
@@ -321,7 +337,7 @@ namespace Ironfront.Net.Unity.Client
         /// snapshot — a pooled transform carries the previous occupant's pose, and leaving it
         /// would show the new player crouched or ragdolled for one frame.
         /// </summary>
-        public void Bind(ushort actorId)
+        public void Bind(ushort actorId, byte team)
         {
             ActorId          = actorId;
             _state           = default;
@@ -329,6 +345,9 @@ namespace Ironfront.Net.Unity.Client
             _ragdollApplied  = false;
             _appliedWeaponId = byte.MaxValue;
             _activeWeapon    = null;
+            _appliedTeam     = TeamId.None;
+
+            ApplyTeam(team);
 
             // Clearing the sample is what makes a respawn not a teleport. The displacement
             // fallback measures this transform against where it was last frame, and a pooled body
@@ -341,9 +360,7 @@ namespace Ironfront.Net.Unity.Client
             if (_animator == null) return;
 
             _animator.SetBool(_hashCrouch,  false);
-            _animator.SetBool(_hashProne,   false);
             _animator.SetBool(_hashSprint,  false);
-            _animator.SetBool(_hashAim,     false);
             _animator.SetBool(_hashDead,    false);
             _animator.SetBool(_hashRagdoll, false);
             _animator.SetBool(_hashSeated,  false);
@@ -366,16 +383,29 @@ namespace Ironfront.Net.Unity.Client
             _state    = RemoteActorVisualState.From(in entry);
             _hasState = true;
 
+            // A proxy without the original Actor/ragdoll rig is hidden on its death event. Spawn
+            // announcements are lifetime announcements, not respawn announcements, so the same
+            // proxy must become visible again when a later snapshot says the actor is alive.
+            if (_state.IsAlive && _hiddenForDeath)
+            {
+                _hiddenForDeath = false;
+                _presentation?.SetVisible(true);
+            }
+
             ApplyWeapon(_state.WeaponId);
+            ApplyTeam(_state.Team);
             ApplyPitch(_state.PitchDegrees);
             SolveLocomotion();
 
             if (_animator != null)
             {
-                _animator.SetBool(_hashCrouch,  _state.Stance == RemoteActorStance.Crouching);
-                _animator.SetBool(_hashProne,   _state.Stance == RemoteActorStance.Prone);
+                // Actor.controller has no prone state. Crouch is its lowest authored stance,
+                // so use that visual fallback instead of leaving a prone remote standing.
+                _animator.SetBool(
+                    _hashCrouch,
+                    _state.Stance == RemoteActorStance.Crouching ||
+                    _state.Stance == RemoteActorStance.Prone);
                 _animator.SetBool(_hashSprint,  _state.IsSprinting);
-                _animator.SetBool(_hashAim,     _state.IsAiming);
                 _animator.SetBool(_hashDead,    !_state.IsAlive);
                 _animator.SetBool(_hashRagdoll, _state.IsRagdoll);
                 _animator.SetBool(_hashSeated,  _state.IsSeated);
@@ -386,6 +416,16 @@ namespace Ironfront.Net.Unity.Client
             }
 
             ApplyRagdoll(_state.IsRagdoll);
+        }
+
+        /// <summary>
+        /// Hides the presentation of a proxy that has no ragdoll while keeping its registry and
+        /// snapshot component alive, so a subsequent respawn can reveal the same actor again.
+        /// </summary>
+        public void HideForDeathFallback()
+        {
+            _hiddenForDeath = true;
+            _presentation?.SetVisible(false);
         }
 
         /// <summary>
@@ -471,7 +511,8 @@ namespace Ironfront.Net.Unity.Client
                 return;
             }
 
-            if (_animator != null) _animator.SetFloat(_hashPitch, pitchDegrees);
+            // The shipped controller has no pitch parameter. A prefab without an authored
+            // upper-body transform keeps its neutral pose instead of issuing a silent no-op.
         }
 
         /// <summary>
@@ -480,12 +521,23 @@ namespace Ironfront.Net.Unity.Client
         /// </summary>
         private void ApplyWeapon(byte weaponId)
         {
-            if (weaponId == _appliedWeaponId) return;
+            bool activeWeaponExists = _activeWeapon != null && _activeWeapon.Exists;
+            if (!RemoteWeaponResolvePolicy.ShouldResolve(
+                    weaponId, _appliedWeaponId, activeWeaponExists))
+                return;
+
             _appliedWeaponId = weaponId;
 
             if (!HasActor)
             {
-                _activeWeapon = null;
+                _activeWeapon = _presentation != null && _presentation.Exists
+                    ? _presentation.EquipWeapon(
+                        weaponId,
+                        _muzzleAnchor != null && _muzzleAnchor.parent != null
+                            ? _muzzleAnchor.parent
+                            : transform)
+                    : null;
+                if (_hiddenForDeath) _presentation?.SetVisible(false);
                 return;
             }
 
@@ -511,6 +563,52 @@ namespace Ironfront.Net.Unity.Client
                     "[net] a remote actor has no weapon to play cosmetics on, so shots will be "
                     + "silent and flashless. Client-track items E1 and E3.");
             }
+        }
+
+        private void ApplyTeam(byte team)
+        {
+            if (team == _appliedTeam) return;
+            _appliedTeam = team;
+
+            if (_presentation != null && _presentation.Exists)
+                _presentation.ApplyTeam(team);
+
+            if (_teamRenderer == null) return;
+
+            int rgb = NetClientBindings.TeamColourRgb(team);
+            Color colour = new Color(
+                ((rgb >> 16) & 0xff) / 255f,
+                ((rgb >> 8) & 0xff) / 255f,
+                (rgb & 0xff) / 255f,
+                1f);
+            _teamRenderer.material.color = colour;
+        }
+
+        private void CreateFallbackMuzzleFlash()
+        {
+            Transform parent = _muzzleAnchor != null ? _muzzleAnchor : transform;
+            var flashObject = new GameObject("Network Muzzle Flash");
+            flashObject.transform.SetParent(parent, false);
+
+            _fallbackMuzzleFlash = flashObject.AddComponent<ParticleSystem>();
+            ParticleSystem.MainModule main = _fallbackMuzzleFlash.main;
+            main.playOnAwake = false;
+            main.loop = false;
+            main.duration = 0.05f;
+            main.startLifetime = 0.045f;
+            main.startSpeed = 0.8f;
+            main.startSize = 0.14f;
+            main.startColor = new Color(1f, 0.72f, 0.18f, 1f);
+            main.maxParticles = 4;
+
+            ParticleSystem.EmissionModule emission = _fallbackMuzzleFlash.emission;
+            emission.enabled = false;
+
+            ParticleSystem.ShapeModule shape = _fallbackMuzzleFlash.shape;
+            shape.enabled = true;
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.angle = 12f;
+            shape.radius = 0.015f;
         }
     }
 }

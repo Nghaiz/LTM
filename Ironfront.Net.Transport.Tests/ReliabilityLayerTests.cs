@@ -212,6 +212,29 @@ namespace Ironfront.Net.Transport.Tests
         }
 
         [Fact]
+        public void ReliablePacketSurvivesAnElevenSecondUnitySceneLoadAndCanStillBeAcked()
+        {
+            var reliability = new ReliabilityLayer();
+            reliability.OnPacketSent(0, new byte[] { 1 }, true, 0);
+            ushort newestSequence = 0;
+
+            // Client 2 in the 2026-09-09 manual run spent 10.94 s inside LoadScene. The old
+            // 10 s delivery deadline abandoned its join burst at 10.34 s even though the peer
+            // was alive, then the UI reported a timeout. Keep the latest relocated sequence so
+            // the first acknowledgement after loading proves the record is still recoverable.
+            for (double nowMs = 1; nowMs <= 11_000; nowMs += 5)
+                reliability.Update(nowMs, (_, _, sequence) => newestSequence = sequence);
+
+            Assert.False(reliability.HasAbandonedReliable);
+            Assert.Equal(1, reliability.PendingReliableCount);
+
+            reliability.ProcessIncomingAck(newestSequence, 0, 11_001);
+
+            Assert.False(reliability.HasAbandonedReliable);
+            Assert.Equal(0, reliability.PendingReliableCount);
+        }
+
+        [Fact]
         public void RetransmissionIntervalsBackOffExponentiallyInsteadOfFloodingAtTheRtoFloor()
         {
             // The other half of the same fix. Ten copies of one packet inside 300 ms is not

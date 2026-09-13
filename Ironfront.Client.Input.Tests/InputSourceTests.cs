@@ -53,6 +53,7 @@ namespace Ironfront.Client.Input.Tests
         [InlineData(1, InputButtons.SwitchWeapon1)]
         [InlineData(2, InputButtons.SwitchWeapon2)]
         [InlineData(3, InputButtons.SwitchWeapon3)]
+        [InlineData(4, InputButtons.SwitchWeapon4)]
         public void A_weapon_slot_sets_exactly_its_own_bit(int slot, InputButtons expected)
         {
             ushort packed = InputButtonPacker.Pack(
@@ -62,7 +63,7 @@ namespace Ironfront.Client.Input.Tests
         }
 
         /// <summary>
-        /// A slot outside 0..3 selects nothing, and the seven-argument overload never selects.
+        /// A slot outside 0..4 selects nothing, and the seven-argument overload never selects.
         /// </summary>
         /// <remarks>
         /// Silent rather than throwing: this runs once per input frame, and a scripted programme
@@ -71,7 +72,7 @@ namespace Ironfront.Client.Input.Tests
         /// </remarks>
         [Theory]
         [InlineData(-1)]
-        [InlineData(4)]
+        [InlineData(5)]
         [InlineData(int.MinValue)]
         public void An_out_of_range_slot_selects_nothing(int slot)
         {
@@ -108,12 +109,13 @@ namespace Ironfront.Client.Input.Tests
         /// becomes permanently ambiguous.
         /// </summary>
         [Fact]
-        public void Bits_with_no_producer_in_FpsActorController_stay_clear()
+        public void Basic_overload_leaves_unproduced_and_weapon_selection_bits_clear()
         {
             const InputButtons unused = InputButtons.Prone | InputButtons.Reserved7
-                                        | InputButtons.LeanLeft | InputButtons.LeanRight
-                                        | InputButtons.SwitchWeapon0 | InputButtons.SwitchWeapon1
-                                        | InputButtons.SwitchWeapon2 | InputButtons.SwitchWeapon3;
+                                         | InputButtons.LeanLeft | InputButtons.LeanRight
+                                         | InputButtons.SwitchWeapon0 | InputButtons.SwitchWeapon1
+                                         | InputButtons.SwitchWeapon2 | InputButtons.SwitchWeapon3
+                                         | InputButtons.SwitchWeapon4;
 
             ushort packed = InputButtonPacker.Pack(true, true, true, true, true, true, true);
 

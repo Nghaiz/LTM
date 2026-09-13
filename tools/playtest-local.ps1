@@ -9,7 +9,7 @@
 # WHAT IT STARTS. Three kinds of process, in the order they have to come up:
 #
 #   1. Ironfront.MasterServer   TCP 27000  -- accounts, room browser, match start, tickets
-#   2. Ironfront.exe -batchmode UDP 27015  -- the game server; registers itself with the master
+#   2. Ironfront.exe -batchmode UDP 27015+ -- one game server for each shipped map
 #   3. Ironfront.exe  x N       windowed   -- the clients you actually play
 #
 # WAITING FOR THE RIGHT THING. Step 2 waits for the MASTER'S VIEW of the game server, not for
@@ -64,6 +64,11 @@ param(
     # Wipe the account database. Off by default: re-registering four players every session is
     # the kind of friction that stops a playtest happening at all.
     [switch] $FreshDb,
+
+    # Per-trigger diagnostics are intentionally opt-in. Unity appends a native stack trace to
+    # every Debug.Log call in a player log; with two held triggers this can generate thousands of
+    # disk writes and starve the UDP pump, making damage and snapshots look seconds late.
+    [switch] $VerboseGameplayLogs,
 
     # Kill a leaked master / game server / clients from an earlier run, then exit.
     [switch] $Stop,
@@ -179,7 +184,13 @@ if (-not (Test-Path $player)) {
 $asm = Join-Path $repoRoot "build/windows/Ironfront_Data/Managed/Assembly-CSharp.dll"
 if (Test-Path $asm) {
     $built = (Get-Item $asm).LastWriteTime
+    # build-player.ps1 temporarily rewrites both stamp sources and restores them after Unity
+    # exits. Their restored LastWriteTime is therefore newer than the DLL even though the DLL
+    # contains the requested stamp. They are generated build inputs, not evidence of stale game
+    # code, so exclude only those two known files from the freshness check.
+    $generatedStampSources = @("BuildStamp.cs", "ServerBuildStamp.cs")
     $newestSource = Get-ChildItem (Join-Path $repoRoot "Ironfront_Reborn/Assets/Scripts") -Recurse -Filter *.cs |
+                    Where-Object { $_.Name -notin $generatedStampSources } |
                     Sort-Object LastWriteTime -Descending | Select-Object -First 1
     if ($newestSource -and $newestSource.LastWriteTime -gt $built) {
         Write-Host "[playtest] WARNING: the player was built $built and"
@@ -222,7 +233,18 @@ try {
 
     # One secret per run, shared by the master and the game server this script starts. It signs
     # the join ticket; a client never sees it.
-    $secret = [Convert]::ToHexString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(24))
+    # Use the instance API and BitConverter rather than the .NET 6 convenience methods. This
+    # script is also invoked by Windows PowerShell 5 on developer machines, where static
+    # RandomNumberGenerator.GetBytes(int) and Convert.ToHexString do not exist.
+    [byte[]] $secretBytes = New-Object byte[] 24
+    $secretRng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $secretRng.GetBytes($secretBytes)
+    }
+    finally {
+        $secretRng.Dispose()
+    }
+    $secret = [BitConverter]::ToString($secretBytes).Replace('-', '')
 
     $masterEnv = @{
         IRONFRONT_SHARED_SECRET = $secret
@@ -254,7 +276,8 @@ try {
     Write-Host "[playtest] master is listening"
 
     # --------------------------------------------------------------------------------------
-    # 2. Game server
+    # 2. Game servers -- one per shipped map. A server process loads exactly one Unity scene,
+    # so registering Dustbowl alone can never satisfy a room created for Island.
     # --------------------------------------------------------------------------------------
     # IRONFRONT_LANEB_ROLE must be ABSENT or DedicatedServerSceneBootstrap stands down and the
     # process hosts nothing. This shell may have inherited one from a lane-B run.
@@ -263,41 +286,57 @@ try {
         Remove-Item ("Env:" + $stale) -ErrorAction SilentlyContinue
     }
 
-    $mapId = if ($Scene -eq "Island") { 2 } else { 1 }
+    $otherScene = if ($Scene -eq "Island") { "Dustbowl" } else { "Island" }
+    $serverSpecs = @(
+        @{ Scene = $Scene;      MapId = if ($Scene -eq "Island") { 2 } else { 1 }; Port = $UdpPort;     Log = $serverLog },
+        @{ Scene = $otherScene; MapId = if ($otherScene -eq "Island") { 2 } else { 1 }; Port = $UdpPort + 1; Log = Join-Path $outDir ("game-server-" + $otherScene + ".log") }
+    )
+    $servers = @()
 
-    $env:IRONFRONT_MASTER_HOST          = "127.0.0.1"
-    $env:IRONFRONT_GAMESERVER_UDP_PORT  = "$UdpPort"
-    $env:IRONFRONT_GAMESERVER_PUBLIC_IP = "127.0.0.1"
-    $env:IRONFRONT_GAMESERVER_TRANSPORT = "udp"
-    $env:IRONFRONT_GAMESERVER_SCENE     = $Scene
-    # REQUIRED. TryRegister refuses a registration with an empty map list, and the server is then
-    # reaped as unauthenticated thirty seconds later -- which surfaces to a player as
-    # "No server available" with a perfectly healthy-looking server process running.
-    $env:IRONFRONT_GAMESERVER_MAP_IDS   = "$mapId"
-    $env:IRONFRONT_GAMESERVER_ACCEPT_UNSIGNED_TICKETS = "0"
+    foreach ($spec in $serverSpecs) {
+        $env:IRONFRONT_MASTER_HOST          = "127.0.0.1"
+        $env:IRONFRONT_GAMESERVER_UDP_PORT  = "$($spec.Port)"
+        $env:IRONFRONT_GAMESERVER_PUBLIC_IP = "127.0.0.1"
+        $env:IRONFRONT_GAMESERVER_TRANSPORT = "udp"
+        $env:IRONFRONT_GAMESERVER_SCENE     = $spec.Scene
+        $env:IRONFRONT_GAMESERVER_MAP_IDS   = "$($spec.MapId)"
+        $env:IRONFRONT_GAMESERVER_ACCEPT_UNSIGNED_TICKETS = "0"
+        # Per-trigger logging is useful for a short diagnosis capture, but is far too expensive
+        # for a normal match because Unity also writes a stack trace for every line.
+        if ($VerboseGameplayLogs) {
+            $env:IRONFRONT_LOG_SHOTS   = "1"
+            $env:IRONFRONT_LOG_LOADOUT = "1"
+        }
+        else {
+            Remove-Item Env:IRONFRONT_LOG_SHOTS -ErrorAction SilentlyContinue
+            Remove-Item Env:IRONFRONT_LOG_LOADOUT -ErrorAction SilentlyContinue
+        }
 
-    Write-Host "[playtest] starting the game server (udp $UdpPort, scene $Scene, map id $mapId)"
-    $server = Start-Process -FilePath $player -PassThru `
-        -ArgumentList @("-batchmode", "-nographics", "-logFile", $serverLog)
-    $processes += @{ Label = "game-server"; Process = $server }
+        Write-Host "[playtest] starting game server (udp $($spec.Port), scene $($spec.Scene), map id $($spec.MapId))"
+        $server = Start-Process -FilePath $player -PassThru `
+            -ArgumentList @("-batchmode", "-nographics", "-logFile", $spec.Log)
+        $servers += $server
+        $processes += @{ Label = "game-server-$($spec.Scene)"; Process = $server }
+    }
 
     $deadline = (Get-Date).AddSeconds($ServerReadySec)
     $healthy = $false
     while ((Get-Date) -lt $deadline) {
-        if ($server.HasExited) {
-            throw "the game server exited $($server.ExitCode) before registering. See $serverLog."
+        $exited = $servers | Where-Object { $_.HasExited } | Select-Object -First 1
+        if ($null -ne $exited) {
+            throw "a game server exited $($exited.ExitCode) before both maps registered. See $outDir."
         }
         $metrics = Read-Metrics -Port $MetricsPort
-        if ($metrics -and $metrics -match $IronfrontHealthyPattern) {
-            Write-Host "[playtest] the master reports $($Matches[1]) healthy game server(s)"
+        if ($metrics -and $metrics -match $IronfrontHealthyPattern -and [int]$Matches[1] -ge 2) {
+            Write-Host "[playtest] the master reports $($Matches[1]) healthy game servers (Dustbowl + Island)"
             $healthy = $true
             break
         }
         Start-Sleep -Milliseconds 750
     }
     if (-not $healthy) {
-        throw ("the game server never became healthy at the master within ${ServerReadySec}s. " +
-               "Look for '[net] master link: registered as server' in $serverLog -- " +
+        throw ("both map servers did not become healthy at the master within ${ServerReadySec}s. " +
+               "Look for '[net] master link: registered as server' in $outDir -- " +
                "'staying standalone' there means it never tried or was refused.")
     }
 
@@ -348,13 +387,13 @@ try {
     Write-Host "     The account database is kept between runs, so this is a first-time step;"
     Write-Host "     pass -FreshDb when you want it wiped."
     Write-Host "  2. Log in. The master address is pre-filled at 127.0.0.1:$MasterPort."
-    Write-Host "  3. Room browser -> the $Scene room -> pick a side -> Ready."
+    Write-Host "  3. Room browser -> choose the Dustbowl or Island room -> pick a side -> Ready."
     Write-Host "  4. When every player is ready the match starts and the map loads."
     Write-Host "     Tab shows the scoreboard; alt-tab between windows to play the other side."
     Write-Host ""
     Write-Host "Logs:   $outDir"
     Write-Host "Master: $masterLog"
-    Write-Host "Server: $serverLog"
+    Write-Host "Servers: $outDir\game-server*.log"
     Write-Host ""
     Write-Host "Ctrl+C here tears the whole stack down."
     Write-Host "==============================================================================="

@@ -137,6 +137,13 @@ public class FpsActorController : ActorController
 
 	private bool crouchInput;
 
+	// Unity key/mouse edges last for one rendered frame, while C_INPUT is sampled by a separate
+	// 30 Hz clock. Keep these edges until that clock has actually included them in a frame. A
+	// scripted test held both values for seconds and therefore could not expose this race.
+	private int pendingNetworkWeaponSlot = -1;
+
+	private bool pendingNetworkFire;
+
 	// Phase-00 task 3: every gameplay input below arrives through this, so a networked
 	// controller can supply one. UI and debug keys keep reading Input directly -- criterion 6
 	// permits it, and widening the seam to cover them buys nothing and risks the loadout screen.
@@ -186,8 +193,46 @@ public class FpsActorController : ActorController
 			GetComponent<Ironfront.Net.Unity.NetPredictionClock>();
 		if (clock == null) return;
 
-		clock.CombatButtonSource = () => (Ironfront.Net.Protocol.InputButtons)inputSource.Buttons;
 		clock.AimPitchSource = () => inputSource.Pitch;
+		clock.SimulationEnabled = () => inputEnabled && actor != null && !actor.dead && !actor.IsSeated();
+		clock.CombatButtonSource = SampleNetworkCombatButtons;
+		clock.OnTickSimulated += OnNetworkTickSimulated;
+	}
+
+	private Ironfront.Net.Protocol.InputButtons SampleNetworkCombatButtons()
+	{
+		Ironfront.Net.Protocol.InputButtons buttons =
+			(Ironfront.Net.Protocol.InputButtons)inputSource.Buttons;
+		if (pendingNetworkFire)
+		{
+			buttons |= Ironfront.Net.Protocol.InputButtons.Fire;
+		}
+		// Ravenfield starts auto-reload inside Weapon.AmmoChanged(), not from an input button.
+		// Mirror that already-started reload onto C_INPUT so the server fills the authoritative
+		// clip too; otherwise the local animation spends reserve ammo and the next snapshot puts
+		// the clip straight back to zero. This also covers grenades and launchers.
+		if (actor != null && actor.activeWeapon != null && actor.activeWeapon.reloading)
+		{
+			buttons |= Ironfront.Net.Protocol.InputButtons.Reload;
+		}
+		buttons |= Ironfront.Net.Protocol.InputFrame.SlotBit(pendingNetworkWeaponSlot);
+		return buttons;
+	}
+
+	private void OnNetworkTickSimulated(
+		uint tick, Ironfront.Net.Replication.Movement.MoveInput input)
+	{
+		if (pendingNetworkWeaponSlot < 0 && !pendingNetworkFire) return;
+
+		bool sentFire = pendingNetworkFire && input.Fire;
+		bool sentSlot = pendingNetworkWeaponSlot >= 0
+			&& input.WeaponSlot == pendingNetworkWeaponSlot;
+		if (!sentFire && !sentSlot) return;
+
+		Debug.Log($"[input] C_INPUT tick {tick} buffered fire={sentFire} slot="
+			+ $"{(sentSlot ? input.WeaponSlot : -1)}");
+		if (sentFire) pendingNetworkFire = false;
+		if (sentSlot) pendingNetworkWeaponSlot = -1;
 	}
 
 	private void Awake()
@@ -215,6 +260,7 @@ public class FpsActorController : ActorController
 		}
 
 		controller = GetComponent<FirstPersonController>();
+		controller.externalMovementAuthority = NetContext.IsClient;
 		characterController = GetComponent<CharacterController>();
 		thirdpersonRenderers = actor.ragdoll.AnimatedRenderers();
 		fpCameraParent = fpCamera.transform.parent;
@@ -236,7 +282,7 @@ public class FpsActorController : ActorController
 			// actually drives.
 			// Aiming() folds in toggleAim and a latch LocalInputSource cannot see, so it is
 			// handed over as a live delegate rather than duplicated there.
-			inputSource = new LocalInputSource(fpCamera.transform, Aiming);
+			inputSource = new LocalInputSource(fpCamera.transform, Aiming, SampleWeaponSlotIntent);
 			// Temporary, and deliberately unconditional: the harness that says whether the
 			// substitution above was correct. Delete both this line and InputShadowCompare.cs
 			// once a playtest has come back quiet.
@@ -506,6 +552,22 @@ public class FpsActorController : ActorController
 		controller.SetMouseEnabled(false);
 	}
 
+	/// <summary>
+	/// Opens the stock loadout UI for a network player's first life without pretending the
+	/// player died and without granting a spawn locally.  The server still places the body only
+	/// after the UI's Deploy button is consumed by NetClientLocalCombatDriver.
+	/// </summary>
+	public void OpenInitialNetworkLoadout()
+	{
+		if (deployedView || LoadoutUi.IsOpen())
+		{
+			return;
+		}
+
+		DisableInput();
+		OpenLoadout();
+	}
+
 	public void CloseLoadout()
 	{
 		LoadoutUi.Hide();
@@ -618,6 +680,12 @@ public class FpsActorController : ActorController
 		// CloseLoadout also does controller.SetMouseEnabled(true), which is SpawnAt's line.
 		CloseLoadout();
 
+		// Actor.Awake parks every body as dead.  The offline SpawnAt path normally clears that
+		// flag, but the network path intentionally cannot call SpawnAt because it would overwrite
+		// the server-owned transform.  Clear the gameplay half explicitly before arming the
+		// loadout: SwitchToFirstAvailableWeapon itself refuses to run on a dead actor.
+		actor.EnterNetworkDeployedState();
+
 		// X-11's other half. SpawnAt arms a body through SpawnLoadoutWeapons (Actor.cs:266);
 		// this path is the one SpawnAt never runs for a networked body (see this method's own
 		// remark above), and nothing else on the client ever called EquipLoadout either -- its
@@ -627,6 +695,16 @@ public class FpsActorController : ActorController
 		// nothing else (Actor.cs:313-316), so it writes no transform and does not reopen the
 		// authority split this method's own remark protects.
 		actor.EquipLoadout();
+
+		// SpawnAt normally owns these three HUD writes.  A network deploy deliberately skips
+		// SpawnAt because the transform is server-owned, so reproduce only its local presentation
+		// here after the chosen loadout has created an active weapon.
+		if (IngameUi.instance != null)
+		{
+			IngameUi.instance.Show();
+			IngameUi.instance.SetHealth(Mathf.Max(0f, actor.health));
+			actor.UpdateAmmoUi();
+		}
 
 		// Null-guarded where SpawnAt is not. SpawnAt runs from a spawn wave, which cannot happen
 		// before the scene's singletons exist; this runs off a network message, which can arrive
@@ -638,6 +716,23 @@ public class FpsActorController : ActorController
 		}
 
 		EnableInput();
+
+		// The prefab deliberately ships its network clock disabled so an offline game and the
+		// parked pre-deploy body do not start producing C_INPUT.  Lane B used to be the only
+		// caller that enabled it, which made the automated clients move and throw grenades while
+		// the real menu/deploy flow never sent a single input frame.  The visible symptom was a
+		// live first-person weapon that could play its local muzzle flash, but WASD left the body
+		// fixed and a locally thrown grenade never received the server explosion that owns its
+		// detonation.  Deployment is the authority boundary at which this body becomes playable,
+		// so start the clock here and leave it running through death: SimulationEnabled above
+		// turns dead/seated input into neutral frames while keeping acknowledgements current.
+		Ironfront.Net.Unity.NetPredictionClock networkClock =
+			GetComponent<Ironfront.Net.Unity.NetPredictionClock>();
+		if (networkClock != null)
+		{
+			networkClock.enabled = true;
+		}
+
 		FirstPersonCamera();
 		ForceEndCrouch();
 		deployedView = true;
@@ -699,6 +794,18 @@ public class FpsActorController : ActorController
 
 	private void FixedUpdate()
 	{
+		// A network client does not own the body's grounded/ragdoll state. Its CharacterController
+		// is deliberately decoupled from the server transform while prediction/reconciliation is
+		// running, so isGrounded can remain false on perfectly valid authoritative terrain. Letting
+		// the offline 1.5-second airborne detector run here made every movement correction call
+		// Actor.FallOver(): the player stood up, moved, fell over, and repeated forever at 100 HP.
+		// Server death/respawn messages already own the client-side ragdoll lifecycle.
+		if (NetContext.IsClient)
+		{
+			hasNotBeenGroundedAction.Start();
+			return;
+		}
+
 		if (!characterController.enabled || characterController.isGrounded || actor.fallenOver || actor.dead || actor.IsSeated())
 		{
 			hasNotBeenGroundedAction.Start();
@@ -711,6 +818,15 @@ public class FpsActorController : ActorController
 
 	private void Update()
 	{
+		// Capture the edge every render frame. NetPredictionClock may or may not simulate a tick
+		// in this frame; OnNetworkTickSimulated clears it only after it reached C_INPUT.
+		if (NetContext.IsClient && inputEnabled && !LocalTextEntry.Composing
+			&& !LoadoutUi.IsOpen()
+			&& (Input.GetButtonDown("Fire1") || Input.GetMouseButtonDown(0)))
+		{
+			pendingNetworkFire = true;
+		}
+
 		controller.sprinting = IsSprinting();
 		if (IsSprinting())
 		{
@@ -820,11 +936,10 @@ public class FpsActorController : ActorController
 		}
 	}
 
-	// Everything below is edge-triggered -- GetKeyDown, GetButtonDown, mouseScrollDelta --
-	// and IInputSource reports levels, not edges. Weapon and seat selection do affect gameplay
-	// and phase-00 section 5 books them as debt to be paid in phase 02, when the C_INPUT
-	// weapon-switch bits (11..14) get a consumer. Routing an edge through a level channel now
-	// would either drop presses or fire them twice.
+	// Everything below is edge-triggered -- GetKeyDown, GetButtonDown, mouseScrollDelta.
+	// Weapon selection is predicted here for Ravenfield responsiveness and independently sampled
+	// as an absolute slot by SampleWeaponSlotIntent for the authoritative C_INPUT stream. Seat
+	// selection remains on its dedicated network seam.
 	private void UpdateInput()
 	{
 		// One guard for the whole method rather than eleven. Every read below is a bare key --
@@ -836,23 +951,23 @@ public class FpsActorController : ActorController
 		}
 		if (Input.GetKeyDown(KeyCode.Alpha1))
 		{
-			actor.SwitchWeapon(0);
+			QueueWeaponSwitch(0);
 		}
 		if (Input.GetKeyDown(KeyCode.Alpha2))
 		{
-			actor.SwitchWeapon(1);
+			QueueWeaponSwitch(1);
 		}
 		if (Input.GetKeyDown(KeyCode.Alpha3))
 		{
-			actor.SwitchWeapon(2);
+			QueueWeaponSwitch(2);
 		}
 		if (Input.GetKeyDown(KeyCode.Alpha4))
 		{
-			actor.SwitchWeapon(3);
+			QueueWeaponSwitch(3);
 		}
 		if (Input.GetKeyDown(KeyCode.Alpha5))
 		{
-			actor.SwitchWeapon(4);
+			QueueWeaponSwitch(4);
 		}
 		if (Input.GetKeyDown(KeyCode.F1))
 		{
@@ -892,12 +1007,32 @@ public class FpsActorController : ActorController
 		}
 		if (Input.mouseScrollDelta.y < 0f)
 		{
-			actor.NextWeapon();
+			QueueWeaponSwitch(actor.FindWeaponSlot(1, skipToggleable: true));
 		}
 		else if (Input.mouseScrollDelta.y > 0f)
 		{
-			actor.PreviousWeapon();
+			QueueWeaponSwitch(actor.FindWeaponSlot(-1, skipToggleable: false));
 		}
+	}
+
+	private void QueueWeaponSwitch(int slot)
+	{
+		if (slot < 0) return;
+		actor.SwitchWeapon(slot);
+		if (!NetContext.IsClient) return;
+
+		pendingNetworkWeaponSlot = slot;
+		Debug.Log($"[input] queued weapon slot {slot} for C_INPUT");
+	}
+
+	/// <summary>
+	/// Returns the base game's number-key or wheel selection until the 30 Hz network clock has
+	/// actually carried it. <see cref="UpdateInput"/> owns the edge and immediate presentation;
+	/// <see cref="OnNetworkTickSimulated"/> owns clearing it after transmission.
+	/// </summary>
+	private int SampleWeaponSlotIntent()
+	{
+		return LocalTextEntry.Composing ? -1 : pendingNetworkWeaponSlot;
 	}
 
 	private void SampleUseRay()

@@ -32,6 +32,11 @@ param(
 
     [string] $LogFile = "",
 
+    # Use only when the complete plugin closure was just built and copied (for example, while
+    # cutting a clean stamped player immediately after committing those binaries). The default
+    # deliberately rebuilds everything so protocol constants cannot be mixed across DLLs.
+    [switch] $SkipLibraryBuild,
+
     # Skip the "is an Editor running" refusal. For the case where the process found is somebody
     # else's Unity on another project -- the check cannot tell them apart.
     [switch] $Force
@@ -39,6 +44,32 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+
+# Capture source cleanliness BEFORE build-libs replaces the tracked plugin binaries. Managed
+# assemblies contain a new PE/MVID on each successful compilation, so testing afterwards makes
+# every otherwise-clean build report -dirty merely because this script performed its required
+# first step. Real source or prefab edits are still included in this project-scoped snapshot.
+$unityProjectDirtyBeforeLibraryBuild = $false
+try {
+    $unityProjectDirtyBeforeLibraryBuild =
+        [bool](& git -C $repoRoot status --porcelain -- Ironfront_Reborn 2>$null)
+}
+catch { }
+
+# Rebuild the complete Unity plugin closure before opening the Editor. PROTOCOL_VERSION is a
+# const, so its value is inlined into dependent assemblies such as Ironfront.MasterClient.dll.
+# Copying only Ironfront.Net.Protocol.dll can therefore produce a player whose game protocol is
+# current while its login request still sends the previous version; the master reports that as
+# "This build is out of date." Keeping this inside the player build makes that mixed state
+# impossible on every future build, not merely repaired in the current working tree.
+$libraryBuild = Join-Path $repoRoot "tools/build-libs.ps1"
+if (-not $SkipLibraryBuild) {
+    & $libraryBuild -Configuration Release
+    if ($LASTEXITCODE -ne 0) { throw "the Unity plugin libraries did not build" }
+}
+else {
+    Write-Host "[build] using the already-built Unity plugin closure (-SkipLibraryBuild)"
+}
 
 # Read the required Editor version from the project and discover that exact version. Unity Hub
 # supports a secondary install directory (common on machines where C: is small) and records it
@@ -171,7 +202,7 @@ if ($commit) {
     # 2026-09-06) reported -dirty because of two stray test-result XMLs in tmp/. The binary
     # matched its commit exactly. A flag that fires on scratch is a flag nobody reads by the
     # second day, which would have cost more than the flag is worth.
-    $dirty  = [bool](& git -C $repoRoot status --porcelain -- Ironfront_Reborn)
+    $dirty = $unityProjectDirtyBeforeLibraryBuild
     $builtAtUtc = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
     if ($dirty) {
@@ -236,6 +267,7 @@ $buildArgs = @(
 )
 
 $started = Get-Date
+$unityExitCode = $null
 
 # -PassThru and then WaitForExit(), NOT -Wait. MEASURED 2026-09-03: Start-Process -Wait waits on
 # the whole descendant tree, and a batchmode Unity leaves something behind that outlives it -- the
@@ -250,6 +282,11 @@ $started = Get-Date
 try {
     $proc = Start-Process -FilePath $UnityPath -ArgumentList $buildArgs -PassThru -NoNewWindow
     $proc.WaitForExit()
+    # Refresh before reading ExitCode. On Windows, Start-Process can otherwise leave the
+    # property empty even though WaitForExit returned; PowerShell then compares that empty
+    # value as non-zero and reports a failed build after Unity already wrote a valid player.
+    $proc.Refresh()
+    $unityExitCode = $proc.ExitCode
 }
 finally {
     # In a finally so a failed build, a thrown check or a Ctrl-C all leave the tree as they found
@@ -263,8 +300,23 @@ finally {
 
 $elapsed = [int]((Get-Date) - $started).TotalSeconds
 
-if ($proc.ExitCode -ne 0) {
-    throw "the Windows player build exited $($proc.ExitCode) after ${elapsed}s. See $LogFile."
+if ($null -eq $unityExitCode) {
+    # Some Unity/Windows combinations release the native process handle before PowerShell can
+    # read ExitCode, even after WaitForExit + Refresh. The editor harness writes this marker only
+    # after BuildPipeline returned success and the complete artifact was measured. Since -logFile
+    # starts a fresh log for this invocation, it is a safe success witness rather than a stale
+    # file-exists check.
+    $completed = Select-String -LiteralPath $LogFile `
+        -SimpleMatch '[build] lane-B windows player complete ->' |
+        Select-Object -Last 1
+    if (-not $completed) {
+        throw "the Windows player build returned no exit code and no completion marker after ${elapsed}s. See $LogFile."
+    }
+    Write-Warning "[build] Unity returned no readable exit code; accepted the harness completion marker."
+}
+
+if ($null -ne $unityExitCode -and $unityExitCode -ne 0) {
+    throw "the Windows player build exited $unityExitCode after ${elapsed}s. See $LogFile."
 }
 
 if (-not (Test-Path $exe)) {

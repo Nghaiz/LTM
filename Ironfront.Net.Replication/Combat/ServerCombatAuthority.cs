@@ -276,8 +276,8 @@ namespace Ironfront.Net.Replication.Combat
         }
 
         /// <summary>
-        /// Where a shot leaves the shooter: their feet plus an eye height that drops when they
-        /// are crouched or prone. Decision D10.
+        /// Where a shot leaves the shooter: the capsule centre converted to feet, then raised
+        /// to eye height. Decision D10.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -303,7 +303,16 @@ namespace Ironfront.Net.Replication.Combat
                 ? ProtocolConstants.EYE_HEIGHT_CROUCHED
                 : ProtocolConstants.EYE_HEIGHT;
 
-            return new Vec3(state.Position.X, state.Position.Y + eye, state.Position.Z);
+            // NetMovementAgent stores the CharacterController transform, whose authored centre
+            // is zero. That transform is the CENTRE of the capsule, not its feet. Adding eye
+            // height directly put every network shot 0.9 m too high while the hitboxes were
+            // shifted by the same mistaken convention. It happened to look plausible in the
+            // first-person camera but rays passed over a remote player's torso.
+            float halfCapsule = MovementCore.HeightFor(state.IsCrouching) * 0.5f;
+            return new Vec3(
+                state.Position.X,
+                state.Position.Y - halfCapsule + eye,
+                state.Position.Z);
         }
 
         /// <summary>

@@ -60,12 +60,11 @@ namespace Ironfront.Net.Unity.Server
         /// How many ticks of one fall are reported before it goes quiet.
         /// </summary>
         /// <remarks>
-        /// Forty at 30 Hz is about 1.3 s, which at 15.5 m/s covers the first twenty metres. The
-        /// recorded falls run for a minute or more; logging all of it would be thousands of lines
-        /// that all say the same thing, and the log a reader has to scroll past is the log they
-        /// stop reading.
+        /// Three consecutive missing-ground samples establish the failure without flooding a
+        /// development log, where every warning also carries a stack trace. Nearby-ground
+        /// descents are filtered in <see cref="Report"/> and produce no warning.
         /// </remarks>
-        private const int MaxReportedTicks = 40;
+        private const int MaxReportedTicks = 3;
 
         /// <summary>How far below the body the probe ray looks for a surface.</summary>
         /// <remarks>
@@ -123,8 +122,6 @@ namespace Ironfront.Net.Unity.Server
 
         private void Report(ushort actorId, NetMovementAgent agent, in MoveState state, float y)
         {
-            ReportPhysicsSettingsOnce();
-
             CharacterController controller = agent.GetComponent<CharacterController>();
             Vector3 position = agent.transform.position;
 
@@ -134,6 +131,14 @@ namespace Ironfront.Net.Unity.Server
             // answer be "no" for a reason this diagnostic invented.
             bool hit = Physics.Raycast(
                 position + Vector3.up * 0.1f, Vector3.down, out RaycastHit info, ProbeDistanceMetres);
+
+            // A nearby surface is an ordinary jump, slope or ledge, not the collision-loss case
+            // this diagnostic exists to catch. Logging forty stack traces for every such descent
+            // inflated the latest server log to several megabytes and helped push its 30 Hz loop
+            // over budget. A real hole remains loud for three consecutive samples.
+            if (hit) return;
+
+            ReportPhysicsSettingsOnce();
 
             Debug.LogWarning(
                 $"[fall] actor {actorId} tick {_descendingTicks} y={y:F3} "
@@ -145,10 +150,7 @@ namespace Ironfront.Net.Unity.Server
                 + $"ctrlRadius={(controller != null ? controller.radius : -1f):F3} "
                 + $"ctrlCenterY={(controller != null ? controller.center.y : -1f):F3} "
                 + $"bypassed={agent.CollisionBypassedMoves} "
-                + (hit
-                    ? $"probe=HIT dist={info.distance:F3} collider='{info.collider.name}' "
-                      + $"layer={info.collider.gameObject.layer}"
-                    : $"probe=MISS within {ProbeDistanceMetres} m")
+                + $"probe=MISS within {ProbeDistanceMetres} m"
                 + " -- ledger X-82");
         }
 

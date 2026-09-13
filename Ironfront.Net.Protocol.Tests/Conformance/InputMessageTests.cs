@@ -181,6 +181,7 @@ namespace Ironfront.Net.Protocol.Tests
             Assert.Equal(1 << 12, (ushort)InputButtons.SwitchWeapon1);
             Assert.Equal(1 << 13, (ushort)InputButtons.SwitchWeapon2);
             Assert.Equal(1 << 14, (ushort)InputButtons.SwitchWeapon3);
+            Assert.Equal(1 << 15, (ushort)InputButtons.SwitchWeapon4);
         }
 
         [Fact]
@@ -202,11 +203,11 @@ namespace Ironfront.Net.Protocol.Tests
         }
 
         /// <summary>
-        /// <c>InputFrame.WeaponSlot</c> decodes bits 11-14, and -1 when none is set.
+        /// <c>InputFrame.WeaponSlot</c> decodes bits 11-15, and -1 when none is set.
         /// </summary>
         /// <remarks>
-        /// These four bits sat on the wire from the freeze until 2026-08-21 with no producer and
-        /// no consumer. The decoder is shared so the two halves cannot transcribe them
+        /// The original four bits sat on the wire from the freeze until 2026-08-21 with no
+        /// producer and no consumer. The decoder is shared so the two halves cannot transcribe them
         /// differently; these are its pins.
         /// </remarks>
         [Theory]
@@ -214,6 +215,7 @@ namespace Ironfront.Net.Protocol.Tests
         [InlineData(InputButtons.SwitchWeapon1, 1)]
         [InlineData(InputButtons.SwitchWeapon2, 2)]
         [InlineData(InputButtons.SwitchWeapon3, 3)]
+        [InlineData(InputButtons.SwitchWeapon4, 4)]
         public void EachSwitchBitDecodesToItsOwnSlot(InputButtons bit, int expected)
         {
             var frame = new InputFrame(0, 0, 0, 0, bit);

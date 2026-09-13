@@ -126,6 +126,12 @@ namespace Ironfront.Net.Unity
         /// <see cref="CombatButtonSource"/>; null reports level.</summary>
         public Func<float> AimPitchSource;
 
+        /// <summary>
+        /// Whether this tick may move the local body. Input packets still advance while false,
+        /// keeping acknowledgements current during loadout, death and vehicle seating.
+        /// </summary>
+        public Func<bool> SimulationEnabled;
+
         private void Awake()
         {
             _agent = GetComponent<NetMovementAgent>();
@@ -209,7 +215,10 @@ namespace Ironfront.Net.Unity
                 AimPitchDegrees = AimPitchSource != null ? AimPitchSource() : 0f;
 
                 MoveInput input = InputSource();
-                _agent.Tick(in input, TickInterval);
+                if (SimulationEnabled == null || SimulationEnabled())
+                    _agent.Tick(in input, TickInterval);
+                else
+                    input = default;
 
                 // Unchecked: a u32 tick at 30 Hz wraps after 4.5 years, and every comparison
                 // downstream uses SequenceMath.IsNewer32, which handles the wrap.

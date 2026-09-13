@@ -101,7 +101,19 @@ public class ThrowableWeapon : Weapon
 	/// </remarks>
 	public void SpawnThrowable()
 	{
-		if (NetContext.IsClient) return;
+		if (NetContext.IsClient)
+		{
+			// The authoritative projectile is supplied by S_PROJECTILE_SPAWN, but the local
+			// weapon still owns the immediately visible HUD prediction. Returning without
+			// consuming a round left the grenade count unchanged forever.
+			if (ammo != -1 && ammo > 0)
+			{
+				ammo--;
+				AmmoChanged();
+			}
+			Reload();
+			return;
+		}
 
 		ReleaseThrowable();
 	}

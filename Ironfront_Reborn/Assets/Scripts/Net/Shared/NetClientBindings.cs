@@ -73,6 +73,9 @@ namespace Ironfront.Net.Unity
         /// </summary>
         public static Func<GameObject, IProjectileBody> ProjectileBodyResolver { get; set; }
 
+        /// <summary>Builds the original-game visual layer for a remote actor proxy.</summary>
+        public static Func<GameObject, IRemoteActorPresentation> RemoteActorPresentationResolver { get; set; }
+
         /// <summary>The scene's replicated-vehicle prefabs, or null when unavailable.</summary>
         public static IVehiclePrefabDirectory VehiclePrefabs { get; set; }
 
@@ -178,6 +181,9 @@ namespace Ironfront.Net.Unity
         public static IProjectileBody ResolveProjectileBody(GameObject gameObject)
             => ProjectileBodyResolver?.Invoke(gameObject);
 
+        public static IRemoteActorPresentation ResolveRemoteActorPresentation(GameObject gameObject)
+            => RemoteActorPresentationResolver?.Invoke(gameObject);
+
         /// <summary>
         /// Shows a hitmarker, or does nothing when no HUD is registered.
         /// </summary>
@@ -229,6 +235,7 @@ namespace Ironfront.Net.Unity
             Hud = null;
             VehicleBodyResolver = null;
             ProjectileBodyResolver = null;
+            RemoteActorPresentationResolver = null;
             VehiclePrefabs = null;
             Decals = null;
             Objectives = null;
@@ -261,6 +268,7 @@ namespace Ironfront.Net.Unity
             public void EnableInput() { }
             public void DisableInput() { }
             public void EnterDeployedView() { }
+            public void OpenInitialLoadout() { }
             public bool ConsumeDeployIntent() => false;
             public bool IsLoadoutOpen => false;
             public bool IsDriving(IGameplayActorPresence actor) => false;
@@ -272,6 +280,7 @@ namespace Ironfront.Net.Unity
             public void ApplyScreenshake(float magnitude, int iterations) { }
             public bool HasFellableBody => false;
             public void FellBody(Vector3 force, HumanBodyBones bone) { }
+            public void ApplyAuthoritativeCombat(byte health, byte weaponId, byte ammoInClip) { }
         }
     }
 }

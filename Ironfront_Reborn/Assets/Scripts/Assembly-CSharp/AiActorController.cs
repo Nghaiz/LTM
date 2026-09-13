@@ -1314,7 +1314,19 @@ public class AiActorController : ActorController
 		}
 		else if (ragdollAutokillAction.TrueDone())
 		{
-			actor.Damage(100f, 0f, true, actor.Position(), Vector3.zero, Vector3.zero);
+			// Headless multiplayer cannot use an animation/physics timeout as a damage source.
+			// It used to kill otherwise healthy bots with a null attacker after 60 seconds,
+			// producing the repeated "The world -> actor" feed and continuously recycling bots.
+			// Recover the stuck rig in-place; retain Ravenfield's original offline behaviour.
+			if (Ironfront.Net.Unity.NetContext.IsServer)
+			{
+				actor.RecoverFromStuckRagdoll();
+				ragdollAutokillAction.Start();
+			}
+			else
+			{
+				actor.Damage(100f, 0f, true, actor.Position(), Vector3.zero, Vector3.zero);
+			}
 		}
 		if (!InCover() || IsReloading() || CoolingDown())
 		{

@@ -128,6 +128,15 @@ namespace Ironfront.Net.Unity.Client
 
             ProjectileApplyResult result = _tracker.Apply(in message, NetContext.CurrentTick);
 
+            if (message.Kind == ProjectileKind.Grenade)
+            {
+                Debug.Log($"[net] grenade {message.ProjectileId} from actor "
+                          + $"{message.OwnerActorId}: {result.Action}, age "
+                          + $"{result.FastForwardedTicks} ticks, remaining "
+                          + $"{result.RemainingLifetimeSeconds:F2}s, position "
+                          + $"{result.Position.X:F2},{result.Position.Y:F2},{result.Position.Z:F2}");
+            }
+
             if (result.Action == ProjectileApplyAction.Ignore)
             {
                 Despawn(result.ProjectileId);
@@ -154,6 +163,9 @@ namespace Ironfront.Net.Unity.Client
             if (prefab == null)
             {
                 UnrenderableKinds++;
+                if (message.Kind == ProjectileKind.Grenade)
+                    Debug.LogError("[net] grenade spawn has no client prefab; the explosion can "
+                                   + "arrive but the thrown grenade cannot be drawn.");
                 return;
             }
 
@@ -168,6 +180,10 @@ namespace Ironfront.Net.Unity.Client
                 // Since C4b the seam simply does not expose it, so that is structural rather
                 // than a comment asking nicely.
                 projectile.SetNetProjectileId(result.ProjectileId);
+                // Instantiate happens before Projectile.Start in this frame. Apply the actual
+                // authoritative velocity now as well as on later re-seats so rigidbody-backed
+                // grenades do not sit invisibly at the spawn point for their first rendered step.
+                projectile.ApplyNetVelocity(ToUnity(result.Velocity));
 
                 // A grenade's fuse counts from the launch tick, so both sides detonate on the
                 // same integer rather than on whichever frame each side's own float crossed.
@@ -188,6 +204,11 @@ namespace Ironfront.Net.Unity.Client
                 }
 
                 _spawned[result.ProjectileId] = projectile;
+            }
+            else if (message.Kind == ProjectileKind.Grenade)
+            {
+                Debug.LogError($"[net] grenade prefab '{prefab.name}' has no projectile body; "
+                               + "the instantiated mesh cannot follow authoritative flight.");
             }
         }
 

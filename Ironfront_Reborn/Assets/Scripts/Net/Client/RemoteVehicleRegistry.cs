@@ -166,6 +166,25 @@ namespace Ironfront.Net.Unity.Client
             return true;
         }
 
+        /// <summary>
+        /// Reads the last server-owned health and state flags without exposing the internal
+        /// vehicle record. Diagnostics uses this to distinguish real replicated damage from a
+        /// cosmetic particle that merely happens to be near a vehicle.
+        /// </summary>
+        public bool TryGetAuthoritativeState(
+            ushort vehicleId, out float health, out VehicleStateFlags flags)
+        {
+            health = 0f;
+            flags = VehicleStateFlags.None;
+
+            if (!_live.TryGetValue(vehicleId, out NetClientVehicle vehicle)) return false;
+            if (vehicle == null || !vehicle.Exists || !vehicle.HasPose) return false;
+
+            health = vehicle.AuthoritativeHealth;
+            flags = vehicle.AuthoritativeFlags;
+            return true;
+        }
+
         private void Awake()
         {
             _client = NetClientBootstrap.Current;

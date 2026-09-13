@@ -56,10 +56,10 @@ namespace Ironfront.Net.Protocol
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <c>SwitchWeapon0..3</c> are bits 11-14 (protocol-spec § 4.2). They were declared at
+        /// <c>SwitchWeapon0..4</c> are bits 11-15 (protocol-spec § 4.2). Slots 0..3 were declared at
         /// the freeze and had zero producers and zero consumers until 2026-08-21, which is why
         /// this decoder lives here rather than in either peer: two transcriptions of the same
-        /// four bits is how the halves drift.
+        /// slot bits is how the halves drift. Slot 4 joined the same shared mapping in v9.
         /// </para>
         /// <para>
         /// <b>Lowest set bit wins.</b> More than one is not a state a producer should send, and
@@ -83,6 +83,7 @@ namespace Ironfront.Net.Protocol
             if ((buttons & InputButtons.SwitchWeapon1) != 0) return 1;
             if ((buttons & InputButtons.SwitchWeapon2) != 0) return 2;
             if ((buttons & InputButtons.SwitchWeapon3) != 0) return 3;
+            if ((buttons & InputButtons.SwitchWeapon4) != 0) return 4;
 
             return -1;
         }
@@ -93,11 +94,11 @@ namespace Ironfront.Net.Protocol
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <b>The one encoder for bits 11-14, and it lives in Protocol because there are two
+        /// <b>The one encoder for bits 11-15, and it lives in Protocol because there are two
         /// producers in two assemblies that cannot see each other.</b> <c>InputButtonPacker</c>
         /// is in <c>Ironfront.Net.Unity</c> and <c>MoveInput.ToButtons</c> is in
         /// <c>Ironfront.Net.Replication</c>; neither may reference the other, so before this
-        /// existed the only way for both to speak bits 11-14 was to transcribe them twice. Rows
+        /// existed the only way for both to speak the slot bits was to transcribe them twice. Rows
         /// X-3 and X-31 are both what happens when one transcription learns a bit and the other
         /// does not — X-31 because <c>MoveInput.ToButtons</c> had never heard of a slot at all.
         /// </para>
@@ -115,6 +116,7 @@ namespace Ironfront.Net.Protocol
                 case 1:  return InputButtons.SwitchWeapon1;
                 case 2:  return InputButtons.SwitchWeapon2;
                 case 3:  return InputButtons.SwitchWeapon3;
+                case 4:  return InputButtons.SwitchWeapon4;
                 default: return InputButtons.None;
             }
         }
