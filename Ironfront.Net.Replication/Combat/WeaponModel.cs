@@ -123,6 +123,20 @@ namespace Ironfront.Net.Replication.Combat
         /// </remarks>
         public readonly WeaponDelivery Delivery;
 
+        /// <summary>
+        /// True when holding the trigger keeps firing at <see cref="Cooldown"/>; false when one
+        /// press is one shot. Handoff section 5.2.
+        /// </summary>
+        /// <remarks>
+        /// <b>Defaults to true, which is what every weapon already did.</b> The server read the
+        /// raw Fire bit off each accepted input frame and attempted a shot, so every weapon in
+        /// the catalogue behaved as an automatic and only <see cref="Cooldown"/> held the rate
+        /// down. Defaulting to false would silently halve the cadence of every rifle in the
+        /// game, so the flag arrives inert and the entries whose own catalogue comment already
+        /// says "semi-auto" or "not an automatic" opt in.
+        /// </remarks>
+        public readonly bool Automatic;
+
         /// <summary>No ammo bag may refill this weapon. <c>Weapon.AllowsResupply</c>.</summary>
         public const short NoResupplySpareAmmo = -1;
 
@@ -180,11 +194,13 @@ namespace Ironfront.Net.Replication.Combat
             float dropoffMinMultiplier = 1f,
             short spareAmmo = InfiniteSpareAmmo,
             bool spendsAmmo = true,
-            WeaponDelivery delivery = WeaponDelivery.Hitscan)
+            WeaponDelivery delivery = WeaponDelivery.Hitscan,
+            bool automatic = true)
         {
             SpareAmmo = spareAmmo;
             SpendsAmmo = spendsAmmo;
             Delivery = delivery;
+            Automatic = automatic;
             Cooldown = cooldown;
             Spread = spread;
             ProjectilesPerShot = projectilesPerShot < 1 ? 1 : projectilesPerShot;
