@@ -159,7 +159,7 @@ namespace Ironfront.Net.Replication.Vehicles
         /// </summary>
         /// <remarks>
         /// Walks the registry's live-id list rather than keeping a separate burning set. At
-        /// <see cref="ProtocolConstants.MAX_VEHICLES"/> = 16 the scan is free, and a second
+        /// <see cref="ProtocolConstants.MAX_VEHICLES"/> the scan is free, and a second
         /// collection tracking who is burning is a second thing that can disagree with
         /// <c>VehicleState.Burning</c> — which is the divergence class this whole phase spends
         /// its budget removing.

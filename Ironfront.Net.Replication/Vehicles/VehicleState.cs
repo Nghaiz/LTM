@@ -104,10 +104,32 @@ namespace Ironfront.Net.Replication.Vehicles
         }
 
         /// <summary>Creates a vehicle at full health.</summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Id 0 throws rather than returning a state nobody can address</b> (protocol 10
+        /// § 8.2). 0 is the protocol's "no vehicle" AND <c>seatInfo</c>'s "not seated", so a
+        /// gameplay vehicle carrying it is indistinguishable from no vehicle at every layer
+        /// that would otherwise have to notice — which is how X-70 produced a quadbike that was
+        /// solid on the server and invisible to every client for the rest of the round.
+        /// </para>
+        /// <para>
+        /// An exception here and a <c>false</c> in <see cref="VehicleRegistry.Add"/> are not
+        /// inconsistent. <c>Add</c> is fed by a spawner that can legitimately double-report, so
+        /// refusing is a duplicate-report answer. Reaching THIS method with 0 means the caller
+        /// never asked the id pool at all, and there is no recovery that leaves a usable
+        /// vehicle behind.
+        /// </para>
+        /// </remarks>
         public static VehicleState Spawned(
             ushort vehicleId, ushort spawnerId, VehicleKind kind, byte seatCount,
             float maxHealth, byte ownerTeam)
         {
+            if (vehicleId == 0)
+                throw new System.ArgumentOutOfRangeException(
+                    nameof(vehicleId),
+                    "A networked vehicle may not carry id 0; it is the protocol's \"no vehicle\" "
+                    + "and seatInfo's \"not seated\". The caller must refuse the spawn instead.");
+
             return new VehicleState
             {
                 VehicleId = vehicleId,

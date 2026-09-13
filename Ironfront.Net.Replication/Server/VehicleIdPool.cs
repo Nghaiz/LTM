@@ -25,11 +25,19 @@ namespace Ironfront.Net.Replication.Server
     /// </para>
     /// <para>
     /// <b>Why <see cref="ProtocolConstants.MAX_VEHICLES"/> is the capacity and not the u16
-    /// space.</b> Sixteen is the number the vehicle snapshot body is sized against — a
-    /// seventeenth live vehicle has nowhere on the wire to go, so handing out a seventeenth id
-    /// would only move the failure somewhere harder to see. The shipped maps author fourteen
-    /// spawners each, so the ceiling has two spare and the quarantine (150 ticks = 5 s) clears
-    /// long before a spawner's 16 s respawn needs an id back.
+    /// space.</b> It is the number the vehicle snapshot body is sized against — one more live
+    /// vehicle than that has nowhere on the wire to go, so handing out one more id would only
+    /// move the failure somewhere harder to see.
+    /// </para>
+    /// <para>
+    /// <b>The number is NOT restated here, and that is the point.</b> This remark used to say
+    /// "sixteen ... the shipped maps author fourteen spawners each, so the ceiling has two
+    /// spare". It counted PADS rather than live vehicles — an <c>AfterMoved</c> pad holds two
+    /// ids at once while its original is driven away — so the arithmetic was wrong by four on
+    /// Dustbowl and the exhaustion it declared impossible is X-70. Protocol 10 raised the
+    /// constant to 24; a second copy of that digit in prose is how the next reader gets the
+    /// same answer the same way. Peak demand per shipping map is asserted by
+    /// <c>VehicleIdDemandTests</c>, which reads the scenes.
     /// </para>
     /// <para>
     /// <b>Exhaustion returns false rather than throwing or wrapping.</b> A monotonic counter was
@@ -129,7 +137,7 @@ namespace Ironfront.Net.Replication.Server
         /// <remarks>
         /// The quarantine exists to outlast packets naming the id. When the spawn message never
         /// framed there are no such packets, so cooling the id for five seconds would take one
-        /// of sixteen out of circulation to protect against nothing. Distinct from
+        /// of the pool's ids out of circulation to protect against nothing. Distinct from
         /// <see cref="Release"/> precisely so the difference is a decision at the call site
         /// rather than a flag.
         /// </remarks>
@@ -147,8 +155,8 @@ namespace Ironfront.Net.Replication.Server
         /// <remarks>
         /// The quarantine is dropped rather than honoured here on purpose. A world reset
         /// despawns every vehicle and the client tears down its whole vehicle table with the
-        /// match phase, so there is nothing left for a stale packet to be applied to. Holding
-        /// sixteen ids for five seconds into the next round would instead leave the opening
+        /// match phase, so there is nothing left for a stale packet to be applied to. Holding the
+        /// whole pool for five seconds into the next round would instead leave the opening
         /// spawns unreplicated, which is the visible failure.
         /// </remarks>
         public void ReleaseAll()

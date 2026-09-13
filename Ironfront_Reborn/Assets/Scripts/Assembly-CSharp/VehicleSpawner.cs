@@ -95,6 +95,17 @@ public class VehicleSpawner : MonoBehaviour
 	/// </remarks>
 	private readonly Dictionary<Vehicle, ushort> supersededNetIds = new Dictionary<Vehicle, ushort>();
 
+	/// <summary>
+	/// The budget behind the <c>[vehicle-spawn-state]</c> line protocol 10 § 8.3 asks for.
+	/// </summary>
+	/// <remarks>
+	/// Per spawner rather than one static budget for the map: a shared one would let the pad
+	/// that respawns fastest spend the whole allowance and silence the thirteen pads a reader
+	/// is comparing it against, which is the opposite of what the line is for.
+	/// </remarks>
+	private readonly Ironfront.Net.Replication.Vehicles.VehicleSpawnStateLog spawnStateLog =
+		new Ironfront.Net.Replication.Vehicles.VehicleSpawnStateLog();
+
 	// Cached once. A fresh lambda per Update would allocate one delegate per frame per spawner,
 	// which on a map with thirty spawners is thirty allocations every frame for a predicate
 	// that never changes.
@@ -219,20 +230,121 @@ public class VehicleSpawner : MonoBehaviour
 			return;
 		}
 
+		// Protocol 10 § 8.2: nothing is instantiated when no id can be allocated. SpawnIsBlocked
+		// already defers on this and asking again is not belt-and-braces -- a sibling pad's
+		// Update can take the last id between that probe and this line, and the object this
+		// method is about to create would then be exactly the phantom X-70 was.
+		if (!NetVehicleLifecycle.CanReplicateAnotherVehicle)
+		{
+			DeferForLackOfAnId();
+			return;
+		}
+
+		Vehicle spawned = ((GameObject)UnityEngine.Object.Instantiate(prefab, base.transform.position, base.transform.rotation)).GetComponent<Vehicle>();
+
+		// ANNOUNCED BEFORE IT IS COMMITTED, and that ordering is the fix. The old order
+		// overwrote lastSpawnedVehicle and only then asked for an id, so a refusal left a
+		// vehicle standing on the pad with id 0 -- solid on the server, addressable by nobody,
+		// and blocking its own replacement for the rest of the round. Announcing first leaves a
+		// refusal with nothing to undo but one Destroy.
+		ushort netId = AnnounceSpawn(spawned);
+
+		if (netId == 0 && NetVehicleLifecycle.IsReplicating)
+		{
+			UnityEngine.Object.Destroy(spawned.gameObject);
+			DeferForLackOfAnId();
+			return;
+		}
+
 		// Hand the outgoing vehicle its own id BEFORE the fields that hold it are overwritten.
 		// X-70: without this the id is orphaned -- never released, never despawned -- because
 		// VehicleDied's guard compares against lastSpawnedVehicle, which is about to change.
 		if (lastSpawnedVehicle != null && lastSpawnedVehicleNetId != 0)
 		{
 			supersededNetIds[lastSpawnedVehicle] = lastSpawnedVehicleNetId;
-			lastSpawnedVehicleNetId = 0;
 		}
 
-		lastSpawnedVehicle = ((GameObject)UnityEngine.Object.Instantiate(prefab, base.transform.position, base.transform.rotation)).GetComponent<Vehicle>();
+		lastSpawnedVehicle = spawned;
+		lastSpawnedVehicleNetId = netId;
 		lastSpawnedVehicle.SetSpawner(this);
 		lastSpawnedVehicleHasBeenUsed = false;
 		scheduler.ReportSpawned();
-		AnnounceSpawn();
+
+		LogFirstState(spawned, netId);
+	}
+
+	/// <summary>
+	/// Holds the request instead of dropping it, because there was no id to pay for it.
+	/// </summary>
+	/// <remarks>
+	/// Protocol 10 § 8.2 allows refusing OR holding, and names dropping as the thing that
+	/// produced "the vehicle exists, nobody can see it". Holding reuses the retry budget the
+	/// obstructed-pad case already has, so an exhausted pool costs a late vehicle rather than
+	/// an unaddressable one -- and the budget is what keeps a permanently unpayable pad (an
+	/// unauthored prefab) from retrying once a second for the life of the process.
+	/// </remarks>
+	private void DeferForLackOfAnId()
+	{
+		if (!scheduler.ReportSpawnRefused())
+		{
+			return;
+		}
+
+		Debug.LogWarning(
+			$"[net] vehicle spawner '{name}' (id {spawnerId}) gave up after "
+			+ $"{scheduler.MaxBlockedRetries} attempts with no vehicle id to spare, so it "
+			+ $"produced nothing rather than a vehicle with id 0. "
+			+ $"{NetVehicleLifecycle.DescribeSpawnRefusal()} The pad is probed silently every "
+			+ "10 seconds and re-arms as soon as a despawn anywhere on the map frees an id.");
+	}
+
+	/// <summary>
+	/// Writes the one line protocol 10 § 8.3 asks for about each vehicle's first state.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>It exists to settle an argument, not to diagnose one.</b> Players report smoke on
+	/// freshly spawned vehicles. If this line and the first snapshot both say full health with
+	/// no flags, the smoke is a client particle bug and the evidence goes to the client side --
+	/// and § 16 forbids the other answer outright: lowering a vehicle's health to make the
+	/// particles stop is falsifying the instrument to match the complaint.
+	/// </para>
+	/// <para>
+	/// A failed invariant is an ERROR rather than a louder version of the same line, because
+	/// the two mean opposite things about whose defect it is.
+	/// </para>
+	/// </remarks>
+	private void LogFirstState(Vehicle vehicle, ushort netId)
+	{
+		VehicleStateFlags flags = VehicleStateFlags.None;
+		if (vehicle.burning) flags |= VehicleStateFlags.Burning;
+		if (vehicle.dead) flags |= VehicleStateFlags.Dead;
+
+		VehicleIds.TryGetKind(vehicle.NetworkId, out VehicleKind kind);
+		Vector3 at = base.transform.position;
+
+		// driver=0 is not an assumption: the vehicle was instantiated on the line above and
+		// nothing has had a frame in which to enter it.
+		if (!spawnStateLog.TryFormat(
+			netId, spawnerId, kind, vehicle.Health, vehicle.maxHealth, flags,
+			driverActorId: 0,
+			new Ironfront.Net.Replication.Movement.Vec3(at.x, at.y, at.z),
+			Time.time, out string line))
+		{
+			return;
+		}
+
+		if (Ironfront.Net.Replication.Vehicles.VehicleSpawnStateLog.IsFreshlySpawned(
+			vehicle.Health, vehicle.maxHealth, flags))
+		{
+			Debug.Log(line);
+			return;
+		}
+
+		Debug.LogError(
+			line + " -- this vehicle was NOT born at full health with no flags, so the smoke "
+			+ "players report is the server's and the damage source has to be found before "
+			+ "the handover. Do not lower maxHealth to make it match.");
 	}
 
 	/// <summary>
@@ -252,18 +364,18 @@ public class VehicleSpawner : MonoBehaviour
 	/// nothing, which means an unauthored prefab or an exhausted id pool.
 	/// </para>
 	/// </remarks>
-	private void AnnounceSpawn()
+	private ushort AnnounceSpawn(Vehicle vehicle)
 	{
-		lastSpawnedVehicleNetId = NetVehicleLifecycle.ReportSpawned(
-			lastSpawnedVehicle.gameObject,
+		ushort netId = NetVehicleLifecycle.ReportSpawned(
+			vehicle.gameObject,
 			spawnerId,
-			lastSpawnedVehicle.NetworkId,
-			lastSpawnedVehicle.seats != null ? lastSpawnedVehicle.seats.Length : 0,
+			vehicle.NetworkId,
+			vehicle.seats != null ? vehicle.seats.Length : 0,
 			base.transform.position,
 			base.transform.rotation);
 
-		if (lastSpawnedVehicleNetId != 0 || !NetVehicleLifecycle.IsReplicating) return;
-		if (warnedAboutUnreplicatedSpawn) return;
+		if (netId != 0 || !NetVehicleLifecycle.IsReplicating) return netId;
+		if (warnedAboutUnreplicatedSpawn) return netId;
 
 		warnedAboutUnreplicatedSpawn = true;
 
@@ -272,25 +384,28 @@ public class VehicleSpawner : MonoBehaviour
 		// branch for a prefab that had carried an id since the commit which introduced the
 		// field. A message that offers a choice is a message that gets chosen wrongly.
 		Debug.LogError(
-			$"[net] vehicle spawner '{name}' (id {spawnerId}) produced '{prefab.name}' "
-			+ $"(networkId {lastSpawnedVehicle.NetworkId}) with no network id, so no client "
-			+ $"will ever see it. {NetVehicleLifecycle.DescribeSpawnRefusal()}");
+			$"[net] vehicle spawner '{name}' (id {spawnerId}) could not replicate "
+			+ $"'{prefab.name}' (networkId {vehicle.NetworkId}), so nothing was spawned. "
+			+ $"{NetVehicleLifecycle.DescribeSpawnRefusal()}");
+
+		return netId;
 	}
 
 	private bool SpawnIsBlocked()
 	{
-		// X-70's capacity half, and it is a BLOCK rather than a refusal on purpose. An
-		// AfterMoved pad schedules its replacement the moment the first driver enters, while
-		// the original is alive and still holding its id -- so such a pad needs two ids at
-		// once, and Dustbowl's four of them take peak demand to 14 + 4 = 18 against a
-		// MAX_VEHICLES of 16. Spawning anyway produced a vehicle with id 0: solid on the
-		// server, invisible to every client, forever.
+		// X-70's capacity half, and it is a BLOCK rather than a refusal on purpose: deferring
+		// reuses the retry budget the obstruction case already has, so the replacement arrives
+		// a few seconds later once a quarantined id drains -- the difference between a late
+		// vehicle and a phantom one.
 		//
-		// Deferring instead reuses the retry budget the obstruction case already has, so the
-		// replacement arrives a few seconds later once a quarantined id drains -- which is the
-		// difference between a late vehicle and a phantom one. Raising MAX_VEHICLES is the
-		// other way and is NOT free: VehicleSnapshotMessage sizes the wire body against it.
-		if (WouldNeedASecondId() && !NetVehicleLifecycle.CanReplicateAnotherVehicle)
+		// UNCONDITIONAL as of protocol 10, and it was not. It used to fire only when this pad
+		// needed a SECOND id alongside one it already held, on the reasoning that a pad whose
+		// vehicle had died released its id on the way out and so re-used capacity rather than
+		// adding to it. That reasoning is about THIS pad and the pool is shared: a pad whose
+		// vehicle died into a 150-tick quarantine, on a map where every other id is live, took
+		// the narrow branch and spawned anyway -- with id 0. Raising MAX_VEHICLES to 24 widens
+		// the margin and does not close that hole; only asking the pool every time does.
+		if (!NetVehicleLifecycle.CanReplicateAnotherVehicle)
 		{
 			return true;
 		}
@@ -316,21 +431,6 @@ public class VehicleSpawner : MonoBehaviour
 		if (blocker == null) return "something that is no longer there";
 
 		return $"'{blocker.gameObject.name}' (layer {LayerMask.LayerToName(blocker.gameObject.layer)})";
-	}
-
-	/// <summary>
-	/// Whether the next spawn would have to hold an id ALONGSIDE the one this pad already
-	/// holds, rather than after it was released.
-	/// </summary>
-	/// <remarks>
-	/// True exactly when the vehicle this pad last produced is still alive and still
-	/// replicated. A pad whose vehicle has died released its id on the way out, so its
-	/// replacement re-uses capacity rather than adding to it -- gating that one too would
-	/// stall the ordinary respawn every time the pool ran hot.
-	/// </remarks>
-	private bool WouldNeedASecondId()
-	{
-		return lastSpawnedVehicle != null && lastSpawnedVehicleNetId != 0;
 	}
 
 	public void VehicleDied(Vehicle vehicle)
@@ -390,6 +490,28 @@ public class VehicleSpawner : MonoBehaviour
 	/// </remarks>
 	private void OnWorldReset()
 	{
+		// The superseded vehicles FIRST, and they were not torn down at all before. This method
+		// destroyed lastSpawnedVehicle and nothing else, so an AfterMoved pad whose original had
+		// been driven away left that original standing into the next round with its id never
+		// released -- X-70's leak one event over, and the mapping protocol 10 § 8.2 requires a
+		// reset to clear. Ordered ahead of the current vehicle because these are the older
+		// claims: a client applying the two despawns in arrival order removes the ghost before
+		// the vehicle it can still see.
+		foreach (KeyValuePair<Vehicle, ushort> superseded in supersededNetIds)
+		{
+			NetVehicleLifecycle.ReportDespawned(
+				superseded.Value, VehicleDespawnReason.WorldReset);
+
+			if (superseded.Key != null)
+			{
+				// EjectOccupants before Destroy, for X-55/X-56's reason below.
+				superseded.Key.EjectOccupants();
+				UnityEngine.Object.Destroy(superseded.Key.gameObject);
+			}
+		}
+
+		supersededNetIds.Clear();
+
 		if (lastSpawnedVehicle != null)
 		{
 			// Ledger X-55/X-56. BEFORE the Destroy, and it has to be before: a seated actor is a

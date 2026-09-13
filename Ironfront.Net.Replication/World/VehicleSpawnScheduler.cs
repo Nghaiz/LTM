@@ -205,6 +205,39 @@ namespace Ironfront.Net.Replication.World
         }
 
         /// <summary>
+        /// The caller instantiated nothing, because the vehicle could not have been replicated.
+        /// The request is HELD rather than dropped.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Protocol 10 § 8.2: a spawn that cannot be given an id is refused or held, and
+        /// <i>"refusing quietly and dropping the request is what produced the vehicle exists,
+        /// nobody can see it state"</i>. Returning to <see cref="VehicleSpawnPhase.WaitingForSpace"/>
+        /// makes an exhausted pool behave exactly like an obstructed pad — the vehicle arrives a
+        /// few seconds late, once a quarantined id drains, instead of arriving unaddressable.
+        /// </para>
+        /// <para>
+        /// <b>It charges the retry budget</b>, so this cannot become the unbounded retry
+        /// <see cref="VehicleSpawnScheduler"/> exists to have removed. A pad whose prefab is
+        /// unauthored can never be paid for, and it reaches
+        /// <see cref="VehicleSpawnPhase.GaveUp"/> on the same count as a pad under a wreck.
+        /// </para>
+        /// </remarks>
+        /// <returns>True when the budget ran out on this call — log once, as with a blocked pad.</returns>
+        public bool ReportSpawnRefused()
+        {
+            Phase       = VehicleSpawnPhase.WaitingForSpace;
+            _retryTimer = _blockedRetrySeconds;
+            BlockedRetries++;
+
+            if (BlockedRetries < _maxBlockedRetries) return false;
+
+            Phase       = VehicleSpawnPhase.GaveUp;
+            _retryTimer = DefaultDormantProbeSeconds;
+            return true;
+        }
+
+        /// <summary>
         /// The world was torn down between rounds. Returns to <see cref="VehicleSpawnPhase.Idle"/>
         /// and cancels anything pending — the caller despawns the vehicle and decides whether the
         /// next round gets one.

@@ -294,7 +294,7 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 
 	protected virtual void Awake()
 	{
-		networkCrashDamageNotBefore = Time.time + 5f;
+		networkCrashDamageNotBefore = VehicleSpawnSettle.DeadlineFrom(Time.time);
 		rigidbody = GetComponent<Rigidbody>();
 		audio = GetComponent<AudioSource>();
 		ActorManager.RegisterVehicle(this);
@@ -350,7 +350,7 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 		// inheriting spawn-pad collision damage and immediately starting the burn effect.
 		if (NetContext.IsServer && !HasDriver())
 		{
-			networkCrashDamageNotBefore = Time.time + 5f;
+			networkCrashDamageNotBefore = VehicleSpawnSettle.DeadlineFrom(Time.time);
 		}
 
 		if (rigidbody.linearVelocity.magnitude < 3f)
@@ -767,7 +767,8 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 		// a human saw the first frame. FixedUpdate keeps this deadline five seconds ahead while the
 		// driver seat is empty; after the first driver enters it becomes a short exit-from-pad grace.
 		// Offline Ravenfield remains unchanged.
-		if (NetContext.IsServer && (!HasDriver() || Time.time < networkCrashDamageNotBefore))
+		if (VehicleSpawnSettle.CrashDamageIsSuppressed(
+			NetContext.IsServer, HasDriver(), Time.time, networkCrashDamageNotBefore))
 		{
 			return;
 		}
@@ -1025,7 +1026,8 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 		// Network vehicles are instantiated into a live PhysX world. Let them settle on their
 		// authored pads before collision damage is authoritative; otherwise touching the ground
 		// or a neighbouring spawn in the first frames starts the burn ladder for every client.
-		if (NetContext.IsServer && (!HasDriver() || Time.time < networkCrashDamageNotBefore))
+		if (VehicleSpawnSettle.CrashDamageIsSuppressed(
+			NetContext.IsServer, HasDriver(), Time.time, networkCrashDamageNotBefore))
 		{
 			return;
 		}
@@ -1286,6 +1288,17 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 	{
 		return health / maxHealth;
 	}
+
+	/// <summary>
+	/// The live hull value. Read-only -- <c>ApplyHealth</c> remains the single writer.
+	/// </summary>
+	/// <remarks>
+	/// Added for the <c>[vehicle-spawn-state]</c> line protocol 10 § 8.3 asks for. The
+	/// alternative was <c>GetHealthRatio() * maxHealth</c>, which does not round-trip: a
+	/// full-health hull comes back a fraction under its own ceiling, and the invariant that
+	/// line exists to prove is <c>health == maxHealth</c> exactly.
+	/// </remarks>
+	public float Health => health;
 
 	protected virtual void HeavyDamage()
 	{
