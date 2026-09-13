@@ -225,6 +225,37 @@ namespace Ironfront.Tools.ClientWiringGate
                 "reached only from Update(), a local-only per-frame path; the loadout screen it "
                 + "asks about is this client's own"),
 
+            // OnSpawnActor rejects every message that is not explicitly marked local before it
+            // opens the loadout UI. This is the identity-establishing message, so there is no
+            // usable actor id for IsLocalActor until after this callback has accepted it.
+            ("/NetClientLocalCombatDriver.cs", "OnSpawnActor",
+                "guarded by message.IsLocalPlayer before touching this client's loadout UI"),
+
+            // ReloadPressed is the reload twin of FirePressed above. It is reached only from
+            // Update and samples this client's own input source; no remote actor is in scope.
+            ("/NetClientLocalCombatDriver.cs", "ReloadPressed",
+                "reached only from Update(), a local-only per-frame path; the local player IS the "
+                + "subject of the read"),
+
+            // This callback first resolves _client.LocalActorId and then looks up that exact
+            // actor in the snapshot. The rig write therefore reconciles this client's body,
+            // never whichever remote actor happened to change in the same snapshot.
+            ("/NetClientLocalCombatDriver.cs", "OnSnapshotApplied",
+                "resolves the snapshot entry from this client's LocalActorId before writing its rig"),
+
+            // ClientPredictionStage is installed only on the local player body. Update has no
+            // remote actor parameter; it reads the local input state solely to decide whether
+            // that body's CharacterController may be restored after deploy.
+            ("/ClientPredictionStage.cs", "Update",
+                "local-player component Update reads this client's input/deploy state; no remote "
+                + "actor event reaches it"),
+
+            // NetClientBootstrap is the one connection-wide client component. This helper uses
+            // LocalActorId to select the snapshot entry before assigning the same local rig's
+            // team, so G4's per-actor remote-event hazard does not apply.
+            ("/NetClientBootstrap.cs", "ApplyLocalActorTeamFromSnapshot",
+                "connection-wide helper selects LocalActorId before writing this client's own rig"),
+
             // The third of the same shape, added with the C_SEAT_REQUEST sender (ledger X-30).
             // Reached only from Update(); it reads THIS client's own input to decide whether the
             // player asked for a seat, and there is no actor id in scope to guard against. The
@@ -449,7 +480,7 @@ namespace Ironfront.Tools.ClientWiringGate
 
         /// <summary>
         /// The one file G8 governs - <c>Actor</c>, where every damage source in the game funnels
-        /// into a single <c>Damage</c> method and therefore into a single ownership guard.
+        /// into a single <c>DamageAttributed</c> method and therefore into a single ownership guard.
         /// </summary>
         /// <remarks>
         /// Scoped to one file on purpose. The guard is deliberately NOT spread across the six
@@ -463,7 +494,7 @@ namespace Ironfront.Tools.ClientWiringGate
         private const string HealthOwnershipOwner = "Actor";
 
         /// <summary>The method that funnels every damage source in the game.</summary>
-        private const string HealthOwnershipMethod = "Damage";
+        private const string HealthOwnershipMethod = "DamageAttributed";
 
         /// <summary>The local whose value, and whose polarity, is the guard.</summary>
         private const string HealthOwnershipLocal = "ownsHealth";
@@ -834,7 +865,8 @@ namespace Ironfront.Tools.ClientWiringGate
         }
 
         /// <summary>
-        /// G8 - <c>Actor.Damage</c>'s <c>ownsHealth</c> guard: present, correctly polarised, and
+        /// G8 - <c>Actor.DamageAttributed</c>'s <c>ownsHealth</c> guard: present, correctly
+        /// polarised, and
         /// actually covering the two operations only the health's owner may perform. Ledger X-6.
         /// </summary>
         /// <remarks>

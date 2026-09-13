@@ -165,7 +165,7 @@ namespace Ironfront.Net.Replication.Tests
         // --------------------------------------------------------------- the Unity half, by Roslyn
 
         /// <summary>
-        /// The harness installs BOTH halves of the input seam and enables the clock.
+        /// The harness installs both input seams, while the real deploy path enables the clock.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -174,8 +174,9 @@ namespace Ironfront.Net.Replication.Tests
         /// row X-3 restated. Without <c>NetPredictionClock.InputSource</c> movement falls back
         /// to <c>MovementSimulation.FromUnityInput</c>, which samples a keyboard nobody is at,
         /// so every scripted client stands still while its programme runs to completion and the
-        /// run reports success. And <c>NetPredictionClock</c> ships DISABLED (checklist A4), so
-        /// without the enable no <c>C_INPUT</c> is sent at all and every client is a spectator.
+        /// run reports success. <c>NetPredictionClock</c> ships DISABLED (checklist A4), and the
+        /// real deployment path must enable it so both scripted and keyboard players start
+        /// producing <c>C_INPUT</c> at the same lifecycle boundary.
         /// </para>
         /// <para>
         /// Graded as text because nothing here compiles Unity code. That is weaker than
@@ -183,13 +184,15 @@ namespace Ironfront.Net.Replication.Tests
         /// </para>
         /// </remarks>
         [Fact]
-        public void TheHarnessInstallsBothInputSeamsAndEnablesTheClock()
+        public void TheHarnessInstallsBothInputSeamsAndLeavesClockActivationToDeploy()
         {
             string harness = UnitySource("Net/Diagnostics/LaneBHarness.cs");
+            string controller = UnitySource("Assembly-CSharp/FpsActorController.cs");
 
             Assert.Contains("SetInputSource(_source)", harness);
             Assert.Contains("clock.InputSource = BuildMoveInput", harness);
-            Assert.Contains("clock.enabled = true", harness);
+            Assert.DoesNotContain("clock.enabled = true", harness);
+            Assert.Contains("networkClock.enabled = true", controller);
         }
 
         /// <summary>
