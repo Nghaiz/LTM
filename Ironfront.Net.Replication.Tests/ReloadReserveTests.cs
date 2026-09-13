@@ -1,4 +1,4 @@
-using Ironfront.Net.Protocol;
+﻿using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Server;
 using Xunit;
@@ -144,6 +144,34 @@ namespace Ironfront.Net.Replication.Tests
             fixture.Step(Reload + 1f, InputButtons.None);
             Assert.Equal(10, fixture.Weapon.AmmoInClip);
             Assert.Equal(90, Remaining(pool));
+        }
+
+        [Fact]
+        public void TheDeathEdgeClearsTheReloadAndTheTriggerLatch()
+        {
+            // The cross-lane half of "death cancels a reload": ServerTickLoop calls this on the
+            // death edge, because ResetWeapon does not run until the player deploys again and a
+            // reload left running would complete under a corpse in between.
+            var session = new ClientSession(connectionId: 4, actorId: Shooter);
+            session.WeaponId = WeaponIds.RK44;
+            session.ResetWeapon();
+
+            session.Weapon.AmmoInClip = 5;
+            session.Weapon.Reloading = true;
+            session.Weapon.ReloadStartedAt = 0f;
+            session.Trigger.WasEffective = true;
+            session.Trigger.SprintFireBlockedUntil = 99f;
+
+            session.ClearCombatStateOnDeath();
+
+            Assert.False(session.Weapon.Reloading);
+            Assert.Equal(float.NegativeInfinity, session.Weapon.ReloadStartedAt);
+            Assert.False(session.Trigger.WasEffective);
+            Assert.Equal(float.NegativeInfinity, session.Trigger.SprintFireBlockedUntil);
+
+            // And the clip a life ended on is left where it was: ResetWeapon owns what the next
+            // one starts with, and two writers of the ammo count is the divergence D9 removed.
+            Assert.Equal(5, session.Weapon.AmmoInClip);
         }
 
         [Fact]

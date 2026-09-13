@@ -173,6 +173,79 @@ namespace Ironfront.Net.Replication.Server
         /// <summary>False until the server has resolved <see cref="ActiveLoadoutSlot"/>.</summary>
         public bool HasActiveLoadoutSlot { get; private set; }
 
+        /// <summary>
+        /// The weapon id in each of the five loadout slots, as the deploy request named them.
+        /// </summary>
+        /// <remarks>
+        /// This is what makes <see cref="ActiveLoadoutSlot"/> resolvable at all: the body can be
+        /// asked what it is HOLDING (<c>NetServerActor.WeaponId</c>, via
+        /// <c>Actor.activeWeapon.NetworkId</c>) but not which slot it came out of, and there is
+        /// no gameplay seam that reports one. The server armed the body from this table, so the
+        /// table is the inverse of the question.
+        /// </remarks>
+        private readonly byte[] _loadoutWeaponIds = new byte[Combat.ActorSpareAmmoPool.SlotsPerActor];
+
+        private bool _hasLoadout;
+
+        /// <summary>True once a deploy request has named this player's five slots.</summary>
+        public bool HasLoadout => _hasLoadout;
+
+        /// <summary>The weapon id in one slot, or <see cref="WeaponIds.NONE"/>.</summary>
+        public byte LoadoutWeaponAt(byte slot)
+            => slot < _loadoutWeaponIds.Length ? _loadoutWeaponIds[slot] : WeaponIds.NONE;
+
+        /// <summary>
+        /// Records the loadout the deploy request asked for, in slot order.
+        /// </summary>
+        /// <remarks>
+        /// <b>Deliberately NOT cleared on a server-initiated respawn.</b> An auto-respawn - the
+        /// one that follows falling out of the world - carries no client request, and clearing
+        /// the table there would leave the slot unresolvable and every reload refused for the
+        /// rest of that life. The body is re-armed from the same loadout it deployed with, so
+        /// the stale table is the right answer rather than merely the convenient one; if the
+        /// player deploys again with a different loadout, that request overwrites it.
+        /// </remarks>
+        public void SetLoadout(byte primary, byte secondary, byte gear1, byte gear2, byte gear3)
+        {
+            _loadoutWeaponIds[0] = primary;
+            _loadoutWeaponIds[1] = secondary;
+            _loadoutWeaponIds[2] = gear1;
+            _loadoutWeaponIds[3] = gear2;
+            _loadoutWeaponIds[4] = gear3;
+            _hasLoadout = true;
+        }
+
+        /// <summary>
+        /// Points <see cref="ActiveLoadoutSlot"/> at whichever slot holds
+        /// <paramref name="weaponId"/>, or forgets the slot when none does.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Forgetting is the whole point of the return value.</b> A weapon the body is
+        /// holding that is in none of the five slots means the session and the body disagree
+        /// about the loadout - handoff section 4.5's state inconsistency - and the answer to
+        /// that is no reserve and no reloads, never slot 0.
+        /// </para>
+        /// <para>
+        /// <b>First match wins</b> when a loadout carries the same id twice. The two slots hold
+        /// the same weapon, so they refill the same clip from different pouches; picking the
+        /// lower one is arbitrary but stable, which is what stops the reported reserve flapping
+        /// between two numbers on consecutive snapshots.
+        /// </para>
+        /// </remarks>
+        public bool ResolveActiveLoadoutSlotFrom(byte weaponId)
+        {
+            if (_hasLoadout && weaponId != WeaponIds.NONE)
+            {
+                for (byte slot = 0; slot < _loadoutWeaponIds.Length; slot++)
+                    if (_loadoutWeaponIds[slot] == weaponId)
+                        return SetActiveLoadoutSlot(slot);
+            }
+
+            ForgetActiveLoadoutSlot();
+            return false;
+        }
+
         /// <summary>Records the slot the body is provably holding.</summary>
         /// <returns>False, leaving the slot unknown, when the slot is outside the loadout.</returns>
         public bool SetActiveLoadoutSlot(byte slot)
@@ -351,6 +424,38 @@ namespace Ironfront.Net.Replication.Server
             // First time this life. A weapon reached for the first time is loaded, which is
             // what the loadout handed the body.
             ResetWeaponPreservingMemory();
+        }
+
+        /// <summary>
+        /// Cancels everything the trigger and the reload were in the middle of, at the DEATH
+        /// edge. Handoff section 5.3.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>At the death edge, not at the respawn.</b> <see cref="ResetWeapon"/> is the only
+        /// thing that cleared a running reload, and it runs when the player deploys again -
+        /// which can be seconds later, or never. In between,
+        /// <c>ServerReloadPolicy.CompleteReloadIfElapsed</c> would finish the reload on the
+        /// server's own clock and spend the reserve for it: a corpse drawing rounds out of a
+        /// pouch, and the count arriving on the next snapshot the client can see.
+        /// </para>
+        /// <para>
+        /// <b>The sprint block goes too, and that is not tidiness.</b> A player who died
+        /// sprinting would otherwise carry the remainder of the window into the next life and
+        /// have the first shot of it refused, from a sprint the previous body was doing.
+        /// </para>
+        /// <para>
+        /// <b>The clip is deliberately left alone.</b> What a life ends holding is not this
+        /// method's business - <see cref="ResetWeapon"/> owns what a life STARTS with, and two
+        /// writers of the ammo count is the divergence phase-05 D9 removed for health.
+        /// </para>
+        /// </remarks>
+        public void ClearCombatStateOnDeath()
+        {
+            Weapon.Reloading = false;
+            Weapon.ReloadStartedAt = float.NegativeInfinity;
+
+            Trigger = EffectiveTrigger.Idle;
         }
 
         /// <summary>Re-arms the weapon with a full clip. Called on spawn and respawn.</summary>

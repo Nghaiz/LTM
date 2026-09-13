@@ -275,6 +275,28 @@ namespace Ironfront.Net.Unity.Server
         }
 
         /// <summary>
+        /// The reserve this actor's carried weapon reports, already encoded. Protocol 10.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Encoded rather than a count, because the two sentinels do not survive a count.</b>
+        /// <c>SpareAmmo</c> is the only codec for this field - a weapon with no reserve at all
+        /// and one that has spent its reserve are different facts that both look like zero, and
+        /// infinite is a third. Storing a plain number here would put the "which -1 is this?"
+        /// question back on this side of the seam.
+        /// </para>
+        /// <para>
+        /// <b>Defaults to no-resupply, not to zero.</b> A bot or a prop that nobody publishes a
+        /// weapon story for should report "this never refills" rather than "empty pouch", which
+        /// is the reading a player would act on.
+        /// </para>
+        /// </remarks>
+        public ushort SpareAmmoEncoded { get; set; } = SpareAmmo.NoResupplyEncoded;
+
+        /// <summary>Whether a server-accepted reload is running. Protocol 10.</summary>
+        public WeaponStateFlags WeaponStateFlags { get; set; } = WeaponStateFlags.None;
+
+        /// <summary>
         /// Staggers the underlying gameplay actor. A no-op for a replicated object that has none
         /// -- a prop or a bare test rig has no balance to lose.
         /// </summary>
@@ -485,7 +507,9 @@ namespace Ironfront.Net.Unity.Server
                 _ammoInClip,
                 _team,
                 vehicleId,
-                seatIndex);
+                seatIndex,
+                SpareAmmoEncoded,
+                WeaponStateFlags);
         }
 
         /// <summary>Packs the gameplay booleans the snapshot carries as one byte.</summary>
