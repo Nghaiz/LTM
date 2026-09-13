@@ -240,7 +240,7 @@ namespace Ironfront.Net.Replication.Tests
         {
             Assert.Equal(6, SeatChangeMessage.Size);
             Assert.Equal(7, (byte)SeatChangeResult.RejectedLockedOut);
-            Assert.Equal(9, ProtocolConstants.PROTOCOL_VERSION);
+            Assert.Equal(10, ProtocolConstants.PROTOCOL_VERSION);
         }
 
         // ---------------------------------------------------------------- budget split
