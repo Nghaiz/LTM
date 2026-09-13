@@ -59,11 +59,28 @@ namespace Ironfront.Net.Replication.Combat
         /// </remarks>
         public readonly bool LaunchedProjectile;
 
+        /// <summary>
+        /// The effective trigger after section 5.1's gates - NOT the raw Fire bit.
+        /// </summary>
+        /// <remarks>
+        /// Reported so a shot log can tell "the client asked and the server said no" apart from
+        /// "the client never asked". Before the sprint gate existed those were the same line,
+        /// which is how a magazine draining with no muzzle flash went unattributed.
+        /// </remarks>
+        public readonly bool EffectiveTriggerDown;
+
+        /// <summary>True when the sprint rule is what refused the trigger on this frame.</summary>
+        public readonly bool BlockedBySprint;
+
         public CombatTickResult(
             FireRejection rejection, bool fired, int hitCount, bool weaponChanged,
             bool victimDied, ushort deadActorId, in Vec3 aimDirection, in Vec3 origin,
-            bool launchedProjectile = false)
+            bool launchedProjectile = false,
+            bool effectiveTriggerDown = false,
+            bool blockedBySprint = false)
         {
+            EffectiveTriggerDown = effectiveTriggerDown;
+            BlockedBySprint = blockedBySprint;
             Rejection = rejection;
             Fired = fired;
             HitCount = hitCount;
@@ -139,6 +156,26 @@ namespace Ironfront.Net.Replication.Combat
         public long ProjectilesLaunched { get; private set; }
 
         /// <summary>
+        /// Raw Fire bits refused by the sprint rule. Handoff section 2.1's symptom, counted.
+        /// </summary>
+        /// <remarks>
+        /// A healthy match drives this steadily - every player who fires the instant they stop
+        /// sprinting contributes - so it is a rate to watch rather than an error. Zero across a
+        /// whole match means the gate is not wired, which is the state this closes.
+        /// </remarks>
+        public long SprintBlockedTriggers { get; private set; }
+
+        /// <summary>
+        /// Reload intents refused because the active loadout slot could not be resolved.
+        /// </summary>
+        /// <remarks>
+        /// Non-zero is a SERVER inconsistency (section 4.5), not a player doing anything: the
+        /// session and the body disagree about the loadout. Counted rather than logged per
+        /// occurrence because it would otherwise print thirty lines a second per affected actor.
+        /// </remarks>
+        public long ReloadsRefusedForUnknownSlot { get; private set; }
+
+        /// <summary>
         /// The resolver this authority steps, for diagnostics that need to reach
         /// <see cref="ServerFireResolver.DiagnosticSpreadScale"/> or the shot counters.
         /// </summary>
@@ -186,35 +223,139 @@ namespace Ironfront.Net.Replication.Combat
             uint currentTick,
             Span<HitResult> hits)
         {
+            // No trigger state supplied, so every effective frame reads as a rising edge and an
+            // infinite pool feeds the reload - which is exactly what this method did before
+            // protocol 10. Kept so the suites written against that shape keep measuring what
+            // they were written to measure; the server's own path never reaches it, because
+            // ServerCombatBridge carries the session's trigger.
+            EffectiveTrigger trigger = EffectiveTrigger.Idle;
+
+            return Step(
+                ref weapon, ref trigger, in config, shooterActorId, in frame, in state, targets,
+                new ActorFireEligibility(shooterIsAlive, isDeployed: true),
+                ActorAmmoSource.Unlimited(shooterActorId),
+                nowSeconds, smoothedRttMs, currentTick, hits);
+        }
+
+        /// <summary>
+        /// Steps one actor's combat for one accepted input frame, through the effective-trigger
+        /// state machine. Handoff sections 5.1 to 5.3.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The order is load-bearing, and protocol 10 adds one step at the front.</b> The
+        /// sprint rule lowers or raises the weapon FIRST, because a lowered weapon is what
+        /// refuses the reload below it and the trigger below that. Then a running reload
+        /// completes, then a fresh reload intent, then the trigger. Any other order costs a
+        /// frame somewhere.
+        /// </para>
+        /// <para>
+        /// <b>A refusal has no side effect.</b> Nothing before
+        /// <see cref="ServerFireResolver.Resolve"/> touches the ammo count, so there is no
+        /// decrement to refund - section 16 forbids the refund, and this is the shape that makes
+        /// the ban free rather than a rule to remember.
+        /// </para>
+        /// </remarks>
+        /// <param name="trigger">
+        /// The session's trigger state, advanced in place by this call. One per player, not one
+        /// per weapon: see <see cref="EffectiveTrigger"/>.
+        /// </param>
+        /// <param name="actor">Alive, deployed, and whether the seat forbids a carried weapon.</param>
+        /// <param name="ammo">
+        /// Which pool and which loadout slot a reload spends. An <see cref="ActorAmmoSource"/>
+        /// with no known slot refuses reloads outright rather than guessing slot 0.
+        /// </param>
+        public CombatTickResult Step(
+            ref WeaponRuntimeState weapon,
+            ref EffectiveTrigger trigger,
+            in WeaponConfig config,
+            ushort shooterActorId,
+            in InputFrame frame,
+            in MoveState state,
+            ReadOnlySpan<HitscanTarget> targets,
+            in ActorFireEligibility actor,
+            in ActorAmmoSource ammo,
+            float nowSeconds,
+            float smoothedRttMs,
+            uint currentTick,
+            Span<HitResult> hits)
+        {
             byte ammoBefore = weapon.AmmoInClip;
+            bool shooterIsAlive = actor.IsAlive;
+
+            // 0. The sprint rule, and the semi-auto edge, before anything reads Unholstered.
+            TriggerOutcome pull = EffectiveTriggerPolicy.Advance(
+                ref trigger, ref weapon, in frame, in actor, config.Automatic, nowSeconds);
+
+            bool blockedBySprint =
+                frame.IsPressed(InputButtons.Fire) && !pull.Effective
+                && (frame.IsPressed(InputButtons.Sprint)
+                    || nowSeconds < trigger.SprintFireBlockedUntil);
+
+            if (blockedBySprint) SprintBlockedTriggers++;
+
+            // A corpse's running reload does not finish. Without this the clip refills under a
+            // dead body and the next life starts from a number nobody can explain - and
+            // BeginReload's Dead rejection does not cover it, because that guards the START.
+            if (!shooterIsAlive)
+            {
+                ServerReloadPolicy.Abort(ref weapon);
+                trigger.ReArm();
+            }
 
             // 1. A reload already running finishes on the server's clock, before anything reads
             //    the ammo count. This is the line that makes SnapshotField.Weapon move.
-            if (ServerReloadPolicy.CompleteReloadIfElapsed(ref weapon, in config, nowSeconds))
+            if (ServerReloadPolicy.CompleteReloadIfElapsed(ref weapon, in config, nowSeconds, in ammo))
                 ReloadsCompleted++;
 
-            // 2. A fresh reload intent.
-            if (frame.IsPressed(InputButtons.Reload)
-                && ServerReloadPolicy.BeginReload(
-                       ref weapon, in config, shooterIsAlive, nowSeconds)
-                   == ServerReloadPolicy.Rejection.None)
-                ReloadsStarted++;
+            // 2. A fresh reload intent. The reserve is read ONCE and handed to the rule, so the
+            //    number that refuses the reload is the number the snapshot reports.
+            if (frame.IsPressed(InputButtons.Reload))
+            {
+                Protocol.SpareAmmo reserve = ammo.Reserve(in weapon, in config);
+
+                ServerReloadPolicy.Rejection reload = ServerReloadPolicy.BeginReload(
+                    ref weapon, in config, shooterIsAlive, nowSeconds, in ammo, in reserve);
+
+                if (reload == ServerReloadPolicy.Rejection.None) ReloadsStarted++;
+                else if (reload == ServerReloadPolicy.Rejection.LoadoutSlotUnknown)
+                    ReloadsRefusedForUnknownSlot++;
+            }
 
             Vec3 origin = ShotOrigin(in state, in frame);
 
-            if (!frame.IsPressed(InputButtons.Fire))
+            // 3. The gate. A semi-automatic reaches the resolver only on the rising edge, so
+            //    the several input frames inside one mouse press spend one round rather than one
+            //    each - and redundancy, which repeats a frame up to three times, cannot turn one
+            //    press into three shots even for an automatic, because a repeated frame never
+            //    gets this far: it is dropped by tick at InputAuthority.TryAccept.
+            if (!pull.AttemptShot)
                 return new CombatTickResult(
-                    FireRejection.None, fired: false, hitCount: 0,
+                    // A gate that swallowed the reason would cost the two signals a shot log is
+                    // read for. CheckCanFire is still the authority on both -- this only makes
+                    // sure a refusal that never reaches it reports the same word it would have.
+                    // Anything else (undeployed, a seat with no carried weapon, the window after
+                    // a sprint, or a semi-automatic whose edge is not armed) is None: the
+                    // trigger was not pulled, which is not a rejection.
+                    frame.IsPressed(InputButtons.Fire) && !pull.Effective
+                        ? !shooterIsAlive        ? FireRejection.ShooterDead
+                        : !weapon.Unholstered    ? FireRejection.Holstered
+                        :                          FireRejection.None
+                        : FireRejection.None,
+                    fired: false, hitCount: 0,
                     weaponChanged: weapon.AmmoInClip != ammoBefore,
-                    victimDied: false, deadActorId: 0, Vec3.Zero, in origin);
+                    victimDied: false, deadActorId: 0, Vec3.Zero, in origin,
+                    launchedProjectile: false,
+                    effectiveTriggerDown: pull.Effective,
+                    blockedBySprint: blockedBySprint);
 
-            // 3. The trigger. CheckCanFire runs inside Resolve against the SERVER clock, so a
+            // 4. The shot. CheckCanFire runs inside Resolve against the SERVER clock, so a
             //    client sending ten frames in one tick gets one shot and nine OnCooldown
             //    rejections — which is what moves FireRateViolations, the signal phase-05
             //    criterion 2 is graded on.
             Vec3 aim = AimDirection(frame.YawDegrees, frame.PitchDegrees);
 
-            // 3a. A weapon that LAUNCHES does not sweep. Ledger X-42: the same trigger rules
+            // 4a. A weapon that LAUNCHES does not sweep. Ledger X-42: the same trigger rules
             //     apply -- CheckCanFire is shared, not restated -- but the flight and the
             //     detonation belong to the engine (V7-D1), so this path spends the round and
             //     stops. Sweeping it as well would resolve a thrown grenade as a bullet, which
@@ -232,7 +373,9 @@ namespace Ironfront.Net.Replication.Combat
                     launchRejection, launched, hitCount: 0,
                     weaponChanged: weapon.AmmoInClip != ammoBefore,
                     victimDied: false, deadActorId: 0, in aim, in origin,
-                    launchedProjectile: launched);
+                    launchedProjectile: launched,
+                    effectiveTriggerDown: pull.Effective,
+                    blockedBySprint: blockedBySprint);
             }
 
             FireRejection rejection = _fireResolver.Resolve(
@@ -272,7 +415,10 @@ namespace Ironfront.Net.Replication.Combat
             return new CombatTickResult(
                 rejection, fired, hitCount,
                 weaponChanged: weapon.AmmoInClip != ammoBefore,
-                victimDied, deadActorId, in aim, in origin);
+                victimDied, deadActorId, in aim, in origin,
+                launchedProjectile: false,
+                effectiveTriggerDown: pull.Effective,
+                blockedBySprint: blockedBySprint);
         }
 
         /// <summary>
@@ -346,6 +492,8 @@ namespace Ironfront.Net.Replication.Combat
             ReloadsCompleted = 0;
             KillsResolved = 0;
             ProjectilesLaunched = 0;
+            SprintBlockedTriggers = 0;
+            ReloadsRefusedForUnknownSlot = 0;
         }
     }
 }

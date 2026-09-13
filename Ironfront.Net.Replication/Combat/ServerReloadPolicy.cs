@@ -1,4 +1,4 @@
-using Ironfront.Net.Protocol;
+﻿using Ironfront.Net.Protocol;
 
 namespace Ironfront.Net.Replication.Combat
 {
@@ -50,6 +50,28 @@ namespace Ironfront.Net.Replication.Combat
 
             /// <summary>The player is dead. A corpse's queued input must not reload.</summary>
             Dead = 4,
+
+            /// <summary>
+            /// The reserve cannot feed a reload: empty, or a weapon that has no reserve at all.
+            /// </summary>
+            /// <remarks>
+            /// Distinct from <see cref="ClipFull"/> because the client shows them differently —
+            /// an empty reserve is a reload the player will keep asking for, and a clip that is
+            /// already full is one they will stop asking for the moment they look at the HUD.
+            /// </remarks>
+            NoReserve = 5,
+
+            /// <summary>
+            /// The server cannot say which loadout slot is active, so it cannot say which
+            /// reserve a reload would spend. Handoff section 4.5.
+            /// </summary>
+            /// <remarks>
+            /// Refusing is the whole point: the alternative is to assume slot 0 and drain a
+            /// magazine belonging to a weapon the player is not holding. A separate code from
+            /// <see cref="NoReserve"/> because this one is a SERVER inconsistency and should be
+            /// counted and logged as one, not shown to the player as an empty pouch.
+            /// </remarks>
+            LoadoutSlotUnknown = 6,
         }
 
         /// <summary>
@@ -60,11 +82,42 @@ namespace Ironfront.Net.Replication.Combat
         public static Rejection BeginReload(
             ref WeaponRuntimeState state, in WeaponConfig config, bool shooterIsAlive,
             float nowSeconds)
+            => BeginReload(
+                ref state, in config, shooterIsAlive, nowSeconds,
+                ActorAmmoSource.Unlimited(), Protocol.SpareAmmo.Infinite);
+
+        /// <summary>
+        /// Starts a reload only if the reserve can actually feed one. Handoff section 5.3.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The reserve is checked at BEGIN, not only at completion,</b> because the snapshot
+        /// carries <c>WeaponStateFlags.Reloading</c> from the moment the server accepts. A
+        /// reload accepted against an empty pouch would play a full reload animation on every
+        /// client and then hand back the same clip — the two sides disagreeing for two seconds
+        /// about something the server already knew.
+        /// </para>
+        /// <para>
+        /// <b>An unknown slot refuses rather than falling back.</b> See
+        /// <see cref="Rejection.LoadoutSlotUnknown"/>.
+        /// </para>
+        /// </remarks>
+        /// <param name="ammo">Which pool and slot this weapon draws from.</param>
+        /// <param name="reserve">
+        /// That source's answer, already resolved through <see cref="ActorAmmoSource.Reserve"/>.
+        /// Passed in rather than recomputed so the number the caller reported on the wire and
+        /// the number this rule reads are the same number.
+        /// </param>
+        public static Rejection BeginReload(
+            ref WeaponRuntimeState state, in WeaponConfig config, bool shooterIsAlive,
+            float nowSeconds, in ActorAmmoSource ammo, in Protocol.SpareAmmo reserve)
         {
             if (!shooterIsAlive) return Rejection.Dead;
+            if (!ammo.SlotIsKnown) return Rejection.LoadoutSlotUnknown;
             if (!state.Unholstered) return Rejection.Holstered;
             if (state.Reloading) return Rejection.AlreadyReloading;
             if (state.AmmoInClip >= config.ClipSize) return Rejection.ClipFull;
+            if (!reserve.CanFeedAReload) return Rejection.NoReserve;
 
             state.Reloading = true;
             state.ReloadStartedAt = nowSeconds;
@@ -111,6 +164,29 @@ namespace Ironfront.Net.Replication.Combat
         /// <param name="pool">Where the rounds come from. Never null.</param>
         /// <param name="ownerId">Whose pool — an <c>actorId</c> for the infantry pool.</param>
         /// <param name="slot">The loadout slot, for a pool that keeps more than one.</param>
+        public static bool CompleteReloadIfElapsed(
+            ref WeaponRuntimeState state, in WeaponConfig config, float nowSeconds,
+            in ActorAmmoSource ammo)
+        {
+            if (!state.Reloading) return false;
+            if (nowSeconds - state.ReloadStartedAt < ReloadSeconds) return false;
+
+            state.Reloading = false;
+            state.ReloadStartedAt = float.NegativeInfinity;
+
+            int wanted = config.ClipSize - state.AmmoInClip;
+            if (wanted <= 0) return false;
+
+            int granted = ammo.Take(ref state, wanted);
+            if (granted <= 0) return false;
+
+            state.AmmoInClip = (byte)(state.AmmoInClip + granted);
+            return true;
+        }
+
+        /// <summary>
+        /// The pool/owner/slot form, for callers that hold the three separately.
+        /// </summary>
         public static bool CompleteReloadIfElapsed(
             ref WeaponRuntimeState state, in WeaponConfig config, float nowSeconds,
             ISpareAmmoPool pool, ushort ownerId, byte slot)
