@@ -294,7 +294,7 @@ namespace Ironfront.Net.Unity.Server
         public ushort SpareAmmoEncoded { get; set; } = SpareAmmo.NoResupplyEncoded;
 
         /// <summary>Whether a server-accepted reload is running. Protocol 10.</summary>
-        public WeaponStateFlags WeaponStateFlags { get; set; } = WeaponStateFlags.None;
+        public WeaponStateFlags WeaponStateFlags { get; set; } = Ironfront.Net.Protocol.WeaponStateFlags.None;
 
         /// <summary>
         /// Staggers the underlying gameplay actor. A no-op for a replicated object that has none
