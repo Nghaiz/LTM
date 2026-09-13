@@ -709,6 +709,15 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 	{
 	}
 
+	/// <summary>
+	/// The live hull value. Read-only -- <c>ApplyHealth</c> remains the single writer.
+	/// </summary>
+	/// <remarks>
+	/// This is what the <c>[vehicle-spawn-state]</c> line protocol 10 § 8.3 asks for reads.
+	/// Not <c>GetHealthRatio() * maxHealth</c>, which does not round-trip: a full-health hull
+	/// comes back a fraction under its own ceiling, and the invariant that line exists to
+	/// prove is <c>health == maxHealth</c> exactly.
+	/// </remarks>
 	public float Health
 	{
 		get { return health; }
@@ -1288,17 +1297,6 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 	{
 		return health / maxHealth;
 	}
-
-	/// <summary>
-	/// The live hull value. Read-only -- <c>ApplyHealth</c> remains the single writer.
-	/// </summary>
-	/// <remarks>
-	/// Added for the <c>[vehicle-spawn-state]</c> line protocol 10 § 8.3 asks for. The
-	/// alternative was <c>GetHealthRatio() * maxHealth</c>, which does not round-trip: a
-	/// full-health hull comes back a fraction under its own ceiling, and the invariant that
-	/// line exists to prove is <c>health == maxHealth</c> exactly.
-	/// </remarks>
-	public float Health => health;
 
 	protected virtual void HeavyDamage()
 	{

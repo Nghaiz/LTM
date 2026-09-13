@@ -1318,6 +1318,21 @@ namespace Ironfront.Net.Unity.Server
             // read as a redundant copy of it on a tick counter that has come back around.
             _projectiles?.ForgetShooter(victimActorId);
 
+            // A running reload dies with its owner. Nothing cleared it at THIS edge before --
+            // only ResetWeapon at respawn did -- so a player shot mid-reload kept the timer
+            // running while dead, and the reload completed into a corpse: the snapshot carried
+            // Reloading for the rest of the death, and the reserve was spent on a clip the new
+            // life throws away. The trigger latch goes with it, so a player who died holding
+            // Fire does not fire on the first tick of the next life without releasing first.
+            // Bots have no session and clear their combat state through the authority instead.
+            for (int i = 0; i < _players.Count; i++)
+            {
+                ClientSession session = _players[i].Session;
+                if (session.ActorId != victimActorId) continue;
+                session.ClearCombatStateOnDeath();
+                break;
+            }
+
             var message = new DeathMessage(
                 victimActorId, killerActorId, cause,
                 Quantize.PackVel16(force.X),
