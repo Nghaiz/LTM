@@ -13,7 +13,7 @@ namespace Ironfront.Net.Protocol
     public static class ProtocolConstants
     {
         public const ushort PROTOCOL_ID       = 0x4946;  // 'IF' — filters out junk packets
-        public const byte   PROTOCOL_VERSION  = 9;
+        public const byte   PROTOCOL_VERSION  = 10;
 
         public const int    MTU_SAFE          = 1200;    // safe through any router
         public const int    GSP_HEADER_SIZE   = 16;
@@ -59,13 +59,23 @@ namespace Ironfront.Net.Protocol
         /// <see cref="MAX_ACTORS"/> — a vehicle is not an actor and never occupies an actorId.
         /// </summary>
         /// <remarks>
-        /// 16 rather than "as many as fit": it bounds the vehicle snapshot body at
-        /// <c>16 x 30 + 9 = 489</c> bytes, which is what lets the elastic actor body be sized
+        /// <para>
+        /// 24 rather than "as many as fit": it bounds the vehicle snapshot body at
+        /// <c>24 x 30 + 9 = 729</c> bytes, which is what lets the elastic actor body be sized
         /// against whatever the vehicle body actually consumed (protocol-spec.md section 4.10,
         /// co-residency). It also leaves the id quarantine below room to hold ids while a
         /// spawner replaces a wreck.
+        /// </para>
+        /// <para>
+        /// <b>Raised from 16 at v10.</b> Island exhausted the id space in a real match — the
+        /// logs show 15/16 and then 16/16, after which spawners either dropped their vehicle or
+        /// created one with id 0, which no client can address. Dustbowl peaks higher than its
+        /// spawner count alone suggests, because <c>AfterMoved</c> keeps a superseded wreck
+        /// mapped while its replacement is already live, so both hold an id at once. 24 covers
+        /// the observed peak and leaves six ids of headroom for replacement and quarantine.
+        /// </para>
         /// </remarks>
-        public const int    MAX_VEHICLES      = 16;
+        public const int    MAX_VEHICLES      = 24;
 
         /// <summary>
         /// Ticks a retired vehicleId is held before it may be reissued. 150 ticks = 5 s at
@@ -131,6 +141,22 @@ namespace Ironfront.Net.Protocol
 
         /// <summary>Seconds after death before a respawn may be requested, on both sides.</summary>
         public const float  RESPAWN_SECONDS = 3f;
+
+        /// <summary>
+        /// Seconds after the last sprinting input frame during which the trigger stays dead,
+        /// on both the client's prediction and the server's authority.
+        /// </summary>
+        /// <remarks>
+        /// Ravenfield's own <c>FpsActorController</c> refuses to fire while sprinting and for a
+        /// short window after, because the weapon is lowered and has to come back up. Before
+        /// v10 only the client knew that: the client's controller declined the shot while the
+        /// server, reading the raw Fire bit out of <c>C_INPUT</c>, accepted it and took the
+        /// round. The player watched the magazine drain with no muzzle flash and no projectile.
+        /// Both sides now read the window from here rather than each carrying a literal — a
+        /// client that blocks for 0.2 s against a server that blocks for 0.25 s reintroduces
+        /// the same disagreement in a narrower band, which is harder to see and no less wrong.
+        /// </remarks>
+        public const float  SPRINT_FIRE_BLOCK_SECONDS = 0.2f;
 
         /// <summary>
         /// Metres from an actor's feet to its eyes while standing. The hitscan origin.
