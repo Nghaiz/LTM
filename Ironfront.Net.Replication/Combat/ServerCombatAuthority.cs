@@ -156,6 +156,38 @@ namespace Ironfront.Net.Replication.Combat
         public long ProjectilesLaunched { get; private set; }
 
         /// <summary>
+        /// Accepted input frames that carried the raw <see cref="InputButtons.Fire"/> bit,
+        /// counted before any gate reads it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The denominator every other trigger counter was missing.</b>
+        /// <see cref="SprintBlockedTriggers"/> and the resolver's shot counters all describe what
+        /// the server DECIDED, so a client that stops sending the Fire bit and a gate that
+        /// refuses every Fire bit produce the same reading: nothing fired, nothing blocked.
+        /// Those are opposite faults in opposite processes and they were indistinguishable from
+        /// any artifact.
+        /// </para>
+        /// <para>
+        /// <b>Measured, not feared.</b> Four Island <c>p10-sprint</c> runs on 2026-09-14 held
+        /// Fire for four seconds after a sprint and fired nothing, and the sprint gate was
+        /// blamed for three of them. The client had walked into the sea:
+        /// <c>Actor.Update</c>'s water branch fells the body,
+        /// <c>FpsActorController.DisableInput</c> clears <c>inputEnabled</c>,
+        /// <c>NetPredictionClock</c> then sends <c>input = default</c> every tick, and the Fire
+        /// bit never left the machine. This counter reads flat across that window and says so in
+        /// one number; the only instrument that could say it before was <c>-LogShots</c>, which
+        /// is slow enough that it got blamed for changing the outcome.
+        /// See <c>docs/island-sprint-fire-drowning-2026-09-14.md</c>.
+        /// </para>
+        /// <para>
+        /// So the pair is the diagnostic, not either half: this rising with no shots fired is a
+        /// SERVER fault, and this flat while a client believes it is firing is a CLIENT one.
+        /// </para>
+        /// </remarks>
+        public long TriggerFramesSeen { get; private set; }
+
+        /// <summary>
         /// Raw Fire bits refused by the sprint rule. Handoff section 2.1's symptom, counted.
         /// </summary>
         /// <remarks>
@@ -287,8 +319,14 @@ namespace Ironfront.Net.Replication.Combat
             TriggerOutcome pull = EffectiveTriggerPolicy.Advance(
                 ref trigger, ref weapon, in frame, in actor, config.Automatic, nowSeconds);
 
+            bool firePressed = frame.IsPressed(InputButtons.Fire);
+
+            // Counted BEFORE every gate, including the sprint rule above, so this number is
+            // about the WIRE and not about any decision taken after it.
+            if (firePressed) TriggerFramesSeen++;
+
             bool blockedBySprint =
-                frame.IsPressed(InputButtons.Fire) && !pull.Effective
+                firePressed && !pull.Effective
                 && (frame.IsPressed(InputButtons.Sprint)
                     || nowSeconds < trigger.SprintFireBlockedUntil);
 
@@ -492,6 +530,7 @@ namespace Ironfront.Net.Replication.Combat
             ReloadsCompleted = 0;
             KillsResolved = 0;
             ProjectilesLaunched = 0;
+            TriggerFramesSeen = 0;
             SprintBlockedTriggers = 0;
             ReloadsRefusedForUnknownSlot = 0;
         }
