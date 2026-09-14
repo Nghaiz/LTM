@@ -416,6 +416,28 @@ def _p10_grade_sprint(run: pathlib.Path, by_name: dict) -> list:
                             f"ammoInClip unchanged at {blocked['clipBefore']}, predictedShots "
                             f"+0, ammoCorrections +{blocked['corrections']}"))
 
+    # § 14 item 4 names the RESERVE beside the clip, and they are not the same field: a gate
+    # that refunded the round after taking it would leave ammoInClip flat and spareAmmoRounds
+    # short. Read the kind first -- spareAmmoRounds is 0 for both sentinels and means nothing
+    # on its own.
+    kind = (by_name["sprint-fire"].get("combat") or {}).get("spareAmmoKind")
+    before = (by_name["sprint-fire"].get("combat") or {}).get("spareAmmoRounds")
+    after = (by_name["sprint-ended"].get("combat") or {}).get("spareAmmoRounds")
+    if kind is None:
+        out.append(("INCONCLUSIVE", "combat.spareAmmoKind is absent from the record -- this "
+                                    "build's recorder predates the protocol-10 contract, so the "
+                                    "reserve half of this item cannot be read"))
+    elif kind != "finite":
+        out.append(("INCONCLUSIVE", f"spareAmmoKind={kind!r}: the reserve cannot move for this "
+                                    f"kind, so a flat spareAmmoRounds here is not evidence the "
+                                    f"sprint gate protected it"))
+    elif after == before:
+        out.append(("PASS", f"reserve held across the sprint window: spareAmmoKind='finite', "
+                            f"spareAmmoRounds unchanged at {before}"))
+    else:
+        out.append(("FAIL", f"spareAmmoRounds went {before} -> {after} during the sprint window "
+                            f"-- a round left the reserve while the trigger was gated"))
+
     if freed["spent"] > 0 or freed["shots"] > 0:
         out.append(("PASS", f"post-sprint window ({freed['seconds']:.1f}s of fire): ammoInClip "
                             f"{freed['clipBefore']} -> {freed['clipAfter']}, predictedShots "
