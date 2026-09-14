@@ -84,6 +84,16 @@ data:
   IRONFRONT_METRICS_PORT: "27001"
   IRONFRONT_METRICS_BIND: "0.0.0.0"
   IRONFRONT_DB_PATH: "/data/ironfront.db"
+
+  # Cleared DELIBERATELY, and it has to be stated rather than omitted: master.Dockerfile bakes
+  # IRONFRONT_TLS_CERT_PATH=/tls/master.pfx as an image default, and the master refuses to start
+  # when the path it names does not exist. Leaving this key out does not mean "no TLS" -- it means
+  # the image's default wins and the pod crash-loops on a certificate nobody mounted.
+  #
+  # Empty means plaintext, which EnvRegistry sanctions on a LAN and this subnet is one. The thing
+  # plaintext would expose is the password hash, which to this server IS the password.
+  IRONFRONT_TLS_CERT_PATH: ""
+  IRONFRONT_TLS_CERT_PASSWORD: ""
   IRONFRONT_METRICS_CSV: "/data/durability.csv"
   IRONFRONT_METRICS_CSV_INTERVAL_SEC: "60"
   IRONFRONT_LOG_LEVEL: "Info"
@@ -168,7 +178,7 @@ spec:
         - name: master
           # Pinned by digest at deploy time, never :latest. tools/deploy-staging-p10.ps1
           # rewrites this line with the digest it just pushed and side-loaded.
-          image: ghcr.io/nghaiz/ironfront-master:staging-p10
+          image: ghcr.io/nghaiz/ironfront-master@sha256:781af1b4b2f99d039c84771a1e0555cc9847d5056313df064ad8bf9d249afe2a
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
@@ -193,10 +203,18 @@ spec:
             capabilities:
               drop: ["ALL"]
           readinessProbe:
-            # The master's metrics endpoint is real HTTP, so unlike the game servers this one
-            # can be probed honestly.
-            httpGet:
-              path: /metrics
+            # tcpSocket, NOT httpGet. The metrics endpoint speaks raw TCP and writes a JSON
+            # document as soon as something connects -- it is not an HTTP server, and the
+            # master's own startup line says so ("try: nc 0.0.0.0 27001"). An httpGet probe
+            # against it never completes a response, so the pod sits 0/1 for ever while the
+            # master is perfectly healthy and listening. `curl http://127.0.0.1:27001/metrics`
+            # has the same problem and returns empty on a working master; read it with
+            # `exec 3<>/dev/tcp/127.0.0.1/27001; cat <&3` instead.
+            #
+            # A TCP accept is a weaker claim than a parsed body, and it is the strongest one
+            # available here: it distinguishes "listening" from "crashed", which is the failure
+            # this deployment actually had.
+            tcpSocket:
               port: 27001
             initialDelaySeconds: 5
             periodSeconds: 10
@@ -239,7 +257,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: game-server
-          image: ghcr.io/nghaiz/ironfront-game-server:staging-p10
+          image: ghcr.io/nghaiz/ironfront-game-server@sha256:211e30c783383c2bd911bd14c6458a63c30d99dbe8aaa0f8cd7ce7c5653512bf
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
@@ -253,6 +271,13 @@ spec:
               value: "Dustbowl"
             - name: IRONFRONT_GAMESERVER_UDP_PORT
               value: "27015"
+            # REQUIRED, and at least one id. GameServerRegistry.TryRegister refuses a
+            # registration whose map list is empty, and the refusal is logged only at Debug --
+            # what an operator sees at Info is the game server saying "master link: the master
+            # refused registration. Staying standalone", with no reason, and then the connection
+            # closing 30 s later as unauthenticated. Omitting this key does not mean "any map".
+            - name: IRONFRONT_GAMESERVER_MAP_IDS
+              value: "1"
           ports:
             - name: game-udp
               containerPort: 27015
@@ -303,7 +328,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: game-server
-          image: ghcr.io/nghaiz/ironfront-game-server:staging-p10
+          image: ghcr.io/nghaiz/ironfront-game-server@sha256:211e30c783383c2bd911bd14c6458a63c30d99dbe8aaa0f8cd7ce7c5653512bf
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
@@ -315,6 +340,12 @@ spec:
               value: "Island"
             - name: IRONFRONT_GAMESERVER_UDP_PORT
               value: "27016"
+            # Island is 2, Dustbowl is 1 (tools/playtest-local.ps1 is the other place that
+            # knows this). A room created for Island cannot be satisfied by a server that only
+            # registered map 1, so the two servers must differ here even though everything
+            # else about them matches.
+            - name: IRONFRONT_GAMESERVER_MAP_IDS
+              value: "2"
           ports:
             - name: game-udp
               containerPort: 27016
