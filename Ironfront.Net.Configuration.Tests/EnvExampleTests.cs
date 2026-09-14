@@ -1,5 +1,7 @@
-using System;
+﻿using System;
 using System.IO;
+using System.Linq;
+using System.Collections.Generic;
 using Ironfront.Net.Configuration;
 using Xunit;
 
@@ -47,6 +49,52 @@ namespace Ironfront.Net.Configuration.Tests
             string committed = File.ReadAllText(path).Replace("\r\n", "\n");
 
             Assert.Equal(rendered, committed);
+        }
+
+        /// <summary>
+        /// Every <see cref="EnvVar"/> declared on <see cref="EnvRegistry"/> is in
+        /// <see cref="EnvRegistry.All"/>. X-93.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Declaring a variable is two steps and nothing enforced the second.</b>
+        /// <c>All</c> is a hand-written list, and every other gate in this file walks it — so a
+        /// variable added to the class but not to that list is read by its consumer at runtime
+        /// and is simultaneously invisible to <c>.env.example</c>, to <c>EnvDump</c>, and to
+        /// <see cref="CommittedTemplateMatchesTheRegistry"/>. The drift gate cannot report a
+        /// variable it has never heard of, so it stays green while the template goes stale.
+        /// </para>
+        /// <para>
+        /// That is not hypothetical: the three <c>IRONFRONT_CLIENT_MASTER_TLS*</c> variables
+        /// were added, built, unit-tested and passed the whole suite while absent from the
+        /// template — found by grepping the template rather than by any check.
+        /// </para>
+        /// <para>
+        /// Reflection rather than a second list, because a second list is the same defect with
+        /// one more place to forget.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public void EveryDeclaredVariableIsInTheAllList()
+        {
+            var declared = typeof(EnvRegistry)
+                .GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+                .Where(f => f.FieldType == typeof(EnvVar))
+                .Select(f => (EnvVar)f.GetValue(null)!)
+                .ToList();
+
+            Assert.NotEmpty(declared);
+
+            var listed = new HashSet<string>(EnvRegistry.All.Select(v => v.Name), StringComparer.Ordinal);
+            var missing = declared.Where(v => !listed.Contains(v.Name)).Select(v => v.Name).ToList();
+
+            Assert.True(
+                missing.Count == 0,
+                "Declared on EnvRegistry but absent from EnvRegistry.All: "
+                + string.Join(", ", missing)
+                + ". Such a variable is read at runtime and is invisible to .env.example, to "
+                + "EnvDump and to the drift gate above -- add it to All rather than deleting it "
+                + "here.");
         }
 
         [Fact]
