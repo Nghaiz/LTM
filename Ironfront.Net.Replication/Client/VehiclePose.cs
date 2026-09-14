@@ -109,7 +109,21 @@ namespace Ironfront.Net.Replication.Client
                     Quantize.UnpackAngVel(entry.AngVelX),
                     Quantize.UnpackAngVel(entry.AngVelY),
                     Quantize.UnpackAngVel(entry.AngVelZ)),
-                entry.Health / 255f,
+                // HEALTH_MAX, not 255. The wire byte spans 0..Quantize.HEALTH_MAX (100) --
+                // VehicleState.NormalizedHealth encodes against that constant and
+                // VehicleSpawnStateLog reads it back against the same one. Dividing by the
+                // width of a byte instead decoded a FULL-health vehicle as 100/255 = 0.392,
+                // NetClientVehicle multiplied that back into Vehicle.SetHealthAuthoritative,
+                // and ApplyHealth's `health < 0.5 * maxHealth` rung of the ladder fired: every
+                // vehicle on every client played its damage smoke from the first snapshot and
+                // never stopped, because each later snapshot repeated the same 0.392.
+                //
+                // That is the client-side particle bug VehicleSpawner.LogFirstState was built
+                // to arbitrate -- it reported full health with no flags throughout, correctly,
+                // and the answer was on this line. Protocol section 16 forbids the other fix
+                // (lowering health until the particles stop); this restores the instrument
+                // instead of silencing it.
+                entry.Health / (float)Quantize.HEALTH_MAX,
                 entry.Flags,
                 Quantize.UnpackYaw(entry.TurretYaw),
                 Quantize.UnpackPitchByte(entry.TurretPitch),
