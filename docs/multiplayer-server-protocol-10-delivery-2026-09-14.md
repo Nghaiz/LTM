@@ -343,7 +343,7 @@ listeners: udp 27015, udp 27016, tcp 27000, tcp 27001
 trong 15 giây đầu dù heartbeat có sống hay không, nên một lần poll ngay sau rollout không phân
 biệt được link sống với link đã chết.
 
-## 9.3. MỞ: master bỏ game server khỏi registry theo thời gian, trong khi link vẫn sống
+## 9.3. ĐÃ SỬA: master bỏ game server khỏi registry theo thời gian, trong khi link vẫn sống
 
 Phát hiện lúc kiểm tra lại staging sau 5 giờ chạy liên tục.
 
@@ -371,12 +371,35 @@ sống và heartbeat vẫn được nhận. Game server không hề biết, nên
 nhận `NoGameServerAvailable` trong khi server đứng đó, log sạch, pod `Running`, và mọi dashboard
 đều xanh. Đây đúng là loại xanh-không-chứng-minh-gì mà bàn giao gốc cảnh báo.
 
-**Chưa điều tra tiếp.** Điểm khởi đầu: `GameServerRegistry` không có đường nào cho heartbeat
-*khôi phục* một server đã bị bỏ — `Heartbeat()` trả false khi id không còn trong `_servers` và
-không ai đọc giá trị trả về đó. Cần tìm cái gì bỏ nó ra, và tại sao heartbeat không cứu được.
+**Nguyên nhân, và nó là hai cái đồng hồ.** `GameServerRegistry.Prune` xoá mọi record có
+heartbeat cuối quá 30 giây. Nhưng tư cách thành viên của registry vốn đã có **đúng một** thẩm
+quyền: `RemoveConnection`, do `MspMessageDispatcher.OnDisconnected` gọi, mà
+`TcpListenerHost.Disconnect` gọi trên **mọi** lần gỡ khỏi bảng connection — quét timeout, lỗi
+socket, đóng sạch, không sót đường nào. Một record còn tồn tại vì thế **đã** có nghĩa "connection
+chủ còn sống".
 
-**Cách phát hiện:** so `gameServers.registered` với số dòng `gs_heartbeat` có id phân biệt trong
-một phút. Hai số đó lệch nhau là dấu hiệu.
+`Prune` là đồng hồ thứ hai, đo một tín hiệu khác, trả lời một câu hỏi đồng hồ thứ nhất đã trả lời.
+Hai cái lệch nhau đúng chỗ không được phép lệch: một khoảng hụt quá 30 giây — load scene, một nhịp
+GC, một frame kẹt — xoá record trong khi link TCP vẫn nguyên. Từ đó `Heartbeat()` trả `false` mỗi
+~5 giây, mãi mãi, dispatcher vứt giá trị đi, và không gì đăng ký lại: `ConnectAndRegisterAsync`
+chạy một lần lúc boot.
+
+**Cách sửa.** `Prune` thôi xoá record, và đổi tên thành `ReleaseRoomsFromSilentServers` — một
+phương thức tên `Prune` mà không prune gì là nói dối người đọc sau. Nó vẫn **trả phòng**, vì đó là
+nửa đúng của tiêu chí M2 số 3: một phòng không được mắc kẹt trên server đã ngừng tick. Server im
+lặng trở thành *registered nhưng không healthy* — `IsHealthy` vẫn chặn `Allocate` ở mốc 15 giây —
+đúng cái trạng thái `CountHealthy` sinh ra để báo động, và nó tự quay lại hàng cấp phát ngay khi
+heartbeat trở lại. `HandleGameServerHeartbeat` giờ **đọc** giá trị trả về và log ERROR kèm id.
+
+**Chỗ chưa xử lý, nói thẳng.** Nếu link đứt thật thì server vẫn bị gỡ đăng ký vĩnh viễn, vì không
+gì đăng ký lại. Khác biệt là bây giờ nó **kêu to** thay vì chết lặng. Đường tự chữa lành cần một
+negative acknowledgement mà game server hành động theo — thêm message protocol, và id mới phải đi
+tới được `TicketValidator`. Việc riêng, không nhét kèm.
+
+**Cách phát hiện (giữ lại, vì vẫn đúng):** so `gameServers.registered` với số dòng `gs_heartbeat`
+có id phân biệt trong một phút. Hai số đó lệch nhau là dấu hiệu.
+
+PR: Nghaiz/LTM#282. Ledger X-87.
 
 ## 10. Rollback
 
