@@ -224,8 +224,8 @@ nhìn hơn Dustbowl và Island hiện nay.
 Hai mục cuối của Definition of Done chưa đạt được, và cả hai đều không phải việc phía server có
 thể tự đóng:
 
-- **Master và game server staging chạy protocol 10** — đã deploy, xem mục 8. Nhưng "chạy" ở mức
-  listener và registration; một trận có người chơi thật thì chưa.
+- **Master và game server staging chạy protocol 10** — đã deploy và đo, xem mục 9.2. Nhưng "chạy"
+  ở mức listener, registration và heartbeat; một trận có người chơi thật thì chưa.
 - **Chưa cutover production cho tới khi client xác nhận** — đúng theo thiết kế. Production vẫn ở
   protocol 9.
 
@@ -236,9 +236,42 @@ network role, và dùng prefab/material Ravenfield gốc cho grenade/rocket/expl
 Checklist nghiệm thu hai người chơi ở mục 14 của bàn giao gốc vẫn là cách duy nhất để đóng phần
 còn lại. Không có test tự động nào ở đây thay được nó.
 
-## 8. Staging
+## 8. Manifest bàn giao (mục 11)
 
-Topology mới: [`infra/k8s/staging-protocol10.yaml`](../infra/k8s/staging-protocol10.yaml) —
+```
+sourceCommit             = 61074af7af6752230cc37939b3282a81428e8660
+protocolVersion          = 10
+protocolSpecCommit       = 61074af7af6752230cc37939b3282a81428e8660
+gameServerArtifactSha256 = b30de8096015c5976411bea1fd341387a92b61db2027fb8d731d6d72226e908e
+gameServerImage          = ghcr.io/nghaiz/ironfront-game-server@sha256:d702605ee4c1bb2ac0ae95bd4a899301606c07fe8eea58e59115e580f1ccaa44
+masterServerImage        = ghcr.io/nghaiz/ironfront-master@sha256:781af1b4b2f99d039c84771a1e0555cc9847d5056313df064ad8bf9d249afe2a
+unityVersion             = 6000.3.21f1
+buildTimestampUtc        = 2026-09-14T00:55:47Z
+tests                    = dotnet test Ironfront.sln -c Release -> 2401 passed, 0 failed, 0 skipped
+```
+
+Artifact: `build/gameserver-linux.tar.gz`, 258 entry, chứa `Ironfront.Server.x86_64`,
+`Ironfront.Server_Data/` và `UnityPlayer.so` ở gốc archive.
+
+**`sourceCommit` là `61074af`, không phải HEAD của nhánh.** Binary được cắt tại `61074af`; commit
+sau đó (`a6f4757`) chỉ chạm `tools/build-player.ps1` và `tools/build-server.ps1`, không có file nào
+dưới `Ironfront_Reborn/`, nên nó không đổi một byte nào trong player. Ghi HEAD vào đây sẽ là một
+con số đúng về nhánh và sai về binary.
+
+Xác minh stamp đã thực sự nằm trong assembly, không phải chỉ trong log:
+
+```
+strings -e l build/server/Ironfront.Server_Data/Managed/Ironfront.Net.Unity.Shared.dll | grep -x 61074af
+strings -e l build/server/Ironfront.Server_Data/Managed/Ironfront.Net.Unity.Server.dll | grep -x 61074af
+```
+
+Cả hai trả về 1, và `dev` trả về 0. Dùng `strings -e l`, không phải `strings -a`: một string
+literal C# nằm ở user-string heap dạng UTF-16, nên probe ASCII trả 0 cho **mọi** literal — một số
+0 từ `strings -a` là probe hỏng chứ không phải giá trị vắng mặt.
+
+## 9. Staging
+
+Topology: [`infra/k8s/staging-protocol10.yaml`](../infra/k8s/staging-protocol10.yaml) —
 master cộng cả hai bản đồ, tất cả trong namespace `ironfront`.
 
 | Thành phần | Endpoint |
@@ -261,12 +294,56 @@ Deploy và verify: `pwsh tools/deploy-staging-p10.ps1`. Script build, push lấy
 qua LAN, pin manifest theo digest rồi apply. Side-load là bắt buộc chứ không phải tối ưu hoá:
 đường ra ghcr.io của node chậm hơn máy build khoảng một trăm lần.
 
-`-VerifyOnly` chạy lại phần kiểm tra. Nó kiểm bốn thứ, vì một pod `Running` không chứng minh gì
-về việc có listener: cổng đang nghe, metrics của master có nêu game server, dòng build stamp của
-cả hai map, và đồng hồ node có đồng bộ NTP (ticket hết hạn sau 60 giây, và một node lệch giờ từ
-chối mọi join theo cách trông giống hệt lỗi protocol).
+`-VerifyOnly` chạy lại phần kiểm tra. Một pod `Running` không chứng minh gì về việc có listener,
+nên nó kiểm: cổng đang nghe; master báo **registered VÀ healthy** tách riêng; không có dòng từ
+chối registration nào trong log game server; dòng build stamp của cả hai map và stamp đó không
+phải `dev`; và đồng hồ node có đồng bộ NTP (ticket hết hạn sau 60 giây, một node lệch giờ từ chối
+mọi join theo cách trông giống hệt lỗi protocol).
 
-## 9. Rollback
+### 9.1. Ba thứ đã làm staging không lên được, và không thứ nào tự nói ra
+
+Cả ba chỉ lộ ra khi thực sự deploy. Ghi lại vì cách hỏng của chúng đều đọc như một lỗi khác.
+
+**Master crash-loop vì một certificate không ai mount.** `master.Dockerfile` nướng sẵn
+`IRONFRONT_TLS_CERT_PATH=/tls/master.pfx` làm image default, và master từ chối khởi động khi path
+đó không tồn tại. Bỏ key này ra khỏi ConfigMap **không** có nghĩa "không TLS" — nghĩa là default
+của image thắng. Phải set rỗng một cách tường minh.
+
+**Readiness probe không bao giờ pass được.** Endpoint metrics nói **TCP thô**, không phải HTTP:
+nó ghi một document JSON ngay khi có kết nối, và chính dòng khởi động của master nói vậy
+(`try: nc 0.0.0.0 27001`). `curl -s http://127.0.0.1:27001/metrics` trả về **rỗng** trên một
+master khoẻ mạnh — tệ hơn một lỗi, vì nó đọc như "master không có gì để báo". Câu curl đó có
+trong mục 13.2 của bàn giao gốc và nó chưa bao giờ có thể chạy đúng. Đọc bằng:
+
+```bash
+timeout 6 bash -c 'exec 3<>/dev/tcp/127.0.0.1/27001; cat <&3'
+```
+
+**Cả hai game server đăng ký rồi bị từ chối, trong im lặng.** `GameServerRegistry.TryRegister` từ
+chối một registration có map list rỗng, và `IRONFRONT_GAMESERVER_MAP_IDS` chưa từng được set. Thứ
+một operator thấy ở mức Info là `[net] master link: the master refused registration. Staying
+standalone.` — không kèm lý do; lý do chỉ log ở mức Debug. Dustbowl là **1**, Island là **2**, và
+hai server phải khác nhau ở đây, nếu không một room tạo cho map này không thể được phục vụ bởi
+server chỉ đăng ký map kia.
+
+### 9.2. Trạng thái đo được lúc bàn giao
+
+```
+game-server-dustbowl  1/1 Running   [net] build 61074af built 2026-09-14T00:55:47Z (server assembly); shared assembly 61074af
+game-server-island    1/1 Running   [net] build 61074af built 2026-09-14T00:55:47Z (server assembly); shared assembly 61074af
+master                1/1 Running   protocol v10, PLAINTEXT, 27000 + metrics 27001
+
+gameServers: registered=2  healthy=2  allocated=0     (đọc ở uptimeSec=1641, không phải ngay sau rollout)
+refused registration: dustbowl=0  island=0
+NTPSynchronized: yes
+listeners: udp 27015, udp 27016, tcp 27000, tcp 27001
+```
+
+`registered` và `healthy` được đọc **sau** cửa sổ 15 giây. Một server vừa đăng ký đọc là healthy
+trong 15 giây đầu dù heartbeat có sống hay không, nên một lần poll ngay sau rollout không phân
+biệt được link sống với link đã chết.
+
+## 10. Rollback
 
 Digest protocol 9 đang chạy production, giữ để rollback:
 
@@ -277,7 +354,7 @@ ghcr.io/nghaiz/ironfront-game-server@sha256:8c5d062d7ddbd432fa87b363969e0499c839
 Rollback là rollback **cả master lẫn game server** về cặp digest protocol 9. Không rollback một
 thành phần: master 10 với game server 9 hoặc ngược lại là chính cái trạng thái mục 1 cấm.
 
-## 10. Liên quan
+## 11. Liên quan
 
 - [`multiplayer-game-server-protocol-handoff-2026-09-13.md`](multiplayer-game-server-protocol-handoff-2026-09-13.md) — bàn giao gốc
 - [`multiplayer-server-deploy-handoff-2026-09-11.md`](multiplayer-server-deploy-handoff-2026-09-11.md) — trạng thái gameplay và checklist hai người chơi

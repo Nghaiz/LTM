@@ -45,6 +45,8 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
+. "$PSScriptRoot/lib/build-stamp.ps1"
+
 # Capture source cleanliness BEFORE build-libs replaces the tracked plugin binaries. Managed
 # assemblies contain a new PE/MVID on each successful compilation, so testing afterwards makes
 # every otherwise-clean build report -dirty merely because this script performed its required
@@ -157,106 +159,18 @@ Write-Host "[build] this takes roughly ten minutes. Nothing is printed until it 
 # folder -- and a stamp written beside the executable describes the FOLDER, so it would read
 # "current" while the code was old. It would lie in exactly the case it was written for. The cost
 # of compiling it in is that a tracked source file has to hold the value for the length of one
-# build; the restore below is in a finally, so a failed or cancelled build leaves the tree as it
+# build; the restore in the finally below means a failed or cancelled build leaves the tree as it
 # found it.
 #
 # A checkout therefore always reads "dev", the Editor always compiles, and only a build produced by
-# THIS script claims an identity -- which is the honest arrangement, because only that build is a
-# thing anybody hands to anybody else.
-$stampFiles = @(
-    (Join-Path $repoRoot "Ironfront_Reborn/Assets/Scripts/Net/Shared/BuildStamp.cs"),
-    (Join-Path $repoRoot "Ironfront_Reborn/Assets/Scripts/Net/Server/ServerBuildStamp.cs")
-)
-
-foreach ($stampFile in $stampFiles) {
-    if (-not (Test-Path -LiteralPath $stampFile -PathType Leaf)) {
-        throw "the build stamp source $stampFile is missing. It is tracked, not generated -- " +
-              "restore it rather than letting the build ship an unidentifiable binary."
-    }
-}
-
-# Degrade rather than block when there is no git to ask. A source drop with no .git is a legitimate
-# way to build, and refusing it would trade a real capability for a diagnostic. It is WARNED about
-# rather than passed over silently: a binary that reports "dev" is one nobody can identify later.
-$commit = $null
-try { $commit = (& git -C $repoRoot rev-parse --short HEAD 2>$null) } catch { $commit = $null }
-
-if ($LASTEXITCODE -ne 0 -or -not $commit) {
-    Write-Warning ("[build] no git commit could be read, so this build will report itself as " +
-                   "'dev' and will be indistinguishable from an Editor build. See " +
-                   "docs/handing-over-a-build.md.")
-    $commit = $null
-}
-
-$stampOriginals = @{}
-
-if ($commit) {
-    $commit = $commit.Trim()
-    # SCOPED TO THE UNITY PROJECT, not the whole tree. The question this flag answers is
-    # "does $commit describe the code in this binary", and only Ironfront_Reborn/ becomes the
-    # binary -- Assets (including the prebuilt Ironfront.Net.* DLLs under Assets/Plugins),
-    # Packages and ProjectSettings. An untracked scratch file in tmp/, a artifacts/ run or an
-    # edit to this very script cannot change what Unity compiles.
-    #
-    # MEASURED, not reasoned about: the first real build off this mechanism (502d45a,
-    # 2026-09-06) reported -dirty because of two stray test-result XMLs in tmp/. The binary
-    # matched its commit exactly. A flag that fires on scratch is a flag nobody reads by the
-    # second day, which would have cost more than the flag is worth.
-    $dirty = $unityProjectDirtyBeforeLibraryBuild
-    $builtAtUtc = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-
-    if ($dirty) {
-        Write-Warning ("[build] Ironfront_Reborn has uncommitted changes, so $commit names a commit this " +
-                       "binary does NOT match. The stamp will say so with a -dirty suffix.")
-    }
-
-    foreach ($stampFile in $stampFiles) {
-        $stampOriginals[$stampFile] = Get-Content -LiteralPath $stampFile -Raw
-
-        $stamped = $stampOriginals[$stampFile]
-
-        # EVERY field is checked on its own, not the file as a whole. Comparing whole texts would
-        # only notice all three substitutions failing together: rename ONE field and the other two
-        # still change, the file differs, the check passes, and the build ships a stamp that is
-        # half real -- a binary claiming a build time for a commit it does not name. A mechanism
-        # whose entire purpose is not lying cannot afford a guard that only catches total failure.
-        #
-        # The patterns require the word `readonly`, which makes them refuse a field turned
-        # back into a `const` -- worth keeping deliberately rather than by luck. A const is
-        # inlined into every other assembly that reads it, which would leave ServerBuildStamp
-        # comparing its own baked copy of the Shared value against its own stamp: equal by
-        # construction, mismatch undetectable, in exactly the case the comparison exists for.
-        # Mutation-tested 2026-09-06: renaming any one of the three fields, or restoring the
-        # const, each makes this refuse; the unmutated source passes.
-        $substitutions = @(
-            @{ Pattern = '(?m)(readonly string Commit\s*=\s*)"[^"]*";'
-               Replace = "`$1`"$commit`";"
-               Expect  = "readonly string Commit = `"$commit`";" },
-            @{ Pattern = '(?m)(readonly string BuiltAtUtc\s*=\s*)"[^"]*";'
-               Replace = "`$1`"$builtAtUtc`";"
-               Expect  = "readonly string BuiltAtUtc = `"$builtAtUtc`";" },
-            @{ Pattern = '(?m)(readonly bool Dirty\s*=\s*)(true|false);'
-               Replace = "`$1$($dirty.ToString().ToLowerInvariant());"
-               Expect  = "readonly bool Dirty = $($dirty.ToString().ToLowerInvariant());" }
-        )
-
-        foreach ($s in $substitutions) {
-            $stamped = $stamped -replace $s.Pattern, $s.Replace
-
-            if ($stamped -notmatch [regex]::Escape($s.Expect)) {
-                throw "the build stamp in $stampFile was not written: expected to find " +
-                      "'$($s.Expect)' after substitution and did not. That field's declaration no " +
-                      "longer matches the pattern this script rewrites, so the build would have " +
-                      "shipped a partial or absent stamp while reporting success. Fix the pattern " +
-                      "here or the field there."
-            }
-        }
-
-        Set-Content -LiteralPath $stampFile -Value $stamped -NoNewline
-    }
-
-    Write-Host "[build] stamp : $commit$(if ($dirty) { '-dirty' }) $builtAtUtc"
-}
+# one of the build scripts claims an identity -- which is the honest arrangement, because only
+# those builds are a thing anybody hands to anybody else.
+#
+# The rewrite itself lives in tools/lib/build-stamp.ps1 because build-server.ps1 needs the same
+# thing and did not have it: the dedicated server shipped an unstamped "dev" binary for as long as
+# this logic lived only here.
+$stamp = Write-BuildStamp -RepoRoot $repoRoot -Dirty $unityProjectDirtyBeforeLibraryBuild
+$stampOriginals = $stamp.Originals
 
 $buildArgs = @(
     "-batchmode", "-quit", "-nographics",
@@ -293,9 +207,7 @@ finally {
     # it. Restoring from the captured text rather than `git checkout --` deliberately: the latter
     # would also discard any unrelated uncommitted edit to these files, which is a destructive
     # answer to a bookkeeping question.
-    foreach ($stampFile in $stampOriginals.Keys) {
-        Set-Content -LiteralPath $stampFile -Value $stampOriginals[$stampFile] -NoNewline
-    }
+    Restore-BuildStamp -Originals $stampOriginals
 }
 
 $elapsed = [int]((Get-Date) - $started).TotalSeconds
