@@ -533,6 +533,9 @@ namespace Ironfront.Net.Unity.Bindings
             set => _actor.health = value;
         }
 
+        /// <inheritdoc/>
+        public bool IsSubmerged => _actor.inWater;
+
         /// <summary>
         /// The alive FLAG and the alive REGISTER, written as a pair. Ledger <b>X-59</b>.
         /// </summary>
