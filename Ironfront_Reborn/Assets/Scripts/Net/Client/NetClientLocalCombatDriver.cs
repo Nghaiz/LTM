@@ -440,11 +440,21 @@ namespace Ironfront.Net.Unity.Client
             // the remaining step.
             //
             // P10 X-85: the every-frame call above was ungated by SPRINT, and the server's
-            // protocol-10 trigger is not. Measured on a lane-B run of the protocol-10 build --
-            // six seconds of Fire held together with Sprint spent not one round (the server was
-            // right) while predictedShots climbed by 51 and ammoCorrections went 1 -> 19 (the
-            // client was wrong, every frame). A human holding Shift and the left mouse button
-            // takes this exact path and watches the magazine drain and snap back.
+            // protocol-10 trigger is not.
+            //
+            // This protects the SERVER from nothing, and saying so is the point. A shot-logged
+            // lane-B run of the protocol-10 build recorded 303 attempts across one six-second
+            // fire+sprint window: 181 refused Holstered by the server's own sprint rule, 75
+            // OnCooldown, 17 NoAmmo, 30 accepted -- and every one of those 30 carried
+            // buttons=0x0801, Fire set and the Sprint bit CLEAR. Not a single shot was ever
+            // accepted with Sprint down. The server gate is airtight and needs no help.
+            //
+            // What this line fixes is THIS side predicting shots the server will always refuse:
+            // +51 predictedShots across that same window against a clip that never moved, and
+            // ammoCorrections climbing 1 -> 19 as each snapshot handed the count back. So the
+            // clip dip a grader sees during a sprint is the client's own predicted number being
+            // corrected up again, not a server spend -- and a human holding Shift and the left
+            // mouse button watches the magazine drain and snap back for the same reason.
             //
             // Advanced BEFORE and OUTSIDE the FirePressed() guard, both deliberately. Outside,
             // because the window runs from the last SPRINTING frame: a player who sprints

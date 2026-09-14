@@ -260,8 +260,14 @@ namespace Ironfront.Net.Replication.Client
             // this line the client predicted a shot on every frame the trigger was down, sprint
             // or no sprint, and the server refused every one of them: 51 predicted shots across
             // one six-second lane-B window with the clip still sitting at 30 and
-            // SnapshotAmmoCorrections climbing 1 -> 19. What a player sees is the magazine
-            // draining and then snapping back on the next snapshot.
+            // SnapshotAmmoCorrections climbing 1 -> 19.
+            //
+            // Nothing here is protecting the server, and the shot log of that window says so
+            // precisely: 181 of 303 attempts refused Holstered by the server's sprint rule, and
+            // all 30 that WERE accepted carried the Sprint bit clear. Every round the server
+            // spent was legal. What this refuses is a prediction whose only possible outcome is
+            // a correction -- the magazine a player watches drain and snap back is this side's
+            // number, handed back by the next snapshot.
             //
             // Holstered, and it is the server's word rather than a near-miss. On a sprinting
             // frame the sprint rule lowers the weapon and ServerCombatAuthority reports exactly

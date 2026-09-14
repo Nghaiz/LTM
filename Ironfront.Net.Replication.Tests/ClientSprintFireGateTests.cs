@@ -22,6 +22,14 @@ namespace Ironfront.Net.Replication.Tests
     /// takes the same path and watches the magazine drain and snap back.
     /// </para>
     /// <para>
+    /// <b>None of this is about protecting the server, and the shot log of that window is
+    /// unambiguous on the point.</b> Of 303 attempts: 181 refused <c>Holstered</c> by the
+    /// server's sprint rule, 75 <c>OnCooldown</c>, 17 <c>NoAmmo</c>, 30 accepted — and every
+    /// one of the 30 carried <c>buttons=0x0801</c>, Fire set with the Sprint bit CLEAR. Not one
+    /// shot was ever accepted while sprinting. So what the tests below grade is the client no
+    /// longer predicting a shot whose only possible outcome is a correction.
+    /// </para>
+    /// <para>
     /// <b>Every window here is stated as
     /// <see cref="ProtocolConstants.SPRINT_FIRE_BLOCK_SECONDS"/> rather than as 0.2.</b> A test
     /// carrying its own literal would keep passing while the constant moved underneath it,
