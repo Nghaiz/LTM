@@ -110,15 +110,48 @@ metadata:
 data:
   IRONFRONT_GAMESERVER_TRANSPORT: "udp"
 
-  # hostNetwork, so this is the node's own address and not a Service name. A game server that
-  # cannot reach the master does not fail — MasterLinkBootstrap treats it as standalone and
-  # plays on, unadvertised — which is exactly why this has to be checked in the metrics rather
-  # than assumed from a pod being Running.
-  IRONFRONT_MASTER_HOST: "192.168.94.130"
-  IRONFRONT_MASTER_PORT: "27000"
-  IRONFRONT_GAMESERVER_MASTER_TLS: "0"
+  # THE MASTER IS ON fly.io, NOT IN THIS CLUSTER. A game server that cannot reach the master
+  # does not fail — MasterLinkBootstrap treats it as standalone and plays on, unadvertised —
+  # which is exactly why this has to be checked in the master's metrics rather than assumed
+  # from a pod being Running.
+  #
+  # This link is OUTBOUND, which is the whole reason the topology works: the VM sits behind
+  # VMware NAT with no inbound forwards, and an outbound TCP dial to fly.io crosses that
+  # without anything being opened. Registration, heartbeats and match reports all travel this
+  # way. Only the UDP the CLIENTS send needs a path in, and that is the public IP below.
+  IRONFRONT_MASTER_HOST: "kien-master-2026.fly.dev"
 
-  # What the master hands to clients as the address to dial.
+  # 443, NOT 27000, AND THE REASON IS THE ONLY THING IN THIS FILE ABOUT IP VERSIONS.
+  #
+  # A fly app is IPv6-only by default. This VM sits behind VMware NAT, which is IPv4, so it
+  # resolves the master to an address it cannot route to and HANGS IN CONNECT — no error, no
+  # log, just a game server that never registers and never says why. The host machine has IPv6
+  # and reaches 27000 fine, which is what makes this look like a working deployment.
+  #
+  # Fly's free SHARED IPv4 routes ports 80 and 443 only, selecting the app by TLS SNI, so
+  # infra/fly/master.toml exposes the same listener on 443 as well. That is the port an
+  # IPv4-only client can reach without paying for a dedicated address.
+  IRONFRONT_MASTER_PORT: "443"
+
+  # The SNI. Empty would default to IRONFRONT_MASTER_HOST, which is already this value — it is
+  # spelled out because on a shared IPv4 the SNI is what PICKS THE APP, so it is load-bearing
+  # rather than cosmetic, and a future edit to the host must not silently change it.
+  IRONFRONT_GAMESERVER_MASTER_TLS_TARGET_HOST: "kien-master-2026.fly.dev"
+
+  # 1, because fly terminates TLS at its edge — infra/fly/master.toml carries
+  # handlers = ["tls"] on 27000. A plaintext dial fails the handshake, and the game server
+  # sends the shared secret over this link while registering, so it must not be plaintext on a
+  # public path regardless.
+  IRONFRONT_GAMESERVER_MASTER_TLS: "1"
+
+  # WHAT THE MASTER HANDS TO CLIENTS AS THE ADDRESS TO DIAL, and the one value here that is
+  # about REACHABILITY rather than about this cluster.
+  #
+  # It must be an address the PLAYERS can route to, which 192.168.94.130 is not: that is the
+  # VMware NAT subnet, visible only from the host. A client handed it authenticates, browses
+  # rooms, picks a side, readies up, receives its signed ticket — and then dials its own
+  # loopback-adjacent nothing. Everything up to the match works, which is what makes this the
+  # hardest value in the file to get wrong safely.
   IRONFRONT_GAMESERVER_PUBLIC_IP: "192.168.94.130"
 
   IRONFRONT_GAMESERVER_ACCEPT_UNSIGNED_TICKETS: "0"
