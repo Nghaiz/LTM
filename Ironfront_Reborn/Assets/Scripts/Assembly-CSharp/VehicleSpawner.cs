@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Ironfront.Net.Protocol;
+using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.World;
 using Ironfront.Net.Unity.Server;
 using UnityEngine;
@@ -37,6 +38,26 @@ public class VehicleSpawner : MonoBehaviour
 	private const int SPAWN_BLOCK_MASK = 5376;
 
 	private static Collider[] spawnCollisions = new Collider[1];
+
+	/// <summary>
+	/// The collider the LAST probe of THIS pad returned, or null when that probe returned
+	/// nothing -- or never ran.
+	/// </summary>
+	/// <remarks>
+	/// <see cref="spawnCollisions"/> cannot answer this. It is static, so every pad on the
+	/// map writes the same slot, and <c>OverlapSphereNonAlloc</c> leaves entries it does not
+	/// fill exactly as it found them -- so reading it at give-up time could name a collider
+	/// from another pad, from another frame, or from no query of this refusal at all.
+	/// </remarks>
+	private Collider lastProbeBlocker;
+
+	/// <summary>Whether the last refusal came from physics rather than from the id pool.</summary>
+	/// <remarks>
+	/// The bit that decides whether an operator should go and look at the pad at all: the
+	/// capacity branch of <see cref="SpawnIsBlocked"/> returns "blocked" without asking
+	/// physics anything, and a pad refused that way may be completely clear.
+	/// </remarks>
+	private bool lastProbeRan;
 
 	public float spawnTime = 16f;
 
@@ -171,14 +192,15 @@ public class VehicleSpawner : MonoBehaviour
 			// 'Vehicle Spawner (1)' twice, so the name alone cannot say which pad to go and
 			// look at -- which is the whole reason spawnerId exists. X-70.
 			//
-			// And the blocker is NAMED. spawnCollisions[0] has held the answer all along and
-			// the message threw it away, so 'the pad is obstructed' could never say by what:
-			// a ragdoll, a standing bot's hitbox, or a vehicle parked on it.
+			// And the blocker is NAMED, with the one bit that decides whether to investigate:
+			// whether a physics query ran at all, and whether what it found is a living body
+			// (allowed, § 7) or a corpse that kept its colliders (the § 2.4 defect). 'The pad is
+			// obstructed by Bone_002' is true of both, so it sent every reader to check by hand.
 			Debug.LogWarning(
 				$"[net] vehicle spawner '{name}' (id {spawnerId}) gave up after "
-				+ $"{scheduler.MaxBlockedRetries} blocked attempts; the pad is obstructed by "
-				+ $"{DescribeBlocker()}. Fast retries are paused; the pad will be checked "
-				+ "silently every 10 seconds and also re-arms on lifecycle events.");
+				+ $"{scheduler.MaxBlockedRetries} blocked attempts. {DescribeBlocker()} "
+				+ "Fast retries are paused; the pad will be checked silently every 10 seconds "
+				+ "and also re-arms on lifecycle events.");
 		}
 	}
 
@@ -407,30 +429,80 @@ public class VehicleSpawner : MonoBehaviour
 		// the margin and does not close that hole; only asking the pool every time does.
 		if (!NetVehicleLifecycle.CanReplicateAnotherVehicle)
 		{
+			// No physics query runs on this branch, so there is no blocker -- and the give-up
+			// line named one anyway. spawnCollisions is STATIC, shared by every pad on the map,
+			// and OverlapSphereNonAlloc does not clear entries it does not fill, so whatever an
+			// earlier query left sat there waiting to be reported as this pad's obstruction.
+			// A capacity refusal and an obstruction need opposite responses -- wait for an id
+			// versus go and look at the pad -- and the old line rendered them identically.
+			lastProbeRan     = false;
+			lastProbeBlocker = null;
 			return true;
 		}
 
-		return Physics.OverlapSphereNonAlloc(base.transform.position, collisionCheckRadius, spawnCollisions, 5376) > 0;
+		// SPAWN_BLOCK_MASK, not the literal 5376 a second time. The constant was declared and
+		// the call site re-spelled it, so the two could drift with nothing to notice.
+		lastProbeRan = true;
+		int hits = Physics.OverlapSphereNonAlloc(
+			base.transform.position, collisionCheckRadius, spawnCollisions, SPAWN_BLOCK_MASK);
+
+		// Copied out of the shared scratch now, while it is certainly this pad's answer.
+		lastProbeBlocker = hits > 0 ? spawnCollisions[0] : null;
+		return hits > 0;
 	}
 
 	/// <summary>
-	/// Names whatever is sitting on the pad, for the gave-up line.
+	/// The gave-up line's verdict: whether a physics query ran at all, and if it did, whether
+	/// what it found belongs to a living body, a corpse, or nothing that is an actor.
 	/// </summary>
 	/// <remarks>
-	/// <c>spawnCollisions[0]</c> is filled by the <c>OverlapSphereNonAlloc</c> in
-	/// <see cref="SpawnIsBlocked"/> and was discarded. A message that says "obstructed"
-	/// without saying by what is the same instrument failure X-70 itself was: it cannot
-	/// distinguish a ragdoll from a parked vehicle, so the reader guesses.
+	/// <para>
+	/// <b>It reads <see cref="lastProbeBlocker"/>, not <c>spawnCollisions[0]</c>, and that is
+	/// the repair.</b> A message that says "obstructed" without saying by what is the
+	/// instrument failure X-70 itself was -- but naming the shared scratch slot replaced it
+	/// with a worse one, a name that can belong to another pad's query or to no query of this
+	/// refusal at all. See <see cref="SpawnIsBlocked"/>.
+	/// </para>
+	/// <para>
+	/// <b>The live-versus-dead bit is the one an operator acts on.</b> A living bot standing on
+	/// a pad is allowed to block it (protocol-10 handoff § 7) and the pad is merely waiting; a
+	/// corpse that still carries its colliders is the § 2.4 cleanup defect. Without that bit
+	/// the next reader repeats the whole investigation. The verdict and its wording live in
+	/// <c>CorpseColliderLedger</c> because this file is <c>Assembly-CSharp</c>, which no test
+	/// project can reference -- out there the sentence is graded by <c>dotnet test</c>.
+	/// </para>
 	/// </remarks>
 	private string DescribeBlocker()
 	{
-		Collider blocker = spawnCollisions != null && spawnCollisions.Length > 0
-			? spawnCollisions[0]
-			: null;
+		Collider blocker = lastProbeBlocker;
 
-		if (blocker == null) return "something that is no longer there";
+		bool belongsToActor    = false;
+		bool actorIsAlive      = false;
+		bool collidersDisabled = false;
+		ushort actorId         = 0;
 
-		return $"'{blocker.gameObject.name}' (layer {LayerMask.LayerToName(blocker.gameObject.layer)})";
+		if (blocker != null)
+		{
+			// InParent: the blocking collider is a ragdoll bone several levels below the body
+			// that carries the NetServerActor, and the bone has no component of its own.
+			NetServerActor owner = blocker.GetComponentInParent<NetServerActor>();
+			if (owner != null)
+			{
+				belongsToActor    = true;
+				actorId           = owner.ActorId;
+				actorIsAlive      = owner.IsAlive;
+				collidersDisabled = owner.CorpseCollidersDisabled;
+			}
+		}
+
+		PadBlockerKind kind = CorpseColliderLedger.ClassifyPadBlocker(
+			lastProbeRan, blocker != null, belongsToActor, actorIsAlive, collidersDisabled);
+
+		string described = blocker != null
+			? $"'{blocker.gameObject.name}' (layer {LayerMask.LayerToName(blocker.gameObject.layer)})"
+			: string.Empty;
+
+		return CorpseColliderLedger.DescribePadBlocker(kind, described, actorId);
 	}
 
 	public void VehicleDied(Vehicle vehicle)
