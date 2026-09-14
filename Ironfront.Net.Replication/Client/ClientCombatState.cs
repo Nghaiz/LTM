@@ -37,6 +37,14 @@ namespace Ironfront.Net.Replication.Client
     /// implementation. What the second copy cost when it did not exist at all is written at the
     /// gate itself.
     /// </para>
+    /// <para>
+    /// <b>And so is the semi-auto edge.</b> <see cref="ApplyTrigger"/> calls
+    /// <see cref="EffectiveTriggerPolicy.AdvanceHeldTrigger"/>, which is the same member the
+    /// server's <see cref="EffectiveTriggerPolicy.Advance"/> is written in terms of — so
+    /// "one press, one round" is one rule rather than two that agree today. Before it existed
+    /// this side predicted a round on every frame the trigger was down, whatever the weapon
+    /// was.
+    /// </para>
     /// </remarks>
     public sealed class ClientCombatState
     {
@@ -88,14 +96,22 @@ namespace Ironfront.Net.Replication.Client
         /// <see cref="PredictFire"/>. The server's own struct, not a client-side echo of it.
         /// </summary>
         /// <remarks>
-        /// Only <see cref="EffectiveTrigger.SprintFireBlockedUntil"/> is used here.
-        /// <see cref="EffectiveTrigger.WasEffective"/> and
-        /// <see cref="EffectiveTrigger.LoweredBySprint"/> belong to the two halves of
-        /// <see cref="EffectiveTriggerPolicy.Advance"/> this side deliberately does not run —
-        /// the policy's own remark lists them and says why. Holding the whole struct anyway
-        /// rather than a bare float is what lets both sides call one implementation: a
-        /// <c>float _sprintBlockedUntil</c> here would need its own stamping arithmetic, which
-        /// is the copy this exists to avoid.
+        /// <para>
+        /// Two of the three fields are used here. <see cref="EffectiveTrigger.SprintFireBlockedUntil"/>
+        /// is stamped by <see cref="ApplySprint"/>, and <see cref="EffectiveTrigger.WasEffective"/>
+        /// by <see cref="ApplyTrigger"/> — the semi-auto edge, which this side predicts against
+        /// since it was measured predicting a magazine the server never spent.
+        /// <see cref="EffectiveTrigger.LoweredBySprint"/> is the one that stays the server's:
+        /// it belongs to the holster mutation in
+        /// <see cref="EffectiveTriggerPolicy.Advance"/>, which this side does not run, and the
+        /// policy's own remark says why.
+        /// </para>
+        /// <para>
+        /// Holding the whole struct rather than a bare float and a bare bool is what lets both
+        /// sides call one implementation: a <c>float _sprintBlockedUntil</c> plus a
+        /// <c>bool _wasFiring</c> here would each need their own arithmetic, which is the copy
+        /// this exists to avoid.
+        /// </para>
         /// </remarks>
         private EffectiveTrigger _trigger = EffectiveTrigger.Idle;
 
@@ -138,6 +154,44 @@ namespace Ironfront.Net.Replication.Client
 
         /// <summary>The equipped weapon's clip size, for a "27 / 30" HUD.</summary>
         public byte ClipSize => _weapon.ClipSize;
+
+        /// <summary>
+        /// The clip the SERVER last reported, verbatim. Meaningless until
+        /// <see cref="HasServerAmmo"/> is true.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A second property beside <see cref="AmmoInClip"/> rather than a replacement for
+        /// it, exactly as <see cref="ServerSaysReloading"/> is beside <see cref="IsReloading"/>.</b>
+        /// A HUD wants the predicted clip; anything MEASURING the server wants this one, and
+        /// the two are not interchangeable: <see cref="ReconcileAmmo"/> deliberately KEEPS the
+        /// prediction while it is within <see cref="AmmoResyncThreshold"/> of the snapshot, so
+        /// <see cref="AmmoInClip"/> can sit up to two rounds off the server's and stay there —
+        /// the bias is sticky by design and never converges on its own.
+        /// </para>
+        /// <para>
+        /// <b>The measurement that made this necessary.</b> On 2026-09-14 the lane-B grader
+        /// counted rounds off <see cref="AmmoInClip"/> and produced both errors from it in one
+        /// afternoon: a FAIL on a semi-auto press where the server had correctly fired once,
+        /// and — worse — a PASS on a sprint window where the server fired NOTHING (97 attempts,
+        /// 97 refused <c>Holstered</c>) because the predicted clip had dipped by one. A red
+        /// gets investigated; a green ends the question. Nothing local ever writes this field,
+        /// so no amount of prediction slack can move it.
+        /// </para>
+        /// </remarks>
+        public byte ServerAmmoInClip { get; private set; }
+
+        /// <summary>
+        /// Whether <see cref="ServerAmmoInClip"/> holds a snapshot reading yet. Check this
+        /// first.
+        /// </summary>
+        /// <remarks>
+        /// Separate from the count for the reason <see cref="SpareAmmo"/>'s kind is separate
+        /// from its rounds: before the first snapshot the honest answer is "not measured", and
+        /// a plain <c>0</c> reads identically to "the clip is empty". A reader that believes
+        /// the byte without this grades an unopened match as a dry magazine.
+        /// </remarks>
+        public bool HasServerAmmo { get; private set; }
 
         /// <summary>
         /// The authoritative reserve from the most recent snapshot, for the "/ 90" half of the
@@ -213,6 +267,17 @@ namespace Ironfront.Net.Replication.Client
             _runtime = WeaponRuntimeState.Loaded(_weapon);
             _reloadStartedAt = float.NaN;
 
+            // The new weapon's first shot is a trigger pull, not a continuation of the one the
+            // player was already holding — the same rule ClientSession.SwitchWeaponTo applies on
+            // the server, and for the same reason. Without it a player who switches with Fire
+            // held is holding a semi-automatic that has already spent its edge, and the only way
+            // out is to release and press again.
+            //
+            // The SPRINT block is deliberately not cleared here: sprinting is a fact about the
+            // body, not about the gun in its hands, and clearing it would hand a free shot to
+            // anyone who swapped weapons mid-sprint. EffectiveTrigger's own remark says so.
+            _trigger.ReArm();
+
             // A weapon swap resyncs on the next snapshot rather than trusting the fresh clip:
             // the server may have handed out a partially-loaded weapon, and the predicted
             // count here is a guess until it says otherwise.
@@ -241,6 +306,69 @@ namespace Ironfront.Net.Replication.Client
         /// </remarks>
         public void ApplySprint(bool sprinting, float nowSeconds)
             => EffectiveTriggerPolicy.AdvanceSprintBlock(ref _trigger, sprinting, nowSeconds);
+
+        /// <summary>
+        /// Advances the semi-auto edge by one frame. Call EVERY frame, trigger down or not.
+        /// </summary>
+        /// <param name="fireHeld">
+        /// Whether the trigger is down AND the actor may shoot at all. A dead player passes
+        /// false: that is not a release, but it is not an effective trigger either, and
+        /// re-arming across a death is what <see cref="SetAlive"/> does anyway.
+        /// </param>
+        /// <returns>
+        /// Whether <see cref="PredictFire"/> should be called this frame: every held frame for
+        /// an automatic, the rising edge only for a semi-automatic.
+        /// </returns>
+        /// <remarks>
+        /// <para>
+        /// <b>The defect this closes was measured, not feared.</b> Until this existed
+        /// <see cref="PredictFire"/> was gated on the cooldown alone, which is the right rule
+        /// for an automatic and the wrong one for everything else. On 2026-09-14 a lane-B run
+        /// held a SIGNAL DMR's trigger for two five-second presses: the server fired the two
+        /// rounds it owed — 298 <c>[shot]</c> lines, exactly 2 with <c>fired=True</c> — and
+        /// this side predicted 29 more and took 9 ammo corrections being handed them back. A
+        /// player watches that as a clip dropping and snapping back on a rifle that fired once.
+        /// </para>
+        /// <para>
+        /// <b>Every frame, including the frames the trigger is up, and a caller that skips
+        /// those breaks the fix silently.</b> The RELEASE is what re-arms the edge. Folded
+        /// under a <c>FirePressed()</c> guard this would leave
+        /// <see cref="EffectiveTrigger.WasEffective"/> true for the rest of the life, and the
+        /// semi-automatic would fire its first round and then nothing ever again — which is a
+        /// worse bug than the one being fixed, and one a grader reading a flat clip could
+        /// easily read as the edge working. The call site is the <c>if</c> condition itself
+        /// for exactly that reason: there is no path that predicts without advancing.
+        /// </para>
+        /// <para>
+        /// <b>A separate call rather than a parameter on <see cref="PredictFire"/>,</b> for the
+        /// reason <see cref="ApplySprint"/> gives one paragraph up: a defaulted parameter lets
+        /// a caller that forgot it read as a caller that meant it. It also keeps
+        /// <see cref="PredictFire"/> callable on its own by every test that predicts a single
+        /// shot without modelling a trigger at all.
+        /// </para>
+        /// <para>
+        /// <b>The sprint block is part of the effective trigger here, not just of
+        /// <see cref="PredictFire"/>'s answer — and it takes a clock for that reason alone.</b>
+        /// The server composes its effective trigger the same way, so coming out of a sprint
+        /// with Fire still held is a rising EDGE on both sides:
+        /// <c>SemiAutoTriggerEdgeTests.EnteringSprintReArmsTheSemiAutoEdge</c> is that rule.
+        /// Passing the raw Fire bit instead would hold <see cref="EffectiveTrigger.WasEffective"/>
+        /// true straight through the sprint, so the server would fire the round it owes at the
+        /// end of the window and this side would predict nothing — and a one-round gap is
+        /// inside <see cref="AmmoResyncThreshold"/>, so <see cref="ReconcileAmmo"/> would KEEP
+        /// the wrong prediction rather than correct it. That is a permanent silent bias, which
+        /// is strictly worse than the flicker the threshold exists to stop.
+        /// </para>
+        /// <para>
+        /// Call <see cref="ApplySprint"/> FIRST each frame: the block this reads is the one it
+        /// stamps, and reading it beforehand tests a window that is one frame stale.
+        /// </para>
+        /// </remarks>
+        public bool ApplyTrigger(bool fireHeld, float nowSeconds)
+            => EffectiveTriggerPolicy.AdvanceHeldTrigger(
+                ref _trigger,
+                fireHeld && EffectiveTriggerPolicy.SprintAllowsFire(in _trigger, nowSeconds),
+                _weapon.Automatic);
 
         /// <summary>
         /// Predicts one trigger pull: stamps the cooldown and decrements ammo locally.
@@ -368,6 +496,13 @@ namespace Ironfront.Net.Replication.Client
                 // weapon swap — a respawn with a different loadout, a pickup — from leaving this
                 // side predicting with the previous gun's numbers.
                 _weapon = WeaponCatalog.For(WeaponId);
+
+                // And the edge is re-armed for the same reason EquipWeapon re-arms it — this is
+                // the OTHER way a weapon changes, a server-side swap this client never asked
+                // for (a respawn with a different loadout, a pickup). Re-arming in only one of
+                // the two places would fix the swap the player drove and leave the one the
+                // server drove with a dead trigger.
+                _trigger.ReArm();
             }
 
             // Taken verbatim, unconditionally, with no equivalent of AmmoResyncThreshold — and
@@ -380,6 +515,14 @@ namespace Ironfront.Net.Replication.Client
             // in-flight local change here for a threshold to protect, so a threshold could only
             // ever delay the correct number.
             SpareAmmo = SpareAmmo.Decode(entry.SpareAmmoEncoded);
+
+            // Taken verbatim and BEFORE ReconcileAmmo runs, which is the whole point of it: this
+            // is the one number on this object that no local prediction has ever touched. Reading
+            // it after the reconcile, or reading the reconciled field instead, would fold the
+            // threshold's sticky bias back in and leave nothing on the client able to say what
+            // the server's clip actually is.
+            ServerAmmoInClip = entry.AmmoInClip;
+            HasServerAmmo = true;
 
             ServerSaysReloading = (entry.WeaponStateFlags & WeaponStateFlags.Reloading) != 0;
 
@@ -473,6 +616,13 @@ namespace Ironfront.Net.Replication.Client
             // which is the one moment a player is most likely to be looking at the HUD.
             SpareAmmo = SpareAmmo.NoResupply;
             ServerSaysReloading = false;
+
+            // Back to "not measured", not to zero. A reconnect that left the last match's count
+            // standing would let a grader read a stale clip as this match's, and zeroing it
+            // without clearing the flag would read as an empty magazine — the two states the
+            // flag exists to keep apart.
+            ServerAmmoInClip = 0;
+            HasServerAmmo = false;
 
             PredictedShots = 0;
             SnapshotAmmoCorrections = 0;

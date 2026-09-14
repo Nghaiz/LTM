@@ -279,6 +279,11 @@ P10_FALLEN_METRES = 50.0
 # that swallows the difference between one shot and three would defeat that grade entirely.
 P10_AMMO_RESYNC_TOLERANCE = 2
 
+# `ProtocolConstants.SPRINT_FIRE_BLOCK_SECONDS`. Quoted only in failure text -- no grade is
+# computed from it, because the programme's own step durations already put every window well
+# clear of the block. Named rather than written inline twice so the two copies cannot disagree.
+P10_SPRINT_BLOCK_SECONDS = 0.2
+
 
 def _p10_set(run: pathlib.Path) -> str:
     """Which p10 programme this run is, or "" when it is not one."""
@@ -352,17 +357,60 @@ def _p10_window(by_name: dict, start: str, end: str) -> dict:
     [start, end] is exactly the step `start` names. Every p10 rule is about an interval -- "no
     round left the clip WHILE sprinting" -- and reading either endpoint alone answers a
     different question.
+
+    ROUNDS ARE COUNTED OFF `serverAmmoInClip`, NEVER OFF `ammoInClip`, and the difference is
+    not a refinement. `ammoInClip` is the CLIENT's predicted clip and `ClientCombatState.
+    ReconcileAmmo` deliberately KEEPS that prediction whenever it is within
+    `AmmoResyncThreshold` of the snapshot -- so the bias is sticky, never converges, and a
+    subtraction over it is not a round count at all. Reading it produced both errors in one
+    afternoon on 2026-09-14: a FAIL on a semi-auto press where the server had correctly fired
+    once, and -- far worse -- a PASS on a sprint window where the server fired NOTHING (97
+    attempts, 97 refused `Holstered`) because the predicted clip happened to dip by one. A red
+    gets investigated; a green ends the question.
+
+    `spent` is None when the recorder did not write the field. Callers MUST check `serverKnown`
+    first: an older artifact cannot answer the question and `_p10_unreadable` is the verdict for
+    it. The predicted numbers are still carried, as `predictedSpent`/`clipBefore`/`clipAfter`,
+    because prediction disagreeing with the server is now a real signal rather than noise.
     """
     before = by_name[start].get("combat") or {}
     after = by_name[end].get("combat") or {}
+
+    server_before, server_after = before.get("serverAmmoInClip"), after.get("serverAmmoInClip")
+    known = server_before is not None and server_after is not None
+
     return {
         "seconds": by_name[end]["elapsedSeconds"] - by_name[start]["elapsedSeconds"],
         "shots": (after.get("predictedShots") or 0) - (before.get("predictedShots") or 0),
-        "spent": (before.get("ammoInClip") or 0) - (after.get("ammoInClip") or 0),
+        "spent": (server_before - server_after) if known else None,
+        "serverKnown": known,
+        "serverBefore": server_before,
+        "serverAfter": server_after,
+        "predictedSpent": (before.get("ammoInClip") or 0) - (after.get("ammoInClip") or 0),
         "corrections": (after.get("ammoCorrections") or 0) - (before.get("ammoCorrections") or 0),
         "clipBefore": before.get("ammoInClip"),
         "clipAfter": after.get("ammoInClip"),
     }
+
+
+def _p10_unreadable(window: dict, title: str) -> tuple:
+    """The verdict for a window whose authoritative clip this build's recorder never wrote.
+
+    INCONCLUSIVE rather than a grade off the predicted clip, and rather than a widened band. A
+    tolerance big enough to swallow the reconcile threshold spans 0..3 rounds around an expected
+    1, which does not distinguish a correct single shot from a triple -- it would not be a
+    weaker grade, it would be no grade wearing one's clothes.
+    """
+    return ("INCONCLUSIVE",
+            f"{title} ({window['seconds']:.1f}s): combat.serverAmmoInClip is absent -- this "
+            f"build's LaneBCheckpointRecorder predates it, so the only clip on record is the "
+            f"CLIENT's prediction and no round count can be trusted. For a reader: ammoInClip "
+            f"{window['clipBefore']} -> {window['clipAfter']} ({window['predictedSpent']} "
+            f"round(s)), predictedShots +{window['shots']}, ammoCorrections "
+            f"+{window['corrections']} -- that clip may sit up to {P10_AMMO_RESYNC_TOLERANCE} "
+            f"rounds off the server's in either direction, and a NON-ZERO ammoCorrections is "
+            f"exactly when it has been overwritten and is least trustworthy. Re-run on a build "
+            f"that writes serverAmmoInClip")
 
 
 def _p10_weapon(by_name: dict, needed: tuple):
@@ -401,20 +449,22 @@ def _p10_grade_sprint(run: pathlib.Path, by_name: dict) -> list:
     # THE HEADLINE. ServerCombatAuthority refuses the trigger while Sprint is pressed and for
     # SPRINT_FIRE_BLOCK_SECONDS after it, so a round leaving the clip here is the magazine
     # draining with no muzzle flash -- the exact defect protocol 10 closed.
-    if blocked["spent"] > 0:
+    if not blocked["serverKnown"]:
+        out.append(_p10_unreadable(blocked, "sprint window"))
+    elif blocked["spent"] > 0:
         out.append(("FAIL", f"sprint window ({blocked['seconds']:.1f}s of fire+sprint): "
-                            f"ammoInClip {blocked['clipBefore']} -> {blocked['clipAfter']}, "
-                            f"{blocked['spent']} round(s) spent while sprinting -- the gate let "
-                            f"a trigger through"))
+                            f"serverAmmoInClip {blocked['serverBefore']} -> "
+                            f"{blocked['serverAfter']}, {blocked['spent']} round(s) spent while "
+                            f"sprinting -- the gate let a trigger through"))
     elif blocked["shots"] > 0:
-        out.append(("FAIL", f"sprint window ({blocked['seconds']:.1f}s): ammoInClip held at "
-                            f"{blocked['clipBefore']} but predictedShots +{blocked['shots']} -- "
-                            f"the client predicted shots the server refused, which is the same "
-                            f"disagreement pointed the other way"))
+        out.append(("FAIL", f"sprint window ({blocked['seconds']:.1f}s): serverAmmoInClip held "
+                            f"at {blocked['serverBefore']} but predictedShots "
+                            f"+{blocked['shots']} -- the client predicted shots the server "
+                            f"refused, which is the same disagreement pointed the other way"))
     else:
         out.append(("PASS", f"sprint window ({blocked['seconds']:.1f}s of fire+sprint): "
-                            f"ammoInClip unchanged at {blocked['clipBefore']}, predictedShots "
-                            f"+0, ammoCorrections +{blocked['corrections']}"))
+                            f"serverAmmoInClip unchanged at {blocked['serverBefore']}, "
+                            f"predictedShots +0, ammoCorrections +{blocked['corrections']}"))
 
     # § 14 item 4 names the RESERVE beside the clip, and they are not the same field: a gate
     # that refunded the round after taking it would leave ammoInClip flat and spareAmmoRounds
@@ -438,14 +488,36 @@ def _p10_grade_sprint(run: pathlib.Path, by_name: dict) -> list:
         out.append(("FAIL", f"spareAmmoRounds went {before} -> {after} during the sprint window "
                             f"-- a round left the reserve while the trigger was gated"))
 
-    if freed["spent"] > 0 or freed["shots"] > 0:
-        out.append(("PASS", f"post-sprint window ({freed['seconds']:.1f}s of fire): ammoInClip "
-                            f"{freed['clipBefore']} -> {freed['clipAfter']}, predictedShots "
-                            f"+{freed['shots']}"))
+    # `or freed["shots"] > 0` used to be the second half of this condition, and it is the
+    # measured false PASS: on an Island p10-sprint run the server fired NOTHING for the whole
+    # programme -- 97 [shot] attempts, 97 refused Holstered, because the weapon never came back
+    # up after the sprint -- and this printed "PASS post-sprint window: ammoInClip 30 -> 29,
+    # predictedShots +34". A predicted shot is the client's own guess; it can never be evidence
+    # that the server fired, and a window whose whole claim is "the weapon is up again" must
+    # read the one clip no prediction touches.
+    if not freed["serverKnown"]:
+        out.append(_p10_unreadable(freed, "post-sprint window"))
+    elif freed["spent"] > 0:
+        out.append(("PASS", f"post-sprint window ({freed['seconds']:.1f}s of fire): "
+                            f"serverAmmoInClip {freed['serverBefore']} -> "
+                            f"{freed['serverAfter']}, {freed['spent']} round(s) spent; "
+                            f"predictedShots +{freed['shots']}, ammoCorrections "
+                            f"+{freed['corrections']}"))
+    elif freed["shots"] > 0:
+        out.append(("FAIL", f"post-sprint window ({freed['seconds']:.1f}s of fire): the SERVER "
+                            f"fired nothing -- serverAmmoInClip held at {freed['serverBefore']} "
+                            f"while the client predicted +{freed['shots']} shot(s) and its own "
+                            f"ammoInClip went {freed['clipBefore']} -> {freed['clipAfter']}. "
+                            f"That dip is the prediction being handed back, not a round leaving "
+                            f"the gun. The sprint block is "
+                            f"{P10_SPRINT_BLOCK_SECONDS}s and this window "
+                            f"opens 1 s after the sprint ended, so the weapon should be up -- "
+                            f"check the shot log for rejection=Holstered"))
     else:
         out.append(("FAIL", f"post-sprint window ({freed['seconds']:.1f}s of fire): nothing "
-                            f"fired -- ammoInClip held at {freed['clipBefore']} and "
-                            f"predictedShots +0. The sprint block is 0.2 s and this window "
+                            f"fired and nothing was even predicted -- serverAmmoInClip held at "
+                            f"{freed['serverBefore']} and predictedShots +0. The sprint block "
+                            f"is {P10_SPRINT_BLOCK_SECONDS}s and this window "
                             f"opens 1 s after the sprint ended, so the weapon should be up"))
     return out
 
@@ -479,21 +551,28 @@ def _p10_grade_semi(run: pathlib.Path, by_name: dict) -> list:
         ("second press", _p10_window(by_name, "press-2", "settled"), 1),
     )
     for title, window, expected in windows:
-        if window["spent"] == expected:
-            out.append(("PASS", f"{title} ({window['seconds']:.1f}s): ammoInClip "
-                                f"{window['clipBefore']} -> {window['clipAfter']}, "
-                                f"{window['spent']} round spent, expected {expected}"))
+        if not window["serverKnown"]:
+            out.append(_p10_unreadable(window, title))
+        elif window["spent"] == expected:
+            out.append(("PASS", f"{title} ({window['seconds']:.1f}s): serverAmmoInClip "
+                                f"{window['serverBefore']} -> {window['serverAfter']}, "
+                                f"{window['spent']} round spent, expected {expected}; the "
+                                f"client predicted +{window['shots']} with "
+                                f"+{window['corrections']} correction(s)"))
+        elif window["spent"] == 0 and window["shots"] > 0:
+            out.append(("FAIL", f"{title} ({window['seconds']:.1f}s): the SERVER spent nothing "
+                                f"-- serverAmmoInClip held at {window['serverBefore']} while "
+                                f"the client predicted +{window['shots']} shot(s) and its own "
+                                f"ammoInClip went {window['clipBefore']} -> "
+                                f"{window['clipAfter']}. Expected {expected}. That dip is the "
+                                f"prediction being handed back, not a round leaving the gun"))
         else:
-            caveat = ""
-            if 0 < window["spent"] <= 1 + P10_AMMO_RESYNC_TOLERANCE and window["corrections"] == 0:
-                caveat = (f" (ammoInClip may sit up to {P10_AMMO_RESYNC_TOLERANCE} rounds under "
-                          f"the server's -- check ammoCorrections before calling this a "
-                          f"server-side defect)")
-            out.append(("FAIL", f"{title} ({window['seconds']:.1f}s): ammoInClip "
-                                f"{window['clipBefore']} -> {window['clipAfter']}, "
+            out.append(("FAIL", f"{title} ({window['seconds']:.1f}s): serverAmmoInClip "
+                                f"{window['serverBefore']} -> {window['serverAfter']}, "
                                 f"{window['spent']} round(s) spent, expected {expected}; "
                                 f"predictedShots +{window['shots']}, ammoCorrections "
-                                f"+{window['corrections']}{caveat}"))
+                                f"+{window['corrections']}. This is the server's own clip, so "
+                                f"prediction slack cannot explain it"))
     return out
 
 
@@ -522,11 +601,26 @@ def _p10_grade_auto(run: pathlib.Path, by_name: dict) -> list:
                                        f"-Weapon 'RK-44' to grade cadence")]
 
     hold = _p10_window(by_name, "auto-hold", "released")
+    if not hold["serverKnown"]:
+        return out + [_p10_unreadable(hold, "auto window")]
+
     rounds, seconds = hold["spent"], hold["seconds"]
 
+    # An automatic that predicted a magazine the server refused would otherwise divide a real
+    # number of seconds by an imaginary number of rounds and report a plausible cadence. The
+    # cadence below is only a statement about the SERVER's rate, so it is computed from the
+    # server's clip and this is the arm that catches a refusal outright.
+    if rounds <= 0 and hold["shots"] > 0:
+        return out + [("FAIL", f"auto window ({seconds:.1f}s of held fire): the SERVER spent "
+                               f"nothing -- serverAmmoInClip held at {hold['serverBefore']} "
+                               f"while the client predicted +{hold['shots']} shot(s) and its "
+                               f"own ammoInClip went {hold['clipBefore']} -> "
+                               f"{hold['clipAfter']}. There is no cadence to measure: every "
+                               f"attempt was refused. Check the shot log for the rejection")]
+
     if rounds <= 1:
-        return out + [("FAIL", f"auto window ({seconds:.1f}s of held fire): ammoInClip "
-                               f"{hold['clipBefore']} -> {hold['clipAfter']}, {rounds} round(s) "
+        return out + [("FAIL", f"auto window ({seconds:.1f}s of held fire): serverAmmoInClip "
+                               f"{hold['serverBefore']} -> {hold['serverAfter']}, {rounds} round(s) "
                                f"spent. An automatic held for {seconds:.1f}s at {name}'s "
                                f"{cooldown}s cooldown should sustain; one round or none is the "
                                f"rising-edge rule applied to a weapon that is not semi-automatic")]
@@ -786,9 +880,162 @@ def gate(run: pathlib.Path) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------- the grader's own tests
+#
+# WHY THESE LIVE IN THE TOOL. The p10 grade is the one part of this file that decides rather
+# than prints, and on 2026-09-14 it decided wrongly in BOTH directions within one afternoon --
+# a FAIL on a semi-auto press the server had fired correctly, and a PASS on a sprint window
+# where the server fired nothing at all. A deciding check with no test is a check nobody has
+# ever seen fail. There is no Python test project in this repo, so the suite is a mode of the
+# tool; `ClientLaneBGraderTests` in Ironfront.Net.Replication.Tests runs it, which is what keeps
+# it from being a file nobody executes.
+#
+# Every case is built from a SYNTHETIC run rather than from an artifact on disk: an artifact
+# pins whatever the build that produced it happened to do, and the cases that matter here are
+# the ones no build has produced yet.
+
+
+def _st_cp(name, seconds, server, predicted, shots, weapon=13, corrections=0, **extra):
+    """One checkpoint record. `server=None` omits serverAmmoInClip -- an older recorder."""
+    combat = {
+        "driverEnabled": True, "alive": True, "weaponId": weapon,
+        "ammoInClip": predicted, "clipSize": 20, "serverAmmoInClip": server,
+        "predictedShots": shots, "ammoCorrections": corrections,
+        "spareAmmoKind": "finite", "spareAmmoRounds": 90, "serverReloading": False,
+    }
+    if server is None:
+        del combat["serverAmmoInClip"]
+    combat.update(extra)
+    return {"checkpoint": name, "elapsedSeconds": seconds, "combat": combat}
+
+
+def _st_run(tmp: pathlib.Path, label: str, programme: str, checkpoints: list) -> pathlib.Path:
+    run = tmp / label
+    run.mkdir()
+    (run / "run.json").write_text(json.dumps({"set": programme}), encoding="utf-8")
+    (run / "driver-checkpoints.jsonl").write_text(
+        "\n".join(json.dumps(c) for c in checkpoints), encoding="utf-8")
+    return run
+
+
+def _st_semi(first=(20, 19), second=(19, 18), predicted=(18, 18, 18, 18), shots=(0, 1, 1, 2),
+             server=True):
+    """A p10-semi programme: one round per press is correct.
+
+    `predicted` defaults to a clip frozen two rounds under the server's for the whole run --
+    the measured artifact, and the exact shape that made the old grade print "first press: 1
+    round PASS" and "second press: 2 rounds FAIL" off identical correct behaviour.
+    """
+    s = [first[0], first[1], second[0], second[1]] if server else [None] * 4
+    names = ("press-1", "released", "press-2", "settled")
+    return [_st_cp(n, i * 5.0, s[i], predicted[i], shots[i]) for i, n in enumerate(names)]
+
+
+def _st_sprint(server_clip=(30, 30, 30, 29), predicted=(30, 30, 30, 29), shots=(0, 0, 0, 1),
+               server=True):
+    names = ("sprint-fire", "sprint-ended", "fire-clear", "settled")
+    s = list(server_clip) if server else [None] * 4
+    return [_st_cp(n, i * 4.0, s[i], predicted[i], shots[i], weapon=1) for i, n in enumerate(names)]
+
+
+def _st_verdicts(run: pathlib.Path) -> list:
+    return [v for v, _ in _p10_verdicts(run)[1]]
+
+
+def self_test() -> int:
+    """Mutation suite for the p10 grades. Returns the number of cases that failed."""
+    import tempfile
+
+    failures = []
+
+    def check(label, actual, expected):
+        ok = actual == expected
+        print(f"{'ok  ' if ok else 'FAIL'} {label}: {actual}")
+        if not ok:
+            failures.append(f"{label}: expected {expected}, got {actual}")
+
+    with tempfile.TemporaryDirectory() as raw:
+        tmp = pathlib.Path(raw)
+
+        # ---- semi: the rule the grade exists to enforce.
+        check("semi/one round per press grades PASS",
+              _st_verdicts(_st_run(tmp, "semi-ok", "p10-semi", _st_semi())),
+              ["PASS", "PASS", "PASS"])
+
+        # The whole point of reading serverAmmoInClip: the predicted clip here is frozen two
+        # rounds low for the entire run and moves not at all, which is a state ReconcileAmmo
+        # reaches legitimately and never leaves. Slack cannot reach the verdict.
+        check("semi/two rounds of prediction slack still grades PASS",
+              _st_verdicts(_st_run(tmp, "semi-slack", "p10-semi",
+                                   _st_semi(predicted=(18, 18, 18, 18), shots=(0, 1, 1, 2)))),
+              ["PASS", "PASS", "PASS"])
+
+        # And the mirror: a genuine second round on the SERVER's clip is a FAIL no tolerance
+        # can swallow, because no tolerance is applied to it.
+        check("semi/a real double-spend on the second press grades FAIL",
+              _st_verdicts(_st_run(tmp, "semi-double", "p10-semi",
+                                   _st_semi(second=(19, 17), shots=(0, 1, 1, 3)))),
+              ["PASS", "PASS", "FAIL"])
+
+        check("semi/a server that fired nothing grades FAIL, never PASS",
+              _st_verdicts(_st_run(tmp, "semi-refused", "p10-semi",
+                                   _st_semi(first=(20, 20), second=(20, 20),
+                                            predicted=(20, 19, 19, 18), shots=(0, 30, 30, 60)))),
+              ["FAIL", "PASS", "FAIL"])
+
+        check("semi/a recorder without the field is INCONCLUSIVE, not graded on the prediction",
+              _st_verdicts(_st_run(tmp, "semi-old", "p10-semi", _st_semi(server=False))),
+              ["INCONCLUSIVE"] * 3)
+
+        # ---- sprint: the measured false PASS, from an Island run where the server fired
+        # nothing for the entire programme (97 attempts, 97 refused Holstered) and the old
+        # grade printed "PASS post-sprint window: ammoInClip 30 -> 29, predictedShots +34".
+        check("sprint/a clean run grades PASS",
+              _st_verdicts(_st_run(tmp, "sprint-ok", "p10-sprint", _st_sprint())),
+              ["PASS", "PASS", "PASS"])
+
+        check("sprint/predicted shots alone are not evidence the weapon came back up",
+              _st_verdicts(_st_run(tmp, "sprint-refused", "p10-sprint",
+                                   _st_sprint(server_clip=(30, 30, 30, 30),
+                                              predicted=(30, 30, 30, 29),
+                                              shots=(0, 0, 0, 34)))),
+              ["PASS", "PASS", "FAIL"])
+
+        check("sprint/a round leaving the server's clip while sprinting grades FAIL",
+              _st_verdicts(_st_run(tmp, "sprint-leak", "p10-sprint",
+                                   _st_sprint(server_clip=(30, 29, 29, 28)))),
+              ["FAIL", "PASS", "PASS"])
+
+        # ---- auto: the same refusal, where it would otherwise divide real seconds by an
+        # imaginary round count and print a plausible cadence.
+        auto_ok = [_st_cp("auto-hold", 0.0, 30, 30, 0, weapon=1),
+                   _st_cp("released", 0.95, 20, 20, 10, weapon=1)]
+        check("auto/a sustained burst grades its cadence PASS",
+              _st_verdicts(_st_run(tmp, "auto-ok", "p10-auto", auto_ok)), ["PASS"])
+
+        auto_refused = [_st_cp("auto-hold", 0.0, 30, 30, 0, weapon=1),
+                        _st_cp("released", 0.95, 30, 29, 28, weapon=1)]
+        check("auto/a refused burst has no cadence and grades FAIL",
+              _st_verdicts(_st_run(tmp, "auto-refused", "p10-auto", auto_refused)), ["FAIL"])
+
+        # ---- the gate's own exit codes, because a verdict list nobody converts is not a gate.
+        check("gate/green run exits 0",
+              p10_gate(_st_run(tmp, "gate-ok", "p10-semi", _st_semi())), 0)
+        check("gate/failed rule exits 1",
+              p10_gate(_st_run(tmp, "gate-red", "p10-semi",
+                               _st_semi(second=(19, 17), shots=(0, 1, 1, 3)))), 1)
+        check("gate/ungradeable run exits 2, which is NOT a green",
+              p10_gate(_st_run(tmp, "gate-old", "p10-semi", _st_semi(server=False))), 2)
+
+    print(f"\nself-test: {len(failures)} failed")
+    for line in failures:
+        print(f"  {line}")
+    return len(failures)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("run", type=pathlib.Path)
+    parser.add_argument("run", type=pathlib.Path, nargs="?")
     parser.add_argument("--section", action="append", choices=sorted(SECTIONS), default=None)
     parser.add_argument(
         "--gate",
@@ -801,7 +1048,19 @@ def main() -> int:
         help="grade the run's protocol-10 programme; exit 1 on a failed rule, 2 when the run "
              "could not be graded at all",
     )
+    parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="grade synthetic runs whose answers are known and exit 1 on any disagreement; "
+             "takes no run directory",
+    )
     args = parser.parse_args()
+
+    if args.self_test:
+        return 1 if self_test() else 0
+
+    if args.run is None:
+        parser.error("a run directory is required unless --self-test is given")
 
     if not args.run.is_dir():
         print(f"not a run directory: {args.run}", file=sys.stderr)

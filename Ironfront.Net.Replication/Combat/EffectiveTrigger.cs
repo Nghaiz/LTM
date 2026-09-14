@@ -45,14 +45,25 @@ namespace Ironfront.Net.Replication.Combat
         public float SprintFireBlockedUntil;
 
         /// <summary>
-        /// True when the sprint rule is what lowered the weapon, so the sprint rule is allowed
-        /// to raise it again.
+        /// True while the sprint rule is HOLDING the weapon down, so the sprint rule is the one
+        /// allowed to raise it again.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// Without this the raise would stomp a holster that belongs to somebody else — a
         /// weapon parked mid-switch by <c>ClientSession.SwitchWeaponTo</c> is holstered on
         /// purpose, and un-holstering it because the player happens not to be sprinting would
         /// let a shot leave a weapon that is still in a bag.
+        /// </para>
+        /// <para>
+        /// <b>Custody, and NOT the lowering edge — the difference was a shipped defect.</b> The
+        /// name is the older, narrower reading: this was set only on the frame the sprint rule
+        /// itself lowered the weapon, so a sprint that BEGAN with the weapon already down
+        /// latched nothing and nothing ever raised it again.
+        /// <see cref="EffectiveTriggerPolicy.Advance"/> carries the measurement. It is now set
+        /// on every sprinting frame, which is the same thing whenever the weapon was up and the
+        /// repair whenever it was not.
+        /// </para>
         /// </remarks>
         public bool LoweredBySprint;
 
@@ -180,11 +191,22 @@ namespace Ironfront.Net.Replication.Combat
     /// doing it. A human holding Shift and the left mouse button takes the same path.
     /// </para>
     /// <para>
+    /// <b>The semi-automatic edge is shared too, since the client learned to predict it.</b>
+    /// <see cref="AdvanceHeldTrigger"/> is the RULE — "an automatic fires on every effective
+    /// sample, a semi-automatic on the rising one" — and <see cref="Advance"/> is written in
+    /// terms of it rather than beside it, exactly as the sprint half is. What stops at this
+    /// boundary is the SAMPLING SITE, not the rule: this side advances the edge once per
+    /// PROCESSED frame, the client advances it once per render frame, and the two therefore
+    /// count edges at different rates. That difference is bounded and harmless in the direction
+    /// that matters -- both see exactly one rising edge per press a human can make -- and the
+    /// alternative was measured on 2026-09-14: a protocol-10 client held a SIGNAL DMR's trigger
+    /// through two five-second presses, this side fired the two rounds it owed, and the client
+    /// predicted 29 more and took 9 ammo corrections doing it, because it had no edge rule at
+    /// all. A sampling rate that disagrees costs a shot at the margin; no rule costs a magazine.
+    /// </para>
+    /// <para>
     /// <b>What is deliberately NOT shared, and why each one stops at this boundary.</b>
-    /// The <i>semi-automatic edge</i> is measured against the last PROCESSED frame, and the
-    /// client's render loop is neither the input send rate nor the accepted-frame rate — an
-    /// edge sampled there would count different edges from this one, which is the disagreement
-    /// again in a new place. The <i>holster mutation</i> is not mirrored because the client's
+    /// The <i>holster mutation</i> is not mirrored because the client's
     /// <see cref="WeaponRuntimeState"/> has one writer, <see cref="WeaponRuntimeState.Loaded"/>,
     /// and nothing on that side parks a weapon mid-switch the way <c>ClientSession</c> does, so
     /// lowering it there would invent a second writer for a field nobody raises. The
@@ -221,11 +243,29 @@ namespace Ironfront.Net.Replication.Combat
 
             if (sprinting)
             {
-                if (weapon.Unholstered)
-                {
-                    weapon.Unholstered = false;
-                    trigger.LoweredBySprint = true;
-                }
+                // The sprint rule takes CUSTODY of the weapon, whether it lowered it or found it
+                // already down. This used to latch only inside `if (weapon.Unholstered)`,
+                // so a sprint that began with the weapon already down set nothing, the raise
+                // below never fired, and the weapon stayed holstered for the rest of that life —
+                // there is no other writer on this side that would ever put it back up.
+                // Measured on Island 2026-09-14: four seconds of held fire AFTER the sprint
+                // ended gave 97 [shot] attempts, 0 fired, 97 rejection=Holstered, while the same
+                // programme on Dustbowl emptied a magazine. The only difference between the two
+                // runs was whether the weapon happened to be up when the sprint started, and
+                // deploy is exactly when it is not: a weapon has an unholster time and a player
+                // who sprints for cover inside it is the ordinary case.
+                //
+                // Taking custody of a weapon this rule did not lower is safe, and that is a claim
+                // about the ACTIVE weapon specifically. Nothing on the server leaves
+                // the active weapon down on purpose: `ClientSession.SwitchWeaponTo` raises the
+                // incoming weapon unconditionally and parks the outgoing one under its own id,
+                // where `Advance` never sees it — the weapon-in-a-bag the flag's own remark
+                // protects is a PARKED state, not this one. So a down active weapon with no flag
+                // is state nobody is tracking — `ClientSession.ClearCombatStateOnDeath` is one
+                // proven producer of exactly that pair, clearing the trigger while deliberately
+                // leaving the weapon alone — and raising it is the repair rather than a stomp.
+                weapon.Unholstered = false;
+                trigger.LoweredBySprint = true;
             }
             else if (trigger.LoweredBySprint)
             {
@@ -248,10 +288,51 @@ namespace Ironfront.Net.Replication.Combat
                 && SprintAllowsFire(in trigger, nowSeconds)
                 && weapon.Unholstered;
 
+            // Read BEFORE the advance, because AdvanceHeldTrigger writes WasEffective and this
+            // outcome still owes the caller the edge computed against the old value. Recomputing
+            // it from the field afterwards would report false on every rising edge.
+            bool wasEffective = trigger.WasEffective;
+            bool attemptShot = AdvanceHeldTrigger(ref trigger, effective, automatic);
+
+            return new TriggerOutcome(effective, effective && !wasEffective, attemptShot);
+        }
+
+        /// <summary>
+        /// Advances the semi-auto edge by one sample, on whichever side is advancing a trigger.
+        /// </summary>
+        /// <param name="effective">
+        /// The trigger after that side's own gates. This side's is every clause in
+        /// <see cref="Advance"/>; the client's is the Fire bit, alive, and
+        /// <see cref="SprintAllowsFire"/> — see <c>ClientCombatState.ApplyTrigger</c>.
+        /// </param>
+        /// <param name="automatic"><see cref="WeaponConfig.Automatic"/>.</param>
+        /// <returns>
+        /// Whether a shot may be attempted: every effective sample for an automatic, the rising
+        /// one only for a semi-automatic.
+        /// </returns>
+        /// <remarks>
+        /// <para>
+        /// <b>Called on EVERY sample, not only the samples the trigger is down</b> — the same
+        /// contract <see cref="AdvanceSprintBlock"/> carries, and for a sharper reason. The
+        /// RELEASE is what re-arms the edge: a caller that ran this only while Fire was held
+        /// would leave <see cref="EffectiveTrigger.WasEffective"/> true for the rest of the
+        /// life, so a semi-automatic would fire once and then never again, and the symptom
+        /// would be a dead trigger rather than a wasted round.
+        /// </para>
+        /// <para>
+        /// <b>Writes <see cref="EffectiveTrigger.WasEffective"/> and nothing else.</b> The
+        /// sprint block is <see cref="AdvanceSprintBlock"/>'s field and the holster is
+        /// <see cref="Advance"/>'s; a caller advancing this one is not advancing those, which
+        /// is what lets the client run this without running the halves it has no state for.
+        /// </para>
+        /// </remarks>
+        public static bool AdvanceHeldTrigger(
+            ref EffectiveTrigger trigger, bool effective, bool automatic)
+        {
             bool risingEdge = effective && !trigger.WasEffective;
             trigger.WasEffective = effective;
 
-            return new TriggerOutcome(effective, risingEdge, automatic ? effective : risingEdge);
+            return automatic ? effective : risingEdge;
         }
 
         /// <summary>
