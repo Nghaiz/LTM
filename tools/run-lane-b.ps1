@@ -132,8 +132,14 @@ param(
     #
     # Empty (the default) leaves the draw alone, matching -SpawnIndex's -1. Names come from
     # `AiActorController.primaryWeaponNames`: RK-44, 76 EAGLE, SL-DEFENDER, SIGNAL DMR,
-    # RECON LRR. The name is NOT validated -- nothing outside Assembly-CSharp can -- so a
-    # misspelling arms nobody and shows up as `weaponId` in the checkpoint record.
+    # RECON LRR.
+    #
+    # The name IS validated now, on the client, against `WeaponManager.EntryNamed` -- an exact,
+    # case-sensitive match. A name nothing has fails the run with `loadout pin UNRESOLVED`
+    # rather than arming the default gun and reporting success, which is what the pin did for
+    # every run before 2026-09-14: five runs naming four different weapons all deployed
+    # `loadout 1/3/7/5/0`, because the pin governed only bodies the SERVER draws and a driver is
+    # armed from the ids its own client sends.
     [string] $Weapon = "",
 
     # Pin the FIRST GEAR slot the same way, by name. Check 4 (E10, "grenade detonates at the
@@ -422,6 +428,15 @@ try {
         $env:IRONFRONT_CLIENT_HOST = "127.0.0.1"
         $env:IRONFRONT_CLIENT_PORT = "$Port"
 
+        # RE-SET, because Clear-ClientEnvironment two lines up removes them. This is half of why
+        # -Weapon pinned nothing: the names were set once before the server started and wiped
+        # before every client launched, so no client process ever saw them -- and the pin that
+        # arms a scripted driver is a CLIENT-side pin (X-27). The other half is that the
+        # server-side PinnedLoadoutDirectory only governs bodies the server draws for itself;
+        # see LaneBHarness.PinLoadoutIfRequested.
+        if ($Weapon) { $env:IRONFRONT_LANEB_WEAPON = $Weapon }
+        if ($Gear)   { $env:IRONFRONT_LANEB_GEAR = $Gear }
+
         # A client process must be CONFIGURED not to open a server socket, not merely left
         # unset. LaneBHarness strips the scene's NetServer, but the strip runs in sceneLoaded
         # and the transport is bound in Awake -- so by the time anything can be stripped the
@@ -608,6 +623,51 @@ if (Test-Path $serverLogPath) {
                  "not run. Absence of the file is not absence of the fault."
 }
 
+# THE PIN HAS TO PROVE IT TOOK. Every run before 2026-09-14 that passed -Weapon reported a
+# pinned loadout in server.log and deployed `loadout 1/3/7/5/0` regardless, because the pin
+# governed bots and a driver is armed from the ids its own client sends. Two greps, because the
+# two failures look nothing alike:
+#
+#   UNRESOLVED -- the name reached the client and matched no weapon (EntryNamed is exact, case
+#   and spacing included). The slot kept the loadout screen's draw.
+#
+#   NEITHER marker -- the pin never ran at all: the variable did not arrive, or the client never
+#   armed a body. This is the silent shape the whole row is about, so absence is graded rather
+#   than assumed benign.
+$loadoutPinResolved = $null
+if ($Weapon -or $Gear) {
+    $loadoutPinResolved = $true
+    foreach ($c in $clients) {
+        $clientLog = Join-Path $outDir "$($c.Label).log"
+        if (-not (Test-Path $clientLog)) {
+            $loadoutPinResolved = $false
+            $failures += "loadout pin: no log at $clientLog, so whether '$($c.Label)' ever " +
+                         "armed the pinned loadout cannot be told. Absence of the file is not " +
+                         "absence of the fault."
+            continue
+        }
+
+        $unresolved = @(Select-String -Path $clientLog -Pattern 'loadout pin UNRESOLVED' -SimpleMatch)
+        $applied = @(Select-String -Path $clientLog -Pattern 'loadout pin applied' -SimpleMatch)
+
+        if ($unresolved.Count -gt 0) {
+            $loadoutPinResolved = $false
+            $failures += "loadout pin: '$($c.Label)' could not resolve a pinned weapon name, so " +
+                         "it deployed holding the loadout screen's own draw and this run is not " +
+                         "the experiment it was asked for (X-27). " +
+                         "$($unresolved[0].Line.Trim())"
+        }
+        elseif ($applied.Count -eq 0) {
+            $loadoutPinResolved = $false
+            $failures += "loadout pin: -Weapon/-Gear was passed but '$($c.Label)' logged neither " +
+                         "'loadout pin applied' nor 'loadout pin UNRESOLVED', so the pin never " +
+                         "ran -- the client never saw IRONFRONT_LANEB_WEAPON, or never armed a " +
+                         "body. Every weapon figure in this run is a figure for whatever the " +
+                         "loadout screen last selected (X-27)."
+        }
+    }
+}
+
 Write-Host ""
 Write-Host "[lane-b] seeds -- UnityEngine.Random=$UnitySeed  NetworkSimulator=$Sim/$SimSeed"
 Write-Host "[lane-b] artifacts -> $outDir"
@@ -623,6 +683,12 @@ $run = [ordered]@{
     spawnIndex     = $SpawnIndex
     pinnedWeapon   = $(if ($Weapon) { $Weapon } else { $null })
     pinnedGear     = $(if ($Gear) { $Gear } else { $null })
+
+    # What was ASKED for is two lines up; this is whether it TOOK. Null when nothing was pinned,
+    # so a reader cannot mistake "not requested" for "requested and confirmed" -- the distinction
+    # the two fields above could not carry, and the reason five runs were compared to each other
+    # while holding the same default weapon.
+    pinnedLoadoutResolved = $loadoutPinResolved
     clients        = $clients | ForEach-Object { @{ label = $_.Label; playerId = $_.PlayerId; displayName = $_.Name; team = $_.Team; programme = $_.Programme } }
     failures       = $failures
     passed         = ($failures.Count -eq 0)

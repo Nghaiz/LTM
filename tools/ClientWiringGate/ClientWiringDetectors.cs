@@ -237,6 +237,14 @@ namespace Ironfront.Tools.ClientWiringGate
                 "reached only from Update(), a local-only per-frame path; the local player IS the "
                 + "subject of the read"),
 
+            // SprintPressed is the third of the same shape, added with the client's sprint-fire
+            // gate: the server refuses a shot taken while sprinting, and this samples the same
+            // Sprint bit so the client stops predicting one. Identical call path to the two
+            // above -- Update() only, this client's own input source, no remote actor in scope.
+            ("/NetClientLocalCombatDriver.cs", "SprintPressed",
+                "reached only from Update(), a local-only per-frame path; the local player IS the "
+                + "subject of the read"),
+
             // This callback first resolves _client.LocalActorId and then looks up that exact
             // actor in the snapshot. The rig write therefore reconciles this client's body,
             // never whichever remote actor happened to change in the same snapshot.
