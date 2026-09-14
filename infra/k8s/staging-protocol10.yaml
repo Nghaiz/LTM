@@ -257,7 +257,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: game-server
-          image: ghcr.io/nghaiz/ironfront-game-server@sha256:211e30c783383c2bd911bd14c6458a63c30d99dbe8aaa0f8cd7ce7c5653512bf
+          image: ghcr.io/nghaiz/ironfront-game-server@sha256:d702605ee4c1bb2ac0ae95bd4a899301606c07fe8eea58e59115e580f1ccaa44
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
@@ -328,7 +328,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: game-server
-          image: ghcr.io/nghaiz/ironfront-game-server@sha256:211e30c783383c2bd911bd14c6458a63c30d99dbe8aaa0f8cd7ce7c5653512bf
+          image: ghcr.io/nghaiz/ironfront-game-server@sha256:d702605ee4c1bb2ac0ae95bd4a899301606c07fe8eea58e59115e580f1ccaa44
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
