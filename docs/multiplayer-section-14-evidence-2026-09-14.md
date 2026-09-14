@@ -27,7 +27,7 @@ cắt cụt, hay một recorder cũ hơn contract đều ra INCONCLUSIVE chứ k
 
 | Mục 14 | Kết quả | Bằng chứng |
 |---|---|---|
-| 2. Semi-auto: một lần nhấn một viên | **ĐỎ** | xem mục 4 |
+| 2. Semi-auto: một lần nhấn một viên | **PASS ở server** | 298 lần thử, đúng **2** `fired=True` cho 2 lần nhấn |
 | 3. Automatic bắn theo cooldown | **PASS** cả hai map | Dustbowl 0,1121 s/phát, Island 0,1066 s/phát; cooldown RK-44 là 0,095 s, nằm trong dải |
 | 4. Sprint+Fire không bắn, không trừ đạn | **PASS** cả hai map | clip đứng yên ở 30, `predictedShots +0`, `ammoCorrections +0` |
 | 5. Clip-1 reload `0/N → 1/N-1` | **PASS** cả hai map | clip `0 → 1` đúng một lần, reserve `1 → 0` đúng một lần, giữ nguyên sau 4 giây vẫn giữ Reload |
@@ -126,19 +126,28 @@ số đúng là **100/100**; một pin vào 255 sẽ đỏ trên một build đ�
 
 ## 7. Còn đỏ, và còn không đo được
 
-**Mục 2 — semi-auto tiêu 2–3 viên mỗi lần nhấn thay vì 1.** Đo được trên cả hai map với SIGNAL DMR
-(weaponId 13):
+**Mục 2 — server đúng, hai thứ khác sai.** Grader ban đầu báo 2–3 viên mỗi lần nhấn. Một lần chạy
+`-LogShots` chấm dứt tranh cãi:
 
 ```
-Dustbowl  nhấn 1  clip 20 -> 18   2 viên   predictedShots +32
-          nhả     clip 18 -> 18   0 viên   (đúng)
-          nhấn 2  clip 18 -> 16   2 viên   predictedShots +32
-Island    nhấn 1  clip 20 -> 17   3 viên
-          nhấn 2  clip 17 -> 15   2 viên
+298  dòng [shot] trong server.log
+  2  fired=True          <- đúng MỘT viên mỗi lần nhấn
+298  rejection=None      <- không có rising edge nên không có lần thử nào
 ```
 
-Bước nhả tiêu đúng 0 viên, nên cò **có** được đọc; rising edge bắn nhiều hơn một lần mỗi lần nhấn.
-Đang được điều tra; chưa kết luận nguyên nhân ở server hay ở chương trình harness.
+**Rising edge phía server đúng.** Cái sai là hai chỗ khác, cả hai đều nằm bên này sợi dây:
+
+1. **Client dự đoán phát thứ hai trên semi-auto đang giữ cò.** `predictedShots +29` trong một lần
+   nhấn mà server chỉ bắn một viên: `PredictFire` chỉ bị chặn bởi cooldown, client không có luật
+   rising edge nào cả. Cùng loại với sprint gate, và cùng một cách sửa: mở rộng primitive dùng
+   chung chứ không viết một edge detector thứ hai.
+2. **Grader báo một defect mà server không có.** Nó đọc `ammoInClip` từ checkpoint record — đó là
+   clip **dự đoán của client**, và `ReconcileAmmo` cho phép nó thấp hơn server tới
+   `AmmoResyncThreshold` (2). Cùng một lần chạy, cùng một hành vi server đúng, grader in
+   `nhấn 1: 1 viên PASS` và `nhấn 2: 2 viên FAIL`. Đó chính là dấu hiệu.
+
+Một grade fail trên hành vi đúng còn tệ hơn không có grade: nó là lý do một lỗi thật về sau bị gạt
+đi. Cả hai đang được sửa.
 
 **Một bất thường cùng đợt, có thể cùng gốc:** cửa sổ 4 giây giữ Fire sau sprint trên RK-44 tự động
 cho kết quả rất khác nhau giữa hai map — Dustbowl `clip 30 → 0` (hết băng, hợp lý), Island
