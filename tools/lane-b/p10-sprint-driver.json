@@ -1,12 +1,13 @@
 {
   "name": "p10-sprint-driver",
+  "note": "The sprint step deliberately does NOT move. The server's gate reads the Sprint BIT off the input frame (EffectiveTriggerPolicy.Advance) and never looks at speed or displacement, so travel adds nothing to what this grades -- and on Island it cost four runs. A six-second forward sprint from Island's spawn spread reaches the sea; Actor.Update's water branch fells the body, FpsActorController.DisableInput clears inputEnabled, and NetPredictionClock then sends input=default every tick, so the Fire bit never leaves the machine and the server reads as 'refused every shot' when it was never asked for one. See docs/island-sprint-fire-drowning-2026-09-14.md before adding moveX/moveZ to any lane-B programme that runs on Island.",
   "steps": [
     { "seconds": 5.0, "yawDegrees": 0, "pitchDegrees": -25, "respawn": true },
     { "checkpoint": "deployed", "seconds": 3.0, "yawDegrees": 0, "pitchDegrees": -25 },
     { "checkpoint": "armed", "seconds": 2.0, "yawDegrees": 0, "pitchDegrees": -25,
       "switchWeaponSlot": 0 },
     { "checkpoint": "sprint-fire", "seconds": 6.0, "yawDegrees": 0, "pitchDegrees": -25,
-      "switchWeaponSlot": 0, "moveZ": 1.0, "sprint": true, "fire": true },
+      "switchWeaponSlot": 0, "sprint": true, "fire": true },
     { "checkpoint": "sprint-ended", "seconds": 1.0, "yawDegrees": 0, "pitchDegrees": -25,
       "switchWeaponSlot": 0 },
     { "checkpoint": "fire-clear", "seconds": 4.0, "yawDegrees": 0, "pitchDegrees": -25,
