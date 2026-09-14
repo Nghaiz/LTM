@@ -1,7 +1,7 @@
 # Nghiệm thu mục 14 bằng máy — bằng chứng đo được
 
 - Ngày: **2026-09-14**
-- Build được đo: **`fb057dd`** (client Windows, stamp `fb057dd`), plugin DLL ở `edb2850`
+- Build được đo: **`d413983`** (client Windows, stamp `d413983`, không `-dirty`)
 - Đối chiếu: [`multiplayer-game-server-protocol-handoff-2026-09-13.md`](multiplayer-game-server-protocol-handoff-2026-09-13.md) mục 14
 - Artifact: `artifacts/lane-b/p10-*`
 
@@ -27,14 +27,17 @@ cắt cụt, hay một recorder cũ hơn contract đều ra INCONCLUSIVE chứ k
 
 | Mục 14 | Kết quả | Bằng chứng |
 |---|---|---|
-| 2. Semi-auto: một lần nhấn một viên | **PASS ở server** | 298 lần thử, đúng **2** `fired=True` cho 2 lần nhấn |
-| 3. Automatic bắn theo cooldown | **PASS** cả hai map | Dustbowl 0,1121 s/phát, Island 0,1066 s/phát; cooldown RK-44 là 0,095 s, nằm trong dải |
-| 4. Sprint+Fire không bắn, không trừ đạn | **PASS** cả hai map | clip đứng yên ở 30, `predictedShots +0`, `ammoCorrections +0` |
+| 2. Semi-auto: một lần nhấn một viên | **PASS** cả hai map | `serverAmmoInClip 20→19→19→18`: đúng 1 viên mỗi lần nhấn, 0 viên lúc nhả, client dự đoán +1, correction +0 |
+| 3. Automatic bắn theo cooldown | **PASS** cả hai map | 19 viên / 2,00 s = 0,1054 s/phát (Dustbowl), 0,1049 s/phát (Island); cooldown RK-44 0,095 s nằm trong dải |
+| 4. Sprint+Fire không bắn, không trừ đạn | **PASS** cả hai map | `serverAmmoInClip` đứng yên ở 30, `predictedShots +0`, `ammoCorrections +0` |
 | 5. Clip-1 reload `0/N → 1/N-1` | **PASS** cả hai map | clip `0 → 1` đúng một lần, reserve `1 → 0` đúng một lần, giữ nguyên sau 4 giây vẫn giữ Reload |
-| 6. Grenade: hai client cùng projectile id | **KHÔNG ĐO ĐƯỢC** | checkpoint record không mang projectile id; cần sửa recorder, không phải sửa chương trình |
+| 6. Grenade: hai client cùng projectile id | **KHÔNG ĐO ĐƯỢC** | record không mang projectile id; cần sửa recorder, không phải sửa chương trình |
 | 8. Collider chặn vehicle pad | **KHÔNG PHẢI DEFECT** | xem mục 5 |
 | 9. Trạng thái xe lúc map vừa tải | **PASS** trên staging | xem mục 6 |
-| 10. Lặp lại trên cả hai map | đã làm cho mục 3, 4, 5 | |
+| 10. Lặp lại trên cả hai map | đã làm cho mục 2, 3, 4, 5 | |
+
+Ma trận cuối: 4 bộ × 2 map = 8 lần chạy, **23/24 check PASS**. Một check còn đỏ là cửa sổ sau
+sprint trên Island — xem mục 7.
 
 Mục 1 (súng lục từng click) là cùng một câu hỏi với mục 2 và được gộp vào đó. Mục 7 có nửa đo được
 (một death, một killfeed, respawn sạch — đã có test) và nửa thị giác.
@@ -88,6 +91,24 @@ Sau khi sửa: `loadout pin applied - Primary='SIGNAL DMR'` và `loadout 13/3/7/
 **Và nó lộ ra ngay mục 2 đang đỏ** — điều mà trước đó không ai đo được, vì không cờ nào đặt được
 một khẩu semi-auto vào tay driver.
 
+### 4.3. Semi-auto: client dự đoán cả băng đạn, grader thì đoán cả hai chiều
+
+`PredictFire` không có luật rising edge nào, nên giữ cò một khẩu semi-auto dự đoán theo nhịp
+cooldown: đo được `predictedShots +32` trong một lần nhấn mà server bắn đúng một viên.
+
+Và grader đếm viên từ `ammoInClip` — clip **dự đoán của client**, thứ `ReconcileAmmo` *giữ lại*
+khi sai lệch nằm trong `AmmoResyncThreshold`, nên độ lệch **dính** và không bao giờ hội tụ. Nó tạo
+ra một FAIL giả (cùng một hành vi server đúng, nhấn 1 PASS nhấn 2 FAIL) và tệ hơn, một **PASS giả**:
+lần chạy Island mà server không bắn gì cả được chấm `PASS ... ammoInClip 30 -> 29`. Một cái đỏ thì
+được điều tra; một cái xanh thì kết thúc câu hỏi.
+
+Sửa ở **nguồn** chứ không nới dải: `ServerAmmoInClip` gán nguyên từ snapshot **trước khi**
+`ReconcileAmmo` chạy, ghi ra `serverAmmoInClip`, và cả bốn loại grade đều đọc nó.
+
+### 4.4. Sprint có thể hạ súng vĩnh viễn
+
+Xem mục 7.1. Chết giữa lúc sprint là một trường hợp sinh ra nó.
+
 ## 5. Pad bị chặn ở Island: đã điều tra, không phải defect
 
 Staging Island ghi bốn pad bị `Bone_002` chặn, trên server **không có người chơi nào** — nên đều là
@@ -126,39 +147,36 @@ số đúng là **100/100**; một pin vào 255 sẽ đỏ trên một build đ�
 
 ## 7. Còn đỏ, và còn không đo được
 
-**Mục 2 — server đúng, hai thứ khác sai.** Grader ban đầu báo 2–3 viên mỗi lần nhấn. Một lần chạy
-`-LogShots` chấm dứt tranh cãi:
+### 7.1. Sau sprint, súng không giương lại trên Island
 
-```
-298  dòng [shot] trong server.log
-  2  fired=True          <- đúng MỘT viên mỗi lần nhấn
-298  rejection=None      <- không có rising edge nên không có lần thử nào
-```
+Cửa sổ 4 giây giữ Fire sau khi sprint kết thúc: server không bắn viên nào, `serverAmmoInClip` đứng
+yên ở 30 trong khi client dự đoán 39 phát. Cùng chương trình đó trên Dustbowl bắn hết băng.
 
-**Rising edge phía server đúng.** Cái sai là hai chỗ khác, cả hai đều nằm bên này sợi dây:
+Một nguyên nhân của triệu chứng này **đã được sửa** và merge ở #276: `EffectiveTriggerPolicy.Advance`
+chỉ chốt cờ ở đúng frame nó hạ súng, nên một khẩu **vốn đã hạ** lúc bắt đầu sprint không bao giờ
+được giương lại. Nhánh sprint nay nhận quyền quản ở **mọi** frame đang sprint. Một trường hợp sinh
+ra trạng thái đó đã được pin bằng test: chết giữa lúc sprint.
 
-1. **Client dự đoán phát thứ hai trên semi-auto đang giữ cò.** `predictedShots +29` trong một lần
-   nhấn mà server chỉ bắn một viên: `PredictFire` chỉ bị chặn bởi cooldown, client không có luật
-   rising edge nào cả. Cùng loại với sprint gate, và cùng một cách sửa: mở rộng primitive dùng
-   chung chứ không viết một edge detector thứ hai.
-2. **Grader báo một defect mà server không có.** Nó đọc `ammoInClip` từ checkpoint record — đó là
-   clip **dự đoán của client**, và `ReconcileAmmo` cho phép nó thấp hơn server tới
-   `AmmoResyncThreshold` (2). Cùng một lần chạy, cùng một hành vi server đúng, grader in
-   `nhấn 1: 1 viên PASS` và `nhấn 2: 2 viên FAIL`. Đó chính là dấu hiệu.
+Nhưng còn một nguyên nhân nữa, và manh mối quan trọng nhất là **dụng cụ đo làm đổi kết quả**:
 
-Một grade fail trên hành vi đúng còn tệ hơn không có grade: nó là lý do một lỗi thật về sau bị gạt
-đi. Cả hai đang được sửa.
+| số lần chạy | kết quả |
+|---|---|
+| 4/4 không có `-LogShots` | ĐỎ, server không bắn gì sau sprint |
+| 1/1 có `-LogShots` | XANH, 30 viên, 180 `rejection=Holstered` gói gọn trong cửa sổ sprint |
 
-**Một bất thường cùng đợt, có thể cùng gốc:** cửa sổ 4 giây giữ Fire sau sprint trên RK-44 tự động
-cho kết quả rất khác nhau giữa hai map — Dustbowl `clip 30 → 0` (hết băng, hợp lý), Island
-`clip 30 → 28` với `predictedShots +38` (server nhận 2 trên 38). Cùng build, cùng chương trình,
-cùng vũ khí.
+`-LogShots` ghi một dòng kèm stack trace cho mỗi lần thử bắn và làm server chậm đi rõ rệt. Nên đây
+là lỗi **phụ thuộc thời gian**, không phải lỗi logic thuần — và mọi kết luận rút từ một lần chạy có
+`-LogShots` ở đây đều vô giá trị. Đang được điều tra.
 
-**Mục 6 không diễn đạt được bằng chương trình**: record mang `explosions`/`explosionsAttached`/
-`explosionsTotal` nhưng không mang projectile id ở đâu cả. Cần sửa recorder.
+### 7.2. Mục 6 không diễn đạt được bằng chương trình
 
-**Thị giác thật sự, không máy nào thay được:** mục 8 (quan sát pad), nửa presentation của mục 7, và
-model/particle của grenade, rocket, remote weapon.
+Record mang `explosions`/`explosionsAttached`/`explosionsTotal` nhưng không mang projectile id ở
+đâu cả. Cần sửa recorder, không phải viết chương trình khác.
+
+### 7.3. Thị giác thật sự
+
+Mục 8 (quan sát pad), nửa presentation của mục 7, và model/particle của grenade, rocket, remote
+weapon. Không máy nào thay được.
 
 ## 8. Một cảnh báo về cách đọc artifact
 
