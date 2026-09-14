@@ -515,6 +515,64 @@ namespace Ironfront.Net.Unity.Server
         /// would be a vehicle pad that quietly stopped working.
         /// </para>
         /// </remarks>
+        /// <summary>Per-submersion drowning state for this actor. X-90.</summary>
+        private readonly DrowningClock _drowning = new DrowningClock();
+
+        /// <summary>
+        /// <c>Time.time</c> at the previous drowning observation; negative before the first.
+        /// </summary>
+        private float _lastDrowningObservationAt = -1f;
+
+        /// <summary>
+        /// Drowns an actor whose head has been under water past the limit. X-90.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Driven from <see cref="Capture"/> for the reason <see cref="ObserveLifeEdge"/>
+        /// is</b>: that method already runs once per snapshot tick per REGISTERED actor, with no
+        /// interest or LOD filter, so a bot nobody can see drowns exactly as a watched player
+        /// does. A second per-actor sweep elsewhere would be a second place to remember.
+        /// </para>
+        /// <para>
+        /// <b>Elapsed time is measured, not assumed.</b> <c>Capture</c> carries no delta and is
+        /// driven from the netcode's own accumulator rather than the frame loop, so reading
+        /// <c>Time.deltaTime</c> here would be correct only by coincidence -- the mistake
+        /// <c>VehicleBurnClock</c>'s remark already records for the burn countdown. Measuring
+        /// <c>Time.time</c> between observations is right at any calling rate.
+        /// </para>
+        /// <para>
+        /// <b>A dead actor resets rather than accumulates.</b> Otherwise a corpse settling under
+        /// water would arm the clock, and the respawn that follows would arrive already drowning.
+        /// </para>
+        /// <para>
+        /// <b>The attacker is null on purpose.</b> <c>ServerCombatEvents.ReportDeath</c> reserves
+        /// null for a real environmental death, which is what this is: the killfeed says the
+        /// world, and <c>MatchScoreTally</c> credits nobody.
+        /// </para>
+        /// </remarks>
+        internal void ObserveDrowning()
+        {
+            if (!NetContext.IsServer) return;
+
+            float now = Time.time;
+            float elapsed = _lastDrowningObservationAt < 0f ? 0f : now - _lastDrowningObservationAt;
+            _lastDrowningObservationAt = now;
+
+            IGameplayActorSource source = Source;
+            if (source == null || !source.Exists) return;
+
+            if (!IsAlive)
+            {
+                _drowning.Reset();
+                return;
+            }
+
+            if (!_drowning.Tick(source.IsSubmerged, elapsed)) return;
+
+            Debug.Log($"[net] actor {_actorId} drowned after {_drowning.Limit:0.#}s under water");
+            ServerCombatEvents.ReportDeath(this, Vector3.zero, attacker: null, CauseOfDeath.Drown);
+        }
+
         internal void ObserveLifeEdge()
         {
             bool alive = IsAlive;
@@ -594,6 +652,7 @@ namespace Ironfront.Net.Unity.Server
             // per REGISTERED actor -- not per replicated one -- and already reads IsAlive.
             // See ObserveLifeEdge for why that distinction is the whole guarantee.
             ObserveLifeEdge();
+            ObserveDrowning();
 
             Vec3 position = Movement != null
                 ? Movement.State.Position

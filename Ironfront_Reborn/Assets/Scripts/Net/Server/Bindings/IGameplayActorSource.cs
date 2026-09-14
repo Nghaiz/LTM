@@ -40,6 +40,25 @@
         bool IsDead { get; set; }
 
         /// <summary>
+        /// Whether this actor's head is under water. Maps to <c>Actor.inWater</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The same point the shipped gameplay already samples</b>, and deliberately not a
+        /// second definition of "in water": <c>Actor.Update</c> writes the field from
+        /// <c>WaterLevel.InWater(CenterPosition() + 0.5 up)</c>, so the rule the server enforces
+        /// and the state the player sees cannot disagree.
+        /// </para>
+        /// <para>
+        /// <b>It is maintained on the server, which is not obvious.</b> <c>Actor.Update</c>
+        /// assigns <c>inWater</c> BEFORE both of its early returns -- the dead guard and the
+        /// suspended-AI-controller guard that parks a network-claimed body -- so a server-side
+        /// player slot keeps a live value even though the rest of that method is skipped for it.
+        /// </para>
+        /// </remarks>
+        bool IsSubmerged { get; }
+
+        /// <summary>
         /// Staggers the actor by <paramref name="balanceDamage"/>. phase-V2 D6.
         /// </summary>
         /// <remarks>

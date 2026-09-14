@@ -1,4 +1,4 @@
-using Ironfront.Net.Protocol;
+﻿using Ironfront.Net.Protocol;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -47,6 +47,7 @@ namespace Ironfront.Net.Unity.Server.Tests
             public bool Exists { get; set; } = true;
             public float Health { get; set; } = 100f;
             public bool IsDead { get; set; }
+            public bool IsSubmerged { get; set; }
 
             public void ApplyBalanceDamage(float balanceDamage) { }
 
