@@ -343,6 +343,41 @@ listeners: udp 27015, udp 27016, tcp 27000, tcp 27001
 trong 15 giây đầu dù heartbeat có sống hay không, nên một lần poll ngay sau rollout không phân
 biệt được link sống với link đã chết.
 
+## 9.3. MỞ: master bỏ game server khỏi registry theo thời gian, trong khi link vẫn sống
+
+Phát hiện lúc kiểm tra lại staging sau 5 giờ chạy liên tục.
+
+```
+kubectl -n ironfront get pods        -> cả ba pod 1/1 Running, restarts 0
+master metrics                        -> gameServers: registered=0 healthy=0, connections.current=2
+master log                            -> gs_heartbeat serverId=1 và serverId=2, đều đặn mỗi ~5 giây
+game server log                       -> "master link: registered as server 1/2", không có dòng lỗi nào
+```
+
+Heartbeat vẫn tới, kết nối vẫn mở, hai bên đều tin là đã đăng ký — nhưng `registered` đọc 0.
+
+Thử nghiệm quyết định: restart **một** game server (Dustbowl). Ngay sau đó:
+
+```
+gameServers: registered=1 healthy=1   conns: 2
+```
+
+Chỉ cái vừa restart được đếm. Island — chạy 5 tiếng, vẫn heartbeat — **không** được đếm.
+
+Nên: master **bỏ** một game server khỏi registry sau một khoảng thời gian, trong khi link TCP vẫn
+sống và heartbeat vẫn được nhận. Game server không hề biết, nên nó không bao giờ đăng ký lại.
+
+**Hệ quả thực tế:** sau vài giờ, một game server khoẻ mạnh lặng lẽ ngừng được cấp phát. Người chơi
+nhận `NoGameServerAvailable` trong khi server đứng đó, log sạch, pod `Running`, và mọi dashboard
+đều xanh. Đây đúng là loại xanh-không-chứng-minh-gì mà bàn giao gốc cảnh báo.
+
+**Chưa điều tra tiếp.** Điểm khởi đầu: `GameServerRegistry` không có đường nào cho heartbeat
+*khôi phục* một server đã bị bỏ — `Heartbeat()` trả false khi id không còn trong `_servers` và
+không ai đọc giá trị trả về đó. Cần tìm cái gì bỏ nó ra, và tại sao heartbeat không cứu được.
+
+**Cách phát hiện:** so `gameServers.registered` với số dòng `gs_heartbeat` có id phân biệt trong
+một phút. Hai số đó lệch nhau là dấu hiệu.
+
 ## 10. Rollback
 
 Digest protocol 9 đang chạy production, giữ để rollback:
