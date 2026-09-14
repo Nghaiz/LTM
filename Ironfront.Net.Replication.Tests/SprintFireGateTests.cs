@@ -2,6 +2,7 @@ using System;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Movement;
+using Ironfront.Net.Replication.Server;
 using Xunit;
 
 namespace Ironfront.Net.Replication.Tests
@@ -166,6 +167,72 @@ namespace Ironfront.Net.Replication.Tests
 
             Assert.False(fixture.Weapon.Unholstered);
             Assert.Equal(0, fixture.Weapon.ClipSpent(fixture.Config));
+        }
+
+        [Fact]
+        public void ASprintThatBeginsWithTheWeaponAlreadyDownStillRaisesItWhenItEnds()
+        {
+            // The defect protocol 10 shipped, and the mirror of the test above: the flag was
+            // set only on the frame the sprint rule LOWERED the weapon, so a sprint that found
+            // it already down latched nothing and the raise never fired. Nothing else on the
+            // server raises an active weapon, so it stayed holstered for the rest of that life.
+            var fixture = new TriggerFixture();
+            fixture.Weapon.Unholstered = false;
+
+            fixture.Step(0f, InputButtons.Sprint);
+            Assert.False(fixture.Weapon.Unholstered);
+            Assert.True(fixture.Trigger.LoweredBySprint);
+
+            fixture.Step(0.033f, InputButtons.None);
+            Assert.True(fixture.Weapon.Unholstered);
+        }
+
+        [Fact]
+        public void HeldFireAfterASprintThatFoundTheWeaponDownIsNotRefusedHolstered()
+        {
+            // The shape the lane-B run graded, and it asserts the REJECTION rather than only
+            // the ammo count: Holstered is the word the Island shot log printed 97 times out of
+            // 97 attempts, four seconds after the sprint ended. `now` is a full second later so
+            // the sprint window has long expired and Holstered is the only thing left that
+            // could refuse the shot.
+            var fixture = new TriggerFixture();
+            fixture.Weapon.Unholstered = false;
+
+            fixture.StepFor(6, InputButtons.Sprint);
+
+            CombatTickResult after = fixture.Step(1f, InputButtons.Fire);
+
+            Assert.True(after.Fired);
+            Assert.NotEqual(FireRejection.Holstered, after.Rejection);
+        }
+
+        [Fact]
+        public void ADeathMidSprintIsOneProducerOfADownWeaponWithNoFlag()
+        {
+            // Where the untracked pair comes from, pinned so the next person does not have to
+            // re-derive it. ClearCombatStateOnDeath resets the trigger — taking LoweredBySprint
+            // with it — and deliberately leaves the weapon alone, because what a life ENDS
+            // holding is ResetWeapon's business. That leaves exactly the state the old raise
+            // could not reach. ResetWeapon at the next deploy re-arms it, so the fix is not the
+            // only thing standing between this and a playable weapon; it is the thing that
+            // makes the sprint rule's own invariant hold without depending on that.
+            var session = new ClientSession(connectionId: 1, actorId: 41);
+            session.WeaponId = WeaponIds.RK44;
+            session.ResetWeapon();
+
+            var actor = ActorFireEligibility.OnFoot(isAlive: true);
+            InputFrame sprint = TriggerFixture.Frame(InputButtons.Sprint);
+
+            EffectiveTriggerPolicy.Advance(
+                ref session.Trigger, ref session.Weapon, in sprint, in actor,
+                automatic: true, nowSeconds: 0f);
+
+            Assert.False(session.Weapon.Unholstered);
+
+            session.ClearCombatStateOnDeath();
+
+            Assert.False(session.Weapon.Unholstered);
+            Assert.False(session.Trigger.LoweredBySprint);
         }
 
         [Fact]
