@@ -146,6 +146,24 @@ namespace Ironfront.MasterClient
             await _requestLock.WaitAsync(ct).ConfigureAwait(false);
             try
             {
+                // REFUSED RATHER THAN SENT, AND THE ALTERNATIVE IS A PERMANENT HANG.
+                //
+                // QueueDisconnected latches — `Interlocked.Exchange(ref _disconnected, 1) != 0`
+                // returns early on every later call — so it faults the pending request ONCE, at
+                // the moment the link drops. A request issued AFTER that point has nothing left
+                // to fault it: TCP allows writing to a half-closed socket, so SendAsync succeeds
+                // into a connection the peer has already finished with, no response ever
+                // arrives, and the await never completes. Measured: a client idled past the
+                // master's unauthenticated deadline and then asked to register sat there
+                // indefinitely, with the UI's in-flight flag stuck and the menu dead.
+                //
+                // Throwing IOException rather than a state exception is deliberate: this IS a
+                // link failure, and MasterSession.IsLinkFailure already routes it to the error
+                // line the player reads. A caller that checks State first — which the menu does
+                // — never reaches this.
+                if (State != MasterConnectionState.Connected)
+                    throw new IOException("Master connection closed.");
+
                 var completion = new TaskCompletionSource<Response>();
                 _pending = completion;
                 await SendAsync(requestType, body, ct).ConfigureAwait(false);
