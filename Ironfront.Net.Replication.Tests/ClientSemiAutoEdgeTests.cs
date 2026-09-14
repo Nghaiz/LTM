@@ -48,6 +48,20 @@ namespace Ironfront.Net.Replication.Tests
         private static WeaponConfig Automatic => WeaponCatalog.For(WeaponIds.RK44);
 
         /// <summary>
+        /// SL-DEFENDER: the weapon the two switch tests swap TO.
+        /// </summary>
+        /// <remarks>
+        /// Its 1.5 s cooldown is more than ten times the DMR's, and a SERVER-side swap does not
+        /// reset <c>_runtime.LastFiredTime</c> — only <see cref="ClientCombatState.EquipWeapon"/>
+        /// does. So the wait before the second press is stated against THIS cooldown: against
+        /// the DMR's, the re-armed edge is spent immediately on a shot the COOLDOWN refuses, and
+        /// the test would report a dead trigger while measuring something else entirely. The
+        /// edge being consumed by a refused attempt is correct and is the server's behaviour
+        /// too — <c>Advance</c> writes <c>WasEffective</c> before the resolver is consulted.
+        /// </remarks>
+        private static WeaponConfig Swapped => WeaponCatalog.For(WeaponIds.SL_DEFENDER);
+
+        /// <summary>
         /// How many cooldowns a "held" press covers. Large enough that an ungated client
         /// empties the SIGNAL DMR's whole 20-round clip, which is what the run recorded.
         /// </summary>
@@ -215,7 +229,7 @@ namespace Ironfront.Net.Replication.Tests
 
             state.EquipWeapon(WeaponIds.SL_DEFENDER);
 
-            float after = Now + SemiAuto.Cooldown * 8;
+            float after = Now + Swapped.Cooldown * 2;
             Assert.Equal(1, Hold(state, Ticks(SemiAuto.Cooldown * 4), fire: true, startAt: after));
         }
 
@@ -239,7 +253,7 @@ namespace Ironfront.Net.Replication.Tests
                 },
                 Now);
 
-            float after = Now + SemiAuto.Cooldown * 8;
+            float after = Now + Swapped.Cooldown * 2;
             Assert.Equal(1, Hold(state, Ticks(SemiAuto.Cooldown * 4), fire: true, startAt: after));
         }
 
@@ -283,17 +297,20 @@ namespace Ironfront.Net.Replication.Tests
             // What it can and cannot prove: that the advance and the prediction are ONE
             // statement, so no frame can predict without advancing and no frame can skip the
             // advance. It does not prove the file compiles; only Unity can say that.
-            string source = File.ReadAllText(Path.Combine(
+            string[] lines = File.ReadAllLines(Path.Combine(
                 RepoRoot(), "Ironfront_Reborn", "Assets", "Scripts", "Net", "Client",
                 "NetClientLocalCombatDriver.cs"));
 
-            string guard = GuardLine(source, "_state.ApplyTrigger(");
+            int at = LineOf(lines, "_state.ApplyTrigger(");
+            string? found = at < 0 ? null : Statement(lines, at);
 
             Assert.True(
-                guard != null,
+                found != null,
                 "NetClientLocalCombatDriver must gate its prediction on _state.ApplyTrigger. "
                 + "Without it the client predicts a round on every frame the trigger is down, "
                 + "whatever the weapon is -- +29 predicted shots against 2 the server fired.");
+
+            string guard = found!;
 
             Assert.Contains("_state.PredictFire(", guard);
 
@@ -304,37 +321,46 @@ namespace Ironfront.Net.Replication.Tests
                 + "worse -- a frame that skips the advance, which latches the edge and leaves "
                 + "the weapon firing once per life.");
 
-            int sprint = source.IndexOf("_state.ApplySprint(", StringComparison.Ordinal);
+            int sprint = LineOf(lines, "_state.ApplySprint(");
             Assert.True(
-                sprint >= 0 && sprint < source.IndexOf(guard, StringComparison.Ordinal),
+                sprint >= 0 && sprint < at,
                 "ApplySprint must run BEFORE the trigger advance: ApplyTrigger reads the block "
                 + "ApplySprint stamps, so the other order tests a window one frame stale.");
         }
 
         /// <summary>
-        /// The whole statement containing <paramref name="call"/>, joined across the line break
-        /// an if-condition is allowed to have. Null when the call is only ever in a comment.
+        /// The first line that CALLS <paramref name="call"/>, or -1. Comment lines are skipped —
+        /// the distinction this whole test rests on, since the driver discusses both calls at
+        /// length above the code that makes them.
         /// </summary>
-        private static string GuardLine(string source, string call)
+        private static int LineOf(string[] lines, string call)
         {
-            string[] lines = source.Replace("\r\n", "\n").Split('\n');
             for (int i = 0; i < lines.Length; i++)
             {
                 string trimmed = lines[i].TrimStart();
                 if (trimmed.StartsWith("//", StringComparison.Ordinal)) continue;
-                if (!trimmed.Contains(call)) continue;
-
-                return i + 1 < lines.Length && !trimmed.Contains(";")
-                    ? lines[i] + " " + lines[i + 1].Trim()
-                    : lines[i];
+                if (trimmed.Contains(call)) return i;
             }
 
-            return null;
+            return -1;
+        }
+
+        /// <summary>
+        /// The whole statement at <paramref name="at"/>, joined across the one line break an
+        /// if-condition and its body are allowed to have between them.
+        /// </summary>
+        private static string Statement(string[] lines, int at)
+        {
+            string trimmed = lines[at].TrimStart();
+
+            return at + 1 < lines.Length && !trimmed.Contains(";")
+                ? lines[at] + " " + lines[at + 1].Trim()
+                : lines[at];
         }
 
         private static string RepoRoot()
         {
-            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            DirectoryInfo? dir = new DirectoryInfo(AppContext.BaseDirectory);
             while (dir != null && !File.Exists(Path.Combine(dir.FullName, "Ironfront.sln")))
                 dir = dir.Parent;
 
