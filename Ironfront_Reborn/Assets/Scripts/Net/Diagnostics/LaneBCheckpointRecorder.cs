@@ -706,6 +706,26 @@ namespace Ironfront.Net.Unity.Diagnostics
                 Num("ammoInClip", state.AmmoInClip); Comma();
                 Num("clipSize", state.ClipSize); Comma();
                 _json.Append("\"reloading\":").Append(state.IsReloading ? "true" : "false"); Comma();
+
+                // The authoritative half of the two above, and they are BOTH written because the
+                // disagreement between them is the only thing in this record that can show a
+                // reload the server refused. "reloading" keeps its meaning exactly -- the local
+                // prediction -- so a reader that already grades it is not silently re-pointed at
+                // a different fact.
+                _json.Append("\"serverReloading\":")
+                     .Append(state.ServerSaysReloading ? "true" : "false"); Comma();
+
+                // Handoff section 3.2 / section 14: without these two a run can show a clip
+                // moving and say nothing about the reserve that fed it, which is exactly the
+                // half of the reload that the bazooka desync lived in.
+                //
+                // The kind is written beside the count rather than folded into it because BOTH
+                // sentinels carry zero rounds. A reader that saw spareAmmoRounds 0 alone could
+                // not tell "empty and refillable" from "never had a reserve" from "never runs
+                // out" -- three states a HUD renders three different ways. Check the kind first.
+                Str("spareAmmoKind", KindName(state.SpareAmmo.Kind)); Comma();
+                Num("spareAmmoRounds", state.SpareAmmo.Rounds); Comma();
+
                 Num("weaponId", state.WeaponId); Comma();
                 Num("predictedShots", state.PredictedShots); Comma();
                 Num("ammoCorrections", state.SnapshotAmmoCorrections); Comma();
@@ -1212,6 +1232,27 @@ namespace Ironfront.Net.Unity.Diagnostics
         private void Str(string key, string value)
         {
             _json.Append('"').Append(key).Append("\":\"").Append(Escape(value)).Append('"');
+        }
+
+        /// <summary>
+        /// The reserve's kind as the lower-case kebab token the lane-B readers expect.
+        /// </summary>
+        /// <remarks>
+        /// Spelled out here rather than taken from <c>SpareAmmo.ToString()</c>, which answers the
+        /// COUNT for a finite reserve -- correct for a log line, wrong for a key whose whole job
+        /// is to say which of the three cases this is before anyone reads the count. An unknown
+        /// value is written through rather than defaulted, so a bit added to the enum shows up in
+        /// the artifact as an unfamiliar token instead of silently grading as "finite".
+        /// </remarks>
+        private static string KindName(SpareAmmoKind kind)
+        {
+            switch (kind)
+            {
+                case SpareAmmoKind.Finite:     return "finite";
+                case SpareAmmoKind.NoResupply: return "no-resupply";
+                case SpareAmmoKind.Infinite:   return "infinite";
+                default:                       return kind.ToString().ToLowerInvariant();
+            }
         }
 
         /// <summary>

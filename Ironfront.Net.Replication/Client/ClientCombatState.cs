@@ -116,11 +116,43 @@ namespace Ironfront.Net.Replication.Client
         /// <summary>The equipped weapon's clip size, for a "27 / 30" HUD.</summary>
         public byte ClipSize => _weapon.ClipSize;
 
+        /// <summary>
+        /// The authoritative reserve from the most recent snapshot, for the "/ 90" half of the
+        /// HUD. <see cref="SpareAmmoKind.NoResupply"/> until one arrives.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Not <c>Finite(0)</c> before the first snapshot, and the difference is the whole
+        /// reason the sentinel exists.</b> A HUD renders an empty-but-refillable reserve as
+        /// <c>/ 0</c> and a weapon that has no reserve at all as <c>/ —</c>; opening at
+        /// <c>Finite(0)</c> would tell every player their rifle was out of spare rounds for the
+        /// first 50 ms of the match.
+        /// </para>
+        /// <para>
+        /// <b>Nothing here predicts it.</b> See <see cref="ApplySnapshot"/> for why that makes
+        /// it unconditional where the clip is not.
+        /// </para>
+        /// </remarks>
+        public SpareAmmo SpareAmmo { get; private set; } = SpareAmmo.NoResupply;
+
         /// <summary>From the snapshot, or from <see cref="EquipWeapon"/> before one arrives.</summary>
         public byte WeaponId { get; private set; }
 
         /// <summary>True between <see cref="BeginReload"/> and the snapshot that answers it.</summary>
         public bool IsReloading => _runtime.Reloading;
+
+        /// <summary>
+        /// What the SERVER says about reloading, from <see cref="WeaponStateFlags.Reloading"/>.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately a second property beside <see cref="IsReloading"/> rather than a
+        /// replacement for it. A HUD wants the predicted one, because waiting a round-trip to
+        /// start the animation is the visible delay prediction exists to remove; a grader wants
+        /// the authoritative one. Collapsing them into a single flag would throw away the
+        /// disagreement between the two, which is the only thing in this file that can show a
+        /// reload the server refused.
+        /// </remarks>
+        public bool ServerSaysReloading { get; private set; }
 
         /// <summary>Trigger pulls the client predicted. The denominator for the next figure.</summary>
         public long PredictedShots { get; private set; }
@@ -269,15 +301,43 @@ namespace Ironfront.Net.Replication.Client
                 _weapon = WeaponCatalog.For(WeaponId);
             }
 
+            // Taken verbatim, unconditionally, with no equivalent of AmmoResyncThreshold — and
+            // that asymmetry with the clip two lines below is deliberate. The clip needs a
+            // threshold because PredictFire moves it BETWEEN snapshots, so the snapshot's higher
+            // count is normally just stale by the one or two shots in flight, and handing it back
+            // every frame is the 30, 29, 30, 29 flicker ReconcileAmmo documents. Nothing predicts
+            // a reserve: the only thing that spends one is a reload the SERVER accepted, and the
+            // snapshot that carries that reload carries the new reserve with it. There is no
+            // in-flight local change here for a threshold to protect, so a threshold could only
+            // ever delay the correct number.
+            SpareAmmo = SpareAmmo.Decode(entry.SpareAmmoEncoded);
+
+            ServerSaysReloading = (entry.WeaponStateFlags & WeaponStateFlags.Reloading) != 0;
+
+            // A reload the server is still running suspends the anti-flicker rule for the same
+            // reason a locally predicted one does: mid-reload, a large predicted/authoritative
+            // gap is correct rather than suspicious. This is also what carries a reload the
+            // client never asked for — a server-side auto-reload on an empty clip — as one clean
+            // jump instead of as a drift correction that climbs SnapshotAmmoCorrections.
+            if (ServerSaysReloading) _reloadPending = true;
+
             byte reconciled = ReconcileAmmo(_runtime.AmmoInClip, entry.AmmoInClip, _reloadPending);
             if (reconciled != _runtime.AmmoInClip) SnapshotAmmoCorrections++;
 
             _runtime.AmmoInClip = reconciled;
 
-            // The snapshot has now answered the reload, whichever way it went: either the clip
-            // came back full or it did not, and in both cases the next divergence is the
-            // client's own prediction rather than a reload in flight.
-            if (_reloadPending)
+            // The server's reload is over — finished, or refused and never started — so this
+            // snapshot is the answer to it, whichever way it went. The disagreement is resolved
+            // the server's way, always: a client that keeps animating a reload the server
+            // cancelled is showing a reload that will never deliver a round, and it would keep
+            // showing it until its own ReloadSeconds clock ran out.
+            //
+            // ENDED, not completed: the clip is deliberately not filled here. The snapshot's own
+            // ammo count — taken verbatim just above, because _reloadPending was set — already
+            // says whether the reload delivered. Filling the clip to ClipSize would overwrite
+            // that authoritative answer with a guess in precisely the case where the guess is
+            // wrong: a reload the server refused for an empty reserve.
+            if (_reloadPending && !ServerSaysReloading)
             {
                 _reloadPending = false;
                 _runtime.Reloading = false;
@@ -337,6 +397,13 @@ namespace Ironfront.Net.Replication.Client
             Health = 100;
             IsAlive = true;
             WeaponId = 0;
+
+            // Back to the sentinel, not to Finite(0) — see the property's own remark. A reconnect
+            // that reset to zero would render "out of spare rounds" until the first snapshot,
+            // which is the one moment a player is most likely to be looking at the HUD.
+            SpareAmmo = SpareAmmo.NoResupply;
+            ServerSaysReloading = false;
+
             PredictedShots = 0;
             SnapshotAmmoCorrections = 0;
         }
