@@ -17,6 +17,7 @@ using System.IO;
 using Ironfront.Net.Replication.Movement;
 using Ironfront.Net.Replication.World;
 using Ironfront.Net.Transport;
+using Ironfront.Net.Unity;
 using Ironfront.Net.Unity.Client;
 using Ironfront.Net.Unity.Server;
 using UnityEngine;
@@ -151,6 +152,27 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// codes, checkpoint counts and seeds; not one of them can see a dead link. This can.
         /// </remarks>
         private bool _lostConnection;
+
+        /// <summary>
+        /// Whether the local body was ever in water during the programme. Ledger <b>X-88</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The witness half of what <see cref="_lostConnection"/> does for the link.</b> A
+        /// lane-B observer's job is to be somewhere it can see the engagement and then hold
+        /// still. Several programmes walk it out under sprint for twenty seconds or more, and a
+        /// walk that ends in water produces a run that exits 0, captures every checkpoint, and
+        /// reports no killfeed line -- which reads exactly like the finding the check exists to
+        /// make. "The witness saw nothing" and "the witness was underwater" must not render
+        /// identically.
+        /// </para>
+        /// <para>
+        /// <b>Latched, not sampled at the end</b>, for the same reason the link flag is: an
+        /// observer that waded through water and back out would read clean at finish while
+        /// every number it recorded in between is about a body that was not watching.
+        /// </para>
+        /// </remarks>
+        private bool _wasInWater;
 
         /// <summary>
         /// Declares this process's role BEFORE the first scene loads, so that every
@@ -590,6 +612,11 @@ namespace Ironfront.Net.Unity.Diagnostics
             NetClientBootstrap live = NetClientBootstrap.Current;
             if (live == null || !live.IsConnected) _lostConnection = true;
 
+            // X-88. Same latch, different fact: the link says the client is present, this says
+            // the body is somewhere it can witness from.
+            ILocalPlayerRig rig = NetClientBindings.LocalPlayer;
+            if (rig.Exists && rig.IsInWater) _wasInWater = true;
+
             if (!_cursor.Advance(Time.deltaTime))
             {
                 DrainCheckpoints();
@@ -986,6 +1013,7 @@ namespace Ironfront.Net.Unity.Diagnostics
                     + $"\"playerId\":{_seeds.PlayerId.ToString(c)},"
                     + $"\"displayName\":\"{_seeds.DisplayName}\","
                     + $"\"lostConnection\":{(_lostConnection ? "true" : "false")},"
+                    + $"\"wasInWater\":{(_wasInWater ? "true" : "false")},"
                     + $"\"connectedAtFinish\":{(IsLive() ? "true" : "false")},"
                     + $"\"finalConnectionId\":{FinalConnectionId().ToString(c)},"
                     + $"\"finalActorId\":{FinalActorId().ToString(c)}"

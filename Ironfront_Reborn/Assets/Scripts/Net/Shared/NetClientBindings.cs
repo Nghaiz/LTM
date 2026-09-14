@@ -270,6 +270,7 @@ namespace Ironfront.Net.Unity
             public IInputSource InputSource => null;
             public GameObject GameObject => null;
             public bool IsInputEnabled => false;
+            public bool IsInWater => false;
             public void SetInputSource(IInputSource source) { }
             public void EnableInput() { }
             public void DisableInput() { }

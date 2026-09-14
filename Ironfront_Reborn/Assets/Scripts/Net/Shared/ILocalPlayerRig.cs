@@ -96,6 +96,27 @@ namespace Ironfront.Net.Unity
         bool IsInputEnabled { get; }
 
         /// <summary>
+        /// Whether the local body is standing in water.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>For telling a witness that saw nothing from a witness that was underwater.</b>
+        /// A lane-B observer walks away from the engagement and then holds; if that walk ends
+        /// in water, the run still exits 0, still captures every checkpoint, and still reports
+        /// "no killfeed line observed" -- which is indistinguishable from the finding the check
+        /// was written to make. Ledger X-88.
+        /// </para>
+        /// <para>
+        /// <b><c>IsInputEnabled</c> cannot carry this and never could.</b>
+        /// <c>FpsActorController.Start</c> pins it false on every lane-B client and only
+        /// <c>SpawnAt</c> re-enables it, which is why the recorder writes
+        /// <c>inputSuppressedByDeath</c> beside it rather than relying on it. A guard built on
+        /// a field that is always false would fail every run, which is its own kind of useless.
+        /// </para>
+        /// </remarks>
+        bool IsInWater { get; }
+
+        /// <summary>
         /// Installs an input source on the rig, replacing whatever it was reading.
         /// </summary>
         /// <remarks>
