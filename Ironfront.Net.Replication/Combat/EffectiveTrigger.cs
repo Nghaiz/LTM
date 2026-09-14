@@ -232,8 +232,8 @@ namespace Ironfront.Net.Replication.Combat
 
             if (sprinting)
             {
-                // <b>The sprint rule takes CUSTODY of the weapon, whether it lowered it or found
-                // it already down.</b> This used to latch only inside `if (weapon.Unholstered)`,
+                // The sprint rule takes CUSTODY of the weapon, whether it lowered it or found it
+                // already down. This used to latch only inside `if (weapon.Unholstered)`,
                 // so a sprint that began with the weapon already down set nothing, the raise
                 // below never fired, and the weapon stayed holstered for the rest of that life —
                 // there is no other writer on this side that would ever put it back up.
@@ -244,8 +244,8 @@ namespace Ironfront.Net.Replication.Combat
                 // deploy is exactly when it is not: a weapon has an unholster time and a player
                 // who sprints for cover inside it is the ordinary case.
                 //
-                // <b>Taking custody of a weapon this rule did not lower is safe, and that is a
-                // claim about the ACTIVE weapon specifically.</b> Nothing on the server leaves
+                // Taking custody of a weapon this rule did not lower is safe, and that is a claim
+                // about the ACTIVE weapon specifically. Nothing on the server leaves
                 // the active weapon down on purpose: `ClientSession.SwitchWeaponTo` raises the
                 // incoming weapon unconditionally and parks the outgoing one under its own id,
                 // where `Advance` never sees it — the weapon-in-a-bag the flag's own remark
