@@ -181,7 +181,56 @@ namespace Ironfront.Net.Unity.Client
             _menu.MasterPort = config.MasterPort;
             _menu.MasterTls  = BuildMasterTls(config);
 
+            LogMasterEndpoint(config);
+
             _menu.Bind(_session, _flow);
+        }
+
+        /// <summary>
+        /// Says where the master is and how this client will speak to it, once per start.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Its absence is what made a transport mismatch take hours to find.</b> A client with
+        /// <c>IRONFRONT_CLIENT_MASTER_TLS=0</c> dialling a TLS master completes its TCP connect,
+        /// reports itself connected, and dies on its first request — and the log said nothing at
+        /// all about the master between "client flow up" and the failure. Nothing named the host,
+        /// the port, or the transport, so the one field that was wrong was the one field nobody
+        /// could see. A build that predates the TLS wiring produces the identical symptom, and
+        /// telling those two apart is exactly what this line is for.
+        /// </para>
+        /// <para>
+        /// <b>Not behind <see cref="_verbose"/>.</b> A diagnostic that is off in the build where
+        /// the fault appears is not a diagnostic; this is one line at startup, and the run that
+        /// needs it is the run nobody thought to enable logging for.
+        /// </para>
+        /// <para>
+        /// <b>The pin is reported as present, never printed.</b> A fingerprint is not a secret,
+        /// but a log line is the wrong place to teach anyone which value to match — and "pinned"
+        /// versus "not pinned" is the whole of what a reader needs to interpret a handshake
+        /// failure.
+        /// </para>
+        /// </remarks>
+        private static void LogMasterEndpoint(GameClientConfig config)
+        {
+            if (!config.MasterTlsEnabled)
+            {
+                Debug.Log($"[flow] master = {config.MasterHost}:{config.MasterPort} (plaintext). "
+                          + "A public master terminates TLS and will drop this link on the first "
+                          + "request — set IRONFRONT_CLIENT_MASTER_TLS=1 for one.");
+                return;
+            }
+
+            string certName = string.IsNullOrWhiteSpace(config.MasterTlsTargetHost)
+                ? config.MasterHost
+                : config.MasterTlsTargetHost;
+
+            string pin = string.IsNullOrWhiteSpace(config.MasterTlsPinnedFingerprintSha256)
+                ? "no pin"
+                : "pinned";
+
+            Debug.Log($"[flow] master = {config.MasterHost}:{config.MasterPort} "
+                      + $"(TLS, cert name '{certName}', {pin}).");
         }
 
         /// <summary>
