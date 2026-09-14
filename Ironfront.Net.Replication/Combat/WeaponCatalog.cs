@@ -62,15 +62,28 @@ namespace Ironfront.Net.Replication.Combat
         /// stagger, no clip.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// <b>Never <see cref="WeaponConfig.Rifle"/>.</b> A gap that fell back to a rifle would
         /// turn a medipack into a gun, which is precisely the bug this file exists to close;
         /// reintroducing it as the default would be a joke at our own expense. It also makes the
         /// failure total and immediate rather than intermittent - an unassigned id loads a clip
         /// of zero and the player simply cannot fire, which is noticed in seconds.
+        /// </para>
+        /// <para>
+        /// <b>No reserve either, stated rather than defaulted.</b>
+        /// <see cref="WeaponConfig"/>'s own default is
+        /// <see cref="WeaponConfig.InfiniteSpareAmmo"/>, and
+        /// <c>ServerCombatBridge.SeedSpareAmmo</c> copies whatever this field says straight into
+        /// a live loadout slot - so an id the server cannot identify would hand the player a
+        /// pouch that never runs down. It is also what all six deliberately inert entries below
+        /// want: BINOCS, AMMO_BAG, MEDIPACK, WRENCH and SUPER_WRENCH are each <c>-1</c> in their
+        /// own prefab, and NV_GOGGLES has no clip for a reload to draw into.
+        /// </para>
         /// </remarks>
         public static readonly WeaponConfig Inert = new WeaponConfig(
             cooldown: 0f, spread: 0f, projectilesPerShot: 1, range: 0f,
-            damage: 0f, force: 0f, clipSize: 0);
+            damage: 0f, force: 0f, clipSize: 0,
+            spareAmmo: WeaponConfig.NoResupplySpareAmmo);
 
         /// <summary>One entry per id, indexed by id. Index 0 is <see cref="WeaponIds.NONE"/>.</summary>
         private static readonly WeaponConfig[] Configs = BuildConfigs();
@@ -169,6 +182,27 @@ namespace Ironfront.Net.Replication.Combat
         /// projectile and V7 owns it, so the hitscan half is what this table can state. The real
         /// payload numbers are recorded inline beside each so V7 does not have to re-derive them.
         /// </para>
+        /// <para>
+        /// <b>The reserve is carried here too, and was not until after protocol 10 shipped.</b>
+        /// Every entry passed the prefab's <c>ammo</c> as <see cref="WeaponConfig.ClipSize"/> and
+        /// dropped the <c>spareAmmo</c> sitting beside it in the same row, with no comment saying
+        /// so. All seventeen therefore fell back to the constructor's default of
+        /// <see cref="WeaponConfig.InfiniteSpareAmmo"/>, and <c>ServerCombatBridge.SeedSpareAmmo</c>
+        /// seeded every loadout slot from that - which made the whole of protocol 10's reserve
+        /// inert by construction. Every actor reported <c>spareAmmoKind: "infinite"</c>,
+        /// <see cref="ActorSpareAmmoPool.Take"/> never decremented, and the bazooka going
+        /// <c>0/N</c> to <c>1/N-1</c> that the phase was graded on could not happen on any weapon
+        /// in the game. One number of a pair was carried across and nothing was left to notice
+        /// the other; each entry below now states both.
+        /// </para>
+        /// <para>
+        /// <b>The two sentinels need no translation.</b> <c>Weapon.AllowsResupply</c> tests
+        /// <c>spareAmmo != -1</c> and <c>Weapon.HasInfiniteSpareAmmo</c> tests <c>== -2</c>
+        /// (<c>Weapon.cs</c>), which is exactly <see cref="WeaponConfig.NoResupplySpareAmmo"/>
+        /// and <see cref="WeaponConfig.InfiniteSpareAmmo"/>. A prefab's <c>-1</c> is written as
+        /// the named constant rather than as a bare <c>-1</c> so the reader does not have to ask
+        /// which of the two negatives it is.
+        /// </para>
         /// </remarks>
         private static WeaponConfig[] BuildConfigs()
         {
@@ -179,7 +213,7 @@ namespace Ironfront.Net.Replication.Combat
             // ak.prefab -> AK Tracer.prefab. The service rifle.
             configs[WeaponIds.RK44] = new WeaponConfig(
                 cooldown: 0.095f, spread: 0.003f, projectilesPerShot: 1, range: 400f,
-                damage: 35f, force: 80f, clipSize: 30,
+                damage: 35f, force: 80f, clipSize: 30, spareAmmo: 180,
                 balanceDamage: 55f,
                 dropoffStartMetres: 149f, dropoffEndMetres: 300f, dropoffMinMultiplier: 0.75f);
 
@@ -187,28 +221,28 @@ namespace Ironfront.Net.Replication.Combat
             // the placeholder had it at the rifle's 30 rounds and the rifle's cadence.
             configs[WeaponIds.SIND7] = new WeaponConfig(
                 cooldown: 0.05f, spread: 0.008f, projectilesPerShot: 1, range: 200f,
-                damage: 30f, force: 50f, clipSize: 12,
+                damage: 30f, force: 50f, clipSize: 12, spareAmmo: 36,
                 balanceDamage: 50f,
                 dropoffStartMetres: 99.3f, dropoffEndMetres: 200f, dropoffMinMultiplier: 0.75f);
 
             // The suppressed variant is NOT a copy: it loses range sooner and floors lower.
             configs[WeaponIds.SIND7_SUPPRESSED] = new WeaponConfig(
                 cooldown: 0.05f, spread: 0.008f, projectilesPerShot: 1, range: 200f,
-                damage: 30f, force: 50f, clipSize: 12,
+                damage: 30f, force: 50f, clipSize: 12, spareAmmo: 36,
                 balanceDamage: 50f,
                 dropoffStartMetres: 30f, dropoffEndMetres: 150f, dropoffMinMultiplier: 0.6f);
 
             // shotgun.prefab (ShellLoadedWeapon). TWENTY pellets at 15, not one round at 40.
             configs[WeaponIds.EAGLE_76] = new WeaponConfig(
                 cooldown: 1.1f, spread: 0.03f, projectilesPerShot: 20, range: 80f,
-                damage: 15f, force: 30f, clipSize: 6,
+                damage: 15f, force: 30f, clipSize: 6, spareAmmo: 30,
                 balanceDamage: 20f,
                 dropoffStartMetres: 0f, dropoffEndMetres: 150f, dropoffMinMultiplier: 0.1f);
 
             // sniper.prefab (ScopedWeapon). The placeholder had this as an automatic.
             configs[WeaponIds.SL_DEFENDER] = new WeaponConfig(
                 cooldown: 1.5f, spread: 0f, projectilesPerShot: 1, range: 1000f,
-                damage: 80f, force: 130f, clipSize: 8,
+                damage: 80f, force: 130f, clipSize: 8, spareAmmo: 40,
                 balanceDamage: 130f,
                 dropoffStartMetres: 248.3f, dropoffEndMetres: 500f, dropoffMinMultiplier: 0.9f,
                 automatic: false);
@@ -216,7 +250,7 @@ namespace Ironfront.Net.Replication.Combat
             // dmr.prefab. Semi-auto, 20-round magazine.
             configs[WeaponIds.SIGNAL_DMR] = new WeaponConfig(
                 cooldown: 0.14f, spread: 0.0012f, projectilesPerShot: 1, range: 800f,
-                damage: 38f, force: 100f, clipSize: 20,
+                damage: 38f, force: 100f, clipSize: 20, spareAmmo: 120,
                 balanceDamage: 60f,
                 dropoffStartMetres: 149f, dropoffEndMetres: 300f, dropoffMinMultiplier: 0.75f,
                 automatic: false);
@@ -225,7 +259,7 @@ namespace Ironfront.Net.Replication.Combat
             // placeholder assumed - 0.1 s and 14 rounds against the guessed 1.5 s and 5.
             configs[WeaponIds.RECON_LRR] = new WeaponConfig(
                 cooldown: 0.1f, spread: 0.0003f, projectilesPerShot: 1, range: 1000f,
-                damage: 52f, force: 110f, clipSize: 14,
+                damage: 52f, force: 110f, clipSize: 14, spareAmmo: 84,
                 balanceDamage: 85f,
                 dropoffStartMetres: 36f, dropoffEndMetres: 400f, dropoffMinMultiplier: 0.8f);
 
@@ -246,26 +280,31 @@ namespace Ironfront.Net.Replication.Combat
             // near miss rather than a category error is that a sweep still printed `hits=1`.
             configs[WeaponIds.BEU_AW1] = new WeaponConfig(
                 cooldown: 0.05f, spread: 0f, projectilesPerShot: 1, range: 300f,
-                damage: 0f, force: 0f, clipSize: 1,
+                damage: 0f, force: 0f, clipSize: 1, spareAmmo: 3,
                 delivery: WeaponDelivery.Projectile, automatic: false);
 
             // javelin.prefab -> javelin missile.prefab (JavelinMissile): damage 2000,
             // balanceDamage 300. The placeholder had this as a marksman rifle doing 40.
             configs[WeaponIds.BIL_SCALPEL] = new WeaponConfig(
                 cooldown: 0.2f, spread: 0f, projectilesPerShot: 1, range: 1000f,
-                damage: 0f, force: 0f, clipSize: 1,
+                damage: 0f, force: 0f, clipSize: 1, spareAmmo: 1,
                 delivery: WeaponDelivery.Projectile, automatic: false);
 
             // Thrown. Both -> GrenadeProjectile, impact damage 70, balanceDamage 60; the blast is
             // separate and V7's. One carried, not the two the placeholder assumed.
+            //
+            // The reserves are the only thing that separates these two entries: a frag holds one
+            // spare and a spearhead two, so a player throws two of the first and three of the
+            // second per life. Identical-looking blocks that differ in one literal are worth
+            // saying out loud rather than leaving for a reader to diff.
             configs[WeaponIds.FRAG] = new WeaponConfig(
                 cooldown: 1.3f, spread: 0.01f, projectilesPerShot: 1, range: 40f,
-                damage: 0f, force: 0f, clipSize: 1,
+                damage: 0f, force: 0f, clipSize: 1, spareAmmo: 1,
                 delivery: WeaponDelivery.Projectile, automatic: false);
 
             configs[WeaponIds.SPEARHEAD] = new WeaponConfig(
                 cooldown: 1.3f, spread: 0.01f, projectilesPerShot: 1, range: 40f,
-                damage: 0f, force: 0f, clipSize: 1,
+                damage: 0f, force: 0f, clipSize: 1, spareAmmo: 2,
                 delivery: WeaponDelivery.Projectile, automatic: false);
 
             // Not weapons, and the assets agree rather than the class name doing the arguing.
@@ -273,6 +312,13 @@ namespace Ironfront.Net.Replication.Combat
             // still points at the rifle's tracer prefab, but Binoculars overrides firing so the
             // reference is vestigial - reading its 35 damage would arm a pair of binoculars.
             // NV_GOGGLES (ToggleableItem) has no projectile at all.
+            //
+            // Their reserve is Inert's no-resupply, and for three of them that IS the prefab:
+            // BINOCS, AMMO_BAG and MEDIPACK each carry spareAmmo -1. NV_GOGGLES carries 10/50,
+            // which is Weapon.Configuration's field default verbatim (Weapon.cs) on an item that
+            // never fires - so it is an unset field rather than an authored figure, and this
+            // entry already declines the clip of 10 beside it for that reason. Carrying the 50
+            // would put "50 spare" on the HUD under a pair of goggles that cannot spend one.
             configs[WeaponIds.BINOCS] = Inert;
             configs[WeaponIds.AMMO_BAG] = Inert;
             configs[WeaponIds.MEDIPACK] = Inert;
@@ -282,7 +328,9 @@ namespace Ironfront.Net.Replication.Combat
             // 200 / 200 / 2000, both 3 m over a 0.15 s swing - but this table models a hitscan
             // shot, and a swing is not one. Writing 60 damage at 3 m range here would let
             // ServerFireResolver resolve a wrench as a very short rifle. They stay Inert and stay
-            // UNAUTHORED so DescribeUnauthored keeps naming them; see BuildAuthored.
+            // UNAUTHORED so DescribeUnauthored keeps naming them; see BuildAuthored. Inert's
+            // no-resupply reserve is what both prefabs say (-1), so taking it claims nothing
+            // about them that they did not already author.
             configs[WeaponIds.WRENCH] = Inert;
             configs[WeaponIds.SUPER_WRENCH] = Inert;
 
