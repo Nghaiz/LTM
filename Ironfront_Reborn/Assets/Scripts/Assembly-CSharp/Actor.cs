@@ -128,6 +128,15 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 	[NonSerialized]
 	public bool inWater;
 
+	/// <summary>
+	/// Whether <see cref="UpdateSwimWeapon"/> is the one holding the weapon out of sight.
+	/// </summary>
+	/// <remarks>
+	/// Edge state, so the swim stow gives back exactly what it took and never re-shows a weapon
+	/// a seat, a death or a ragdoll put away for its own reasons.
+	/// </remarks>
+	private bool swimWeaponStowed;
+
 	[NonSerialized]
 	public Weapon activeWeapon;
 
@@ -592,7 +601,7 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		{
 			return;
 		}
-		if (inWater && !fallenOver)
+		if (inWater && !fallenOver && !IsNetworkDrivenLocalBody())
 		{
 			if (IsSeated())
 			{
@@ -600,6 +609,7 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 			}
 			FallOver();
 		}
+		UpdateSwimWeapon();
 		if (!hurtAction.Done() && !fallenOver && !dead)
 		{
 			float num = hurtAction.Ratio();
@@ -657,6 +667,12 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 
 	private void UpdateWeapon()
 	{
+		// A stowed swimmer's weapon is not aimed, fired or reloaded. Without this the shipped
+		// `!fallenOver` guard would let a networked swimmer -- who no longer ragdolls for water
+		// -- fire a weapon whose GameObject is switched off, which is a shot with no muzzle,
+		// no sound and no animation that the server nonetheless resolves.
+		if (swimWeaponStowed) return;
+
 		bool flag = !fallenOver && controller.Fire() && (!IsSeated() || seat.CanUseCarriedWeapon() || seat.HasMountedWeapon());
 		if (flag)
 		{
@@ -903,6 +919,77 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 			return;
 		}
 		target.AddForce(force, ForceMode.Impulse);
+	}
+
+	/// <summary>
+	/// Whether this body's position belongs to the netcode rather than to this Actor.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Water must not ragdoll such a body.</b> <c>FallOver</c> calls
+	/// <c>controller.DisableInput</c>, and for the local networked player that closes a loop
+	/// with no exit: input off means the client sends no move command, the server therefore
+	/// holds the body exactly where it is, <c>inWater</c> stays true, and
+	/// <c>UpdateRagdollStates</c>' getup gate -- which requires <c>!inWater</c> -- never opens.
+	/// A player who swam out of their depth lost control of their character for the rest of the
+	/// round. Ledger <b>X-86</b>.
+	/// </para>
+	/// <para>
+	/// <b>The server was never affected and is not changed here.</b> <c>Update</c> returns
+	/// early, above, for a network-claimed body whose AI controller is suspended, so the water
+	/// branch is unreachable on a game server. This is a client-role fix.
+	/// </para>
+	/// <para>
+	/// <b><c>NetContext.IsClient</c> is load-bearing, not belt-and-braces.</b>
+	/// <c>NetPresenterGate.IsLocalActor</c> answers literally <c>!aiControlled</c> when offline
+	/// -- by design, so single-player keeps its shipped behaviour -- and without this term the
+	/// gate would strip the ragdoll swim from offline play too, which nobody asked for.
+	/// </para>
+	/// <para>
+	/// <b>Skipping the block also skips its <c>LeaveSeat</c>, and that is a correction.</b>
+	/// Seat authority at the client role is the server's (design D2, ledger X-30); a client
+	/// deciding locally that its occupant has left a vehicle is exactly the local decision the
+	/// netcode forbids elsewhere in this file.
+	/// </para>
+	/// </remarks>
+	private bool IsNetworkDrivenLocalBody()
+	{
+		return Ironfront.Net.Unity.NetContext.IsClient
+			&& Ironfront.Net.Unity.NetPresenterGate.IsLocalActor(this);
+	}
+
+	/// <summary>
+	/// Puts the weapon away while swimming and takes it back out on dry land.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The ragdoll swim stows the weapon inside <c>FallOver</c> and restores it inside the
+	/// getup. A body that no longer ragdolls for water needs the same two edges without the
+	/// ragdoll, which is what this is: losing the gun in the water is the intended rule, losing
+	/// the controls was not.
+	/// </para>
+	/// <para>
+	/// <b>It only ever undoes its own stow.</b> <see cref="swimWeaponStowed"/> is the edge, so
+	/// a weapon hidden by a death, a seat or a ragdoll is left exactly as that path left it.
+	/// </para>
+	/// </remarks>
+	private void UpdateSwimWeapon()
+	{
+		bool shouldStow = inWater && !fallenOver && !dead;
+		if (shouldStow == swimWeaponStowed) return;
+
+		swimWeaponStowed = shouldStow;
+		if (!HasUnholsteredWeapon()) return;
+
+		if (shouldStow)
+		{
+			activeWeapon.SetAiming(false);
+			activeWeapon.StopFire();
+			// UpdateWeapon returns early from here on, so it will not run the `else if
+			// (wasFiring)` branch that normally clears this.
+			wasFiring = false;
+		}
+		activeWeapon.gameObject.SetActive(!shouldStow);
 	}
 
 	public void FallOver()
