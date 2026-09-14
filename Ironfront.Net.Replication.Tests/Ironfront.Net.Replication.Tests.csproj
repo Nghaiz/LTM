@@ -105,6 +105,16 @@
              Link="Linked\ScriptedAim.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Diagnostics\LaneBSpawnPin.cs"
              Link="Linked\LaneBSpawnPin.cs" />
+
+    <!--
+      The client-side half of the loadout pin. It lives in Net/Shared rather than in
+      Diagnostics because Assembly-CSharp has to name it (FpsActorController.GetLoadout is the
+      seam), and LaneBHarness.cs's own header states the rule that nothing outside Diagnostics
+      may name a type from that folder: a build defining IRONFRONT_NO_DIAGNOSTICS loses the type
+      and Assembly-CSharp stops compiling.
+    -->
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Shared\ClientLoadoutPin.cs"
+             Link="Linked\ClientLoadoutPin.cs" />
   </ItemGroup>
 
 </Project>

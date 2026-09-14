@@ -1112,7 +1112,64 @@ public class FpsActorController : ActorController
 
 	public override WeaponManager.LoadoutSet GetLoadout()
 	{
-		return LoadoutUi.instance.loadout;
+		WeaponManager.LoadoutSet chosen = LoadoutUi.instance.loadout;
+
+		// Ledger X-27, second half. With no pin installed -- every configuration that ships, and
+		// every ordinary Play session -- this returns the loadout screen's own selection and the
+		// behaviour is what it was before the seam existed. The same shape, and the same
+		// argument, as AiActorController.PinnedOr on the server side.
+		//
+		// THIS is the seam and not NetClientLocalCombatDriver.RequestRespawn, deliberately: that
+		// one rewrites only the ids the spawn request carries, which would arm the SERVER body
+		// with the pinned weapon and leave this client rendering and predicting the drawn one --
+		// X-11's disagreement, reintroduced for exactly the runs being measured. Everything that
+		// asks what this player chose comes through here, so one override keeps both sides
+		// holding the same gun.
+		ClientLoadoutPin pin = ClientLoadoutPin.Active;
+		if (pin == null || chosen == null)
+		{
+			return chosen;
+		}
+
+		// A COPY. LoadoutUi.instance.loadout is the screen's own object and is handed out by
+		// reference; overwriting its fields would make the pin outlive the harness that set it
+		// and silently rewrite what the player sees selected.
+		WeaponManager.LoadoutSet pinned = new WeaponManager.LoadoutSet
+		{
+			primary = pin.PinnedOr(chosen.primary, ClientLoadoutSlot.Primary, EntryNamedOrNull),
+			secondary = pin.PinnedOr(chosen.secondary, ClientLoadoutSlot.Secondary, EntryNamedOrNull),
+			gear1 = pin.PinnedOr(chosen.gear1, ClientLoadoutSlot.Gear1, EntryNamedOrNull),
+
+			// Untouched: the pin covers the three slots PinnedLoadoutDirectory covers, so the
+			// two halves of X-27 pin the same set and a run cannot be half-pinned depending on
+			// which body was armed.
+			gear2 = chosen.gear2,
+			gear3 = chosen.gear3
+		};
+
+		// ONCE per pin, on the respawn path. LogError rather than LogWarning: an unmatched name
+		// means the run is not the experiment it was asked for, and the whole reason this row
+		// was reopened is that the old pin reported success while pinning nothing.
+		if (pin.TryTakeReport(out string report))
+		{
+			if (pin.HasUnresolved)
+			{
+				Debug.LogError(report);
+			}
+			else
+			{
+				Debug.Log(report);
+			}
+		}
+
+		return pinned;
+	}
+
+	// WeaponManager.EntryNamed dereferences `instance` without a guard, so a scene that has not
+	// built the catalogue yet would take an NRE on a path that is meant to degrade to the draw.
+	private static WeaponEntry EntryNamedOrNull(string name)
+	{
+		return WeaponManager.instance == null ? null : WeaponManager.EntryNamed(name);
 	}
 
 	public override bool Crouch()
