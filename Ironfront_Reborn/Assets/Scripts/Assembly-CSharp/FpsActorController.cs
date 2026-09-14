@@ -1167,7 +1167,7 @@ public class FpsActorController : ActorController
 
 	// WeaponManager.EntryNamed dereferences `instance` without a guard, so a scene that has not
 	// built the catalogue yet would take an NRE on a path that is meant to degrade to the draw.
-	private static WeaponEntry EntryNamedOrNull(string name)
+	private static WeaponManager.WeaponEntry EntryNamedOrNull(string name)
 	{
 		return WeaponManager.instance == null ? null : WeaponManager.EntryNamed(name);
 	}
