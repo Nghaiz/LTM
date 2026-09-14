@@ -182,6 +182,47 @@ jobs:
           if-no-files-found: warn
 
   # =======================================================================================
+  # HARD GATE — the artifact Unity actually loads.
+  #
+  # Assets/Plugins/Ironfront.*.dll are build artifacts of .NET source that live in git, and
+  # Unity loads them rather than compiling those sources. A source fix committed without
+  # tools/build-libs.ps1 having run is shipped in name only.
+  #
+  # THIS USED TO LIVE IN THE ADVISORY JOB BELOW, AND IT WORKED. On 2026-09-14 it emitted
+  # exactly the warning it was written to emit -- "Ironfront.Net.Replication source changed
+  # after this DLL was last committed" -- and #281 merged green anyway, because a
+  # continue-on-error job reports `pass` and nobody reads a warning inside a green check. The
+  # vehicle-health fix that PR carried never reached the game: the committed DLL decoded full
+  # health as 0.3922, under the rung that plays damage smoke, against the rebuilt 1.0000.
+  #
+  # Its own argument for being advisory was that a stale DLL "breaks Unity at the client
+  # track's desk" rather than the build. That desk is the shipping path. A gate that has
+  # already proved it can detect the fault and has already been ignored does not need better
+  # wording; it needs to block.
+  #
+  # Its own job rather than a step in build-test: the check reads commit history on both
+  # sides, so it needs fetch-depth 0, and build-test is deliberately shallow across a
+  # two-OS matrix. No `paths:` filter -- a required check skipped by paths reports
+  # "Expected — Waiting" for ever (ci-cd-trigger-design rule 3).
+  # =======================================================================================
+  plugin-closure:
+    name: plugin closure
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Both timestamps come from `git log`, which a shallow clone cannot answer. Without
+          # this the script would skip every library for "no history on one side" and pass --
+          # an under-triggering gate, which is the failure mode this whole job exists to undo.
+          fetch-depth: 0
+
+      - name: Plugin DLLs match their sources
+        shell: pwsh
+        run: ./tools/check-plugin-dll-freshness.ps1
+
+  # =======================================================================================
   # SOFT GATE — reports, never blocks. continue-on-error is set at the JOB level so a
   # failure here shows as a neutral/green check on the PR.
   # =======================================================================================
@@ -232,49 +273,6 @@ jobs:
         shell: pwsh
         run: ./tools/check-commit-scope.ps1 -BaseRef "origin/${{ github.base_ref }}" -HeadRef "HEAD"
 
-      # Plugin-DLL drift. Assets/Plugins/Ironfront.Net.*.dll are build artifacts of B, C and D
-      # source that live in git, so the Unity project can silently load a build older than the
-      # source it was built from. That is not hypothetical: after #19 merged,
-      # Ironfront.Net.Replication.dll on develop was missing ServerMessageRouter and
-      # ServerPayloadWriter, and nothing reported it — it was fixed by accident in #21 by
-      # someone rebuilding for an unrelated reason. Standing rule 5 in plans/plan.md
-      # says rebuild in the same PR as the source change; this is the thing that notices when
-      # nobody did.
-      #
-      # Discovered from the DLLs actually present rather than from a hardcoded project list, so
-      # adding a library to build-libs.ps1 extends the check with no edit here.
-      #
-      # Advisory, and deliberately so: a stale DLL never breaks the .NET build or the tests
-      # (they compile from source), it breaks Unity at the client track's desk. Blocking a merge on it
-      # would stop work that is provably correct on every gate that can measure it.
-      - name: Plugin DLL drift check
-        if: always()
-        shell: bash
-        run: |
-          drift=0
-          # Ironfront.*, not Ironfront.Net.*: Ironfront.MasterClient.dll is equally
-          # load-bearing (it holds IMasterClient and MasterClientTlsOptions) and was invisible
-          # to the narrower glob. The `[ -d "$lib" ]` guard below filters anything without a
-          # matching source directory, so third-party DLLs stay out on their own.
-          for dll in Ironfront_Reborn/Assets/Plugins/Ironfront.*.dll; do
-            [ -e "$dll" ] || continue
-            lib=$(basename "$dll" .dll)
-            [ -d "$lib" ] || continue
-            # The whole project directory, not just *.cs: a .csproj or Directory.Packages.props
-            # bump changes the emitted assembly just as a source edit does. bin/ and obj/ are
-            # gitignored, so they contribute no noise.
-            src_at=$(git log -1 --format=%ct -- "$lib")
-            dll_at=$(git log -1 --format=%ct -- "$dll")
-            if [ -z "$src_at" ] || [ -z "$dll_at" ]; then
-              echo "$lib: no history for one side, skipping"
-              continue
-            fi
-            if [ "$src_at" -gt "$dll_at" ]; then
-              echo "::warning file=$dll::$lib source changed after this DLL was last committed. Run tools/build-libs.ps1 and commit the result — Unity is loading a stale build."
-              drift=1
-            fi
-          done
-          if [ "$drift" -eq 0 ]; then echo "No plugin DLL drift."; fi
 
       # The security scan that actually runs on this repository. CodeQL cannot: code scanning
       # on a private repo needs GitHub Advanced Security, so codeql.yml skips itself until the
