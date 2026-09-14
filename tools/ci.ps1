@@ -78,6 +78,21 @@ try {
         & "$PSScriptRoot/check-duplicate-assemblies.ps1"
     }
 
+    # THE ARTIFACT UNITY ACTUALLY LOADS. Six .NET projects reach Unity as prebuilt DLLs committed
+    # under Assets/Plugins; Unity never compiles their sources. PR #281 fixed the vehicle-health
+    # decode and did not refresh the closure, so the suite was green, the source was right, and
+    # every vehicle in the game kept smoking -- the committed DLL decoded full health as 0.3922
+    # against the rebuilt DLL's 1.0000. Every other step in this file reads source or a fresh
+    # build; this is the only one that asks whether the shipped binary agrees with either.
+    #
+    # Commit timestamps, not bytes: Roslyn embeds a fresh MVID per compilation, so two builds of
+    # identical source are never byte-equal and a gate written that way is red always, which is
+    # the same as no gate. The same script is the ci.yml `plugin closure` job, which BLOCKS -- it
+    # spent its whole life as a warning inside a continue-on-error job and was duly ignored.
+    Invoke-Step "3g. Unity plugin DLLs match their sources" {
+        & "$PSScriptRoot/check-plugin-dll-freshness.ps1"
+    }
+
     # phase-3-harness.md acceptance criterion 4, and the ack half debt-closure added to it.
     #
     # WIRED HERE BELATEDLY. The gate shipped with #150 and nothing ever invoked it — not ci.ps1,
