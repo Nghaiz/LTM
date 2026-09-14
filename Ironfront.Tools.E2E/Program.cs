@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -122,7 +122,7 @@ namespace Ironfront.Tools.E2E
             var stopwatch = Stopwatch.StartNew();
             try
             {
-                await master.ConnectAsync(options.MasterHost, options.MasterPort, ct).ConfigureAwait(false);
+                await master.ConnectAsync(options.MasterHost, options.MasterPort, MasterTlsOf(options), ct).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -351,7 +351,7 @@ namespace Ironfront.Tools.E2E
             var stopwatch = Stopwatch.StartNew();
             try
             {
-                await partner.ConnectAsync(options.MasterHost, options.MasterPort, ct).ConfigureAwait(false);
+                await partner.ConnectAsync(options.MasterHost, options.MasterPort, MasterTlsOf(options), ct).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -511,7 +511,7 @@ namespace Ironfront.Tools.E2E
             try
             {
                 foreach (IMasterClient client in all)
-                    await client.ConnectAsync(options.MasterHost, options.MasterPort, ct).ConfigureAwait(false);
+                    await client.ConnectAsync(options.MasterHost, options.MasterPort, MasterTlsOf(options), ct).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -798,7 +798,7 @@ namespace Ironfront.Tools.E2E
                 return existing.RoomId;
             }
 
-            await host.ConnectAsync(options.MasterHost, options.MasterPort, ct).ConfigureAwait(false);
+            await host.ConnectAsync(options.MasterHost, options.MasterPort, MasterTlsOf(options), ct).ConfigureAwait(false);
 
             try
             {
@@ -971,10 +971,33 @@ namespace Ironfront.Tools.E2E
             public string Detail = string.Empty;
         }
 
+    /// <summary>
+    /// The TLS options for the master link, or null when the link is plaintext.
+    /// </summary>
+    /// <remarks>
+    /// Null rather than a disabled instance, matching what the client does: ConnectAsync's
+    /// parameter is optional and its own default is null, and two ways to spell the same thing
+    /// is two things to drift. The target host is the host dialled, which on fly's shared IPv4
+    /// is also the SNI that selects the app.
+    /// </remarks>
+    private static MasterClientTlsOptions? MasterTlsOf(Options options)
+        => options.MasterTls
+            ? new MasterClientTlsOptions { Enabled = true, TargetHost = options.MasterHost }
+            : null;
+
         private sealed class Options
         {
             public string MasterHost { get; private set; } = "127.0.0.1";
             public int MasterPort { get; private set; } = 27000;
+
+            /// <summary>TLS for the master link, for a master behind a TLS terminator.</summary>
+            /// <remarks>
+            /// Off by default, which is every local and LAN master. Needed for fly.io, whose
+            /// app config terminates TLS at the edge: a plaintext dial there fails the
+            /// handshake and this harness reports "could not reach", which names the symptom
+            /// and nothing about the cause.
+            /// </remarks>
+            public bool MasterTls { get; private set; }
             public string Username { get; private set; } = "e2e_walker";
 
             /// <summary>The account that creates the room and sits in it. See ResolveRoomAsync.</summary>
@@ -1049,6 +1072,7 @@ namespace Ironfront.Tools.E2E
                         case "--match-wait": options.MatchWaitSeconds = int.Parse(Next(args, ref i)); break;
                         case "--master-host": options.MasterHost = Next(args, ref i); break;
                         case "--master-port": options.MasterPort = int.Parse(Next(args, ref i)); break;
+                        case "--master-tls": options.MasterTls = true; break;
                         case "--username": options.Username = Next(args, ref i); break;
                         case "--host-username": options.HostUsername = Next(args, ref i); break;
                         case "--room-name": options.RoomName = Next(args, ref i); break;
