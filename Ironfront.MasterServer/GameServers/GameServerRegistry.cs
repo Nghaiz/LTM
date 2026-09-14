@@ -181,17 +181,64 @@ namespace Ironfront.MasterServer.GameServers
             return releasedRooms;
         }
 
-        public List<int> Prune(long now)
+        /// <summary>
+        /// Takes the room back off a game server that has gone silent, and returns the rooms
+        /// freed. It does NOT unregister anybody.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This used to delete the record, and that is how a healthy server disappeared.</b>
+        /// Registry membership has exactly one authority: <see cref="RemoveConnection"/>, driven
+        /// by <c>MspMessageDispatcher.OnDisconnected</c>, which <c>TcpListenerHost.Disconnect</c>
+        /// calls on every single removal from its connection table -- timeout sweep, socket
+        /// error, clean close alike. A record that still exists therefore already means "the
+        /// owner connection is alive". Deleting on a heartbeat gap was a SECOND clock over a
+        /// DIFFERENT signal, answering a question the first clock had already answered, and the
+        /// two disagreed exactly when they must not.
+        /// </para>
+        /// <para>
+        /// <b>What that cost.</b> One gap over 30 s -- a scene load, a GC pause, a stalled
+        /// frame -- removed the record while the TCP link stayed up. From that moment
+        /// <see cref="Heartbeat"/> returned <c>false</c> every ~5 s forever, the dispatcher
+        /// discarded the value, and nothing re-registers: <c>ConnectAndRegisterAsync</c> runs
+        /// once at boot. Observed on staging after five hours: pod Running, heartbeats steady
+        /// for both ids, <c>connections.current: 2</c>, <c>registered: 0</c>, every join
+        /// answered <c>NoGameServerAvailable</c>, logs clean, dashboards green. Restarting a
+        /// server was the only recovery, and only for that one.
+        /// </para>
+        /// <para>
+        /// <b>The room half of M2 criterion 3 is kept, because it is the half that was right.</b>
+        /// A room must not stay stranded on a server that stopped ticking. So the room comes
+        /// back and the registration stays: the server is then <i>registered but not healthy</i>
+        /// -- <see cref="GameServerRecord.IsHealthy"/> still gates <see cref="Allocate"/> at
+        /// 15 s -- which is precisely the state <see cref="CountHealthy"/> was built to surface
+        /// and alert on. A silent server is now visibly useless instead of invisibly absent, and
+        /// it re-enters allocation by itself the moment its heartbeats resume.
+        /// </para>
+        /// <para>
+        /// <b>It is idempotent.</b> Releasing sets <see cref="GameServerRecord.AssignedRoomId"/>
+        /// to 0, so a server that stays silent is reported once rather than on every tick.
+        /// </para>
+        /// <para>
+        /// <b>What this does NOT fix.</b> A genuinely dropped link still unregisters the server
+        /// permanently, because nothing re-registers. That case is now LOUD rather than silent
+        /// -- <c>HandleGameServerHeartbeat</c> logs every rejected heartbeat by id -- but the
+        /// self-healing answer is a negative acknowledgement the game server acts on, which
+        /// needs a protocol message and a new server id reaching <c>TicketValidator</c>. Tracked
+        /// separately.
+        /// </para>
+        /// </remarks>
+        public List<int> ReleaseRoomsFromSilentServers(long now)
         {
             var releasedRooms = new List<int>();
-            var dead = new List<ushort>();
             foreach (KeyValuePair<ushort, GameServerRecord> item in _servers)
             {
                 if (now - item.Value.LastHeartbeatAt <= 30_000) continue;
-                if (item.Value.AssignedRoomId != 0) releasedRooms.Add(item.Value.AssignedRoomId);
-                dead.Add(item.Key);
+                if (item.Value.AssignedRoomId == 0) continue;
+
+                releasedRooms.Add(item.Value.AssignedRoomId);
+                item.Value.AssignedRoomId = 0;
             }
-            foreach (ushort id in dead) _servers.Remove(id);
             return releasedRooms;
         }
 

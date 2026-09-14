@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Client;
 using Ironfront.Net.Replication.Movement;

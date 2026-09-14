@@ -59,6 +59,16 @@ namespace Ironfront.Net.Unity.Bindings
         }
 
         /// <inheritdoc/>
+        public bool IsInWater
+        {
+            get
+            {
+                FpsActorController local = FpsActorController.instance;
+                return local != null && local.actor != null && local.actor.inWater;
+            }
+        }
+
+        /// <inheritdoc/>
         public void SetInputSource(IInputSource source)
         {
             FpsActorController local = FpsActorController.instance;

@@ -25,9 +25,25 @@ namespace Ironfront.MasterServer.Tests
         private const string SharedSecret = "this-is-a-long-enough-shared-secret-for-tests";
         private static readonly ushort[] Dustbowl = { 1 };
 
-        /// <summary>M2 criterion 3.</summary>
+        /// <summary>
+        /// M2 criterion 3, and the half of it that changed. X-87.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The room comes back; the registration stays.</b> This used to assert the record
+        /// was gone, which is how a live game server disappeared from a healthy master: one
+        /// heartbeat gap over 30 s deleted it while its TCP link was still up, every later
+        /// heartbeat was rejected in silence, and nothing re-registers.
+        /// </para>
+        /// <para>
+        /// Registry membership has one authority — <c>RemoveConnection</c>, driven by every
+        /// connection close — so a second, stricter clock over a different signal could only
+        /// ever disagree with it. What the room half asserted was always right and is kept: a
+        /// room must not stay stranded on a server that stopped ticking.
+        /// </para>
+        /// </remarks>
         [Fact]
-        public void ThirtySecondsWithoutAHeartbeatRemovesTheServerAndReleasesItsRoom()
+        public void ThirtySecondsWithoutAHeartbeatReleasesTheRoomButKeepsTheRegistration()
         {
             var registry = new GameServerRegistry(SharedSecret);
             long start = 1_000_000;
@@ -35,13 +51,43 @@ namespace Ironfront.MasterServer.Tests
             Assert.NotNull(server);
             Assert.Same(server, registry.Allocate(1, 42, start));
 
-            // The record is healthy for 15 s and reaped at 30 s. Both edges matter: reaping at the
-            // health boundary would drop a server over one late heartbeat, and the room has to come
-            // back or it is stranded on a server that no longer exists.
+            // Unhealthy at 15 s and room-released at 30 s. Both edges matter: releasing at the
+            // health boundary would strand a room over one late heartbeat.
             Assert.False(server!.IsHealthy(start + 15_001));
-            Assert.Empty(registry.Prune(start + 30_000));
-            Assert.Equal(new[] { 42 }, registry.Prune(start + 30_001));
-            Assert.False(registry.TryGet(server.ServerId, out _));
+            Assert.Empty(registry.ReleaseRoomsFromSilentServers(start + 30_000));
+            Assert.Equal(new[] { 42 }, registry.ReleaseRoomsFromSilentServers(start + 30_001));
+
+            Assert.True(registry.TryGet(server.ServerId, out _));
+            Assert.Equal(1, registry.Count);
+            Assert.Equal(0, registry.CountHealthy(start + 30_001));
+
+            // Idempotent: the room is reported once, not on every tick it stays silent.
+            Assert.Empty(registry.ReleaseRoomsFromSilentServers(start + 60_000));
+        }
+
+        /// <summary>
+        /// The staging failure itself: a silent server recovers by heartbeating again. X-87.
+        /// </summary>
+        /// <remarks>
+        /// Observed after five hours — pod Running, heartbeats steady for both ids,
+        /// <c>connections.current: 2</c>, <c>registered: 0</c>, every join answered
+        /// <c>NoGameServerAvailable</c>, logs clean. Restarting a server was the only recovery,
+        /// and only for that one. This is the assertion that would have been red.
+        /// </remarks>
+        [Fact]
+        public void AServerThatWentSilentIsAllocatableAgainOnceItsHeartbeatsResume()
+        {
+            var registry = new GameServerRegistry(SharedSecret);
+            long start = 1_000_000;
+            Assert.True(registry.TryRegister(1, SharedSecret, "10.0.0.7", 27015, 16, Dustbowl, start, out GameServerRecord? server));
+
+            long silent = start + 5 * 60 * 60 * 1000;
+            registry.ReleaseRoomsFromSilentServers(silent);
+
+            // The heartbeat is ACCEPTED -- it used to answer false forever, unread.
+            Assert.True(registry.Heartbeat(1, server!.ServerId, 0, -1f, 8f, 1, silent));
+            Assert.True(server.IsHealthy(silent));
+            Assert.Same(server, registry.Allocate(1, 77, silent));
         }
 
         /// <summary>
@@ -57,7 +103,7 @@ namespace Ironfront.MasterServer.Tests
 
             Assert.True(registry.Heartbeat(1, server!.ServerId, 4, 12f, 8f, 1, start + 25_000));
 
-            Assert.Empty(registry.Prune(start + 40_000));
+            Assert.Empty(registry.ReleaseRoomsFromSilentServers(start + 40_000));
             Assert.True(registry.TryGet(server.ServerId, out _));
         }
 
@@ -394,7 +440,7 @@ namespace Ironfront.MasterServer.Tests
         /// number — so the tie-break is what decides most real allocations, and a tie-break that
         /// silently equals "first one the dictionary yields" is the X-7 defect with a new name.
         /// <c>Dictionary</c> hands out insertion order only while nothing is removed; once
-        /// <c>Prune</c> or <c>RemoveConnection</c> frees a slot, the next registration reuses it
+        /// <c>RemoveConnection</c> frees a slot, the next registration reuses it
         /// and lands at the FRONT of iteration. That is a long-running master's steady state,
         /// not an edge case.
         /// </para>

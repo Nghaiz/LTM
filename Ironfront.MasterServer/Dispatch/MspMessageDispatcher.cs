@@ -148,7 +148,7 @@ namespace Ironfront.MasterServer.Dispatch
 
             foreach (MatchmakeResult result in _matchmaking.Tick(nowUnixMs))
                 PushMatchmakeResult(result);
-            foreach (int roomId in _gameServers.Prune(nowUnixMs))
+            foreach (int roomId in _gameServers.ReleaseRoomsFromSilentServers(nowUnixMs))
                 ResetRoomAfterServerLoss(roomId);
         }
 
@@ -463,7 +463,26 @@ namespace Ironfront.MasterServer.Dispatch
 
         private void HandleGameServerHeartbeat(ClientConnection connection, GameServerHeartbeatRequest request)
         {
-            _gameServers.Heartbeat(connection.Id, request.ServerId, request.CurrentPlayers, request.CpuPercent, request.AverageTickMs, request.State, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+            // THE RETURN VALUE IS READ. It was discarded, and that is the whole reason a master
+            // could drop a live game server in silence: Heartbeat answers false for an id it
+            // does not hold, or one held by a different connection, and every dashboard stayed
+            // green while a healthy server stopped being allocatable. Nothing recovers here --
+            // the game server registers once, at boot -- so the only honest thing this side can
+            // do is refuse to be quiet about it.
+            bool accepted = _gameServers.Heartbeat(
+                connection.Id, request.ServerId, request.CurrentPlayers, request.CpuPercent,
+                request.AverageTickMs, request.State,
+                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+
+            if (!accepted)
+            {
+                MasterLog.Error(
+                    $"conn #{connection.Id}: GS_HEARTBEAT REJECTED for server id "
+                    + $"{request.ServerId} -- this id is not registered to this connection, so "
+                    + "the server is heartbeating into nothing and will never be allocated a "
+                    + "room again. It cannot recover on its own: registration happens once, at "
+                    + "boot. Restart that game server.");
+            }
 
             StructuredLog.Event("gs_heartbeat", new
             {
