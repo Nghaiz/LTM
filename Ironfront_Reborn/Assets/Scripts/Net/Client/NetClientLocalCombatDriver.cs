@@ -416,6 +416,28 @@ namespace Ironfront.Net.Unity.Client
             // Safe by construction: PredictFire never raycasts, never applies damage and never
             // moves health. It stamps a local cooldown and decrements a predicted clip that the
             // next snapshot reconciles.
+            //
+            // HANDOFF 3.2, "do not subtract ammo a second time at network role" -- audited
+            // 2026-09-14, and there is no second subtraction of the CLIP to remove. Written down
+            // rather than answered with a guard, because a guard against a decrement that does
+            // not exist is a second place to get this wrong later.
+            //
+            // There are two clip counters on a client and each is decremented in exactly one
+            // place. ClientCombatState's is moved only by PredictFire, here -- the whole file
+            // contains no other call. Ravenfield's Weapon.ammo is moved only by `ammo--` in
+            // Weapon.Shoot. They do not compound, because OnSnapshotApplied ASSIGNS the
+            // reconciled count into Weapon.ammo (ILocalPlayerRig.ApplyAuthoritativeCombat) --
+            // an assignment, not a subtraction, so a divergence is erased every snapshot rather
+            // than accumulated. A real double decrement would show as SnapshotAmmoCorrections
+            // climbing at the rate of PredictedShots; both are in the lane-B record and it does
+            // not.
+            //
+            // The RESERVE is the one that genuinely still has two writers, and it is not fixable
+            // from this file: Weapon.ReloadDone spends Actor.spareAmmo[slot] locally while the
+            // server spends its own pool, and ApplyAuthoritativeCombat has no reserve parameter
+            // to correct it with. ClientCombatState.SpareAmmo now carries the authoritative
+            // number as far as this seam; widening ILocalPlayerRig to push it into the rig is
+            // the remaining step.
             if (_state.IsAlive && FirePressed()) _state.PredictFire(Time.time);
             if (_state.IsAlive && ReloadPressed()) _state.BeginReload(Time.time);
 
