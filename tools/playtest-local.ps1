@@ -1,4 +1,4 @@
-# tools/playtest-local.ps1 -- the whole game, on one machine, played by hand.
+﻿# tools/playtest-local.ps1 -- the whole game, on one machine, played by hand.
 #
 # WHAT THIS IS FOR. Everything else in tools/ launches processes that grade themselves:
 # run-lane-b.ps1 drives scripted clients through recorded programmes, run-e2e.ps1 drives a
@@ -60,6 +60,22 @@ param(
     # Leave the windows wherever Unity puts them (stacked). The 2x2 tiling is best-effort
     # Win32 and this is the escape hatch when it misbehaves on a multi-monitor desktop.
     [switch] $NoTile,
+
+    # The address REMOTE players dial, and the address the master reads out to them as the game
+    # server's. Defaults to loopback, which is this script's whole shape: everything on one
+    # machine.
+    #
+    # WHY THIS EXISTS, AND WHY LOOPBACK ALONE WAS A TRAP. Every address below was hardcoded to
+    # 127.0.0.1, including IRONFRONT_GAMESERVER_PUBLIC_IP -- the one the master hands to a
+    # client as "dial this for the match". On this machine that is correct and invisible. From
+    # another machine it is silently, exactly wrong: the client authenticates, browses rooms,
+    # readies up, gets its ticket, and then dials its OWN loopback. Everything up to the match
+    # works, which is what makes it hard to see.
+    #
+    # Pass the address the other players can actually route to -- on this host that is the
+    # Radmin VPN adapter (26.x.x.x), a LAN address for players on the same network, or a public
+    # IP if one is forwarded here. `-Clients 0` runs a headless host with no local windows.
+    [string] $AdvertiseIp = "127.0.0.1",
 
     # Wipe the account database. Off by default: re-registering four players every session is
     # the kind of friction that stops a playtest happening at all.
@@ -296,7 +312,7 @@ try {
     foreach ($spec in $serverSpecs) {
         $env:IRONFRONT_MASTER_HOST          = "127.0.0.1"
         $env:IRONFRONT_GAMESERVER_UDP_PORT  = "$($spec.Port)"
-        $env:IRONFRONT_GAMESERVER_PUBLIC_IP = "127.0.0.1"
+        $env:IRONFRONT_GAMESERVER_PUBLIC_IP = $AdvertiseIp
         $env:IRONFRONT_GAMESERVER_TRANSPORT = "udp"
         $env:IRONFRONT_GAMESERVER_SCENE     = $spec.Scene
         $env:IRONFRONT_GAMESERVER_MAP_IDS   = "$($spec.MapId)"
@@ -387,6 +403,18 @@ try {
     Write-Host "     The account database is kept between runs, so this is a first-time step;"
     Write-Host "     pass -FreshDb when you want it wiped."
     Write-Host "  2. Log in. The master address is pre-filled at 127.0.0.1:$MasterPort."
+    if ($AdvertiseIp -ne "127.0.0.1") {
+        Write-Host ""
+        Write-Host "================ Players on OTHER machines ================" -ForegroundColor Cyan
+        Write-Host "  They dial the MASTER, not the game server:"
+        Write-Host "      pwsh tools/play-lan.ps1 -MasterHost $AdvertiseIp -PlayerId 2 -Name P2"
+        Write-Host "  Each of them needs their OWN player id and their own account -- the server"
+        Write-Host "  enforces one session per id and a reused one is refused as InvalidTicket,"
+        Write-Host "  which reads as a full server and is not one."
+        Write-Host "  This host is advertising $AdvertiseIp for the match itself, so that address"
+        Write-Host "  has to be routable from their machine, and UDP $UdpPort/$($UdpPort + 1) has to"
+        Write-Host "  reach this process."
+    }
     Write-Host "  3. Room browser -> choose the Dustbowl or Island room -> pick a side -> Ready."
     Write-Host "  4. When every player is ready the match starts and the map loads."
     Write-Host "     Tab shows the scoreboard; alt-tab between windows to play the other side."
