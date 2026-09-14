@@ -495,7 +495,7 @@ namespace Ironfront.Net.Replication.Tests
         {
             string actor = CodeOnly(ReadUnitySource(GameplayActor));
 
-            Assert.Equal(1, Regex.Matches(actor, @"\.layer\s*=\s*16\b").Count);
+            Assert.Single(Regex.Matches(actor, @"\.layer\s*=\s*16\b"));
 
             string enterSeat = CodeOnly(MethodBody(actor, "public bool EnterSeat(Seat seat)"));
 
