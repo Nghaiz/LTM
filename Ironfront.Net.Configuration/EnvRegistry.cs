@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -292,6 +292,44 @@ namespace Ironfront.Net.Configuration
             "act on. The line above claimed the match the whole time; only data disagreed.",
             MasterPort.DefaultValue);
 
+        /// <summary>Whether a client build uses TLS when dialling the master.</summary>
+        public static readonly EnvVar ClientMasterTls = new EnvVar(
+            "IRONFRONT_CLIENT_MASTER_TLS", "Game client", "game client",
+            "Set to 1 when the master listener presents TLS. The mirror of\n" +
+            "IRONFRONT_GAMESERVER_MASTER_TLS, and a SEPARATE variable because the two are not\n" +
+            "the same link: a game server can reach the master over a private network in\n" +
+            "plaintext while every client reaches that same master through a public name which\n" +
+            "terminates TLS. fly.io is exactly that shape -- its app config carries a tls\n" +
+            "handler on the MSP port, so a plaintext client fails the handshake before it can\n" +
+            "even show a login screen.\n" +
+            "\n" +
+            "The plumbing this drives was already complete and merely unreachable:\n" +
+            "MasterSession.ConnectAsync has taken a MasterClientTlsOptions since the\n" +
+            "master-client library was written, and MenuScreenController.MasterTls is a\n" +
+            "settable property that nothing ever set. The client could not speak TLS for want\n" +
+            "of one variable and one assignment, and the symptom -- a client unable to reach a\n" +
+            "perfectly healthy public master -- reads as a deployment fault rather than as a\n" +
+            "missing feature, which is why it outlived a deployment that was working.",
+            "0",
+            summary: "1 to use TLS for client-to-master login");
+
+        /// <summary>Server name used by a client's TLS connection to the master.</summary>
+        public static readonly EnvVar ClientMasterTlsTargetHost = new EnvVar(
+            "IRONFRONT_CLIENT_MASTER_TLS_TARGET_HOST", "Game client", "game client",
+            "Certificate name for the client's master TLS connection. Empty uses\n" +
+            "IRONFRONT_CLIENT_MASTER_HOST, which is right whenever the client dials the\n" +
+            "certificate's own name. Set it when a client reaches the master through an\n" +
+            "address the certificate does not name.",
+            summary: "TLS certificate name; empty uses the client's master host");
+
+        /// <summary>Optional self-signed certificate pin for the client-to-master link.</summary>
+        public static readonly EnvVar ClientMasterTlsPinnedFingerprint = new EnvVar(
+            "IRONFRONT_CLIENT_MASTER_TLS_PINNED_FINGERPRINT_SHA256", "Game client", "game client",
+            "SHA-256 certificate fingerprint for a self-signed master certificate. Leave empty\n" +
+            "for a publicly trusted certificate -- fly.io's edge certificate is one, so the fly\n" +
+            "deployment wants this empty. Never use an accept-any-certificate switch.",
+            summary: "optional SHA-256 pin for a self-signed master certificate");
+
         /// <summary>The V5-D6 driver-prediction fallback, as one flag.</summary>
         public static readonly EnvVar ClientPredictLocalVehicle = new EnvVar(
             "IRONFRONT_CLIENT_PREDICT_VEHICLE", "Game client", "game client",
@@ -499,6 +537,7 @@ namespace Ironfront.Net.Configuration
             GameServerPublicIp, GameServerMapIds, GameServerScene, GameServerAcceptUnsignedTickets,
             ClientHost, ClientPort, ClientVerbose, ClientPredictLocalVehicle,
             ClientMasterHost, ClientMasterPort,
+            ClientMasterTls, ClientMasterTlsTargetHost, ClientMasterTlsPinnedFingerprint,
             ClientPlayerId, ClientDisplayName, ClientTeam,
             LogLevel, StructuredLog,
             TlsCertificatePath, TlsCertificatePassword,

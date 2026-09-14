@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace Ironfront.Net.Configuration
 {
@@ -50,6 +50,20 @@ namespace Ironfront.Net.Configuration
 
         /// <summary>The master server's TCP port.</summary>
         public int MasterPort { get; set; } = DefaultMasterPort;
+
+        /// <summary>Whether the client dials the master over TLS.</summary>
+        /// <remarks>
+        /// The mirror of <c>GameServerConfig.MasterTlsEnabled</c>, and separate from it because
+        /// the two links can differ: game servers may reach the master privately in plaintext
+        /// while clients reach the same master through a public name that terminates TLS.
+        /// </remarks>
+        public bool MasterTlsEnabled { get; set; }
+
+        /// <summary>Certificate name for the master TLS link. Empty uses <see cref="MasterHost"/>.</summary>
+        public string MasterTlsTargetHost { get; set; } = string.Empty;
+
+        /// <summary>Optional SHA-256 pin for a self-signed master certificate.</summary>
+        public string MasterTlsPinnedFingerprintSha256 { get; set; } = string.Empty;
 
         /// <summary>
         /// Whether the client predicts the vehicle it is driving. V5-D6.
@@ -168,6 +182,17 @@ namespace Ironfront.Net.Configuration
 
             MasterPort = EnvParse.Port(
                 EnvRegistry.ClientMasterPort.Read(read), MasterPort, EnvRegistry.ClientMasterPort.Name);
+
+            MasterTlsEnabled = EnvParse.Flag(
+                EnvRegistry.ClientMasterTls.Read(read), MasterTlsEnabled);
+
+            string masterTlsTargetHost = EnvParse.Trimmed(
+                EnvRegistry.ClientMasterTlsTargetHost.Read(read));
+            if (masterTlsTargetHost.Length > 0) MasterTlsTargetHost = masterTlsTargetHost;
+
+            string masterTlsPin = EnvParse.Trimmed(
+                EnvRegistry.ClientMasterTlsPinnedFingerprint.Read(read));
+            if (masterTlsPin.Length > 0) MasterTlsPinnedFingerprintSha256 = masterTlsPin;
 
             PredictLocalVehicle = EnvParse.Flag(
                 EnvRegistry.ClientPredictLocalVehicle.Read(read), PredictLocalVehicle);

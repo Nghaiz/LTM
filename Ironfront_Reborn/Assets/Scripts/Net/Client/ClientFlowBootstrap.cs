@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Ironfront.MasterClient;
 using Ironfront.Net.Configuration;
 using Ironfront.Net.Transport;
@@ -179,8 +179,56 @@ namespace Ironfront.Net.Unity.Client
             GameClientConfig config = ResolveConfig();
             _menu.MasterHost = config.MasterHost;
             _menu.MasterPort = config.MasterPort;
+            _menu.MasterTls  = BuildMasterTls(config);
 
             _menu.Bind(_session, _flow);
+        }
+
+        /// <summary>
+        /// The TLS options for the client's master link, or null when the link is plaintext.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Nothing set <c>MenuScreenController.MasterTls</c> before this.</b> The property
+        /// existed, <c>MasterSession.ConnectAsync</c> has taken a <c>MasterClientTlsOptions</c>
+        /// since the master-client library was written, and the whole path was reachable except
+        /// for this one assignment -- so a client could not dial a TLS master at all, and the
+        /// symptom was a client that could not reach a perfectly healthy public master. That
+        /// reads as a deployment fault rather than a missing feature, which is why it outlived
+        /// a master that was up and serving.
+        /// </para>
+        /// <para>
+        /// <b>Null rather than a disabled instance</b>, because <c>ConnectAsync</c>'s parameter
+        /// is optional and its own default is null: handing it a switched-off options object
+        /// would be a second way to spell the same thing, and the two would drift.
+        /// </para>
+        /// <para>
+        /// <b><c>AllowAnyCertificate</c> is deliberately never set here.</b> A pin covers the
+        /// self-signed case and a public CA covers the rest; an accept-anything switch on the
+        /// link that carries the login is the one shortcut this seam must not offer.
+        /// </para>
+        /// </remarks>
+        private static Ironfront.MasterClient.MasterClientTlsOptions? BuildMasterTls(
+            GameClientConfig config)
+        {
+            if (!config.MasterTlsEnabled) return null;
+
+            return new Ironfront.MasterClient.MasterClientTlsOptions
+            {
+                Enabled = true,
+
+                // Empty means "the host we dialled", which is the ordinary case and is what the
+                // game server's mirror of this does. A value is only needed when the address
+                // reached is not the name on the certificate.
+                TargetHost = string.IsNullOrWhiteSpace(config.MasterTlsTargetHost)
+                    ? config.MasterHost
+                    : config.MasterTlsTargetHost,
+
+                PinnedFingerprintSha256 = string.IsNullOrWhiteSpace(
+                    config.MasterTlsPinnedFingerprintSha256)
+                        ? null
+                        : config.MasterTlsPinnedFingerprintSha256,
+            };
         }
 
         private void OnDestroy()
