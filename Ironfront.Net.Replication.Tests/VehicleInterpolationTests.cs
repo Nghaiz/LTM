@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Client;
 using Ironfront.Net.Replication.Movement;
@@ -280,7 +280,12 @@ namespace Ironfront.Net.Replication.Tests
             VehicleSnapshotEntry entry = Entry(7, x: 12.5f);
             entry.VelX = Quantize.PackVel16(9.5f);
             entry.AngVelY = Quantize.PackAngVel(1.25f);
-            entry.Health = 128;
+            // A code the wire can actually carry. This read 128 with an assertion of 128/255,
+            // which is not a round trip through anything: the encoder
+            // (VehicleState.NormalizedHealth) never emits above Quantize.HEALTH_MAX = 100, so
+            // the pair described VehiclePose.FromEntry's own arithmetic rather than the
+            // protocol's, and it went green for as long as the decoder divided by 255. X-85.
+            entry.Health = Quantize.HEALTH_MAX / 2;
             entry.Flags = VehicleStateFlags.Burning | VehicleStateFlags.InWater;
             entry.SubtypeA = 0xAB;
             entry.SubtypeB = 0xCD;
@@ -295,7 +300,7 @@ namespace Ironfront.Net.Replication.Tests
             // window IS the fact being asserted: these are the resolutions the wire has.
             Assert.InRange(pose.LinearVelocity.X, 9.0f, 9.6f);
             Assert.InRange(pose.AngularVelocity.Y, 1.18f, 1.26f);
-            Assert.Equal(128f / 255f, pose.Health, 3);
+            Assert.Equal(0.5f, pose.Health, 3);
             Assert.Equal(VehicleStateFlags.Burning | VehicleStateFlags.InWater, pose.Flags);
             Assert.Equal(0xAB, pose.SubtypeA);
             Assert.Equal(0xCD, pose.SubtypeB);
