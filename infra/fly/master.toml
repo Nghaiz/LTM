@@ -61,6 +61,30 @@ primary_region = "sin"
     port     = 27000
     handlers = ["tls"]
 
+  # 443 AS WELL AS 27000, AND IT IS NOT REDUNDANT — it is the only port an IPv4-only client can
+  # reach this app on without paying.
+  #
+  # A fly app is IPv6-only by default, and this one has exactly that: a dedicated v6 and no v4.
+  # A machine with IPv6 reaches 27000 perfectly, which is why the app looked fine. A machine
+  # WITHOUT it resolves kien-master-2026.fly.dev to an address it cannot route to and hangs in
+  # connect — no error, no log, just silence. That is what a game server inside VMware NAT does,
+  # and VMware's NAT is IPv4.
+  #
+  # Fly's SHARED IPv4 is free and routes ports 80 and 443 only, picking the app by TLS SNI. This
+  # service already terminates TLS at the edge, so exposing the same internal 27000 on 443 makes
+  # the whole master reachable over IPv4 at no cost — the alternative being a dedicated v4, which
+  # is a recurring charge for one address.
+  #
+  # The client has to send the SNI for that routing to resolve, which is exactly what
+  # MasterClientTlsOptions.TargetHost sets, and IRONFRONT_CLIENT_MASTER_TLS_TARGET_HOST /
+  # IRONFRONT_GAMESERVER_MASTER_TLS_TARGET_HOST are how it is supplied.
+  #
+  # 27000 stays: it costs nothing, it is the documented port, and an IPv6 client should not be
+  # made to care about any of the above.
+  [[services.ports]]
+    port     = 443
+    handlers = ["tls"]
+
   [[services.tcp_checks]]
     interval     = "30s"
     timeout      = "5s"
