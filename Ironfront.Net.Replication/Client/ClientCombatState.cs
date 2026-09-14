@@ -30,6 +30,13 @@ namespace Ironfront.Net.Replication.Client
     /// predicts a shot the server rejects, and the only symptom is an ammo count that
     /// occasionally jumps back up.
     /// </para>
+    /// <para>
+    /// <b>And so is the sprint rule, since protocol 10.</b> <see cref="ApplySprint"/> advances
+    /// <see cref="EffectiveTriggerPolicy"/>'s own block and <see cref="PredictFire"/> reads it,
+    /// so the trigger this side predicts against and the trigger the server enforces are one
+    /// implementation. What the second copy cost when it did not exist at all is written at the
+    /// gate itself.
+    /// </para>
     /// </remarks>
     public sealed class ClientCombatState
     {
@@ -75,6 +82,22 @@ namespace Ironfront.Net.Replication.Client
         // what that counter documents as "client and server disagreeing about the weapon".
         private WeaponConfig _weapon = WeaponCatalog.Inert;
         private WeaponRuntimeState _runtime = WeaponRuntimeState.Loaded(WeaponCatalog.Inert);
+
+        /// <summary>
+        /// The sprint block, advanced by <see cref="ApplySprint"/> and read by
+        /// <see cref="PredictFire"/>. The server's own struct, not a client-side echo of it.
+        /// </summary>
+        /// <remarks>
+        /// Only <see cref="EffectiveTrigger.SprintFireBlockedUntil"/> is used here.
+        /// <see cref="EffectiveTrigger.WasEffective"/> and
+        /// <see cref="EffectiveTrigger.LoweredBySprint"/> belong to the two halves of
+        /// <see cref="EffectiveTriggerPolicy.Advance"/> this side deliberately does not run —
+        /// the policy's own remark lists them and says why. Holding the whole struct anyway
+        /// rather than a bare float is what lets both sides call one implementation: a
+        /// <c>float _sprintBlockedUntil</c> here would need its own stamping arithmetic, which
+        /// is the copy this exists to avoid.
+        /// </remarks>
+        private EffectiveTrigger _trigger = EffectiveTrigger.Idle;
 
         /// <summary>Set by a reload, cleared by the first snapshot that carries an ammo count.</summary>
         private bool _reloadPending;
@@ -197,6 +220,29 @@ namespace Ironfront.Net.Replication.Client
         }
 
         /// <summary>
+        /// Advances the sprint gate by one frame. Call EVERY frame, sprinting or not.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Every frame, and not only the frames the trigger is down.</b> The block runs from
+        /// the LAST sprinting frame, so a player who sprints without firing and pulls the
+        /// trigger the instant they release Shift must still be refused for
+        /// <see cref="ProtocolConstants.SPRINT_FIRE_BLOCK_SECONDS"/>. Called under a
+        /// fire-pressed guard there would be nothing stamped at that moment and this side would
+        /// predict a shot the server refuses — the original disagreement, one release later.
+        /// </para>
+        /// <para>
+        /// <b>A separate call rather than a parameter on <see cref="PredictFire"/> or
+        /// <see cref="Tick"/>.</b> Both of those are called from places that know nothing about
+        /// sprinting, and a defaulted <c>sprinting: false</c> parameter would let a caller that
+        /// forgot it read as a caller that meant it — which is exactly the shape of the defect
+        /// being closed. The sprint bit has one reader, at the seam where the input is read.
+        /// </para>
+        /// </remarks>
+        public void ApplySprint(bool sprinting, float nowSeconds)
+            => EffectiveTriggerPolicy.AdvanceSprintBlock(ref _trigger, sprinting, nowSeconds);
+
+        /// <summary>
         /// Predicts one trigger pull: stamps the cooldown and decrements ammo locally.
         /// </summary>
         /// <remarks>
@@ -209,6 +255,23 @@ namespace Ironfront.Net.Replication.Client
         public FireRejection PredictFire(float nowSeconds)
         {
             CompleteReloadIfElapsed(nowSeconds);
+
+            // The sprint rule, read from the server's own predicate rather than restated. Before
+            // this line the client predicted a shot on every frame the trigger was down, sprint
+            // or no sprint, and the server refused every one of them: 51 predicted shots across
+            // one six-second lane-B window with the clip still sitting at 30 and
+            // SnapshotAmmoCorrections climbing 1 -> 19. What a player sees is the magazine
+            // draining and then snapping back on the next snapshot.
+            //
+            // Holstered, and it is the server's word rather than a near-miss. On a sprinting
+            // frame the sprint rule lowers the weapon and ServerCombatAuthority reports exactly
+            // this. Over the release window the server reports None instead — the weapon is back
+            // up and its answer means "no trigger pull happened", which it can afford because it
+            // carries BlockedBySprint in a separate field. This method has one return value and
+            // None here means "play the muzzle flash", so None would render a shot that never
+            // leaves the barrel: the defect with an extra step.
+            if (!EffectiveTriggerPolicy.SprintAllowsFire(in _trigger, nowSeconds))
+                return FireRejection.Holstered;
 
             FireRejection rejection =
                 ServerFireResolver.CheckCanFire(in _runtime, in _weapon, IsAlive, nowSeconds);
@@ -390,6 +453,7 @@ namespace Ironfront.Net.Replication.Client
         {
             _weapon = WeaponCatalog.Inert;
             _runtime = WeaponRuntimeState.Loaded(WeaponCatalog.Inert);
+            _trigger = EffectiveTrigger.Idle;
             _reloadPending = false;
             _reloadStartedAt = float.NaN;
             _diedAtSeconds = float.NegativeInfinity;
@@ -467,6 +531,18 @@ namespace Ironfront.Net.Replication.Client
                 _diedAtSeconds = float.NegativeInfinity;
                 _deathStamped = false;
                 _runtime = WeaponRuntimeState.Loaded(_weapon);
+
+                // A new life starts under no sprint block, exactly as ClientSession.ResetWeapon
+                // clears the server's. Carrying one across a death would refuse the first shot
+                // of a life for up to SPRINT_FIRE_BLOCK_SECONDS, from a sprint the previous body
+                // was doing — and it would refuse it on THIS side only, which is the shape of
+                // disagreement this gate exists to remove.
+                //
+                // Not cleared by EquipWeapon, deliberately and for the reason EffectiveTrigger's
+                // own remark gives: sprinting is a fact about the body, not about the gun in its
+                // hands, so a weapon swap mid-sprint must not hand the player a free shot.
+                _trigger = EffectiveTrigger.Idle;
+
                 _reloadPending = true;
                 _reloadStartedAt = float.NaN;
                 OnRespawned?.Invoke();

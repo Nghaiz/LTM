@@ -438,6 +438,22 @@ namespace Ironfront.Net.Unity.Client
             // to correct it with. ClientCombatState.SpareAmmo now carries the authoritative
             // number as far as this seam; widening ILocalPlayerRig to push it into the rig is
             // the remaining step.
+            //
+            // P10 X-85: the every-frame call above was ungated by SPRINT, and the server's
+            // protocol-10 trigger is not. Measured on a lane-B run of the protocol-10 build --
+            // six seconds of Fire held together with Sprint spent not one round (the server was
+            // right) while predictedShots climbed by 51 and ammoCorrections went 1 -> 19 (the
+            // client was wrong, every frame). A human holding Shift and the left mouse button
+            // takes this exact path and watches the magazine drain and snap back.
+            //
+            // Advanced BEFORE and OUTSIDE the FirePressed() guard, both deliberately. Outside,
+            // because the window runs from the last SPRINTING frame: a player who sprints
+            // without firing and shoots the instant they release Shift is still refused for
+            // SPRINT_FIRE_BLOCK_SECONDS, and a stamp that only happened while the trigger was
+            // down would have nothing to refuse them with. Before, because PredictFire reads the
+            // block at the timestamp it is handed, and both calls are handed this frame's.
+            _state.ApplySprint(SprintPressed(), Time.time);
+
             if (_state.IsAlive && FirePressed()) _state.PredictFire(Time.time);
             if (_state.IsAlive && ReloadPressed()) _state.BeginReload(Time.time);
 
@@ -680,6 +696,33 @@ namespace Ironfront.Net.Unity.Client
             if (input == null) return false;
 
             return (input.Buttons & (ushort)InputButtons.Reload) != 0;
+        }
+
+        /// <summary>
+        /// Whether the local player is sprinting this frame. Ledger <b>X-85</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The SAME bit the server reads. <c>IInputSource.Buttons</c> is the packed word
+        /// <c>ClientInputSender</c> puts on the wire, so the sprint this side predicts against
+        /// and the sprint <c>EffectiveTriggerPolicy</c> enforces on the accepted frame are the
+        /// same press — not a <c>UnityEngine.Input.GetKey</c> reading of the keyboard, which a
+        /// scripted client, a controller and a rebind all leave empty (defect 4 of the phase-3D
+        /// report, the same trap <see cref="FirePressed"/> names).
+        /// </para>
+        /// <para>
+        /// <b>Absent input source reads as NOT sprinting, and that is the safe direction here
+        /// rather than a silent fallback.</b> With no input source there is no Fire bit either,
+        /// so <see cref="FirePressed"/> is false on the same frame and nothing is predicted to
+        /// gate. Returning true instead would arm a 0.2 s block out of a missing binding.
+        /// </para>
+        /// </remarks>
+        private static bool SprintPressed()
+        {
+            IInputSource input = NetClientBindings.LocalPlayer.InputSource;
+            if (input == null) return false;
+
+            return (input.Buttons & (ushort)InputButtons.Sprint) != 0;
         }
 
         /// <summary>
