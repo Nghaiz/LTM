@@ -1,4 +1,4 @@
-# tools/play-lan.ps1 -- launch ONE human-playable client against a master + game server that are
+﻿# tools/play-lan.ps1 -- launch ONE human-playable client against a master + game server that are
 # already running somewhere else.
 #
 # WHICH SCRIPT DO I WANT?
@@ -41,11 +41,24 @@
 [CmdletBinding()]
 param(
     # The MASTER server -- accounts, room browser, tickets. This is the address the menu talks
-    # to, and the one that decides whether you can get into a match at all. Defaults to the
-    # sandbox k8s node (infra/k8s/gameserver-lan.yaml).
-    [string] $MasterHost = "192.168.94.130",
+    # to, and the one that decides whether you can get into a match at all.
+    #
+    # Defaults to the fly.io master, which is the one that is actually up and is reachable from
+    # anywhere. It used to default to the sandbox k8s node, an address on a VMware NAT subnet
+    # that only the machine hosting that VM can route to -- so the default was useful to exactly
+    # one person and silently useless to everyone else.
+    [string] $MasterHost = "kien-master-2026.fly.dev",
 
-    [int] $MasterPort = 27000,
+    # 443, not 27000, and NOT because this is HTTP. A fly app is IPv6-only by default; the free
+    # shared IPv4 that makes it reachable from an IPv4-only machine routes ports 80 and 443
+    # only, picking the app by TLS SNI. infra/fly/master.toml therefore exposes the same MSP
+    # listener on both, and 443 is the one an IPv4 client can use. 27000 still works over IPv6.
+    [int] $MasterPort = 443,
+
+    # TLS is ON by default because the default master terminates TLS at fly's edge and a
+    # plaintext dial fails the handshake before a login screen can appear. Pass this when
+    # pointing at a plaintext master -- a local one, or a LAN box.
+    [switch] $NoMasterTls,
 
     # The GAME server, for the direct-dial fallback only: NetClientBootstrap uses these when no
     # socket was handed to it, which today means a map scene entered outside the shipped flow.
@@ -95,12 +108,20 @@ foreach ($stale in @("IRONFRONT_LANEB_ROLE", "IRONFRONT_LANEB_LABEL", "IRONFRONT
 $env:IRONFRONT_ROLE                = "client"
 $env:IRONFRONT_CLIENT_MASTER_HOST  = $MasterHost
 $env:IRONFRONT_CLIENT_MASTER_PORT  = "$MasterPort"
+$masterTlsFlag = if ($NoMasterTls) { "0" } else { "1" }
+$env:IRONFRONT_CLIENT_MASTER_TLS   = $masterTlsFlag
+
+# The SNI, and on fly's shared IPv4 it is what PICKS THE APP rather than a nicety -- the edge
+# has no other way to tell which app a raw TLS connection on 443 belongs to. Empty would default
+# to the host, which is already this value; it is set explicitly so the two cannot drift apart.
+$env:IRONFRONT_CLIENT_MASTER_TLS_TARGET_HOST = $MasterHost
 $env:IRONFRONT_CLIENT_HOST         = $ServerHost
 $env:IRONFRONT_CLIENT_PORT         = "$Port"
 $env:IRONFRONT_CLIENT_PLAYER_ID    = "$PlayerId"
 $env:IRONFRONT_CLIENT_DISPLAY_NAME = $Name
 
-Write-Host "[play] $Name (id $PlayerId) -> master ${MasterHost}:${MasterPort}"
+$masterScheme = if ($NoMasterTls) { "plaintext" } else { "TLS" }
+Write-Host "[play] $Name (id $PlayerId) -> master ${MasterHost}:${MasterPort} ($masterScheme)"
 Write-Host "[play] log: $LogFile"
 Write-Host "[play] in the client: register or log in, open the room browser, pick a side, ready up."
 Write-Host "[play] the match starts when everyone in the room is ready; the map loads itself."
