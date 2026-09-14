@@ -4,6 +4,56 @@ using Ironfront.Net.Protocol;
 namespace Ironfront.Net.Replication.Combat
 {
     /// <summary>
+    /// What a vehicle pad's spawner found in the way, in the one dimension that decides whether
+    /// an operator should investigate: whose body it is, and whether that body is alive.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The give-up line could not say any of this, and that was its own defect.</b> Island
+    /// logged <c>the pad is obstructed by 'Bone_002' (layer Hitbox)</c>, which is true of a bot
+    /// standing on the pad — legitimate, § 7 — and equally true of a corpse whose colliders were
+    /// never switched off — the § 2.4 defect. One bit separates "the pad is waiting" from "the
+    /// cleanup is broken", and the message omitted exactly that bit.
+    /// </para>
+    /// <para>
+    /// <b><see cref="NotProbed"/> is the one that was actually happening.</b>
+    /// <c>VehicleSpawner.SpawnIsBlocked</c> answers "blocked" for TWO reasons: physics found
+    /// something, or the vehicle-id pool had nothing left. The second returns before the
+    /// <c>OverlapSphere</c> runs, so no collider is read at all — and the message still named
+    /// one, out of a <c>static</c> scratch array that <c>OverlapSphereNonAlloc</c> does not
+    /// clear. That is how Island printed a blocker on layer <c>SeatedHitbox</c>: the pad mask
+    /// is 5376, which has no bit 16, so that collider provably did not come from the query
+    /// being reported.
+    /// </para>
+    /// </remarks>
+    public enum PadBlockerKind : byte
+    {
+        /// <summary>
+        /// No physics query ran. The refusal was capacity — no free vehicle id — and the pad
+        /// may be completely clear.
+        /// </summary>
+        NotProbed = 0,
+
+        /// <summary>The query ran and the collider it named is gone by the time it is read.</summary>
+        Gone = 1,
+
+        /// <summary>Scenery, a wreck, a parked vehicle. Nothing to do with an actor.</summary>
+        NotAnActor = 2,
+
+        /// <summary>A living body standing on the pad. Allowed by § 7; the pad is waiting.</summary>
+        LivingActor = 3,
+
+        /// <summary>
+        /// A corpse whose pad-blocking colliders ARE switched off — so whatever is in the way
+        /// is not one of them, and the cleanup is not the thing to go and look at.
+        /// </summary>
+        CleanedCorpse = 4,
+
+        /// <summary>A corpse whose pad-blocking colliders were never switched off. § 2.4.</summary>
+        UncleanedCorpse = 5,
+    }
+
+    /// <summary>
     /// Tracks whether each corpse's gameplay colliders have been taken out of the way, and names
     /// the ones that have not. Protocol-10 handoff § 7, last paragraph.
     /// </summary>
@@ -53,6 +103,18 @@ namespace Ironfront.Net.Replication.Combat
         /// make this ledger disagree with the thing it is modelling. A corpse's seated hitboxes
         /// are still cleaned up; they are simply not what this verdict is about.
         /// </para>
+        /// <para>
+        /// <b>And a give-up line naming layer <c>SeatedHitbox</c> is not a reason to add the
+        /// bit — it is proof the line was lying.</b> The mask is what
+        /// <c>Physics.OverlapSphereNonAlloc</c> is handed, so a query with no bit 16 cannot
+        /// RETURN a layer-16 collider. Island printed one anyway, which means the collider it
+        /// named came from some earlier query and not from the refusal being reported:
+        /// <c>VehicleSpawner.SpawnIsBlocked</c> answers "blocked" for lack of a vehicle id
+        /// without running physics at all, and the scratch array it reads is <c>static</c> and
+        /// is not cleared. <c>Actor.EnterSeat</c> then moves that bot's hitbox bones from layer
+        /// 8 to 16, which is the layer that got printed. Widening this mask would have "fixed"
+        /// a reading that was never about a corpse. See <see cref="PadBlockerKind.NotProbed"/>.
+        /// </para>
         /// </remarks>
         public const int SpawnBlockMask = (1 << 8) | (1 << 10) | (1 << 12);
 
@@ -91,6 +153,111 @@ namespace Ironfront.Net.Replication.Combat
         /// <summary>Whether a layer is one a vehicle pad refuses to spawn into.</summary>
         public static bool BlocksVehicleSpawn(int layer)
             => layer >= 0 && layer < 32 && (SpawnBlockMask & (1 << layer)) != 0;
+
+        /// <summary>
+        /// Decides which of <see cref="PadBlockerKind"/> a spawner's refusal actually was.
+        /// </summary>
+        /// <param name="probeRan">
+        /// Whether a physics query was executed for the refusal being reported. False means the
+        /// pad was refused for vehicle-id capacity and nothing was ever asked of physics — the
+        /// distinction the old message could not make and the one Island's log turned on.
+        /// </param>
+        /// <param name="hasBlocker">Whether that query produced a collider still alive to read.</param>
+        /// <param name="blockerBelongsToActor">Whether the collider hangs off a replicated body.</param>
+        /// <param name="actorIsAlive">That body's authoritative life flag.</param>
+        /// <param name="corpseCollidersDisabled">
+        /// Whether that body's own cleanup has run — read from the component that does the
+        /// disabling rather than from this ledger, because the component is the thing that
+        /// knows. A body killed by a path that never reached the death funnel is absent from
+        /// the ledger entirely and would otherwise be reported as clean by omission.
+        /// </param>
+        /// <remarks>
+        /// Static and pure. It takes no instance state, so a caller cannot get a different
+        /// verdict by holding a different ledger — and <c>dotnet test</c> can grade the whole
+        /// decision without an engine, which is the only reason any of this is out here rather
+        /// than inside <c>VehicleSpawner</c> where <c>Assembly-CSharp</c> puts it beyond CI.
+        /// </remarks>
+        public static PadBlockerKind ClassifyPadBlocker(
+            bool probeRan,
+            bool hasBlocker,
+            bool blockerBelongsToActor,
+            bool actorIsAlive,
+            bool corpseCollidersDisabled)
+        {
+            if (!probeRan) return PadBlockerKind.NotProbed;
+            if (!hasBlocker) return PadBlockerKind.Gone;
+            if (!blockerBelongsToActor) return PadBlockerKind.NotAnActor;
+            if (actorIsAlive) return PadBlockerKind.LivingActor;
+
+            return corpseCollidersDisabled
+                ? PadBlockerKind.CleanedCorpse
+                : PadBlockerKind.UncleanedCorpse;
+        }
+
+        /// <summary>
+        /// The sentence a spawner's give-up line carries, so the wording is graded by CI rather
+        /// than living as an interpolated string in a file no test can reach.
+        /// </summary>
+        /// <param name="kind">The verdict from <see cref="ClassifyPadBlocker"/>.</param>
+        /// <param name="blockerDescription">
+        /// The engine's own words for the collider — <c>'Bone_002' (layer Hitbox)</c>. Passed in
+        /// rather than built here because a name and a layer NAME both need Unity.
+        /// </param>
+        /// <param name="actorId">
+        /// The owning actor, or 0 for a body the registry never gave an id. Named as
+        /// "unregistered" rather than as actor 0, because 0 is the spec's "unknown" and printing
+        /// it as an id sends the reader looking for an actor that does not exist.
+        /// </param>
+        /// <remarks>
+        /// Every branch says what the reader should DO, because a diagnostic that reports a
+        /// state without naming the consequence is what the original line was: correct, and
+        /// still leaving the next person to repeat the investigation.
+        /// </remarks>
+        public static string DescribePadBlocker(
+            PadBlockerKind kind, string blockerDescription, ushort actorId)
+        {
+            string what = string.IsNullOrEmpty(blockerDescription)
+                ? "an unnamed collider"
+                : blockerDescription;
+
+            string who = actorId == 0 ? "an unregistered actor" : $"actor {actorId}";
+
+            switch (kind)
+            {
+                case PadBlockerKind.NotProbed:
+                    return "No obstruction probe ran for this refusal: the pad was refused "
+                         + "because the vehicle-id pool had no free id, so this is a CAPACITY "
+                         + "refusal and the pad may be completely clear. No collider is named "
+                         + "because none was read.";
+
+                case PadBlockerKind.Gone:
+                    return "The pad was obstructed by a collider that is no longer there.";
+
+                case PadBlockerKind.NotAnActor:
+                    return $"The pad is obstructed by {what}, which belongs to no actor — "
+                         + "scenery, a wreck, or a parked vehicle.";
+
+                case PadBlockerKind.LivingActor:
+                    return $"The pad is obstructed by {what} on LIVING {who}, which § 7 allows: "
+                         + "the pad is waiting for a body to move, not broken.";
+
+                case PadBlockerKind.CleanedCorpse:
+                    return $"The pad is obstructed by {what} on DEAD {who}, whose pad-blocking "
+                         + "colliders ARE disabled — so the blocker is not one of them and the "
+                         + "corpse cleanup is not what to go and look at.";
+
+                case PadBlockerKind.UncleanedCorpse:
+                    return $"The pad is obstructed by {what} on DEAD {who}, whose pad-blocking "
+                         + "colliders were NEVER disabled. That is the corpse-cleanup defect "
+                         + "(§ 2.4), not a busy pad.";
+
+                default:
+                    // Errors over silent fallbacks: a kind added without a sentence must say so
+                    // rather than print an empty clause that reads as "nothing was wrong".
+                    throw new ArgumentOutOfRangeException(
+                        nameof(kind), kind, "no give-up sentence for this blocker kind");
+            }
+        }
 
         /// <summary>
         /// Starts this actor's cleanup deadline. Idempotent within one life, for
