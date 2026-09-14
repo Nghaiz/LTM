@@ -152,7 +152,20 @@ data:
   # rooms, picks a side, readies up, receives its signed ticket — and then dials its own
   # loopback-adjacent nothing. Everything up to the match works, which is what makes this the
   # hardest value in the file to get wrong safely.
-  IRONFRONT_GAMESERVER_PUBLIC_IP: "192.168.94.130"
+  # The Radmin VPN address of the Windows host, because that is the only address a player on
+  # another machine can currently route to. VMware NAT forwards UDP 27015/27016 from the host
+  # into this VM (vmnetnat.conf [incomingudp]), so a packet aimed here lands on the game server.
+  #
+  # Proven rather than assumed: 100 datagrams sent at this address from the host produced an
+  # InDatagrams delta of exactly 100 on the node, read from /proc/net/snmp inside a hostNetwork
+  # pod. That is the path, end to end.
+  #
+  # CHANGE THIS IF THE PLAYERS ARRIVE ANOTHER WAY. It is not a property of the cluster; it is
+  # the answer to "what address can the people playing actually reach?". Same LAN -> the host's
+  # LAN address. Router port-forward -> the public IP. A wrong value here is the cruellest
+  # failure in the system: the client logs in, browses rooms, readies up, receives its signed
+  # ticket, and only then dials an address that goes nowhere.
+  IRONFRONT_GAMESERVER_PUBLIC_IP: "26.18.240.157"
 
   IRONFRONT_GAMESERVER_ACCEPT_UNSIGNED_TICKETS: "0"
   IRONFRONT_GAMESERVER_MAX_PLAYERS: "16"
