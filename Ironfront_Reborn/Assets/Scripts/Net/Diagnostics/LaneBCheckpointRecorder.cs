@@ -705,6 +705,22 @@ namespace Ironfront.Net.Unity.Diagnostics
                 _json.Append("\"alive\":").Append(state.IsAlive ? "true" : "false"); Comma();
                 Num("ammoInClip", state.AmmoInClip); Comma();
                 Num("clipSize", state.ClipSize); Comma();
+
+                // The AUTHORITATIVE clip, beside the predicted one above and for the same reason
+                // serverReloading sits beside reloading. They are not interchangeable and a
+                // grader that counted rounds off the predicted one produced both errors in one
+                // afternoon: a FAIL on a semi-auto press the server fired correctly, and a PASS
+                // on a sprint window where the server fired nothing at all (97 attempts, 97
+                // refused Holstered) because the predicted clip had dipped by one. ReconcileAmmo
+                // KEEPS a prediction within AmmoResyncThreshold, so that dip is sticky and never
+                // converges — nothing but this field can say what the server's clip is.
+                //
+                // Written as null before the first snapshot rather than as 0, because
+                // HasServerAmmo is the difference between "not measured" and "empty magazine"
+                // and a reader cannot recover it from a bare zero.
+                if (state.HasServerAmmo) Num("serverAmmoInClip", state.ServerAmmoInClip);
+                else _json.Append("\"serverAmmoInClip\":null");
+                Comma();
                 _json.Append("\"reloading\":").Append(state.IsReloading ? "true" : "false"); Comma();
 
                 // The authoritative half of the two above, and they are BOTH written because the

@@ -464,7 +464,35 @@ namespace Ironfront.Net.Unity.Client
             // block at the timestamp it is handed, and both calls are handed this frame's.
             _state.ApplySprint(SprintPressed(), Time.time);
 
-            if (_state.IsAlive && FirePressed()) _state.PredictFire(Time.time);
+            // P10 X-86: the every-frame call above was also ungated by the semi-auto EDGE, and
+            // the server's trigger is not. The comment block above says an edge detector here
+            // "would additionally have to model auto-fire, which is the same predicate written a
+            // second time" — that objection was correct and the answer is not to skip the rule
+            // but to share it. ApplyTrigger calls EffectiveTriggerPolicy.AdvanceHeldTrigger, the
+            // member the SERVER's own trigger is written in terms of, so there is no second
+            // predicate to disagree with.
+            //
+            // The measurement, from a shot-logged lane-B run of the protocol-10 build on
+            // 2026-09-14: a SIGNAL DMR (semi-automatic, 0.14 s cooldown, clip of 20) held for
+            // two five-second presses. 298 [shot] lines, exactly 2 of them fired=True — one per
+            // press, the server's edge doing precisely its job — while this side recorded
+            // predictedShots +29 and ammoCorrections +9 for the same two presses. What a player
+            // sees is a magazine draining and snapping back on a rifle that fired once.
+            //
+            // It is the IF CONDITION rather than a statement above the guard, and that is the
+            // shape rather than an accident. The edge is re-armed by the RELEASE, so a call
+            // folded under FirePressed() would leave it latched for the rest of the life and the
+            // weapon would fire once and then never again — a dead trigger, which is worse than
+            // the bug being fixed and reads to a grader as a flat clip, i.e. as success. Sitting
+            // in the condition there is no path that predicts without advancing.
+            //
+            // IsAlive is folded into the argument rather than left as a second && term for the
+            // same reason: short-circuiting past the advance is exactly the skipped frame above.
+            // A dead player passes false, which is not a release but is not an effective trigger
+            // either, and SetAlive re-arms across the respawn anyway.
+            if (_state.ApplyTrigger(_state.IsAlive && FirePressed(), Time.time))
+                _state.PredictFire(Time.time);
+
             if (_state.IsAlive && ReloadPressed()) _state.BeginReload(Time.time);
 
             // Two ways in, and the keyboard is still first so a human press costs no lookup.
