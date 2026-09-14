@@ -36,8 +36,8 @@ cắt cụt, hay một recorder cũ hơn contract đều ra INCONCLUSIVE chứ k
 | 9. Trạng thái xe lúc map vừa tải | **PASS** trên staging | xem mục 6 |
 | 10. Lặp lại trên cả hai map | đã làm cho mục 2, 3, 4, 5 | |
 
-Ma trận cuối: 4 bộ × 2 map = 8 lần chạy, **23/24 check PASS**. Một check còn đỏ là cửa sổ sau
-sprint trên Island — xem mục 7.
+Ma trận cuối: 4 bộ × 2 map = 8 lần chạy, **23/24 check PASS**. Check còn đỏ là cửa sổ sau sprint
+trên Island, và nó **không phải lỗi protocol** — driver chạy xuống biển. Xem mục 7.1.
 
 Mục 1 (súng lục từng click) là cùng một câu hỏi với mục 2 và được gộp vào đó. Mục 7 có nửa đo được
 (một death, một killfeed, respawn sạch — đã có test) và nửa thị giác.
@@ -147,26 +147,50 @@ số đúng là **100/100**; một pin vào 255 sẽ đỏ trên một build đ�
 
 ## 7. Còn đỏ, và còn không đo được
 
-### 7.1. Sau sprint, súng không giương lại trên Island
+### 7.1. Sau sprint, súng không giương lại trên Island — ĐÃ ĐÓNG, và tôi đã kết luận sai một lần
 
-Cửa sổ 4 giây giữ Fire sau khi sprint kết thúc: server không bắn viên nào, `serverAmmoInClip` đứng
-yên ở 30 trong khi client dự đoán 39 phát. Cùng chương trình đó trên Dustbowl bắn hết băng.
+Triệu chứng: cửa sổ 4 giây giữ Fire sau sprint, server không bắn viên nào, `serverAmmoInClip` đứng
+yên ở 30 trong khi client dự đoán ~39 phát.
 
-Một nguyên nhân của triệu chứng này **đã được sửa** và merge ở #276: `EffectiveTriggerPolicy.Advance`
-chỉ chốt cờ ở đúng frame nó hạ súng, nên một khẩu **vốn đã hạ** lúc bắt đầu sprint không bao giờ
-được giương lại. Nhánh sprint nay nhận quyền quản ở **mọi** frame đang sprint. Một trường hợp sinh
-ra trạng thái đó đã được pin bằng test: chết giữa lúc sprint.
+**Kết luận đầu tiên của tôi là sai, và cách nó sai đáng ghi lại.** Tôi đo 4/4 lần chạy đỏ khi không
+có `-LogShots` và 1/1 lần xanh khi có, rồi kết luận đây là lỗi phụ thuộc thời gian mà dụng cụ đo
+làm đổi kết quả. Bằng chứng tốt hơn bác bỏ điều đó: bốn lần chạy đỏ xuất phát từ **bốn spawn khác
+nhau**, đi **bốn đường khác nhau**, và đều kết thúc trong một dải cao độ rộng 1 mét
+(**16,89–17,89**). Đó là một mặt nước, không phải bốn con dốc trùng hợp. Lần chạy xanh đơn giản là
+xuất phát ở điểm cao nhất trong sáu lần (y 25,85) và hết chương trình khi vẫn còn trên cạn.
+**Điểm spawn mới là biến phân biệt; `-LogShots` không có đường nhân quả nào tới `Actor.Update`.**
+Năm mẫu, và tôi đã đọc một xổ số spawn thành một quan hệ nhân quả.
 
-Nhưng còn một nguyên nhân nữa, và manh mối quan trọng nhất là **dụng cụ đo làm đổi kết quả**:
+**Nguyên nhân thật: driver chạy xuống biển.** `p10-sprint-driver.json` giữ `moveZ: 1.0` cùng sprint
+trong 6 giây, đủ để rời thềm spawn của Island. Rồi:
 
-| số lần chạy | kết quả |
-|---|---|
-| 4/4 không có `-LogShots` | ĐỎ, server không bắn gì sau sprint |
-| 1/1 có `-LogShots` | XANH, 30 viên, 180 `rejection=Holstered` gói gọn trong cửa sổ sprint |
+```
+Actor.cs:595-601   if (inWater && !fallenOver) FallOver();
+Actor.cs:917       FallOver() -> controller.DisableInput()  -> inputEnabled = false
+Actor.cs:836       lối duy nhất đứng dậy mang "&& !inWater"  -> không bao giờ EnableInput()
+FpsActorController.cs:197   clock.SimulationEnabled = () => inputEnabled && ...
+NetPredictionClock.cs:218   if (SimulationEnabled()) ... else input = default
+```
 
-`-LogShots` ghi một dòng kèm stack trace cho mỗi lần thử bắn và làm server chậm đi rõ rệt. Nên đây
-là lỗi **phụ thuộc thời gian**, không phải lỗi logic thuần — và mọi kết luận rút từ một lần chạy có
-`-LogShots` ở đây đều vô giá trị. Đang được điều tra.
+Từ đó **mọi frame lên dây đều mang 0 nút**. Server không hề từ chối phát nào — nó chưa từng được
+hỏi. Còn `NetClientLocalCombatDriver` đọc input **source** chứ không đọc frame đã bị zero, nên
+client vẫn dự đoán.
+
+Lỗi nằm ở **chương trình**, không ở game: bỏ `moveZ` khỏi bước sprint. Cổng sprint đọc **bit**
+Sprint chứ không đọc tốc độ hay quãng đường, nên quãng đường không đóng góp gì vào thứ đang được
+chấm. Vẫn giữ 6 giây Sprint+Fire và 4 giây Fire sau đó.
+
+**Một dụng cụ đo mới đi kèm:** `ServerCombatAuthority.TriggerFramesSeen` đếm frame có bit Fire
+*đến nơi*, trước mọi cổng. Thiếu nó là lý do việc này mất bốn lần chạy: mọi counter cũ đều mô tả
+thứ server **quyết định**, nên "client không gửi gì" và "cổng từ chối tất cả" đọc y hệt nhau.
+
+**Còn lại cho chủ dự án quyết:** một người chơi mạng bơi ra chỗ sâu sẽ mất `inputEnabled` vĩnh viễn
+và không có đường quay lại. Mất súng khi bơi có thể là thiết kế; mất quyền điều khiển cả mạng thì
+không. `Actor.cs`/`FpsActorController.cs` chưa bị đụng tới.
+
+**Bẫy còn lại trong các bộ khác:** `separation-observer-a.json` đi ~154 m và **có sprint** — tệ hơn
+cả p10-sprint, và tệ hơn về bản chất vì một observer chết đuối thất bại im lặng dưới dạng "nhân
+chứng không thấy gì". `vehicle-driver` ~120 m nhưng ngồi xe nên đi đường khác.
 
 ### 7.2. Mục 6 không diễn đạt được bằng chương trình
 
