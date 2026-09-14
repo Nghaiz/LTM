@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Movement;
@@ -389,6 +389,122 @@ namespace Ironfront.Net.Replication.Tests
 
             session.WeaponId = WeaponIds.NONE;
             Assert.Equal(0f, session.WeaponConfig.Damage);
+        }
+
+        // ------------------------------------------------------- the reserve (protocol 10)
+
+        /// <summary>
+        /// Every weapon's reserve, against the prefab row its clip already came from.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Asserted by id and by value, not by a count of how many are finite.</b> The bug
+        /// this replaces was one missing constructor argument that silently applied to all
+        /// seventeen entries at once, so a test that counted would have been satisfied by any
+        /// seventeen numbers. Naming each is what makes a single wrong literal fail.
+        /// </para>
+        /// <para>
+        /// The expected figures are <c>tools/extract_weapon_registry.py</c>'s <c>spareAmmo</c>
+        /// output, which is the same row the <see cref="WeaponConfig.ClipSize"/> assertions
+        /// elsewhere in this file read their <c>ammo</c> from.
+        /// </para>
+        /// </remarks>
+        [Theory]
+        [InlineData(WeaponIds.RK44, 180)]
+        [InlineData(WeaponIds.SIND7, 36)]
+        [InlineData(WeaponIds.SIND7_SUPPRESSED, 36)]
+        [InlineData(WeaponIds.EAGLE_76, 30)]
+        [InlineData(WeaponIds.BEU_AW1, 3)]
+        [InlineData(WeaponIds.SL_DEFENDER, 40)]
+        [InlineData(WeaponIds.FRAG, 1)]
+        [InlineData(WeaponIds.SPEARHEAD, 2)]
+        [InlineData(WeaponIds.BIL_SCALPEL, 1)]
+        [InlineData(WeaponIds.SIGNAL_DMR, 120)]
+        [InlineData(WeaponIds.RECON_LRR, 84)]
+        public void EveryWeaponCarriesTheReserveItsPrefabAuthored(byte weaponId, int rounds)
+        {
+            SpareAmmo reserve = SpareAmmo.FromConfigured(WeaponCatalog.For(weaponId).SpareAmmo);
+
+            // Kind before Rounds, always: both sentinels report zero rounds, so a Rounds-only
+            // assertion passes identically for finite-zero, no-resupply and infinite.
+            Assert.Equal(SpareAmmoKind.Finite, reserve.Kind);
+            Assert.Equal(rounds, reserve.Rounds);
+        }
+
+        [Theory]
+        [InlineData(WeaponIds.BINOCS)]
+        [InlineData(WeaponIds.AMMO_BAG)]
+        [InlineData(WeaponIds.MEDIPACK)]
+        [InlineData(WeaponIds.NV_GOGGLES)]
+        [InlineData(WeaponIds.WRENCH)]
+        [InlineData(WeaponIds.SUPER_WRENCH)]
+        [InlineData(WeaponIds.CAR_HORN)]
+        [InlineData(WeaponIds.NONE)]
+        [InlineData(200)]
+        public void AnItemWithNoReserveSaysNoResupplyRatherThanInfinite(byte weaponId)
+        {
+            // No-resupply and infinite are the two things a player cannot tell apart from a
+            // round count, because both carry zero: one HUD reads "--" and the other reads a
+            // pouch that never empties. The id space's non-weapons, the two melee placeholders,
+            // the horn, NONE and an id off the end of the table are all the first.
+            Assert.Equal(
+                SpareAmmoKind.NoResupply,
+                SpareAmmo.FromConfigured(WeaponCatalog.For(weaponId).SpareAmmo).Kind);
+        }
+
+        [Fact]
+        public void NoAssignedWeaponReportsAnInfiniteReserve()
+        {
+            // The regression gate for the defect itself, rather than for any one number.
+            // WeaponConfig's spareAmmo argument DEFAULTS to InfiniteSpareAmmo, so dropping it
+            // from an entry is silent: the table still compiles, the clip is still right, and
+            // the reserve quietly stops being able to run down. Protocol 10 shipped that way on
+            // all seventeen ids and no test in this file noticed.
+            for (byte id = 1; id <= WeaponIds.MAX_ASSIGNED; id++)
+            {
+                Assert.False(
+                    WeaponCatalog.For(id).SpareAmmo == WeaponConfig.InfiniteSpareAmmo,
+                    "weapon id " + id + " (" + WeaponIds.NameOf(id)
+                    + ") fell back to WeaponConfig's default reserve - pass spareAmmo: in"
+                    + " WeaponCatalog.BuildConfigs, from the prefab's own row");
+            }
+        }
+
+        [Fact]
+        public void ABazookaSeededFromTheCatalogueGoesFromZeroOfThreeToOneOfTwo()
+        {
+            // Handoff section 5.3's acceptance criterion, run against the catalogue rather than
+            // against a literal reserve. It is the only form of the test that would have failed
+            // before this commit: ReloadReserveTests already proved the decrement with a pool
+            // the test itself filled, while the shipped path filled that pool from a config
+            // saying "infinite" and ActorSpareAmmoPool.Take never touched it.
+            const byte slot = 1;
+
+            WeaponConfig bazooka = WeaponCatalog.For(WeaponIds.BEU_AW1);
+
+            // What ServerCombatBridge.SeedSpareAmmo does per loadout slot at spawn.
+            var pool = new ActorSpareAmmoPool();
+            pool.SetLoadout(
+                TriggerFixture.Shooter, slot,
+                rounds: bazooka.SpareAmmo, cap: bazooka.SpareAmmo, resupplyPerPulse: 0);
+
+            Assert.Equal(3, pool.Remaining(TriggerFixture.Shooter, slot, default));
+
+            var fixture = new TriggerFixture(
+                bazooka, ActorAmmoSource.FromSlot(pool, TriggerFixture.Shooter, slot));
+            fixture.Weapon.AmmoInClip = 0;
+
+            fixture.Step(0f, InputButtons.Reload);
+            fixture.Step(ProtocolConstants.RELOAD_SECONDS, InputButtons.None);
+
+            Assert.Equal(1, fixture.Weapon.AmmoInClip);
+            Assert.Equal(2, pool.Remaining(TriggerFixture.Shooter, slot, default));
+
+            // And the reserve the wire carries agrees with the pool, which is what a lane-B
+            // grader reads. Finite, so the count beside it means something.
+            SpareAmmo reserve = fixture.Ammo.Reserve(in fixture.Weapon, in bazooka);
+            Assert.Equal(SpareAmmoKind.Finite, reserve.Kind);
+            Assert.Equal(2, reserve.Rounds);
         }
 
         /// <summary>A shooter and one standing target 10 m downrange.</summary>

@@ -492,10 +492,27 @@ namespace Ironfront.Net.Unity.Server
         /// </para>
         /// <para>
         /// <b>Internal and driven from <see cref="Capture"/></b>, which already runs once per
-        /// snapshot tick per replicated actor and already reads <see cref="IsAlive"/>. A second
-        /// per-actor sweep somewhere else would be a second place to remember, and an actor that
+        /// snapshot tick per REGISTERED actor and already reads <see cref="IsAlive"/>. A second
+        /// per-actor sweep somewhere else would be a second place to remember.
+        /// </para>
+        /// <para>
+        /// <b>What this rests on is <c>ServerActorRegistry.CaptureInto</c> being unfiltered, and
+        /// it used to claim something weaker and wrong.</b> The argument here read "an actor that
         /// is not captured is not replicated — so there is no body this misses that anybody can
-        /// see.
+        /// see", which is about VISIBILITY. A pad block is PHYSICS: an invisible corpse stops an
+        /// <c>OverlapSphere</c> exactly as well as a visible one, so "nobody can see it" would
+        /// not have made a missed body harmless. The claim that does hold is narrower and
+        /// checkable — <c>CaptureInto</c> walks every registered, active actor with no interest
+        /// or LOD test, and <c>ServerTickLoop.BuildAndSendSnapshots</c> calls it BEFORE any
+        /// per-viewer view is built and without consulting the player count, so a bot outside
+        /// everyone's interest radius, a bot the LOD gate is skipping, and a bot on a server
+        /// with no humans connected at all are captured identically.
+        /// </para>
+        /// <para>
+        /// That invariant is load-bearing rather than incidental, so it is pinned by
+        /// <c>PadBlockerDiagnosticTests</c>: adding an interest filter to that loop for snapshot
+        /// bandwidth would silently stop corpse cleanup for culled bodies, and the only symptom
+        /// would be a vehicle pad that quietly stopped working.
         /// </para>
         /// </remarks>
         internal void ObserveLifeEdge()
@@ -574,7 +591,8 @@ namespace Ironfront.Net.Unity.Server
         public ActorSnapshotEntry Capture()
         {
             // The life edge is read here because this method already runs once per snapshot tick
-            // per replicated actor and already reads IsAlive. See ObserveLifeEdge.
+            // per REGISTERED actor -- not per replicated one -- and already reads IsAlive.
+            // See ObserveLifeEdge for why that distinction is the whole guarantee.
             ObserveLifeEdge();
 
             Vec3 position = Movement != null
