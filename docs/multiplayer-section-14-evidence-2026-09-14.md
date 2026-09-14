@@ -29,15 +29,18 @@ cắt cụt, hay một recorder cũ hơn contract đều ra INCONCLUSIVE chứ k
 |---|---|---|
 | 2. Semi-auto: một lần nhấn một viên | **PASS** cả hai map | `serverAmmoInClip 20→19→19→18`: đúng 1 viên mỗi lần nhấn, 0 viên lúc nhả, client dự đoán +1, correction +0 |
 | 3. Automatic bắn theo cooldown | **PASS** cả hai map | 19 viên / 2,00 s = 0,1054 s/phát (Dustbowl), 0,1049 s/phát (Island); cooldown RK-44 0,095 s nằm trong dải |
-| 4. Sprint+Fire không bắn, không trừ đạn | **PASS** cả hai map | `serverAmmoInClip` đứng yên ở 30, `predictedShots +0`, `ammoCorrections +0` |
+| 4. Sprint+Fire không bắn, không trừ đạn | **PASS** cả hai map | `serverAmmoInClip` đứng yên ở 30, `predictedShots +0`, `ammoCorrections +0`; sau sprint bắn hết băng, 4/4 lần Island |
 | 5. Clip-1 reload `0/N → 1/N-1` | **PASS** cả hai map | clip `0 → 1` đúng một lần, reserve `1 → 0` đúng một lần, giữ nguyên sau 4 giây vẫn giữ Reload |
 | 6. Grenade: hai client cùng projectile id | **KHÔNG ĐO ĐƯỢC** | record không mang projectile id; cần sửa recorder, không phải sửa chương trình |
 | 8. Collider chặn vehicle pad | **KHÔNG PHẢI DEFECT** | xem mục 5 |
 | 9. Trạng thái xe lúc map vừa tải | **PASS** trên staging | xem mục 6 |
 | 10. Lặp lại trên cả hai map | đã làm cho mục 2, 3, 4, 5 | |
 
-Ma trận cuối: 4 bộ × 2 map = 8 lần chạy, **23/24 check PASS**. Check còn đỏ là cửa sổ sau sprint
-trên Island, và nó **không phải lỗi protocol** — driver chạy xuống biển. Xem mục 7.1.
+Ma trận cuối: 4 bộ × 2 map = 8 lần chạy, **24/24 check PASS**.
+
+Check cuối cùng còn đỏ (cửa sổ sau sprint trên Island) **không phải lỗi protocol** — driver chạy
+xuống biển; xem mục 7.1. Sau khi sửa chương trình: **4/4 lần chạy Island liên tiếp PASS**, mỗi lần
+`serverAmmoInClip 30 → 0`, đúng trường hợp trước đó đỏ 4/4.
 
 Mục 1 (súng lục từng click) là cùng một câu hỏi với mục 2 và được gộp vào đó. Mục 7 có nửa đo được
 (một death, một killfeed, respawn sạch — đã có test) và nửa thị giác.
