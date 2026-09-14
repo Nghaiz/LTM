@@ -90,6 +90,7 @@ namespace Ironfront.Net.Unity.Diagnostics
         private static bool _spawnPinned;
         private static bool _spawnPinReported;
         private static bool _loadoutPinned;
+        private static bool _clientLoadoutPinned;
 
         private const int ExitTimedOut = 2;
         private const int ExitProgrammeUnusable = 3;
@@ -357,11 +358,23 @@ namespace Ironfront.Net.Unity.Diagnostics
         }
 
         /// <summary>
-        /// Forces every server-spawned body's primary weapon to the name
-        /// <c>IRONFRONT_LANEB_WEAPON</c> asks for, so two runs of one programme are comparable
-        /// shot-for-shot (ledger <b>X-27</b>).
+        /// Forces the primary weapon of every body the server DRAWS FOR ITSELF — a bot — to the
+        /// name <c>IRONFRONT_LANEB_WEAPON</c> asks for (ledger <b>X-27</b>).
         /// </summary>
         /// <remarks>
+        /// <para>
+        /// <b>This does NOT reach a scripted driver, and used to claim it did.</b>
+        /// <c>PinnedLoadoutDirectory</c> is read in exactly one place,
+        /// <c>AiActorController.PinnedOr</c>, reached from that controller's
+        /// <c>GetLoadout</c> — and <c>Actor.SpawnLoadoutWeapons</c> arms a body from
+        /// <c>ResolveDeployLoadout() ?? controller.GetLoadout()</c>. For a claimed player body
+        /// the left operand is never null: it is the five ids the CLIENT sent in
+        /// <c>SpawnRequestMessage</c>, stamped in by <c>ServerCombatBridge.PlaceAtSpawn</c>. So
+        /// <c>GetLoadout</c> is never called for a driver and this directory never sees one.
+        /// Five runs asking for RK-44, SIGNAL DMR, SL-DEFENDER and BEU AW1 all deployed the
+        /// identical <c>loadout 1/3/7/5/0</c> under a log line that said the loadout was pinned.
+        /// <see cref="PinClientLoadoutIfRequested"/> is the half that arms the driver.
+        /// </para>
         /// <para>
         /// <b>No deadline here, unlike the spawn pin.</b> That one had to wait for a directory
         /// the scene fills later; this installs a directory of its own and depends on nothing
@@ -369,10 +382,11 @@ namespace Ironfront.Net.Unity.Diagnostics
         /// spawn, and nothing can join before the server announces its slots.
         /// </para>
         /// <para>
-        /// <b>The name is not validated, and cannot be.</b> Only `WeaponManager.EntryNamed`
-        /// knows which names exist and it lives in `Assembly-CSharp`. So the name is LOGGED
-        /// here and the resulting `weaponId` is recorded per checkpoint by the artifact — a
-        /// misspelling shows up as an empty slot in the run rather than as a lie in this line.
+        /// <b>The name is not validated HERE, and cannot be.</b> Only
+        /// `WeaponManager.EntryNamed` knows which names exist and it lives in `Assembly-CSharp`,
+        /// which no asmdef may reference. The client half resolves the same name against that
+        /// catalogue and reports an unmatched one loudly, so a misspelling is now caught on the
+        /// process that can catch it rather than left to be inferred from `weaponId`.
         /// </para>
         /// </remarks>
         private static void PinLoadoutIfRequested()
@@ -393,11 +407,67 @@ namespace Ironfront.Net.Unity.Diagnostics
             _loadoutPinned = true;
 
             Debug.Log(
-                $"[lane-b] loadout pinned for every body the server spawns - "
+                $"[lane-b] loadout pinned for every body the server DRAWS FOR ITSELF - "
                 + $"primary='{(wantsWeapon ? weapon.Trim() : "drawn")}' "
-                + $"gear1='{(wantsGear ? gear.Trim() : "drawn")}' - so two runs of one programme "
-                + "are comparable shot-for-shot (X-27). Names are NOT validated here; check "
-                + "weaponId in the checkpoint record.");
+                + $"gear1='{(wantsGear ? gear.Trim() : "drawn")}'. This is the BOT half only: a "
+                + "claimed player body is armed from the ids its own client sent, so nothing "
+                + "here reaches a scripted driver. The driver is pinned client-side and reports "
+                + "itself in that client's log (X-27).");
+        }
+
+        /// <summary>
+        /// Forces THIS CLIENT's own chosen loadout to <c>IRONFRONT_LANEB_WEAPON</c> and
+        /// <c>IRONFRONT_LANEB_GEAR</c>, which is what actually arms a scripted driver. Ledger
+        /// <b>X-27</b>, second half.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why the server-side directory was not enough.</b> See
+        /// <see cref="PinLoadoutIfRequested"/>: a claimed player body is armed from the ids the
+        /// client put in its own spawn request, never from an <c>ILoadoutDirectory</c>. Pinning
+        /// the client's choice is the only way to change what the driver holds, and it changes
+        /// what this client renders at the same time — see <see cref="ClientLoadoutPin"/> for
+        /// why arming the two sides differently would be worse than not pinning at all.
+        /// </para>
+        /// <para>
+        /// <b>Installed in <c>sceneLoaded</c>, well before the first deploy.</b> The pin is read
+        /// by <c>FpsActorController.GetLoadout</c>, which runs when a body is armed; nothing can
+        /// be armed before this client has joined, and it has not dialled yet. Unlike the spawn
+        /// pin there is nothing the scene must build first, so there is no deadline and no
+        /// retry.
+        /// </para>
+        /// <para>
+        /// <b>Whether the name RESOLVED is reported by the pin itself</b>, in this process's
+        /// log, once — an unmatched name is a <c>LogError</c> carrying
+        /// <see cref="ClientLoadoutPin.UnresolvedMarker"/>, which <c>run-lane-b.ps1</c> greps
+        /// and fails the run on. This line only reports what was ASKED for; a run that asks and
+        /// produces neither marker never reached the pin at all, which the runner also grades.
+        /// </para>
+        /// </remarks>
+        private static void PinClientLoadoutIfRequested()
+        {
+            if (_clientLoadoutPinned) return;
+
+            string weapon = Read(WeaponVariable);
+            string gear = Read(GearVariable);
+
+            bool wantsWeapon = !string.IsNullOrWhiteSpace(weapon);
+            bool wantsGear = !string.IsNullOrWhiteSpace(gear);
+            if (!wantsWeapon && !wantsGear) return;
+
+            ClientLoadoutPin.Active = new ClientLoadoutPin(
+                wantsWeapon ? weapon.Trim() : null,
+                secondary: null,
+                gear1: wantsGear ? gear.Trim() : null);
+            _clientLoadoutPinned = true;
+
+            Debug.Log(
+                $"[lane-b] this client's own loadout is pinned - "
+                + $"primary='{(wantsWeapon ? weapon.Trim() : "chosen")}' "
+                + $"gear1='{(wantsGear ? gear.Trim() : "chosen")}' - so the driver deploys "
+                + "holding it instead of whatever the loadout screen last selected (X-27). "
+                + "Whether each name MATCHED a weapon is reported separately, on the first "
+                + "deploy.");
         }
 
         private void OnDestroy()
@@ -473,6 +543,7 @@ namespace Ironfront.Net.Unity.Diagnostics
                 Strip(FindFirstObjectByType<NetServerBootstrap>(FindObjectsInactive.Include),
                       "NetServer");
                 NetContext.SetRole(NetRole.Client);
+                PinClientLoadoutIfRequested();
             }
         }
 

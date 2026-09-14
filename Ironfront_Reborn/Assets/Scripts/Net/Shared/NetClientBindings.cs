@@ -232,6 +232,12 @@ namespace Ironfront.Net.Unity
         private static void ResetOnLoad()
         {
             _localPlayer = null;
+
+            // The lane-B loadout pin is a static too, and a pin left over from the previous Play
+            // session would arm the next one with a weapon nobody asked for -- the same hazard,
+            // and the same remedy, as the rig above.
+            ClientLoadoutPin.Active = null;
+
             Hud = null;
             VehicleBodyResolver = null;
             ProjectileBodyResolver = null;
