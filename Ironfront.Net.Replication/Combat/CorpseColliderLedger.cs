@@ -16,14 +16,27 @@ namespace Ironfront.Net.Replication.Combat
     /// cleanup is broken", and the message omitted exactly that bit.
     /// </para>
     /// <para>
-    /// <b><see cref="NotProbed"/> is the one that was actually happening.</b>
-    /// <c>VehicleSpawner.SpawnIsBlocked</c> answers "blocked" for TWO reasons: physics found
-    /// something, or the vehicle-id pool had nothing left. The second returns before the
-    /// <c>OverlapSphere</c> runs, so no collider is read at all — and the message still named
-    /// one, out of a <c>static</c> scratch array that <c>OverlapSphereNonAlloc</c> does not
-    /// clear. That is how Island printed a blocker on layer <c>SeatedHitbox</c>: the pad mask
-    /// is 5376, which has no bit 16, so that collider provably did not come from the query
-    /// being reported.
+    /// <b>On Island's four reports the answer was <see cref="LivingActor"/>, and the layer the
+    /// line already printed is what settles it.</b> The bot prefab authors TWO objects called
+    /// <c>Bone_002</c> — one at layer 8 in <c>ActiveRaggy.animatedObject</c>, one at layer 10
+    /// in <c>ragdollObject</c> — so the NAME cannot tell a body from a corpse but the LAYER
+    /// can. Both bot prefabs set <c>autoDisableColliders: 1</c>, so <c>ActiveRaggy.Ragdoll</c>
+    /// switches every layer-8 collider off the moment a body goes limp, and
+    /// <c>OverlapSphere</c> does not return a disabled collider. An enabled layer-8
+    /// <c>Bone_002</c> therefore belongs to a body that has not ragdolled. Layer 16 is reached
+    /// only through <c>Actor.EnterSeat</c>, which refuses an occupied or already-seated body
+    /// and moves the LIVE rig. Neither report named layer 10, which is the only layer a corpse
+    /// can block on. § 7 allows all of that: those pads were waiting, not broken.
+    /// </para>
+    /// <para>
+    /// <b><see cref="NotProbed"/> is not what Island was doing — it is a hole found while
+    /// checking whether it was.</b> <c>VehicleSpawner.SpawnIsBlocked</c> answers "blocked" for
+    /// TWO reasons: physics found something, or the vehicle-id pool had nothing left. The
+    /// second returns before the <c>OverlapSphere</c> runs, so no collider is read at all — and
+    /// the message still named one, out of a <c>static</c> scratch array that
+    /// <c>OverlapSphereNonAlloc</c> does not clear. Nothing in the logs proves that branch was
+    /// taken; it is kept as a distinct verdict because a capacity refusal and an obstruction
+    /// call for opposite actions, and the old line rendered them identically.
     /// </para>
     /// </remarks>
     public enum PadBlockerKind : byte
@@ -97,23 +110,24 @@ namespace Ironfront.Net.Replication.Combat
         /// red test rather than a pad that stops working.
         /// </para>
         /// <para>
-        /// <b><c>SeatedHitbox</c> (16) is deliberately absent.</b> Island's report names
-        /// <c>Hitbox</c>/<c>SeatedHitbox</c> together, but the pad mask tests only the first —
-        /// so a seated hitbox left behind does not block a pad, and adding the bit here would
-        /// make this ledger disagree with the thing it is modelling. A corpse's seated hitboxes
-        /// are still cleaned up; they are simply not what this verdict is about.
+        /// <b><c>SeatedHitbox</c> (16) is deliberately absent, and a give-up line naming it is
+        /// not an argument for adding it.</b> The mask is what
+        /// <c>Physics.OverlapSphereNonAlloc</c> is HANDED, so a query with no bit 16 cannot
+        /// return a layer-16 collider; Island printed one anyway, which proves only that the
+        /// layer in the message was not the layer the query matched on. Two paths produce that
+        /// and the log cannot separate them: <c>Actor.EnterSeat</c> moves a living body's
+        /// hitbox bones from 8 to 16, and <c>gameObject.layer</c> is read when the line is
+        /// written rather than when the query ran; or the refusal never ran a query and read a
+        /// collider some earlier one left in the <c>static</c> scratch array. Both start from a
+        /// layer-8 animated-rig bone, which is why both read as a living body. Widening this
+        /// mask would have "fixed" a reading that was never about a corpse.
         /// </para>
         /// <para>
-        /// <b>And a give-up line naming layer <c>SeatedHitbox</c> is not a reason to add the
-        /// bit — it is proof the line was lying.</b> The mask is what
-        /// <c>Physics.OverlapSphereNonAlloc</c> is handed, so a query with no bit 16 cannot
-        /// RETURN a layer-16 collider. Island printed one anyway, which means the collider it
-        /// named came from some earlier query and not from the refusal being reported:
-        /// <c>VehicleSpawner.SpawnIsBlocked</c> answers "blocked" for lack of a vehicle id
-        /// without running physics at all, and the scratch array it reads is <c>static</c> and
-        /// is not cleared. <c>Actor.EnterSeat</c> then moves that bot's hitbox bones from layer
-        /// 8 to 16, which is the layer that got printed. Widening this mask would have "fixed"
-        /// a reading that was never about a corpse. See <see cref="PadBlockerKind.NotProbed"/>.
+        /// A corpse's layer-16 colliders are consequently NOT disabled by
+        /// <c>NetServerActor.DisableCorpseColliders</c>, which filters on
+        /// <see cref="BlocksVehicleSpawn"/>. That is deliberate and costs nothing: a collider
+        /// on a layer the pad mask does not test cannot obstruct a pad. Adding the bit to
+        /// "be safe" would make this ledger disagree with the thing it models.
         /// </para>
         /// </remarks>
         public const int SpawnBlockMask = (1 << 8) | (1 << 10) | (1 << 12);

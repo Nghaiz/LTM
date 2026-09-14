@@ -433,8 +433,8 @@ public class VehicleSpawner : MonoBehaviour
 			// line named one anyway. spawnCollisions is STATIC, shared by every pad on the map,
 			// and OverlapSphereNonAlloc does not clear entries it does not fill, so whatever an
 			// earlier query left sat there waiting to be reported as this pad's obstruction.
-			// Island printed a blocker on layer SeatedHitbox, which SPAWN_BLOCK_MASK has no bit
-			// for and so cannot return: proof the named collider came from a different query.
+			// A capacity refusal and an obstruction need opposite responses -- wait for an id
+			// versus go and look at the pad -- and the old line rendered them identically.
 			lastProbeRan     = false;
 			lastProbeBlocker = null;
 			return true;

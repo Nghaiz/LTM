@@ -20,13 +20,24 @@ namespace Ironfront.Net.Replication.Tests
     /// would keep its colliders and block the pad forever.
     /// </para>
     /// <para>
-    /// <b>That is not what is happening, and the layer name is how you can tell.</b> The pad
-    /// query is an <c>OverlapSphereNonAlloc</c> masked to
-    /// <see cref="CorpseColliderLedger.SpawnBlockMask"/>, which carries no bit 16 — so it
-    /// CANNOT return a collider on layer <c>SeatedHitbox</c>. The one it named therefore came
-    /// from somewhere other than the query being reported: <c>SpawnIsBlocked</c> answers
-    /// "blocked" for lack of a vehicle id without running physics at all, and the scratch array
-    /// the message read is <c>static</c> and is not cleared. The defect was the instrument.
+    /// <b>The verdict is a LIVING bot, and the layer the line already printed is how you can
+    /// tell.</b> The bot prefab authors two objects called <c>Bone_002</c>, one at layer 8 in
+    /// the animated rig and one at layer 10 in the ragdoll rig, so the NAME is ambiguous and
+    /// the LAYER is not. Both bot prefabs set <c>autoDisableColliders: 1</c>, so
+    /// <c>ActiveRaggy.Ragdoll</c> disables every layer-8 collider the instant a body goes limp
+    /// and an <c>OverlapSphere</c> cannot return one from a corpse; layer 16 is written only by
+    /// <c>Actor.EnterSeat</c>, on the live rig, and refuses an already-seated body. Neither
+    /// report named layer 10 — the one layer a corpse can block on. § 7 allows a living body to
+    /// hold a pad, so there is no § 2.4 defect in this evidence. Those facts are pinned below
+    /// rather than left in prose, because the whole verdict rests on them.
+    /// </para>
+    /// <para>
+    /// <b>The defect that IS here is the instrument.</b> A mask with no bit 16 cannot return a
+    /// layer-16 collider, yet the line printed one — proving only that the layer it reports is
+    /// not the layer the query matched on. Two paths do that and the log separates neither:
+    /// <c>gameObject.layer</c> is read when the message is written, so a bot that climbed into
+    /// a seat in between prints 16; and a refusal for lack of a vehicle id runs no query at all
+    /// and reads a collider an earlier one left in the <c>static</c> scratch array.
     /// </para>
     /// <para>
     /// <b>The cleanup itself is reached for every registered actor</b>, which the source
@@ -413,11 +424,149 @@ namespace Ironfront.Net.Replication.Tests
         public void TheLifeEdgeRemarkNamesTheLoopItDependsOn()
             => Assert.Contains("CaptureInto", ReadUnitySource(Actor), StringComparison.Ordinal);
 
+        // ------------------------------------------------- the evidence the verdict rests on
+        //
+        // The verdict for Island was "a living bot, which § 7 allows" -- a claim about the
+        // engine's data, not about this library, and the kind of claim that silently stops
+        // being true. Each fact it rests on is asserted here so that changing the data breaks a
+        // test instead of quietly inverting a conclusion somebody reads years later.
+
+        /// <summary>
+        /// A bot carries TWO colliders called <c>Bone_002</c>, on different layers.
+        /// </summary>
+        /// <remarks>
+        /// This is why the shipped line could not answer the question and why the layer can:
+        /// layer 8 is the animated rig a living body presents, layer 10 the ragdoll rig a
+        /// corpse presents. Both are in <see cref="CorpseColliderLedger.SpawnBlockMask"/>, so
+        /// both genuinely block a pad — and both print the same name.
+        /// </remarks>
+        [Fact]
+        public void TheBotPrefabAuthorsTheSameBoneOnALivingAndADeadLayer()
+        {
+            foreach (string prefab in BotPrefabs)
+            {
+                IReadOnlyList<int> layers = LayersOfObjectsNamed(ReadUnitySource(prefab), "Bone_002");
+
+                Assert.Contains(8,  layers);   // Hitbox, animated rig
+                Assert.Contains(10, layers);   // Ragdoll rig
+            }
+        }
+
+        /// <summary>
+        /// A ragdolling bot switches its layer-8 colliders off, so a corpse cannot present one.
+        /// </summary>
+        /// <remarks>
+        /// <b>The load-bearing step.</b> <c>ActiveRaggy.Ragdoll</c> disables every animated-rig
+        /// collider only when <c>autoDisableColliders</c> is set, and
+        /// <c>Physics.OverlapSphere</c> does not return a disabled collider. With the flag on,
+        /// an ENABLED layer-8 <c>Bone_002</c> is proof the body has not ragdolled. Clear the
+        /// flag on the bot prefab and Island's two <c>(layer Hitbox)</c> reports stop
+        /// distinguishing a body from a corpse — which is exactly the day this must go red.
+        /// </remarks>
+        [Fact]
+        public void ABotsAnimatedCollidersAreSwitchedOffWhenItRagdolls()
+        {
+            foreach (string prefab in BotPrefabs)
+            {
+                Assert.Contains(
+                    "autoDisableColliders: 1", ReadUnitySource(prefab), StringComparison.Ordinal);
+            }
+
+            string raggy = ReadUnitySource(ActiveRaggy);
+            string body  = CodeOnly(MethodBody(raggy, "public void Ragdoll(Vector3 velocity)"));
+
+            Assert.Contains("autoDisableColliders", body, StringComparison.Ordinal);
+            Assert.Contains("enabled = false",      body, StringComparison.Ordinal);
+            Assert.Contains("ragdollObject.SetActive(true)", body, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// Layer 16 is written by exactly one statement in the project, on the living rig.
+        /// </summary>
+        /// <remarks>
+        /// The other half of the verdict: <c>(layer SeatedHitbox)</c> can only have come from a
+        /// body that entered a seat, and <c>Actor.EnterSeat</c> refuses a vehicle that is dead,
+        /// a seat that is taken and a body already seated. A corpse never reaches layer 16. If
+        /// a second writer ever appears this test fails, and the reasoning has to be redone
+        /// rather than inherited.
+        /// </remarks>
+        [Fact]
+        public void OnlyEnteringASeatPutsABoneOnTheSeatedLayer()
+        {
+            string actor = CodeOnly(ReadUnitySource(GameplayActor));
+
+            Assert.Equal(1, Regex.Matches(actor, @"\.layer\s*=\s*16\b").Count);
+
+            string enterSeat = CodeOnly(MethodBody(actor, "public bool EnterSeat(Seat seat)"));
+
+            Assert.Contains("hitboxColliders",  enterSeat, StringComparison.Ordinal);
+            Assert.Contains("layer = 16",       enterSeat, StringComparison.Ordinal);
+            Assert.Contains("seat.vehicle.dead", enterSeat, StringComparison.Ordinal);
+            Assert.Contains("IsSeated()",        enterSeat, StringComparison.Ordinal);
+        }
+
         // ------------------------------------------------------------------------------ helpers
         //
         // Copied rather than shared, as in ExceptionStormTests, NullReferenceCascadeTests and
         // VehicleIdDemandTests: these suites are deliberately self-contained, and a shared
         // fixture here would be a refactor of four other files this lane does not own.
+
+        private const string ActiveRaggy =
+            "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ActiveRaggy.cs";
+
+        private const string GameplayActor =
+            "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs";
+
+        /// <summary>
+        /// Every prefab a server-side bot is instantiated from.
+        /// </summary>
+        /// <remarks>
+        /// Both, not one: they are near-duplicates and a fact asserted of only the one that
+        /// happens to be spawned today is a fact that stops holding the day the other is.
+        /// </remarks>
+        private static readonly string[] BotPrefabs =
+        {
+            "Ironfront_Reborn/Assets/Prefab/Ai Character Optimizations.prefab",
+            "Ironfront_Reborn/Assets/Prefab/Ai Character Optimizations 1.prefab",
+        };
+
+        /// <summary>
+        /// The <c>m_Layer</c> of every GameObject in a text-serialized prefab carrying
+        /// <paramref name="name"/>.
+        /// </summary>
+        /// <remarks>
+        /// <c>m_Layer</c> is authored BEFORE <c>m_Name</c> in Unity's GameObject block, so the
+        /// scan remembers the last layer seen and commits it when the matching name arrives.
+        /// The test asserting a non-empty result is what stops a serialization change from
+        /// turning this into a silently vacuous pass.
+        /// </remarks>
+        private static IReadOnlyList<int> LayersOfObjectsNamed(string prefabYaml, string name)
+        {
+            var layers = new List<int>();
+            int pending = -1;
+
+            foreach (string raw in prefabYaml.Split('\n'))
+            {
+                string line = raw.Trim();
+
+                if (line.StartsWith("m_Layer:", StringComparison.Ordinal))
+                {
+                    pending = int.Parse(line.Substring("m_Layer:".Length).Trim());
+                }
+                else if (line == "m_Name: " + name && pending >= 0)
+                {
+                    layers.Add(pending);
+                    pending = -1;
+                }
+            }
+
+            Assert.True(
+                layers.Count > 0,
+                $"no GameObject named '{name}' found -- the prefab scan has stopped working, "
+                + "which would make every assertion over it vacuously true");
+
+            return layers;
+        }
 
         private static IReadOnlyList<string> LayerNames()
         {
