@@ -3,6 +3,7 @@
   "steps": [
     { "seconds": 5.0, "yawDegrees": 180, "respawn": true },
     { "checkpoint": "deployed", "seconds": 3.0, "yawDegrees": 180 },
+    { "checkpoint": "armed", "seconds": 2.0, "yawDegrees": 180 },
     { "checkpoint": "sprint-fire", "seconds": 6.0, "yawDegrees": 180 },
     { "checkpoint": "sprint-ended", "seconds": 1.0, "yawDegrees": 180 },
     { "checkpoint": "fire-clear", "seconds": 4.0, "yawDegrees": 180 },

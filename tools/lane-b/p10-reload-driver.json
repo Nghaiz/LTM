@@ -3,18 +3,21 @@
   "steps": [
     { "seconds": 5.0, "yawDegrees": 0, "pitchDegrees": -25, "respawn": true },
     { "checkpoint": "deployed", "seconds": 3.0, "yawDegrees": 0, "pitchDegrees": -25 },
-    { "checkpoint": "armed", "seconds": 2.0, "yawDegrees": 0, "pitchDegrees": -25 },
+    { "checkpoint": "armed", "seconds": 2.0, "yawDegrees": 0, "pitchDegrees": -25,
+      "switchWeaponSlot": 2 },
     { "checkpoint": "dry", "seconds": 6.0, "yawDegrees": 0, "pitchDegrees": -25,
-      "fire": true },
-    { "checkpoint": "empty", "seconds": 2.0, "yawDegrees": 0, "pitchDegrees": -25 },
+      "switchWeaponSlot": 2, "fire": true },
+    { "checkpoint": "empty", "seconds": 2.0, "yawDegrees": 0, "pitchDegrees": -25,
+      "switchWeaponSlot": 2 },
     { "checkpoint": "reload-pressed", "seconds": 0.5, "yawDegrees": 0, "pitchDegrees": -25,
-      "reload": true },
+      "switchWeaponSlot": 2, "reload": true },
     { "checkpoint": "reload-running", "seconds": 1.0, "yawDegrees": 0, "pitchDegrees": -25,
-      "reload": true },
+      "switchWeaponSlot": 2, "reload": true },
     { "checkpoint": "reload-held", "seconds": 4.0, "yawDegrees": 0, "pitchDegrees": -25,
-      "reload": true },
+      "switchWeaponSlot": 2, "reload": true },
     { "checkpoint": "still-held", "seconds": 4.0, "yawDegrees": 0, "pitchDegrees": -25,
-      "reload": true },
-    { "checkpoint": "settled", "seconds": 4.0, "yawDegrees": 0, "pitchDegrees": -25 }
+      "switchWeaponSlot": 2, "reload": true },
+    { "checkpoint": "settled", "seconds": 4.0, "yawDegrees": 0, "pitchDegrees": -25,
+      "switchWeaponSlot": 2 }
   ]
 }
