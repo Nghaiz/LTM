@@ -1,0 +1,11 @@
+{
+  "name": "p10-auto-witness-a",
+  "steps": [
+    { "seconds": 5.0, "yawDegrees": 90, "respawn": true },
+    { "checkpoint": "deployed", "seconds": 3.0, "yawDegrees": 90 },
+    { "checkpoint": "armed", "seconds": 2.0, "yawDegrees": 90 },
+    { "checkpoint": "auto-hold", "seconds": 2.0, "yawDegrees": 90 },
+    { "checkpoint": "released", "seconds": 3.0, "yawDegrees": 90 },
+    { "checkpoint": "settled", "seconds": 4.0, "yawDegrees": 90 }
+  ]
+}

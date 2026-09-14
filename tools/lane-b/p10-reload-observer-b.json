@@ -1,0 +1,15 @@
+{
+  "name": "p10-reload-witness-b",
+  "steps": [
+    { "seconds": 5.0, "yawDegrees": 180, "respawn": true },
+    { "checkpoint": "deployed", "seconds": 3.0, "yawDegrees": 180 },
+    { "checkpoint": "armed", "seconds": 2.0, "yawDegrees": 180 },
+    { "checkpoint": "dry", "seconds": 6.0, "yawDegrees": 180 },
+    { "checkpoint": "empty", "seconds": 2.0, "yawDegrees": 180 },
+    { "checkpoint": "reload-pressed", "seconds": 0.5, "yawDegrees": 180 },
+    { "checkpoint": "reload-running", "seconds": 1.0, "yawDegrees": 180 },
+    { "checkpoint": "reload-held", "seconds": 4.0, "yawDegrees": 180 },
+    { "checkpoint": "still-held", "seconds": 4.0, "yawDegrees": 180 },
+    { "checkpoint": "settled", "seconds": 4.0, "yawDegrees": 180 }
+  ]
+}
