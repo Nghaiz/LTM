@@ -536,6 +536,29 @@ foreach ($c in $clients) {
         $failures += "$($c.Label): was not connected when the programme ended."
     }
 
+    # A WITNESS THAT WAS UNDERWATER AND A WITNESS THAT SAW NOTHING RENDER IDENTICALLY. X-88.
+    #
+    # Several programmes walk an observer out of the engagement under sprint and then hold --
+    # separation-observer-a.json ran moveZ 1.0 with sprint for twenty-two seconds. A walk that
+    # ends in water still exits 0, still captures every checkpoint, still draws from the right
+    # seeds, and still reports no killfeed line. That last part is exactly the finding these
+    # checks are written to make, so the failure arrives disguised as the result.
+    #
+    # Same shape as lostConnection above, and graded the same way: from the summary, latched
+    # rather than sampled, because a body that waded through and back out reads clean at finish
+    # while everything it recorded in between is about a body that was not watching.
+    if ($summary.PSObject.Properties.Name -notcontains 'wasInWater') {
+        $failures += "$($c.Label): the summary carries no wasInWater field -- this player " +
+                     "predates the witness check, so nothing in this run can tell an observer " +
+                     "that saw nothing from one that was underwater. Rebuild with -Build."
+    }
+    elseif ($summary.wasInWater) {
+        $failures += "$($c.Label): its body entered water during the programme. Anything this " +
+                     "client did or did not witness after that is about a body that was not " +
+                     "in a position to witness it -- shorten the walk in its scenario rather " +
+                     "than reading this run's verdict."
+    }
+
     # The seed this runner PRINTS must be the seed the process actually DREW from. They are
     # two different numbers the moment anything mistypes the parse, and the first run of this
     # harness proved it: LaneBHarness read the seed through a float, float32 stops representing
