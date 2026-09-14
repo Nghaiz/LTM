@@ -1,0 +1,11 @@
+{
+  "name": "p10-sprint-witness-a",
+  "steps": [
+    { "seconds": 5.0, "yawDegrees": 90, "respawn": true },
+    { "checkpoint": "deployed", "seconds": 3.0, "yawDegrees": 90 },
+    { "checkpoint": "sprint-fire", "seconds": 6.0, "yawDegrees": 90 },
+    { "checkpoint": "sprint-ended", "seconds": 1.0, "yawDegrees": 90 },
+    { "checkpoint": "fire-clear", "seconds": 4.0, "yawDegrees": 90 },
+    { "checkpoint": "settled", "seconds": 4.0, "yawDegrees": 90 }
+  ]
+}

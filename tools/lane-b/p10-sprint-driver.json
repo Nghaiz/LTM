@@ -1,0 +1,13 @@
+{
+  "name": "p10-sprint-driver",
+  "steps": [
+    { "seconds": 5.0, "yawDegrees": 0, "pitchDegrees": -25, "respawn": true },
+    { "checkpoint": "deployed", "seconds": 3.0, "yawDegrees": 0, "pitchDegrees": -25 },
+    { "checkpoint": "sprint-fire", "seconds": 6.0, "yawDegrees": 0, "pitchDegrees": -25,
+      "moveZ": 1.0, "sprint": true, "fire": true },
+    { "checkpoint": "sprint-ended", "seconds": 1.0, "yawDegrees": 0, "pitchDegrees": -25 },
+    { "checkpoint": "fire-clear", "seconds": 4.0, "yawDegrees": 0, "pitchDegrees": -25,
+      "fire": true },
+    { "checkpoint": "settled", "seconds": 4.0, "yawDegrees": 0, "pitchDegrees": -25 }
+  ]
+}
