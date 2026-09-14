@@ -3,8 +3,12 @@
 `deploy.sh` puts the **master server** on fly.io. The **game server is deliberately absent**,
 and the section below is the reason rather than an omission.
 
-The full stack (master + two game servers) lives in [`infra/compose/`](../compose/) on the
-Azure VM described in issue #78. Nothing here replaces it.
+The full stack (master + two game servers) was meant to live in [`infra/compose/`](../compose/)
+on the Azure VM described in issue #78. **That VM is not answering** — checked 2026-09-14,
+`20.214.142.73` refuses 27000, 27015 and 27016 alike, and issue #127 (its remaining checklist)
+still references `ghcr.io/sagitoaz/...`, from before the repository moved to `Nghaiz/LTM`. Treat
+#78 and #127 as history until somebody re-provisions it; this Fly app is the master that is
+actually up.
 
 | File | What it is |
 |---|---|
@@ -100,10 +104,27 @@ ever taken up; what was missing was a decision, and this is it.
 ## Operational notes
 
 - **Metrics are on loopback on purpose.** The payload is unauthenticated and reports player
-  counts and game-server health. Read it from inside the VM:
-  `fly ssh console --app kien-master-2026 -C 'curl -s 127.0.0.1:27001'`. Do not add a
-  `[[services]]` block for 27001. `MasterServerConfig.cs:270` parses the value with
-  `IPAddress.Parse`, so only a literal IP is valid here.
+  counts and game-server health. Do not add a `[[services]]` block for 27001.
+  `MasterServerConfig.cs:270` parses the value with `IPAddress.Parse`, so only a literal IP is
+  valid here.
+
+  **This line used to say `fly ssh console -C 'curl -s 127.0.0.1:27001'`, and that cannot
+  work for two independent reasons** — found by running it against the live app on 2026-09-14:
+
+  1. **The endpoint is raw TCP, not HTTP.** The master says so itself at boot:
+     `metrics endpoint on 127.0.0.1:27001 — try: nc 127.0.0.1 27001`. An HTTP GET gets nothing.
+  2. **There is no `curl` in the image.** `exec: "curl": executable file not found in $PATH`.
+
+  A `fly proxy 27001:27001` plus an HTTP fetch fails for reason 1 as well. What works is a raw
+  TCP read through the proxy:
+
+  ```bash
+  fly proxy 27001:27001 --app kien-master-2026 &
+  nc 127.0.0.1 27001            # or: python -c "import socket;s=socket.create_connection(('127.0.0.1',27001));print(s.recv(65536).decode())"
+  ```
+
+  The same raw-TCP shape caught out the protocol-10 staging deploy; it is a property of the
+  endpoint, not of a platform.
 - **TLS terminates at Fly's edge.** `handlers = ["tls"]` on port 27000, so
   `IRONFRONT_TLS_CERT_PATH` is empty and the master serves plaintext inside the container. A
   game server dialling this master sets `IRONFRONT_GAMESERVER_MASTER_TLS=1` against
@@ -115,9 +136,21 @@ ever taken up; what was missing was a decision, and this is it.
   `gh api user/packages/container/ironfront-master` reports `visibility=public`. Note the
   sibling `ironfront-gameserver` (no hyphen) is a private, abandoned 2026-08-18 build — the live
   package is `ironfront-game-server`, with the hyphen.
-- **Latest master digest on `develop`** (2026-08-25T15:19:38VN, from the merge of #174):
+- **Currently deployed** (2026-09-14T09:47Z, machine version 4, from the merge of #284):
   ```
-  ghcr.io/nghaiz/ironfront-master@sha256:5c1770f87e2ff8ff14f1a46d2c09649965fa86d29fa46cdeb482a5f4131da23c
+  ghcr.io/nghaiz/ironfront-master@sha256:828425bc019c13d99c00089e52cd00074f8636b2c102fafa238e81a1a3788fad
   ```
-  Re-read it rather than copying this line once it ages:
-  `gh api user/packages/container/ironfront-master/versions --jq '.[0].name'`.
+  The machine carries `org.opencontainers.image.revision=c4d158334588b1793ec39027f3a647aad3e4ee64`,
+  and its boot line reads `Ironfront Master Server — protocol v10`. Read both back rather than
+  trusting this paragraph once it ages:
+
+  ```bash
+  fly image show --app kien-master-2026        # revision label
+  fly logs --app kien-master-2026 --no-tail | grep -i "protocol v"
+  gh api user/packages/container/ironfront-master/versions     --jq '.[] | select(.metadata.container.tags[]? == "develop") | .name'
+  ```
+
+  The previous entry here named the #174 build of 2026-08-25 and was three weeks stale, which
+  is exactly how the app came to be serving **protocol 9 to protocol-10 clients** without
+  anybody noticing: `fly status` said `started`, the TCP health check said passing, and neither
+  is a claim about the wire version.
