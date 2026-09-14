@@ -70,6 +70,15 @@ namespace Ironfront.Net.Unity.Server
         private GameServerMatchReporter _link;
         private GameServerConfig _config;
 
+        /// <summary>The shared secret, kept so a re-registration does not have to re-read it.</summary>
+        private string _secret;
+
+        /// <summary>When to dial again after a loss. See <see cref="MasterLinkKeepAlive"/>.</summary>
+        private readonly MasterLinkKeepAlive _keepAlive = new MasterLinkKeepAlive();
+
+        /// <summary>An attempt is in flight; <see cref="Update"/> must not start a second.</summary>
+        private bool _connecting;
+
         /// <summary>The id the master assigned, or 0 when standalone or not yet registered.</summary>
         public ushort ServerId { get; private set; }
 
@@ -156,7 +165,68 @@ namespace Ironfront.Net.Unity.Server
                 return;
             }
 
+            _secret = secret;
+            _keepAlive.WantsLink = true;
+
             _ = ConnectAsync(secret);
+        }
+
+        /// <summary>
+        /// Keeps the registration alive: notices a lost link and re-registers on a backoff.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Registration used to be a once-per-process event, and losing it was silent.</b>
+        /// <see cref="GameServerMatchReporter"/> guards Heartbeat, MatchStarted and MatchEnded
+        /// with <c>if (!IsConnected) return;</c>, so a server whose master link died went on
+        /// playing complete matches while reporting nothing at all, and logged not one line
+        /// about it. The master drops a server that stops heartbeating, so the two ends agree
+        /// on the outcome and disagree on whether anything is wrong: the registry shows no
+        /// server, the server shows a healthy match.
+        /// </para>
+        /// <para>
+        /// <b>Observed on 2026-09-14</b> — a VMware host was suspended for some hours with two
+        /// game servers registered. The master saw the heartbeats stop, marked both unhealthy
+        /// and dropped them (<c>gsRegistered</c> 2 to 0). On resume both processes carried on
+        /// with dead sockets, never re-registered, and were invisible to matchmaking for the
+        /// rest of their lifetime. A suspended VM is only the cheapest way to produce this; a
+        /// master restart, a NAT rebind or a dropped Wi-Fi link do the same thing.
+        /// </para>
+        /// <para>
+        /// <b>The id is re-adopted, not assumed.</b> The master assigns a fresh id on each
+        /// registration, so a reconnect can come back as a different server — and the ticket
+        /// validator is checking tickets against the OLD id until
+        /// <see cref="AdoptServerIdOnValidator"/> runs again. Skipping that would admit no
+        /// player at all, which is a worse silence than the one this fixes.
+        /// </para>
+        /// </remarks>
+        private void MaintainLink(float deltaSeconds)
+        {
+            if (!_keepAlive.WantsLink || _connecting) return;
+
+            // A link we registered has since died. Stand the reporter down BEFORE disposing the
+            // old one: ServerMasterReporter heartbeats every tick from its own Update, and a
+            // disposed link underneath it is a race this ordering removes rather than guards.
+            if (_link != null && !_link.IsConnected)
+            {
+                Debug.LogWarning(
+                    $"[net] master link: lost the link to {_config.MasterHost}:{_config.MasterPort} "
+                    + $"(was server {ServerId}). Matches will not be advertised until it is back. "
+                    + "Re-registering.");
+
+                _reporter.SetReporter(new NullMatchReporter());
+
+                GameServerMatchReporter dead = _link;
+                _link = null;
+                ServerId = 0;
+                dead.Dispose();
+
+                _keepAlive.OnLinkDown();
+                return;
+            }
+
+            if (_link == null && _keepAlive.ShouldAttempt(deltaSeconds))
+                _ = ConnectAsync(_secret);
         }
 
         // async void is what a MonoBehaviour lifecycle method would force; an async Task the
@@ -172,6 +242,8 @@ namespace Ironfront.Net.Unity.Server
                 MaxPlayers   = _config.MaxPlayers,
                 MapIds       = _config.MapIds,
             };
+
+            _connecting = true;
 
             var reporter = new GameServerMatchReporter(new GameServerLink(), ownsLink: true);
 
@@ -211,23 +283,43 @@ namespace Ironfront.Net.Unity.Server
                 // Caught, not rethrown, and the reporter is disposed rather than installed. A
                 // master that is down must not stop a match from running -- that is the whole
                 // point of the standalone contingency, and it is worth more than a stack trace.
-                Debug.LogWarning($"[net] master link: registration failed, staying standalone. {ex.Message}");
+                // Caught, not rethrown, and the reporter is disposed rather than installed. A
+                // master that is down must not stop a match from running -- that is the whole
+                // point of the standalone contingency, and it is worth more than a stack trace.
+                //
+                // "Standalone FOR NOW", since MaintainLink retries: the previous wording said
+                // "staying standalone" and meant it literally, so a master that was down for the
+                // ten seconds this process happened to boot in was never contacted again.
                 _link = null;
                 reporter.Dispose();
+                _connecting = false;
+                _keepAlive.OnLinkDown();
+
+                Debug.LogWarning(
+                    "[net] master link: registration failed, standalone for now, retrying in "
+                    + $"{_keepAlive.RetryInSeconds:0}s. {ex.Message}");
                 return;
             }
 
             if (ServerId == 0)
             {
-                Debug.LogWarning("[net] master link: the master refused registration. Staying standalone.");
                 _link = null;
                 reporter.Dispose();
+                _connecting = false;
+                _keepAlive.OnLinkDown();
+
+                Debug.LogWarning(
+                    "[net] master link: the master refused registration. Standalone for now, "
+                    + $"retrying in {_keepAlive.RetryInSeconds:0}s.");
                 return;
             }
 
             _reporter.SetReporter(reporter);
 
             AdoptServerIdOnValidator();
+
+            _keepAlive.OnRegistered();
+            _connecting = false;
 
             Debug.Log($"[net] master link: registered as server {ServerId} with {_config.MasterHost}:{_config.MasterPort}.");
         }
@@ -278,7 +370,17 @@ namespace Ironfront.Net.Unity.Server
         // The Poll() contract from the master-server track's plan section 5: every event and Task continuation
         // fires on the thread that calls this, so Unity API use stays on the main thread and the
         // whole off-main-thread bug class disappears. One frame of latency, on a lobby link.
-        private void Update() => _link?.Poll();
+        private void Update()
+        {
+            // Poll FIRST. GameServerLink only enqueues what it reads; Poll is what runs the
+            // continuations, and so it is what turns a closed socket into State.Disconnected.
+            // Checking the link before draining it would read a stale state for one frame --
+            // harmless here, but it is the same ordering trap that made registration deadlock
+            // in P14, and it costs nothing to get right.
+            _link?.Poll();
+
+            MaintainLink(Time.unscaledDeltaTime);
+        }
 
         private void OnDestroy()
         {

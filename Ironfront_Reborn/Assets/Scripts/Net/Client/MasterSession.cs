@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 
 using System;
 using System.Diagnostics;
@@ -274,6 +274,7 @@ namespace Ironfront.Net.Unity.Client
             {
                 int roomId = JoinedRoomId;
                 JoinResult result = await _master.JoinRoomAsync(roomId, null).ConfigureAwait(false);
+                NoteMasterAnswered();
 
                 if (!result.Ok)
                 {
@@ -297,7 +298,7 @@ namespace Ironfront.Net.Unity.Client
             {
                 Fail(ex is MasterServerException master
                     ? MasterErrorText.DescribeFailure(master.ErrorCode)
-                    : "Lost the connection to the master server.");
+                    : LinkFailureText());
                 _enteringMatch = false;
             }
         }
@@ -440,6 +441,13 @@ namespace Ironfront.Net.Unity.Client
             try
             {
                 await _master.ConnectAsync(host, port, tls).ConfigureAwait(false);
+
+                // A fresh link has answered nothing yet. Recorded here rather than inferred
+                // later because "died before the master said anything" is a different fault
+                // from "died mid-session", and only this method knows a new link began.
+                _linkDialled  = true;
+                _linkTls      = tls != null && tls.Enabled;
+                _linkAnswered = false;
                 return true;
             }
             catch (Exception ex) when (IsLinkFailure(ex))
@@ -447,6 +455,63 @@ namespace Ironfront.Net.Unity.Client
                 Fail($"Could not reach the master server at {host}:{port}.");
                 return false;
             }
+        }
+
+        /// <summary>A link was opened through <see cref="ConnectAsync"/> on this session.</summary>
+        /// <remarks>
+        /// Tri-state on purpose. A harness that drives this object without ever dialling has no
+        /// link to describe, so it must keep the plain wording rather than be handed a guess
+        /// about a transport it never opened.
+        /// </remarks>
+        private bool _linkDialled;
+
+        /// <summary>The live link is encrypted.</summary>
+        private bool _linkTls;
+
+        /// <summary>The master has put at least one frame on the live link.</summary>
+        private bool _linkAnswered;
+
+        /// <summary>Records that the master answered — including a refusal, which is an answer.</summary>
+        private void NoteMasterAnswered() => _linkAnswered = true;
+
+        /// <summary>
+        /// What to tell the player when the link dies, in the terms of the link that died.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A master behind a TLS terminator kills a plaintext client exactly here</b>, and
+        /// until this existed it did so under the one sentence that fits every other cause. The
+        /// fly.io deployment carries a <c>tls</c> handler on BOTH of its MSP ports, so a client
+        /// with <c>IRONFRONT_CLIENT_MASTER_TLS=0</c> completes its TCP connect — the edge
+        /// accepts the socket — reports itself connected, and then has its first MSP frame
+        /// dropped because those bytes are not a TLS ClientHello. What the player saw was
+        /// "Lost the connection to the master server." on a form they had just filled in, with
+        /// nothing anywhere naming the certificate they were not presenting.
+        /// </para>
+        /// <para>
+        /// <b>The signature is precise, which is why it is safe to name a cause.</b> The link
+        /// was dialled by us, it is plaintext, and it closed having never delivered a single
+        /// frame — not a response, not a push, not even an error. A master that genuinely
+        /// dropped mid-session has answered something, and a master that refused the request
+        /// answered it too (<c>ErrorPush</c> completes the pending call), so neither reaches the
+        /// TLS wording.
+        /// </para>
+        /// <para>
+        /// <b>"probably", not "certainly".</b> A plaintext master that crashes between accept
+        /// and its first write produces the same silence, and this must not tell that operator
+        /// to go and enable TLS as though it were established fact. What is stated as fact is
+        /// the part we observed: it closed without answering.
+        /// </para>
+        /// </remarks>
+        private string LinkFailureText()
+        {
+            if (!_linkDialled || _linkAnswered)
+                return "Lost the connection to the master server.";
+
+            return _linkTls
+                ? "The master server closed the connection without answering."
+                : "The master server closed the connection without answering. A public master "
+                  + "expects TLS — set IRONFRONT_CLIENT_MASTER_TLS=1.";
         }
 
         /// <summary>
@@ -465,6 +530,7 @@ namespace Ironfront.Net.Unity.Client
             {
                 string hash = PasswordHasher.Hash(password, username);
                 LoginResult result = await _master.LoginAsync(username, hash).ConfigureAwait(false);
+                NoteMasterAnswered();
 
                 if (!result.Ok)
                 {
@@ -486,13 +552,14 @@ namespace Ironfront.Net.Unity.Client
             }
             catch (MasterServerException ex)
             {
+                NoteMasterAnswered();
                 Fail(MasterErrorText.DescribeFailure(ex.ErrorCode));
                 Recover(GameFlowState.LoginScreen);
                 return false;
             }
             catch (Exception ex) when (IsLinkFailure(ex))
             {
-                Fail("Lost the connection to the master server.");
+                Fail(LinkFailureText());
                 Recover(GameFlowState.LoginScreen);
                 return false;
             }
@@ -549,6 +616,7 @@ namespace Ironfront.Net.Unity.Client
                 RegisterResult result = await _master
                     .RegisterAsync(username, hash, displayName ?? string.Empty)
                     .ConfigureAwait(false);
+                NoteMasterAnswered();
 
                 if (!result.Ok)
                 {
@@ -561,12 +629,13 @@ namespace Ironfront.Net.Unity.Client
             }
             catch (MasterServerException ex)
             {
+                NoteMasterAnswered();
                 Fail(MasterErrorText.DescribeFailure(ex.ErrorCode));
                 return false;
             }
             catch (Exception ex) when (IsLinkFailure(ex))
             {
-                Fail("Lost the connection to the master server.");
+                Fail(LinkFailureText());
                 return false;
             }
         }
@@ -594,6 +663,7 @@ namespace Ironfront.Net.Unity.Client
             {
                 long startedTicks = Stopwatch.GetTimestamp();
                 Rooms = await _master.GetRoomsAsync().ConfigureAwait(false) ?? Array.Empty<RoomInfo>();
+                NoteMasterAnswered();
 
                 // Measured around the request the browser was making anyway (P16 3.2). Rounded
                 // up rather than truncated so a fast LAN reads "1 ms" instead of "0 ms", which
@@ -606,12 +676,13 @@ namespace Ironfront.Net.Unity.Client
             }
             catch (MasterServerException ex)
             {
+                NoteMasterAnswered();
                 Fail(MasterErrorText.DescribeFailure(ex.ErrorCode));
                 return false;
             }
             catch (Exception ex) when (IsLinkFailure(ex))
             {
-                Fail("Lost the connection to the master server.");
+                Fail(LinkFailureText());
                 return false;
             }
         }
@@ -641,6 +712,7 @@ namespace Ironfront.Net.Unity.Client
                     : PasswordHasher.HashRoomPassword(password!);
 
                 JoinResult result = await _master.JoinRoomAsync(roomId, hash).ConfigureAwait(false);
+                NoteMasterAnswered();
 
                 if (!result.Ok)
                 {
@@ -676,13 +748,14 @@ namespace Ironfront.Net.Unity.Client
             }
             catch (MasterServerException ex)
             {
+                NoteMasterAnswered();
                 Fail(MasterErrorText.DescribeFailure(ex.ErrorCode));
                 Recover(GameFlowState.RoomBrowser);
                 return false;
             }
             catch (Exception ex) when (IsLinkFailure(ex))
             {
-                Fail("Lost the connection to the master server.");
+                Fail(LinkFailureText());
                 Recover(GameFlowState.RoomBrowser);
                 return false;
             }
@@ -741,6 +814,7 @@ namespace Ironfront.Net.Unity.Client
                 };
 
                 CreateRoomResult result = await _master.CreateRoomAsync(request).ConfigureAwait(false);
+                NoteMasterAnswered();
 
                 if (!result.Ok || result.RoomId == 0)
                 {
@@ -764,13 +838,14 @@ namespace Ironfront.Net.Unity.Client
             }
             catch (MasterServerException ex)
             {
+                NoteMasterAnswered();
                 Fail(MasterErrorText.DescribeFailure(ex.ErrorCode));
                 Recover(GameFlowState.RoomBrowser);
                 return false;
             }
             catch (Exception ex) when (IsLinkFailure(ex))
             {
-                Fail("Lost the connection to the master server.");
+                Fail(LinkFailureText());
                 Recover(GameFlowState.RoomBrowser);
                 return false;
             }
@@ -835,12 +910,13 @@ namespace Ironfront.Net.Unity.Client
             }
             catch (MasterServerException ex)
             {
+                NoteMasterAnswered();
                 Fail(MasterErrorText.DescribeFailure(ex.ErrorCode));
                 return false;
             }
             catch (Exception ex) when (IsLinkFailure(ex))
             {
-                Fail("Lost the connection to the master server.");
+                Fail(LinkFailureText());
                 return false;
             }
         }
@@ -885,7 +961,7 @@ namespace Ironfront.Net.Unity.Client
                 // The room is left locally either way. A master that did not hear us drops the
                 // membership on disconnect, and stranding the player on a room screen they have
                 // already left is the worse of the two failures.
-                Fail("Lost the connection to the master server.");
+                Fail(LinkFailureText());
             }
 
             PendingJoin = PendingJoin.None;
