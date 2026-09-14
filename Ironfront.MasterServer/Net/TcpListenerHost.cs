@@ -472,15 +472,27 @@ namespace Ironfront.MasterServer.Net
                 //   Authenticated -> IDLE gap since the last byte. A logged-in client that has
                 //   nothing to say is supposed to send HEARTBEAT, so silence is the signal.
                 //
-                //   Unauthenticated -> absolute DEADLINE since accept. Using the idle gap here
-                //   makes the Slowloris defense defend nothing: the attack is a client that
-                //   stays just busy enough to look alive while never completing a frame or
-                //   authenticating, so a clock any byte resets is a clock the attacker owns.
-                //   Measured before this was fixed: one byte every 20 s held a slot for 89 s
-                //   against a 30 s limit, indefinitely in principle.
+                //   Unauthenticated -> gap since the last COMPLETE FRAME, under an absolute
+                //   ceiling. Using the raw byte clock here makes the Slowloris defense defend
+                //   nothing: the attack is a client that stays just busy enough to look alive
+                //   while never completing a frame or authenticating, so a clock any byte
+                //   resets is a clock the attacker owns. Measured before that was fixed: one
+                //   byte every 20 s held a slot for 89 s against a 30 s limit.
+                //
+                //   But measuring from ACCEPT, which is what replaced it, is a deadline the
+                //   PLAYER cannot survive either. REGISTER does not authenticate a connection
+                //   -- a successful register returns to the login form by design -- so the
+                //   create-account screen ran on a fuse lit at accept that nothing the player
+                //   did could reset, and four form fields take longer than thirty seconds.
+                //
+                //   A COMPLETE FRAME separates the two: a dribble that never closes a frame
+                //   dies on the same deadline as silence, while a real client keeps this moving
+                //   for free, because MasterClient has heartbeated every 15 s since the socket
+                //   opened. The ceiling then bounds the well-behaved squatter that remains.
                 bool expired = connection.IsAuthenticated
                     ? now - connection.LastActivityMs > (long)_options.HeartbeatTimeout.TotalMilliseconds
-                    : now - connection.ConnectedAtMs > (long)_options.UnauthenticatedTimeout.TotalMilliseconds;
+                    : now - connection.LastFrameAtMs > (long)_options.UnauthenticatedTimeout.TotalMilliseconds
+                      || now - connection.ConnectedAtMs > (long)_options.UnauthenticatedCeiling.TotalMilliseconds;
 
                 if (expired) _timeoutScratch.Add(connection);
             }
@@ -491,9 +503,24 @@ namespace Ironfront.MasterServer.Net
             for (int i = 0; i < _timeoutScratch.Count; i++)
             {
                 ClientConnection connection = _timeoutScratch[i];
-                string reason = connection.IsAuthenticated
-                    ? $"heartbeat timeout ({_options.HeartbeatTimeout.TotalSeconds:0.##}s silent)"
-                    : $"not authenticated within {_options.UnauthenticatedTimeout.TotalSeconds:0.##}s";
+                // The two unauthenticated reasons are distinguished, because they mean
+                // opposite things to whoever reads the log: one is a peer that stopped talking,
+                // the other is a peer that talked properly for five minutes and never logged in.
+                string reason;
+                if (connection.IsAuthenticated)
+                {
+                    reason = $"heartbeat timeout ({_options.HeartbeatTimeout.TotalSeconds:0.##}s silent)";
+                }
+                else if (now - connection.LastFrameAtMs > (long)_options.UnauthenticatedTimeout.TotalMilliseconds)
+                {
+                    reason = "no complete frame for "
+                             + $"{_options.UnauthenticatedTimeout.TotalSeconds:0.##}s while unauthenticated";
+                }
+                else
+                {
+                    reason = "not authenticated within "
+                             + $"{_options.UnauthenticatedCeiling.TotalMinutes:0.##} min";
+                }
 
                 Interlocked.Increment(ref _totalTimedOut);
                 Disconnect(connection, reason);
