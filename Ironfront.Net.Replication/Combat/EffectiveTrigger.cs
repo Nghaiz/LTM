@@ -191,11 +191,22 @@ namespace Ironfront.Net.Replication.Combat
     /// doing it. A human holding Shift and the left mouse button takes the same path.
     /// </para>
     /// <para>
+    /// <b>The semi-automatic edge is shared too, since the client learned to predict it.</b>
+    /// <see cref="AdvanceHeldTrigger"/> is the RULE — "an automatic fires on every effective
+    /// sample, a semi-automatic on the rising one" — and <see cref="Advance"/> is written in
+    /// terms of it rather than beside it, exactly as the sprint half is. What stops at this
+    /// boundary is the SAMPLING SITE, not the rule: this side advances the edge once per
+    /// PROCESSED frame, the client advances it once per render frame, and the two therefore
+    /// count edges at different rates. That difference is bounded and harmless in the direction
+    /// that matters -- both see exactly one rising edge per press a human can make -- and the
+    /// alternative was measured on 2026-09-14: a protocol-10 client held a SIGNAL DMR's trigger
+    /// through two five-second presses, this side fired the two rounds it owed, and the client
+    /// predicted 29 more and took 9 ammo corrections doing it, because it had no edge rule at
+    /// all. A sampling rate that disagrees costs a shot at the margin; no rule costs a magazine.
+    /// </para>
+    /// <para>
     /// <b>What is deliberately NOT shared, and why each one stops at this boundary.</b>
-    /// The <i>semi-automatic edge</i> is measured against the last PROCESSED frame, and the
-    /// client's render loop is neither the input send rate nor the accepted-frame rate — an
-    /// edge sampled there would count different edges from this one, which is the disagreement
-    /// again in a new place. The <i>holster mutation</i> is not mirrored because the client's
+    /// The <i>holster mutation</i> is not mirrored because the client's
     /// <see cref="WeaponRuntimeState"/> has one writer, <see cref="WeaponRuntimeState.Loaded"/>,
     /// and nothing on that side parks a weapon mid-switch the way <c>ClientSession</c> does, so
     /// lowering it there would invent a second writer for a field nobody raises. The
@@ -277,10 +288,51 @@ namespace Ironfront.Net.Replication.Combat
                 && SprintAllowsFire(in trigger, nowSeconds)
                 && weapon.Unholstered;
 
+            // Read BEFORE the advance, because AdvanceHeldTrigger writes WasEffective and this
+            // outcome still owes the caller the edge computed against the old value. Recomputing
+            // it from the field afterwards would report false on every rising edge.
+            bool wasEffective = trigger.WasEffective;
+            bool attemptShot = AdvanceHeldTrigger(ref trigger, effective, automatic);
+
+            return new TriggerOutcome(effective, effective && !wasEffective, attemptShot);
+        }
+
+        /// <summary>
+        /// Advances the semi-auto edge by one sample, on whichever side is advancing a trigger.
+        /// </summary>
+        /// <param name="effective">
+        /// The trigger after that side's own gates. This side's is every clause in
+        /// <see cref="Advance"/>; the client's is the Fire bit, alive, and
+        /// <see cref="SprintAllowsFire"/> — see <c>ClientCombatState.ApplyTrigger</c>.
+        /// </param>
+        /// <param name="automatic"><see cref="WeaponConfig.Automatic"/>.</param>
+        /// <returns>
+        /// Whether a shot may be attempted: every effective sample for an automatic, the rising
+        /// one only for a semi-automatic.
+        /// </returns>
+        /// <remarks>
+        /// <para>
+        /// <b>Called on EVERY sample, not only the samples the trigger is down</b> — the same
+        /// contract <see cref="AdvanceSprintBlock"/> carries, and for a sharper reason. The
+        /// RELEASE is what re-arms the edge: a caller that ran this only while Fire was held
+        /// would leave <see cref="EffectiveTrigger.WasEffective"/> true for the rest of the
+        /// life, so a semi-automatic would fire once and then never again, and the symptom
+        /// would be a dead trigger rather than a wasted round.
+        /// </para>
+        /// <para>
+        /// <b>Writes <see cref="EffectiveTrigger.WasEffective"/> and nothing else.</b> The
+        /// sprint block is <see cref="AdvanceSprintBlock"/>'s field and the holster is
+        /// <see cref="Advance"/>'s; a caller advancing this one is not advancing those, which
+        /// is what lets the client run this without running the halves it has no state for.
+        /// </para>
+        /// </remarks>
+        public static bool AdvanceHeldTrigger(
+            ref EffectiveTrigger trigger, bool effective, bool automatic)
+        {
             bool risingEdge = effective && !trigger.WasEffective;
             trigger.WasEffective = effective;
 
-            return new TriggerOutcome(effective, risingEdge, automatic ? effective : risingEdge);
+            return automatic ? effective : risingEdge;
         }
 
         /// <summary>
