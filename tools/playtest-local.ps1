@@ -371,8 +371,16 @@ try {
     # UDP :27015 against the server they just joined.
     $env:IRONFRONT_ROLE = "client"
 
+    # The loopback master this script just started serves PLAINTEXT, so the transport is pinned
+    # here beside the address rather than left to .env. Since .env points the client at the
+    # public fly master, which terminates TLS, an unpinned run would inherit
+    # IRONFRONT_CLIENT_MASTER_TLS=1 and offer a ClientHello to a listener that speaks MSP --
+    # and the failure is the quiet kind: the TCP connect succeeds, the client reports itself
+    # connected, and the first request dies. A real environment variable beats the file
+    # (DotEnv.Load skips any key already set), which is the whole reason pinning works.
     $env:IRONFRONT_CLIENT_MASTER_HOST = "127.0.0.1"
     $env:IRONFRONT_CLIENT_MASTER_PORT = "$MasterPort"
+    $env:IRONFRONT_CLIENT_MASTER_TLS  = "0"
 
     $launched = @()
     for ($i = 1; $i -le $Clients; $i++) {
