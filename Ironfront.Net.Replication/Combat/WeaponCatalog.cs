@@ -307,21 +307,53 @@ namespace Ironfront.Net.Replication.Combat
                 damage: 0f, force: 0f, clipSize: 1, spareAmmo: 2,
                 delivery: WeaponDelivery.Projectile, automatic: false);
 
-            // Not weapons, and the assets agree rather than the class name doing the arguing.
-            // AMMO_BAG and MEDIPACK resolve a projectile whose damage is literally 0. BINOCS
-            // still points at the rifle's tracer prefab, but Binoculars overrides firing so the
-            // reference is vestigial - reading its 35 damage would arm a pair of binoculars.
-            // NV_GOGGLES (ToggleableItem) has no projectile at all.
+            // Deployables. They do no damage and they ARE still launched, and those two facts
+            // were being conflated: both carried Inert, whose clipSize is 0, and
+            // ServerFireResolver.CheckCanFire rejects a clip of 0 as NoAmmo unconditionally -
+            // there is no `config.ClipSize > 0` escape on that line the way MountedWeaponAuthority
+            // has one. So every trigger pull on an ammo bag or a medipack was refused, on the
+            // first throw and every throw after it, and the whole deployable pipeline behind it
+            // (ProjectileNetAnnouncer.KindOf -> ProjectileKind.AmmoBag/Medipack,
+            // ServerDeployableAuthority's resupply and heal pulse, the client presenter's slots
+            // 4 and 5) has never been reachable in a networked match. Offline is unaffected and
+            // always was: Ammobox.Awake and Medipack.Awake run their own InvokeRepeating under
+            // NetContext.IsOffline, which is why this reads as a multiplayer-only regression.
             //
-            // Their reserve is Inert's no-resupply, and for three of them that IS the prefab:
-            // BINOCS, AMMO_BAG and MEDIPACK each carry spareAmmo -1. NV_GOGGLES carries 10/50,
-            // which is Weapon.Configuration's field default verbatim (Weapon.cs) on an item that
-            // never fires - so it is an unset field rather than an authored figure, and this
-            // entry already declines the clip of 10 beside it for that reason. Carrying the 50
-            // would put "50 spare" on the HUD under a pair of goggles that cannot spend one.
+            // This is ledger X-42 one row further down. That row moved SMAW, JAVELIN, FRAG and
+            // SPEARHEAD off hitscan for exactly this reason - `damage: 0f, force: 0f` was the
+            // assets saying "the real numbers live on the projectile prefab" - and stopped two
+            // entries short. Nothing here is a balance decision: every number below is read off
+            // the prefab. ammobox.prefab / medipack.prefab both author `ammo: 1` (one carried),
+            // `spareAmmo: -1` (no bag may refill a bag), `cooldown: 0.2`, `auto: 0`, and a wired
+            // projectilePrefab. Range is FRAG's 40 f and is inert on this path - the Projectile
+            // branch of ServerCombatAuthority.Step never sweeps - but a plausible number beats a
+            // zero a later reader would have to re-derive.
+            configs[WeaponIds.AMMO_BAG] = new WeaponConfig(
+                cooldown: 0.2f, spread: 0.02f, projectilesPerShot: 1, range: 40f,
+                damage: 0f, force: 0f, clipSize: 1,
+                spareAmmo: WeaponConfig.NoResupplySpareAmmo,
+                delivery: WeaponDelivery.Projectile, automatic: false);
+
+            configs[WeaponIds.MEDIPACK] = new WeaponConfig(
+                cooldown: 0.2f, spread: 0.02f, projectilesPerShot: 1, range: 40f,
+                damage: 0f, force: 0f, clipSize: 1,
+                spareAmmo: WeaponConfig.NoResupplySpareAmmo,
+                delivery: WeaponDelivery.Projectile, automatic: false);
+
+            // Genuinely not launchers, and the assets agree rather than the class name doing the
+            // arguing. BINOCS still points at the rifle's tracer prefab, but Binoculars overrides
+            // firing so the reference is vestigial - reading its 35 damage would arm a pair of
+            // binoculars. NV_GOGGLES (ToggleableItem) has no projectile at all. Neither has a
+            // deployable behind it waiting to be reached, which is the whole difference between
+            // these two and the pair above.
+            //
+            // BINOCS carries spareAmmo -1 in its own prefab, so Inert's reserve is the authored
+            // one. NV_GOGGLES carries 10/50, which is Weapon.Configuration's field default
+            // verbatim (Weapon.cs) on an item that never fires - so it is an unset field rather
+            // than an authored figure, and this entry already declines the clip of 10 beside it
+            // for that reason. Carrying the 50 would put "50 spare" on the HUD under a pair of
+            // goggles that cannot spend one.
             configs[WeaponIds.BINOCS] = Inert;
-            configs[WeaponIds.AMMO_BAG] = Inert;
-            configs[WeaponIds.MEDIPACK] = Inert;
             configs[WeaponIds.NV_GOGGLES] = Inert;
 
             // Melee. Real numbers exist - WRENCH 60 damage / 150 balance / 300 force, SUPER_WRENCH
