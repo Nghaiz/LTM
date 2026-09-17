@@ -28,14 +28,14 @@ Cột **gốc** trỏ về năm nguyên nhân gốc ở § Phụ lục B. Sửa 
 |---|---|---|---|---|---|
 | W1 Xe cộ | 19 | 2 | 0 | 0 | 17 |
 | W2 Chiến đấu | 17 | 0 | 1 | 0 | 16 |
-| W3 Di chuyển | 6 | 2 | 0 | 0 | 4 |
+| W3 Di chuyển | 6 | 2 | 1 | 0 | 3 |
 | W4 Luồng trận & kết cục | 6 | 0 | 0 | 0 | 6 |
 | W5 HUD & minimap | 5 | 0 | 0 | 0 | 5 |
 | W6 Bot & quyền thế giới | 4 | 0 | 0 | 0 | 4 |
 | W7 Phiên & kết nối | 8 | 0 | 0 | 0 | 8 |
 | W8 Số liệu & tương đương | 4 | 0 | 0 | 0 | 4 |
 | W9 Tooling | 4 | 0 | 0 | 0 | 4 |
-| **Tổng** | **73** | **4** | **1** | **0** | **68** |
+| **Tổng** | **73** | **4** | **2** | **0** | **67** |
 
 ---
 
@@ -174,7 +174,7 @@ Vòng lặp cốt lõi của một FPS: bắn trúng, nhận sát thương, ch�
 |---|---|---|---|---|---|
 | **MOV-01** | ✅ | **Giữ Space là nhảy liên tục.** `MovementSimulation` đọc `Input.GetButton` (mức) và `MovementCore` áp lại `JumpSpeed` mỗi tick chạm đất; bản gốc chốt **cạnh** rồi xoá | `MovementSimulation.cs:124`; `MovementCore.cs:160-166` | 1 | |
 | **MOV-02** | ✅ | **Giữ Shift khi đang ngắm/cúi/nạp/ngồi vẫn chạy hết tốc lực.** Bản gốc dùng tổ hợp `!Crouch() && !Aiming() && !IsReloading() && !IsSeated()` | `MovementSimulation.cs:124` vs `FpsActorController.cs:1219-1222` | 1 | |
-| **MOV-03** | ☐ | **Bật "Toggle Crouch" thì server không bao giờ thấy bạn cúi.** Hai chủ thể cùng ghi `CharacterController.height` và `transform.position`, mỗi tick ghi đè nhau — bạn nấp sau vật che và bị bắn xuyên đầu | `MovementCore` / `NetServerActor` | 1 | |
+| **MOV-03** | ☑ | **Bật "Toggle Crouch" thì server không bao giờ thấy bạn cúi.** Hai chủ thể cùng ghi `CharacterController.height` và `transform.position`, mỗi tick ghi đè nhau — bạn nấp sau vật che và bị bắn xuyên đầu | `MovementSimulation.cs:124`; `NetMovementAgent.cs:341`; `FpsActorController.cs:769` | 1 | |
 | **MOV-04** | ☐ | **Bước khỏi mép vực rơi nhanh hơn ~10 m/s.** Vận tốc −10 của tick còn trên mặt đất sống sang tick đầu tiên trên không | `MovementCore.cs:167-170` vs `FirstPersonController.cs:173-176` | 1 | |
 | **MOV-05** | ☐ | **Thân thể từ xa không nghiêng, không giật khi trúng đạn, không báo trạng thái cúi** | `RemoteActorView.cs` | 1 | |
 | **MOV-06** | ☐ | **Không có bơi hay lực nổi cho bất kỳ thân thể mạng nào.** Thay bằng đồng hồ chết đuối 8 giây — mất hẳn cơ chế bơi của bản gốc | client movement | 1 | |
