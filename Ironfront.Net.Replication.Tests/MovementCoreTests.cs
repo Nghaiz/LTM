@@ -62,6 +62,25 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(MovementCore.RunSpeed, MovementCore.SpeedFor(in sprinting));
         }
 
+        [Theory]
+        [InlineData(true, false, false)]    // crouching
+        [InlineData(false, true, false)]    // aiming
+        [InlineData(false, false, true)]    // reloading
+        public void AimingCrouchingOrReloadingVetoesSprint(bool crouch, bool aim, bool reload)
+        {
+            // The shipped speed rule is FpsActorController.IsSprinting(), which the controller
+            // stores into its own `sprinting` field every render frame and
+            // FirstPersonController.GetInput reads to choose between two speeds. Reading the
+            // Sprint BUTTON instead gave a player who held it while crouching, aiming or
+            // reloading 6.5 m/s where the game gives 3.5 -- and gave it on both sides at once,
+            // which is exactly why it never rubber-banded and nothing caught it.
+            var held = new MoveInput(
+                0f, 1f, 0f, jump: false, sprint: true, crouch: crouch,
+                fire: false, aim: aim, reload: reload);
+
+            Assert.Equal(MovementCore.WalkSpeed, MovementCore.SpeedFor(in held));
+        }
+
         // ------------------------------------------------------------------ direction
 
         [Theory]

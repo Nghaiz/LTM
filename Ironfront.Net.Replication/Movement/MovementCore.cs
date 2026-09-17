@@ -124,16 +124,36 @@ namespace Ironfront.Net.Replication.Movement
         /// Chooses the speed for this tick.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// <b>There is no crouch speed, and that is not an oversight.</b> The phase-00 sketch
         /// assumed a <c>CROUCH_SPEED</c> of 2.0 m/s. The shipped game has no such value:
         /// <c>FpsActorController.StartCrouch()</c> only changes the CharacterController's
-        /// height, and <c>FirstPersonController.GetInput()</c> picks between exactly two
-        /// speeds on the sprint flag alone. Inventing a crouch speed here would make the
-        /// server authoritatively slower than the client every time a player crouches, which
-        /// presents as rubber-banding while crouch-walking and would have been extremely
-        /// annoying to trace back to a constant nobody wrote down.
+        /// height. Inventing a crouch speed here would make the server authoritatively slower
+        /// than the client every time a player crouches, which presents as rubber-banding while
+        /// crouch-walking and would have been extremely annoying to trace back to a constant
+        /// nobody wrote down.
+        /// </para>
+        /// <para>
+        /// <b>Sprint is the controller's <c>sprinting</c> FIELD, not the Sprint button.</b> This
+        /// read the raw button, on the reasoning that <c>FirstPersonController.GetInput()</c>
+        /// "picks between exactly two speeds on the sprint flag alone". It does — but the flag it
+        /// reads is written every render frame by <c>FpsActorController.Update()</c> as
+        /// <c>IsSprinting()</c>, which is <c>!Crouch() &amp;&amp; !Aiming() &amp;&amp; !IsReloading()
+        /// &amp;&amp; InputSource.Sprint() &amp;&amp; !IsSeated()</c>. The shipped game therefore gives
+        /// WALK speed to a player holding Sprint while aiming, crouching or reloading, and this
+        /// method gave them run speed — 6.5 m/s against 3.5, on both sides at once, so it never
+        /// rubber-banded and nothing caught it.
+        /// </para>
+        /// <para>
+        /// <b>The seated term of that composite is absent here on purpose.</b> A seated body is
+        /// not simulated by this file at all: <c>FpsActorController</c>'s <c>SimulationEnabled</c>
+        /// is false while <c>IsSeated()</c>, so no tick reaches this line to be gated.
+        /// </para>
         /// </remarks>
-        public static float SpeedFor(in MoveInput input) => input.Sprint ? RunSpeed : WalkSpeed;
+        public static float SpeedFor(in MoveInput input)
+            => (input.Sprint && !input.Crouch && !input.Aim && !input.Reload)
+                ? RunSpeed
+                : WalkSpeed;
 
         /// <summary>
         /// Advances one tick and returns the motion the caller should feed to
