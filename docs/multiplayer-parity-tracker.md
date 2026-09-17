@@ -26,16 +26,16 @@ Cột **gốc** trỏ về năm nguyên nhân gốc ở § Phụ lục B. Sửa 
 
 | Nhóm | Tổng | ✅ | ☑ | ◐ | ☐ |
 |---|---|---|---|---|---|
-| W1 Xe cộ | 19 | 2 | 0 | 0 | 17 |
-| W2 Chiến đấu | 19 | 0 | 3 | 0 | 16 |
+| W1 Xe cộ | 20 | 2 | 0 | 0 | 18 |
+| W2 Chiến đấu | 21 | 1 | 3 | 0 | 17 |
 | W3 Di chuyển | 6 | 2 | 1 | 0 | 3 |
 | W4 Luồng trận & kết cục | 6 | 0 | 0 | 0 | 6 |
-| W5 HUD & minimap | 5 | 0 | 0 | 0 | 5 |
-| W6 Bot & quyền thế giới | 4 | 0 | 0 | 0 | 4 |
+| W5 HUD & minimap | 6 | 0 | 0 | 0 | 6 |
+| W6 Bot & quyền thế giới | 5 | 0 | 0 | 0 | 5 |
 | W7 Phiên & kết nối | 8 | 0 | 0 | 0 | 8 |
 | W8 Số liệu & tương đương | 4 | 0 | 0 | 0 | 4 |
 | W9 Tooling | 4 | 0 | 0 | 0 | 4 |
-| **Tổng** | **75** | **4** | **4** | **0** | **67** |
+| **Tổng** | **80** | **5** | **4** | **0** | **71** |
 
 ---
 
@@ -141,6 +141,8 @@ ngồi không tồn tại. Mười tám lỗi dưới đây, bảy trong số đ
 | **VEH-17** | ☐ | **Loại xe không được `VehicleSpawner` tham chiếu thì vô hình.** `SceneVehiclePrefabDirectory.Scan` chỉ đọc spawner; xe đặt sẵn trong scene tăng `UnknownPrefabSpawns` và không bao giờ được vẽ | `ClientSceneBindings.cs:50-67` | 1 | |
 | **VEH-18** | ☐ | **Bắn khi ngồi ghế súng làm lóe súng trường của chính bạn.** `Actor.cs:676` thấy `IsSeated()` false nên cho qua; client trừ đạn súng trường trong khi server tiêu đạn pháo | `Actor.cs:668-700` | 1 | R1 |
 | **VEH-19** | ☐ | **Thân thể ngồi ghế vẫn bị hoà giải vị trí, đánh thức bộ dò X-19.** Sau khi VEH-01 landed, `StartSeated` tắt `CharacterController` (đúng), nhưng đường hoà giải vẫn gọi `NetMovementAgent.CharacterMove` — nên `CollisionBypassedMoves` đi 0 → 1 và in `[net] '...' moved with no collision` một lần trên **mọi** client ngồi ghế. Đo được: chỉ driver được ngồi của `veh01-x1789582332` có cảnh báo; hai observer và cả ba client của lần chạy trước đều 0. Hệ quả: dương tính giả trên chính bộ dò dự án dùng để chấm X-19, nên một hồi quy X-19 thật trên thân thể ngồi ghế sẽ bị che. Vị trí vẫn hội tụ (`err=0,00m`, `y == authY`) nên không có hư hại chức năng | `NetMovementAgent.cs:299`; `ClientPredictionStage.cs:288-303` | 1 | R1 |
+| **VEH-20** | ☐ | **Bảng xe của server rỗng, nên không client nào được kể về chiếc xe nào.** `S_VEHICLE_SPAWN` chưa bao giờ tới — **cả hai log client của phiên thật không có một dòng nào chứa chữ "vehicle"**. Phía client không có đường nào che giấu xe (`DrawRemoteVehicles` giữ nguyên tư thế khi thiếu dữ liệu), nên "không thấy xe" chỉ có nghĩa là bảng trống | `ServerTickLoop.cs:1162-1216`; `ServerStateAudit.cs:337` | 1 | |
+| | | ⚠ **Chưa tìm ra nguyên nhân, và mình đã bác bỏ giả thuyết của chính mình.** *Pad bị chặn* **không** khoá vĩnh viễn — `GaveUp` vẫn dò lại mỗi `DefaultDormantProbeSeconds`. `OnWorldReset` **có** phá xe và **có** lên lịch spawn lại. `RegisterForCapture` với `source == null` là đường offline/client. Xe không lấy được id thì bị **Destroy**, không đứng chắn pad. Còn lại bốn khả năng mà **chỉ log server phân biệt được** — và log đó không tồn tại trên máy này. Đã thêm một cảnh báo ở `AnnounceNewVehicles` khi client join vào bảng rỗng, để lần sau **tự chẩn đoán** thay vì im lặng | | | |
 
 ## W2 — Chiến đấu
 
@@ -175,6 +177,10 @@ Vòng lặp cốt lõi của một FPS: bắn trúng, nhận sát thương, ch�
 | | | **Nghiệm thu:** do người chơi báo từ phiên chơi thật 2026-09-17 (2 người, server teammate). **Loại trừ hồi quy bằng diff**: `40cf05d` không đụng dòng `weapon.ammo = ammoInClip` nào. Sửa bằng delegate thứ ba trên `LocalInputSource` (khuôn `Aiming`/`SampleWeaponSlotIntent` đã có) + `SprintSource` trên clock. **An toàn một phía** — bit mới là tập con của bit cũ nên server cũ vẫn khớp, và nó sửa luôn bất đồng tốc độ mà MOV-02 đơn lẻ gây ra | | | |
 | **CMB-19** | ☐ | **Băng đạn về 0 rồi nhảy lên 1.** HUD đọc **dự đoán của client**, và `ReconcileAmmo` giữ nguyên số dự đoán khi lệch ≤ `AmmoResyncThreshold = 2`, đồng thời trả snapshot về **nguyên văn** khi `reloadPending` bật. Hai bên tiêu đạn trên hai đồng hồ khác nhau (client mỗi frame render theo cooldown, server mỗi frame input được chấp nhận) — đo được 0,1054 s/phát so với cooldown 0,095 s, nên client dẫn trước 1–3 viên. Tới ranh giới nạp đạn, nguồn của con số **đổi chỗ** | `ClientCombatState.cs:643-651,536`; `NetClientLocalCombatDriver.cs:839` | 1 | |
 | | | **Cách sửa (chưa làm):** một chủ thể viết cho con số HUD đọc, và hoà giải **chính xác** — `OnSnapshotApplied` đã nhận `lastProcessedInputTick` mà không bao giờ truyền nó xuống `ReconcileAmmo`, và đó chính là lý do cần dải ±2. Phương án nhỏ hơn nhưng là quyết định sản phẩm: đưa `ServerAmmoInClip` cho rig thay vì `AmmoInClip`, chấp nhận HUD trễ một RTT. **Không kiểm chứng được bằng artifact nào hiện có** — không recorder nào đọc `Weapon.ammo`/`Actor.spareAmmo`, đúng TOL-04 | | | |
+| **CMB-20** | ✅ | **Một phát giết người-với-người không hề phát `S_DEATH`.** `TryBeginDeath` trả `true` **đúng một lần mỗi mạng** — nó **là** cạnh tử vong — và `EmitDeath` đặt `S_DEATH`, killfeed, xác, vé, điểm sau cạnh đó. `ServerCombatAuthority` **cũng** đóng tem lên cổng ấy mỗi phát hitscan, nên `EmitDeath` nhận `false` và thoát trước khi phát gì. Client nạn nhân chỉ biết mình chết nhờ snapshot xoá `IsAlive` → tự tắt input → **đứng đơ** | `ServerCombatAuthority.cs:450`; `ServerTickLoop.cs:1310`; `ServerRespawnGate.cs:82-83,105-115` | 1 | |
+| | | **Nghiệm thu:** người chơi báo từ phiên thật 2026-09-17. Sửa bằng cách **gỡ cái tem** và bỏ tham số cổng khỏi constructor (lớp đó chưa bao giờ *đọc* cổng, chỉ ghi) — nên quyền sở hữu thành **cấu trúc**, không phải quy ước. **Và đây là phần đáng ghi nhất:** comment ở `ServerTickLoop` gọi cái tem thứ hai là *"safe"* vì `MarkDeath` nuốt bản trùng — **đúng khi được viết**, sai sau khi cổng đổi thành trả-về-cạnh. Câu đó sống lâu hơn sự thật của nó rồi quay ra bênh vực lỗi. Còn một test ghim lỗi thành hợp đồng (`AKilledVictimIsStampedIntoTheRespawnGate`) — đã đảo thành khẳng định điều ngược lại. 1666/1666 xanh | | | |
+| **CMB-21** | ☐ | **Không có projectile nào của người chơi được tạo trên server** — cả lựu đạn lẫn bazooka. `FireCarriedWeapon` trả `true` chỉ cần `activeWeapon != null`; nếu `Weapon.CanFire()` từ chối thì `Weapon.Fire` **im lặng không làm gì** — không projectile, không announce, không lỗi. Và `CanFire()` đọc trạng thái **không gì duy trì cho thân thể do server điều khiển**: `Actor.Update` thoát sớm ở `:600` nên `StopFire()` **không thể tới được**, nên `holdingFire` đặt một lần là **không bao giờ xoá** → từ phát thứ hai, mọi vũ khí không tự động bị từ chối, im lặng. Lựu đạn "không nổ" là hệ quả: không có instance trên server thì không có ngòi nổ | `IronfrontNetBindings.cs:668-677`; `Weapon.cs:287,397-405`; `Actor.cs:600-603,668-685` | 1 | R3 |
+| | | **Chẩn đoán đã có sẵn nhưng đang tắt:** `IRONFRONT_LOG_LOADOUT=1` in `[switch] actor=… slot=… outcome=… weaponId=…`, `IRONFRONT_LOG_SHOTS=1` in `[shot] actor=… weapon=… rejection=…`. Hai dòng đó tách được "thân thể chưa từng cầm lựu đạn" / "phiên chưa nhận nó" / "engine từ chối". Liên quan X-31 và X-42 (còn mở) | | | |
 
 ## W3 — Di chuyển
 
@@ -207,6 +213,8 @@ Vòng lặp cốt lõi của một FPS: bắn trúng, nhận sát thương, ch�
 | **HUD-03** | ☐ | **Nút spawn trên minimap chết cho tới khi có cờ đổi chủ.** `UpdateSpawnPointButtons` chỉ chạy từ `MinimapUi.Start` và `CapturePoint.SetOwner`; đội của bạn được giải sau `Start`, nên mọi nút bị vô hiệu suốt lần deploy đầu | `MinimapUi.cs:119-123,189-226` | 2 | |
 | **HUD-04** | ☐ | **Vết cháy của lựu đạn được vẽ thành vết đạn.** `DecalType.Scorch` không có drawer — 3 entry cho 4 member enum; `DecalManager` tự sửa type thành `Impact` | `DecalManager.cs:13-24,129-162`; `_Managers.prefab` | 1 | |
 | **HUD-05** | ☐ | **Ống nhòm ra lệnh squad không có tác dụng.** Vẫn đọc được cự ly, vẫn có hiệu ứng, không squad nào di chuyển — lệnh không có thông điệp nào để đi qua dây | `Binoculars.cs:56-86` | 1 | |
+| **HUD-06** | ☐ | **Hiệu ứng nổ là một chùm quad trắng không texture — do cấu trúc, không phải do lỗi thời.** `_effectsByKind` trỏ vào **container placeholder** trong scene: cả bốn emitter (2 mỗi map) có `m_Materials: {fileID: 0}` (**không material**) và `EmissionModule.enabled: 0`, `m_Bursts: []`, `looping: 1`. Hiệu ứng thật nằm ở các **object con** (`Explosion Fire`/`Sparks`/`Debris`…), có material đàng hoàng. Rồi `ExplosionEffectPlayback.TryPlay` **chế ra** 24 hạt vào emitter trơ ấy, và `TryAssignFallbackMaterial` gán `Shader.Find("Particles/Standard Unlit")` **không texture** → `_BaseMap` trắng → quad trắng đục | `Dustbowl.unity:399864,434002`; `Island.unity:315520,309892`; `ExplosionEffectPlayback.cs:25,38-46`; `NetClientExplosionPresenter.cs:307-326` | 1 | |
+| | | **Bản sửa code là bù cho một asset thiếu, và comment ở `NetClientExplosionPresenter.cs:239-243` nói rõ ý định đó.** Sửa đúng là **asset**: trỏ `_effectsByKind` vào hiệu ứng thật thay vì placeholder (sửa YAML của scene — cần chủ dự án xác nhận). Bàn giao 2026-09-13 đã ghi sẵn việc này: *"dùng prefab/material Ravenfield gốc… loại bỏ material fallback gây ô vuông trắng"* | | | |
 
 ## W6 — Bot & quyền thế giới
 
@@ -216,6 +224,8 @@ Vòng lặp cốt lõi của một FPS: bắn trúng, nhận sát thương, ch�
 | **BOT-02** | ☐ | **Squad địch cướp và chiếm xe của bạn.** `OccupantEntered` định nghĩa "người chơi" bằng `aiControlled`, mà thân thể người chơi mạng **là** `aiControlled` — nên `claimedByPlayer` không bao giờ bật, `ownerTeam` giữ −1, và bất kỳ squad nào đủ ghế trống đều lên, kể cả địch | `Vehicle.cs:432-448`; `Squad.cs:248` | 1 | **R2** |
 | **BOT-03** | ☐ | **Bot xa người >100 m chỉ nghĩ 6 Hz.** `BotLodGate` **đang bật thật** trên prefab bot đang dùng, ngược lại chính comment trong code nói nó không có ở đó. Áp cho cả bot đang ở trong tầm ngắm | `Ai Character Optimizations.prefab:2605-2615`; `AiActorController.cs:362-364` | 1 | |
 | **BOT-04** | ☐ | **Bot ngoài bán kính cull 500 m đứng hình rồi nhảy** khi vào lại tầm nhìn. Nhìn qua scope thấy tượng | `InterestManager.cs:77,258-299` | 1 | |
+| **BOT-05** | ☐ | **Người vào trận spawn cách trận đánh 700–800 m, nên không thấy ai.** `IsEligible` đặt người lên điểm đội mình **sở hữu** (X-89/X-90) — đảm bảo *sở hữu*, không đảm bảo *gần trận*. Trong phiên thật: P1 ở Fortress, P2 ở Oasis, mọi bot ở Mine/Town cách **700–800 m**, còn `InterestManager` cull quá `CullRadius = 500` trừ khi nằm trong nón nhìn 15°. Bằng chứng: `[predict] actors N` đứng ở **1–3 suốt phiên** trên cả hai client; lần đối chứng trên Island đạt **34** | `IronfrontNetBindings.cs:733-739`; `InterestManager.cs:77,258-299` | 1 | |
+| | | **Hai hướng, và chúng khác nhau về bản chất.** *Đặt lại chỗ spawn* (ưu tiên điểm sở hữu **gần đồng đội đang sống**) sửa nguyên nhân; *miễn cull cho đồng đội* nhỏ hơn nhưng **cố ý để bot địch vô hình**, tức chỉ sửa nửa triệu chứng. Đây là quyết định thiết kế, không phải lỗi một dòng | | | |
 
 ## W7 — Phiên & kết nối
 

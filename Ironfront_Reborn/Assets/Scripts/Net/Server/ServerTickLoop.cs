@@ -1174,6 +1174,25 @@ namespace Ironfront.Net.Unity.Server
             // no longer exists and never receive a despawn for it.
             int liveCount = registry.LiveCount;
 
+            // A client that joins an empty table is never told about a vehicle again unless one
+            // spawns later, and NOTHING ELSE IN THE PROCESS SAYS SO. The loop below iterates
+            // nothing, this method returns, and the client's world simply has no vehicles in it
+            // for reasons its own log cannot show. That is the shape of the 2026-09-17 session:
+            // both client logs contain the word "vehicle" zero times, which proves the absence
+            // and says nothing about the cause -- and the server's log, which would have, was not
+            // kept. This line is what makes the next occurrence decidable, and it is logged per
+            // join rather than once per process because a join is already a rare event.
+            if (liveCount == 0)
+            {
+                Debug.LogWarning(
+                    "[net] a client joined while the replicated vehicle table is EMPTY. No "
+                    + "S_VEHICLE_SPAWN will be sent for anything, so this client sees no vehicles "
+                    + "at all. Read the spawners above this line: a pad that gave up logs 'gave up "
+                    + "after N blocked attempts', a vehicle with no id logs 'could not replicate', "
+                    + "and a pad that has never spawned since the last world reset logs NOTHING -- "
+                    + "which is the one shape that leaves this method silent.");
+            }
+
             for (int i = 0; i < liveCount && i < liveIds.Length; i++)
             {
                 ushort vehicleId = liveIds[i];
