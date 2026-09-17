@@ -860,6 +860,91 @@ namespace Ironfront.Net.Unity.Server
         /// </summary>
         private const int NeutralOwner = -1;
 
+        /// <summary>
+        /// Reused across every placement so the near-teammate draw allocates nothing (M1
+        /// criterion 9) — the same reason <see cref="_targets"/> is a preallocated array rather
+        /// than a fresh list per shot. Capacity is <see cref="ProtocolConstants.MAX_ACTORS"/>
+        /// because <see cref="ServerActorRegistry.Actors"/> never holds more than that.
+        /// </summary>
+        private static readonly List<Vector3> _teammateAnchors =
+            new List<Vector3>(ProtocolConstants.MAX_ACTORS);
+
+        /// <summary>
+        /// Refills <see cref="_teammateAnchors"/> with every living, announceable, same-team body
+        /// other than <paramref name="spawning"/> itself. BOT-05: a joining player used to be
+        /// handed a uniform random point on their team's whole base, up to ~800 m from every
+        /// living teammate and clear across <c>InterestManager.CullRadius</c> (500 m).
+        /// </summary>
+        private static void CollectLivingTeammateAnchors(NetServerActor spawning)
+        {
+            _teammateAnchors.Clear();
+
+            IReadOnlyList<NetServerActor> actors = ServerActorRegistry.Instance.Actors;
+            for (int i = 0; i < actors.Count; i++)
+            {
+                NetServerActor candidate = actors[i];
+
+                // isActiveAndEnabled reads live component/GameObject state, so it stays here in
+                // the registry-driven loop rather than in IsLivingTeammateAnchor below — the
+                // same split ServerTickLoop.AnnounceNewActors already draws around its own
+                // isActiveAndEnabled check.
+                if (candidate == null || !candidate.isActiveAndEnabled) continue;
+                if (!IsLivingTeammateAnchor(candidate, spawning, spawning.Team)) continue;
+
+                _teammateAnchors.Add(TeammateAnchorPosition(candidate));
+            }
+        }
+
+        /// <summary>
+        /// Whether <paramref name="candidate"/> is a valid anchor for placing
+        /// <paramref name="spawning"/> near team <paramref name="team"/>. Extracted as a pure
+        /// predicate — independent of <see cref="ServerActorRegistry"/> and of
+        /// <c>isActiveAndEnabled</c> — so the EditMode suite can drive every branch with bare
+        /// <see cref="NetServerActor"/> rigs, the same way <c>AnnounceableActorTests</c>
+        /// already does for <see cref="ServerTickLoop.IsAnnounceable"/>.
+        /// </summary>
+        internal static bool IsLivingTeammateAnchor(
+            NetServerActor candidate, NetServerActor spawning, int team)
+        {
+            if (candidate == null) return false;
+            if (candidate == spawning) return false;
+            if (candidate.Team != team) return false;
+            if (!candidate.IsAlive) return false;
+
+            // Excludes unclaimed player-slot bodies parked near (0, 1000, 0) — the same
+            // sentinel-position problem X-18 closed for the client's own view of the world, and
+            // exactly as wrong an anchor as it would be a spawn.
+            return ServerTickLoop.IsAnnounceable(candidate);
+        }
+
+        /// <summary>
+        /// A living actor's own position: the simulation state for a player, the transform for a
+        /// bot — the same split <see cref="NetServerActor.Capture"/> already draws around
+        /// <see cref="NetServerActor.Movement"/> being null.
+        /// </summary>
+        private static Vector3 TeammateAnchorPosition(NetServerActor actor)
+            => actor.Movement != null
+                ? MovementSimulation.ToUnity(actor.Movement.State.Position)
+                : actor.transform.position;
+
+        /// <summary>
+        /// The distance from <paramref name="ground"/> to the closest entry in
+        /// <see cref="_teammateAnchors"/>, or -1 when there is none. Log-line diagnostics only.
+        /// </summary>
+        private static float NearestTeammateDistanceMetres(Vector3 ground)
+        {
+            if (_teammateAnchors.Count == 0) return -1f;
+
+            float nearestSqr = float.PositiveInfinity;
+            for (int i = 0; i < _teammateAnchors.Count; i++)
+            {
+                float sqr = (ground - _teammateAnchors[i]).sqrMagnitude;
+                if (sqr < nearestSqr) nearestSqr = sqr;
+            }
+
+            return Mathf.Sqrt(nearestSqr);
+        }
+
         private static void MoveToSpawnPoint(ServerPlayer player, SpawnRequestMessage? request)
         {
             NetServerActor actor = player.Actor;
@@ -882,7 +967,13 @@ namespace Ironfront.Net.Unity.Server
                 return;
             }
 
-            int chosen = ChooseRequestedOrRandomSpawnIndex(spawnPoints, actor.Team, request);
+            // BOT-05: gathered once, ahead of both draws below, so the team draw AND the neutral
+            // fallback both favour landing near whoever on this team is still alive rather than
+            // a uniform point anywhere on the whole base.
+            CollectLivingTeammateAnchors(actor);
+
+            int chosen = ChooseRequestedOrRandomSpawnIndex(
+                spawnPoints, actor.Team, request, _teammateAnchors);
             if (chosen < 0)
             {
                 // Every point this team held has been captured. A neutral point is a worse spawn
@@ -891,7 +982,7 @@ namespace Ironfront.Net.Unity.Server
                 // origin, alive on full health, falling, until EnforceWireVolume kills the body
                 // for leaving the world. Losing every flag is a legitimate match state, so this
                 // degrades rather than refuses.
-                chosen = ChooseSpawnIndex(spawnPoints, NeutralOwner);
+                chosen = ChooseSpawnIndexNearTeammates(spawnPoints, NeutralOwner, _teammateAnchors);
                 WarnOnce(
                     "spawn-no-owned-point-team" + actor.Team,
                     $"[net] team {actor.Team} owns none of the {spawnPoints.Count} spawn points, "
@@ -915,9 +1006,15 @@ namespace Ironfront.Net.Unity.Server
             Vector3 ground = spawnPoints.GetSpawnPosition(chosen);
             Vector3 position = StandingBodyPosition(ground);
 
+            float nearestTeammateMetres = NearestTeammateDistanceMetres(ground);
+            string nearestTeammateText = nearestTeammateMetres >= 0f
+                ? $"{nearestTeammateMetres:F1} m"
+                : "none alive";
+
             Debug.Log($"[net] actor {actor.ActorId} (team {actor.Team}) placed at spawn point "
                       + $"{chosen} of {spawnPoints.Count} {position} "
-                      + $"(ground {ground} + {StandingLiftMetres:F2} m capsule lift)");
+                      + $"(ground {ground} + {StandingLiftMetres:F2} m capsule lift, "
+                      + $"nearest teammate {nearestTeammateText})");
 
             // Teleport, not a transform write: it disables the CharacterController around the
             // assignment, which otherwise fights it and lands the actor somewhere else.
@@ -1022,8 +1119,77 @@ namespace Ironfront.Net.Unity.Server
         }
 
         /// <summary>
+        /// <see cref="ChooseSpawnIndex"/>, biased toward the eligible point nearest a living
+        /// teammate. BOT-05.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The reservoir draw always runs first, over every call.</b> <paramref name="anchors"/>
+        /// never changes which indices are eligible or how many <c>Random.Range</c> calls that
+        /// costs — only which of the (already eligible) indices the RETURN VALUE names — so a
+        /// seeded lane-B/load run consumes the exact same RNG sequence whether or not any
+        /// teammate is alive to draw anchors from.
+        /// </para>
+        /// <para>
+        /// <b>Never widens eligibility.</b> The nearest search only ever looks at an index that
+        /// already passed <see cref="ISpawnPointDirectory.IsEligible"/> — a
+        /// <see cref="PinnedSpawnPointDirectory"/> still exposes exactly one candidate per team,
+        /// so <c>candidateCount</c> stays below 2 and this degrades to the reservoir pick,
+        /// keeping <c>-SpawnIndex</c> exactly as deterministic as before.
+        /// </para>
+        /// <para>
+        /// Reads positions through <see cref="ISpawnPointDirectory.GetAnchorPosition"/> only,
+        /// never <see cref="ISpawnPointDirectory.GetSpawnPosition"/> — see that member's remarks
+        /// for why probing candidates through the jittering, rotation-advancing member would be a
+        /// different (and, for a pinned directory, wrong) behaviour.
+        /// </para>
+        /// </remarks>
+        internal static int ChooseSpawnIndexNearTeammates(
+            ISpawnPointDirectory spawnPoints, int eligibilityTeam, IReadOnlyList<Vector3> anchors)
+        {
+            bool haveAnchors = anchors != null && anchors.Count > 0;
+
+            int reservoirPick = -1;
+            int candidateCount = 0;
+            int count = spawnPoints.Count;
+
+            int nearestIndex = -1;
+            float nearestSqrDistance = float.PositiveInfinity;
+
+            for (int i = 0; i < count; i++)
+            {
+                if (!spawnPoints.IsEligible(i, eligibilityTeam)) continue;
+
+                candidateCount++;
+                if (UnityEngine.Random.Range(0, candidateCount) == 0) reservoirPick = i;
+
+                if (!haveAnchors) continue;
+
+                Vector3 candidatePosition = spawnPoints.GetAnchorPosition(i);
+                for (int a = 0; a < anchors.Count; a++)
+                {
+                    // Strictly less, never <=, so the FIRST (lowest-index) candidate to reach a
+                    // given distance keeps it — the tie-break the plan calls for.
+                    float sqrDistance = (candidatePosition - anchors[a]).sqrMagnitude;
+                    if (sqrDistance >= nearestSqrDistance) continue;
+
+                    nearestSqrDistance = sqrDistance;
+                    nearestIndex = i;
+                }
+            }
+
+            // No anchors, or fewer than two eligible points to choose between, leaves nothing
+            // for proximity to decide — the reservoir draw is already the whole answer, and is
+            // the ONLY answer for a pinned directory's single-candidate team.
+            if (!haveAnchors || candidateCount < 2) return reservoirPick;
+
+            return nearestIndex;
+        }
+
+        /// <summary>
         /// Honours the deploying client's requested spawn point when it names one this actor's
-        /// team may actually use; falls back to <see cref="ChooseSpawnIndex"/> otherwise.
+        /// team may actually use; falls back to <see cref="ChooseSpawnIndexNearTeammates"/>
+        /// otherwise.
         /// </summary>
         /// <remarks>
         /// <b>Never trusted outright.</b> <see cref="SpawnRequestMessage.SpawnPointIndex"/> is
@@ -1034,7 +1200,8 @@ namespace Ironfront.Net.Unity.Server
         /// <see cref="ISpawnPointDirectory.GetSpawnPosition"/> unchecked.
         /// </remarks>
         internal static int ChooseRequestedOrRandomSpawnIndex(
-            ISpawnPointDirectory spawnPoints, int team, SpawnRequestMessage? request)
+            ISpawnPointDirectory spawnPoints, int team, SpawnRequestMessage? request,
+            IReadOnlyList<Vector3> anchors)
         {
             if (request.HasValue)
             {
@@ -1047,7 +1214,7 @@ namespace Ironfront.Net.Unity.Server
                 }
             }
 
-            return ChooseSpawnIndex(spawnPoints, team);
+            return ChooseSpawnIndexNearTeammates(spawnPoints, team, anchors);
         }
 
         private void EmitWeaponFire(

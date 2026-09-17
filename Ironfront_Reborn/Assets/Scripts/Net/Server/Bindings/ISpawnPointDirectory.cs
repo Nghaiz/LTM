@@ -33,5 +33,21 @@ namespace Ironfront.Net.Unity.Server
 
         /// <summary>The world position for slot <paramref name="index"/>.</summary>
         Vector3 GetSpawnPosition(int index);
+
+        /// <summary>
+        /// The authored position of slot <paramref name="index"/>, for comparing CANDIDATES —
+        /// never the point that already won the draw.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="GetSpawnPosition"/> is jitters-and-a-side-effect: the underlying
+        /// <c>SpawnPoint.GetSpawnPosition</c> is virtual and overriding subclasses jitter the
+        /// result, and <see cref="PinnedSpawnPointDirectory"/> advances its rotation
+        /// cursor on that call. Picking the nearest-to-a-teammate candidate out of several has to
+        /// read every candidate's position WITHOUT paying either cost — a jittered comparison
+        /// would pick unpredictably, and probing three candidates would advance a pinned rotation
+        /// three times for one placement (X-28). This member is the side-effect-free answer:
+        /// the authored point, exactly, every time it is asked.
+        /// </remarks>
+        Vector3 GetAnchorPosition(int index);
     }
 }
