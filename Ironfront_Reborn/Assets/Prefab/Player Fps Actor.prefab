@@ -353,7 +353,7 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier:
   MaxTicksPerFrame: 5
-  UseUnscaledTime: 0
+  UseUnscaledTime: 1
   LogTickRate: 0
 --- !u!114 &900000000001004
 MonoBehaviour:
