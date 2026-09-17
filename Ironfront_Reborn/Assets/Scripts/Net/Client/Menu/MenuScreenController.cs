@@ -201,6 +201,8 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         private void Awake()
         {
+            MenuRuntimeTheme.Apply(gameObject);
+
             if (_practiceBackButton != null)
                 _practiceBackButton.onClick.AddListener(ClosePractice);
 

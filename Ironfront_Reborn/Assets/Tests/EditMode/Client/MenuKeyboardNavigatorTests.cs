@@ -107,6 +107,22 @@ namespace Ironfront.Net.Unity.Client.Tests
         }
 
         [Test]
+        public void SelectedSecondaryButtonReceivesEnterInsteadOfPrimary()
+        {
+            int primaryCount = 0;
+            int secondaryCount = 0;
+            _submit.onClick.AddListener(() => primaryCount++);
+            _second.onClick.AddListener(() => secondaryCount++);
+            _navigator.Configure(new Selectable[] { _first, _second }, _submit, _cancel);
+            EventSystem.current.SetSelectedGameObject(_second.gameObject);
+
+            _navigator.Submit();
+
+            Assert.AreEqual(0, primaryCount);
+            Assert.AreEqual(1, secondaryCount);
+        }
+
+        [Test]
         public void MultilineInputKeepsEnterForItsOwnEditing()
         {
             int submitCount = 0;

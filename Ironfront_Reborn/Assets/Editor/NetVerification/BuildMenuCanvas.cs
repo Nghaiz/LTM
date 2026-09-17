@@ -155,6 +155,11 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_signedInText", signedIn);
             so.ApplyModifiedPropertiesWithoutUndo();
 
+            // The same idempotent pass also upgrades older committed scenes at runtime. Running
+            // it here makes a freshly generated scene readable in the Editor before Play.
+            MenuRuntimeTheme.Apply(root);
+            log.AppendLine("theme: Ironfront Reborn tactical shell, focus navigation, and transitions authored.");
+
             // The controller's own Apply() decides this at runtime; the authored state is what a
             // reader of the scene sees, and Title is where a player starts.
             title.SetActive(true);
@@ -204,7 +209,7 @@ namespace Ironfront.Net.Unity.EditorTools
         {
             GameObject panel = Panel(root, "Title");
 
-            Label(panel, "Heading", "IRONFRONT", 72, new Vector2(0f, 220f), new Vector2(900f, 110f));
+            Label(panel, "Heading", "IRONFRONT REBORN", 72, new Vector2(0f, 220f), new Vector2(900f, 110f));
 
             Button multiplayer = MakeButton(
                 panel, "Multiplayer", "MULTIPLAYER", new Vector2(0f, 40f), new Vector2(460f, 92f));

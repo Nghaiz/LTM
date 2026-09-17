@@ -85,6 +85,14 @@ namespace Ironfront.Net.Unity.Client.Menu
                 {
                     return;
                 }
+
+                if (selected != null
+                    && selected.TryGetComponent(out Button selectedButton)
+                    && CanSelect(selectedButton))
+                {
+                    selectedButton.onClick.Invoke();
+                    return;
+                }
             }
 
             if (CanSelect(_primary)) _primary!.onClick.Invoke();
