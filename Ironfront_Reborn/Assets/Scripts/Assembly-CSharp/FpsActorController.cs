@@ -205,6 +205,13 @@ public class FpsActorController : ActorController
 		// behind cover the player believes they are behind.
 		clock.CrouchSource = () => Crouch();
 
+		// The composite, not the key, and this one is the difference between a shot and no shot:
+		// a sprinting body's weapon is holstered on both sides of the wire. Holding Shift while
+		// aiming is NOT sprinting -- the game fires and spends the round -- so sending the raw key
+		// made the client's prediction and the server refuse a shot the game had already taken,
+		// and the next snapshot wrote the round back. The magazine never emptied.
+		clock.SprintSource = () => IsSprinting();
+
 		clock.OnTickSimulated += OnNetworkTickSimulated;
 	}
 
@@ -290,8 +297,12 @@ public class FpsActorController : ActorController
 			// ServerVehicleInputBridge replaces it with a NetInputSource the moment somebody
 			// actually drives.
 			// Aiming() folds in toggleAim and a latch LocalInputSource cannot see, so it is
-			// handed over as a live delegate rather than duplicated there.
-			inputSource = new LocalInputSource(fpCamera.transform, Aiming, SampleWeaponSlotIntent);
+			// handed over as a live delegate rather than duplicated there. IsSprinting() is here
+			// for the same reason and one more: it is the COMPOSITE the trigger rule on both
+			// sides of the wire is built on, and sending the raw Sprint key in its place made a
+			// held Shift while aiming refuse every shot the game had already fired.
+			inputSource = new LocalInputSource(
+				fpCamera.transform, Aiming, SampleWeaponSlotIntent, IsSprinting);
 			// Temporary, and deliberately unconditional: the harness that says whether the
 			// substitution above was correct. Delete both this line and InputShadowCompare.cs
 			// once a playtest has come back quiet.

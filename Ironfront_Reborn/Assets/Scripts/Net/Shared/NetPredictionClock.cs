@@ -102,6 +102,27 @@ namespace Ironfront.Net.Unity
         public Func<bool> CrouchSource;
 
         /// <summary>
+        /// Whether the local body IS sprinting this tick, when raw <c>Input</c> cannot answer it.
+        /// Null leaves the Sprint button in place.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The sibling of <see cref="CrouchSource"/> and here for the same reason, but this one
+        /// decides more than a speed: the trigger rule on both sides of the wire refuses a
+        /// sprinting body, so the bit this feeds is the difference between a shot that happens and
+        /// a shot that is drawn, spent and then quietly unspent by the next snapshot.
+        /// </para>
+        /// <para>
+        /// <b>"Sprinting" is a composite, not the key.</b>
+        /// <c>FpsActorController.IsSprinting()</c> is
+        /// <c>!Crouch() &amp;&amp; !Aiming() &amp;&amp; !IsReloading() &amp;&amp; Sprint()
+        /// &amp;&amp; !IsSeated()</c>; a player holding Shift while aiming is not sprinting, and the
+        /// raw key said they were.
+        /// </para>
+        /// </remarks>
+        public Func<bool> SprintSource;
+
+        /// <summary>
         /// Aim pitch, in degrees, as of the last simulated tick. -90..90.
         /// </summary>
         /// <remarks>
@@ -283,11 +304,13 @@ namespace Ironfront.Net.Unity
             InputButtons combat = CombatButtonSource != null ? CombatButtonSource() : InputButtons.None;
             float yaw = _cameraParent.eulerAngles.y;
 
-            // The crouch STATE when something can answer for it, the button otherwise -- see
-            // CrouchSource for why those are different questions.
-            return CrouchSource != null
-                ? MovementSimulation.FromUnityInput(yaw, combat, CrouchSource())
-                : MovementSimulation.FromUnityInput(yaw, combat);
+            // The crouch and sprint STATES when something can answer for them, the raw buttons
+            // otherwise -- see CrouchSource and SprintSource for why those are different
+            // questions, and why the sprint one decides whether a shot happens at all.
+            bool crouching = CrouchSource != null ? CrouchSource() : Input.GetButton("Crouch");
+            bool sprinting = SprintSource != null ? SprintSource() : Input.GetButton("Sprint");
+
+            return MovementSimulation.FromUnityInput(yaw, combat, crouching, sprinting);
         }
     }
 }

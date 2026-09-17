@@ -101,7 +101,8 @@ namespace Ironfront.Net.Unity
         /// </para>
         /// </remarks>
         public static MoveInput FromUnityInput(float yawDegrees, InputButtons combat)
-            => FromUnityInput(yawDegrees, combat, Input.GetButton("Crouch"));
+            => FromUnityInput(
+                yawDegrees, combat, Input.GetButton("Crouch"), Input.GetButton("Sprint"));
 
         /// <summary>
         /// As above, with the crouch STATE supplied by the caller.
@@ -138,6 +139,35 @@ namespace Ironfront.Net.Unity
         /// </remarks>
         public static MoveInput FromUnityInput(
             float yawDegrees, InputButtons combat, bool crouching)
+            => FromUnityInput(yawDegrees, combat, crouching, Input.GetButton("Sprint"));
+
+        /// <summary>
+        /// As above, with the sprint STATE supplied by the caller.
+        /// </summary>
+        /// <param name="sprinting">
+        /// Whether this body <b>is</b> sprinting — <c>FpsActorController.IsSprinting()</c>, never
+        /// the Sprint button.
+        /// </param>
+        /// <remarks>
+        /// <para>
+        /// <b>The same state-versus-button distinction as the crouch overload, and on this axis it
+        /// decides whether a shot happens at all.</b> <c>IsSprinting()</c> is
+        /// <c>!Crouch() &amp;&amp; !Aiming() &amp;&amp; !IsReloading() &amp;&amp; Sprint() &amp;&amp; !IsSeated()</c>,
+        /// and the trigger rule on BOTH sides of the wire refuses a sprinting body's trigger. So a
+        /// raw key read here said "sprinting" to the server while the game itself said "aiming,
+        /// therefore able to fire": the game spent the round and spawned the projectile, both
+        /// authorities refused the shot, and the next snapshot wrote the round back. The magazine
+        /// fell by one and rose by one and never emptied.
+        /// </para>
+        /// <para>
+        /// <b><see cref="MovementCore.SpeedFor"/> keeps its own copy of the composite and that is
+        /// deliberate.</b> It is a shared rule with its own tests and its own callers, and its
+        /// contract is "the sprint flag means the body is sprinting" — which is now true of this
+        /// bit as well, so the two agree rather than merely happen to.
+        /// </para>
+        /// </remarks>
+        public static MoveInput FromUnityInput(
+            float yawDegrees, InputButtons combat, bool crouching, bool sprinting)
             => LocalTextEntry.Composing
                 // Neutral while a text field owns the keyboard. This sampler reads the walk,
                 // jump, sprint and crouch axes DIRECTLY -- they never pass through
@@ -158,7 +188,7 @@ namespace Ironfront.Net.Unity
                 Input.GetAxis("Vertical"),
                 yawDegrees,
                 Input.GetButton("Jump"),
-                Input.GetButton("Sprint"),
+                sprinting,
                 crouching,
                 (combat & InputButtons.Fire) != 0,
                 (combat & InputButtons.Aim) != 0,

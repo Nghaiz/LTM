@@ -36,6 +36,7 @@ namespace Ironfront.Net.Unity
     {
         private readonly Transform _lookTransform;
         private readonly Func<bool> _aiming;
+        private readonly Func<bool> _sprinting;
         private readonly Func<int> _weaponSlotIntent;
 
         /// <param name="lookTransform">
@@ -50,12 +51,38 @@ namespace Ironfront.Net.Unity
         /// bool, so the read stays live like every other member here; null means never aiming,
         /// which is what a source with no controller behind it should report.
         /// </param>
+        /// <param name="weaponSlotIntent">
+        /// The weapon slot the player is asking for, or -1. Also the controller's — the wheel,
+        /// the number keys and a latch this class cannot see.
+        /// </param>
+        /// <param name="sprinting">
+        /// Whether this body IS sprinting, which is a different question from whether the Sprint
+        /// key is down. <c>FpsActorController.IsSprinting()</c> is
+        /// <c>!Crouch() &amp;&amp; !Aiming() &amp;&amp; !IsReloading() &amp;&amp; inputSource.Sprint()
+        /// &amp;&amp; !IsSeated()</c>, and the trigger rule on BOTH sides of the wire is built on the
+        /// answer: a sprinting body's weapon is holstered and its trigger is refused.
+        /// <para>
+        /// <b>Sending the raw key made the client and the game disagree about one action.</b>
+        /// Holding Sprint while aiming is not sprinting — the game fires, spends the round and
+        /// spawns the projectile — but the raw bit said "sprinting", so the client's prediction
+        /// and the server both refused the shot, and the next snapshot wrote the unspent round
+        /// back into the clip. The count fell by one and rose by one and the magazine never
+        /// emptied, and the server took no shot at all: a gun that looks like it works and
+        /// cannot kill anything.
+        /// </para>
+        /// <para>
+        /// Null keeps the raw read, which is what this class did before the parameter existed
+        /// and what a source with no controller behind it can still answer.
+        /// </para>
+        /// </param>
         public LocalInputSource(
-            Transform lookTransform, Func<bool> aiming = null, Func<int> weaponSlotIntent = null)
+            Transform lookTransform, Func<bool> aiming = null, Func<int> weaponSlotIntent = null,
+            Func<bool> sprinting = null)
         {
             _lookTransform = lookTransform;
             _aiming = aiming;
             _weaponSlotIntent = weaponSlotIntent;
+            _sprinting = sprinting;
         }
 
         /// <summary>
@@ -128,7 +155,7 @@ namespace Ironfront.Net.Unity
                     reload: Input.GetButton("Reload") && !loadoutOpen,
                     jump:   Input.GetButton("Jump"),
                     crouch: Input.GetButton("Crouch"),
-                    sprint: Input.GetButton("Sprint"),
+                    sprint: _sprinting != null ? _sprinting() : Input.GetButton("Sprint"),
                     use:    Input.GetButton("Use"),
                     weaponSlot: _weaponSlotIntent != null ? _weaponSlotIntent() : -1);
             }
