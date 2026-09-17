@@ -77,6 +77,31 @@ namespace Ironfront.Net.Unity
         public Func<MoveInput> InputSource;
 
         /// <summary>
+        /// Whether the local body IS crouching this tick, when raw <c>Input</c> cannot answer it.
+        /// Null leaves the Crouch button in place.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A source here, and not a raw read inside <c>MovementSimulation</c>, for the same reason
+        /// the aim pitch and the combat mask are: the answer lives in <c>Assembly-CSharp</c>, one
+        /// layer up, and this assembly may not name it.
+        /// </para>
+        /// <para>
+        /// <b>It exists because the Crouch button is not the crouch STATE.</b> With the
+        /// toggle-crouch option on, the state is a flag latched by the button's down-edge, so a
+        /// player taps once and stays crouched while the button itself reads false. The raw read
+        /// then did two things wrong at once: it put "standing" on the wire for the whole of that
+        /// crouch, and it made <c>NetMovementAgent.ApplyStanceHeight</c> fight
+        /// <c>Actor.Update</c> over the CharacterController's height on every tick.
+        /// </para>
+        /// <para>
+        /// Null is the honest answer for the diagnostics that drive this component with no player
+        /// rig behind them.
+        /// </para>
+        /// </remarks>
+        public Func<bool> CrouchSource;
+
+        /// <summary>
         /// Aim pitch, in degrees, as of the last simulated tick. -90..90.
         /// </summary>
         /// <remarks>
@@ -254,8 +279,15 @@ namespace Ironfront.Net.Unity
         }
 
         private MoveInput DefaultInput()
-            => MovementSimulation.FromUnityInput(
-                _cameraParent.eulerAngles.y,
-                CombatButtonSource != null ? CombatButtonSource() : InputButtons.None);
+        {
+            InputButtons combat = CombatButtonSource != null ? CombatButtonSource() : InputButtons.None;
+            float yaw = _cameraParent.eulerAngles.y;
+
+            // The crouch STATE when something can answer for it, the button otherwise -- see
+            // CrouchSource for why those are different questions.
+            return CrouchSource != null
+                ? MovementSimulation.FromUnityInput(yaw, combat, CrouchSource())
+                : MovementSimulation.FromUnityInput(yaw, combat);
+        }
     }
 }

@@ -101,6 +101,43 @@ namespace Ironfront.Net.Unity
         /// </para>
         /// </remarks>
         public static MoveInput FromUnityInput(float yawDegrees, InputButtons combat)
+            => FromUnityInput(yawDegrees, combat, Input.GetButton("Crouch"));
+
+        /// <summary>
+        /// As above, with the crouch STATE supplied by the caller.
+        /// </summary>
+        /// <param name="crouching">
+        /// Whether the actor <b>is</b> crouching this tick — <c>FpsActorController.Crouch()</c>,
+        /// never the Crouch button. See the remarks.
+        /// </param>
+        /// <remarks>
+        /// <para>
+        /// <b>Crouch is the one axis here whose state and whose button are different
+        /// questions.</b> With the toggle-crouch option on, <c>FpsActorController.Crouch()</c>
+        /// returns a flag latched by the button's down-edge, so a player taps once, releases, and
+        /// stays crouched. <c>Input.GetButton("Crouch")</c> then reports "standing" for the whole
+        /// of that crouch, and it reached two readers at once.
+        /// </para>
+        /// <para>
+        /// <c>Actor.Update</c> takes the crouch from <c>controller.Crouch()</c> and calls
+        /// <c>StartCrouch()</c>, so the client's own capsule really is 0.5 m tall — while
+        /// <c>NetMovementAgent.ApplyStanceHeight</c> derives the height it wants from
+        /// <c>MoveState.IsCrouching</c>, which this flag feeds, and writes 1.8 back on the same
+        /// tick. Two writers held one <c>CharacterController.height</c> and disagreed every tick.
+        /// </para>
+        /// <para>
+        /// And the flag went on the wire, so the server stood the body up: the player crouched
+        /// behind cover on their own screen and was shot over it on the server's.
+        /// </para>
+        /// <para>
+        /// <b>Jump, sprint and the movement axes are still sampled raw, and that is not an
+        /// oversight.</b> None of the three has a latched form, and the axes never pass through
+        /// <c>LocalInputSource</c> at all — see the text-field remark below, which is about
+        /// exactly that.
+        /// </para>
+        /// </remarks>
+        public static MoveInput FromUnityInput(
+            float yawDegrees, InputButtons combat, bool crouching)
             => LocalTextEntry.Composing
                 // Neutral while a text field owns the keyboard. This sampler reads the walk,
                 // jump, sprint and crouch axes DIRECTLY -- they never pass through
@@ -122,7 +159,7 @@ namespace Ironfront.Net.Unity
                 yawDegrees,
                 Input.GetButton("Jump"),
                 Input.GetButton("Sprint"),
-                Input.GetButton("Crouch"),
+                crouching,
                 (combat & InputButtons.Fire) != 0,
                 (combat & InputButtons.Aim) != 0,
                 (combat & InputButtons.Reload) != 0,

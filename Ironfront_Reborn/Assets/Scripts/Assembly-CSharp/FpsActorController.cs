@@ -196,6 +196,15 @@ public class FpsActorController : ActorController
 		clock.AimPitchSource = () => inputSource.Pitch;
 		clock.SimulationEnabled = () => inputEnabled && actor != null && !actor.dead && !actor.IsSeated();
 		clock.CombatButtonSource = SampleNetworkCombatButtons;
+
+		// Crouch() and not Input.GetButton("Crouch"): with the toggle-crouch option on the state
+		// is a latch, so a player who taps once and releases is crouched while the button reads
+		// false. Everything downstream reads the state -- Actor.Update calls StartCrouch() from
+		// Crouch() -- so the wire and NetMovementAgent.ApplyStanceHeight have to as well, or the
+		// capsule has two writers that disagree every tick and the server stands the body up
+		// behind cover the player believes they are behind.
+		clock.CrouchSource = () => Crouch();
+
 		clock.OnTickSimulated += OnNetworkTickSimulated;
 	}
 
