@@ -12,6 +12,7 @@ namespace Ironfront.Net.Unity.Client.Tests
     public sealed class MenuKeyboardNavigatorTests
     {
         private readonly List<GameObject> _objects = new List<GameObject>();
+        private EventSystem _eventSystem = null!;
         private MenuKeyboardNavigator _navigator = null!;
         private Button _first = null!;
         private Button _second = null!;
@@ -22,9 +23,8 @@ namespace Ironfront.Net.Unity.Client.Tests
         [SetUp]
         public void SetUp()
         {
-            var eventSystem = Make("EventSystem");
-            eventSystem.AddComponent<EventSystem>();
-            eventSystem.AddComponent<StandaloneInputModule>();
+            GameObject eventSystem = Make("EventSystem");
+            _eventSystem = eventSystem.AddComponent<EventSystem>();
 
             _navigator = Make("Navigator").AddComponent<MenuKeyboardNavigator>();
             _first = MakeButton("First");
@@ -46,11 +46,11 @@ namespace Ironfront.Net.Unity.Client.Tests
         public void FocusFirstSelectsFirstLiveControl()
         {
             _first.interactable = false;
-            _navigator.Configure(new Selectable[] { _first, _second }, _submit, _cancel);
+            _navigator.Configure(new Selectable[] { _first, _second }, _submit, _cancel, _eventSystem);
 
             _navigator.FocusFirst();
 
-            Assert.AreSame(_second.gameObject, EventSystem.current.currentSelectedGameObject);
+            Assert.AreSame(_second.gameObject, _eventSystem.currentSelectedGameObject);
         }
 
         [Test]
@@ -58,23 +58,23 @@ namespace Ironfront.Net.Unity.Client.Tests
         {
             _second.interactable = false;
             _navigator.Configure(
-                new Selectable[] { _first, _second, _third }, _submit, _cancel);
-            EventSystem.current.SetSelectedGameObject(_third.gameObject);
+                new Selectable[] { _first, _second, _third }, _submit, _cancel, _eventSystem);
+            _eventSystem.SetSelectedGameObject(_third.gameObject);
 
             _navigator.Move(backwards: false);
 
-            Assert.AreSame(_first.gameObject, EventSystem.current.currentSelectedGameObject);
+            Assert.AreSame(_first.gameObject, _eventSystem.currentSelectedGameObject);
         }
 
         [Test]
         public void MoveBackwardWraps()
         {
-            _navigator.Configure(new Selectable[] { _first, _third }, _submit, _cancel);
-            EventSystem.current.SetSelectedGameObject(_first.gameObject);
+            _navigator.Configure(new Selectable[] { _first, _third }, _submit, _cancel, _eventSystem);
+            _eventSystem.SetSelectedGameObject(_first.gameObject);
 
             _navigator.Move(backwards: true);
 
-            Assert.AreSame(_third.gameObject, EventSystem.current.currentSelectedGameObject);
+            Assert.AreSame(_third.gameObject, _eventSystem.currentSelectedGameObject);
         }
 
         [Test]
@@ -84,7 +84,7 @@ namespace Ironfront.Net.Unity.Client.Tests
             int cancelCount = 0;
             _submit.onClick.AddListener(() => submitCount++);
             _cancel.onClick.AddListener(() => cancelCount++);
-            _navigator.Configure(new Selectable[] { _first }, _submit, _cancel);
+            _navigator.Configure(new Selectable[] { _first }, _submit, _cancel, _eventSystem);
 
             _navigator.Submit();
             _navigator.Cancel();
@@ -99,7 +99,7 @@ namespace Ironfront.Net.Unity.Client.Tests
             int submitCount = 0;
             _submit.onClick.AddListener(() => submitCount++);
             _submit.interactable = false;
-            _navigator.Configure(new Selectable[] { _first }, _submit, _cancel);
+            _navigator.Configure(new Selectable[] { _first }, _submit, _cancel, _eventSystem);
 
             _navigator.Submit();
 
@@ -113,8 +113,8 @@ namespace Ironfront.Net.Unity.Client.Tests
             int secondaryCount = 0;
             _submit.onClick.AddListener(() => primaryCount++);
             _second.onClick.AddListener(() => secondaryCount++);
-            _navigator.Configure(new Selectable[] { _first, _second }, _submit, _cancel);
-            EventSystem.current.SetSelectedGameObject(_second.gameObject);
+            _navigator.Configure(new Selectable[] { _first, _second }, _submit, _cancel, _eventSystem);
+            _eventSystem.SetSelectedGameObject(_second.gameObject);
 
             _navigator.Submit();
 
@@ -129,8 +129,8 @@ namespace Ironfront.Net.Unity.Client.Tests
             _submit.onClick.AddListener(() => submitCount++);
             InputField multiline = Make("Multiline").AddComponent<InputField>();
             multiline.lineType = InputField.LineType.MultiLineNewline;
-            _navigator.Configure(new Selectable[] { multiline, _submit }, _submit, _cancel);
-            EventSystem.current.SetSelectedGameObject(multiline.gameObject);
+            _navigator.Configure(new Selectable[] { multiline, _submit }, _submit, _cancel, _eventSystem);
+            _eventSystem.SetSelectedGameObject(multiline.gameObject);
 
             _navigator.Submit();
 

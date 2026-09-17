@@ -15,12 +15,18 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private Selectable[] _order = Array.Empty<Selectable>();
         [SerializeField] private Button? _primary;
         [SerializeField] private Button? _cancel;
+        private EventSystem? _eventSystemOverride;
 
-        public void Configure(Selectable[] order, Button? primary, Button? cancel)
+        public void Configure(
+            Selectable[] order,
+            Button? primary,
+            Button? cancel,
+            EventSystem? eventSystem = null)
         {
             _order = order ?? Array.Empty<Selectable>();
             _primary = primary;
             _cancel = cancel;
+            _eventSystemOverride = eventSystem;
         }
 
         private void OnEnable()
@@ -63,9 +69,10 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         public void Move(bool backwards)
         {
-            if (_order.Length == 0 || EventSystem.current == null) return;
+            EventSystem? eventSystem = ActiveEventSystem;
+            if (_order.Length == 0 || eventSystem == null) return;
 
-            GameObject? selected = EventSystem.current.currentSelectedGameObject;
+            GameObject? selected = eventSystem.currentSelectedGameObject;
             int current = Array.FindIndex(
                 _order,
                 control => control != null && control.gameObject == selected);
@@ -76,9 +83,10 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         public void Submit()
         {
-            if (EventSystem.current != null)
+            EventSystem? eventSystem = ActiveEventSystem;
+            if (eventSystem != null)
             {
-                GameObject selected = EventSystem.current.currentSelectedGameObject;
+                GameObject selected = eventSystem.currentSelectedGameObject;
                 if (selected != null
                     && selected.TryGetComponent(out InputField field)
                     && field.lineType != InputField.LineType.SingleLine)
@@ -112,8 +120,9 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         private void Select(int index)
         {
-            if (index < 0 || index >= _order.Length || EventSystem.current == null) return;
-            EventSystem.current.SetSelectedGameObject(_order[index].gameObject);
+            EventSystem? eventSystem = ActiveEventSystem;
+            if (index < 0 || index >= _order.Length || eventSystem == null) return;
+            eventSystem.SetSelectedGameObject(_order[index].gameObject);
 
             if (_order[index] is InputField field)
                 field.ActivateInputField();
@@ -124,5 +133,7 @@ namespace Ironfront.Net.Unity.Client.Menu
             && control.gameObject.activeInHierarchy
             && control.IsActive()
             && control.IsInteractable();
+
+        private EventSystem? ActiveEventSystem => _eventSystemOverride ?? EventSystem.current;
     }
 }

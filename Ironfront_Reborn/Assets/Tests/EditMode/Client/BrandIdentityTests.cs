@@ -49,8 +49,11 @@ namespace Ironfront.Net.Unity.Client.Tests
             return string.Join(
                 "\n",
                 scene.GetRootGameObjects()
-                    .SelectMany(root => root.GetComponentsInChildren<Text>(includeInactive: true))
-                    .Select(label => label.text));
+                    .SelectMany(root =>
+                        root.GetComponentsInChildren<Text>(includeInactive: true)
+                            .Select(label => label.text)
+                            .Concat(root.GetComponentsInChildren<TextMesh>(includeInactive: true)
+                                .Select(label => label.text))));
         }
     }
 }
