@@ -218,7 +218,14 @@ namespace Ironfront.Net.Unity.Bindings
             if (local == null || local.actor == null) return;
 
             Actor actor = local.actor;
+
+            // Read BEFORE the write. This is the only place on a client that learns a hit
+            // landed: Actor.DamageAttributed raises every piece of that feedback and never runs
+            // at client role, and S_DEATH arrives only when the hit was fatal.
+            float before = actor.health;
             actor.health = health;
+
+            ShowIncomingHit(local, before, health);
 
             Weapon weapon = actor.activeWeapon;
             if (weapon != null && weapon.NetworkId == weaponId)
@@ -242,6 +249,59 @@ namespace Ironfront.Net.Unity.Bindings
             if (IngameUi.instance == null) return;
             actor.UpdateHealthUi();
             if (weapon != null) actor.UpdateAmmoUi();
+        }
+
+        /// <summary>
+        /// The feedback the game gives a player who has just been shot, minus the parts the wire
+        /// cannot supply.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Nothing else on a client learns that a hit landed.</b> <c>Actor.DamageAttributed</c>
+        /// raises all of this and never runs at client role — the client does not own health —
+        /// and <c>S_DEATH</c> arrives only when the hit was fatal. So before this a networked
+        /// player watched their health number fall and had no other sign they were being shot at.
+        /// </para>
+        /// <para>
+        /// <b>The two that are applied here are exact, not approximations.</b> The vignette's
+        /// intensity is <c>Clamp01(0.3 + (1 - health/100))</c>, copied out of
+        /// <c>Actor.DamageAttributed</c> where it is computed from the same health value this
+        /// method was just handed. The camera kick's threshold and impulse are
+        /// <c>FpsActorController.ReceivedDamage</c>'s own.
+        /// </para>
+        /// <para>
+        /// <b>The directional arc is absent on purpose, and so are the screenshake and the
+        /// deafening.</b> The arc needs the shooter's bearing and no message carries one for a
+        /// non-lethal hit: <c>S_HIT_CONFIRM</c> goes to the shooter, and <c>S_DEATH</c> carries a
+        /// force but only for a kill. <c>ReceivedDamage</c> converts a direction into the
+        /// on-screen angle unconditionally, so calling it with a zero vector would draw the arc at
+        /// a fixed and wrong bearing — a player would break cover from a threat that is not there.
+        /// The shake and the deafening are keyed on BALANCE damage, which the wire carries no
+        /// more than it carries the bearing, and inventing an intensity for them would be a
+        /// fabrication rather than a translation of a number that exists.
+        /// </para>
+        /// <para>
+        /// A rise is not a hit: a heal, a respawn and a snapshot that changed nothing all leave
+        /// <paramref name="after"/> at or above <paramref name="before"/>.
+        /// </para>
+        /// </remarks>
+        private static void ShowIncomingHit(FpsActorController local, float before, float after)
+        {
+            if (after >= before) return;
+
+            if (before - after > 5f && local.fpParent != null)
+            {
+                local.fpParent.KickCamera(new Vector3(
+                    UnityEngine.Random.Range(5f, 10f),
+                    UnityEngine.Random.Range(-10f, 10f),
+                    UnityEngine.Random.Range(-5f, 5f)));
+            }
+
+            if (IngameUi.instance != null)
+            {
+                IngameUi.instance.ShowVignette(
+                    Mathf.Clamp01(0.3f + (1f - after / 100f)), 6f);
+            }
         }
 
         /// <summary>
