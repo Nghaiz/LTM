@@ -36,13 +36,20 @@ namespace Ironfront.Net.Replication.Tests
             {
                 WeaponConfig config = WeaponCatalog.For(id);
 
-                // "Has an entry" cannot be "is not Inert" — six of the seventeen ids are
+                // "Has an entry" cannot be "is not Inert" — four of the seventeen ids are
                 // legitimately inert (D4). Cooldown-or-clip is what separates an authored inert
                 // entry from a hole in the array, since Inert has neither and every real entry
                 // has at least one.
+                //
+                // AMMO_BAG and MEDIPACK were on this list and should never have been. They do
+                // zero damage, which is what the list was reaching for, but they LAUNCH — and
+                // Inert's clipSize of 0 is refused as NoAmmo by ServerFireResolver.CheckCanFire
+                // on every trigger pull, so listing them here was pinning "the deployables
+                // cannot be thrown" as expected. Damage-is-zero is asserted for them by
+                // DeployablesDoNoDamage; that they can still be launched is asserted by
+                // DeployablesAreLaunchable.
                 bool isDeliberatelyInert =
-                    id == WeaponIds.BINOCS || id == WeaponIds.AMMO_BAG ||
-                    id == WeaponIds.MEDIPACK || id == WeaponIds.NV_GOGGLES ||
+                    id == WeaponIds.BINOCS || id == WeaponIds.NV_GOGGLES ||
                     id == WeaponIds.WRENCH || id == WeaponIds.SUPER_WRENCH;
 
                 if (isDeliberatelyInert)
@@ -87,6 +94,85 @@ namespace Ironfront.Net.Replication.Tests
             Assert.True(WeaponCatalog.For(WeaponIds.FRAG).ClipSize > 0);
             Assert.Equal(0f, WeaponCatalog.For(WeaponIds.FRAG).Damage);
             Assert.Equal(0f, WeaponCatalog.For(WeaponIds.SPEARHEAD).Damage);
+        }
+
+        /// <summary>
+        /// A deployable does no damage AND can still be thrown. Those are two claims and the
+        /// catalogue used to answer both with <c>Inert</c>, which is only the first.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>What this goes red for.</b> Re-marking either id <c>Inert</c> — or dropping its
+        /// <c>clipSize</c> to 0, or letting its delivery fall back to the <c>Hitscan</c> default
+        /// that <c>WeaponConfig</c>'s constructor supplies. Each of those alone is enough to make
+        /// an ammo bag unthrowable in a networked match, and none of them is visible at the call
+        /// site: <c>ServerFireResolver.CheckCanFire</c> rejects a clip of 0 as <c>NoAmmo</c> with
+        /// no <c>ClipSize &gt; 0</c> escape, and the hitscan branch of
+        /// <c>ServerCombatAuthority.Step</c> resolves a sweep instead of launching.
+        /// </para>
+        /// <para>
+        /// <b>Asserted by identity, not by count.</b> "Two entries are launchable" would be
+        /// satisfied by any two, and the pair that matters is exactly these. The numbers are read
+        /// off <c>ammobox.prefab</c> / <c>medipack.prefab</c> (<c>ammo: 1</c>, <c>cooldown: 0.2</c>,
+        /// <c>spareAmmo: -1</c>), so a disagreement here is a disagreement with the assets.
+        /// </para>
+        /// <para>
+        /// The whole deployable pipeline sits behind this — <c>ProjectileNetAnnouncer.KindOf</c>,
+        /// <c>ServerDeployableAuthority</c>'s resupply and heal pulse, the client presenter's
+        /// slots 4 and 5 — and every one of those shipped and was tested while nothing could
+        /// reach them.
+        /// </para>
+        /// </remarks>
+        [Theory]
+        [InlineData(WeaponIds.AMMO_BAG)]
+        [InlineData(WeaponIds.MEDIPACK)]
+        public void DeployablesAreLaunchable(byte weaponId)
+        {
+            WeaponConfig config = WeaponCatalog.For(weaponId);
+
+            Assert.Equal(WeaponDelivery.Projectile, config.Delivery);
+            Assert.True(
+                config.ClipSize > 0,
+                WeaponIds.NameOf(weaponId) + " has a clip of 0, which ServerFireResolver"
+                + ".CheckCanFire refuses as NoAmmo on every trigger pull — the deployable can"
+                + " never be thrown in a networked match");
+            Assert.True(config.Cooldown > 0f);
+
+            // Zero damage is the half that was always right; keep both halves in one place so a
+            // future edit cannot restore one by removing the other.
+            Assert.Equal(0f, config.Damage);
+
+            // A bag may not refill a bag. This is the prefab's own spareAmmo: -1, and it is what
+            // bounds a deployable to one throw per life.
+            Assert.Equal(WeaponConfig.NoResupplySpareAmmo, config.SpareAmmo);
+        }
+
+        /// <summary>
+        /// The trigger gate the entry above exists to clear, exercised rather than reasoned
+        /// about: a fresh deployable loadout slot accepts its first pull and refuses the second.
+        /// </summary>
+        /// <remarks>
+        /// Reads through <c>ServerFireResolver.CheckCanFire</c>, the same call the live path
+        /// makes, so a change to that gate's ordering or to <c>WeaponModel</c>'s clip seeding is
+        /// caught here rather than in a play session.
+        /// </remarks>
+        [Theory]
+        [InlineData(WeaponIds.AMMO_BAG)]
+        [InlineData(WeaponIds.MEDIPACK)]
+        public void ADeployableAcceptsItsFirstThrowAndRefusesTheSecond(byte weaponId)
+        {
+            WeaponConfig config = WeaponCatalog.For(weaponId);
+            WeaponRuntimeState state = WeaponRuntimeState.Loaded(in config);
+
+            Assert.Equal(
+                FireRejection.None,
+                ServerFireResolver.CheckCanFire(in state, in config, shooterIsAlive: true, 10f));
+
+            state.AmmoInClip = 0;
+
+            Assert.Equal(
+                FireRejection.NoAmmo,
+                ServerFireResolver.CheckCanFire(in state, in config, shooterIsAlive: true, 20f));
         }
 
         [Fact]
