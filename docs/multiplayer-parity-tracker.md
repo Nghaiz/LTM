@@ -28,14 +28,14 @@ Cột **gốc** trỏ về năm nguyên nhân gốc ở § Phụ lục B. Sửa 
 |---|---|---|---|---|---|
 | W1 Xe cộ | 19 | 2 | 0 | 0 | 17 |
 | W2 Chiến đấu | 17 | 0 | 0 | 0 | 17 |
-| W3 Di chuyển | 6 | 1 | 0 | 0 | 5 |
+| W3 Di chuyển | 6 | 2 | 0 | 0 | 4 |
 | W4 Luồng trận & kết cục | 6 | 0 | 0 | 0 | 6 |
 | W5 HUD & minimap | 5 | 0 | 0 | 0 | 5 |
 | W6 Bot & quyền thế giới | 4 | 0 | 0 | 0 | 4 |
 | W7 Phiên & kết nối | 8 | 0 | 0 | 0 | 8 |
 | W8 Số liệu & tương đương | 4 | 0 | 0 | 0 | 4 |
 | W9 Tooling | 3 | 0 | 0 | 0 | 3 |
-| **Tổng** | **72** | **3** | **0** | **0** | **69** |
+| **Tổng** | **72** | **4** | **0** | **0** | **68** |
 
 ---
 
@@ -102,6 +102,16 @@ reqSent=2  refused=2  occupiedVehicleId=0   arbiter-scene warnings=0
 
 Sáu DLL trong `Assets/Plugins` được build lại trong cùng commit, đúng như mọi thay đổi source .NET của repo này.
 
+### MOV-02 — ✅ đã sửa **và đã nghiệm thu**
+
+**Đã sửa.** `MovementCore.SpeedFor` đọc nút Sprint thô; luật thật là cờ `sprinting` của controller, được `FpsActorController.Update():830` ghi mỗi frame bằng `IsSprinting()` = `!Crouch() && !Aiming() && !IsReloading() && InputSource.Sprint() && !IsSeated()`. Giữ Shift khi đang ngắm/cúi/nạp cho **6,5 m/s** thay vì 3,5.
+
+**Đã nghiệm thu.** `dotnet test`: **1666/1666**. Ba case của `AimingCrouchingOrReloadingVetoesSprint` đều **đỏ trên code cũ**.
+
+**Và đây là điều đáng ghi lại hơn cả bản sửa.** Lỗi này sống sót vì **cả hai phía cùng đọc một luật sai**. Một bất đồng giữa dự đoán và quyền uy thì ồn ào — nó rubber-band, nó lộ ra ngay. Nhưng một bất đồng *chung* với bản gốc thì im lặng: client và server đồng ý với nhau, các cổng đều xanh, và chỉ có người chơi biết là sai.
+
+Điều đó dự đoán được cả một lớp lỗi còn chưa tìm ra: mọi hằng số hoặc luật trong `Ironfront.Net.Replication` mà **cả hai phía dùng chung** đều không thể bị phát hiện bằng bất kỳ cổng nào hiện có. `MovementCore`, `ServerFireResolver`, `EffectiveTriggerPolicy`, `CapturePointState` — cùng một hình dạng. Cách duy nhất tìm là đối chiếu từng cái với bản gốc, đúng như đã làm ở đây.
+
 ---
 
 ## W1 — Xe cộ
@@ -162,7 +172,7 @@ Vòng lặp cốt lõi của một FPS: bắn trúng, nhận sát thương, ch�
 | ID | | Lỗi | Ở đâu | Nguồn | Gốc |
 |---|---|---|---|---|---|
 | **MOV-01** | ✅ | **Giữ Space là nhảy liên tục.** `MovementSimulation` đọc `Input.GetButton` (mức) và `MovementCore` áp lại `JumpSpeed` mỗi tick chạm đất; bản gốc chốt **cạnh** rồi xoá | `MovementSimulation.cs:124`; `MovementCore.cs:160-166` | 1 | |
-| **MOV-02** | ☐ | **Giữ Shift khi đang ngắm/cúi/nạp/ngồi vẫn chạy hết tốc lực.** Bản gốc dùng tổ hợp `!Crouch() && !Aiming() && !IsReloading() && !IsSeated()` | `MovementSimulation.cs:124` vs `FpsActorController.cs:1219-1222` | 1 | |
+| **MOV-02** | ✅ | **Giữ Shift khi đang ngắm/cúi/nạp/ngồi vẫn chạy hết tốc lực.** Bản gốc dùng tổ hợp `!Crouch() && !Aiming() && !IsReloading() && !IsSeated()` | `MovementSimulation.cs:124` vs `FpsActorController.cs:1219-1222` | 1 | |
 | **MOV-03** | ☐ | **Bật "Toggle Crouch" thì server không bao giờ thấy bạn cúi.** Hai chủ thể cùng ghi `CharacterController.height` và `transform.position`, mỗi tick ghi đè nhau — bạn nấp sau vật che và bị bắn xuyên đầu | `MovementCore` / `NetServerActor` | 1 | |
 | **MOV-04** | ☐ | **Bước khỏi mép vực rơi nhanh hơn ~10 m/s.** Vận tốc −10 của tick còn trên mặt đất sống sang tick đầu tiên trên không | `MovementCore.cs:167-170` vs `FirstPersonController.cs:173-176` | 1 | |
 | **MOV-05** | ☐ | **Thân thể từ xa không nghiêng, không giật khi trúng đạn, không báo trạng thái cúi** | `RemoteActorView.cs` | 1 | |
