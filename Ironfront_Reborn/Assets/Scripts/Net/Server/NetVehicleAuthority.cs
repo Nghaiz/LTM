@@ -267,6 +267,68 @@ namespace Ironfront.Net.Unity.Server
             _vehicles.Claims.ReleaseExpired(Time.time);
         }
 
+        // ------------------------------------------------------------- seat occupancy
+
+        /// <summary>
+        /// Publishes the seat the SCENE has just put an actor into, or vacated, to the same table
+        /// <c>SeatArbiter</c> books and the snapshot reads.
+        /// </summary>
+        /// <param name="seatIndex">
+        /// The seat's index in <c>Vehicle.seats</c>. Negative means "not a seat of this vehicle"
+        /// and is ignored.
+        /// </param>
+        /// <param name="occupant">
+        /// The actor now sitting there, or <see langword="null"/> when the seat has been vacated.
+        /// </param>
+        /// <remarks>
+        /// <para>
+        /// <b>The scene's half of a table the arbiter only half owned.</b> The snapshot reads seat
+        /// state from the arbiter's record rather than from <c>Actor.seat</c>, on the documented
+        /// grounds that the arbiter's record is what the server DECIDED and the two agree only
+        /// because the bridge keeps them so. That reasoning holds on the request path and fails
+        /// on every other one: the AI boards with a direct <c>Actor.EnterSeat</c> and sends no
+        /// request, so nothing ever booked the table. The consequence was visible from the far
+        /// side — a bot riding a vehicle was replicated to every client as a body standing on the
+        /// ground inside it, and a client asking for the seat the arbiter still believed free was
+        /// granted it, refused by the scene, and answered <c>RejectedOccupied</c>.
+        /// </para>
+        /// <para>
+        /// <b>One table, every entry path.</b> <c>Seat.SetOccupant</c> is the single choke point
+        /// every way into a seat funnels through, so publishing from <c>Vehicle.OccupantEntered</c>
+        /// and <c>Vehicle.OccupantLeft</c> covers the AI, the network bridge and anything added
+        /// later, without a second bookkeeping path to keep in step.
+        /// </para>
+        /// <para>
+        /// <b>Written unconditionally, including over a booking that already exists.</b> On the
+        /// request path this re-writes the id the arbiter wrote, which is why it is harmless
+        /// there. Where the two ever disagree the scene wins — the same precedence
+        /// <c>Actor.EnterSeat</c> already documents when it refuses a booked seat and the bridge
+        /// rolls the arbiter back. The scene is authoritative about the scene.
+        /// </para>
+        /// <para>
+        /// <b>Unreachable offline and on a client</b>, so neither changes: <see cref="IsInstalled"/>
+        /// is false without the netcode, and a client seats a body only through its own
+        /// presentation path, which has no <c>NetServerActor</c> to name.
+        /// </para>
+        /// </remarks>
+        public static void PublishSeatOccupancy(GameObject vehicle, int seatIndex, GameObject occupant)
+        {
+            if (!IsInstalled || vehicle == null || seatIndex < 0) return;
+
+            ushort vehicleId = _vehicles.NetworkIdOf(vehicle);
+            if (vehicleId == 0) return;   // not replicated, so there is no table to write
+
+            // TryResolveBot is named for its first caller rather than for its contract: it reads
+            // the NetServerActor off whatever object it is handed, so a claimed player body
+            // answers exactly as a bot does. A null occupant never reaches it, and the id stays
+            // 0 -- which is the registry's own encoding for "this seat is empty".
+            ushort actorId = 0;
+            if (occupant != null && TryResolveBot(occupant, out ushort seatedId))
+                actorId = seatedId;
+
+            _vehicles.Registry.TrySetOccupant(vehicleId, (byte)seatIndex, actorId);
+        }
+
         private static bool TryResolveBot(GameObject botActor, out ushort botId)
         {
             botId = 0;

@@ -431,6 +431,18 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 
 	public void OccupantEntered(Seat seat)
 	{
+		// Published FIRST, for the reason Actor.EnterSeat publishes the seat link before
+		// anything that can call out or throw (X-58): the table the snapshot reads is corrected
+		// by the state change itself rather than by reaching the end of this method.
+		//
+		// Here rather than at the call sites because Seat.SetOccupant is the single choke point
+		// every way into a seat funnels through -- and because the AI boards with a direct
+		// Actor.EnterSeat and sends no request, so no other writer exists for a bot.
+		NetVehicleAuthority.PublishSeatOccupancy(
+			base.gameObject,
+			SeatIndexOf(seat),
+			(seat.occupant != null) ? seat.occupant.gameObject : null);
+
 		if (seat == seats[0])
 		{
 			DriverEntered();
@@ -662,6 +674,12 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 
 	public void OccupantLeft(Seat seat, Actor leaver)
 	{
+		// The mirror of OccupantEntered's publish, and first for the same reason. A null occupant
+		// is the registry's own encoding for an empty seat, so nothing here has to test whether
+		// the vehicle is now empty -- IsEmpty() below is a different question with a different
+		// answer on a vehicle that still has a gunner.
+		NetVehicleAuthority.PublishSeatOccupancy(base.gameObject, SeatIndexOf(seat), null);
+
 		if (seat == seats[0])
 		{
 			DriverExited();

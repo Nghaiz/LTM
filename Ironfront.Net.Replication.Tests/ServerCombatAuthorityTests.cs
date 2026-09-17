@@ -244,16 +244,31 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
-        public void AKilledVictimIsStampedIntoTheRespawnGate()
+        public void AKilledVictimIsNotStampedByTheAuthority()
         {
+            // The gate IS the death edge: TryBeginDeath answers true exactly once per life, and
+            // ServerTickLoop.EmitDeath gates the S_DEATH broadcast, the killfeed line, the corpse,
+            // the ticket and the score behind that true. So a class that stamps the gate on a kill
+            // CONSUMES the edge, and EmitDeath then returns having emitted nothing.
+            //
+            // This test used to assert the opposite, and that is how the defect survived: it was
+            // written while the gate swallowed a repeat silently, and it kept passing after the
+            // gate was changed to RETURN the edge -- which is the change that made EmitDeath
+            // correct. Every player-versus-player kill emitted no S_DEATH at all, the victim's
+            // client cleared IsAlive from the snapshot, disabled its own input and stood there
+            // unable to move, and no other client saw anything happen.
+            //
+            // It asserts the negative now, so the stamp cannot quietly come back.
             var fixture = new CombatFixture();
 
             fixture.Step(now: 10f, InputButtons.Fire);
 
-            Assert.True(fixture.RespawnGate.IsDead(Victim));
-            Assert.Equal(
-                ProtocolConstants.RESPAWN_SECONDS,
-                fixture.RespawnGate.SecondsUntilRespawn(Victim, 10f), 3);
+            Assert.True(
+                fixture.Authority.KillsResolved > 0,
+                "the fixture has to actually kill somebody for this test to mean anything");
+            Assert.False(
+                fixture.RespawnGate.IsDead(Victim),
+                "ServerCombatAuthority must leave the death edge to ServerTickLoop.EmitDeath");
         }
 
         // ------------------------------------------------------------------ respawn gate
@@ -612,8 +627,11 @@ namespace Ironfront.Net.Replication.Tests
                 Compensator = new LagCompensator(new HitboxHistory());
                 Resolver = new ServerFireResolver(Compensator, seed: 7);
                 Sink = new FakeDamageSink();
+                // Held here and NOT handed to the authority: the gate belongs to whoever emits the
+                // death, which is ServerTickLoop.EmitDeath. See
+                // AKilledVictimIsNotStampedByTheAuthority.
                 RespawnGate = new ServerRespawnGate();
-                Authority = new ServerCombatAuthority(Resolver, Sink, RespawnGate);
+                Authority = new ServerCombatAuthority(Resolver, Sink);
 
                 Weapon = WeaponRuntimeState.Loaded(in _config);
                 State = MoveState.AtRest(

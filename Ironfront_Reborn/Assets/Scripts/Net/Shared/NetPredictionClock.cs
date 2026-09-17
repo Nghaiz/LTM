@@ -77,6 +77,52 @@ namespace Ironfront.Net.Unity
         public Func<MoveInput> InputSource;
 
         /// <summary>
+        /// Whether the local body IS crouching this tick, when raw <c>Input</c> cannot answer it.
+        /// Null leaves the Crouch button in place.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A source here, and not a raw read inside <c>MovementSimulation</c>, for the same reason
+        /// the aim pitch and the combat mask are: the answer lives in <c>Assembly-CSharp</c>, one
+        /// layer up, and this assembly may not name it.
+        /// </para>
+        /// <para>
+        /// <b>It exists because the Crouch button is not the crouch STATE.</b> With the
+        /// toggle-crouch option on, the state is a flag latched by the button's down-edge, so a
+        /// player taps once and stays crouched while the button itself reads false. The raw read
+        /// then did two things wrong at once: it put "standing" on the wire for the whole of that
+        /// crouch, and it made <c>NetMovementAgent.ApplyStanceHeight</c> fight
+        /// <c>Actor.Update</c> over the CharacterController's height on every tick.
+        /// </para>
+        /// <para>
+        /// Null is the honest answer for the diagnostics that drive this component with no player
+        /// rig behind them.
+        /// </para>
+        /// </remarks>
+        public Func<bool> CrouchSource;
+
+        /// <summary>
+        /// Whether the local body IS sprinting this tick, when raw <c>Input</c> cannot answer it.
+        /// Null leaves the Sprint button in place.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The sibling of <see cref="CrouchSource"/> and here for the same reason, but this one
+        /// decides more than a speed: the trigger rule on both sides of the wire refuses a
+        /// sprinting body, so the bit this feeds is the difference between a shot that happens and
+        /// a shot that is drawn, spent and then quietly unspent by the next snapshot.
+        /// </para>
+        /// <para>
+        /// <b>"Sprinting" is a composite, not the key.</b>
+        /// <c>FpsActorController.IsSprinting()</c> is
+        /// <c>!Crouch() &amp;&amp; !Aiming() &amp;&amp; !IsReloading() &amp;&amp; Sprint()
+        /// &amp;&amp; !IsSeated()</c>; a player holding Shift while aiming is not sprinting, and the
+        /// raw key said they were.
+        /// </para>
+        /// </remarks>
+        public Func<bool> SprintSource;
+
+        /// <summary>
         /// Aim pitch, in degrees, as of the last simulated tick. -90..90.
         /// </summary>
         /// <remarks>
@@ -253,9 +299,19 @@ namespace Ironfront.Net.Unity
             _secondTimer = 0f;
         }
 
+        /// <remarks>
+        /// All three live sources reach the frame in one call, written inline rather than through
+        /// temporaries so that a reader — and the source-text gate in
+        /// <c>ClientInputSenderTests</c> — can see which question each argument answers. Each falls
+        /// back to a raw read when nothing installed a source; see <see cref="CrouchSource"/> and
+        /// <see cref="SprintSource"/> for why "is crouching" and "is sprinting" are not the same
+        /// questions as the two keys, and why the sprint one decides whether a shot happens at all.
+        /// </remarks>
         private MoveInput DefaultInput()
             => MovementSimulation.FromUnityInput(
                 _cameraParent.eulerAngles.y,
-                CombatButtonSource != null ? CombatButtonSource() : InputButtons.None);
+                CombatButtonSource != null ? CombatButtonSource() : InputButtons.None,
+                CrouchSource != null ? CrouchSource() : Input.GetButton("Crouch"),
+                SprintSource != null ? SprintSource() : Input.GetButton("Sprint"));
     }
 }

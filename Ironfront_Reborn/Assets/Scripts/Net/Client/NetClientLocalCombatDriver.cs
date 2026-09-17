@@ -432,12 +432,12 @@ namespace Ironfront.Net.Unity.Client
             // climbing at the rate of PredictedShots; both are in the lane-B record and it does
             // not.
             //
-            // The RESERVE is the one that genuinely still has two writers, and it is not fixable
-            // from this file: Weapon.ReloadDone spends Actor.spareAmmo[slot] locally while the
-            // server spends its own pool, and ApplyAuthoritativeCombat has no reserve parameter
-            // to correct it with. ClientCombatState.SpareAmmo now carries the authoritative
-            // number as far as this seam; widening ILocalPlayerRig to push it into the rig is
-            // the remaining step.
+            // The RESERVE was the one that genuinely had two writers, and it is corrected now:
+            // Weapon.ReloadDone spends Actor.spareAmmo[slot] locally while the server spends its
+            // own pool, so every reload the server refused or performed differently widened the
+            // gap for good. ClientCombatState.SpareAmmo carried the authoritative number as far
+            // as this seam from the day it was decoded; ApplyAuthoritativeCombat took only the
+            // clip, so it stopped there. The parameter added below is the hop it never made.
             //
             // P10 X-85: the every-frame call above was ungated by SPRINT, and the server's
             // protocol-10 trigger is not.
@@ -836,7 +836,8 @@ namespace Ironfront.Net.Unity.Client
 
             ILocalPlayerRig rig = NetClientBindings.LocalPlayer;
             if (rig != null && rig.Exists)
-                rig.ApplyAuthoritativeCombat(_state.Health, _state.WeaponId, _state.AmmoInClip);
+                rig.ApplyAuthoritativeCombat(
+                    _state.Health, _state.WeaponId, _state.AmmoInClip, _state.SpareAmmo);
 
             AdoptAlreadyAliveBody(in entry);
         }

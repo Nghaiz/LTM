@@ -235,7 +235,7 @@ namespace Ironfront.Net.Unity.Server
             _lagCompensator.Occlusion = IsOccluded;
             _fireResolver = new ServerFireResolver(_lagCompensator);
             _damageSink = new ServerActorDamageSink(ServerActorRegistry.Instance);
-            _combatAuthority = new ServerCombatAuthority(_fireResolver, _damageSink, _respawnGate);
+            _combatAuthority = new ServerCombatAuthority(_fireResolver, _damageSink);
             _combat = new ServerCombatBridge(
                 this, ServerActorRegistry.Instance, _combatAuthority, _respawnGate,
                 _mountedWeapons, _mountedWeaponAuthority);
@@ -1174,6 +1174,25 @@ namespace Ironfront.Net.Unity.Server
             // no longer exists and never receive a despawn for it.
             int liveCount = registry.LiveCount;
 
+            // A client that joins an empty table is never told about a vehicle again unless one
+            // spawns later, and NOTHING ELSE IN THE PROCESS SAYS SO. The loop below iterates
+            // nothing, this method returns, and the client's world simply has no vehicles in it
+            // for reasons its own log cannot show. That is the shape of the 2026-09-17 session:
+            // both client logs contain the word "vehicle" zero times, which proves the absence
+            // and says nothing about the cause -- and the server's log, which would have, was not
+            // kept. This line is what makes the next occurrence decidable, and it is logged per
+            // join rather than once per process because a join is already a rare event.
+            if (liveCount == 0)
+            {
+                Debug.LogWarning(
+                    "[net] a client joined while the replicated vehicle table is EMPTY. No "
+                    + "S_VEHICLE_SPAWN will be sent for anything, so this client sees no vehicles "
+                    + "at all. Read the spawners above this line: a pad that gave up logs 'gave up "
+                    + "after N blocked attempts', a vehicle with no id logs 'could not replicate', "
+                    + "and a pad that has never spawned since the last world reset logs NOTHING -- "
+                    + "which is the one shape that leaves this method silent.");
+            }
+
             for (int i = 0; i < liveCount && i < liveIds.Length; i++)
             {
                 ushort vehicleId = liveIds[i];
@@ -1288,10 +1307,21 @@ namespace Ironfront.Net.Unity.Server
         /// killfeed saw it, whether the ticket came off the right team.
         /// </para>
         /// <para>
-        /// Stamping the gate here is safe even though the hitscan path already did:
-        /// <c>ServerRespawnGate.MarkDeath</c> ignores a second stamp within one life, precisely
-        /// so a death arriving from more than one place does not push the countdown out by the
-        /// gap between them.
+        /// <b>The gate is stamped HERE and nowhere else.</b> Everything below — the
+        /// <c>S_DEATH</c> broadcast, the killfeed, the corpse, the ticket and the score — sits
+        /// behind a true from <see cref="ServerRespawnGate.TryBeginDeath"/>, so any call site that
+        /// stamps the gate first CONSUMES that edge and this method returns having emitted
+        /// nothing. That is not hypothetical. The hitscan path stamped it, and every
+        /// player-versus-player kill resolved to silence: the victim's client learned it was dead
+        /// from the snapshot, disabled its own input and stood there, and no other client saw a
+        /// thing. The stamp is the death EDGE, not a clock to be set defensively.
+        /// </para>
+        /// <para>
+        /// The paragraph that stood here called the second stamp "safe" because
+        /// <c>MarkDeath</c> ignored a repeat within one life. It was safe when the gate swallowed
+        /// repeats silently. It stopped being safe the moment the gate was changed to RETURN the
+        /// edge — which is the change that made this method correct — and the stamp upstream was
+        /// left behind, defended by a sentence that had gone stale.
         /// </para>
         /// </remarks>
         public void EmitDeath(

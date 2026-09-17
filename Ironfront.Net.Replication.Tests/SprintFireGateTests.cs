@@ -31,8 +31,7 @@ namespace Ironfront.Net.Replication.Tests
 
             Authority = new ServerCombatAuthority(
                 new ServerFireResolver(new LagCompensator(new HitboxHistory()), seed: 7),
-                new SilentDamageSink(),
-                new ServerRespawnGate());
+                new SilentDamageSink());
 
             Weapon = WeaponRuntimeState.Loaded(in _config);
             State = MoveState.AtRest(new Vec3(0f, MovementCore.StandHeight * 0.5f, 0f));

@@ -122,16 +122,20 @@ namespace Ironfront.Net.Replication.Combat
     {
         private readonly ServerFireResolver _fireResolver;
         private readonly IActorDamageSink _damageSink;
-        private readonly ServerRespawnGate _respawnGate;
 
+        /// <remarks>
+        /// <b>No <c>ServerRespawnGate</c>, deliberately.</b> It used to take one and stamp it on
+        /// every kill, which meant this class consumed the death edge that
+        /// <c>ServerTickLoop.EmitDeath</c> gates the whole death — broadcast, killfeed, corpse,
+        /// ticket, score — behind. Every hitscan kill therefore emitted nothing at all. The gate
+        /// belongs to whoever emits the death, and that is EmitDeath alone.
+        /// </remarks>
         public ServerCombatAuthority(
             ServerFireResolver fireResolver,
-            IActorDamageSink damageSink,
-            ServerRespawnGate respawnGate)
+            IActorDamageSink damageSink)
         {
             _fireResolver = fireResolver ?? throw new ArgumentNullException(nameof(fireResolver));
             _damageSink = damageSink ?? throw new ArgumentNullException(nameof(damageSink));
-            _respawnGate = respawnGate ?? throw new ArgumentNullException(nameof(respawnGate));
         }
 
         /// <summary>Reload intents accepted. Non-zero is the reported bug being closed.</summary>
@@ -447,7 +451,18 @@ namespace Ironfront.Net.Replication.Combat
                 deadActorId = hit.TargetActorId;
                 KillsResolved++;
 
-                _respawnGate.MarkDeath(hit.TargetActorId, nowSeconds);
+                // The death gate is deliberately NOT stamped here. ServerTickLoop.EmitDeath owns
+                // that edge and gates the S_DEATH broadcast, the killfeed line, the corpse, the
+                // ticket and the score on it, so stamping it first CONSUMED the edge: EmitDeath's
+                // TryBeginDeath answered false for a death this path had already recorded, and it
+                // returned before emitting anything. A hitscan kill produced no S_DEATH at all --
+                // the victim's client cleared IsAlive from the snapshot, disabled its own input
+                // and stood there unable to move, and no other client saw a thing.
+                //
+                // This call used to be defended by a comment in EmitDeath calling it safe, on the
+                // grounds that the gate ignored a repeat within one life. That was true while the
+                // gate swallowed repeats silently; it stopped being true when the gate was changed
+                // to RETURN the edge, which is what makes EmitDeath correct.
             }
 
             return new CombatTickResult(

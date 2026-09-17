@@ -101,6 +101,73 @@ namespace Ironfront.Net.Unity
         /// </para>
         /// </remarks>
         public static MoveInput FromUnityInput(float yawDegrees, InputButtons combat)
+            => FromUnityInput(
+                yawDegrees, combat, Input.GetButton("Crouch"), Input.GetButton("Sprint"));
+
+        /// <summary>
+        /// As above, with the crouch STATE supplied by the caller.
+        /// </summary>
+        /// <param name="crouching">
+        /// Whether the actor <b>is</b> crouching this tick — <c>FpsActorController.Crouch()</c>,
+        /// never the Crouch button. See the remarks.
+        /// </param>
+        /// <remarks>
+        /// <para>
+        /// <b>Crouch is the one axis here whose state and whose button are different
+        /// questions.</b> With the toggle-crouch option on, <c>FpsActorController.Crouch()</c>
+        /// returns a flag latched by the button's down-edge, so a player taps once, releases, and
+        /// stays crouched. <c>Input.GetButton("Crouch")</c> then reports "standing" for the whole
+        /// of that crouch, and it reached two readers at once.
+        /// </para>
+        /// <para>
+        /// <c>Actor.Update</c> takes the crouch from <c>controller.Crouch()</c> and calls
+        /// <c>StartCrouch()</c>, so the client's own capsule really is 0.5 m tall — while
+        /// <c>NetMovementAgent.ApplyStanceHeight</c> derives the height it wants from
+        /// <c>MoveState.IsCrouching</c>, which this flag feeds, and writes 1.8 back on the same
+        /// tick. Two writers held one <c>CharacterController.height</c> and disagreed every tick.
+        /// </para>
+        /// <para>
+        /// And the flag went on the wire, so the server stood the body up: the player crouched
+        /// behind cover on their own screen and was shot over it on the server's.
+        /// </para>
+        /// <para>
+        /// <b>Jump, sprint and the movement axes are still sampled raw, and that is not an
+        /// oversight.</b> None of the three has a latched form, and the axes never pass through
+        /// <c>LocalInputSource</c> at all — see the text-field remark below, which is about
+        /// exactly that.
+        /// </para>
+        /// </remarks>
+        public static MoveInput FromUnityInput(
+            float yawDegrees, InputButtons combat, bool crouching)
+            => FromUnityInput(yawDegrees, combat, crouching, Input.GetButton("Sprint"));
+
+        /// <summary>
+        /// As above, with the sprint STATE supplied by the caller.
+        /// </summary>
+        /// <param name="sprinting">
+        /// Whether this body <b>is</b> sprinting — <c>FpsActorController.IsSprinting()</c>, never
+        /// the Sprint button.
+        /// </param>
+        /// <remarks>
+        /// <para>
+        /// <b>The same state-versus-button distinction as the crouch overload, and on this axis it
+        /// decides whether a shot happens at all.</b> <c>IsSprinting()</c> is
+        /// <c>!Crouch() &amp;&amp; !Aiming() &amp;&amp; !IsReloading() &amp;&amp; Sprint() &amp;&amp; !IsSeated()</c>,
+        /// and the trigger rule on BOTH sides of the wire refuses a sprinting body's trigger. So a
+        /// raw key read here said "sprinting" to the server while the game itself said "aiming,
+        /// therefore able to fire": the game spent the round and spawned the projectile, both
+        /// authorities refused the shot, and the next snapshot wrote the round back. The magazine
+        /// fell by one and rose by one and never emptied.
+        /// </para>
+        /// <para>
+        /// <b><see cref="MovementCore.SpeedFor"/> keeps its own copy of the composite and that is
+        /// deliberate.</b> It is a shared rule with its own tests and its own callers, and its
+        /// contract is "the sprint flag means the body is sprinting" — which is now true of this
+        /// bit as well, so the two agree rather than merely happen to.
+        /// </para>
+        /// </remarks>
+        public static MoveInput FromUnityInput(
+            float yawDegrees, InputButtons combat, bool crouching, bool sprinting)
             => LocalTextEntry.Composing
                 // Neutral while a text field owns the keyboard. This sampler reads the walk,
                 // jump, sprint and crouch axes DIRECTLY -- they never pass through
@@ -121,8 +188,8 @@ namespace Ironfront.Net.Unity
                 Input.GetAxis("Vertical"),
                 yawDegrees,
                 Input.GetButton("Jump"),
-                Input.GetButton("Sprint"),
-                Input.GetButton("Crouch"),
+                sprinting,
+                crouching,
                 (combat & InputButtons.Fire) != 0,
                 (combat & InputButtons.Aim) != 0,
                 (combat & InputButtons.Reload) != 0,

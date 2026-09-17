@@ -258,8 +258,12 @@ namespace Ironfront.Net.Unity.Server
 
             Debug.LogError(
                 $"[net] actor {session.ActorId} spent a round of weapon {session.WeaponId} on a "
-                + "projectile launch and its body is holding nothing, so nothing was launched. "
-                + "The session and the body disagree about the loadout.");
+                + "projectile launch and NOTHING WAS LAUNCHED: the body is either holding no "
+                + "weapon at all, or its engine weapon refused the trigger. Weapon.CanFire is "
+                + "unholstered && !reloading && HasLoadedAmmo() && (auto || !holdingFire) && "
+                + "!CoolingDown(); run with IRONFRONT_LOG_SHOTS=1 to see which gate answered. "
+                + "Before this line said so, a refusal here spent the round, launched nothing "
+                + "and produced no message at all.");
         }
 
         /// <summary>

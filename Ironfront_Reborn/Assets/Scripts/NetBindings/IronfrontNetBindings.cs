@@ -672,7 +672,30 @@ namespace Ironfront.Net.Unity.Bindings
             Weapon weapon = _actor.activeWeapon;
             if (weapon == null) return false;
 
+            // The engine's own opinion, asked BEFORE Fire rather than assumed after it.
+            // Weapon.Fire returns void and sets holdingFire either way, so a refusal is
+            // invisible to the caller: the authority has already spent the round, nothing is
+            // launched, and FireCarriedWeapon said everything was fine. Returning false here
+            // turns that into the caller's error line, which is the only thing that ever named
+            // this failure.
+            if (!weapon.CanFire()) return false;
+
             weapon.Fire(new Vector3(directionX, directionY, directionZ), useMuzzleDirection: true);
+
+            // THE LATCH. Weapon.Fire sets holdingFire unconditionally, and Actor.UpdateWeapon is
+            // what clears it -- but Actor.Update returns early for a body whose controller is
+            // suspended (Actor.cs:600-603), which is every networked player's body. Nothing on
+            // the server ever cleared it, so CanFire()'s (auto || !holdingFire) term refused
+            // every pull after the first for every NON-automatic weapon. A frag grenade and a
+            // bazooka fired once and never again; the rifle kept working because auto
+            // short-circuits that term.
+            //
+            // StopFire and not a direct write, because holdingFire is protected and this is the
+            // engine's own way to clear it. Conditional because for an auto weapon StopFire also
+            // stops the looping fire sound, and the authority calls this once per accepted frame
+            // -- stopping it there would stutter the loop.
+            if (!weapon.configuration.auto) weapon.StopFire();
+
             return true;
         }
     }
