@@ -95,6 +95,29 @@ namespace Ironfront.Net.Unity.Server
                 _arbiter.Rollback(in decision);
                 decision = SeatDecision.Refuse(in request, SeatChangeResult.RejectedOccupied);
                 EngineRefusals++;
+
+                // Logged, not only counted, because NOTHING READ THE COUNTER: it was incremented
+                // here and referenced nowhere else in the tree, so the one signal that says "the
+                // arbiter's record and the scene disagree about who is sitting where" reached no
+                // reader at all. Its absence is the healthy reading, which is what makes a single
+                // line enough to grade a run on.
+                //
+                // The disagreement it names is a body seated in the scene that never booked the
+                // table. Until 2026-09-17 the only such path was the AI boarding with a direct
+                // Actor.EnterSeat, and it cost a real symptom: a bot riding a vehicle was
+                // replicated to every client as standing on the ground inside it, and a client
+                // asking for a seat the arbiter still believed free was granted it, refused by
+                // the scene, and answered RejectedOccupied exactly as this branch does.
+                // Vehicle.OccupantEntered now publishes occupancy for every entry path; a line
+                // here means a path was missed.
+                if (EngineRefusals == 1)
+                {
+                    Debug.LogWarning(
+                        "[net] the arbiter granted vehicle " + request.VehicleId + " seat "
+                        + request.SeatIndex + " to actor " + request.ActorId + " and the scene "
+                        + "refused it: something seated that body without booking the seat table. "
+                        + "Further occurrences are counted in EngineRefusals and not logged.");
+                }
             }
 
             _send(decision);
