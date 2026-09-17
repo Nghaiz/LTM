@@ -27,7 +27,7 @@ Cột **gốc** trỏ về năm nguyên nhân gốc ở § Phụ lục B. Sửa 
 | Nhóm | Tổng | ✅ | ☑ | ◐ | ☐ |
 |---|---|---|---|---|---|
 | W1 Xe cộ | 19 | 2 | 0 | 0 | 17 |
-| W2 Chiến đấu | 17 | 0 | 2 | 0 | 15 |
+| W2 Chiến đấu | 19 | 0 | 3 | 0 | 16 |
 | W3 Di chuyển | 6 | 2 | 1 | 0 | 3 |
 | W4 Luồng trận & kết cục | 6 | 0 | 0 | 0 | 6 |
 | W5 HUD & minimap | 5 | 0 | 0 | 0 | 5 |
@@ -35,7 +35,7 @@ Cột **gốc** trỏ về năm nguyên nhân gốc ở § Phụ lục B. Sửa 
 | W7 Phiên & kết nối | 8 | 0 | 0 | 0 | 8 |
 | W8 Số liệu & tương đương | 4 | 0 | 0 | 0 | 4 |
 | W9 Tooling | 4 | 0 | 0 | 0 | 4 |
-| **Tổng** | **73** | **4** | **3** | **0** | **66** |
+| **Tổng** | **75** | **4** | **4** | **0** | **67** |
 
 ---
 
@@ -171,6 +171,10 @@ Vòng lặp cốt lõi của một FPS: bắn trúng, nhận sát thương, ch�
 | **CMB-15** | ☐ | **Độ trễ rút súng không được mô hình hoá phía server** | server combat path | 1 | |
 | **CMB-16** | ☐ | **HUD không ẩn khi chết; respawn giữ nguyên đạn dự trữ của đời trước** | combat path | 1 | |
 | **CMB-17** | ☐ | **Phím K tự sát ragdoll thân thể cục bộ trong khi server vẫn để bạn sống** | `FpsActorController.cs:880-883` | 1 | |
+| **CMB-18** | ☑ | **Giữ Shift trong khi ngắm làm mọi phát bắn không hề tồn tại với server.** Bit Sprint trên dây mang **nút thô**, nhưng luật cò súng ở cả hai phía dựng trên bit đó và từ chối thân thể đang sprint — mà "đang sprint" là tổ hợp `!Crouch() && !Aiming() && !IsReloading() && Sprint() && !IsSeated()`. Giữ Shift + ngắm: game **cho bắn** (trừ 1 viên, sinh đạn), client dự đoán và server **đều từ chối**, snapshot sau ghi lại viên đạn → `−1` rồi `+1`, băng không bao giờ cạn. **Triệu chứng người chơi thấy là "đạn vô hạn"; sự thật là server nhận 0 phát** | `LocalInputSource.cs:131`; `MovementSimulation.cs:125`; `EffectiveTrigger.cs:242-289` | 1 | |
+| | | **Nghiệm thu:** do người chơi báo từ phiên chơi thật 2026-09-17 (2 người, server teammate). **Loại trừ hồi quy bằng diff**: `40cf05d` không đụng dòng `weapon.ammo = ammoInClip` nào. Sửa bằng delegate thứ ba trên `LocalInputSource` (khuôn `Aiming`/`SampleWeaponSlotIntent` đã có) + `SprintSource` trên clock. **An toàn một phía** — bit mới là tập con của bit cũ nên server cũ vẫn khớp, và nó sửa luôn bất đồng tốc độ mà MOV-02 đơn lẻ gây ra | | | |
+| **CMB-19** | ☐ | **Băng đạn về 0 rồi nhảy lên 1.** HUD đọc **dự đoán của client**, và `ReconcileAmmo` giữ nguyên số dự đoán khi lệch ≤ `AmmoResyncThreshold = 2`, đồng thời trả snapshot về **nguyên văn** khi `reloadPending` bật. Hai bên tiêu đạn trên hai đồng hồ khác nhau (client mỗi frame render theo cooldown, server mỗi frame input được chấp nhận) — đo được 0,1054 s/phát so với cooldown 0,095 s, nên client dẫn trước 1–3 viên. Tới ranh giới nạp đạn, nguồn của con số **đổi chỗ** | `ClientCombatState.cs:643-651,536`; `NetClientLocalCombatDriver.cs:839` | 1 | |
+| | | **Cách sửa (chưa làm):** một chủ thể viết cho con số HUD đọc, và hoà giải **chính xác** — `OnSnapshotApplied` đã nhận `lastProcessedInputTick` mà không bao giờ truyền nó xuống `ReconcileAmmo`, và đó chính là lý do cần dải ±2. Phương án nhỏ hơn nhưng là quyết định sản phẩm: đưa `ServerAmmoInClip` cho rig thay vì `AmmoInClip`, chấp nhận HUD trễ một RTT. **Không kiểm chứng được bằng artifact nào hiện có** — không recorder nào đọc `Weapon.ammo`/`Actor.spareAmmo`, đúng TOL-04 | | | |
 
 ## W3 — Di chuyển
 
