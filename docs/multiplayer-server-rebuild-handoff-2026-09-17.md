@@ -10,7 +10,7 @@ Gửi người phụ trách dev server.
    còn mở mà đọc code không trả lời được.
 3. **Chơi lại hai người** và đối chiếu với bảy triệu chứng ở § 6.
 
-- Nhánh: **`veh01-vehicle-seat`** (chưa merge vào `develop`; PR đang mở)
+- Nhánh: **`veh01-vehicle-seat`** đã merge vào `develop` qua **PR #294**, squash thành `9f97c79`
 - Commit đầu nhánh: `3a941d7` · Commit cuối: **`b7d75f7`**
 - 21 commit, 2026-09-17
 
@@ -150,13 +150,13 @@ hoặc một quyết định.
 
 | # | Triệu chứng | Trạng thái | Kiểm bằng cách nào |
 |---|---|---|---|
-| 1 | Giữ Shift khi ngắm và bắn → đạn dao động, **đạn vô hạn** | ✅ sửa | Giữ Shift + ngắm + bắn. Băng đạn phải **cạn** được, và người kia phải chết được |
-| 2 | Lựu đạn không nổ, không thấy đường bay | ✅ sửa | Ném lựu đạn: phải thấy nó bay **và** nổ |
-| 3 | Bắn bazooka: nổ ra chùm ô vuông trắng | ⏸ chờ quyết định asset | Xem § 7 |
-| 4 | Bắn thường: đạn về 0 rồi nhảy lên 1 | ⏸ chờ quyết định | Xem § 7 |
-| 5 | P1 hết máu nhưng không hồi sinh, đứng đơ | ✅ sửa | Giết nhau: nạn nhân phải thấy màn hình chết **và hồi sinh được**. Đồng đội phải thấy killfeed |
+| 1 | Giữ Shift khi ngắm và bắn → đạn dao động, **đạn vô hạn** | ✅ sửa · lane-B: băng cạn sau 30 phát (§ 10) | Giữ Shift + ngắm + bắn. Băng đạn phải **cạn** được, và người kia phải chết được |
+| 2 | Lựu đạn không nổ, không thấy đường bay | ✅ sửa · lane-B: 2 quả đều nổ (§ 10) | Ném lựu đạn: phải thấy nó bay **và** nổ |
+| 3 | Bắn bazooka: nổ ra chùm ô vuông trắng | ☑ sửa ở PR #295, bazooka chưa bắn thử | Xem § 7 và § 10 |
+| 4 | Bắn thường: đạn về 0 rồi nhảy lên 1 | ☑ sửa ở PR #295 | Xem § 7 và § 10 |
+| 5 | P1 hết máu nhưng không hồi sinh, đứng đơ | ✅ sửa · lane-B: kill PvP + hồi sinh (§ 10) | Giết nhau: nạn nhân phải thấy màn hình chết **và hồi sinh được**. Đồng đội phải thấy killfeed |
 | 6 | Bắn trúng mà không có dấu hiệu gì | ✅ sửa | Bị bắn: phải thấy **vignette đỏ** và **giật camera** |
-| 7 | Không thấy bot lẫn xe | ⏸ | Bot: xem § 7. Xe: **§ 5 là câu trả lời** |
+| 7 | Không thấy bot lẫn xe | ☑ bot: sửa ở PR #295 · xe: vẫn mở | Bot: xem § 7. Xe: **§ 5 là câu trả lời** |
 
 **Một điều đáng biết khi đọc kết quả:** triệu chứng **1 và 6 hoá ra là một**. Nếu người chơi giữ
 Shift lúc bắn thì **không phát nào tới được server**, nên không có gì để báo trúng. Nếu sau khi
@@ -165,6 +165,8 @@ deploy mà #6 vẫn còn, hãy kiểm #1 trước.
 ---
 
 ## 7. Ba việc còn lại cần chủ dự án quyết
+
+> **Cập nhật 2026-09-17:** cả ba đã được xử lý ở PR #295. Hướng đã chọn và bằng chứng nằm ở § 10.
 
 **Ô vuông trắng (triệu chứng 3)** — đây là **lỗi asset trước tiên**. `_effectsByKind` trong
 `Dustbowl.unity` và `Island.unity` trỏ vào **placeholder không material**: cả bốn emitter có
@@ -191,6 +193,8 @@ client luôn dẫn trước 1–3 viên. Sửa được, nhưng **chạm vào nh
 
 ## 8. Những gì **chưa** được chứng minh — đừng đọc thành đã xong
 
+> **Cập nhật 2026-09-17:** CMB-20 và CMB-21 đã được lane-B chứng minh (§ 10). Các mục còn lại dưới đây vẫn đúng.
+
 Nói thẳng để không ai đọc bản này thành một tuyên bố "đã sửa hết":
 
 - **CMB-21 (lựu đạn/bazooka)** sửa dựa trên chuỗi nhân quả đọc trọn trong code, **chưa bắn thử lần
@@ -214,3 +218,69 @@ Nói thẳng để không ai đọc bản này thành một tuyên bố "đã s�
 - [`multiplayer-server-deploy-handoff-2026-09-11.md`](multiplayer-server-deploy-handoff-2026-09-11.md)
   — bàn giao deploy lần trước, cùng khuôn
 - [`handing-over-a-build.md`](handing-over-a-build.md) · [`operations.md`](operations.md)
+
+---
+
+## 10. Kết quả thực hiện 2026-09-17
+
+### Merge
+
+- **PR #294** (nhánh `veh01-vehicle-seat`) squash vào `develop` thành `9f97c79`.
+- **PR #295** (ba việc ở § 7) squash thành `cd6ec0f`. PR này cũng build lại 6 DLL plugin và thêm hai bộ lane-B: `refire` (ném, nạp, ném lại) và `ammohud` (checkpoint dày quanh lúc nạp đạn).
+
+### Hướng đã chọn cho ba việc ở § 7
+
+| # | Đã làm | Chưa kiểm bằng chạy thật |
+|---|---|---|
+| 3 | Chùm quad trắng đến từ **code**, không chỉ từ scene. `ExplosionEffectPlayback` biến container rỗng thành emitter 24 hạt, rồi gán một material tự tạo không có texture và phóng `localScale` lên bằng bán kính nổ. Code đó đã bị xoá. `PlayEffect` giờ gọi `Play(true)` để các object con (có material thật) tự vẽ, giống bản chơi đơn. Slot Rocket của `Dustbowl.unity`/`Island.unity` trỏ vào "Explosion Arms". Slot Grenade giữ nguyên | Hình ảnh khi bắn bazooka |
+| 4 | Giữ nguyên nhịp bắn. `ClientCombatState` chỉ coi cạnh xuống của cờ Reloading từ server là lúc nạp xong. Trong lúc chờ nạp, nó bỏ qua mức tăng nhỏ (≤ 2) từ snapshot, và không để đồng hồ nạp 1,8 s phía client đi trước server. Phía Unity, `ApplyAuthoritativeCombat(clipSettled)` không ghi đè băng đạn giữa lúc nạp. Dòng tracker là **CMB-19**, không phải CMB-12 | Chữ HUD và cú nháy cuối lần nạp |
+| 7 | Chọn **đặt lại chỗ spawn**, không miễn cull. Người vào trận được đặt ở điểm đội mình sở hữu **gần đồng đội còn sống nhất**. Lượt bốc ngẫu nhiên vẫn chạy trước, nên seed và pin của lane-B không đổi. Log server ghi thêm `nearest teammate X m` | Trận mà đội giữ điểm tiền tuyến. Đội chỉ giữ căn cứ thì vẫn spawn ở căn cứ |
+
+### Deploy
+
+| | Lần 1 (PR #294) | Lần 2 (PR #295, đang chạy) |
+|---|---|---|
+| Build stamp | `fb3750b 2026-09-17T12:24:17Z` | `cd6ec0f 2026-09-17T13:34:38Z` |
+| Release | `gs-20260917-veh01` | `gs-20260917-s7` |
+| Image | `sha256:739ae93ab70fcc7635974db61d8147fdfbdb3662afe4b91fde8e18a38a0b74b4` | `sha256:1210e6cb81a5f76099cac184315f689edc3521abaaeb43590e7ad1ecd1467e77` |
+
+- Cả hai stamp đều sạch, không `-dirty`. Tarball bỏ `Ravenfield_BurstDebugInformation_DoNotShip`.
+- Image được side-load vào VM rồi `set image` cho `game-server-dustbowl` và `game-server-island`. Image trước ngày này là tag `relink-fe52ffa`. Rollback: đặt lại một trong hai digest trên.
+- ConfigMap `gameserver-env-p10` đã bật `IRONFRONT_LOG_LOADOUT=1` và `IRONFRONT_LOG_SHOTS=1`.
+- Master không redeploy. Cả hai pod đăng ký với `kien-master-2026.fly.dev:443`.
+- Client Windows build lại ở `cd6ec0f`, thư mục `build/windows`.
+- E2E qua master Fly tới VM đạt **4/4 trên cả hai map**:
+  `dotnet run --project Ironfront.Tools.E2E -c Release -- --master-host kien-master-2026.fly.dev --master-port 443 --master-tls --map-id 1`
+
+### Log § 5
+
+Pod mới spawn đủ bảng xe ngay khi khởi động (16/17 dòng `[vehicle-spawn-state]`). Sau các lần join E2E, grep ở § 5 chỉ ra dòng `[vehicle-spawn-state]`: không có `gave up`, `could not replicate`, `EMPTY` hay `match reset left state behind`.
+
+**Nguyên nhân bảng xe rỗng trong phiên 2026-09-17 vẫn chưa biết.** Pod cũ đã chạy 2 ngày 16 giờ và bị thay trước khi kịp lưu log. Log gate đã bật sẵn, nên lần chơi dài kế tiếp hãy chạy lại grep § 5.
+
+### Bằng chứng lane-B
+
+Server Windows và client chạy cùng một commit. Artifact nằm trong `artifacts/lane-b/`.
+
+- **CMB-20** (`veh01-cmb20`, bộ `sbclose`, `-SpawnIndex '3,5'`, cả ba client đội 0): killfeed trên cả ba client ghi OBS-B bị DRIVER giết bằng Bullet, driver trúng 4 phát. Nạn nhân giữ 0 máu suốt cửa sổ hồi sinh rồi hồi sinh. Driver bắn 30 phát được server chấp nhận, sau đó là `NoAmmo`.
+- **CMB-21** (`veh01-cmb21`, bộ `refire`): quả thứ nhất nổ. Bấm R xong, quả thứ hai được chấp nhận và nổ. Quả thứ ba bị từ chối vì đã hết lựu đạn. Nếu không bấm R thì quả thứ hai là `NoAmmo`, vì tuỳ chọn "auto reload" mặc định tắt.
+- **§ 7 trên build mới** (`s7-refire`, `s7-ammohud`): cả hai vụ nổ ghi `authoritative explosion Grenade … rendered`, không có cảnh báo material. Băng đạn đi 2 → 0 trong lúc nạp → 30, không nhảy lên. Log server ghi `nearest teammate 2.5 m` và `0.5 m`.
+- Test: `dotnet test` 8/8 project, 0 lỗi (Replication 1667/1667). Unity EditMode 160/160, trong đó có 14 test spawn mới.
+
+### Sự cố khi kiểm: VMware NAT ngừng chuyển tiếp UDP
+
+Lúc 20:43 E2E vào được cả hai pod. Từ khoảng 20:52 thì login và join phòng vẫn OK nhưng bước UDP timeout. vmnat vẫn nghe trên 27015/27016 và dịch vụ vẫn báo Running.
+
+Đo bằng bộ đếm `Udp InDatagrams` trong `/proc/net/snmp` của VM, mỗi lần gửi 200 gói:
+- gửi thẳng tới `192.168.94.130:27016`: +196;
+- gửi qua `26.18.240.157:27016` hoặc `127.0.0.1:27016`: +0.
+
+Cách sửa: khởi động lại **VMware NAT Service** với quyền admin. Chuyển tiếp chạy lại, hai game server tự đăng ký lại với master trong 30 giây, và E2E đạt 4/4. Nguyên nhân chưa rõ. Nếu người chơi vào được phòng nhưng trận không kết nối, kiểm bộ đếm trên trước tiên.
+
+Chạy E2E nhiều lần trong một phút từ cùng một IP sẽ bị master trả `errorCode 9001` (RateLimited). Nên cách mỗi lần khoảng 70 giây.
+
+### Bẫy công cụ
+
+- Pin spawn chỉ nhận slot đội đang sở hữu (X-63). Trên Dustbowl dùng `-SpawnIndex '3,5'`. Chú thích trong `run-lane-b.ps1` đã được sửa.
+- Trên máy host đang forward cổng game vào VM, vmnat giữ UDP 27015. Lane-B phải chạy với `-Port 27115`, nếu không server không bind được cổng và runner chỉ báo "never logged ready".
+- Mỗi lần build player hay server bằng Unity đều ghi lại 6 DLL trong `Assets/Plugins/`. Chạy `git restore` chúng trước khi commit.
