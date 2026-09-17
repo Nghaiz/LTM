@@ -86,6 +86,8 @@
              Link="Linked\MatchTransportHandoff.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\Menu\MenuNavigationCycle.cs"
              Link="Linked\MenuNavigationCycle.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\Menu\MenuTransitionState.cs"
+             Link="Linked\MenuTransitionState.cs" />
   </ItemGroup>
 
 </Project>

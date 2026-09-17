@@ -709,7 +709,11 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         private static void SetActive(GameObject? screen, bool active)
         {
-            if (screen != null && screen.activeSelf != active) screen.SetActive(active);
+            if (screen == null) return;
+
+            MenuScreenTransition transition = screen.GetComponent<MenuScreenTransition>();
+            if (transition != null) transition.SetVisible(active);
+            else if (screen.activeSelf != active) screen.SetActive(active);
         }
 
         /// <summary>
