@@ -27,7 +27,7 @@ Cột **gốc** trỏ về năm nguyên nhân gốc ở § Phụ lục B. Sửa 
 | Nhóm | Tổng | ✅ | ☑ | ◐ | ☐ |
 |---|---|---|---|---|---|
 | W1 Xe cộ | 19 | 2 | 0 | 0 | 17 |
-| W2 Chiến đấu | 17 | 0 | 1 | 0 | 16 |
+| W2 Chiến đấu | 17 | 0 | 2 | 0 | 15 |
 | W3 Di chuyển | 6 | 2 | 1 | 0 | 3 |
 | W4 Luồng trận & kết cục | 6 | 0 | 0 | 0 | 6 |
 | W5 HUD & minimap | 5 | 0 | 0 | 0 | 5 |
@@ -35,7 +35,7 @@ Cột **gốc** trỏ về năm nguyên nhân gốc ở § Phụ lục B. Sửa 
 | W7 Phiên & kết nối | 8 | 0 | 0 | 0 | 8 |
 | W8 Số liệu & tương đương | 4 | 0 | 0 | 0 | 4 |
 | W9 Tooling | 4 | 0 | 0 | 0 | 4 |
-| **Tổng** | **73** | **4** | **2** | **0** | **67** |
+| **Tổng** | **73** | **4** | **3** | **0** | **66** |
 
 ---
 
@@ -149,7 +149,8 @@ Vòng lặp cốt lõi của một FPS: bắn trúng, nhận sát thương, ch�
 
 | ID | | Lỗi | Ở đâu | Nguồn | Gốc |
 |---|---|---|---|---|---|
-| **CMB-01** | ☐ | **Bị bắn không có phản hồi nào.** Không vignette đỏ, không mũi tên chỉ hướng, không giật camera, không rung, không ù tai. `ClientCombatState.OnHealthChanged` có **0 subscriber** trong production — chỉ một test | `Actor.cs:1171-1214`; `ClientCombatState.cs:249` | **3** | R3 |
+| **CMB-01** | ☑ | **Bị bắn không có phản hồi nào.** Không vignette đỏ, không mũi tên chỉ hướng, không giật camera, không rung, không ù tai. `Actor.DamageAttributed` dựng tất cả và không bao giờ chạy ở client | `Actor.cs:1171-1214`; `LocalPlayerRigBinding.cs:213` | **3** | R3 |
+| | | **Đã sửa một nửa, và nửa còn lại cần protocol.** Áp dụng **vignette** (`Clamp01(0.3 + (1-health/100))`, chép nguyên từ `Actor.DamageAttributed` — chỉ phụ thuộc `health`, thứ dây có mang) và **giật camera** (ngưỡng + vector của chính `ReceivedDamage`). Cả hai là bản sao chính xác. **Ba thứ cố ý bỏ**: *mũi tên chỉ hướng* cần góc của kẻ bắn mà không thông điệp nào mang nó cho phát không chết người — và `ReceivedDamage` chuyển hướng thành góc **vô điều kiện**, nên vector 0 sẽ vẽ mũi tên ở góc sai cố định (tệ hơn không vẽ); *rung màn hình* và *ù tai* khoá theo **balance damage**, dây không mang, bịa cường độ là chế số | | | |
 | **CMB-02** | ☐ | **Knock-down vô hình và bản sao trên server không bao giờ đứng dậy.** `balance` chỉ có một chỗ hồi (`Actor.cs:665`, 10/s) và một chỗ reset (`SpawnAt`), cả hai nằm trên đường thân thể mạng không đi qua | `Actor.cs:665,600-603`; `IronfrontNetBindings.cs:608-616` | **3** | R3 |
 | | | **Đã đào, và đây là hai nửa tách biệt.** *Nửa "vô hình"* là **quyết định có ghi chú**: `NetServerActor.ApplyBalanceDamage` viết rõ *"Applied server-side and NOT replicated: there is no wire field for stagger and `ActorStateFlags` is 8/8 full"* — sửa cần một bit mới trên dây, tức quy trình protocol. *Nửa "vĩnh viễn"* là lỗi thật: `ApplyBalanceDamage` trừ balance và gọi `KnockOver`, nhưng **không có đường đứng dậy nào tồn tại trong netcode** — grep cả `Net/` và `NetBindings/` chỉ thấy `ragdoll.InstantAnimate()`, thứ dùng để dựng lại tư thế khi hồi sinh, không phải để đứng dậy sau knock-down | | | |
 | | | ⚠ **Chưa sửa, và lý do là rủi ro chứ không phải thiếu thời gian.** Đường naive — nới chỗ thoát sớm ở `Actor.cs:600` để `UpdateRagdollStates` và phép hồi balance chạy — chính là đường comment ngay trên đó ghi lại đã từng *"pull the client below the map"*, vì `GetUp()` → `controller.GettingUp()` ghi vào `transform.position`. Còn `RecoverFromStuckRagdoll()` (public, có sẵn) gọi `InstantGetUp()` → `controller.EnableInput()`, mà thân thể mạng có controller **bị treo** — bật nó lên là thả cho vòng lặp bị park chạy lại. Cần một vòng đời được thiết kế cho ragdoll của thân thể bị treo, không phải một miếng vá | | | |
