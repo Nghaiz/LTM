@@ -83,8 +83,6 @@ namespace Ironfront.Net.Unity.Client
         // static: a fresh connection should not inherit a previous match's live predictions.
         private readonly ExplosionSuppressor _suppressor = new ExplosionSuppressor();
 
-        private static Material _fallbackParticleMaterial;
-
         /// <summary>
         /// The presenter this client is running, or null off a client. phase-V1 task 3.
         /// </summary>
@@ -101,7 +99,6 @@ namespace Ironfront.Net.Unity.Client
         private static void ResetCurrentOnLoad()
         {
             Current = null;
-            _fallbackParticleMaterial = null;
         }
 
         private void Awake()
@@ -234,102 +231,41 @@ namespace Ironfront.Net.Unity.Client
 
             if (!effect.gameObject.activeSelf) effect.gameObject.SetActive(true);
             effect.transform.position = position;
-            effect.transform.localScale = Vector3.one * Mathf.Max(radiusMetres, 0.01f);
 
-            // Both shipped map scenes carried non-null placeholder ParticleSystems whose
-            // emission was disabled, looping was enabled, and renderer material was null.
-            // Play() therefore succeeded silently while drawing zero particles. Normalize the
-            // scene object at the last responsible moment; this also keeps old map bundles
-            // compatible with a newly deployed client assembly.
-            if (!ExplosionEffectPlayback.TryPlay(new UnityExplosionEffectSurface(effect)))
+            // The scene container itself is a defaults-only placeholder with no material
+            // (emission disabled, m_Materials: {fileID: 0}); the real effect lives on its
+            // CHILDREN, which carry real materials, bursts and lifetimes already authored in
+            // the scene. Playing the container plays its children with it, so this only needs
+            // to reject the case where nothing under it can actually draw.
+            if (!HasDrawableMaterial(effect))
             {
                 NetClientPresenterGuard.WarnOnce(
                     "explosion-undrawable-effect:" + index,
-                    $"[net] {kind} explosion effect could not obtain a drawable particle "
-                    + "material. The event was received but no particles were rendered.");
+                    $"[net] {kind} explosion effect has no enabled child ParticleSystemRenderer "
+                    + "with a drawable material. The event was received but no particles were "
+                    + "rendered.");
                 return false;
             }
+
+            effect.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            effect.Play(true);
             return true;
         }
 
-        private sealed class UnityExplosionEffectSurface : IExplosionEffectSurface
+        /// <summary>
+        /// True when at least one enabled <see cref="ParticleSystemRenderer"/> under
+        /// <paramref name="effect"/> (itself or a child) has a material assigned. Never creates
+        /// or assigns one -- a scene-authored effect with no material is a content bug to fix in
+        /// the scene, not something to patch at runtime.
+        /// </summary>
+        private static bool HasDrawableMaterial(ParticleSystem effect)
         {
-            private readonly ParticleSystem _effect;
-            private readonly ParticleSystemRenderer _renderer;
-
-            public UnityExplosionEffectSurface(ParticleSystem effect)
+            foreach (ParticleSystemRenderer renderer in
+                     effect.GetComponentsInChildren<ParticleSystemRenderer>(true))
             {
-                _effect = effect;
-                _renderer = effect.GetComponent<ParticleSystemRenderer>();
+                if (renderer.enabled && renderer.sharedMaterial != null) return true;
             }
-
-            public bool Looping
-            {
-                get => _effect.main.loop;
-                set
-                {
-                    ParticleSystem.MainModule main = _effect.main;
-                    main.loop = value;
-                }
-            }
-
-            public bool EmissionEnabled
-            {
-                get => _effect.emission.enabled;
-                set
-                {
-                    ParticleSystem.EmissionModule emission = _effect.emission;
-                    emission.enabled = value;
-                }
-            }
-
-            public float EmissionRatePerSecond
-            {
-                get => _effect.emission.rateOverTime.constant;
-                set
-                {
-                    ParticleSystem.EmissionModule emission = _effect.emission;
-                    emission.rateOverTime = new ParticleSystem.MinMaxCurve(value);
-                }
-            }
-
-            public int BurstCount => _effect.emission.burstCount;
-
-            public bool HasDrawableMaterial =>
-                _renderer != null && _renderer.sharedMaterial != null;
-
-            public void SetBurstCount(short count)
-            {
-                ParticleSystem.EmissionModule emission = _effect.emission;
-                emission.SetBursts(new[] { new ParticleSystem.Burst(0f, count) });
-            }
-
-            public bool TryAssignFallbackMaterial()
-            {
-                if (_renderer == null) return false;
-
-                if (_fallbackParticleMaterial == null)
-                {
-                    Shader shader = Shader.Find("Particles/Standard Unlit")
-                                    ?? Shader.Find("Legacy Shaders/Particles/Alpha Blended Premultiply")
-                                    ?? Shader.Find("Sprites/Default");
-                    if (shader == null) return false;
-
-                    _fallbackParticleMaterial = new Material(shader)
-                    {
-                        name = "Ironfront Runtime Explosion Material",
-                    };
-                }
-
-                _renderer.sharedMaterial = _fallbackParticleMaterial;
-                return true;
-            }
-
-            public void Restart()
-            {
-                _effect.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-                _effect.Play(true);
-            }
+            return false;
         }
 
         /// <summary>

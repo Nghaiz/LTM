@@ -232470,7 +232470,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Ironfront.Net.Unity.Client.NetClientExplosionPresenter
   _effectsByKind:
   - {fileID: 1436363352}
-  - {fileID: 1389589922}
+  - {fileID: 1105814805}
   _shakeMagnitudePerMetre: 1
   _shakeIterations: 3
   _shakeRadiusMultiplier: 3
