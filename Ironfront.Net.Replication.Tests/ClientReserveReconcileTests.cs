@@ -240,5 +240,104 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(SpareAmmoKind.NoResupply, state.SpareAmmo.Kind);
             Assert.False(state.ServerSaysReloading);
         }
+
+        /// <summary>
+        /// S4 (CMB-19): the HUD's ammo count no longer jumps 0 -&gt; 1 -&gt; (stuck) across a
+        /// reload. Three defects in one sequence, per the handoff diagnosis:
+        /// (a) a flagged, still-reloading snapshot must not be taken verbatim just because it
+        /// is within <see cref="ClientCombatState.AmmoResyncThreshold"/> of the prediction;
+        /// (b) the same holds for a flagless snapshot the server produced before it saw the
+        /// reload input; (c) <see cref="ClientCombatState.Tick"/> must not let Ravenfield's own
+        /// (1.8 s) reload clock finish the clip ahead of the server's (2.0 s + RTT).
+        /// </summary>
+        [Fact]
+        public void AReloadDeliveredByTheFlagFallingEdgeLandsVerbatimAndTheLocalTimerNeverJumpsAheadOfIt()
+        {
+            var state = Equipped();
+
+            // Sync predicted and server to 1, then spend the last round locally: predicted is
+            // now 0 while the server's last-known clip -- frozen until its own reload finishes
+            // -- is still 1.
+            state.ApplySnapshot(WeaponEntry(ammo: 1, spareEncoded: 90), Now);
+            Assert.Equal(FireRejection.None, state.PredictFire(Now));
+            Assert.Equal(0, state.AmmoInClip);
+
+            state.BeginReload(Now);
+
+            // The server has started its own reload, but the ammo on the wire is still the
+            // frozen 1 -- a rise of 1 over the predicted 0, inside AmmoResyncThreshold. The
+            // pre-fix rule took ANY pending snapshot verbatim and jumped the HUD 0 -> 1 right
+            // here, a full reload-length before anything was actually delivered.
+            state.ApplySnapshot(
+                WeaponEntry(ammo: 1, spareEncoded: 90, flags: WeaponStateFlags.Reloading), Now);
+            Assert.Equal(0, state.AmmoInClip);
+
+            // Ravenfield's own reload clock (1.8 s, ak.prefab) elapses before the server's
+            // (2.0 s + RTT, ProtocolConstants.RELOAD_SECONDS). CompleteReloadIfElapsed must not
+            // fill the clip while the server still says Reloading, or the HUD shows a full
+            // magazine the server has not actually granted yet.
+            state.Tick(Now + state.ReloadSeconds + 1f);
+            Assert.Equal(0, state.AmmoInClip);
+            Assert.True(state.IsReloading);
+
+            // The flag's fall -- Reloading true, then false -- is the one signal that means
+            // "delivered". The snapshot's ammo lands verbatim and the local reload state ends
+            // with it, not with the local clock read above.
+            state.ApplySnapshot(WeaponEntry(ammo: 30, spareEncoded: 90), Now);
+            Assert.Equal(30, state.AmmoInClip);
+            Assert.False(state.IsReloading);
+        }
+
+        /// <summary>
+        /// S4 secondary defect (b): a flagless snapshot produced before the server has
+        /// processed the reload input carries no <see cref="WeaponStateFlags.Reloading"/> bit
+        /// at all, so <see cref="ClientCombatState.ServerSaysReloading"/> never sets and the
+        /// reload-delivered bypass never runs. The pending-reconcile rule alone must protect
+        /// the prediction here.
+        /// </summary>
+        [Fact]
+        public void AFlaglessSnapshotBeforeTheServerSeesTheReloadDoesNotOverwriteThePendingPrediction()
+        {
+            var state = Equipped();
+            state.ApplySnapshot(WeaponEntry(ammo: 1, spareEncoded: 90), Now);
+            Assert.Equal(FireRejection.None, state.PredictFire(Now));
+            Assert.Equal(0, state.AmmoInClip);
+
+            state.BeginReload(Now);
+
+            // No Reloading flag on the wire at all -- the server has not yet acted on the
+            // input. The rise (1) is within threshold, so the stale ammo=1 must not overwrite
+            // the predicted 0.
+            state.ApplySnapshot(WeaponEntry(ammo: 1, spareEncoded: 90), Now);
+
+            Assert.Equal(0, state.AmmoInClip);
+        }
+
+        /// <summary>
+        /// S4 companion (a): a genuinely small delivered clip must not be swallowed by the
+        /// anti-flicker threshold once the flag actually falls. Without the reload-delivered
+        /// bypass, a rise of exactly <see cref="ClientCombatState.AmmoResyncThreshold"/> would
+        /// route through <c>ReconcileAmmo</c>'s pending branch and keep the stale predicted
+        /// value instead of the server's real, small answer.
+        /// </summary>
+        [Fact]
+        public void ARealReloadedClipIsNotHiddenBehindTheAntiFlickerThresholdWhenTheFlagFalls()
+        {
+            var state = Equipped();
+            state.ApplySnapshot(WeaponEntry(ammo: 0, spareEncoded: 6), Now);
+            Assert.Equal(0, state.AmmoInClip);
+
+            // The server starts its reload; the wire still reports the pre-reload clip (0).
+            state.ApplySnapshot(
+                WeaponEntry(ammo: 0, spareEncoded: 6, flags: WeaponStateFlags.Reloading), Now);
+            Assert.Equal(0, state.AmmoInClip);
+
+            // The server's real delivered clip (2) is a rise of exactly AmmoResyncThreshold
+            // over the predicted 0. The flag's fall edge must bypass ReconcileAmmo entirely
+            // and take this verbatim rather than hide it as "within threshold, keep predicted".
+            state.ApplySnapshot(WeaponEntry(ammo: 2, spareEncoded: 4), Now);
+
+            Assert.Equal(2, state.AmmoInClip);
+        }
     }
 }

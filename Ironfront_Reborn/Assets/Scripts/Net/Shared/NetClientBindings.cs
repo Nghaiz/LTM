@@ -288,7 +288,7 @@ namespace Ironfront.Net.Unity
             public bool HasFellableBody => false;
             public void FellBody(Vector3 force, HumanBodyBones bone) { }
             public void ApplyAuthoritativeCombat(
-                byte health, byte weaponId, byte ammoInClip, SpareAmmo spare) { }
+                byte health, byte weaponId, byte ammoInClip, SpareAmmo spare, bool clipSettled) { }
         }
     }
 }

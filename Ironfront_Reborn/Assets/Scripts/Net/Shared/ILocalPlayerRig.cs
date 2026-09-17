@@ -318,8 +318,16 @@ namespace Ironfront.Net.Unity
         /// finite, infinite, or no-resupply-at-all — and those are three different HUDs.
         /// </para>
         /// </remarks>
+        /// <param name="clipSettled">
+        /// Whether <paramref name="ammoInClip"/> is safe to assign to <c>Weapon.ammo</c> this
+        /// tick — false while a reload is running, on either side. S4 (CMB-19): every snapshot
+        /// during a reload carries SOME clip reading — the client's own reconciled prediction,
+        /// which is deliberately sticky mid-reload (see <c>ClientCombatState.ReconcileAmmo</c>)
+        /// — and assigning it unconditionally is what let the HUD blink through the reload
+        /// instead of holding still until the clip is actually settled.
+        /// </param>
         void ApplyAuthoritativeCombat(
-            byte health, byte weaponId, byte ammoInClip, SpareAmmo spare) { }
+            byte health, byte weaponId, byte ammoInClip, SpareAmmo spare, bool clipSettled) { }
 
         /// <summary>
         /// Reads this rig's currently chosen loadout as weapon network ids, one per slot. 0
