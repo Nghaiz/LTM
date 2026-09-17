@@ -1,0 +1,122 @@
+{
+  "name": "ammohud-driver",
+  "steps": [
+    {
+      "seconds": 5.0,
+      "yawDegrees": 0,
+      "pitchDegrees": 60,
+      "respawn": true
+    },
+    {
+      "checkpoint": "deployed",
+      "seconds": 2.0,
+      "yawDegrees": 0,
+      "pitchDegrees": 60
+    },
+    {
+      "checkpoint": "firing",
+      "seconds": 2.9,
+      "yawDegrees": 0,
+      "pitchDegrees": 60,
+      "fire": true
+    },
+    {
+      "checkpoint": "released",
+      "seconds": 0.3,
+      "yawDegrees": 0,
+      "pitchDegrees": 60
+    },
+    {
+      "checkpoint": "reload-00",
+      "seconds": 0.25,
+      "yawDegrees": 0,
+      "pitchDegrees": 60,
+      "reload": true
+    },
+    {
+      "checkpoint": "reload-01",
+      "seconds": 0.25,
+      "yawDegrees": 0,
+      "pitchDegrees": 60,
+      "reload": true
+    },
+    {
+      "checkpoint": "reload-02",
+      "seconds": 0.25,
+      "yawDegrees": 0,
+      "pitchDegrees": 60
+    },
+    {
+      "checkpoint": "reload-03",
+      "seconds": 0.25,
+      "yawDegrees": 0,
+      "pitchDegrees": 60
+    },
+    {
+      "checkpoint": "reload-04",
+      "seconds": 0.25,
+      "yawDegrees": 0,
+      "pitchDegrees": 60
+    },
+    {
+      "checkpoint": "reload-05",
+      "seconds": 0.25,
+      "yawDegrees": 0,
+      "pitchDegrees": 60
+    },
+    {
+      "checkpoint": "reload-06",
+      "seconds": 0.25,
+      "yawDegrees": 0,
+      "pitchDegrees": 60
+    },
+    {
+      "checkpoint": "reload-07",
+      "seconds": 0.25,
+      "yawDegrees": 0,
+      "pitchDegrees": 60
+    },
+    {
+      "checkpoint": "reload-08",
+      "seconds": 0.25,
+      "yawDegrees": 0,
+      "pitchDegrees": 60
+    },
+    {
+      "checkpoint": "reload-09",
+      "seconds": 0.25,
+      "yawDegrees": 0,
+      "pitchDegrees": 60
+    },
+    {
+      "checkpoint": "reload-10",
+      "seconds": 0.25,
+      "yawDegrees": 0,
+      "pitchDegrees": 60
+    },
+    {
+      "checkpoint": "reload-11",
+      "seconds": 0.25,
+      "yawDegrees": 0,
+      "pitchDegrees": 60
+    },
+    {
+      "checkpoint": "reload-12",
+      "seconds": 0.25,
+      "yawDegrees": 0,
+      "pitchDegrees": 60
+    },
+    {
+      "checkpoint": "reload-13",
+      "seconds": 0.25,
+      "yawDegrees": 0,
+      "pitchDegrees": 60
+    },
+    {
+      "checkpoint": "settled",
+      "seconds": 2.0,
+      "yawDegrees": 0,
+      "pitchDegrees": 60
+    }
+  ]
+}

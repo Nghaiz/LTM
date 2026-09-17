@@ -93,14 +93,10 @@ param(
     # outside the scene's count logs an error and leaves the run UNPINNED rather than failing --
     # see LaneBHarness.PinSpawnPointIfRequested.
     #
-    # Dustbowl has SIX slots and Island FIVE, and every one of Dustbowl's has placed a real
-    # player across the recorded runs; on Island only slots 0 and 1 name a team, so any of the
-    # other three starves nobody either (P19 section 3.6).
-    #
-    # Dustbowl has SIX slots, 0..5, and every one of them has placed a real player across the
-    # recorded runs under artifacts/lane-b (grep "placed at spawn point"), so any of the six is
-    # a valid pin. Which one barely matters: every player lands on whichever is chosen, so the
-    # pair is co-located either way. 0 is as good a default as any.
+    # ONLY A SLOT THE TEAM OWNS IS ELIGIBLE (X-63), and the server refuses a pin that starves a
+    # team, so a bare "0" is refused. Dustbowl opens with team 0 on slot 3 and team 1 on slot 5:
+    # pass "3,5". Measured 2026-09-17 -- the older advice here that "any of the six is a valid
+    # pin" predates X-63.
     # A STRING, not an int, since X-28. LaneBSpawnPin has always parsed a per-team form
     # ("3,7" = team 0 on slot 3, team 1 on slot 7) and a rotation form ("3|4|5,7" = team 0
     # cycles 3, 4, 5), and neither could ever be typed here because this parameter was [int] --
@@ -172,6 +168,9 @@ param(
     # racing that is phase-3d-lane-b.md section 8 row 6.
     [int] $ServerReadySeconds = 120,
 
+    # On a host whose VMware NAT forwards UDP 27015/27016 into the game-server VM, vmnat already
+    # holds these ports: the server logs "UDP :27015 could not be bound" and this runner only
+    # reports "never logged ready". Pass -Port 27115 there.
     [int] $Port = 27015,
 
     # Signed tickets are the real path (issue #151): with a secret set the client mints and
