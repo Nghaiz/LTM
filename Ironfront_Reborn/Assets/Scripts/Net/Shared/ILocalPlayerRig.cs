@@ -330,5 +330,59 @@ namespace Ironfront.Net.Unity
         {
             primary = secondary = gear1 = gear2 = gear3 = 0;
         }
+
+        /// <summary>
+        /// Puts this rig's body into <paramref name="seatIndex"/> of <paramref name="vehicle"/>.
+        /// This APPLIES a seat the server has already arbitrated; it never requests one.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Maps to <c>Actor.EnterSeat</c> — <b>the same method the offline and server paths
+        /// call</b>, so the camera re-parent, the per-seat HUD, the pilot's mouse lock, the
+        /// first-person model swap and the hitbox layer move all come with it rather than being
+        /// reimplemented on this side.
+        /// </para>
+        /// <para>
+        /// <b>The client half of the seat transfer, and it had no counterpart.</b>
+        /// <c>ServerSeatBridge.Apply</c> moves the server's body on an arbitrated decision and
+        /// answers with <c>S_SEAT_CHANGE</c>; the client's two subscribers to that message —
+        /// <c>ClientVehicleStage</c> and <c>ClientSeatRequester</c> — tracked ids, prediction
+        /// mode and retries, and neither touched the body. So a networked player was seated on
+        /// the server, replicated as seated, and <em>standing</em> on their own screen: no seat
+        /// camera, no vehicle HUD, and <c>IsSeated()</c> false — which left
+        /// <c>FpsActorController</c>'s <c>SimulationEnabled</c> true and drove the on-foot body
+        /// from the same keys that were driving the vehicle.
+        /// </para>
+        /// <para>
+        /// <b>Here rather than at the caller because <c>Actor</c> cannot be named from
+        /// <c>Net/Client</c></b> — the assembly boundary and <c>check-net-layering.ps1</c>
+        /// RULE 6b, which is the same reason <see cref="SetTeam"/> and
+        /// <see cref="EnterDeployedView"/> are on this interface.
+        /// </para>
+        /// <para>
+        /// <b>Default-implemented as a no-op, deliberately</b>, in the shape
+        /// <see cref="ApplyAuthoritativeCombat"/> and <see cref="GetChosenLoadout"/> established:
+        /// the null rig and the EditMode fakes predate this member and must keep compiling. A
+        /// no-op is also the honest answer for the null rig, which has no body to seat.
+        /// </para>
+        /// </remarks>
+        void EnterSeat(IGameplayVehicleBody vehicle, byte seatIndex) { }
+
+        /// <summary>
+        /// Takes this rig's body out of whatever seat it is in, landing it at the seat's authored
+        /// exit offset. A no-op when the rig is absent or already on foot.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The mirror of <see cref="EnterSeat"/>, mapping to <c>Actor.LeaveSeat</c>.
+        /// </para>
+        /// <para>
+        /// <b>Implementations must tolerate a body that is not seated.</b> A <c>Left</c> can
+        /// arrive for an actor this client never put in a seat — a body that respawned between
+        /// the request and the answer, or a leave the arbiter decided for somebody else — and
+        /// <c>Actor.LeaveSeat</c> dereferences its seat on the first line.
+        /// </para>
+        /// </remarks>
+        void LeaveSeat() { }
     }
 }

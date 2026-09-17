@@ -366,9 +366,32 @@ namespace Ironfront.Net.Unity.Client
                 // guard is in, and the controller cannot change while seated.
                 _localController = NetClientBindings.LocalPlayer;
 
+                // The BODY, not just the bookkeeping. ServerSeatBridge.Apply moves the server's
+                // actor on this same decision; this is its client counterpart, and without it the
+                // player was seated on the server, replicated as seated, and standing on their
+                // own screen -- no seat camera, no vehicle HUD, and IsSeated() false, which left
+                // FpsActorController's SimulationEnabled true and drove the on-foot body from the
+                // same keys that were driving the vehicle.
+                //
+                // No race with S_VEHICLE_SPAWN: a client can only have ASKED for a seat on a
+                // vehicle it had already resolved, because ClientSeatRequester measures reach
+                // through this same registry entry before it sends.
+                if (_registry != null
+                    && _registry.TryFind(message.VehicleId, out NetClientVehicle seated))
+                {
+                    _localController.EnterSeat(seated.Body, message.SeatIndex);
+                }
+
                 if (message.SeatIndex == DriverSeatIndex) Register(message.VehicleId);
                 return;
             }
+
+            // The body leaves the seat, and ONLY on a Left: every other result is a refusal, which
+            // means this client was never in a seat to be taken out of. Read through
+            // NetClientBindings rather than the held _localController, because Release() below
+            // nulls that field on this very path.
+            if (message.Result == SeatChangeResult.Left)
+                NetClientBindings.LocalPlayer.LeaveSeat();
 
             // Every other result — Left, and every refusal — leaves this client not driving.
             // Acting on a refusal by clearing is correct and is the point: the refusal is the

@@ -246,5 +246,54 @@ namespace Ironfront.Net.Unity.Bindings
             gear2     = WeaponManager.NetworkIdOf(loadout.gear2);
             gear3     = WeaponManager.NetworkIdOf(loadout.gear3);
         }
+
+        /// <inheritdoc/>
+        public void EnterSeat(IGameplayVehicleBody vehicle, byte seatIndex)
+        {
+            FpsActorController local = FpsActorController.instance;
+            if (local == null || local.actor == null) return;
+            if (vehicle == null || !vehicle.Exists) return;
+
+            // GetComponent rather than a cached reference: a despawn destroys the object while
+            // the registry is still holding its entry, so the body can be Exists-false one frame
+            // after it was resolvable.
+            GameObject hullObject = vehicle.GameObject;
+            if (hullObject == null) return;
+
+            Vehicle hull = hullObject.GetComponent<Vehicle>();
+            if (hull == null) return;
+
+            // The seat array is authored per vehicle and the index arrives from the wire, so it
+            // is untrusted input until it has been ranged. Vehicle.GetSeatPosition makes the same
+            // check by catching, which is why this one does not call it.
+            Seat[] seats = hull.seats;
+            if (seats == null || seatIndex >= seats.Length) return;
+
+            // The bool is checked for the same reason ServerSeatBridge checks it (V4-D7): a false
+            // means the live scene refused a seat the server has already booked, so the two
+            // sides now disagree about where this body is. There is nothing to roll back on this
+            // side -- the server is the authority and its next snapshot is what corrects it --
+            // but a silent no-op here is exactly what hid this defect, so it is said out loud.
+            if (!local.actor.EnterSeat(seats[seatIndex]))
+            {
+                Debug.LogWarning("[net] the client refused a seat the server granted (actor "
+                    + local.actor.GetInstanceID() + ", vehicle " + hull.NetworkId
+                    + ", seat " + seatIndex + "). The body stays on foot until the next "
+                    + "authoritative position arrives.");
+            }
+        }
+
+        /// <inheritdoc/>
+        public void LeaveSeat()
+        {
+            FpsActorController local = FpsActorController.instance;
+            if (local == null || local.actor == null) return;
+
+            // Actor.LeaveSeat dereferences its seat on the first line, and a Left can arrive for
+            // a body this client never seated -- see the interface's own remark.
+            if (!local.actor.IsSeated()) return;
+
+            local.actor.LeaveSeat();
+        }
     }
 }
