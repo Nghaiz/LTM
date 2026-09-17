@@ -1,0 +1,331 @@
+% =====================================================================================
+% D-masterserver.tex — PHẦN II của Nguyễn Tự Kiên: Master Server TCP và hạ tầng
+% =====================================================================================
+\PhanLon{II. NỘI DUNG CÁ NHÂN}
+\textit{Sinh viên thực hiện: Nguyễn Tự Kiên (B23DCCN465) -- phân hệ Master Server TCP và hạ tầng.}
+
+\section{Biểu đồ và giao diện nội dung cá nhân thực hiện}
+Phân hệ Master Server là \textbf{máy chủ TCP thuần .NET 8} --- không ASP.NET Core, không SignalR, không
+WebSocket --- chỉ dùng \code{TcpListener} và \code{Socket}. Trọng tâm là bài toán \textbf{đóng khung thông điệp trên
+luồng byte TCP}. Phạm vi còn gồm thư viện \code{IMasterClient} cho client Unity, liên kết game server -- master,
+công cụ kiểm thử tải và hạ tầng triển khai (Docker, systemd, TLS, Terraform).
+
+% -------------------------------------------------------------------------------------
+\subsection{Kiến trúc thành phần Master Server}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \node[bxB, text width=3.0cm] (cli) at (4.2,0)  {Client Unity\\{\footnotesize IMasterClient}};
+  \node[bxG, text width=3.0cm] (gs)  at (10.2,0) {Game Server\\{\footnotesize GameServerLink}};
+  % luồng nhận
+  \node[bxO, text width=5.4cm] (lis) at (7.2,-1.9) {\textbf{TcpListenerHost}\\{\footnotesize accept bất đồng bộ; 5 kết nối/IP, 256 tổng; TLS tuỳ chọn}};
+  \node[bxO, text width=2.6cm] (cc)  at (1.9,-3.9) {\textbf{ClientConnection}\\{\footnotesize đọc/ghi async}};
+  \node[bxO, text width=2.6cm] (fr)  at (5.4,-3.9) {\textbf{MspFrameReader}\\{\footnotesize bộ đệm tích luỹ}};
+  \node[bxO, text width=2.6cm] (q)   at (8.9,-3.9) {\textbf{Hàng đợi}\\{\footnotesize đồng thời}};
+  \node[bxO, text width=2.6cm] (lt)  at (12.4,-3.9) {\textbf{Luồng logic}\\{\footnotesize duy nhất}};
+  \node[bxO, text width=4.2cm] (dp)  at (7.2,-5.7) {\textbf{MspMessageDispatcher}\\{\footnotesize định tuyến theo msgType}};
+  % dịch vụ
+  \node[bxY, text width=2.7cm] (au) at (1.9,-7.7)  {\textbf{AuthService}\\{\footnotesize bcrypt, phiên}};
+  \node[bxY, text width=2.7cm] (lo) at (5.9,-7.7)  {\textbf{LobbyService}\\{\footnotesize phòng, đẩy trạng thái}};
+  \node[bxY, text width=2.7cm] (mm) at (9.9,-7.7)  {\textbf{Matchmaking}\\{\footnotesize hàng đợi ghép}};
+  \node[bxY, text width=2.2cm] (ch) at (13.6,-7.7) {\textbf{ChatService}};
+  \node[db,  text width=1.8cm] (db) at (1.9,-9.9)  {SQLite};
+  \node[bxY, text width=2.7cm] (gr) at (5.9,-9.9)  {\textbf{GameServer\-Registry}\\{\footnotesize heartbeat}};
+  \node[bxY, text width=2.7cm] (tk) at (9.9,-9.9)  {\textbf{JoinTicket}\\{\footnotesize HMAC-SHA256}};
+  \node[bxP, text width=2.2cm] (me) at (13.6,-9.9) {\textbf{Metrics}\\{\footnotesize TCP 27001}};
+  \node[grp, fit=(lis)(cc)(lt)(db)(me)] (gM) {};
+  \node[grpt, anchor=south east] at (gM.north east) {Ironfront.MasterServer};
+  % cạnh
+  \draw[arr] (cli.south) -- node[lbl, left=3pt, pos=0.25]{TCP 27000} (cli.south |- lis.north);
+  \draw[arr] (gs.south) -- node[lbl, right=3pt, pos=0.25]{TCP 27000} (gs.south |- lis.north);
+  \draw[arr] (lis.south) -- ++(0,-0.45) -| (cc.north);
+  \draw[arr] (cc) -- (fr); \draw[arr] (fr) -- (q); \draw[arr] (q) -- (lt);
+  \draw[arr] (lt.south) |- (dp.east);
+  \draw[arr] (dp.south) -- ++(0,-0.5) -| (au.north);
+  \draw[arr] (dp.south) -- ++(0,-0.5) -| (lo.north);
+  \draw[arr] (dp.south) -- ++(0,-0.5) -| (mm.north);
+  \draw[arr] (dp.south) -- ++(0,-0.5) -| (ch.north);
+  \draw[arr] (au) -- (db);
+  \draw[arr] (lo) -- (gr);
+  \draw[arr] (mm) -- (lo);
+  \draw[arr] (lo.south east) -- (tk.north west);
+  \draw[darr] (gr.south) -- ++(0,-0.55) -| (me.south);
+\end{tikzpicture}
+\caption{Biểu đồ thành phần Master Server: I/O bất đồng bộ trên thread pool, logic trên một luồng duy nhất}
+\label{fig:D-thanhphan}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Đóng khung tin trên luồng TCP}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm, fld/.style={draw=cLine, minimum height=1.25cm, align=center, font=\footnotesize, inner sep=2pt}]
+  \node[fld, fill=cBlue,   minimum width=3.8cm, anchor=west] (a) at (0,0)    {\textbf{length} -- u32 big-endian\\\texttt{00 00 00 09}};
+  \node[fld, fill=cGreen,  minimum width=3.8cm, anchor=west] (b) at (a.east) {\textbf{msgType} -- u16 little-endian\\\texttt{01 00} = LOGIN\_REQ};
+  \node[fld, fill=cOrange, minimum width=6.4cm, anchor=west] (c) at (b.east) {\textbf{body} -- UTF-8 JSON\\\texttt{7B 22 75 22 3A 31 7D} = \texttt{\{"u":1\}}};
+\end{tikzpicture}
+\caption{Khung tin MSP tham chiếu 13 byte (được ghim trong bộ test conformance)}
+\label{fig:D-khung}
+\end{figure}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{3.3cm}|Y|Y|}
+\hline
+\hd{Trường hợp đọc} & \hd{Điều xảy ra nếu xử lý sai} & \hd{Số liệu đo thực tế} \\ \hline
+Một lần đọc, một khung & Không lỗi -- trường hợp ai cũng thử & Chỉ trùng khớp do tình cờ \\ \hline
+Dính (glue) & Khung 2..n bị bỏ hoặc kết nối treo & 1000 lần Send $\rightarrow$ 942 lần Receive \\ \hline
+Tách (split) & Không bao giờ ghép đủ khung, đọc rác từ tiền tố cụt & 1 khung 58 KB $\rightarrow$ 8 lần Receive \\ \hline
+Dính + phần dư đuôi & Cả hai lỗi cùng lúc; phải giữ phần đuôi qua các lần đọc & Kiểm thử riêng \\ \hline
+\end{tabularx}
+\end{center}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \node[bxB, text width=4.2cm] (r)   at (5,0)     {\texttt{ReadAsync} / \texttt{SslStream.ReadAsync}};
+  \node[dec, text width=1.9cm] (z)   at (5,-1.8)  {0 byte?};
+  \node[bxB, text width=4.2cm] (ap)  at (5,-3.5)  {\texttt{reader.Append(chunk)}};
+  \node[dec, text width=2.3cm] (h)   at (5,-5.3)  {đủ 4 byte\\length?};
+  \node[dec, text width=2.3cm] (lim) at (5,-7.5)  {length\\$\le$ 64 KB?};
+  \node[dec, text width=2.3cm] (fu)  at (5,-9.7)  {đủ 4 + length\\byte?};
+  \node[bxG, text width=4.2cm] (out) at (5,-11.6) {Tách khung (msgType, body)\\đưa vào hàng đợi logic};
+  \node[bxO, text width=3.6cm] (cl)  at (11.3,-1.8) {Peer đã đóng\\dọn dẹp idempotent};
+  \node[bxO, text width=3.6cm] (bad) at (11.3,-7.5) {Chốt lỗi, đóng kết nối\\(chưa buffer gì)};
+  \draw[arr] (r) -- (z);
+  \draw[arr] (z) -- node[lbl, right=2pt]{không} (ap);
+  \draw[arr] (z) -- node[lbl, above=2pt]{có} (cl);
+  \draw[arr] (ap) -- (h);
+  \draw[arr] (h) -- node[lbl, right=2pt]{đủ} (lim);
+  \draw[arr] (lim) -- node[lbl, above=2pt]{không} (bad);
+  \draw[arr] (lim) -- node[lbl, right=2pt]{có} (fu);
+  \draw[arr] (fu) -- node[lbl, right=2pt]{đủ} (out);
+  \draw[arr] (h.west) -- node[lbl, above=2pt]{chưa} (0.6,-5.3) |- (r.west);
+  \draw[arr] (fu.west) -- node[lbl, above=2pt]{chưa} (0.6,-9.7) -- (0.6,-5.3);
+  \draw[arr] (out.east) -- (8.6,-11.6) |- node[lbl, pos=0.25, right=2pt]{rút khung tiếp\\(vòng \texttt{while})} (h.east);
+\end{tikzpicture}
+\caption{Thuật toán bộ đọc tích luỹ: rút mọi khung hoàn chỉnh trong vòng lặp \texttt{while}, không phải \texttt{if}}
+\label{fig:D-bodoc}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Luồng dịch vụ sảnh chờ}
+\begin{figure}[H]
+\centering
+\renewcommand{\seqstep}{0.64cm}
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \seqactor{C}{1.0}{Client}
+  \seqactor{M}{6.3}{Master Server}
+  \seqactor{D}{10.6}{SQLite}
+  \seqactor{G}{14.6}{Game Server}
+  \seqbegin
+  \seqmsg{G}{M}{GS\_REGISTER \{serverSecret, publicIp, udpPort\}}
+  \seqret{M}{G}{GS\_REGISTER\_RES \{serverId\}}
+  \seqmsg{G}{M}{GS\_HEARTBEAT \{players, cpu, avgTickMs\} mỗi 15 s}
+  \seqmsg{C}{M}{REGISTER\_REQ \{username, passwordHash\}}
+  \seqmsg{M}{D}{INSERT accounts (bcrypt cost 11)}
+  \seqret{M}{C}{REGISTER\_RES \{ok\}}
+  \seqmsg{C}{M}{LOGIN\_REQ \{username, passwordHash\}}
+  \seqmsg{M}{D}{SELECT account}
+  \seqnote{C}{M}{2}{bcrypt verify (hash giả nếu không có tài khoản)\\token 32 byte ngẫu nhiên, hạn 24 h, gắn IP}
+  \seqret{M}{C}{LOGIN\_RES \{sessionToken, playerId\}}
+  \seqmsg{C}{M}{ROOM\_CREATE\_REQ \{name, mapId, maxPlayers\}}
+  \seqret{M}{C}{ROOM\_CREATE\_RES + ROOM\_STATE\_PUSH (Waiting)}
+  \seqmsg{C}{M}{ROOM\_JOIN\_REQ \{roomId, password\}}
+  \seqnote{C}{M}{2}{Chọn game server khoẻ còn chỗ\\ký joinTicket hạn 60 s}
+  \seqret{M}{C}{ROOM\_JOIN\_RES \{ip, port, joinTicket\}}
+  \seqmsg{G}{M}{GS\_MATCH\_STARTED \{roomId\}}
+  \seqret{M}{C}{ROOM\_STATE\_PUSH (InMatch)}
+  \seqmsg{G}{M}{GS\_MATCH\_ENDED \{results\}}
+  \seqmsg{M}{D}{INSERT match\_results}
+  \seqret{M}{C}{ROOM\_STATE\_PUSH (Waiting)}
+  \seqend{C,M,D,G}
+\end{tikzpicture}
+\caption{Biểu đồ tuần tự dịch vụ sảnh: đăng ký game server, tài khoản, phòng, joinTicket, kết quả trận}
+\label{fig:D-tuantu}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Vòng đời kết nối và phòng}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \node[init] (i) at (1.5,0) {};
+  \node[st, text width=2.8cm] (un) at (1.5,-1.8) {Unauthenticated};
+  \node[st, text width=2.8cm] (au) at (1.5,-5.0) {Authenticated};
+  \node[st, text width=2.2cm, fill=cOrange] (cl) at (10.5,-3.4) {Closed};
+  \node[final] (f) at (10.5,-5.4) {};
+  \draw[arr] (i) -- node[lbl, right=3pt]{accept (còn chỗ theo IP và tổng)} (un);
+  \draw[arr] (un) -- node[lbl, left=3pt]{LOGIN\_RES ok} (au);
+  \draw[arr] (un.east) -- ++(1.2,0) |- node[lbl, pos=0.75, above=2pt]{quá 30 s kể từ accept / khung sai hoặc > 64 KB} ($(cl.west)+(0,0.2)$);
+  \draw[arr] (au.east) -- ++(1.2,0) |- node[lbl, pos=0.75, below=2pt]{im lặng 45 s / peer đóng, RST} ($(cl.west)+(0,-0.2)$);
+  \draw[arr] (au.south) .. controls +(-0.2,-1.3) and +(-1.6,-0.4) .. node[lbl, left=2pt, pos=0.7]{HEARTBEAT 15 s} (au.west);
+  \draw[arr] (cl) -- node[lbl, right=3pt]{gỡ khỏi bảng trước, rồi giảm bộ đếm IP} (f);
+\end{tikzpicture}
+\caption{Vòng đời một kết nối TCP: hạn tuyệt đối trước xác thực, hạn im lặng sau xác thực}
+\label{fig:D-ketnoi}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \node[init] (i) at (1.2,1.7) {};
+  \node[st] (w) at (1.8,0) {Waiting};
+  \node[st] (s) at (6.6,0) {Starting};
+  \node[st] (m) at (12.4,0) {InMatch};
+  \node[st] (e) at (12.4,-2.8) {Ending};
+  \draw[arr] (i) -- node[lbl, left=2pt]{ROOM\_CREATE\_REQ} ($(w.north)+(-0.6,0)$);
+  \draw[arr] (w) -- node[lbl, above=2pt]{cấp game server} (s);
+  \draw[arr] (s) -- node[lbl, below=3pt]{GS\_MATCH\_STARTED} (m);
+  \draw[arr] (m) -- node[lbl, right=2pt]{trận kết thúc} (e);
+  \draw[arr] (e.west) -| node[lbl, pos=0.25, below=2pt]{GS\_MATCH\_ENDED: lưu kết quả, giải phóng server} (w.south);
+  \draw[arr] (m.north) -- ++(0,0.9) -| node[lbl, pos=0.25, above=2pt]{mất heartbeat 30 s: báo lỗi 3001 cho thành viên} ($(w.north)+(0.6,0)$);
+  \draw[arr] (w.west) .. controls +(-1.4,0.5) and +(-1.4,-0.5) .. (w.west);
+  \node[lbl, align=right, anchor=east] at (0.1,-0.9) {vào / rời / sẵn sàng\\$\rightarrow$ ROOM\_STATE\_PUSH};
+\end{tikzpicture}
+\caption{Vòng đời phòng (\texttt{RoomLifecycleState})}
+\label{fig:D-phong}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Mô hình dữ liệu}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm,
+  ent/.style={draw=cLine, rectangle split, rectangle split parts=2, rectangle split part fill={cBlue,white},
+    font=\footnotesize, inner sep=4pt}]
+  \node[ent] (acc) at (0,0) {\textbf{accounts}
+    \nodepart{two}\begin{tabular}{@{}lll@{}}
+      INTEGER & player\_id & PK \\ TEXT & username & UNIQUE, NOCASE \\ TEXT & password\_hash & bcrypt \\
+      TEXT & display\_name & \\ INTEGER & created\_at & \\ INTEGER & last\_login\_at & \\
+      INTEGER & failed\_logins & \\ INTEGER & locked\_until & \\ INTEGER & is\_banned & \\
+    \end{tabular}};
+  \node[ent] (mr) at (8.5,0) {\textbf{match\_results}
+    \nodepart{two}\begin{tabular}{@{}lll@{}}
+      INTEGER & id & PK \\ INTEGER & room\_id & \\ INTEGER & player\_id & FK \\
+      INTEGER & kills & \\ INTEGER & deaths & \\ INTEGER & score & \\ INTEGER & ended\_at & \\
+    \end{tabular}};
+  \draw[cLine, thick] (acc.east) -- node[lbl, above=2pt, pos=0.12]{1} node[lbl, above=2pt, pos=0.88]{n} (mr.west);
+  \node[lbl] at ($(acc.east)!0.5!(mr.west)+(0,-0.4)$) {có};
+\end{tikzpicture}
+\caption{Lược đồ SQLite của Master Server (phiên và phòng được giữ trong bộ nhớ)}
+\label{fig:D-csdl}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Giao diện lập trình và giao diện giám sát}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm,
+  cls/.style={draw=cLine, rectangle split, rectangle split parts=2, rectangle split part fill={cBlue,white},
+    font=\footnotesize, inner sep=4pt}]
+  \node[cls, anchor=north] (im) at (3.4,0) {\begin{tabular}{@{}c@{}}\textit{«interface»}\\\textbf{IMasterClient}\end{tabular}
+    \nodepart{two}\begin{tabular}{@{}l@{}}
+      + State : MasterConnectionState \\
+      + LoginAsync(username, passwordHash) \\
+      + RegisterAsync(username, hash, displayName) \\
+      + GetRoomsAsync() : RoomInfo[] \\
+      + CreateRoomAsync(CreateRoomRequest) \\
+      + JoinRoomAsync(roomId, password) : JoinResult \\
+      + LeaveRoomAsync(), SetReadyAsync(ready) \\
+      + SendChatAsync(channel, text) \\
+      + Poll() \quad {\scriptsize(sự kiện phát trên luồng chính)} \\
+      + OnRoomStatePush, OnChat, OnError, OnDisconnected \\
+    \end{tabular}};
+  \node[cls, anchor=north] (jr) at (11.8,0) {\textbf{JoinResult}
+    \nodepart{two}\begin{tabular}{@{}l@{}}
+      + Ok : bool \\ + ErrorCode : int \\ + GameServerIp : string \\ + GameServerPort : int \\ + JoinTicket : byte[64] \\
+    \end{tabular}};
+  \node[cls, anchor=north] (gl) at (11.8,-3.9) {\begin{tabular}{@{}c@{}}\textit{«interface»}\\\textbf{IGameServerLink}\end{tabular}
+    \nodepart{two}\begin{tabular}{@{}l@{}}
+      + Register(), Heartbeat() \\ + MatchStarted(), MatchEnded() \\
+    \end{tabular}};
+  \node[bxY, text width=2.6cm] (mc)  at (3.4,-7.7) {MasterClient};
+  \node[bxY, text width=2.9cm] (gsl) at (9.5,-7.3) {GameServerLink};
+  \node[bxY, text width=3.3cm] (fk)  at (14.2,-7.3) {FakeGameServerLink};
+  \node[bxY, text width=3.8cm] (rep) at (11.9,-9.2) {GameServerMatchReporter};
+  \draw[darr, -{Triangle[open, length=3mm]}] (mc) -- (im);
+  \draw[arr] (im.east |- jr.west) -- node[lbl, above=2pt]{trả về} (jr.west);
+  \draw[darr, -{Triangle[open, length=3mm]}] (gsl.north) -- (gsl.north |- gl.south);
+  \draw[darr, -{Triangle[open, length=3mm]}] (fk.north) -- (fk.north |- gl.south);
+  \draw[arr] (rep.north) -- (rep.north |- gl.south);
+\end{tikzpicture}
+\caption{API cho client Unity và liên kết game server; mọi sự kiện được phát trên luồng chính trong \texttt{Poll()}}
+\label{fig:D-api}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}[t]{0.49\linewidth}\lstset{basicstyle=\ttfamily\footnotesize}
+\begin{lstlisting}
+$ nc 127.0.0.1 27001
+{ "uptimeSec": 5412,
+  "connections": { "current": 18, "peak": 32,
+      "totalAccepted": 1411, "refused": 0,
+      "timedOut": 3 },
+  "transport": { "tls": true,
+      "framesReceived": 88213,
+      "tlsHandshakeFailures": 0 },
+  "accounts": { "total": 57, "onlineNow": 16 },
+  "rooms": { "active": 3, "inMatch": 2,
+      "queued": 0 },
+  "gameServers": { "registered": 2,
+      "healthy": 2, "allocated": 2 },
+  "rates": { "loginsPerMin": 4,
+      "errorsPerMin": 0 } }
+\end{lstlisting}
+\end{minipage}
+
+\vspace{4pt}
+\begin{minipage}[t]{0.8\linewidth}\lstset{basicstyle=\ttfamily\footnotesize}
+\begin{lstlisting}
+$ dotnet run --project Ironfront.Tools.LoadTest -- \
+    --master 127.0.0.1:27000 --clients 16 \
+    --duration 60 --behavior random-walk
+
+scenario       ops   ops/s     p50     p99  fail
+random-walk   8636   143.9  0.81ms  5.77ms     0
+room-list   366927 12230.0  0.89ms  7.42ms     0
+join-leave    3911   130.4  0.72ms  5.68ms   147
+32 clients    6208   206.9  1.03ms  8.51ms     0
+
+RAM 64-74 MB; 1000 connections held: 81 MB
+\end{lstlisting}
+\end{minipage}
+\caption{Giao diện giám sát: điểm cuối metrics JSON trên TCP thô (trái, giá trị minh hoạ cấu trúc)
+và báo cáo công cụ kiểm thử tải (phải, số đo thực)}
+\label{fig:D-giamsat}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Hạ tầng triển khai}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm, lay/.style={box, text width=3.4cm, minimum height=1.35cm},
+                    rowname/.style={font=\small\bfseries, align=left, text width=2.5cm, anchor=west}]
+  \node[rowname] at (0,0) {Build và\\phát hành};
+  \node[lay, fill=cGray]   (a1) at (4.6,0)  {\textbf{GitHub Actions}\\{\footnotesize build, test Ubuntu và Windows}};
+  \node[lay, fill=cPurple] (a2) at (8.4,0)  {\textbf{docker build}\\{\footnotesize master, gameserver Dockerfile}};
+  \node[lay, fill=cPurple] (a3) at (12.2,0) {\textbf{GHCR}\\{\footnotesize image bất biến theo commit}};
+  \draw[arr] (a1) -- (a2); \draw[arr] (a2) -- (a3);
+  \node[rowname] at (0,-2.3) {Máy ảo\\{\footnotesize\mdseries Terraform, cloud-init}};
+  \node[lay, fill=cGreen] (b1) at (12.2,-2.3) {\textbf{VM + firewall}\\{\footnotesize 27000/tcp, 27015--27016/udp}};
+  \node[lay, fill=cGreen] (b2) at (8.4,-2.3)  {\textbf{.env chỉ root đọc}\\{\footnotesize SHARED\_SECRET, PUBLIC\_IP}};
+  \node[lay, fill=cGreen] (b3) at (4.6,-2.3)  {\textbf{infra/tls}\\{\footnotesize cấp và gia hạn chứng chỉ}};
+  \node[rowname] at (0,-4.6) {docker\\compose};
+  \node[lay, fill=cOrange] (c1) at (4.6,-4.6)  {\textbf{master}\\{\footnotesize 27000/tcp TLS, không quyền root}};
+  \node[lay, fill=cBlue]   (c2) at (8.4,-4.6)  {\textbf{gameserver-1}\\{\footnotesize 27015/udp, tối đa 1536 MB}};
+  \node[lay, fill=cBlue]   (c3) at (12.2,-4.6) {\textbf{gameserver-2}\\{\footnotesize 27016/udp, cùng image}};
+  \node[rowname] at (0,-6.9) {systemd\\trên host};
+  \node[lay, fill=cGray] (d1) at (4.6,-6.9)  {\textbf{volume SQLite}\\{\footnotesize tài khoản, kết quả trận}};
+  \node[lay, fill=cGray] (d2) at (8.4,-6.9)  {\textbf{backup.timer}\\{\footnotesize sao lưu định kỳ}};
+  \node[lay, fill=cGray] (d3) at (12.2,-6.9) {\textbf{alert.timer}\\{\footnotesize báo khi master ngừng}};
+  \draw[arr] (a3.east) -- (14.7,0) -- node[lbl, sloped, above=1pt]{deploy.sh kéo image} (14.7,-4.6) -- (c3.east);
+  \draw[darr] (b2.south) -- (c2.north);
+  \draw[darr] (b3.south) -- (c1.north);
+  \draw[cLine, thick] (c1.south) -- (d1.north);
+  \draw[darr] (d2.west) -- (d1.east);
+  \draw[darr] (d3.north) -- ++(0,0.35) -| ($(c1.south)+(1.0,0)$);
+\end{tikzpicture}
+\caption{Đường ống triển khai và topo hạ tầng trên VPS (fly.io là phương án thay thế)}
+\label{fig:D-hatang}
+\end{figure}

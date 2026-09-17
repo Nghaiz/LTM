@@ -1,0 +1,231 @@
+% =====================================================================================
+% C-replication.tex — PHẦN II của Nguyễn Duy Nghĩa: đồng bộ trạng thái và mô phỏng server
+% =====================================================================================
+\PhanLon{II. NỘI DUNG CÁ NHÂN}
+\textit{Sinh viên thực hiện: Nguyễn Duy Nghĩa (B23DCCN600) -- phân hệ đồng bộ trạng thái và mô phỏng server (Replication).}
+
+\section{Biểu đồ và giao diện nội dung cá nhân thực hiện}
+Phân hệ Replication đứng giữa: \textbf{nhận byte từ Transport và biến thành trạng thái trò chơi}, và ngược lại.
+Nhiệm vụ gồm: nén trạng thái thế giới (lượng tử hoá, delta, quản lý vùng quan tâm) để 48 actor vừa ngân sách 8 KB/s;
+vòng mô phỏng có thẩm quyền 30 Hz chống gian lận; bù trễ khi bắn; \code{MovementSimulation} dùng chung client và
+server; và bộ test conformance làm trọng tài cho giao thức.
+
+% -------------------------------------------------------------------------------------
+\subsection{Kiến trúc phân hệ Replication}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm, lay/.style={box, text width=3.4cm, minimum height=1.55cm},
+                    rowname/.style={font=\small\bfseries, align=left, text width=2.5cm, anchor=west}]
+  \node[rowname] at (0,-0.75) {Game server\\Unity\\{\footnotesize\mdseries Net/Server}};
+  \node[lay, fill=cOrange] (u1) at (4.6,0)     {\textbf{NetServerBootstrap}\\{\footnotesize vai trò, transport, vé}};
+  \node[lay, fill=cOrange] (u2) at (8.4,0)     {\textbf{ServerInputStage}\\{\footnotesize trước bước vật lý}};
+  \node[lay, fill=cOrange] (u3) at (12.2,0)    {\textbf{ServerTickLoop}\\{\footnotesize điều phối tick}};
+  \node[lay, fill=cOrange] (u4) at (4.6,-1.6)  {\textbf{ServerCombatBridge}\\{\footnotesize bắn, sát thương}};
+  \node[lay, fill=cOrange] (u5) at (8.4,-1.6)  {\textbf{MatchController}\\{\footnotesize trận, điểm chiếm}};
+  \node[lay, fill=cOrange] (u6) at (12.2,-1.6) {\textbf{ServerSnapshotStage}\\{\footnotesize gửi snapshot}};
+  \node[font=\footnotesize, align=center] at (8.4,-2.75) {gọi xuống (lớp keo không chứa quy tắc; mọi quy tắc nằm dưới và được xUnit kiểm thử)};
+  \node[rowname] at (0,-4.85) {Thư viện\\Replication\\{\footnotesize\mdseries .NET thuần}};
+  \node[lay, fill=cBlue] (l1) at (4.6,-3.9)  {\textbf{Server}\\{\footnotesize TickScheduler, InputAuthority, MessageRouter}};
+  \node[lay, fill=cBlue] (l2) at (8.4,-3.9)  {\textbf{Snapshot + Interest}\\{\footnotesize WorldSnapshot, DeltaEncoder, InterestManager}};
+  \node[lay, fill=cBlue] (l3) at (12.2,-3.9) {\textbf{Combat}\\{\footnotesize CombatAuthority, LagCompensator, HitboxHistory}};
+  \node[lay, fill=cBlue]  (l4) at (4.6,-5.8)  {\textbf{Match}\\{\footnotesize MatchStateMachine, CapturePointState}};
+  \node[lay, fill=cGreen] (l5) at (8.4,-5.8)  {\textbf{Movement}\\{\footnotesize MovementCore, dùng chung}};
+  \node[lay, fill=cBlue]  (l6) at (12.2,-5.8) {\textbf{Client}\\{\footnotesize MessageRouter, Reconciler, Interpolator}};
+  \node[font=\footnotesize, align=center] at (8.4,-7.05) {trao đổi byte qua ITransportServer / ITransportClient; báo kết quả qua IMatchReporter};
+  \node[rowname] at (0,-8.2) {Phụ thuộc};
+  \node[lay, fill=cPurple] (d1) at (4.6,-8.2)  {\textbf{Net.Transport}\\{\footnotesize UDP, kênh 1/2/3}};
+  \node[lay, fill=cGreen]  (d2) at (8.4,-8.2)  {\textbf{Net.Protocol}\\{\footnotesize message, lượng tử hoá}};
+  \node[lay, fill=cPurple] (d3) at (12.2,-8.2) {\textbf{Net.MasterLink}\\{\footnotesize GS\_MATCH\_* về master}};
+\end{tikzpicture}
+\caption{Kiến trúc phân hệ: lớp keo Unity mỏng gọi vào thư viện Replication kiểm thử được bằng xUnit}
+\label{fig:C-kientruc}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Vòng tick có thẩm quyền của server}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \buoc{b1}{(0,0)}{1}{ServerTickScheduler}{Đồng hồ thực $\rightarrow$ số tick 30 Hz còn nợ; bỏ tồn đọng quá 3 tick}{cBlue}
+  \buoc{b2}{(5.6,0)}{2}{Nhận message}{Poll transport; router giải C\_INPUT, C\_SPAWN\_REQUEST, C\_ACK\_BASELINE}{cBlue}
+  \buoc{b3}{(11.2,0)}{3}{InputAuthority}{Chuẩn hoá vector; thiếu input thì lặp tối đa 3 tick}{cGreen}
+  \buoc{b4}{(0,-2.7)}{4}{Mô phỏng Unity}{MovementSimulation, PhysX, AI gốc (bot xa 6 Hz)}{cOrange}
+  \buoc{b5}{(5.6,-2.7)}{5}{Kẹp tốc độ}{So quãng đường với giới hạn 1,3 lần sau khi di chuyển}{cGreen}
+  \buoc{b6}{(11.2,-2.7)}{6}{ServerCombatAuthority}{Cooldown, đạn, bù trễ, sát thương}{cGreen}
+  \buoc{b7}{(0,-5.4)}{7}{MatchStateMachine}{Điểm chiếm, ticket, pha trận}{cBlue}
+  \buoc{b8}{(5.6,-5.4)}{8}{HitboxHistory}{Ghi hộp hitbox world-space của tick hiện tại}{cBlue}
+  \buoc{b9}{(11.2,-5.4)}{9}{Snapshot 20 Hz}{Mỗi client: interest $\rightarrow$ delta $\rightarrow$ S\_SNAPSHOT kênh 1; sự kiện kênh 2}{cPurple}
+  \draw[arr] (b1) -- (b2); \draw[arr] (b2) -- (b3);
+  \draw[arr] (b4) -- (b5); \draw[arr] (b5) -- (b6);
+  \draw[arr] (b7) -- (b8); \draw[arr] (b8) -- (b9);
+  \draw[arr] (b3.south) -- ++(0,-0.3) -| (b4.north);
+  \draw[arr] (b6.south) -- ++(0,-0.3) -| (b7.north);
+\end{tikzpicture}
+\caption{Các bước của một tick mô phỏng có thẩm quyền trên game server}
+\label{fig:C-tick}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Đường ống nén snapshot}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \buoc{p1}{(0,0)}{1}{Trạng thái actor}{float, Vector3 trong Unity}{cOrange}
+  \buoc{p2}{(5.6,0)}{2}{Lượng tử hoá}{vị trí i16 trong ±2048 m (6,25 cm); yaw u16; pitch i8; máu u8}{cBlue}
+  \buoc{p3}{(11.2,0)}{3}{WorldSnapshot}{Lưu giá trị đã lượng tử hoá để so sánh delta chính xác}{cBlue}
+  \buoc{p4}{(0,-2.7)}{4}{InterestManager}{Lọc và giảm tần số theo từng người xem}{cGreen}
+  \buoc{p5}{(5.6,-2.7)}{5}{DeltaEncoder}{changeMask 8 bit so với baseline client đã xác nhận}{cGreen}
+  \buoc{p6}{(11.2,-2.7)}{6}{ServerPayloadWriter}{Khung S\_SNAPSHOT tối đa 1181 byte, gửi kênh 1}{cPurple}
+  \draw[arr] (p1) -- (p2); \draw[arr] (p2) -- (p3);
+  \draw[arr] (p4) -- (p5); \draw[arr] (p5) -- (p6);
+  \draw[arr] (p3.south) -- ++(0,-0.3) -| (p4.north);
+\end{tikzpicture}
+\caption{Đường ống nén từ trạng thái mô phỏng đến gói S\_SNAPSHOT}
+\label{fig:C-nen}
+\end{figure}
+
+\begin{figure}[H]
+\centering\small
+\begin{tabularx}{\linewidth}{|Y|L{2.4cm}|L{2.8cm}|L{2.8cm}|}
+\hline
+\hd{Cấu hình (16 người + 32 bot, bản đồ Dustbowl, 5 phút)} & \hd{KB/s mỗi client} & \hd{Snapshot trung bình} & \hd{Tiết kiệm luỹ kế} \\ \hline
+Gốc: snapshot đầy đủ, căn byte, không interest & 19,86 & 1017 byte & -- \\ \hline
++ bit-packing (đo, không đưa vào bản chạy) & 19,04 & 975 byte & 4,1\% \\ \hline
++ delta encoding & 9,94 & 509 byte & 49,9\% \\ \hline
++ quản lý vùng quan tâm & 1,50 & 77 byte & 92,4\% \\ \hline
+\textbf{Server đã triển khai} (định dạng v1 căn byte) & \textbf{1,67} & -- & 21\% ngân sách 8 KB/s \\ \hline
+\end{tabularx}
+\caption{Kết quả đo đóng góp của từng kỹ thuật nén (in bởi \texttt{Phase04ExperimentTests})}
+\label{fig:C-ketqua}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Delta theo baseline đã xác nhận}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \seqactor{S}{2.4}{Server (DeltaEncoder)}
+  \seqactor{C}{12.6}{Client (DeltaDecoder)}
+  \seqbegin
+  \seqmsg{S}{C}{S\_SNAPSHOT tick 100 (đầy đủ, chưa có baseline)}
+  \seqret{C}{S}{C\_ACK\_BASELINE \{tick 100\} -- kênh 2}
+  \seqlost{S}{C}{S\_SNAPSHOT tick 103 (delta so với 100) -- MẤT}
+  \seqmsg{S}{C}{S\_SNAPSHOT tick 106 (vẫn delta so với 100)}
+  \seqnote{C}{C}{3}{Giải được vì đã có tick 100; mất 103 chỉ mất đúng gói đó}
+  \seqret{C}{S}{C\_ACK\_BASELINE \{tick 106\}}
+  \seqmsg{S}{C}{S\_SNAPSHOT tick 109 (delta so với 106)}
+  \seqnote{S}{S}{3}{Giữ 32 snapshot lịch sử mỗi client; im lặng lâu hơn nhận bản đầy đủ}
+  \seqend{S,C}
+\end{tikzpicture}
+\caption{Delta chỉ so với baseline client đã xác nhận: một gói mất không làm hỏng chuỗi delta}
+\label{fig:C-baseline}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Quản lý vùng quan tâm}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \fill[cOrange!60] (0,0) circle (3.6);
+  \fill[cBlue] (0,0) circle (2.3);
+  \fill[cGreen] (0,0) circle (1.0);
+  \draw[cLine] (0,0) circle (3.6) (0,0) circle (2.3) (0,0) circle (1.0);
+  \fill[cPurple!80, opacity=0.8] (0,0) -- (15:3.6) arc (15:-15:3.6) -- cycle;
+  \fill[black] (0,0) circle (3pt);
+  \node[font=\footnotesize, below=3pt] at (0,0) {người xem};
+  \node[font=\footnotesize] at (0,0.6)  {Near};
+  \node[font=\footnotesize] at (0,1.65) {Mid};
+  \node[font=\footnotesize] at (0,2.95) {Far};
+  \foreach \p in {(0.5,0.4), (-0.6,-0.5), (1.5,1.2), (-1.8,0.4), (2.8,-1.2), (-2.4,2.2), (3.1,0.1)} { \fill[black!70] \p circle (2pt); }
+  % chú giải
+  \begin{scope}[shift={(4.8,2.6)}, every node/.style={font=\small, anchor=west}]
+    \fill[cGreen] (0,0) rectangle (0.4,0.4); \draw[cLine] (0,0) rectangle (0.4,0.4);
+    \node at (0.6,0.2) {Near: dưới 60 m hoặc chính mình $\rightarrow$ 20 Hz};
+    \fill[cBlue] (0,-0.8) rectangle (0.4,-0.4); \draw[cLine] (0,-0.8) rectangle (0.4,-0.4);
+    \node at (0.6,-0.6) {Mid: 60--150 m, đồng đội trong 300 m $\rightarrow$ 10 Hz};
+    \fill[cOrange!60] (0,-1.6) rectangle (0.4,-1.2); \draw[cLine] (0,-1.6) rectangle (0.4,-1.2);
+    \node at (0.6,-1.4) {Far: 150--500 m $\rightarrow$ 4 Hz};
+    \fill[cPurple!80] (0,-2.4) rectangle (0.4,-2.0); \draw[cLine] (0,-2.4) rectangle (0.4,-2.0);
+    \node at (0.6,-2.2) {Trong nón nhìn 15°: không bị cắt};
+    \draw[cLine] (0,-3.2) rectangle (0.4,-2.8);
+    \node at (0.6,-3.0) {Culled: trên 500 m, ngoài nón nhìn $\rightarrow$ không gửi};
+    \node[font=\footnotesize, text width=8.6cm, align=left] at (0,-4.3) {Actor ngoài 300 m bị bỏ khỏi snapshot nhưng không despawn (tránh nhấp nháy). Đồng đội được nâng tối thiểu lên Mid, không bị hạ từ Near xuống Mid.};
+  \end{scope}
+\end{tikzpicture}
+\caption{Các vùng quan tâm theo khoảng cách từ người xem và tần số cập nhật (không theo tỉ lệ)}
+\label{fig:C-interest}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Bắn có thẩm quyền và bù trễ}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  % hàng 1
+  \node[bxB, text width=2.6cm] (i)  at (1.6,0)  {C\_INPUT có nút FIRE};
+  \node[dec, text width=2.6cm] (v)  at (6.4,0)  {hợp lệ?\\{\footnotesize sống, cooldown, đạn}};
+  \node[bxO, text width=3.2cm] (r)  at (13.6,0) {Từ chối: không trừ đạn, không raycast};
+  \node[bxG, text width=3.2cm] (a)  at (6.4,-2.5) {Trừ đạn; độ tản bằng RNG của server};
+  \node[grp, fit=(i)(v)(r)(a)] (g1) {};
+  \node[grpt] at (g1.north west) {1. Kiểm tra rẻ trước};
+  \draw[arr] (i) -- (v);
+  \draw[arr] (v) -- node[lbl, above=2pt]{sai} (r);
+  \draw[arr] (v) -- node[lbl, right=2pt]{đúng} (a);
+  % hàng 2
+  \node[bxB, text width=4.6cm] (t)  at (2.9,-4.9) {rewind = clamp((RTT/2 + 100 ms) / 33,3 ms, 0, 6 tick)};
+  \node[bxB, text width=3.4cm] (h)  at (8.6,-4.9) {HitboxHistory: hộp tại tick $-$ rewind};
+  \node[bxB, text width=2.8cm] (x)  at (13.6,-4.9) {LagCompensator: giao tia -- hộp};
+  \node[grp, fit=(t)(h)(x)] (g2) {};
+  \node[grpt, anchor=south east] at (g2.north east) {2. Bù trễ (không di chuyển collider)};
+  \draw[arr] (a.south) -- ++(0,-0.75) -| (t.north);
+  \draw[arr] (t) -- (h); \draw[arr] (h) -- (x);
+  % hàng 3
+  \node[dec, text width=2.2cm] (w)  at (13.6,-7.6) {tường chắn?\\(hỏi Unity)};
+  \node[bxO, text width=1.6cm] (m)  at (13.6,-9.7) {Trượt};
+  \node[bxG, text width=3.0cm] (d)  at (8.6,-7.6) {IActorDamageSink: trừ máu};
+  \node[bxP, text width=4.6cm] (e)  at (2.9,-7.6) {S\_HIT\_CONFIRM cho người bắn; S\_DEATH nếu hạ gục; S\_WEAPON\_FIRE cho người khác};
+  \node[grp, fit=(w)(m)(d)(e)] (g3) {};
+  \node[grpt] at (g3.north west) {3. Kết quả};
+  \draw[arr] (x) -- (w);
+  \draw[arr] (w) -- node[lbl, above=2pt]{không} (d);
+  \draw[arr] (w) -- node[lbl, right=2pt]{có} (m);
+  \draw[arr] (d) -- (e);
+\end{tikzpicture}
+\caption{Luồng phân xử phát bắn có thẩm quyền với bù trễ tối đa 200 ms}
+\label{fig:C-ban}
+\end{figure}
+
+\begin{figure}[H]
+\centering\small
+\begin{tabular}{|l|c|c|c|c|c|c|}
+\hline
+\hd{RTT} & \hd{0 ms} & \hd{50 ms} & \hd{100 ms} & \hd{150 ms} & \hd{200 ms} & \hd{300 ms} \\ \hline
+Có bù trễ & 100\% & 100\% & 100\% & 100\% & 100\% & 100\% \\ \hline
+Không bù trễ & 0\% & 0\% & 0\% & 0\% & 0\% & 0\% \\ \hline
+\end{tabular}
+\caption{Tỉ lệ trúng mục tiêu chạy ngang 5 m/s theo RTT (mục tiêu đứng yên: 20/20 trong cả hai trường hợp)}
+\label{fig:C-tile}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Máy trạng thái trận đấu}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \node[init] (i) at (-0.4,0) {};
+  \node[st, text width=3.0cm] (w) at (2.2,0)    {WaitingForPlayers};
+  \node[st, text width=2.2cm] (u) at (8.0,0)    {Warmup};
+  \node[st, text width=2.2cm, fill=cGreen] (p) at (13.4,0) {Playing};
+  \node[st, text width=2.2cm, fill=cOrange] (e) at (13.4,-3.0) {Ended};
+  \node[st, text width=2.2cm] (r) at (2.2,-3.0) {Resetting};
+  \draw[arr] (i) -- (w);
+  \draw[arr] ($(w.east)+(0,0.2)$) -- node[lbl, above=3pt]{đủ người tối thiểu} ($(u.west)+(0,0.2)$);
+  \draw[arr] ($(u.west)+(0,-0.2)$) -- node[lbl, below=3pt]{người chơi rời, không đủ} ($(w.east)+(0,-0.2)$);
+  \draw[arr] (u) -- node[lbl, above=3pt]{hết warmup} (p);
+  \draw[arr] (p) -- node[lbl, right=3pt]{một đội hết ticket} (e);
+  \draw[arr] (e) -- node[lbl, above=3pt]{hết thời gian sau trận} (r);
+  \draw[arr] (r) -- node[lbl, right=3pt, align=left]{despawn actor, giải phóng id,\\đặt lại điểm chiếm} (w);
+\end{tikzpicture}
+\caption{\texttt{MatchStateMachine} -- pha trận được phát tới client qua S\_MATCH\_STATE}
+\label{fig:C-tran}
+\end{figure}

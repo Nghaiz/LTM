@@ -1,0 +1,230 @@
+% =====================================================================================
+% preamble.tex — cấu hình chung cho cả 4 báo cáo cá nhân
+% Biên dịch bằng XeLaTeX (hoặc Tectonic). Xem README.md.
+% =====================================================================================
+\documentclass[13pt]{extarticle}
+
+% ---------- Trang và font -----------------------------------------------------------
+\usepackage[letterpaper, left=2.5cm, right=2cm, top=2.2cm, bottom=2.2cm, footskip=1cm]{geometry}
+\usepackage{fontspec}
+% Dùng Times New Roman nếu máy có (Windows/Overleaf có sẵn); nếu không, dùng TeX Gyre Termes
+% — bản sao Times có đủ dấu tiếng Việt.
+\IfFontExistsTF{Times New Roman}{%
+  \setmainfont{Times New Roman}%
+}{%
+  \setmainfont{texgyretermes}[Extension=.otf, UprightFont=*-regular, BoldFont=*-bold,
+    ItalicFont=*-italic, BoldItalicFont=*-bolditalic]%
+}
+\setmonofont{lmmono10}[Extension=.otf, UprightFont=*-regular, Scale=0.9]
+\linespread{1.2}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\hyphenpenalty=10000
+\exhyphenpenalty=10000
+\emergencystretch=3em
+
+% ---------- Gói --------------------------------------------------------------------
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{array, tabularx, longtable, booktabs, multirow, makecell}
+\usepackage{colortbl}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{tocloft}
+\usepackage{caption}
+\usepackage{fancyhdr}
+\usepackage{bytefield}
+\usepackage{url}
+\usepackage{etoolbox}
+\usepackage{float}
+\usepackage{amssymb}
+\usepackage{listings}
+\lstset{basicstyle=\ttfamily\scriptsize, backgroundcolor=\color{cGray}, frame=single, rulecolor=\color{cLine},
+  columns=fullflexible, keepspaces=true, breaklines=true, xleftmargin=2pt, xrightmargin=2pt,
+  extendedchars=true, inputencoding=utf8}
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta, calc, fit, backgrounds, shapes.multipart,
+  shapes.geometric, matrix, decorations.pathreplacing}
+\usepackage[hidelinks]{hyperref}
+
+% ---------- Tên tiếng Việt ----------------------------------------------------------
+\renewcommand{\figurename}{Hình}
+\renewcommand{\tablename}{Bảng}
+\renewcommand{\contentsname}{Mục lục}
+
+% ---------- Màu --------------------------------------------------------------------
+\definecolor{tocblue}{HTML}{2F5496}
+\definecolor{cBlue}{HTML}{DDE8F3}
+\definecolor{cGreen}{HTML}{E3F1E8}
+\definecolor{cOrange}{HTML}{FBEFD9}
+\definecolor{cPurple}{HTML}{F1E3F3}
+\definecolor{cGray}{HTML}{EEF0F2}
+\definecolor{cHead}{HTML}{E7E7E7}
+\definecolor{cLine}{HTML}{555555}
+\definecolor{uiBg}{HTML}{2B2F36}
+\definecolor{uiBar}{HTML}{15181D}
+\definecolor{uiField}{HTML}{1C1F24}
+\definecolor{uiBtn}{HTML}{4A525D}
+\definecolor{uiText}{HTML}{E8E8E8}
+\definecolor{uiState}{HTML}{9FD49F}
+\definecolor{uiRed}{HTML}{D9534F}
+
+% ---------- Tiêu đề mục ------------------------------------------------------------
+\titleformat{\section}{\bfseries\fontsize{14}{18}\selectfont}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\bfseries\fontsize{13}{16}\selectfont}{\thesubsection.}{0.5em}{}
+\titleformat{\subsubsection}{\bfseries\itshape\fontsize{13}{16}\selectfont}{\thesubsubsection.}{0.5em}{}
+\titlespacing*{\section}{0pt}{14pt}{6pt}
+\titlespacing*{\subsection}{12pt}{10pt}{4pt}
+\titlespacing*{\subsubsection}{24pt}{8pt}{3pt}
+
+% "Phần" lớn: I. NỘI DUNG NHÓM / II. NỘI DUNG CÁ NHÂN — sang trang mới, vào mục lục
+\newcommand{\PhanLon}[1]{%
+  \clearpage\phantomsection
+  \addcontentsline{toc}{part}{#1}%
+  {\bfseries\fontsize{15}{19}\selectfont #1\par}\vspace{6pt}}
+
+% ---------- Mục lục ----------------------------------------------------------------
+\renewcommand{\cfttoctitlefont}{\color{tocblue}\bfseries\fontsize{15}{19}\selectfont}
+\renewcommand{\cftaftertoctitle}{}
+\setlength{\cftbeforetoctitleskip}{0pt}
+\setlength{\cftaftertoctitleskip}{8pt}
+\renewcommand{\cftpartfont}{\bfseries}
+\renewcommand{\cftpartpagefont}{\bfseries}
+\renewcommand{\cftpartleader}{\cftdotfill{\cftdotsep}}
+\setlength{\cftbeforepartskip}{4pt}
+\renewcommand{\cftsecfont}{\normalfont}
+\renewcommand{\cftsecpagefont}{\normalfont}
+\renewcommand{\cftsecleader}{\cftdotfill{\cftdotsep}}
+\renewcommand{\cftsecaftersnum}{.}
+\setlength{\cftbeforesecskip}{2pt}
+\setlength{\cftsecindent}{1.2em}
+\setlength{\cftsubsecindent}{3em}
+\renewcommand{\cftsubsecaftersnum}{.}
+\setlength{\cftsecnumwidth}{1.8em}
+\setlength{\cftsubsecnumwidth}{2.6em}
+\setcounter{tocdepth}{2}
+\setcounter{secnumdepth}{3}
+
+% ---------- Hình và bảng -----------------------------------------------------------
+\counterwithin{figure}{section}
+\captionsetup{font={small,it}, labelfont={small,it}, labelsep=period, justification=centering}
+\setlength{\abovecaptionskip}{4pt}
+\renewcommand{\arraystretch}{1.25}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcommand{\hd}[1]{\cellcolor{cHead}\textbf{#1}}
+\setlist{nosep, leftmargin=1.5em, topsep=2pt}
+
+% Mã nguồn trong văn bản: ngắt dòng được ở / . _ và chữ hoa
+\urlstyle{tt}
+\DeclareUrlCommand\code{\urlstyle{tt}}
+\expandafter\def\expandafter\UrlBreaks\expandafter{\UrlBreaks
+  \do\A\do\B\do\C\do\D\do\E\do\F\do\G\do\H\do\I\do\J\do\K\do\L\do\M\do\N\do\O\do\P
+  \do\Q\do\R\do\S\do\T\do\U\do\V\do\W\do\X\do\Y\do\Z\do\_\do\.}
+
+% ---------- Số trang ---------------------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0pt}
+\fancypagestyle{plain}{\fancyhf{}\cfoot{\thepage}\renewcommand{\headrulewidth}{0pt}}
+
+% ---------- Style TikZ dùng chung ---------------------------------------------------
+\tikzset{
+  every picture/.style={font=\small},
+  box/.style={draw=cLine, rounded corners=2pt, align=center, inner sep=4pt, fill=white,
+    font=\small, minimum height=0.9cm},
+  bxB/.style={box, fill=cBlue}, bxG/.style={box, fill=cGreen}, bxO/.style={box, fill=cOrange},
+  bxP/.style={box, fill=cPurple}, bxY/.style={box, fill=cGray},
+  dec/.style={draw=cLine, diamond, aspect=2.2, align=center, inner sep=1pt, fill=cOrange, font=\small},
+  db/.style={draw=cLine, cylinder, shape border rotate=90, aspect=0.25, fill=cGray, align=center,
+    minimum height=1cm, font=\small},
+  arr/.style={-{Stealth[length=2.2mm]}, draw=cLine, thick},
+  darr/.style={arr, dashed},
+  biarr/.style={{Stealth[length=2.2mm]}-{Stealth[length=2.2mm]}, draw=cLine, thick},
+  lbl/.style={font=\footnotesize, fill=white, inner sep=1.5pt, align=center},
+  grp/.style={draw=cLine, dashed, rounded corners=4pt, inner sep=8pt},
+  grpt/.style={font=\footnotesize\bfseries, anchor=south west, inner sep=2pt},
+  % trạng thái
+  st/.style={draw=cLine, rounded corners=5pt, fill=cBlue, minimum height=0.8cm, minimum width=2.4cm,
+    align=center, font=\small},
+  init/.style={circle, fill=black, minimum size=7pt, inner sep=0pt},
+  final/.style={circle, draw=black, double, double distance=1.5pt, fill=black, minimum size=5pt, inner sep=0pt},
+  % lớp UML
+  umlclass/.style={draw=cLine, rectangle split, rectangle split parts=2, fill=white,
+    rectangle split part fill={cBlue, white}, align=left, font=\footnotesize, inner sep=3pt},
+}
+
+% ---------- Sơ đồ tuần tự: macro tự viết để kiểm soát vị trí chữ ----------------------
+% Dùng trong tikzpicture:
+%   \seqactor{id}{x}{Tên}   ... \seqbegin
+%   \seqmsg{từ}{đến}{nhãn}   \seqret{từ}{đến}{nhãn}   \seqself{id}{nhãn}
+%   \seqnote{trái}{phải}{số dòng}{nội dung}
+%   \seqloopbegin   ... \seqloopend{trái}{phải}{nhãn}
+%   \seqend
+\newdimen\seqy
+\newdimen\seqloopy
+\newcommand{\seqstep}{0.72cm}
+\newcommand{\seqactor}[3]{%
+  \node[draw=cLine, fill=cBlue, rounded corners=2pt, minimum height=0.8cm, align=center, font=\small\bfseries]
+    (#1) at (#2,0) {#3};}
+\newcommand{\seqbegin}{\global\seqy=-0.55cm}
+\newcommand{\seqmsg}[3]{%
+  \global\advance\seqy by -\seqstep
+  \draw[arr] (#1.center |- 0,\the\seqy) -- node[lbl, above=1pt]{#3} (#2.center |- 0,\the\seqy);}
+\newcommand{\seqret}[3]{%
+  \global\advance\seqy by -\seqstep
+  \draw[darr] (#1.center |- 0,\the\seqy) -- node[lbl, above=1pt]{#3} (#2.center |- 0,\the\seqy);}
+\newcommand{\seqlost}[3]{% gói bị mất: mũi tên đứt đoạn dừng giữa chừng với dấu X
+  \global\advance\seqy by -\seqstep
+  \draw[darr, -] (#1.center |- 0,\the\seqy) -- node[lbl, above=1pt]{#3} ($(#1.center |- 0,\the\seqy)!0.7!(#2.center |- 0,\the\seqy)$)
+    node[text=red!70!black, font=\bfseries, inner sep=0pt] {$\times$};}
+\newcommand{\seqself}[2]{%
+  \global\advance\seqy by -\seqstep
+  \draw[arr] (#1.center |- 0,\the\seqy) -- ++(0.6,0) -- ++(0,-0.4) -- ++(-0.6,0);
+  \node[lbl, anchor=west, align=left] at ($(#1.center |- 0,\the\seqy)+(0.7,-0.2)$) {#2};
+  \global\advance\seqy by -0.3cm}
+\newcommand{\seqnote}[4]{%
+  \global\advance\seqy by -0.45cm
+  \path let \p1=(#1.center), \p2=(#2.center), \n1={max(\x2-\x1+1.2cm, 3.4cm)} in
+    node[draw=cLine, fill=cOrange, anchor=north, text width=\n1-8pt, align=center, font=\footnotesize,
+      inner sep=3pt] at ($(#1.center |- 0,\the\seqy)!0.5!(#2.center |- 0,\the\seqy)$) {#4};
+  \global\advance\seqy by -#3\baselineskip
+  \global\advance\seqy by -0.05cm}
+\newcommand{\seqloopbegin}{\global\advance\seqy by -0.25cm \global\seqloopy=\seqy}
+\newcommand{\seqloopend}[3]{%
+  \global\advance\seqy by -0.3cm
+  \draw[cLine, thin] ($(#1.center |- 0,\the\seqloopy)+(-0.9,0)$) rectangle ($(#2.center |- 0,\the\seqy)+(0.9,0)$);
+  \node[anchor=north west, fill=cGray, draw=cLine, font=\scriptsize\bfseries, inner sep=2pt]
+    at ($(#1.center |- 0,\the\seqloopy)+(-0.9,0)$) {#3};}
+\newcommand{\seqend}[1]{% #1 = danh sách id, ví dụ {C,M,G}
+  \global\advance\seqy by -0.4cm
+  \begin{scope}[on background layer]
+    \foreach \a in {#1} { \draw[cLine!70, dashed] (\a.south) -- (\a.center |- 0,\the\seqy); }
+  \end{scope}}
+
+% ---------- Hộp bước đánh số (dùng cho luồng xử lý) ---------------------------------
+% \buoc{tên node}{vị trí}{số}{tiêu đề}{mô tả}{màu}
+\newcommand{\buoc}[6]{%
+  \node[draw=cLine, rounded corners=2pt, fill=#6, text width=4.3cm, align=left, inner sep=4pt,
+    minimum height=1.75cm, anchor=north west] (#1) at #2 {%
+    \textbf{#3.~#4}\par\vspace{1pt}{\footnotesize #5}};}
+
+% ---------- Giao diện IMGUI (mô phỏng) ---------------------------------------------
+\newcommand{\uinum}[1]{\tikz[baseline=-0.6ex]\node[circle, fill=uiRed, text=white, inner sep=0pt,
+  minimum size=10pt, font=\tiny\bfseries]{#1};}
+
+% ---------- Bảng ánh xạ ------------------------------------------------------------
+\newenvironment{bangAnhXa}{%
+  \small
+  \begin{longtable}{|L{4.2cm}|L{6.6cm}|L{4.4cm}|}
+  \hline
+  \hd{Hình / phần tử trên hình} & \hd{Chức năng (mô tả)} & \hd{Hiện thực trong mã nguồn}\\ \hline
+  \endfirsthead
+  \hline
+  \hd{Hình / phần tử trên hình} & \hd{Chức năng (mô tả)} & \hd{Hiện thực trong mã nguồn}\\ \hline
+  \endhead
+  \hline
+  \endfoot
+}{\end{longtable}}
+\newcommand{\hang}[3]{#1 & #2 & #3 \\ \hline}

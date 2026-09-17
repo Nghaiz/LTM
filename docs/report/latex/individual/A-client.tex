@@ -1,0 +1,275 @@
+% =====================================================================================
+% A-client.tex — PHẦN II của Nguyễn Thành Trung: client Unity
+% =====================================================================================
+
+% ---------- Macro vẽ giao diện IMGUI (dùng trong scope của từng khung) ----------------
+% Toạ độ y tính từ mép trên khung (âm dần xuống), khung rộng 7.6 cm
+\newcommand{\uiPanel}[2]{% chiều cao, tiêu đề thanh
+  \fill[uiBg] (0,0) rectangle (7.6,-#1);
+  \fill[uiBar] (0,0) rectangle (7.6,-0.45);
+  \node[anchor=west, text=cBlue, font=\scriptsize] at (0.15,-0.225) {#2};
+  \node[anchor=east, text=cBlue, font=\scriptsize] at (7.45,-0.225) {Shift+F2};
+  \draw[black!80] (0,0) rectangle (7.6,-#1);}
+\newcommand{\uiS}[2]{\node[anchor=west, text=uiState, font=\scriptsize\ttfamily] at (0.25,#1) {#2};}
+\newcommand{\uiT}[2]{\node[anchor=west, text=uiText, font=\footnotesize] at (0.25,#1) {#2};}
+\newcommand{\uiF}[4]{\draw[fill=uiField, draw=black!40] (#2,#1+0.19) rectangle (#3,#1-0.19);
+  \node[anchor=west, text=uiText, font=\scriptsize\ttfamily] at (#2+0.08,#1) {#4};}
+\newcommand{\uiB}[4]{\draw[fill=uiBtn, draw=black!30, rounded corners=1.5pt] (#2,#1+0.2) rectangle (#3,#1-0.2);
+  \node[text=uiText, font=\footnotesize] at ({(#2+#3)/2},#1) {#4};}
+\newcommand{\uiE}[2]{\node[anchor=west, text=red!60, font=\footnotesize] at (0.25,#1) {#2};}
+\newcommand{\uiN}[3]{\node[circle, fill=uiRed, text=white, inner sep=0pt, minimum size=11pt, font=\tiny\bfseries] at (#1,#2) {#3};}
+
+\PhanLon{II. NỘI DUNG CÁ NHÂN}
+\textit{Sinh viên thực hiện: Nguyễn Thành Trung (B23DCCN861) -- phân hệ client Unity.}
+
+\section{Biểu đồ và giao diện nội dung cá nhân thực hiện}
+Phân hệ client là nơi các thư viện mạng được đưa vào trò chơi thật. Nhiệm vụ gồm: mở \textbf{điểm nối netcode}
+trong mã gameplay một người chơi mà không phá lối chơi gốc; làm cho \textbf{người chơi ở xa hiển thị mượt} (nội suy,
+hoạt ảnh, ragdoll cục bộ); làm cho \textbf{người chơi cục bộ phản hồi tức thì} (dự đoán và hoà giải); và xây dựng
+\textbf{giao diện} sảnh chờ, HUD, overlay chẩn đoán. Đây cũng là thành viên duy nhất mở Unity Editor.
+
+% -------------------------------------------------------------------------------------
+\subsection{Điểm nối netcode trong mã gameplay}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm,
+  cls/.style={draw=cLine, rectangle split, rectangle split parts=2, rectangle split part fill={cBlue,white},
+    font=\footnotesize, inner sep=4pt, minimum width=3.4cm},
+  inh/.style={draw=cLine, thick, -{Triangle[open, length=3mm]}},
+  real/.style={draw=cLine, thick, dashed, -{Triangle[open, length=3mm]}}]
+  \node[cls] (actor) at (2.4,0) {\textbf{Actor}
+    \nodepart{two}\begin{tabular}{@{}l@{}} + controller : ActorController \\ + Update() \end{tabular}};
+  \node[cls] (ac) at (9.6,0) {\begin{tabular}{@{}c@{}}\textit{«abstract»}\\\textbf{ActorController}\end{tabular}
+    \nodepart{two}\begin{tabular}{@{}l@{}} + Fire() : bool \\ + Aim() : bool \\ + Velocity() : Vector3 \end{tabular}};
+  \node[cls] (fps) at (7.2,-3.6) {\textbf{FpsActorController}
+    \nodepart{two}\begin{tabular}{@{}l@{}} - inputSource : IInputSource \\ + SetInputSource(IInputSource) \end{tabular}};
+  \node[cls] (ai) at (12.8,-3.6) {\textbf{AiActorController}
+    \nodepart{two}\begin{tabular}{@{}l@{}} AI gốc, chạy trên server \end{tabular}};
+  \node[cls] (in) at (7.2,-6.8) {\begin{tabular}{@{}c@{}}\textit{«interface»}\\\textbf{IInputSource}\end{tabular}
+    \nodepart{two}\begin{tabular}{@{}l@{}} + MoveAxes \\ + LookDelta \\ + Buttons \end{tabular}};
+  \node[cls] (loc) at (2.6,-10.2) {\textbf{LocalInputSource}
+    \nodepart{two}\begin{tabular}{@{}l@{}} bàn phím và chuột \end{tabular}};
+  \node[cls] (net) at (7.2,-10.2) {\textbf{NetInputSource}
+    \nodepart{two}\begin{tabular}{@{}l@{}} input nhận từ C\_INPUT \end{tabular}};
+  \node[cls] (nul) at (11.8,-10.2) {\textbf{NullInputSource}
+    \nodepart{two}\begin{tabular}{@{}l@{}} headless, không input \end{tabular}};
+  \node[cls] (rav) at (2.4,-3.6) {\textbf{RemoteActorView}
+    \nodepart{two}\begin{tabular}{@{}l@{}} + Apply(RemoteActorVisualState) \end{tabular}};
+  \draw[arr] (actor.east |- ac.west) -- node[lbl, above=2pt]{đọc} (ac.west);
+  \draw[inh] (fps.north) -- ++(0,0.6) -| ($(ac.south)+(-0.8,0)$);
+  \draw[inh] (ai.north) -- ++(0,0.6) -| ($(ac.south)+(0.8,0)$);
+  \draw[arr] (fps.south) -- node[lbl, right=2pt]{dùng} (in.north);
+  \draw[real] (loc.north) -- ++(0,0.6) -| ($(in.south)+(-0.8,0)$);
+  \draw[real] (net.north) -- (in.south);
+  \draw[real] (nul.north) -- ++(0,0.6) -| ($(in.south)+(0.8,0)$);
+  \draw[darr] (rav.north) -- node[lbl, left=2pt, align=right]{điều khiển hình thể\\actor ở xa} (actor.south);
+\end{tikzpicture}
+\caption{Biểu đồ lớp điểm nối netcode: tách nguồn input khỏi \texttt{FpsActorController}}
+\label{fig:A-lop}
+\end{figure}
+\code{Actor.cs} không biết và không cần biết controller lấy dữ liệu từ đâu. Tách 59 lời gọi \code{Input.*} ra sau
+giao diện \code{IInputSource} giúp cùng một controller nhận input từ bàn phím (client), từ gói mạng (server) hoặc
+không nhận gì (headless).
+
+% -------------------------------------------------------------------------------------
+\subsection{Thứ tự thực thi một khung hình client}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \buoc{s1}{(0,0)}{1}{NetClientBootstrap}{order $-$1000: Poll transport, đẩy mọi payload vào ClientMessageRouter}{cBlue}
+  \buoc{s2}{(5.6,0)}{2}{RemoteVehicleRegistry}{order $-$60: cập nhật phương tiện ở xa}{cBlue}
+  \buoc{s3}{(11.2,0)}{3}{RemoteActorRegistry}{order $-$50: nội suy actor ở xa qua RemoteActorView}{cBlue}
+  \buoc{s4}{(0,-2.7)}{4}{Presenter}{order $-$50: Combat, Objective, Projectile, Explosion biến sự kiện thành hiệu ứng}{cGreen}
+  \buoc{s5}{(5.6,-2.7)}{5}{ClientVehicleStage}{order $-$45: input phương tiện khi đang ngồi ghế}{cBlue}
+  \buoc{s6}{(11.2,-2.7)}{6}{ClientPredictionStage}{order $-$40: gửi C\_INPUT, hoà giải khi có snapshot mới}{cGreen}
+  \buoc{s7}{(0,-5.4)}{7}{Gameplay gốc}{order 0: Actor, Weapon, UI của Ravenfield}{cOrange}
+  \buoc{s8}{(5.6,-5.4)}{8}{Overlay giao diện}{OnGUI: LobbyShellOverlay, TransportDebugOverlay}{cOrange}
+  \buoc{s9}{(11.2,-5.4)}{9}{Shadow compare}{order +1000: so sánh chẩn đoán input và chuyển động}{cGray}
+  \draw[arr] (s1) -- (s2); \draw[arr] (s2) -- (s3);
+  \draw[arr] (s4) -- (s5); \draw[arr] (s5) -- (s6);
+  \draw[arr] (s7) -- (s8); \draw[arr] (s8) -- (s9);
+  \draw[arr] (s3.south) -- ++(0,-0.3) -| (s4.north);
+  \draw[arr] (s6.south) -- ++(0,-0.3) -| (s7.north);
+\end{tikzpicture}
+\caption{Chuỗi thành phần client theo \texttt{DefaultExecutionOrder} trong một khung hình}
+\label{fig:A-thutu}
+\end{figure}
+Mọi dữ liệu đến được áp dụng \textbf{trước} khi có thành phần nào đọc nó: bootstrap chạy sớm nhất để
+\code{NetContext.Role} được gán trước mọi \code{Awake}, và các bước chẩn đoán chạy sau cùng.
+
+% -------------------------------------------------------------------------------------
+\subsection{Máy trạng thái luồng trò chơi}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm, st/.append style={text width=2.3cm, minimum width=2.6cm}]
+  \node[init] (i) at (1.5,1.5) {};
+  \node[st] (boot) at (1.5,0)    {Booting};
+  \node[st] (log)  at (5.6,0)    {LoginScreen};
+  \node[st] (aut)  at (9.8,0)    {Authenticating};
+  \node[st] (lob)  at (14.0,0)   {Lobby};
+  \node[st] (rb)   at (14.0,-3.0) {RoomBrowser};
+  \node[st] (jr)   at (9.8,-3.0)  {JoiningRoom};
+  \node[st] (rl)   at (5.6,-3.0)  {RoomLobby};
+  \node[st] (cg)   at (1.5,-3.0)  {ConnectingGame};
+  \node[st, fill=cGreen] (im) at (1.5,-6.0) {InMatch};
+  \node[st, fill=cOrange] (me) at (5.6,-6.0) {MatchEnd};
+  \draw[arr] (i) -- (boot);
+  \draw[arr] (boot) -- node[lbl, above=3pt]{Start} (log);
+  \draw[arr] ($(log.east)+(0,0.15)$) -- node[lbl, above=3pt]{Log in} ($(aut.west)+(0,0.15)$);
+  \draw[arr] ($(aut.west)+(0,-0.15)$) -- node[lbl, below=3pt]{lỗi} ($(log.east)+(0,-0.15)$);
+  \draw[arr] (aut) -- node[lbl, above=0.45cm]{LOGIN\_RES} (lob);
+  \draw[arr] (lob) -- node[lbl, left=3pt]{Browse rooms} (rb);
+  \draw[arr] ($(rb.west)+(0,0.15)$) -- node[lbl, above=3pt]{Join} ($(jr.east)+(0,0.15)$);
+  \draw[arr] ($(jr.east)+(0,-0.15)$) -- node[lbl, below=3pt]{lỗi} ($(rb.west)+(0,-0.15)$);
+  \draw[arr] (jr) -- node[lbl, above=0.45cm]{ROOM\_JOIN\_RES} (rl);
+  \draw[arr] ($(rl.west)+(0,0.15)$) -- node[lbl, above=3pt]{vào trận} ($(cg.east)+(0,0.15)$);
+  \draw[arr] ($(cg.east)+(0,-0.15)$) -- node[lbl, below=3pt]{thất bại} ($(rl.west)+(0,-0.15)$);
+  \draw[arr] (cg) -- node[lbl, right=3pt]{CONNECT\_ACCEPTED} (im);
+  \draw[arr] (im) -- node[lbl, above=0.45cm]{trận kết thúc} (me);
+  \draw[arr] (im.south) -- ++(0,-0.8) -| node[lbl, pos=0.12, below=2pt]{mất kết nối} (16.1,0) -- (lob.east);
+  \draw[cLine, thick] (me.south) -- ++(0,-0.8) node[lbl, pos=0.5, right=2pt]{Continue / sau 15 s} ;
+\end{tikzpicture}
+\caption{Máy trạng thái \texttt{GameFlowController}: 10 trạng thái; mọi chuyển trạng thái ngoài bảng đều bị từ chối}
+\label{fig:A-trangthai}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Giao diện sảnh chờ}
+Giao diện sảnh được vẽ hoàn toàn bằng IMGUI (\code{OnGUI}) trong \code{LobbyShellOverlay}, không cần Canvas hay
+prefab. Mỗi màn hình tương ứng một trạng thái ở Hình~\ref{fig:A-trangthai}; dòng \texttt{state:} đầu khung luôn hiển thị
+trạng thái hiện tại. Số đỏ trên hình là mã phần tử dùng trong bảng ánh xạ ở Mục 4.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  % (a) Login
+  \begin{scope}[shift={(0,0)}]
+    \uiPanel{6.9}{Ironfront -- lobby shell}
+    \uiS{-0.8}{state: LoginScreen}
+    \uiT{-1.25}{Master server} \uiN{7.25}{-1.25}{1}
+    \uiF{-1.7}{0.25}{7.35}{127.0.0.1}
+    \uiF{-2.15}{0.25}{7.35}{27000}
+    \uiT{-2.6}{Username} \uiN{7.25}{-2.6}{2}
+    \uiF{-3.05}{0.25}{7.35}{kien}
+    \uiT{-3.5}{Password}
+    \uiF{-3.95}{0.25}{7.35}{********}
+    \uiB{-4.5}{0.25}{7.35}{Log in} \uiN{7.25}{-4.5}{3}
+    \uiT{-5.0}{Direct connect (no master, no ticket)} \uiN{7.25}{-5.0}{4}
+    \uiF{-5.45}{0.25}{5.8}{26.14.3.9} \uiF{-5.45}{5.95}{7.35}{27015}
+    \uiB{-5.95}{0.25}{7.35}{Connect directly}
+    \uiE{-6.45}{Wrong username or password (1000)} \uiN{7.25}{-6.45}{5}
+    \node[font=\footnotesize\itshape] at (3.8,-7.25) {(a) LoginScreen / Authenticating};
+  \end{scope}
+  % (b) Room browser
+  \begin{scope}[shift={(8.2,0)}]
+    \uiPanel{6.9}{Ironfront -- lobby shell}
+    \uiS{-0.8}{state: RoomBrowser}
+    \uiB{-1.3}{0.25}{7.35}{Refresh} \uiN{7.25}{-1.3}{6}
+    \uiT{-1.8}{Room password (blank for public rooms)} \uiN{7.25}{-1.8}{7}
+    \uiF{-2.25}{0.25}{7.35}{}
+    \draw[draw=black!40] (0.25,-2.6) rectangle (7.35,-4.45);
+    \uiT{-2.9}{\#3 Dustbowl CQ \quad 12/16} \uiB{-2.9}{5.9}{6.9}{Join} \uiN{5.55}{-2.9}{8} \uiN{7.15}{-2.9}{9}
+    \uiT{-3.5}{\#7 Island private \quad 4/16} \uiB{-3.5}{5.9}{6.9}{Join}
+    \uiT{-4.1}{\#9 LAN test \quad 1/8} \uiB{-4.1}{5.9}{6.9}{Join}
+    \uiT{-4.9}{Direct connect (no master, no ticket)}
+    \uiF{-5.35}{0.25}{5.8}{127.0.0.1} \uiF{-5.35}{5.95}{7.35}{27015}
+    \uiB{-5.85}{0.25}{7.35}{Connect directly}
+    \node[font=\footnotesize\itshape] at (3.8,-7.25) {(b) Lobby $\rightarrow$ RoomBrowser / JoiningRoom};
+  \end{scope}
+  % (c) Lobby + RoomLobby
+  \begin{scope}[shift={(0,-7.9)}]
+    \uiPanel{4.6}{Ironfront -- lobby shell}
+    \uiS{-0.8}{state: Lobby}
+    \uiT{-1.25}{Signed in as Kien (\#42)} \uiN{7.25}{-1.25}{10}
+    \uiB{-1.75}{0.25}{7.35}{Browse rooms}
+    \draw[black!50, dashed] (0.25,-2.2) -- (7.35,-2.2);
+    \uiS{-2.55}{state: RoomLobby}
+    \uiT{-3.0}{In room. Game server: 203.0.113.7:27015} \uiN{7.25}{-3.0}{11}
+    \uiT{-3.45}{Waiting for the match to start.}
+    \uiB{-4.0}{0.25}{7.35}{Enter match now (debug)} \uiN{7.25}{-4.0}{12}
+    \node[font=\footnotesize\itshape] at (3.8,-4.95) {(c) Lobby và RoomLobby};
+  \end{scope}
+  % (d) Connecting + MatchEnd
+  \begin{scope}[shift={(8.2,-7.9)}]
+    \uiPanel{4.6}{Ironfront -- lobby shell}
+    \uiS{-0.8}{state: ConnectingGame  (working...)}
+    \uiT{-1.25}{Connecting to the game server...} \uiN{7.25}{-1.25}{13}
+    \uiT{-1.7}{Giving up after 10 seconds.}
+    \draw[black!50, dashed] (0.25,-2.2) -- (7.35,-2.2);
+    \uiS{-2.55}{state: MatchEnd}
+    \uiT{-3.0}{Match over.} \uiN{7.25}{-3.0}{14}
+    \uiB{-3.55}{0.25}{7.35}{Continue} \uiN{7.25}{-3.55}{15}
+    \node[font=\footnotesize\itshape] at (3.8,-4.95) {(d) ConnectingGame và MatchEnd};
+  \end{scope}
+\end{tikzpicture}
+\caption{Các màn hình giao diện sảnh chờ, dựng lại theo mã \texttt{LobbyShellOverlay} (bố cục IMGUI)}
+\label{fig:A-sanh}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Giao diện trong trận và overlay chẩn đoán}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \shade[top color=cBlue!10!black!35!blue!30, bottom color=green!25!black!45] (0,0) rectangle (15.8,-7.2);
+  \draw[black!80] (0,0) rectangle (15.8,-7.2);
+  % overlay transport
+  \node[anchor=north west, fill=black, fill opacity=0.75, text opacity=1, text=white, font=\scriptsize\ttfamily,
+        align=left, inner sep=5pt] (ov) at (0.3,-0.3) {Transport Connected\\RTT 48.2 ms  jitter 3.1 ms\\loss up 0.4\%  down 1.2\%\\rate up 0.9 KB/s  down 1.7 KB/s\\congestion GOOD  fragments 0  pool 12\\packets sent 18422 recv 12291 lost 147};
+  \uiN{6.05}{-0.4}{16}
+  % điểm chiếm, ticket
+  \node[fill=black, fill opacity=0.5, text opacity=1, text=white, font=\footnotesize, inner sep=4pt] at (8.8,-0.55) {A $\blacksquare$ \quad B $\square$ \quad C $\boxminus$ \qquad Tickets 212 : 187};
+  \uiN{11.75}{-0.55}{17}
+  % killfeed
+  \node[anchor=north east, fill=black, fill opacity=0.5, text opacity=1, text=white, font=\footnotesize, align=right, inner sep=4pt] at (15.5,-1.2)
+    {Toan $\triangleright$ [M4] $\triangleright$ Bot\_12\\Nghia $\triangleright$ [Grenade] $\triangleright$ Trung};
+  \uiN{15.3}{-1.0}{18}
+  % hitmarker
+  \node[text=white, font=\Huge] at (7.9,-3.8) {$\times$};
+  \uiN{8.6}{-3.3}{19}
+  % máu, đạn
+  \node[anchor=south west, fill=black, fill opacity=0.5, text opacity=1, text=white, font=\normalsize, inner sep=5pt] at (0.3,0.3-7.2) {$\heartsuit$ 76};
+  \uiN{1.9}{-6.55}{20}
+  \node[anchor=south east, fill=black, fill opacity=0.5, text opacity=1, text=white, font=\normalsize, inner sep=5pt] at (15.5,0.3-7.2) {30 / 90};
+  \uiN{13.9}{-6.55}{21}
+  \node[fill=black, fill opacity=0.35, text opacity=1, text=white, font=\scriptsize, inner sep=3pt] at (7.9,-6.7) {Shift+F3: overlay transport $\cdot$ Tab: bảng điểm $\cdot$ Shift+F2: lobby shell};
+\end{tikzpicture}
+\caption{Bố cục màn hình trong trận: HUD được cấp dữ liệu từ server và overlay chẩn đoán transport (Shift+F3);
+các số là minh hoạ bố cục}
+\label{fig:A-hud}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Luồng dự đoán và hoà giải phía client}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \node[bxB, text width=2.5cm] (t)  at (1.45,0)   {NetPrediction\\Clock\\{\footnotesize bước 30 Hz}};
+  \node[bxB, text width=2.4cm] (i)  at (4.6,0)   {LocalInputSource\\{\footnotesize InputFrame(tick)}};
+  \node[bxG, text width=2.6cm] (m)  at (7.9,0)   {NetMovementAgent\\{\footnotesize mô phỏng ngay}};
+  \node[bxB, text width=2.3cm] (q)  at (11.1,0)  {Lưu input\\chưa xác nhận};
+  \node[bxP, text width=2.2cm] (s)  at (14.3,0)  {C\_INPUT kênh 3\\{\footnotesize tối đa 8 frame}};
+  \node[grp, fit=(t)(s)] (g1) {};
+  \node[grpt] at (g1.north west) {1. Dự đoán -- mỗi tick};
+  \draw[arr] (t) -- (i); \draw[arr] (i) -- (m); \draw[arr] (m) -- (q); \draw[arr] (q) -- (s);
+
+  \node[bxP, text width=2.5cm] (n)  at (1.6,-2.9) {S\_SNAPSHOT\\{\footnotesize ClientMessageRouter}};
+  \node[bxB, text width=3.1cm] (h)  at (5.4,-2.9) {SnapshotHolding\\Queue};
+  \node[bxG, text width=3.2cm] (r)  at (9.2,-2.9) {PredictionReconciler\\{\footnotesize so tại lastProcessedInputTick}};
+  \node[bxO, text width=3.0cm] (c)  at (13.4,-2.9) {Lệch quá ngưỡng: đặt về server, phát lại input};
+  \node[grp, fit=(n)(c)] (g2) {};
+  \node[grpt] at (g2.north west) {2. Hoà giải -- khi có snapshot mới};
+  \draw[arr] (n) -- (h); \draw[arr] (h) -- (r); \draw[arr] (r) -- (c);
+  \draw[darr] (q.south) -- node[lbl, right=2pt]{input chưa xác nhận} (q.south |- r.north);
+
+  \node[bxB, text width=3.0cm] (ri) at (3.2,-5.8) {RemoteActorRegistry};
+  \node[bxG, text width=3.4cm] (si) at (7.9,-5.8) {SnapshotInterpolator\\{\footnotesize hiển thị tại now $-$ 100 ms}};
+  \node[bxG, text width=3.2cm] (rv) at (12.6,-5.8) {RemoteActorView\\{\footnotesize tư thế, vũ khí, hoạt ảnh}};
+  \node[grp, fit=(ri)(rv)] (g3) {};
+  \node[grpt] at (g3.north west) {3. Nội suy actor ở xa};
+  \draw[arr] (ri) -- (si); \draw[arr] (si) -- (rv);
+  \draw[arr] (h.south) -- node[lbl, right=2pt]{actor ở xa} (h.south |- ri.north);
+\end{tikzpicture}
+\caption{Luồng xử lý dự đoán, hoà giải và nội suy trong client}
+\label{fig:A-duDoan}
+\end{figure}

@@ -1,0 +1,416 @@
+% =====================================================================================
+% phan1-nhom.tex — PHẦN I: nội dung nhóm (giống nhau ở cả 4 báo cáo)
+% =====================================================================================
+\PhanLon{I. NỘI DUNG NHÓM}
+
+\section{Mô tả kiến trúc chung của hệ thống}
+
+\subsection{Bài toán và phạm vi}
+\textbf{Ironfront Reborn} chuyển mã nguồn trò chơi bắn súng góc nhìn thứ nhất \textit{Ravenfield Beta 5}
+(Unity 6000.3, vốn chỉ chơi đơn) thành một trò chơi \textbf{nhiều người chơi, máy chủ nắm quyền quyết định}
+(server-authoritative). Yêu cầu cốt lõi của môn Lập trình mạng: \textbf{toàn bộ tầng mạng được viết tay trên
+socket TCP và UDP thô} qua \code{System.Net.Sockets} --- không dùng Mirror, Photon, Netcode for GameObjects,
+KCP, gRPC hay WebSocket.
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{5.2cm}|Y|}
+\hline
+\hd{Tiêu chí} & \hd{Giá trị thiết kế} \\ \hline
+Quy mô một trận & 16 người chơi thật + 32 bot AI (tối đa 64 actor, 16 phương tiện) \\ \hline
+Tần số mô phỏng / snapshot / gửi input & 30 Hz / 20 Hz / 30 Hz \\ \hline
+Băng thông xuống mỗi client & $\le$ 8 KB/s (đo trên server đã triển khai: 1,67 KB/s) \\ \hline
+Triển khai & LAN trước, sau đó VPS công cộng (Docker Compose, TLS cho kênh TCP) \\ \hline
+Công nghệ & .NET 8 (master server, công cụ), netstandard2.1 (thư viện dùng chung), Unity 6 (client và game server headless) \\ \hline
+\end{tabularx}
+\end{center}
+
+\subsection{Kiến trúc ba tiến trình}
+Hệ thống gồm \textbf{ba loại tiến trình} độc lập, giao tiếp qua \textbf{hai giao thức tự định nghĩa}:
+\textbf{MSP} (Master Server Protocol, trên TCP) cho dịch vụ sảnh chờ và \textbf{GSP} (Game Server Protocol,
+trên UDP) cho lưu lượng trong trận. Hai giao thức gặp nhau ở đúng một điểm: \textbf{joinTicket} được master
+ký HMAC và game server tự kiểm tra.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  % ---- Client
+  \node[bxB, text width=3.2cm] (cg) at (2,0)    {Gameplay\\{\footnotesize Actor, Weapon, UI}};
+  \node[bxB, text width=3.2cm] (cp) at (2,-1.4) {Dự đoán + Nội suy};
+  \node[bxB, text width=3.2cm] (cr) at (2,-2.6) {Replication Client};
+  \node[bxB, text width=3.2cm] (ct) at (2,-3.8) {Transport UDP};
+  \node[bxB, text width=3.2cm] (cm) at (2,-5.0) {MasterClient TCP};
+  \draw[arr] (cg) -- (cp); \draw[arr] (cp) -- (cr); \draw[arr] (cr) -- (ct);
+  \node[grp, fit=(cg)(cm)] (gC) {};
+  \node[grpt] at (gC.north west) {Client -- Unity 6};
+  % ---- Game server
+  \node[bxG, text width=3.4cm] (ss) at (14,-1.0) {Mô phỏng có thẩm quyền\\{\footnotesize PhysX, A*, AI gốc}};
+  \node[bxG, text width=3.4cm] (sr) at (14,-2.4) {Replication Server\\{\footnotesize snapshot, delta, interest}};
+  \node[bxG, text width=3.4cm] (st) at (14,-3.8) {Transport UDP};
+  \node[bxG, text width=3.4cm] (sm) at (14,-5.0) {MasterLink TCP};
+  \draw[arr] (st) -- (sr); \draw[arr] (sr) -- (ss);
+  \node[grp, fit=(ss)(sm)] (gS) {};
+  \node[grpt] at (gS.north west) {Game Server -- Unity headless};
+  % ---- UDP link
+  \draw[biarr] (ct.east) -- node[lbl, above=2pt]{UDP $\cdot$ GSP $\cdot$ 20--30 Hz} (st.west);
+  % ---- Master server
+  \node[bxO, text width=4.2cm] (ml) at (8,-7.2) {Sảnh chờ, danh sách phòng};
+  \node[bxO, text width=2.1cm] (ma) at (5.6,-8.8) {Xác thực,\\tài khoản};
+  \node[bxO, text width=2.1cm] (mm) at (8,-8.8) {Ghép trận};
+  \node[bxO, text width=2.1cm] (mg) at (10.4,-8.8) {Registry\\game server};
+  \node[db, text width=1.6cm] (md) at (5.6,-10.3) {SQLite};
+  \draw[arr] (ml) -- (ma); \draw[arr] (ml) -- (mm); \draw[arr] (ml) -- (mg); \draw[arr] (ma) -- (md);
+  \node[grp, fit=(ml)(ma)(mg)(md)] (gM) {};
+  \node[grpt] at (gM.north west) {Master Server -- .NET 8};
+  % ---- TCP links
+  \draw[biarr] (cm.south) |- node[lbl, pos=0.75]{TCP $\cdot$ MSP\\đăng nhập, phòng, chat} (ml.west);
+  \draw[biarr] (sm.south) |- node[lbl, pos=0.75]{TCP $\cdot$ MSP\\đăng ký, heartbeat} (ml.east);
+\end{tikzpicture}
+\caption{Kiến trúc tổng thể ba tiến trình và hai giao thức MSP/GSP}
+\label{fig:n-kientruc}
+\end{figure}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{2.3cm}|L{3.2cm}|Y|L{3.4cm}|}
+\hline
+\hd{Tiến trình} & \hd{Nền tảng} & \hd{Trách nhiệm chính} & \hd{Giao tiếp} \\ \hline
+\textbf{Client} & Unity 6, bản build thường & Hiển thị, nhận input, dự đoán chuyển động người chơi cục bộ, nội suy actor ở xa, giao diện sảnh và HUD & TCP tới Master; UDP tới Game Server \\ \hline
+\textbf{Game Server} & Unity 6 headless (\code{UNITY_SERVER}) & Chạy mô phỏng có thẩm quyền (vật lý, AI, bắn, điểm chiếm), tạo snapshot riêng cho từng client, bù trễ & Nhận UDP từ client; TCP tới Master \\ \hline
+\textbf{Master Server} & .NET 8 console, SQLite & Tài khoản, phiên, phòng, ghép trận, chat sảnh, registry game server, cấp joinTicket & Nhận TCP từ client và game server \\ \hline
+\end{tabularx}
+\end{center}
+
+\subsection{Phân chia TCP và UDP theo đặc tính dữ liệu}
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{2.8cm}|Y|Y|}
+\hline
+\hd{Đặc tính} & \hd{TCP -- Master Server} & \hd{UDP -- Game Server} \\ \hline
+Dùng cho & Đăng nhập, danh sách phòng, tạo/vào phòng, ghép trận, chat sảnh, heartbeat server & Mọi lưu lượng trong trận: input, snapshot, sự kiện gameplay \\ \hline
+Tần suất & Vài gói/phút mỗi client & 20--60 gói/giây mỗi chiều \\ \hline
+Mất gói & Không chấp nhận (mất \code{LOGIN_RES} là treo màn hình) & Chấp nhận với trạng thái: snapshot sau thay thế snapshot trước \\ \hline
+Nếu đổi chỗ & Phải tự viết lại độ tin cậy mà TCP đã làm tốt & Head-of-line blocking: một gói mất chặn mọi gói sau; Nagle + delayed ACK thêm 40--200 ms \\ \hline
+Đóng khung & Tiền tố độ dài 4 byte + JSON & Datagram tự nhiên, header nhị phân 16 byte \\ \hline
+\end{tabularx}
+\end{center}
+Không dùng WebSocket: WebSocket chạy trên TCP nên thừa hưởng nguyên vẹn head-of-line blocking, cộng thêm chi
+phí bắt tay HTTP --- một ràng buộc chỉ cần cho trình duyệt, không cần cho client desktop.
+
+\subsection{Kiến trúc phân lớp mã nguồn}
+Mã nguồn chia thành các thư viện .NET thuần (\code{netstandard2.1}) \textbf{không bao giờ tham chiếu
+\code{UnityEngine}}; dự án Unity dùng chúng dưới dạng DLL do \code{tools/build-libs.ps1} sinh vào
+\code{Assets/Plugins}. Nhờ vậy logic mạng được kiểm thử bằng xUnit trong vài giây, không cần mở Unity Editor.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm, lay/.style={box, text width=3.35cm, minimum height=1.25cm},
+                    rowname/.style={font=\small\bfseries, align=left, text width=2.4cm, anchor=west}]
+  \node[rowname] at (0,0) {Ứng dụng};
+  \node[lay, fill=cOrange] (u1) at (4.6,0)  {\textbf{Ironfront\_Reborn}\\{\footnotesize Unity 6: client + server headless}};
+  \node[lay, fill=cPurple] (u2) at (8.35,0) {\textbf{MasterServer}\\{\footnotesize net8.0 exe, TCP, SQLite}};
+  \node[lay, fill=cPurple] (u3) at (12.1,0) {\textbf{Công cụ}\\{\footnotesize LoadTest, MspBench, PacketReplay}};
+  \node[rowname] at (0,-2.1) {Thư viện mạng\\{\footnotesize\mdseries netstandard2.1}};
+  \node[lay, fill=cBlue, text width=2.55cm] (l1) at (4.2,-2.1)  {\textbf{Net.Transport}\\{\footnotesize UDP tin cậy}};
+  \node[lay, fill=cBlue, text width=2.55cm] (l2) at (7.1,-2.1)  {\textbf{Net.Replication}\\{\footnotesize snapshot, bù trễ}};
+  \node[lay, fill=cBlue, text width=2.55cm] (l3) at (10.0,-2.1) {\textbf{MasterClient}\\{\footnotesize client MSP}};
+  \node[lay, fill=cBlue, text width=2.55cm] (l4) at (12.9,-2.1) {\textbf{Net.MasterLink}\\{\footnotesize GS báo master}};
+  \node[rowname] at (0,-4.2) {Tầng nền};
+  \node[lay, fill=cGreen, text width=6.2cm] (p1) at (6.05,-4.2) {\textbf{Ironfront.Net.Protocol}\\{\footnotesize SSOT: hằng số, header, message, lượng tử hoá, joinTicket}};
+  \node[lay, fill=cGreen, text width=4.3cm] (p2) at (11.95,-4.2) {\textbf{Net.Configuration}\\{\footnotesize biến môi trường dùng chung}};
+  \node[rowname] at (0,-6.3) {Bảo đảm\\chất lượng};
+  \node[lay, fill=cGray, text width=6.2cm] (q1) at (6.05,-6.3) {\textbf{xUnit}\\{\footnotesize Protocol.Tests (conformance), Transport, Replication, MasterServer}};
+  \node[lay, fill=cGray, text width=4.3cm] (q2) at (11.95,-6.3) {\textbf{tools/SpecChecker}\\{\footnotesize chặn build khi lệch đặc tả}};
+  \draw[arr] (4.2,-1.4) -- (4.2,-0.65);
+  \draw[arr] (10.0,-1.4) -- (10.0,-0.65);
+  \node[lbl, anchor=west] at (4.35,-1.02) {DLL qua build-libs.ps1};
+  \node[lbl, anchor=west] at (10.15,-1.02) {tham chiếu project};
+  \draw[arr] (4.2,-3.55) -- (4.2,-2.75);
+  \draw[arr] (7.1,-3.55) -- (7.1,-2.75);
+  \draw[arr] (11.95,-3.55) -- (11.95,-2.75);
+  \draw[arr] (3.6,-5.65) -- (3.6,-4.85);
+  \draw[cLine, dashed] (2.9,-5.25) -- (14.2,-5.25);
+\end{tikzpicture}
+\caption{Phân lớp thư viện và quan hệ phụ thuộc giữa các project trong solution}
+\label{fig:n-phanlop}
+\end{figure}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{4.6cm}|L{2.4cm}|L{1.5cm}|Y|}
+\hline
+\hd{Project} & \hd{Loại} & \hd{Dòng mã} & \hd{Vai trò} \\ \hline
+\code{Ironfront.Net.Protocol} & netstandard2.1 & 5\,300 & Nguồn sự thật duy nhất của định dạng dây \\ \hline
+\code{Ironfront.Net.Transport} & netstandard2.1 & 4\,100 & Độ tin cậy trên UDP, kênh, phân mảnh, nghẽn, giả lập mạng \\ \hline
+\code{Ironfront.Net.Replication} & netstandard2.1 & 18\,500 & Snapshot, delta, interest, tick server, bù trễ, trận đấu \\ \hline
+\code{Ironfront.MasterServer} & net8.0 exe & 4\,300 & Framing, dispatch, xác thực, sảnh, ghép trận, TLS, metrics \\ \hline
+\code{MasterClient}, \code{MasterLink} & netstandard2.1 & 1\,250 & API cho client Unity và liên kết game server -- master \\ \hline
+\code{Assets/Scripts/Net} & Unity C\# & 14\,600 & Lớp keo Unity: bootstrap, dự đoán, hiển thị, giao diện \\ \hline
+\end{tabularx}
+\end{center}
+
+\subsection{Kiến trúc triển khai}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \node[bxB, text width=2.4cm] (c1) at (1.5,0)    {Client Unity 1};
+  \node[bxB, text width=2.4cm] (c2) at (1.5,-2.4) {Client Unity N};
+  \node[grp, fit=(c1)(c2)] (gP) {};
+  \node[grpt] at (gP.north west) {Người chơi};
+  \node[bxG, text width=2.8cm] (g1) at (6.3,0)    {gameserver-1\\{\footnotesize UDP 27015}};
+  \node[bxG, text width=2.8cm] (g2) at (6.3,-2.4) {gameserver-2\\{\footnotesize UDP 27016}};
+  \node[bxO, text width=3.2cm] (m)  at (6.3,-4.9) {master\\{\footnotesize TCP 27000 (TLS)\\metrics 27001 loopback}};
+  \node[db, text width=1.9cm] (v)   at (13.4,-4.9) {volume\\SQLite};
+  \node[bxY, text width=2.9cm] (a)  at (11.4,-2.4) {ironfront-alert\\{\footnotesize timer: đọc metrics}};
+  \node[bxY, text width=2.9cm] (b)  at (11.4,0)    {ironfront-backup\\{\footnotesize timer: sao lưu}};
+  \node[grp, fit=(g1)(m)(v)(a)(b)] (gV) {};
+  \node[grpt] at (gV.north west) {Máy ảo VPS -- Docker Compose};
+  \node[bxP, text width=2.8cm] (reg) at (6.3,-7.6) {GHCR\\{\footnotesize image theo digest}};
+  \draw[biarr] (c1) -- node[lbl, above=2pt]{UDP $\cdot$ GSP} (g1);
+  \draw[biarr] (c2) -- node[lbl, above=2pt]{UDP $\cdot$ GSP} (g2);
+  \draw[biarr] (gP.south) |- node[lbl, pos=0.72, above=2pt]{TCP/TLS $\cdot$ MSP} (m.west);
+  \draw[arr] (g2.south) -- (m.north);
+  \draw[arr] (g1.east) -- (8.6,0) -- node[lbl, sloped, above=1pt, pos=0.45]{đăng ký, heartbeat (TLS)} (8.6,-4.55) -- ($(m.east)+(0,0.35)$);
+  \draw[cLine, thick] ($(m.east)+(0,-0.35)$) -- ($(v.west)+(0,-0.35)$);
+  \draw[darr] (b.east) -- (13.4,0) -- (v.north);
+  \draw[darr] (reg.north) -- node[lbl, right=2pt]{pull image} (reg.north |- gV.south);
+\end{tikzpicture}
+\caption{Sơ đồ triển khai trên một máy ảo: một master và hai game server headless}
+\label{fig:n-trienkhai}
+\end{figure}
+
+Image được kéo từ GHCR theo digest cố định; bí mật (\code{IRONFRONT_SHARED_SECRET}, chứng chỉ TLS) lấy từ tệp
+\code{.env} không commit. Sao lưu và cảnh báo chạy bằng systemd timer \textit{ngoài} container, vì bộ phát hiện
+sự cố phải nằm ngoài thứ nó giám sát. Hạ tầng còn có cấu hình Terraform (tạo VM, cloud-init) và fly.io làm phương
+án thay thế.
+
+\subsection{Phân công theo phân hệ}
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{3.8cm}|L{2.4cm}|L{4.2cm}|Y|}
+\hline
+\hd{Sinh viên} & \hd{Mã SV} & \hd{Phân hệ} & \hd{Phạm vi mã nguồn chính} \\ \hline
+Nguyễn Thành Trung & B23DCCN861 & Client Unity & \code{Assets/Scripts/Net/Client}, \code{Net/Input} \\ \hline
+Nguyễn Minh Toàn & B23DCCN832 & Tầng giao vận UDP & \code{Ironfront.Net.Transport} \\ \hline
+Nguyễn Duy Nghĩa & B23DCCN600 & Replication, mô phỏng server & \code{Ironfront.Net.Replication}, \code{Net/Server} \\ \hline
+Nguyễn Tự Kiên & B23DCCN465 & Master Server TCP, hạ tầng & \code{Ironfront.MasterServer}, \code{MasterClient}, \code{infra} \\ \hline
+\end{tabularx}
+\end{center}
+
+% -------------------------------------------------------------------------------------
+\section{Mô tả thiết kế chung của hệ thống}
+
+\subsection{Mô hình thẩm quyền}
+Hệ thống \textbf{hoàn toàn do server quyết định}: client chỉ gửi \textit{ý định} (input), không bao giờ gửi kết
+quả. Nhờ vậy gian lận tốc độ, dịch chuyển tức thời, bắn nhanh hay đạn vô hạn trở nên bất khả thi về cấu trúc
+thay vì chỉ bị phát hiện.
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{4.6cm}|L{2.3cm}|Y|}
+\hline
+\hd{Vấn đề} & \hd{Ai quyết định} & \hd{Client được làm gì} \\ \hline
+Vị trí nhân vật & Server & Dự đoán ngay, sau đó hoà giải với server \\ \hline
+Trúng đạn, sát thương & Server & Hiện hiệu ứng dự đoán, chờ \code{S_HIT_CONFIRM} \\ \hline
+Máu, chết, hồi sinh & Server & Chỉ hiển thị \\ \hline
+Độ tản đạn, giật súng & Server & Giật cục bộ cho cảm giác, không ảnh hưởng viên đạn thật \\ \hline
+Bot AI, điểm chiếm, điểm số & Server & Nội suy, hiển thị \\ \hline
+Lên xuống ghế phương tiện & Server & Gửi yêu cầu \code{C_SEAT_REQUEST} \\ \hline
+Camera, UI, âm thanh, ragdoll & Client & Toàn quyền, không đồng bộ \\ \hline
+\end{tabularx}
+\end{center}
+
+\subsection{Luồng nghiệp vụ đầu -- cuối}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \seqactor{C}{1.2}{Client}
+  \seqactor{M}{7.8}{Master Server (TCP)}
+  \seqactor{G}{14.4}{Game Server (UDP)}
+  \seqbegin
+  \seqmsg{G}{M}{GS\_REGISTER \{serverSecret, publicIp, udpPort\}}
+  \seqret{M}{G}{GS\_REGISTER\_RES \{serverId\}}
+  \seqmsg{C}{M}{LOGIN\_REQ \{username, SHA256(pass+user)\}}
+  \seqret{M}{C}{LOGIN\_RES \{sessionToken, playerId\}}
+  \seqmsg{C}{M}{ROOM\_LIST\_REQ}
+  \seqret{M}{C}{ROOM\_LIST\_RES [phòng]}
+  \seqmsg{C}{M}{ROOM\_JOIN\_REQ \{roomId\}}
+  \seqnote{M}{G}{2}{Chọn game server còn chỗ\\joinTicket = HMAC-SHA256(playerId, serverId, roomId, exp)}
+  \seqret{M}{C}{ROOM\_JOIN\_RES \{ip, port, joinTicket\}}
+  \seqmsg{C}{G}{CONNECT\_REQUEST \{version, joinTicket, clientSalt\}}
+  \seqret{G}{C}{CONNECT\_CHALLENGE \{serverSalt\}}
+  \seqmsg{C}{G}{CONNECT\_RESPONSE \{salt XOR, joinTicket\}}
+  \seqnote{M}{G}{2}{Game server tự kiểm tra HMAC và hạn dùng\\không cần hỏi lại master}
+  \seqret{G}{C}{CONNECT\_ACCEPTED \{connectionId, serverTick\}}
+  \seqret{G}{C}{S\_MATCH\_STATE + S\_SPAWN\_ACTOR $\times$ N}
+  \seqloopbegin
+  \seqmsg{C}{G}{C\_INPUT \{tick, các frame gần nhất\} -- 30 Hz}
+  \seqret{G}{C}{S\_SNAPSHOT \{tick, lastProcessedInputTick, delta\} -- 20 Hz}
+  \seqloopend{C}{G}{lặp}
+  \seqmsg{C}{G}{C\_INPUT \{nút FIRE, yaw, pitch\}}
+  \seqnote{M}{G}{2}{Tua hitbox về thời điểm client nhìn thấy\\raycast, phân xử trúng}
+  \seqret{G}{C}{S\_HIT\_CONFIRM \{targetId, damage\}}
+  \seqmsg{G}{M}{GS\_MATCH\_ENDED \{kết quả\}}
+  \seqend{C,M,G}
+\end{tikzpicture}
+\caption{Luồng đầu -- cuối: đăng nhập, vào phòng, kết nối game server, chơi, kết thúc trận}
+\label{fig:n-luong}
+\end{figure}
+
+\subsection{Các kỹ thuật netcode cốt lõi}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \seqactor{C}{2.5}{Client}
+  \seqactor{S}{13}{Server}
+  \seqbegin
+  \seqnote{C}{C}{1}{tick 100: nhấn W}
+  \seqself{C}{Dự đoán: di chuyển ngay, lưu input tick 100}
+  \seqmsg{C}{S}{C\_INPUT \{tick 100, moveZ +1\}}
+  \seqnote{S}{S}{2}{Xử lý tick 100\\ra vị trí P}
+  \seqret{S}{C}{S\_SNAPSHOT \{lastProcessedInputTick 100, pos P\}}
+  \seqself{C}{Hoà giải: so vị trí dự đoán tại tick 100 với P;\\lệch quá ngưỡng thì đặt về P, phát lại input 101..hiện tại}
+  \global\advance\seqy by -0.3cm
+  \seqnote{C}{S}{2}{Actor ở xa: nội suy, hiển thị tại (now $-$ 100 ms)\\giữa hai snapshot đã nhận}
+  \seqend{C,S}
+\end{tikzpicture}
+\caption{Dự đoán phía client, hoà giải với server và nội suy actor ở xa}
+\label{fig:n-netcode}
+\end{figure}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{4cm}|Y|L{4.2cm}|}
+\hline
+\hd{Kỹ thuật} & \hd{Mục đích} & \hd{Tham số} \\ \hline
+Dự đoán phía client & Người chơi cục bộ di chuyển ngay khi nhấn phím & Cùng \code{MovementSimulation} ở client và server \\ \hline
+Hoà giải & Sửa sai khi dự đoán lệch, phát lại input chưa xác nhận & Ngưỡng lệch 0,1 m \\ \hline
+Nội suy thực thể & Actor ở xa chuyển động mượt dù snapshot chỉ 20 Hz & Bộ đệm 100 ms \\ \hline
+Bù trễ & Người ping cao vẫn bắn trúng thứ họ thấy & Tua tối đa 200 ms, lịch sử hitbox 1 s \\ \hline
+\end{tabularx}
+\end{center}
+
+\subsection{Thiết kế giao thức}
+\subsubsection{GSP -- cấu trúc một datagram PAYLOAD}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm, fld/.style={draw=cLine, minimum height=1.2cm, align=center, font=\footnotesize, inner sep=2pt}]
+  \node[fld, fill=cBlue,   minimum width=4.6cm, anchor=west] (h) at (0,0)    {\textbf{GSP header}\\16 byte};
+  \node[fld, fill=cGreen,  minimum width=2.2cm, anchor=west] (e) at (h.east) {\textbf{Envelope}\\3 byte};
+  \node[fld, fill=cOrange, minimum width=2.8cm, anchor=west] (f) at (e.east) {\textbf{Frame}\\channelId,\\messageCount};
+  \node[fld, fill=cPurple, minimum width=3.2cm, anchor=west] (m1) at (f.east) {\textbf{Message 1}\\msgType, length,\\body};
+  \node[fld, fill=cPurple, minimum width=3.2cm, anchor=west] (m2) at (m1.east) {\textbf{Message n}\\\ldots};
+  \draw[decorate, decoration={brace, amplitude=5pt, mirror}] (h.south west) -- node[below=6pt, font=\footnotesize]{byte 0--15} (h.south east);
+  \draw[decorate, decoration={brace, amplitude=5pt, mirror}] (e.south west) -- node[below=6pt, font=\footnotesize]{16--18} (e.south east);
+  \draw[decorate, decoration={brace, amplitude=5pt, mirror}] (f.south west) -- node[below=6pt, font=\footnotesize]{frame $\le$ 1181 byte; cả datagram $\le$ 1200 byte (MTU an toàn)} (m2.south east);
+\end{tikzpicture}
+\caption{Ba lớp của một datagram PAYLOAD: header GSP, envelope kênh của transport, frame message của ứng dụng}
+\label{fig:n-datagram}
+\end{figure}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{1.1cm}|L{4.2cm}|Y|L{3.6cm}|}
+\hline
+\hd{Kênh} & \hd{Kiểu} & \hd{Dữ liệu} & \hd{Khi mất gói} \\ \hline
+0 & Không tin cậy, không thứ tự & Ping/pong & Bỏ qua \\ \hline
+1 & Không tin cậy, có thứ tự (server $\rightarrow$ client) & \code{S_SNAPSHOT}, \code{S_WEAPON_FIRE}, \code{S_VEHICLE_SNAPSHOT} & Bỏ qua; gói cũ bị huỷ \\ \hline
+2 & Tin cậy, có thứ tự & Sự kiện gameplay, spawn/despawn, chat, \code{C_ACK_BASELINE} & Gửi lại tới khi được ack \\ \hline
+3 & Không tin cậy, có thứ tự (client $\rightarrow$ server) & \code{C_INPUT}, \code{C_VEHICLE_INPUT} & Bỏ qua; bù bằng dư thừa \\ \hline
+\end{tabularx}
+\end{center}
+Độ tin cậy áp dụng \textbf{theo kênh}, không theo kết nối: một sự kiện bị mất trên kênh 2 không làm nghẽn snapshot
+trên kênh 1 --- ưu điểm cốt lõi so với TCP vốn ép mọi thứ vào một luồng.
+
+\subsubsection{MSP -- khung tin trên TCP}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm, fld/.style={draw=cLine, minimum height=1.1cm, align=center, font=\footnotesize, inner sep=2pt}]
+  \node[fld, fill=cBlue,   minimum width=3.6cm, anchor=west] (a) at (0,0)    {\textbf{length}\\u32, big-endian};
+  \node[fld, fill=cGreen,  minimum width=3.2cm, anchor=west] (b) at (a.east) {\textbf{msgType}\\u16, little-endian};
+  \node[fld, fill=cOrange, minimum width=6.0cm, anchor=west] (c) at (b.east) {\textbf{body}\\UTF-8 JSON, tối đa 64 KB};
+\end{tikzpicture}
+\caption{Khung tin MSP: tiền tố độ dài giải quyết bài toán ranh giới thông điệp trên luồng byte TCP}
+\label{fig:n-msp}
+\end{figure}
+
+\subsubsection{joinTicket -- cầu nối TCP và UDP}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm, fld/.style={draw=cLine, minimum height=1.1cm, align=center, font=\footnotesize, inner sep=2pt}]
+  \node[fld, fill=cBlue,   minimum width=2.0cm, anchor=west] (a) at (0,0)    {\textbf{playerId}\\u32};
+  \node[fld, fill=cBlue,   minimum width=1.7cm, anchor=west] (b) at (a.east) {\textbf{serverId}\\u16};
+  \node[fld, fill=cBlue,   minimum width=1.6cm, anchor=west] (c) at (b.east) {\textbf{roomId}\\u16};
+  \node[fld, fill=cGreen,  minimum width=3.0cm, anchor=west] (d) at (c.east) {\textbf{expiresAtUnixMs}\\u64 (60 s)};
+  \node[fld, fill=cOrange, minimum width=3.0cm, anchor=west] (e) at (d.east) {\textbf{displayName}\\16 byte UTF-8};
+  \node[fld, fill=cPurple, minimum width=3.6cm, anchor=west] (f) at (e.east) {\textbf{hmac}\\HMAC-SHA256, 32 byte};
+  \draw[decorate, decoration={brace, amplitude=5pt, mirror}] (a.south west) -- node[below=6pt, font=\footnotesize]{32 byte dữ liệu được ký} (e.south east);
+  \draw[decorate, decoration={brace, amplitude=5pt, mirror}] (f.south west) -- node[below=6pt, font=\footnotesize]{32 byte chữ ký} (f.south east);
+\end{tikzpicture}
+\caption{Cấu trúc joinTicket 64 byte}
+\label{fig:n-ticket}
+\end{figure}
+Master ký vé bằng \code{SHARED_SECRET}; game server kiểm tra chữ ký bằng \code{FixedTimeEquals} và kiểm hạn dùng.
+Không cần gọi lại master, nên \textbf{master có thể dừng giữa trận mà trận vẫn tiếp tục}.
+
+\subsection{Tham số thời gian}
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{5.4cm}|L{3.2cm}|Y|}
+\hline
+\hd{Tham số} & \hd{Giá trị} & \hd{Ghi chú} \\ \hline
+Tick mô phỏng server & 30 Hz (33,3 ms) & Theo đồng hồ thực, không theo số lần FixedUpdate \\ \hline
+Snapshot & 20 Hz (50 ms) & Rẻ hơn 30 Hz, nội suy bù độ mượt \\ \hline
+Gửi input & 30 Hz & Mỗi gói lặp lại các frame gần nhất \\ \hline
+Bộ đệm nội suy & 100 ms & Chịu được mất một snapshot \\ \hline
+Cửa sổ bù trễ / lịch sử hitbox & 200 ms / 1 s & Chặn lạm dụng ping giả \\ \hline
+Keep-alive / timeout UDP & 1 s / 10 s & \\ \hline
+Heartbeat MSP client / game server & 15 s & Phát hiện kết nối TCP nửa mở \\ \hline
+\end{tabularx}
+\end{center}
+
+\subsection{Phân loại đối tượng đồng bộ}
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{3.4cm}|L{5.2cm}|Y|}
+\hline
+\hd{Loại} & \hd{Ví dụ} & \hd{Cách xử lý} \\ \hline
+Actor được đồng bộ & Người chơi, bot & Có \code{actorId} u16, có trong snapshot, mã hoá delta \\ \hline
+Phương tiện & Xe, trực thăng, tàu & Luồng riêng \code{S_VEHICLE_SNAPSHOT} \\ \hline
+Chỉ ở server & Lịch sử hitbox, dữ liệu AI & Không bao giờ gửi \\ \hline
+Chỉ ở client & Camera, UI, particle, ragdoll, âm thanh & Không bao giờ gửi \\ \hline
+Sự kiện một lần & Chết, nổ, phát súng, chiếm điểm & Kênh tin cậy có thứ tự \\ \hline
+Tĩnh & Địa hình, công trình, điểm hồi sinh & Có sẵn trong scene hai phía \\ \hline
+\end{tabularx}
+\end{center}
+
+\subsection{Bảo mật ở mức phù hợp phạm vi}
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{5cm}|Y|L{2.5cm}|}
+\hline
+\hd{Mối đe doạ} & \hd{Biện pháp} & \hd{Tầng} \\ \hline
+Tăng tốc, dịch chuyển, bắn nhanh, đạn vô hạn & Server chỉ nhận input; kẹp tốc độ; tự quản lý cooldown và đạn & Replication \\ \hline
+Mạo danh người chơi & \code{connectionId} gắn với \code{playerId} trong joinTicket đã ký & Transport \\ \hline
+Khuếch đại giả mạo IP & Bắt tay challenge không lưu trạng thái (cookie HMAC) & Transport \\ \hline
+Gói rác, lụt gói & Kiểm \code{protocolId}; giới hạn tốc độ theo IP; giới hạn nhóm phân mảnh & Transport \\ \hline
+Nghe lén mật khẩu & TLS và ghim vân tay chứng chỉ; SHA-256 phía client, bcrypt phía server & Master \\ \hline
+Tràn bộ nhớ, Slowloris & Khung tối đa 64 KB; hạn 30 s trước xác thực; 5 kết nối/IP & Master \\ \hline
+SQL injection, dò mật khẩu & Truy vấn tham số hoá; 5 lần/phút/IP; khoá 15 phút sau 10 lần sai & Master \\ \hline
+\end{tabularx}
+\end{center}
+
+\subsection{Các quyết định kiến trúc đã chốt}
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{1.3cm}|Y|Y|}
+\hline
+\hd{Mã} & \hd{Quyết định} & \hd{Lý do} \\ \hline
+AD-1 & Server nắm quyền, không có listen-server & Thẩm quyền rõ ràng; tránh sửa 21 singleton \\ \hline
+AD-2 & Game server là Unity headless & Tái dùng PhysX, A*, AI; tiết kiệm 8--12 tuần \\ \hline
+AD-3 & Không theo đuổi tất định (lockstep) & \code{Random} rải rác 27 tệp; PhysX không tất định \\ \hline
+AD-4 & Ragdoll chỉ là hiệu ứng cục bộ & Tiết kiệm khoảng 1,7 MB/s \\ \hline
+AD-5 & Transport, Replication là thư viện .NET thuần & Kiểm thử bằng xUnit, tránh xung đột Unity \\ \hline
+AD-7 & Snapshot không tin cậy, sự kiện tin cậy & Đúng bản chất trạng thái và sự kiện \\ \hline
+AD-8 & Không dùng WebSocket & Yêu cầu môn học và head-of-line blocking \\ \hline
+\end{tabularx}
+\end{center}
+
+\subsection{Quy trình phát triển và bảo đảm chất lượng}
+\begin{itemize}
+  \item \textbf{Đặc tả giao thức đóng băng} và \code{ProtocolConstants.cs} là nguồn sự thật duy nhất;
+        \code{tools/SpecChecker} làm hỏng build nếu hai bên lệch nhau.
+  \item \textbf{Tách người viết và người kiểm}: phân hệ Transport viết bit-packing, phân hệ Replication viết bộ
+        test conformance bằng hex viết tay theo đặc tả.
+  \item \textbf{CI} chạy trên Ubuntu và Windows: build coi cảnh báo là lỗi, chạy test, kiểm tra lệch đặc tả.
+  \item \textbf{Definition of Done}: đã chạy và xem đầu ra, test phân hệ xanh, toàn bộ test xanh, Unity biên dịch
+        sạch, đã merge và viết báo cáo phase.
+\end{itemize}

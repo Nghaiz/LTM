@@ -1,0 +1,294 @@
+% =====================================================================================
+% B-transport.tex — PHẦN II của Nguyễn Minh Toàn: tầng giao vận UDP (Transport)
+% =====================================================================================
+\PhanLon{II. NỘI DUNG CÁ NHÂN}
+\textit{Sinh viên thực hiện: Nguyễn Minh Toàn (B23DCCN832) -- phân hệ tầng giao vận UDP (Transport).}
+
+\section{Biểu đồ và giao diện nội dung cá nhân thực hiện}
+Phân hệ Transport xây dựng \textbf{tầng giao vận tin cậy trên UDP từ con số không}, chỉ với \code{Socket} kiểu
+\code{Dgram}: đánh số thứ tự, ack bằng bitfield, gửi lại, 4 kênh độc lập, phân mảnh, ước lượng RTT, kiểm soát
+nghẽn, chống giả mạo và bộ giả lập mạng. Tầng này chỉ biết mảng byte --- không biết nội dung là snapshot hay
+chat --- và không tham chiếu \code{UnityEngine}.
+
+% -------------------------------------------------------------------------------------
+\subsection{Kiến trúc thư viện Transport}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm, lay/.style={box, text width=3.4cm, minimum height=1.3cm},
+                    rowname/.style={font=\small\bfseries, align=left, text width=2.5cm, anchor=west}]
+  \node[rowname] at (0,0) {Ứng dụng};
+  \node[lay, fill=cOrange] (u1) at (4.6,0)  {\textbf{Client Unity}\\{\footnotesize NetClientBootstrap}};
+  \node[lay, fill=cOrange] (u2) at (8.4,0)  {\textbf{Game server}\\{\footnotesize NetServerBootstrap}};
+  \node[lay, fill=cOrange] (u3) at (12.2,0) {\textbf{LoadTest, xUnit}\\{\footnotesize bot và kiểm thử}};
+  \node[font=\footnotesize] at (8.4,-1.05) {\texttt{ITransportClient} / \texttt{ITransportServer} -- chỉ trao đổi byte và id kênh};
+  \node[rowname] at (0,-2.1) {Mặt tiền API};
+  \node[lay, fill=cBlue]   (a1) at (4.6,-2.1)  {\textbf{UdpTransportClient}\\{\footnotesize kết nối, gửi lại yêu cầu}};
+  \node[lay, fill=cBlue]   (a2) at (8.4,-2.1)  {\textbf{UdpTransportServer}\\{\footnotesize bảng kết nối, RateLimiter}};
+  \node[lay, fill=cPurple] (a3) at (12.2,-2.1) {\textbf{LoopbackTransport}\\{\footnotesize trong bộ nhớ, cho test}};
+  \node[rowname] at (0,-3.8) {Mỗi kết nối};
+  \node[lay, fill=cBlue] (k1) at (4.6,-3.8)  {\textbf{Connection}\\{\footnotesize trạng thái, RTT, keep-alive}};
+  \node[lay, fill=cBlue] (k2) at (8.4,-3.8)  {\textbf{ReliabilityLayer}\\{\footnotesize seq, ack, bitfield, gửi lại}};
+  \node[lay, fill=cBlue] (k3) at (12.2,-3.8) {\textbf{ChannelSet}\\{\footnotesize 4 kênh, sequence riêng}};
+  \node[lay, fill=cBlue] (k4) at (4.6,-5.3)  {\textbf{FragmentAssembler}\\{\footnotesize ghép mảnh, 8 nhóm, 2 s}};
+  \node[lay, fill=cBlue] (k5) at (8.4,-5.3)  {\textbf{CongestionControl}\\{\footnotesize GOOD / BAD}};
+  \node[lay, fill=cBlue] (k6) at (12.2,-5.3) {\textbf{FlowControl}\\{\footnotesize tối đa 64 gói chưa ack}};
+  \node[rowname] at (0,-7.1) {Socket};
+  \node[lay, fill=cGreen] (s1) at (4.6,-7.1)  {\textbf{UdpPeer}\\{\footnotesize socket không chặn, 1024 gói/Poll}};
+  \node[lay, fill=cGray]  (s2) at (8.4,-7.1)  {\textbf{BufferPool, PacketLogger}\\{\footnotesize không cấp phát, ghi .ifpcap}};
+  \node[lay, fill=cGray]  (s3) at (12.2,-7.1) {\textbf{NetworkSimulator}\\{\footnotesize mất gói, trễ, jitter}};
+  \node[font=\footnotesize] at (8.4,-8.25) {\texttt{System.Net.Sockets.Socket} (\texttt{SocketType.Dgram}) -- hệ điều hành};
+\end{tikzpicture}
+\caption{Biểu đồ thành phần thư viện Ironfront.Net.Transport}
+\label{fig:B-thanhphan}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Định dạng gói tin GSP}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm, fld/.style={draw=cLine, minimum height=1.2cm, align=center, font=\scriptsize, inner sep=1pt, anchor=west}]
+  % 16 byte = 16 cm... dùng 0.98 cm / byte
+  \def\b{0.98}
+  \node[fld, fill=cBlue,   minimum width=2*\b cm] (p)  at (0,0)      {\textbf{protocolId}\\u16 0x4946};
+  \node[fld, fill=cBlue,   minimum width=1*\b cm] (t)  at (p.east)   {\textbf{type}\\u8};
+  \node[fld, fill=cBlue,   minimum width=1*\b cm] (f)  at (t.east)   {\textbf{flags}\\u8};
+  \node[fld, fill=cGreen,  minimum width=2*\b cm] (s)  at (f.east)   {\textbf{sequence}\\u16};
+  \node[fld, fill=cGreen,  minimum width=2*\b cm] (a)  at (s.east)   {\textbf{ack}\\u16};
+  \node[fld, fill=cGreen,  minimum width=4*\b cm] (ab) at (a.east)   {\textbf{ackBitfield}\\u32: 32 gói trước ack};
+  \node[fld, fill=cOrange, minimum width=2*\b cm] (c)  at (ab.east)  {\textbf{connection}\\\textbf{Id} u16};
+  \node[fld, fill=cOrange, minimum width=2*\b cm] (l)  at (c.east)   {\textbf{payload}\\\textbf{Length}\\u16 $\le$ 1184};
+  \foreach \n/\o in {p/0, t/2, f/3, s/4, a/6, ab/8, c/12, l/14} { \node[font=\scriptsize, anchor=north west] at (\n.south west) {\o}; }
+  \node[font=\scriptsize, anchor=north east] at (l.south east) {16};
+  % envelope + fragment header
+  \node[fld, fill=cPurple, minimum width=2.4cm] (e1) at (0,-2.4)  {\textbf{channelId}\\u8: 0..3};
+  \node[fld, fill=cPurple, minimum width=4.2cm] (e2) at (e1.east) {\textbf{channelSequence}\\u16, riêng từng kênh};
+  \node[font=\footnotesize, anchor=north] at ($(e1.south west)!0.5!(e2.south east)+(0,-0.1)$) {Envelope kênh 3 byte (mọi gói PAYLOAD)};
+  \node[fld, fill=cPurple, minimum width=3.6cm] (g1) at (8.1,-2.4)  {\textbf{fragmentGroupId}\\u16};
+  \node[fld, fill=cPurple, minimum width=2.0cm] (g2) at (g1.east)   {\textbf{index}\\u8};
+  \node[fld, fill=cPurple, minimum width=2.0cm] (g3) at (g2.east)   {\textbf{count}\\u8 $\le$ 64};
+  \node[font=\footnotesize, anchor=north] at ($(g1.south west)!0.5!(g3.south east)+(0,-0.1)$) {Header phân mảnh 4 byte (khi cờ FRAGMENTED)};
+\end{tikzpicture}
+\caption{Header GSP 16 byte (little-endian), envelope kênh và header phân mảnh}
+\label{fig:B-header}
+\end{figure}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{2.6cm}|Y|}
+\hline
+\hd{Trường} & \hd{Giá trị} \\ \hline
+Bit \code{flags} & 0 RELIABLE $\cdot$ 1 FRAGMENTED $\cdot$ 2 ORDERED $\cdot$ 3 COMPRESSED (dự phòng) $\cdot$ 4--7 phải bằng 0 \\ \hline
+\code{packetType} & 0x01 CONNECT\_REQUEST $\cdot$ 0x02 CONNECT\_CHALLENGE $\cdot$ 0x03 CONNECT\_RESPONSE $\cdot$ 0x04 CONNECT\_ACCEPTED $\cdot$ 0x05 CONNECT\_DENIED $\cdot$ 0x06 DISCONNECT $\cdot$ 0x07 KEEPALIVE $\cdot$ 0x10 PAYLOAD $\cdot$ 0x11 FRAGMENT \\ \hline
+\end{tabularx}
+\end{center}
+
+% -------------------------------------------------------------------------------------
+\subsection{Bắt tay không lưu trạng thái}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \seqactor{C}{2.2}{Client (UdpTransportClient)}
+  \seqactor{S}{12.8}{Server (UdpTransportServer)}
+  \seqbegin
+  \seqmsg{C}{S}{CONNECT\_REQUEST \{version, joinTicket 64 byte, clientSalt u64\}}
+  \seqnote{S}{S}{3}{RateLimiter theo IP; kiểm version và chỗ trống; \textbf{không lưu gì}, chưa kiểm HMAC}
+  \seqret{S}{C}{CONNECT\_CHALLENGE \{serverSalt\}}
+  \seqnote{C}{S}{2}{serverSalt = HMAC(serverKey, địa chỉ, cổng, clientSalt, epoch 30 s)\\client tính challengeResponse = clientSalt XOR serverSalt}
+  \seqmsg{C}{S}{CONNECT\_RESPONSE \{response, clientSalt, joinTicket\}}
+  \seqnote{S}{S}{3}{Tính lại salt: địa chỉ đã được chứng minh; kiểm vé (HMAC, hạn), gắn playerId, cấp connectionId}
+  \seqret{S}{C}{hợp lệ: CONNECT\_ACCEPTED \{connectionId, serverTick, mapId, playerId\}}
+  \seqret{S}{C}{không hợp lệ: CONNECT\_DENIED \{lý do 1..6\}}
+  \seqend{C,S}
+\end{tikzpicture}
+\caption{Bắt tay challenge -- response dùng cookie HMAC: server không cấp tài nguyên cho địa chỉ chưa được chứng minh}
+\label{fig:B-battay}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Máy trạng thái kết nối}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \node[init] (i) at (-0.6,0) {};
+  \node[st, text width=2.4cm] (d)  at (1.8,0)    {Disconnected};
+  \node[st, text width=2.4cm] (c)  at (7.2,0)    {Connecting};
+  \node[st, text width=2.4cm] (h)  at (12.6,0)   {Challenged};
+  \node[st, text width=2.4cm, fill=cGreen] (ok) at (12.6,-3.4) {Connected};
+  \draw[arr] (i) -- (d);
+  \draw[arr] (d) -- node[lbl, above=3pt]{Connect()} (c);
+  \draw[arr] (c) -- node[lbl, above=3pt]{nhận CHALLENGE} (h);
+  \draw[arr] (h) -- node[lbl, right=3pt]{nhận CONNECT\_ACCEPTED} (ok);
+  \draw[arr] (c.north) -- ++(0,0.9) -| node[lbl, pos=0.25, above=2pt]{5 s hết giờ / CONNECT\_DENIED} ($(d.north)+(0.4,0)$);
+  \draw[arr] (h.north) -- ++(0,1.8) -| node[lbl, pos=0.25, above=2pt]{5 s hết giờ} ($(d.north)+(-0.4,0)$);
+  \draw[arr] (ok.west) -| node[lbl, pos=0.3, below=3pt]{DISCONNECT (gửi 3 lần) / 10 s im lặng / hết lượt gửi lại} (d.south);
+  \draw[arr] (ok.south east) .. controls +(1.2,-0.8) and +(1.3,0.4) .. node[lbl, right=2pt]{KEEPALIVE\\mỗi 1 s} (ok.east);
+  \node[font=\footnotesize, align=left, anchor=north west] at (3.3,-0.55) {CONNECT\_REQUEST gửi lại mỗi 250 ms,\\tối đa 20 lần};
+\end{tikzpicture}
+\caption{Máy trạng thái \texttt{ConnectionState} của một kết nối}
+\label{fig:B-trangthai}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Cơ chế ack bằng bitfield và gửi lại}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm, cell/.style={draw=cLine, minimum width=2.1cm, minimum height=1.1cm, align=center, font=\footnotesize, anchor=west}]
+  \node[cell, fill=cGreen]  (c0) at (0,0)     {\textbf{seq 103}\\đã nhận};
+  \node[cell, fill=cOrange] (c1) at (c0.east) {\textbf{seq 102}\\MẤT};
+  \node[cell, fill=cGreen]  (c2) at (c1.east) {\textbf{seq 101}\\đã nhận};
+  \node[cell, fill=cOrange] (c3) at (c2.east) {\textbf{seq 100}\\MẤT};
+  \node[cell, fill=cGreen]  (c4) at (c3.east) {\textbf{seq 99}\\đã nhận};
+  \node[cell, fill=cGreen]  (c5) at (c4.east) {\textbf{seq 98}\\đã nhận};
+  \node[cell, fill=cGreen]  (c6) at (c5.east) {\textbf{seq 97}\\đã nhận};
+  \foreach \n/\t in {c0/{ack = 103}, c1/{bit0 = 0}, c2/{bit1 = 1}, c3/{bit2 = 0}, c4/{bit3 = 1}, c5/{bit4 = 1}, c6/{bit5 = 1}}
+    { \node[font=\footnotesize] at ($(\n.south)+(0,-0.3)$) {\t}; }
+\end{tikzpicture}
+\caption{Ví dụ ack bitfield: \texttt{ack = 103}, \texttt{ackBitfield = ...111010}; bên gửi biết ngay gói 102 và 100 bị mất.
+Mỗi gói mang 33 thông tin ack nên không cần gói ACK riêng}
+\label{fig:B-bitfield}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  % ---- cột gửi
+  \node[font=\small\bfseries] at (4,1.0) {Gửi};
+  \node[bxB, text width=3.6cm] (a)  at (4,0)    {\texttt{Send(channel, payload, reliable)}};
+  \node[dec, text width=1.7cm] (d1) at (4,-1.8) {reliable?};
+  \node[dec, text width=2.2cm] (d2) at (4,-4.0) {chưa ack\\< 64 gói?};
+  \node[bxO, text width=1.7cm] (q)  at (7.9,-4.0) {Tạm hoãn gói tin cậy mới};
+  \node[bxB, text width=3.6cm] (k)  at (4,-6.1)  {Sao chép vào BufferPool, lưu theo sequence};
+  \node[bxG, text width=3.6cm] (w)  at (4,-7.9)  {Ghi header + envelope\\gửi datagram};
+  \draw[arr] (a) -- (d1);
+  \draw[arr] (d1) -- node[lbl, right=2pt]{có} (d2);
+  \draw[arr] (d2) -- node[lbl, above=2pt]{không} (q);
+  \draw[arr] (d2) -- node[lbl, right=2pt]{có} (k);
+  \draw[arr] (k) -- (w);
+  \draw[arr] (d1.west) -- node[lbl, above=2pt]{không} (0.6,-1.8) |- (w.west);
+  % ---- cột nhận ack / gửi lại
+  \draw[cLine, dashed] (9.0,1.2) -- (9.0,-8.6);
+  \node[font=\small\bfseries] at (12.6,1.0) {Nhận ack và gửi lại};
+  \node[bxB, text width=3.8cm] (r)  at (12.6,0)    {Gói đến mang ack + bitfield};
+  \node[bxB, text width=3.8cm] (x)  at (12.6,-1.8) {Đánh dấu đã nhận, trả buffer; mẫu RTT chỉ từ lần gửi đầu (Karn)};
+  \node[bxB, text width=3.8cm] (t)  at (12.6,-4.0) {\texttt{Poll()}: gói quá RTO\\(30--1000 ms)};
+  \node[dec, text width=2.2cm] (d3) at (12.6,-6.1) {đã gửi lại\\> 10 lần?};
+  \node[bxO, text width=3.8cm] (z)  at (12.6,-7.9) {Đóng kết nối\\\texttt{TransportError}};
+  \draw[arr] (r) -- (x);
+  \draw[arr] (t) -- (d3);
+  \draw[arr] (d3) -- node[lbl, right=2pt]{có} (z);
+  \draw[arr] (d3.west) -- node[lbl, above=2pt]{không: gửi lại} (8.2,-6.1) |- ($(w.east)+(0,0.2)$);
+\end{tikzpicture}
+\caption{Luồng gửi tin cậy, xử lý ack và gửi lại trong \texttt{ReliabilityLayer}}
+\label{fig:B-guilai}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Kênh, phân mảnh và kiểm soát nghẽn}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \node[bxB, text width=3.2cm] (in)  at (3.2,0)   {Datagram PAYLOAD\\đã giải header};
+  \node[bxB, text width=2.6cm] (in2) at (10.4,0)  {Datagram FRAGMENT};
+  \node[bxB, text width=3.6cm] (fa)  at (10.4,-1.6) {FragmentAssembler\\{\footnotesize tối đa 8 nhóm, huỷ sau 2 s}};
+  \node[dec, text width=2.0cm] (e)   at (6.8,-3.6) {channelId\\trong envelope};
+  \node[bxG, text width=2.4cm] (c0)  at (1.8,-6.0) {Giao ngay\\không thứ tự};
+  \node[dec, text width=2.3cm] (c1)  at (6.8,-6.0) {channelSequence\\mới hơn?};
+  \node[dec, text width=2.3cm] (c2)  at (12.6,-6.0) {đúng sequence\\kế tiếp?};
+  \node[bxG, text width=2.2cm] (d1)  at (5.2,-8.6) {Giao};
+  \node[bxO, text width=2.2cm] (x1)  at (8.4,-8.6) {Huỷ gói cũ};
+  \node[bxG, text width=2.8cm] (d2)  at (11.2,-8.6) {Giao + xả gói đệm liền sau};
+  \node[bxO, text width=2.0cm] (b2)  at (14.5,-8.6) {Đệm chờ};
+  \draw[arr] (in2) -- (fa);
+  \draw[arr] (in.south) -- (3.2,-2.4) -| (e.north);
+  \draw[arr] (fa.south) -- (10.4,-2.4) -| (e.north);
+  \draw[arr] (e.west) -| node[lbl, pos=0.25, above=2pt]{kênh 0} (c0.north);
+  \draw[arr] (e) -- node[lbl, right=2pt]{kênh 1 / 3} (c1);
+  \draw[arr] (e.east) -| node[lbl, pos=0.25, above=2pt]{kênh 2} (c2.north);
+  \draw[arr] (c1.south) -- ++(0,-0.4) -| node[lbl, pos=0.75, left=2pt]{có} (d1.north);
+  \draw[arr] (c1.south) -- ++(0,-0.4) -| node[lbl, pos=0.75, right=2pt]{không} (x1.north);
+  \draw[arr] (c2.south) -- ++(0,-0.4) -| node[lbl, pos=0.75, left=2pt]{có} (d2.north);
+  \draw[arr] (c2.south) -- ++(0,-0.4) -| node[lbl, pos=0.75, right=2pt]{sớm} (b2.north);
+\end{tikzpicture}
+\caption{Xử lý phía nhận theo kênh: kênh 2 chờ đúng thứ tự, kênh 1 và 3 bỏ gói cũ}
+\label{fig:B-kenh}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \node[init] (i) at (0.6,0) {};
+  \node[st, fill=cGreen, text width=2.2cm] (g) at (3.2,0) {GOOD};
+  \node[st, fill=cOrange, text width=2.2cm] (b) at (11.2,0) {BAD};
+  \draw[arr] (i) -- (g);
+  \draw[arr] ($(g.east)+(0,0.2)$) -- node[lbl, above=3pt]{RTT làm mượt > 250 ms} ($(b.west)+(0,0.2)$);
+  \draw[arr] ($(b.west)+(0,-0.2)$) -- node[lbl, below=3pt]{RTT < 200 ms và đã ở BAD $\ge$ 10 s} ($(g.east)+(0,-0.2)$);
+  \node[font=\footnotesize, align=center, anchor=north] at ($(g.south)+(0,-0.25)$) {snapshot 20 Hz};
+  \node[font=\footnotesize, align=center, anchor=north] at ($(b.south)+(0,-0.25)$) {snapshot 10 Hz, giảm chi tiết};
+\end{tikzpicture}
+\caption{Kiểm soát nghẽn hai chế độ có trễ (hysteresis) 250/200 ms; RTT làm mượt theo EWMA 0,9/0,1}
+\label{fig:B-nghen}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Giao diện lập trình và giao diện chẩn đoán}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm,
+  cls/.style={draw=cLine, rectangle split, rectangle split parts=2, rectangle split part fill={cBlue,white},
+    font=\footnotesize, inner sep=4pt}]
+  \node[cls, anchor=north] (ic) at (2.9,0) {\begin{tabular}{@{}c@{}}\textit{«interface»}\\\textbf{ITransportClient}\end{tabular}
+    \nodepart{two}\begin{tabular}{@{}l@{}}
+      + State : ConnectionState \\ + SmoothedRttMs : float \\ + Stats : TransportStats \\
+      + Connect(host, port, joinTicket) \\ + Send(channelId, payload, reliable) \\ + Disconnect() \\ + Poll() \\
+      + OnMessage, OnConnected, \\ \quad OnDisconnected \\
+    \end{tabular}};
+  \node[cls, anchor=north] (is) at (8.4,0) {\begin{tabular}{@{}c@{}}\textit{«interface»}\\\textbf{ITransportServer}\end{tabular}
+    \nodepart{two}\begin{tabular}{@{}l@{}}
+      + ConnectionCount : int \\ + Start(port, maxConnections) \\ + Send(connectionId, channel, \\ \quad payload, reliable) \\
+      + Broadcast(channel, payload, reliable) \\ + Disconnect(connectionId, reason) \\ + Poll() \\
+      + OnValidateTicket, OnClientConnected, \\ \quad OnClientDisconnected \\
+    \end{tabular}};
+  \node[cls, anchor=north] (ts) at (13.9,0) {\textbf{TransportStats}
+    \nodepart{two}\begin{tabular}{@{}l@{}}
+      + BytesSent, BytesReceived \\ + PacketsSent, Received \\ + PacketsLost, Resent \\ + SmoothedRttMs, JitterMs \\
+      + CongestionMode \\ + PendingFragmentGroups \\
+    \end{tabular}};
+  \node[bxY, text width=2.9cm] (uc) at (1.3,-7.4) {UdpTransportClient};
+  \node[bxY, text width=2.9cm] (lb) at (4.6,-7.4) {LoopbackTransport};
+  \node[bxY, text width=2.9cm] (us) at (8.4,-7.4) {UdpTransportServer};
+  \draw[darr, -{Triangle[open, length=3mm]}] (uc.north) -- (uc.north |- ic.south);
+  \draw[darr, -{Triangle[open, length=3mm]}] (lb.north) -- (lb.north |- ic.south);
+  \draw[darr, -{Triangle[open, length=3mm]}] (us.north) -- (us.north |- is.south);
+  \draw[arr] (is.east |- ts.west) -- (ts.west);
+\end{tikzpicture}
+\caption{Giao diện lập trình công khai của Transport (đóng băng từ tuần 1)}
+\label{fig:B-api}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}[t]{0.42\linewidth}
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize]
+Transport Connected
+RTT 48.2 ms  jitter 3.1 ms
+loss up 0.4%  down 1.2%
+rate up 0.9 KB/s  down 1.7 KB/s
+congestion GOOD  fragments 0  pool 12
+packets sent 18422 recv 12291
+        lost 147 resent 52
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.55\linewidth}
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize]
+$ dotnet run --project Ironfront.Tools.PacketReplay \
+    -- capture.ifpcap --conn 3 --from 12.0 --to 15.0
+t=12.004 OUT PAYLOAD  seq=4412 ack=3380 ch=1 len=87
+t=12.021 IN  PAYLOAD  seq=3381 ack=4411 ch=3 len=41
+t=12.062 IN  KEEPALIVE seq=3382 ack=4413 rtt~41ms
+gap: seq 4414 not acked after 3 datagrams
+summary: 118 out, 94 in, 2 gaps, rtt p50 44ms
+\end{lstlisting}
+\end{minipage}
+\caption{Giao diện chẩn đoán: văn bản overlay do \texttt{TransportDiagnosticsFormatter} sinh (trái) và minh hoạ đầu ra
+công cụ phát lại gói (phải); các số là minh hoạ bố cục}
+\label{fig:B-chandoan}
+\end{figure}
