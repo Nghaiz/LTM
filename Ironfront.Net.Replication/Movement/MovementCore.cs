@@ -16,6 +16,20 @@ namespace Ironfront.Net.Replication.Movement
 
         public bool IsCrouching;
 
+        /// <summary>
+        /// Whether the jump button was held at the END of the previous step. The jump is an
+        /// edge, and this is the half of it the simulation has to remember — see
+        /// <see cref="MovementCore.Step"/>.
+        /// </summary>
+        /// <remarks>
+        /// <b>In the state rather than at the input source, deliberately.</b> The edge has to be
+        /// computed from one contiguous frame sequence, and the two sides do not share a source:
+        /// the client predicts from the frames it generates, the server replays the frames it
+        /// received. Recomputing the rise here makes it the same rise on both, which is the same
+        /// argument that keeps every other line of this file shared.
+        /// </remarks>
+        public bool JumpHeld;
+
         public static MoveState AtRest(Vec3 position, bool grounded = true)
             => new MoveState { Position = position, Velocity = Vec3.Zero, IsGrounded = grounded };
     }
@@ -161,7 +175,17 @@ namespace Ironfront.Net.Replication.Movement
             {
                 velocity = new Vec3(velocity.X, -StickToGroundForce, velocity.Z);
 
-                if (input.Jump)
+                // The jump is an EDGE, not a level. Holding the key in the shipped game gives one
+                // jump: FirstPersonController latches it on the button's down-transition and
+                // FixedUpdate consumes it -- `if (!m_Jump) m_Jump = GetButtonDown("Jump")`.
+                // Re-applying JumpSpeed on every grounded tick instead turns a held key into a
+                // hop, which is what reading the button as a level here did.
+                //
+                // The rise is computed from the previous frame's own bit rather than from a
+                // "jump pressed" flag the caller sets, because the caller differs on the two
+                // sides and this file must not: the client predicts from frames it generated and
+                // the server replays frames it received.
+                if (input.Jump && !state.JumpHeld)
                     velocity = new Vec3(velocity.X, JumpSpeed, velocity.Z);
             }
             else
@@ -171,6 +195,7 @@ namespace Ironfront.Net.Replication.Movement
 
             state.Velocity    = velocity;
             state.IsCrouching = input.Crouch;
+            state.JumpHeld    = input.Jump;
 
             return velocity * dt;
         }

@@ -206,6 +206,50 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void HoldingJumpGivesOneJumpRatherThanAHop()
+        {
+            // The shipped controller latches the button's down-transition and consumes it
+            // (`if (!m_Jump) m_Jump = GetButtonDown("Jump")`), so a held key is one jump.
+            // Reading the button as a level re-applied JumpSpeed on every grounded tick, which
+            // is a hop per tick for as long as the key is down.
+            var state = MoveState.AtRest(Vec3.Zero, grounded: true);
+            var held  = new MoveInput(0f, 0f, 0f, jump: true, sprint: false, crouch: false);
+
+            // Every tick reports grounded, which is what a hop needs: grounding is the caller's
+            // input here, and a body the caller keeps on the floor sees the button every tick.
+            MovementCore.Step(ref state, in held, Dt);
+            Assert.Equal(MovementCore.JumpSpeed, state.Velocity.Y, 4);
+
+            MovementCore.Step(ref state, in held, Dt);
+            Assert.True(state.Velocity.Y < MovementCore.JumpSpeed,
+                "the second tick re-applied the jump while the button was still held");
+
+            MovementCore.Step(ref state, in held, Dt);
+            Assert.True(state.Velocity.Y < MovementCore.JumpSpeed,
+                "the third tick re-applied the jump while the button was still held");
+        }
+
+        [Fact]
+        public void ReleasingAndPressingJumpJumpsAgain()
+        {
+            // The mirror of the test above, and the reason that one is about an EDGE rather than
+            // about "jump works once per life": the latch has to clear on release.
+            var state = MoveState.AtRest(Vec3.Zero, grounded: true);
+            var held  = new MoveInput(0f, 0f, 0f, jump: true, sprint: false, crouch: false);
+            var up    = new MoveInput(0f, 0f, 0f, jump: false, sprint: false, crouch: false);
+
+            MovementCore.Step(ref state, in held, Dt);
+            Assert.Equal(MovementCore.JumpSpeed, state.Velocity.Y, 4);
+
+            MovementCore.Step(ref state, in up, Dt);
+            Assert.True(state.Velocity.Y < MovementCore.JumpSpeed, "the release tick must not jump");
+
+            state.IsGrounded = true;
+            MovementCore.Step(ref state, in held, Dt);
+            Assert.Equal(MovementCore.JumpSpeed, state.Velocity.Y, 4);
+        }
+
+        [Fact]
         public void GravityAccumulatesWhileAirborne()
         {
             var state = MoveState.AtRest(Vec3.Zero, grounded: false);
