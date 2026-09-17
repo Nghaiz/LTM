@@ -299,18 +299,19 @@ namespace Ironfront.Net.Unity
             _secondTimer = 0f;
         }
 
+        /// <remarks>
+        /// All three live sources reach the frame in one call, written inline rather than through
+        /// temporaries so that a reader — and the source-text gate in
+        /// <c>ClientInputSenderTests</c> — can see which question each argument answers. Each falls
+        /// back to a raw read when nothing installed a source; see <see cref="CrouchSource"/> and
+        /// <see cref="SprintSource"/> for why "is crouching" and "is sprinting" are not the same
+        /// questions as the two keys, and why the sprint one decides whether a shot happens at all.
+        /// </remarks>
         private MoveInput DefaultInput()
-        {
-            InputButtons combat = CombatButtonSource != null ? CombatButtonSource() : InputButtons.None;
-            float yaw = _cameraParent.eulerAngles.y;
-
-            // The crouch and sprint STATES when something can answer for them, the raw buttons
-            // otherwise -- see CrouchSource and SprintSource for why those are different
-            // questions, and why the sprint one decides whether a shot happens at all.
-            bool crouching = CrouchSource != null ? CrouchSource() : Input.GetButton("Crouch");
-            bool sprinting = SprintSource != null ? SprintSource() : Input.GetButton("Sprint");
-
-            return MovementSimulation.FromUnityInput(yaw, combat, crouching, sprinting);
-        }
+            => MovementSimulation.FromUnityInput(
+                _cameraParent.eulerAngles.y,
+                CombatButtonSource != null ? CombatButtonSource() : InputButtons.None,
+                CrouchSource != null ? CrouchSource() : Input.GetButton("Crouch"),
+                SprintSource != null ? SprintSource() : Input.GetButton("Sprint"));
     }
 }
