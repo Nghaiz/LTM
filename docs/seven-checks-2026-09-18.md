@@ -17,7 +17,7 @@
 | 1 | Asset hiệu ứng nổ có bị mất không | **Không mất gì.** 0 file `.meta` mồ côi trên toàn `Assets/` (2034 GUID), mọi material + texture của FX nổ đều resolve | ✅ đã trả lời |
 | 2 | Vì sao bảng xe rỗng (§ 5) | **Đã có câu trả lời từ log thật: pool vehicle-id cạn.** Không phải pad bị chặn | ✅ đã trả lời · cần quyết hướng sửa |
 | 3 | Xe còn tự bốc khói lúc mới vào không | **Không còn.** Chứng minh ở cả ba lớp: log server, mã, prefab | ✅ đã hết |
-| 4 | Animation cờ / chạy ngồi bắn còn cứng không | **Còn cứng một nửa.** Chân tay đi đứng có, thân trên và phản ứng thì không | ⚠️ còn thiếu 13 tham số |
+| 4 | Animation cờ / chạy ngồi bắn còn cứng không | **Cờ đã hết cứng.** Thân người thì còn một nửa: đi đứng có, phản ứng không | ✅ cờ · ⚠️ 9 tham số thân người |
 | 5 | Màu bot lúc spawn có đúng team không | **Đúng theo cấu trúc.** Cùng một hàm màu với bản chơi đơn, áp lúc spawn | ✅ không thấy lỗi |
 | 6 | Bắn có ghi nhận damage, về 0 có chết không | **Có**, đã được lane-B chứng minh trên chính build đang deploy | ✅ đã sửa |
 | 7 | Island còn lỗi render không, bot animation ổn chưa | Bản sửa render **còn nguyên**; animation bot **giống hệt Dustbowl**, không phải lỗi riêng của Island | ✅ / ⚠️ |
@@ -223,8 +223,30 @@ có nối `_upperBody`. Prefab cũng có đủ 1 Animator và 1 SkinnedMeshRende
 Tóm lại: **chân đã đi, thân trên đã ngẩng cúi, nhưng phản ứng thì chưa có**. Cảm giác "cứng đơ"
 còn lại đến từ chín tham số trên chứ không phải từ việc animation chết hẳn.
 
-**Chưa kiểm:** lá cờ phấp phới. Tôi chưa truy được object cờ trong hai scene và chưa xác định
-nó chạy bằng Animator, Cloth, shader hay script. Không có kết luận nào ở đây, và tôi không đoán.
+### Lá cờ: đã hết cứng, và chạy ở mọi role
+
+Cờ thuộc `CapturePoint`, không thuộc hệ animation của nhân vật, nên nó là một câu chuyện riêng
+và câu trả lời khác hẳn.
+
+`CapturePoint.Update` (`CapturePoint.cs:173-182`) **không bị chặn theo role**. Chỉ phép tính
+chiếm điểm (`UpdateOwner`) nằm sau `NetContext.IsOffline` (`:165-168`); phần nâng cờ và phất cờ
+chạy trong mọi role, kể cả client mạng.
+
+Hai cơ chế, chọn theo thứ có sẵn trên object:
+
+- **Island**: cờ HQ có `Cloth` thật. Đếm trong scene: `Island.unity` có **5** component
+  `Cloth`, `Dustbowl.unity` có **0**. Chúng giữ nguyên chuyển động solver đã tác giả.
+- **Dustbowl, và mọi mức đồ hoạ dưới 5**: dùng mesh cứng, nên `Awake` (`:126-132`) gắn cho nó
+  một dao động hai sóng sin tất định trong `Update`:
+  `Sin(t*3.2 + phase)*7° + Sin(t*6.7 + phase*1.9)*2°`, với `phase` lấy từ toạ độ thế giới của
+  chính điểm đó nên các cờ không phất đồng pha.
+
+Bản này là `05de045`, và `git merge-base --is-ancestor 05de045 cd6ec0f` xác nhận nó **đã có
+trong build đang deploy**.
+
+Một chi tiết nhỏ nên biết: `rigidFlagVisual` chỉ được chọn một lần trong `Awake`, dựa trên
+`QualitySettings.GetQualityLevel()` tại thời điểm đó. Đổi mức đồ hoạ giữa phiên sẽ không chọn
+lại cờ LQ/HQ cho tới lần nạp scene sau.
 
 ---
 
@@ -386,7 +408,6 @@ Cổng đã được chứng minh là bắt được đúng lỗi nó tuyên b�
 |---|---|
 | Sửa pool vehicle-id (§ 2) | Hai hướng khác nhau về bản chất, một trong hai là thay đổi wire. Cần chủ dự án chọn |
 | Chín tham số animation (§ 4) | Cần thêm trường trên wire; là một phase riêng |
-| Cờ phấp phới (§ 4) | Chưa truy được object cờ trong scene. Chưa có kết luận |
 | Material Sparks/Shockwave (§ 1) | Là hình dạng đã ship, giống bản chơi đơn. Đổi hay không là quyết định thẩm mỹ |
 | `burnParticles` của jeep/quadbike/rhib (§ 3) | Xe nhẹ cháy không có lửa. Lỗi ngược chiều, tìm thấy khi kiểm |
 
