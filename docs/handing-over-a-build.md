@@ -108,9 +108,8 @@ Read it like this:
 | `MIXED BUILD FOLDER` (an error) | two assemblies from different commits — somebody copied files rather than replacing the folder. Nothing measured on this process is trustworthy |
 
 Where the lines appear: the server writes them to its console and to its log; a client writes them
-to `%USERPROFILE%\AppData\LocalLow\SteelRaven7\Ravenfield\Player.log`. That path is not a typo —
-`companyName` and `productName` in `ProjectSettings.asset` are still the base game's, so Unity
-puts the log where Ravenfield's would go.
+to `%USERPROFILE%\AppData\LocalLow\Team 10 LTM\Ironfront Reborn\Player.log`, derived from the
+project identity in `ProjectSettings.asset`.
 
 **The stamp only speaks for builds cut after it shipped.** Anything older reports `dev`, which is
 indistinguishable from a developer's own Editor build. For that first exchange there is no

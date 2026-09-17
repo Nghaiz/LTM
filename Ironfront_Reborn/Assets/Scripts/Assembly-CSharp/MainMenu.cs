@@ -5,13 +5,13 @@ using UnityEngine.UI;
 
 public class MainMenu : MonoBehaviour
 {
-	private const string NEWS_URL = "https://docs.google.com/document/export?format=txt&id=12lhDOtsf3FUBGm-UGuNdVV1_3qju_ODtQvuuS1f7xp0";
+	private const string NEWS_URL = "";
 
-	private const string GREENLIGHT_URL = "https://docs.google.com/document/export?format=txt&id=10slFia3_pfrp9G0Sna3K77uuhw-7E441DbVmuOsx3fc";
+	private const string GREENLIGHT_URL = "";
 
-	private const string GREENLIGHT_STEAM_PREFIX = "steam://url/CommunityFilePage/";
+	private const string GREENLIGHT_STEAM_PREFIX = "";
 
-	private const string GREENLIGHT_WEB_PREFIX = "http://steamcommunity.com/sharedfiles/filedetails/?id=";
+	private const string GREENLIGHT_WEB_PREFIX = "";
 
 	public static string greenlightId = string.Empty;
 
@@ -45,28 +45,15 @@ public class MainMenu : MonoBehaviour
 
 	private bool greenlightActivated;
 
-	private string greenlightWebUrl = "https://twitter.com/SteelRaven7";
+	private string greenlightWebUrl = string.Empty;
 
-	private string greenlightSteamUrl = "https://twitter.com/SteelRaven7";
+	private string greenlightSteamUrl = string.Empty;
 
 	private void Start()
 	{
-		menuContent.SetActive(false);
-		newsContent.SetActive(true);
-		if (displayedNews)
-		{
-			if (!string.IsNullOrEmpty(greenlightId))
-			{
-				ActivateGreenlight();
-			}
-			ShowMenu();
-		}
-		else
-		{
-			StartCoroutine(LoadNews());
-			StartCoroutine(LoadGreenlight());
-			displayedNews = true;
-		}
+		greenlightButton.SetActive(false);
+		ShowMenu();
+		displayedNews = true;
 	}
 
 	public void StartLevel(string levelName)
@@ -216,17 +203,16 @@ public class MainMenu : MonoBehaviour
 
 	public void OpenTwitter()
 	{
-		Application.OpenURL("http://twitter.com/SteelRaven7");
 	}
 
 	public void OpenGreenlightWeb()
 	{
-		Application.OpenURL(greenlightWebUrl);
+		if (!string.IsNullOrEmpty(greenlightWebUrl)) Application.OpenURL(greenlightWebUrl);
 	}
 
 	public void OpenGreenlightSteam()
 	{
-		Application.OpenURL(greenlightSteamUrl);
+		if (!string.IsNullOrEmpty(greenlightSteamUrl)) Application.OpenURL(greenlightSteamUrl);
 	}
 
 	public void OpenGreenlightWindow()

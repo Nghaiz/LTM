@@ -1,4 +1,4 @@
-﻿%YAML 1.1
+%YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
 --- !u!29 &1
 OcclusionCullingSettings:
@@ -132807,9 +132807,9 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: 'VOTE FOR RAVENFIELD
+  m_Text: 'IRONFRONT REBORN
 
-    ON STEAM GREENLIGHT!'
+    MULTIPLAYER PROJECT'
 --- !u!114 &1020
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -135306,7 +135306,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: "Ravenfield \xA9 Johan Hassel (@SteelRaven7) 2016"
+  m_Text: Ironfront Reborn - Team 10 LTM
 --- !u!114 &1094
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -139496,9 +139496,9 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: 'RAVENFIELD
+  m_Text: 'IRONFRONT REBORN
 
-    Beta 5'
+    TEAM 10 LTM'
 --- !u!114 &1215
 MonoBehaviour:
   m_ObjectHideFlags: 0
