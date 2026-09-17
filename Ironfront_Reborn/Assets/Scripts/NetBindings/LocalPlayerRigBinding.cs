@@ -212,7 +212,7 @@ namespace Ironfront.Net.Unity.Bindings
 
         /// <inheritdoc/>
         public void ApplyAuthoritativeCombat(
-            byte health, byte weaponId, byte ammoInClip, SpareAmmo spare)
+            byte health, byte weaponId, byte ammoInClip, SpareAmmo spare, bool clipSettled)
         {
             FpsActorController local = FpsActorController.instance;
             if (local == null || local.actor == null) return;
@@ -230,7 +230,12 @@ namespace Ironfront.Net.Unity.Bindings
             Weapon weapon = actor.activeWeapon;
             if (weapon != null && weapon.NetworkId == weaponId)
             {
-                weapon.ammo = ammoInClip;
+                // S4 (CMB-19): only assign the clip once it is settled. Mid-reload, the
+                // reconciled count on the wire is deliberately sticky (ClientCombatState keeps
+                // the prediction or the frozen pre-reload count, never a half-delivered guess),
+                // and assigning it every snapshot is what blinked the HUD through the reload
+                // instead of holding it still until the server's answer actually lands.
+                if (clipSettled) weapon.ammo = ammoInClip;
 
                 // The reserve, which had two writers and no corrector: Weapon.ReloadDone spends
                 // Actor.spareAmmo[slot] locally while the server spends its own pool, so every

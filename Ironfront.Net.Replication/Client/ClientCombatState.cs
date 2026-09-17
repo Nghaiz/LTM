@@ -463,6 +463,17 @@ namespace Ironfront.Net.Replication.Client
         private void CompleteReloadIfElapsed(float nowSeconds)
         {
             if (!_runtime.Reloading) return;
+
+            // The server's own reload is the one that actually fills the clip -- see
+            // ApplySnapshot's reload-delivered branch. Ravenfield's local timer
+            // (DefaultReloadSeconds, 1.8 s on ak.prefab) finishes before the server's
+            // (ProtocolConstants.RELOAD_SECONDS, 2.0 s) plus RTT, so completing here while the
+            // server still says Reloading would render a full magazine the server has not
+            // granted yet -- the 30 -> 1 -> 30 blink in the S4 diagnosis. Waiting for the flag
+            // to fall is what CompleteReloadIfElapsed cannot see on its own; ApplySnapshot ends
+            // the local reload the moment it does.
+            if (ServerSaysReloading) return;
+
             if (float.IsNaN(_reloadStartedAt)) return;
             if (nowSeconds - _reloadStartedAt < ReloadSeconds) return;
 
@@ -524,6 +535,7 @@ namespace Ironfront.Net.Replication.Client
             ServerAmmoInClip = entry.AmmoInClip;
             HasServerAmmo = true;
 
+            bool serverWasReloading = ServerSaysReloading;
             ServerSaysReloading = (entry.WeaponStateFlags & WeaponStateFlags.Reloading) != 0;
 
             // A reload the server is still running suspends the anti-flicker rule for the same
@@ -533,7 +545,20 @@ namespace Ironfront.Net.Replication.Client
             // jump instead of as a drift correction that climbs SnapshotAmmoCorrections.
             if (ServerSaysReloading) _reloadPending = true;
 
-            byte reconciled = ReconcileAmmo(_runtime.AmmoInClip, entry.AmmoInClip, _reloadPending);
+            // The flag's SET -> CLEAR transition, and nothing else, is "delivered": the server
+            // just finished (or refused) the reload this tick, and entry.AmmoInClip is its
+            // answer. Routing that through ReconcileAmmo's pending branch is the S4 bug (CMB-19)
+            // — a one- or two-round rise sits inside AmmoResyncThreshold, so the reconcile kept
+            // the STALE predicted count instead of the delivered clip, and the flagged snapshots
+            // along the way (still reloading, ammo frozen at the pre-reload count) got taken
+            // verbatim instead, which is the 0 -> 1 jump this fixes. A flag that is still set,
+            // or was never set, falls through to the ordinary pending reconcile below.
+            bool reloadDelivered = serverWasReloading && !ServerSaysReloading;
+
+            byte reconciled = reloadDelivered
+                ? entry.AmmoInClip
+                : ReconcileAmmo(_runtime.AmmoInClip, entry.AmmoInClip, _reloadPending);
+
             if (reconciled != _runtime.AmmoInClip) SnapshotAmmoCorrections++;
 
             _runtime.AmmoInClip = reconciled;
@@ -633,16 +658,33 @@ namespace Ironfront.Net.Replication.Client
         /// in flight or the two have drifted further than <see cref="AmmoResyncThreshold"/>.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// Without this, a client that has predicted one shot ahead of the server reads 29
         /// while the snapshot still says 30, takes the snapshot, predicts 29 again on the next
         /// frame, and the HUD reads 30, 29, 30, 29 for as long as the player keeps firing. The
         /// threshold is what distinguishes "one or two shots in flight", which is the normal
         /// operating condition, from "these two numbers are about a different clip", which is
         /// the only case worth a visible correction.
+        /// </para>
+        /// <para>
+        /// <b>While reload-pending, "verbatim" used to mean ANY snapshot, including a stale
+        /// one.</b> S4 (CMB-19): a snapshot produced mid-reload, or before the server has even
+        /// seen the reload input, still carries the frozen pre-reload count — and a small rise
+        /// over the prediction (1 or 2 rounds) is exactly what the pending flag is set to
+        /// suspend the anti-flicker rule for, not evidence that the reload delivered. So a
+        /// small rise keeps the prediction, same as the non-pending case; only a rise too large
+        /// to be that kind of staleness (or a snapshot at or below the prediction) is trusted.
+        /// The reload's genuine delivery is <see cref="ApplySnapshot"/>'s own flag-fall bypass,
+        /// which does not call this method at all — see its remarks.
+        /// </para>
         /// </remarks>
         public static byte ReconcileAmmo(byte predicted, byte fromSnapshot, bool reloadPending)
         {
-            if (reloadPending) return fromSnapshot;
+            if (reloadPending)
+            {
+                int rise = fromSnapshot - predicted;
+                return rise > 0 && rise <= AmmoResyncThreshold ? predicted : fromSnapshot;
+            }
 
             int drift = predicted - fromSnapshot;
             if (drift < 0) drift = -drift;

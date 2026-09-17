@@ -299,6 +299,16 @@ namespace Ironfront.Net.Unity.Server
             return _inner.GetSpawnPosition(index);
         }
 
+        /// <inheritdoc />
+        /// <remarks>
+        /// Deliberately does NOT call <see cref="AdvanceRotationOf"/>. This is read while
+        /// COMPARING candidates during selection — <c>ChooseSpawnIndexNearTeammates</c> may ask
+        /// it once per eligible slot — and the rotation must advance exactly once per body
+        /// actually placed (X-28), which is what <see cref="GetSpawnPosition"/> alone still
+        /// guarantees.
+        /// </remarks>
+        public Vector3 GetAnchorPosition(int index) => _inner.GetAnchorPosition(index);
+
         private void AdvanceRotationOf(int index)
         {
             for (int team = 0; team < _rotationByTeam.Length; team++)

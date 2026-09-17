@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using Ironfront.Net.Replication.Client;
@@ -57,6 +58,14 @@ namespace Ironfront.Net.Unity.Server.Tests
                 PositionsRequested++;
                 return new Vector3(index, 0f, 0f);
             }
+
+            /// <summary>
+            /// Same formula as <see cref="GetSpawnPosition"/> but never touches
+            /// <see cref="PositionsRequested"/> — <c>ChoosingAPointDoesNotAskAnyPointForItsPosition</c>
+            /// and its near-teammate sibling both rely on that counter staying at the ONLY call
+            /// that means "a point actually won".
+            /// </summary>
+            public Vector3 GetAnchorPosition(int index) => new Vector3(index, 0f, 0f);
         }
 
         /// <summary>
@@ -79,6 +88,8 @@ namespace Ironfront.Net.Unity.Server.Tests
             public bool IsEligible(int index, int team) => _owners[index] == team;
 
             public Vector3 GetSpawnPosition(int index) => new Vector3(index, 0f, 0f);
+
+            public Vector3 GetAnchorPosition(int index) => new Vector3(index, 0f, 0f);
         }
 
         [Test]
@@ -441,6 +452,256 @@ namespace Ironfront.Net.Unity.Server.Tests
             ServerCombatBridge.ChooseSpawnIndex(points, 0);
 
             Assert.AreEqual(0, points.PositionsRequested);
+        }
+
+        // ---- ChooseSpawnIndexNearTeammates - the BOT-05 fix -------------------------------
+
+        [Test]
+        public void NearTeammatesPicksTheEligiblePointClosestToALivingTeammate()
+        {
+            // Points at x = 0, 1, 2, 3 (wildcard-owned); the anchor sits closest to point 2
+            // (0.1 m away) rather than to an extreme index, so a pass that only ever picked the
+            // lowest or highest index would still fail this.
+            var points = new FakeSpawnPoints(-1, -1, -1, -1);
+            var anchors = new[] { new Vector3(2.1f, 0f, 0f) };
+
+            Assert.AreEqual(2, ServerCombatBridge.ChooseSpawnIndexNearTeammates(points, 0, anchors));
+        }
+
+        [Test]
+        public void NearTeammatesWithNoAnchorsReachesEveryEligiblePointLikePlainReservoirSampling()
+        {
+            var points = new FakeSpawnPoints(-1, -1, -1);
+            var seen = new bool[3];
+
+            for (int attempt = 0; attempt < 300; attempt++)
+                seen[ServerCombatBridge.ChooseSpawnIndexNearTeammates(points, 0, null)] = true;
+
+            Assert.IsTrue(seen[0] && seen[1] && seen[2],
+                "with no anchors the near-teammate draw must degrade to the same reservoir "
+                + "sampling as ChooseSpawnIndex");
+        }
+
+        [Test]
+        public void NearTeammatesNeverPicksAnotherTeamsPointEvenWhenATeammateStandsOnIt()
+        {
+            // Team 0 owns 0, 2 and 3; team 1 owns 1 alone. The anchor sits exactly on team 1's
+            // point, which makes it the nearest point in the WORLD to every one of team 0's
+            // candidates -- and it must still never be returned for team 0.
+            var points = new CapturePointOwners(0, 1, 0, 0);
+            var anchors = new[] { new Vector3(1f, 0f, 0f) };
+
+            for (int draw = 0; draw < 200; draw++)
+            {
+                int chosen = ServerCombatBridge.ChooseSpawnIndexNearTeammates(points, 0, anchors);
+                Assert.That(chosen, Is.EqualTo(0).Or.EqualTo(2).Or.EqualTo(3),
+                    $"draw {draw} chose {chosen}, which team 0 does not own — proximity widened "
+                    + "eligibility");
+            }
+        }
+
+        [Test]
+        public void NearTeammatesNeverAsksAnyPointForItsSpawnPosition()
+        {
+            // Same guarantee as ChoosingAPointDoesNotAskAnyPointForItsPosition, but for the
+            // near-teammate path: reading GetSpawnPosition here would jitter the comparison and
+            // advance a pinned directory's rotation once per candidate probed, not once per
+            // placement (X-28).
+            var points = new FakeSpawnPoints(-1, -1, -1);
+            var anchors = new[] { new Vector3(1.4f, 0f, 0f) };
+
+            ServerCombatBridge.ChooseSpawnIndexNearTeammates(points, 0, anchors);
+
+            Assert.AreEqual(0, points.PositionsRequested);
+        }
+
+        [Test]
+        public void APinnedDirectoryStillRotatesWhenAnchorsArePresent()
+        {
+            // Same rotation as APinnedDirectoryRotatesThroughItsSlotsAcrossPlacements, but every
+            // draw now carries a teammate anchor. Only one slot is ever eligible for team 0 at a
+            // time, so the near-teammate draw must degrade to the plain reservoir pick and never
+            // let proximity reorder or skip a step of the rotation.
+            var points = new PinnedSpawnPointDirectory(
+                new FakeSpawnPoints(-1, -1, -1, -1, -1, -1),
+                new[] { new[] { 3, 4, 5 }, new[] { 0 } });
+            var anchors = new[] { new Vector3(4f, 0f, 0f) };
+
+            int[] expected = { 3, 4, 5, 3, 4, 5, 3 };
+            for (int placement = 0; placement < expected.Length; placement++)
+            {
+                int chosen = ServerCombatBridge.ChooseSpawnIndexNearTeammates(points, 0, anchors);
+                Assert.AreEqual(expected[placement], chosen,
+                    $"placement {placement} chose {chosen}, expected {expected[placement]} - "
+                    + "an anchor perturbed a pinned rotation's single-candidate eligibility");
+
+                points.GetSpawnPosition(chosen);
+            }
+        }
+
+        [Test]
+        public void NearTeammatesBreaksATieByPreferringTheLowestIndex()
+        {
+            // Points at x = 0, 1, 2, 3 (wildcard-owned); an anchor exactly between 1 and 2 is
+            // equidistant from both, so the lower index must win.
+            var points = new FakeSpawnPoints(-1, -1, -1, -1);
+            var anchors = new[] { new Vector3(1.5f, 0f, 0f) };
+
+            Assert.AreEqual(1, ServerCombatBridge.ChooseSpawnIndexNearTeammates(points, 0, anchors));
+        }
+
+        [Test]
+        public void TheNeutralFallbackAlsoPrefersTheNearestPointToALivingTeammate()
+        {
+            // The fallback MoveToSpawnPoint takes when a team owns nothing: ask on behalf of
+            // NeutralOwner (-1) and still land on whichever neutral point is closest to a
+            // teammate, rather than a uniform draw across the map's contested ground.
+            var points = new CapturePointOwners(0, -1, 0, -1);
+            var anchors = new[] { new Vector3(3f, 0f, 0f) }; // nearest to neutral point 3
+
+            int chosen = ServerCombatBridge.ChooseSpawnIndexNearTeammates(points, -1, anchors);
+
+            Assert.AreEqual(3, chosen, "the neutral fallback ignored the nearby living teammate");
+        }
+
+        // ---- IsLivingTeammateAnchor - the anchor-collection filter, BOT-05 ----------------
+
+        /// <summary>
+        /// Pins <c>ServerCombatBridge.IsLivingTeammateAnchor</c> — the pure predicate BOT-05's
+        /// anchor collection filters candidates through. Extracted specifically so this suite
+        /// never has to touch the live <c>ServerActorRegistry</c> singleton, the same reason
+        /// <c>ServerTickLoop</c> extracted <c>IsAnnounceable</c> for
+        /// <see cref="AnnounceableActorTests"/> — whose <c>CreateBody</c> helper this mirrors.
+        /// </summary>
+        public sealed class TeammateAnchorFilterTests
+        {
+            private readonly List<GameObject> _spawned = new List<GameObject>();
+
+            [TearDown]
+            public void TearDown()
+            {
+                for (int i = 0; i < _spawned.Count; i++)
+                    // Fully qualified: this file's own using System conflicts with UnityEngine
+                    // for the bare name Object (CS0104), unlike AnnounceableActorTests.cs, which
+                    // has no using System and can write it unqualified.
+                    if (_spawned[i] != null) UnityEngine.Object.DestroyImmediate(_spawned[i]);
+
+                _spawned.Clear();
+            }
+
+            /// <summary>
+            /// A bare replicated body, deactivated before the component is added. Same ordering
+            /// as <c>AnnounceableActorTests.CreateBody</c> and for the same reason: <c>OnEnable</c>
+            /// registers into the process-wide singleton registry even outside play mode.
+            /// </summary>
+            private NetServerActor CreateBody(string name)
+            {
+                var go = new GameObject(name);
+                _spawned.Add(go);
+                go.SetActive(false);
+                return go.AddComponent<NetServerActor>();
+            }
+
+            [Test]
+            public void ALivingSameTeamBotIsAValidAnchor()
+            {
+                NetServerActor spawning = CreateBody("spawning");
+                spawning.Team = 0;
+
+                NetServerActor teammate = CreateBody("teammate bot");
+                teammate.Team = 0;
+                teammate.IsAlive = true;
+
+                Assert.IsTrue(
+                    ServerCombatBridge.IsLivingTeammateAnchor(teammate, spawning, spawning.Team));
+            }
+
+            [Test]
+            public void TheSpawningActorItselfIsNeverItsOwnAnchor()
+            {
+                NetServerActor spawning = CreateBody("spawning");
+                spawning.Team = 0;
+                spawning.IsAlive = true;
+
+                Assert.IsFalse(
+                    ServerCombatBridge.IsLivingTeammateAnchor(spawning, spawning, spawning.Team),
+                    "a body cannot be its own nearest teammate");
+            }
+
+            [Test]
+            public void ADeadTeammateIsNotAnAnchor()
+            {
+                NetServerActor spawning = CreateBody("spawning");
+                spawning.Team = 0;
+
+                NetServerActor corpse = CreateBody("dead teammate");
+                corpse.Team = 0;
+                corpse.IsAlive = false;
+
+                Assert.IsFalse(
+                    ServerCombatBridge.IsLivingTeammateAnchor(corpse, spawning, spawning.Team));
+            }
+
+            [Test]
+            public void AnEnemyIsNeverAnAnchorEvenWhenAlive()
+            {
+                NetServerActor spawning = CreateBody("spawning");
+                spawning.Team = 0;
+
+                NetServerActor enemy = CreateBody("enemy");
+                enemy.Team = 1;
+                enemy.IsAlive = true;
+
+                Assert.IsFalse(
+                    ServerCombatBridge.IsLivingTeammateAnchor(enemy, spawning, spawning.Team));
+            }
+
+            /// <summary>
+            /// X-18's trap, one layer over: an unclaimed player-slot body sits on the prefab's
+            /// authored spot near (0, 1000, 0), so it must never anchor a placement either.
+            /// </summary>
+            [Test]
+            public void AnUnclaimedPlayerSlotIsNeverAnAnchor()
+            {
+                NetServerActor spawning = CreateBody("spawning");
+                spawning.Team = 0;
+
+                NetServerActor unclaimedSlot = CreateBody("unclaimed slot");
+                unclaimedSlot.Team = 0;
+                unclaimedSlot.IsAlive = true;
+                unclaimedSlot.MarkAvailableForPlayers();
+
+                Assert.IsFalse(
+                    ServerCombatBridge.IsLivingTeammateAnchor(
+                        unclaimedSlot, spawning, spawning.Team));
+            }
+
+            [Test]
+            public void AClaimedPlayerSlotIsAValidAnchor()
+            {
+                NetServerActor spawning = CreateBody("spawning");
+                spawning.Team = 0;
+
+                NetServerActor claimedSlot = CreateBody("claimed slot");
+                claimedSlot.Team = 0;
+                claimedSlot.IsAlive = true;
+                claimedSlot.MarkAvailableForPlayers();
+                claimedSlot.Claim();
+
+                Assert.IsTrue(
+                    ServerCombatBridge.IsLivingTeammateAnchor(
+                        claimedSlot, spawning, spawning.Team));
+            }
+
+            [Test]
+            public void ADestroyedCandidateIsNeverAnAnchor()
+            {
+                NetServerActor spawning = CreateBody("spawning");
+                spawning.Team = 0;
+
+                Assert.IsFalse(
+                    ServerCombatBridge.IsLivingTeammateAnchor(null, spawning, spawning.Team));
+            }
         }
 
         // ---- ScriptedAim.SteerToward - the X-66 route-steering arithmetic ----------------

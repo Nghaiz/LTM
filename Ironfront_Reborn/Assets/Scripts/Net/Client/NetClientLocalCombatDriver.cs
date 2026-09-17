@@ -713,11 +713,15 @@ namespace Ironfront.Net.Unity.Client
         /// <para>
         /// <b>What this still does NOT deliver.</b> <c>PredictFire</c>'s own remark names the
         /// effects a caller plays on <c>FireRejection.None</c> — muzzle flash, recoil, a cosmetic
-        /// tracer and an ammo readout. Nothing in the build reads
-        /// <c>ClientCombatState.AmmoInClip</c> or <c>PredictedShots</c> except
+        /// tracer and an ammo readout. <c>PredictedShots</c> is read by nothing but
         /// <c>LaneBCheckpointRecorder</c>, so what this call buys today is that the recorder's
-        /// <c>predictedShots</c> stops being a constant zero and becomes evidence. The
-        /// presentation half needs a presenter that does not exist yet (ledger X-16).
+        /// <c>predictedShots</c> stops being a constant zero and becomes evidence.
+        /// <c>ClientCombatState.AmmoInClip</c>, unlike <c>PredictedShots</c>, DOES already cross
+        /// into the HUD: every <c>OnSnapshotApplied</c> hands it to
+        /// <c>ILocalPlayerRig.ApplyAuthoritativeCombat</c>, gated on <c>clipSettled</c> (S4,
+        /// CMB-19) so a clip mid-reload is not overwritten. The presentation half this method's
+        /// own effects still lack — the muzzle flash, recoil and tracer themselves — needs a
+        /// presenter that does not exist yet (ledger X-16).
         /// </para>
         /// </remarks>
         private static bool FirePressed()
@@ -837,7 +841,8 @@ namespace Ironfront.Net.Unity.Client
             ILocalPlayerRig rig = NetClientBindings.LocalPlayer;
             if (rig != null && rig.Exists)
                 rig.ApplyAuthoritativeCombat(
-                    _state.Health, _state.WeaponId, _state.AmmoInClip, _state.SpareAmmo);
+                    _state.Health, _state.WeaponId, _state.AmmoInClip, _state.SpareAmmo,
+                    clipSettled: !(_state.IsReloading || _state.ServerSaysReloading));
 
             AdoptAlreadyAliveBody(in entry);
         }

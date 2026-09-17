@@ -763,6 +763,9 @@ namespace Ironfront.Net.Unity.Bindings
 
         public Vector3 GetSpawnPosition(int index) => At(index).GetSpawnPosition();
 
+        /// <summary>The authored point's transform, no jitter, no side effects.</summary>
+        public Vector3 GetAnchorPosition(int index) => At(index).transform.position;
+
         private static SpawnPoint[] Points()
         {
             ActorManager manager = ActorManager.instance;
