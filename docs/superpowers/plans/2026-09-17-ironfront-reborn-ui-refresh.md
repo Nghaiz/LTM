@@ -40,31 +40,35 @@
 
 ```csharp
 #nullable enable
-using System.IO;
+using System.Linq;
 using NUnit.Framework;
+using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace Ironfront.Net.Unity.Client.Tests
 {
     public sealed class BrandIdentityTests
     {
-        private static string Root => Directory.GetParent(Application.dataPath)!.FullName;
-
         [Test]
         public void PlayerSettingsUseNewIdentity()
         {
-            string text = File.ReadAllText(Path.Combine(Root, "ProjectSettings", "ProjectSettings.asset"));
-            StringAssert.Contains("companyName: Team 10 LTM", text);
-            StringAssert.Contains("productName: Ironfront Reborn", text);
-            StringAssert.Contains("Standalone: com.team10ltm.ironfrontreborn", text);
+            Assert.AreEqual("Team 10 LTM", PlayerSettings.companyName);
+            Assert.AreEqual("Ironfront Reborn", PlayerSettings.productName);
+            Assert.AreEqual("com.team10ltm.ironfrontreborn",
+                PlayerSettings.GetApplicationIdentifier(BuildTargetGroup.Standalone));
         }
 
-        [TestCase("Assets/Scenes/Splash.unity")]
-        [TestCase("Assets/Scenes/Menu.unity")]
-        [TestCase("Assets/Scripts/Assembly-CSharp/MainMenu.cs")]
-        public void PlayerFacingFilesContainNoInheritedBrand(string path)
+        [TestCase("Assets/Scenes/Splash.unity", "IRONFRONT REBORN")]
+        [TestCase("Assets/Scenes/Menu.unity", "IRONFRONT REBORN")]
+        public void PlayerFacingScenesUseOnlyNewBrand(string path, string requiredTitle)
         {
-            string text = File.ReadAllText(Path.Combine(Root, path));
+            var scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
+            string text = string.Join("\n", scene.GetRootGameObjects()
+                .SelectMany(root => root.GetComponentsInChildren<Text>(true))
+                .Select(label => label.text));
+            StringAssert.Contains(requiredTitle, text);
             StringAssert.DoesNotContain("Ravenfield", text);
             StringAssert.DoesNotContain("SteelRaven7", text);
             StringAssert.DoesNotContain("Johan Hassel", text);
@@ -246,22 +250,23 @@ git commit -m "feat(client): animate menu screen transitions"
 - Consumes: navigator/transition components and existing `Menu*Screen` serialized fields.
 - Produces: shared visual tokens/helpers and the regenerated `Multiplayer Menu` Canvas.
 
-- [ ] **Step 1: Add failing authoring assertions**
+- [ ] **Step 1: Add failing scene authoring assertions**
 
 ```csharp
 [Test]
 public void BuilderAuthorsApprovedIdentityAndUxComponents()
 {
-    string path = Path.Combine(Root, "Assets", "Editor", "NetVerification", "BuildMenuCanvas.cs");
-    string text = File.ReadAllText(path);
+    var scene = EditorSceneManager.OpenScene("Assets/Scenes/Menu.unity", OpenSceneMode.Single);
+    GameObject root = scene.GetRootGameObjects().Single(go => go.name == "Multiplayer Menu");
+    string text = string.Join("\n", root.GetComponentsInChildren<Text>(true).Select(label => label.text));
     StringAssert.Contains("IRONFRONT REBORN", text);
     StringAssert.Contains("TEAM 10 LTM", text);
-    StringAssert.Contains("MenuKeyboardNavigator", text);
-    StringAssert.Contains("MenuScreenTransition", text);
+    Assert.GreaterOrEqual(root.GetComponentsInChildren<MenuKeyboardNavigator>(true).Length, 8);
+    Assert.GreaterOrEqual(root.GetComponentsInChildren<MenuScreenTransition>(true).Length, 8);
 }
 ```
 
-Also forbid the old repeated flat colour literals, requiring shared named palette tokens.
+Add assertions over real scene objects: every button has distinct normal/highlighted/selected/disabled colours, every input has a visible sibling label, and the title/auth screens have a bounded raised card rather than controls parented directly to the full-screen panel.
 
 - [ ] **Step 2: Run identity tests and verify RED**
 
@@ -344,4 +349,3 @@ At 1920×1080, exercise title → login → register → login → lobby → roo
 - [ ] **Step 6: Commit only proven corrections**
 
 If verification exposes a defect, add a focused failing regression test, confirm RED, make the smallest correction, confirm GREEN, and commit that test with the correction.
-
