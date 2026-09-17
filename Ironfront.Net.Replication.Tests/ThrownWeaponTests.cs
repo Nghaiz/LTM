@@ -225,9 +225,13 @@ namespace Ironfront.Net.Replication.Tests
                         "the launch must sit after the fired-guard, or the server is not the one "
                         + "deciding whether a grenade leaves the hand.");
 
-            // A body holding nothing is LOGGED. A silent zero here presents as a grenade count
-            // going down and an explosion that never happens -- the row itself.
-            Assert.Contains("holding nothing, so nothing was launched", bridge, StringComparison.Ordinal);
+            // A refused launch is LOGGED, and the line now separates the two ways it happens:
+            // the body holding no weapon at all, and the engine's own weapon refusing the
+            // trigger. That second way is what this test could not see -- the message it pinned
+            // named only the first, so a refusal at Weapon.CanFire spent the round, launched
+            // nothing and matched an assertion that was looking for a different sentence.
+            Assert.Contains("NOTHING WAS LAUNCHED", bridge, StringComparison.Ordinal);
+            Assert.Contains("IRONFRONT_LOG_SHOTS=1", bridge, StringComparison.Ordinal);
         }
 
         [Fact]

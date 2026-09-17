@@ -27,7 +27,7 @@ Cột **gốc** trỏ về năm nguyên nhân gốc ở § Phụ lục B. Sửa 
 | Nhóm | Tổng | ✅ | ☑ | ◐ | ☐ |
 |---|---|---|---|---|---|
 | W1 Xe cộ | 20 | 2 | 0 | 0 | 18 |
-| W2 Chiến đấu | 21 | 1 | 3 | 0 | 17 |
+| W2 Chiến đấu | 21 | 1 | 4 | 0 | 16 |
 | W3 Di chuyển | 6 | 2 | 1 | 0 | 3 |
 | W4 Luồng trận & kết cục | 6 | 0 | 0 | 0 | 6 |
 | W5 HUD & minimap | 6 | 0 | 0 | 0 | 6 |
@@ -35,7 +35,7 @@ Cột **gốc** trỏ về năm nguyên nhân gốc ở § Phụ lục B. Sửa 
 | W7 Phiên & kết nối | 8 | 0 | 0 | 0 | 8 |
 | W8 Số liệu & tương đương | 4 | 0 | 0 | 0 | 4 |
 | W9 Tooling | 4 | 0 | 0 | 0 | 4 |
-| **Tổng** | **80** | **5** | **4** | **0** | **71** |
+| **Tổng** | **80** | **5** | **5** | **0** | **70** |
 
 ---
 
@@ -179,7 +179,7 @@ Vòng lặp cốt lõi của một FPS: bắn trúng, nhận sát thương, ch�
 | | | **Cách sửa (chưa làm):** một chủ thể viết cho con số HUD đọc, và hoà giải **chính xác** — `OnSnapshotApplied` đã nhận `lastProcessedInputTick` mà không bao giờ truyền nó xuống `ReconcileAmmo`, và đó chính là lý do cần dải ±2. Phương án nhỏ hơn nhưng là quyết định sản phẩm: đưa `ServerAmmoInClip` cho rig thay vì `AmmoInClip`, chấp nhận HUD trễ một RTT. **Không kiểm chứng được bằng artifact nào hiện có** — không recorder nào đọc `Weapon.ammo`/`Actor.spareAmmo`, đúng TOL-04 | | | |
 | **CMB-20** | ✅ | **Một phát giết người-với-người không hề phát `S_DEATH`.** `TryBeginDeath` trả `true` **đúng một lần mỗi mạng** — nó **là** cạnh tử vong — và `EmitDeath` đặt `S_DEATH`, killfeed, xác, vé, điểm sau cạnh đó. `ServerCombatAuthority` **cũng** đóng tem lên cổng ấy mỗi phát hitscan, nên `EmitDeath` nhận `false` và thoát trước khi phát gì. Client nạn nhân chỉ biết mình chết nhờ snapshot xoá `IsAlive` → tự tắt input → **đứng đơ** | `ServerCombatAuthority.cs:450`; `ServerTickLoop.cs:1310`; `ServerRespawnGate.cs:82-83,105-115` | 1 | |
 | | | **Nghiệm thu:** người chơi báo từ phiên thật 2026-09-17. Sửa bằng cách **gỡ cái tem** và bỏ tham số cổng khỏi constructor (lớp đó chưa bao giờ *đọc* cổng, chỉ ghi) — nên quyền sở hữu thành **cấu trúc**, không phải quy ước. **Và đây là phần đáng ghi nhất:** comment ở `ServerTickLoop` gọi cái tem thứ hai là *"safe"* vì `MarkDeath` nuốt bản trùng — **đúng khi được viết**, sai sau khi cổng đổi thành trả-về-cạnh. Câu đó sống lâu hơn sự thật của nó rồi quay ra bênh vực lỗi. Còn một test ghim lỗi thành hợp đồng (`AKilledVictimIsStampedIntoTheRespawnGate`) — đã đảo thành khẳng định điều ngược lại. 1666/1666 xanh | | | |
-| **CMB-21** | ☐ | **Không có projectile nào của người chơi được tạo trên server** — cả lựu đạn lẫn bazooka. `FireCarriedWeapon` trả `true` chỉ cần `activeWeapon != null`; nếu `Weapon.CanFire()` từ chối thì `Weapon.Fire` **im lặng không làm gì** — không projectile, không announce, không lỗi. Và `CanFire()` đọc trạng thái **không gì duy trì cho thân thể do server điều khiển**: `Actor.Update` thoát sớm ở `:600` nên `StopFire()` **không thể tới được**, nên `holdingFire` đặt một lần là **không bao giờ xoá** → từ phát thứ hai, mọi vũ khí không tự động bị từ chối, im lặng. Lựu đạn "không nổ" là hệ quả: không có instance trên server thì không có ngòi nổ | `IronfrontNetBindings.cs:668-677`; `Weapon.cs:287,397-405`; `Actor.cs:600-603,668-685` | 1 | R3 |
+| **CMB-21** | ☑ | **Không có projectile nào của người chơi được tạo trên server** — cả lựu đạn lẫn bazooka. `FireCarriedWeapon` trả `true` chỉ cần `activeWeapon != null`; nếu `Weapon.CanFire()` từ chối thì `Weapon.Fire` **im lặng không làm gì** — không projectile, không announce, không lỗi. Và `CanFire()` đọc trạng thái **không gì duy trì cho thân thể do server điều khiển**: `Actor.Update` thoát sớm ở `:600` nên `StopFire()` **không thể tới được**, nên `holdingFire` đặt một lần là **không bao giờ xoá** → từ phát thứ hai, mọi vũ khí không tự động bị từ chối, im lặng. Lựu đạn "không nổ" là hệ quả: không có instance trên server thì không có ngòi nổ | `IronfrontNetBindings.cs:668-677`; `Weapon.cs:287,397-405`; `Actor.cs:600-603,668-685` | 1 | R3 |
 | | | **Chẩn đoán đã có sẵn nhưng đang tắt:** `IRONFRONT_LOG_LOADOUT=1` in `[switch] actor=… slot=… outcome=… weaponId=…`, `IRONFRONT_LOG_SHOTS=1` in `[shot] actor=… weapon=… rejection=…`. Hai dòng đó tách được "thân thể chưa từng cầm lựu đạn" / "phiên chưa nhận nó" / "engine từ chối". Liên quan X-31 và X-42 (còn mở) | | | |
 
 ## W3 — Di chuyển
