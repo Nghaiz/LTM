@@ -26,16 +26,16 @@ Cột **gốc** trỏ về năm nguyên nhân gốc ở § Phụ lục B. Sửa 
 
 | Nhóm | Tổng | ✅ | ☑ | ◐ | ☐ |
 |---|---|---|---|---|---|
-| W1 Xe cộ | 19 | 1 | 0 | 0 | 18 |
+| W1 Xe cộ | 19 | 2 | 0 | 0 | 17 |
 | W2 Chiến đấu | 17 | 0 | 0 | 0 | 17 |
-| W3 Di chuyển | 6 | 0 | 0 | 0 | 6 |
+| W3 Di chuyển | 6 | 1 | 0 | 0 | 5 |
 | W4 Luồng trận & kết cục | 6 | 0 | 0 | 0 | 6 |
 | W5 HUD & minimap | 5 | 0 | 0 | 0 | 5 |
 | W6 Bot & quyền thế giới | 4 | 0 | 0 | 0 | 4 |
 | W7 Phiên & kết nối | 8 | 0 | 0 | 0 | 8 |
 | W8 Số liệu & tương đương | 4 | 0 | 0 | 0 | 4 |
 | W9 Tooling | 3 | 0 | 0 | 0 | 3 |
-| **Tổng** | **72** | **1** | **0** | **0** | **71** |
+| **Tổng** | **72** | **3** | **0** | **0** | **69** |
 
 ---
 
@@ -78,7 +78,29 @@ Và ảnh chụp cùng checkpoint (`driver-05-driving.png`): trước là góc n
 
 **Tác dụng phụ đã ghi nhận:** bản sửa đánh thức bộ dò X-19 một lần trên mỗi client ngồi ghế — xem **VEH-19**. Không hư hại chức năng (`err=0,00m`, `y == authY`), nhưng nó là dương tính giả trên một bộ dò.
 
-**Việc còn lại:** VEH-08 là chướng ngại trực tiếp cho việc vào ghế lái, và nó là dòng kế tiếp của W1.
+**Việc còn lại:** VEH-08 là chướng ngại trực tiếp cho việc vào ghế lái — **đã sửa ở dòng dưới.**
+
+### VEH-08 — ✅ đã sửa **và đã nghiệm thu**
+
+**Đã sửa.** Một seam, ba chỗ gọi: `NetVehicleAuthority.PublishSeatOccupancy(vehicle, seatIndex, occupant)`, gọi từ `Vehicle.OccupantEntered` và `Vehicle.OccupantLeft`. Đặt ở `Seat.SetOccupant` — điểm nghẽn duy nhất mọi đường vào ghế đều qua — nên phủ cả AI, cả bridge mạng, và cả đường thêm sau này, mà không sinh bảng thứ hai.
+
+**Đã nghiệm thu.** `artifacts/lane-b/veh08-try1`, ngay lần chạy đầu:
+
+```
+reqSent=2  refused=2  occupiedVehicleId=0   arbiter-scene warnings=0
+```
+
+Đúng hình dạng của `veh01-try1`/`veh01-try3` trước khi sửa. Ở những lần đó, hai lần `RejectedOccupied` **buộc phải** đến từ đường rollback: `RejectedOccupied` chỉ có hai nguồn, và nguồn kia (`SeatArbiter.Decide`) đọc bảng occupancy — mà bảng đó trống vì không client nào vào được ghế (`occupiedVehicleId=0` cho cả ba). Nên `EngineRefusals` bằng 2, và không ai biết.
+
+**Một điều mình không chứng minh được, và nói thẳng:** chưa từng *quan sát* dòng cảnh báo đó kêu, vì bản sửa xoá mất điều kiện sinh ra nó trước khi mình kịp đo. Cái mình kiểm được là **đường ra của nó sống**: `server.log` của chính lần chạy này bắt được 52 lần `UnityEngine.Debug:LogWarning`. Và nhánh đó là ba dòng không có guard nào. Đường còn lại có thể kêu nó là `ServerVehicleRegistry.Clear()` ở ranh giới vòng đấu — xoá bảng trong khi scene vẫn còn người ngồi.
+
+### MOV-01 — ✅ đã sửa **và đã nghiệm thu**
+
+**Đã sửa.** `MovementCore` áp `JumpSpeed` mỗi tick khi nút còn giữ; bản gốc chốt **cạnh xuống** (`if (!m_Jump) m_Jump = GetButtonDown("Jump")`) rồi `FixedUpdate` tiêu thụ. Phép chốt cạnh đặt trong `MoveState.JumpHeld` — **state dùng chung** — chứ không ở nguồn input, vì hai bên không chung nguồn: client dự đoán từ frame nó sinh, server replay từ frame nó nhận.
+
+**Đã nghiệm thu.** `dotnet test Ironfront.Net.Replication.Tests`: **1663/1663** (thêm 2 test). `HoldingJumpGivesOneJumpRatherThanAHop` **đỏ trên code cũ** — tick 2 và 3 áp lại `JumpSpeed`. Test đối xứng `ReleasingAndPressingJumpJumpsAgain` **xanh trên cả hai** — nó không phải bằng chứng cho bản sửa, nó là lưới chặn cho một cách "sửa" sai (chốt một lần rồi không bao giờ mở lại).
+
+Sáu DLL trong `Assets/Plugins` được build lại trong cùng commit, đúng như mọi thay đổi source .NET của repo này.
 
 ---
 
@@ -97,7 +119,7 @@ ngồi không tồn tại. Mười tám lỗi dưới đây, bảy trong số đ
 | **VEH-05** | ☐ | **WASD vừa lái xe vừa đi bộ thân thể bạn.** `SimulationEnabled` luôn true vì `IsSeated()` luôn false trên client; camera trôi và rung so với chính chiếc xe đang ngồi | `FpsActorController.cs:197`; `NetPredictionClock.cs:217-226` | 1 | R1 |
 | **VEH-06** | ☐ | **Tiếng động cơ xe không bao giờ phát trên client.** `enginePitchTarget` bị ghim về 0 nên kể cả vòng lặp `playOnAwake` cũng bị dừng; xe chạy qua trong im lặng, bánh vẫn phanh ở `brakeTorque = 120` | `Car.cs:71-75,100-111,190-201` | 1 | R1 |
 | **VEH-07** | ☐ | **Không chọn được ghế.** Client luôn hỏi ghế 0 rồi mới đi lên; ngắm vào ghế xạ thủ mà ghế lái trống thì bạn thành tài xế | `ClientSeatRequester.cs:265-301,429-438` | 1 | |
-| **VEH-08** | ☐ | **Bot lên xe vô hình với arbiter ghế.** `AiActorController` gọi thẳng `EnterSeat`, không book vào registry — client khác vẽ một bot đứng bên trong xe đang chạy | `AiActorController.cs:643-650`; `ServerSeatBridge.cs:93-98` | 1 | |
+| **VEH-08** | ✅ | **Bot lên xe vô hình với arbiter ghế.** `AiActorController` gọi thẳng `EnterSeat`, không book vào registry — client khác vẽ một bot đứng bên trong xe đang chạy | `AiActorController.cs:643-650`; `ServerSeatBridge.cs:93-98` | 1 | |
 | **VEH-09** | ☐ | **Cờ sở hữu xe không bao giờ cập nhật trên client.** `Tank.ownerIndicator` giữ `SetOwner(-1)` từ `Awake` — xám suốt trận; không có owner team trên dây | `Tank.cs:127-137`; `VehicleSnapshotMessage.cs:45-85` | 1 | |
 | **VEH-10** | ☐ | **Wrench sửa xe chỉ cục bộ rồi bật lại.** Thanh máu nhích lên rồi snapshot sau khôi phục về giá trị server; xe không bao giờ được sửa | `Vehicle.cs:892-935` | 1 | |
 | **VEH-11** | ☐ | **Xe có thể nổ hai lần.** Client tự đếm `burnTime` và gọi `Die()`, server cũng hết hạn và `S_VEHICLE_DESPAWN` gọi `Die()` lần nữa — `Die` không có guard `dead` | `Vehicle.cs:369-380,997-1031` | 1 | |
@@ -139,7 +161,7 @@ Vòng lặp cốt lõi của một FPS: bắn trúng, nhận sát thương, ch�
 
 | ID | | Lỗi | Ở đâu | Nguồn | Gốc |
 |---|---|---|---|---|---|
-| **MOV-01** | ☐ | **Giữ Space là nhảy liên tục.** `MovementSimulation` đọc `Input.GetButton` (mức) và `MovementCore` áp lại `JumpSpeed` mỗi tick chạm đất; bản gốc chốt **cạnh** rồi xoá | `MovementSimulation.cs:124`; `MovementCore.cs:160-166` | 1 | |
+| **MOV-01** | ✅ | **Giữ Space là nhảy liên tục.** `MovementSimulation` đọc `Input.GetButton` (mức) và `MovementCore` áp lại `JumpSpeed` mỗi tick chạm đất; bản gốc chốt **cạnh** rồi xoá | `MovementSimulation.cs:124`; `MovementCore.cs:160-166` | 1 | |
 | **MOV-02** | ☐ | **Giữ Shift khi đang ngắm/cúi/nạp/ngồi vẫn chạy hết tốc lực.** Bản gốc dùng tổ hợp `!Crouch() && !Aiming() && !IsReloading() && !IsSeated()` | `MovementSimulation.cs:124` vs `FpsActorController.cs:1219-1222` | 1 | |
 | **MOV-03** | ☐ | **Bật "Toggle Crouch" thì server không bao giờ thấy bạn cúi.** Hai chủ thể cùng ghi `CharacterController.height` và `transform.position`, mỗi tick ghi đè nhau — bạn nấp sau vật che và bị bắn xuyên đầu | `MovementCore` / `NetServerActor` | 1 | |
 | **MOV-04** | ☐ | **Bước khỏi mép vực rơi nhanh hơn ~10 m/s.** Vận tốc −10 của tick còn trên mặt đất sống sang tick đầu tiên trên không | `MovementCore.cs:167-170` vs `FirstPersonController.cs:173-176` | 1 | |
