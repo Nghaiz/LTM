@@ -1,3 +1,4 @@
+using Ironfront.Net.Protocol;
 using UnityEngine;
 
 namespace Ironfront.Net.Unity
@@ -298,10 +299,27 @@ namespace Ironfront.Net.Unity
         void FellBody(Vector3 force, HumanBodyBones bone);
 
         /// <summary>
-        /// Applies the server's authoritative health and active-weapon clip to the local Ravenfield
-        /// body and HUD. Implementations without a gameplay body may keep the default no-op.
+        /// Applies the server's authoritative health, active-weapon clip and spare reserve to the
+        /// local Ravenfield body and HUD. Implementations without a gameplay body may keep the
+        /// default no-op.
         /// </summary>
-        void ApplyAuthoritativeCombat(byte health, byte weaponId, byte ammoInClip) { }
+        /// <remarks>
+        /// <para>
+        /// <b>The reserve is the last of the three to get a corrector, and it needed one most.</b>
+        /// The clip is assigned, never subtracted, so a divergence is erased on the next
+        /// snapshot; <c>Weapon.ReloadDone</c> spends <c>Actor.spareAmmo[slot]</c> locally while
+        /// the server spends its own pool, so every reload the server refused or performed
+        /// differently widened the gap for good and the HUD drew the local number throughout.
+        /// The wire carried the right value and <c>ClientCombatState</c> decoded it; this
+        /// parameter is the hop it never made.
+        /// </para>
+        /// <para>
+        /// A <see cref="SpareAmmo"/> rather than an <c>int</c> because the wire is three-state —
+        /// finite, infinite, or no-resupply-at-all — and those are three different HUDs.
+        /// </para>
+        /// </remarks>
+        void ApplyAuthoritativeCombat(
+            byte health, byte weaponId, byte ammoInClip, SpareAmmo spare) { }
 
         /// <summary>
         /// Reads this rig's currently chosen loadout as weapon network ids, one per slot. 0

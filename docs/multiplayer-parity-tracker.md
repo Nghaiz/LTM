@@ -27,15 +27,15 @@ Cột **gốc** trỏ về năm nguyên nhân gốc ở § Phụ lục B. Sửa 
 | Nhóm | Tổng | ✅ | ☑ | ◐ | ☐ |
 |---|---|---|---|---|---|
 | W1 Xe cộ | 19 | 2 | 0 | 0 | 17 |
-| W2 Chiến đấu | 17 | 0 | 0 | 0 | 17 |
+| W2 Chiến đấu | 17 | 0 | 1 | 0 | 16 |
 | W3 Di chuyển | 6 | 2 | 0 | 0 | 4 |
 | W4 Luồng trận & kết cục | 6 | 0 | 0 | 0 | 6 |
 | W5 HUD & minimap | 5 | 0 | 0 | 0 | 5 |
 | W6 Bot & quyền thế giới | 4 | 0 | 0 | 0 | 4 |
 | W7 Phiên & kết nối | 8 | 0 | 0 | 0 | 8 |
 | W8 Số liệu & tương đương | 4 | 0 | 0 | 0 | 4 |
-| W9 Tooling | 3 | 0 | 0 | 0 | 3 |
-| **Tổng** | **72** | **4** | **0** | **0** | **68** |
+| W9 Tooling | 4 | 0 | 0 | 0 | 4 |
+| **Tổng** | **73** | **4** | **1** | **0** | **68** |
 
 ---
 
@@ -161,7 +161,7 @@ Vòng lặp cốt lõi của một FPS: bắn trúng, nhận sát thương, ch�
 | **CMB-09** | ☐ | **Reload phẳng 2 giây cho mọi súng.** `RELOAD_SECONDS = 2f` là hằng số protocol; kiểu nạp từng viên của shotgun đã mất | `ProtocolConstants.cs:140` | 1 | |
 | **CMB-10** | ☐ | **Melee không làm gì cả.** `WRENCH`/`SUPER_WRENCH` bị đánh dấu `Inert`, clip 0, nên mọi lần bấm cò bị từ chối `NoAmmo` | `WeaponCatalog.cs:334-335` | 1 | |
 | **CMB-11** | ☐ | **Bắn súng to không đánh dấu spotted.** `user.Highlight()` không có cổng role, ghi vào bản sao actor của chính client — mà `IsHighlighted()` chỉ được đọc bởi AI, thứ không có trong tiến trình này | `Weapon.cs:414-417` | 1 | |
-| **CMB-12** | ☐ | **HUD đạn dự trữ là dự đoán cục bộ không bao giờ được sửa.** Giá trị **có** trên dây và **có** được giải mã, nhưng không gì ghi ngược vào `Actor.spareAmmo` | `LocalPlayerRigBinding.cs:213-229` | 2 | |
+| **CMB-12** | ☑ | **HUD đạn dự trữ là dự đoán cục bộ không bao giờ được sửa.** Giá trị **có** trên dây và **có** được giải mã, nhưng không gì ghi ngược vào `Actor.spareAmmo` | `ILocalPlayerRig.cs:304`; `LocalPlayerRigBinding.cs:213`; `NetClientLocalCombatDriver.cs:839` | 2 | |
 | **CMB-13** | ☐ | **Bốn chỗ gây sát thương chạy trên client không có cổng**, chỉ vô hại nhờ proxy prefab tình cờ không có collider | `MeleeWeapon.cs:44-52`; `Hitbox.cs:40-43`; `Vehicle.cs:1012-1026` | 1 | |
 | **CMB-14** | ☐ | **Người chơi từ xa không bao giờ trông như đang ngắm.** `IsAiming` không có writer | `NetServerActor.cs:389` | 1 | |
 | **CMB-15** | ☐ | **Độ trễ rút súng không được mô hình hoá phía server** | server combat path | 1 | |
@@ -240,6 +240,7 @@ Không phải "cơ chế" theo nghĩa gameplay, nhưng đây là những thứ c
 | **TOL-01** | ☐ | **`recount_debt_ledger.py` xếp nhầm X-82 là đã đóng.** Dòng 52 kiểm tra **chuỗi con** `"CLOSED"` trước khi kiểm tra **tiền tố**; ô trạng thái của X-82 có câu *"Now that X-86 is closed"* nên bị bucket `closed`. `--check` **exit 0** trong khi X-82 vẫn mở — và X-82 là dòng sổ nợ tự gọi là *"nguồn gốc chính còn lại của thân thể sai chỗ"* | `tools/recount_debt_ledger.py:52` | 1 |
 | **TOL-02** | ☐ | **Không cổng nào so trạng thái một dòng với cây mã**, chỉ so với chữ của các dòng khác. Bốn phán quyết lật ngược ô trạng thái (X-28, X-81, X-82, X-88) đều vô hình với mọi lệnh trong `ci.ps1` và `ci.yml` | tooling | 1 |
 | **TOL-03** | ☐ | **Chương trình `vehicle` của lane-B chưa từng đạt, và không đạt được một cách tất định.** `SpawnPoint.RandomSpawnPointPosition` (`SpawnPoint.cs:115`) lấy ngẫu nhiên một child bên trong CapturePoint, nên `-SpawnIndex` ghim được **điểm** mà không ghim được **toạ độ trong điểm** — hai lần chạy cùng "spawn point 0 of 5" cách nhau ~50 m. Bước `approachVehicle` đi **đường thẳng** tới mục tiêu (X-66), nên từ một child bất lợi nó dừng cách xe 43 m thay vì tới nơi. Cả **bốn** artifact `vehicle` trong repo đều `passed: false`. Hệ quả: **toàn bộ khu vực xe chưa từng được nghiệm thu lần nào** — có artifact trên đĩa nên trông như đã kiểm, nhưng không lần nào xanh | `SpawnPoint.cs:115`; `tools/lane-b/vehicle-driver.json` | 1 |
+| **TOL-04** | ☐ | **Harness quan sát netcode, không quan sát rig — nên cả một lớp lỗi không thể nghiệm thu được.** Hai lần liên tiếp: **MOV-03** không kiểm được vì `LaneBHarness.cs:778` thay hẳn `clock.InputSource` bằng `BuildMoveInput`, nên đường `DefaultInput` (đường client thật đi) chưa bao giờ chạy trong harness; **CMB-12** không kiểm được vì recorder ghi `spareAmmoKind`/`spareAmmoRounds` từ `state.SpareAmmo` — giá trị *trên dây*, không phải `Actor.spareAmmo` mà rig đã áp. Toàn bộ nhóm lỗi trình bày phía client (W5, và phần lớn W2) nằm trong cùng tình trạng: chạy bao nhiêu lần cũng không đóng được bằng bằng chứng. **Hình dạng sửa đã có sẵn ngay trong recorder**: cặp `reloading`/`serverReloading` ghi giá trị cục bộ *bên cạnh* giá trị quyền uy đúng để bất đồng lộ ra. Cặp đó cần được nhân rộng sang trạng thái của rig — và việc đó cần thêm member **đọc** trên `ILocalPlayerRig`, thứ hiện chưa có | `LaneBHarness.cs:778`; `LaneBCheckpointRecorder.cs:742-743` | 1 |
 
 ---
 

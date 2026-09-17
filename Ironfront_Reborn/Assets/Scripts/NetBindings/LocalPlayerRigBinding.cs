@@ -1,3 +1,4 @@
+using Ironfront.Net.Protocol;
 using Ironfront.Net.Unity;
 using UnityEngine;
 
@@ -210,7 +211,8 @@ namespace Ironfront.Net.Unity.Bindings
         }
 
         /// <inheritdoc/>
-        public void ApplyAuthoritativeCombat(byte health, byte weaponId, byte ammoInClip)
+        public void ApplyAuthoritativeCombat(
+            byte health, byte weaponId, byte ammoInClip, SpareAmmo spare)
         {
             FpsActorController local = FpsActorController.instance;
             if (local == null || local.actor == null) return;
@@ -220,13 +222,45 @@ namespace Ironfront.Net.Unity.Bindings
 
             Weapon weapon = actor.activeWeapon;
             if (weapon != null && weapon.NetworkId == weaponId)
+            {
                 weapon.ammo = ammoInClip;
+
+                // The reserve, which had two writers and no corrector: Weapon.ReloadDone spends
+                // Actor.spareAmmo[slot] locally while the server spends its own pool, so every
+                // reload the server refused or performed differently widened the gap for good.
+                // A weapon does not know its own index, so the slot is found the way
+                // Actor.RemainingSpareAmmoFor finds it.
+                for (int slot = 0; slot < actor.weapons.Length; slot++)
+                {
+                    if (actor.weapons[slot] != weapon) continue;
+                    actor.spareAmmo[slot] = LocalSpareEncoding(spare);
+                    break;
+                }
+            }
 
             // These singleton calls are presentation only and are absent during scene teardown.
             if (IngameUi.instance == null) return;
             actor.UpdateHealthUi();
             if (weapon != null) actor.UpdateAmmoUi();
         }
+
+        /// <summary>
+        /// The wire's three-state reserve in the encoding <c>Actor.spareAmmo</c> already uses: a
+        /// count, <c>-1</c> for no resupply, <c>-2</c> for infinite.
+        /// </summary>
+        /// <remarks>
+        /// Those sentinels are the game's, not this seam's. <c>IngameUi.SetAmmoText</c> switches
+        /// on them to choose between a number, an empty label and "/∞", and
+        /// <c>Weapon.AllowsResupply</c> tests the same <c>-2</c> against the weapon's own config.
+        /// Reading the convention out of the code that draws it, rather than inventing a fourth
+        /// one here, is the whole of this method.
+        /// </remarks>
+        private static int LocalSpareEncoding(SpareAmmo spare) => spare.Kind switch
+        {
+            SpareAmmoKind.Infinite => -2,
+            SpareAmmoKind.NoResupply => -1,
+            _ => spare.Rounds,
+        };
 
         /// <inheritdoc/>
         public void GetChosenLoadout(
