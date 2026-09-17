@@ -278,7 +278,7 @@ namespace Ironfront.Net.Replication.Tests
                 Compensator = new LagCompensator(new HitboxHistory());
                 Resolver = new ServerFireResolver(Compensator, seed: 7);
                 Sink = new CountingDamageSink();
-                Authority = new ServerCombatAuthority(Resolver, Sink, new ServerRespawnGate());
+                Authority = new ServerCombatAuthority(Resolver, Sink);
 
                 Weapon = WeaponRuntimeState.Loaded(in _config);
                 State = MoveState.AtRest(Vec3.Zero);

@@ -352,13 +352,24 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
-        /// The tick loop asks the installed combat seam for this tick's buttons, and passes them
-        /// into the frame it builds.
+        /// The tick loop asks the installed combat seam for this tick's buttons, and the installed
+        /// crouch and sprint seams for this tick's states, and passes all three into the frame it
+        /// builds.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// This is what a scripted Lane B client drives: it calls
         /// <c>FpsActorController.SetInputSource</c> and the delegate installed below reads the
         /// replacement live, so no second input path exists to keep in step.
+        /// </para>
+        /// <para>
+        /// <b>The last two arguments are states, not keys, and each is checked by name.</b> A
+        /// crouching body's capsule has one writer per side and a sprinting body's trigger is
+        /// refused on both, so a frame built from the raw keys disagrees with the game about the
+        /// same action — and one of those disagreements made every Shift-held-while-aiming shot
+        /// invisible to the server. Asserting the count alone would not notice an argument being
+        /// swapped for a key read.
+        /// </para>
         /// </remarks>
         [Fact]
         public void TheTickLoopReadsTheInstalledCombatSeam()
@@ -370,10 +381,16 @@ namespace Ironfront.Net.Replication.Tests
                     .Single(i => i.Expression is MemberAccessExpressionSyntax m
                                  && m.Name.Identifier.ValueText == "FromUnityInput");
 
-            Assert.Equal(2, fromUnityInput.ArgumentList.Arguments.Count);
+            Assert.Equal(4, fromUnityInput.ArgumentList.Arguments.Count);
             Assert.Contains(
                 "CombatButtonSource",
                 fromUnityInput.ArgumentList.Arguments[1].ToString());
+            Assert.Contains(
+                "CrouchSource",
+                fromUnityInput.ArgumentList.Arguments[2].ToString());
+            Assert.Contains(
+                "SprintSource",
+                fromUnityInput.ArgumentList.Arguments[3].ToString());
         }
 
         /// <summary>
@@ -578,8 +595,7 @@ namespace Ironfront.Net.Replication.Tests
                 Sink = new SenderDamageSink();
                 Authority = new ServerCombatAuthority(
                     new ServerFireResolver(new LagCompensator(new HitboxHistory()), seed: 7),
-                    Sink,
-                    new ServerRespawnGate());
+                    Sink);
 
                 Weapon = WeaponRuntimeState.Loaded(in _config);
                 State = MoveState.AtRest(Vec3.Zero);
