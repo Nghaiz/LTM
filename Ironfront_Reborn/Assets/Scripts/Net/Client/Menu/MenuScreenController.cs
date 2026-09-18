@@ -315,6 +315,16 @@ namespace Ironfront.Net.Unity.Client.Menu
             _flow.Transition(GameFlowState.LoginScreen);
         }
 
+        /// <summary>Returns from the login form to the title screen.</summary>
+        public void ReturnToTitle()
+        {
+            if (_flow == null || _flow.State != GameFlowState.LoginScreen) return;
+
+            ClearError();
+            _registerRequested = false;
+            _flow.Reset();
+        }
+
         /// <summary>
         /// The Title screen's secondary action: hand over to the legacy offline menu.
         /// </summary>

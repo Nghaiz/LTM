@@ -3,7 +3,10 @@
 using Ironfront.MasterClient;
 using Ironfront.Net.Configuration;
 using Ironfront.Net.Protocol;
+using System;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace Ironfront.Net.Unity.Client.Menu
@@ -56,6 +59,7 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private Text[] _roomLabels = new Text[Rows];
 
         [Header("Controls")]
+        [SerializeField] private InputField? _searchField;
         [SerializeField] private Button? _refreshButton;
         [SerializeField] private Button? _createRoomButton;
 
@@ -72,6 +76,7 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         /// <summary>The room the password prompt is asking about, or 0 when it is closed.</summary>
         private int _promptRoomId;
+        private RoomInfo[] _visibleRooms = Array.Empty<RoomInfo>();
 
         private void Awake()
         {
@@ -86,10 +91,28 @@ namespace Ironfront.Net.Unity.Client.Menu
 
             if (_refreshButton != null) _refreshButton.onClick.AddListener(OnRefresh);
             if (_createRoomButton != null) _createRoomButton.onClick.AddListener(OnCreateRoom);
+            if (_searchField != null) _searchField.onValueChanged.AddListener(OnSearchChanged);
             if (_passwordJoinButton != null) _passwordJoinButton.onClick.AddListener(OnPasswordJoin);
             if (_passwordCancelButton != null) _passwordCancelButton.onClick.AddListener(ClosePrompt);
 
             ClosePrompt();
+        }
+
+        private void Update()
+        {
+            if (_passwordPrompt == null || !_passwordPrompt.activeSelf) return;
+
+            if (Input.GetKeyDown(KeyCode.Escape)) ClosePrompt();
+            else if ((Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
+                     && EventSystem.current != null
+                     && EventSystem.current.currentSelectedGameObject == _passwordField?.gameObject)
+                OnPasswordJoin();
+        }
+
+        private void OnSearchChanged(string query)
+        {
+            ClosePrompt();
+            if (_controller != null) DrawRooms(_controller);
         }
 
         private void OnRefresh()
@@ -119,7 +142,7 @@ namespace Ironfront.Net.Unity.Client.Menu
         {
             if (_controller == null) return;
 
-            RoomInfo[] rooms = _controller.Rooms;
+            RoomInfo[] rooms = _visibleRooms;
             if (row < 0 || row >= rooms.Length) return;
 
             RoomInfo room = rooms[row];
@@ -192,8 +215,18 @@ namespace Ironfront.Net.Unity.Client.Menu
         /// something actually changed.
         /// </remarks>
         public override void OnControllerStateChanged(MenuScreenController controller)
+            => DrawRooms(controller);
+
+        private void DrawRooms(MenuScreenController controller)
         {
-            RoomInfo[] rooms = controller.Rooms;
+            RoomInfo[] allRooms = controller.Rooms;
+            string query = _searchField != null ? _searchField.text : string.Empty;
+            var filtered = new List<RoomInfo>(allRooms.Length);
+            foreach (RoomInfo room in allRooms)
+                if (room != null && MatchesSearch(room, query)) filtered.Add(room);
+
+            RoomInfo[] rooms = filtered.ToArray();
+            _visibleRooms = rooms;
 
             for (int i = 0; i < _roomButtons.Length; i++)
             {
@@ -202,7 +235,10 @@ namespace Ironfront.Net.Unity.Client.Menu
                 Button button = _roomButtons[i];
                 if (button != null)
                 {
-                    button.gameObject.SetActive(used);
+                    GameObject rowObject = button.transform.parent != null
+                        ? button.transform.parent.gameObject
+                        : button.gameObject;
+                    rowObject.SetActive(used);
                     button.interactable = used && !controller.IsBusy && rooms[i].IsJoinable;
                 }
 
@@ -244,6 +280,19 @@ namespace Ironfront.Net.Unity.Client.Menu
 
             return $"{lockGlyph}{room.Name}   {map}   {room.Players}/{room.MaxPlayers}   "
                    + Describe(room.Lifecycle);
+        }
+
+        internal static bool MatchesSearch(RoomInfo room, string query)
+        {
+            if (room == null || string.IsNullOrWhiteSpace(query)) return room != null;
+
+            string needle = query.Trim();
+            if (room.Name.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+
+            string map = MapCatalog.TryGetScene(room.MapId, out string scene)
+                ? scene
+                : $"map {room.MapId}";
+            return map.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static string Describe(RoomLifecycleState state)

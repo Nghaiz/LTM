@@ -103,6 +103,8 @@ namespace Ironfront.Net.Unity.EditorTools
 
         private static bool Build(StringBuilder log)
         {
+            IronfrontRebornUiAssetCatalog.ConfigureImporters();
+
             Scene scene = SceneManager.GetActiveScene();
             if (scene.path != ScenePath)
             {
@@ -125,7 +127,7 @@ namespace Ironfront.Net.Unity.EditorTools
 
             var scaler = root.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.referenceResolution = new Vector2(1280f, 720f);
             scaler.matchWidthOrHeight = 0.5f;
 
             MenuScreenController controller = root.AddComponent<MenuScreenController>();
@@ -202,45 +204,82 @@ namespace Ironfront.Net.Unity.EditorTools
         private static GameObject BuildTitle(
             GameObject root, MenuScreenController controller, StringBuilder log)
         {
-            GameObject panel = Panel(root, "Title");
+            GameObject panel = Panel(root, "Title", opaque: false);
+            FullscreenSprite(panel, "Background", "backgrounds/main_menu_scene.jpg");
+            PackImage(panel, "Logo", "logos/ironfront_reborn_logo.png",
+                new Vector2(-430f, 266f), new Vector2(270f, 72f));
 
-            Label(panel, "Heading", "IRONFRONT", 72, new Vector2(0f, 220f), new Vector2(900f, 110f));
+            Text tagline = Label(panel, "Tagline", "TACTICAL WARFARE. REFORGED.", 16,
+                new Vector2(-430f, 216f), new Vector2(360f, 28f));
+            tagline.alignment = TextAnchor.MiddleLeft;
 
-            Button multiplayer = MakeButton(
-                panel, "Multiplayer", "MULTIPLAYER", new Vector2(0f, 40f), new Vector2(460f, 92f));
-            Button practice = MakeButton(
-                panel, "Practice", "Practice (offline)", new Vector2(0f, -70f), new Vector2(360f, 64f));
+            Button multiplayer = PackButton(panel, "Multiplayer", "MULTIPLAYER",
+                new Vector2(-430f, 104f), new Vector2(360f, 72f), "buttons/primary", "icons/png/users.png");
+            Button practice = PackButton(panel, "Practice", "PRACTICE",
+                new Vector2(-430f, 20f), new Vector2(360f, 72f), "buttons/secondary", "icons/png/crosshair.png");
+            Button settings = PackButton(panel, "Settings", "SETTINGS",
+                new Vector2(-430f, -64f), new Vector2(360f, 72f), "buttons/secondary", "icons/png/settings.png");
+            Button exit = PackButton(panel, "Exit", "EXIT",
+                new Vector2(-430f, -148f), new Vector2(360f, 72f), "buttons/danger", "icons/png/power.png");
+
+            Text footer = Label(panel, "Footer", "TEAM 10 LTM  •  CLASSROOM MULTIPLAYER PROJECT", 14,
+                new Vector2(-420f, -324f), new Vector2(420f, 24f));
+            footer.alignment = TextAnchor.MiddleLeft;
+            footer.color = new Color(0.72f, 0.76f, 0.80f, 0.9f);
+
+            SetVerticalNavigation(multiplayer, practice, settings, exit);
 
             MenuTitleScreen screen = panel.AddComponent<MenuTitleScreen>();
             var so = new SerializedObject(screen);
             Assign(so, "_controller", controller);
             Assign(so, "_multiplayerButton", multiplayer);
             Assign(so, "_practiceButton", practice);
+            Assign(so, "_settingsButton", settings);
+            Assign(so, "_exitButton", exit);
             so.ApplyModifiedPropertiesWithoutUndo();
 
-            log.AppendLine("title: multiplayer is the primary action, practice is secondary.");
+            log.AppendLine("title: supplied background/logo and four fully wired actions.");
             return panel;
         }
 
         private static GameObject BuildLogin(
             GameObject root, MenuScreenController controller, StringBuilder log)
         {
-            GameObject panel = Panel(root, "Login");
+            GameObject panel = Panel(root, "Login", opaque: false);
+            FullscreenSprite(panel, "Background", "backgrounds/sign_in_scene.jpg");
+            PackImage(panel, "Logo", "logos/ironfront_reborn_logo.png",
+                new Vector2(-475f, 298f), new Vector2(216f, 58f));
+            PackImage(panel, "GlassPanel", "panels/glass_panel_large.png",
+                new Vector2(0f, -5f), new Vector2(650f, 600f), sliced: true);
 
-            Label(panel, "Heading", "SIGN IN", 48, new Vector2(0f, 250f), new Vector2(700f, 70f));
+            Label(panel, "Heading", "SIGN IN", 34, new Vector2(0f, 234f), new Vector2(520f, 52f));
+            Text subheading = Label(panel, "Subheading", "CONNECT TO THE FRONT", 15,
+                new Vector2(0f, 199f), new Vector2(520f, 24f));
+            subheading.color = new Color(0.76f, 0.79f, 0.82f);
 
-            InputField username = Field(
-                panel, "Username", "Username", new Vector2(0f, 140f), password: false);
-            InputField password = Field(
-                panel, "Password", "Password", new Vector2(0f, 60f), password: true);
+            InputField username = PackField(panel, "Username", "Username",
+                new Vector2(0f, 132f), new Vector2(480f, 58f), password: false);
+            InputField password = PackField(panel, "Password", "Password",
+                new Vector2(0f, 62f), new Vector2(480f, 58f), password: true);
+            Toggle remember = PackToggle(panel, "RememberMe", "Remember username",
+                new Vector2(-125f, 10f));
+            Button forgot = LinkButton(panel, "ForgotPassword", "Forgot password?",
+                new Vector2(151f, 10f), new Vector2(210f, 36f));
 
-            Button logIn = MakeButton(panel, "LogIn", "LOG IN", new Vector2(0f, -30f), new Vector2(460f, 74f));
-            Button create = MakeButton(
-                panel, "CreateAccount", "Create an account", new Vector2(0f, -120f), new Vector2(360f, 56f));
+            Button logIn = PackButton(panel, "LogIn", "LOG IN", new Vector2(0f, -52f),
+                new Vector2(360f, 72f), "buttons/primary", "icons/png/user.png");
+            Label(panel, "Divider", "────────────  OR  ────────────", 14,
+                new Vector2(0f, -103f), new Vector2(480f, 24f));
+            Button create = PackButton(panel, "CreateAccount", "CREATE ACCOUNT",
+                new Vector2(0f, -154f), new Vector2(360f, 72f), "buttons/secondary", "icons/png/plus.png");
+            Button back = PackButton(panel, "Back", "BACK", new Vector2(-500f, -310f),
+                new Vector2(142f, 48f), "buttons/back_small", "icons/png/back.png");
 
-            Text error = Label(
-                panel, "Error", string.Empty, 28, new Vector2(0f, -210f), new Vector2(760f, 90f));
+            Text error = Label(panel, "Error", string.Empty, 18,
+                new Vector2(0f, -221f), new Vector2(540f, 52f));
             error.color = ErrorInk;
+
+            SetVerticalNavigation(username, password, remember, forgot, logIn, create, back);
 
             MenuLoginScreen screen = panel.AddComponent<MenuLoginScreen>();
             var so = new SerializedObject(screen);
@@ -249,10 +288,13 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_passwordField", password);
             Assign(so, "_logInButton", logIn);
             Assign(so, "_createAccountButton", create);
+            Assign(so, "_rememberMeToggle", remember);
+            Assign(so, "_forgotPasswordButton", forgot);
+            Assign(so, "_backButton", back);
             Assign(so, "_errorText", error);
             so.ApplyModifiedPropertiesWithoutUndo();
 
-            log.AppendLine("login: error label authored; criterion 3 renders here.");
+            log.AppendLine("login: supplied pack, remember/forgot/back, explicit keyboard order.");
             return panel;
         }
 
@@ -326,13 +368,33 @@ namespace Ironfront.Net.Unity.EditorTools
         private static GameObject BuildRoomBrowser(
             GameObject root, MenuScreenController controller, StringBuilder log)
         {
-            GameObject panel = Panel(root, "RoomBrowser");
+            GameObject panel = Panel(root, "RoomBrowser", opaque: false);
+            FullscreenSprite(panel, "Background", "backgrounds/rooms_scene.jpg");
+            PackImage(panel, "Logo", "logos/ironfront_reborn_logo.png",
+                new Vector2(-492f, 315f), new Vector2(190f, 51f));
+            PackImage(panel, "RoomsTab", "tabs/tab_active.png",
+                new Vector2(-160f, 316f), new Vector2(210f, 54f), sliced: true);
+            Label(panel, "RoomsTabLabel", "ROOMS", 18, new Vector2(-160f, 316f), new Vector2(210f, 54f));
+            PackImage(panel, "GlassPanel", "panels/glass_panel_large.png",
+                new Vector2(0f, -20f), new Vector2(1140f, 590f), sliced: true);
 
-            Label(panel, "Heading", "ROOMS", 44, new Vector2(-540f, 420f), new Vector2(400f, 64f));
+            Label(panel, "Heading", "MULTIPLAYER ROOMS", 28,
+                new Vector2(-405f, 230f), new Vector2(320f, 48f)).alignment = TextAnchor.MiddleLeft;
 
             // Labelled "master", never "ping": see MasterSession.MasterPingMs. A number with no
             // subject is the one thing this readout must not be.
-            Text ping = Label(panel, "Ping", "master --", 26, new Vector2(560f, 420f), new Vector2(320f, 50f));
+            Text ping = Label(panel, "Ping", "master --", 16,
+                new Vector2(445f, 230f), new Vector2(190f, 40f));
+            PackImage(panel, "PingSignal", "misc/ping_signal.png",
+                new Vector2(335f, 230f), new Vector2(40f, 30f));
+
+            InputField search = PackField(panel, "Search", "Search rooms or maps...",
+                new Vector2(-285f, 180f), new Vector2(500f, 56f), password: false,
+                defaultSprite: "fields/search_field.png");
+            PackImage(search.gameObject, "SearchIcon", "icons/png/search.png",
+                new Vector2(-218f, 0f), new Vector2(25f, 25f));
+            Button refresh = PackButton(panel, "Refresh", "REFRESH", new Vector2(385f, 180f),
+                new Vector2(210f, 52f), "buttons/secondary", "icons/png/refresh.png");
 
             int rows = MenuRoomBrowserScreen.Rows;
             var buttons = new Object[rows];
@@ -340,30 +402,22 @@ namespace Ironfront.Net.Unity.EditorTools
 
             for (int i = 0; i < rows; i++)
             {
-                float y = 330f - (i * 78f);
-                Button row = MakeButton(
-                    panel, "Row" + i, string.Empty, new Vector2(0f, y), new Vector2(1500f, 68f),
-                    out Text caption);
-
-                caption.alignment = TextAnchor.MiddleLeft;
-                caption.resizeTextForBestFit = false;
-                caption.fontSize = 28;
-                Inset(caption.GetComponent<RectTransform>());
+                float y = 122f - (i * 48f);
+                Button row = MakeRoomRow(panel, i, new Vector2(0f, y), out Text caption);
 
                 buttons[i] = row;
                 labels[i] = caption;
             }
 
             Text overflow = Label(
-                panel, "Overflow", string.Empty, 24, new Vector2(0f, -320f), new Vector2(1500f, 44f));
+                panel, "Overflow", string.Empty, 14, new Vector2(-260f, -275f), new Vector2(520f, 26f));
+            overflow.alignment = TextAnchor.MiddleLeft;
 
-            Button refresh = MakeButton(
-                panel, "Refresh", "REFRESH", new Vector2(-380f, -390f), new Vector2(380f, 70f));
-            Button create = MakeButton(
-                panel, "CreateRoom", "CREATE ROOM", new Vector2(380f, -390f), new Vector2(380f, 70f));
+            Button create = PackButton(panel, "CreateRoom", "CREATE ROOM",
+                new Vector2(390f, -280f), new Vector2(300f, 60f), "buttons/primary", "icons/png/plus.png");
 
             Text error = Label(
-                panel, "Error", string.Empty, 28, new Vector2(0f, -470f), new Vector2(1500f, 60f));
+                panel, "Error", string.Empty, 16, new Vector2(0f, -326f), new Vector2(900f, 34f));
             error.color = ErrorInk;
 
             GameObject prompt = BuildPasswordPrompt(
@@ -374,6 +428,7 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_controller", controller);
             AssignArray(so, "_roomButtons", buttons);
             AssignArray(so, "_roomLabels", labels);
+            Assign(so, "_searchField", search);
             Assign(so, "_refreshButton", refresh);
             Assign(so, "_createRoomButton", create);
             Assign(so, "_pingText", ping);
@@ -387,7 +442,7 @@ namespace Ironfront.Net.Unity.EditorTools
 
             prompt.SetActive(false);
 
-            log.AppendLine("room browser: " + rows + " rows, master-ping readout, password prompt.");
+            log.AppendLine("room browser: supplied pack, search, " + rows + " real-data rows.");
             return panel;
         }
 
@@ -395,14 +450,23 @@ namespace Ironfront.Net.Unity.EditorTools
         private static GameObject BuildPasswordPrompt(
             GameObject parent, out InputField password, out Button join, out Button cancel)
         {
-            GameObject prompt = Panel(parent, "PasswordPrompt");
+            GameObject prompt = Panel(parent, "PasswordPrompt", opaque: false);
+            Image shade = prompt.AddComponent<Image>();
+            shade.color = new Color(0f, 0f, 0f, 0.72f);
+            PackImage(prompt, "GlassPanel", "panels/glass_panel_small.png",
+                Vector2.zero, new Vector2(500f, 280f), sliced: true);
 
-            Label(prompt, "Heading", "PRIVATE ROOM", 40, new Vector2(0f, 140f), new Vector2(700f, 60f));
+            Label(prompt, "Heading", "PRIVATE ROOM", 28,
+                new Vector2(0f, 86f), new Vector2(420f, 48f));
 
-            password = Field(prompt, "Password", "Room password", new Vector2(0f, 50f), password: true);
+            password = PackField(prompt, "Password", "Room password", new Vector2(0f, 28f),
+                new Vector2(400f, 52f), password: true);
 
-            join = MakeButton(prompt, "Join", "JOIN", new Vector2(-160f, -50f), new Vector2(280f, 68f));
-            cancel = MakeButton(prompt, "Cancel", "Cancel", new Vector2(160f, -50f), new Vector2(280f, 68f));
+            join = PackButton(prompt, "Join", "JOIN", new Vector2(-105f, -62f),
+                new Vector2(190f, 52f), "buttons/join");
+            cancel = PackButton(prompt, "Cancel", "CANCEL", new Vector2(105f, -62f),
+                new Vector2(190f, 52f), "buttons/secondary");
+            SetVerticalNavigation(password, join, cancel);
 
             return prompt;
         }
@@ -565,6 +629,198 @@ namespace Ironfront.Net.Unity.EditorTools
         }
 
         // ------------------------------------------------------------------ widgets
+
+        private static void FullscreenSprite(GameObject parent, string name, string asset)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(parent.transform, worldPositionStays: false);
+            Stretch(go.GetComponent<RectTransform>());
+            Image image = go.GetComponent<Image>();
+            image.sprite = IronfrontRebornUiAssetCatalog.Sprite(asset);
+            image.preserveAspect = false;
+            image.raycastTarget = false;
+            go.transform.SetAsFirstSibling();
+        }
+
+        private static Image PackImage(
+            GameObject parent, string name, string asset, Vector2 position, Vector2 size,
+            bool sliced = false)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(parent.transform, worldPositionStays: false);
+            Centre(go.GetComponent<RectTransform>(), position, size);
+            Image image = go.GetComponent<Image>();
+            image.sprite = IronfrontRebornUiAssetCatalog.Sprite(asset);
+            image.type = sliced ? Image.Type.Sliced : Image.Type.Simple;
+            image.preserveAspect = !sliced;
+            image.raycastTarget = false;
+            return image;
+        }
+
+        private static Button PackButton(
+            GameObject parent, string name, string caption, Vector2 position, Vector2 size,
+            string spriteStem, string iconAsset = null)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
+            go.transform.SetParent(parent.transform, worldPositionStays: false);
+            Centre(go.GetComponent<RectTransform>(), position, size);
+
+            Image image = go.GetComponent<Image>();
+            image.sprite = IronfrontRebornUiAssetCatalog.Sprite(spriteStem + "_base.png");
+            image.type = Image.Type.Sliced;
+
+            Button button = go.GetComponent<Button>();
+            button.targetGraphic = image;
+            button.transition = Selectable.Transition.SpriteSwap;
+            SpriteState state = button.spriteState;
+            state.highlightedSprite = IronfrontRebornUiAssetCatalog.Sprite(spriteStem + "_hover.png");
+            state.pressedSprite = IronfrontRebornUiAssetCatalog.Sprite(spriteStem + "_pressed.png");
+            state.selectedSprite = state.highlightedSprite;
+            state.disabledSprite = IronfrontRebornUiAssetCatalog.Sprite("buttons/disabled_base.png");
+            button.spriteState = state;
+
+            Text text = Label(go, "Caption", caption, Mathf.Clamp(Mathf.RoundToInt(size.y * 0.32f), 14, 24),
+                iconAsset == null ? Vector2.zero : new Vector2(16f, 0f),
+                iconAsset == null ? size : new Vector2(size.x - 72f, size.y));
+            text.fontStyle = FontStyle.Bold;
+            text.raycastTarget = false;
+
+            if (iconAsset != null)
+                PackImage(go, "Icon", iconAsset, new Vector2(-size.x * 0.5f + 38f, 0f),
+                    new Vector2(30f, 30f));
+
+            return button;
+        }
+
+        private static Button LinkButton(
+            GameObject parent, string name, string caption, Vector2 position, Vector2 size)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
+            go.transform.SetParent(parent.transform, worldPositionStays: false);
+            Centre(go.GetComponent<RectTransform>(), position, size);
+            Image hitArea = go.GetComponent<Image>();
+            hitArea.color = new Color(0f, 0f, 0f, 0f);
+
+            Button button = go.GetComponent<Button>();
+            button.targetGraphic = hitArea;
+            ColorBlock colors = button.colors;
+            colors.normalColor = Color.white;
+            colors.highlightedColor = new Color(1f, 0.67f, 0.3f);
+            colors.pressedColor = new Color(1f, 0.47f, 0.12f);
+            button.colors = colors;
+
+            Text text = Label(go, "Caption", caption, 15, Vector2.zero, size);
+            text.alignment = TextAnchor.MiddleRight;
+            text.color = new Color(0.95f, 0.59f, 0.24f);
+            text.raycastTarget = false;
+            return button;
+        }
+
+        private static InputField PackField(
+            GameObject parent, string name, string placeholder, Vector2 position, Vector2 size,
+            bool password, string defaultSprite = "fields/input_default.png")
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(InputField));
+            go.transform.SetParent(parent.transform, worldPositionStays: false);
+            Centre(go.GetComponent<RectTransform>(), position, size);
+
+            Image background = go.GetComponent<Image>();
+            background.sprite = IronfrontRebornUiAssetCatalog.Sprite(defaultSprite);
+            background.type = Image.Type.Sliced;
+
+            Text text = Label(go, "Text", string.Empty, 18, Vector2.zero, size);
+            text.alignment = TextAnchor.MiddleLeft;
+            text.supportRichText = false;
+            text.resizeTextForBestFit = false;
+            Inset(text.GetComponent<RectTransform>());
+
+            Text hint = Label(go, "Placeholder", placeholder, 18, Vector2.zero, size);
+            hint.alignment = TextAnchor.MiddleLeft;
+            hint.color = new Color(0.56f, 0.61f, 0.66f);
+            hint.resizeTextForBestFit = false;
+            Inset(hint.GetComponent<RectTransform>());
+
+            if (defaultSprite.EndsWith("search_field.png"))
+            {
+                text.GetComponent<RectTransform>().offsetMin = new Vector2(52f, 6f);
+                hint.GetComponent<RectTransform>().offsetMin = new Vector2(52f, 6f);
+            }
+
+            InputField field = go.GetComponent<InputField>();
+            field.targetGraphic = background;
+            field.textComponent = text;
+            field.placeholder = hint;
+            field.contentType = password ? InputField.ContentType.Password : InputField.ContentType.Standard;
+            field.lineType = InputField.LineType.SingleLine;
+            field.transition = Selectable.Transition.SpriteSwap;
+            SpriteState state = field.spriteState;
+            state.highlightedSprite = IronfrontRebornUiAssetCatalog.Sprite("fields/input_focus.png");
+            state.selectedSprite = state.highlightedSprite;
+            state.pressedSprite = state.highlightedSprite;
+            field.spriteState = state;
+            return field;
+        }
+
+        private static Toggle PackToggle(GameObject parent, string name, string caption, Vector2 position)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(Toggle));
+            go.transform.SetParent(parent.transform, worldPositionStays: false);
+            Centre(go.GetComponent<RectTransform>(), position, new Vector2(250f, 42f));
+
+            Image off = PackImage(go, "Off", "toggles/checkbox_off.png",
+                new Vector2(-102f, 0f), new Vector2(30f, 30f));
+            off.raycastTarget = true;
+            Image on = PackImage(off.gameObject, "On", "toggles/checkbox_on.png",
+                Vector2.zero, new Vector2(30f, 30f));
+            Text text = Label(go, "Caption", caption, 15,
+                new Vector2(18f, 0f), new Vector2(200f, 36f));
+            text.alignment = TextAnchor.MiddleLeft;
+
+            Toggle toggle = go.GetComponent<Toggle>();
+            toggle.targetGraphic = off;
+            toggle.graphic = on;
+            toggle.isOn = false;
+            return toggle;
+        }
+
+        private static Button MakeRoomRow(
+            GameObject parent, int index, Vector2 position, out Text caption)
+        {
+            var go = new GameObject("Row" + index, typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(parent.transform, worldPositionStays: false);
+            Centre(go.GetComponent<RectTransform>(), position, new Vector2(1040f, 44f));
+
+            Image image = go.GetComponent<Image>();
+            image.sprite = IronfrontRebornUiAssetCatalog.Sprite("panels/room_row.png");
+            image.type = Image.Type.Sliced;
+            image.raycastTarget = false;
+
+            caption = Label(go, "Caption", string.Empty, 16,
+                new Vector2(-74f, 0f), new Vector2(850f, 40f));
+            caption.alignment = TextAnchor.MiddleLeft;
+            caption.resizeTextForBestFit = false;
+            caption.raycastTarget = false;
+
+            return PackButton(go, "JoinButton", "JOIN", new Vector2(435f, 0f),
+                new Vector2(120f, 38f), "buttons/join_small");
+        }
+
+        private static void SetVerticalNavigation(params Selectable[] controls)
+        {
+            for (int i = 0; i < controls.Length; i++)
+            {
+                Selectable control = controls[i];
+                if (control == null) continue;
+
+                Navigation navigation = new Navigation
+                {
+                    mode = Navigation.Mode.Explicit,
+                    selectOnUp = controls[(i - 1 + controls.Length) % controls.Length],
+                    selectOnDown = controls[(i + 1) % controls.Length],
+                };
+                control.navigation = navigation;
+            }
+        }
 
         private static GameObject Panel(GameObject root, string name, bool opaque = true)
         {

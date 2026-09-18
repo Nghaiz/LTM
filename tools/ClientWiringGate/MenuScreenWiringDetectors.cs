@@ -199,7 +199,11 @@ namespace Ironfront.Tools.ClientWiringGate
                  "no listener is added to the primary action, so there is still no way into "
                  + "multiplayer from the menu (criterion 1)"),
                 ("_practiceButton",
-                 "Practice is unreachable and the offline game loses its entry (criterion 5)")),
+                 "Practice is unreachable and the offline game loses its entry (criterion 5)"),
+                ("_settingsButton",
+                 "Settings renders but cannot open the existing options UI"),
+                ("_exitButton",
+                 "Exit renders but cannot reach the application's single quit path")),
 
             new Screen(
                 "MenuLoginScreen", "Scripts/Net/Client/Menu/MenuLoginScreen.cs",
@@ -215,6 +219,12 @@ namespace Ironfront.Tools.ClientWiringGate
                  "no listener is added, so the login form cannot be submitted at all"),
                 ("_createAccountButton",
                  "the register screen is unreachable, so criterion 2 cannot be performed"),
+                ("_rememberMeToggle",
+                 "Remember username renders but cannot express the player's choice"),
+                ("_forgotPasswordButton",
+                 "Forgot password renders but cannot show the classroom-build limitation"),
+                ("_backButton",
+                 "the sign-in screen has no way back to the title"),
                 ("_errorText",
                  "a wrong password produces NO visible message, which is criterion 3 failing "
                  + "exactly as the M3 clause describes")),
@@ -258,6 +268,8 @@ namespace Ironfront.Tools.ClientWiringGate
                 ("_controller",
                  "every control on the browser is inert, so there is no way from the signed-in "
                  + "screen into a room at all -- F2 exactly as the audit found it"),
+                ("_searchField",
+                 "the search box renders but cannot filter the current room snapshot"),
                 ("_refreshButton",
                  "the list can never be re-fetched, so a room created on the OTHER machine never "
                  + "appears and criterion 2 cannot be performed"),

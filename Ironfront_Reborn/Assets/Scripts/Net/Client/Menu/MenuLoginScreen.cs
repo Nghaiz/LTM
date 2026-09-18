@@ -1,6 +1,7 @@
 #nullable enable
 
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace Ironfront.Net.Unity.Client.Menu
@@ -32,7 +33,14 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private InputField? _passwordField;
         [SerializeField] private Button? _logInButton;
         [SerializeField] private Button? _createAccountButton;
+        [SerializeField] private Toggle? _rememberMeToggle;
+        [SerializeField] private Button? _forgotPasswordButton;
+        [SerializeField] private Button? _backButton;
         [SerializeField] private Text? _errorText;
+
+        internal const string RememberedUsernameKey = "ironfront.menu.remembered-username";
+        internal const string PasswordRecoveryUnavailableMessage =
+            "Password recovery is not available in this classroom build.";
 
         /// <summary>
         /// The colour the label was authored with. Every failure goes back to it.
@@ -62,6 +70,34 @@ namespace Ironfront.Net.Unity.Client.Menu
 
             if (_logInButton != null) _logInButton.onClick.AddListener(OnLogIn);
             if (_createAccountButton != null) _createAccountButton.onClick.AddListener(OnCreateAccount);
+            if (_forgotPasswordButton != null) _forgotPasswordButton.onClick.AddListener(OnForgotPassword);
+            if (_backButton != null) _backButton.onClick.AddListener(OnBack);
+            if (_rememberMeToggle != null) _rememberMeToggle.onValueChanged.AddListener(OnRememberChanged);
+
+            string remembered = ReadRememberedUsername();
+            if (_usernameField != null && remembered.Length > 0) _usernameField.text = remembered;
+            if (_rememberMeToggle != null) _rememberMeToggle.isOn = remembered.Length > 0;
+        }
+
+        private void Update()
+        {
+            if (Input.GetKeyDown(KeyCode.Escape))
+            {
+                OnBack();
+                return;
+            }
+
+            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
+            {
+                GameObject selected = EventSystem.current != null
+                    ? EventSystem.current.currentSelectedGameObject
+                    : null;
+                if (selected == _usernameField?.gameObject || selected == _passwordField?.gameObject)
+                    OnLogIn();
+            }
+
+            if (Input.GetKeyDown(KeyCode.Tab)) SelectNext(Input.GetKey(KeyCode.LeftShift)
+                || Input.GetKey(KeyCode.RightShift));
         }
 
         private void OnLogIn()
@@ -77,6 +113,8 @@ namespace Ironfront.Net.Unity.Client.Menu
                 return;
             }
 
+            StoreRememberedUsername(_rememberMeToggle != null && _rememberMeToggle.isOn, username);
+
             _controller.SubmitLogin(username, password);
 
             // Dropped now rather than on success: a failed attempt is exactly the case where the
@@ -85,6 +123,45 @@ namespace Ironfront.Net.Unity.Client.Menu
         }
 
         private void OnCreateAccount() => _controller?.ShowRegister();
+
+        private void OnForgotPassword()
+        {
+            if (_errorText == null) return;
+            _errorText.color = NoticeColour;
+            _errorText.text = PasswordRecoveryUnavailableMessage;
+        }
+
+        private void OnBack() => _controller?.ReturnToTitle();
+
+        private void OnRememberChanged(bool remember)
+        {
+            if (!remember) StoreRememberedUsername(false, string.Empty);
+        }
+
+        private void SelectNext(bool backwards)
+        {
+            if (EventSystem.current == null) return;
+
+            Selectable current = EventSystem.current.currentSelectedGameObject != null
+                ? EventSystem.current.currentSelectedGameObject.GetComponent<Selectable>()
+                : null;
+            Selectable next = backwards ? current?.FindSelectableOnUp() : current?.FindSelectableOnDown();
+            if (next == null) next = backwards ? _backButton : _usernameField;
+            next?.Select();
+        }
+
+        internal static string ReadRememberedUsername()
+            => PlayerPrefs.GetString(RememberedUsernameKey, string.Empty);
+
+        internal static void StoreRememberedUsername(bool remember, string username)
+        {
+            if (remember && !string.IsNullOrWhiteSpace(username))
+                PlayerPrefs.SetString(RememberedUsernameKey, username.Trim());
+            else
+                PlayerPrefs.DeleteKey(RememberedUsernameKey);
+
+            PlayerPrefs.Save();
+        }
 
         /// <inheritdoc />
         public override void SetError(string message)

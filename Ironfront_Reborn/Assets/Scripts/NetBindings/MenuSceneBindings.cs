@@ -109,6 +109,14 @@ namespace Ironfront.Net.Unity.Bindings
         }
     }
 
+    /// <summary>Forwards title-screen actions to the legacy game-owned UI and quit path.</summary>
+    internal sealed class LegacyMenuPlatformActions : IMenuPlatformActions
+    {
+        public void OpenSettings() => OptionsUi.Show();
+
+        public void ExitGame() => AppQuit.Quit();
+    }
+
     /// <summary>
     /// Registers the two seams P15 declares. Contracts § 6.3.
     /// </summary>
@@ -144,6 +152,7 @@ namespace Ironfront.Net.Unity.Bindings
         {
             NetClientBindings.TeamPalette = new LegacyTeamPalette();
             NetClientBindings.Practice = new LegacyPracticeLauncher();
+            NetClientBindings.MenuPlatformActions = new LegacyMenuPlatformActions();
         }
     }
 }
