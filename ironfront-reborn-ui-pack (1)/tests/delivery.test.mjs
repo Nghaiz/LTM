@@ -22,11 +22,11 @@ test('three backgrounds and eight previews are valid large images', async () => 
   }
 });
 
-test('asset library contains independently reusable SVG files', async () => {
+test('asset library contains independently reusable PNG files', async () => {
   const categories = ['branding','icons','panels','buttons','inputs','badges','decorative'];
   let count = 0;
-  for (const category of categories) count += (await readdir(path.join(root, 'assets', category))).filter(f => f.endsWith('.svg')).length;
-  assert.ok(count >= 20, `expected at least 20 SVG assets, found ${count}`);
+  for (const category of categories) count += (await readdir(path.join(root, 'assets', category))).filter(f => f.endsWith('.png')).length;
+  assert.ok(count >= 20, `expected at least 20 PNG assets, found ${count}`);
 });
 
 test('responsive and accessibility states are present', async () => {

@@ -29,7 +29,8 @@ namespace Ironfront.Net.Unity.Client.Tests
 
             CanvasScaler scaler = root.GetComponent<CanvasScaler>();
             Assert.AreEqual(new Vector2(1920f, 1080f), scaler.referenceResolution);
-            Assert.IsNull(root.transform.Find("Sign In/ForgotPassword"));
+            Assert.IsTrue(root.GetComponent<Canvas>().pixelPerfect);
+            Assert.NotNull(root.transform.Find("Sign In/ForgotPassword"));
             Assert.NotNull(root.GetComponentInChildren<MenuToast>(true));
 
             string allText = string.Join("\n", root.GetComponentsInChildren<Text>(true)
@@ -83,7 +84,7 @@ namespace Ironfront.Net.Unity.Client.Tests
                 .ToArray();
 
             Assert.IsTrue(
-                sprites.Any(path => path == "Assets/UI/IronfrontReborn/branding/ironfront-reborn-logo.svg"),
+                sprites.Any(path => path == "Assets/UI/IronfrontReborn/branding/ironfront-reborn-logo.png"),
                 "The supplied wordmark is not used anywhere in the menu.");
 
             // The menu rows carry the icons the prototype names for them. Two is a deliberately low
@@ -93,8 +94,7 @@ namespace Ironfront.Net.Unity.Client.Tests
             Assert.GreaterOrEqual(icons, 2,
                 "The menu does not reference the supplied icon set.");
 
-            // The angular surfaces. These are geometry rather than sprites -- the pack's buttons,
-            // panels and fields are SVGs with no nine-slice border -- so they are counted by
+            // The angular surfaces. These are geometry rather than stretched sprites, so they are counted by
             // component, and every screen must have contributed some.
             AngularPanel[] panels = root.GetComponentsInChildren<AngularPanel>(true);
             Assert.GreaterOrEqual(panels.Length, 8,

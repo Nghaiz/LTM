@@ -12,28 +12,30 @@ All assets are reusable components. Background scenes contain no embedded interf
 
 ## Branding
 
-| Path | Format | ViewBox | Usage |
+| Path | Format | Canvas | Usage |
 |---|---|---:|---|
-| `assets/branding/ironfront-reborn-logo.svg` | SVG | 520×128 | Full horizontal wordmark |
-| `assets/branding/ironfront-symbol.svg` | SVG | 64×64 | Compact game mark |
+| `assets/branding/ironfront-reborn-logo.png` | PNG | 1040×256 | Full horizontal wordmark |
+| `assets/branding/ironfront-symbol.png` | PNG | 256×256 | Compact game mark |
 
 ## Icons
 
-All icons are transparent SVGs on a 24×24 viewBox and inherit `currentColor` where applicable.
+All icons are transparent 96×96 white-alpha PNGs intended for runtime tinting.
 
-`user.svg`, `users.svg`, `lock.svg`, `search.svg`, `refresh.svg`, `plus.svg`, `settings.svg`, `power.svg`, `target.svg`, `copy.svg`, `leave.svg`, `chevron.svg`, `wifi.svg`, `shield.svg`.
+`user.png`, `users.png`, `lock.png`, `search.png`, `refresh.png`, `plus.png`, `settings.png`, `power.png`, `target.png`, `copy.png`, `leave.png`, `chevron.png`, `wifi.png`, `shield.png`.
 
 ## Interface surfaces
 
 | Path | Format | Usage |
 |---|---|---|
-| `assets/panels/operations-panel.svg` | SVG | Scalable angular glass panel |
-| `assets/buttons/primary.svg` | SVG | Orange high-priority action |
-| `assets/buttons/secondary.svg` | SVG | Blue-steel secondary action |
-| `assets/inputs/field.svg` | SVG | Text/select field frame |
-| `assets/badges/host.svg` | SVG | Host status badge |
-| `assets/badges/ready.svg` | SVG | Ready status badge |
-| `assets/decorative/corner.svg` | SVG | Orange/cyan HUD corner accent |
+| `assets/panels/operations-panel.png` | PNG | Angular glass panel (1280×720) |
+| `assets/buttons/primary.png` | PNG | Orange high-priority action (640×116) |
+| `assets/buttons/secondary.png` | PNG | Blue-steel secondary action (640×116) |
+| `assets/inputs/field.png` | PNG | Text/select field frame (840×104) |
+| `assets/badges/host.png` | PNG | Host status badge (192×48) |
+| `assets/badges/ready.png` | PNG | Ready status badge (192×48) |
+| `assets/decorative/corner.png` | PNG | Orange/cyan HUD corner accent (240×240) |
+
+The original SVG files remain beside these PNGs only as editable source masters. HTML and Unity runtime paths use PNG exclusively.
 
 ## Interface states
 

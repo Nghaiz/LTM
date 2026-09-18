@@ -19,7 +19,7 @@ The Unity menu scene will provide eight screens matching the prototype:
 
 Splash and all in-game HUD/gameplay scenes are explicitly out of scope for this pass.
 
-Branding is **Ironfront Reborn**, developed by **Team 10 LTM**. Forgot Password is deliberately omitted.
+Branding is **Ironfront Reborn**, developed by **Team 10 LTM**. Forgot Password remains visible for HTML parity and reports the shared development notice.
 
 ## Source-of-truth rules
 
@@ -57,7 +57,7 @@ Reusable, relevant logic may be selectively taken from `feature/ironfront-reborn
 - Existing master-server authentication and registration are preserved.
 - Remember Username remains functional.
 - Password visibility controls are local UI behavior.
-- Forgot Password is absent.
+- Forgot Password reports the shared development notice.
 - Validation and network errors appear in the styled status area.
 
 ### Rooms
@@ -95,9 +95,9 @@ Reusable, relevant logic may be selectively taken from `feature/ironfront-reborn
 
 ## Assets
 
-Every SVG in the supplied pack is rasterized to a transparent PNG. The source HTML and the Unity asset catalogue reference those PNGs, and no runtime menu asset depends on Unity's SVG importer. Icons are rasterized as white-alpha images so UGUI tinting preserves the prototype's per-state colours; fixed-colour badges, wordmarks, panels, fields, buttons, and decoration retain their authored colours.
+Every SVG in the supplied pack is rasterized to a transparent PNG. The source HTML and the Unity asset catalogue reference those PNGs, and no runtime menu asset depends on Unity's SVG importer. Icons are rasterized as white-alpha images so UGUI tinting preserves the prototype's per-state colours; fixed-colour badges, wordmarks, panels, fields, buttons, and decoration retain their authored colours. Original SVGs remain only as recoverable source masters and are never loaded by the menu.
 
-Only assets actually required by the Unity UI are copied from the updated pack into a clean `Assets/UI/IronfrontReborn` hierarchy. HTML, CSS, JavaScript, previews, and mock content stay outside the Unity asset tree. Existing SVG copies and obsolete pack assets are removed after scene references are regenerated and validated.
+Only assets actually required by the Unity UI are copied from the updated pack into a clean `Assets/UI/IronfrontReborn` hierarchy. HTML, CSS, JavaScript, previews, and mock content stay outside the Unity asset tree. Existing SVG copies are retained as unused source masters after scene references are regenerated and validated.
 
 The three supplied backgrounds and rasterized branding/icons are used without generative alteration. Angular surfaces and state changes described by CSS may be reproduced with Unity UI geometry and colors so they remain scalable; no new art assets are generated.
 

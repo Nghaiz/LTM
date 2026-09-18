@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Text;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Unity.Client;
@@ -142,6 +142,7 @@ namespace Ironfront.Net.Unity.EditorTools
             var canvas = root.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = SortingOrder;
+            canvas.pixelPerfect = true;
 
             var scaler = root.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -152,7 +153,7 @@ namespace Ironfront.Net.Unity.EditorTools
 
             MenuToast toast = BuildToast(root);
             GameObject title = BuildTitle(root, controller, log);
-            GameObject login = BuildLogin(root, controller, log);
+            GameObject login = BuildLogin(root, controller, toast, log);
             GameObject register = BuildRegister(root, controller, log);
             GameObject practice = BuildPractice(root, controller, toast, out Button practiceBack);
             GameObject settings = BuildSettings(root, controller, toast, out Button settingsBack);
@@ -234,7 +235,7 @@ namespace Ironfront.Net.Unity.EditorTools
             // The supplied wordmark, used as-is. It replaces a Text label that spelled the same
             // name in the default font -- the artwork was in the pack the whole time and nothing
             // referenced it.
-            Icon(panel, "Logo", "branding/ironfront-reborn-logo.svg",
+            Icon(panel, "Logo", "branding/ironfront-reborn-logo.png",
                 new Vector2(-560f, 350f), new Vector2(475f, 130f));
 
             Text tagline = Label(panel, "Tagline", "TACTICAL WARFARE. REFORGED.", 16,
@@ -246,13 +247,13 @@ namespace Ironfront.Net.Unity.EditorTools
             // prototype names for it; `PackButton` has taken an icon since it was written and no
             // call site had ever passed one.
             Button multiplayer = PackButton(panel, "Multiplayer", "MULTIPLAYER",
-                new Vector2(-560f, 150f), new Vector2(480f, 76f), "primary", "icons/users.svg");
+                new Vector2(-560f, 150f), new Vector2(480f, 76f), "primary", "icons/users.png");
             Button practice = PackButton(panel, "Practice", "PRACTICE",
-                new Vector2(-560f, 58f), new Vector2(480f, 76f), "menu", "icons/target.svg");
+                new Vector2(-560f, 58f), new Vector2(480f, 76f), "menu", "icons/target.png");
             Button settings = PackButton(panel, "Settings", "SETTINGS",
-                new Vector2(-560f, -34f), new Vector2(480f, 76f), "menu", "icons/settings.svg");
+                new Vector2(-560f, -34f), new Vector2(480f, 76f), "menu", "icons/settings.png");
             Button exit = PackButton(panel, "Exit", "EXIT",
-                new Vector2(-560f, -126f), new Vector2(480f, 76f), "menu", "icons/power.svg");
+                new Vector2(-560f, -126f), new Vector2(480f, 76f), "menu", "icons/power.png");
 
             Text footer = Label(panel, "Footer", "TEAM 10 LTM  •  CLASSROOM MULTIPLAYER PROJECT", 14,
                 new Vector2(-545f, -465f), new Vector2(520f, 24f));
@@ -276,7 +277,7 @@ namespace Ironfront.Net.Unity.EditorTools
         }
 
         private static GameObject BuildLogin(
-            GameObject root, MenuScreenController controller, StringBuilder log)
+            GameObject root, MenuScreenController controller, MenuToast toast, StringBuilder log)
         {
             GameObject panel = Panel(root, "Sign In", opaque: false);
             FullscreenSprite(panel, "Background", "backgrounds/auth.png");
@@ -298,6 +299,8 @@ namespace Ironfront.Net.Unity.EditorTools
             Button reveal = AddPasswordReveal(panel, password, new Vector2(275f, 62f));
             Toggle remember = PackToggle(panel, "RememberMe", "Remember username",
                 new Vector2(-125f, 10f));
+            Button forgot = LinkButton(panel, "ForgotPassword", "Forgot password?",
+                new Vector2(145f, 10f), new Vector2(210f, 38f));
             Button logIn = PackButton(panel, "LogIn", "LOG IN", new Vector2(0f, -52f),
                 new Vector2(420f, 72f), "primary");
             Label(panel, "Divider", "────────────  OR  ────────────", 14,
@@ -311,9 +314,10 @@ namespace Ironfront.Net.Unity.EditorTools
                 new Vector2(0f, -221f), new Vector2(540f, 52f));
             error.color = ErrorInk;
 
-            SetVerticalNavigation(username, password, reveal, remember, logIn, create, back);
+            SetVerticalNavigation(username, password, reveal, remember, forgot, logIn, create, back);
             ConfigureKeyboard(panel,
-                new Selectable[] { username, password, reveal, remember, logIn, create, back }, logIn, back);
+                new Selectable[] { username, password, reveal, remember, forgot, logIn, create, back }, logIn, back);
+            panel.AddComponent<MenuDevelopmentControls>().Configure(toast, forgot);
 
             MenuLoginScreen screen = panel.AddComponent<MenuLoginScreen>();
             var so = new SerializedObject(screen);
@@ -497,24 +501,53 @@ namespace Ironfront.Net.Unity.EditorTools
             Button gameplayTab = MakeButton(panel, "GameplayTab", "03  GAMEPLAY",
                 new Vector2(-570f, 30f), new Vector2(260f, 64f));
 
-            Label(panel, "GroupHeading", "DISPLAY, AUDIO & FIELD CONTROLS", 24,
+            GameObject displayGroup = Panel(panel, "DisplayGroup", opaque: false);
+            GameObject audioGroup = Panel(panel, "AudioGroup", opaque: false);
+            GameObject gameplayGroup = Panel(panel, "GameplayGroup", opaque: false);
+
+            Label(displayGroup, "GroupHeading", "DISPLAY & PERFORMANCE", 24,
                 new Vector2(170f, 245f), new Vector2(900f, 44f)).alignment = TextAnchor.MiddleLeft;
-            Dropdown resolution = MakeDropdown(panel, "Resolution", new Vector2(-60f, 165f));
-            Dropdown displayMode = MakeDropdown(panel, "DisplayMode", new Vector2(520f, 165f));
-            Dropdown quality = MakeDropdown(panel, "Quality", new Vector2(-60f, 85f));
-            Toggle vSync = MakeToggle(panel, "VSync", "V-SYNC", new Vector2(520f, 85f));
-            Slider volume = MakeSlider(panel, "MasterVolume", "MASTER VOLUME",
-                new Vector2(-60f, -15f), 0f, 1f);
-            Slider fov = MakeSlider(panel, "FieldOfView", "FIELD OF VIEW",
-                new Vector2(520f, -15f), 60f, 120f);
-            Slider sensitivity = MakeSlider(panel, "Sensitivity", "MOUSE SENSITIVITY",
-                new Vector2(-60f, -120f), 0.05f, 1f);
-            Button fps = MakeButton(panel, "FpsLimit", "FPS LIMIT // LATER",
-                new Vector2(520f, -120f), new Vector2(560f, 60f));
-            Button advancedAudio = MakeButton(panel, "AdvancedAudio", "ADVANCED AUDIO",
-                new Vector2(-60f, -205f), new Vector2(560f, 60f));
-            Button accessibility = MakeButton(panel, "Accessibility", "ACCESSIBILITY",
-                new Vector2(520f, -205f), new Vector2(560f, 60f));
+            Dropdown resolution = MakeDropdown(displayGroup, "Resolution", new Vector2(-60f, 165f));
+            Dropdown displayMode = MakeDropdown(displayGroup, "DisplayMode", new Vector2(520f, 165f));
+            Dropdown quality = MakeDropdown(displayGroup, "Quality", new Vector2(-60f, 85f));
+            Toggle vSync = MakeToggle(displayGroup, "VSync", "V-SYNC", new Vector2(520f, 85f));
+            Button fps = MakeButton(displayGroup, "FpsLimit", "FPS LIMIT // IN DEVELOPMENT",
+                new Vector2(-60f, -15f), new Vector2(560f, 60f));
+            Button motionBlur = MakeButton(displayGroup, "MotionBlur", "MOTION BLUR // IN DEVELOPMENT",
+                new Vector2(520f, -15f), new Vector2(560f, 60f));
+
+            Label(audioGroup, "GroupHeading", "AUDIO MIXER", 24,
+                new Vector2(170f, 245f), new Vector2(900f, 44f)).alignment = TextAnchor.MiddleLeft;
+            Slider volume = MakeSlider(audioGroup, "MasterVolume", "MASTER VOLUME",
+                new Vector2(-60f, 165f), 0f, 1f);
+            Button music = MakeButton(audioGroup, "MusicVolume", "MUSIC // IN DEVELOPMENT",
+                new Vector2(520f, 165f), new Vector2(560f, 60f));
+            Button sfx = MakeButton(audioGroup, "SfxVolume", "SOUND EFFECTS // IN DEVELOPMENT",
+                new Vector2(-60f, 85f), new Vector2(560f, 60f));
+            Button voice = MakeButton(audioGroup, "VoiceVolume", "VOICE CHAT // IN DEVELOPMENT",
+                new Vector2(520f, 85f), new Vector2(560f, 60f));
+            Button advancedAudio = MakeButton(audioGroup, "AdvancedAudio", "DYNAMIC RANGE // IN DEVELOPMENT",
+                new Vector2(-60f, -15f), new Vector2(560f, 60f));
+            Button outputDevice = MakeButton(audioGroup, "OutputDevice", "OUTPUT DEVICE // IN DEVELOPMENT",
+                new Vector2(520f, -15f), new Vector2(560f, 60f));
+
+            Label(gameplayGroup, "GroupHeading", "GAMEPLAY & ACCESSIBILITY", 24,
+                new Vector2(170f, 245f), new Vector2(900f, 44f)).alignment = TextAnchor.MiddleLeft;
+            Slider fov = MakeSlider(gameplayGroup, "FieldOfView", "FIELD OF VIEW",
+                new Vector2(-60f, 165f), 60f, 120f);
+            Slider sensitivity = MakeSlider(gameplayGroup, "Sensitivity", "MOUSE SENSITIVITY",
+                new Vector2(520f, 165f), 0.05f, 1f);
+            Button language = MakeButton(gameplayGroup, "Language", "LANGUAGE // IN DEVELOPMENT",
+                new Vector2(-60f, 85f), new Vector2(560f, 60f));
+            Button colorblind = MakeButton(gameplayGroup, "Colorblind", "COLORBLIND // IN DEVELOPMENT",
+                new Vector2(520f, 85f), new Vector2(560f, 60f));
+            Button accessibility = MakeButton(gameplayGroup, "Accessibility", "SUBTITLES // IN DEVELOPMENT",
+                new Vector2(-60f, -15f), new Vector2(560f, 60f));
+            Button cameraShake = MakeButton(gameplayGroup, "CameraShake", "CAMERA SHAKE // IN DEVELOPMENT",
+                new Vector2(520f, -15f), new Vector2(560f, 60f));
+
+            audioGroup.SetActive(false);
+            gameplayGroup.SetActive(false);
 
             Button reset = PackButton(panel, "Reset", "RESET DEFAULTS",
                 new Vector2(90f, -365f), new Vector2(280f, 68f), "secondary");
@@ -534,14 +567,18 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_sensitivity", sensitivity);
             Assign(so, "_saveButton", save);
             Assign(so, "_resetButton", reset);
+            AssignArray(so, "_categoryButtons", new Object[] { displayTab, audioTab, gameplayTab });
+            AssignArray(so, "_categoryGroups", new Object[] { displayGroup, audioGroup, gameplayGroup });
             AssignArray(so, "_unsupportedButtons",
-                new Object[] { displayTab, audioTab, gameplayTab, fps, advancedAudio, accessibility });
+                new Object[] { fps, motionBlur, music, sfx, voice, advancedAudio, outputDevice,
+                    language, colorblind, accessibility, cameraShake });
             Assign(so, "_toast", toast);
             so.ApplyModifiedPropertiesWithoutUndo();
             ConfigureKeyboard(panel,
                 new Selectable[] { displayTab, audioTab, gameplayTab, resolution, displayMode,
-                    quality, vSync, volume, fov, sensitivity, fps, advancedAudio, accessibility,
-                    reset, back, save }, save, back);
+                    quality, vSync, fps, motionBlur, volume, music, sfx, voice, advancedAudio,
+                    outputDevice, fov, sensitivity, language, colorblind, accessibility,
+                    cameraShake, reset, back, save }, save, back);
             return panel;
         }
 
@@ -569,7 +606,7 @@ namespace Ironfront.Net.Unity.EditorTools
 
             InputField search = PackField(panel, "Search", "Search rooms or maps...",
                 new Vector2(-285f, 180f), new Vector2(500f, 56f), password: false,
-                iconAsset: "icons/search.svg");
+                iconAsset: "icons/search.png");
             Button refresh = PackButton(panel, "Refresh", "REFRESH", new Vector2(385f, 180f),
                 new Vector2(210f, 52f), "secondary");
             Button mode = PackButton(panel, "ModeFilter", "MODE", new Vector2(95f, 180f),
@@ -754,6 +791,7 @@ namespace Ironfront.Net.Unity.EditorTools
             previewNote.resizeTextForBestFit = false;
 
             string[] previewStats = { "CAPACITY", "BOTS", "SECURITY" };
+            var previewValues = new Text[previewStats.Length];
             for (int i = 0; i < previewStats.Length; i++)
             {
                 AngularPanel cell = Angular(preview.gameObject, "Stat" + i,
@@ -771,6 +809,7 @@ namespace Ironfront.Net.Unity.EditorTools
                     new Vector2(113f, 22f));
                 value.alignment = TextAnchor.MiddleLeft;
                 value.resizeTextForBestFit = false;
+                previewValues[i] = value;
             }
 
             Text error = Label(
@@ -801,6 +840,9 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_backButton", back);
             Assign(so, "_errorText", error);
             Assign(so, "_mapPreviewTitle", previewTitle);
+            Assign(so, "_mapPreviewCapacity", previewValues[0]);
+            Assign(so, "_mapPreviewBots", previewValues[1]);
+            Assign(so, "_mapPreviewSecurity", previewValues[2]);
             so.ApplyModifiedPropertiesWithoutUndo();
             panel.AddComponent<MenuDevelopmentControls>().Configure(toast, mode, region, balance);
             ConfigureKeyboard(panel,
@@ -832,6 +874,17 @@ namespace Ironfront.Net.Unity.EditorTools
                 panel, "Heading", string.Empty, 44, new Vector2(0f, 440f), new Vector2(1400f, 66f));
             Text status = Label(
                 panel, "Status", string.Empty, 28, new Vector2(0f, 380f), new Vector2(1400f, 50f));
+
+            Angular(panel, "TeamZeroCard", new Vector2(-420f, 100f), new Vector2(620f, 510f),
+                CutCard, new Color(5f / 255f, 25f / 255f, 43f / 255f, 0.88f),
+                AngularEdge.All, 1f, Hex("3E87B7"));
+            Angular(panel, "TeamOneCard", new Vector2(420f, 100f), new Vector2(620f, 510f),
+                CutCard, new Color(30f / 255f, 17f / 255f, 12f / 255f, 0.88f),
+                AngularEdge.All, 1f, Orange);
+            Text versus = Label(panel, "Versus", "VS", 28, new Vector2(0f, 115f),
+                new Vector2(100f, 100f));
+            versus.color = Orange;
+            versus.fontStyle = FontStyle.Bold;
 
             // NO colour is set on either heading or any row here. Both are written at runtime
             // from ITeamPalette (criterion 10); authoring one would be the second copy of the
@@ -1190,7 +1243,7 @@ namespace Ironfront.Net.Unity.EditorTools
                 new Vector2(310f, barHeight), 0f,
                 new Color(24f / 255f, 57f / 255f, 83f / 255f, 0.75f),
                 AngularEdge.All, 0f, Color.clear);
-            Icon(panelBar.gameObject, "BrandMark", "branding/ironfront-reborn-logo.svg",
+            Icon(panelBar.gameObject, "BrandMark", "branding/ironfront-reborn-logo.png",
                 new Vector2(-805f, 0f), new Vector2(210f, 46f));
 
             // `.account-chip`: a status dot and two lines, right-aligned on its own gradient.
@@ -1569,7 +1622,7 @@ namespace Ironfront.Net.Unity.EditorTools
 
             Text label = go.AddComponent<Text>();
             label.text = text;
-            label.font = DefaultFont();
+            label.font = size >= 18 ? BoldFont() : DefaultFont();
             label.fontSize = size;
             label.color = Ink;
             label.alignment = TextAnchor.MiddleCenter;
@@ -1839,18 +1892,25 @@ namespace Ironfront.Net.Unity.EditorTools
         }
 
         /// <summary>
-        /// The built-in font every legacy <c>Text</c> in this project already uses.
+        /// The bundled UI font used by the HTML prototype's fallback stack.
         /// </summary>
         /// <remarks>
-        /// <c>LegacyRuntime.ttf</c> is where Unity moved Arial. A null font renders nothing at
-        /// all — no error, no warning, an empty rect — which on a screenshot-graded phase would
-        /// read as "the label is unassigned" and send the reader after the wrong fault.
+        /// The explicit project path keeps glyph metrics stable between Editor and player builds.
+        /// A built-in fallback remains so a missing asset produces readable diagnostics instead
+        /// of an entirely blank menu.
         /// </remarks>
         private static Font DefaultFont()
         {
-            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            Font font = AssetDatabase.LoadAssetAtPath<Font>("Assets/Font/Roboto-Regular.ttf");
+            if (font == null) font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
             return font;
+        }
+
+        private static Font BoldFont()
+        {
+            Font font = AssetDatabase.LoadAssetAtPath<Font>("Assets/Font/Roboto-Bold.ttf");
+            return font != null ? font : DefaultFont();
         }
 
         private static Color Hex(string rgb)

@@ -9,7 +9,7 @@ const screens = ['main-menu', 'sign-in', 'create-account', 'practice', 'settings
 const files = [
   'index.html', 'css/tokens.css', 'css/styles.css', 'js/app.js',
   'assets/backgrounds/main-menu.png', 'assets/backgrounds/auth.png', 'assets/backgrounds/multiplayer.png',
-  'assets/branding/ironfront-reborn-logo.svg', 'assets/branding/ironfront-symbol.svg',
+  'assets/branding/ironfront-reborn-logo.png', 'assets/branding/ironfront-symbol.png',
   'README.md', 'ASSET_MANIFEST.md'
 ];
 

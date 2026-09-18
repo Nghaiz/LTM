@@ -20,6 +20,10 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private Button? _saveButton;
         [SerializeField] private Button? _resetButton;
 
+        [Header("Categories")]
+        [SerializeField] private Button[] _categoryButtons = System.Array.Empty<Button>();
+        [SerializeField] private GameObject[] _categoryGroups = System.Array.Empty<GameObject>();
+
         [Header("Deferred controls")]
         [SerializeField] private Button[] _unsupportedButtons = System.Array.Empty<Button>();
         [SerializeField] private MenuToast? _toast;
@@ -57,6 +61,7 @@ namespace Ironfront.Net.Unity.Client.Menu
         {
             ConfigureRanges();
             WireButtons();
+            ShowCategory(0);
         }
 
         private void OnEnable()
@@ -189,8 +194,23 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (_resetButton != null) _resetButton.onClick.AddListener(ResetToDefaults);
             if (_displayMode != null)
                 _displayMode.onValueChanged.AddListener(_ => RefreshResolutionAvailability());
+            for (int i = 0; i < _categoryButtons.Length; i++)
+            {
+                int category = i;
+                Button button = _categoryButtons[i];
+                if (button != null) button.onClick.AddListener(() => ShowCategory(category));
+            }
             foreach (Button button in _unsupportedButtons)
                 if (button != null) button.onClick.AddListener(ShowDevelopment);
+        }
+
+        private void ShowCategory(int category)
+        {
+            for (int i = 0; i < _categoryGroups.Length; i++)
+                if (_categoryGroups[i] != null) _categoryGroups[i].SetActive(i == category);
+
+            for (int i = 0; i < _categoryButtons.Length; i++)
+                if (_categoryButtons[i] != null) _categoryButtons[i].interactable = i != category;
         }
 
         private void ShowDevelopment() => _toast?.ShowDevelopment();

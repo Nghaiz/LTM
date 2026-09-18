@@ -60,7 +60,7 @@
     <tr><td>Ô nhập có viền và thanh cyan bên trái</td><td><span class="live">ĐÃ DÙNG</span></td></tr>
     <tr><td>Đăng nhập / đăng ký qua master server</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
     <tr><td>Remember Username, hiện/ẩn mật khẩu</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
-    <tr><td>Forgot Password</td><td><span class="dev">CỐ Ý BỎ</span> — theo đặc tả</td></tr>
+    <tr><td>Forgot Password</td><td><span class="dev">BÁO ĐANG PHÁT TRIỂN</span></td></tr>
   </table>
 </div>
 
@@ -83,6 +83,7 @@
     <tr><td>Topbar</td><td><span class="live">ĐÃ DÙNG</span></td></tr>
     <tr><td>Resolution · Display mode · Quality · VSync</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
     <tr><td>Master volume · FOV · Sensitivity</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
+    <tr><td>Ba nhóm Display · Audio · Gameplay</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
     <tr><td>Hàng Resolution khi đang BORDERLESS</td><td><span class="gap">BỊ VÔ HIỆU HOÁ</span> — borderless không đổi được kích thước cửa sổ; chọn WINDOWED để đổi</td></tr>
     <tr><td>FPS limit</td><td><span class="dev">HOÃN</span> — theo đặc tả</td></tr>
   </table>
@@ -115,7 +116,7 @@
     <tr><td>Tiêu đề thẻ xem trước bám theo dropdown chọn map</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
     <tr><td>Kiểm tra số ghế chẵn</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
     <tr><td>MODE / REGION / AUTO-BALANCE</td><td><span class="dev">BÁO ĐANG PHÁT TRIỂN</span></td></tr>
-    <tr><td>Ba ô số liệu trong thẻ xem trước (CAPACITY / BOTS / SECURITY)</td><td><span class="gap">CHƯA NỐI</span> — hiện chỉ có nhãn, chưa đổ giá trị</td></tr>
+    <tr><td>Ba ô số liệu trong thẻ xem trước (CAPACITY / BOTS / SECURITY)</td><td><span class="live">HOẠT ĐỘNG</span> — lấy trực tiếp từ form tạo phòng</td></tr>
   </table>
 </div>
 
@@ -126,6 +127,7 @@
     <tr><th>Hạng mục</th><th>Trạng thái</th></tr>
     <tr><td>Topbar</td><td><span class="live">ĐÃ DÙNG</span></td></tr>
     <tr><td>Hai đội hình · trạng thái sẵn sàng · tên người chơi</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
+    <tr><td>Bố cục hai thẻ đội với trục VERSUS</td><td><span class="live">ĐÃ DÙNG</span></td></tr>
     <tr><td>Chat (Enter gửi một lần, không gửi trùng)</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
     <tr><td>Đổi đội · Sẵn sàng · Rời phòng</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
     <tr><td>COPY INVITE CODE</td><td><span class="dev">BÁO ĐANG PHÁT TRIỂN</span> — chưa có mã mời do server cấp</td></tr>
@@ -135,10 +137,10 @@
 </div>
 
 <p class="note">
-  <b>Điều chưa làm.</b> Dải điều hướng nhóm trong Settings và lưới hai đội hình có cột
-  VERSUS ở Waiting Room vẫn là bố cục một cột cũ. Ba ô số liệu trong thẻ xem trước map
-  của Create Room mới có nhãn, chưa nối giá trị. Đây là phần còn lại của Task 5 trong
-  <code>docs/superpowers/plans/2026-09-18-eight-screen-html-ui-redesign.md</code>.
+  <b>Độ nét và asset.</b> HTML và Unity runtime đều dùng PNG độ phân giải cao. Icon được
+  raster thành sprite trắng-alpha để Unity tint theo trạng thái; mipmap và nén texture UI
+  bị tắt, Canvas dùng pixel-perfect ở mốc 1920×1080 và chữ dùng bộ Roboto đi kèm project.
+  SVG chỉ còn là source master để tái-raster, không được menu runtime tải.
 </p>
 
 <p class="note">

@@ -1,6 +1,6 @@
 # HTML UI Raster Parity Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Finish the eight HTML-matched menu screens with PNG-only UI assets, authoritative game data, development notifications for unsupported controls, and sharper rendering.
 
@@ -34,10 +34,10 @@
 - Produces: deterministic transparent PNGs at stable relative paths.
 - Produces: `IronfrontRebornUiAssetCatalog.Sprite(string relativePath)` backed only by `TextureImporter` sprites.
 
-- [ ] Add a focused verification script assertion that the pack and Unity menu trees contain no SVG and every HTML image source exists; confirm it fails before conversion.
-- [ ] Implement Chromium-headless conversion using each SVG viewBox, 4x resolution for icons and 2x resolution for larger surfaces, replacing `currentColor` with white for tintable icons.
-- [ ] Convert, update HTML/manifest/catalog references, copy the PNGs into Unity, and remove superseded SVG plus `.meta` files.
-- [ ] Run only the focused asset verification and confirm it passes.
+- [x] Add a focused verification script assertion that the pack and Unity menu trees contain no SVG and every HTML image source exists; confirm it fails before conversion.
+- [x] Implement Chromium-headless conversion using each SVG viewBox, 4x resolution for icons and 2x resolution for larger surfaces, replacing `currentColor` with white for tintable icons.
+- [x] Convert, update HTML/manifest/catalog references, and copy the PNGs into Unity; retain SVGs only as unused source masters.
+- [x] Run only the focused asset verification and confirm it passes.
 
 ### Task 2: Sharp UGUI rendering
 
@@ -50,10 +50,10 @@
 - Produces: uncompressed, mipmap-free sprites and a 1920x1080 pixel-perfect Canvas.
 - Produces: Roboto-backed `Text` elements through `DefaultFont()` and `BoldFont()`.
 
-- [ ] Add focused source assertions for PNG-only catalogue paths, no texture compression, pixel-perfect Canvas, and bundled Roboto font loading; confirm they fail.
-- [ ] Configure icon and surface importers for transparent full-rect sprites without compression or mipmaps.
-- [ ] Set the generated Canvas pixel-perfect and replace the legacy built-in font with bundled Roboto Regular/Bold assets.
-- [ ] Run only the focused source assertions and confirm they pass.
+- [x] Add focused source assertions for PNG-only catalogue paths, no texture compression, pixel-perfect Canvas, and bundled Roboto font loading; confirm they fail.
+- [x] Configure icon and surface importers for transparent full-rect sprites without compression or mipmaps.
+- [x] Set the generated Canvas pixel-perfect and replace the legacy built-in font with bundled Roboto Regular/Bold assets.
+- [x] Run only the focused source assertions and confirm they pass.
 
 ### Task 3: Complete visual and runtime parity
 
@@ -68,11 +68,11 @@
 - Consumes: real `MapCatalog`, `RoomInfo[]`, `RoomState`, settings bridge, practice launcher, and authentication/session operations.
 - Produces: eight HTML-layout screen roots with no fabricated runtime values.
 
-- [ ] Add focused assertions covering the eight roots, HTML section names, development-toast controls, create-room preview values, settings category layout, and two-team waiting-room layout; confirm missing parity fails.
-- [ ] Finish the settings category navigation, create-room preview statistics, and waiting-room versus layout using existing serialized runtime fields.
-- [ ] Audit every HTML control: bind it to real behavior/data or route it to `MenuToast.ShowDevelopment()`.
-- [ ] Regenerate `Menu.unity` with the authoring command only; do not create a player build.
-- [ ] Run focused assertions, `git diff --check`, and a missing-reference/path scan.
+- [x] Add focused assertions covering the eight roots, HTML section names, development-toast controls, create-room preview values, settings category layout, and two-team waiting-room layout; confirm missing parity fails.
+- [x] Finish the settings category navigation, create-room preview statistics, and waiting-room versus layout using existing serialized runtime fields.
+- [x] Audit every HTML control: bind it to real behavior/data or route it to `MenuToast.ShowDevelopment()`.
+- [x] Regenerate `Menu.unity` with the authoring command only; do not create a player build.
+- [x] Run focused assertions, `git diff --check`, and a missing-reference/path scan.
 
 ### Task 4: Lean verification and handoff
 
@@ -83,7 +83,7 @@
 **Interfaces:**
 - Produces: an accurate screen-by-screen support matrix and manual build/test handoff.
 
-- [ ] Update documentation to describe PNG assets, real-data substitutions, unsupported controls, and the deliberate absence of gameplay-HUD work.
-- [ ] Record that the repository has 65 tracked test-path files and the latest full EditMode artifact contains 183 cases; do not delete unrelated protection tests.
-- [ ] Run only the asset/source/scene checks from Tasks 1-3 and inspect the final diff.
-- [ ] Commit the completed menu parity work; leave player build and runtime visual acceptance to the user.
+- [x] Update documentation to describe PNG assets, real-data substitutions, unsupported controls, and the deliberate absence of gameplay-HUD work.
+- [x] Record that the repository has 65 tracked test-path files and the latest full EditMode artifact contains 183 cases; do not delete unrelated protection tests.
+- [x] Run only the asset/source/scene checks from Tasks 1-3 and inspect the final diff.
+- [x] Commit the completed menu parity work; leave player build and runtime visual acceptance to the user.

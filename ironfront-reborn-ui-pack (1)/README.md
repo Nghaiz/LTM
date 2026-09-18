@@ -34,7 +34,7 @@ Account creation follows the game contract: username (3–16 lowercase letters, 
 ## Integration
 
 - Reuse the clean raster scenes from `assets/backgrounds/`.
-- Use the independent SVG controls and icons from their category folders.
+- Use the independent high-resolution PNG controls and icons from their category folders. SVG files are retained only as source masters.
 - Adjust colors, typography and sizing in `css/tokens.css`.
 - Screen markup is in `index.html`; interaction state is in `js/app.js`.
 - The prototype contains no framework and requires no compilation.

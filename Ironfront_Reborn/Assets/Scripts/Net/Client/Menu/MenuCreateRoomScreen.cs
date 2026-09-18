@@ -62,6 +62,9 @@ namespace Ironfront.Net.Unity.Client.Menu
         /// simply leaves it null.
         /// </remarks>
         [SerializeField] private Text? _mapPreviewTitle;
+        [SerializeField] private Text? _mapPreviewCapacity;
+        [SerializeField] private Text? _mapPreviewBots;
+        [SerializeField] private Text? _mapPreviewSecurity;
 
         /// <summary>
         /// The map ids behind the dropdown, in its own option order.
@@ -80,12 +83,14 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (_backButton != null) _backButton.onClick.AddListener(OnBack);
             if (_privateToggle != null) _privateToggle.onValueChanged.AddListener(OnPrivateChanged);
             if (_mapDropdown != null) _mapDropdown.onValueChanged.AddListener(_ => RefreshMapPreview());
-            RefreshMapPreview();
+            if (_maxPlayersField != null) _maxPlayersField.onValueChanged.AddListener(_ => RefreshPreviewStats());
+            if (_botCountField != null) _botCountField.onValueChanged.AddListener(_ => RefreshPreviewStats());
 
             if (_maxPlayersField != null && _maxPlayersField.text.Length == 0)
                 _maxPlayersField.text = DefaultMaxPlayers.ToString();
 
             OnPrivateChanged(_privateToggle != null && _privateToggle.isOn);
+            RefreshMapPreview();
         }
 
         /// <summary>Points the map-preview card at the map the dropdown is showing.</summary>
@@ -124,13 +129,30 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         private void OnPrivateChanged(bool isPrivate)
         {
-            if (_passwordField == null) return;
-
-            _passwordField.interactable = isPrivate;
+            if (_passwordField != null) _passwordField.interactable = isPrivate;
 
             // Cleared when the toggle goes off, so a password typed and then un-ticked is not
             // sent with a room the player has just decided should be public.
-            if (!isPrivate) _passwordField.text = string.Empty;
+            if (!isPrivate && _passwordField != null) _passwordField.text = string.Empty;
+            RefreshPreviewStats();
+        }
+
+        private void RefreshPreviewStats()
+        {
+            if (_mapPreviewCapacity != null)
+                _mapPreviewCapacity.text = PreviewValue(_maxPlayersField, DefaultMaxPlayers.ToString());
+            if (_mapPreviewBots != null)
+                _mapPreviewBots.text = PreviewValue(_botCountField, "0");
+            if (_mapPreviewSecurity != null)
+                _mapPreviewSecurity.text = _privateToggle != null && _privateToggle.isOn
+                    ? "PRIVATE"
+                    : "PUBLIC";
+        }
+
+        private static string PreviewValue(InputField? field, string fallback)
+        {
+            string value = field != null ? field.text.Trim() : string.Empty;
+            return value.Length == 0 ? fallback : value;
         }
 
         private void OnBack() => _controller?.HideCreateRoom();
