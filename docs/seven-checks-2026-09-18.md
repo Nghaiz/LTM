@@ -139,19 +139,28 @@ Pod cũ chạy 2 ngày 16 giờ. Sau đủ số lần thay thế, mọi pad đ�
 ngừng đẻ xe. Kết hợp với xác xe biến mất theo thời gian, bảng xe teo dần về rỗng. Đây là cơ chế
 duy nhất trong bốn giả thuyết còn lại của § 5 mà log hiện tại xác nhận.
 
-### Cần quyết trước khi sửa
+### Đã sửa: thu hồi xe bị bỏ rơi
 
-Hai hướng khác nhau về bản chất:
+Chủ dự án chọn hướng thu hồi thay vì nâng `MAX_VEHICLES` (nâng trần là thay đổi wire vì
+`VehicleSnapshotMessage.cs:138` tính kích thước thân tin từ chính hằng số đó, và nó chỉ đẩy lùi
+ngưỡng chứ không đóng lỗ rò).
 
-- **Thu hồi xe bị bỏ rơi** — cho một chiếc `superseded` không người ngồi quá N giây thành đối
-  tượng despawn. Chặn được sự tăng vô hạn, không đụng wire, nhưng thay đổi thứ người chơi nhìn
-  thấy (xe đậu bên đường sẽ biến mất).
-- **Nâng `MAX_VEHICLES`** — `VehicleSnapshotMessage.cs:138` lấy đúng hằng số này để tính kích
-  thước thân tin, nên đây là **thay đổi wire** và kéo theo bump `PROTOCOL_VERSION`. Chỉ đẩy lùi
-  ngưỡng chứ không đóng lỗ rò.
+`VehicleSpawner.SweepAbandonedVehicles` despawn một chiếc `superseded` khi nó **trống quá
+`reclaimAbandonedAfterSeconds` (mặc định 90 s) VÀ không có actor còn sống nào trong bán kính
+`reclaimKeepAliveRadius` (mặc định 30 m)**.
 
-Đang chờ chủ dự án chọn. Đo được ngay bằng `NetVehicleLifecycle.DescribeSpawnRefusal()`, vốn đã
-in `ids in-use / quarantined / free / capacity`.
+Cả hai điều kiện đều cần. Chỉ xét ghế trống thì sẽ ăn mất chiếc jeep người chơi đậu cạnh điểm
+đang chiếm; chỉ xét khoảng cách thì thu hồi ngay khi tài xế bước xuống. Gộp lại mới phân biệt
+được rác của bot (bị bỏ lại **vì** bot đã đi xa) với xe người chơi đậu tạm.
+
+Việc này cũng đóng luôn lỗ rò thứ hai, không cần hẹn giờ: một key đã bị Unity huyển diệt được thu
+hồi ngay, vì `Vehicle.OnDestroy` không báo despawn và không trả id.
+
+`VehicleDespawnReason` thêm `Reclaimed = 2`. **Không bump `PROTOCOL_VERSION`**: `TryParse` ép
+kiểu thẳng không kiểm miền, và client chỉ hỏi “lý do có phải `Destroyed` không”, nên client cũ
+rơi vào nhánh huỷ im lặng — đúng hành vi mong muốn. Server cũ không bao giờ gửi nó.
+
+`MAX_VEHICLES` giữ nguyên 24.
 
 ---
 
@@ -406,8 +415,7 @@ Cổng đã được chứng minh là bắt được đúng lỗi nó tuyên b�
 
 | Việc | Vì sao chưa làm |
 |---|---|
-| Sửa pool vehicle-id (§ 2) | Hai hướng khác nhau về bản chất, một trong hai là thay đổi wire. Cần chủ dự án chọn |
-| Chín tham số animation (§ 4) | Cần thêm trường trên wire; là một phase riêng |
+| Sáu tham số animation còn lại (§ 4) | `falling`, `onBack`, `lean`, `hurt`, `hurt x`, `seated type`. Cả `ActorStateFlags` lẫn `SnapshotField` **đều đầy byte**, không còn bit trống, nên phải nới một trường giống cách v10 nới `Weapon` từ 2 lên 5 byte — thay đổi protocol, là một phase riêng |
 | Material Sparks/Shockwave (§ 1) | Là hình dạng đã ship, giống bản chơi đơn. Đổi hay không là quyết định thẩm mỹ |
 | `burnParticles` của jeep/quadbike/rhib (§ 3) | Xe nhẹ cháy không có lửa. Lỗi ngược chiều, tìm thấy khi kiểm |
 

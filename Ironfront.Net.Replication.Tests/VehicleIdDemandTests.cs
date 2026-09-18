@@ -254,17 +254,88 @@ namespace Ironfront.Net.Replication.Tests
         {
             string source = ReadUnitySource(Spawner);
 
-            // Handed over before lastSpawnedVehicle is reassigned...
-            Assert.Contains(
-                "supersededNetIds[lastSpawnedVehicle] = lastSpawnedVehicleNetId",
-                MethodBody(source, "private void SpawnVehicle()"),
-                StringComparison.Ordinal);
+            // Handed over before lastSpawnedVehicle is reassigned. Asserted as two tokens rather
+            // than as one pasted line: the entry gained a timestamp alongside the id and the
+            // statement now wraps, so a single-literal match was pinning the FORMATTING of a
+            // behaviour rather than the behaviour.
+            string spawn = MethodBody(source, "private void SpawnVehicle()");
+            Assert.Contains("supersededNetIds[lastSpawnedVehicle]", spawn, StringComparison.Ordinal);
+            Assert.Contains("lastSpawnedVehicleNetId", spawn, StringComparison.Ordinal);
 
             // ...and despawned when that vehicle dies, rather than falling through the
             // lastSpawnedVehicle guard into nothing.
             string died = MethodBody(source, "public void VehicleDied(Vehicle vehicle)");
             Assert.Contains("supersededNetIds.TryGetValue", died, StringComparison.Ordinal);
-            Assert.Contains("ReportDespawned(supersededId", died, StringComparison.Ordinal);
+            Assert.Contains("ReportDespawned(superseded.NetId", died, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// A superseded vehicle nobody is using has its id taken back, so the pool cannot drain
+        /// monotonically on a server that runs for days.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The measurement this exists for.</b> On 2026-09-18 two pods with no human players
+        /// had spent every one of <c>MAX_VEHICLES</c>'s 24 ids within four and a half hours,
+        /// from fourteen authored pads on each map, and every pad after that was refused with a
+        /// CAPACITY refusal. Releasing on death alone cannot bound that: an <c>AfterMoved</c>
+        /// pad supersedes when a driver gets in, and a bot that drives the original away and
+        /// abandons it never dies, so the id never comes back.
+        /// </para>
+        /// <para>
+        /// <b>Source-invariant, for the reason the rest of this file is.</b> The sweep lives in
+        /// <c>Assembly-CSharp</c>, which no test assembly can reference, so this reads the file.
+        /// It asserts the three conditions that make the sweep safe rather than its formatting:
+        /// it runs only where there is a pool to be out of, it waits for the vehicle to be
+        /// empty, and it does not take a vehicle somebody is standing next to.
+        /// </para>
+        /// <para>
+        /// <b>What this goes red for.</b> Deleting the sweep, dropping the
+        /// <c>IsReplicating</c> guard (which would start destroying vehicles in single-player,
+        /// where there is no id pool at all), dropping the emptiness test (reclaiming a vehicle
+        /// out from under its driver), or dropping the proximity test (eating a player's parked
+        /// jeep while they capture the flag beside it).
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public void AnAbandonedSupersededVehicleHasItsIdReclaimed()
+        {
+            string source = ReadUnitySource(Spawner);
+            string sweep = MethodBody(source, "private void SweepAbandonedVehicles()");
+
+            Assert.Contains("NetVehicleLifecycle.IsReplicating", sweep, StringComparison.Ordinal);
+            Assert.Contains("IsEmpty()", sweep, StringComparison.Ordinal);
+            Assert.Contains("SomebodyIsStandingBy", sweep, StringComparison.Ordinal);
+            Assert.Contains(
+                "VehicleDespawnReason.Reclaimed", sweep, StringComparison.Ordinal);
+
+            // Called, not merely defined. A sweep nothing invokes is the shape of defect this
+            // whole file exists to catch.
+            Assert.Contains(
+                "SweepAbandonedVehicles()",
+                MethodBody(source, "private void Update()"),
+                StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// A superseded vehicle destroyed by something other than its own death path still gives
+        /// its id back.
+        /// </summary>
+        /// <remarks>
+        /// <c>Vehicle.OnDestroy</c> only leaves <c>ActorManager</c>'s register — it reports no
+        /// despawn and returns no id. Before the sweep, a superseded vehicle destroyed from
+        /// anywhere else held its id for the life of the process with no object left to notice,
+        /// which is the same leak as the abandoned case with nothing to time out. The sweep
+        /// treats a key Unity has destroyed as reclaimable immediately, because there is nothing
+        /// left to wait for.
+        /// </remarks>
+        [Fact]
+        public void ADestroyedSupersededVehicleIsReclaimedWithoutWaiting()
+        {
+            string sweep = MethodBody(
+                ReadUnitySource(Spawner), "private void SweepAbandonedVehicles()");
+
+            Assert.Contains("vehicle == null", sweep, StringComparison.Ordinal);
         }
 
         /// <summary>

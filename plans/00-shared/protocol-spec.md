@@ -917,7 +917,8 @@ second 16-byte GSP header at 20 Hz (~320 B/s) to solve a problem neither stream 
 **Enums.** `SeatAction`: `Enter` = 0, `Leave` = 1. `SeatChangeResult`: `Entered` = 0, `Left` = 1,
 `RejectedOccupied` = 2, `RejectedVehicleDead` = 3, `RejectedAlreadySeated` = 4, `RejectedTooFar` = 5,
 `RejectedNoSuchSeat` = 6, `RejectedLockedOut` = 7. `VehicleDespawnReason`: `Destroyed` = 0,
-`WorldReset` = 1.
+`WorldReset` = 1, `Reclaimed` = 2. A receiver must treat every reason other than `Destroyed` as
+a quiet removal, which is what makes `Reclaimed` safe to send to a client that predates it.
 `ProjectileKind`: `Shell` = 0, `Rocket` = 1, `GuidedMissile` = 2, `Grenade` = 3,
 `AmmoBag` = 4, `Medipack` = 5, `Bullet` = 6.
 

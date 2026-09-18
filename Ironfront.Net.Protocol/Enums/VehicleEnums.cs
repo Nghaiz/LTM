@@ -279,5 +279,30 @@ namespace Ironfront.Net.Protocol
 
         /// <summary>Torn down between rounds, with the rest of the world.</summary>
         WorldReset = 1,
+
+        /// <summary>
+        /// Taken back by its own pad after being abandoned, so its id can be spent again.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why this is not <see cref="WorldReset"/>, which behaves identically today.</b> The
+        /// only consumer branches on <see cref="Destroyed"/> and treats everything else as a
+        /// quiet removal, so reusing <c>WorldReset</c> would have worked and would have put
+        /// "the round ended" in the log every time a jeep nobody was using went away. A reason
+        /// code exists to say why; spending the byte to say the wrong thing is how a reader
+        /// three months from now spends an afternoon looking for a round boundary that never
+        /// happened.
+        /// </para>
+        /// <para>
+        /// <b>Backward compatible in both directions, which is why it needs no
+        /// <c>PROTOCOL_VERSION</c> bump.</b> <c>VehicleDespawnMessage.TryParse</c> casts the
+        /// byte straight across with no range check, and
+        /// <c>RemoteVehicleRegistry.OnVehicleDespawn</c> asks only whether the reason IS
+        /// <see cref="Destroyed"/> — so an older client receiving this value falls into the
+        /// quiet-destroy branch, which is exactly the intended behaviour. An older server never
+        /// sends it. Same shape as the one-sided sprint-bit change.
+        /// </para>
+        /// </remarks>
+        Reclaimed = 2,
     }
 }
