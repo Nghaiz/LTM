@@ -8,7 +8,7 @@ Bốn báo cáo cá nhân dùng chung phần nhóm. Sửa ở đâu:
 | Font, lề, màu, kiểu tiêu đề, mục lục, style sơ đồ | `common/preamble.tex` |
 | Phần I -- nội dung nhóm (giống nhau ở cả 4 bản) | `common/phan1-nhom.tex` |
 | Phần II -- nội dung cá nhân | `individual/A-client.tex`, `B-transport.tex`, `C-replication.tex`, `D-masterserver.tex` |
-| Tên, mã sinh viên của từng bản | dòng `\BiaBaoCao{...}{...}` trong `BaoCao_*.tex` |
+| Tên, mã sinh viên, phân hệ cá nhân (in trên bìa) | dòng `\BiaBaoCao{tên}{mã SV}{phân hệ}` trong `BaoCao_*.tex` |
 | Khung bìa và logo | `image/khung-bia.png`, `image/logo-ptit.png` |
 
 ## Môi trường biên dịch
@@ -72,7 +72,12 @@ TeX Gyre Termes -- bản sao Times có đủ dấu tiếng Việt, đi kèm Tect
 Tất cả sơ đồ vẽ bằng TikZ, toạ độ tính bằng cm (khổ nội dung rộng khoảng 16 cm). Macro dùng chung trong
 `common/preamble.tex`:
 
-- `\seqactor`, `\seqmsg`, `\seqret`, `\seqlost`, `\seqself`, `\seqnote`, `\seqloopbegin/\seqloopend`, `\seqend` -- sơ đồ tuần tự
+- Sơ đồ tuần tự theo phong cách Visual Paradigm (lifeline đầu hộp, thanh kích hoạt tự vẽ, thông điệp tự đánh số,
+  gọi = nét liền đầu đặc, trả về = nét đứt đầu mở, fragment có nhãn ngũ giác, ghi chú gấp góc):
+  `\seqactor{id}{x}{nhãn}`, `\seqhuman{id}{x}{nhãn}` (tác nhân người), `\seqbegin`, `\seqmsg`, `\seqret`, `\seqlost`,
+  `\seqself` / `\seqselfl` (nhãn bên trái; `\seqself` tự chuyển sang trái khi lifeline ở sát lề phải), `\seqnote`,
+  `\seqfragbegin` ... `\seqfragelse{trái}{phải}{điều kiện}` ... `\seqfragend{trái}{phải}{loop|alt|opt}{điều kiện}`,
+  `\seqloopbegin/\seqloopend`, `\seqend{danh sách id}`. Nhãn dài hơn mũi tên tự neo về phía bên gửi.
 - `\buoc{tên}{(x,y)}{số}{tiêu đề}{mô tả}{màu}` -- hộp bước đánh số
 - style `bxB`, `bxG`, `bxO`, `bxP`, `bxY` (hộp màu), `dec` (hình thoi), `db` (CSDL), `st` (trạng thái), `arr`/`darr` (mũi tên)
 

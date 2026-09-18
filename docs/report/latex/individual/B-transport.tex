@@ -2,7 +2,7 @@
 % B-transport.tex — PHẦN II của Nguyễn Minh Toàn: tầng giao vận UDP (Transport)
 % =====================================================================================
 \PhanLon{II. NỘI DUNG CÁ NHÂN}
-\textit{Sinh viên thực hiện: Nguyễn Minh Toàn (B23DCCN832) -- phân hệ tầng giao vận UDP (Transport).}
+\textit{Phân hệ tầng giao vận UDP (Transport).}
 
 \section{Biểu đồ và giao diện nội dung cá nhân thực hiện}
 Phân hệ Transport xây dựng \textbf{tầng giao vận tin cậy trên UDP từ con số không}, chỉ với \code{Socket} kiểu
@@ -95,8 +95,11 @@ Bit \code{flags} & 0 RELIABLE $\cdot$ 1 FRAGMENTED $\cdot$ 2 ORDERED $\cdot$ 3 C
   \seqnote{C}{S}{2}{serverSalt = HMAC(serverKey, địa chỉ, cổng, clientSalt, epoch 30 s)\\client tính challengeResponse = clientSalt XOR serverSalt}
   \seqmsg{C}{S}{CONNECT\_RESPONSE \{response, clientSalt, joinTicket\}}
   \seqnote{S}{S}{3}{Tính lại salt: địa chỉ đã được chứng minh; kiểm vé (HMAC, hạn), gắn playerId, cấp connectionId}
-  \seqret{S}{C}{hợp lệ: CONNECT\_ACCEPTED \{connectionId, serverTick, mapId, playerId\}}
-  \seqret{S}{C}{không hợp lệ: CONNECT\_DENIED \{lý do 1..6\}}
+  \seqfragbegin
+  \seqret{S}{C}{CONNECT\_ACCEPTED \{connectionId, serverTick, mapId, playerId\}}
+  \seqfragelse{C}{S}{vé sai / hết hạn / playerId đang chơi}
+  \seqret{S}{C}{CONNECT\_DENIED \{lý do 1..6\}}
+  \seqfragend{C}{S}{alt}{vé hợp lệ}
   \seqend{C,S}
 \end{tikzpicture}
 \caption{Bắt tay challenge -- response dùng cookie HMAC: server không cấp tài nguyên cho địa chỉ chưa được chứng minh}
@@ -292,3 +295,352 @@ summary: 118 out, 94 in, 2 gaps, rtt p50 44ms
 công cụ phát lại gói (phải); các số là minh hoạ bố cục}
 \label{fig:B-chandoan}
 \end{figure}
+
+% =====================================================================================
+\section{Luồng xử lý và giải pháp đã ứng dụng}
+Mục này đi theo từng đầu việc của phân hệ trong bản mô tả đề tài: thiết lập kết nối UDP, header 16 byte, bắt
+tay có cookie, ack bằng bitfield và gửi lại, bốn kênh truyền, cắt ghép mảnh, kiểm soát nghẽn, giữ kết nối, bộ giả
+lập mạng và công cụ đo. Với mỗi đầu việc, báo cáo trình bày \textbf{luồng xử lý} (sơ đồ tuần tự theo đúng tên lớp
+trong mã nguồn), \textbf{vấn đề gặp phải} và \textbf{giải pháp đã áp dụng}. Các tham số lấy trực tiếp từ mã nguồn
+\code{Ironfront.Net.Transport} và \code{ProtocolConstants}.
+
+% -------------------------------------------------------------------------------------
+\subsection{Luồng thiết lập kết nối UDP có xác thực}
+\textbf{Bài toán.} UDP không có kết nối: bất kỳ ai cũng gửi được datagram tới cổng 27015 và điền địa chỉ nguồn giả.
+Nếu server cấp bộ nhớ, sinh số ngẫu nhiên hoặc kiểm chữ ký ngay khi nhận \code{CONNECT_REQUEST}, kẻ tấn công chỉ cần
+gửi hàng loạt gói với địa chỉ nguồn giả là làm đầy bảng chờ và đẩy người chơi thật ra ngoài. Server cũng phải biết
+người kết nối chính là người đã được Master Server cấp vé.
+
+\begin{figure}[H]
+\centering
+\renewcommand{\seqstep}{0.66cm}
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \seqhuman{B}{0.6}{NetClient-\\Bootstrap}
+  \seqactor{C}{3.5}{c : Connection}
+  \seqactor{S}{7.9}{srv : UdpTransport-\\Server}
+  \seqactor{R}{11.1}{RateLimiter}
+  \seqactor{K}{13.6}{Handshake-\\Cookie}
+  \seqactor{V}{15.9}{Ticket-\\Validator}
+  \seqbegin
+  \seqmsg{B}{C}{BeginConnect(joinTicket)}
+  \seqself{C}{clientSalt = CSPRNG u64\\trạng thái Connecting}
+  \seqfragbegin
+  \seqmsg{C}{S}{CONNECT\_REQUEST \{version, ticket, clientSalt\}}
+  \seqfragend{C}{S}{loop}{mỗi 250 ms, tối đa 20 lần}
+  \seqmsg{S}{R}{Allow(ip)}
+  \seqret{R}{S}{true (5 yêu cầu/giây/IP)}
+  \seqmsg{S}{K}{Derive(ip, port, clientSalt, epoch)}
+  \seqret{K}{S}{serverSalt = HMAC-SHA256(...)[0..8]}
+  \seqret{S}{C}{CONNECT\_CHALLENGE \{serverSalt\}}
+  \seqself{C}{response = clientSalt XOR serverSalt\\trạng thái Challenged}
+  \seqmsg{C}{S}{CONNECT\_RESPONSE \{response, clientSalt, ticket\}}
+  \seqmsg{S}{K}{Verify(ip, port, clientSalt, response)}
+  \seqret{K}{S}{true: địa chỉ nguồn đã được chứng minh}
+  \seqmsg{S}{V}{OnValidateTicket(ticket)}
+  \seqret{V}{S}{HMAC đúng, còn hạn, đúng serverId}
+  \seqfragbegin
+  \seqself{S}{cấp connectionId, gắn playerId,\\tạo Connection, lưu bản ghi phát lại}
+  \seqret{S}{C}{CONNECT\_ACCEPTED \{connectionId, serverTick, mapId, playerId\}}
+  \seqret{C}{B}{OnConnected(ConnectResult)}
+  \seqfragelse{B}{V}{vé sai, hết hạn hoặc playerId đang chơi}
+  \seqret{S}{C}{CONNECT\_DENIED \{InvalidTicket / AlreadyConnected\}}
+  \seqret{C}{B}{OnDisconnected(lý do)}
+  \seqfragend{B}{V}{alt}{hợp lệ}
+  \seqend{B,C,S,R,K,V}
+\end{tikzpicture}
+\caption{Biểu đồ tuần tự thiết lập kết nối: server không lưu trạng thái cho tới khi địa chỉ nguồn được chứng minh}
+\label{fig:B-luong-ketnoi}
+\end{figure}
+
+\textbf{Diễn giải luồng.}
+\begin{enumerate}
+  \item Client tạo \code{clientSalt} ngẫu nhiên bằng \code{RandomNumberGenerator} và gửi \code{CONNECT_REQUEST}
+        (kích thước cố định, sai kích thước bị bỏ im lặng). Gói được gửi lại mỗi 250 ms, tối đa 20 lần
+        (5 giây), vì chính gói này cũng có thể mất.
+  \item Server kiểm tra theo thứ tự rẻ trước: giới hạn tốc độ theo IP, phiên bản giao thức, địa chỉ đã có kết nối
+        chưa, còn chỗ trống không. Sau đó nó \textbf{không lưu gì} mà tính \code{serverSalt} bằng
+        HMAC-SHA256 trên (địa chỉ, cổng, clientSalt, khung thời gian 30 s) và trả \code{CONNECT_CHALLENGE} về đúng
+        địa chỉ đã khai.
+  \item Chỉ client thật sự sở hữu địa chỉ đó mới nhận được challenge và tính được
+        \code{clientSalt} XOR \code{serverSalt}. Khi \code{CONNECT_RESPONSE} tới, server tính lại cookie (chấp nhận khung
+        hiện tại và khung liền trước) để xác minh --- tới đây địa chỉ nguồn mới đáng tin.
+  \item Lúc này server mới làm việc tốn kém: kiểm HMAC của joinTicket, đọc \code{playerId} và từ chối nếu
+        \code{playerId} đó đang có kết nối khác. Hợp lệ thì lấy một \code{connectionId} từ hàng đợi id trống,
+        tạo \code{Connection} và trả \code{CONNECT_ACCEPTED}.
+  \item \code{CONNECT_ACCEPTED} có thể mất. Server giữ một bản ghi nhỏ theo địa chỉ; nếu client gửi lại
+        \code{CONNECT_RESPONSE} với đúng đáp án, server gửi lại \code{CONNECT_ACCEPTED} cũ thay vì cấp kết nối thứ hai.
+\end{enumerate}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{4.4cm}|Y|L{3.6cm}|}
+\hline
+\hd{Vấn đề} & \hd{Giải pháp đã áp dụng} & \hd{Mã nguồn} \\ \hline
+Lụt \code{CONNECT_REQUEST} với địa chỉ nguồn giả làm đầy bảng chờ & Cookie không trạng thái kiểu SYN-cookie: \code{serverSalt} là HMAC của địa chỉ, cổng, clientSalt và epoch 30 s, tính lại khi cần, không bao giờ lưu & \texttt{HandshakeCookie.Derive / Verify} \\ \hline
+Server bị dùng làm công cụ khuếch đại & Challenge chỉ gửi một gói nhỏ về địa chỉ đã khai; giới hạn 5 yêu cầu/giây/IP, bảng giới hạn tối đa 10\,000 IP và tự dọn sau 10 s & \code{RateLimiter} \\ \hline
+Một vé bị lộ mở ra nhiều người chơi & Gắn \code{playerId} trong vé với \code{connectionId}; vé thứ hai bị từ chối \code{AlreadyConnected}, không đá người đang chơi & \code{_playerIdToConnection} \\ \hline
+Mất \code{CONNECT_ACCEPTED} & Bản ghi phát lại theo địa chỉ, hết hạn sau 10 s & \code{AcceptedHandshake} \\ \hline
+Con trỏ ack bị gieo sai từ bộ đếm gói điều khiển dùng chung & Gói bắt tay \textbf{không} cập nhật con trỏ ack; gói dữ liệu đầu tiên mới khởi tạo nó & \code{Connection.HandleClientHandshake} \\ \hline
+\end{tabularx}
+\end{center}
+
+% -------------------------------------------------------------------------------------
+\subsection{Luồng gửi và nhận một bản tin}
+Tầng trên (Replication) chỉ gọi \texttt{Send(channelId, payload, reliable)} và nhận lại \code{OnMessage(payload)}.
+Mọi việc ở giữa --- đánh số, dựng header, ghi nhận để gửi lại, đưa vào socket, phân loại theo kênh --- là của
+Transport. Toàn bộ chạy trên luồng gọi \code{Poll()}, không tạo luồng riêng, nên không cần khoá.
+
+\begin{figure}[H]
+\centering
+\renewcommand{\seqstep}{0.66cm}
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \seqhuman{A}{0.6}{Replication\\(bên gửi)}
+  \seqactor{C}{3.4}{c : Connection}
+  \seqactor{L}{6.6}{ReliabilityLayer}
+  \seqactor{P}{9.7}{UdpPeer}
+  \seqactor{Q}{12.6}{peer : Connection\\(bên nhận)}
+  \seqactor{H}{15.5}{ChannelSet}
+  \seqbegin
+  \seqmsg{A}{C}{Send(kênh 2, payload, reliable)}
+  \seqself{C}{kiểm CanSendReliable (< 64 gói chưa ack)\\ghi envelope \{channelId, channelSequence\}}
+  \seqmsg{C}{L}{BuildAck(), NextSequence()}
+  \seqret{L}{C}{ack, ackBitfield, sequence}
+  \seqmsg{C}{L}{OnPacketSent(seq, datagram, reliable)}
+  \seqnote{L}{L}{}{chép datagram vào BufferPool,\\giữ tới khi được ack}
+  \seqmsg{C}{P}{Send(datagram, endpoint)}
+  \seqmsg{P}{Q}{SendTo() -- datagram UDP $\le$ 1200 byte}
+  \seqnote{P}{Q}{}{TryParse header: protocolId, cờ dự trữ = 0, connectionId khớp địa chỉ; sai thì bỏ im lặng}
+  \seqselfl{Q}{ProcessIncomingAck(ack, bitfield)\\OnPacketReceived(sequence)}
+  \seqmsg{Q}{H}{Receive(channelId, channelSequence, body)}
+  \seqret{H}{Q}{giao theo chính sách kênh}
+  \seqret{Q}{A}{KEEPALIVE mang ack mới (vì gói tin cậy)}
+  \seqend{A,C,L,P,Q,H}
+\end{tikzpicture}
+\caption{Biểu đồ tuần tự gửi -- nhận một bản tin tin cậy qua kênh 2}
+\label{fig:B-luong-guinhan}
+\end{figure}
+
+\textbf{Các giải pháp trên đường nóng.}
+\begin{itemize}
+  \item \textbf{Ack cõng trên mọi gói (piggyback).} Header nào cũng mang \code{ack} và \code{ackBitfield} 32 bit,
+        nên một gói xác nhận được 33 gói cùng lúc và không cần gói ACK riêng. Riêng khi nhận gói tin cậy, bên nhận
+        gửi ngay một \code{KEEPALIVE} để bên gửi không phải chờ tới nhịp giữ kết nối 1 giây.
+  \item \textbf{Không cấp phát trên đường nóng.} Mọi mảng byte lấy từ \code{BufferPool} kích thước cố định 1200 byte.
+        Đo trên .NET 8 Release: \code{BufferPool} 10,4 ns/lần, \code{ArrayPool.Shared} 17,4 ns, \texttt{new byte[]}
+        16,7 ns; sau khởi động, \code{Poll} và \code{Send} cấp phát 0 byte.
+  \item \textbf{Nhận có giới hạn.} Mỗi lần \code{Poll} đọc tối đa 1024 gói; phần còn lại để lượt sau (33 ms).
+        Không giới hạn thì khi bị lụt gói, vòng mô phỏng nằm trọn trong vòng nhận và server ngừng mô phỏng.
+  \item \textbf{Bộ đệm socket 1 MB và cảnh báo khi hệ điều hành cắt bớt.} Linux mặc định giới hạn
+        \code{rmem_max} khoảng 208 KB mà không báo lỗi; \code{UdpPeer} đọc lại kích thước thực tế và ghi cảnh báo.
+        Trên Windows, tắt \code{SIO_UDP_CONNRESET} để gói ICMP ``port unreachable'' không làm hỏng lần nhận sau.
+  \item \textbf{Gói lỗi không được trả lời.} Header sai, \code{connectionId} không khớp địa chỉ hoặc cờ dự trữ khác 0
+        đều bị bỏ im lặng --- trả lời sẽ biến server thành công cụ dò cổng.
+\end{itemize}
+
+% -------------------------------------------------------------------------------------
+\subsection{Luồng phát hiện mất gói và gửi lại}
+\begin{figure}[H]
+\centering
+\renewcommand{\seqstep}{0.66cm}
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \seqactor{L}{1.6}{sender : ReliabilityLayer}
+  \seqactor{P}{6.4}{UdpPeer}
+  \seqactor{R}{10.6}{receiver : Connection}
+  \seqactor{H}{14.6}{ChannelSet}
+  \seqbegin
+  \seqmsg{P}{R}{seq 100 (kênh 2, channelSeq 7)}
+  \seqmsg{R}{H}{giao channelSeq 7}
+  \seqlost{P}{R}{seq 101 (kênh 2, channelSeq 8) -- MẤT}
+  \seqmsg{P}{R}{seq 102 (kênh 2, channelSeq 9)}
+  \seqmsg{R}{H}{channelSeq 9 tới sớm}
+  \seqnote{H}{H}{}{đệm chờ channelSeq 8,\\chưa giao 9}
+  \seqret{R}{P}{gói kế tiếp mang ack = 102, bitfield ...101}
+  \seqmsg{P}{L}{ProcessIncomingAck(102, ...101)}
+  \seqself{L}{đánh dấu 100, 102 đã nhận;\\mẫu RTT chỉ từ gói gửi lần đầu (Karn)}
+  \seqfragbegin
+  \seqself{L}{Update(): seq 101 quá RTO\\RTO = clamp(1,5 $\cdot$ SRTT + 4 $\cdot$ jitter, 30, 1000 ms)}
+  \seqmsg{L}{P}{gửi lại datagram 101 từ BufferPool}
+  \seqfragend{L}{P}{loop}{chưa ack và ResendCount $\le$ 10}
+  \seqmsg{P}{R}{seq 101 (bản gửi lại, channelSeq 8)}
+  \seqmsg{R}{H}{channelSeq 8}
+  \seqret{H}{R}{giao 8 rồi xả 9 đang đệm}
+  \seqend{L,P,R,H}
+\end{tikzpicture}
+\caption{Biểu đồ tuần tự mất gói trên kênh tin cậy: bitfield chỉ ra gói mất, RTO kích hoạt gửi lại, kênh giữ đúng thứ tự}
+\label{fig:B-luong-mat}
+\end{figure}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{4.2cm}|Y|}
+\hline
+\hd{Vấn đề} & \hd{Giải pháp đã áp dụng} \\ \hline
+Biết gói nào mất mà không tốn gói ACK riêng & Cửa sổ nhận 32 bit dịch theo khoảng cách sequence; bên gửi quét \code{ack} và 32 bit để xác nhận từng gói (\code{ProcessIncomingAck}) \\ \hline
+Số thứ tự 16 bit quay vòng sau khoảng 36 phút ở 30 gói/giây & So sánh bằng \texttt{SequenceMath.IsNewer / Distance} theo số học modulo $2^{16}$, không dùng phép so sánh thường; có test biên tại 65535 $\rightarrow$ 0 \\ \hline
+RTT bị đo sai khi gói đã gửi lại & Thuật toán Karn: chỉ lấy mẫu RTT khi gói được ack mà chưa từng gửi lại; SRTT làm mượt EWMA 0,9/0,1, jitter theo hệ số 0,25 \\ \hline
+Chờ gửi lại quá lâu hoặc quá dồn & RTO động = 1,5 $\times$ SRTT + 4 $\times$ jitter, kẹp trong [30; 1000] ms \\ \hline
+Gói tin cậy mất vĩnh viễn làm kênh có thứ tự treo mãi & Quá 10 lần gửi lại hoặc trùng ô vòng đệm 1024 thì \textbf{đóng kết nối} với \code{TransportError} thay vì tiếp tục im lặng (kết nối trông khoẻ nhưng không giao gì) \\ \hline
+Bên nhận quá tải & Điều khiển luồng: tối đa 64 gói tin cậy chưa ack; \code{KEEPALIVE} quảng bá số gói chờ và mức áp lực, bên gửi tạm dừng gói tin cậy mới khi áp lực > 80\% \\ \hline
+\end{tabularx}
+\end{center}
+
+% -------------------------------------------------------------------------------------
+\subsection{Bốn kênh truyền và luồng phân loại khi nhận}
+Mỗi gói \code{PAYLOAD} có envelope 3 byte gồm \code{channelId} và \code{channelSequence} \textbf{riêng từng kênh},
+tách khỏi sequence của kết nối. Nhờ vậy \code{KEEPALIVE} hay gói của kênh khác không làm một snapshot trông ``cũ''.
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{1cm}|L{3.8cm}|Y|L{3.8cm}|}
+\hline
+\hd{Kênh} & \hd{Đảm bảo} & \hd{Cách xử lý phía nhận (\code{ChannelSet.Receive})} & \hd{Dữ liệu} \\ \hline
+0 & Không tin cậy, không thứ tự & Giao ngay & Ping/pong \\ \hline
+1 & Không tin cậy, có thứ tự & Giao nếu \code{channelSequence} mới hơn gói đã giao; gói cũ bị huỷ và đếm \code{StalePacketsDropped} & Snapshot server $\rightarrow$ client \\ \hline
+2 & Tin cậy, có thứ tự & Cửa sổ 256 ô: gói đúng thứ tự thì giao và xả các gói liền sau đang đệm; gói sớm được chép vào bộ đệm; gói trùng hoặc quá cửa sổ bị bỏ & Sự kiện, spawn, chat \\ \hline
+3 & Không tin cậy, có thứ tự & Như kênh 1 nhưng bộ đếm riêng & Input client $\rightarrow$ server \\ \hline
+\end{tabularx}
+\end{center}
+\textbf{Giải pháp chống head-of-line blocking:} độ tin cậy áp dụng \textbf{theo kênh}. Thí nghiệm
+\code{--phase4-report} cho thấy khi kênh 2 đang thiếu sequence 0, snapshot kênh 1 vẫn được giao ngay (1 gói), còn
+kênh 2 đệm gói sau và chỉ giao cả hai khi gói thiếu tới. Nếu dùng TCP, snapshot phải chờ sự kiện bị mất.
+
+% -------------------------------------------------------------------------------------
+\subsection{Luồng cắt và ghép mảnh bản tin lớn}
+Datagram giới hạn 1200 byte để không bị phân mảnh ở tầng IP trên đường có PPPoE, VPN hay đường hầm (payload tối đa
+1184 byte sau header 16 byte). Bản tin lớn hơn --- ví dụ danh sách người chơi khi mới vào trận --- được cắt ở tầng
+Transport.
+
+\begin{figure}[H]
+\centering
+\renewcommand{\seqstep}{0.66cm}
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \seqhuman{A}{0.6}{Replication}
+  \seqactor{C}{4.0}{c : Connection}
+  \seqactor{Q}{9.0}{peer : Connection}
+  \seqactor{F}{13.2}{FragmentAssembler}
+  \seqbegin
+  \seqmsg{A}{C}{Send(kênh 2, payload 3000 byte)}
+  \seqself{C}{envelope + payload > 1184 byte:\\groupId mới, count = 3 ($\le$ 64)}
+  \seqfragbegin
+  \seqmsg{C}{Q}{FRAGMENT \{groupId, index i, count 3\} -- cờ RELIABLE | FRAGMENTED}
+  \seqmsg{Q}{F}{TryReassemble(groupId, i, 3, data)}
+  \seqret{F}{Q}{chưa đủ mảnh}
+  \seqfragend{A}{F}{loop}{i = 0..2, mỗi mảnh một gói tin cậy}
+  \seqfragbegin
+  \seqret{F}{Q}{đủ 3 mảnh: ghép thành một mảng}
+  \seqselfl{Q}{ProcessPayload: đọc envelope,\\đưa vào ChannelSet}
+  \seqret{Q}{A}{OnMessage(payload 3000 byte)}
+  \seqfragelse{A}{F}{nhóm quá 2 s hoặc đã có 8 nhóm dở dang}
+  \seqselfl{F}{huỷ nhóm cũ nhất, trả mảnh về BufferPool}
+  \seqfragend{A}{F}{alt}{đủ mảnh}
+  \seqend{A,C,Q,F}
+\end{tikzpicture}
+\caption{Biểu đồ tuần tự cắt và ghép mảnh với bộ nhớ có giới hạn}
+\label{fig:B-luong-manh}
+\end{figure}
+
+\textbf{Giải pháp.} (1) Mảnh luôn được gửi \textbf{tin cậy} kể cả khi tầng trên yêu cầu không tin cậy, vì thiếu một mảnh
+thì cả bản tin vô dụng. (2) Giới hạn bộ nhớ trước dữ liệu do kẻ tấn công điều khiển: tối đa 64 mảnh mỗi nhóm, 8 nhóm
+dở dang mỗi kết nối, nhóm quá 2 giây bị huỷ, và nếu \code{count} của một mảnh khác với nhóm thì huỷ cả nhóm.
+(3) Trước khi cắt, kiểm tra số gói tin cậy chưa ack cộng số mảnh không vượt 64, tránh một bản tin lớn chiếm hết cửa sổ.
+Kiểm thử: ghép đúng từng byte khi mảnh đến ngược thứ tự với bản tin 20 KB.
+
+% -------------------------------------------------------------------------------------
+\subsection{Luồng giữ kết nối, kiểm soát nghẽn và ngắt kết nối}
+\begin{figure}[H]
+\centering
+\renewcommand{\seqstep}{0.66cm}
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \seqhuman{T}{0.6}{Vòng tick\\(Poll)}
+  \seqactor{C}{4.2}{c : Connection}
+  \seqactor{G}{8.2}{CongestionControl}
+  \seqactor{F}{11.9}{FlowControl}
+  \seqactor{Q}{15.0}{peer}
+  \seqbegin
+  \seqfragbegin
+  \seqmsg{T}{C}{Update(nowMs)}
+  \seqmsg{C}{G}{Update(dt, SmoothedRttMs)}
+  \seqret{G}{C}{GOOD: 20 Hz / BAD: 10 Hz, giảm chi tiết}
+  \seqfragbegin
+  \seqmsg{C}{Q}{KEEPALIVE \{pendingReliable u16, pressure \%\}}
+  \seqfragend{C}{Q}{opt}{$\ge$ 1 s từ keep-alive trước}
+  \seqret{Q}{C}{KEEPALIVE của peer}
+  \seqmsg{C}{F}{ApplyRemote(pending, pressure)}
+  \seqret{F}{C}{tạm dừng gói tin cậy mới nếu pressure > 80\%}
+  \seqfragend{T}{Q}{loop}{mỗi tick khi Connected}
+  \seqfragbegin
+  \seqself{C}{Fail(Timeout): trả buffer, xoá kênh, xoá mảnh}
+  \seqret{C}{T}{OnDisconnected(Timeout)}
+  \seqfragelse{T}{Q}{Disconnect() chủ động}
+  \seqmsg{C}{Q}{DISCONNECT \{lý do\} $\times$ 3 lần}
+  \seqret{C}{T}{OnDisconnected(LocalRequest)}
+  \seqfragelse{T}{Q}{gói tin cậy bị bỏ sau 10 lần gửi lại}
+  \seqret{C}{T}{OnDisconnected(TransportError)}
+  \seqfragend{T}{Q}{alt}{không nhận gì trong 10 s}
+  \seqend{T,C,G,F,Q}
+\end{tikzpicture}
+\caption{Biểu đồ tuần tự giữ kết nối, điều khiển luồng và các đường kết thúc kết nối}
+\label{fig:B-luong-giu}
+\end{figure}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{4.2cm}|Y|}
+\hline
+\hd{Vấn đề} & \hd{Giải pháp đã áp dụng} \\ \hline
+NAT xoá ánh xạ cổng khi kết nối im lặng; phát hiện client đã mất & \code{KEEPALIVE} mỗi 1 s; không nhận gói nào trong 10 s thì coi như rời trận (đúng yêu cầu ``mất kết nối quá 10 giây'' trong đề) \\ \hline
+Keep-alive không bao giờ được gửi trên kết nối đang bận & Hẹn giờ theo lần gửi \textbf{keep-alive} cuối, không theo lần gửi gói bất kỳ; nếu không, kết nối gửi snapshot 20 Hz không bao giờ gửi keep-alive và thông tin điều khiển luồng không được làm mới \\ \hline
+Báo ngắt kết nối có thể mất & \code{DISCONNECT} gửi 3 lần liên tiếp, không cần ack; bên kia vẫn có lưới an toàn timeout 10 s \\ \hline
+Mạng nghẽn làm RTT tăng & Hai chế độ có trễ (hysteresis): SRTT > 250 ms chuyển BAD (snapshot 10 Hz, giảm chi tiết); về GOOD khi SRTT < 200 ms và đã ở BAD đủ 10 s; nếu vừa về GOOD chưa tới 10 s đã xấu lại thì phạt 20 s để không dao động \\ \hline
+Rò rỉ tài nguyên khi đóng & \code{Fail} idempotent: trả mọi buffer của \code{ReliabilityLayer}, \code{ChannelSet}, \code{FragmentAssembler}; server trả \code{connectionId} về hàng đợi và gỡ ràng buộc \code{playerId} để người chơi kết nối lại được \\ \hline
+\end{tabularx}
+\end{center}
+
+% -------------------------------------------------------------------------------------
+\subsection{Bộ giả lập mạng, ghi phát lại gói và đo hiệu năng}
+\textbf{Bộ giả lập mạng.} \code{NetworkSimulator} nằm ngay dưới \code{UdpPeer.Send}: mỗi datagram được tung xúc xắc
+để bỏ, nhân đôi hoặc giữ lại một khoảng trễ (có jitter, có thể bị đẩy chậm thêm để đảo thứ tự), rồi được xả theo
+thời điểm đến hạn trong \code{Poll}. Hạt giống cố định nên cùng cấu hình cho cùng chuỗi sự cố --- lỗi tái hiện được.
+Bật mà không cần build lại: \code{IRONFRONT_SIM=typical}.
+
+\begin{center}\small
+\begin{tabular}{|l|c|c|c|c|c|}
+\hline
+\hd{Hồ sơ} & \hd{Trễ} & \hd{Jitter} & \hd{Mất gói} & \hd{Đảo thứ tự} & \hd{Trùng gói} \\ \hline
+\code{lan} & 1 ms & 0 & 0 & 0 & 0 \\ \hline
+\code{good} & 30 ms & 5 ms & 0,5\% & 0 & 0 \\ \hline
+\code{typical} & 50 ms & 20 ms & 5\% & 2\% & 0 \\ \hline
+\code{bad} & 100 ms & 50 ms & 15\% & 5\% & 2\% \\ \hline
+\code{awful} & 150 ms & 100 ms & 30\% & 10\% & 5\% \\ \hline
+\end{tabular}
+\end{center}
+
+\textbf{Ghi và phát lại gói.} Đặt \code{IRONFRONT_PCAP=đường-dẫn} thì \code{PacketLogger} ghi mọi datagram vào tệp
+\code{.ifpcap} có phiên bản (chiều, thời điểm, địa chỉ, byte thô). Công cụ \code{Ironfront.Tools.PacketReplay} đọc
+lại, lọc theo khoảng thời gian và \code{connectionId}, giải header, ước lượng lỗ hổng sequence và ghép ack với RTT
+(Hình~\ref{fig:B-chandoan}). Vì tệp có thể chứa joinTicket, tệp chỉ lưu trong thư mục bị git bỏ qua.
+
+\textbf{Kết quả đo (localhost, .NET 8 Release, ghi trong \code{plans/transport/reports/measurements.csv}).}
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{5.6cm}|Y|}
+\hline
+\hd{Phép đo} & \hd{Kết quả} \\ \hline
+Phân tích header GSP & 3,5 ns/lần, 0 byte cấp phát \\ \hline
+16 kết nối, 30 Hz, 10 phút & 16/16 kết nối ổn định, bộ đệm không phải cấp thêm \\ \hline
+64 kết nối, 30 Hz, 20 s (đã khởi động) & 64/64 kết nối; CPU 0,39\% một nhân; \code{Send} và \code{Poll} cấp phát 0 byte \\ \hline
+Ack bitfield bật / tắt & Một gói ack xác nhận 33 gói / 1 gói; còn 7 / 39 gói tin cậy chờ \\ \hline
+Kiểm soát nghẽn & RTT cao: 20 $\rightarrow$ 10 Hz; thời gian ở BAD tối thiểu 20 s khi vừa chuyển trạng thái \\ \hline
+\end{tabularx}
+\end{center}
+
+\subsection{Kiểm thử phân hệ}
+Bộ \code{Ironfront.Net.Transport.Tests} gồm 85 test xUnit, chạy trong CI trên Ubuntu và Windows:
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{4.6cm}|c|Y|}
+\hline
+\hd{Tệp test} & \hd{Số test} & \hd{Kịch bản tiêu biểu} \\ \hline
+\code{ControlAndSocketTests} & 22 & Gói điều khiển, timeout 10 s, DISCONNECT, socket thật trên localhost \\ \hline
+\code{ReliabilityLayerTests} & 19 & Ack bitfield, sequence quay vòng, Karn, RTO, bỏ gói sau 10 lần \\ \hline
+\code{HandshakeHardeningTests} & 12 & Cookie sai, cookie hết epoch, vé sai, vé trùng playerId, lụt yêu cầu \\ \hline
+\code{ChannelAndFragmentTests} & 11 & Sai thứ tự, gói trùng, gói cũ trên kênh 1/3, ghép mảnh ngược thứ tự, giới hạn 8 nhóm \\ \hline
+\code{ReliableChannelSurvivalTests} & 8 & Kênh tin cậy sống sót qua mất gói kéo dài của bộ giả lập \\ \hline
+\code{UdpPeerTests} & 8 & Ngân sách 1024 gói/Poll, bộ đệm socket, gói header sai \\ \hline
+\code{PacketLoggerTests}, \code{Diagnostics} & 5 & Ghi -- đọc lại \code{.ifpcap}, định dạng overlay chẩn đoán \\ \hline
+\end{tabularx}
+\end{center}

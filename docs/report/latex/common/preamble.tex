@@ -15,6 +15,12 @@
   \setmainfont{texgyretermes}[Extension=.otf, UprightFont=*-regular, BoldFont=*-bold,
     ItalicFont=*-italic, BoldItalicFont=*-bolditalic]%
 }
+% Chữ trong sơ đồ tuần tự dùng font không chân (giống Visual Paradigm): Arial nếu có, không thì
+% Liberation Sans, cuối cùng là TeX Gyre Heros (đi kèm Tectonic/TeX Live, đủ dấu tiếng Việt).
+\IfFontExistsTF{Arial}{\setsansfont{Arial}}{%
+  \IfFontExistsTF{Liberation Sans}{\setsansfont{Liberation Sans}}{%
+    \setsansfont{texgyreheros}[Extension=.otf, UprightFont=*-regular, BoldFont=*-bold,
+      ItalicFont=*-italic, BoldItalicFont=*-bolditalic]}}
 \setmonofont{lmmono10}[Extension=.otf, UprightFont=*-regular, Scale=0.9]
 \linespread{1.2}
 \setlength{\parindent}{0pt}
@@ -155,53 +161,215 @@
     rectangle split part fill={cBlue, white}, align=left, font=\footnotesize, inner sep=3pt},
 }
 
-% ---------- Sơ đồ tuần tự: macro tự viết để kiểm soát vị trí chữ ----------------------
+\makeatletter
+% ---------- Sơ đồ tuần tự theo phong cách Visual Paradigm ------------------------------
+% Lifeline có đầu hộp tô chuyển màu, đường đời nét đứt, thanh kích hoạt tự vẽ trên mỗi lifeline
+% (từ thông điệp đầu tiên tới thông điệp cuối cùng chạm vào nó), thông điệp đánh số tự động,
+% thông điệp gọi = nét liền đầu tam giác đặc, trả về = nét đứt đầu mở, combined fragment có nhãn
+% ngũ giác (loop / alt / opt) kèm điều kiện [guard], ghi chú dạng tờ giấy gấp góc.
 % Dùng trong tikzpicture:
-%   \seqactor{id}{x}{Tên}   ... \seqbegin
-%   \seqmsg{từ}{đến}{nhãn}   \seqret{từ}{đến}{nhãn}   \seqself{id}{nhãn}
-%   \seqnote{trái}{phải}{số dòng}{nội dung}
-%   \seqloopbegin   ... \seqloopend{trái}{phải}{nhãn}
-%   \seqend
+%   \seqactor{id}{x}{nhãn}      lifeline dạng hộp      \seqhuman{id}{x}{nhãn}  lifeline tác nhân (người)
+%   \seqbegin
+%   \seqmsg{từ}{đến}{nhãn}   \seqret{từ}{đến}{nhãn}   \seqlost{từ}{đến}{nhãn}   \seqself{id}{nhãn}
+%   \seqnote{trái}{phải}{(bỏ qua)}{nội dung}   -- chiều cao tự đo
+%   \seqfragbegin ... [\seqfragelse{trái}{phải}{điều kiện}] ... \seqfragend{trái}{phải}{loại}{điều kiện}
+%   \seqloopbegin ... \seqloopend{trái}{phải}{điều kiện}   -- viết tắt cho fragment loop
+%   \seqgap{khoảng}             chèn khoảng trống dọc
+%   \seqend{danh sách id}
+\definecolor{vpBorder}{HTML}{4A6A9A}
+\definecolor{vpHeadTop}{HTML}{FBFCFE}
+\definecolor{vpHeadBot}{HTML}{C9DAF0}
+\definecolor{vpAct}{HTML}{E3EBF7}
+\definecolor{vpNote}{HTML}{FFF9C8}
+\definecolor{vpNoteLine}{HTML}{A8A060}
+\definecolor{vpFrag}{HTML}{EDF1F7}
+\definecolor{vpLine}{HTML}{3A3A3A}
+\pgfdeclarelayer{background}
+\pgfdeclarelayer{vpact}
+\pgfsetlayers{background,vpact,main}
+\tikzset{
+  vplbl/.style={font=\sffamily\footnotesize, fill=white, inner sep=1.2pt, align=center},
+  vpcall/.style={draw=vpLine, line width=0.6pt, -{Triangle[length=2.3mm, width=1.7mm]}},
+  vpreply/.style={draw=vpLine, line width=0.6pt, dash pattern=on 3pt off 2pt, -{Straight Barb[length=2.3mm, width=2.2mm]}},
+  vphead/.style={draw=vpBorder, line width=0.7pt, top color=vpHeadTop, bottom color=vpHeadBot,
+    minimum height=0.8cm, minimum width=2.1cm, inner xsep=5pt, align=center, font=\sffamily\small},
+  vpactbox/.style={draw=vpBorder, line width=0.5pt, fill=vpAct},
+}
 \newdimen\seqy
-\newdimen\seqloopy
+\newdimen\seq@xa \newdimen\seq@xb \newdimen\seq@ya \newdimen\seq@yb \newdimen\seq@m
+\newcount\seq@no
+\newcount\seq@lvl
 \newcommand{\seqstep}{0.72cm}
-\newcommand{\seqactor}[3]{%
-  \node[draw=cLine, fill=cBlue, rounded corners=2pt, minimum height=0.8cm, align=center, font=\small\bfseries]
-    (#1) at (#2,0) {#3};}
-\newcommand{\seqbegin}{\global\seqy=-0.55cm}
-\newcommand{\seqmsg}[3]{%
-  \global\advance\seqy by -\seqstep
-  \draw[arr] (#1.center |- 0,\the\seqy) -- node[lbl, above=1pt]{#3} (#2.center |- 0,\the\seqy);}
-\newcommand{\seqret}[3]{%
-  \global\advance\seqy by -\seqstep
-  \draw[darr] (#1.center |- 0,\the\seqy) -- node[lbl, above=1pt]{#3} (#2.center |- 0,\the\seqy);}
-\newcommand{\seqlost}[3]{% gói bị mất: mũi tên đứt đoạn dừng giữa chừng với dấu X
-  \global\advance\seqy by -\seqstep
-  \draw[darr, -] (#1.center |- 0,\the\seqy) -- node[lbl, above=1pt]{#3} ($(#1.center |- 0,\the\seqy)!0.7!(#2.center |- 0,\the\seqy)$)
-    node[text=red!70!black, font=\bfseries, inner sep=0pt] {$\times$};}
-\newcommand{\seqself}[2]{%
-  \global\advance\seqy by -\seqstep
-  \draw[arr] (#1.center |- 0,\the\seqy) -- ++(0.6,0) -- ++(0,-0.4) -- ++(-0.6,0);
-  \node[lbl, anchor=west, align=left] at ($(#1.center |- 0,\the\seqy)+(0.7,-0.2)$) {#2};
-  \global\advance\seqy by -0.3cm}
-\newcommand{\seqnote}[4]{%
-  \global\advance\seqy by -0.45cm
-  \path let \p1=(#1.center), \p2=(#2.center), \n1={max(\x2-\x1+1.2cm, 3.4cm)} in
-    node[draw=cLine, fill=cOrange, anchor=north, text width=\n1-8pt, align=center, font=\footnotesize,
-      inner sep=3pt] at ($(#1.center |- 0,\the\seqy)!0.5!(#2.center |- 0,\the\seqy)$) {#4};
-  \global\advance\seqy by -#3\baselineskip
-  \global\advance\seqy by -0.05cm}
-\newcommand{\seqloopbegin}{\global\advance\seqy by -0.25cm \global\seqloopy=\seqy}
-\newcommand{\seqloopend}[3]{%
-  \global\advance\seqy by -0.3cm
-  \draw[cLine, thin] ($(#1.center |- 0,\the\seqloopy)+(-0.9,0)$) rectangle ($(#2.center |- 0,\the\seqy)+(0.9,0)$);
-  \node[anchor=north west, fill=cGray, draw=cLine, font=\scriptsize\bfseries, inner sep=2pt]
-    at ($(#1.center |- 0,\the\seqloopy)+(-0.9,0)$) {#3};}
-\newcommand{\seqend}[1]{% #1 = danh sách id, ví dụ {C,M,G}
-  \global\advance\seqy by -0.4cm
-  \begin{scope}[on background layer]
-    \foreach \a in {#1} { \draw[cLine!70, dashed] (\a.south) -- (\a.center |- 0,\the\seqy); }
+\newcommand{\seq@hw}{0.11cm}
+\newcommand{\seqactor}[3]{\node[vphead] (#1) at (#2,0) {#3};}
+\newcommand{\seqhuman}[3]{%
+  \node[font=\sffamily\small, anchor=center, inner sep=1pt, align=center] (#1) at (#2,-0.1) {#3};
+  \begin{scope}[draw=vpBorder, line width=0.8pt, shift={(#1.north)}]
+    \draw[fill=vpHeadTop] (0,0.66) circle (0.12);
+    \draw (0,0.54) -- (0,0.24) (-0.22,0.44) -- (0.22,0.44)
+          (-0.17,0.02) -- (0,0.24) -- (0.17,0.02);
   \end{scope}}
+\newcommand{\seqbegin}{\global\seqy=-0.55cm \global\seq@no=0 \global\seq@lvl=0 }
+\newcommand{\seqgap}[1]{\global\advance\seqy by -#1\relax}
+% ghi nhận lifeline #1 có tham gia ở độ cao hiện tại (để vẽ thanh kích hoạt)
+\def\seq@touch#1{%
+  \expandafter\ifx\csname seq@top@#1\endcsname\relax
+    \expandafter\xdef\csname seq@top@#1\endcsname{\the\seqy}\fi
+  \expandafter\xdef\csname seq@bot@#1\endcsname{\the\seqy}}
+% toạ độ x hai đầu mũi tên, lùi vào mép thanh kích hoạt
+\def\seq@ends#1#2{%
+  \pgfpointanchor{#1}{center}\global\seq@xa=\pgf@x
+  \pgfpointanchor{#2}{center}\global\seq@xb=\pgf@x
+  \ifdim\seq@xa<\seq@xb
+    \global\advance\seq@xa by \seq@hw \global\advance\seq@xb by -\seq@hw
+  \else
+    \global\advance\seq@xa by -\seq@hw \global\advance\seq@xb by \seq@hw
+  \fi}
+\def\seq@arrow#1#2#3#4{%
+  \global\advance\seqy by -\seqstep
+  \global\advance\seq@no by 1
+  \seq@touch{#1}\seq@touch{#2}%
+  \seq@ends{#1}{#2}%
+  \edef\seq@P{\the\seq@xa,\the\seqy}\edef\seq@Q{\the\seq@xb,\the\seqy}%
+  \draw[#4] (\seq@P) -- (\seq@Q);
+  \seq@placelabel{#3}}
+% Nhãn thông điệp: nằm giữa mũi tên nếu vừa; nếu dài hơn mũi tên thì neo về phía bên gửi
+% và chạy theo chiều mũi tên (không tràn ngược ra sau lifeline gửi).
+\newbox\seq@box
+\newdimen\seq@len
+\newdimen\seq@maxx \seq@maxx=16.6cm
+\newdimen\seq@minx \seq@minx=-0.4cm
+\def\seq@placelabel#1{%
+  \pgfinterruptpicture
+    \global\setbox\seq@box\hbox{\sffamily\footnotesize\begin{tabular}{@{}c@{}}\the\seq@no:~#1\end{tabular}}%
+  \endpgfinterruptpicture
+  \seq@len=\seq@xb \advance\seq@len by -\seq@xa
+  \ifdim\seq@len<0pt \seq@len=-\seq@len \fi
+  \advance\seq@len by -0.25cm
+  \ifdim\wd\seq@box<\seq@len
+    \node[vplbl, above=0.5pt] at ($(\seq@P)!0.5!(\seq@Q)$) {\the\seq@no:~#1};
+  \else
+    \seq@len=\wd\seq@box
+    \ifdim\seq@xa<\seq@xb
+      \advance\seq@len by \seq@xa
+      \ifdim\seq@len>\seq@maxx
+        \node[vplbl, anchor=south east] at ($(\seq@Q)+(-0.06,0.02)$) {\the\seq@no:~#1};
+      \else
+        \node[vplbl, anchor=south west] at ($(\seq@P)+(0.06,0.02)$) {\the\seq@no:~#1};
+      \fi
+    \else
+      \seq@len=-\seq@len \advance\seq@len by \seq@xa
+      \ifdim\seq@len<\seq@minx
+        \node[vplbl, anchor=south west] at ($(\seq@Q)+(0.06,0.02)$) {\the\seq@no:~#1};
+      \else
+        \node[vplbl, anchor=south east] at ($(\seq@P)+(-0.06,0.02)$) {\the\seq@no:~#1};
+      \fi
+    \fi
+  \fi}
+\newcommand{\seqmsg}[3]{\seq@arrow{#1}{#2}{#3}{vpcall}}
+\newcommand{\seqret}[3]{\seq@arrow{#1}{#2}{#3}{vpreply}}
+\newcommand{\seqlost}[3]{% thông điệp bị mất: dừng giữa đường ở chấm tròn đặc, kèm dấu X đỏ
+  \global\advance\seqy by -\seqstep
+  \global\advance\seq@no by 1
+  \seq@touch{#1}%
+  \seq@ends{#1}{#2}%
+  \global\seq@xb=\dimexpr(\seq@xa*3+\seq@xb*7)/10\relax
+  \edef\seq@P{\the\seq@xa,\the\seqy}\edef\seq@Q{\the\seq@xb,\the\seqy}%
+  \draw[vpcall] (\seq@P) -- (\seq@Q);
+  \seq@placelabel{#3}
+  \fill[vpLine] (\seq@Q) ++(0.12,0) circle (2.2pt);
+  \node[text=red!70!black, font=\bfseries, inner sep=0pt] at ($(\seq@Q)+(0.42,0)$) {$\times$};}
+\newcommand{\seqself}[2]{%
+  \pgfpointanchor{#1}{center}%
+  \ifdim\pgf@x>10.5cm \seqselfl{#1}{#2}\else\seq@selfr{#1}{#2}\fi}
+\newcommand{\seq@selfr}[2]{%
+  \global\advance\seqy by -\seqstep
+  \global\advance\seq@no by 1
+  \seq@touch{#1}%
+  \pgfpointanchor{#1}{center}\global\seq@xa=\pgf@x \global\advance\seq@xa by \seq@hw
+  \edef\seq@P{\the\seq@xa,\the\seqy}%
+  \draw[vpcall] (\seq@P) -- ++(0.55,0) -- ++(0,-0.42) -- ++(-0.55,0);
+  \node[vplbl, anchor=west, align=left] at ($(\seq@P)+(0.62,-0.21)$) {\the\seq@no:~#2};
+  \global\advance\seqy by -0.42cm
+  \seq@touch{#1}}
+\newcommand{\seqselfl}[2]{% như \seqself nhưng đặt nhãn bên trái lifeline (dùng cho lifeline sát lề phải)
+  \global\advance\seqy by -\seqstep
+  \global\advance\seq@no by 1
+  \seq@touch{#1}%
+  \pgfpointanchor{#1}{center}\global\seq@xa=\pgf@x \global\advance\seq@xa by \seq@hw
+  \edef\seq@P{\the\seq@xa,\the\seqy}%
+  \draw[vpcall] (\seq@P) -- ++(0.55,0) -- ++(0,-0.42) -- ++(-0.55,0);
+  \node[vplbl, anchor=east, align=right] at ($(\seq@P)+(-0.35,-0.21)$) {\the\seq@no:~#2};
+  \global\advance\seqy by -0.42cm
+  \seq@touch{#1}}
+\newcommand{\seqnote}[4]{%
+  \global\advance\seqy by -0.32cm
+  \path let \p1=(#1.center), \p2=(#2.center), \n1={max(abs(\x2-\x1)+1.2cm, 3.6cm)} in
+    node[fill=vpNote, anchor=north, text width=\n1-10pt, align=center, font=\sffamily\footnotesize,
+      inner xsep=5pt, inner ysep=3pt] (seqnoteN) at ($(#1.center |- 0,\the\seqy)!0.5!(#2.center |- 0,\the\seqy)$) {#4};
+  \fill[white] ([xshift=-6pt]seqnoteN.north east) -- (seqnoteN.north east) -- ([yshift=-6pt]seqnoteN.north east) -- cycle;
+  \draw[vpNoteLine, line width=0.5pt] (seqnoteN.north west) -- ([xshift=-6pt]seqnoteN.north east)
+    -- ([yshift=-6pt]seqnoteN.north east) -- (seqnoteN.south east) -- (seqnoteN.south west) -- cycle
+    ([xshift=-6pt]seqnoteN.north east) |- ([yshift=-6pt]seqnoteN.north east);
+  \pgfpointanchor{seqnoteN}{south}\global\seqy=\pgf@y
+  \global\advance\seqy by -0.02cm}
+% combined fragment; lề ngang thu hẹp dần theo độ lồng nhau
+\def\seq@margin{\seq@m=\dimexpr 1.4cm - 0.25cm*\seq@lvl\relax}
+\newcommand{\seqfragbegin}{%
+  \global\advance\seq@lvl by 1
+  \global\advance\seqy by -0.22cm
+  \expandafter\xdef\csname seq@fragtop\the\seq@lvl\endcsname{\the\seqy}%
+  \global\advance\seqy by -0.3cm}
+\newcommand{\seqfragelse}[3]{%
+  \global\advance\seqy by -0.3cm
+  \seq@margin
+  \pgfpointanchor{#1}{center}\global\seq@xa=\pgf@x \global\advance\seq@xa by -\seq@m
+  \pgfpointanchor{#2}{center}\global\seq@xb=\pgf@x \global\advance\seq@xb by \seq@m
+  \edef\seq@P{\the\seq@xa,\the\seqy}\edef\seq@Q{\the\seq@xb,\the\seqy}%
+  \draw[vpBorder, line width=0.6pt, dash pattern=on 4pt off 2.5pt] (\seq@P) -- (\seq@Q);
+  \node[anchor=north west, font=\sffamily\footnotesize\itshape, inner sep=2pt, fill=white] at ($(\seq@P)+(0.1,-0.04)$) {[#3]};
+  \global\advance\seqy by -0.3cm}
+\newcommand{\seqfragend}[4]{%
+  \global\advance\seqy by -0.3cm
+  \seq@margin
+  \pgfpointanchor{#1}{center}\global\seq@xa=\pgf@x \global\advance\seq@xa by -\seq@m
+  \pgfpointanchor{#2}{center}\global\seq@xb=\pgf@x \global\advance\seq@xb by \seq@m
+  \global\seq@ya=\csname seq@fragtop\the\seq@lvl\endcsname\relax
+  \edef\seq@P{\the\seq@xa,\the\seq@ya}\edef\seq@Q{\the\seq@xb,\the\seqy}%
+  \draw[vpBorder, line width=0.7pt] (\seq@P) rectangle (\seq@Q);
+  \node[anchor=north west, font=\sffamily\footnotesize\bfseries, inner xsep=4pt, inner ysep=2.5pt,
+    text opacity=0] (seqfragT) at (\seq@P) {#3};
+  \fill[vpFrag] (seqfragT.north west) -- (seqfragT.north east) -- ([yshift=4pt]seqfragT.south east)
+    -- ([xshift=-4pt]seqfragT.south east) -- (seqfragT.south west) -- cycle;
+  \draw[vpBorder, line width=0.7pt] (seqfragT.north east) -- ([yshift=4pt]seqfragT.south east)
+    -- ([xshift=-4pt]seqfragT.south east) -- (seqfragT.south west);
+  \node[anchor=north west, font=\sffamily\footnotesize\bfseries, inner xsep=4pt, inner ysep=2.5pt] at (seqfragT.north west) {#3};
+  \ifx\relax#4\relax\else
+    \node[anchor=west, font=\sffamily\footnotesize\itshape, inner sep=1.5pt, fill=white] at ([xshift=4pt]seqfragT.east) {[#4]};
+  \fi
+  \global\advance\seq@lvl by -1
+  \global\advance\seqy by -0.1cm}
+\newcommand{\seqloopbegin}{\seqfragbegin}
+\newcommand{\seqloopend}[3]{\seqfragend{#1}{#2}{loop}{#3}}
+\def\seq@activation#1{%
+  \expandafter\ifx\csname seq@top@#1\endcsname\relax\else
+    \pgfpointanchor{#1}{center}\global\seq@xa=\pgf@x
+    \global\seq@xb=\seq@xa
+    \global\advance\seq@xa by -\seq@hw \global\advance\seq@xb by \seq@hw
+    \global\seq@ya=\csname seq@top@#1\endcsname\relax \global\advance\seq@ya by 0.2cm
+    \global\seq@yb=\csname seq@bot@#1\endcsname\relax \global\advance\seq@yb by -0.2cm
+    \edef\seq@P{\the\seq@xa,\the\seq@ya}\edef\seq@Q{\the\seq@xb,\the\seq@yb}%
+    \begin{pgfonlayer}{vpact}\draw[vpactbox] (\seq@P) rectangle (\seq@Q);\end{pgfonlayer}%
+    \expandafter\global\expandafter\let\csname seq@top@#1\endcsname\relax
+    \expandafter\global\expandafter\let\csname seq@bot@#1\endcsname\relax
+  \fi}
+\newcommand{\seqend}[1]{% #1 = danh sách id, ví dụ {C,M,G}
+  \global\advance\seqy by -0.45cm
+  \foreach \a in {#1} {\seq@activation{\a}}
+  \begin{pgfonlayer}{background}
+    \foreach \a in {#1} { \draw[vpBorder!70, line width=0.6pt, dash pattern=on 4pt off 3pt] (\a.south) -- (\a.center |- 0,\the\seqy); }
+  \end{pgfonlayer}}
+\makeatother
 
 % ---------- Hộp bước đánh số (dùng cho luồng xử lý) ---------------------------------
 % \buoc{tên node}{vị trí}{số}{tiêu đề}{mô tả}{màu}

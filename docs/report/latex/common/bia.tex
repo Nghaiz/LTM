@@ -1,6 +1,6 @@
 % =====================================================================================
 % bia.tex — trang bìa theo mẫu PTIT
-% \BiaBaoCao{Họ và tên}{Mã sinh viên}
+% \BiaBaoCao{Họ và tên}{Mã sinh viên}{Phân hệ cá nhân thực hiện}
 % Mọi dòng được đặt theo tâm trang (current page.north), nên luôn căn giữa tuyệt đối.
 % Muốn dịch một dòng lên/xuống: sửa số pt trong yshift tương ứng.
 % =====================================================================================
@@ -9,7 +9,9 @@
 \newcommand{\DeTai}{Ironfront Reborn -- Trò chơi bắn súng nhiều người chơi\\với tầng mạng TCP/UDP tự xây dựng}
 \newcommand{\TieuDeBaoCao}{Báo cáo kiến trúc và giao diện hệ thống}
 
-\newcommand{\BiaBaoCao}[2]{%
+\newcommand{\PhanHeCaNhan}{}
+\newcommand{\BiaBaoCao}[3]{%
+\renewcommand{\PhanHeCaNhan}{#3}%
 \begin{titlepage}
 \thispagestyle{empty}
 \begin{tikzpicture}[remember picture, overlay]
@@ -30,7 +32,9 @@
       \textbf{Sinh viên thực hiện:} & \textbf{#1} \\
       \textbf{Mã sinh viên:}        & \textbf{#2} \\
     \end{tabular}}
-  \dong{590}{\bfseries\fontsize{14}{19}\selectfont}{\TieuDeBaoCao}
+  \dong{578}{\bfseries\fontsize{14}{19}\selectfont}{\TieuDeBaoCao}
+  \dong{606}{\fontsize{13.5}{18}\selectfont}{\parbox{13.5cm}{\centering
+    \textbf{Phần cá nhân:} \textbf{\textit{#3}}}}
   \dong{702}{\bfseries\fontsize{13.5}{18}\selectfont}{Hà Nội -- 2026}
 \end{tikzpicture}
 \end{titlepage}
