@@ -19,8 +19,7 @@
 \newcommand{\uiE}[2]{\node[anchor=west, text=red!60, font=\footnotesize] at (0.25,#1) {#2};}
 \newcommand{\uiN}[3]{\node[circle, fill=uiRed, text=white, inner sep=0pt, minimum size=11pt, font=\tiny\bfseries] at (#1,#2) {#3};}
 
-\PhanLon{II. NỘI DUNG CÁ NHÂN}
-\textit{Phân hệ client Unity.}
+\PhanLon{II. NỘI DUNG CÁ NHÂN -- Phân hệ client Unity.}
 
 \section{Biểu đồ và giao diện nội dung cá nhân thực hiện}
 Phân hệ client là nơi các thư viện mạng được đưa vào trò chơi thật. Nhiệm vụ gồm: mở \textbf{điểm nối netcode}
@@ -370,7 +369,7 @@ Mã lỗi khó hiểu & \code{MasterErrorText} ánh xạ mã lỗi MSP sang câu
 \label{fig:A-luong-vaotran}
 \end{figure}
 
-\textbf{Giải pháp đáng chú ý.}
+\textbf{Các giải pháp kỹ thuật chính.}
 \begin{itemize}
   \item \textbf{\code{PendingJoin} gói địa chỉ, cổng và vé vào một giá trị.} Tránh việc gọi nhầm server này với vé của server
         khác (game server sẽ từ chối với lỗi chữ ký không nói rõ nguyên nhân). Vé chỉ sống 60 s nên client quay số ngay và

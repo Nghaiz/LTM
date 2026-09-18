@@ -1,8 +1,7 @@
 % =====================================================================================
 % C-replication.tex — PHẦN II của Nguyễn Duy Nghĩa: đồng bộ trạng thái và mô phỏng server
 % =====================================================================================
-\PhanLon{II. NỘI DUNG CÁ NHÂN}
-\textit{Phân hệ đồng bộ trạng thái và mô phỏng server (Replication).}
+\PhanLon{II. NỘI DUNG CÁ NHÂN -- Phân hệ đồng bộ trạng thái và mô phỏng server (Replication).}
 
 \section{Biểu đồ và giao diện nội dung cá nhân thực hiện}
 Phân hệ Replication đứng giữa: \textbf{nhận byte từ Transport và biến thành trạng thái trò chơi}, và ngược lại.
@@ -111,10 +110,10 @@ Gốc: snapshot đầy đủ, căn byte, không interest & 19,86 & 1017 byte & -
   \seqret{C}{S}{C\_ACK\_BASELINE \{tick 100\} -- kênh 2}
   \seqlost{S}{C}{S\_SNAPSHOT tick 103 (delta so với 100) -- MẤT}
   \seqmsg{S}{C}{S\_SNAPSHOT tick 106 (vẫn delta so với 100)}
-  \seqnote{C}{C}{3}{Giải được vì đã có tick 100; mất 103 chỉ mất đúng gói đó}
+  \seqself{C}{giải delta dựa trên baseline tick 100;\\gói 103 bị mất không ảnh hưởng gói 106}
   \seqret{C}{S}{C\_ACK\_BASELINE \{tick 106\}}
   \seqmsg{S}{C}{S\_SNAPSHOT tick 109 (delta so với 106)}
-  \seqnote{S}{S}{3}{Giữ 32 snapshot lịch sử mỗi client; im lặng lâu hơn nhận bản đầy đủ}
+  \seqself{S}{lưu 32 snapshot lịch sử cho mỗi client;\\baseline quá cũ thì gửi snapshot đầy đủ}
   \seqend{S,C}
 \end{tikzpicture}
 \caption{Delta chỉ so với baseline client đã xác nhận: một gói mất không làm hỏng chuỗi delta}

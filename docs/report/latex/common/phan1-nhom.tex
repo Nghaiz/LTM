@@ -229,12 +229,12 @@ Camera, UI, âm thanh, ragdoll & Client & Toàn quyền, không đồng bộ \\ 
   \seqmsg{C}{M}{ROOM\_LIST\_REQ}
   \seqret{M}{C}{ROOM\_LIST\_RES [phòng]}
   \seqmsg{C}{M}{ROOM\_JOIN\_REQ \{roomId\}}
-  \seqnote{M}{G}{2}{Chọn game server còn chỗ\\joinTicket = HMAC-SHA256(playerId, serverId, roomId, exp)}
+  \seqself{M}{chọn game server còn chỗ; ký joinTicket =\\HMAC-SHA256(playerId, serverId, roomId, exp)}
   \seqret{M}{C}{ROOM\_JOIN\_RES \{ip, port, joinTicket\}}
   \seqmsg{C}{G}{CONNECT\_REQUEST \{version, joinTicket, clientSalt\}}
   \seqret{G}{C}{CONNECT\_CHALLENGE \{serverSalt\}}
   \seqmsg{C}{G}{CONNECT\_RESPONSE \{salt XOR, joinTicket\}}
-  \seqnote{M}{G}{2}{Game server tự kiểm tra HMAC và hạn dùng\\không cần hỏi lại master}
+  \seqself{G}{kiểm tra HMAC và hạn dùng của vé\\(không truy vấn lại Master Server)}
   \seqret{G}{C}{CONNECT\_ACCEPTED \{connectionId, serverTick\}}
   \seqret{G}{C}{S\_MATCH\_STATE + S\_SPAWN\_ACTOR $\times$ N}
   \seqloopbegin
@@ -242,7 +242,7 @@ Camera, UI, âm thanh, ragdoll & Client & Toàn quyền, không đồng bộ \\ 
   \seqret{G}{C}{S\_SNAPSHOT \{tick, lastProcessedInputTick, delta\} -- 20 Hz}
   \seqloopend{C}{G}{lặp}
   \seqmsg{C}{G}{C\_INPUT \{nút FIRE, yaw, pitch\}}
-  \seqnote{M}{G}{2}{Tua hitbox về thời điểm client nhìn thấy\\raycast, phân xử trúng}
+  \seqself{G}{tua hitbox về thời điểm client quan sát,\\raycast và phân xử trúng}
   \seqret{G}{C}{S\_HIT\_CONFIRM \{targetId, damage\}}
   \seqmsg{G}{M}{GS\_MATCH\_ENDED \{kết quả\}}
   \seqend{C,M,G}
@@ -258,14 +258,13 @@ Camera, UI, âm thanh, ragdoll & Client & Toàn quyền, không đồng bộ \\ 
   \seqactor{C}{2.5}{Client}
   \seqactor{S}{13}{Server}
   \seqbegin
-  \seqnote{C}{C}{1}{tick 100: nhấn W}
-  \seqself{C}{Dự đoán: di chuyển ngay, lưu input tick 100}
+  \seqself{C}{tick 100: nhấn W; dự đoán di chuyển ngay,\\lưu input tick 100}
   \seqmsg{C}{S}{C\_INPUT \{tick 100, moveZ +1\}}
-  \seqnote{S}{S}{2}{Xử lý tick 100\\ra vị trí P}
+  \seqself{S}{xử lý input tick 100,\\tính ra vị trí P}
   \seqret{S}{C}{S\_SNAPSHOT \{lastProcessedInputTick 100, pos P\}}
   \seqself{C}{Hoà giải: so vị trí dự đoán tại tick 100 với P;\\lệch quá ngưỡng thì đặt về P, phát lại input 101..hiện tại}
   \global\advance\seqy by -0.3cm
-  \seqnote{C}{S}{2}{Actor ở xa: nội suy, hiển thị tại (now $-$ 100 ms)\\giữa hai snapshot đã nhận}
+  \seqself{C}{actor ở xa: nội suy tại (now $-$ 100 ms)\\giữa hai snapshot đã nhận}
   \seqend{C,S}
 \end{tikzpicture}
 \caption{Dự đoán phía client, hoà giải với server và nội suy actor ở xa}

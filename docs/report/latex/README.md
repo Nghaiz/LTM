@@ -73,9 +73,9 @@ Tất cả sơ đồ vẽ bằng TikZ, toạ độ tính bằng cm (khổ nội 
 `common/preamble.tex`:
 
 - Sơ đồ tuần tự theo phong cách Visual Paradigm (lifeline đầu hộp, thanh kích hoạt tự vẽ, thông điệp tự đánh số,
-  gọi = nét liền đầu đặc, trả về = nét đứt đầu mở, fragment có nhãn ngũ giác, ghi chú gấp góc):
+  gọi = nét liền đầu đặc, trả về = nét đứt đầu mở, fragment có nhãn ngũ giác; không dùng ghi chú, xử lý nội bộ vẽ bằng `\seqself`):
   `\seqactor{id}{x}{nhãn}`, `\seqhuman{id}{x}{nhãn}` (tác nhân người), `\seqbegin`, `\seqmsg`, `\seqret`, `\seqlost`,
-  `\seqself` / `\seqselfl` (nhãn bên trái; `\seqself` tự chuyển sang trái khi lifeline ở sát lề phải), `\seqnote`,
+  `\seqself` / `\seqselfl` (nhãn bên trái; `\seqself` tự chuyển sang trái khi lifeline ở sát lề phải),
   `\seqfragbegin` ... `\seqfragelse{trái}{phải}{điều kiện}` ... `\seqfragend{trái}{phải}{loop|alt|opt}{điều kiện}`,
   `\seqloopbegin/\seqloopend`, `\seqend{danh sách id}`. Nhãn dài hơn mũi tên tự neo về phía bên gửi.
 - `\buoc{tên}{(x,y)}{số}{tiêu đề}{mô tả}{màu}` -- hộp bước đánh số

@@ -1,8 +1,7 @@
 % =====================================================================================
 % D-masterserver.tex — PHẦN II của Nguyễn Tự Kiên: Master Server TCP và hạ tầng
 % =====================================================================================
-\PhanLon{II. NỘI DUNG CÁ NHÂN}
-\textit{Phân hệ Master Server TCP và hạ tầng.}
+\PhanLon{II. NỘI DUNG CÁ NHÂN -- Phân hệ Master Server TCP và hạ tầng.}
 
 \section{Biểu đồ và giao diện nội dung cá nhân thực hiện}
 Phân hệ Master Server là \textbf{máy chủ TCP thuần .NET 8} --- không ASP.NET Core, không SignalR, không
@@ -126,12 +125,12 @@ Dính + phần dư đuôi & Cả hai lỗi cùng lúc; phải giữ phần đuô
   \seqret{M}{C}{REGISTER\_RES \{ok\}}
   \seqmsg{C}{M}{LOGIN\_REQ \{username, passwordHash\}}
   \seqmsg{M}{D}{SELECT account}
-  \seqnote{C}{M}{2}{bcrypt verify (hash giả nếu không có tài khoản)\\token 32 byte ngẫu nhiên, hạn 24 h, gắn IP}
+  \seqself{M}{bcrypt verify (hash giả nếu không có tài khoản);\\sinh token 32 byte ngẫu nhiên, hạn 24 h, gắn IP}
   \seqret{M}{C}{LOGIN\_RES \{sessionToken, playerId\}}
   \seqmsg{C}{M}{ROOM\_CREATE\_REQ \{name, mapId, maxPlayers\}}
   \seqret{M}{C}{ROOM\_CREATE\_RES + ROOM\_STATE\_PUSH (Waiting)}
   \seqmsg{C}{M}{ROOM\_JOIN\_REQ \{roomId, password\}}
-  \seqnote{C}{M}{2}{Chọn game server khoẻ còn chỗ\\ký joinTicket hạn 60 s}
+  \seqself{M}{chọn game server hoạt động và còn chỗ;\\ký joinTicket hạn 60 s}
   \seqret{M}{C}{ROOM\_JOIN\_RES \{ip, port, joinTicket\}}
   \seqmsg{G}{M}{GS\_MATCH\_STARTED \{roomId\}}
   \seqret{M}{C}{ROOM\_STATE\_PUSH (InMatch)}
@@ -383,16 +382,16 @@ chạm vào dữ liệu nên không cần khoá, và tình huống hai người 
 \end{figure}
 
 \begin{center}\small
-\begin{tabularx}{\linewidth}{|L{4.3cm}|Y|L{3.4cm}|}
+\begin{tabularx}{\linewidth}{|L{4.6cm}|Y|}
 \hline
-\hd{Vấn đề} & \hd{Giải pháp đã áp dụng} & \hd{Mã nguồn} \\ \hline
-TCP là luồng byte, không có ranh giới bản tin & Khung tiền tố độ dài: \code{length} u32 big-endian + \code{msgType} u16 + thân JSON; bộ đọc tích luỹ giữ phần đuôi dở dang qua các lần đọc và rút khung bằng vòng \code{while} & \code{MspFrameReader} \\ \hline
-\code{length} do kẻ tấn công điều khiển (gửi $2^{32}-1$ để server cấp 4 GB) & Kiểm tra giới hạn 64 KB \textbf{trước khi} đệm; vi phạm thì bộ đọc chốt lỗi và đóng kết nối & \code{MspFrameReader} \\ \hline
-Slowloris: kết nối rồi nhỏ giọt từng byte để giữ chỗ & Chưa đăng nhập: hạn \textbf{tuyệt đối} 30 s kể từ lúc accept (không gia hạn khi có byte); đã đăng nhập: hạn \textbf{im lặng} 45 s & \code{TcpListenerHostOptions} \\ \hline
-Một địa chỉ hoặc botnet chiếm hết chỗ & Tối đa 5 kết nối/IP và 256 kết nối tổng & \code{TcpListenerHost} \\ \hline
-Nagle + delayed ACK làm trễ bản tin nhỏ & \texttt{Socket.NoDelay = true}; mỗi khung ghi bằng \textbf{một} lệnh gửi (ghi header rồi ghi thân là mẫu gây trễ) & \code{TcpListenerHost}, \code{ClientConnection} \\ \hline
-Kết nối nửa mở (rút dây mạng, không có FIN/RST) & \code{HEARTBEAT} mỗi 15 s từ client; 45 s im lặng thì đóng. Kiểm thử bằng \texttt{LingerOption(true, 0)} ép RST: 1\,376 lần ngắt đột ngột trong 30 s đều được thu hồi & \code{disconnect-abrupt} (LoadTest) \\ \hline
-Dọn dẹp chạy hai lần làm bộ đếm IP âm hoặc rò chỗ & Gỡ khỏi bảng kết nối \textbf{trước}, chỉ giảm bộ đếm IP nếu việc gỡ thật sự xảy ra (idempotent) & \code{TcpListenerHost} \\ \hline
+\hd{Vấn đề} & \hd{Giải pháp đã áp dụng} \\ \hline
+TCP là luồng byte, không có ranh giới bản tin & Khung tiền tố độ dài: \code{length} u32 big-endian + \code{msgType} u16 + thân JSON; bộ đọc tích luỹ giữ phần đuôi dở dang qua các lần đọc và rút khung bằng vòng \code{while} (\code{MspFrameReader}) \\ \hline
+\code{length} do kẻ tấn công điều khiển (gửi $2^{32}-1$ để server cấp 4 GB) & Kiểm tra giới hạn 64 KB \textbf{trước khi} đệm; vi phạm thì bộ đọc chốt lỗi và đóng kết nối (\code{MspFrameReader}) \\ \hline
+Slowloris: kết nối rồi nhỏ giọt từng byte để giữ chỗ & Chưa đăng nhập: hạn \textbf{tuyệt đối} 30 s kể từ lúc accept (không gia hạn khi có byte); đã đăng nhập: hạn \textbf{im lặng} 45 s (\code{TcpListenerHostOptions}) \\ \hline
+Một địa chỉ hoặc botnet chiếm hết chỗ & Tối đa 5 kết nối/IP và 256 kết nối tổng (\code{TcpListenerHost}) \\ \hline
+Nagle + delayed ACK làm trễ bản tin nhỏ & \texttt{Socket.NoDelay = true}; mỗi khung ghi bằng \textbf{một} lệnh gửi (ghi header rồi ghi thân là mẫu gây trễ) (\code{TcpListenerHost}, \code{ClientConnection}) \\ \hline
+Kết nối nửa mở (rút dây mạng, không có FIN/RST) & \code{HEARTBEAT} mỗi 15 s từ client; 45 s im lặng thì đóng. Kiểm thử bằng \texttt{LingerOption(true, 0)} ép RST: 1\,376 lần ngắt đột ngột trong 30 s đều được thu hồi (\code{disconnect-abrupt} (LoadTest)) \\ \hline
+Dọn dẹp chạy hai lần làm bộ đếm IP âm hoặc rò chỗ & Gỡ khỏi bảng kết nối \textbf{trước}, chỉ giảm bộ đếm IP nếu việc gỡ thật sự xảy ra (idempotent) (\code{TcpListenerHost}) \\ \hline
 \end{tabularx}
 \end{center}
 
@@ -674,7 +673,7 @@ mỗi lần đăng nhập. Trận đang chạy không bị ảnh hưởng vì ga
   \seqfragend{U}{F}{alt}{khớp}
   \seqmsg{U}{C}{LOGIN\_REQ (đã mã hoá TLS 1.2/1.3)}
   \seqmsg{C}{F}{Append(bản rõ sau giải mã)}
-  \seqnote{C}{F}{}{Vẫn phải đóng khung: SslStream vẫn là luồng byte}
+  \seqself{F}{tách frame theo tiền tố độ dài\\(SslStream vẫn là luồng byte)}
   \seqend{U,S,C,F}
 \end{tikzpicture}
 \caption{Biểu đồ tuần tự bắt tay TLS với ghim vân tay chứng chỉ}

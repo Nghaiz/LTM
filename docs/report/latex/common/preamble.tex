@@ -83,11 +83,16 @@
 \titlespacing*{\subsection}{12pt}{10pt}{4pt}
 \titlespacing*{\subsubsection}{24pt}{8pt}{3pt}
 
-% "Phần" lớn: I. NỘI DUNG NHÓM / II. NỘI DUNG CÁ NHÂN — sang trang mới, vào mục lục
+% "Phần" lớn: I. NỘI DUNG NHÓM / II. NỘI DUNG CÁ NHÂN — sang trang mới, vào mục lục.
+% Tiêu đề luôn nằm trên một dòng: nếu dài hơn bề rộng trang thì thu nhỏ vừa khít.
+\newsavebox{\PhanLonBox}
 \newcommand{\PhanLon}[1]{%
   \clearpage\phantomsection
   \addcontentsline{toc}{part}{#1}%
-  {\bfseries\fontsize{15}{19}\selectfont #1\par}\vspace{6pt}}
+  \sbox{\PhanLonBox}{\bfseries\fontsize{15}{19}\selectfont #1}%
+  \noindent\ifdim\wd\PhanLonBox>\linewidth
+    \resizebox{\linewidth}{!}{\usebox{\PhanLonBox}}%
+  \else\usebox{\PhanLonBox}\fi\par\vspace{6pt}}
 
 % ---------- Mục lục ----------------------------------------------------------------
 \renewcommand{\cfttoctitlefont}{\color{tocblue}\bfseries\fontsize{15}{19}\selectfont}
@@ -166,23 +171,21 @@
 % Lifeline có đầu hộp tô chuyển màu, đường đời nét đứt, thanh kích hoạt tự vẽ trên mỗi lifeline
 % (từ thông điệp đầu tiên tới thông điệp cuối cùng chạm vào nó), thông điệp đánh số tự động,
 % thông điệp gọi = nét liền đầu tam giác đặc, trả về = nét đứt đầu mở, combined fragment có nhãn
-% ngũ giác (loop / alt / opt) kèm điều kiện [guard], ghi chú dạng tờ giấy gấp góc.
+% ngũ giác (loop / alt / opt) kèm điều kiện [guard]. Hộp lifeline và thanh kích hoạt màu xanh da trời
+% như mặc định của Visual Paradigm. Không dùng ghi chú: xử lý nội bộ vẽ bằng thông điệp tự gọi (\seqself).
 % Dùng trong tikzpicture:
 %   \seqactor{id}{x}{nhãn}      lifeline dạng hộp      \seqhuman{id}{x}{nhãn}  lifeline tác nhân (người)
 %   \seqbegin
 %   \seqmsg{từ}{đến}{nhãn}   \seqret{từ}{đến}{nhãn}   \seqlost{từ}{đến}{nhãn}   \seqself{id}{nhãn}
-%   \seqnote{trái}{phải}{(bỏ qua)}{nội dung}   -- chiều cao tự đo
 %   \seqfragbegin ... [\seqfragelse{trái}{phải}{điều kiện}] ... \seqfragend{trái}{phải}{loại}{điều kiện}
 %   \seqloopbegin ... \seqloopend{trái}{phải}{điều kiện}   -- viết tắt cho fragment loop
 %   \seqgap{khoảng}             chèn khoảng trống dọc
 %   \seqend{danh sách id}
-\definecolor{vpBorder}{HTML}{4A6A9A}
-\definecolor{vpHeadTop}{HTML}{FBFCFE}
-\definecolor{vpHeadBot}{HTML}{C9DAF0}
-\definecolor{vpAct}{HTML}{E3EBF7}
-\definecolor{vpNote}{HTML}{FFF9C8}
-\definecolor{vpNoteLine}{HTML}{A8A060}
-\definecolor{vpFrag}{HTML}{EDF1F7}
+\definecolor{vpBorder}{HTML}{3B5B7A}
+\definecolor{vpHeadTop}{HTML}{9ED8F4}
+\definecolor{vpHeadBot}{HTML}{7CC7ED}
+\definecolor{vpAct}{HTML}{7CC7ED}
+\definecolor{vpFrag}{HTML}{E4F3FB}
 \definecolor{vpLine}{HTML}{3A3A3A}
 \pgfdeclarelayer{background}
 \pgfdeclarelayer{vpact}
@@ -302,17 +305,6 @@
   \node[vplbl, anchor=east, align=right] at ($(\seq@P)+(-0.35,-0.21)$) {\the\seq@no:~#2};
   \global\advance\seqy by -0.42cm
   \seq@touch{#1}}
-\newcommand{\seqnote}[4]{%
-  \global\advance\seqy by -0.32cm
-  \path let \p1=(#1.center), \p2=(#2.center), \n1={max(abs(\x2-\x1)+1.2cm, 3.6cm)} in
-    node[fill=vpNote, anchor=north, text width=\n1-10pt, align=center, font=\sffamily\footnotesize,
-      inner xsep=5pt, inner ysep=3pt] (seqnoteN) at ($(#1.center |- 0,\the\seqy)!0.5!(#2.center |- 0,\the\seqy)$) {#4};
-  \fill[white] ([xshift=-6pt]seqnoteN.north east) -- (seqnoteN.north east) -- ([yshift=-6pt]seqnoteN.north east) -- cycle;
-  \draw[vpNoteLine, line width=0.5pt] (seqnoteN.north west) -- ([xshift=-6pt]seqnoteN.north east)
-    -- ([yshift=-6pt]seqnoteN.north east) -- (seqnoteN.south east) -- (seqnoteN.south west) -- cycle
-    ([xshift=-6pt]seqnoteN.north east) |- ([yshift=-6pt]seqnoteN.north east);
-  \pgfpointanchor{seqnoteN}{south}\global\seqy=\pgf@y
-  \global\advance\seqy by -0.02cm}
 % combined fragment; lề ngang thu hẹp dần theo độ lồng nhau
 \def\seq@margin{\seq@m=\dimexpr 1.4cm - 0.25cm*\seq@lvl\relax}
 \newcommand{\seqfragbegin}{%
