@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ironfront Reborn — Trạng thái triển khai UI</title>
+<link rel="stylesheet" href="css/tokens.css">
+<style>
+  html,body{overflow:auto}
+  body{padding:34px 40px 60px;background:var(--ink-950)}
+  h1{font-family:var(--font-display);font-size:34px;margin:0 0 6px}
+  .lede{color:#8da8ba;margin:0 0 30px;max-width:900px;line-height:1.6}
+  .screen-block{max-width:1100px;margin:0 0 26px;padding:20px 26px;
+    background:linear-gradient(180deg,rgba(7,24,40,.94),rgba(5,17,29,.91));
+    border:1px solid var(--line);
+    clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px)}
+  .screen-block h2{font-family:var(--font-display);font-size:22px;margin:0 0 4px}
+  .screen-block .path{color:#6f90a6;font-size:11px;letter-spacing:.14em;margin:0 0 14px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;font-family:var(--font-display);font-size:10px;letter-spacing:.12em;
+    color:#82a8c2;padding:0 10px 8px 0;border-bottom:1px solid rgba(76,133,174,.28)}
+  td{padding:8px 10px 8px 0;border-bottom:1px solid rgba(76,133,174,.14);vertical-align:top}
+  td:first-child{width:38%;color:#eaf6ff}
+  .live{color:var(--green);font-weight:800;font-size:10px;letter-spacing:.1em}
+  .dev{color:var(--yellow);font-weight:800;font-size:10px;letter-spacing:.1em}
+  .gap{color:var(--orange);font-weight:800;font-size:10px;letter-spacing:.1em}
+  .note{max-width:1100px;margin:34px 0 0;padding:18px 24px;border-left:3px solid var(--orange);
+    background:#071825;color:#9fb4c5;font-size:13px;line-height:1.7}
+  .note b{color:var(--steel-100)}
+  code{background:#0a2032;padding:2px 6px;font-size:12px}
+</style>
+</head>
+<body>
+
+<h1>Trạng thái triển khai UI</h1>
+<p class="lede">
+  Trang này theo dõi mức độ khớp giữa bản dựng Unity và bộ HTML này. Bản HTML vẫn là
+  <b>tham chiếu thiết kế</b> — nó không phải nguồn dữ liệu. Dữ liệu phòng, tên map, đội,
+  người chơi và trạng thái kết nối trong game luôn lấy từ phiên chơi thật.
+</p>
+
+<div class="screen-block">
+  <h2>Main Menu</h2>
+  <p class="path">Menu → Multiplayer Menu / Main Menu</p>
+  <table>
+    <tr><th>Hạng mục</th><th>Trạng thái</th></tr>
+    <tr><td>Wordmark Ironfront Reborn (art của pack)</td><td><span class="live">ĐÃ DÙNG</span></td></tr>
+    <tr><td>Bốn nút menu kèm icon (users / target / settings / power)</td><td><span class="live">ĐÃ DÙNG</span></td></tr>
+    <tr><td>Multiplayer · Practice · Settings · Exit</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
+    <tr><td>Dòng tagline và footer</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
+  </table>
+</div>
+
+<div class="screen-block">
+  <h2>Sign In / Create Account</h2>
+  <p class="path">Menu → Multiplayer Menu / Sign In · Create Account</p>
+  <table>
+    <tr><th>Hạng mục</th><th>Trạng thái</th></tr>
+    <tr><td>Glass card góc cắt 18px</td><td><span class="live">ĐÃ DÙNG</span></td></tr>
+    <tr><td>Ô nhập có viền và thanh cyan bên trái</td><td><span class="live">ĐÃ DÙNG</span></td></tr>
+    <tr><td>Đăng nhập / đăng ký qua master server</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
+    <tr><td>Remember Username, hiện/ẩn mật khẩu</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
+    <tr><td>Forgot Password</td><td><span class="dev">CỐ Ý BỎ</span> — theo đặc tả</td></tr>
+  </table>
+</div>
+
+<div class="screen-block">
+  <h2>Practice</h2>
+  <p class="path">Menu → Multiplayer Menu / Practice</p>
+  <table>
+    <tr><th>Hạng mục</th><th>Trạng thái</th></tr>
+    <tr><td>Topbar (brand · nav · account chip)</td><td><span class="live">ĐÃ DÙNG</span></td></tr>
+    <tr><td>Chọn map từ game đã cài</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
+    <tr><td>Các tuỳ chọn practice chưa hỗ trợ</td><td><span class="dev">BÁO ĐANG PHÁT TRIỂN</span></td></tr>
+  </table>
+</div>
+
+<div class="screen-block">
+  <h2>Settings</h2>
+  <p class="path">Menu → Multiplayer Menu / Settings</p>
+  <table>
+    <tr><th>Hạng mục</th><th>Trạng thái</th></tr>
+    <tr><td>Topbar</td><td><span class="live">ĐÃ DÙNG</span></td></tr>
+    <tr><td>Resolution · Display mode · Quality · VSync</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
+    <tr><td>Master volume · FOV · Sensitivity</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
+    <tr><td>Hàng Resolution khi đang BORDERLESS</td><td><span class="gap">BỊ VÔ HIỆU HOÁ</span> — borderless không đổi được kích thước cửa sổ; chọn WINDOWED để đổi</td></tr>
+    <tr><td>FPS limit</td><td><span class="dev">HOÃN</span> — theo đặc tả</td></tr>
+  </table>
+</div>
+
+<div class="screen-block">
+  <h2>Rooms</h2>
+  <p class="path">Menu → Multiplayer Menu / Rooms</p>
+  <table>
+    <tr><th>Hạng mục</th><th>Trạng thái</th></tr>
+    <tr><td>Topbar</td><td><span class="live">ĐÃ DÙNG</span></td></tr>
+    <tr><td>Tìm kiếm · Làm mới · Vào phòng · Tạo phòng</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
+    <tr><td>Bảng phòng từ dữ liệu master server thật</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
+    <tr><td>MODE / REGION</td><td><span class="dev">BÁO ĐANG PHÁT TRIỂN</span> — giao thức phòng chưa có hai trường này</td></tr>
+    <tr><td>QUICK MATCH</td><td><span class="dev">BÁO ĐANG PHÁT TRIỂN</span> — không tự chọn một phòng bịa ra</td></tr>
+    <tr><td>Cột tiêu đề bảng, bốn cột dữ liệu, nút JOIN riêng</td><td><span class="live">ĐÃ DÙNG</span></td></tr>
+    <tr><td>Cột MODE và PING của prototype</td><td><span class="gap">KHÔNG VẼ</span> — giao thức phòng không có hai trường này; một cột toàn ô trống là bịa dữ liệu</td></tr>
+  </table>
+</div>
+
+<div class="screen-block">
+  <h2>Create Room</h2>
+  <p class="path">Menu → Multiplayer Menu / Create Room</p>
+  <table>
+    <tr><th>Hạng mục</th><th>Trạng thái</th></tr>
+    <tr><td>Topbar</td><td><span class="live">ĐÃ DÙNG</span></td></tr>
+    <tr><td>Bố cục hai cột: cột nhập liệu và thẻ xem trước map</td><td><span class="live">ĐÃ DÙNG</span></td></tr>
+    <tr><td>Tên phòng · Map · Sức chứa · Số bot · Riêng tư · Mật khẩu</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
+    <tr><td>Ô nhập theo kiểu pack (viền + thanh cyan bên trái)</td><td><span class="live">ĐÃ DÙNG</span></td></tr>
+    <tr><td>Tiêu đề thẻ xem trước bám theo dropdown chọn map</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
+    <tr><td>Kiểm tra số ghế chẵn</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
+    <tr><td>MODE / REGION / AUTO-BALANCE</td><td><span class="dev">BÁO ĐANG PHÁT TRIỂN</span></td></tr>
+    <tr><td>Ba ô số liệu trong thẻ xem trước (CAPACITY / BOTS / SECURITY)</td><td><span class="gap">CHƯA NỐI</span> — hiện chỉ có nhãn, chưa đổ giá trị</td></tr>
+  </table>
+</div>
+
+<div class="screen-block">
+  <h2>Waiting Room</h2>
+  <p class="path">Menu → Multiplayer Menu / Waiting Room</p>
+  <table>
+    <tr><th>Hạng mục</th><th>Trạng thái</th></tr>
+    <tr><td>Topbar</td><td><span class="live">ĐÃ DÙNG</span></td></tr>
+    <tr><td>Hai đội hình · trạng thái sẵn sàng · tên người chơi</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
+    <tr><td>Chat (Enter gửi một lần, không gửi trùng)</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
+    <tr><td>Đổi đội · Sẵn sàng · Rời phòng</td><td><span class="live">HOẠT ĐỘNG</span></td></tr>
+    <tr><td>COPY INVITE CODE</td><td><span class="dev">BÁO ĐANG PHÁT TRIỂN</span> — chưa có mã mời do server cấp</td></tr>
+    <tr><td>START GAME thủ công</td><td><span class="dev">BÁO ĐANG PHÁT TRIỂN</span> — tự động bắt đầu khi đủ người vẫn là luồng chính</td></tr>
+    <tr><td>Liên kết ROOMS trên topbar</td><td><span class="dev">BÁO ĐANG PHÁT TRIỂN</span> — từ trong phòng nó sẽ là rời trận; nút LEAVE mới là chỗ quyết định đó</td></tr>
+  </table>
+</div>
+
+<p class="note">
+  <b>Điều chưa làm.</b> Dải điều hướng nhóm trong Settings và lưới hai đội hình có cột
+  VERSUS ở Waiting Room vẫn là bố cục một cột cũ. Ba ô số liệu trong thẻ xem trước map
+  của Create Room mới có nhãn, chưa nối giá trị. Đây là phần còn lại của Task 5 trong
+  <code>docs/superpowers/plans/2026-09-18-eight-screen-html-ui-redesign.md</code>.
+</p>
+
+<p class="note">
+  <b>Hai hạng mục cần mở Unity Editor.</b> Thùng nổ <code>ExplosiveProp</code> và hệ thống
+  particle lửa của xe nhẹ đều không sửa được bằng code: cả hai cần authoring prefab/scene
+  (fileID do Editor cấp), và hạng mục xe nhẹ còn vướng một quyết định thiết kế về
+  <code>burnTime</code>. Chi tiết ở
+  <code>docs/props-and-vehicle-fire-investigation-2026-09-18.md</code>.
+</p>
+
+<p class="note">
+  <b>Về account chip.</b> Prototype ghi <code>VANGUARD_07 / LEVEL 18</code>. Bản dựng
+  không chép hai giá trị đó: chúng là dữ liệu giả, và một bản dựng tự bịa tên người
+  dùng là đang nói sai về việc ai đang đăng nhập. Chip hiện mô tả màn hình đang mở.
+  Nối tên operative thật cần một phiên đăng nhập, mà công cụ authoring thì không có.
+</p>
+
+</body>
+</html>

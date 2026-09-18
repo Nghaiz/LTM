@@ -1,0 +1,15 @@
+:root {
+  --ink-950:#030913; --ink-900:#07111d; --ink-850:#0a1826; --ink-800:#0d2031;
+  --steel-500:#6686a2; --steel-300:#9dbad0; --steel-100:#e7f2fb;
+  --cyan:#35b6ff; --cyan-soft:#7acfff; --orange:#ff7417; --orange-hi:#ff9f2b;
+  --green:#3bdb83; --yellow:#ffc33c; --red:#ff5265;
+  --panel:rgba(5,18,31,.93); --panel-soft:rgba(8,28,44,.82); --line:rgba(113,179,226,.42);
+  --shadow:0 28px 80px rgba(0,0,0,.55); --cut:14px;
+  --font-display:"Arial Narrow","Roboto Condensed",Impact,sans-serif;
+  --font-ui:Inter,Roboto,"Segoe UI",Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{width:100%;height:100%;margin:0;background:var(--ink-950);color:var(--steel-100);font-family:var(--font-ui);overflow:hidden}
+button,input,select{font:inherit}
+button{color:inherit}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
