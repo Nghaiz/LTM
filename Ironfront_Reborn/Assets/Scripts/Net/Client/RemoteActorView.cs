@@ -134,11 +134,28 @@ namespace Ironfront.Net.Unity.Client
         private static readonly int _hashMovementX = Animator.StringToHash("movement x");
         private static readonly int _hashMovementY = Animator.StringToHash("movement y");
 
+        // Water, and these two cost nothing to add because the bit is ALREADY on the wire.
+        // ActorStateFlags.IsInWater has been decoded into RemoteActorVisualState.IsInWater since
+        // the flags byte was defined, and nothing read it -- so a networked body in a river kept
+        // its walking pose and appeared to march along the bottom, which is exactly what it was
+        // doing. `swim forward` is the stroke rather than the float, so it needs the same
+        // movement the locomotion solver already computes; there is no third state on the
+        // controller between them.
+        //
+        // The remaining gap is NOT free and is deliberately not attempted here: `falling`,
+        // `onBack`, `lean`, `hurt` and `hurt x` have no bit and no field on the wire, and
+        // neither ActorStateFlags nor SnapshotField has a spare -- both bytes are full. Adding
+        // them means widening a field the way v10 widened Weapon, which is a protocol change
+        // and its own phase.
+        private static readonly int _hashSwim        = Animator.StringToHash("swim");
+        private static readonly int _hashSwimForward = Animator.StringToHash("swim forward");
+
         /// <summary>Every parameter name this component writes, for the once-only audit.</summary>
         private static readonly string[] _writtenParameters =
         {
             "crouched", "sprinting", "dead", "ragdolled",
             "seated", "moving", "movement x", "movement y",
+            "swim", "swim forward",
         };
 
         private RemoteActorVisualState _state;
@@ -413,6 +430,13 @@ namespace Ironfront.Net.Unity.Client
                 _animator.SetBool(_hashMoving,     _locomotion.IsMoving);
                 _animator.SetFloat(_hashMovementX, _locomotion.MovementX);
                 _animator.SetFloat(_hashMovementY, _locomotion.MovementY);
+
+                // Read from the wire, not guessed from the body's height against a water plane:
+                // the server owns whether an actor is in water (it is the same bit the drowning
+                // clock runs off), and a client re-deciding it locally would put two answers on
+                // one question for the sake of an animation.
+                _animator.SetBool(_hashSwim,        _state.IsInWater);
+                _animator.SetBool(_hashSwimForward, _state.IsInWater && _locomotion.IsMoving);
             }
 
             ApplyRagdoll(_state.IsRagdoll);

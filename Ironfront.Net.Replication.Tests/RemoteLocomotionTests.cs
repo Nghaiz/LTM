@@ -372,6 +372,106 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Contains(ActorControllerGuid, prefab, StringComparison.Ordinal);
         }
 
+        /// <summary>
+        /// The water pose reaches the animator, and it is read from the wire rather than guessed.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>ActorStateFlags.IsInWater</c> has been on the wire and decoded into
+        /// <c>RemoteActorVisualState.IsInWater</c> since the flags byte was defined, and nothing
+        /// read it -- so a networked body in a river kept its walking pose and marched along the
+        /// bottom, which is precisely what it was doing.
+        /// </para>
+        /// <para>
+        /// <b>Asserted by identity, not by count.</b> "Two more parameters than before" is
+        /// satisfied by any two. The pair that matters is these two, driven by that bit, inside
+        /// <c>Apply</c> -- moving them to <c>Bind</c> would set the pose once per spawn and never
+        /// update it, which is the same shape of defect as not writing them at all.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public void ApplyWritesTheWaterPoseFromTheReplicatedBit()
+        {
+            string source = ViewSource();
+            string apply = MethodBody(source, "public void Apply(in ActorSnapshotEntry entry)");
+
+            Assert.Contains("_hashSwim", apply);
+            Assert.Contains("_hashSwimForward", apply);
+
+            // From the server's bit, never from a local water-plane test: two answers to one
+            // question is what the flags byte exists to prevent.
+            Assert.Matches(@"_hashSwim,\s*_state\.IsInWater", apply);
+            Assert.Matches(@"_hashSwimForward,\s*_state\.IsInWater\s*&&", apply);
+
+            // Bound to the controller's spelling, like the locomotion trio above.
+            Assert.Contains("Animator.StringToHash(\"swim\")", source);
+            Assert.Contains("Animator.StringToHash(\"swim forward\")", source);
+        }
+
+        /// <summary>
+        /// <c>_writtenParameters</c> says exactly what the view writes -- no more, no less.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// That array is what <c>RemoteActorView</c>'s own once-only startup audit compares
+        /// against the live controller, so it is a second copy of a list the hashes already
+        /// carry. <see cref="EveryParameterTheViewWritesExistsInTheController"/> grades the
+        /// hashes; nothing graded the copy, and a copy nothing grades drifts.
+        /// </para>
+        /// <para>
+        /// <b>Both directions.</b> A stale entry makes the runtime audit report a controller
+        /// parameter missing that nothing was ever going to write. A missing entry makes the
+        /// audit pass on a controller that does not declare a parameter the view writes anyway,
+        /// which is the silent no-op the gate above exists to make loud.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public void TheRuntimeAuditListMatchesTheParametersActuallyWritten()
+        {
+            System.Text.RegularExpressions.Match block = Regex.Match(
+                ViewSource(),
+                @"_writtenParameters\s*=\s*\{(?<body>[^}]*)\}",
+                RegexOptions.Singleline);
+
+            Assert.True(
+                block.Success,
+                "RemoteActorView no longer declares _writtenParameters. It is what the component's "
+                + "own once-only controller audit reads; removing it removes the runtime half of "
+                + "this gate and leaves only these source tests.");
+
+            var claimed = new HashSet<string>(StringComparer.Ordinal);
+            foreach (System.Text.RegularExpressions.Match m in Regex.Matches(
+                         block.Groups["body"].Value, "\"([^\"]+)\""))
+            {
+                claimed.Add(m.Groups[1].Value);
+            }
+
+            HashSet<string> hashed = ViewParameters();
+
+            var claimedNotWritten = new List<string>();
+            foreach (string name in claimed)
+            {
+                if (!hashed.Contains(name)) claimedNotWritten.Add(name);
+            }
+
+            var writtenNotClaimed = new List<string>();
+            foreach (string name in hashed)
+            {
+                if (!claimed.Contains(name)) writtenNotClaimed.Add(name);
+            }
+
+            Assert.True(
+                claimedNotWritten.Count == 0,
+                "_writtenParameters names parameter(s) no StringToHash call resolves: "
+                + string.Join(", ", claimedNotWritten));
+
+            Assert.True(
+                writtenNotClaimed.Count == 0,
+                "RemoteActorView hashes parameter(s) missing from _writtenParameters: "
+                + string.Join(", ", writtenNotClaimed)
+                + ". The runtime audit would then stay silent about them.");
+        }
+
         // ------------------------------------------------------------------ helpers
 
         /// <summary>Assets/AnimatorController/Actor.controller, from its .meta.</summary>
