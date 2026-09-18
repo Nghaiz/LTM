@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Collections.Generic;
+using System.Text;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Unity.Client;
 using Ironfront.Net.Unity.Client.Menu;
@@ -154,7 +155,7 @@ namespace Ironfront.Net.Unity.EditorTools
             GameObject login = BuildLogin(root, controller, log);
             GameObject register = BuildRegister(root, controller, log);
             GameObject practice = BuildPractice(root, controller, toast, out Button practiceBack);
-            GameObject settings = BuildSettings(root, toast, out Button settingsBack);
+            GameObject settings = BuildSettings(root, controller, toast, out Button settingsBack);
             GameObject authenticating = BuildAuthenticating(root);
             GameObject lobby = BuildLobby(root, out Text signedIn, out Button browseRooms);
             GameObject browser = BuildRoomBrowser(root, controller, toast, log);
@@ -427,6 +428,8 @@ namespace Ironfront.Net.Unity.EditorTools
             FullscreenSprite(panel, "Background", "backgrounds/multiplayer.png");
             Angular(panel, "OperationsPanel", new Vector2(0f, -30f), new Vector2(1540f, 870f),
                 CutPanel, Surface);
+            TopBar(panel, toast, "PRACTICE", "OFFLINE SIMULATION", "LOCAL SESSION", offline: true,
+                ("SETTINGS", controller.OpenSettings));
             Label(panel, "Kicker", "COMBAT SIMULATION // SOLO TRAINING", 15,
                 new Vector2(-510f, 375f), new Vector2(520f, 28f)).alignment = TextAnchor.MiddleLeft;
             Label(panel, "Heading", "PRACTICE MODE", 46,
@@ -473,12 +476,15 @@ namespace Ironfront.Net.Unity.EditorTools
             return panel;
         }
 
-        private static GameObject BuildSettings(GameObject root, MenuToast toast, out Button back)
+        private static GameObject BuildSettings(
+            GameObject root, MenuScreenController controller, MenuToast toast, out Button back)
         {
             GameObject panel = Panel(root, "Settings", opaque: false);
             FullscreenSprite(panel, "Background", "backgrounds/multiplayer.png");
             Angular(panel, "OperationsPanel", new Vector2(0f, -30f), new Vector2(1540f, 870f),
                 CutPanel, Surface);
+            TopBar(panel, toast, "SYSTEM SETTINGS", "CONFIGURATION", "LOCAL PROFILE", offline: true,
+                ("MAIN MENU", controller.ReturnToTitle));
             Label(panel, "Kicker", "SYSTEM CONTROL // CLIENT CONFIGURATION", 15,
                 new Vector2(-480f, 375f), new Vector2(620f, 28f)).alignment = TextAnchor.MiddleLeft;
             Label(panel, "Heading", "SETTINGS", 46,
@@ -547,14 +553,8 @@ namespace Ironfront.Net.Unity.EditorTools
         {
             GameObject panel = Panel(root, "Rooms", opaque: false);
             FullscreenSprite(panel, "Background", "backgrounds/multiplayer.png");
-            Label(panel, "Logo", "IRONFRONT REBORN", 28,
-                new Vector2(-720f, 470f), new Vector2(360f, 54f)).alignment = TextAnchor.MiddleLeft;
-            // `.topbar nav button.is-current`: a washed fill with a 4px orange rule under it, not a
-            // sprite. The tab the pack used to supply no longer exists.
-            Angular(panel, "RoomsTab", new Vector2(-300f, 470f), new Vector2(210f, 54f), 0f,
-                new Color(46f / 255f, 90f / 255f, 123f / 255f, 0.3f),
-                AngularEdge.Bottom, 4f, Orange);
-            Label(panel, "RoomsTabLabel", "ROOMS", 18, new Vector2(-160f, 316f), new Vector2(210f, 54f));
+            TopBar(panel, toast, "MULTIPLAYER", "MULTIPLAYER", "MASTER SERVER", offline: false,
+                ("OPERATIVE", null), ("SETTINGS", controller.OpenSettings));
             Angular(panel, "GlassPanel", new Vector2(0f, -25f), new Vector2(1540f, 850f),
                 CutPanel, Surface);
 
@@ -665,6 +665,8 @@ namespace Ironfront.Net.Unity.EditorTools
             FullscreenSprite(panel, "Background", "backgrounds/multiplayer.png");
             Angular(panel, "OperationsPanel", Vector2.zero, new Vector2(1460f, 920f),
                 CutPanel, Surface);
+            TopBar(panel, toast, "CREATE OPERATION", "HOST", "ROOM SETUP", offline: false,
+                ("ROOMS", controller.OpenRoomBrowser));
 
             Label(panel, "Heading", "CREATE ROOM", 48, new Vector2(0f, 330f), new Vector2(900f, 70f));
 
@@ -728,6 +730,14 @@ namespace Ironfront.Net.Unity.EditorTools
             FullscreenSprite(panel, "Background", "backgrounds/multiplayer.png");
             Angular(panel, "OperationsPanel", Vector2.zero, new Vector2(1580f, 940f),
                 CutPanel, Surface);
+            // The prototype's ROOMS link is deliberately NOT wired here. On every other screen it
+            // navigates to the browser; from inside a room it would mean walking out of a match the
+            // player is already in, and the lobby's own LEAVE control is the one place that
+            // decision belongs. The item is still drawn -- greyed out it would read as broken -- so
+            // it takes the shared development notice, which is the spec's rule for a control the
+            // game cannot honestly honour.
+            TopBar(panel, toast, "LOBBY", "IN MATCH", "ROOM LOBBY", offline: false,
+                ("ROOMS", null));
 
             Text heading = Label(
                 panel, "Heading", string.Empty, 44, new Vector2(0f, 440f), new Vector2(1400f, 66f));
@@ -1047,6 +1057,130 @@ namespace Ironfront.Net.Unity.EditorTools
         /// single flat green rectangle when the lookup came back empty — a "signal strength"
         /// readout that could not show strength.
         /// </remarks>
+        /// <summary>
+        /// The prototype's <c>.topbar</c> — brand, section nav and account chip — shared by all
+        /// five multiplayer screens.
+        /// </summary>
+        /// <param name="links">
+        /// One entry per nav item after the current one. A null <c>Go</c> renders the item but
+        /// routes it to the development notice instead of navigating, which is the spec's rule for
+        /// a control the game cannot honestly honour.
+        /// </param>
+        /// <remarks>
+        /// <para>
+        /// <b>This was missing from every multiplayer screen</b>, which the three-screen revision
+        /// papered over with a per-screen <c>Logo</c> Text label and a hand-drawn "tab" rectangle.
+        /// The bar is the one element that makes the five screens read as one application rather
+        /// than five unrelated panels, so it is authored once here.
+        /// </para>
+        /// <para>
+        /// <b>The account chip states the screen, not a person.</b> The prototype fills it with
+        /// <c>VANGUARD_07 / LEVEL 18</c>, which the spec forbids copying: those are mock values,
+        /// and a build that invented a username would be lying about who is signed in. The bar is
+        /// authored with a true description of where the player is; binding the real operative once
+        /// there is a session to read it from is a separate change, and the two Text objects carry
+        /// names so it can find them.
+        /// </para>
+        /// </remarks>
+        private static void TopBar(GameObject panel, MenuToast toast, string current,
+            string chipTitle, string chipDetail, bool offline,
+            params (string Label, System.Action Go)[] links)
+        {
+            // `.topbar`: 76px tall, three columns -- a 310px brand, centred nav, a 260px chip. The
+            // canvas is 1920x1080 anchored at its centre, so the bar's own centre sits 38px below
+            // the top edge.
+            const float barCentreY = 502f;
+            const float barHeight = 76f;
+
+            AngularPanel panelBar = Angular(panel, "TopBar", new Vector2(0f, barCentreY),
+                new Vector2(1920f, barHeight), 0f, new Color(5f / 255f, 17f / 255f, 28f / 255f, 0.9f),
+                AngularEdge.Bottom, 1f, new Color(97f / 255f, 165f / 255f, 213f / 255f, 0.4f));
+
+            // `.brand-button`: a 210px wordmark on its own washed, right-ruled panel.
+            Angular(panelBar.gameObject, "BrandButton", new Vector2(-805f, 0f),
+                new Vector2(310f, barHeight), 0f,
+                new Color(24f / 255f, 57f / 255f, 83f / 255f, 0.75f),
+                AngularEdge.All, 0f, Color.clear);
+            Icon(panelBar.gameObject, "BrandMark", "branding/ironfront-reborn-logo.svg",
+                new Vector2(-805f, 0f), new Vector2(210f, 46f));
+
+            // `.account-chip`: a status dot and two lines, right-aligned on its own gradient.
+            Angular(panelBar.gameObject, "AccountChip", new Vector2(830f, 0f),
+                new Vector2(260f, barHeight), 0f,
+                new Color(20f / 255f, 55f / 255f, 80f / 255f, 0.25f),
+                AngularEdge.All, 0f, Color.clear);
+            Plain(panelBar.gameObject, "StatusDot", new Vector2(740f, 0f), new Vector2(10f, 10f),
+                offline ? Cyan : Green);
+
+            Text chipName = Label(panelBar.gameObject, "AccountName", chipTitle, 16,
+                new Vector2(848f, 10f), new Vector2(200f, 22f));
+            chipName.alignment = TextAnchor.MiddleLeft;
+            chipName.color = Ink;
+            chipName.resizeTextForBestFit = false;
+
+            Text chipDetailText = Label(panelBar.gameObject, "AccountDetail", chipDetail, 11,
+                new Vector2(848f, -12f), new Vector2(200f, 18f));
+            chipDetailText.alignment = TextAnchor.MiddleLeft;
+            chipDetailText.color = Hex("6F94AD");
+            chipDetailText.resizeTextForBestFit = false;
+
+            // `.topbar nav button`: 145px minimum, a 4px rule on the current one. Laid out from the
+            // centre outward in the order the prototype lists them.
+            var items = new List<(string Label, System.Action Go)>(links.Length + 1) { (current, null) };
+            items.AddRange(links);
+
+            const float itemWidth = 165f;
+            float first = -((items.Count - 1) * itemWidth) * 0.5f;
+            var unsupported = new List<Button>();
+
+            for (int i = 0; i < items.Count; i++)
+            {
+                bool isCurrent = i == 0;
+                (string Label, System.Action Go) item = items[i];
+                var position = new Vector2(first + (i * itemWidth), 0f);
+
+                AngularPanel face = Angular(panelBar.gameObject, "Nav" + i, position,
+                    new Vector2(itemWidth, barHeight), 0f,
+                    isCurrent
+                        ? new Color(46f / 255f, 90f / 255f, 123f / 255f, 0.3f)
+                        : Color.clear,
+                    isCurrent ? AngularEdge.Bottom : AngularEdge.None, 4f, Orange);
+
+                Text caption = Label(panelBar.gameObject, "Nav" + i + "Label", item.Label, 14,
+                    position, new Vector2(itemWidth, barHeight));
+                caption.fontStyle = FontStyle.Bold;
+                caption.color = isCurrent ? Color.white : Hex("9DB3C4");
+                caption.raycastTarget = false;
+
+                if (isCurrent) continue;
+
+                // The current section is a label, not a control. Every other item is a real button,
+                // and one that cannot navigate still has to SAY so rather than sit there inert --
+                // which is what the spec's shared development notice is for.
+                face.raycastTarget = true;
+                Button button = face.gameObject.AddComponent<Button>();
+                button.targetGraphic = face;
+                button.transition = Selectable.Transition.None;
+
+                if (item.Go != null)
+                {
+                    // A local, because `i` is shared across every iteration of a `for` loop: closing
+                    // over it would give every listener the LAST index, so all four nav items would
+                    // navigate to whichever one happened to be last.
+                    System.Action go = item.Go;
+                    button.onClick.AddListener(() => go());
+                }
+                else
+                {
+                    unsupported.Add(button);
+                }
+            }
+
+            if (unsupported.Count > 0)
+                panelBar.gameObject.AddComponent<MenuDevelopmentControls>()
+                    .Configure(toast, unsupported.ToArray());
+        }
+
         private static void SignalBars(GameObject parent, Vector2 position)
         {
             var group = new GameObject("PingSignal", typeof(RectTransform));
