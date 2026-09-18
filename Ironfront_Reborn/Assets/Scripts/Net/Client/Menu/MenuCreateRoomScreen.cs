@@ -53,6 +53,17 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private Text? _errorText;
 
         /// <summary>
+        /// The map-preview card's title, which follows the map dropdown.
+        /// </summary>
+        /// <remarks>
+        /// The prototype hard-codes a map name in mock data. A card naming a map the player had not
+        /// chosen would be worse than no card at all, so this is read from the selected option
+        /// rather than written once by the authoring tool. Optional: a scene without the card
+        /// simply leaves it null.
+        /// </remarks>
+        [SerializeField] private Text? _mapPreviewTitle;
+
+        /// <summary>
         /// The map ids behind the dropdown, in its own option order.
         /// </summary>
         /// <remarks>
@@ -68,11 +79,27 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (_createButton != null) _createButton.onClick.AddListener(OnCreate);
             if (_backButton != null) _backButton.onClick.AddListener(OnBack);
             if (_privateToggle != null) _privateToggle.onValueChanged.AddListener(OnPrivateChanged);
+            if (_mapDropdown != null) _mapDropdown.onValueChanged.AddListener(_ => RefreshMapPreview());
+            RefreshMapPreview();
 
             if (_maxPlayersField != null && _maxPlayersField.text.Length == 0)
                 _maxPlayersField.text = DefaultMaxPlayers.ToString();
 
             OnPrivateChanged(_privateToggle != null && _privateToggle.isOn);
+        }
+
+        /// <summary>Points the map-preview card at the map the dropdown is showing.</summary>
+        private void RefreshMapPreview()
+        {
+            if (_mapPreviewTitle == null || _mapDropdown == null) return;
+            if (_mapDropdown.options.Count == 0)
+            {
+                _mapPreviewTitle.text = string.Empty;
+                return;
+            }
+
+            int index = Mathf.Clamp(_mapDropdown.value, 0, _mapDropdown.options.Count - 1);
+            _mapPreviewTitle.text = _mapDropdown.options[index].text;
         }
 
         /// <summary>Fills the dropdown from <see cref="MapCatalog"/>, in catalogue order.</summary>

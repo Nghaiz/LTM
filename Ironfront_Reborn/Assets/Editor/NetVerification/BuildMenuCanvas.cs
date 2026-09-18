@@ -675,37 +675,118 @@ namespace Ironfront.Net.Unity.EditorTools
             TopBar(panel, toast, "CREATE OPERATION", "HOST", "ROOM SETUP", offline: false,
                 ("ROOMS", controller.OpenRoomBrowser));
 
-            Label(panel, "Heading", "CREATE ROOM", 48, new Vector2(0f, 330f), new Vector2(900f, 70f));
+            // `.create-layout`: two columns of 1.6fr and .8fr with a 28px gap, inside a 1400px
+            // content width. The fields keep the wide column and the preview takes the narrow one,
+            // which is the opposite of what the single-column revision did -- it had the fields
+            // centred and no preview card at all.
+            const float leftCentre = -243f;
+            const float rightCentre = 471f;
+            const float leftWidth = 915f;
 
-            InputField name = Field(panel, "Name", "Room name", new Vector2(0f, 230f), password: false);
-            Dropdown map = MakeDropdown(panel, "Map", new Vector2(0f, 155f));
+            Label(panel, "MissionNumber", "OPERATION // 01", 14, new Vector2(leftCentre, 400f),
+                new Vector2(leftWidth, 24f)).alignment = TextAnchor.MiddleLeft;
+            Text heading = Label(panel, "Heading", "CREATE ROOM", 44, new Vector2(leftCentre, 356f),
+                new Vector2(leftWidth, 60f));
+            heading.alignment = TextAnchor.MiddleLeft;
 
-            InputField maxPlayers = Field(
-                panel, "MaxPlayers", "Players (even, 2-" + ProtocolConstants.MAX_PLAYERS + ")",
-                new Vector2(0f, 80f), password: false);
+            var fieldSize = new Vector2(leftWidth, 56f);
+            InputField name = PackField(panel, "Name", "Room name", new Vector2(leftCentre, 282f),
+                fieldSize, password: false);
+            Dropdown map = MakeDropdown(panel, "Map", new Vector2(leftCentre, 206f));
+
+            // `.two-col`: capacity and bots side by side, each half the column minus the 14px gap.
+            float half = (leftWidth - 14f) * 0.5f;
+            InputField maxPlayers = PackField(panel, "MaxPlayers",
+                "Players (even, 2-" + ProtocolConstants.MAX_PLAYERS + ")",
+                new Vector2(leftCentre - (half * 0.5f) - 7f, 130f), new Vector2(half, 56f),
+                password: false);
             maxPlayers.contentType = InputField.ContentType.IntegerNumber;
 
-            InputField bots = Field(panel, "BotCount", "Bots", new Vector2(0f, 5f), password: false);
+            InputField bots = PackField(panel, "BotCount", "Bots",
+                new Vector2(leftCentre + (half * 0.5f) + 7f, 130f), new Vector2(half, 56f),
+                password: false);
             bots.contentType = InputField.ContentType.IntegerNumber;
 
-            Toggle isPrivate = MakeToggle(panel, "Private", "Private room", new Vector2(0f, -70f));
-            InputField password = Field(
-                panel, "Password", "Room password", new Vector2(0f, -140f), password: true);
+            Toggle isPrivate = PackToggle(panel, "Private", "Private room",
+                new Vector2(leftCentre, 54f));
+            InputField password = PackField(panel, "Password", "Room password",
+                new Vector2(leftCentre, -22f), fieldSize, password: true);
 
-            Button create = MakeButton(
-                panel, "Create", "CREATE", new Vector2(-160f, -240f), new Vector2(300f, 74f));
-            Button back = MakeButton(
-                panel, "Back", "Back", new Vector2(160f, -240f), new Vector2(300f, 74f));
+            // The three controls the protocol cannot persist. Drawn in the fields column, where
+            // `.switch` sits in the prototype, and routed to the shared development notice.
             Button mode = MakeButton(panel, "Mode", "MODE: IN DEVELOPMENT",
-                new Vector2(430f, 155f), new Vector2(420f, 60f));
+                new Vector2(leftCentre - (half * 0.5f) - 7f, -110f), new Vector2(half, 60f));
             Button region = MakeButton(panel, "Region", "REGION: IN DEVELOPMENT",
-                new Vector2(430f, 80f), new Vector2(420f, 60f));
+                new Vector2(leftCentre + (half * 0.5f) + 7f, -110f), new Vector2(half, 60f));
             Button balance = MakeButton(panel, "Balance", "AUTO BALANCE: IN DEVELOPMENT",
-                new Vector2(430f, 5f), new Vector2(420f, 60f));
+                new Vector2(leftCentre, -182f), new Vector2(leftWidth, 60f));
+
+            // `.map-preview`: a card with the multiplayer backdrop as its art, the map's own name,
+            // and three stat cells under a rule. The title is bound to the dropdown rather than
+            // authored, so the card cannot name a map the player did not choose.
+            const float previewHeight = 500f;
+            AngularPanel preview = Angular(panel, "MapPreview", new Vector2(rightCentre, 106f),
+                new Vector2(457f, previewHeight), 0f, Hex("061522"), AngularEdge.All, 1f,
+                Hex("3F6986"));
+
+            Image art = Plain(preview.gameObject, "PreviewArt",
+                new Vector2(0f, (previewHeight * 0.5f) - 105f), new Vector2(457f, 210f),
+                Color.white);
+            art.sprite = IronfrontRebornUiAssetCatalog.Sprite("backgrounds/multiplayer.png");
+
+            Text previewKicker = Label(preview.gameObject, "PreviewKicker", "SELECTED THEATER", 11,
+                new Vector2(0f, 80f), new Vector2(417f, 20f));
+            previewKicker.alignment = TextAnchor.MiddleLeft;
+            previewKicker.fontStyle = FontStyle.Bold;
+            previewKicker.color = Orange;
+            previewKicker.resizeTextForBestFit = false;
+
+            Text previewTitle = Label(preview.gameObject, "PreviewTitle", string.Empty, 28,
+                new Vector2(0f, 44f), new Vector2(417f, 44f));
+            previewTitle.alignment = TextAnchor.MiddleLeft;
+            previewTitle.resizeTextForBestFit = false;
+
+            Text previewNote = Label(preview.gameObject, "PreviewNote",
+                "The map every player in this room will load.", 13,
+                new Vector2(0f, 6f), new Vector2(417f, 40f));
+            previewNote.alignment = TextAnchor.UpperLeft;
+            previewNote.color = Hex("8DA8BA");
+            previewNote.resizeTextForBestFit = false;
+
+            string[] previewStats = { "CAPACITY", "BOTS", "SECURITY" };
+            for (int i = 0; i < previewStats.Length; i++)
+            {
+                AngularPanel cell = Angular(preview.gameObject, "Stat" + i,
+                    new Vector2(-139f + (i * 139f), -120f), new Vector2(129f, 62f), 0f,
+                    Hex("0A2032"), AngularEdge.All, 0f, Color.clear);
+                cell.raycastTarget = false;
+
+                Text caption = Label(cell.gameObject, "Key", previewStats[i], 10,
+                    new Vector2(0f, 14f), new Vector2(113f, 18f));
+                caption.alignment = TextAnchor.UpperLeft;
+                caption.color = Hex("7193AA");
+                caption.resizeTextForBestFit = false;
+
+                Text value = Label(cell.gameObject, "Value", "--", 14, new Vector2(0f, -12f),
+                    new Vector2(113f, 22f));
+                value.alignment = TextAnchor.MiddleLeft;
+                value.resizeTextForBestFit = false;
+            }
 
             Text error = Label(
-                panel, "Error", string.Empty, 28, new Vector2(0f, -330f), new Vector2(1100f, 90f));
+                panel, "Error", string.Empty, 20, new Vector2(leftCentre, -250f),
+                new Vector2(leftWidth, 70f));
             error.color = ErrorInk;
+
+            // `.form-footer`: right-aligned, under a rule.
+            Angular(panel, "FormRule", new Vector2(0f, -310f), new Vector2(1400f, 1f), 0f,
+                new Color(103f / 255f, 160f / 255f, 201f / 255f, 0.28f),
+                AngularEdge.All, 0f, Color.clear);
+
+            Button create = MakeButton(
+                panel, "Create", "CREATE", new Vector2(270f, -375f), new Vector2(300f, 74f));
+            Button back = MakeButton(
+                panel, "Back", "Back", new Vector2(590f, -375f), new Vector2(300f, 74f));
 
             MenuCreateRoomScreen screen = panel.AddComponent<MenuCreateRoomScreen>();
             var so = new SerializedObject(screen);
@@ -719,6 +800,7 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_createButton", create);
             Assign(so, "_backButton", back);
             Assign(so, "_errorText", error);
+            Assign(so, "_mapPreviewTitle", previewTitle);
             so.ApplyModifiedPropertiesWithoutUndo();
             panel.AddComponent<MenuDevelopmentControls>().Configure(toast, mode, region, balance);
             ConfigureKeyboard(panel,
