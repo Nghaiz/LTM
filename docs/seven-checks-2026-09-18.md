@@ -15,13 +15,13 @@
 | # | Câu hỏi | Kết luận | Trạng thái |
 |---|---|---|---|
 | 1 | Asset hiệu ứng nổ có bị mất không | **Không mất gì.** 0 file `.meta` mồ côi trên toàn `Assets/` (2034 GUID), mọi material + texture của FX nổ đều resolve | ✅ đã trả lời |
-| 2 | Vì sao bảng xe rỗng (§ 5) | **Đã có câu trả lời từ log thật: pool vehicle-id cạn.** Không phải pad bị chặn | ✅ đã trả lời · cần quyết hướng sửa |
+| 2 | Vì sao bảng xe rỗng (§ 5) | **Đã có câu trả lời từ log thật: pool vehicle-id cạn.** Không phải pad bị chặn | ✅ đã sửa (#298) và deploy |
 | 3 | Xe còn tự bốc khói lúc mới vào không | **Không còn.** Chứng minh ở cả ba lớp: log server, mã, prefab | ✅ đã hết |
-| 4 | Animation cờ / chạy ngồi bắn còn cứng không | **Cờ đã hết cứng.** Thân người thì còn một nửa: đi đứng có, phản ứng không | ✅ cờ · ⚠️ 9 tham số thân người |
+| 4 | Animation cờ / chạy ngồi bắn còn cứng không | **Cờ đã hết cứng.** Thân người thì còn một nửa: đi đứng có, phản ứng không | ✅ cờ, bơi (#298) · ⚠️ còn 6 tham số, cần nới wire |
 | 5 | Màu bot lúc spawn có đúng team không | **Đúng theo cấu trúc.** Cùng một hàm màu với bản chơi đơn, áp lúc spawn | ✅ không thấy lỗi |
 | 6 | Bắn có ghi nhận damage, về 0 có chết không | **Có**, đã được lane-B chứng minh trên chính build đang deploy | ✅ đã sửa |
 | 7 | Island còn lỗi render không, bot animation ổn chưa | Bản sửa render **còn nguyên**; animation bot **giống hệt Dustbowl**, không phải lỗi riêng của Island | ✅ / ⚠️ |
-| 8 | Ammo box, kit hồi máu dùng được chưa | **Trước: không, một phát cũng không ném được.** Đã sửa trong lần này | ✅ đã sửa |
+| 8 | Ammo box, kit hồi máu dùng được chưa | **Trước: không, một phát cũng không ném được.** Đã sửa (#297) | ✅ đã sửa và deploy |
 
 ---
 
@@ -78,7 +78,7 @@ trong build đang deploy**.
 | `Grenade` (0) | `GrenadeProjectile.cs:140` | có | vẽ đúng |
 | `Rocket` (1) | `ExplodingProjectile.cs:97` | có | vẽ đúng |
 | `Vehicle` (2) | `Vehicle.cs:1142` | **trống** | **vẫn thấy nổ** — xác xe tự vẽ `deathParticles` của chính nó, vì client có gọi `Die()` trên `VehicleDespawnReason.Destroyed` (`RemoteVehicleRegistry.cs:304-309`) |
-| `Environment` (3) | `ExplosiveProp.cs:124` | **trống** | **không ảnh hưởng** — đếm theo GUID: `ExplosiveProp` có **0 instance** trong cả `Dustbowl.unity` lẫn `Island.unity` |
+| `Environment` (3) | `ExplosiveProp.cs:124` | **trống** | **không ảnh hưởng** — GUID của `ExplosiveProp` chỉ có trong chính file `.meta` của nó: 0 prefab, 0 scene trên toàn `Assets/` |
 
 **Không nên điền hai ô này.** Điền ô 2 sẽ khiến mỗi xe nổ vẽ **hai lần**: một từ
 `deathParticles` của xác, một từ presenter. Giá phải trả hiện tại chỉ là một dòng cảnh báo
@@ -425,3 +425,38 @@ Cổng đã được chứng minh là bắt được đúng lỗi nó tuyên b�
 - [`multiplayer-server-rebuild-handoff-2026-09-17.md`](multiplayer-server-rebuild-handoff-2026-09-17.md)
   — § 5 là grep mà tài liệu này chạy và trả lời
 - [`multiplayer-parity-tracker.md`](multiplayer-parity-tracker.md)
+
+---
+
+## Deploy 2026-09-18
+
+Gộp đúng như chủ dự án chọn: bản sửa túi đạn/kit (#297) cùng bản thu hồi xe và tư thế bơi (#298),
+build một lần từ `ddf6756`.
+
+| | Giá trị |
+|---|---|
+| Build stamp (server và client) | `ddf6756 2026-09-18T00:49:33Z` / `ddf6756 2026-09-18T03:27:48Z`, cả hai sạch, không `-dirty` |
+| Image | `ghcr.io/nghaiz/ironfront-game-server:ddf6756`, `sha256:c1bf6697e636905e629bf89c13fd78f452c67201e992a63582048e55ecf41e5d` |
+| Cách đưa lên | side-load: `docker save` trên Windows, `ctr -n k8s.io images import` trên VM, `kubectl set image` cho `game-server-dustbowl` và `game-server-island` |
+| Rollback | đặt lại `sha256:1210e6cb81a5f76099cac184315f689edc3521abaaeb43590e7ad1ecd1467e77` (bản PR #295) |
+| Master | không đổi. Hai pod đăng ký lại với `kien-master-2026.fly.dev:443` (server 41 và 40) |
+| Client Windows | `build/windows`, `Assembly-CSharp.dll` ghi lúc 10:30:50 |
+
+`Ironfront.Net.Replication.dll` trong image khớp md5 với bản đã commit (`6837f756…`), tức image
+thật sự mang hai bản sửa chứ không phải một DLL cũ.
+
+**E2E qua master Fly: 4/4 trên cả hai map.** Lần chạy đầu cho map 1 hỏng ở bước đăng nhập master
+(kết nối mất 30 s rồi bị đóng) — tức chưa chạm tới game server, và master không đổi trong lần này.
+Chạy lại thì qua. Nghi Fly khởi động nguội; chưa kiểm chứng.
+
+Hai pod mới spawn 14 và 13 dòng `[vehicle-spawn-state]` ngay khi lên. Bằng chứng thật cho bản thu
+hồi là dòng `reclaimed id` trong log sau vài giờ chạy: lần chơi dài tới hãy grep nó cùng với § 5.
+
+**Còn phải kiểm bằng mắt** (lane-B không với tới được): ném túi đạn và kit hồi máu trong trận, xác
+nhận đồng đội đứng cạnh được tiếp đạn/hồi máu; và nhìn một người chơi khác xuống nước.
+
+### Thêm một phát hiện khi kiểm
+
+`ExplosiveProp` (thùng phuy nổ dây chuyền, ledger C-11) là **code chết hoàn toàn**: GUID của nó
+chỉ xuất hiện trong chính file `.meta` của nó, không có trong prefab hay scene nào trên toàn
+`Assets/`. Tính năng được viết ra nhưng không map nào dùng.
