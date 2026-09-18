@@ -70,12 +70,20 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private InputField? _chatField;
         [SerializeField] private Button? _chatSendButton;
 
+        private MenuChatInput? _chatInput;
+
         private void Awake()
         {
             if (_switchSideButton != null) _switchSideButton.onClick.AddListener(OnSwitchSide);
             if (_readyButton != null) _readyButton.onClick.AddListener(OnReady);
             if (_leaveButton != null) _leaveButton.onClick.AddListener(OnLeave);
-            if (_chatSendButton != null) _chatSendButton.onClick.AddListener(OnSendChat);
+            if (_chatField != null)
+            {
+                _chatInput = GetComponent<MenuChatInput>() ?? gameObject.AddComponent<MenuChatInput>();
+                _chatInput.Configure(_chatField, text => _controller?.SendChat(text));
+            }
+            if (_chatSendButton != null && _chatInput != null)
+                _chatSendButton.onClick.AddListener(_chatInput.SubmitCurrent);
 
             // Belt to BuildMenuCanvas's braces. That builder sets the same limit when it
             // GENERATES the canvas, which does nothing for a canvas already serialized in a

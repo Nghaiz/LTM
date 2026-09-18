@@ -60,6 +60,104 @@ namespace Ironfront.Net.Unity.Client.Tests
         }
 
         [Test]
+        public void BorderlessIgnoresTheChosenResolutionSoTheImageIsNotUpscaled()
+        {
+            // The reported bug, as a value. Borderless renders at whatever this returns and scales
+            // it to the window, so returning the player's 1280x720 here is exactly the call that
+            // made the resolution row blur the game instead of resizing it.
+            var data = new MenuSettingsData(1280, 720, 1, 3, 1, 1f, 90f, 0.5f);
+
+            MenuSettingsScreen.DisplayApplication applied =
+                MenuSettingsScreen.ResolveApplication(data, 2560, 1440);
+
+            Assert.AreEqual(2560, applied.Width);
+            Assert.AreEqual(1440, applied.Height);
+            Assert.AreEqual(FullScreenMode.FullScreenWindow, applied.Mode);
+        }
+
+        [Test]
+        public void WindowedResizesTheWindowToTheChosenResolution()
+        {
+            var data = new MenuSettingsData(1280, 720, 0, 3, 1, 1f, 90f, 0.5f);
+
+            MenuSettingsScreen.DisplayApplication applied =
+                MenuSettingsScreen.ResolveApplication(data, 2560, 1440);
+
+            Assert.AreEqual(1280, applied.Width);
+            Assert.AreEqual(720, applied.Height);
+            Assert.AreEqual(FullScreenMode.Windowed, applied.Mode);
+        }
+
+        [Test]
+        public void FullscreenChangesTheDisplayModeToTheChosenResolution()
+        {
+            var data = new MenuSettingsData(1280, 720, 2, 3, 1, 1f, 90f, 0.5f);
+
+            MenuSettingsScreen.DisplayApplication applied =
+                MenuSettingsScreen.ResolveApplication(data, 2560, 1440);
+
+            Assert.AreEqual(1280, applied.Width);
+            Assert.AreEqual(720, applied.Height);
+            Assert.AreEqual(FullScreenMode.ExclusiveFullScreen, applied.Mode);
+        }
+
+        [Test]
+        public void TheDisplayModeRowDistinguishesTheTwoFullscreenModes()
+        {
+            // Screen.fullScreen is true for BOTH, which is why reading the row back through it
+            // reported a fullscreen build as BORDERLESS -- and once the two modes do different
+            // things with the resolution, misreading the mode means the next Save discards it.
+            Assert.AreEqual(0, MenuSettingsScreen.DisplayModeIndexOf(FullScreenMode.Windowed));
+            Assert.AreEqual(1, MenuSettingsScreen.DisplayModeIndexOf(FullScreenMode.FullScreenWindow));
+            Assert.AreEqual(2, MenuSettingsScreen.DisplayModeIndexOf(FullScreenMode.ExclusiveFullScreen));
+        }
+
+        [Test]
+        public void TheResolutionRowIsDisabledOnlyWhileBorderlessIsSelected()
+        {
+            var root = new GameObject("Settings");
+
+            // Built inactive so Awake runs AFTER Configure has handed the component its controls.
+            // On an active object Awake would run first, wire nothing, and never subscribe to the
+            // mode row -- the same reason the scene's serialized fields are assigned before play.
+            root.SetActive(false);
+            MenuSettingsScreen screen = root.AddComponent<MenuSettingsScreen>();
+            var resolution = new GameObject("Resolution", typeof(Dropdown)).GetComponent<Dropdown>();
+            var displayMode = new GameObject("DisplayMode", typeof(Dropdown)).GetComponent<Dropdown>();
+            var quality = new GameObject("Quality", typeof(Dropdown)).GetComponent<Dropdown>();
+            var vSync = new GameObject("VSync", typeof(Toggle)).GetComponent<Toggle>();
+            var volume = new GameObject("Volume", typeof(Slider)).GetComponent<Slider>();
+            var fov = new GameObject("Fov", typeof(Slider)).GetComponent<Slider>();
+            var sensitivity = new GameObject("Sensitivity", typeof(Slider)).GetComponent<Slider>();
+
+            try
+            {
+                screen.Configure(resolution, displayMode, quality, vSync, volume, fov, sensitivity);
+                screen.SetResolutionOptions(new[] { new DisplayResolutionOption(1280, 720) });
+                root.SetActive(true);
+
+                displayMode.value = 1;
+                Assert.IsFalse(resolution.interactable,
+                    "BORDERLESS cannot resize the window, so the row must not offer to.");
+
+                displayMode.value = 0;
+                Assert.IsTrue(resolution.interactable,
+                    "WINDOWED is exactly the mode the player asked for, so the row must be usable.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(resolution.gameObject);
+                Object.DestroyImmediate(displayMode.gameObject);
+                Object.DestroyImmediate(quality.gameObject);
+                Object.DestroyImmediate(vSync.gameObject);
+                Object.DestroyImmediate(volume.gameObject);
+                Object.DestroyImmediate(fov.gameObject);
+                Object.DestroyImmediate(sensitivity.gameObject);
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
         public void SettingsScreenSavesValuesFromTheHtmlControls()
         {
             var root = new GameObject("Settings", typeof(MenuSettingsScreen));

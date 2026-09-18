@@ -48,7 +48,7 @@ namespace Ironfront.Net.Unity.Client.Menu
                 _practiceButton.onClick.AddListener(OnPractice);
 
             if (_settingsButton != null)
-                _settingsButton.onClick.AddListener(OpenSettings);
+                _settingsButton.onClick.AddListener(OnSettings);
 
             if (_exitButton != null)
                 _exitButton.onClick.AddListener(ExitGame);
@@ -57,6 +57,8 @@ namespace Ironfront.Net.Unity.Client.Menu
         private void OnMultiplayer() => _controller?.GoToMultiplayer();
 
         private void OnPractice() => _controller?.OpenPractice();
+
+        private void OnSettings() => _controller?.OpenSettings();
 
         internal static void OpenSettings() => NetClientBindings.MenuPlatformActions?.OpenSettings();
 

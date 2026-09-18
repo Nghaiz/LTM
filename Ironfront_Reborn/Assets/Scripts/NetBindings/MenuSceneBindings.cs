@@ -82,6 +82,13 @@ namespace Ironfront.Net.Unity.Bindings
         /// <inheritdoc/>
         public void HidePracticeMenu() => SetMenuActive(false);
 
+        public void LaunchMap(string sceneName)
+        {
+            MainMenu menu = Resolve();
+            if (menu == null || string.IsNullOrWhiteSpace(sceneName)) return;
+            menu.StartLevel(sceneName);
+        }
+
         private void SetMenuActive(bool active)
         {
             MainMenu menu = Resolve();

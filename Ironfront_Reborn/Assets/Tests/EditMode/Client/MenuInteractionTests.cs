@@ -90,6 +90,43 @@ namespace Ironfront.Net.Unity.Client.Tests
             Assert.IsTrue(root.activeSelf);
         }
 
+        [Test]
+        public void DevelopmentControlsRouteClicksToTheSharedToast()
+        {
+            GameObject root = Make("DevelopmentControl");
+            Button button = Make("Unsupported").AddComponent<Button>();
+            Text label = Make("ToastLabel").AddComponent<Text>();
+            MenuToast toast = Make("Toast").AddComponent<MenuToast>();
+            toast.Configure(label);
+            MenuDevelopmentControls controls = root.AddComponent<MenuDevelopmentControls>();
+            controls.Configure(toast, button);
+
+            button.onClick.Invoke();
+
+            Assert.AreEqual(MenuToast.DevelopmentMessage, label.text);
+        }
+
+        [Test]
+        public void PasswordRevealButtonTogglesMaskWithoutChangingTheValue()
+        {
+            InputField field = Make("Password").AddComponent<InputField>();
+            field.contentType = InputField.ContentType.Password;
+            field.text = "secret-value";
+            Button button = Make("Reveal").AddComponent<Button>();
+            Text caption = Make("Caption").AddComponent<Text>();
+            MenuPasswordReveal reveal = Make("RevealBinding").AddComponent<MenuPasswordReveal>();
+            reveal.Configure(field, button, caption);
+
+            button.onClick.Invoke();
+            Assert.AreEqual(InputField.ContentType.Standard, field.contentType);
+            Assert.AreEqual("HIDE", caption.text);
+            Assert.AreEqual("secret-value", field.text);
+
+            button.onClick.Invoke();
+            Assert.AreEqual(InputField.ContentType.Password, field.contentType);
+            Assert.AreEqual("SHOW", caption.text);
+        }
+
         private GameObject Make(string name)
         {
             var item = new GameObject(name);
