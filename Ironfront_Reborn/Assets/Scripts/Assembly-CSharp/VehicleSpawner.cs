@@ -114,7 +114,84 @@ public class VehicleSpawner : MonoBehaviour
 	/// callback that fires as the object goes away.
 	/// </para>
 	/// </remarks>
-	private readonly Dictionary<Vehicle, ushort> supersededNetIds = new Dictionary<Vehicle, ushort>();
+	private readonly Dictionary<Vehicle, SupersededVehicle> supersededNetIds =
+		new Dictionary<Vehicle, SupersededVehicle>();
+
+	/// <summary>
+	/// One superseded vehicle: the id it is holding, and since when nobody has been sitting in
+	/// it.
+	/// </summary>
+	/// <remarks>
+	/// The timestamp is what separates "driven away a moment ago" from "abandoned", and it lives
+	/// beside the id rather than on <c>Vehicle</c> for the reason the dictionary itself gives:
+	/// the bookkeeping has to survive the object going away.
+	/// </remarks>
+	private readonly struct SupersededVehicle
+	{
+		public readonly ushort NetId;
+
+		/// <summary><c>Time.time</c> when this vehicle last had somebody in it.</summary>
+		public readonly float LastOccupiedAt;
+
+		public SupersededVehicle(ushort netId, float lastOccupiedAt)
+		{
+			NetId          = netId;
+			LastOccupiedAt = lastOccupiedAt;
+		}
+
+		public SupersededVehicle OccupiedNow(float now) => new SupersededVehicle(NetId, now);
+	}
+
+	/// <summary>
+	/// How long a superseded vehicle may sit empty before this pad takes its id back. Zero or
+	/// less disables reclamation for this pad.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>This is the bound on a population that otherwise only grows.</b> An
+	/// <c>AfterMoved</c> pad schedules a replacement the moment the first driver enters, so the
+	/// original stays alive holding its id, and that id comes back only when the vehicle DIES.
+	/// A bot that drives one away and leaves it standing never dies, so the id never returns.
+	/// Measured on 2026-09-18 against two pods with no human players: both maps had spent every
+	/// one of <c>MAX_VEHICLES</c>'s 24 ids inside four and a half hours, from fourteen authored
+	/// pads, and every pad after that was refused with <c>CAPACITY</c>. A long-running server
+	/// therefore stops producing vehicles at all, which is the "no client saw any vehicle"
+	/// session of 2026-09-17.
+	/// </para>
+	/// <para>
+	/// <b>Ninety seconds, and the number is per pad on purpose.</b> A pad whose vehicle is meant
+	/// to be parked and used as cover can be authored longer without changing anyone else.
+	/// </para>
+	/// </remarks>
+	[Tooltip("Seconds a superseded vehicle may sit empty before this pad reclaims its network "
+	         + "id. 0 or less disables reclamation for this pad.")]
+	public float reclaimAbandonedAfterSeconds = 90f;
+
+	/// <summary>
+	/// How close a living actor has to be to keep an abandoned vehicle from being reclaimed.
+	/// </summary>
+	/// <remarks>
+	/// <b>Without this, reclamation eats a player's parked jeep.</b> Somebody who drives to a
+	/// flag, gets out and spends two minutes capturing it has a vehicle that is empty and is
+	/// emphatically not abandoned. An empty-seat test alone cannot tell those apart; standing
+	/// next to it can. Bot litter is abandoned precisely because the bot walked off.
+	/// </remarks>
+	[Tooltip("A living actor within this many metres keeps an empty vehicle from being "
+	         + "reclaimed, so a player's parked vehicle is never taken.")]
+	public float reclaimKeepAliveRadius = 30f;
+
+	// Reclamation runs on a slow cadence rather than every frame: the threshold is measured in
+	// tens of seconds, and the alternative is a seat scan plus a radius query per pad per frame
+	// for an answer that cannot change meaningfully inside one.
+	private const float ReclaimSweepInterval = 2f;
+
+	private float nextReclaimSweepAt;
+
+	// Both reused across sweeps, for ActorManager.ActorsInRange's buffer-overload reason: a
+	// fresh List per sweep per pad is a steady GC drip for the life of the process.
+	private readonly List<Vehicle> reclaimCandidates = new List<Vehicle>();
+
+	private static readonly List<Actor> reclaimNearbyActors = new List<Actor>();
 
 	/// <summary>
 	/// The budget behind the <c>[vehicle-spawn-state]</c> line protocol 10 § 8.3 asks for.
@@ -176,6 +253,12 @@ public class VehicleSpawner : MonoBehaviour
 
 	private void Update()
 	{
+		// BEFORE the scheduler tick, so an id freed this sweep is available to the spawn the
+		// same tick may ask for. The other order costs a full retry interval on the one pad
+		// that is most starved -- and SpawnIsBlocked asks the pool directly, so it would read
+		// the pre-sweep answer and defer for nothing.
+		SweepAbandonedVehicles();
+
 		VehicleSpawnStep step = scheduler.Tick(Time.deltaTime, spawnIsBlocked);
 
 		if (step.ShouldSpawn)
@@ -283,7 +366,13 @@ public class VehicleSpawner : MonoBehaviour
 		// VehicleDied's guard compares against lastSpawnedVehicle, which is about to change.
 		if (lastSpawnedVehicle != null && lastSpawnedVehicleNetId != 0)
 		{
-			supersededNetIds[lastSpawnedVehicle] = lastSpawnedVehicleNetId;
+			// Seeded as occupied NOW rather than at 0, so the reclaim clock starts from the
+			// moment of supersession. An AfterMoved pad supersedes because a driver got IN, so
+			// "last occupied" is this instant by construction; seeding 0 would make a vehicle
+			// that is being driven right now eligible for reclamation on the first sweep, and
+			// the sweep's own emptiness test is the only thing that would save it.
+			supersededNetIds[lastSpawnedVehicle] =
+				new SupersededVehicle(lastSpawnedVehicleNetId, Time.time);
 		}
 
 		lastSpawnedVehicle = spawned;
@@ -505,16 +594,124 @@ public class VehicleSpawner : MonoBehaviour
 		return CorpseColliderLedger.DescribePadBlocker(kind, described, actorId);
 	}
 
+	/// <summary>
+	/// Takes back the network id of any vehicle this pad superseded and nobody is using.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>This is the only thing that bounds the superseded population.</b> See
+	/// <see cref="reclaimAbandonedAfterSeconds"/> for the measurement that says it has to exist.
+	/// A pad's CURRENT vehicle is never a candidate: reclaiming it would fight the spawner that
+	/// just placed it.
+	/// </para>
+	/// <para>
+	/// <b>A key that has gone null is reclaimed immediately, and that is a second leak closed.</b>
+	/// <c>Vehicle.OnDestroy</c> only leaves <c>ActorManager</c>'s register; it reports no despawn
+	/// and returns no id. So a superseded vehicle destroyed by anything other than its own
+	/// <c>Die()</c> path -- a scene teardown, a <c>Destroy</c> from elsewhere -- used to hold its
+	/// id for the life of the process with no object left to notice. There is nothing to wait
+	/// for in that case: the object is already gone, so the timer does not apply.
+	/// </para>
+	/// <para>
+	/// <b>Silent on a client and offline.</b> <c>Start</c> disables this component at client
+	/// role, and the whole sweep is behind <c>IsReplicating</c> -- there is no id pool to be out
+	/// of in single-player, so reclaiming would destroy vehicles the original game keeps.
+	/// </para>
+	/// <para>
+	/// <b>Reported before destroyed</b>, the ordering <see cref="OnWorldReset"/> already uses: a
+	/// client that gets the despawn first removes its copy cleanly rather than having the
+	/// snapshot stream stop under one it still holds.
+	/// </para>
+	/// </remarks>
+	private void SweepAbandonedVehicles()
+	{
+		if (supersededNetIds.Count == 0) return;
+		if (!NetVehicleLifecycle.IsReplicating) return;
+
+		float now = Time.time;
+		if (now < nextReclaimSweepAt) return;
+		nextReclaimSweepAt = now + ReclaimSweepInterval;
+
+		reclaimCandidates.Clear();
+
+		// Collected first, mutated after: the dictionary cannot be written to while it is being
+		// enumerated, and both branches below write to it.
+		foreach (KeyValuePair<Vehicle, SupersededVehicle> entry in supersededNetIds)
+		{
+			Vehicle vehicle = entry.Key;
+
+			// Destroyed out from under us. Unity's overloaded == is what makes this readable as
+			// a null; the dictionary still holds the dead key.
+			if (vehicle == null)
+			{
+				reclaimCandidates.Add(vehicle);
+				continue;
+			}
+
+			if (reclaimAbandonedAfterSeconds <= 0f) continue;
+
+			if (!vehicle.IsEmpty())
+			{
+				supersededNetIds[vehicle] = entry.Value.OccupiedNow(now);
+				continue;
+			}
+
+			if (now - entry.Value.LastOccupiedAt < reclaimAbandonedAfterSeconds) continue;
+			if (SomebodyIsStandingBy(vehicle)) continue;
+
+			reclaimCandidates.Add(vehicle);
+		}
+
+		for (int i = 0; i < reclaimCandidates.Count; i++)
+		{
+			Vehicle vehicle = reclaimCandidates[i];
+			if (!supersededNetIds.TryGetValue(vehicle, out SupersededVehicle superseded)) continue;
+
+			supersededNetIds.Remove(vehicle);
+			NetVehicleLifecycle.ReportDespawned(superseded.NetId, VehicleDespawnReason.Reclaimed);
+
+			if (vehicle == null) continue;
+
+			Debug.Log(
+				$"[net] vehicle spawner '{name}' (id {spawnerId}) reclaimed id {superseded.NetId}: "
+				+ $"empty for {now - superseded.LastOccupiedAt:F0}s with nobody within "
+				+ $"{reclaimKeepAliveRadius:F0}m. {NetVehicleLifecycle.DescribeSpawnRefusal()}");
+
+			// EjectOccupants even though IsEmpty just said there are none: X-55/X-56's rule is
+			// about a HALF-booked seat, where the seat records an occupant that does not think
+			// it is seated there. IsEmpty reads the same seats, so the two agree -- and the one
+			// case where they would not is exactly the one that welds a body to a hierarchy
+			// about to be destroyed.
+			vehicle.EjectOccupants();
+			UnityEngine.Object.Destroy(vehicle.gameObject);
+		}
+
+		reclaimCandidates.Clear();
+	}
+
+	/// <summary>
+	/// True when a living actor is close enough that this vehicle is parked rather than
+	/// abandoned.
+	/// </summary>
+	private bool SomebodyIsStandingBy(Vehicle vehicle)
+	{
+		if (reclaimKeepAliveRadius <= 0f) return false;
+
+		ActorManager.AliveActorsInRange(
+			vehicle.transform.position, reclaimKeepAliveRadius, reclaimNearbyActors);
+		return reclaimNearbyActors.Count > 0;
+	}
+
 	public void VehicleDied(Vehicle vehicle)
 	{
 		// A superseded vehicle -- alive and driven away when this pad respawned. Its id is the
 		// one X-70 leaked: released here, and its despawn put on the wire, so the clients that
 		// have been rendering it since stop. Checked before the lastSpawnedVehicle branch
 		// because the two sets are disjoint and this one used to fall through it entirely.
-		if (vehicle != null && supersededNetIds.TryGetValue(vehicle, out ushort supersededId))
+		if (vehicle != null && supersededNetIds.TryGetValue(vehicle, out SupersededVehicle superseded))
 		{
 			supersededNetIds.Remove(vehicle);
-			NetVehicleLifecycle.ReportDespawned(supersededId, VehicleDespawnReason.Destroyed);
+			NetVehicleLifecycle.ReportDespawned(superseded.NetId, VehicleDespawnReason.Destroyed);
 		}
 
 		if (vehicle == lastSpawnedVehicle)
@@ -569,10 +766,10 @@ public class VehicleSpawner : MonoBehaviour
 		// reset to clear. Ordered ahead of the current vehicle because these are the older
 		// claims: a client applying the two despawns in arrival order removes the ghost before
 		// the vehicle it can still see.
-		foreach (KeyValuePair<Vehicle, ushort> superseded in supersededNetIds)
+		foreach (KeyValuePair<Vehicle, SupersededVehicle> superseded in supersededNetIds)
 		{
 			NetVehicleLifecycle.ReportDespawned(
-				superseded.Value, VehicleDespawnReason.WorldReset);
+				superseded.Value.NetId, VehicleDespawnReason.WorldReset);
 
 			if (superseded.Key != null)
 			{
