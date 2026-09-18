@@ -202088,6 +202088,8 @@ MonoBehaviour:
   spawnTime: 16
   respawnType: 0
   prefab: {fileID: 1449476272426843, guid: b49d605db3b92e14084d23e98b85343c, type: 3}
+  reclaimAbandonedAfterSeconds: 90
+  reclaimKeepAliveRadius: 30
 --- !u!114 &7712
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -203036,6 +203038,8 @@ MonoBehaviour:
   spawnTime: 16
   respawnType: 0
   prefab: {fileID: 1449476272426843, guid: b49d605db3b92e14084d23e98b85343c, type: 3}
+  reclaimAbandonedAfterSeconds: 90
+  reclaimKeepAliveRadius: 30
 --- !u!114 &7775
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -203550,6 +203554,8 @@ MonoBehaviour:
   spawnTime: 16
   respawnType: 0
   prefab: {fileID: 1230382135169811, guid: 4bcd7e3e116a6d94d8b24fe86d8c481a, type: 3}
+  reclaimAbandonedAfterSeconds: 90
+  reclaimKeepAliveRadius: 30
 --- !u!114 &7809
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -205107,6 +205113,8 @@ MonoBehaviour:
   spawnTime: 16
   respawnType: 0
   prefab: {fileID: 1961941151340677, guid: be7e7e4e21124404f8e6f9af4a5771ac, type: 3}
+  reclaimAbandonedAfterSeconds: 90
+  reclaimKeepAliveRadius: 30
 --- !u!114 &7924
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -205620,6 +205628,8 @@ MonoBehaviour:
   spawnTime: 16
   respawnType: 0
   prefab: {fileID: 1449476272426843, guid: b49d605db3b92e14084d23e98b85343c, type: 3}
+  reclaimAbandonedAfterSeconds: 90
+  reclaimKeepAliveRadius: 30
 --- !u!114 &7959
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -210727,6 +210737,8 @@ MonoBehaviour:
   spawnTime: 16
   respawnType: 0
   prefab: {fileID: 1185474965220719, guid: 7fa575aacaa091149a5e01793f534279, type: 3}
+  reclaimAbandonedAfterSeconds: 90
+  reclaimKeepAliveRadius: 30
 --- !u!114 &8328
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -211188,6 +211200,8 @@ MonoBehaviour:
   spawnTime: 16
   respawnType: 0
   prefab: {fileID: 1230382135169811, guid: 4bcd7e3e116a6d94d8b24fe86d8c481a, type: 3}
+  reclaimAbandonedAfterSeconds: 90
+  reclaimKeepAliveRadius: 30
 --- !u!114 &8358
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -211494,6 +211508,8 @@ MonoBehaviour:
   spawnTime: 10
   respawnType: 1
   prefab: {fileID: 1963161338829483, guid: 2f2293a4cf510a14ca54611d0132981e, type: 3}
+  reclaimAbandonedAfterSeconds: 90
+  reclaimKeepAliveRadius: 30
 --- !u!114 &8376
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -214677,6 +214693,8 @@ MonoBehaviour:
   spawnTime: 16
   respawnType: 0
   prefab: {fileID: 1449476272426843, guid: b49d605db3b92e14084d23e98b85343c, type: 3}
+  reclaimAbandonedAfterSeconds: 90
+  reclaimKeepAliveRadius: 30
 --- !u!114 &8625
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -215173,6 +215191,8 @@ MonoBehaviour:
   spawnTime: 16
   respawnType: 0
   prefab: {fileID: 1961941151340677, guid: be7e7e4e21124404f8e6f9af4a5771ac, type: 3}
+  reclaimAbandonedAfterSeconds: 90
+  reclaimKeepAliveRadius: 30
 --- !u!114 &8664
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -216432,6 +216452,8 @@ MonoBehaviour:
   spawnTime: 16
   respawnType: 0
   prefab: {fileID: 1185474965220719, guid: 7fa575aacaa091149a5e01793f534279, type: 3}
+  reclaimAbandonedAfterSeconds: 90
+  reclaimKeepAliveRadius: 30
 --- !u!114 &8752
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -219449,6 +219471,8 @@ MonoBehaviour:
   spawnTime: 16
   respawnType: 0
   prefab: {fileID: 1961941151340677, guid: be7e7e4e21124404f8e6f9af4a5771ac, type: 3}
+  reclaimAbandonedAfterSeconds: 90
+  reclaimKeepAliveRadius: 30
 --- !u!114 &8957
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -225923,6 +225947,8 @@ MonoBehaviour:
   spawnTime: 16
   respawnType: 0
   prefab: {fileID: 1449476272426843, guid: b49d605db3b92e14084d23e98b85343c, type: 3}
+  reclaimAbandonedAfterSeconds: 90
+  reclaimKeepAliveRadius: 30
 --- !u!114 &9287
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -225964,6 +225990,8 @@ MonoBehaviour:
   spawnTime: 10
   respawnType: 1
   prefab: {fileID: 1963161338829483, guid: 2f2293a4cf510a14ca54611d0132981e, type: 3}
+  reclaimAbandonedAfterSeconds: 90
+  reclaimKeepAliveRadius: 30
 --- !u!114 &9290
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -232471,6 +232499,8 @@ MonoBehaviour:
   _effectsByKind:
   - {fileID: 1436363352}
   - {fileID: 1105814805}
+  - {fileID: 1105814805}
+  - {fileID: 1436363352}
   _shakeMagnitudePerMetre: 1
   _shakeIterations: 3
   _shakeRadiusMultiplier: 3
@@ -330046,6 +330076,8 @@ MonoBehaviour:
   _warmupSeconds: 20
   _postMatchSeconds: 20
   _victoryPoints: 200
+  _eliminationGraceSeconds: 1
+  _eliminationDwellSeconds: 5
 --- !u!114 &1940902177
 MonoBehaviour:
   m_ObjectHideFlags: 0
