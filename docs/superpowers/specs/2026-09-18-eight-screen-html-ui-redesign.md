@@ -17,6 +17,8 @@ The Unity menu scene will provide eight screens matching the prototype:
 7. Create Room
 8. Waiting Room
 
+Splash and all in-game HUD/gameplay scenes are explicitly out of scope for this pass.
+
 Branding is **Ironfront Reborn**, developed by **Team 10 LTM**. Forgot Password is deliberately omitted.
 
 ## Source-of-truth rules
@@ -93,14 +95,23 @@ Reusable, relevant logic may be selectively taken from `feature/ironfront-reborn
 
 ## Assets
 
-Only assets actually required by the Unity UI are copied from the updated pack into a clean `Assets/UI/IronfrontReborn` hierarchy. HTML, CSS, JavaScript, previews, and mock content stay outside the Unity asset tree. Existing obsolete pack assets are removed after scene references are regenerated and validated.
+Every SVG in the supplied pack is rasterized to a transparent PNG. The source HTML and the Unity asset catalogue reference those PNGs, and no runtime menu asset depends on Unity's SVG importer. Icons are rasterized as white-alpha images so UGUI tinting preserves the prototype's per-state colours; fixed-colour badges, wordmarks, panels, fields, buttons, and decoration retain their authored colours.
 
-The three supplied backgrounds and supplied branding/icons are used as-is. Angular surfaces and state changes described by CSS may be reproduced with Unity UI geometry and colors so they remain scalable; no new art assets are generated.
+Only assets actually required by the Unity UI are copied from the updated pack into a clean `Assets/UI/IronfrontReborn` hierarchy. HTML, CSS, JavaScript, previews, and mock content stay outside the Unity asset tree. Existing SVG copies and obsolete pack assets are removed after scene references are regenerated and validated.
+
+The three supplied backgrounds and rasterized branding/icons are used without generative alteration. Angular surfaces and state changes described by CSS may be reproduced with Unity UI geometry and colors so they remain scalable; no new art assets are generated.
+
+## Sharpness
+
+- Menu authoring uses the existing 1920x1080 reference canvas and the bundled Roboto font assets instead of `LegacyRuntime.ttf`.
+- The generated Canvas is pixel-perfect at the reference resolution; UI positions and sizes are integral pixels.
+- Raster UI assets disable mipmaps and compression, keep alpha transparency, use full-rect sprites, and use point filtering for pixel-sized icons or bilinear filtering only where a large surface is intentionally scaled.
+- Backgrounds keep their source dimensions and aspect ratio. They may use bilinear filtering, but not lossy Unity texture compression.
 
 ## Verification
 
-- Add focused EditMode tests for keyboard navigation, transitions, settings resolution behavior, chat Enter submission, branding, and unsupported-action notifications.
+- Keep verification focused on asset references, the generated scene hierarchy, real-data bindings, and unsupported-action routing.
 - Regenerate the menu scene and check that all serialized references resolve.
-- Run the full Unity EditMode suite and .NET solution tests.
+- Do not run the full Unity or .NET suites for this visual pass. The user will build and runtime-test locally.
 - Scan user-facing project/menu text for obsolete Ravenfield/SteelRaven branding while preserving third-party/legal attribution where appropriate.
 - Do not create a player build; the user will build and perform final visual/runtime validation.
