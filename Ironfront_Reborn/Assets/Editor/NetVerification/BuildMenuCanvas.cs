@@ -577,17 +577,26 @@ namespace Ironfront.Net.Unity.EditorTools
             Button region = PackButton(panel, "RegionFilter", "REGION", new Vector2(580f, 180f),
                 new Vector2(170f, 52f), "secondary");
 
+            RoomTableHeader(panel, new Vector2(0f, 138f));
+
             int rows = MenuRoomBrowserScreen.Rows;
-            var buttons = new Object[rows];
-            var labels = new Object[rows];
+            var joins = new Object[rows];
+            var names = new Object[rows];
+            var maps = new Object[rows];
+            var players = new Object[rows];
+            var statuses = new Object[rows];
 
             for (int i = 0; i < rows; i++)
             {
-                float y = 122f - (i * 48f);
-                Button row = MakeRoomRow(panel, i, new Vector2(0f, y), out Text caption);
+                float y = 100f - (i * 46f);
+                (Button Join, Text Name, Text Map, Text Players, Text Status) row =
+                    MakeRoomRow(panel, i, new Vector2(0f, y));
 
-                buttons[i] = row;
-                labels[i] = caption;
+                joins[i] = row.Join;
+                names[i] = row.Name;
+                maps[i] = row.Map;
+                players[i] = row.Players;
+                statuses[i] = row.Status;
             }
 
             Text overflow = Label(
@@ -609,9 +618,7 @@ namespace Ironfront.Net.Unity.EditorTools
             MenuRoomBrowserScreen screen = panel.AddComponent<MenuRoomBrowserScreen>();
             var so = new SerializedObject(screen);
             Assign(so, "_controller", controller);
-            AssignArray(so, "_roomButtons", buttons);
-            AssignArray(so, "_roomLabels", labels);
-            Assign(so, "_searchField", search);
+            AssignRoomRows(so, "_rows", joins, names, maps, players, statuses);            Assign(so, "_searchField", search);
             Assign(so, "_refreshButton", refresh);
             Assign(so, "_createRoomButton", create);
             Assign(so, "_pingText", ping);
@@ -1297,25 +1304,134 @@ namespace Ironfront.Net.Unity.EditorTools
             return toggle;
         }
 
-        private static Button MakeRoomRow(
-            GameObject parent, int index, Vector2 position, out Text caption)
+        /// <summary>
+        /// The column widths of the room table, as fractions of the row, and where each column's
+        /// centre falls.
+        /// </summary>
+        /// <remarks>
+        /// The prototype's <c>grid-template-columns: 1.55fr 1.25fr .7fr .62fr .65fr .7fr</c> has six
+        /// columns; this table has four plus the join button, because MODE and PING have no source
+        /// in the room protocol — see <c>MenuRoomBrowserScreen.RoomRow</c>. The name column keeps the
+        /// prototype's emphasis as the widest, and the two narrow numeric columns stay narrow so the
+        /// eye can compare them down the list, which is the whole reason a table is a table.
+        /// </remarks>
+        private static readonly (string Title, float Width, float Centre)[] RoomColumns =
         {
+            ("ROOM", 476f, -462f),
+            ("MAP", 392f, -28f),
+            ("PLAYERS", 196f, 266f),
+            ("STATUS", 196f, 462f),
+        };
+
+        /// <summary>The <c>.room-row--head</c> strip: same columns, read once.</summary>
+        private static void RoomTableHeader(GameObject parent, Vector2 position)
+        {
+            const float rowWidth = 1400f;
+
+            AngularPanel header = Angular(parent, "RoomTableHead", position, new Vector2(rowWidth, 26f),
+                0f, Hex("0B2133"), AngularEdge.All, 0f, Color.clear);
+            header.raycastTarget = false;
+
+            foreach ((string title, _, float centre) in RoomColumns)
+            {
+                Text cell = Label(header.gameObject, "Head" + title, title, 12,
+                    new Vector2(centre, 0f), new Vector2(180f, 24f));
+                cell.alignment = TextAnchor.MiddleLeft;
+                cell.fontStyle = FontStyle.Bold;
+                cell.color = Hex("82A8C2");
+                cell.resizeTextForBestFit = false;
+                cell.raycastTarget = false;
+            }
+
+            Text joinHead = Label(header.gameObject, "HeadJoin", string.Empty, 12,
+                new Vector2(632f, 0f), new Vector2(140f, 24f));
+            joinHead.resizeTextForBestFit = false;
+            joinHead.raycastTarget = false;
+        }
+
+        /// <summary>
+        /// One room row: four cells and a join button, on the prototype's <c>.room-row</c>.
+        /// </summary>
+        /// <remarks>
+        /// The row is a numbered <c>Row{i}</c> object that the screen activates and deactivates whole,
+        /// so an unused row costs nothing and no cell can outlive its row.
+        /// </remarks>
+        private static (Button Join, Text Name, Text Map, Text Players, Text Status) MakeRoomRow(
+            GameObject parent, int index, Vector2 position)
+        {
+            const float rowWidth = 1400f;
+
             var go = new GameObject("Row" + index, typeof(RectTransform), typeof(Image));
             go.transform.SetParent(parent.transform, worldPositionStays: false);
-            Centre(go.GetComponent<RectTransform>(), position, new Vector2(1040f, 44f));
+            Centre(go.GetComponent<RectTransform>(), position, new Vector2(rowWidth, 42f));
 
             Image image = go.GetComponent<Image>();
-            image.color = new Color(0.04f, 0.14f, 0.21f, 0.86f);
+            image.color = new Color(4f / 255f, 15f / 255f, 26f / 255f, 0.55f);
             image.raycastTarget = false;
 
-            caption = Label(go, "Caption", string.Empty, 16,
-                new Vector2(-74f, 0f), new Vector2(850f, 40f));
-            caption.alignment = TextAnchor.MiddleLeft;
-            caption.resizeTextForBestFit = false;
-            caption.raycastTarget = false;
+            Text[] cells = new Text[RoomColumns.Length];
+            for (int i = 0; i < RoomColumns.Length; i++)
+            {
+                Text cell = Label(go, "Cell" + RoomColumns[i].Title, string.Empty, 15,
+                    new Vector2(RoomColumns[i].Centre, 0f),
+                    new Vector2(RoomColumns[i].Width - 20f, 38f));
+                cell.alignment = TextAnchor.MiddleLeft;
+                cell.resizeTextForBestFit = false;
+                cell.raycastTarget = false;
+                cells[i] = cell;
+            }
 
-            return PackButton(go, "JoinButton", "JOIN", new Vector2(435f, 0f),
-                new Vector2(120f, 38f), "secondary");
+            // The name is what the eye lands on, so it is the one cell the prototype bolds and
+            // brightens; the rest are read second.
+            cells[0].fontStyle = FontStyle.Bold;
+            cells[0].color = Hex("EAF6FF");
+            for (int i = 1; i < cells.Length; i++) cells[i].color = Hex("9DBAD0");
+
+            Button join = PackButton(go, "JoinButton", "JOIN", new Vector2(632f, 0f),
+                new Vector2(130f, 34f), "command");
+
+            return (join, cells[0], cells[1], cells[2], cells[3]);
+        }
+
+        /// <summary>
+        /// Fills the screen's array of row structs.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="AssignArray"/> cannot do this: it writes object references into an array of
+        /// references, whereas a row is a struct whose cells are five separate fields. The array has
+        /// to be resized and each element's children written by name — and a name that has drifted
+        /// from the component is reported here rather than silently leaving a cell empty.
+        /// </remarks>
+        private static void AssignRoomRows(SerializedObject so, string field,
+            Object[] joins, Object[] names, Object[] maps, Object[] players, Object[] statuses)
+        {
+            SerializedProperty array = so.FindProperty(field);
+            if (array == null || !array.isArray)
+                throw new System.InvalidOperationException(
+                    so.targetObject.GetType().Name + " has no serialized array '" + field +
+                    "'. The builder and the component have drifted; fix the builder rather than " +
+                    "assigning by hand.");
+
+            array.arraySize = joins.Length;
+            for (int i = 0; i < joins.Length; i++)
+            {
+                SerializedProperty element = array.GetArrayElementAtIndex(i);
+                Relative(element, "Join").objectReferenceValue = joins[i];
+                Relative(element, "Name").objectReferenceValue = names[i];
+                Relative(element, "Map").objectReferenceValue = maps[i];
+                Relative(element, "Players").objectReferenceValue = players[i];
+                Relative(element, "Status").objectReferenceValue = statuses[i];
+            }
+        }
+
+        private static SerializedProperty Relative(SerializedProperty element, string name)
+        {
+            SerializedProperty property = element.FindPropertyRelative(name);
+            if (property == null)
+                throw new System.InvalidOperationException(
+                    "The room-row struct has no field '" + name + "'. A row cell would have stayed " +
+                    "empty and the table would have looked authored.");
+            return property;
         }
 
         private static void SetVerticalNavigation(params Selectable[] controls)

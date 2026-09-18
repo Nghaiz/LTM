@@ -54,9 +54,38 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private MenuScreenController? _controller;
 
         [Header("Rows")]
-        [Tooltip("One button per visible room. Length must be MenuRoomBrowserScreen.Rows.")]
-        [SerializeField] private Button[] _roomButtons = new Button[Rows];
-        [SerializeField] private Text[] _roomLabels = new Text[Rows];
+        [Tooltip("One row per visible room. Length must be MenuRoomBrowserScreen.Rows.")]
+        [SerializeField] private RoomRow[] _rows = new RoomRow[Rows];
+
+        /// <summary>
+        /// One visible room, as the cells the prototype's <c>.room-row</c> draws.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A row used to be a single <see cref="Text"/>.</b> Every fact about the room was
+        /// joined into one sentence, so nothing lined up between rows, no column could be scanned,
+        /// and reading the list meant parsing eight sentences. The prototype gives each fact its own
+        /// cell with a header above them.
+        /// </para>
+        /// <para>
+        /// <b>Only four of the prototype's six columns exist here.</b> MODE and PING are absent from
+        /// the room protocol: a <c>RoomInfo</c> carries a name, a map id, a player count, a
+        /// lifecycle and a privacy flag, and nothing else. The spec's rule is that a property the
+        /// protocol does not carry is reported as under development rather than invented, and a
+        /// column of blanks or zeroes would be inventing one — so those two columns are not drawn
+        /// at all. The readout above the table stays and stays labelled <c>master</c>, because that
+        /// is what it measures: this client's round trip to the master, not a per-room figure.
+        /// </para>
+        /// </remarks>
+        [Serializable]
+        private struct RoomRow
+        {
+            public Button Join;
+            public Text Name;
+            public Text Map;
+            public Text Players;
+            public Text Status;
+        }
 
         [Header("Controls")]
         [SerializeField] private InputField? _searchField;
@@ -76,16 +105,17 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         /// <summary>The room the password prompt is asking about, or 0 when it is closed.</summary>
         private int _promptRoomId;
+
         private RoomInfo[] _visibleRooms = Array.Empty<RoomInfo>();
 
         private void Awake()
         {
-            for (int i = 0; i < _roomButtons.Length; i++)
+            for (int i = 0; i < _rows.Length; i++)
             {
                 // Captured per iteration, because the closure below outlives the loop. Without
                 // the copy every row would join whichever room the LAST iteration indexed.
                 int row = i;
-                Button button = _roomButtons[i];
+                Button button = _rows[i].Join;
                 if (button != null) button.onClick.AddListener(() => OnRoomClicked(row));
             }
 
@@ -228,27 +258,32 @@ namespace Ironfront.Net.Unity.Client.Menu
             RoomInfo[] rooms = filtered.ToArray();
             _visibleRooms = rooms;
 
-            for (int i = 0; i < _roomButtons.Length; i++)
+            for (int i = 0; i < _rows.Length; i++)
             {
+                RoomRow row = _rows[i];
                 bool used = i < rooms.Length;
 
-                Button button = _roomButtons[i];
-                if (button != null)
+                if (row.Join != null)
                 {
-                    GameObject rowObject = button.transform.parent != null
-                        ? button.transform.parent.gameObject
-                        : button.gameObject;
+                    GameObject rowObject = row.Join.transform.parent != null
+                        ? row.Join.transform.parent.gameObject
+                        : row.Join.gameObject;
                     rowObject.SetActive(used);
-                    button.interactable = used && !controller.IsBusy && rooms[i].IsJoinable;
+                    row.Join.interactable = used && !controller.IsBusy && rooms[i].IsJoinable;
                 }
 
-                Text label = i < _roomLabels.Length ? _roomLabels[i] : null!;
-                if (label != null && used) label.text = Describe(rooms[i]);
+                if (!used) continue;
+
+                RoomInfo room = rooms[i];
+                if (row.Name != null) row.Name.text = room.Name;
+                if (row.Map != null) row.Map.text = MapLabel(room);
+                if (row.Players != null) row.Players.text = PlayerLabel(room);
+                if (row.Status != null) row.Status.text = StatusLabel(room);
             }
 
             if (_overflowText != null)
-                _overflowText.text = rooms.Length > _roomButtons.Length
-                    ? $"{rooms.Length - _roomButtons.Length} more room(s) not shown."
+                _overflowText.text = rooms.Length > _rows.Length
+                    ? $"{rooms.Length - _rows.Length} more room(s) not shown."
                     : string.Empty;
 
             if (_pingText != null)
@@ -261,26 +296,29 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (_passwordJoinButton != null) _passwordJoinButton.interactable = !controller.IsBusy;
         }
 
-        /// <summary>One row's text: the five facts a player needs before committing.</summary>
+        /// <summary>The MAP cell: the scene this build plays for the room's map id.</summary>
         /// <remarks>
-        /// The lock glyph is a plain ASCII marker rather than an emoji: the Canvas uses Unity's
-        /// built-in legacy font, which has no glyph for one, and a missing glyph renders as a
-        /// blank — a private room would then be indistinguishable from a public one, which is
-        /// criterion 1 failing quietly.
+        /// Not "Unknown" for an id with no entry: a map id this build cannot name is a real thing a
+        /// newer master can send, and the number is what makes it reportable.
         /// </remarks>
-        internal static string Describe(RoomInfo room)
-        {
-            string map = MapCatalog.TryGetScene(room.MapId, out string scene)
-                ? scene
-                // Not "Unknown": a map id this build has no entry for is a real thing a newer
-                // master can name, and the number is what makes it reportable.
-                : $"map {room.MapId}";
+        internal static string MapLabel(RoomInfo room)
+            => MapCatalog.TryGetScene(room.MapId, out string scene) ? scene : $"map {room.MapId}";
 
-            string lockGlyph = room.IsPrivate ? "[LOCKED] " : string.Empty;
+        /// <summary>The PLAYERS cell.</summary>
+        internal static string PlayerLabel(RoomInfo room) => $"{room.Players}/{room.MaxPlayers}";
 
-            return $"{lockGlyph}{room.Name}   {map}   {room.Players}/{room.MaxPlayers}   "
-                   + Describe(room.Lifecycle);
-        }
+        /// <summary>
+        /// The STATUS cell: the lifecycle, marked when the room wants a password.
+        /// </summary>
+        /// <remarks>
+        /// The lock is a plain ASCII marker rather than an emoji: the Canvas uses Unity's built-in
+        /// legacy font, which has no glyph for one, and a missing glyph renders as a blank — a
+        /// private room would then be indistinguishable from a public one, which is criterion 1
+        /// failing quietly. It lives in this cell rather than in the name because the prototype's
+        /// own lock is a status, not part of the room's title.
+        /// </remarks>
+        internal static string StatusLabel(RoomInfo room)
+            => room.IsPrivate ? "[LOCKED] " + Describe(room.Lifecycle) : Describe(room.Lifecycle);
 
         internal static bool MatchesSearch(RoomInfo room, string query)
         {
@@ -289,10 +327,7 @@ namespace Ironfront.Net.Unity.Client.Menu
             string needle = query.Trim();
             if (room.Name.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0) return true;
 
-            string map = MapCatalog.TryGetScene(room.MapId, out string scene)
-                ? scene
-                : $"map {room.MapId}";
-            return map.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
+            return MapLabel(room).IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static string Describe(RoomLifecycleState state)
