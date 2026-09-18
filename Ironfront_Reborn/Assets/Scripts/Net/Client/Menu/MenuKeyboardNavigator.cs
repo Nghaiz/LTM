@@ -89,7 +89,8 @@ namespace Ironfront.Net.Unity.Client.Menu
                 GameObject selected = eventSystem.currentSelectedGameObject;
                 if (selected != null
                     && selected.TryGetComponent(out InputField field)
-                    && field.lineType != InputField.LineType.SingleLine)
+                    && (field.lineType != InputField.LineType.SingleLine
+                        || field.GetComponentInParent<MenuChatInput>() != null))
                 {
                     return;
                 }

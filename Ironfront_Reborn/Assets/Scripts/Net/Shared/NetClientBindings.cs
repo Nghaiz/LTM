@@ -120,6 +120,9 @@ namespace Ironfront.Net.Unity
         /// </remarks>
         public static IPracticeLauncher Practice { get; set; }
 
+        /// <summary>The single legacy-backed settings screen shared by title and pause.</summary>
+        public static IGameSettingsLauncher Settings { get; set; }
+
         /// <summary>
         /// The colour for <paramref name="team"/> as <c>0xRRGGBB</c>, or a neutral grey when no
         /// palette is registered.
@@ -249,6 +252,7 @@ namespace Ironfront.Net.Unity
             MatchHud = null;
             TeamPalette = null;
             Practice = null;
+            Settings = null;
             ProjectileCatalogReader = null;
             LocalTeam = null;
             ExplosionPredictor = null;

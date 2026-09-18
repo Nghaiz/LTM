@@ -109,6 +109,27 @@ namespace Ironfront.Net.Unity.Bindings
         }
     }
 
+    /// <summary>Opens the existing OptionsUi so title and pause share one settings owner.</summary>
+    internal sealed class LegacyGameSettingsLauncher : IGameSettingsLauncher
+    {
+        private OptionsUi _options;
+
+        public bool IsAvailable => Resolve() != null;
+
+        public void ShowSettings()
+        {
+            if (Resolve() != null) OptionsUi.Show();
+        }
+
+        private OptionsUi Resolve()
+        {
+            if (_options != null) return _options;
+
+            _options = Object.FindAnyObjectByType<OptionsUi>(FindObjectsInactive.Include);
+            return _options;
+        }
+    }
+
     /// <summary>
     /// Registers the two seams P15 declares. Contracts § 6.3.
     /// </summary>
@@ -144,6 +165,7 @@ namespace Ironfront.Net.Unity.Bindings
         {
             NetClientBindings.TeamPalette = new LegacyTeamPalette();
             NetClientBindings.Practice = new LegacyPracticeLauncher();
+            NetClientBindings.Settings = new LegacyGameSettingsLauncher();
         }
     }
 }

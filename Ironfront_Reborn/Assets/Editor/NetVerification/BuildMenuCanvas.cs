@@ -214,16 +214,19 @@ namespace Ironfront.Net.Unity.EditorTools
             Button multiplayer = MakeButton(
                 panel, "Multiplayer", "MULTIPLAYER", new Vector2(0f, 40f), new Vector2(460f, 92f));
             Button practice = MakeButton(
-                panel, "Practice", "Practice (offline)", new Vector2(0f, -70f), new Vector2(360f, 64f));
+                panel, "Practice", "Practice (offline)", new Vector2(0f, -62f), new Vector2(360f, 58f));
+            Button settings = MakeButton(
+                panel, "Settings", "SETTINGS", new Vector2(0f, -136f), new Vector2(360f, 58f));
 
             MenuTitleScreen screen = panel.AddComponent<MenuTitleScreen>();
             var so = new SerializedObject(screen);
             Assign(so, "_controller", controller);
             Assign(so, "_multiplayerButton", multiplayer);
             Assign(so, "_practiceButton", practice);
+            Assign(so, "_settingsButton", settings);
             so.ApplyModifiedPropertiesWithoutUndo();
 
-            log.AppendLine("title: multiplayer is the primary action, practice is secondary.");
+            log.AppendLine("title: multiplayer is primary; practice and shared settings are secondary.");
             return panel;
         }
 

@@ -1,4 +1,7 @@
 using System.Collections;
+using System.Collections.Generic;
+using Ironfront.Net.Unity;
+using Ironfront.Unity.Ui;
 using UnityEngine;
 using UnityEngine.Audio;
 using UnityEngine.UI;
@@ -55,6 +58,12 @@ public class OptionsUi : MonoBehaviour
 
 		public int difficulty;
 
+		public int resolutionWidth;
+
+		public int resolutionHeight;
+
+		public bool fullscreen;
+
 		public static Options Load()
 		{
 			Options options = new Options();
@@ -83,6 +92,9 @@ public class OptionsUi : MonoBehaviour
 			options.toggleAim = PlayerPrefs.GetInt("toggle aim", 0) == 1;
 			options.toggleCrouch = PlayerPrefs.GetInt("toggle crouch", 0) == 1;
 			options.fieldOfView = PlayerPrefs.GetFloat("field of view", 90f);
+			options.resolutionWidth = PlayerPrefs.GetInt("ironfront resolution width", Screen.width);
+			options.resolutionHeight = PlayerPrefs.GetInt("ironfront resolution height", Screen.height);
+			options.fullscreen = PlayerPrefs.GetInt("ironfront fullscreen", Screen.fullScreen ? 1 : 0) == 1;
 			return options;
 		}
 
@@ -113,6 +125,14 @@ public class OptionsUi : MonoBehaviour
 			PlayerPrefs.SetInt("toggle aim", instance.toggleAim.isOn ? 1 : 0);
 			PlayerPrefs.SetInt("toggle crouch", instance.toggleCrouch.isOn ? 1 : 0);
 			PlayerPrefs.SetFloat("field of view", instance.fieldOfView.value);
+			if (instance.resolutionDropdown != null && instance.resolutionOptions.Count > 0)
+			{
+				int index = Mathf.Clamp(instance.resolutionDropdown.value, 0, instance.resolutionOptions.Count - 1);
+				DisplayResolutionOption resolution = instance.resolutionOptions[index];
+				PlayerPrefs.SetInt("ironfront resolution width", resolution.Width);
+				PlayerPrefs.SetInt("ironfront resolution height", resolution.Height);
+			}
+			PlayerPrefs.SetInt("ironfront fullscreen", instance.fullscreenToggle != null && instance.fullscreenToggle.isOn ? 1 : 0);
 			PlayerPrefs.Save();
 		}
 	}
@@ -167,6 +187,12 @@ public class OptionsUi : MonoBehaviour
 
 	public Dropdown difficulty;
 
+	public Dropdown resolutionDropdown;
+
+	public Toggle fullscreenToggle;
+
+	private readonly List<DisplayResolutionOption> resolutionOptions = new List<DisplayResolutionOption>();
+
 	public static bool IsFastQuality()
 	{
 		return QualitySettings.GetQualityLevel() <= 1;
@@ -219,6 +245,8 @@ public class OptionsUi : MonoBehaviour
 		instance = this;
 		Object.DontDestroyOnLoad(base.gameObject);
 		canvas = GetComponent<Canvas>();
+		EnsureDisplayAndAudioPanel();
+		ApplyCollectionSkin(canvas.transform);
 		hitmarkerAudio = hitmarkerEffect.GetComponent<AudioSource>();
 		Load();
 		Hide();
@@ -251,6 +279,7 @@ public class OptionsUi : MonoBehaviour
 		toggleAim.isOn = options.toggleAim;
 		toggleCrouch.isOn = options.toggleCrouch;
 		fieldOfView.value = options.fieldOfView;
+		PopulateResolutionControls(options);
 		ApplyOptions();
 	}
 
@@ -281,6 +310,119 @@ public class OptionsUi : MonoBehaviour
 		float num = GetOptions().masterVolume;
 		float value = 0f - (Mathf.Pow(80f, 1f - num) - 1f);
 		audioMixer.SetFloat("volume", value);
+		if (options.resolutionWidth > 0 && options.resolutionHeight > 0)
+		{
+			Screen.SetResolution(options.resolutionWidth, options.resolutionHeight, options.fullscreen);
+		}
+	}
+
+	private void EnsureDisplayAndAudioPanel()
+	{
+		Transform existing = canvas.transform.Find("IronfrontDisplayAudio");
+		if (existing != null)
+		{
+			Transform resolution = existing.Find("Resolution");
+			Transform fullscreen = existing.Find("Fullscreen");
+			resolutionDropdown = resolution != null ? resolution.GetComponent<Dropdown>() : null;
+			fullscreenToggle = fullscreen != null ? fullscreen.GetComponent<Toggle>() : null;
+			ApplyCollectionSkin(existing);
+			return;
+		}
+
+		GameObject panelObject = new GameObject("IronfrontDisplayAudio", typeof(RectTransform), typeof(Image));
+		panelObject.transform.SetParent(canvas.transform, false);
+		RectTransform panel = panelObject.GetComponent<RectTransform>();
+		panel.anchorMin = new Vector2(1f, 1f);
+		panel.anchorMax = new Vector2(1f, 1f);
+		panel.pivot = new Vector2(1f, 1f);
+		panel.anchoredPosition = new Vector2(-24f, -24f);
+		panel.sizeDelta = new Vector2(330f, 190f);
+		GameUiCollectionSkin.StylePanel(panelObject.GetComponent<Image>());
+
+		CreateLabel(panel, "Heading", "DISPLAY & AUDIO", new Vector2(18f, -18f), 18, true);
+		CreateLabel(panel, "ResolutionLabel", "RESOLUTION", new Vector2(18f, -58f), 13, false);
+		resolutionDropdown = Instantiate(helicopterType, panel, false);
+		resolutionDropdown.name = "Resolution";
+		RectTransform resolutionRect = resolutionDropdown.GetComponent<RectTransform>();
+		resolutionRect.anchorMin = resolutionRect.anchorMax = new Vector2(1f, 1f);
+		resolutionRect.pivot = new Vector2(1f, 1f);
+		resolutionRect.anchoredPosition = new Vector2(-18f, -50f);
+		resolutionRect.sizeDelta = new Vector2(185f, 34f);
+		resolutionDropdown.onValueChanged.RemoveAllListeners();
+
+		fullscreenToggle = Instantiate(mouseInvert, panel, false);
+		fullscreenToggle.name = "Fullscreen";
+		RectTransform fullscreenRect = fullscreenToggle.GetComponent<RectTransform>();
+		fullscreenRect.anchorMin = fullscreenRect.anchorMax = new Vector2(0f, 1f);
+		fullscreenRect.pivot = new Vector2(0f, 1f);
+		fullscreenRect.anchoredPosition = new Vector2(18f, -105f);
+		fullscreenRect.sizeDelta = new Vector2(220f, 30f);
+		fullscreenToggle.onValueChanged.RemoveAllListeners();
+		Text fullscreenLabel = fullscreenToggle.GetComponentInChildren<Text>(true);
+		if (fullscreenLabel != null) fullscreenLabel.text = "FULLSCREEN";
+
+		CreateLabel(panel, "VolumeHint", "MASTER VOLUME IS APPLIED WITH ALL SETTINGS", new Vector2(18f, -151f), 11, false);
+		ApplyCollectionSkin(panel);
+	}
+
+	private static Text CreateLabel(RectTransform parent, string name, string value, Vector2 position, int size, bool heading)
+	{
+		GameObject labelObject = new GameObject(name, typeof(RectTransform), typeof(Text));
+		labelObject.transform.SetParent(parent, false);
+		RectTransform rect = labelObject.GetComponent<RectTransform>();
+		rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
+		rect.pivot = new Vector2(0f, 1f);
+		rect.anchoredPosition = position;
+		rect.sizeDelta = new Vector2(292f, 28f);
+		Text label = labelObject.GetComponent<Text>();
+		label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+		label.fontSize = size;
+		label.text = value;
+		label.alignment = TextAnchor.MiddleLeft;
+		GameUiCollectionSkin.StyleText(label, heading);
+		return label;
+	}
+
+	private void PopulateResolutionControls(Options loaded)
+	{
+		if (resolutionDropdown == null || fullscreenToggle == null) return;
+
+		List<DisplayResolutionOption> detected = new List<DisplayResolutionOption>();
+		foreach (Resolution resolution in Screen.resolutions)
+		{
+			detected.Add(new DisplayResolutionOption(resolution.width, resolution.height));
+		}
+		detected.Add(new DisplayResolutionOption(
+			loaded.resolutionWidth > 0 ? loaded.resolutionWidth : Screen.width,
+			loaded.resolutionHeight > 0 ? loaded.resolutionHeight : Screen.height));
+
+		resolutionOptions.Clear();
+		resolutionOptions.AddRange(DisplayResolutionCatalog.Build(detected));
+		List<string> labels = new List<string>(resolutionOptions.Count);
+		foreach (DisplayResolutionOption option in resolutionOptions) labels.Add(option.Label);
+		resolutionDropdown.ClearOptions();
+		resolutionDropdown.AddOptions(labels);
+		resolutionDropdown.value = DisplayResolutionCatalog.FindBestIndex(
+			resolutionOptions, loaded.resolutionWidth, loaded.resolutionHeight);
+		resolutionDropdown.RefreshShownValue();
+		fullscreenToggle.isOn = loaded.fullscreen;
+	}
+
+	private void ApplyCollectionSkin(Transform root)
+	{
+		foreach (Button button in root.GetComponentsInChildren<Button>(true))
+		{
+			bool primary = button.name.IndexOf("save", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+				button.name.IndexOf("apply", System.StringComparison.OrdinalIgnoreCase) >= 0;
+			GameUiCollectionSkin.StyleButton(button, primary);
+		}
+		foreach (Dropdown dropdown in root.GetComponentsInChildren<Dropdown>(true)) GameUiCollectionSkin.StyleField(dropdown);
+		foreach (Toggle toggle in root.GetComponentsInChildren<Toggle>(true)) GameUiCollectionSkin.StyleCompactControl(toggle);
+		foreach (Slider slider in root.GetComponentsInChildren<Slider>(true)) GameUiCollectionSkin.StyleCompactControl(slider);
+		foreach (Text text in root.GetComponentsInChildren<Text>(true))
+		{
+			if (text.name != "Heading") GameUiCollectionSkin.StyleText(text);
+		}
 	}
 
 	public void ToggleHitmarker()

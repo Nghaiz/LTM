@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Ironfront.Unity.Ui;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -14,7 +15,8 @@ namespace Ironfront.Net.Unity.Client.Menu
     /// </summary>
     public static class MenuRuntimeTheme
     {
-        private const string MarkerName = "Ironfront Runtime Theme";
+        private const string MarkerName = "Game UI Collection Theme v2";
+        private const string LegacyMarkerName = "Ironfront Runtime Theme";
         private const string CardName = "Theme Content Card";
         private const string RailName = "Theme Brand Rail";
 
@@ -50,6 +52,8 @@ namespace Ironfront.Net.Unity.Client.Menu
         public static void Apply(GameObject root)
         {
             if (root == null || root.transform.Find(MarkerName) != null) return;
+
+            RemoveLegacyGeneratedShell(root);
 
             var marker = new GameObject(MarkerName, typeof(RectTransform));
             marker.transform.SetParent(root.transform, worldPositionStays: false);
@@ -104,8 +108,7 @@ namespace Ironfront.Net.Unity.Client.Menu
                 wide ? new Vector2(1740f, 940f) : new Vector2(980f, 900f));
 
             Image surface = cardObject.GetComponent<Image>();
-            surface.color = Surface;
-            surface.raycastTarget = false;
+            GameUiCollectionSkin.StylePanel(surface);
 
             Outline outline = cardObject.GetComponent<Outline>();
             outline.effectColor = new Color(Cyan.r, Cyan.g, Cyan.b, 0.22f);
@@ -125,7 +128,9 @@ namespace Ironfront.Net.Unity.Client.Menu
 
             RectTransform rail = railObject.GetComponent<RectTransform>();
             Image image = railObject.GetComponent<Image>();
-            image.color = SurfaceRaised;
+            image.sprite = GameUiCollectionResources.Load().ButtonBorderCyan;
+            image.color = Color.white;
+            image.type = Image.Type.Simple;
             image.raycastTarget = false;
 
             if (wide)
@@ -194,42 +199,26 @@ namespace Ironfront.Net.Unity.Client.Menu
         private static void StyleControls(GameObject card)
         {
             foreach (Button button in card.GetComponentsInChildren<Button>(includeInactive: true))
-                StyleButton(button, PrimaryButtons.Contains(button.name));
+                GameUiCollectionSkin.StyleButton(button, PrimaryButtons.Contains(button.name));
 
             foreach (InputField input in card.GetComponentsInChildren<InputField>(includeInactive: true))
             {
-                Image image = input.GetComponent<Image>();
-                if (image != null) image.color = Field;
-                input.colors = SelectableColors(Field, new Color(0.06f, 0.10f, 0.13f, 1f), Cyan);
+                GameUiCollectionSkin.StyleField(input);
                 if (input.textComponent != null) input.textComponent.color = Ink;
             }
 
             foreach (Dropdown dropdown in card.GetComponentsInChildren<Dropdown>(includeInactive: true))
             {
-                Image image = dropdown.GetComponent<Image>();
-                if (image != null) image.color = Field;
-                dropdown.colors = SelectableColors(Field, SurfaceRaised, Cyan);
+                GameUiCollectionSkin.StyleField(dropdown);
             }
 
             foreach (Toggle toggle in card.GetComponentsInChildren<Toggle>(includeInactive: true))
-                toggle.colors = SelectableColors(Field, SurfaceRaised, Amber);
+                GameUiCollectionSkin.StyleCompactControl(toggle);
         }
 
         private static void StyleButton(Button button, bool primary)
         {
-            Color normal = primary ? Amber : SurfaceRaised;
-            Color highlighted = primary ? AmberBright : new Color(0.10f, 0.15f, 0.18f, 1f);
-            Color selected = primary ? new Color(1f, 0.76f, 0.40f, 1f) : Cyan;
-            button.colors = SelectableColors(normal, highlighted, selected);
-
-            if (button.targetGraphic is Image image) image.color = normal;
-
-            Text caption = button.GetComponentInChildren<Text>(includeInactive: true);
-            if (caption != null)
-            {
-                caption.color = primary ? new Color(0.08f, 0.065f, 0.04f, 1f) : Ink;
-                caption.fontStyle = FontStyle.Bold;
-            }
+            GameUiCollectionSkin.StyleButton(button, primary);
         }
 
         private static ColorBlock SelectableColors(Color normal, Color highlighted, Color selected)
@@ -301,7 +290,7 @@ namespace Ironfront.Net.Unity.Client.Menu
             switch (panel.name)
             {
                 case "Title":
-                    Configure(panel, new[] { "Multiplayer", "Practice" }, "Multiplayer", null);
+                    Configure(panel, new[] { "Multiplayer", "Practice", "Settings" }, "Multiplayer", null);
                     break;
                 case "Login":
                     Configure(panel, new[] { "Username", "Password", "LogIn", "CreateAccount" }, "LogIn", null);
@@ -357,6 +346,32 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (bar == null) return;
             foreach (Button button in bar.GetComponentsInChildren<Button>(includeInactive: true))
                 StyleButton(button, primary: false);
+        }
+
+        private static void RemoveLegacyGeneratedShell(GameObject root)
+        {
+            Transform? marker = root.transform.Find(LegacyMarkerName);
+            if (marker != null) DestroyGenerated(marker.gameObject);
+
+            foreach (Transform panel in root.transform.Cast<Transform>().ToArray())
+            {
+                Transform? card = panel.Find(CardName);
+                if (card != null)
+                {
+                    foreach (Transform content in card.Cast<Transform>().ToArray())
+                        content.SetParent(panel, worldPositionStays: false);
+                    DestroyGenerated(card.gameObject);
+                }
+
+                Transform? rail = panel.Find(RailName);
+                if (rail != null) DestroyGenerated(rail.gameObject);
+            }
+        }
+
+        private static void DestroyGenerated(GameObject generated)
+        {
+            if (Application.isPlaying) UnityEngine.Object.Destroy(generated);
+            else UnityEngine.Object.DestroyImmediate(generated);
         }
 
         private static Text ThemeLabel(

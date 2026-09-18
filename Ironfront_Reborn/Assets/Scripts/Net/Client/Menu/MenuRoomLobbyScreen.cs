@@ -69,12 +69,18 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private Text? _chatLog;
         [SerializeField] private InputField? _chatField;
         [SerializeField] private Button? _chatSendButton;
+        private MenuChatInput? _chatInput;
 
         private void Awake()
         {
             if (_switchSideButton != null) _switchSideButton.onClick.AddListener(OnSwitchSide);
             if (_readyButton != null) _readyButton.onClick.AddListener(OnReady);
             if (_leaveButton != null) _leaveButton.onClick.AddListener(OnLeave);
+            if (_chatField != null)
+            {
+                _chatInput = GetComponent<MenuChatInput>() ?? gameObject.AddComponent<MenuChatInput>();
+                _chatInput.Configure(_chatField, SubmitChat);
+            }
             if (_chatSendButton != null) _chatSendButton.onClick.AddListener(OnSendChat);
 
             // Belt to BuildMenuCanvas's braces. That builder sets the same limit when it
@@ -130,18 +136,10 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         private void OnSendChat()
         {
-            if (_controller == null || _chatField == null) return;
-
-            string text = _chatField.text;
-            if (text.Trim().Length == 0) return;
-
-            _controller.SendChat(text);
-
-            // Cleared on send rather than on delivery: the line comes back as a push carrying
-            // the sender's name, so leaving it in the field would show the player their own
-            // message twice, once of them unsent.
-            _chatField.text = string.Empty;
+            _chatInput?.SubmitCurrent();
         }
+
+        private void SubmitChat(string text) => _controller?.SendChat(text);
 
         public override void SetError(string message)
         {

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Ironfront.Net.Protocol;
+using Ironfront.Unity.Ui;
 using UnityEngine;
 
 namespace Ironfront.Net.Unity.Client
@@ -106,6 +107,9 @@ namespace Ironfront.Net.Unity.Client
 
         private string _draft = string.Empty;
         private bool _composing;
+        private GUIStyle _chatPanelStyle;
+        private GUIStyle _chatLabelStyle;
+        private GUIStyle _chatInputStyle;
 
         /// <summary>Set on the frame the line opens, consumed by the first <c>OnGUI</c> after it.</summary>
         /// <remarks>
@@ -238,7 +242,9 @@ namespace Ironfront.Net.Unity.Client
                 return;
             }
 
-            if (!Input.GetKeyDown(_sendKey)) return;
+            bool returnDown = Input.GetKeyDown(_sendKey);
+            bool keypadEnterDown = Input.GetKeyDown(KeyCode.KeypadEnter);
+            if (!ChatKeyboardIntent.ShouldSend(_composing, returnDown, keypadEnterDown)) return;
 
             Send(_draft);
             _draft = string.Empty;
@@ -358,17 +364,20 @@ namespace Ironfront.Net.Unity.Client
         {
             if (_lines.Count == 0 && !_composing) return;
 
-            var style = new GUIStyle(GUI.skin.label) { richText = false };
+            EnsureChatStyles();
 
-            GUILayout.BeginArea(new Rect(12f, Screen.height - 190f, 520f, 178f));
+            Rect panel = new Rect(12f, Screen.height - 214f, 540f, 198f);
+            GUI.Box(panel, GUIContent.none, _chatPanelStyle);
+
+            GUILayout.BeginArea(new Rect(panel.x + 22f, panel.y + 18f, panel.width - 44f, panel.height - 34f));
 
             for (int i = 0; i < _lines.Count; i++)
-                GUILayout.Label($"{_lines[i].Speaker}: {_lines[i].Text}", style);
+                GUILayout.Label($"{_lines[i].Speaker}: {_lines[i].Text}", _chatLabelStyle);
 
             if (_composing)
             {
                 GUI.SetNextControlName(DraftControlName);
-                _draft = GUILayout.TextField(_draft, ChatTextMessage.MaxTextCharacters);
+                _draft = GUILayout.TextField(_draft, ChatTextMessage.MaxTextCharacters, _chatInputStyle);
 
                 // Once, on the first OnGUI pass after the line opened. See _focusPending.
                 //
@@ -386,6 +395,33 @@ namespace Ironfront.Net.Unity.Client
             }
 
             GUILayout.EndArea();
+        }
+
+        private void EnsureChatStyles()
+        {
+            if (_chatPanelStyle != null) return;
+
+            Sprite panelSprite = GameUiCollectionResources.Load().PanelCyan;
+            _chatPanelStyle = new GUIStyle(GUI.skin.box)
+            {
+                normal = { background = panelSprite != null ? panelSprite.texture : null },
+                border = new RectOffset(18, 18, 18, 18),
+                padding = new RectOffset(18, 18, 16, 16)
+            };
+            _chatLabelStyle = new GUIStyle(GUI.skin.label)
+            {
+                richText = false,
+                fontSize = 15,
+                normal = { textColor = GameUiCollectionSkin.TextPrimary }
+            };
+            _chatInputStyle = new GUIStyle(GUI.skin.textField)
+            {
+                fontSize = 16,
+                fixedHeight = 34f,
+                padding = new RectOffset(12, 12, 7, 7),
+                normal = { textColor = GameUiCollectionSkin.TextPrimary },
+                focused = { textColor = GameUiCollectionSkin.Cyan }
+            };
         }
 
         private const string DraftControlName = "ironfront.chat.draft";

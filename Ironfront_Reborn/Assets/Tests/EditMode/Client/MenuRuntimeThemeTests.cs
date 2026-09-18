@@ -2,6 +2,7 @@
 
 using System.Linq;
 using Ironfront.Net.Unity.Client.Menu;
+using Ironfront.Unity.Ui;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.UI;
@@ -20,6 +21,7 @@ namespace Ironfront.Net.Unity.Client.Tests
             Child(title, "Heading", typeof(Text)).GetComponent<Text>().text = "IRONFRONT";
             MakeButton(title, "Multiplayer", "MULTIPLAYER");
             MakeButton(title, "Practice", "Practice (offline)");
+            MakeButton(title, "Settings", "SETTINGS");
         }
 
         [TearDown]
@@ -40,6 +42,7 @@ namespace Ironfront.Net.Unity.Client.Tests
             Assert.NotNull(title.GetComponent<MenuScreenTransition>());
             Assert.NotNull(title.transform.Find("Theme Content Card"));
             Assert.NotNull(title.transform.Find("Theme Brand Rail"));
+            Assert.NotNull(_root.transform.Find("Game UI Collection Theme v2"));
         }
 
         [Test]
@@ -52,6 +55,8 @@ namespace Ironfront.Net.Unity.Client.Tests
             Assert.AreNotEqual(colors.normalColor, colors.highlightedColor);
             Assert.AreNotEqual(colors.normalColor, colors.selectedColor);
             Assert.AreNotEqual(colors.normalColor, colors.disabledColor);
+            Assert.AreSame(GameUiCollectionResources.Load().ButtonYellow,
+                button.GetComponent<Image>().sprite);
         }
 
         [Test]

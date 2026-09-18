@@ -68,6 +68,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Shared\DisplayResolutionCatalog.cs"
+             Link="Linked\DisplayResolutionCatalog.cs" />
+    <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\ChatKeyboardIntent.cs"
+             Link="Linked\ChatKeyboardIntent.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\GameFlowState.cs"
              Link="Linked\GameFlowState.cs" />
     <Compile Include="..\Ironfront_Reborn\Assets\Scripts\Net\Client\GameFlowController.cs"

@@ -5,6 +5,7 @@
         "Ironfront.Net.Unity.Client",
         "Ironfront.Net.Unity.Shared",
         "Ironfront.Net.Unity.Input",
+        "Ironfront.Unity.Ui",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],
