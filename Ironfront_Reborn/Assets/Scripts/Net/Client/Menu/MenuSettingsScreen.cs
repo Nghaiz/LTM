@@ -39,6 +39,18 @@ namespace Ironfront.Net.Unity.Client.Menu
             _fieldOfView = fieldOfView;
             _sensitivity = sensitivity;
             ConfigureRanges();
+
+            // Wire here as well as in Awake, and refresh here rather than waiting for OnEnable.
+            //
+            // In Play the scene's serialized fields are already assigned when Awake runs, so Awake
+            // wires and OnEnable loads. In an EDIT-MODE test neither lifecycle method runs at all:
+            // Unity calls Awake and OnEnable for a component in edit mode only when the class is
+            // [ExecuteAlways]. Without this call a test could assign a display mode and see the
+            // resolution row stay enabled, and the wiring it was checking would be unreachable
+            // rather than wrong. `WireButtons` guards on `_wired`, so the two paths cannot
+            // double-subscribe.
+            WireButtons();
+            RefreshResolutionAvailability();
         }
 
         private void Awake()
