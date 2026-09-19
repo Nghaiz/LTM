@@ -2,21 +2,7 @@
 % A-client.tex — PHẦN II của Nguyễn Thành Trung: client Unity
 % =====================================================================================
 
-% ---------- Macro vẽ giao diện IMGUI (dùng trong scope của từng khung) ----------------
-% Toạ độ y tính từ mép trên khung (âm dần xuống), khung rộng 7.6 cm
-\newcommand{\uiPanel}[2]{% chiều cao, tiêu đề thanh
-  \fill[uiBg] (0,0) rectangle (7.6,-#1);
-  \fill[uiBar] (0,0) rectangle (7.6,-0.45);
-  \node[anchor=west, text=cBlue, font=\scriptsize] at (0.15,-0.225) {#2};
-  \node[anchor=east, text=cBlue, font=\scriptsize] at (7.45,-0.225) {Shift+F2};
-  \draw[black!80] (0,0) rectangle (7.6,-#1);}
-\newcommand{\uiS}[2]{\node[anchor=west, text=uiState, font=\scriptsize\ttfamily] at (0.25,#1) {#2};}
-\newcommand{\uiT}[2]{\node[anchor=west, text=uiText, font=\footnotesize] at (0.25,#1) {#2};}
-\newcommand{\uiF}[4]{\draw[fill=uiField, draw=black!40] (#2,#1+0.19) rectangle (#3,#1-0.19);
-  \node[anchor=west, text=uiText, font=\scriptsize\ttfamily] at (#2+0.08,#1) {#4};}
-\newcommand{\uiB}[4]{\draw[fill=uiBtn, draw=black!30, rounded corners=1.5pt] (#2,#1+0.2) rectangle (#3,#1-0.2);
-  \node[text=uiText, font=\footnotesize] at ({(#2+#3)/2},#1) {#4};}
-\newcommand{\uiE}[2]{\node[anchor=west, text=red!60, font=\footnotesize] at (0.25,#1) {#2};}
+% ---------- Macro đánh số phần tử trên hình HUD ----------------------------------------
 \newcommand{\uiN}[3]{\node[circle, fill=uiRed, text=white, inner sep=0pt, minimum size=11pt, font=\tiny\bfseries] at (#1,#2) {#3};}
 
 \PhanLon{II. NỘI DUNG CÁ NHÂN -- Phân hệ client Unity.}
@@ -134,75 +120,45 @@ Mọi dữ liệu đến được áp dụng \textbf{trước} khi có thành ph
 
 % -------------------------------------------------------------------------------------
 \subsection{Giao diện sảnh chờ}
-Giao diện sảnh được vẽ hoàn toàn bằng IMGUI (\code{OnGUI}) trong \code{LobbyShellOverlay}, không cần Canvas hay
-prefab. Mỗi màn hình tương ứng một trạng thái ở Hình~\ref{fig:A-trangthai}; dòng \texttt{state:} đầu khung luôn hiển thị
-trạng thái hiện tại. Số đỏ trên hình là mã phần tử dùng trong bảng ánh xạ ở Mục 4.
+Người chơi đi qua các màn hình theo đúng thứ tự các trạng thái ở Hình~\ref{fig:A-trangthai}: màn hình chính, đăng
+nhập, rồi danh sách phòng. Ngoài luồng chơi mạng còn có màn hình luyện tập ngoại tuyến và màn hình cài đặt. Khung
+\code{LobbyShellOverlay} vẽ bằng IMGUI (\code{OnGUI}) vẫn được giữ lại làm công cụ gỡ lỗi, mở bằng Shift+F2.
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[x=1cm, y=1cm]
-  % (a) Login
-  \begin{scope}[shift={(0,0)}]
-    \uiPanel{6.9}{Ironfront -- lobby shell}
-    \uiS{-0.8}{state: LoginScreen}
-    \uiT{-1.25}{Master server} \uiN{7.25}{-1.25}{1}
-    \uiF{-1.7}{0.25}{7.35}{127.0.0.1}
-    \uiF{-2.15}{0.25}{7.35}{27000}
-    \uiT{-2.6}{Username} \uiN{7.25}{-2.6}{2}
-    \uiF{-3.05}{0.25}{7.35}{kien}
-    \uiT{-3.5}{Password}
-    \uiF{-3.95}{0.25}{7.35}{********}
-    \uiB{-4.5}{0.25}{7.35}{Log in} \uiN{7.25}{-4.5}{3}
-    \uiT{-5.0}{Direct connect (no master, no ticket)} \uiN{7.25}{-5.0}{4}
-    \uiF{-5.45}{0.25}{5.8}{26.14.3.9} \uiF{-5.45}{5.95}{7.35}{27015}
-    \uiB{-5.95}{0.25}{7.35}{Connect directly}
-    \uiE{-6.45}{Wrong username or password (1000)} \uiN{7.25}{-6.45}{5}
-    \node[font=\footnotesize\itshape] at (3.8,-7.25) {(a) LoginScreen / Authenticating};
-  \end{scope}
-  % (b) Room browser
-  \begin{scope}[shift={(8.2,0)}]
-    \uiPanel{6.9}{Ironfront -- lobby shell}
-    \uiS{-0.8}{state: RoomBrowser}
-    \uiB{-1.3}{0.25}{7.35}{Refresh} \uiN{7.25}{-1.3}{6}
-    \uiT{-1.8}{Room password (blank for public rooms)} \uiN{7.25}{-1.8}{7}
-    \uiF{-2.25}{0.25}{7.35}{}
-    \draw[draw=black!40] (0.25,-2.6) rectangle (7.35,-4.45);
-    \uiT{-2.9}{\#3 Dustbowl CQ \quad 12/16} \uiB{-2.9}{5.9}{6.9}{Join} \uiN{5.55}{-2.9}{8} \uiN{7.15}{-2.9}{9}
-    \uiT{-3.5}{\#7 Island private \quad 4/16} \uiB{-3.5}{5.9}{6.9}{Join}
-    \uiT{-4.1}{\#9 LAN test \quad 1/8} \uiB{-4.1}{5.9}{6.9}{Join}
-    \uiT{-4.9}{Direct connect (no master, no ticket)}
-    \uiF{-5.35}{0.25}{5.8}{127.0.0.1} \uiF{-5.35}{5.95}{7.35}{27015}
-    \uiB{-5.85}{0.25}{7.35}{Connect directly}
-    \node[font=\footnotesize\itshape] at (3.8,-7.25) {(b) Lobby $\rightarrow$ RoomBrowser / JoiningRoom};
-  \end{scope}
-  % (c) Lobby + RoomLobby
-  \begin{scope}[shift={(0,-7.9)}]
-    \uiPanel{4.6}{Ironfront -- lobby shell}
-    \uiS{-0.8}{state: Lobby}
-    \uiT{-1.25}{Signed in as Kien (\#42)} \uiN{7.25}{-1.25}{10}
-    \uiB{-1.75}{0.25}{7.35}{Browse rooms}
-    \draw[black!50, dashed] (0.25,-2.2) -- (7.35,-2.2);
-    \uiS{-2.55}{state: RoomLobby}
-    \uiT{-3.0}{In room. Game server: 203.0.113.7:27015} \uiN{7.25}{-3.0}{11}
-    \uiT{-3.45}{Waiting for the match to start.}
-    \uiB{-4.0}{0.25}{7.35}{Enter match now (debug)} \uiN{7.25}{-4.0}{12}
-    \node[font=\footnotesize\itshape] at (3.8,-4.95) {(c) Lobby và RoomLobby};
-  \end{scope}
-  % (d) Connecting + MatchEnd
-  \begin{scope}[shift={(8.2,-7.9)}]
-    \uiPanel{4.6}{Ironfront -- lobby shell}
-    \uiS{-0.8}{state: ConnectingGame  (working...)}
-    \uiT{-1.25}{Connecting to the game server...} \uiN{7.25}{-1.25}{13}
-    \uiT{-1.7}{Giving up after 10 seconds.}
-    \draw[black!50, dashed] (0.25,-2.2) -- (7.35,-2.2);
-    \uiS{-2.55}{state: MatchEnd}
-    \uiT{-3.0}{Match over.} \uiN{7.25}{-3.0}{14}
-    \uiB{-3.55}{0.25}{7.35}{Continue} \uiN{7.25}{-3.55}{15}
-    \node[font=\footnotesize\itshape] at (3.8,-4.95) {(d) ConnectingGame và MatchEnd};
-  \end{scope}
-\end{tikzpicture}
-\caption{Các màn hình giao diện sảnh chờ, dựng lại theo mã \texttt{LobbyShellOverlay} (bố cục IMGUI)}
+\includegraphics[width=0.9\textwidth]{image/main-menu.png}
+\caption{Màn hình chính: chơi mạng (Multiplayer), luyện tập ngoại tuyến, cài đặt và thoát}
+\label{fig:A-menu}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{image/login-screen.png}
+\caption{Màn hình đăng nhập (trạng thái \texttt{LoginScreen} / \texttt{Authenticating}): tên đăng nhập, mật khẩu,
+tạo tài khoản mới}
+\label{fig:A-dangnhap}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{image/room-browser.png}
+\caption{Danh sách phòng (trạng thái \texttt{RoomBrowser}): tìm kiếm, lọc theo chế độ và khu vực, làm mới, vào
+phòng, ghép trận nhanh và tạo phòng}
 \label{fig:A-sanh}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{image/practice-mode.png}
+\caption{Màn hình luyện tập ngoại tuyến: chọn bản đồ, chế độ chơi, độ khó và số lượng bot, không cần kết nối mạng}
+\label{fig:A-luyentap}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{image/settings.png}
+\caption{Màn hình cài đặt: hiển thị, âm thanh và lối chơi, lưu theo máy}
+\label{fig:A-caidat}
 \end{figure}
 
 % -------------------------------------------------------------------------------------
