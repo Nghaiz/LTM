@@ -213,7 +213,25 @@ namespace Ironfront.Net.Unity.EditorTools
 
 
             EditorSceneManager.MarkSceneDirty(scene);
-            EditorSceneManager.SaveScene(scene);
+
+            // The return value is CHECKED, and that is the whole point of this line.
+            //
+            // SaveScene answers false when the write did not happen, and this script used to
+            // discard the answer and log "saved" regardless. It did that for a whole session: a
+            // second Editor held Menu.unity open, every batch rebuild failed to write, and the
+            // report said the scene had been saved each time -- so the fixes being made were
+            // reported as landed while the file on disk still had the previous revision in it, and
+            // the authoring test kept failing on a string the source no longer contained. A build
+            // step that cannot fail is worse than no build step, which this repository has already
+            // written down once, in ci.ps1, about the Unity compile check.
+            if (!EditorSceneManager.SaveScene(scene))
+            {
+                log.AppendLine("FAILED: SaveScene refused to write " + ScenePath +
+                               ". Something else is holding the file open -- most often a second " +
+                               "Unity Editor with this scene loaded. Close it and run again.");
+                return false;
+            }
+
             log.AppendLine("saved: " + ScenePath);
             return true;
         }
@@ -310,7 +328,12 @@ namespace Ironfront.Net.Unity.EditorTools
             Angular(panel, "GlassPanel", new Vector2(0f, -5f), new Vector2(700f, 680f),
                 CutCard, Surface);
 
-            Label(panel, "Kicker", "SECURE CONNECTION // EU-01", 10,
+            // "SECURE CONNECTION // EU-01" was here, and the region code is prototype mock data:
+            // the spec says mock values are never copied into Unity, and MenuAuthoringTests has
+            // asserted that since before this screen existed. A real region would have to come
+            // from the master, which does not name one, so the kicker says only what is true at
+            // this point in the flow.
+            Label(panel, "Kicker", "SECURE CONNECTION", 10,
                 new Vector2(0f, 260f), new Vector2(520f, 22f)).color = CyanSoft;
             Label(panel, "Heading", "SIGN IN", 38, new Vector2(0f, 224f), new Vector2(520f, 52f));
             Text subheading = Label(panel, "Subheading", "Welcome back, soldier.", 15,
@@ -322,8 +345,12 @@ namespace Ironfront.Net.Unity.EditorTools
                 iconAsset: "icons/user.png");
             InputField password = PackField(panel, "Password", "Password",
                 new Vector2(0f, 56f), new Vector2(480f, 54f), password: true,
-                iconAsset: "icons/lock.png");
-            Button reveal = AddPasswordReveal(panel, password, new Vector2(210f, 56f));
+                iconAsset: "icons/lock.png", trailingAction: 66f);
+            // Inside the field's right end, which is where `.field-action` sits in the prototype,
+            // and at a position the field's text inset now stops short of. It used to be centred
+            // at x=210 over a field spanning -240..240, so it covered the last 75px of the input
+            // and swallowed every click meant for it.
+            Button reveal = AddPasswordReveal(panel, password, new Vector2(206f, 56f));
             Toggle remember = PackToggle(panel, "RememberMe", "Remember me",
                 new Vector2(-125f, 10f));
             Button forgot = LinkButton(panel, "ForgotPassword", "Forgot password?",
@@ -1024,12 +1051,21 @@ namespace Ironfront.Net.Unity.EditorTools
             Button start = PackButton(panel, "StartGame", "START GAME",
                 new Vector2(615f, -410f), new Vector2(220f, 50f), "command");
 
+            // The chat band sits ABOVE the action band, and the two used to share one.
+            //
+            // chatLog/chatField/chatSend were at y=-290 and y=-370 while LEAVE, SWITCH SIDE, READY
+            // UP and START GAME all sat at y=-410 in 50px-tall rows -- so the chat row's own 60px
+            // height reached down to -400 and landed on top of them. SEND covered READY UP and
+            // SWITCH SIDE, the input covered LEAVE ROOM, and the log covered the top of the input.
+            // Every one of those is a click the wrong control swallowed.
             Text chatLog = Label(
-                panel, "ChatLog", string.Empty, 24, new Vector2(0f, -290f), new Vector2(1400f, 130f));
+                panel, "ChatLog", string.Empty, 22, new Vector2(0f, -235f), new Vector2(1400f, 100f));
             chatLog.alignment = TextAnchor.LowerLeft;
             chatLog.resizeTextForBestFit = false;
 
-            InputField chatField = Field(panel, "ChatInput", "Say something", new Vector2(-180f, -370f), password: false);
+            InputField chatField = PackField(panel, "ChatInput", "Say something",
+                new Vector2(-180f, -330f), new Vector2(560f, 52f), password: false,
+                iconAsset: "icons/chevron.png");
 
             // The master's own limit, so the field cannot accept a line the master will refuse.
             // Nothing capped this before, and the refusal that came back was reported as "you are
@@ -1037,11 +1073,12 @@ namespace Ironfront.Net.Unity.EditorTools
             // identical text, and got the identical sentence. Read from the shared protocol
             // constant rather than typed here: two places holding one number is how they drift.
             chatField.characterLimit = MspChatLimits.MaxTextCharacters;
-            Button chatSend = MakeButton(
-                panel, "ChatSend", "SEND", new Vector2(280f, -370f), new Vector2(240f, 60f));
+            Button chatSend = PackButton(
+                panel, "ChatSend", "SEND", new Vector2(280f, -330f), new Vector2(200f, 52f),
+                "secondary");
 
             Text error = Label(
-                panel, "Error", string.Empty, 26, new Vector2(0f, -490f), new Vector2(1400f, 56f));
+                panel, "Error", string.Empty, 22, new Vector2(0f, -455f), new Vector2(1400f, 30f));
             error.color = ErrorInk;
 
             MenuRoomLobbyScreen screen = panel.AddComponent<MenuRoomLobbyScreen>();
@@ -1338,9 +1375,13 @@ namespace Ironfront.Net.Unity.EditorTools
 
         private static Button AddPasswordReveal(GameObject parent, InputField field, Vector2 position)
         {
+            // 56x42, the size of `.field-action` and small enough to sit inside the field's right
+            // end without reaching the text. It used to be a 90x40 link button, which needed more
+            // width than the field could spare beside its own contents.
             Button button = LinkButton(parent, field.name + "Reveal", "SHOW", position,
-                new Vector2(90f, 40f));
+                new Vector2(56f, 42f));
             Text caption = button.GetComponentInChildren<Text>(true);
+            caption.fontSize = 13;
             MenuPasswordReveal reveal = button.gameObject.AddComponent<MenuPasswordReveal>();
             reveal.Configure(field, button, caption);
             return button;
@@ -1512,7 +1553,7 @@ namespace Ironfront.Net.Unity.EditorTools
 
         private static InputField PackField(
             GameObject parent, string name, string placeholder, Vector2 position, Vector2 size,
-            bool password, string iconAsset = null)
+            bool password, string iconAsset = null, float trailingAction = 0f)
         {
             // `.field` is a plain rectangle -- no cut -- with a 1px #557996 border and
             // `box-shadow: inset 3px 0 var(--cyan)`, a 3px cyan bar down the left edge. Two
@@ -1537,13 +1578,13 @@ namespace Ironfront.Net.Unity.EditorTools
             text.supportRichText = false;
             text.resizeTextForBestFit = false;
             text.color = Color.white;
-            FieldInset(text.GetComponent<RectTransform>());
+            FieldInset(text.GetComponent<RectTransform>(), trailingAction);
 
             Text hint = Label(go, "Placeholder", placeholder, 18, Vector2.zero, size);
             hint.alignment = TextAnchor.MiddleLeft;
             hint.color = Hex("738CA2");
             hint.resizeTextForBestFit = false;
-            FieldInset(hint.GetComponent<RectTransform>());
+            FieldInset(hint.GetComponent<RectTransform>(), trailingAction);
 
             InputField field = go.GetComponent<InputField>();
             field.targetGraphic = frame;
@@ -1561,12 +1602,17 @@ namespace Ironfront.Net.Unity.EditorTools
         }
 
         /// <summary>The text inset of <c>.field input</c>, past the 53px glyph column.</summary>
-        private static void FieldInset(RectTransform rect)
+        /// <param name="trailingAction">
+        /// Width reserved at the right end for a button sitting inside the field, such as the
+        /// password reveal. <c>.field input</c> is <c>flex: 1</c> and stops at the action; without
+        /// this the text and the action occupy the same pixels and the action swallows the clicks.
+        /// </param>
+        private static void FieldInset(RectTransform rect, float trailingAction = 0f)
         {
             rect.anchorMin = Vector2.zero;
             rect.anchorMax = Vector2.one;
             rect.offsetMin = new Vector2(53f, 6f);
-            rect.offsetMax = new Vector2(-14f, -6f);
+            rect.offsetMax = new Vector2(-14f - trailingAction, -6f);
         }
 
         private static Toggle PackToggle(GameObject parent, string name, string caption, Vector2 position)

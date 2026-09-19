@@ -35,7 +35,16 @@ namespace Ironfront.Net.Unity.EditorTools
                     texture.textureType = TextureImporterType.Sprite;
                     texture.spriteImportMode = SpriteImportMode.Single;
                     texture.filterMode = FilterMode.Bilinear;
-                    texture.mipmapEnabled = false;
+                    // Mipmaps ON, which is the opposite of the usual advice for UI art.
+                    //
+                    // The usual advice assumes a sprite drawn at its own size, where mip 0 is used
+                    // and the chain is dead weight. This pack is not that: the icons are 96px and
+                    // the menu draws them at 22 to 28, so every one of them is minified three to
+                    // four times over. With no mip chain that minification is a bilinear average of
+                    // four texels -- the mushy, shimmery look the icons had, and worse the smaller
+                    // the window, because the canvas scaler shrinks the draw size while the
+                    // texture stays 96px.
+                    texture.mipmapEnabled = true;
                     texture.alphaIsTransparency = true;
                     texture.wrapMode = TextureWrapMode.Clamp;
                     texture.npotScale = TextureImporterNPOTScale.None;

@@ -36,7 +36,21 @@ namespace Ironfront.Net.Unity
     {
         private readonly Transform _lookTransform;
         private readonly Func<bool> _aiming;
-        private readonly Func<bool> _sprinting;
+
+        /// <summary>
+        /// The sprint bit from the three raw keys, or null to send the raw sprint key alone.
+        /// </summary>
+        /// <remarks>
+        /// <b>It takes the keys rather than fetching them, and that is not a style choice.</b> The
+        /// gate this supplies is <c>FpsActorController.IsSprinting()</c>, which is written in terms
+        /// of <c>Crouch()</c> and <c>Aiming()</c> — and those read back through
+        /// <see cref="Buttons"/>. A no-argument delegate therefore closed a cycle:
+        /// <c>Buttons</c> asked for the sprint bit, the gate asked whether the player was crouching,
+        /// and answering that asked <c>Buttons</c> for the crouch bit, which recomputed the sprint
+        /// bit. The stack overflow it produced was on the first frame after a map loaded.
+        /// </remarks>
+        private readonly Func<bool, bool, bool, bool> _sprinting;
+
         private readonly Func<int> _weaponSlotIntent;
 
         /// <param name="lookTransform">
@@ -77,7 +91,7 @@ namespace Ironfront.Net.Unity
         /// </param>
         public LocalInputSource(
             Transform lookTransform, Func<bool> aiming = null, Func<int> weaponSlotIntent = null,
-            Func<bool> sprinting = null)
+            Func<bool, bool, bool, bool> sprinting = null)
         {
             _lookTransform = lookTransform;
             _aiming = aiming;
@@ -149,13 +163,20 @@ namespace Ironfront.Net.Unity
                     fire: false, aim: false, reload: false,
                     jump: false, crouch: false, sprint: false, use: false);
 
+                // The three keys the sprint gate is written in terms of, computed HERE and handed
+                // over, so the gate never has to ask this property for them. See _sprinting's
+                // remark for what asking cost.
+                bool aimKey = Input.GetButton("Fire2") || Input.GetMouseButton(1);
+                bool crouchKey = Input.GetButton("Crouch");
+                bool sprintKey = Input.GetButton("Sprint");
+
                 return InputButtonPacker.Pack(
                     fire:   (Input.GetButton("Fire1") || Input.GetMouseButton(0)) && !loadoutOpen,
-                    aim:    (Input.GetButton("Fire2") || Input.GetMouseButton(1)) && !loadoutOpen,
+                    aim:    aimKey && !loadoutOpen,
                     reload: Input.GetButton("Reload") && !loadoutOpen,
                     jump:   Input.GetButton("Jump"),
-                    crouch: Input.GetButton("Crouch"),
-                    sprint: _sprinting != null ? _sprinting() : Input.GetButton("Sprint"),
+                    crouch: crouchKey,
+                    sprint: _sprinting != null ? _sprinting(crouchKey, aimKey, sprintKey) : sprintKey,
                     use:    Input.GetButton("Use"),
                     weaponSlot: _weaponSlotIntent != null ? _weaponSlotIntent() : -1);
             }
