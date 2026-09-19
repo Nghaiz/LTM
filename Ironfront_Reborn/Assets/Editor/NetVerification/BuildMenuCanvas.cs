@@ -468,48 +468,79 @@ namespace Ironfront.Net.Unity.EditorTools
             PackPanel(panel, "OperationsPanel", new Vector2(0f, -30f), new Vector2(1540f, 870f));
             TopBar(panel, toast, "PRACTICE", "OFFLINE SIMULATION", "LOCAL SESSION", offline: true,
                 ("SETTINGS", controller.OpenSettings));
-            Label(panel, "Kicker", "COMBAT SIMULATION // SOLO TRAINING", 15,
+            Label(panel, "Kicker", "COMBAT SIMULATION // SOLO TRAINING", 11,
                 new Vector2(-510f, 375f), new Vector2(520f, 28f)).alignment = TextAnchor.MiddleLeft;
-            Label(panel, "Heading", "PRACTICE MODE", 46,
+            Label(panel, "Heading", "PRACTICE MODE", 42,
                 new Vector2(-480f, 325f), new Vector2(580f, 66f)).alignment = TextAnchor.MiddleLeft;
             Text note = Label(panel, "Note",
-                "Map names come from the installed game. Prototype theaters are not used.", 16,
+                "Configure a local battle and deploy immediately.", 14,
                 new Vector2(-390f, 275f), new Vector2(760f, 34f));
             note.alignment = TextAnchor.MiddleLeft;
+            note.color = Hex("8DA8BA");
 
-            Angular(panel, "MapPreview", new Vector2(-445f, -35f), new Vector2(560f, 520f),
+            AngularPanel mapCard = Angular(panel, "MapPreview", new Vector2(-475f, -40f),
+                new Vector2(490f, 520f),
                 0f, Hex("061522"), AngularEdge.All, 1f, Hex("3F6986"));
-            Label(panel, "MapPreviewTitle", "SELECTED THEATER", 18,
-                new Vector2(-445f, 80f), new Vector2(470f, 50f));
-            Label(panel, "Offline", "OFFLINE SIMULATION // LOCAL SESSION", 16,
-                new Vector2(-445f, 10f), new Vector2(470f, 40f));
+            Image practiceArt = Plain(mapCard.gameObject, "MapArt", new Vector2(0f, 112f),
+                new Vector2(490f, 295f), Color.white);
+            practiceArt.sprite = IronfrontRebornUiAssetCatalog.Sprite("backgrounds/multiplayer.png");
+            Label(panel, "MapPreviewTitle", "SELECTED THEATER", 11,
+                new Vector2(-475f, -8f), new Vector2(430f, 28f)).alignment = TextAnchor.MiddleLeft;
+            Label(panel, "Offline", "OFFLINE SIMULATION // LOCAL SESSION", 14,
+                new Vector2(-475f, -50f), new Vector2(430f, 40f)).alignment = TextAnchor.MiddleLeft;
 
-            Dropdown map = MakeDropdown(panel, "PracticeMap", new Vector2(300f, 225f));
-            Button mode = MakeButton(panel, "PracticeMode", "GAME MODE",
-                new Vector2(300f, 145f), new Vector2(560f, 60f));
-            Button difficulty = MakeButton(panel, "Difficulty", "AI DIFFICULTY",
-                new Vector2(300f, 65f), new Vector2(560f, 60f));
-            Button bots = MakeButton(panel, "BotCount", "BOT COUNT",
-                new Vector2(300f, -15f), new Vector2(560f, 60f));
-            Button weather = MakeButton(panel, "Weather", "WEATHER / TIME",
-                new Vector2(300f, -95f), new Vector2(560f, 60f));
-            Button rules = MakeButton(panel, "Rules", "VEHICLES / FRIENDLY FIRE",
-                new Vector2(300f, -175f), new Vector2(560f, 60f));
-            back = PackButton(panel, "Back", "BACK", new Vector2(200f, -365f),
-                new Vector2(280f, 68f), "secondary");
-            Button start = PackButton(panel, "StartPractice", "CONTINUE TO PRACTICE",
-                new Vector2(510f, -365f), new Vector2(340f, 68f), "primary");
+            const float rightCentre = 290f;
+            const float rightWidth = 820f;
+            const float gap = 14f;
+            float two = (rightWidth - gap) * 0.5f;
+            float three = (rightWidth - (gap * 2f)) / 3f;
+            float leftTwo = rightCentre - ((two + gap) * 0.5f);
+            float rightTwo = rightCentre + ((two + gap) * 0.5f);
+            float leftThree = rightCentre - three - gap;
+            float rightThree = rightCentre + three + gap;
+
+            Label(panel, "ConfigHeading", "SIMULATION PARAMETERS                         01", 13,
+                new Vector2(rightCentre, 242f), new Vector2(rightWidth, 32f))
+                .alignment = TextAnchor.MiddleLeft;
+            Dropdown map = MakeDropdown(panel, "PracticeMap", new Vector2(leftTwo, 190f),
+                new Vector2(two, 48f));
+            Button mode = MakeButton(panel, "PracticeMode", "GAME MODE // IN DEVELOPMENT",
+                new Vector2(rightTwo, 190f), new Vector2(two, 48f));
+            Button difficulty = MakeButton(panel, "Difficulty", "AI DIFFICULTY // IN DEVELOPMENT",
+                new Vector2(leftThree, 115f), new Vector2(three, 48f));
+            Button bots = MakeButton(panel, "BotCount", "BOT COUNT // IN DEVELOPMENT",
+                new Vector2(rightCentre, 115f), new Vector2(three, 48f));
+            Button matchTime = MakeButton(panel, "MatchTime", "MATCH TIME // IN DEVELOPMENT",
+                new Vector2(rightThree, 115f), new Vector2(three, 48f));
+            Button weather = MakeButton(panel, "Weather", "WEATHER // IN DEVELOPMENT",
+                new Vector2(leftThree, 40f), new Vector2(three, 48f));
+            Button timeOfDay = MakeButton(panel, "TimeOfDay", "TIME OF DAY // IN DEVELOPMENT",
+                new Vector2(rightCentre, 40f), new Vector2(three, 48f));
+            Button playerTeam = MakeButton(panel, "PlayerTeam", "PLAYER TEAM // IN DEVELOPMENT",
+                new Vector2(rightThree, 40f), new Vector2(three, 48f));
+            Button vehicles = MakeButton(panel, "Vehicles", "VEHICLES // IN DEVELOPMENT",
+                new Vector2(leftTwo, -45f), new Vector2(two, 65f));
+            Button friendlyFire = MakeButton(panel, "FriendlyFire", "FRIENDLY FIRE // IN DEVELOPMENT",
+                new Vector2(rightTwo, -45f), new Vector2(two, 65f));
+            Label(panel, "PracticeSummary", "DEPLOYMENT   •   LOCAL HOST", 13,
+                new Vector2(rightCentre, -125f), new Vector2(rightWidth, 54f));
+            back = PackButton(panel, "Back", "BACK", new Vector2(325f, -365f),
+                new Vector2(220f, 50f), "secondary");
+            Button start = PackButton(panel, "StartPractice", "START PRACTICE  ›",
+                new Vector2(585f, -365f), new Vector2(280f, 50f), "primary");
 
             MenuPracticeScreen screen = panel.AddComponent<MenuPracticeScreen>();
             var so = new SerializedObject(screen);
             Assign(so, "_controller", controller);
             Assign(so, "_mapDropdown", map);
             Assign(so, "_startButton", start);
-            AssignArray(so, "_unsupportedControls", new Object[] { mode, difficulty, bots, weather, rules });
+            AssignArray(so, "_unsupportedControls", new Object[] { mode, difficulty, bots,
+                matchTime, weather, timeOfDay, playerTeam, vehicles, friendlyFire });
             Assign(so, "_toast", toast);
             so.ApplyModifiedPropertiesWithoutUndo();
             ConfigureKeyboard(panel,
-                new Selectable[] { map, mode, difficulty, bots, weather, rules, back, start },
+                new Selectable[] { map, mode, difficulty, bots, matchTime, weather, timeOfDay,
+                    playerTeam, vehicles, friendlyFire, back, start },
                 start, back);
             return panel;
         }
@@ -523,10 +554,19 @@ namespace Ironfront.Net.Unity.EditorTools
             PackPanel(panel, "OperationsPanel", new Vector2(0f, -30f), new Vector2(1540f, 870f));
             TopBar(panel, toast, "SYSTEM SETTINGS", "CONFIGURATION", "LOCAL PROFILE", offline: true,
                 ("MAIN MENU", controller.ReturnToTitle));
-            Label(panel, "Kicker", "SYSTEM CONTROL // CLIENT CONFIGURATION", 15,
+            Label(panel, "Kicker", "SYSTEM CONTROL // CLIENT CONFIGURATION", 11,
                 new Vector2(-480f, 375f), new Vector2(620f, 28f)).alignment = TextAnchor.MiddleLeft;
-            Label(panel, "Heading", "SETTINGS", 46,
+            Label(panel, "Heading", "SETTINGS", 42,
                 new Vector2(-560f, 325f), new Vector2(460f, 66f)).alignment = TextAnchor.MiddleLeft;
+            Text settingsNote = Label(panel, "Subtitle",
+                "Optimize visuals, performance and battlefield awareness.", 14,
+                new Vector2(-360f, 286f), new Vector2(700f, 28f));
+            settingsNote.alignment = TextAnchor.MiddleLeft;
+            settingsNote.color = Hex("8DA8BA");
+            Text profile = Label(panel, "SettingsProfile", "PROFILE   DEFAULT", 13,
+                new Vector2(570f, 338f), new Vector2(260f, 30f));
+            profile.alignment = TextAnchor.MiddleRight;
+            profile.color = Orange;
 
             Button displayTab = MakeButton(panel, "DisplayTab", "01  DISPLAY",
                 new Vector2(-570f, 190f), new Vector2(260f, 64f));
@@ -584,11 +624,15 @@ namespace Ironfront.Net.Unity.EditorTools
             gameplayGroup.SetActive(false);
 
             Button reset = PackButton(panel, "Reset", "RESET DEFAULTS",
-                new Vector2(90f, -365f), new Vector2(280f, 68f), "secondary");
+                new Vector2(90f, -365f), new Vector2(280f, 50f), "secondary");
             back = PackButton(panel, "Back", "CANCEL",
-                new Vector2(390f, -365f), new Vector2(260f, 68f), "secondary");
+                new Vector2(390f, -365f), new Vector2(260f, 50f), "secondary");
             Button save = PackButton(panel, "Save", "APPLY SETTINGS",
-                new Vector2(690f, -365f), new Vector2(300f, 68f), "primary");
+                new Vector2(690f, -365f), new Vector2(300f, 50f), "primary");
+            Text settingsStatus = Label(panel, "SettingsStatus", "NO UNSAVED CHANGES", 11,
+                new Vector2(-520f, -365f), new Vector2(300f, 30f));
+            settingsStatus.alignment = TextAnchor.MiddleLeft;
+            settingsStatus.color = Hex("718FA4");
 
             MenuSettingsScreen screen = panel.AddComponent<MenuSettingsScreen>();
             var so = new SerializedObject(screen);
@@ -601,6 +645,7 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_sensitivity", sensitivity);
             Assign(so, "_saveButton", save);
             Assign(so, "_resetButton", reset);
+            Assign(so, "_statusText", settingsStatus);
             AssignArray(so, "_categoryButtons", new Object[] { displayTab, audioTab, gameplayTab });
             AssignArray(so, "_categoryGroups", new Object[] { displayGroup, audioGroup, gameplayGroup });
             AssignArray(so, "_unsupportedButtons",
@@ -797,8 +842,8 @@ namespace Ironfront.Net.Unity.EditorTools
                 password: false);
             bots.contentType = InputField.ContentType.IntegerNumber;
 
-            Toggle isPrivate = PackToggle(panel, "Private", "Private room",
-                new Vector2(leftHalf, 54f));
+            Toggle isPrivate = MakeSwitch(panel, "Private", "PRIVATE ROOM",
+                new Vector2(leftHalf, 54f), new Vector2(half, 65f));
             Button balance = MakeButton(panel, "Balance", "AUTO-BALANCE // IN DEVELOPMENT",
                 new Vector2(rightHalf, 54f), new Vector2(half, 65f));
             InputField password = PackField(panel, "Password", "Room password",
@@ -1784,29 +1829,36 @@ namespace Ironfront.Net.Unity.EditorTools
         /// <summary>A checkbox with a caption beside it.</summary>
         private static Toggle MakeToggle(
             GameObject parent, string name, string caption, Vector2 position)
+            => MakeSwitch(parent, name, caption, position, new Vector2(560f, 65f));
+
+        private static Toggle MakeSwitch(
+            GameObject parent, string name, string caption, Vector2 position, Vector2 size)
         {
-            var go = new GameObject(name, typeof(RectTransform));
+            var go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Toggle));
             go.transform.SetParent(parent.transform, worldPositionStays: false);
-            Centre(go.GetComponent<RectTransform>(), position, new Vector2(560f, 50f));
+            Centre(go.GetComponent<RectTransform>(), position, size);
+            Image card = PackFieldFace(go);
 
-            var boxObject = new GameObject("Box", typeof(RectTransform));
+            var boxObject = new GameObject("Track", typeof(RectTransform), typeof(Image));
             boxObject.transform.SetParent(go.transform, worldPositionStays: false);
-            Centre(boxObject.GetComponent<RectTransform>(), new Vector2(-250f, 0f), new Vector2(40f, 40f));
-            Image box = boxObject.AddComponent<Image>();
-            box.color = new Color(0.12f, 0.14f, 0.18f, 1f);
+            Centre(boxObject.GetComponent<RectTransform>(),
+                new Vector2((-size.x * 0.5f) + 30f, 0f), new Vector2(30f, 17f));
+            Image track = boxObject.GetComponent<Image>();
+            track.color = Hex("176F9F");
 
-            var markObject = new GameObject("Mark", typeof(RectTransform));
+            var markObject = new GameObject("Handle", typeof(RectTransform), typeof(Image));
             markObject.transform.SetParent(boxObject.transform, worldPositionStays: false);
-            Centre(markObject.GetComponent<RectTransform>(), Vector2.zero, new Vector2(26f, 26f));
-            Image mark = markObject.AddComponent<Image>();
-            mark.color = Ink;
+            Centre(markObject.GetComponent<RectTransform>(), new Vector2(7f, 0f), new Vector2(11f, 11f));
+            Image mark = markObject.GetComponent<Image>();
+            mark.color = CyanSoft;
 
-            Text label = Label(go, "Caption", caption, 28, new Vector2(30f, 0f), new Vector2(460f, 44f));
+            Text label = Label(go, "Caption", caption, 14, new Vector2(30f, 0f),
+                new Vector2(size.x - 90f, 44f));
             label.alignment = TextAnchor.MiddleLeft;
             label.resizeTextForBestFit = false;
 
-            Toggle toggle = go.AddComponent<Toggle>();
-            toggle.targetGraphic = box;
+            Toggle toggle = go.GetComponent<Toggle>();
+            toggle.targetGraphic = card;
             toggle.graphic = mark;
             toggle.isOn = false;
 

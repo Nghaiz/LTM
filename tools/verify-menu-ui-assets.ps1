@@ -71,10 +71,18 @@ foreach ($helper in @('PackPanel(', 'PackButtonFace(', 'PackFieldFace(', 'PackCo
 if ($builder -notmatch 'IPreprocessBuildWithReport') {
     $failures.Add('Player builds do not regenerate Menu.unity from the PNG pack first')
 }
+foreach ($practiceControl in @('MatchTime', 'TimeOfDay', 'PlayerTeam', 'Vehicles', 'FriendlyFire')) {
+    if ($builder -notmatch ('"' + [regex]::Escape($practiceControl) + '"')) {
+        $failures.Add("Practice page is missing HTML control $practiceControl")
+    }
+}
 
 $settings = Get-Content -Raw -LiteralPath $settingsPath
 if ($settings -notmatch '_categoryGroups') {
     $failures.Add('Settings tabs do not switch real category groups')
+}
+if ($settings -notmatch '_statusText') {
+    $failures.Add('Settings HTML status line is not bound to runtime state')
 }
 
 $createRoom = Get-Content -Raw -LiteralPath $createRoomPath

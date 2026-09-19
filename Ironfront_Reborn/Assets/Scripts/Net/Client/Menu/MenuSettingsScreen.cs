@@ -19,6 +19,7 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private Slider? _sensitivity;
         [SerializeField] private Button? _saveButton;
         [SerializeField] private Button? _resetButton;
+        [SerializeField] private Text? _statusText;
 
         [Header("Categories")]
         [SerializeField] private Button[] _categoryButtons = System.Array.Empty<Button>();
@@ -68,6 +69,7 @@ namespace Ironfront.Net.Unity.Client.Menu
         {
             if (_resolutionOptions.Count == 0) SetResolutionOptions(DetectedResolutions());
             LoadIntoControls();
+            SetStatus("SETTINGS LOADED");
         }
 
         public void SetResolutionOptions(IEnumerable<DisplayResolutionOption> options)
@@ -98,6 +100,7 @@ namespace Ironfront.Net.Unity.Client.Menu
                 _sensitivity != null ? _sensitivity.value : 0.5f);
             MenuSettingsModel.Save(data);
             if (applyRuntime) ApplyRuntime(data);
+            SetStatus("ALL CHANGES SAVED");
         }
 
         public void ResetToDefaults()
@@ -112,6 +115,7 @@ namespace Ironfront.Net.Unity.Client.Menu
                 90f,
                 0.5f);
             PutIntoControls(defaults);
+            SetStatus("DEFAULTS RESTORED");
         }
 
         private void LoadIntoControls()
@@ -193,7 +197,17 @@ namespace Ironfront.Net.Unity.Client.Menu
             if (_saveButton != null) _saveButton.onClick.AddListener(() => Save());
             if (_resetButton != null) _resetButton.onClick.AddListener(ResetToDefaults);
             if (_displayMode != null)
-                _displayMode.onValueChanged.AddListener(_ => RefreshResolutionAvailability());
+                _displayMode.onValueChanged.AddListener(_ =>
+                {
+                    RefreshResolutionAvailability();
+                    MarkUnsaved();
+                });
+            if (_resolution != null) _resolution.onValueChanged.AddListener(_ => MarkUnsaved());
+            if (_quality != null) _quality.onValueChanged.AddListener(_ => MarkUnsaved());
+            if (_vSync != null) _vSync.onValueChanged.AddListener(_ => MarkUnsaved());
+            if (_masterVolume != null) _masterVolume.onValueChanged.AddListener(_ => MarkUnsaved());
+            if (_fieldOfView != null) _fieldOfView.onValueChanged.AddListener(_ => MarkUnsaved());
+            if (_sensitivity != null) _sensitivity.onValueChanged.AddListener(_ => MarkUnsaved());
             for (int i = 0; i < _categoryButtons.Length; i++)
             {
                 int category = i;
@@ -214,6 +228,13 @@ namespace Ironfront.Net.Unity.Client.Menu
         }
 
         private void ShowDevelopment() => _toast?.ShowDevelopment();
+
+        private void MarkUnsaved() => SetStatus("UNSAVED CHANGES");
+
+        private void SetStatus(string value)
+        {
+            if (_statusText != null) _statusText.text = value;
+        }
 
         private static IEnumerable<DisplayResolutionOption> DetectedResolutions()
         {
