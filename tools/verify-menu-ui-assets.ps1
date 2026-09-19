@@ -11,6 +11,7 @@ $catalogPath = Join-Path $RepositoryRoot 'Ironfront_Reborn/Assets/Editor/NetVeri
 $builderPath = Join-Path $RepositoryRoot 'Ironfront_Reborn/Assets/Editor/NetVerification/BuildMenuCanvas.cs'
 $settingsPath = Join-Path $RepositoryRoot 'Ironfront_Reborn/Assets/Scripts/Net/Client/Menu/MenuSettingsScreen.cs'
 $createRoomPath = Join-Path $RepositoryRoot 'Ironfront_Reborn/Assets/Scripts/Net/Client/Menu/MenuCreateRoomScreen.cs'
+$roomLobbyPath = Join-Path $RepositoryRoot 'Ironfront_Reborn/Assets/Scripts/Net/Client/Menu/MenuRoomLobbyScreen.cs'
 $scenePath = Join-Path $RepositoryRoot 'Ironfront_Reborn/Assets/Scenes/Menu.unity'
 
 $html = Get-Content -Raw -LiteralPath $htmlPath
@@ -46,6 +47,31 @@ if ($builder -notmatch '"Versus"') {
     $failures.Add('Waiting Room does not author the central versus treatment')
 }
 
+# The HTML pack is the rendering source of truth. These checks deliberately reject a
+# geometrically similar substitute: the generated Canvas must use the rasterised pack faces for
+# every repeated panel/button/field and carry the supplied decorative treatment where the HTML
+# uses it.
+foreach ($asset in @(
+    'panels/operations-panel.png',
+    'buttons/primary.png',
+    'buttons/secondary.png',
+    'inputs/field.png',
+    'badges/ready.png',
+    'decorative/corner.png'
+)) {
+    if ($builder -notmatch [regex]::Escape($asset)) {
+        $failures.Add("Menu builder does not render pack asset $asset")
+    }
+}
+foreach ($helper in @('PackPanel(', 'PackButtonFace(', 'PackFieldFace(', 'PackCorner(')) {
+    if ($builder -notmatch [regex]::Escape($helper)) {
+        $failures.Add("Menu builder is missing shared HTML-pack renderer $helper")
+    }
+}
+if ($builder -notmatch 'IPreprocessBuildWithReport') {
+    $failures.Add('Player builds do not regenerate Menu.unity from the PNG pack first')
+}
+
 $settings = Get-Content -Raw -LiteralPath $settingsPath
 if ($settings -notmatch '_categoryGroups') {
     $failures.Add('Settings tabs do not switch real category groups')
@@ -55,6 +81,13 @@ $createRoom = Get-Content -Raw -LiteralPath $createRoomPath
 foreach ($field in @('_mapPreviewCapacity', '_mapPreviewBots', '_mapPreviewSecurity')) {
     if ($createRoom -notmatch [regex]::Escape($field)) {
         $failures.Add("Create Room preview is missing runtime field $field")
+    }
+}
+
+$roomLobby = Get-Content -Raw -LiteralPath $roomLobbyPath
+foreach ($caption in @('"READY UP"', '"STAND DOWN"')) {
+    if ($roomLobby -notmatch [regex]::Escape($caption)) {
+        $failures.Add("Waiting Room runtime caption does not match HTML: $caption")
     }
 }
 
