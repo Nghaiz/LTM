@@ -76,6 +76,10 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private GameObject? _practiceBackBar;
         [SerializeField] private Button? _practiceBackButton;
 
+        [Header("Settings")]
+        [SerializeField] private GameObject? _settingsScreen;
+        [SerializeField] private Button? _settingsBackButton;
+
         [Header("Lobby readout")]
         [SerializeField] private Text? _signedInText;
 
@@ -134,6 +138,10 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         /// <summary>The legacy practice menu is showing, so every network screen is down.</summary>
         private bool _practiceOpen;
+        private bool _settingsOpen;
+
+        public bool IsPracticeScreenOpen => _practiceOpen;
+        public bool IsSettingsScreenOpen => _settingsOpen;
 
         private volatile bool _busy;
 
@@ -203,6 +211,9 @@ namespace Ironfront.Net.Unity.Client.Menu
         {
             if (_practiceBackButton != null)
                 _practiceBackButton.onClick.AddListener(ClosePractice);
+
+            if (_settingsBackButton != null)
+                _settingsBackButton.onClick.AddListener(CloseSettings);
 
             if (_browseRoomsButton != null)
                 _browseRoomsButton.onClick.AddListener(OpenRoomBrowser);
@@ -315,6 +326,32 @@ namespace Ironfront.Net.Unity.Client.Menu
             _flow.Transition(GameFlowState.LoginScreen);
         }
 
+        /// <summary>Returns from the login form to the title screen.</summary>
+        public void ReturnToTitle()
+        {
+            if (_flow == null || _flow.State != GameFlowState.LoginScreen) return;
+
+            ClearError();
+            _registerRequested = false;
+            _flow.Reset();
+        }
+
+        /// <summary>Returns from any menu page to the HTML prototype's main menu.</summary>
+        public void ReturnToMainMenu()
+        {
+            if (_flow == null) return;
+
+            ClearError();
+            ClearChat();
+            _practiceOpen = false;
+            _settingsOpen = false;
+            _registerRequested = false;
+            _createRequested = false;
+            _roomHeading = string.Empty;
+            _flow.Reset();
+            _dirty = true;
+        }
+
         /// <summary>
         /// The Title screen's secondary action: hand over to the legacy offline menu.
         /// </summary>
@@ -326,12 +363,9 @@ namespace Ironfront.Net.Unity.Client.Menu
         /// </remarks>
         public void OpenPractice()
         {
-            IPracticeLauncher? practice = NetClientBindings.Practice;
-            if (practice == null || !practice.IsAvailable) return;
-
             ClearError();
+            _settingsOpen = false;
             _practiceOpen = true;
-            practice.ShowPracticeMenu();
             _dirty = true;
         }
 
@@ -341,6 +375,29 @@ namespace Ironfront.Net.Unity.Client.Menu
             NetClientBindings.Practice?.HidePracticeMenu();
             _practiceOpen = false;
             _dirty = true;
+        }
+
+        public void OpenSettings()
+        {
+            ClearError();
+            _practiceOpen = false;
+            _settingsOpen = true;
+            _dirty = true;
+        }
+
+        public void CloseSettings()
+        {
+            _settingsOpen = false;
+            _dirty = true;
+        }
+
+        public void LaunchPracticeMap(string sceneName)
+        {
+            IPracticeLauncher? practice = NetClientBindings.Practice;
+            if (practice == null || !practice.IsAvailable) return;
+            _practiceOpen = false;
+            _dirty = true;
+            practice.LaunchMap(sceneName);
         }
 
         /// <summary>Whether the Practice button should be offered at all.</summary>
@@ -445,6 +502,9 @@ namespace Ironfront.Net.Unity.Client.Menu
             _createRequested = false;
             _dirty = true;
         }
+
+        /// <summary>Returns from the create form to the already-open room browser.</summary>
+        public void ShowRoomBrowser() => HideCreateRoom();
 
         /// <summary>
         /// Joins a room by id, with a password when it is private. P16 3.2.
@@ -678,26 +738,27 @@ namespace Ironfront.Net.Unity.Client.Menu
         {
             GameFlowState state = _flow != null ? _flow.State : GameFlowState.Booting;
 
-            bool practice = _practiceOpen;
-            bool login = !practice && state == GameFlowState.LoginScreen && !_registerRequested;
-            bool register = !practice && state == GameFlowState.LoginScreen && _registerRequested;
+            bool localOverlay = _practiceOpen || _settingsOpen;
+            bool login = !localOverlay && state == GameFlowState.LoginScreen && !_registerRequested;
+            bool register = !localOverlay && state == GameFlowState.LoginScreen && _registerRequested;
 
             // JoiningRoom draws the BROWSER, busy, rather than a screen of its own. The player
             // pressed a row and is waiting on one round trip; a blank interstitial for that would
             // be a screen whose only content is the absence of the one they were just looking at.
             // Every control on it is non-interactable while IsBusy, so the press cannot repeat.
-            bool browsing = !practice
+            bool browsing = !localOverlay
                             && (state == GameFlowState.RoomBrowser || state == GameFlowState.JoiningRoom);
 
-            SetActive(_titleScreen, !practice && state == GameFlowState.Booting);
+            SetActive(_titleScreen, !localOverlay && state == GameFlowState.Booting);
             SetActive(_loginScreen, login);
             SetActive(_registerScreen, register);
-            SetActive(_authenticatingScreen, !practice && state == GameFlowState.Authenticating);
-            SetActive(_lobbyScreen, !practice && state == GameFlowState.Lobby);
+            SetActive(_authenticatingScreen, !localOverlay && state == GameFlowState.Authenticating);
+            SetActive(_lobbyScreen, !localOverlay && state == GameFlowState.Lobby);
             SetActive(_roomBrowserScreen, browsing && !_createRequested);
             SetActive(_createRoomScreen, browsing && _createRequested);
-            SetActive(_roomLobbyScreen, !practice && state == GameFlowState.RoomLobby);
-            SetActive(_practiceBackBar, practice);
+            SetActive(_roomLobbyScreen, !localOverlay && state == GameFlowState.RoomLobby);
+            SetActive(_practiceBackBar, _practiceOpen);
+            SetActive(_settingsScreen, _settingsOpen);
 
             if (_browseRoomsButton != null) _browseRoomsButton.interactable = !_busy;
 
@@ -709,7 +770,14 @@ namespace Ironfront.Net.Unity.Client.Menu
 
         private static void SetActive(GameObject? screen, bool active)
         {
-            if (screen != null && screen.activeSelf != active) screen.SetActive(active);
+            if (screen == null) return;
+            MenuScreenTransition? transition = screen.GetComponent<MenuScreenTransition>();
+            if (transition != null)
+            {
+                transition.SetVisible(active, immediate: !Application.isPlaying);
+                return;
+            }
+            if (screen.activeSelf != active) screen.SetActive(active);
         }
 
         /// <summary>

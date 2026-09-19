@@ -52,6 +52,8 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private Text? _teamOneHeading;
         [SerializeField] private Text[] _teamZeroRows = new Text[RowsPerSide];
         [SerializeField] private Text[] _teamOneRows = new Text[RowsPerSide];
+        [SerializeField] private Image[] _teamZeroReadyBadges = new Image[RowsPerSide];
+        [SerializeField] private Image[] _teamOneReadyBadges = new Image[RowsPerSide];
 
         [Header("Controls")]
         [SerializeField] private Button? _switchSideButton;
@@ -70,12 +72,20 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private InputField? _chatField;
         [SerializeField] private Button? _chatSendButton;
 
+        private MenuChatInput? _chatInput;
+
         private void Awake()
         {
             if (_switchSideButton != null) _switchSideButton.onClick.AddListener(OnSwitchSide);
             if (_readyButton != null) _readyButton.onClick.AddListener(OnReady);
             if (_leaveButton != null) _leaveButton.onClick.AddListener(OnLeave);
-            if (_chatSendButton != null) _chatSendButton.onClick.AddListener(OnSendChat);
+            if (_chatField != null)
+            {
+                _chatInput = GetComponent<MenuChatInput>() ?? gameObject.AddComponent<MenuChatInput>();
+                _chatInput.Configure(_chatField, text => _controller?.SendChat(text));
+            }
+            if (_chatSendButton != null && _chatInput != null)
+                _chatSendButton.onClick.AddListener(_chatInput.SubmitCurrent);
 
             // Belt to BuildMenuCanvas's braces. That builder sets the same limit when it
             // GENERATES the canvas, which does nothing for a canvas already serialized in a
@@ -153,8 +163,10 @@ namespace Ironfront.Net.Unity.Client.Menu
         {
             RoomState? room = controller.Room;
 
-            DrawColumn(_teamZeroRows, _teamZeroHeading, 0, room, controller.PlayerId);
-            DrawColumn(_teamOneRows, _teamOneHeading, 1, room, controller.PlayerId);
+            DrawColumn(_teamZeroRows, _teamZeroReadyBadges, _teamZeroHeading, 0, room,
+                controller.PlayerId);
+            DrawColumn(_teamOneRows, _teamOneReadyBadges, _teamOneHeading, 1, room,
+                controller.PlayerId);
 
             if (_chatLog != null) _chatLog.text = controller.ChatLog;
 
@@ -178,7 +190,7 @@ namespace Ironfront.Net.Unity.Client.Menu
                 _switchSideLabel.text = waiting ? "SWITCH SIDE" : "SIDES LOCKED";
 
             if (_readyButton != null) _readyButton.interactable = waiting && known && !controller.IsBusy;
-            if (_readyLabel != null) _readyLabel.text = ready ? "NOT READY" : "READY";
+            if (_readyLabel != null) _readyLabel.text = ready ? "STAND DOWN" : "READY UP";
 
             if (_leaveButton != null) _leaveButton.interactable = !controller.IsBusy;
             if (_chatSendButton != null) _chatSendButton.interactable = !controller.IsBusy;
@@ -193,7 +205,8 @@ namespace Ironfront.Net.Unity.Client.Menu
         /// what a screenshot of a mid-switch roster makes ambiguous.
         /// </remarks>
         private static void DrawColumn(
-            Text[] rows, Text? heading, byte team, RoomState? room, int selfPlayerId)
+            Text[] rows, Image[] readyBadges, Text? heading, byte team, RoomState? room,
+            int selfPlayerId)
         {
             Color colour = TeamColour(team);
 
@@ -218,15 +231,19 @@ namespace Ironfront.Net.Unity.Client.Menu
                     if (row == null) continue;
 
                     string you = member.PlayerId == selfPlayerId ? "  (you)" : string.Empty;
-                    string ready = member.Ready ? "[READY] " : "[      ] ";
-
-                    row.text = ready + member.Name + you;
+                    row.text = member.Name + you;
                     row.color = colour;
+                    if (written - 1 < readyBadges.Length && readyBadges[written - 1] != null)
+                        readyBadges[written - 1].gameObject.SetActive(member.Ready);
                 }
             }
 
             for (int i = written; i < rows.Length; i++)
+            {
                 if (rows[i] != null) rows[i].text = string.Empty;
+                if (i < readyBadges.Length && readyBadges[i] != null)
+                    readyBadges[i].gameObject.SetActive(false);
+            }
         }
 
         /// <summary>

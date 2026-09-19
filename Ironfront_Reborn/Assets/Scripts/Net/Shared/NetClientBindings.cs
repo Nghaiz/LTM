@@ -120,6 +120,9 @@ namespace Ironfront.Net.Unity
         /// </remarks>
         public static IPracticeLauncher Practice { get; set; }
 
+        /// <summary>Settings and application-exit actions supplied by Assembly-CSharp.</summary>
+        public static IMenuPlatformActions MenuPlatformActions { get; set; }
+
         /// <summary>
         /// The colour for <paramref name="team"/> as <c>0xRRGGBB</c>, or a neutral grey when no
         /// palette is registered.
@@ -249,6 +252,7 @@ namespace Ironfront.Net.Unity
             MatchHud = null;
             TeamPalette = null;
             Practice = null;
+            MenuPlatformActions = null;
             ProjectileCatalogReader = null;
             LocalTeam = null;
             ExplosionPredictor = null;

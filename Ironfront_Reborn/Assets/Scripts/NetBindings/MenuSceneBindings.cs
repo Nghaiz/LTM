@@ -82,6 +82,13 @@ namespace Ironfront.Net.Unity.Bindings
         /// <inheritdoc/>
         public void HidePracticeMenu() => SetMenuActive(false);
 
+        public void LaunchMap(string sceneName)
+        {
+            MainMenu menu = Resolve();
+            if (menu == null || string.IsNullOrWhiteSpace(sceneName)) return;
+            menu.StartLevel(sceneName);
+        }
+
         private void SetMenuActive(bool active)
         {
             MainMenu menu = Resolve();
@@ -107,6 +114,14 @@ namespace Ironfront.Net.Unity.Bindings
             _menu = Object.FindAnyObjectByType<MainMenu>(FindObjectsInactive.Include);
             return _menu;
         }
+    }
+
+    /// <summary>Forwards title-screen actions to the legacy game-owned UI and quit path.</summary>
+    internal sealed class LegacyMenuPlatformActions : IMenuPlatformActions
+    {
+        public void OpenSettings() => OptionsUi.Show();
+
+        public void ExitGame() => AppQuit.Quit();
     }
 
     /// <summary>
@@ -144,6 +159,7 @@ namespace Ironfront.Net.Unity.Bindings
         {
             NetClientBindings.TeamPalette = new LegacyTeamPalette();
             NetClientBindings.Practice = new LegacyPracticeLauncher();
+            NetClientBindings.MenuPlatformActions = new LegacyMenuPlatformActions();
         }
     }
 }

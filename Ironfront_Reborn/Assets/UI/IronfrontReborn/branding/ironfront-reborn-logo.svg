@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 128" role="img" aria-label="Ironfront Reborn">
+  <defs><linearGradient id="steel" x2="0" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#a8b7c8"/></linearGradient></defs>
+  <path fill="#ff7417" d="M4 4h10v78H4zM20 4h5v78h-5z"/>
+  <text x="39" y="55" fill="url(#steel)" font-family="Impact,Arial Narrow,sans-serif" font-size="54" letter-spacing="2">IRONFRONT</text>
+  <text x="40" y="108" fill="#ff6612" font-family="Impact,Arial Narrow,sans-serif" font-size="48" letter-spacing="11">REBORN</text>
+  <path stroke="#73b8f6" opacity=".7" d="M40 119h438"/>
+</svg>

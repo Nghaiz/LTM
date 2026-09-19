@@ -297,12 +297,23 @@ public class FpsActorController : ActorController
 			// ServerVehicleInputBridge replaces it with a NetInputSource the moment somebody
 			// actually drives.
 			// Aiming() folds in toggleAim and a latch LocalInputSource cannot see, so it is
-			// handed over as a live delegate rather than duplicated there. IsSprinting() is here
-			// for the same reason and one more: it is the COMPOSITE the trigger rule on both
-			// sides of the wire is built on, and sending the raw Sprint key in its place made a
-			// held Shift while aiming refuse every shot the game had already fired.
+			// handed over as a live delegate rather than duplicated there. The sprint bit is
+			// handed over for the same reason and one more: it is the COMPOSITE the trigger rule
+			// on both sides of the wire is built on, and sending the raw Sprint key in its place
+			// made a held Shift while aiming refuse every shot the game had already fired.
+			//
+			// It takes the three keys rather than reading them back, and that is what keeps this
+			// from recursing. The gate is written in terms of Crouch() and Aiming(), which read
+			// through inputSource -- so a no-argument delegate asked inputSource for the crouch
+			// bit while inputSource was still working out the sprint bit, and that recomputed the
+			// sprint bit. Infinite, and it overflowed the stack on the first frame after a map
+			// loaded. CrouchFrom/AimFrom are the same two rules taking the key as an argument, so
+			// there is still exactly one definition of each and no route back into the source.
 			inputSource = new LocalInputSource(
-				fpCamera.transform, Aiming, SampleWeaponSlotIntent, IsSprinting);
+				fpCamera.transform, Aiming, SampleWeaponSlotIntent,
+				(crouchKey, aimKey, sprintKey) =>
+					!CrouchFrom(crouchKey) && !AimFrom(aimKey) && !IsReloading()
+					&& sprintKey && !actor.IsSeated());
 			// Temporary, and deliberately unconditional: the harness that says whether the
 			// substitution above was correct. Delete both this line and InputShadowCompare.cs
 			// once a playtest has come back quiet.
@@ -331,11 +342,20 @@ public class FpsActorController : ActorController
 
 	public override bool Aiming()
 	{
+		return AimFrom(inputSource.Aim());
+	}
+
+	/// <summary>
+	/// <see cref="Aiming"/>'s rule, given the key rather than fetching it from the input source.
+	/// </summary>
+	/// <remarks>Same reason as <see cref="CrouchFrom"/>.</remarks>
+	private bool AimFrom(bool key)
+	{
 		if (OptionsUi.GetOptions().toggleAim)
 		{
 			return aimToggle && !LoadoutUi.IsOpen();
 		}
-		return inputSource.Aim();
+		return key;
 	}
 
 	public override bool Reload()
@@ -1194,11 +1214,24 @@ public class FpsActorController : ActorController
 
 	public override bool Crouch()
 	{
+		return CrouchFrom(inputSource.Crouch());
+	}
+
+	/// <summary>
+	/// <see cref="Crouch"/>'s rule, given the key rather than fetching it from the input source.
+	/// </summary>
+	/// <remarks>
+	/// The two-argument form exists so the sprint gate can apply the same rule without reading
+	/// back through <c>inputSource</c> while <c>inputSource</c> is still computing. See the
+	/// delegate passed to <see cref="LocalInputSource"/> for what that cost when it did.
+	/// </remarks>
+	private bool CrouchFrom(bool key)
+	{
 		if (OptionsUi.GetOptions().toggleCrouch)
 		{
 			return crouchInput;
 		}
-		return inputSource.Crouch();
+		return key;
 	}
 
 	public override void StartCrouch()

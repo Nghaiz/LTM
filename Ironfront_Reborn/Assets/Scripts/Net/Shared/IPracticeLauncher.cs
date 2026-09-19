@@ -61,5 +61,8 @@ namespace Ironfront.Net.Unity
         /// route must not have the call depend on how they got there.
         /// </remarks>
         void HidePracticeMenu();
+
+        /// <summary>Launches one scene selected from the authoritative map catalogue.</summary>
+        void LaunchMap(string sceneName);
     }
 }
