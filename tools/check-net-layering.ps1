@@ -227,6 +227,18 @@ $ClientBaseline = @(
                 'collides with a public enum NESTED inside UnityStandardAssets ActivateTrigger, ' +
                 'which the declaration matcher reads at line start regardless of nesting -- the ' +
                 'same shape as the ActiveRaggy.State collision above' }
+
+    # Found by the eight-screen menu, which added the first Net/Client files to name either.
+    @{ Type = 'MainMenu'                ; Kind = 'not-a-reference'; Retires = 'never'
+       Reason = 'MenuNavigationAction.MainMenu, an enum MEMBER declared in ' +
+                'MenuNavigationButton.cs itself -- the same shape as the VehicleKind.Helicopter ' +
+                'row above. The legacy MonoBehaviour of that name is never referenced: the case ' +
+                'body calls _controller.ReturnToMainMenu(), a method on a Net/Client type' }
+    @{ Type = 'Resolution'              ; Kind = 'not-a-reference'; Retires = 'never'
+       Reason = 'UnityEngine.Resolution, the engine struct, in `foreach (Resolution resolution ' +
+                'in Screen.resolutions)` at MenuSettingsScreen.cs. It collides with a public ' +
+                'enum NESTED inside UnityStandardAssets BloomOptimized in firstpass -- the same ' +
+                'shape as the Mode row above, and an engine type rather than a legacy one' }
 )
 
 # RULE 7's allow-list: the legacy names Net/Diagnostics still contains, one row per NAME.
