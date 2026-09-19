@@ -224,11 +224,33 @@ namespace Ironfront.Net.Unity.EditorTools
             // the authoring test kept failing on a string the source no longer contained. A build
             // step that cannot fail is worse than no build step, which this repository has already
             // written down once, in ci.ps1, about the Unity compile check.
-            if (!EditorSceneManager.SaveScene(scene))
+            // The explicit-path overload, not SaveScene(scene).
+            //
+            // The one-argument form answered false here while the scene was loaded, dirty, had
+            // fourteen roots and sat at exactly this path, and while the file itself was writable
+            // -- so its false was not about any of the things it looks like it is about. The
+            // two-argument form says which asset to write. If that refuses too, SaveOpenScenes is
+            // tried before giving up, because it is a different code path inside the Editor and
+            // one of the two has been observed to write while the other reported failure.
+            bool saved = EditorSceneManager.SaveScene(scene, ScenePath, saveAsCopy: false)
+                         || EditorSceneManager.SaveOpenScenes();
+
+            if (!saved)
             {
-                log.AppendLine("FAILED: SaveScene refused to write " + ScenePath +
-                               ". Something else is holding the file open -- most often a second " +
-                               "Unity Editor with this scene loaded. Close it and run again.");
+                // Last resort: the Editor's own File > Save, which is a different path again.
+                EditorApplication.ExecuteMenuItem("File/Save");
+                System.IO.FileInfo written = new System.IO.FileInfo(ScenePath);
+                saved = written.Exists &&
+                        (System.DateTime.UtcNow - written.LastWriteTimeUtc).TotalMinutes < 2;
+                log.AppendLine("menu-save fallback: " + (saved ? "wrote" : "did not write"));
+            }
+
+            if (!saved)
+            {
+                log.AppendLine("FAILED: neither SaveScene nor SaveOpenScenes wrote " + ScenePath +
+                               ". scene.path='" + scene.path + "' loaded=" + scene.isLoaded +
+                               " dirty=" + scene.isDirty + " roots=" + scene.rootCount +
+                               " | fileWritable=" + CanWrite(ScenePath));
                 return false;
             }
 
@@ -245,6 +267,28 @@ namespace Ironfront.Net.Unity.EditorTools
         /// and deleting authored work nobody asked to delete is a worse failure than leaving a
         /// stale root behind.
         /// </remarks>
+        /// <summary>Whether the file at <paramref name="assetPath"/> can be opened for writing.</summary>
+        /// <remarks>
+        /// Asks for exactly the access a save needs: write, sharing reads. A stricter share mode
+        /// answers "no" whenever anything merely has the file open to read it, which is normal for
+        /// an asset under a source tree and says nothing about whether a save would succeed.
+        /// </remarks>
+        private static bool CanWrite(string assetPath)
+        {
+            try
+            {
+                using (System.IO.File.Open(assetPath, System.IO.FileMode.Open,
+                           System.IO.FileAccess.ReadWrite, System.IO.FileShare.Read))
+                {
+                    return true;
+                }
+            }
+            catch (System.Exception)
+            {
+                return false;
+            }
+        }
+
         private static void RemovePreviousRoot(Scene scene, StringBuilder log)
         {
             foreach (GameObject rootObject in scene.GetRootGameObjects())
