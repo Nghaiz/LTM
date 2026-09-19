@@ -165,32 +165,8 @@ phòng, ghép trận nhanh và tạo phòng}
 \subsection{Giao diện trong trận và overlay chẩn đoán}
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[x=1cm, y=1cm]
-  \shade[top color=cBlue!10!black!35!blue!30, bottom color=green!25!black!45] (0,0) rectangle (15.8,-7.2);
-  \draw[black!80] (0,0) rectangle (15.8,-7.2);
-  % overlay transport
-  \node[anchor=north west, fill=black, fill opacity=0.75, text opacity=1, text=white, font=\scriptsize\ttfamily,
-        align=left, inner sep=5pt] (ov) at (0.3,-0.3) {Transport Connected\\RTT 48.2 ms  jitter 3.1 ms\\loss up 0.4\%  down 1.2\%\\rate up 0.9 KB/s  down 1.7 KB/s\\congestion GOOD  fragments 0  pool 12\\packets sent 18422 recv 12291 lost 147};
-  \uiN{6.05}{-0.4}{16}
-  % điểm chiếm, ticket
-  \node[fill=black, fill opacity=0.5, text opacity=1, text=white, font=\footnotesize, inner sep=4pt] at (8.8,-0.55) {A $\blacksquare$ \quad B $\square$ \quad C $\boxminus$ \qquad Tickets 212 : 187};
-  \uiN{11.75}{-0.55}{17}
-  % killfeed
-  \node[anchor=north east, fill=black, fill opacity=0.5, text opacity=1, text=white, font=\footnotesize, align=right, inner sep=4pt] at (15.5,-1.2)
-    {Toan $\triangleright$ [M4] $\triangleright$ Bot\_12\\Nghia $\triangleright$ [Grenade] $\triangleright$ Trung};
-  \uiN{15.3}{-1.0}{18}
-  % hitmarker
-  \node[text=white, font=\Huge] at (7.9,-3.8) {$\times$};
-  \uiN{8.6}{-3.3}{19}
-  % máu, đạn
-  \node[anchor=south west, fill=black, fill opacity=0.5, text opacity=1, text=white, font=\normalsize, inner sep=5pt] at (0.3,0.3-7.2) {$\heartsuit$ 76};
-  \uiN{1.9}{-6.55}{20}
-  \node[anchor=south east, fill=black, fill opacity=0.5, text opacity=1, text=white, font=\normalsize, inner sep=5pt] at (15.5,0.3-7.2) {30 / 90};
-  \uiN{13.9}{-6.55}{21}
-  \node[fill=black, fill opacity=0.35, text opacity=1, text=white, font=\scriptsize, inner sep=3pt] at (7.9,-6.7) {Shift+F3: overlay transport $\cdot$ Tab: bảng điểm $\cdot$ Shift+F2: lobby shell};
-\end{tikzpicture}
-\caption{Bố cục màn hình trong trận: HUD được cấp dữ liệu từ server và overlay chẩn đoán transport (Shift+F3);
-các số là minh hoạ bố cục}
+\includegraphics[width=0.9\textwidth]{image/ingame.png}
+\caption{Màn hình trong trận đấu}
 \label{fig:A-hud}
 \end{figure}
 
