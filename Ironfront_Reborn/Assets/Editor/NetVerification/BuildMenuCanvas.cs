@@ -341,6 +341,20 @@ namespace Ironfront.Net.Unity.EditorTools
             footer.alignment = TextAnchor.MiddleLeft;
             footer.color = new Color(0.72f, 0.76f, 0.80f, 0.9f);
 
+            // `.build-label`, which is a SEPARATE element from `.tagline` in the prototype -- bottom
+            // right, next to the tagline's bottom left. The spec puts the team's own identity here
+            // in place of the prototype's "v0.8.0 // UI ASSET BUILD", and MenuAuthoringTests has
+            // required this string since before the screen existed. Pinned to the corner rather
+            // than placed at a coordinate, for the reason Anchor gives.
+            Text build = Label(panel, "BuildLabel",
+                "TEAM 10 LTM  •  CLASSROOM MULTIPLAYER PROJECT", 12, Vector2.zero,
+                new Vector2(420f, 22f));
+            build.alignment = TextAnchor.MiddleRight;
+            build.resizeTextForBestFit = false;
+            build.color = Hex("C7D8E6");
+            Anchor(build.GetComponent<RectTransform>(), new Vector2(1f, 0f), new Vector2(1f, 0f),
+                new Vector2(-22f, 16f), new Vector2(420f, 22f));
+
             SetVerticalNavigation(multiplayer, practice, settings, exit);
             ConfigureKeyboard(panel, new Selectable[] { multiplayer, practice, settings, exit }, multiplayer, null);
 
@@ -1488,40 +1502,66 @@ namespace Ironfront.Net.Unity.EditorTools
             string chipTitle, string chipDetail, bool offline,
             params (string Label, MenuNavigationAction? Go)[] links)
         {
-            // `.topbar`: 76px tall, three columns -- a 310px brand, centred nav, a 260px chip. The
-            // canvas is 1920x1080 anchored at its centre, so the bar's own centre sits 38px below
-            // the top edge.
-            const float barCentreY = 502f;
+            // `.topbar`: 76px tall, three columns -- a 310px brand, centred nav, a 260px chip.
+            //
+            // Anchored to the TOP EDGE, not placed at an absolute y. The canvas is not 1920x1080:
+            // CanvasScaler is ScaleWithScreenSize with matchWidthOrHeight 0.5, so it holds the 1920
+            // reference width only on a 16:9 screen, and on anything else it scales to a blend of
+            // both axes -- which leaves the canvas taller or shorter than 1080 reference units.
+            // This bar used to sit at y=502 with a 76px height, on the assumption that the top edge
+            // was at 540. On a screen whose canvas came out ~1004 units tall the edge was at 502
+            // instead, so exactly half the bar was off-screen: still clickable, half visible.
             const float barHeight = 76f;
 
-            AngularPanel panelBar = Angular(panel, "TopBar", new Vector2(0f, barCentreY),
-                new Vector2(1920f, barHeight), 0f, new Color(5f / 255f, 17f / 255f, 28f / 255f, 0.9f),
-                AngularEdge.Bottom, 1f, new Color(97f / 255f, 165f / 255f, 213f / 255f, 0.4f));
+            var barObject = new GameObject("TopBar", typeof(RectTransform), typeof(AngularPanel));
+            barObject.transform.SetParent(panel.transform, worldPositionStays: false);
+            RectTransform barRect = barObject.GetComponent<RectTransform>();
+            barRect.anchorMin = new Vector2(0f, 1f);
+            barRect.anchorMax = new Vector2(1f, 1f);
+            barRect.pivot = new Vector2(0.5f, 1f);
+            barRect.anchoredPosition = Vector2.zero;
+            barRect.sizeDelta = new Vector2(0f, barHeight);
 
-            // `.brand-button`: a 210px wordmark on its own washed, right-ruled panel.
-            Angular(panelBar.gameObject, "BrandButton", new Vector2(-805f, 0f),
+            AngularPanel panelBar = barObject.GetComponent<AngularPanel>();
+            panelBar.color = new Color(5f / 255f, 17f / 255f, 28f / 255f, 0.9f);
+            panelBar.Configure(0f, AngularEdge.Bottom, 1f,
+                new Color(97f / 255f, 165f / 255f, 213f / 255f, 0.4f));
+            panelBar.raycastTarget = false;
+
+            // `.brand-button`: a 210px wordmark on its own washed, right-ruled panel. Pinned to the
+            // bar's LEFT edge rather than to x=-805, for the same reason the bar is pinned to the
+            // canvas: the width it would be offset from is not 1920.
+            AngularPanel brand = Angular(panelBar.gameObject, "BrandButton", Vector2.zero,
                 new Vector2(310f, barHeight), 0f,
                 new Color(24f / 255f, 57f / 255f, 83f / 255f, 0.75f),
                 AngularEdge.All, 0f, Color.clear);
-            Icon(panelBar.gameObject, "BrandMark", "branding/ironfront-reborn-logo.png",
-                new Vector2(-805f, 0f), new Vector2(210f, 46f));
+            Anchor(brand.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
+                Vector2.zero, new Vector2(310f, barHeight));
+            Icon(brand.gameObject, "BrandMark", "branding/ironfront-reborn-logo.png",
+                Vector2.zero, new Vector2(210f, 46f));
 
             // `.account-chip`: a status dot and two lines, right-aligned on its own gradient.
-            Angular(panelBar.gameObject, "AccountChip", new Vector2(830f, 0f),
+            AngularPanel chip = Angular(panelBar.gameObject, "AccountChip", Vector2.zero,
                 new Vector2(260f, barHeight), 0f,
                 new Color(20f / 255f, 55f / 255f, 80f / 255f, 0.25f),
                 AngularEdge.All, 0f, Color.clear);
-            Plain(panelBar.gameObject, "StatusDot", new Vector2(740f, 0f), new Vector2(10f, 10f),
+            Anchor(chip.GetComponent<RectTransform>(), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
+                Vector2.zero, new Vector2(260f, barHeight));
+
+            // Offsets are from the chip's own centre, which is 130 from either edge -- so the dot
+            // lands 40 from the chip's left edge and the text 58 from it: the prototype's 35px
+            // padding, plus a 10px dot and a 13px gap.
+            Plain(chip.gameObject, "StatusDot", new Vector2(-90f, 0f), new Vector2(10f, 10f),
                 offline ? Cyan : Green);
 
-            Text chipName = Label(panelBar.gameObject, "AccountName", chipTitle, 16,
-                new Vector2(848f, 10f), new Vector2(200f, 22f));
+            Text chipName = Label(chip.gameObject, "AccountName", chipTitle, 16,
+                new Vector2(13f, 10f), new Vector2(170f, 22f));
             chipName.alignment = TextAnchor.MiddleLeft;
             chipName.color = Ink;
             chipName.resizeTextForBestFit = false;
 
-            Text chipDetailText = Label(panelBar.gameObject, "AccountDetail", chipDetail, 11,
-                new Vector2(848f, -12f), new Vector2(200f, 18f));
+            Text chipDetailText = Label(chip.gameObject, "AccountDetail", chipDetail, 11,
+                new Vector2(13f, -12f), new Vector2(170f, 18f));
             chipDetailText.alignment = TextAnchor.MiddleLeft;
             chipDetailText.color = Hex("6F94AD");
             chipDetailText.resizeTextForBestFit = false;
@@ -2105,6 +2145,29 @@ namespace Ironfront.Net.Unity.EditorTools
             rect.anchorMin = new Vector2(0.5f, 0.5f);
             rect.anchorMax = new Vector2(0.5f, 0.5f);
             rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = position;
+            rect.sizeDelta = size;
+        }
+
+        /// <summary>
+        /// Pins a rect to one point of its parent, so it follows that edge instead of a coordinate.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="Centre"/> is only safe for the middle of a screen, because the middle is the
+        /// same point whatever the screen's size. Everything measured from an edge needs this: the
+        /// canvas is NOT a fixed 1920x1080. <c>CanvasScaler</c> runs ScaleWithScreenSize with
+        /// <c>matchWidthOrHeight</c> 0.5, which holds the 1920 reference width only on a 16:9 screen
+        /// and otherwise scales to a blend of both axes, leaving the canvas taller or shorter than
+        /// 1080 reference units. An element placed at a fixed y near the top therefore drifts off
+        /// the edge as the aspect ratio changes -- which is how the topbar came to be half
+        /// off-screen while still responding to clicks.
+        /// </remarks>
+        private static void Anchor(RectTransform rect, Vector2 anchor, Vector2 pivot,
+            Vector2 position, Vector2 size)
+        {
+            rect.anchorMin = anchor;
+            rect.anchorMax = anchor;
+            rect.pivot = pivot;
             rect.anchoredPosition = position;
             rect.sizeDelta = size;
         }
