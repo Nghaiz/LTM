@@ -13,6 +13,16 @@ public class ActorManager : MonoBehaviour
 
 	private const float AI_MAX_FIRST_SPAWN_TIME = 10f;
 
+	/// <summary>
+	/// Seconds a body stays down before <see cref="SpawnWave"/> will respawn it.
+	/// </summary>
+	/// <remarks>
+	/// Named because <see cref="CreateAIActor"/> now has to subtract it to make a newly created
+	/// bot eligible on the next wave; two copies of the same literal in one file, one of them
+	/// load-bearing for a deploy time, is how the two silently drift apart.
+	/// </remarks>
+	private const float AI_SPAWN_WAVE_DEATH_GRACE = 6f;
+
 	public static ActorManager instance;
 
 	public float spawnTime = 10f;
@@ -22,6 +32,17 @@ public class ActorManager : MonoBehaviour
 	public int team1Bots = 16;
 
 	public GameObject actorPrefab;
+
+	/// <summary>
+	/// Whether this round's AI roster has been created yet.
+	/// </summary>
+	/// <remarks>
+	/// The roster is filled ONCE per round, on the first <see cref="SpawnWave"/> tick after
+	/// <c>NetBotRelease</c> opens. Not serialized and not public: it is round state, and a
+	/// designer setting it in the inspector would mean "this map starts with no bots, ever".
+	/// </remarks>
+	[NonSerialized]
+	private bool aiRosterFilled;
 
 	[NonSerialized]
 	public SpawnPoint[] spawnPoints;
@@ -113,6 +134,12 @@ public class ActorManager : MonoBehaviour
 	private void OnDestroy()
 	{
 		SceneManager.sceneLoaded -= OnLevelLoaded;
+
+		// NetWorldLifecycle is static and outlives the scene, so an un-removed handler would
+		// keep a destroyed ActorManager alive and fire DespawnBots against a dead `actors` list
+		// on the NEXT map's first round reset. Unconditional: -= on a handler that was never
+		// added is a no-op, and StartGame's subscription is skipped on a client.
+		Ironfront.Net.Unity.Server.NetWorldLifecycle.ResetRequested -= OnWorldResetRequested;
 	}
 
 	public void StartGame()
@@ -157,8 +184,96 @@ public class ActorManager : MonoBehaviour
 			return;
 		}
 
-		FillEmptySlotsWithAI();
+		// THE ROSTER IS NO LONGER FILLED HERE, and that is the whole fix for "every capture
+		// point is already owned seconds into the match".
+		//
+		// FillEmptySlotsWithAI used to run on this line, at SCENE LOAD, while the capture
+		// arithmetic waits for MatchPhase.Playing. So 32 bots had the whole of
+		// WaitingForPlayers plus the 20s warmup to spread across the map, and the round opened
+		// onto terrain they were already standing on. Measured on Dustbowl 2026-09-20: the map
+		// opened correctly at one point per team, then the four neutral points fell to bots at
+		// ~34s, ~65s, ~92s and ~115s while the three human clients captured nothing, and by
+		// 118s nothing on the map was neutral. The objective game was played, and decided, by
+		// bots before a player had finished choosing a loadout.
+		//
+		// The wave below now fills the roster on its first tick after NetBotRelease opens --
+		// 30s after the first player body enters the world, and never before one does. Doing it
+		// there rather than here also means the round-reset path gets the re-fill for free.
+		Ironfront.Net.Unity.Server.NetWorldLifecycle.ResetRequested += OnWorldResetRequested;
 		InvokeRepeating("SpawnWave", 1f, spawnTime);
+	}
+
+	/// <summary>
+	/// Clears the round's bots and re-arms the release gate, so the next round opens as empty
+	/// as the first one did.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <c>MatchStateMachine.PerformReset</c> restores every capture point's opening owner and
+	/// does nothing to the bodies. Without this the delay would protect the FIRST round only:
+	/// round two reopens with the previous round's 32 bots standing exactly where they finished,
+	/// and a gate anchored on "the first player spawn" has nothing left to delay.
+	/// </para>
+	/// <para>
+	/// <b>Destroyed, not parked.</b> <c>NetServerActor.OnDisable</c> unregisters through
+	/// <c>ServerActorRegistry</c>, which hands the actor id back to the quarantining pool — so
+	/// destruction is also what keeps the id space honest. It runs on
+	/// <c>NetWorldLifecycle.ResetRequested</c>, which fires BEFORE
+	/// <c>ServerTickLoop.ResetForNewMatch</c> snapshots the still-live actors into its retained
+	/// set, so these ids leave the retained count rather than being re-offered while still held
+	/// (X-73, X-74).
+	/// </para>
+	/// </remarks>
+	private void OnWorldResetRequested()
+	{
+		DespawnBots();
+		Ironfront.Net.Unity.NetBotRelease.ResetForNewRound();
+	}
+
+	/// <summary>Destroys every AI body and empties the roster.</summary>
+	/// <remarks>
+	/// Iterated over a COPY: <c>Actor.OnDestroy</c> unregisters from <see cref="actors"/>, so
+	/// walking the live list while destroying from it skips every second entry.
+	/// </remarks>
+	private void DespawnBots()
+	{
+		if (actors == null)
+		{
+			return;
+		}
+		List<Actor> snapshot = new List<Actor>(actors);
+		int destroyed = 0;
+		foreach (Actor actor in snapshot)
+		{
+			// A body a connection holds is not ours to destroy even when it is AI-controlled:
+			// aiControlled is frozen in Awake from the controller's type and a player slot is
+			// built from the same AI character prefab, so it stays true for a claimed slot for
+			// the whole match. The same IsClaimed / AvailableForPlayers test SpawnWave uses.
+			if (actor == null || !actor.aiControlled)
+			{
+				continue;
+			}
+			var replicated = actor.GetComponent<Ironfront.Net.Unity.Server.NetServerActor>();
+			if (replicated != null && (replicated.AvailableForPlayers || replicated.IsClaimed))
+			{
+				continue;
+			}
+			// DEACTIVATE FIRST, and the ordering is the whole point.
+			//
+			// Object.Destroy is deferred to the end of the frame, so NetServerActor.OnDisable --
+			// which is what unregisters and hands the actor id back to the pool -- would not run
+			// until after MatchController.OnResetRequested had already called
+			// ResetForNewMatch, whose FIRST act is to snapshot every still-live actor into its
+			// retained-id set. The ids would be retained for a round they no longer belong to.
+			// SetActive(false) fires OnDisable synchronously, so the registry is correct by the
+			// time that snapshot is taken -- which is exactly what OnResetRequested's own
+			// "the world is torn down first" comment promises.
+			actor.gameObject.SetActive(false);
+			UnityEngine.Object.Destroy(actor.gameObject);
+			destroyed++;
+		}
+		aiRosterFilled = false;
+		Debug.Log($"[net] round reset: {destroyed} bot(s) despawned, roster re-armed.");
 	}
 
 	private void FillEmptySlotsWithAI()
@@ -177,17 +292,62 @@ public class ActorManager : MonoBehaviour
 	{
 		Actor component = UnityEngine.Object.Instantiate(actorPrefab).GetComponent<Actor>();
 		component.SetTeam(team);
-		component.deathTimestamp = Time.time + Mathf.Max(spawnTime, 10f);
+
+		// DEPLOY ON THE NEXT WAVE, not sixteen seconds from now.
+		//
+		// A fresh Actor is dead, and SpawnWave's own test is `deathTimestamp + 6f < Time.time`,
+		// so the old `Time.time + max(spawnTime, 10f)` held every bot out of the world for ~16s
+		// after creation. That stagger existed because the roster was built at scene load and
+		// wanted the map quiet for a moment. The release gate now owns that wait, and owns it
+		// properly -- so stacking the old one on top would put bots in the world 46s after the
+		// first player spawned when the rule says 30.
+		//
+		// The subtraction is what makes the strict `<` above true on the very next tick.
+		component.deathTimestamp = Time.time - (AI_SPAWN_WAVE_DEATH_GRACE + 1f);
 		component.lqUpdatePhase = fillRatio * 0.2f;
 	}
 
 	private void SpawnWave()
 	{
+		// NO BOT EXISTS BEFORE A HUMAN IS IN THE WORLD, AND NONE FOR 30s AFTER THE FIRST ONE.
+		//
+		// GATED PER ACTOR, NOT BY RETURNING EARLY, and that distinction is the whole reason
+		// single-player still works. Offline the PLAYER's own body is spawned by this wave --
+		// GameManager.StartGame instantiates the prefab at (0, 1000, 0) and it sits dead in
+		// `actors` until a wave picks it up -- so a blanket early-out here would hold the player
+		// out of the world, which would mean the anchor never fires, which would mean the wave
+		// never opens: a deadlock that ends single-player at the loadout screen. Networked
+		// players never come through here at all (ServerCombatBridge.PlaceAtSpawn places them,
+		// and the claimed/available test below skips their slots), so the ONLY thing this gate
+		// may hold back is an AI body.
+		bool botsReleased = Ironfront.Net.Unity.NetBotRelease.IsReleased;
+
+		// First tick past the gate: build the roster the old StartGame call used to build at
+		// scene load. Doing it here rather than at the release edge means the round-reset path
+		// re-fills for free -- DespawnBots clears the flag and this rebuilds on the next tick
+		// after the new round's first player spawns.
+		if (botsReleased && !aiRosterFilled)
+		{
+			aiRosterFilled = true;
+			FillEmptySlotsWithAI();
+			Debug.Log(
+				$"[net] bots released: {team0Bots} for team 0, {team1Bots} for team 1, "
+				+ $"{Ironfront.Net.Unity.NetBotRelease.DelaySeconds:F0}s after the first player "
+				+ "body entered the world.");
+		}
+
 		List<Actor> list = new List<Actor>();
 		foreach (Actor actor in actors)
 		{
-			if (actor.dead && actor.deathTimestamp + 6f < Time.time)
+			if (actor.dead && actor.deathTimestamp + AI_SPAWN_WAVE_DEATH_GRACE < Time.time)
 			{
+				// The gate, applied to AI bodies only. See the remark at the top of this method
+				// for why a human body must never be held here.
+				if (actor.aiControlled && !botsReleased)
+				{
+					continue;
+				}
+
 				// A BODY A CONNECTION HOLDS IS NOT THE BOT WAVE'S TO SPAWN.
 				//
 				// ServerTickLoop.OnClientConnected parks a claimed slot at Health 0 / IsAlive
@@ -258,6 +418,20 @@ public class ActorManager : MonoBehaviour
 			{
 				actor.SpawnAt(spawnPoint3.GetSpawnPosition());
 				spawnedActors[spawnPoint3].Add(actor);
+
+				// THE OFFLINE BOT-RELEASE ANCHOR, and the counterpart to the one in
+				// ServerCombatBridge.PlaceAtSpawn. Single-player has no deploy handshake: the
+				// player's body enters the world right here, on the wave, so this is the only
+				// moment that answers "a human is now in the map".
+				//
+				// Guarded on aiControlled rather than on NetContext.IsOffline: a bot must never
+				// anchor its own release, and on the networked server no human body reaches
+				// this loop anyway, so the test states the real condition instead of the
+				// circumstance that usually implies it.
+				if (!actor.aiControlled)
+				{
+					Ironfront.Net.Unity.NetBotRelease.NotifyPlayerSpawned();
+				}
 			}
 		}
 		SpawnPoint[] array2 = spawnPoints;

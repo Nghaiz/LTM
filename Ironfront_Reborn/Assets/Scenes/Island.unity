@@ -203900,7 +203900,7 @@ MonoBehaviour:
   spawnpointContainer: {fileID: 4610}
   contestedSpawnpointContainer: {fileID: 2968}
   captureRange: 25
-  captureSpeed: 0.2
+  captureSpeed: 0.06
   canBeCaptured: 0
   flagParent: {fileID: 2843}
   lqFlag: {fileID: 1424}
@@ -204534,7 +204534,7 @@ MonoBehaviour:
   spawnpointContainer: {fileID: 3852}
   contestedSpawnpointContainer: {fileID: 4993}
   captureRange: 25
-  captureSpeed: 0.2
+  captureSpeed: 0.06
   canBeCaptured: 0
   flagParent: {fileID: 2722}
   lqFlag: {fileID: 592}
@@ -209049,7 +209049,7 @@ MonoBehaviour:
   spawnpointContainer: {fileID: 2793}
   contestedSpawnpointContainer: {fileID: 3525}
   captureRange: 25
-  captureSpeed: 0.2
+  captureSpeed: 0.06
   canBeCaptured: 1
   flagParent: {fileID: 3097}
   lqFlag: {fileID: 2417}
@@ -217435,7 +217435,7 @@ MonoBehaviour:
   spawnpointContainer: {fileID: 4144}
   contestedSpawnpointContainer: {fileID: 3786}
   captureRange: 25
-  captureSpeed: 0.2
+  captureSpeed: 0.06
   canBeCaptured: 1
   flagParent: {fileID: 3582}
   lqFlag: {fileID: 754}
@@ -217616,7 +217616,7 @@ MonoBehaviour:
   spawnpointContainer: {fileID: 3350}
   contestedSpawnpointContainer: {fileID: 3705}
   captureRange: 25
-  captureSpeed: 0.2
+  captureSpeed: 0.06
   canBeCaptured: 1
   flagParent: {fileID: 4691}
   lqFlag: {fileID: 2615}
@@ -330071,7 +330071,7 @@ MonoBehaviour:
   - {fileID: 2794}
   - {fileID: 2674}
   _captureRadius: 15
-  _captureSpeed: 0.2
+  _captureSpeed: 0.06
   _minPlayersToStart: 2
   _warmupSeconds: 20
   _postMatchSeconds: 20

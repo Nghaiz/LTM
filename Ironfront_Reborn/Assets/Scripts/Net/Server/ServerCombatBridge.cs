@@ -483,6 +483,17 @@ namespace Ironfront.Net.Unity.Server
 
             MoveToSpawnPoint(player, request);
 
+            // THE BOT-RELEASE ANCHOR. A player body is now in the world, so the 30s clock that
+            // holds the AI roster back starts here -- and only here, because this is the one
+            // place a human body is placed on the networked path. Both teams' bots release from
+            // this single anchor whichever team this player is on: anchoring per team would
+            // hand the map to whichever side happened to be occupied first.
+            //
+            // After MoveToSpawnPoint rather than before, so the clock starts from the body
+            // actually being somewhere. Idempotent -- only the first call per round anchors, so
+            // every respawn and every later joiner below costs one field read.
+            NetBotRelease.NotifyPlayerSpawned();
+
             // X-11's second half: a deploy request carries the loadout the CLIENT chose, and
             // the body must be armed from THAT rather than from the server's own
             // controller.GetLoadout() draw -- the two disagreeing is the original defect this
