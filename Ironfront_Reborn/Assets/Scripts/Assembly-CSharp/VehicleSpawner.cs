@@ -191,6 +191,36 @@ public class VehicleSpawner : MonoBehaviour
 	// fresh List per sweep per pad is a steady GC drip for the life of the process.
 	private readonly List<Vehicle> reclaimCandidates = new List<Vehicle>();
 
+	/// <summary>
+	/// Vehicles seen occupied during a sweep, whose <c>LastOccupiedAt</c> is refreshed AFTER the
+	/// enumeration finishes.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>This list exists because the refresh used to happen inside the loop.</b>
+	/// <see cref="SweepAbandonedVehicles"/>'s own comment already said "collected first, mutated
+	/// after: the dictionary cannot be written to while it is being enumerated" — and then the
+	/// occupied branch wrote <c>supersededNetIds[vehicle]</c> mid-enumeration anyway.
+	/// </para>
+	/// <para>
+	/// <b>It throws on Unity and would not throw on modern .NET</b>, which is why it survived
+	/// review. Since .NET Core 3.0 overwriting an EXISTING key's value does not invalidate a
+	/// dictionary enumerator; on Mono, which is what ships in the player, any write bumps the
+	/// version and the next <c>MoveNext</c> raises <c>InvalidOperationException: Collection was
+	/// modified</c>. Measured on a 131s lane-B match 2026-09-20: 131 throws before this fix.
+	/// </para>
+	/// <para>
+	/// <b>What it cost.</b> The exception escaped <c>Update</c>, so every sweep aborted at the
+	/// first occupied superseded vehicle — the reclaim never reached the entries after it, which
+	/// is exactly the id-pool leak this sweep was added to close.
+	/// </para>
+	/// <para>
+	/// Pre-allocated beside <see cref="reclaimCandidates"/> and cleared per sweep, for the same
+	/// reason: this runs out of <c>Update</c> and must not allocate per frame.
+	/// </para>
+	/// </remarks>
+	private readonly List<Vehicle> reclaimStillOccupied = new List<Vehicle>();
+
 	private static readonly List<Actor> reclaimNearbyActors = new List<Actor>();
 
 	/// <summary>
@@ -633,9 +663,13 @@ public class VehicleSpawner : MonoBehaviour
 		nextReclaimSweepAt = now + ReclaimSweepInterval;
 
 		reclaimCandidates.Clear();
+		reclaimStillOccupied.Clear();
 
 		// Collected first, mutated after: the dictionary cannot be written to while it is being
 		// enumerated, and both branches below write to it.
+		//
+		// The occupied branch used to break that rule in place, which is what made this sweep
+		// throw on Mono and abort at the first occupied entry. See reclaimStillOccupied.
 		foreach (KeyValuePair<Vehicle, SupersededVehicle> entry in supersededNetIds)
 		{
 			Vehicle vehicle = entry.Key;
@@ -652,7 +686,7 @@ public class VehicleSpawner : MonoBehaviour
 
 			if (!vehicle.IsEmpty())
 			{
-				supersededNetIds[vehicle] = entry.Value.OccupiedNow(now);
+				reclaimStillOccupied.Add(vehicle);
 				continue;
 			}
 
@@ -661,6 +695,19 @@ public class VehicleSpawner : MonoBehaviour
 
 			reclaimCandidates.Add(vehicle);
 		}
+
+		// The deferred half of the occupied branch. Safe here because the enumeration above has
+		// finished; TryGetValue guards the entry having been removed in between.
+		for (int i = 0; i < reclaimStillOccupied.Count; i++)
+		{
+			Vehicle occupied = reclaimStillOccupied[i];
+			if (occupied == null) continue;
+			if (!supersededNetIds.TryGetValue(occupied, out SupersededVehicle seen)) continue;
+
+			supersededNetIds[occupied] = seen.OccupiedNow(now);
+		}
+
+		reclaimStillOccupied.Clear();
 
 		for (int i = 0; i < reclaimCandidates.Count; i++)
 		{
