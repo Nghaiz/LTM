@@ -1,0 +1,469 @@
+% =====================================================================================
+% A-client.tex — PHẦN II của Nguyễn Thành Trung: client Unity
+% =====================================================================================
+
+% ---------- Macro đánh số phần tử trên hình HUD ----------------------------------------
+\newcommand{\uiN}[3]{\node[circle, fill=uiRed, text=white, inner sep=0pt, minimum size=11pt, font=\tiny\bfseries] at (#1,#2) {#3};}
+
+\PhanLon{II. NỘI DUNG CÁ NHÂN -- Phân hệ client Unity.}
+
+\section{Biểu đồ và giao diện nội dung cá nhân thực hiện}
+Phân hệ client là nơi các thư viện mạng được đưa vào trò chơi thật. Nhiệm vụ gồm: mở \textbf{điểm nối netcode}
+trong mã gameplay một người chơi mà không phá lối chơi gốc; làm cho \textbf{người chơi ở xa hiển thị mượt} (nội suy,
+hoạt ảnh, ragdoll cục bộ); làm cho \textbf{người chơi cục bộ phản hồi tức thì} (dự đoán và hoà giải); và xây dựng
+\textbf{giao diện} sảnh chờ, HUD, overlay chẩn đoán. Đây cũng là thành viên duy nhất mở Unity Editor.
+
+% -------------------------------------------------------------------------------------
+\subsection{Điểm nối netcode trong mã gameplay}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm,
+  cls/.style={draw=cLine, rectangle split, rectangle split parts=2, rectangle split part fill={cBlue,white},
+    font=\footnotesize, inner sep=4pt, minimum width=3.4cm},
+  inh/.style={draw=cLine, thick, -{Triangle[open, length=3mm]}},
+  real/.style={draw=cLine, thick, dashed, -{Triangle[open, length=3mm]}}]
+  \node[cls] (actor) at (2.4,0) {\textbf{Actor}
+    \nodepart{two}\begin{tabular}{@{}l@{}} + controller : ActorController \\ + Update() \end{tabular}};
+  \node[cls] (ac) at (9.6,0) {\begin{tabular}{@{}c@{}}\textit{«abstract»}\\\textbf{ActorController}\end{tabular}
+    \nodepart{two}\begin{tabular}{@{}l@{}} + Fire() : bool \\ + Aim() : bool \\ + Velocity() : Vector3 \end{tabular}};
+  \node[cls] (fps) at (7.2,-3.6) {\textbf{FpsActorController}
+    \nodepart{two}\begin{tabular}{@{}l@{}} - inputSource : IInputSource \\ + SetInputSource(IInputSource) \end{tabular}};
+  \node[cls] (ai) at (12.8,-3.6) {\textbf{AiActorController}
+    \nodepart{two}\begin{tabular}{@{}l@{}} AI gốc, chạy trên server \end{tabular}};
+  \node[cls] (in) at (7.2,-6.8) {\begin{tabular}{@{}c@{}}\textit{«interface»}\\\textbf{IInputSource}\end{tabular}
+    \nodepart{two}\begin{tabular}{@{}l@{}} + MoveAxes \\ + LookDelta \\ + Buttons \end{tabular}};
+  \node[cls] (loc) at (2.6,-10.2) {\textbf{LocalInputSource}
+    \nodepart{two}\begin{tabular}{@{}l@{}} bàn phím và chuột \end{tabular}};
+  \node[cls] (net) at (7.2,-10.2) {\textbf{NetInputSource}
+    \nodepart{two}\begin{tabular}{@{}l@{}} input nhận từ C\_INPUT \end{tabular}};
+  \node[cls] (nul) at (11.8,-10.2) {\textbf{NullInputSource}
+    \nodepart{two}\begin{tabular}{@{}l@{}} headless, không input \end{tabular}};
+  \node[cls] (rav) at (2.4,-3.6) {\textbf{RemoteActorView}
+    \nodepart{two}\begin{tabular}{@{}l@{}} + Apply(RemoteActorVisualState) \end{tabular}};
+  \draw[arr] (actor.east |- ac.west) -- node[lbl, above=2pt]{đọc} (ac.west);
+  \draw[inh] (fps.north) -- ++(0,0.6) -| ($(ac.south)+(-0.8,0)$);
+  \draw[inh] (ai.north) -- ++(0,0.6) -| ($(ac.south)+(0.8,0)$);
+  \draw[arr] (fps.south) -- node[lbl, right=2pt]{dùng} (in.north);
+  \draw[real] (loc.north) -- ++(0,0.6) -| ($(in.south)+(-0.8,0)$);
+  \draw[real] (net.north) -- (in.south);
+  \draw[real] (nul.north) -- ++(0,0.6) -| ($(in.south)+(0.8,0)$);
+  \draw[darr] (rav.north) -- node[lbl, left=2pt, align=right]{điều khiển hình thể\\actor ở xa} (actor.south);
+\end{tikzpicture}
+\caption{Biểu đồ lớp điểm nối netcode: tách nguồn input khỏi \texttt{FpsActorController}}
+\label{fig:A-lop}
+\end{figure}
+\code{Actor.cs} không biết và không cần biết controller lấy dữ liệu từ đâu. Tách 59 lời gọi \code{Input.*} ra sau
+giao diện \code{IInputSource} giúp cùng một controller nhận input từ bàn phím (client), từ gói mạng (server) hoặc
+không nhận gì (headless).
+
+% -------------------------------------------------------------------------------------
+\subsection{Thứ tự thực thi một khung hình client}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \buoc{s1}{(0,0)}{1}{NetClientBootstrap}{order $-$1000: Poll transport, đẩy mọi payload vào ClientMessageRouter}{cBlue}
+  \buoc{s2}{(5.6,0)}{2}{RemoteVehicleRegistry}{order $-$60: cập nhật phương tiện ở xa}{cBlue}
+  \buoc{s3}{(11.2,0)}{3}{RemoteActorRegistry}{order $-$50: nội suy actor ở xa qua RemoteActorView}{cBlue}
+  \buoc{s4}{(0,-2.7)}{4}{Presenter}{order $-$50: Combat, Objective, Projectile, Explosion biến sự kiện thành hiệu ứng}{cGreen}
+  \buoc{s5}{(5.6,-2.7)}{5}{ClientVehicleStage}{order $-$45: input phương tiện khi đang ngồi ghế}{cBlue}
+  \buoc{s6}{(11.2,-2.7)}{6}{ClientPredictionStage}{order $-$40: gửi C\_INPUT, hoà giải khi có snapshot mới}{cGreen}
+  \buoc{s7}{(0,-5.4)}{7}{Gameplay gốc}{order 0: Actor, Weapon, UI của Ravenfield}{cOrange}
+  \buoc{s8}{(5.6,-5.4)}{8}{Overlay giao diện}{OnGUI: LobbyShellOverlay, TransportDebugOverlay}{cOrange}
+  \buoc{s9}{(11.2,-5.4)}{9}{Shadow compare}{order +1000: so sánh chẩn đoán input và chuyển động}{cGray}
+  \draw[arr] (s1) -- (s2); \draw[arr] (s2) -- (s3);
+  \draw[arr] (s4) -- (s5); \draw[arr] (s5) -- (s6);
+  \draw[arr] (s7) -- (s8); \draw[arr] (s8) -- (s9);
+  \draw[arr] (s3.south) -- ++(0,-0.3) -| (s4.north);
+  \draw[arr] (s6.south) -- ++(0,-0.3) -| (s7.north);
+\end{tikzpicture}
+\caption{Chuỗi thành phần client theo \texttt{DefaultExecutionOrder} trong một khung hình}
+\label{fig:A-thutu}
+\end{figure}
+Mọi dữ liệu đến được áp dụng \textbf{trước} khi có thành phần nào đọc nó: bootstrap chạy sớm nhất để
+\code{NetContext.Role} được gán trước mọi \code{Awake}, và các bước chẩn đoán chạy sau cùng.
+
+% -------------------------------------------------------------------------------------
+\subsection{Máy trạng thái luồng trò chơi}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm, st/.append style={text width=2.3cm, minimum width=2.6cm}]
+  \node[init] (i) at (1.5,1.5) {};
+  \node[st] (boot) at (1.5,0)    {Booting};
+  \node[st] (log)  at (5.6,0)    {LoginScreen};
+  \node[st] (aut)  at (9.8,0)    {Authenticating};
+  \node[st] (lob)  at (14.0,0)   {Lobby};
+  \node[st] (rb)   at (14.0,-3.0) {RoomBrowser};
+  \node[st] (jr)   at (9.8,-3.0)  {JoiningRoom};
+  \node[st] (rl)   at (5.6,-3.0)  {RoomLobby};
+  \node[st] (cg)   at (1.5,-3.0)  {ConnectingGame};
+  \node[st, fill=cGreen] (im) at (1.5,-6.0) {InMatch};
+  \node[st, fill=cOrange] (me) at (5.6,-6.0) {MatchEnd};
+  \draw[arr] (i) -- (boot);
+  \draw[arr] (boot) -- node[lbl, above=3pt]{Start} (log);
+  \draw[arr] ($(log.east)+(0,0.15)$) -- node[lbl, above=3pt]{Log in} ($(aut.west)+(0,0.15)$);
+  \draw[arr] ($(aut.west)+(0,-0.15)$) -- node[lbl, below=3pt]{lỗi} ($(log.east)+(0,-0.15)$);
+  \draw[arr] (aut) -- node[lbl, above=0.45cm]{LOGIN\_RES} (lob);
+  \draw[arr] (lob) -- node[lbl, left=3pt]{Browse rooms} (rb);
+  \draw[arr] ($(rb.west)+(0,0.15)$) -- node[lbl, above=3pt]{Join} ($(jr.east)+(0,0.15)$);
+  \draw[arr] ($(jr.east)+(0,-0.15)$) -- node[lbl, below=3pt]{lỗi} ($(rb.west)+(0,-0.15)$);
+  \draw[arr] (jr) -- node[lbl, above=0.45cm]{ROOM\_JOIN\_RES} (rl);
+  \draw[arr] ($(rl.west)+(0,0.15)$) -- node[lbl, above=3pt]{vào trận} ($(cg.east)+(0,0.15)$);
+  \draw[arr] ($(cg.east)+(0,-0.15)$) -- node[lbl, below=3pt]{thất bại} ($(rl.west)+(0,-0.15)$);
+  \draw[arr] (cg) -- node[lbl, right=3pt]{CONNECT\_ACCEPTED} (im);
+  \draw[arr] (im) -- node[lbl, above=0.45cm]{trận kết thúc} (me);
+  \draw[arr] (im.south) -- ++(0,-0.8) -| node[lbl, pos=0.12, below=2pt]{mất kết nối} (16.1,0) -- (lob.east);
+  \draw[cLine, thick] (me.south) -- ++(0,-0.8) node[lbl, pos=0.5, right=2pt]{Continue / sau 15 s} ;
+\end{tikzpicture}
+\caption{Máy trạng thái \texttt{GameFlowController}: 10 trạng thái; mọi chuyển trạng thái ngoài bảng đều bị từ chối}
+\label{fig:A-trangthai}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Giao diện sảnh chờ}
+Người chơi đi qua các màn hình theo đúng thứ tự các trạng thái ở Hình~\ref{fig:A-trangthai}: màn hình chính, đăng
+nhập, rồi danh sách phòng. Ngoài luồng chơi mạng còn có màn hình luyện tập ngoại tuyến và màn hình cài đặt. Khung
+\code{LobbyShellOverlay} vẽ bằng IMGUI (\code{OnGUI}) vẫn được giữ lại làm công cụ gỡ lỗi, mở bằng Shift+F2.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{image/main-menu.png}
+\caption{Màn hình chính: chơi mạng (Multiplayer), luyện tập ngoại tuyến, cài đặt và thoát}
+\label{fig:A-menu}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{image/login-screen.png}
+\caption{Màn hình đăng nhập (trạng thái \texttt{LoginScreen} / \texttt{Authenticating}): tên đăng nhập, mật khẩu,
+tạo tài khoản mới}
+\label{fig:A-dangnhap}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{image/room-browser.png}
+\caption{Danh sách phòng (trạng thái \texttt{RoomBrowser}): tìm kiếm, lọc theo chế độ và khu vực, làm mới, vào
+phòng, ghép trận nhanh và tạo phòng}
+\label{fig:A-sanh}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{image/practice-mode.png}
+\caption{Màn hình luyện tập ngoại tuyến: chọn bản đồ, chế độ chơi, độ khó và số lượng bot, không cần kết nối mạng}
+\label{fig:A-luyentap}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{image/settings.png}
+\caption{Màn hình cài đặt: hiển thị, âm thanh và lối chơi, lưu theo máy}
+\label{fig:A-caidat}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Giao diện trong trận và overlay chẩn đoán}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{image/ingame.png}
+\caption{Màn hình trong trận đấu}
+\label{fig:A-hud}
+\end{figure}
+
+% -------------------------------------------------------------------------------------
+\subsection{Luồng dự đoán và hoà giải phía client}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \node[bxB, text width=2.5cm] (t)  at (1.45,0)   {NetPrediction\\Clock\\{\footnotesize bước 30 Hz}};
+  \node[bxB, text width=2.4cm] (i)  at (4.6,0)   {LocalInputSource\\{\footnotesize InputFrame(tick)}};
+  \node[bxG, text width=2.6cm] (m)  at (7.9,0)   {NetMovementAgent\\{\footnotesize mô phỏng ngay}};
+  \node[bxB, text width=2.3cm] (q)  at (11.1,0)  {Lưu input\\chưa xác nhận};
+  \node[bxP, text width=2.2cm] (s)  at (14.3,0)  {C\_INPUT kênh 3\\{\footnotesize tối đa 8 frame}};
+  \node[grp, fit=(t)(s)] (g1) {};
+  \node[grpt] at (g1.north west) {1. Dự đoán -- mỗi tick};
+  \draw[arr] (t) -- (i); \draw[arr] (i) -- (m); \draw[arr] (m) -- (q); \draw[arr] (q) -- (s);
+
+  \node[bxP, text width=2.5cm] (n)  at (1.6,-2.9) {S\_SNAPSHOT\\{\footnotesize ClientMessageRouter}};
+  \node[bxB, text width=3.1cm] (h)  at (5.4,-2.9) {SnapshotHolding\\Queue};
+  \node[bxG, text width=3.2cm] (r)  at (9.2,-2.9) {PredictionReconciler\\{\footnotesize so tại lastProcessedInputTick}};
+  \node[bxO, text width=3.0cm] (c)  at (13.4,-2.9) {Lệch quá ngưỡng: đặt về server, phát lại input};
+  \node[grp, fit=(n)(c)] (g2) {};
+  \node[grpt] at (g2.north west) {2. Hoà giải -- khi có snapshot mới};
+  \draw[arr] (n) -- (h); \draw[arr] (h) -- (r); \draw[arr] (r) -- (c);
+  \draw[darr] (q.south) -- node[lbl, right=2pt]{input chưa xác nhận} (q.south |- r.north);
+
+  \node[bxB, text width=3.0cm] (ri) at (3.2,-5.8) {RemoteActorRegistry};
+  \node[bxG, text width=3.4cm] (si) at (7.9,-5.8) {SnapshotInterpolator\\{\footnotesize hiển thị tại now $-$ 100 ms}};
+  \node[bxG, text width=3.2cm] (rv) at (12.6,-5.8) {RemoteActorView\\{\footnotesize tư thế, vũ khí, hoạt ảnh}};
+  \node[grp, fit=(ri)(rv)] (g3) {};
+  \node[grpt] at (g3.north west) {3. Nội suy actor ở xa};
+  \draw[arr] (ri) -- (si); \draw[arr] (si) -- (rv);
+  \draw[arr] (h.south) -- node[lbl, right=2pt]{actor ở xa} (h.south |- ri.north);
+\end{tikzpicture}
+\caption{Luồng xử lý dự đoán, hoà giải và nội suy trong client}
+\label{fig:A-duDoan}
+\end{figure}
+
+% =====================================================================================
+\section{Luồng xử lý và giải pháp đã ứng dụng}
+Mục này mô tả chi tiết các luồng mà phân hệ client hiện thực: từ màn hình đăng nhập tới sảnh, vào phòng và kết nối
+game server bằng vé, rồi trong trận là dự đoán -- hoà giải chuyển động của người chơi cục bộ, nội suy người chơi ở xa,
+hiển thị sự kiện chiến đấu và HUD, cuối cùng là mất kết nối và kết thúc trận. Mỗi luồng có sơ đồ tuần tự (tên lớp đúng
+như trong mã nguồn), diễn giải và bảng \textbf{vấn đề -- giải pháp}.
+
+% -------------------------------------------------------------------------------------
+\subsection{Luồng đăng nhập từ giao diện}
+\textbf{Bài toán.} \code{OnGUI} chạy trên luồng chính của Unity và không thể \code{await}; nếu chờ phản hồi mạng ngay
+trong \code{OnGUI} thì cả trò chơi đứng hình. Ngược lại, callback mạng không được phép chạm vào đối tượng Unity từ luồng
+nền.
+
+\begin{figure}[H]
+\centering
+\renewcommand{\seqstep}{0.64cm}
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \seqhuman{P}{0.6}{Người chơi}
+  \seqactor{O}{3.5}{LobbyShell-\\Overlay}
+  \seqactor{S}{6.9}{MasterSession}
+  \seqactor{F}{10.2}{GameFlow-\\Controller}
+  \seqactor{M}{13.4}{MasterClient}
+  \seqactor{X}{15.9}{Master\\Server}
+  \seqbegin
+  \seqmsg{P}{O}{nhập host, username, mật khẩu; bấm ``Log in''}
+  \seqmsg{O}{S}{Submit(LoginAsync()) -- async void có bắt lỗi}
+  \seqmsg{S}{M}{ConnectAsync(host, 27000, TLS pin)}
+  \seqmsg{M}{X}{TCP + bắt tay TLS}
+  \seqmsg{S}{F}{Transition(Authenticating)}
+  \seqself{S}{PasswordHasher.Hash:\\SHA256(mật khẩu + username)}
+  \seqmsg{S}{M}{LoginAsync(username, hash)}
+  \seqmsg{M}{X}{LOGIN\_REQ (luồng nền)}
+  \seqret{X}{M}{LOGIN\_RES}
+  \seqself{M}{đưa phản hồi vào ConcurrentQueue;\\Poll() trên luồng chính hoàn thành Task}
+  \seqfragbegin
+  \seqret{M}{S}{ok: sessionToken, playerId, displayName}
+  \seqmsg{S}{F}{Transition(Lobby)}
+  \seqfragelse{P}{X}{lỗi (sai mật khẩu, bị khoá, quá tần suất, sai phiên bản)}
+  \seqret{M}{S}{MasterServerException(errorCode)}
+  \seqmsg{S}{F}{Recover(LoginScreen)}
+  \seqfragend{P}{X}{alt}{đăng nhập thành công}
+  \seqret{O}{P}{vẽ màn hình theo State; lỗi hiển thị bằng MasterErrorText}
+  \seqend{P,O,S,F,M,X}
+\end{tikzpicture}
+\caption{Biểu đồ tuần tự đăng nhập: giao diện không bao giờ chặn, mọi kết quả về luồng chính qua Poll()}
+\label{fig:A-luong-dangnhap}
+\end{figure}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{4.4cm}|Y|}
+\hline
+\hd{Vấn đề} & \hd{Giải pháp đã áp dụng} \\ \hline
+\code{OnGUI} không \code{await} được & Nút bấm gọi \code{Submit(Task)}: một \code{async void} duy nhất có \code{try/catch} bao trọn, để ngoại lệ không thoát ra ngoài (ngoại lệ thoát khỏi \code{async void} làm sập luồng đồng bộ hoá của Unity) \\ \hline
+Callback mạng chạy trên luồng nền & \code{MasterClient} chép khung vào \code{ConcurrentQueue<Action>}; \code{Poll()} gọi mỗi khung hình rút hàng đợi trên luồng chính \\ \hline
+Chuyển màn hình sai thứ tự khi có nhiều thao tác chồng nhau & \code{GameFlowController} là máy trạng thái 10 trạng thái có bảng cạnh hợp lệ; \code{Transition} ngoài bảng ném lỗi, \code{Recover} chỉ đi theo cạnh phục hồi đã khai báo \\ \hline
+Mật khẩu gốc lộ ra server hoặc log & Băm \code{SHA256(mật khẩu + username)} ngay ở client; mật khẩu phòng băm riêng bằng \code{HashRoomPassword} \\ \hline
+Mã lỗi khó hiểu & \code{MasterErrorText} ánh xạ mã lỗi MSP sang câu thông báo cho người chơi \\ \hline
+\end{tabularx}
+\end{center}
+
+% -------------------------------------------------------------------------------------
+\subsection{Luồng vào phòng và kết nối game server}
+\begin{figure}[H]
+\centering
+\renewcommand{\seqstep}{0.64cm}
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \seqactor{S}{1.2}{MasterSession}
+  \seqactor{F}{4.5}{GameFlow-\\Controller}
+  \seqactor{Q}{7.8}{SnapshotHolding-\\Queue}
+  \seqactor{T}{11.3}{UdpTransport-\\Client}
+  \seqactor{G}{14.8}{Game Server}
+  \seqbegin
+  \seqmsg{S}{F}{Transition(JoiningRoom)}
+  \seqself{S}{JoinRoomAsync(roomId, hash mật khẩu phòng)}
+  \seqself{S}{PendingJoin \{ip, port, vé 64 byte\}}
+  \seqmsg{S}{F}{Transition(RoomLobby)}
+  \seqmsg{S}{F}{EnterMatch(): Transition(ConnectingGame)}
+  \seqmsg{S}{Q}{Clear(); Hold() -- bắt đầu giữ gói đến}
+  \seqmsg{S}{T}{Connect(ip, port, joinTicket)}
+  \seqmsg{T}{G}{CONNECT\_REQUEST / RESPONSE (bắt tay cookie)}
+  \seqfragbegin
+  \seqret{G}{T}{CONNECT\_ACCEPTED \{connectionId, serverTick, mapId, playerId\}}
+  \seqret{T}{S}{OnConnected: tải scene bản đồ}
+  \seqmsg{T}{Q}{S\_MATCH\_STATE, S\_SPAWN\_ACTOR, S\_SNAPSHOT (giữ lại)}
+  \seqmsg{S}{Q}{OnSceneReady(): phát lại gói đã giữ}
+  \seqmsg{S}{F}{Transition(InMatch)}
+  \seqfragelse{S}{G}{quá 10 s hoặc CONNECT\_DENIED}
+  \seqself{S}{FailJunction(thông báo)}
+  \seqmsg{S}{F}{Recover(RoomLobby)}
+  \seqfragend{S}{G}{alt}{được chấp nhận}
+  \seqend{S,F,Q,T,G}
+\end{tikzpicture}
+\caption{Biểu đồ tuần tự từ vào phòng tới vào trận: vé từ master, bắt tay UDP, giữ gói trong lúc tải bản đồ}
+\label{fig:A-luong-vaotran}
+\end{figure}
+
+\textbf{Các giải pháp kỹ thuật chính.}
+\begin{itemize}
+  \item \textbf{\code{PendingJoin} gói địa chỉ, cổng và vé vào một giá trị.} Tránh việc gọi nhầm server này với vé của server
+        khác (game server sẽ từ chối với lỗi chữ ký không nói rõ nguyên nhân). Vé chỉ sống 60 s nên client quay số ngay và
+        hết hạn chờ sau 10 s --- nằm gọn trong hạn của vé.
+  \item \textbf{Giữ gói trong lúc tải bản đồ.} Server bắt đầu gửi trạng thái ngay sau \code{CONNECT_ACCEPTED}, khi scene còn
+        đang tải. \code{SnapshotHoldingQueue} bắt đầu giữ \textbf{trước} khi quay số, và chỉ phát lại khi scene sẵn sàng;
+        vì thế không có khoảng hở nào để một gói bị đưa vào scene chưa tồn tại, và HUD không xuất hiện trên bản đồ tải dở.
+  \item \textbf{Lỗi quay số không làm sập khung hình.} Vé sai độ dài, cổng ngoài phạm vi hay tên máy không phân giải được
+        đều bị bắt và biến thành thông báo, trạng thái quay về \code{RoomLobby}.
+  \item \textbf{Kết nối trực tiếp (LAN) không cần master:} ô ``Direct connect'' dùng vé không ký 64 byte, dành cho thử
+        nghiệm khi game server chạy độc lập.
+\end{itemize}
+
+% -------------------------------------------------------------------------------------
+\subsection{Luồng dự đoán và hoà giải chuyển động người chơi cục bộ}
+\begin{figure}[H]
+\centering
+\renewcommand{\seqstep}{0.64cm}
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \seqactor{K}{1.3}{NetPrediction-\\Clock}
+  \seqactor{A}{4.7}{NetMovement-\\Agent}
+  \seqactor{P}{8.2}{ClientPrediction-\\Stage}
+  \seqactor{R}{11.8}{Prediction-\\Reconciler}
+  \seqactor{T}{15.0}{Transport\\(kênh 3)}
+  \seqbegin
+  \seqfragbegin
+  \seqmsg{K}{A}{Step(input từ LocalInputSource, 1/30 s)}
+  \seqself{A}{MovementCore.Step -- cùng mã với server}
+  \seqmsg{K}{P}{OnTickSimulated(tick, input)}
+  \seqmsg{P}{R}{Record(tick, input)}
+  \seqmsg{P}{T}{C\_INPUT \{tick cũ nhất, tối đa 8 frame\} -- không tin cậy}
+  \seqfragend{K}{T}{loop}{mỗi tick 30 Hz}
+  \seqret{T}{P}{OnSnapshotApplied(serverTick, lastProcessedInputTick)}
+  \seqmsg{P}{R}{Reconcile(dự đoán, vị trí server, lastProcessedInputTick)}
+  \seqfragbegin
+  \seqret{R}{P}{Agreed: không làm gì}
+  \seqfragelse{K}{T}{lệch > 0,25 m}
+  \seqself{R}{nhận trạng thái server trước,\\rồi phát lại input sau lastProcessedInputTick}
+  \seqret{R}{P}{Corrected}
+  \seqfragelse{K}{T}{input cần phát lại đã bị đẩy khỏi vòng đệm}
+  \seqret{R}{P}{Resynchronised: đặt thẳng về server}
+  \seqfragend{K}{T}{alt}{lệch $\le$ 0,25 m}
+  \seqmsg{P}{A}{ApplyAuthoritativeState (chỉ khi Corrected / Resync)}
+  \seqend{K,A,P,R,T}
+\end{tikzpicture}
+\caption{Biểu đồ tuần tự dự đoán phía client và hoà giải với snapshot của server}
+\label{fig:A-luong-dudoan}
+\end{figure}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{4.4cm}|Y|}
+\hline
+\hd{Vấn đề} & \hd{Giải pháp đã áp dụng} \\ \hline
+Chờ server trả lời mới di chuyển thì trễ bằng một vòng RTT & Dự đoán: mô phỏng ngay bằng \code{MovementCore} --- mã dùng chung với server nên cùng input cho cùng kết quả \\ \hline
+Gói input bị mất & Mỗi \code{C_INPUT} mang tối đa 8 frame gần nhất (266 ms dư thừa ở 30 Hz), gửi không tin cậy trên kênh 3 --- rẻ hơn trả ack cho 30 bản tin mỗi giây \\ \hline
+Dự đoán lệch server & So tại \code{lastProcessedInputTick}; lệch quá 0,25 m thì \textbf{nhận trạng thái server trước rồi mới phát lại} input chưa xác nhận (phát lại lên trạng thái dự đoán sẽ nhân đôi sai số) \\ \hline
+Ghi input sai tick làm mọi lần phát lại lệch một khung & Ghi \code{Record} \textbf{trước} khi gửi và dùng đúng tick mà đồng hồ đã đóng dấu \\ \hline
+Tick 32 bit quay vòng & So sánh bằng \code{SequenceMath.IsNewer32}; ack cũ bị bỏ qua (\code{Stale}) \\ \hline
+Ép \code{CharacterController} di chuyển thừa & Chỉ ghi lại trạng thái khi thật sự Corrected hoặc Resynchronised \\ \hline
+\end{tabularx}
+\end{center}
+
+% -------------------------------------------------------------------------------------
+\subsection{Luồng hiển thị người chơi và bot ở xa}
+\begin{figure}[H]
+\centering
+\renewcommand{\seqstep}{0.64cm}
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \seqactor{R}{1.3}{ClientMessage-\\Router}
+  \seqactor{G}{4.9}{RemoteActor-\\Registry}
+  \seqactor{I}{8.7}{Snapshot-\\Interpolator}
+  \seqactor{V}{12.3}{RemoteActorView}
+  \seqactor{U}{15.4}{Actor\\(Unity)}
+  \seqbegin
+  \seqmsg{R}{G}{OnSpawn(S\_SPAWN\_ACTOR)}
+  \seqmsg{G}{V}{tạo / gắn RemoteActorView cho actorId}
+  \seqfragbegin
+  \seqmsg{R}{I}{Push(bản sao WorldSnapshot đã giải delta)}
+  \seqfragend{R}{U}{loop}{mỗi S\_SNAPSHOT}
+  \seqfragbegin
+  \seqmsg{G}{I}{TrySample(renderTick = tick mới nhất $-$ 2 + phần lẻ)}
+  \seqret{I}{G}{from, to, alpha}
+  \seqmsg{G}{V}{Apply(vị trí nội suy, yaw, tư thế, vũ khí)}
+  \seqmsg{V}{U}{điều khiển hình thể, hoạt ảnh, súng cầm tay}
+  \seqfragend{R}{U}{loop}{mỗi khung hình (Update)}
+  \seqmsg{R}{G}{OnDespawn(S\_DESPAWN\_ACTOR)}
+  \seqmsg{G}{V}{gỡ view, trả actor về kho}
+  \seqend{R,G,I,V,U}
+\end{tikzpicture}
+\caption{Biểu đồ tuần tự nội suy actor ở xa giữa hai snapshot đã nhận}
+\label{fig:A-luong-noisuy}
+\end{figure}
+
+\textbf{Giải pháp.} Snapshot chỉ tới 20 Hz (xa hơn còn 10 hoặc 4 Hz) nên hiển thị thẳng sẽ giật. Client hiển thị lùi sau
+snapshot mới nhất 2 tick và \textbf{nội suy} giữa hai snapshot bao quanh thời điểm đó --- mất một snapshot vẫn còn cặp
+khác để nội suy, đúng yêu cầu ``chuyển động của người khác luôn mượt khi mất gói''. Vòng đệm 16 snapshot (nửa giây) được cấp
+phát một lần; snapshot được \textbf{chép vào} chứ không giữ tham chiếu, vì \code{DeltaDecoder} tái sử dụng cùng một đối
+tượng. Nếu thời điểm hiển thị cũ hơn snapshot cũ nhất thì dừng ở snapshot cũ nhất chứ không ngoại suy lùi.
+Ragdoll khi chết chỉ là hiệu ứng cục bộ, không đồng bộ (tiết kiệm khoảng 1,7 MB/s).
+
+% -------------------------------------------------------------------------------------
+\subsection{Luồng sự kiện chiến đấu, mục tiêu và HUD}
+\begin{figure}[H]
+\centering
+\renewcommand{\seqstep}{0.64cm}
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \seqactor{T}{1.3}{Transport\\(kênh 1, 2)}
+  \seqactor{R}{4.7}{ClientMessage-\\Router}
+  \seqactor{C}{8.4}{NetClientCombat-\\Presenter}
+  \seqactor{O}{12.1}{NetClientObjective-\\Presenter}
+  \seqactor{H}{15.3}{HUD /\\hiệu ứng}
+  \seqbegin
+  \seqmsg{T}{R}{payload đã tách khung}
+  \seqfragbegin
+  \seqmsg{R}{C}{S\_WEAPON\_FIRE}
+  \seqmsg{C}{H}{tiếng súng, vệt đạn (CosmeticTracerPool)}
+  \seqfragelse{T}{H}{S\_HIT\_CONFIRM}
+  \seqmsg{R}{C}{S\_HIT\_CONFIRM \{targetId, damage\}}
+  \seqmsg{C}{H}{dấu trúng (hitmarker), âm thanh trúng}
+  \seqfragelse{T}{H}{S\_DEATH}
+  \seqmsg{R}{C}{S\_DEATH \{nạn nhân, người bắn, vũ khí\}}
+  \seqmsg{C}{H}{thông báo hạ gục, ragdoll cục bộ, đếm ngược hồi sinh}
+  \seqfragelse{T}{H}{S\_MATCH\_STATE / S\_CAPTURE\_POINT}
+  \seqmsg{R}{O}{pha trận, vé mỗi phe, trạng thái điểm chiếm}
+  \seqmsg{O}{H}{thanh vé, cờ điểm chiếm, bảng điểm cuối trận}
+  \seqfragend{T}{H}{alt}{S\_WEAPON\_FIRE}
+  \seqend{T,R,C,O,H}
+\end{tikzpicture}
+\caption{Biểu đồ tuần tự biến sự kiện server thành hiệu ứng và HUD}
+\label{fig:A-luong-sukien}
+\end{figure}
+Máu, đạn, hạ gục và điểm số đều \textbf{do server quyết định}; client chỉ hiển thị. Giật súng cục bộ vẫn chạy để có cảm giác
+bắn, nhưng không ảnh hưởng viên đạn thật. Trước khi chạm vào bất kỳ đối tượng nào, mọi presenter hỏi \code{NetClientPresenterGuard} hai câu: ``có nên chạy
+không'' (chỉ ở vai trò client mạng) và ``actor này có phải người đang ngồi trước bàn phím không'' --- để hiệu ứng dành
+cho chính người chơi (hitmarker, đếm ngược hồi sinh) không bị áp nhầm lên actor ở xa.
+
+% -------------------------------------------------------------------------------------
+\subsection{Luồng mất kết nối và kết thúc trận}
+Theo đề, hết trận server hiện bảng điểm 20 s rồi đặt lại thế giới, người chơi không phải thoát phòng; còn người chơi mất
+kết nối quá 10 s bị coi như rời trận. Phía client xử lý hai trường hợp như sau.
+\begin{figure}[H]
+\centering
+\renewcommand{\seqstep}{0.64cm}
+\begin{tikzpicture}[x=1cm, y=1cm]
+  \seqactor{T}{1.4}{UdpTransport-\\Client}
+  \seqactor{S}{5.6}{MasterSession}
+  \seqactor{F}{9.8}{GameFlow-\\Controller}
+  \seqhuman{P}{14.2}{Người chơi}
+  \seqbegin
+  \seqfragbegin
+  \seqmsg{T}{S}{OnDisconnected(Timeout / TransportError / RemoteRequest)}
+  \seqself{S}{Fail("Disconnected from the game server")}
+  \seqmsg{S}{F}{Recover(Lobby)}
+  \seqret{F}{P}{về sảnh kèm thông báo, không đứng hình}
+  \seqfragelse{T}{P}{S\_MATCH\_STATE: pha Ended rồi Resetting}
+  \seqret{T}{P}{qua NetClientObjectivePresenter: HUD hiện pha, vé, thời gian còn lại}
+  \seqret{T}{P}{sau Resetting: S\_SPAWN\_ACTOR mới, vẫn ở InMatch}
+  \seqfragend{T}{P}{alt}{mất kết nối giữa trận}
+  \seqend{T,S,F,P}
+\end{tikzpicture}
+\caption{Biểu đồ tuần tự phía client khi mất kết nối và khi trận kết thúc}
+\label{fig:A-luong-roi}
+\end{figure}
+Khi server không nhận được gói nào trong 10 s, nó coi người chơi đã rời trận; phía client cũng tự hết hạn sau 10 s im lặng và
+đưa người chơi về sảnh với thông báo, thay vì để lại một thế giới đứng yên không ai cập nhật.

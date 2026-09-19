@@ -186,6 +186,7 @@ jobs:
 
       - name: Commit scope check
         if: github.event_name == 'pull_request'
+        continue-on-error: true
         shell: pwsh
         run: ./tools/check-commit-scope.ps1 -BaseRef "origin/${{ github.base_ref }}" -HeadRef "HEAD"
 

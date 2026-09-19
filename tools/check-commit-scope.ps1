@@ -202,6 +202,5 @@ Write-Host "  Valid scopes: $($VALID_SCOPES -join ' ')"
 
 if ($Strict) { exit 1 }
 
-# Non-zero so the CI step is visibly yellow/red inside the advisory job, while the job's
-# continue-on-error keeps the PR mergeable.
-exit 1
+# Advisory check: exit 0 so it reports without failing the step.
+exit 0

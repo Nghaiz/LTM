@@ -1,0 +1,390 @@
+% =====================================================================================
+% preamble.tex — cấu hình chung cho cả 4 báo cáo cá nhân
+% Biên dịch bằng XeLaTeX (hoặc Tectonic). Xem README.md.
+% =====================================================================================
+\documentclass[13pt]{extarticle}
+
+% ---------- Trang và font -----------------------------------------------------------
+\usepackage[letterpaper, left=2.5cm, right=2cm, top=2.2cm, bottom=2.2cm, footskip=1cm]{geometry}
+\usepackage{fontspec}
+% Dùng Times New Roman nếu máy có (Windows/Overleaf có sẵn); nếu không, dùng TeX Gyre Termes
+% — bản sao Times có đủ dấu tiếng Việt.
+\IfFontExistsTF{Times New Roman}{%
+  \setmainfont{Times New Roman}%
+}{%
+  \setmainfont{texgyretermes}[Extension=.otf, UprightFont=*-regular, BoldFont=*-bold,
+    ItalicFont=*-italic, BoldItalicFont=*-bolditalic]%
+}
+% Chữ trong sơ đồ tuần tự dùng font không chân (giống Visual Paradigm): Arial nếu có, không thì
+% Liberation Sans, cuối cùng là TeX Gyre Heros (đi kèm Tectonic/TeX Live, đủ dấu tiếng Việt).
+\IfFontExistsTF{Arial}{\setsansfont{Arial}}{%
+  \IfFontExistsTF{Liberation Sans}{\setsansfont{Liberation Sans}}{%
+    \setsansfont{texgyreheros}[Extension=.otf, UprightFont=*-regular, BoldFont=*-bold,
+      ItalicFont=*-italic, BoldItalicFont=*-bolditalic]}}
+\setmonofont{lmmono10}[Extension=.otf, UprightFont=*-regular, Scale=0.9]
+\linespread{1.2}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\hyphenpenalty=10000
+\exhyphenpenalty=10000
+\emergencystretch=3em
+
+% ---------- Gói --------------------------------------------------------------------
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{array, tabularx, longtable, booktabs, multirow, makecell}
+\usepackage{colortbl}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{tocloft}
+\usepackage{caption}
+\usepackage{fancyhdr}
+\usepackage{bytefield}
+\usepackage{url}
+\usepackage{etoolbox}
+\usepackage{float}
+\usepackage{amssymb}
+\usepackage{listings}
+\lstset{basicstyle=\ttfamily\scriptsize, backgroundcolor=\color{cGray}, frame=single, rulecolor=\color{cLine},
+  columns=fullflexible, keepspaces=true, breaklines=true, xleftmargin=2pt, xrightmargin=2pt,
+  extendedchars=true, inputencoding=utf8}
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta, calc, fit, backgrounds, shapes.multipart,
+  shapes.geometric, matrix, decorations.pathreplacing}
+\usepackage[hidelinks]{hyperref}
+
+% ---------- Tên tiếng Việt ----------------------------------------------------------
+\renewcommand{\figurename}{Hình}
+\renewcommand{\tablename}{Bảng}
+\renewcommand{\contentsname}{Mục lục}
+
+% ---------- Màu --------------------------------------------------------------------
+\definecolor{tocblue}{HTML}{2F5496}
+\definecolor{cBlue}{HTML}{DDE8F3}
+\definecolor{cGreen}{HTML}{E3F1E8}
+\definecolor{cOrange}{HTML}{FBEFD9}
+\definecolor{cPurple}{HTML}{F1E3F3}
+\definecolor{cGray}{HTML}{EEF0F2}
+\definecolor{cHead}{HTML}{E7E7E7}
+\definecolor{cLine}{HTML}{555555}
+\definecolor{uiBg}{HTML}{2B2F36}
+\definecolor{uiBar}{HTML}{15181D}
+\definecolor{uiField}{HTML}{1C1F24}
+\definecolor{uiBtn}{HTML}{4A525D}
+\definecolor{uiText}{HTML}{E8E8E8}
+\definecolor{uiState}{HTML}{9FD49F}
+\definecolor{uiRed}{HTML}{D9534F}
+
+% ---------- Tiêu đề mục ------------------------------------------------------------
+\titleformat{\section}{\bfseries\fontsize{14}{18}\selectfont}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\bfseries\fontsize{13}{16}\selectfont}{\thesubsection.}{0.5em}{}
+\titleformat{\subsubsection}{\bfseries\itshape\fontsize{13}{16}\selectfont}{\thesubsubsection.}{0.5em}{}
+\titlespacing*{\section}{0pt}{14pt}{6pt}
+\titlespacing*{\subsection}{12pt}{10pt}{4pt}
+\titlespacing*{\subsubsection}{24pt}{8pt}{3pt}
+
+% "Phần" lớn: I. NỘI DUNG NHÓM / II. NỘI DUNG CÁ NHÂN — sang trang mới, vào mục lục.
+% Tiêu đề luôn nằm trên một dòng: nếu dài hơn bề rộng trang thì thu nhỏ vừa khít.
+\newsavebox{\PhanLonBox}
+\newcommand{\PhanLon}[1]{%
+  \clearpage\phantomsection
+  \addcontentsline{toc}{part}{#1}%
+  \sbox{\PhanLonBox}{\bfseries\fontsize{15}{19}\selectfont #1}%
+  \noindent\ifdim\wd\PhanLonBox>\linewidth
+    \resizebox{\linewidth}{!}{\usebox{\PhanLonBox}}%
+  \else\usebox{\PhanLonBox}\fi\par\vspace{6pt}}
+
+% ---------- Mục lục ----------------------------------------------------------------
+\renewcommand{\cfttoctitlefont}{\color{tocblue}\bfseries\fontsize{15}{19}\selectfont}
+\renewcommand{\cftaftertoctitle}{}
+\setlength{\cftbeforetoctitleskip}{0pt}
+\setlength{\cftaftertoctitleskip}{8pt}
+\renewcommand{\cftpartfont}{\bfseries}
+\renewcommand{\cftpartpagefont}{\bfseries}
+\renewcommand{\cftpartleader}{\cftdotfill{\cftdotsep}}
+\setlength{\cftbeforepartskip}{4pt}
+\renewcommand{\cftsecfont}{\normalfont}
+\renewcommand{\cftsecpagefont}{\normalfont}
+\renewcommand{\cftsecleader}{\cftdotfill{\cftdotsep}}
+\renewcommand{\cftsecaftersnum}{.}
+\setlength{\cftbeforesecskip}{2pt}
+\setlength{\cftsecindent}{1.2em}
+\setlength{\cftsubsecindent}{3em}
+\renewcommand{\cftsubsecaftersnum}{.}
+\setlength{\cftsecnumwidth}{1.8em}
+\setlength{\cftsubsecnumwidth}{2.6em}
+\setcounter{tocdepth}{2}
+\setcounter{secnumdepth}{3}
+
+% ---------- Hình và bảng -----------------------------------------------------------
+\counterwithin{figure}{section}
+\captionsetup{font={small,it}, labelfont={small,it}, labelsep=period, justification=centering}
+\setlength{\abovecaptionskip}{4pt}
+\renewcommand{\arraystretch}{1.25}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcommand{\hd}[1]{\cellcolor{cHead}\textbf{#1}}
+\setlist{nosep, leftmargin=1.5em, topsep=2pt}
+
+% Mã nguồn trong văn bản: ngắt dòng được ở / . _ và chữ hoa
+\urlstyle{tt}
+\DeclareUrlCommand\code{\urlstyle{tt}}
+\expandafter\def\expandafter\UrlBreaks\expandafter{\UrlBreaks
+  \do\A\do\B\do\C\do\D\do\E\do\F\do\G\do\H\do\I\do\J\do\K\do\L\do\M\do\N\do\O\do\P
+  \do\Q\do\R\do\S\do\T\do\U\do\V\do\W\do\X\do\Y\do\Z\do\_\do\.}
+
+% ---------- Số trang ---------------------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0pt}
+\fancypagestyle{plain}{\fancyhf{}\cfoot{\thepage}\renewcommand{\headrulewidth}{0pt}}
+
+% ---------- Style TikZ dùng chung ---------------------------------------------------
+\tikzset{
+  every picture/.style={font=\small},
+  box/.style={draw=cLine, rounded corners=2pt, align=center, inner sep=4pt, fill=white,
+    font=\small, minimum height=0.9cm},
+  bxB/.style={box, fill=cBlue}, bxG/.style={box, fill=cGreen}, bxO/.style={box, fill=cOrange},
+  bxP/.style={box, fill=cPurple}, bxY/.style={box, fill=cGray},
+  dec/.style={draw=cLine, diamond, aspect=2.2, align=center, inner sep=1pt, fill=cOrange, font=\small},
+  db/.style={draw=cLine, cylinder, shape border rotate=90, aspect=0.25, fill=cGray, align=center,
+    minimum height=1cm, font=\small},
+  arr/.style={-{Stealth[length=2.2mm]}, draw=cLine, thick},
+  darr/.style={arr, dashed},
+  biarr/.style={{Stealth[length=2.2mm]}-{Stealth[length=2.2mm]}, draw=cLine, thick},
+  lbl/.style={font=\footnotesize, fill=white, inner sep=1.5pt, align=center},
+  grp/.style={draw=cLine, dashed, rounded corners=4pt, inner sep=8pt},
+  grpt/.style={font=\footnotesize\bfseries, anchor=south west, inner sep=2pt},
+  % trạng thái
+  st/.style={draw=cLine, rounded corners=5pt, fill=cBlue, minimum height=0.8cm, minimum width=2.4cm,
+    align=center, font=\small},
+  init/.style={circle, fill=black, minimum size=7pt, inner sep=0pt},
+  final/.style={circle, draw=black, double, double distance=1.5pt, fill=black, minimum size=5pt, inner sep=0pt},
+  % lớp UML
+  umlclass/.style={draw=cLine, rectangle split, rectangle split parts=2, fill=white,
+    rectangle split part fill={cBlue, white}, align=left, font=\footnotesize, inner sep=3pt},
+}
+
+\makeatletter
+% ---------- Sơ đồ tuần tự theo phong cách Visual Paradigm ------------------------------
+% Lifeline có đầu hộp tô chuyển màu, đường đời nét đứt, thanh kích hoạt tự vẽ trên mỗi lifeline
+% (từ thông điệp đầu tiên tới thông điệp cuối cùng chạm vào nó), thông điệp đánh số tự động,
+% thông điệp gọi = nét liền đầu tam giác đặc, trả về = nét đứt đầu mở, combined fragment có nhãn
+% ngũ giác (loop / alt / opt) kèm điều kiện [guard]. Hộp lifeline và thanh kích hoạt màu xanh da trời
+% như mặc định của Visual Paradigm. Không dùng ghi chú: xử lý nội bộ vẽ bằng thông điệp tự gọi (\seqself).
+% Dùng trong tikzpicture:
+%   \seqactor{id}{x}{nhãn}      lifeline dạng hộp      \seqhuman{id}{x}{nhãn}  lifeline tác nhân (người)
+%   \seqbegin
+%   \seqmsg{từ}{đến}{nhãn}   \seqret{từ}{đến}{nhãn}   \seqlost{từ}{đến}{nhãn}   \seqself{id}{nhãn}
+%   \seqfragbegin ... [\seqfragelse{trái}{phải}{điều kiện}] ... \seqfragend{trái}{phải}{loại}{điều kiện}
+%   \seqloopbegin ... \seqloopend{trái}{phải}{điều kiện}   -- viết tắt cho fragment loop
+%   \seqgap{khoảng}             chèn khoảng trống dọc
+%   \seqend{danh sách id}
+\definecolor{vpBorder}{HTML}{3B5B7A}
+\definecolor{vpHeadTop}{HTML}{9ED8F4}
+\definecolor{vpHeadBot}{HTML}{7CC7ED}
+\definecolor{vpAct}{HTML}{7CC7ED}
+\definecolor{vpFrag}{HTML}{E4F3FB}
+\definecolor{vpLine}{HTML}{3A3A3A}
+\pgfdeclarelayer{background}
+\pgfdeclarelayer{vpact}
+\pgfsetlayers{background,vpact,main}
+\tikzset{
+  vplbl/.style={font=\sffamily\footnotesize, fill=white, inner sep=1.2pt, align=center},
+  vpcall/.style={draw=vpLine, line width=0.6pt, -{Triangle[length=2.3mm, width=1.7mm]}},
+  vpreply/.style={draw=vpLine, line width=0.6pt, dash pattern=on 3pt off 2pt, -{Straight Barb[length=2.3mm, width=2.2mm]}},
+  vphead/.style={draw=vpBorder, line width=0.7pt, top color=vpHeadTop, bottom color=vpHeadBot,
+    minimum height=0.8cm, minimum width=2.1cm, inner xsep=5pt, align=center, font=\sffamily\small},
+  vpactbox/.style={draw=vpBorder, line width=0.5pt, fill=vpAct},
+}
+\newdimen\seqy
+\newdimen\seq@xa \newdimen\seq@xb \newdimen\seq@ya \newdimen\seq@yb \newdimen\seq@m
+\newcount\seq@no
+\newcount\seq@lvl
+\newcommand{\seqstep}{0.72cm}
+\newcommand{\seq@hw}{0.11cm}
+\newcommand{\seqactor}[3]{\node[vphead] (#1) at (#2,0) {#3};}
+\newcommand{\seqhuman}[3]{%
+  \node[font=\sffamily\small, anchor=center, inner sep=1pt, align=center] (#1) at (#2,-0.1) {#3};
+  \begin{scope}[draw=vpBorder, line width=0.8pt, shift={(#1.north)}]
+    \draw[fill=vpHeadTop] (0,0.66) circle (0.12);
+    \draw (0,0.54) -- (0,0.24) (-0.22,0.44) -- (0.22,0.44)
+          (-0.17,0.02) -- (0,0.24) -- (0.17,0.02);
+  \end{scope}}
+\newcommand{\seqbegin}{\global\seqy=-0.55cm \global\seq@no=0 \global\seq@lvl=0 }
+\newcommand{\seqgap}[1]{\global\advance\seqy by -#1\relax}
+% ghi nhận lifeline #1 có tham gia ở độ cao hiện tại (để vẽ thanh kích hoạt)
+\def\seq@touch#1{%
+  \expandafter\ifx\csname seq@top@#1\endcsname\relax
+    \expandafter\xdef\csname seq@top@#1\endcsname{\the\seqy}\fi
+  \expandafter\xdef\csname seq@bot@#1\endcsname{\the\seqy}}
+% toạ độ x hai đầu mũi tên, lùi vào mép thanh kích hoạt
+\def\seq@ends#1#2{%
+  \pgfpointanchor{#1}{center}\global\seq@xa=\pgf@x
+  \pgfpointanchor{#2}{center}\global\seq@xb=\pgf@x
+  \ifdim\seq@xa<\seq@xb
+    \global\advance\seq@xa by \seq@hw \global\advance\seq@xb by -\seq@hw
+  \else
+    \global\advance\seq@xa by -\seq@hw \global\advance\seq@xb by \seq@hw
+  \fi}
+\def\seq@arrow#1#2#3#4{%
+  \global\advance\seqy by -\seqstep
+  \global\advance\seq@no by 1
+  \seq@touch{#1}\seq@touch{#2}%
+  \seq@ends{#1}{#2}%
+  \edef\seq@P{\the\seq@xa,\the\seqy}\edef\seq@Q{\the\seq@xb,\the\seqy}%
+  \draw[#4] (\seq@P) -- (\seq@Q);
+  \seq@placelabel{#3}}
+% Nhãn thông điệp: nằm giữa mũi tên nếu vừa; nếu dài hơn mũi tên thì neo về phía bên gửi
+% và chạy theo chiều mũi tên (không tràn ngược ra sau lifeline gửi).
+\newbox\seq@box
+\newdimen\seq@len
+\newdimen\seq@maxx \seq@maxx=16.6cm
+\newdimen\seq@minx \seq@minx=-0.4cm
+\def\seq@placelabel#1{%
+  \pgfinterruptpicture
+    \global\setbox\seq@box\hbox{\sffamily\footnotesize\begin{tabular}{@{}c@{}}\the\seq@no:~#1\end{tabular}}%
+  \endpgfinterruptpicture
+  \seq@len=\seq@xb \advance\seq@len by -\seq@xa
+  \ifdim\seq@len<0pt \seq@len=-\seq@len \fi
+  \advance\seq@len by -0.25cm
+  \ifdim\wd\seq@box<\seq@len
+    \node[vplbl, above=0.5pt] at ($(\seq@P)!0.5!(\seq@Q)$) {\the\seq@no:~#1};
+  \else
+    \seq@len=\wd\seq@box
+    \ifdim\seq@xa<\seq@xb
+      \advance\seq@len by \seq@xa
+      \ifdim\seq@len>\seq@maxx
+        \node[vplbl, anchor=south east] at ($(\seq@Q)+(-0.06,0.02)$) {\the\seq@no:~#1};
+      \else
+        \node[vplbl, anchor=south west] at ($(\seq@P)+(0.06,0.02)$) {\the\seq@no:~#1};
+      \fi
+    \else
+      \seq@len=-\seq@len \advance\seq@len by \seq@xa
+      \ifdim\seq@len<\seq@minx
+        \node[vplbl, anchor=south west] at ($(\seq@Q)+(0.06,0.02)$) {\the\seq@no:~#1};
+      \else
+        \node[vplbl, anchor=south east] at ($(\seq@P)+(-0.06,0.02)$) {\the\seq@no:~#1};
+      \fi
+    \fi
+  \fi}
+\newcommand{\seqmsg}[3]{\seq@arrow{#1}{#2}{#3}{vpcall}}
+\newcommand{\seqret}[3]{\seq@arrow{#1}{#2}{#3}{vpreply}}
+\newcommand{\seqlost}[3]{% thông điệp bị mất: dừng giữa đường ở chấm tròn đặc, kèm dấu X đỏ
+  \global\advance\seqy by -\seqstep
+  \global\advance\seq@no by 1
+  \seq@touch{#1}%
+  \seq@ends{#1}{#2}%
+  \global\seq@xb=\dimexpr(\seq@xa*3+\seq@xb*7)/10\relax
+  \edef\seq@P{\the\seq@xa,\the\seqy}\edef\seq@Q{\the\seq@xb,\the\seqy}%
+  \draw[vpcall] (\seq@P) -- (\seq@Q);
+  \seq@placelabel{#3}
+  \fill[vpLine] (\seq@Q) ++(0.12,0) circle (2.2pt);
+  \node[text=red!70!black, font=\bfseries, inner sep=0pt] at ($(\seq@Q)+(0.42,0)$) {$\times$};}
+\newcommand{\seqself}[2]{%
+  \pgfpointanchor{#1}{center}%
+  \ifdim\pgf@x>10.5cm \seqselfl{#1}{#2}\else\seq@selfr{#1}{#2}\fi}
+\newcommand{\seq@selfr}[2]{%
+  \global\advance\seqy by -\seqstep
+  \global\advance\seq@no by 1
+  \seq@touch{#1}%
+  \pgfpointanchor{#1}{center}\global\seq@xa=\pgf@x \global\advance\seq@xa by \seq@hw
+  \edef\seq@P{\the\seq@xa,\the\seqy}%
+  \draw[vpcall] (\seq@P) -- ++(0.55,0) -- ++(0,-0.42) -- ++(-0.55,0);
+  \node[vplbl, anchor=west, align=left] at ($(\seq@P)+(0.62,-0.21)$) {\the\seq@no:~#2};
+  \global\advance\seqy by -0.42cm
+  \seq@touch{#1}}
+\newcommand{\seqselfl}[2]{% như \seqself nhưng đặt nhãn bên trái lifeline (dùng cho lifeline sát lề phải)
+  \global\advance\seqy by -\seqstep
+  \global\advance\seq@no by 1
+  \seq@touch{#1}%
+  \pgfpointanchor{#1}{center}\global\seq@xa=\pgf@x \global\advance\seq@xa by \seq@hw
+  \edef\seq@P{\the\seq@xa,\the\seqy}%
+  \draw[vpcall] (\seq@P) -- ++(0.55,0) -- ++(0,-0.42) -- ++(-0.55,0);
+  \node[vplbl, anchor=east, align=right] at ($(\seq@P)+(-0.35,-0.21)$) {\the\seq@no:~#2};
+  \global\advance\seqy by -0.42cm
+  \seq@touch{#1}}
+% combined fragment; lề ngang thu hẹp dần theo độ lồng nhau
+\def\seq@margin{\seq@m=\dimexpr 1.4cm - 0.25cm*\seq@lvl\relax}
+\newcommand{\seqfragbegin}{%
+  \global\advance\seq@lvl by 1
+  \global\advance\seqy by -0.22cm
+  \expandafter\xdef\csname seq@fragtop\the\seq@lvl\endcsname{\the\seqy}%
+  \global\advance\seqy by -0.3cm}
+\newcommand{\seqfragelse}[3]{%
+  \global\advance\seqy by -0.3cm
+  \seq@margin
+  \pgfpointanchor{#1}{center}\global\seq@xa=\pgf@x \global\advance\seq@xa by -\seq@m
+  \pgfpointanchor{#2}{center}\global\seq@xb=\pgf@x \global\advance\seq@xb by \seq@m
+  \edef\seq@P{\the\seq@xa,\the\seqy}\edef\seq@Q{\the\seq@xb,\the\seqy}%
+  \draw[vpBorder, line width=0.6pt, dash pattern=on 4pt off 2.5pt] (\seq@P) -- (\seq@Q);
+  \node[anchor=north west, font=\sffamily\footnotesize\itshape, inner sep=2pt, fill=white] at ($(\seq@P)+(0.1,-0.04)$) {[#3]};
+  \global\advance\seqy by -0.3cm}
+\newcommand{\seqfragend}[4]{%
+  \global\advance\seqy by -0.3cm
+  \seq@margin
+  \pgfpointanchor{#1}{center}\global\seq@xa=\pgf@x \global\advance\seq@xa by -\seq@m
+  \pgfpointanchor{#2}{center}\global\seq@xb=\pgf@x \global\advance\seq@xb by \seq@m
+  \global\seq@ya=\csname seq@fragtop\the\seq@lvl\endcsname\relax
+  \edef\seq@P{\the\seq@xa,\the\seq@ya}\edef\seq@Q{\the\seq@xb,\the\seqy}%
+  \draw[vpBorder, line width=0.7pt] (\seq@P) rectangle (\seq@Q);
+  \node[anchor=north west, font=\sffamily\footnotesize\bfseries, inner xsep=4pt, inner ysep=2.5pt,
+    text opacity=0] (seqfragT) at (\seq@P) {#3};
+  \fill[vpFrag] (seqfragT.north west) -- (seqfragT.north east) -- ([yshift=4pt]seqfragT.south east)
+    -- ([xshift=-4pt]seqfragT.south east) -- (seqfragT.south west) -- cycle;
+  \draw[vpBorder, line width=0.7pt] (seqfragT.north east) -- ([yshift=4pt]seqfragT.south east)
+    -- ([xshift=-4pt]seqfragT.south east) -- (seqfragT.south west);
+  \node[anchor=north west, font=\sffamily\footnotesize\bfseries, inner xsep=4pt, inner ysep=2.5pt] at (seqfragT.north west) {#3};
+  \ifx\relax#4\relax\else
+    \node[anchor=west, font=\sffamily\footnotesize\itshape, inner sep=1.5pt, fill=white] at ([xshift=4pt]seqfragT.east) {[#4]};
+  \fi
+  \global\advance\seq@lvl by -1
+  \global\advance\seqy by -0.1cm}
+\newcommand{\seqloopbegin}{\seqfragbegin}
+\newcommand{\seqloopend}[3]{\seqfragend{#1}{#2}{loop}{#3}}
+\def\seq@activation#1{%
+  \expandafter\ifx\csname seq@top@#1\endcsname\relax\else
+    \pgfpointanchor{#1}{center}\global\seq@xa=\pgf@x
+    \global\seq@xb=\seq@xa
+    \global\advance\seq@xa by -\seq@hw \global\advance\seq@xb by \seq@hw
+    \global\seq@ya=\csname seq@top@#1\endcsname\relax \global\advance\seq@ya by 0.2cm
+    \global\seq@yb=\csname seq@bot@#1\endcsname\relax \global\advance\seq@yb by -0.2cm
+    \edef\seq@P{\the\seq@xa,\the\seq@ya}\edef\seq@Q{\the\seq@xb,\the\seq@yb}%
+    \begin{pgfonlayer}{vpact}\draw[vpactbox] (\seq@P) rectangle (\seq@Q);\end{pgfonlayer}%
+    \expandafter\global\expandafter\let\csname seq@top@#1\endcsname\relax
+    \expandafter\global\expandafter\let\csname seq@bot@#1\endcsname\relax
+  \fi}
+\newcommand{\seqend}[1]{% #1 = danh sách id, ví dụ {C,M,G}
+  \global\advance\seqy by -0.45cm
+  \foreach \a in {#1} {\seq@activation{\a}}
+  \begin{pgfonlayer}{background}
+    \foreach \a in {#1} { \draw[vpBorder!70, line width=0.6pt, dash pattern=on 4pt off 3pt] (\a.south) -- (\a.center |- 0,\the\seqy); }
+  \end{pgfonlayer}}
+\makeatother
+
+% ---------- Hộp bước đánh số (dùng cho luồng xử lý) ---------------------------------
+% \buoc{tên node}{vị trí}{số}{tiêu đề}{mô tả}{màu}
+\newcommand{\buoc}[6]{%
+  \node[draw=cLine, rounded corners=2pt, fill=#6, text width=4.3cm, align=left, inner sep=4pt,
+    minimum height=1.75cm, anchor=north west] (#1) at #2 {%
+    \textbf{#3.~#4}\par\vspace{1pt}{\footnotesize #5}};}
+
+% ---------- Giao diện IMGUI (mô phỏng) ---------------------------------------------
+\newcommand{\uinum}[1]{\tikz[baseline=-0.6ex]\node[circle, fill=uiRed, text=white, inner sep=0pt,
+  minimum size=10pt, font=\tiny\bfseries]{#1};}
+
+% ---------- Bảng ánh xạ ------------------------------------------------------------
+\newenvironment{bangAnhXa}{%
+  \small
+  \begin{longtable}{|L{4.2cm}|L{6.6cm}|L{4.4cm}|}
+  \hline
+  \hd{Hình / phần tử trên hình} & \hd{Chức năng (mô tả)} & \hd{Hiện thực trong mã nguồn}\\ \hline
+  \endfirsthead
+  \hline
+  \hd{Hình / phần tử trên hình} & \hd{Chức năng (mô tả)} & \hd{Hiện thực trong mã nguồn}\\ \hline
+  \endhead
+  \hline
+  \endfoot
+}{\end{longtable}}
+\newcommand{\hang}[3]{#1 & #2 & #3 \\ \hline}
