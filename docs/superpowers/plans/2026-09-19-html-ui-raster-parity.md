@@ -24,9 +24,9 @@
 
 **Files:**
 - Create: `tools/convert-ui-svg-to-png.ps1`
-- Create: PNG counterparts under `ironfront-reborn-ui-pack (1)/assets/`
-- Modify: `ironfront-reborn-ui-pack (1)/index.html`
-- Modify: `ironfront-reborn-ui-pack (1)/ASSET_MANIFEST.md`
+- Create: PNG counterparts under `ui-pack/assets/`
+- Modify: `ui-pack/index.html`
+- Modify: `ui-pack/ASSET_MANIFEST.md`
 - Replace: SVG files under `Ironfront_Reborn/Assets/UI/IronfrontReborn/` with PNG files
 - Modify: `Ironfront_Reborn/Assets/Editor/NetVerification/IronfrontRebornUiAssetCatalog.cs`
 
@@ -77,8 +77,8 @@
 ### Task 4: Lean verification and handoff
 
 **Files:**
-- Modify: `ironfront-reborn-ui-pack (1)/status.html`
-- Modify: `ironfront-reborn-ui-pack (1)/README.md`
+- Modify: `ui-pack/status.html`
+- Modify: `ui-pack/README.md`
 
 **Interfaces:**
 - Produces: an accurate screen-by-screen support matrix and manual build/test handoff.

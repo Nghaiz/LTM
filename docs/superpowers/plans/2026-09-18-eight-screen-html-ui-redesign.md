@@ -108,7 +108,7 @@
 - Delete: `Ironfront_Reborn/Assets/UI/IronfrontRebornPack/`
 
 **Interfaces:**
-- Consumes: supplied files under `ironfront-reborn-ui-pack (1)/assets`.
+- Consumes: supplied files under `ui-pack/assets`.
 - Produces: stable Unity asset paths referenced by the menu authoring tool.
 
 - [ ] Copy the three supplied backgrounds and only the branding/icons used by the eight screens into the normalized hierarchy without modifying their art.

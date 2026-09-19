@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -221,8 +221,6 @@ namespace Ironfront.Tools.ClientWiringGate
                  "the register screen is unreachable, so criterion 2 cannot be performed"),
                 ("_rememberMeToggle",
                  "Remember username renders but cannot express the player's choice"),
-                ("_forgotPasswordButton",
-                 "Forgot password renders but cannot show the classroom-build limitation"),
                 ("_backButton",
                  "the sign-in screen has no way back to the title"),
                 ("_errorText",
@@ -255,15 +253,29 @@ namespace Ironfront.Tools.ClientWiringGate
 
             new Screen(
                 "MenuRoomBrowserScreen", "Scripts/Net/Client/Menu/MenuRoomBrowserScreen.cs",
+                // A row used to be two parallel arrays, `_roomButtons` and `_roomLabels`, and this
+                // gate checked those names. They are now the cells of one `RoomRow` struct, so
+                // the old names resolve to nothing — and "absent" reads identically to "never
+                // wired", which is how a rename produced two findings about a browser that was
+                // fully authored. Grading the columns of the struct keeps the guarantee the old
+                // pair carried and adds the three cells it never covered.
                 new[]
                 {
-                    ("_roomButtons", RoomBrowserRows,
+                    ("_rows[].Join", RoomBrowserRows,
                      "the rows a player presses to join are missing or the wrong number of them "
                      + "exists, so some rooms are listed with no way in and criterion 1 shows a "
                      + "list that cannot be used"),
-                    ("_roomLabels", RoomBrowserRows,
-                     "a row renders as a blank button: the name, map, players, lifecycle and "
-                     + "lock glyph criterion 1 is graded on all have nowhere to be written"),
+                    ("_rows[].Name", RoomBrowserRows,
+                     "a row renders with no room name, so the list criterion 1 is graded on "
+                     + "cannot be told apart room from room"),
+                    ("_rows[].Map", RoomBrowserRows,
+                     "the map column is blank, so a player cannot see what they are joining"),
+                    ("_rows[].Players", RoomBrowserRows,
+                     "the player count never renders, so a full room looks the same as an empty "
+                     + "one until the join is refused"),
+                    ("_rows[].Status", RoomBrowserRows,
+                     "the lifecycle and lock glyph have nowhere to be written, so a locked or "
+                     + "in-progress room is presented as joinable"),
                 },
                 ("_controller",
                  "every control on the browser is inert, so there is no way from the signed-in "
@@ -463,6 +475,7 @@ namespace Ironfront.Tools.ClientWiringGate
             var findings = new List<GateFinding>();
 
             findings.AddRange(GradeArrays(index, screen, document, path));
+            findings.AddRange(GradeDevelopmentNotices(index, screen, document, path));
 
             foreach ((string field, string consequence) in screen.Fields)
             {
@@ -696,21 +709,128 @@ namespace Ironfront.Tools.ClientWiringGate
         /// rows, contains no null and no duplicate and is still a screen that hides players from
         /// the two people comparing screenshots.
         /// </remarks>
+        /// <summary>
+        /// Buttons whose whole job is to say the feature is not in this build, and the screen
+        /// each sits on.
+        /// </summary>
+        /// <remarks>
+        /// <b>This replaces a field check that could not see the behaviour it was grading.</b>
+        /// The gate used to require <c>MenuLoginScreen._forgotPasswordButton</c>, and the builder
+        /// deliberately leaves it null: the announcement is made by
+        /// <c>MenuDevelopmentControls</c>, which shows a toast, so wiring the screen's own field
+        /// as well would add a second listener writing a second message. The old check therefore
+        /// reported a break on a screen that works. What actually has to hold is here instead —
+        /// the button exists, something announces for it, and that something has a toast to
+        /// announce into.
+        /// </remarks>
+        private static readonly (string Screen, string Button, string Consequence)[] DevelopmentNotices =
+        {
+            ("MenuLoginScreen", "ForgotPassword",
+             "Forgot password renders but cannot show the classroom-build limitation"),
+        };
+
+        private const string DevelopmentControlsSource =
+            "Scripts/Net/Client/Menu/MenuDevelopmentControls.cs";
+
+        /// <summary>
+        /// Grades the announce-only buttons in <see cref="DevelopmentNotices"/> against the
+        /// <c>MenuDevelopmentControls</c> on the same panel.
+        /// </summary>
+        internal static IEnumerable<GateFinding> GradeDevelopmentNotices(
+            UnityAssetIndex index, Screen screen, UnityAssetDocument document, string path)
+        {
+            var findings = new List<GateFinding>();
+            string rel = AssetWiringDetectors.Rel(index, path);
+
+            foreach ((string owner, string button, string consequence) in DevelopmentNotices)
+            {
+                if (!string.Equals(owner, screen.Name, StringComparison.Ordinal)) continue;
+
+                long? panel = document.OwningGameObjectId;
+                // A screen on no GameObject is already reported by GradeScreens, and repeating it
+                // here would file the same break twice under two different sentences.
+                if (panel == null) continue;
+
+                string controlsGuid = ScriptGuid(index, DevelopmentControlsSource);
+                UnityAssetDocument? controls = index.Documents(path)
+                    .FirstOrDefault(d => d.IsMonoBehaviour
+                                         && d.OwningGameObjectId == panel
+                                         && d.ScriptGuid == controlsGuid);
+
+                if (controls == null)
+                {
+                    findings.Add(new GateFinding(
+                        screen.LedgerRow, rel, 0,
+                        $"{screen.Name} carries no MenuDevelopmentControls, so {button} has "
+                        + $"nothing to announce with and {consequence} ({screen.FieldClause})."));
+                    continue;
+                }
+
+                if (controls.Reference("_toast")?.IsNull != false)
+                    findings.Add(new GateFinding(
+                        screen.LedgerRow, rel, 0,
+                        $"MenuDevelopmentControls on {screen.Name} has no _toast, so the "
+                        + $"listener it adds to {button} runs and shows nothing -- "
+                        + $"{consequence} ({screen.FieldClause})."));
+
+                IReadOnlyList<UnityObjectRef>? buttons = controls.ReferenceArray("_buttons");
+                bool announced = buttons != null && buttons.Any(
+                    b => !b.IsNull && string.Equals(
+                        OwnerName(index, path, b.FileId), button, StringComparison.Ordinal));
+
+                if (!announced)
+                    findings.Add(new GateFinding(
+                        screen.LedgerRow, rel, 0,
+                        $"{button} is not in MenuDevelopmentControls._buttons on {screen.Name}, "
+                        + $"so pressing it does nothing at all and {consequence} "
+                        + $"({screen.FieldClause})."));
+            }
+
+            return findings;
+        }
+
+        /// <summary>The name of the GameObject a component reference inside this asset sits on.</summary>
+        private static string? OwnerName(UnityAssetIndex index, string path, long componentId)
+        {
+            long? owner = index.Documents(path)
+                .FirstOrDefault(d => d.AnchorId == componentId)?.OwningGameObjectId;
+
+            return owner == null
+                ? null
+                : index.Documents(path)
+                    .FirstOrDefault(d => d.AnchorId == owner.Value && d.ClassId == 1)?.Name;
+        }
+
         internal static IEnumerable<GateFinding> GradeArrays(
             UnityAssetIndex index, Screen screen, UnityAssetDocument document, string path)
         {
             var findings = new List<GateFinding>();
             string rel = AssetWiringDetectors.Rel(index, path);
 
-            foreach ((string field, int length, string consequence) in screen.Arrays)
+            foreach ((string spec, int length, string consequence) in screen.Arrays)
             {
-                IReadOnlyList<UnityObjectRef>? entries = document.ReferenceArray(field);
+                // `_rows[].Join` grades one COLUMN of a struct array: the Join cell of every row.
+                // Five such specs cover a five-cell row, and each reuses every clause below —
+                // count, null, dangling and duplicate — rather than growing a parallel grader.
+                int marker = spec.IndexOf("[].", StringComparison.Ordinal);
+                string field = marker < 0 ? spec : spec.Substring(0, marker);
+                string? member = marker < 0 ? null : spec.Substring(marker + 3);
+
+                // Two rows sharing a cell is still caught, because the duplicate clause runs
+                // per column: row 2's Name and row 5's Name pointing at one Text is a real bug.
+                string Cell(int i) => member == null
+                    ? $"{screen.Name}.{field}[{i}]"
+                    : $"{screen.Name}.{field}[{i}].{member}";
+
+                IReadOnlyList<UnityObjectRef>? entries = member == null
+                    ? document.ReferenceArray(field)
+                    : document.StructReferenceArray(field, member);
 
                 if (entries == null)
                 {
                     findings.Add(new GateFinding(
                         screen.LedgerRow, rel, 0,
-                        $"{screen.Name}.{field} is not an authored array at all, so "
+                        $"{screen.Name}.{spec} is not an authored array at all, so "
                         + $"{consequence} ({screen.ArrayClause})."));
                     continue;
                 }
@@ -719,7 +839,7 @@ namespace Ironfront.Tools.ClientWiringGate
                 {
                     findings.Add(new GateFinding(
                         screen.LedgerRow, rel, 0,
-                        $"{screen.Name}.{field} holds {entries.Count} entries and the screen "
+                        $"{screen.Name}.{spec} holds {entries.Count} entries and the screen "
                         + $"needs {length}. Nothing in the asset is null and nothing is "
                         + $"duplicated, so no other clause here can see it -- and "
                         + $"{consequence} ({screen.ArrayClause})."));
@@ -736,7 +856,7 @@ namespace Ironfront.Tools.ClientWiringGate
                     {
                         findings.Add(new GateFinding(
                             screen.LedgerRow, rel, 0,
-                            $"{screen.Name}.{field}[{i}] is unassigned, so {consequence} "
+                            $"{Cell(i)} is unassigned, so {consequence} "
                             + $"({screen.ArrayClause})."));
                         continue;
                     }
@@ -745,14 +865,14 @@ namespace Ironfront.Tools.ClientWiringGate
 
                     if (target == null)
                         throw new AssetGateUnknownException(
-                            $"{path}: {screen.Name}.{field}[{i}] names guid {entry.Guid}, which "
+                            $"{path}: {Cell(i)} names guid {entry.Guid}, which "
                             + "no asset in the tree carries. The reference is dangling; this "
                             + "check cannot grade it.");
 
                     if (!index.Documents(target).Any(d => d.AnchorId == entry.FileId))
                         findings.Add(new GateFinding(
                             screen.LedgerRow, rel, 0,
-                            $"{screen.Name}.{field}[{i}] names fileID {entry.FileId}, which no "
+                            $"{Cell(i)} names fileID {entry.FileId}, which no "
                             + $"object in {AssetWiringDetectors.Rel(index, target)} carries. "
                             + $"Unity loads that as null, so {consequence} -- and it reads "
                             + $"exactly like the unassigned case at runtime ({screen.ArrayClause})."));
@@ -761,7 +881,7 @@ namespace Ironfront.Tools.ClientWiringGate
                     if (seen.TryGetValue(key, out int first))
                         findings.Add(new GateFinding(
                             screen.LedgerRow, rel, 0,
-                            $"{screen.Name}.{field}[{i}] points at the same object as [{first}]. "
+                            $"{Cell(i)} points at the same object as row {first}. "
                             + "Two rows cannot be one object: whichever is written last wins, so "
                             + $"this row does not exist and {consequence} ({screen.ArrayClause})."));
                     else

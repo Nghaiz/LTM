@@ -2,7 +2,7 @@
 
 ## Goal
 
-Rebuild the complete pre-game menu flow from `ironfront-reborn-ui-pack (1)` while preserving the real multiplayer and gameplay behavior already present in the project. The HTML prototype is the visual and interaction reference; it is not a data source.
+Rebuild the complete pre-game menu flow from `ui-pack` while preserving the real multiplayer and gameplay behavior already present in the project. The HTML prototype is the visual and interaction reference; it is not a data source.
 
 ## Scope
 

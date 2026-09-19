@@ -177,6 +177,85 @@ namespace Ironfront.Tools.ClientWiringGate
             return entries;
         }
 
+        /// <summary>
+        /// One member's reference out of every row of a serialized array of STRUCTS — the shape
+        /// Unity writes for a <c>[Serializable] struct</c> array, where each row is a map rather
+        /// than a bare <c>{fileID: …}</c>. Returns null when the key is absent, an empty list for
+        /// <c>[]</c>, and one entry per row otherwise.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see cref="ReferenceArray"/> cannot read this shape: it requires every entry to begin
+        /// with <c>{</c> and throws on <c>- Join: {fileID: …}</c>. Keeping them apart rather than
+        /// widening the flat reader means a flat field that somehow serialized as a map still
+        /// fails loudly instead of being quietly half-read.
+        /// </para>
+        /// <para>
+        /// <b>A row missing the member entirely yields <c>{fileID: 0}</c></b>, so it grades as
+        /// unassigned. Absent and null are different mistakes — the distinction
+        /// <see cref="ReferenceArray"/> is careful to keep — but inside one row of a struct array
+        /// they are the same authoring gap with the same consequence, and Unity itself writes
+        /// every member of every row once the array has been serialized at all.
+        /// </para>
+        /// </remarks>
+        public IReadOnlyList<UnityObjectRef>? StructReferenceArray(string field, string member)
+        {
+            int at = FindKeyLine(field);
+            if (at < 0) return null;
+
+            if (ValueAfterColon(_lines[at]) == "[]") return Array.Empty<UnityObjectRef>();
+
+            int fieldIndent = IndentOf(_lines[at]);
+            var entries = new List<UnityObjectRef>();
+            bool inRow = false;
+            var current = new UnityObjectRef(0, null);
+
+            for (int i = at + 1; i < _lines.Count; i++)
+            {
+                string trimmed = _lines[i].Trim();
+                if (trimmed.Length == 0) break;
+
+                bool startsRow = trimmed.StartsWith("- ", StringComparison.Ordinal);
+
+                // A line at or left of the key's own indent that is not a row bullet is the next
+                // key — or the next document's `---`, which lands here at indent 0.
+                if (!startsRow && IndentOf(_lines[i]) <= fieldIndent) break;
+
+                if (startsRow)
+                {
+                    if (inRow) entries.Add(current);
+                    inRow = true;
+                    current = new UnityObjectRef(0, null);
+                    trimmed = trimmed.Substring(2).Trim();
+                }
+
+                int colon = trimmed.IndexOf(':');
+                if (colon < 0) continue;
+                if (!string.Equals(trimmed.Substring(0, colon).Trim(), member, StringComparison.Ordinal))
+                    continue;
+
+                string rest = trimmed.Substring(colon + 1).Trim();
+
+                // Unity wraps a long reference after the guid's comma, same as elsewhere.
+                for (int j = i + 1; j < _lines.Count && rest.StartsWith("{", StringComparison.Ordinal)
+                                    && !rest.Contains('}'); j++)
+                {
+                    rest += " " + _lines[j].Trim();
+                    i = j;
+                }
+
+                if (!rest.StartsWith("{", StringComparison.Ordinal))
+                    throw new AssetGateUnknownException(
+                        $"{SourcePath}: {field}[].{member} holds a non-reference value '{rest}'. "
+                        + "This check reads object references only.");
+
+                current = ParseRef(rest);
+            }
+
+            if (inRow) entries.Add(current);
+            return entries;
+        }
+
         /// <summary>A plain scalar field, or null when the key is absent.</summary>
         public string? Scalar(string field)
         {

@@ -4,7 +4,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $failures = [System.Collections.Generic.List[string]]::new()
-$packRoot = Join-Path $RepositoryRoot 'ironfront-reborn-ui-pack (1)'
+$packRoot = Join-Path $RepositoryRoot 'ui-pack'
 $unityRoot = Join-Path $RepositoryRoot 'Ironfront_Reborn/Assets/UI/IronfrontReborn'
 $htmlPath = Join-Path $packRoot 'index.html'
 $catalogPath = Join-Path $RepositoryRoot 'Ironfront_Reborn/Assets/Editor/NetVerification/IronfrontRebornUiAssetCatalog.cs'
@@ -29,8 +29,12 @@ if ($catalog -match '\.svg') { $failures.Add('Unity UI catalogue still reference
 if ($catalog -notmatch 'textureCompression\s*=\s*TextureImporterCompression\.Uncompressed') {
     $failures.Add('Unity UI catalogue does not force uncompressed textures')
 }
-if ($catalog -notmatch 'mipmapEnabled\s*=\s*false') {
-    $failures.Add('Unity UI catalogue does not disable mipmaps')
+# Mipmaps ON, and deliberately so: the pack ships 96px icons that the menu draws at 22-28px,
+# and a downscale that far without mip levels aliases on every edge. This assertion used to
+# demand `false`, from the earlier policy of feeding the Canvas art at its exact drawn size.
+# Do not flip it back without changing the source art to match.
+if ($catalog -notmatch 'mipmapEnabled\s*=\s*true') {
+    $failures.Add('Unity UI catalogue does not enable mipmaps')
 }
 
 $builder = Get-Content -Raw -LiteralPath $builderPath

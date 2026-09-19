@@ -4,7 +4,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$assetRoot = Join-Path $RepositoryRoot 'ironfront-reborn-ui-pack (1)/assets'
+$assetRoot = Join-Path $RepositoryRoot 'ui-pack/assets'
 if (-not (Test-Path -LiteralPath $EdgePath)) {
     throw "Microsoft Edge was not found at $EdgePath"
 }
