@@ -29,6 +29,15 @@ namespace Ironfront.Net.Unity.Client.Menu
         public void SetVisible(bool visible, bool immediate = false)
         {
             CacheReferences();
+
+            if (!immediate && !MenuTransitionState.ShouldRestart(
+                    IsTargetVisible,
+                    visible,
+                    _animation != null,
+                    gameObject.activeSelf,
+                    _group!.alpha))
+                return;
+
             IsTargetVisible = visible;
 
             if (_animation != null)

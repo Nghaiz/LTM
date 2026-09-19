@@ -336,6 +336,22 @@ namespace Ironfront.Net.Unity.Client.Menu
             _flow.Reset();
         }
 
+        /// <summary>Returns from any menu page to the HTML prototype's main menu.</summary>
+        public void ReturnToMainMenu()
+        {
+            if (_flow == null) return;
+
+            ClearError();
+            ClearChat();
+            _practiceOpen = false;
+            _settingsOpen = false;
+            _registerRequested = false;
+            _createRequested = false;
+            _roomHeading = string.Empty;
+            _flow.Reset();
+            _dirty = true;
+        }
+
         /// <summary>
         /// The Title screen's secondary action: hand over to the legacy offline menu.
         /// </summary>
@@ -486,6 +502,9 @@ namespace Ironfront.Net.Unity.Client.Menu
             _createRequested = false;
             _dirty = true;
         }
+
+        /// <summary>Returns from the create form to the already-open room browser.</summary>
+        public void ShowRoomBrowser() => HideCreateRoom();
 
         /// <summary>
         /// Joins a room by id, with a password when it is private. P16 3.2.

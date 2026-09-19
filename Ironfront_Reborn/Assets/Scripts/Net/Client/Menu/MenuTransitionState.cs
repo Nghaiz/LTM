@@ -24,6 +24,27 @@ namespace Ironfront.Net.Unity.Client.Menu
     {
         public const float HiddenScale = 1.008f;
 
+        /// <summary>
+        /// Decides whether a visibility request needs to start (or reverse) an animation.
+        /// Re-applying the same controller state must not restart an animation which is already
+        /// travelling to that state; room snapshots can legitimately cause Apply several times
+        /// per second.
+        /// </summary>
+        public static bool ShouldRestart(
+            bool currentTarget,
+            bool requestedTarget,
+            bool animationRunning,
+            bool active,
+            float alpha)
+        {
+            if (currentTarget != requestedTarget) return true;
+            if (animationRunning) return false;
+
+            return requestedTarget
+                ? !active || alpha < 0.999f
+                : active || alpha > 0.001f;
+        }
+
         public static MenuTransitionFrame Evaluate(
             float startAlpha,
             bool targetVisible,

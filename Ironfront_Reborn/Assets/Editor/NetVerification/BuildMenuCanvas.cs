@@ -466,8 +466,8 @@ namespace Ironfront.Net.Unity.EditorTools
             FullscreenSprite(panel, "Background", "backgrounds/multiplayer.png");
             MultiplayerShade(panel);
             PackPanel(panel, "OperationsPanel", new Vector2(0f, -30f), new Vector2(1540f, 870f));
-            TopBar(panel, toast, "PRACTICE", "OFFLINE SIMULATION", "LOCAL SESSION", offline: true,
-                ("SETTINGS", controller.OpenSettings));
+            TopBar(panel, controller, toast, "PRACTICE", "OFFLINE SIMULATION", "LOCAL SESSION",
+                offline: true, ("SETTINGS", MenuNavigationAction.Settings));
             Label(panel, "Kicker", "COMBAT SIMULATION // SOLO TRAINING", 11,
                 new Vector2(-510f, 375f), new Vector2(520f, 28f)).alignment = TextAnchor.MiddleLeft;
             Label(panel, "Heading", "PRACTICE MODE", 42,
@@ -552,8 +552,8 @@ namespace Ironfront.Net.Unity.EditorTools
             FullscreenSprite(panel, "Background", "backgrounds/multiplayer.png");
             MultiplayerShade(panel);
             PackPanel(panel, "OperationsPanel", new Vector2(0f, -30f), new Vector2(1540f, 870f));
-            TopBar(panel, toast, "SYSTEM SETTINGS", "CONFIGURATION", "LOCAL PROFILE", offline: true,
-                ("MAIN MENU", controller.ReturnToTitle));
+            TopBar(panel, controller, toast, "SYSTEM SETTINGS", "CONFIGURATION", "LOCAL PROFILE",
+                offline: true, ("MAIN MENU", MenuNavigationAction.MainMenu));
             Label(panel, "Kicker", "SYSTEM CONTROL // CLIENT CONFIGURATION", 11,
                 new Vector2(-480f, 375f), new Vector2(620f, 28f)).alignment = TextAnchor.MiddleLeft;
             Label(panel, "Heading", "SETTINGS", 42,
@@ -670,8 +670,10 @@ namespace Ironfront.Net.Unity.EditorTools
             GameObject panel = Panel(root, "Rooms", opaque: false);
             FullscreenSprite(panel, "Background", "backgrounds/multiplayer.png");
             MultiplayerShade(panel);
-            TopBar(panel, toast, "MULTIPLAYER", "MULTIPLAYER", "MASTER SERVER", offline: false,
-                ("OPERATIVE", null), ("SETTINGS", controller.OpenSettings));
+            TopBar(panel, controller, toast, "MULTIPLAYER", "MULTIPLAYER", "MASTER SERVER",
+                offline: false,
+                ("MAIN MENU", MenuNavigationAction.MainMenu),
+                ("SETTINGS", MenuNavigationAction.Settings));
             PackPanel(panel, "OperationsPanel", new Vector2(0f, -25f), new Vector2(1540f, 850f));
 
             Label(panel, "Kicker", "TEAM 10 LTD // MULTIPLAYER OPERATIONS", 11,
@@ -795,8 +797,8 @@ namespace Ironfront.Net.Unity.EditorTools
             FullscreenSprite(panel, "Background", "backgrounds/multiplayer.png");
             MultiplayerShade(panel);
             PackPanel(panel, "OperationsPanel", Vector2.zero, new Vector2(1460f, 920f));
-            TopBar(panel, toast, "CREATE OPERATION", "HOST", "ROOM SETUP", offline: false,
-                ("ROOMS", controller.OpenRoomBrowser));
+            TopBar(panel, controller, toast, "CREATE OPERATION", "HOST", "ROOM SETUP",
+                offline: false, ("ROOMS", MenuNavigationAction.RoomBrowser));
 
             // `.create-layout`: two columns of 1.6fr and .8fr with a 28px gap, inside a 1400px
             // content width. The fields keep the wide column and the preview takes the narrow one,
@@ -958,7 +960,7 @@ namespace Ironfront.Net.Unity.EditorTools
             // decision belongs. The item is still drawn -- greyed out it would read as broken -- so
             // it takes the shared development notice, which is the spec's rule for a control the
             // game cannot honestly honour.
-            TopBar(panel, toast, "LOBBY", "IN MATCH", "ROOM LOBBY", offline: false,
+            TopBar(panel, controller, toast, "LOBBY", "IN MATCH", "ROOM LOBBY", offline: false,
                 ("ROOMS", null));
 
             Label(panel, "Kicker", "OPERATION LOBBY // WAITING FOR DEPLOYMENT", 11,
@@ -1396,9 +1398,10 @@ namespace Ironfront.Net.Unity.EditorTools
         /// names so it can find them.
         /// </para>
         /// </remarks>
-        private static void TopBar(GameObject panel, MenuToast toast, string current,
+        private static void TopBar(GameObject panel, MenuScreenController controller,
+            MenuToast toast, string current,
             string chipTitle, string chipDetail, bool offline,
-            params (string Label, System.Action Go)[] links)
+            params (string Label, MenuNavigationAction? Go)[] links)
         {
             // `.topbar`: 76px tall, three columns -- a 310px brand, centred nav, a 260px chip. The
             // canvas is 1920x1080 anchored at its centre, so the bar's own centre sits 38px below
@@ -1440,7 +1443,8 @@ namespace Ironfront.Net.Unity.EditorTools
 
             // `.topbar nav button`: 145px minimum, a 4px rule on the current one. Laid out from the
             // centre outward in the order the prototype lists them.
-            var items = new List<(string Label, System.Action Go)>(links.Length + 1) { (current, null) };
+            var items = new List<(string Label, MenuNavigationAction? Go)>(links.Length + 1)
+                { (current, null) };
             items.AddRange(links);
 
             const float itemWidth = 165f;
@@ -1450,7 +1454,7 @@ namespace Ironfront.Net.Unity.EditorTools
             for (int i = 0; i < items.Count; i++)
             {
                 bool isCurrent = i == 0;
-                (string Label, System.Action Go) item = items[i];
+                (string Label, MenuNavigationAction? Go) item = items[i];
                 var position = new Vector2(first + (i * itemWidth), 0f);
 
                 AngularPanel face = Angular(panelBar.gameObject, "Nav" + i, position,
@@ -1476,14 +1480,9 @@ namespace Ironfront.Net.Unity.EditorTools
                 button.targetGraphic = face;
                 button.transition = Selectable.Transition.None;
 
-                if (item.Go != null)
-                {
-                    // A local, because `i` is shared across every iteration of a `for` loop: closing
-                    // over it would give every listener the LAST index, so all four nav items would
-                    // navigate to whichever one happened to be last.
-                    System.Action go = item.Go;
-                    button.onClick.AddListener(() => go());
-                }
+                if (item.Go.HasValue)
+                    face.gameObject.AddComponent<MenuNavigationButton>()
+                        .Configure(controller, item.Go.Value);
                 else
                 {
                     unsupported.Add(button);

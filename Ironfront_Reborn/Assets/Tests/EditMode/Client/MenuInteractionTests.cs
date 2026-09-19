@@ -35,6 +35,24 @@ namespace Ironfront.Net.Unity.Client.Tests
         }
 
         [Test]
+        public void RepeatedVisibilityRequestDoesNotRestartAnAnimationAlreadyHeadingThere()
+        {
+            Assert.IsFalse(MenuTransitionState.ShouldRestart(
+                currentTarget: false,
+                requestedTarget: false,
+                animationRunning: true,
+                active: true,
+                alpha: 0.4f));
+
+            Assert.IsTrue(MenuTransitionState.ShouldRestart(
+                currentTarget: false,
+                requestedTarget: true,
+                animationRunning: true,
+                active: true,
+                alpha: 0.4f));
+        }
+
+        [Test]
         public void KeyboardNavigationWrapsAndEnterInvokesSelectedButton()
         {
             EventSystem eventSystem = Make("EventSystem").AddComponent<EventSystem>();
@@ -104,6 +122,20 @@ namespace Ironfront.Net.Unity.Client.Tests
             button.onClick.Invoke();
 
             Assert.AreEqual(MenuToast.DevelopmentMessage, label.text);
+        }
+
+        [Test]
+        public void SerializedTopBarNavigationStillInvokesItsControllerAtRuntime()
+        {
+            MenuScreenController controller = Make("Controller").AddComponent<MenuScreenController>();
+            GameObject item = Make("SettingsLink");
+            Button button = item.AddComponent<Button>();
+            item.AddComponent<MenuNavigationButton>()
+                .Configure(controller, MenuNavigationAction.Settings);
+
+            button.onClick.Invoke();
+
+            Assert.IsTrue(controller.IsSettingsScreenOpen);
         }
 
         [Test]
