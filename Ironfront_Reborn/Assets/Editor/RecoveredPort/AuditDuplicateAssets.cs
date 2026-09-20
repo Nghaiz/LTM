@@ -271,6 +271,15 @@ namespace Ironfront.Tools.RecoveredPort
             return result;
         }
 
+        /// <summary>
+        /// Every vertex stream, not just position/normal/uv0.
+        ///
+        /// uv2 is the one that matters most and is the easiest to forget: P23 set LightmapStatic
+        /// on 1,379 objects, so a "duplicate" mesh that happens to lack lightmap UVs is not a
+        /// duplicate at all, and swapping it in would break the bake silently. Tangents, colors
+        /// and blend shapes are here for the same reason -- a hash that ignores a stream declares
+        /// two meshes identical on the strength of the streams it chose to look at.
+        /// </summary>
         static string MeshHash(Mesh mesh)
         {
             using (var ms = new MemoryStream())
@@ -278,7 +287,14 @@ namespace Ironfront.Tools.RecoveredPort
             {
                 foreach (var v in mesh.vertices) { w.Write(v.x); w.Write(v.y); w.Write(v.z); }
                 foreach (var n in mesh.normals) { w.Write(n.x); w.Write(n.y); w.Write(n.z); }
+                foreach (var t in mesh.tangents) { w.Write(t.x); w.Write(t.y); w.Write(t.z); w.Write(t.w); }
+                foreach (var c in mesh.colors32) { w.Write(c.r); w.Write(c.g); w.Write(c.b); w.Write(c.a); }
                 foreach (var u in mesh.uv) { w.Write(u.x); w.Write(u.y); }
+                foreach (var u in mesh.uv2) { w.Write(u.x); w.Write(u.y); }
+                foreach (var u in mesh.uv3) { w.Write(u.x); w.Write(u.y); }
+                foreach (var u in mesh.uv4) { w.Write(u.x); w.Write(u.y); }
+                w.Write(mesh.blendShapeCount);
+                w.Write(mesh.bindposes.Length);
                 for (var s = 0; s < mesh.subMeshCount; s++) foreach (var t in mesh.GetTriangles(s)) w.Write(t);
                 w.Flush();
                 return Hash(ms.ToArray());
