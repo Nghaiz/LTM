@@ -1,0 +1,3621 @@
+{
+  "note": "Lines the recovered original has that our tree does not, after dropping comments, decompiler-rendering differences and moved lines. NOT a bug list: each candidate is still (a), (b), (c) or (d) until a person reads it. Verified by --self-test.",
+  "scope": {
+    "commonFiles": 322,
+    "filesWithCandidates": 70,
+    "candidates": 506,
+    "outrightDeletions": 75,
+    "skippedAsP24": [
+      "AstarPath.cs",
+      "EuclideanEmbedding.cs",
+      "PathUtilities.cs",
+      "ProceduralGridMover.cs",
+      "RecastGraph.cs",
+      "Voxelize.cs"
+    ],
+    "ambiguousBasenames": [
+      "AssemblyInfo.cs",
+      "Extensions.cs"
+    ],
+    "onlyInOurs": 12,
+    "onlyInRecovered": 196
+  },
+  "files": {
+    "ScoreUi.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/ScoreUi.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ScoreUi.cs",
+      "survivors": 56,
+      "outrightDeletions": 14,
+      "candidates": [
+        {
+          "line": 28,
+          "recovered": "private int blueScore;",
+          "ours": "private Color blue;",
+          "similarity": 0.68
+        },
+        {
+          "line": 30,
+          "recovered": "private int redScore;",
+          "ours": "private Color red;",
+          "similarity": 0.67
+        },
+        {
+          "line": 32,
+          "recovered": "private int blueFlags;",
+          "ours": "private int lastPhase;",
+          "similarity": 0.73
+        },
+        {
+          "line": 34,
+          "recovered": "private int redFlags;",
+          "ours": "private int lastPhase;",
+          "similarity": 0.74
+        },
+        {
+          "line": 44,
+          "recovered": "private bool gameEnded;",
+          "ours": "private Color red;",
+          "similarity": 0.68
+        },
+        {
+          "line": 46,
+          "recovered": "public static void AddScore(int blue, int red)",
+          "ours": "public static void SetCapturePointCounts(int blueCount, int redCount)",
+          "similarity": 0.71
+        },
+        {
+          "line": 48,
+          "recovered": "instance.blueScore += blue * ScoreMultiplier(instance.blueFlags);",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 49,
+          "recovered": "instance.redScore += red * ScoreMultiplier(instance.redFlags);",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 50,
+          "recovered": "if (blue > 0)",
+          "ours": "if (blueScored)",
+          "similarity": 0.64
+        },
+        {
+          "line": 52,
+          "recovered": "instance.bluePulse.Start();",
+          "ours": "bluePulse.Start();",
+          "similarity": 0.8
+        },
+        {
+          "line": 54,
+          "recovered": "if (red > 0)",
+          "ours": "if (redScored)",
+          "similarity": 0.62
+        },
+        {
+          "line": 56,
+          "recovered": "instance.redPulse.Start();",
+          "ours": "redPulse.Start();",
+          "similarity": 0.79
+        },
+        {
+          "line": 58,
+          "recovered": "instance.UpdateUi();",
+          "ours": "UpdateUi();",
+          "similarity": 0.71
+        },
+        {
+          "line": 59,
+          "recovered": "if (!instance.gameEnded)",
+          "ours": "if (instance == null)",
+          "similarity": 0.62
+        },
+        {
+          "line": 61,
+          "recovered": "if (instance.blueScore >= instance.redScore + GameManager.instance.victoryPoints)",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 63,
+          "recovered": "Win(true);",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 65,
+          "recovered": "else if (instance.redScore >= instance.blueScore + GameManager.instance.victoryPoints)",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 67,
+          "recovered": "Win(false);",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 72,
+          "recovered": "public static void AddFlag(int blue, int red)",
+          "ours": "public static void SetCapturePointCounts(int blueCount, int redCount)",
+          "similarity": 0.68
+        },
+        {
+          "line": 74,
+          "recovered": "instance.blueFlags += blue;",
+          "ours": "if (instance.blueFlagsText != null)",
+          "similarity": 0.71
+        },
+        {
+          "line": 75,
+          "recovered": "instance.redFlags += red;",
+          "ours": "if (instance.redFlagsText != null)",
+          "similarity": 0.68
+        },
+        {
+          "line": 76,
+          "recovered": "instance.UpdateUi();",
+          "ours": "UpdateUi();",
+          "similarity": 0.71
+        },
+        {
+          "line": 77,
+          "recovered": "if (!instance.gameEnded && GameManager.instance.ElapsedGameTime() > 1f)",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 79,
+          "recovered": "if (!ActorManager.HasSpawnPoint(0))",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 81,
+          "recovered": "Win(false);",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 83,
+          "recovered": "else if (!ActorManager.HasSpawnPoint(1))",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 85,
+          "recovered": "Win(true);",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 90,
+          "recovered": "public static void Win(bool blue)",
+          "ours": "private void OnMatchEnded(bool blue)",
+          "similarity": 0.64
+        },
+        {
+          "line": 92,
+          "recovered": "if (!instance.gameEnded)",
+          "ours": "if (instance == null)",
+          "similarity": 0.62
+        },
+        {
+          "line": 94,
+          "recovered": "instance.gameEnded = true;",
+          "ours": "instance.hasAuthoritativeState = true;",
+          "similarity": 0.62
+        },
+        {
+          "line": 95,
+          "recovered": "instance.victoryScreen.gameObject.SetActive(true);",
+          "ours": "victoryScreen.gameObject.SetActive(true);",
+          "similarity": 0.9
+        },
+        {
+          "line": 96,
+          "recovered": "Color color = ((!blue) ? instance.red : instance.blue);",
+          "ours": "Color color = ((!blue) ? red : this.blue);",
+          "similarity": 0.8
+        },
+        {
+          "line": 98,
+          "recovered": "instance.victoryScreen.color = color;",
+          "ours": "victoryScreen.color = color;",
+          "similarity": 0.86
+        },
+        {
+          "line": 99,
+          "recovered": "if (blue)",
+          "ours": "if (blueScored)",
+          "similarity": 0.75
+        },
+        {
+          "line": 101,
+          "recovered": "instance.victoryText.text = \"BLUE TEAM IS\";",
+          "ours": "victoryText.text = blue ? \"BLUE TEAM IS\" : \"RED TEAM IS\";",
+          "similarity": 0.68
+        },
+        {
+          "line": 105,
+          "recovered": "instance.victoryText.text = \"RED TEAM IS\";",
+          "ours": "victoryText.text = blue ? \"BLUE TEAM IS\" : \"RED TEAM IS\";",
+          "similarity": 0.67
+        },
+        {
+          "line": 107,
+          "recovered": "instance.Invoke(\"HideVictoryScreen\", 5f);",
+          "ours": "Invoke(\"HideVictoryScreen\", 5f);",
+          "similarity": 0.87
+        },
+        {
+          "line": 118,
+          "recovered": "return flags;",
+          "ours": "return \"Playing\";",
+          "similarity": 0.73
+        },
+        {
+          "line": 124,
+          "recovered": "blueScore = 0;",
+          "ours": "if (blueScored)",
+          "similarity": 0.62
+        },
+        {
+          "line": 125,
+          "recovered": "redScore = 0;",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 126,
+          "recovered": "blueFlags = 0;",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 127,
+          "recovered": "redFlags = 0;",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 139,
+          "recovered": "blueFlagsText.text = blueFlags.ToString();",
+          "ours": "blueFlagsText.text = board.BlueFlags.ToString();",
+          "similarity": 0.93
+        },
+        {
+          "line": 140,
+          "recovered": "redFlagsText.text = redFlags.ToString();",
+          "ours": "redFlagsText.text = board.RedFlags.ToString();",
+          "similarity": 0.93
+        },
+        {
+          "line": 141,
+          "recovered": "bool flag = blueScore + redScore >= GameManager.instance.victoryPoints;",
+          "ours": "bool flag = blueScore + redScore >= victoryPoints;",
+          "similarity": 0.83
+        },
+        {
+          "line": 142,
+          "recovered": "intercept.enabled = flag;",
+          "ours": "ui.intercept.enabled = flag;",
+          "similarity": 0.94
+        },
+        {
+          "line": 145,
+          "recovered": "float x = (float)blueScore / (float)GameManager.instance.victoryPoints;",
+          "ours": "float x = (float)blueScore / (float)victoryPoints;",
+          "similarity": 0.77
+        },
+        {
+          "line": 146,
+          "recovered": "float x2 = 1f - (float)redScore / (float)GameManager.instance.victoryPoints;",
+          "ours": "float x2 = 1f - (float)redScore / (float)victoryPoints;",
+          "similarity": 0.79
+        },
+        {
+          "line": 147,
+          "recovered": "blueBar.rectTransform.anchorMax = new Vector2(x, 1f);",
+          "ours": "ui.blueBar.rectTransform.anchorMax = new Vector2(x, 1f);",
+          "similarity": 0.97
+        },
+        {
+          "line": 148,
+          "recovered": "redBar.rectTransform.anchorMin = new Vector2(x2, 0f);",
+          "ours": "ui.redBar.rectTransform.anchorMin = new Vector2(x2, 0f);",
+          "similarity": 0.97
+        },
+        {
+          "line": 152,
+          "recovered": "float x3 = Mathf.Clamp01((float)(blueScore - redScore + GameManager.instance.victoryPoints) / (float)(2 * GameManager.instance.victoryPoints));",
+          "ours": "float x3 = Mathf.Clamp01((float)(blueScore - redScore + victoryPoints) / (float)(2 * victoryPoints));",
+          "similarity": 0.81
+        },
+        {
+          "line": 153,
+          "recovered": "blueBar.rectTransform.anchorMax = new Vector2(x3, 1f);",
+          "ours": "ui.blueBar.rectTransform.anchorMax = new Vector2(x3, 1f);",
+          "similarity": 0.97
+        },
+        {
+          "line": 154,
+          "recovered": "redBar.rectTransform.anchorMin = new Vector2(x3, 0f);",
+          "ours": "ui.redBar.rectTransform.anchorMin = new Vector2(x3, 0f);",
+          "similarity": 0.97
+        },
+        {
+          "line": 155,
+          "recovered": "intercept.rectTransform.anchorMin = new Vector2(x3, 0f);",
+          "ours": "ui.intercept.rectTransform.anchorMin = new Vector2(x3, 0f);",
+          "similarity": 0.97
+        },
+        {
+          "line": 156,
+          "recovered": "intercept.rectTransform.anchorMax = new Vector2(x3, 1f);",
+          "ours": "ui.intercept.rectTransform.anchorMax = new Vector2(x3, 1f);",
+          "similarity": 0.97
+        },
+        {
+          "line": 170,
+          "recovered": "if (Input.GetKeyDown(KeyCode.Tab))",
+          "ours": "if (Input.GetKeyDown(KeyCode.V))",
+          "similarity": 0.94
+        }
+      ]
+    },
+    "Actor.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Actor.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs",
+      "survivors": 47,
+      "outrightDeletions": 3,
+      "candidates": [
+        {
+          "line": 1,
+          "recovered": "using System;",
+          "ours": "\ufeffusing System;",
+          "similarity": 0.96
+        },
+        {
+          "line": 2,
+          "recovered": "using System.Collections;",
+          "ours": "\ufeffusing System;",
+          "similarity": 0.67
+        },
+        {
+          "line": 5,
+          "recovered": "public class Actor : Hurtable",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 204,
+          "recovered": "seat.OccupantLeft();",
+          "ours": "leaving.OccupantLeft();",
+          "similarity": 0.84
+        },
+        {
+          "line": 235,
+          "recovered": "WeaponManager.LoadoutSet loadout = controller.GetLoadout();",
+          "ours": "WeaponManager.LoadoutSet loadout = ResolveDeployLoadout() ?? controller.GetLoadout();",
+          "similarity": 0.82
+        },
+        {
+          "line": 344,
+          "recovered": "hipRigidbody.drag = 8f;",
+          "ours": "hipRigidbody.linearDamping = 8f;",
+          "similarity": 0.79
+        },
+        {
+          "line": 345,
+          "recovered": "hipRigidbody.angularDrag = 8f;",
+          "ours": "hipRigidbody.angularDamping = 8f;",
+          "similarity": 0.92
+        },
+        {
+          "line": 349,
+          "recovered": "headRigidbody.angularDrag = 3f;",
+          "ours": "headRigidbody.angularDamping = 3f;",
+          "similarity": 0.92
+        },
+        {
+          "line": 350,
+          "recovered": "headRigidbody.drag = 10f;",
+          "ours": "headRigidbody.linearDamping = 10f;",
+          "similarity": 0.81
+        },
+        {
+          "line": 355,
+          "recovered": "hipRigidbody.drag = 0f;",
+          "ours": "hipRigidbody.linearDamping = 0f;",
+          "similarity": 0.79
+        },
+        {
+          "line": 356,
+          "recovered": "headRigidbody.drag = 0f;",
+          "ours": "headRigidbody.linearDamping = 0f;",
+          "similarity": 0.8
+        },
+        {
+          "line": 357,
+          "recovered": "hipRigidbody.angularDrag = 0.05f;",
+          "ours": "hipRigidbody.angularDamping = 0.05f;",
+          "similarity": 0.93
+        },
+        {
+          "line": 358,
+          "recovered": "headRigidbody.angularDrag = 0.05f;",
+          "ours": "headRigidbody.angularDamping = 0.05f;",
+          "similarity": 0.93
+        },
+        {
+          "line": 377,
+          "recovered": "if (inWater && !fallenOver)",
+          "ours": "if (!dead && fallenOver)",
+          "similarity": 0.78
+        },
+        {
+          "line": 442,
+          "recovered": "bool flag = !fallenOver && controller.Fire() && (!IsSeated() || seat.CanUseWeapon() || seat.HasMountedWeapon());",
+          "ours": "bool flag = !fallenOver && controller.Fire() && (!IsSeated() || seat.CanUseCarriedWeapon() || seat.HasMountedWeapon());",
+          "similarity": 0.97
+        },
+        {
+          "line": 721,
+          "recovered": "ScoreUi.AddScore((team == 1) ? 1 : 0, (team == 0) ? 1 : 0);",
+          "ours": "MatchScoreboard.Current.AddScore((team == 1) ? 1 : 0, (team == 0) ? 1 : 0);",
+          "similarity": 0.85
+        },
+        {
+          "line": 782,
+          "recovered": "if (health <= 0f)",
+          "ours": "if (ownsHealth && health <= 0f)",
+          "similarity": 0.7
+        },
+        {
+          "line": 798,
+          "recovered": "if (!aiControlled)",
+          "ours": "if (!aiControlled)",
+          "similarity": 1.0
+        },
+        {
+          "line": 827,
+          "recovered": "if (!aiControlled)",
+          "ours": "if (!aiControlled)",
+          "similarity": 1.0
+        },
+        {
+          "line": 880,
+          "recovered": "return IsSeated() && seat.type != Seat.Type.Driver && seat.type != Seat.Type.Pilot;",
+          "ours": "return IsSeated() && (seat.type == Seat.Type.Driver || seat.type == Seat.Type.Pilot);",
+          "similarity": 0.94
+        },
+        {
+          "line": 899,
+          "recovered": "if (seat.vehicle.dead || seat.IsOccupied())",
+          "ours": "if (seat.vehicle.dead || seat.IsOccupied() || IsSeated())",
+          "similarity": 0.86
+        },
+        {
+          "line": 911,
+          "recovered": "if (!seat.CanUseWeapon())",
+          "ours": "if (!seat.CanUseCarriedWeapon())",
+          "similarity": 0.88
+        },
+        {
+          "line": 938,
+          "recovered": "seat.OccupantLeft();",
+          "ours": "leaving.OccupantLeft();",
+          "similarity": 0.84
+        },
+        {
+          "line": 956,
+          "recovered": "StartCoroutine(ReactivateCollisionsWith(vehicle));",
+          "ours": "ReactivateCollisions();",
+          "similarity": 0.63
+        },
+        {
+          "line": 959,
+          "recovered": "private IEnumerator ReactivateCollisionsWith(Vehicle vehicle)",
+          "ours": "private void ReactivateCollisions()",
+          "similarity": 0.67
+        },
+        {
+          "line": 961,
+          "recovered": "yield return new WaitForSeconds(0.5f);",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 962,
+          "recovered": "bool reenteredThatVehicle = IsSeated() && seat.vehicle == vehicle;",
+          "ours": "bool flag = IsSeated() && seat.enclosed;",
+          "similarity": 0.62
+        },
+        {
+          "line": 963,
+          "recovered": "if (vehicle != null && !reenteredThatVehicle)",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 975,
+          "recovered": "if (dead || fallenOver || (IsSeated() && !seat.CanUseWeapon()))",
+          "ours": "if (dead || fallenOver || (IsSeated() && !seat.CanUseCarriedWeapon()))",
+          "similarity": 0.95
+        },
+        {
+          "line": 979,
+          "recovered": "for (int i = 1; i < 4; i++)",
+          "ours": "for (int i = 1; i < 5; i++)",
+          "similarity": 0.96
+        },
+        {
+          "line": 981,
+          "recovered": "int num = (activeWeaponSlot + i) % 5;",
+          "ours": "int slot = (activeWeaponSlot + step * i + 5) % 5;",
+          "similarity": 0.79
+        },
+        {
+          "line": 982,
+          "recovered": "if (weapons[num] != null && !weapons[num].IsToggleable())",
+          "ours": "if (!(weapon == null) && weapon.AllowsResupply())",
+          "similarity": 0.62
+        },
+        {
+          "line": 984,
+          "recovered": "SwitchWeapon(num);",
+          "ours": "UpdateSwimWeapon();",
+          "similarity": 0.65
+        },
+        {
+          "line": 992,
+          "recovered": "if (dead || fallenOver || (IsSeated() && !seat.CanUseWeapon()))",
+          "ours": "if (dead || fallenOver || (IsSeated() && !seat.CanUseCarriedWeapon()))",
+          "similarity": 0.95
+        },
+        {
+          "line": 996,
+          "recovered": "for (int i = 1; i < 4; i++)",
+          "ours": "for (int i = 1; i < 5; i++)",
+          "similarity": 0.96
+        },
+        {
+          "line": 998,
+          "recovered": "int num = (activeWeaponSlot - i + 5) % 5;",
+          "ours": "int slot = (activeWeaponSlot + step * i + 5) % 5;",
+          "similarity": 0.82
+        },
+        {
+          "line": 999,
+          "recovered": "if (weapons[num] != null)",
+          "ours": "if (!(weapon != null))",
+          "similarity": 0.81
+        },
+        {
+          "line": 1001,
+          "recovered": "SwitchWeapon(num);",
+          "ours": "UpdateSwimWeapon();",
+          "similarity": 0.65
+        },
+        {
+          "line": 1009,
+          "recovered": "if (dead || fallenOver || (IsSeated() && !seat.CanUseWeapon()))",
+          "ours": "if (dead || fallenOver || (IsSeated() && !seat.CanUseCarriedWeapon()))",
+          "similarity": 0.95
+        },
+        {
+          "line": 1066,
+          "recovered": "return IsSeated() && !seat.CanUseWeapon();",
+          "ours": "return IsSeated() && !seat.CanUseCarriedWeapon();",
+          "similarity": 0.92
+        },
+        {
+          "line": 1098,
+          "recovered": "if (!aiControlled)",
+          "ours": "if (!aiControlled)",
+          "similarity": 1.0
+        },
+        {
+          "line": 1113,
+          "recovered": "if (!aiControlled)",
+          "ours": "if (!aiControlled)",
+          "similarity": 1.0
+        },
+        {
+          "line": 1140,
+          "recovered": "if (!aiControlled)",
+          "ours": "if (!aiControlled)",
+          "similarity": 1.0
+        },
+        {
+          "line": 1155,
+          "recovered": "if (!aiControlled && num != health)",
+          "ours": "if (!aiControlled)",
+          "similarity": 0.68
+        },
+        {
+          "line": 1165,
+          "recovered": "if (!aiControlled)",
+          "ours": "if (!aiControlled)",
+          "similarity": 1.0
+        },
+        {
+          "line": 1171,
+          "recovered": "return !skinnedRendererRagdoll.isVisible || Vector3.Distance(base.transform.position, Camera.main.transform.position) > 12000f / Camera.main.fieldOfView;",
+          "ours": "return !skinnedRendererRagdoll.isVisible || Vector3.Distance(base.transform.position, camera.transform.position) > 12000f / camera.fieldOfView;",
+          "similarity": 0.95
+        },
+        {
+          "line": 1173,
+          "recovered": "return !skinnedRenderer.isVisible || Vector3.Distance(base.transform.position, Camera.main.transform.position) > 12000f / Camera.main.fieldOfView;",
+          "ours": "return !skinnedRenderer.isVisible || Vector3.Distance(base.transform.position, camera.transform.position) > 12000f / camera.fieldOfView;",
+          "similarity": 0.95
+        }
+      ]
+    },
+    "FpsActorController.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/FpsActorController.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/FpsActorController.cs",
+      "survivors": 40,
+      "outrightDeletions": 16,
+      "candidates": [
+        {
+          "line": 51,
+          "recovered": "public static int playerTeam = -1;",
+          "ours": "public static int playerTeam",
+          "similarity": 0.9
+        },
+        {
+          "line": 105,
+          "recovered": "playerTeam = actor.team;",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 130,
+          "recovered": "return (Input.GetButton(\"Fire1\") || Input.GetMouseButton(0)) && !LoadoutUi.IsOpen();",
+          "ours": "&& (Input.GetButtonDown(\"Fire1\") || Input.GetMouseButtonDown(0)))",
+          "similarity": 0.74
+        },
+        {
+          "line": 139,
+          "recovered": "return (Input.GetButton(\"Fire2\") || Input.GetMouseButton(1)) && !LoadoutUi.IsOpen();",
+          "ours": "&& (Input.GetButtonDown(\"Fire1\") || Input.GetMouseButtonDown(0)))",
+          "similarity": 0.71
+        },
+        {
+          "line": 144,
+          "recovered": "return Input.GetButton(\"Reload\") && !LoadoutUi.IsOpen();",
+          "ours": "return aimToggle && !LoadoutUi.IsOpen();",
+          "similarity": 0.67
+        },
+        {
+          "line": 164,
+          "recovered": "return tpCamera.transform.forward * Input.GetAxis(\"Vertical\") + tpCamera.transform.right * Input.GetAxis(\"Horizontal\");",
+          "ours": "return tpCamera.transform.forward * inputSource.MoveZ + tpCamera.transform.right * inputSource.MoveX;",
+          "similarity": 0.72
+        },
+        {
+          "line": 188,
+          "recovered": "return new Vector2(Input.GetAxis(\"Horizontal\"), Input.GetAxis(\"Vertical\"));",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 193,
+          "recovered": "float num = OptionsUi.GetOptions().mouseSensitivity * OptionsUi.GetOptions().helicopterSensitivity;",
+          "ours": "controller.SetMouseSensitivityMultiplier(OptionsUi.GetOptions().mouseSensitivity, OptionsUi.GetOptions().mouseInvert);",
+          "similarity": 0.66
+        },
+        {
+          "line": 194,
+          "recovered": "if (OptionsUi.GetOptions().helicopterType == 2)",
+          "ours": "if (OptionsUi.GetOptions().toggleAim)",
+          "similarity": 0.71
+        },
+        {
+          "line": 196,
+          "recovered": "float num2 = Input.GetAxis(\"Helicopter Pitch\") * ((!OptionsUi.GetOptions().heliInvertPitch) ? 1f : (-1f));",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 197,
+          "recovered": "float num3 = Input.GetAxis(\"Helicopter Yaw\") * ((!OptionsUi.GetOptions().heliInvertYaw) ? 1f : (-1f));",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 198,
+          "recovered": "float num4 = Input.GetAxis(\"Helicopter Roll\") * ((!OptionsUi.GetOptions().heliInvertRoll) ? 1f : (-1f));",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 199,
+          "recovered": "float y = Input.GetAxis(\"Helicopter Throttle\") * ((!OptionsUi.GetOptions().heliInvertThrottle) ? 1f : (-1f));",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 200,
+          "recovered": "return new Vector4(num3 * 30f * num, y, num4 * 20f * num, num2 * 30f * num);",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 202,
+          "recovered": "Vector2 vector = new Vector2(num * Input.GetAxis(\"Mouse X\"), num * Input.GetAxis(\"Mouse Y\"));",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 203,
+          "recovered": "if (!OptionsUi.GetOptions().heliInvertPitch)",
+          "ours": "if (OptionsUi.GetOptions().toggleAim)",
+          "similarity": 0.74
+        },
+        {
+          "line": 205,
+          "recovered": "vector.y = 0f - vector.y;",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 207,
+          "recovered": "if (Aiming())",
+          "ours": "if (IsSprinting())",
+          "similarity": 0.71
+        },
+        {
+          "line": 209,
+          "recovered": "vector = Vector2.zero;",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 211,
+          "recovered": "if (OptionsUi.GetOptions().helicopterType == 0)",
+          "ours": "if (OptionsUi.GetOptions().toggleAim)",
+          "similarity": 0.71
+        },
+        {
+          "line": 213,
+          "recovered": "return new Vector4(Input.GetAxis(\"Horizontal\"), Input.GetAxis(\"Vertical\"), vector.x * 20f, vector.y * 30f);",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 215,
+          "recovered": "return new Vector4(vector.x * 30f, Input.GetAxis(\"Vertical\"), Input.GetAxis(\"Horizontal\") * 20f, vector.y * 30f);",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 276,
+          "recovered": "if (!seat.CanUseWeapon())",
+          "ours": "if (!seat.CanUseCarriedWeapon())",
+          "similarity": 0.88
+        },
+        {
+          "line": 287,
+          "recovered": "if (!seat.CanUseWeapon())",
+          "ours": "if (!seat.CanUseCarriedWeapon())",
+          "similarity": 0.88
+        },
+        {
+          "line": 378,
+          "recovered": "return Input.GetAxis(\"Lean\");",
+          "ours": "return inputSource.Lean;",
+          "similarity": 0.64
+        },
+        {
+          "line": 468,
+          "recovered": "if (Input.GetButtonDown(\"Loadout\"))",
+          "ours": "if (!Input.GetButtonDown(\"Use\"))",
+          "similarity": 0.84
+        },
+        {
+          "line": 489,
+          "recovered": "if (Time.timeScale < 1f)",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 491,
+          "recovered": "Time.timeScale = 1f;",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 495,
+          "recovered": "Time.timeScale = 0.2f;",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 497,
+          "recovered": "Time.fixedDeltaTime = Time.timeScale / 60f;",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 525,
+          "recovered": "actor.SwitchWeapon(0);",
+          "ours": "actor.SwitchWeapon(slot);",
+          "similarity": 0.89
+        },
+        {
+          "line": 529,
+          "recovered": "actor.SwitchWeapon(1);",
+          "ours": "actor.SwitchWeapon(slot);",
+          "similarity": 0.89
+        },
+        {
+          "line": 533,
+          "recovered": "actor.SwitchWeapon(2);",
+          "ours": "actor.SwitchWeapon(slot);",
+          "similarity": 0.89
+        },
+        {
+          "line": 537,
+          "recovered": "actor.SwitchWeapon(3);",
+          "ours": "actor.SwitchWeapon(slot);",
+          "similarity": 0.89
+        },
+        {
+          "line": 541,
+          "recovered": "actor.SwitchWeapon(4);",
+          "ours": "actor.SwitchWeapon(slot);",
+          "similarity": 0.89
+        },
+        {
+          "line": 581,
+          "recovered": "actor.NextWeapon();",
+          "ours": "actor.SwitchWeapon(slot);",
+          "similarity": 0.73
+        },
+        {
+          "line": 585,
+          "recovered": "actor.PreviousWeapon();",
+          "ours": "actor.SwitchWeapon(slot);",
+          "similarity": 0.67
+        },
+        {
+          "line": 666,
+          "recovered": "return LoadoutUi.instance.loadout;",
+          "ours": "WeaponManager.LoadoutSet chosen = LoadoutUi.instance.loadout;",
+          "similarity": 0.67
+        },
+        {
+          "line": 675,
+          "recovered": "return Input.GetButton(\"Crouch\");",
+          "ours": "if (Input.GetButtonDown(\"Fire2\"))",
+          "similarity": 0.64
+        },
+        {
+          "line": 715,
+          "recovered": "return !Crouch() && !Aiming() && !IsReloading() && Input.GetButton(\"Sprint\") && !actor.IsSeated();",
+          "ours": "return !Crouch() && !Aiming() && !IsReloading() && inputSource.Sprint() && !actor.IsSeated();",
+          "similarity": 0.89
+        }
+      ]
+    },
+    "Vehicle.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Vehicle.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Vehicle.cs",
+      "survivors": 24,
+      "outrightDeletions": 3,
+      "candidates": [
+        {
+          "line": 4,
+          "recovered": "public class Vehicle : MonoBehaviour",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 120,
+          "recovered": "return seats[0].IsOccupied();",
+          "ours": "return seats[0].occupant;",
+          "similarity": 0.78
+        },
+        {
+          "line": 138,
+          "recovered": "health = maxHealth;",
+          "ours": "return health / maxHealth;",
+          "similarity": 0.8
+        },
+        {
+          "line": 150,
+          "recovered": "Vector3 vector = rigidbody.velocity * Time.fixedDeltaTime;",
+          "ours": "Vector3 vector = rigidbody.linearVelocity * Time.fixedDeltaTime;",
+          "similarity": 0.93
+        },
+        {
+          "line": 165,
+          "recovered": "if (rigidbody.velocity.magnitude < 3f)",
+          "ours": "if (rigidbody.linearVelocity.magnitude < 3f)",
+          "similarity": 0.9
+        },
+        {
+          "line": 173,
+          "recovered": "if (burning && !dead)",
+          "ours": "if (burning)",
+          "similarity": 0.73
+        },
+        {
+          "line": 175,
+          "recovered": "burnTime -= Time.deltaTime;",
+          "ours": "burnTime -= Time.fixedDeltaTime;",
+          "similarity": 0.92
+        },
+        {
+          "line": 219,
+          "recovered": "return seatsClaimedByBots < seats.Length;",
+          "ours": "return ClaimedSeatCount < seats.Length;",
+          "similarity": 0.8
+        },
+        {
+          "line": 238,
+          "recovered": "InvokeRepeating(\"AutoDamage\", 50f, 2f);",
+          "ours": "CancelInvoke(\"AutoDamage\");",
+          "similarity": 0.66
+        },
+        {
+          "line": 245,
+          "recovered": "Damage(maxHealth * 0.07f);",
+          "ours": "Damage(maxHealth * AUTO_DAMAGE_PERCENT);",
+          "similarity": 0.65
+        },
+        {
+          "line": 263,
+          "recovered": "health = Mathf.Clamp(health - amount, 0f, maxHealth);",
+          "ours": "health = Mathf.Clamp(newHealth, 0f, maxHealth);",
+          "similarity": 0.86
+        },
+        {
+          "line": 264,
+          "recovered": "if (amount > 900f)",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 272,
+          "recovered": "if (health < 0.5f * maxHealth)",
+          "ours": "bool showDamage = health < 0.5f * maxHealth;",
+          "similarity": 0.69
+        },
+        {
+          "line": 320,
+          "recovered": "health = Mathf.Min(health + amount, maxHealth);",
+          "ours": "ApplyHealth(Mathf.Min(health + amount, maxHealth), 0f, NoAttacker);",
+          "similarity": 0.76
+        },
+        {
+          "line": 321,
+          "recovered": "if (health >= 0.5f * maxHealth)",
+          "ours": "bool showDamage = health < 0.5f * maxHealth;",
+          "similarity": 0.66
+        },
+        {
+          "line": 326,
+          "recovered": "InvokeRepeating(\"AutoDamage\", 50f, 2f);",
+          "ours": "CancelInvoke(\"AutoDamage\");",
+          "similarity": 0.66
+        },
+        {
+          "line": 377,
+          "recovered": "if (burning && crashSkipsBurn && !dead)",
+          "ours": "if (burning && crashSkipsBurn && !dead && !NetVehicleAuthority.ServerOwnsVehicleDeath)",
+          "similarity": 0.62
+        },
+        {
+          "line": 403,
+          "recovered": "return rigidbody.velocity;",
+          "ours": "return rigidbody.linearVelocity;",
+          "similarity": 0.86
+        },
+        {
+          "line": 418,
+          "recovered": "return new Vector2(Mathf.Clamp(v.x, -1f, 1f), Mathf.Clamp(v.y, -1f, 1f));",
+          "ours": "return new Vector2(VehicleInputClamp.Axis(v.x), VehicleInputClamp.Axis(v.y));",
+          "similarity": 0.62
+        },
+        {
+          "line": 423,
+          "recovered": "return new Vector4(Mathf.Clamp(v.x, -1f, 1f), Mathf.Clamp(v.y, -1f, 1f), Mathf.Clamp(v.z, -1f, 1f), Mathf.Clamp(v.w, -1f, 1f));",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 510,
+          "recovered": "return rigidbody.velocity.magnitude < 0.2f;",
+          "ours": "return rigidbody.linearVelocity.magnitude < 0.2f;",
+          "similarity": 0.91
+        },
+        {
+          "line": 525,
+          "recovered": "if (heavyDamageAudio != null && claimedByPlayer)",
+          "ours": "if (fireAlarm != null && claimedByPlayer)",
+          "similarity": 0.76
+        },
+        {
+          "line": 540,
+          "recovered": "if (ActorManager.instance.debug && !dead && Camera.main != null)",
+          "ours": "if (ActorManager.instance != null && ActorManager.instance.debug && !dead && Camera.main != null)",
+          "similarity": 0.8
+        },
+        {
+          "line": 547,
+          "recovered": "GUI.Label(new Rect(vector.x - 100f, (float)Screen.height - vector.y, 200f, 50f), \"AI Claimed seats: \" + seatsClaimedByBots + \"/\" + seats.Length);",
+          "ours": "GUI.Label(new Rect(vector.x - 100f, (float)Screen.height - vector.y, 200f, 50f), \"AI Claimed seats: \" + ClaimedSeatCount + \"/\" + seats.Length);",
+          "similarity": 0.94
+        }
+      ]
+    },
+    "ActorManager.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/ActorManager.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ActorManager.cs",
+      "survivors": 23,
+      "outrightDeletions": 2,
+      "candidates": [
+        {
+          "line": 98,
+          "recovered": "component.deathTimestamp = Time.time + Mathf.Max(spawnTime, 10f);",
+          "ours": "component.deathTimestamp = Time.time - (AI_SPAWN_WAVE_DEATH_GRACE + 1f);",
+          "similarity": 0.62
+        },
+        {
+          "line": 107,
+          "recovered": "if (actor.dead && actor.deathTimestamp + 6f < Time.time)",
+          "ours": "if (actor.dead && actor.deathTimestamp + AI_SPAWN_WAVE_DEATH_GRACE < Time.time)",
+          "similarity": 0.81
+        },
+        {
+          "line": 125,
+          "recovered": "SpawnPoint spawnPoint2 = actor.controller.SelectedSpawnPoint();",
+          "ours": "SpawnPoint spawnPoint3 = actor.controller.SelectedSpawnPoint();",
+          "similarity": 0.98
+        },
+        {
+          "line": 126,
+          "recovered": "if (spawnPoint2 != null)",
+          "ours": "if (spawnPoint3 != null)",
+          "similarity": 0.96
+        },
+        {
+          "line": 128,
+          "recovered": "actor.SpawnAt(spawnPoint2.GetSpawnPosition());",
+          "ours": "actor.SpawnAt(spawnPoint3.GetSpawnPosition());",
+          "similarity": 0.98
+        },
+        {
+          "line": 129,
+          "recovered": "spawnedActors[spawnPoint2].Add(actor);",
+          "ours": "spawnedActors[spawnPoint3].Add(actor);",
+          "similarity": 0.97
+        },
+        {
+          "line": 133,
+          "recovered": "foreach (SpawnPoint spawnPoint3 in array2)",
+          "ours": "foreach (SpawnPoint spawnPoint2 in array2)",
+          "similarity": 0.98
+        },
+        {
+          "line": 137,
+          "recovered": "int squadSize = UnityEngine.Random.Range(2, UnityEngine.Random.Range(2, spawnPoint3.maxSquadSize + 2));",
+          "ours": "int squadSize = UnityEngine.Random.Range(2, UnityEngine.Random.Range(2, spawnPoint2.maxSquadSize + 2));",
+          "similarity": 0.99
+        },
+        {
+          "line": 139,
+          "recovered": "foreach (Actor spawnedActor in spawnedActors[spawnPoint3])",
+          "ours": "foreach (Actor spawnedActor in spawnedActors[spawnPoint2])",
+          "similarity": 0.98
+        },
+        {
+          "line": 148,
+          "recovered": "squadSize = UnityEngine.Random.Range(2, UnityEngine.Random.Range(2, spawnPoint3.maxSquadSize + 2));",
+          "ours": "squadSize = UnityEngine.Random.Range(2, UnityEngine.Random.Range(2, spawnPoint2.maxSquadSize + 2));",
+          "similarity": 0.99
+        },
+        {
+          "line": 165,
+          "recovered": "instance.aliveActors[actor.team].Add(actor);",
+          "ours": "instance.actors.Add(actor);",
+          "similarity": 0.76
+        },
+        {
+          "line": 170,
+          "recovered": "instance.aliveActors[actor.team].Remove(actor);",
+          "ours": "instance.actors.Remove(actor);",
+          "similarity": 0.78
+        },
+        {
+          "line": 329,
+          "recovered": "public static bool Explode(Vector3 point, ExplodingProjectile.ExplosionConfiguration configuration)",
+          "ours": "ExplodingProjectile.ExplosionConfiguration configuration,",
+          "similarity": 0.72
+        },
+        {
+          "line": 331,
+          "recovered": "List<Actor> list = ActorsInRange(point, configuration.balanceRange);",
+          "ours": "ActorsInRange(point, configuration.balanceRange, _explosionVictims);",
+          "similarity": 0.72
+        },
+        {
+          "line": 333,
+          "recovered": "foreach (Actor item in list)",
+          "ours": "foreach (Actor actor in snapshot)",
+          "similarity": 0.75
+        },
+        {
+          "line": 337,
+          "recovered": "float num = configuration.damageFalloff.Evaluate(Mathf.Clamp01(magnitude / configuration.damageRange));",
+          "ours": "float num4 = configuration.damageFalloff.Evaluate(vehicleDamageT);",
+          "similarity": 0.7
+        },
+        {
+          "line": 338,
+          "recovered": "float num2 = configuration.balanceFalloff.Evaluate(Mathf.Clamp01(magnitude / configuration.balanceRange));",
+          "ours": "float num2 = configuration.balanceFalloff.Evaluate(ranges.GetBalanceT(magnitude));",
+          "similarity": 0.72
+        },
+        {
+          "line": 341,
+          "recovered": "item.Damage(configuration.damage * num, configuration.balanceDamage * num2, false, item.CenterPosition(), vector.normalized, vector.normalized * configuration.force * num2);",
+          "ours": "item.DamageAttributed(configuration.damage * num, configuration.balanceDamage * num2, false, item.CenterPosition(), vector.normalized, vector.normalized * configuration.force * num2, source);",
+          "similarity": 0.95
+        },
+        {
+          "line": 349,
+          "recovered": "Vehicle[] array = instance.vehicles.ToArray();",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 350,
+          "recovered": "foreach (Vehicle vehicle in array)",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 353,
+          "recovered": "if (num3 < configuration.damageRange)",
+          "ours": "source, point, configuration.damageRange, kind);",
+          "similarity": 0.68
+        },
+        {
+          "line": 355,
+          "recovered": "float num4 = configuration.damageFalloff.Evaluate(Mathf.Clamp01(num3 / configuration.damageRange));",
+          "ours": "float num4 = configuration.damageFalloff.Evaluate(vehicleDamageT);",
+          "similarity": 0.72
+        },
+        {
+          "line": 356,
+          "recovered": "vehicle.Damage(configuration.damage * num4);",
+          "ours": "vehicle.Damage(configuration.damage * num4, ResolveAttackerId(source));",
+          "similarity": 0.77
+        }
+      ]
+    },
+    "AiActorController.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/AiActorController.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/AiActorController.cs",
+      "survivors": 23,
+      "outrightDeletions": 4,
+      "candidates": [
+        {
+          "line": 1,
+          "recovered": "using System;",
+          "ours": "\ufeffusing System;",
+          "similarity": 0.96
+        },
+        {
+          "line": 376,
+          "recovered": "list.RemoveAll((Actor actor) => !HasEffectiveWeaponAgainst(actor) || (actor.IsSeated() && actor.seat.vehicle.burning));",
+          "ours": "list.RemoveAll((Actor target) => !HasEffectiveWeaponAgainst(target) || (target.IsSeated() && target.seat.vehicle.burning));",
+          "similarity": 0.88
+        },
+        {
+          "line": 547,
+          "recovered": "squad.squadVehicle.stuck = true;",
+          "ours": "actor.seat.vehicle.stuck = true;",
+          "similarity": 0.75
+        },
+        {
+          "line": 607,
+          "recovered": "if (!squad.HasVehicle() && squad.state == Squad.State.Moving)",
+          "ours": "if (!squad.HasVehicle() && squad.state != Squad.State.DigIn && squad.IsTakingFire())",
+          "similarity": 0.79
+        },
+        {
+          "line": 797,
+          "recovered": "if (!HasTarget() && actor.hasAmmoBox && actor.weapons[actor.ammoBoxSlot].AmmoFull() && (squad.MemberNeedsResupply() || (!ActorManager.instance.player.dead && actor.team == ActorManager.instance.player.team && ActorManager.instance.player.needsResupply && Vector3.Distance(ActorManager.instance.player.transform.position, base.transform.position) < 10f)))",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 801,
+          "recovered": "if (!ActorManager.instance.player.dead && actor.team == ActorManager.instance.player.team && ActorManager.instance.player.needsResupply && Vector3.Distance(ActorManager.instance.player.transform.position, base.transform.position) < 10f)",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 803,
+          "recovered": "LookAt(ActorManager.instance.player.transform.position);",
+          "ours": "LookAt(ActorManager.Player.transform.position);",
+          "similarity": 0.89
+        },
+        {
+          "line": 814,
+          "recovered": "if (!HasTarget() && actor.hasMedipack && actor.weapons[actor.medipackSlot].AmmoFull() && (squad.MemberNeedsHealth() || (!ActorManager.instance.player.dead && actor.team == ActorManager.instance.player.team && ActorManager.instance.player.health < 80f && Vector3.Distance(ActorManager.instance.player.transform.position, base.transform.position) < 10f)))",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 818,
+          "recovered": "if (!ActorManager.instance.player.dead && actor.team == ActorManager.instance.player.team && ActorManager.instance.player.health < 80f && Vector3.Distance(ActorManager.instance.player.transform.position, base.transform.position) < 10f)",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 820,
+          "recovered": "LookAt(ActorManager.instance.player.transform.position);",
+          "ours": "LookAt(ActorManager.Player.transform.position);",
+          "similarity": 0.89
+        },
+        {
+          "line": 1005,
+          "recovered": "if (weapon != null && weapon.HasAnyAmmo() && weapon.EffectivenessAgainst(targetType) != Weapon.Effectiveness.No && weapon.EffectiveAtRange(range))",
+          "ours": "if (weapon != null && weapon.HasAnyAmmo() && weapon.EffectivenessAgainst(targetType) != 0 && weapon.EffectiveAtRange(range))",
+          "similarity": 0.91
+        },
+        {
+          "line": 1322,
+          "recovered": "list.Sort(delegate(int x, int y)",
+          "ours": "list.Sort(delegate (int x, int y)",
+          "similarity": 0.98
+        },
+        {
+          "line": 1325,
+          "recovered": "return shortLtNext ? num5 : (-num5);",
+          "ours": "return shortLtNext ? num6 : (-num6);",
+          "similarity": 0.94
+        },
+        {
+          "line": 1339,
+          "recovered": "list2.Sort(delegate(int x, int y)",
+          "ours": "list2.Sort(delegate (int x, int y)",
+          "similarity": 0.99
+        },
+        {
+          "line": 1341,
+          "recovered": "int num5 = cornerFromOriginAngles[x].CompareTo(cornerFromOriginAngles[y]);",
+          "ours": "int num5 = cornerFromOriginAngles[x].CompareTo(cornerFromOriginAngles[y]);",
+          "similarity": 1.0
+        },
+        {
+          "line": 1554,
+          "recovered": "float magnitude3 = vehicle.rigidbody.velocity.magnitude;",
+          "ours": "float magnitude3 = vehicle.rigidbody.linearVelocity.magnitude;",
+          "similarity": 0.93
+        },
+        {
+          "line": 1600,
+          "recovered": "float num = Mathf.Max(minDistance, speedGain * vehicle.rigidbody.velocity.magnitude);",
+          "ours": "float num = Mathf.Max(minDistance, speedGain * vehicle.rigidbody.linearVelocity.magnitude);",
+          "similarity": 0.95
+        },
+        {
+          "line": 1617,
+          "recovered": "float num = Mathf.Max(minDistance, speedGain * vehicle.rigidbody.velocity.magnitude);",
+          "ours": "float num = Mathf.Max(minDistance, speedGain * vehicle.rigidbody.linearVelocity.magnitude);",
+          "similarity": 0.95
+        },
+        {
+          "line": 1638,
+          "recovered": "Vector3 vector = position + rigidbody.velocity * 3f;",
+          "ours": "Vector3 vector = position + rigidbody.linearVelocity * 3f;",
+          "similarity": 0.93
+        },
+        {
+          "line": 1979,
+          "recovered": "if (!HasTarget())",
+          "ours": "if (!HasTarget())",
+          "similarity": 1.0
+        },
+        {
+          "line": 2066,
+          "recovered": "loadoutSet.primary = WeaponManager.EntryNamed(primaryWeaponNames[UnityEngine.Random.Range(0, primaryWeaponNames.Length)]);",
+          "ours": "loadoutSet.primary = WeaponManager.EntryNamed(PinnedOr(primaryWeaponNames[UnityEngine.Random.Range(0, primaryWeaponNames.Length)], LoadoutSlot.Primary));",
+          "similarity": 0.89
+        },
+        {
+          "line": 2067,
+          "recovered": "loadoutSet.secondary = WeaponManager.EntryNamed(secondaryWeaponNames[UnityEngine.Random.Range(0, secondaryWeaponNames.Length)]);",
+          "ours": "loadoutSet.secondary = WeaponManager.EntryNamed(PinnedOr(secondaryWeaponNames[UnityEngine.Random.Range(0, secondaryWeaponNames.Length)], LoadoutSlot.Secondary));",
+          "similarity": 0.89
+        },
+        {
+          "line": 2068,
+          "recovered": "loadoutSet.gear1 = WeaponManager.EntryNamed(gearNames[UnityEngine.Random.Range(0, gearNames.Length)]);",
+          "ours": "loadoutSet.gear1 = WeaponManager.EntryNamed(PinnedOr(gearNames[UnityEngine.Random.Range(0, gearNames.Length)], LoadoutSlot.Gear1));",
+          "similarity": 0.88
+        }
+      ]
+    },
+    "CapturePoint.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/CapturePoint.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/CapturePoint.cs",
+      "survivors": 20,
+      "outrightDeletions": 2,
+      "candidates": [
+        {
+          "line": 9,
+          "recovered": "private const float CAPTURE_RATE_PER_PERSON = 0.05f;",
+          "ours": "private const float UPDATE_RATE = 1f;",
+          "similarity": 0.74
+        },
+        {
+          "line": 119,
+          "recovered": "bool flag = false;",
+          "ours": "bool hostilePresent = false;",
+          "similarity": 0.65
+        },
+        {
+          "line": 131,
+          "recovered": "Dictionary<int, int> dictionary3;",
+          "ours": "Dictionary<int, int> dictionary2;",
+          "similarity": 0.97
+        },
+        {
+          "line": 132,
+          "recovered": "Dictionary<int, int> dictionary2 = (dictionary3 = dictionary);",
+          "ours": "Dictionary<int, int> dictionary3 = (dictionary2 = dictionary);",
+          "similarity": 0.97
+        },
+        {
+          "line": 135,
+          "recovered": "team = dictionary3[team];",
+          "ours": "team = dictionary2[team];",
+          "similarity": 0.96
+        },
+        {
+          "line": 136,
+          "recovered": "dictionary2[key] = team + 1;",
+          "ours": "dictionary3[key] = team + 1;",
+          "similarity": 0.96
+        },
+        {
+          "line": 150,
+          "recovered": "if (!item.aiControlled)",
+          "ours": "if (isContested)",
+          "similarity": 0.62
+        },
+        {
+          "line": 152,
+          "recovered": "flag = true;",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 172,
+          "recovered": "control -= (float)num5 * 0.05f;",
+          "ours": "control = 0.01f;",
+          "similarity": 0.74
+        },
+        {
+          "line": 181,
+          "recovered": "control = Mathf.Clamp01(control + (float)num5 * 0.05f);",
+          "ours": "control = Mathf.Clamp01(control + (float)num5 * captureSpeed);",
+          "similarity": 0.84
+        },
+        {
+          "line": 192,
+          "recovered": "if (flag && !playerWasInRadius)",
+          "ours": "if (inRadius && !playerWasInRadius)",
+          "similarity": 0.85
+        },
+        {
+          "line": 196,
+          "recovered": "else if (!flag && playerWasInRadius)",
+          "ours": "else if (!inRadius && playerWasInRadius)",
+          "similarity": 0.87
+        },
+        {
+          "line": 200,
+          "recovered": "if (flag)",
+          "ours": "if (hasSafeFlags)",
+          "similarity": 0.69
+        },
+        {
+          "line": 204,
+          "recovered": "flagRenderer.enabled = control > 0f;",
+          "ours": "flagRenderer.enabled = visible;",
+          "similarity": 0.76
+        },
+        {
+          "line": 205,
+          "recovered": "playerWasInRadius = flag;",
+          "ours": "playerWasInRadius = inRadius;",
+          "similarity": 0.81
+        },
+        {
+          "line": 218,
+          "recovered": "Vector3 normalized = (attacker.Position() - base.transform.position).ToGround().normalized;",
+          "ours": "Vector3 normalized = (attackerPosition - base.transform.position).ToGround().normalized;",
+          "similarity": 0.98
+        },
+        {
+          "line": 261,
+          "recovered": "ScoreUi.AddFlag(num2, num);",
+          "ours": "MatchScoreboard.Current.AddFlag(num2, num);",
+          "similarity": 0.71
+        },
+        {
+          "line": 266,
+          "recovered": "catch (Exception)",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 298,
+          "recovered": "return contestedSpawnpointContainer.GetChild(num2).position;",
+          "ours": "return SnappedContainerChildPosition(contestedSpawnpointContainer.GetChild(num2));",
+          "similarity": 0.72
+        },
+        {
+          "line": 301,
+          "recovered": "return contestedSpawnpointContainer.GetChild(num).position;",
+          "ours": "return SnappedContainerChildPosition(contestedSpawnpointContainer.GetChild(num));",
+          "similarity": 0.71
+        }
+      ]
+    },
+    "ProceduralWorld.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/ProceduralWorld.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ProceduralWorld.cs",
+      "survivors": 19,
+      "outrightDeletions": 2,
+      "candidates": [
+        {
+          "line": 78,
+          "recovered": "return new Vector3",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 80,
+          "recovered": "x = ((float)x + (float)rnd.NextDouble()) * world.tileSize,",
+          "ours": "result.x = ((float)x + (float)rnd.NextDouble()) * world.tileSize;",
+          "similarity": 0.91
+        },
+        {
+          "line": 81,
+          "recovered": "z = ((float)z + (float)rnd.NextDouble()) * world.tileSize",
+          "ours": "result.z = ((float)z + (float)rnd.NextDouble()) * world.tileSize;",
+          "similarity": 0.91
+        },
+        {
+          "line": 87,
+          "recovered": "return new Vector3",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 89,
+          "recovered": "x = (px + (float)rnd.NextDouble() / (float)world.subTiles) * world.tileSize,",
+          "ours": "result.x = (px + (float)rnd.NextDouble() / (float)world.subTiles) * world.tileSize;",
+          "similarity": 0.93
+        },
+        {
+          "line": 90,
+          "recovered": "z = (pz + (float)rnd.NextDouble() / (float)world.subTiles) * world.tileSize",
+          "ours": "result.z = (pz + (float)rnd.NextDouble() / (float)world.subTiles) * world.tileSize;",
+          "similarity": 0.94
+        },
+        {
+          "line": 109,
+          "recovered": "GameObject ob = UnityEngine.Object.Instantiate(position: new Vector3(((float)x + 0.5f) * world.tileSize, 0f, ((float)z + 0.5f) * world.tileSize), original: pref.prefab, rotation: Quaternion.identity) as GameObject;",
+          "ours": "GameObject ob2 = UnityEngine.Object.Instantiate(position: new Vector3(((float)x + 0.5f) * world.tileSize, 0f, ((float)z + 0.5f) * world.tileSize), original: pref.prefab, rotation: Quaternion.identity) as GameObject;",
+          "similarity": 1.0
+        },
+        {
+          "line": 118,
+          "recovered": "ditherMap[sx + 1, sz + 1] = 0f;",
+          "ours": "ditherMap[sx2 + 1, sz + 1] = 0f;",
+          "similarity": 0.98
+        },
+        {
+          "line": 121,
+          "recovered": "for (int j = 0; j < world.subTiles; j++)",
+          "ours": "for (int sz = 0; sz < world.subTiles; sz++)",
+          "similarity": 0.89
+        },
+        {
+          "line": 123,
+          "recovered": "for (int k = 0; k < world.subTiles; k++)",
+          "ours": "for (int sz = 0; sz < world.subTiles; sz++)",
+          "similarity": 0.89
+        },
+        {
+          "line": 125,
+          "recovered": "float px = (float)x + (float)j / (float)world.subTiles;",
+          "ours": "float px = (float)x + (float)sx / (float)world.subTiles;",
+          "similarity": 0.96
+        },
+        {
+          "line": 126,
+          "recovered": "float pz = (float)z + (float)k / (float)world.subTiles;",
+          "ours": "float pz = (float)z + (float)sz2 / (float)world.subTiles;",
+          "similarity": 0.94
+        },
+        {
+          "line": 129,
+          "recovered": "float fcount = subSize * subSize * density + ditherMap[j + 1, k + 1];",
+          "ours": "float fcount = subSize * subSize * density + ditherMap[sx + 1, sz2 + 1];",
+          "similarity": 0.95
+        },
+        {
+          "line": 131,
+          "recovered": "ditherMap[j + 1 + 1, k + 1] += 0.4375f * (fcount - (float)count);",
+          "ours": "ditherMap[sx + 1 + 1, sz2 + 1] += 0.4375f * (fcount - (float)count);",
+          "similarity": 0.94
+        },
+        {
+          "line": 132,
+          "recovered": "ditherMap[j + 1 - 1, k + 1 + 1] += 0.1875f * (fcount - (float)count);",
+          "ours": "ditherMap[sx + 1 - 1, sz2 + 1 + 1] += 0.1875f * (fcount - (float)count);",
+          "similarity": 0.94
+        },
+        {
+          "line": 133,
+          "recovered": "ditherMap[j + 1, k + 1 + 1] += 0.3125f * (fcount - (float)count);",
+          "ours": "ditherMap[sx + 1, sz2 + 1 + 1] += 0.3125f * (fcount - (float)count);",
+          "similarity": 0.94
+        },
+        {
+          "line": 134,
+          "recovered": "ditherMap[j + 1 + 1, k + 1 + 1] += 0.0625f * (fcount - (float)count);",
+          "ours": "ditherMap[sx + 1 + 1, sz2 + 1 + 1] += 0.0625f * (fcount - (float)count);",
+          "similarity": 0.94
+        },
+        {
+          "line": 135,
+          "recovered": "for (int l = 0; l < count; l++)",
+          "ours": "for (int j = 0; j < count; j++)",
+          "similarity": 0.9
+        },
+        {
+          "line": 137,
+          "recovered": "GameObject ob2 = UnityEngine.Object.Instantiate(position: RandomInside(px, pz), original: pref.prefab, rotation: RandomYRot()) as GameObject;",
+          "ours": "GameObject ob = UnityEngine.Object.Instantiate(position: RandomInside(px, pz), original: pref.prefab, rotation: RandomYRot()) as GameObject;",
+          "similarity": 1.0
+        }
+      ]
+    },
+    "VehicleSpawner.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/VehicleSpawner.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/VehicleSpawner.cs",
+      "survivors": 18,
+      "outrightDeletions": 7,
+      "candidates": [
+        {
+          "line": 1,
+          "recovered": "using System.Collections;",
+          "ours": "using System.Collections.Generic;",
+          "similarity": 0.86
+        },
+        {
+          "line": 29,
+          "recovered": "private bool spawningQueued;",
+          "ours": "private ushort spawnerId;",
+          "similarity": 0.68
+        },
+        {
+          "line": 33,
+          "recovered": "GetComponent<Renderer>().enabled = false;",
+          "ours": "marker.enabled = false;",
+          "similarity": 0.62
+        },
+        {
+          "line": 42,
+          "recovered": "private void StartSpawnCountdown()",
+          "ours": "private void Start()",
+          "similarity": 0.74
+        },
+        {
+          "line": 44,
+          "recovered": "Invoke(\"SpawnVehicle\", spawnTime);",
+          "ours": "lastSpawnedVehicle = spawned;",
+          "similarity": 0.63
+        },
+        {
+          "line": 49,
+          "recovered": "if (!GameManager.instance.noVehicles)",
+          "ours": "return GameManager.instance != null && GameManager.instance.noVehicles;",
+          "similarity": 0.63
+        },
+        {
+          "line": 51,
+          "recovered": "StartCoroutine(SpawnCoroutine());",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 55,
+          "recovered": "private IEnumerator SpawnCoroutine()",
+          "ours": "private void SpawnVehicle()",
+          "similarity": 0.6
+        },
+        {
+          "line": 57,
+          "recovered": "while (SpawnIsBlocked())",
+          "ours": "private bool SpawnIsBlocked()",
+          "similarity": 0.72
+        },
+        {
+          "line": 59,
+          "recovered": "yield return new WaitForSeconds(1f);",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 61,
+          "recovered": "lastSpawnedVehicle = ((GameObject)Object.Instantiate(prefab, base.transform.position, base.transform.rotation)).GetComponent<Vehicle>();",
+          "ours": "Vehicle spawned = ((GameObject)UnityEngine.Object.Instantiate(prefab, base.transform.position, base.transform.rotation)).GetComponent<Vehicle>();",
+          "similarity": 0.89
+        },
+        {
+          "line": 68,
+          "recovered": "return Physics.OverlapSphereNonAlloc(base.transform.position, collisionCheckRadius, spawnCollisions, 5376) > 0;",
+          "ours": "base.transform.position, collisionCheckRadius, spawnCollisions, SPAWN_BLOCK_MASK);",
+          "similarity": 0.68
+        },
+        {
+          "line": 73,
+          "recovered": "if (respawnType == RespawnType.AfterDestroyed)",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 75,
+          "recovered": "StartSpawnCountdown();",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 77,
+          "recovered": "else if (respawnType == RespawnType.AfterMoved && vehicle == lastSpawnedVehicle && !lastSpawnedVehicleHasBeenUsed)",
+          "ours": "scheduler.ReportVehicleDied(vehicle == lastSpawnedVehicle, lastSpawnedVehicleHasBeenUsed);",
+          "similarity": 0.7
+        },
+        {
+          "line": 79,
+          "recovered": "StartSpawnCountdown();",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 88,
+          "recovered": "if (respawnType == RespawnType.AfterMoved)",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 90,
+          "recovered": "StartSpawnCountdown();",
+          "ours": null,
+          "similarity": 0.0
+        }
+      ]
+    },
+    "TankTurret.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/TankTurret.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/TankTurret.cs",
+      "survivors": 13,
+      "outrightDeletions": 3,
+      "candidates": [
+        {
+          "line": 5,
+          "recovered": "private const float MAX_TURN_DELTA = 5f;",
+          "ours": "private const float LEGACY_STEP_DEG = 5f;",
+          "similarity": 0.78
+        },
+        {
+          "line": 26,
+          "recovered": "if (!(towerJoint == null))",
+          "ours": "if (towerJoint == null)",
+          "similarity": 0.94
+        },
+        {
+          "line": 29,
+          "recovered": "Vector3 eulerAngles = towerJoint.targetRotation.eulerAngles;",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 30,
+          "recovered": "Vector2 input = GetInput();",
+          "ours": "Vector2 demand = GetInput();",
+          "similarity": 0.84
+        },
+        {
+          "line": 31,
+          "recovered": "eulerAngles.z = Mathf.Clamp(eulerAngles.z - input.x, eulerAngles.z - 5f, eulerAngles.z + 5f);",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 32,
+          "recovered": "spring.targetPosition = Mathf.Clamp(Mathf.Clamp(spring.targetPosition - input.y, spring.targetPosition - 5f, spring.targetPosition + 5f), cannonJoint.limits.min, cannonJoint.limits.max);",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 33,
+          "recovered": "towerJoint.targetRotation = Quaternion.Euler(eulerAngles);",
+          "ours": "towerJoint.targetRotation = Quaternion.Euler(0f, 0f, _aim.Yaw);",
+          "similarity": 0.79
+        },
+        {
+          "line": 41,
+          "recovered": "if (!user.aiControlled)",
+          "ours": "if (user.aiControlled)",
+          "similarity": 0.98
+        },
+        {
+          "line": 52,
+          "recovered": "if (!user.aiControlled)",
+          "ours": "if (user.aiControlled)",
+          "similarity": 0.98
+        },
+        {
+          "line": 58,
+          "recovered": "private Vector2 GetInput()",
+          "ours": "protected virtual Vector2 GetInput()",
+          "similarity": 0.74
+        },
+        {
+          "line": 64,
+          "recovered": "if (!user.aiControlled)",
+          "ours": "if (user.aiControlled)",
+          "similarity": 0.98
+        },
+        {
+          "line": 66,
+          "recovered": "return new Vector2(Input.GetAxis(\"Mouse X\"), Input.GetAxis(\"Mouse Y\") * (float)((!OptionsUi.GetOptions().mouseInvert) ? 1 : (-1))) * OptionsUi.GetOptions().mouseSensitivity * 4f;",
+          "ours": "_pendingMouseAim += new Vector2(Input.GetAxis(\"Mouse X\"), Input.GetAxis(\"Mouse Y\") * (float)((!OptionsUi.GetOptions().mouseInvert) ? 1 : (-1))) * OptionsUi.GetOptions().mouseSensitivity * 4f;",
+          "similarity": 0.94
+        },
+        {
+          "line": 69,
+          "recovered": "return new Vector2(vector.x * 3f, vector.y * 3f);",
+          "ours": "return new Vector2(vector.x * 3f, vector.y * 3f) / LEGACY_STEP_DEG;",
+          "similarity": 0.84
+        }
+      ]
+    },
+    "MountedTurret.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/MountedTurret.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/MountedTurret.cs",
+      "survivors": 11,
+      "outrightDeletions": 2,
+      "candidates": [
+        {
+          "line": 5,
+          "recovered": "private const float MAX_TURN_DELTA = 10f;",
+          "ours": "private const float LEGACY_STEP_DEG = 10f;",
+          "similarity": 0.79
+        },
+        {
+          "line": 16,
+          "recovered": "if (user != null)",
+          "ours": "if (user == null)",
+          "similarity": 0.94
+        },
+        {
+          "line": 18,
+          "recovered": "Vector2 vector = Vector2.ClampMagnitude(GetInput(), 10f);",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 20,
+          "recovered": "localEulerAngles.z += vector.x;",
+          "ours": "localEulerAngles.z = _aim.Yaw;",
+          "similarity": 0.75
+        },
+        {
+          "line": 23,
+          "recovered": "localEulerAngles2.x = Mathf.Clamp(Mathf.DeltaAngle(0f, localEulerAngles2.x - vector.y), -40f, 15f);",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 31,
+          "recovered": "if (!user.aiControlled)",
+          "ours": "if (user.aiControlled)",
+          "similarity": 0.98
+        },
+        {
+          "line": 42,
+          "recovered": "if (!user.aiControlled)",
+          "ours": "if (user.aiControlled)",
+          "similarity": 0.98
+        },
+        {
+          "line": 48,
+          "recovered": "private Vector2 GetInput()",
+          "ours": "protected virtual Vector2 GetInput()",
+          "similarity": 0.74
+        },
+        {
+          "line": 54,
+          "recovered": "if (!user.aiControlled)",
+          "ours": "if (user.aiControlled)",
+          "similarity": 0.98
+        },
+        {
+          "line": 56,
+          "recovered": "return new Vector2(Input.GetAxis(\"Mouse X\"), Input.GetAxis(\"Mouse Y\") * (float)((!OptionsUi.GetOptions().mouseInvert) ? 1 : (-1))) * OptionsUi.GetOptions().mouseSensitivity * 4f;",
+          "ours": "_pendingMouseAim += new Vector2(Input.GetAxis(\"Mouse X\"), Input.GetAxis(\"Mouse Y\") * (float)((!OptionsUi.GetOptions().mouseInvert) ? 1 : (-1))) * OptionsUi.GetOptions().mouseSensitivity * 4f;",
+          "similarity": 0.94
+        },
+        {
+          "line": 59,
+          "recovered": "return new Vector2(vector.x * 5f, vector.y * 5f);",
+          "ours": "return new Vector2(vector.x * 5f, vector.y * 5f) / LEGACY_STEP_DEG;",
+          "similarity": 0.84
+        }
+      ]
+    },
+    "GridGraph.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/GridGraph.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/GridGraph.cs",
+      "survivors": 9,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 41,
+          "recovered": "if (channels[i] != ChannelUse.None)",
+          "ours": "if (channels[i] != 0)",
+          "similarity": 0.71
+        },
+        {
+          "line": 63,
+          "recovered": "if (channels[0] != ChannelUse.None)",
+          "ours": "if (channels[0] != 0)",
+          "similarity": 0.71
+        },
+        {
+          "line": 67,
+          "recovered": "if (channels[1] != ChannelUse.None)",
+          "ours": "if (channels[1] != 0)",
+          "similarity": 0.71
+        },
+        {
+          "line": 71,
+          "recovered": "if (channels[2] != ChannelUse.None)",
+          "ours": "if (channels[2] != 0)",
+          "similarity": 0.71
+        },
+        {
+          "line": 906,
+          "recovered": "if (((num >> k) & 1) != 0 && (((num >> k + 1) | (num >> k + 1 - 4)) & 1) != 0)",
+          "ours": "if (((uint)(num >> k) & (true ? 1u : 0u)) != 0 && ((uint)((num >> k + 1) | (num >> k + 1 - 4)) & (true ? 1u : 0u)) != 0)",
+          "similarity": 0.86
+        },
+        {
+          "line": 966,
+          "recovered": "Vector3 vector = (Vector3)gridNode.position;",
+          "ours": "Vector3 from = (Vector3)gridNode.position;",
+          "similarity": 0.91
+        },
+        {
+          "line": 974,
+          "recovered": "Gizmos.DrawLine(vector, (Vector3)pathNode.parent.node.position);",
+          "ours": "Gizmos.DrawLine(from, (Vector3)pathNode.parent.node.position);",
+          "similarity": 0.94
+        },
+        {
+          "line": 984,
+          "recovered": "Gizmos.DrawLine(vector, (Vector3)gridNode2.position);",
+          "ours": "Gizmos.DrawLine(from, (Vector3)gridNode2.position);",
+          "similarity": 0.92
+        },
+        {
+          "line": 992,
+          "recovered": "Gizmos.DrawLine(vector, (Vector3)graphNode.position);",
+          "ours": "Gizmos.DrawLine(from, (Vector3)graphNode.position);",
+          "similarity": 0.92
+        }
+      ]
+    },
+    "Helicopter.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Helicopter.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Helicopter.cs",
+      "survivors": 9,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 45,
+          "recovered": "blurredRotor = rotor.GetChild(0).GetComponent<Renderer>();",
+          "ours": "blurredRotor = blurred.GetComponent<Renderer>();",
+          "similarity": 0.85
+        },
+        {
+          "line": 55,
+          "recovered": "rotorSpeed = Mathf.Clamp01(rotorSpeed + Time.deltaTime * 0.3f);",
+          "ours": "rotorSpeed = Mathf.Clamp01(rotorSpeed + Time.fixedDeltaTime * 0.3f);",
+          "similarity": 0.96
+        },
+        {
+          "line": 58,
+          "recovered": "Damage(Time.deltaTime * 30f);",
+          "ours": "Damage(Time.fixedDeltaTime * 30f);",
+          "similarity": 0.92
+        },
+        {
+          "line": 63,
+          "recovered": "rotorSpeed = Mathf.Clamp01(rotorSpeed - Time.deltaTime * 0.3f);",
+          "ours": "rotorSpeed = Mathf.Clamp01(rotorSpeed - Time.fixedDeltaTime * 0.3f);",
+          "similarity": 0.96
+        },
+        {
+          "line": 86,
+          "recovered": "float num = Vector3.Dot(normalized, rigidbody.velocity);",
+          "ours": "float num = Vector3.Dot(normalized, rigidbody.linearVelocity);",
+          "similarity": 0.93
+        },
+        {
+          "line": 87,
+          "recovered": "float magnitude = Vector3.Cross(normalized, rigidbody.velocity).magnitude;",
+          "ours": "float magnitude = Vector3.Cross(normalized, rigidbody.linearVelocity).magnitude;",
+          "similarity": 0.95
+        },
+        {
+          "line": 88,
+          "recovered": "rigidbody.angularDrag = 0.2f + num * 0.01f;",
+          "ours": "rigidbody.angularDamping = 0.2f + num * 0.01f;",
+          "similarity": 0.94
+        },
+        {
+          "line": 89,
+          "recovered": "rigidbody.drag = 0.05f + magnitude * 0.01f;",
+          "ours": "rigidbody.linearDamping = 0.05f + magnitude * 0.01f;",
+          "similarity": 0.88
+        },
+        {
+          "line": 99,
+          "recovered": "float t = Mathf.Clamp01(0f - Vector3.Dot(normalized2, rigidbody.velocity.normalized));",
+          "ours": "float t = Mathf.Clamp01(0f - Vector3.Dot(normalized2, rigidbody.linearVelocity.normalized));",
+          "similarity": 0.95
+        }
+      ]
+    },
+    "LoadoutUi.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/LoadoutUi.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/LoadoutUi.cs",
+      "survivors": 9,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 76,
+          "recovered": "int num = PlayerPrefs.GetInt(slot);",
+          "ours": "int @int = PlayerPrefs.GetInt(slot);",
+          "similarity": 0.93
+        },
+        {
+          "line": 77,
+          "recovered": "if (num == -1)",
+          "ours": "if (@int == -1)",
+          "similarity": 0.83
+        },
+        {
+          "line": 81,
+          "recovered": "return WeaponManager.instance.weapons[num];",
+          "ours": "return WeaponManager.instance.weapons[0];",
+          "similarity": 0.95
+        },
+        {
+          "line": 168,
+          "recovered": "component.FindChild(\"Image\").GetComponent<Image>().sprite = entry.image;",
+          "ours": "component.Find(\"Image\").GetComponent<Image>().sprite = entry.image;",
+          "similarity": 0.96
+        },
+        {
+          "line": 309,
+          "recovered": "button.FindChild(\"Image\").GetComponent<Image>().sprite = nothingSprite;",
+          "ours": "button.Find(\"Image\").GetComponent<Image>().sprite = nothingSprite;",
+          "similarity": 0.96
+        },
+        {
+          "line": 314,
+          "recovered": "button.FindChild(\"Image\").GetComponent<Image>().sprite = entry.image;",
+          "ours": "button.Find(\"Image\").GetComponent<Image>().sprite = entry.image;",
+          "similarity": 0.96
+        },
+        {
+          "line": 399,
+          "recovered": "FpsActorController.instance.CloseLoadout();",
+          "ours": "FpsActorController.instance.DeployFromLoadout();",
+          "similarity": 0.88
+        },
+        {
+          "line": 404,
+          "recovered": "return instance.uiCanvas.enabled;",
+          "ours": "return instance != null && instance.uiCanvas.enabled;",
+          "similarity": 0.77
+        },
+        {
+          "line": 419,
+          "recovered": "return instance.hasBeenOpen;",
+          "ours": "return instance != null && instance.hasBeenOpen;",
+          "similarity": 0.74
+        }
+      ]
+    },
+    "Weapon.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Weapon.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs",
+      "survivors": 9,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 5,
+          "recovered": "public class Weapon : MonoBehaviour",
+          "ours": "public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon",
+          "similarity": 0.61
+        },
+        {
+          "line": 178,
+          "recovered": "if (!stopFireLoop.Done())",
+          "ours": "if (stopFireLoop.TrueDone())",
+          "similarity": 0.91
+        },
+        {
+          "line": 197,
+          "recovered": "if (configuration.auto && (!audio.isPlaying || !stopFireLoop.Done()))",
+          "ours": "if (configuration.auto && audio != null && (!audio.isPlaying || !stopFireLoop.Done()))",
+          "similarity": 0.89
+        },
+        {
+          "line": 274,
+          "recovered": "private void AmmoChanged()",
+          "ours": "protected void AmmoChanged()",
+          "similarity": 0.85
+        },
+        {
+          "line": 281,
+          "recovered": "if (!HasLoadedAmmo() && HasSpareAmmo() && !reloading && (configuration.forceAutoReload || OptionsUi.GetOptions().autoReload))",
+          "ours": "if (!HasLoadedAmmo() && HasSpareAmmo() && !reloading && autoReload)",
+          "similarity": 0.7
+        },
+        {
+          "line": 347,
+          "recovered": "if (!user.aiControlled && configuration.casing != null)",
+          "ours": "if (!user.aiControlled && configuration.casing != null && NetWeaponAuthority.CosmeticHalfRunsHere)",
+          "similarity": 0.72
+        },
+        {
+          "line": 351,
+          "recovered": "if (!configuration.auto)",
+          "ours": "if (configuration.auto)",
+          "similarity": 0.98
+        },
+        {
+          "line": 355,
+          "recovered": "else if (ammo == 0)",
+          "ours": "if (ammo != -1)",
+          "similarity": 0.71
+        },
+        {
+          "line": 359,
+          "recovered": "if (!user.aiControlled && reverbAudio != null)",
+          "ours": "if (user != null && !user.aiControlled && reverbAudio != null)",
+          "similarity": 0.85
+        }
+      ]
+    },
+    "GrenadeProjectile.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/GrenadeProjectile.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/GrenadeProjectile.cs",
+      "survivors": 8,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 3,
+          "recovered": "public class GrenadeProjectile : Projectile",
+          "ours": "public partial class GrenadeProjectile : Projectile",
+          "similarity": 0.91
+        },
+        {
+          "line": 30,
+          "recovered": "Invoke(\"Explode\", configuration.lifetime);",
+          "ours": "Invoke(nameof(Explode), configuration.lifetime);",
+          "similarity": 0.89
+        },
+        {
+          "line": 36,
+          "recovered": "Vector3 vector = velocity * Time.deltaTime;",
+          "ours": "Vector3 vector = velocity * Time.deltaTime",
+          "similarity": 0.99
+        },
+        {
+          "line": 39,
+          "recovered": "if (Physics.SphereCast(ray, radius, out hitInfo, vector.magnitude * 2f, 4097))",
+          "ours": "if (Physics.SphereCast(ray, radius, out hitInfo, vector.magnitude, 4097))",
+          "similarity": 0.97
+        },
+        {
+          "line": 58,
+          "recovered": "if (ActorManager.Explode(base.transform.position, explosionConfiguration) && !source.aiControlled)",
+          "ours": "base.transform.position, explosionConfiguration, source,",
+          "similarity": 0.7
+        },
+        {
+          "line": 75,
+          "recovered": "GetComponent<ParticleSystem>().Play(true);",
+          "ours": "ParticleSystem burst = GetComponent<ParticleSystem>();",
+          "similarity": 0.65
+        },
+        {
+          "line": 77,
+          "recovered": "component.pitch = Random.Range(0.9f, 1.1f);",
+          "ours": "component.pitch = CosmeticRandom.Range(0.9f, 1.1f);",
+          "similarity": 0.91
+        },
+        {
+          "line": 79,
+          "recovered": "Invoke(\"Cleanup\", 10f);",
+          "ours": "Invoke(nameof(Cleanup), 0f);",
+          "similarity": 0.78
+        }
+      ]
+    },
+    "NodeLink2.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/NodeLink2.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/NodeLink2.cs",
+      "survivors": 8,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 244,
+          "recovered": "Vector3 vector = new Vector3(Mathf.Cos(0f) * r, 0f, Mathf.Sin(0f) * r) + o;",
+          "ours": "Vector3 vector = new Vector3(Mathf.Cos(f) * r, 0f, Mathf.Sin(f) * r) + o;",
+          "similarity": 0.97
+        },
+        {
+          "line": 249,
+          "recovered": "Vector3 vector2 = new Vector3(Mathf.Cos(f) * r, 0f, Mathf.Sin(f) * r) + o;",
+          "ours": "Vector3 vector = new Vector3(Mathf.Cos(f) * r, 0f, Mathf.Sin(f) * r) + o;",
+          "similarity": 0.99
+        },
+        {
+          "line": 250,
+          "recovered": "Gizmos.DrawLine(vector, vector2);",
+          "ours": "Gizmos.DrawLine(from, vector2);",
+          "similarity": 0.88
+        },
+        {
+          "line": 251,
+          "recovered": "vector = vector2;",
+          "ours": "from = vector2;",
+          "similarity": 0.75
+        },
+        {
+          "line": 265,
+          "recovered": "Vector3 vector2 = p1;",
+          "ours": "Vector3 vector = p2 - p1;",
+          "similarity": 0.87
+        },
+        {
+          "line": 269,
+          "recovered": "Vector3 vector3 = AstarSplines.CubicBezier(p1, p3, p4, p2, t);",
+          "ours": "Vector3 vector2 = AstarSplines.CubicBezier(p1, p3, p4, p2, t);",
+          "similarity": 0.98
+        },
+        {
+          "line": 270,
+          "recovered": "Gizmos.DrawLine(vector2, vector3);",
+          "ours": "Gizmos.DrawLine(from, vector);",
+          "similarity": 0.84
+        },
+        {
+          "line": 271,
+          "recovered": "vector2 = vector3;",
+          "ours": "from = vector;",
+          "similarity": 0.69
+        }
+      ]
+    },
+    "NodeLink3.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/NodeLink3.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/NodeLink3.cs",
+      "survivors": 8,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 269,
+          "recovered": "Vector3 vector = new Vector3(Mathf.Cos(0f) * r, 0f, Mathf.Sin(0f) * r) + o;",
+          "ours": "Vector3 vector = new Vector3(Mathf.Cos(f) * r, 0f, Mathf.Sin(f) * r) + o;",
+          "similarity": 0.97
+        },
+        {
+          "line": 274,
+          "recovered": "Vector3 vector2 = new Vector3(Mathf.Cos(f) * r, 0f, Mathf.Sin(f) * r) + o;",
+          "ours": "Vector3 vector = new Vector3(Mathf.Cos(f) * r, 0f, Mathf.Sin(f) * r) + o;",
+          "similarity": 0.99
+        },
+        {
+          "line": 275,
+          "recovered": "Gizmos.DrawLine(vector, vector2);",
+          "ours": "Gizmos.DrawLine(from, vector2);",
+          "similarity": 0.88
+        },
+        {
+          "line": 276,
+          "recovered": "vector = vector2;",
+          "ours": "from = vector2;",
+          "similarity": 0.75
+        },
+        {
+          "line": 290,
+          "recovered": "Vector3 vector2 = p1;",
+          "ours": "Vector3 vector = p2 - p1;",
+          "similarity": 0.87
+        },
+        {
+          "line": 294,
+          "recovered": "Vector3 vector3 = AstarSplines.CubicBezier(p1, p3, p4, p2, t);",
+          "ours": "Vector3 vector2 = AstarSplines.CubicBezier(p1, p3, p4, p2, t);",
+          "similarity": 0.98
+        },
+        {
+          "line": 295,
+          "recovered": "Gizmos.DrawLine(vector2, vector3);",
+          "ours": "Gizmos.DrawLine(from, vector);",
+          "similarity": 0.84
+        },
+        {
+          "line": 296,
+          "recovered": "vector2 = vector3;",
+          "ours": "from = vector;",
+          "similarity": 0.69
+        }
+      ]
+    },
+    "SpawnPoint.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/SpawnPoint.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/SpawnPoint.cs",
+      "survivors": 7,
+      "outrightDeletions": 4,
+      "candidates": [
+        {
+          "line": 38,
+          "recovered": "Vector3 vector = base.transform.position + Vector3.Scale(Random.insideUnitSphere, new Vector3(3f, 0f, 3f));",
+          "ours": "Vector3 jittered = authored + Vector3.Scale(Random.insideUnitSphere, new Vector3(3f, 0f, 3f));",
+          "similarity": 0.83
+        },
+        {
+          "line": 39,
+          "recovered": "Ray ray = new Ray(vector + Vector3.up * 3f, Vector3.down);",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 40,
+          "recovered": "RaycastHit hitInfo;",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 41,
+          "recovered": "if (Physics.Raycast(ray, out hitInfo))",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 43,
+          "recovered": "return hitInfo.point;",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 45,
+          "recovered": "return vector;",
+          "ours": "return true;",
+          "similarity": 0.69
+        },
+        {
+          "line": 55,
+          "recovered": "return spawnpointContainer.GetChild(Random.Range(0, childCount)).position;",
+          "ours": "return SnappedContainerChildPosition(spawnpointContainer.GetChild(Random.Range(0, childCount)));",
+          "similarity": 0.76
+        }
+      ]
+    },
+    "AstarSerializer.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding.Serialization/AstarSerializer.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/Serialization/AstarSerializer.cs",
+      "survivors": 6,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 362,
+          "recovered": "string input = GetString(zipEntry);",
+          "ours": "string @string = GetString(zipEntry);",
+          "similarity": 0.89
+        },
+        {
+          "line": 363,
+          "recovered": "JsonReader jsonReader = new JsonReader(input, readerSettings);",
+          "ours": "JsonReader jsonReader = new JsonReader(@string, readerSettings);",
+          "similarity": 0.94
+        },
+        {
+          "line": 521,
+          "recovered": "string input = GetString(zipEntry);",
+          "ours": "string @string = GetString(zipEntry);",
+          "similarity": 0.89
+        },
+        {
+          "line": 522,
+          "recovered": "JsonReader jsonReader = new JsonReader(input, readerSettings);",
+          "ours": "JsonReader jsonReader = new JsonReader(@string, readerSettings);",
+          "similarity": 0.94
+        },
+        {
+          "line": 559,
+          "recovered": "string input = GetString(entry);",
+          "ours": "string @string = GetString(entry);",
+          "similarity": 0.88
+        },
+        {
+          "line": 560,
+          "recovered": "JsonReader jsonReader = new JsonReader(input, readerSettings);",
+          "ours": "JsonReader jsonReader = new JsonReader(@string, readerSettings);",
+          "similarity": 0.94
+        }
+      ]
+    },
+    "ExplodingProjectile.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/ExplodingProjectile.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ExplodingProjectile.cs",
+      "survivors": 6,
+      "outrightDeletions": 1,
+      "candidates": [
+        {
+          "line": 47,
+          "recovered": "if (hitInfo.collider.gameObject.layer == 12)",
+          "ours": "if (source != null && hitInfo.collider.gameObject.layer == 12)",
+          "similarity": 0.83
+        },
+        {
+          "line": 57,
+          "recovered": "if ((Explode(hitInfo.point, hitInfo.normal) || flag) && !source.aiControlled)",
+          "ours": "if ((Explode(hitInfo.point, hitInfo.normal) || flag) && source != null && !source.aiControlled)",
+          "similarity": 0.9
+        },
+        {
+          "line": 66,
+          "recovered": "bool result = ActorManager.Explode(position, explosionConfiguration);",
+          "ours": "public ExplosionConfiguration explosionConfiguration;",
+          "similarity": 0.62
+        },
+        {
+          "line": 80,
+          "recovered": "audioSource.pitch = UnityEngine.Random.Range(0.9f, 1.1f);",
+          "ours": "audioSource.pitch = CosmeticRandom.Range(0.9f, 1.1f);",
+          "similarity": 0.83
+        },
+        {
+          "line": 83,
+          "recovered": "Invoke(\"StopSmoke\", smokeTime);",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 90,
+          "recovered": "Invoke(\"Cleanup\", 10f);",
+          "ours": "Invoke(nameof(Cleanup), 0f);",
+          "similarity": 0.78
+        }
+      ]
+    },
+    "MinimapUi.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/MinimapUi.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/MinimapUi.cs",
+      "survivors": 6,
+      "outrightDeletions": 1,
+      "candidates": [
+        {
+          "line": 46,
+          "recovered": "float target = ((!Input.GetKey(KeyCode.M)) ? 0f : 1f);",
+          "ours": "float target = (!held) ? 0f : 1f;",
+          "similarity": 0.71
+        },
+        {
+          "line": 117,
+          "recovered": "int num = 0;",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 123,
+          "recovered": "Color color = (colors.normalColor = ColorScheme.TeamColor(owner));",
+          "ours": "Color color2 = (colors.normalColor = ColorScheme.TeamColor(owner));",
+          "similarity": 0.99
+        },
+        {
+          "line": 124,
+          "recovered": "colors.highlightedColor = color + new Color(0.2f, 0.2f, 0.2f);",
+          "ours": "colors.highlightedColor = color2 + new Color(0.2f, 0.2f, 0.2f);",
+          "similarity": 0.99
+        },
+        {
+          "line": 125,
+          "recovered": "colors.disabledColor = color * new Color(0.5f, 0.5f, 0.5f);",
+          "ours": "colors.disabledColor = color2 * new Color(0.5f, 0.5f, 0.5f);",
+          "similarity": 0.99
+        },
+        {
+          "line": 128,
+          "recovered": "button.interactable = owner == num;",
+          "ours": "button.interactable = owner == localTeam;",
+          "similarity": 0.87
+        }
+      ]
+    },
+    "PathTypesDemo.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/PathTypesDemo.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/PathTypesDemo.cs",
+      "survivors": 6,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 345,
+          "recovered": "List<Vector3> list3;",
+          "ours": "List<Vector3> list2;",
+          "similarity": 0.95
+        },
+        {
+          "line": 346,
+          "recovered": "List<Vector3> list2 = (list3 = list);",
+          "ours": "List<Vector3> list3 = (list2 = list);",
+          "similarity": 0.95
+        },
+        {
+          "line": 347,
+          "recovered": "int index2;",
+          "ours": "int index;",
+          "similarity": 0.95
+        },
+        {
+          "line": 348,
+          "recovered": "int index = (index2 = j);",
+          "ours": "int index2 = (index = j);",
+          "similarity": 0.96
+        },
+        {
+          "line": 349,
+          "recovered": "Vector3 vector = list3[index2];",
+          "ours": "Vector3 vector = list2[index];",
+          "similarity": 0.95
+        },
+        {
+          "line": 350,
+          "recovered": "list2[index] = vector - zero;",
+          "ours": "list3[index2] = vector - zero;",
+          "similarity": 0.95
+        }
+      ]
+    },
+    "Projectile.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Projectile.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Projectile.cs",
+      "survivors": 6,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 4,
+          "recovered": "public class Projectile : MonoBehaviour",
+          "ours": "public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectileBody",
+          "similarity": 0.63
+        },
+        {
+          "line": 72,
+          "recovered": "Vector3 delta = velocity * Time.deltaTime;",
+          "ours": "Vector3 delta = velocity * Time.deltaTime",
+          "similarity": 0.99
+        },
+        {
+          "line": 78,
+          "recovered": "Vector3 vector = ActorManager.instance.player.Position();",
+          "ours": "Vector3 vector = player.Position();",
+          "similarity": 0.76
+        },
+        {
+          "line": 97,
+          "recovered": "if (Physics.Raycast(ray, out hitInfo, delta.magnitude * 2f, -2049) && Hit(ray, hitInfo))",
+          "ours": "if (Physics.Raycast(ray, out hitInfo, delta.magnitude, -2049) && Hit(ray, hitInfo))",
+          "similarity": 0.98
+        },
+        {
+          "line": 132,
+          "recovered": "else if (component.ProjectileHit(this, hitInfo.point) && !source.aiControlled)",
+          "ours": "&& component.ProjectileHit(this, hitInfo.point)",
+          "similarity": 0.72
+        },
+        {
+          "line": 142,
+          "recovered": "if (configuration.makesFlybySound && travellingTowardsPlayer && Vector3.Distance(hitInfo.point, ActorManager.instance.player.Position()) < 15f)",
+          "ours": "&& Vector3.Distance(hitInfo.point, ActorManager.Player.Position()) < 15f)",
+          "similarity": 0.66
+        }
+      ]
+    },
+    "Ammobox.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Ammobox.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Ammobox.cs",
+      "survivors": 5,
+      "outrightDeletions": 1,
+      "candidates": [
+        {
+          "line": 15,
+          "recovered": "component.velocity = base.transform.forward * configuration.speed;",
+          "ours": "component.linearVelocity = base.transform.forward * configuration.speed;",
+          "similarity": 0.94
+        },
+        {
+          "line": 16,
+          "recovered": "InvokeRepeating(\"Resupply\", 3f, 3f);",
+          "ours": "InvokeRepeating(nameof(Resupply), 3f, 3f);",
+          "similarity": 0.86
+        },
+        {
+          "line": 21,
+          "recovered": "List<Actor> list = ActorManager.AliveActorsInRange(base.transform.position, 6f);",
+          "ours": "ActorManager.AliveActorsInRange(base.transform.position, 6f, _nearby);",
+          "similarity": 0.81
+        },
+        {
+          "line": 22,
+          "recovered": "foreach (Actor item in list)",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 24,
+          "recovered": "item.ResupplyAmmo();",
+          "ours": "_nearby[i].ResupplyAmmo();",
+          "similarity": 0.74
+        }
+      ]
+    },
+    "Car.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Car.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Car.cs",
+      "survivors": 5,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 93,
+          "recovered": "float target = ((!HasDriver()) ? 0f : 0.5f);",
+          "ours": "enginePitchTarget = ((!HasDriver()) ? 0f : 0.5f);",
+          "similarity": 0.81
+        },
+        {
+          "line": 105,
+          "recovered": "steerAngle = Mathf.MoveTowards(steerAngle, target2, 5f * maxSteer * Time.deltaTime);",
+          "ours": "steerAngle = Mathf.MoveTowards(steerAngle, target2, 5f * maxSteer * Time.fixedDeltaTime);",
+          "similarity": 0.97
+        },
+        {
+          "line": 115,
+          "recovered": "target = 0.5f;",
+          "ours": "enginePitchTarget = 0.5f;",
+          "similarity": 0.7
+        },
+        {
+          "line": 120,
+          "recovered": "target = ((!(vector.y > 0f)) ? (0.5f + Mathf.Abs(vector.y) * 0.2f) : (0.5f + Mathf.Abs(vector.y) * 0.6f));",
+          "ours": "enginePitchTarget = ((!(vector.y > 0f)) ? (0.5f + Mathf.Abs(vector.y) * 0.2f) : (0.5f + Mathf.Abs(vector.y) * 0.6f));",
+          "similarity": 0.95
+        },
+        {
+          "line": 129,
+          "recovered": "enginePitch = Mathf.MoveTowards(enginePitch, target, Time.deltaTime);",
+          "ours": "enginePitch = Mathf.MoveTowards(enginePitch, enginePitchTarget, Time.deltaTime);",
+          "similarity": 0.93
+        }
+      ]
+    },
+    "GridNode.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/GridNode.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/GridNode.cs",
+      "survivors": 5,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 55,
+          "recovered": "gridFlags = (ushort)((gridFlags & -1025) | (value ? 1024 : 0));",
+          "ours": "gridFlags = (ushort)((gridFlags & 0xFFFFFBFFu) | (value ? 1024u : 0u));",
+          "similarity": 0.88
+        },
+        {
+          "line": 67,
+          "recovered": "gridFlags = (ushort)((gridFlags & -257) | (value ? 256 : 0));",
+          "ours": "gridFlags = (ushort)((gridFlags & 0xFFFFFEFFu) | (value ? 256u : 0u));",
+          "similarity": 0.87
+        },
+        {
+          "line": 79,
+          "recovered": "gridFlags = (ushort)((gridFlags & -513) | (value ? 512 : 0));",
+          "ours": "gridFlags = (ushort)((gridFlags & 0xFFFFFDFFu) | (value ? 512u : 0u));",
+          "similarity": 0.87
+        },
+        {
+          "line": 119,
+          "recovered": "gridFlags = (ushort)((gridFlags & -256) | connections);",
+          "ours": "gridFlags = (ushort)((gridFlags & 0xFFFFFF00u) | (uint)connections);",
+          "similarity": 0.86
+        },
+        {
+          "line": 124,
+          "recovered": "gridFlags = (ushort)(gridFlags & -256);",
+          "ours": "gridFlags = (ushort)(gridFlags & 0xFFFFFF00u);",
+          "similarity": 0.79
+        }
+      ]
+    },
+    "IngameMenuUi.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/IngameMenuUi.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/IngameMenuUi.cs",
+      "survivors": 5,
+      "outrightDeletions": 3,
+      "candidates": [
+        {
+          "line": 20,
+          "recovered": "Time.timeScale = 0f;",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 28,
+          "recovered": "Time.timeScale = 1f;",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 29,
+          "recovered": "Time.fixedDeltaTime = Time.timeScale / 60f;",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 37,
+          "recovered": "return instance.canvas.enabled;",
+          "ours": "instance.canvas.enabled = true;",
+          "similarity": 0.77
+        },
+        {
+          "line": 66,
+          "recovered": "Application.Quit();",
+          "ours": "AppQuit.Quit();",
+          "similarity": 0.76
+        }
+      ]
+    },
+    "Medipack.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Medipack.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Medipack.cs",
+      "survivors": 5,
+      "outrightDeletions": 1,
+      "candidates": [
+        {
+          "line": 17,
+          "recovered": "component.velocity = base.transform.forward * configuration.speed;",
+          "ours": "component.linearVelocity = base.transform.forward * configuration.speed;",
+          "similarity": 0.94
+        },
+        {
+          "line": 18,
+          "recovered": "InvokeRepeating(\"Resupply\", 3f, 3f);",
+          "ours": "InvokeRepeating(nameof(Resupply), 3f, 3f);",
+          "similarity": 0.86
+        },
+        {
+          "line": 23,
+          "recovered": "List<Actor> list = ActorManager.AliveActorsInRange(base.transform.position, 6f);",
+          "ours": "ActorManager.AliveActorsInRange(base.transform.position, 6f, _nearby);",
+          "similarity": 0.81
+        },
+        {
+          "line": 24,
+          "recovered": "foreach (Actor item in list)",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 26,
+          "recovered": "if (item.ResupplyHealth())",
+          "ours": "if (_nearby[i].ResupplyHealth())",
+          "similarity": 0.79
+        }
+      ]
+    },
+    "AlternatingMountedWeapon.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/AlternatingMountedWeapon.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/AlternatingMountedWeapon.cs",
+      "survivors": 4,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 7,
+          "recovered": "private int currentMuzzle;",
+          "ours": "public byte currentMuzzle;",
+          "similarity": 0.73
+        },
+        {
+          "line": 12,
+          "recovered": "currentMuzzle = (currentMuzzle + 1) % muzzles.Length;",
+          "ours": "currentMuzzle = (byte)((currentMuzzle + 1) % muzzles.Length);",
+          "similarity": 0.98
+        },
+        {
+          "line": 13,
+          "recovered": "Quaternion rotation = Quaternion.LookRotation(direction + Random.insideUnitSphere * configuration.spread);",
+          "ours": "Quaternion rotation = Quaternion.LookRotation(direction + UnityEngine.Random.insideUnitSphere * configuration.spread);",
+          "similarity": 0.95
+        },
+        {
+          "line": 14,
+          "recovered": "Projectile component = ((GameObject)Object.Instantiate(configuration.projectilePrefab, transform.position, rotation)).GetComponent<Projectile>();",
+          "ours": "Projectile component = ((GameObject)UnityEngine.Object.Instantiate(configuration.projectilePrefab, transform.position, rotation)).GetComponent<Projectile>();",
+          "similarity": 0.96
+        }
+      ]
+    },
+    "AstarData.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/AstarData.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/AstarData.cs",
+      "survivors": 4,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 278,
+          "recovered": "for (int num = 0; num < graphs.Length; num++)",
+          "ours": "for (int j = 0; j < graphs.Length; j++)",
+          "similarity": 0.86
+        },
+        {
+          "line": 280,
+          "recovered": "for (int num2 = num + 1; num2 < graphs.Length; num2++)",
+          "ours": "for (int k = j + 1; k < graphs.Length; k++)",
+          "similarity": 0.8
+        },
+        {
+          "line": 282,
+          "recovered": "if (graphs[num] != null && graphs[num2] != null && graphs[num].guid == graphs[num2].guid)",
+          "ours": "if (graphs[j] != null && graphs[k] != null && graphs[j].guid == graphs[k].guid)",
+          "similarity": 0.89
+        },
+        {
+          "line": 285,
+          "recovered": "graphs[num].guid = Pathfinding.Util.Guid.NewGuid();",
+          "ours": "graphs[j].guid = Pathfinding.Util.Guid.NewGuid();",
+          "similarity": 0.96
+        }
+      ]
+    },
+    "BezierMover.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/BezierMover.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/BezierMover.cs",
+      "survivors": 4,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 73,
+          "recovered": "Vector3 vector = points[j].position;",
+          "ours": "Vector3 from = points[j].position;",
+          "similarity": 0.89
+        },
+        {
+          "line": 76,
+          "recovered": "Vector3 vector2 = AstarSplines.CubicBezier(points[j].position, points[j].position + normalized * tangentLengths, points[(j + 1) % num].position - normalized2 * tangentLengths, points[(j + 1) % num].position, (float)k / 100f);",
+          "ours": "Vector3 vector = AstarSplines.CubicBezier(points[j].position, points[j].position + normalized * tangentLengths, points[(j + 1) % num].position - normalized2 * tangentLengths, points[(j + 1) % num].position, (float)k / 100f);",
+          "similarity": 1.0
+        },
+        {
+          "line": 77,
+          "recovered": "Gizmos.DrawLine(vector, vector2);",
+          "ours": "Gizmos.DrawLine(from, vector);",
+          "similarity": 0.86
+        },
+        {
+          "line": 78,
+          "recovered": "vector = vector2;",
+          "ours": "from = vector;",
+          "similarity": 0.71
+        }
+      ]
+    },
+    "MainMenu.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/MainMenu.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/MainMenu.cs",
+      "survivors": 4,
+      "outrightDeletions": 1,
+      "candidates": [
+        {
+          "line": 48,
+          "recovered": "private string greenlightWebUrl = \"https://twitter.com/SteelRaven7\";",
+          "ours": "private string greenlightWebUrl = string.Empty;",
+          "similarity": 0.64
+        },
+        {
+          "line": 50,
+          "recovered": "private string greenlightSteamUrl = \"https://twitter.com/SteelRaven7\";",
+          "ours": "private string greenlightSteamUrl = string.Empty;",
+          "similarity": 0.66
+        },
+        {
+          "line": 219,
+          "recovered": "Application.OpenURL(\"http://twitter.com/SteelRaven7\");",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 241,
+          "recovered": "Application.Quit();",
+          "ours": "AppQuit.Quit();",
+          "similarity": 0.76
+        }
+      ]
+    },
+    "NodeLink.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/NodeLink.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/NodeLink.cs",
+      "survivors": 4,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 115,
+          "recovered": "Vector3 vector2 = p1;",
+          "ours": "Vector3 vector = p2 - p1;",
+          "similarity": 0.87
+        },
+        {
+          "line": 119,
+          "recovered": "Vector3 vector3 = AstarSplines.CubicBezier(p1, p3, p4, p2, t);",
+          "ours": "Vector3 vector2 = AstarSplines.CubicBezier(p1, p3, p4, p2, t);",
+          "similarity": 0.98
+        },
+        {
+          "line": 120,
+          "recovered": "Gizmos.DrawLine(vector2, vector3);",
+          "ours": "Gizmos.DrawLine(from, vector2);",
+          "similarity": 0.83
+        },
+        {
+          "line": 121,
+          "recovered": "vector2 = vector3;",
+          "ours": "from = vector2;",
+          "similarity": 0.67
+        }
+      ]
+    },
+    "PathPool.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/PathPool.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/PathPool.cs",
+      "survivors": 4,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 71,
+          "recovered": "Dictionary<Type, int> dictionary2;",
+          "ours": "Dictionary<Type, int> dictionary;",
+          "similarity": 0.99
+        },
+        {
+          "line": 72,
+          "recovered": "Dictionary<Type, int> dictionary = (dictionary2 = totalCreated);",
+          "ours": "Dictionary<Type, int> dictionary2 = (dictionary = totalCreated);",
+          "similarity": 0.98
+        },
+        {
+          "line": 75,
+          "recovered": "int num = dictionary2[typeFromHandle];",
+          "ours": "int num = dictionary[typeFromHandle];",
+          "similarity": 0.99
+        },
+        {
+          "line": 76,
+          "recovered": "dictionary[key] = num + 1;",
+          "ours": "dictionary2[key] = num + 1;",
+          "similarity": 0.98
+        }
+      ]
+    },
+    "TimeOfDay.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/TimeOfDay.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/TimeOfDay.cs",
+      "survivors": 4,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 70,
+          "recovered": "base.transform.FindChild(\"Day\").gameObject.SetActive(true);",
+          "ours": "base.transform.Find(\"Day\").gameObject.SetActive(true);",
+          "similarity": 0.96
+        },
+        {
+          "line": 71,
+          "recovered": "base.transform.FindChild(\"Night\").gameObject.SetActive(false);",
+          "ours": "base.transform.Find(\"Night\").gameObject.SetActive(false);",
+          "similarity": 0.96
+        },
+        {
+          "line": 84,
+          "recovered": "base.transform.FindChild(\"Day\").gameObject.SetActive(false);",
+          "ours": "base.transform.Find(\"Day\").gameObject.SetActive(false);",
+          "similarity": 0.96
+        },
+        {
+          "line": 85,
+          "recovered": "base.transform.FindChild(\"Night\").gameObject.SetActive(true);",
+          "ours": "base.transform.Find(\"Night\").gameObject.SetActive(true);",
+          "similarity": 0.96
+        }
+      ]
+    },
+    "UnityObjectConverter.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding.Serialization/UnityObjectConverter.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/Serialization/UnityObjectConverter.cs",
+      "survivors": 4,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 62,
+          "recovered": "UnityEngine.Object obj = (UnityEngine.Object)value;",
+          "ours": "UnityEngine.Object @object = (UnityEngine.Object)value;",
+          "similarity": 0.96
+        },
+        {
+          "line": 69,
+          "recovered": "dictionary.Add(\"Name\", obj.name);",
+          "ours": "dictionary.Add(\"Name\", @object.name);",
+          "similarity": 0.94
+        },
+        {
+          "line": 70,
+          "recovered": "dictionary.Add(\"Type\", obj.GetType().AssemblyQualifiedName);",
+          "ours": "dictionary.Add(\"Type\", @object.GetType().AssemblyQualifiedName);",
+          "similarity": 0.97
+        },
+        {
+          "line": 82,
+          "recovered": "Debug.Log(\"Adding UnityReferenceHelper to Unity Reference '\" + obj.name + \"'\");",
+          "ours": "Debug.Log(\"Adding UnityReferenceHelper to Unity Reference '\" + @object.name + \"'\");",
+          "similarity": 0.98
+        }
+      ]
+    },
+    "ActiveRaggy.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/ActiveRaggy.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ActiveRaggy.cs",
+      "survivors": 3,
+      "outrightDeletions": 1,
+      "candidates": [
+        {
+          "line": 104,
+          "recovered": "jointDrive.mode = JointDriveMode.Position;",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 267,
+          "recovered": "rigidbody.velocity = velocity;",
+          "ours": "rigidbody.linearVelocity = velocity;",
+          "similarity": 0.88
+        },
+        {
+          "line": 303,
+          "recovered": "return rigidbodies[0].velocity;",
+          "ours": "return rigidbodies[0].linearVelocity;",
+          "similarity": 0.88
+        }
+      ]
+    },
+    "ActorSpawner.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/ActorSpawner.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ActorSpawner.cs",
+      "survivors": 3,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 25,
+          "recovered": "int n = 3;",
+          "ours": "int j = 3;",
+          "similarity": 0.9
+        },
+        {
+          "line": 29,
+          "recovered": "n = 5;",
+          "ours": "j = 5;",
+          "similarity": 0.83
+        },
+        {
+          "line": 36,
+          "recovered": "for (int i = 0; i < n; i++)",
+          "ours": "for (int i = 0; i < j; i++)",
+          "similarity": 0.96
+        }
+      ]
+    },
+    "BoundsConverter.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding.Serialization/BoundsConverter.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/Serialization/BoundsConverter.cs",
+      "survivors": 3,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 17,
+          "recovered": "return new Bounds",
+          "ours": "return bounds;",
+          "similarity": 0.77
+        },
+        {
+          "line": 19,
+          "recovered": "center = new Vector3(CastFloat(values[\"cx\"]), CastFloat(values[\"cy\"]), CastFloat(values[\"cz\"])),",
+          "ours": "bounds.center = new Vector3(CastFloat(values[\"cx\"]), CastFloat(values[\"cy\"]), CastFloat(values[\"cz\"]));",
+          "similarity": 0.95
+        },
+        {
+          "line": 20,
+          "recovered": "extents = new Vector3(CastFloat(values[\"ex\"]), CastFloat(values[\"ey\"]), CastFloat(values[\"ez\"]))",
+          "ours": "bounds.extents = new Vector3(CastFloat(values[\"ex\"]), CastFloat(values[\"ey\"]), CastFloat(values[\"ez\"]));",
+          "similarity": 0.96
+        }
+      ]
+    },
+    "GraphCollision.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/GraphCollision.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/GraphCollision.cs",
+      "survivors": 3,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 162,
+          "recovered": "RaycastHit raycastHit = new RaycastHit",
+          "ours": "RaycastHit raycastHit = default(RaycastHit);",
+          "similarity": 0.77
+        },
+        {
+          "line": 164,
+          "recovered": "point = position,",
+          "ours": "raycastHit.point = position;",
+          "similarity": 0.71
+        },
+        {
+          "line": 165,
+          "recovered": "distance = 0f",
+          "ours": "raycastHit.distance = 0f;",
+          "similarity": 0.67
+        }
+      ]
+    },
+    "LevelBounds.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/LevelBounds.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/LevelBounds.cs",
+      "survivors": 3,
+      "outrightDeletions": 1,
+      "candidates": [
+        {
+          "line": 7,
+          "recovered": "private Bounds bounds;",
+          "ours": null,
+          "similarity": 0.0
+        },
+        {
+          "line": 15,
+          "recovered": "return instance.bounds.Contains(point);",
+          "ours": "return instance.volume.Contains(new Vec3(point.x, point.y, point.z));",
+          "similarity": 0.65
+        },
+        {
+          "line": 21,
+          "recovered": "bounds = new Bounds(base.transform.position, base.transform.localScale);",
+          "ours": "new Vec3(base.transform.position.x, base.transform.position.y, base.transform.position.z),",
+          "similarity": 0.6
+        }
+      ]
+    },
+    "Path.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/Path.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/Path.cs",
+      "survivors": 3,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 256,
+          "recovered": "if (AstarPath.isEditor || AstarPath.active.logPathResults != PathLog.None)",
+          "ours": "if (AstarPath.isEditor || AstarPath.active.logPathResults != 0)",
+          "similarity": 0.91
+        },
+        {
+          "line": 260,
+          "recovered": "if (AstarPath.active.logPathResults != PathLog.None && AstarPath.active.logPathResults != PathLog.InGame)",
+          "ours": "if (AstarPath.active.logPathResults != 0 && AstarPath.active.logPathResults != PathLog.InGame)",
+          "similarity": 0.93
+        },
+        {
+          "line": 275,
+          "recovered": "if (AstarPath.isEditor || AstarPath.active.logPathResults != PathLog.None)",
+          "ours": "if (AstarPath.isEditor || AstarPath.active.logPathResults != 0)",
+          "similarity": 0.91
+        }
+      ]
+    },
+    "RichAI.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/RichAI.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/RichAI.cs",
+      "survivors": 3,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 461,
+          "recovered": "Vector3 vector = tr.position;",
+          "ours": "Vector3 from = tr.position;",
+          "similarity": 0.86
+        },
+        {
+          "line": 464,
+          "recovered": "Gizmos.DrawLine(vector, buffer[i]);",
+          "ours": "Gizmos.DrawLine(from, buffer[i]);",
+          "similarity": 0.88
+        },
+        {
+          "line": 465,
+          "recovered": "vector = buffer[i];",
+          "ours": "vector2 = buffer[num];",
+          "similarity": 0.88
+        }
+      ]
+    },
+    "Squad.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Squad.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Squad.cs",
+      "survivors": 3,
+      "outrightDeletions": 1,
+      "candidates": [
+        {
+          "line": 64,
+          "recovered": "squadVehicle.DropSeatClaim();",
+          "ours": "squadVehicle.DropSeatClaim(a != null ? a.actor : null);",
+          "similarity": 0.69
+        },
+        {
+          "line": 231,
+          "recovered": "squadVehicle.ClaimSeat();",
+          "ours": "if (!squadVehicle.IsFull())",
+          "similarity": 0.62
+        },
+        {
+          "line": 248,
+          "recovered": "vehicle.ClaimSeat();",
+          "ours": null,
+          "similarity": 0.0
+        }
+      ]
+    },
+    "Boat.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Boat.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Boat.cs",
+      "survivors": 2,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 60,
+          "recovered": "Vector2 vector = Driver().controller.BoatInput();",
+          "ours": "Vector2 vector = Vehicle.Clamp2(Driver().controller.BoatInput());",
+          "similarity": 0.86
+        },
+        {
+          "line": 66,
+          "recovered": "rigidbody.AddRelativeTorque(base.transform.up * turnSpeed * vector.x, ForceMode.Acceleration);",
+          "ours": "rigidbody.AddRelativeTorque(Vector3.up * turnSpeed * vector.x, ForceMode.Acceleration);",
+          "similarity": 0.93
+        }
+      ]
+    },
+    "DecalManager.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/DecalManager.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/DecalManager.cs",
+      "survivors": 2,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 11,
+          "recovered": "BloodRed",
+          "ours": "BloodRed = 2,",
+          "similarity": 0.94
+        },
+        {
+          "line": 168,
+          "recovered": "decalMeshData[(DecalType)value].UpdateMesh();",
+          "ours": "decalMeshData.Add((DecalType)value, meshData);",
+          "similarity": 0.75
+        }
+      ]
+    },
+    "HeadingGuide.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/HeadingGuide.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/HeadingGuide.cs",
+      "survivors": 2,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 19,
+          "recovered": "if (rigidbody.velocity.magnitude > 0.2f)",
+          "ours": "if (rigidbody.linearVelocity.magnitude > 0.2f)",
+          "similarity": 0.9
+        },
+        {
+          "line": 21,
+          "recovered": "to = Quaternion.LookRotation(rigidbody.velocity, rigidbody.transform.up);",
+          "ours": "to = Quaternion.LookRotation(rigidbody.linearVelocity, rigidbody.transform.up);",
+          "similarity": 0.95
+        }
+      ]
+    },
+    "IngameUi.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/IngameUi.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/IngameUi.cs",
+      "survivors": 2,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 69,
+          "recovered": "instance.ShowHitmarker();",
+          "ours": "instance.ShowHitmarker(severity);",
+          "similarity": 0.86
+        },
+        {
+          "line": 166,
+          "recovered": "private void ShowHitmarker()",
+          "ours": "private void ShowHitmarker(int severity)",
+          "similarity": 0.82
+        }
+      ]
+    },
+    "LevelGridNode.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/LevelGridNode.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/LevelGridNode.cs",
+      "survivors": 2,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 42,
+          "recovered": "gridFlags = (ushort)((gridFlags & -257) | (value ? 256 : 0));",
+          "ours": "gridFlags = (ushort)((gridFlags & 0xFFFFFEFFu) | (value ? 256u : 0u));",
+          "similarity": 0.87
+        },
+        {
+          "line": 54,
+          "recovered": "gridFlags = (ushort)((gridFlags & -513) | (value ? 512 : 0));",
+          "ours": "gridFlags = (ushort)((gridFlags & 0xFFFFFDFFu) | (value ? 512u : 0u));",
+          "similarity": 0.87
+        }
+      ]
+    },
+    "NavGraph.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/NavGraph.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/NavGraph.cs",
+      "survivors": 2,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 76,
+          "recovered": "Matrix4x4 m = newMatrix * inverse;",
+          "ours": "Matrix4x4 i = newMatrix * inverse;",
+          "similarity": 0.97
+        },
+        {
+          "line": 79,
+          "recovered": "node.position = (Int3)m.MultiplyPoint((Vector3)node.position);",
+          "ours": "node.position = (Int3)i.MultiplyPoint((Vector3)node.position);",
+          "similarity": 0.98
+        }
+      ]
+    },
+    "ObjImporter.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/ObjImporter.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/ObjImporter.cs",
+      "survivors": 2,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 79,
+          "recovered": "meshStruct result = new meshStruct",
+          "ours": "meshStruct result = default(meshStruct);",
+          "similarity": 0.71
+        },
+        {
+          "line": 81,
+          "recovered": "fileName = filename",
+          "ours": "result.fileName = filename;",
+          "similarity": 0.83
+        }
+      ]
+    },
+    "StartEndModifier.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/StartEndModifier.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/StartEndModifier.cs",
+      "survivors": 2,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 58,
+          "recovered": "if ((forceAddPoint || addPoints) && exactStartPoint != Exactness.SnapToNode)",
+          "ours": "if ((forceAddPoint || addPoints) && exactStartPoint != 0)",
+          "similarity": 0.84
+        },
+        {
+          "line": 66,
+          "recovered": "if ((forceAddPoint2 || addPoints) && exactEndPoint != Exactness.SnapToNode)",
+          "ours": "if ((forceAddPoint2 || addPoints) && exactEndPoint != 0)",
+          "similarity": 0.84
+        }
+      ]
+    },
+    "SuperWrench.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/SuperWrench.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/SuperWrench.cs",
+      "survivors": 2,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 23,
+          "recovered": "attachedRigidbody.drag = 0.2f;",
+          "ours": "attachedRigidbody.linearDamping = 0.2f;",
+          "similarity": 0.84
+        },
+        {
+          "line": 24,
+          "recovered": "attachedRigidbody.angularDrag = 0.2f;",
+          "ours": "attachedRigidbody.angularDamping = 0.2f;",
+          "similarity": 0.93
+        }
+      ]
+    },
+    "Binoculars.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Binoculars.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Binoculars.cs",
+      "survivors": 1,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 19,
+          "recovered": "if (findRangeAction.TrueDone() && scope.activeInHierarchy)",
+          "ours": "if (findRangeAction.TrueDone() && scope != null && scope.activeInHierarchy)",
+          "similarity": 0.87
+        }
+      ]
+    },
+    "CarHorn.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/CarHorn.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/CarHorn.cs",
+      "survivors": 1,
+      "outrightDeletions": 1,
+      "candidates": [
+        {
+          "line": 7,
+          "recovered": "if (configuration.loud)",
+          "ours": null,
+          "similarity": 0.0
+        }
+      ]
+    },
+    "DebugUtility.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/DebugUtility.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/DebugUtility.cs",
+      "survivors": 1,
+      "outrightDeletions": 1,
+      "candidates": [
+        {
+          "line": 165,
+          "recovered": "mesh.Optimize();",
+          "ours": null,
+          "similarity": 0.0
+        }
+      ]
+    },
+    "FollowMainCamera.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/FollowMainCamera.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/FollowMainCamera.cs",
+      "survivors": 1,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 7,
+          "recovered": "base.transform.position = Camera.main.transform.position;",
+          "ours": "base.transform.position = camera.transform.position;",
+          "similarity": 0.94
+        }
+      ]
+    },
+    "ForceRenderQueue.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/ForceRenderQueue.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ForceRenderQueue.cs",
+      "survivors": 1,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 10,
+          "recovered": "GetComponent<Renderer>().material.renderQueue = queue;",
+          "ours": "GetComponent<Renderer>().sharedMaterial.renderQueue = queue;",
+          "similarity": 0.93
+        }
+      ]
+    },
+    "GraphNode.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/GraphNode.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/GraphNode.cs",
+      "survivors": 1,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 114,
+          "recovered": "flags = (flags & 0xFFFFFF) | (value << 24);",
+          "ours": "flags = (flags & 0xFFFFFFu) | (value << 24);",
+          "similarity": 0.99
+        }
+      ]
+    },
+    "Hitbox.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Hitbox.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Hitbox.cs",
+      "survivors": 1,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 29,
+          "recovered": "return parent.Damage(20f, 200f, false, position, r.velocity.normalized, r.velocity * r.mass * 0.01f);",
+          "ours": "return parent.Damage(20f, 200f, false, position, r.linearVelocity.normalized, r.linearVelocity * r.mass * 0.01f);",
+          "similarity": 0.92
+        }
+      ]
+    },
+    "MultiTargetPath.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/MultiTargetPath.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/MultiTargetPath.cs",
+      "survivors": 1,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 515,
+          "recovered": "if (base.CompleteState != PathCompleteState.NotCalculated)",
+          "ours": "while (base.CompleteState == PathCompleteState.NotCalculated)",
+          "similarity": 0.94
+        }
+      ]
+    },
+    "PathNode.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/PathNode.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/PathNode.cs",
+      "survivors": 1,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 31,
+          "recovered": "return flags & 0xFFFFFFF;",
+          "ours": "return flags & 0xFFFFFFFu;",
+          "similarity": 0.98
+        }
+      ]
+    },
+    "RichFunnel.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/RichFunnel.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/RichFunnel.cs",
+      "survivors": 1,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 85,
+          "recovered": "if (raycastableGraph != null && funnelSimplificationMode != FunnelSimplification.None)",
+          "ours": "if (raycastableGraph != null && funnelSimplificationMode != 0)",
+          "similarity": 0.82
+        }
+      ]
+    },
+    "Seat.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Seat.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Seat.cs",
+      "survivors": 1,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 84,
+          "recovered": "public bool CanUseWeapon()",
+          "ours": "public bool CanUseCarriedWeapon()",
+          "similarity": 0.88
+        }
+      ]
+    },
+    "SpectatorCamera.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/SpectatorCamera.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/SpectatorCamera.cs",
+      "survivors": 1,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 60,
+          "recovered": "Application.CaptureScreenshot(\"screenshot.png\", 3);",
+          "ours": "ScreenCapture.CaptureScreenshot(screenshotName);",
+          "similarity": 0.67
+        }
+      ]
+    },
+    "Tank.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Tank.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Tank.cs",
+      "survivors": 1,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 86,
+          "recovered": "Vector2 vector = Driver().controller.CarInput();",
+          "ours": "Vector2 vector = Vehicle.Clamp2(Driver().controller.CarInput());",
+          "similarity": 0.86
+        }
+      ]
+    },
+    "ThrowableWeapon.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/ThrowableWeapon.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ThrowableWeapon.cs",
+      "survivors": 1,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 19,
+          "recovered": "if (animator != null)",
+          "ours": "else if (animator != null)",
+          "similarity": 0.89
+        }
+      ]
+    },
+    "WeaponManager.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/WeaponManager.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/WeaponManager.cs",
+      "survivors": 1,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 126,
+          "recovered": "if (Input.GetKeyDown((int)secretSequence[sequenceIndex] + (int)secretSequence2[sequenceIndex] - secretSequence[18]))",
+          "ours": "if (Input.GetKeyDown(secretSequence[sequenceIndex] + (int)secretSequence2[sequenceIndex] - (int)secretSequence[M22S7_HASH_INDEXER]))",
+          "similarity": 0.91
+        }
+      ]
+    },
+    "WeaponPhotoShoot.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/WeaponPhotoShoot.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/WeaponPhotoShoot.cs",
+      "survivors": 1,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 42,
+          "recovered": "transform.FindChild(\"Arms\").GetComponent<Renderer>().enabled = false;",
+          "ours": "transform.Find(\"Arms\").GetComponent<Renderer>().enabled = false;",
+          "similarity": 0.96
+        }
+      ]
+    }
+  }
+}
