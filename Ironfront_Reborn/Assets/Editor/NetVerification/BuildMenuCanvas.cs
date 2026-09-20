@@ -172,7 +172,7 @@ namespace Ironfront.Net.Unity.EditorTools
             GameObject practice = BuildPractice(root, controller, toast, out Button practiceBack);
             GameObject settings = BuildSettings(root, controller, toast, out Button settingsBack);
             GameObject authenticating = BuildAuthenticating(root);
-            GameObject lobby = BuildLobby(root, out Text signedIn, out Button browseRooms);
+            GameObject lobby = BuildLobby(root, controller, toast, out Text signedIn, out Button browseRooms);
             GameObject browser = BuildRoomBrowser(root, controller, toast, log);
             GameObject createRoom = BuildCreateRoom(root, controller, toast, log);
             GameObject roomLobby = BuildRoomLobby(root, controller, toast, log);
@@ -429,6 +429,12 @@ namespace Ironfront.Net.Unity.EditorTools
             SetVerticalNavigation(username, password, reveal, remember, forgot, logIn, create, back);
             ConfigureKeyboard(panel,
                 new Selectable[] { username, password, reveal, remember, forgot, logIn, create, back }, logIn, back);
+
+            // Forgot password is an announce-only control, so it goes to the shared development
+            // notice and NOT to MenuLoginScreen: the screen used to carry a second, parallel way to
+            // say the same sentence, and Awake() only wired it when the field was non-null, so a
+            // builder that left it null made that whole path unreachable while still compiling.
+            // One owner for the announcement; MenuDevelopmentControls is it.
             panel.AddComponent<MenuDevelopmentControls>().Configure(toast, forgot);
 
             MenuLoginScreen screen = panel.AddComponent<MenuLoginScreen>();
@@ -439,7 +445,6 @@ namespace Ironfront.Net.Unity.EditorTools
             Assign(so, "_logInButton", logIn);
             Assign(so, "_createAccountButton", create);
             Assign(so, "_rememberMeToggle", remember);
-            Assign(so, "_forgotPasswordButton", null);
             Assign(so, "_backButton", back);
             Assign(so, "_errorText", error);
             so.ApplyModifiedPropertiesWithoutUndo();
@@ -503,25 +508,86 @@ namespace Ironfront.Net.Unity.EditorTools
             return panel;
         }
 
+        /// <summary>
+        /// The round trip to the master, dressed with the same pack as the two screens it sits
+        /// between.
+        /// </summary>
+        /// <remarks>
+        /// <b>It was a flat backdrop with one line on it, and the pack has no authenticating page
+        /// to copy.</b> That is why it was passed over when the other eight screens were rebuilt:
+        /// nothing in <c>ui-pack/previews/</c> corresponds to it. But it is the screen the player
+        /// is looking at the instant they press LOG IN, so an unstyled rectangle between Sign In
+        /// and the signed-in screen reads as the menu having fallen over rather than as a screen
+        /// that is waiting. The copy and its position are unchanged; what is added is the auth
+        /// background, the wordmark and the glass panel the auth screens already use.
+        /// </remarks>
         private static GameObject BuildAuthenticating(GameObject root)
         {
-            GameObject panel = Panel(root, "Authenticating");
+            GameObject panel = Panel(root, "Authenticating", opaque: false);
+            FullscreenSprite(panel, "Background", "backgrounds/auth.png");
+            FullscreenTint(panel, "AuthVignette", new Color(3f / 255f, 9f / 255f, 16f / 255f, 0.30f));
+            Icon(panel, "Logo", "branding/ironfront-reborn-logo.png",
+                new Vector2(-660f, 440f), new Vector2(300f, 82f));
+            Angular(panel, "GlassPanel", Vector2.zero, new Vector2(700f, 300f), CutCard, Surface);
+
             Label(panel, "Message", "Signing in...", 44, Vector2.zero, new Vector2(700f, 90f));
             return panel;
         }
 
-        private static GameObject BuildLobby(GameObject root, out Text signedIn, out Button browseRooms)
+        /// <summary>
+        /// The signed-in screen: who you are, and the one way on.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Drawn with the multiplayer half's chrome, because that is where it sits.</b> It is
+        /// the screen between authentication and the room browser, and it is also where a match
+        /// ends: <c>InMatch -&gt; Lobby</c> on a disconnect and <c>MatchEnd -&gt; Lobby</c> after
+        /// the scoreboard. So it belongs with Practice, Settings, Rooms, Create Room and Waiting
+        /// Room -- the five that take the multiplayer background and the shared top bar -- rather
+        /// than with the two auth screens on the other side of the login round trip.
+        /// </para>
+        /// <para>
+        /// <b>The pack has no lobby page, and that is a deliberate gap rather than a missing
+        /// file.</b> <c>ui-pack/js/app.js</c> sends a successful sign-in straight to
+        /// <c>rooms</c>, so the prototype has no step here at all. The step exists in this client
+        /// because the phase-03 transition table has the state and because a match returns to it,
+        /// so what this screen can do that the prototype could not is reuse the prototype's own
+        /// components instead of inventing new ones.
+        /// </para>
+        /// </remarks>
+        private static GameObject BuildLobby(
+            GameObject root, MenuScreenController controller, MenuToast toast,
+            out Text signedIn, out Button browseRooms)
         {
-            GameObject panel = Panel(root, "Lobby");
+            GameObject panel = Panel(root, "Lobby", opaque: false);
+            FullscreenSprite(panel, "Background", "backgrounds/multiplayer.png");
+            MultiplayerShade(panel);
+            PackPanel(panel, "OperationsPanel", new Vector2(0f, -30f), new Vector2(1540f, 870f));
 
-            Label(panel, "Heading", "SIGNED IN", 48, new Vector2(0f, 160f), new Vector2(700f, 70f));
-            signedIn = Label(panel, "SignedIn", string.Empty, 34, new Vector2(0f, 60f), new Vector2(900f, 70f));
+            // LOBBY is the current section and is drawn as a label rather than a control. MAIN MENU
+            // is a real link and the only one offered: the flow table has no edge from this half
+            // back to LoginScreen, so a player who wants out of the signed-in state has nothing
+            // else to press. ROOMS is deliberately absent -- that is what the button below is.
+            TopBar(panel, controller, toast, "LOBBY", "SIGNED IN", "MASTER SERVER", offline: false,
+                ("MAIN MENU", MenuNavigationAction.MainMenu));
+
+            // Centred in the operations panel rather than hung under its top edge the way Practice
+            // and Rooms hang theirs: those two fill the panel downward with a map card and a room
+            // table, and this screen has three lines and one button. Three lines pinned to the top
+            // of an 870px panel is 400px of empty box below them, which reads as a layout that
+            // failed rather than as a screen with nothing else to say.
+            Label(panel, "Kicker", "OPERATIONS // SIGNED IN", 11,
+                new Vector2(0f, 84f), new Vector2(700f, 22f)).color = CyanSoft;
+            Label(panel, "Heading", "SIGNED IN", 42, new Vector2(0f, 32f), new Vector2(700f, 62f));
+            signedIn = Label(panel, "SignedIn", string.Empty, 20,
+                new Vector2(0f, -24f), new Vector2(900f, 34f));
+            signedIn.color = Hex("8DA8BA");
 
             // P16 3.2: the one edge out of Lobby the transition table has. Before this button the
             // signed-in screen was terminal for anyone not pressing Shift+F2, which is F2 in the
             // player-facing audit -- an account you can make and then do nothing with.
-            browseRooms = MakeButton(
-                panel, "BrowseRooms", "BROWSE ROOMS", new Vector2(0f, -50f), new Vector2(460f, 84f));
+            browseRooms = PackButton(panel, "BrowseRooms", "BROWSE ROOMS", new Vector2(0f, -117f),
+                new Vector2(460f, 76f), "primary", "icons/users.png");
 
             return panel;
         }
