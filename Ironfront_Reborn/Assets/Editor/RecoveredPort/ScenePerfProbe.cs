@@ -59,8 +59,8 @@ namespace Ironfront.Tools.RecoveredPort
         static int _poseStartFrame;
         static Camera _camera;
         static Bounds _bounds;
-        static List<Sample> _samples;
-        static List<PoseResult> _poses;
+        static List<FrameSample> _samples;
+        static List<PosePerfResult> _poses;
         static int _staticBatchedRenderers;
         static int _totalRenderers;
 
@@ -137,7 +137,7 @@ namespace Ironfront.Tools.RecoveredPort
                 _pose = -1;
                 _camera = null;
                 _samples = null;
-                _poses = new List<PoseResult>(Poses);
+                _poses = new List<PosePerfResult>(Poses);
                 _staticBatchedRenderers = -1;
                 _totalRenderers = 0;
                 EditorApplication.update -= Sampler;
@@ -174,7 +174,7 @@ namespace Ironfront.Tools.RecoveredPort
             var inPose = Time.frameCount - _poseStartFrame;
             if (inPose < WarmupFramesPerPose) return;
 
-            _samples.Add(new Sample
+            _samples.Add(new FrameSample
             {
                 batches = UnityStats.batches,
                 drawCalls = UnityStats.drawCalls,
@@ -208,7 +208,7 @@ namespace Ironfront.Tools.RecoveredPort
         {
             _pose = pose;
             _poseStartFrame = Time.frameCount;
-            _samples = new List<Sample>(SampleFramesPerPose);
+            _samples = new List<FrameSample>(SampleFramesPerPose);
             Place(_camera, _bounds, pose);
         }
 
@@ -317,9 +317,9 @@ namespace Ironfront.Tools.RecoveredPort
         /// number -- the spread is carried anyway so a wobble stays visible instead of averaged
         /// away, and a wobble is the tell that the pose was not actually pinned.
         /// </summary>
-        static PoseResult Summarise(int pose, Vector3 position, List<Sample> samples)
+        static PosePerfResult Summarise(int pose, Vector3 position, List<FrameSample> samples)
         {
-            var r = new PoseResult { pose = pose, position = position, sampleCount = samples.Count };
+            var r = new PosePerfResult { pose = pose, position = position, sampleCount = samples.Count };
             r.batches = Median(samples.Select(s => s.batches));
             r.drawCalls = Median(samples.Select(s => s.drawCalls));
             r.setPassCalls = Median(samples.Select(s => s.setPassCalls));
@@ -337,14 +337,14 @@ namespace Ironfront.Tools.RecoveredPort
             return r;
         }
 
-        static void WritePartial(string scene, List<PoseResult> poses)
+        static void WritePartial(string scene, List<PosePerfResult> poses)
         {
-            var result = new SceneResult
+            var result = new ScenePerfResult
             {
                 scene = scene,
                 renderers = _totalRenderers,
                 staticBatchedRenderers = _staticBatchedRenderers,
-                poses = poses ?? new List<PoseResult>()
+                poses = poses ?? new List<PosePerfResult>()
             };
             result.Tally();
 
@@ -357,13 +357,13 @@ namespace Ironfront.Tools.RecoveredPort
         static void Finish()
         {
             var label = SessionState.GetString(LabelKey, "run");
-            var doc = new ProbeDoc { label = label, unityVersion = Application.unityVersion, measuredAtUtc = DateTime.UtcNow.ToString("o") };
+            var doc = new ScenePerfDoc { label = label, unityVersion = Application.unityVersion, measuredAtUtc = DateTime.UtcNow.ToString("o") };
 
             foreach (var scene in RestoreStaticFlags.Scenes)
             {
                 var partial = PartialPath(scene);
                 if (!File.Exists(partial)) { Debug.LogWarning("[scene-perf] no samples for " + scene); continue; }
-                doc.scenes.Add(JsonUtility.FromJson<SceneResult>(File.ReadAllText(partial)));
+                doc.scenes.Add(JsonUtility.FromJson<ScenePerfResult>(File.ReadAllText(partial)));
                 File.Delete(partial);
             }
 
@@ -383,14 +383,14 @@ namespace Ironfront.Tools.RecoveredPort
 
         // --------------------------------------------------------------------------- data types
 
-        struct Sample
+        struct FrameSample
         {
             public int batches, drawCalls, setPassCalls, staticBatched, dynamicBatched, triangles, vertices;
             public float frameMs;
         }
 
         [Serializable]
-        public class PoseResult
+        public class PosePerfResult
         {
             public int pose;
             public Vector3 position;
@@ -410,7 +410,7 @@ namespace Ironfront.Tools.RecoveredPort
         }
 
         [Serializable]
-        public class SceneResult
+        public class ScenePerfResult
         {
             public string scene;
             public int renderers;
@@ -421,7 +421,7 @@ namespace Ironfront.Tools.RecoveredPort
             public int triangles;
             public double frameMsMean;
             public double frameMsP99;
-            public List<PoseResult> poses = new List<PoseResult>();
+            public List<PosePerfResult> poses = new List<PosePerfResult>();
 
             public void Tally()
             {
@@ -443,14 +443,14 @@ namespace Ironfront.Tools.RecoveredPort
         }
 
         [Serializable]
-        public class ProbeDoc
+        public class ScenePerfDoc
         {
             public string generatedBy = "Ironfront/Recovered Port/Measure Scene Perf -- Assets/Editor/RecoveredPort/ScenePerfProbe.cs";
             public string note = "Play Mode sample from the one camera the scene enables on load. Counts are exact for that view; they are not whole-scene totals.";
             public string label;
             public string unityVersion;
             public string measuredAtUtc;
-            public List<SceneResult> scenes = new List<SceneResult>();
+            public List<ScenePerfResult> scenes = new List<ScenePerfResult>();
         }
     }
 }

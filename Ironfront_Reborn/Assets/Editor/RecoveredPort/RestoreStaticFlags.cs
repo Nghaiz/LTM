@@ -90,14 +90,14 @@ namespace Ironfront.Tools.RecoveredPort
 
         // ---------------------------------------------------------------------------- the work
 
-        public static Report Restore(string sceneName, bool apply)
+        public static RestoreReport Restore(string sceneName, bool apply)
         {
             var root = RepoRoot();
             var sourcePath = Path.Combine(root, "tools/recovered/static-flags." + sceneName + ".json");
             if (!File.Exists(sourcePath))
                 throw new FileNotFoundException("no recovered baseline at " + sourcePath);
 
-            var doc = JsonUtility.FromJson<SourceDoc>(File.ReadAllText(sourcePath));
+            var doc = JsonUtility.FromJson<RecoveredDoc>(File.ReadAllText(sourcePath));
             if (doc == null || doc.entries == null || doc.entries.Length == 0)
                 throw new InvalidDataException(sourcePath + " parsed to no entries");
 
@@ -106,23 +106,23 @@ namespace Ironfront.Tools.RecoveredPort
             if (!scene.IsValid()) throw new InvalidOperationException("could not open " + scenePath);
 
             var candidates = Enumerate(scene);
-            var byName = new Dictionary<string, List<Candidate>>(StringComparer.Ordinal);
+            var byName = new Dictionary<string, List<SceneCandidate>>(StringComparer.Ordinal);
             foreach (var c in candidates)
             {
-                List<Candidate> bucket;
-                if (!byName.TryGetValue(c.Name, out bucket)) byName[c.Name] = bucket = new List<Candidate>();
+                List<SceneCandidate> bucket;
+                if (!byName.TryGetValue(c.Name, out bucket)) byName[c.Name] = bucket = new List<SceneCandidate>();
                 bucket.Add(c);
             }
 
-            var report = new Report { scene = sceneName, scenePath = scenePath, applied = apply, sourceCount = doc.entries.Length, sceneObjects = candidates.Count };
-            var claimed = new HashSet<Candidate>();
-            var matched = new List<KeyValuePair<SourceEntry, Match>>();
-            var unplacedAfterStage1 = new List<SourceEntry>();
+            var report = new RestoreReport { scene = sceneName, scenePath = scenePath, applied = apply, sourceCount = doc.entries.Length, sceneObjects = candidates.Count };
+            var claimed = new HashSet<SceneCandidate>();
+            var matched = new List<KeyValuePair<RecoveredEntry, Placement>>();
+            var unplacedAfterStage1 = new List<RecoveredEntry>();
 
             // --- stage 1: (name, position rounded to 2 dp), path as tie-break -----------------
             foreach (var e in doc.entries)
             {
-                List<Candidate> bucket;
+                List<SceneCandidate> bucket;
                 if (!byName.TryGetValue(e.name, out bucket)) { unplacedAfterStage1.Add(e); continue; }
 
                 var pool = bucket.Where(c => !claimed.Contains(c) && SamePosition(c.LocalPosition, e.localPos)).ToList();
@@ -134,18 +134,18 @@ namespace Ironfront.Tools.RecoveredPort
                     string how;
                     var single = NarrowByPath(pool, e.path, out how);
                     if (single == null) { report.ambiguous.Add(Ambiguity(e, pool, "stage1")); continue; }
-                    pool = new List<Candidate> { single };
+                    pool = new List<SceneCandidate> { single };
                     stage = "name+pos+" + how;
                 }
 
                 claimed.Add(pool[0]);
-                matched.Add(new KeyValuePair<SourceEntry, Match>(e, new Match { Candidate = pool[0], Stage = stage }));
+                matched.Add(new KeyValuePair<RecoveredEntry, Placement>(e, new Placement { Target = pool[0], Stage = stage }));
             }
 
             // --- stage 2: name alone, over what stage 1 could not place -----------------------
             foreach (var e in unplacedAfterStage1)
             {
-                List<Candidate> bucket;
+                List<SceneCandidate> bucket;
                 if (!byName.TryGetValue(e.name, out bucket)) { report.absent.Add(Describe(e)); continue; }
 
                 var pool = bucket.Where(c => !claimed.Contains(c)).ToList();
@@ -157,12 +157,12 @@ namespace Ironfront.Tools.RecoveredPort
                     string how;
                     var single = NarrowByPath(pool, e.path, out how);
                     if (single == null) { report.ambiguous.Add(Ambiguity(e, pool, "stage2")); continue; }
-                    pool = new List<Candidate> { single };
+                    pool = new List<SceneCandidate> { single };
                     stage = "name+" + how;
                 }
 
                 claimed.Add(pool[0]);
-                matched.Add(new KeyValuePair<SourceEntry, Match>(e, new Match { Candidate = pool[0], Stage = stage }));
+                matched.Add(new KeyValuePair<RecoveredEntry, Placement>(e, new Placement { Target = pool[0], Stage = stage }));
             }
 
             // --- guard, then apply -----------------------------------------------------------
@@ -171,12 +171,12 @@ namespace Ironfront.Tools.RecoveredPort
             foreach (var pair in matched)
             {
                 var e = pair.Key;
-                var go = pair.Value.Candidate.GameObject;
+                var go = pair.Value.Target.GameObject;
 
                 var reason = GuardReason(go);
                 if (reason != null)
                 {
-                    report.guarded.Add(new GuardRecord { path = pair.Value.Candidate.Path, name = e.name, reason = reason });
+                    report.guarded.Add(new GuardSkipRecord { path = pair.Value.Target.Path, name = e.name, reason = reason });
                     continue;
                 }
 
@@ -193,10 +193,10 @@ namespace Ironfront.Tools.RecoveredPort
                 }
 
                 appliedTargets.Add(go);
-                report.entries.Add(new AppliedRecord
+                report.entries.Add(new AppliedFlagRecord
                 {
                     gid = GlobalObjectId.GetGlobalObjectIdSlow(go).ToString(),
-                    path = pair.Value.Candidate.Path,
+                    path = pair.Value.Target.Path,
                     name = e.name,
                     parentPath = e.parentPath,
                     siblingIndex = go.transform.GetSiblingIndex(),
@@ -212,7 +212,7 @@ namespace Ironfront.Tools.RecoveredPort
             {
                 if (appliedTargets.Contains(c.GameObject)) continue;
                 if ((GameObjectUtility.GetStaticEditorFlags(c.GameObject) & StaticEditorFlags.BatchingStatic) == 0) continue;
-                report.preexisting.Add(new AppliedRecord
+                report.preexisting.Add(new AppliedFlagRecord
                 {
                     gid = GlobalObjectId.GetGlobalObjectIdSlow(c.GameObject).ToString(),
                     path = c.Path,
@@ -331,7 +331,7 @@ namespace Ironfront.Tools.RecoveredPort
         /// thing that tells them apart -- and it tells them apart exactly, which is why this is
         /// a tie-break rather than a guess. Where two candidates share the tail we still bail.
         /// </summary>
-        static Candidate NarrowByPath(List<Candidate> pool, string entryPath, out string how)
+        static SceneCandidate NarrowByPath(List<SceneCandidate> pool, string entryPath, out string how)
         {
             how = null;
             if (string.IsNullOrEmpty(entryPath)) return null;
@@ -350,17 +350,17 @@ namespace Ironfront.Tools.RecoveredPort
             return null;
         }
 
-        static List<Candidate> Enumerate(Scene scene)
+        static List<SceneCandidate> Enumerate(Scene scene)
         {
-            var list = new List<Candidate>();
+            var list = new List<SceneCandidate>();
             foreach (var root in scene.GetRootGameObjects()) Walk(root.transform, string.Empty, list);
             return list;
         }
 
-        static void Walk(Transform t, string parentPath, List<Candidate> into)
+        static void Walk(Transform t, string parentPath, List<SceneCandidate> into)
         {
             var path = parentPath.Length == 0 ? t.name : parentPath + "/" + t.name;
-            into.Add(new Candidate { GameObject = t.gameObject, Name = t.name, Path = path, LocalPosition = t.localPosition });
+            into.Add(new SceneCandidate { GameObject = t.gameObject, Name = t.name, Path = path, LocalPosition = t.localPosition });
             for (var i = 0; i < t.childCount; i++) Walk(t.GetChild(i), path, into);
         }
 
@@ -370,16 +370,16 @@ namespace Ironfront.Tools.RecoveredPort
             return i < 0 ? string.Empty : path.Substring(0, i);
         }
 
-        static MissRecord Describe(SourceEntry e)
+        static UnplacedRecord Describe(RecoveredEntry e)
         {
-            return new MissRecord { name = e.name, parentPath = e.parentPath, path = e.path, detail = "no object of this name left unclaimed in the scene" };
+            return new UnplacedRecord { name = e.name, parentPath = e.parentPath, path = e.path, detail = "no object of this name left unclaimed in the scene" };
         }
 
-        static MissRecord Ambiguity(SourceEntry e, List<Candidate> pool, string stage)
+        static UnplacedRecord Ambiguity(RecoveredEntry e, List<SceneCandidate> pool, string stage)
         {
             var sample = string.Join(", ", pool.Take(3).Select(c => "'" + c.Path + "'").ToArray());
             if (pool.Count > 3) sample += ", ...";
-            return new MissRecord
+            return new UnplacedRecord
             {
                 name = e.name,
                 parentPath = e.parentPath,
@@ -388,7 +388,7 @@ namespace Ironfront.Tools.RecoveredPort
             };
         }
 
-        static void WriteReport(string path, Report report)
+        static void WriteReport(string path, RestoreReport report)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path));
             File.WriteAllText(path, JsonUtility.ToJson(report, true).Replace("\r\n", "\n") + "\n");
@@ -396,7 +396,7 @@ namespace Ironfront.Tools.RecoveredPort
 
         // --------------------------------------------------------------------------- data types
 
-        class Candidate
+        class SceneCandidate
         {
             public GameObject GameObject;
             public string Name;
@@ -404,14 +404,14 @@ namespace Ironfront.Tools.RecoveredPort
             public Vector3 LocalPosition;
         }
 
-        struct Match
+        struct Placement
         {
-            public Candidate Candidate;
+            public SceneCandidate Target;
             public string Stage;
         }
 
         [Serializable]
-        public class SourceEntry
+        public class RecoveredEntry
         {
             public string name;
             public string parentPath;
@@ -422,15 +422,15 @@ namespace Ironfront.Tools.RecoveredPort
         }
 
         [Serializable]
-        public class SourceDoc
+        public class RecoveredDoc
         {
             public string scene;
             public int count;
-            public SourceEntry[] entries;
+            public RecoveredEntry[] entries;
         }
 
         [Serializable]
-        public class AppliedRecord
+        public class AppliedFlagRecord
         {
             public string gid;
             public string path;
@@ -443,7 +443,7 @@ namespace Ironfront.Tools.RecoveredPort
         }
 
         [Serializable]
-        public class MissRecord
+        public class UnplacedRecord
         {
             public string name;
             public string parentPath;
@@ -452,7 +452,7 @@ namespace Ironfront.Tools.RecoveredPort
         }
 
         [Serializable]
-        public class GuardRecord
+        public class GuardSkipRecord
         {
             public string path;
             public string name;
@@ -460,7 +460,7 @@ namespace Ironfront.Tools.RecoveredPort
         }
 
         [Serializable]
-        public class Report
+        public class RestoreReport
         {
             public string generatedBy = "Ironfront/Recovered Port/Restore Static Flags -- Assets/Editor/RecoveredPort/RestoreStaticFlags.cs";
             public string note = "Regenerate from the menu item. Do not hand-edit: StaticFlagsBaselineTests pins this file.";
@@ -480,11 +480,11 @@ namespace Ironfront.Tools.RecoveredPort
             public int absentCount;
             public int preexistingCount;
             public int withRenderer;
-            public List<AppliedRecord> entries = new List<AppliedRecord>();
-            public List<AppliedRecord> preexisting = new List<AppliedRecord>();
-            public List<GuardRecord> guarded = new List<GuardRecord>();
-            public List<MissRecord> ambiguous = new List<MissRecord>();
-            public List<MissRecord> absent = new List<MissRecord>();
+            public List<AppliedFlagRecord> entries = new List<AppliedFlagRecord>();
+            public List<AppliedFlagRecord> preexisting = new List<AppliedFlagRecord>();
+            public List<GuardSkipRecord> guarded = new List<GuardSkipRecord>();
+            public List<UnplacedRecord> ambiguous = new List<UnplacedRecord>();
+            public List<UnplacedRecord> absent = new List<UnplacedRecord>();
 
             public void Tally()
             {

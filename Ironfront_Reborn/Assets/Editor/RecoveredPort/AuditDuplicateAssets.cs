@@ -56,7 +56,7 @@ namespace Ironfront.Tools.RecoveredPort
 
         public static bool Audit()
         {
-            var doc = new AuditDoc { auditedAtUtc = DateTime.UtcNow.ToString("o"), unityVersion = Application.unityVersion };
+            var doc = new DuplicateAuditDoc { auditedAtUtc = DateTime.UtcNow.ToString("o"), unityVersion = Application.unityVersion };
 
             foreach (var pair in Folders)
             {
@@ -68,7 +68,7 @@ namespace Ironfront.Tools.RecoveredPort
                 {
                     var file = Path.GetFileName(dupPath);
                     var canonPath = canonDir + "/" + file;
-                    var record = new PairRecord
+                    var record = new DuplicatePairRecord
                     {
                         duplicate = dupPath,
                         canonical = canonPath,
@@ -316,7 +316,7 @@ namespace Ironfront.Tools.RecoveredPort
         // --------------------------------------------------------------------------- data types
 
         [Serializable]
-        public class PairRecord
+        public class DuplicatePairRecord
         {
             public string duplicate;
             public string canonical;
@@ -329,7 +329,7 @@ namespace Ironfront.Tools.RecoveredPort
         }
 
         [Serializable]
-        public class AuditDoc
+        public class DuplicateAuditDoc
         {
             public string generatedBy = "Ironfront/Recovered Port/Audit Duplicate Assets -- Assets/Editor/RecoveredPort/AuditDuplicateAssets.cs";
             public string note = "Verdicts are the engine's view, not a byte comparison. tools/dedupe_assets.py merges only 'identical' pairs.";
@@ -338,7 +338,7 @@ namespace Ironfront.Tools.RecoveredPort
             public int identical;
             public int differs;
             public int noCanonical;
-            public List<PairRecord> pairs = new List<PairRecord>();
+            public List<DuplicatePairRecord> pairs = new List<DuplicatePairRecord>();
 
             public void Tally()
             {
