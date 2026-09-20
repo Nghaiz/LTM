@@ -221,7 +221,11 @@ material and mesh pairs differ as text because the rips use different serializat
   settings are not (`serializedVersion` 4 vs 13, different `maxTextureSize`), so the imported
   textures differ. Choosing a winner is a visual decision, not a cleanup.
 - **`Images3` is referenced by nothing at all** — 16 files of dead weight.
-- **44 meshes are genuinely identical** by topology, bounds and geometry hash.
+- **44 meshes are genuinely identical** — same topology, same bounds, and the same hash over
+  every vertex stream. uv2 is in that hash deliberately: P23 just set LightmapStatic on 1 379
+  objects, so a "duplicate" that happened to lack lightmap UVs would break a bake silently, and
+  a hash that only covers position/normal/uv0 declares meshes identical on the strength of the
+  streams it chose to look at.
 
 ### The near-miss
 
@@ -263,7 +267,27 @@ build to begin with.
 This is repo hygiene: 61 fewer assets to mistake for the real one, and `Images3`'s several
 megabytes out of git. It is worth having and it is not a performance change.
 
-## 6. What is left for the owner
+## 6. Lane-B: nothing froze
+
+`run-lane-b.ps1 -Scene Dustbowl -Port 27115 -SpawnIndex '3,5'` against the rebuilt player, after
+both the flags and the merge. `passed: true`, no failures, no client lost its connection, all
+three finished their programme.
+
+| Client | checkpoints | path walked | scoreboard |
+|---|---|---|---|
+| driver | 29 | 4 916 m | 10 kills / 10 deaths |
+| observer-a | 31 | 3 620 m | 10 / 10 |
+| observer-b | 30 | 6 220 m | 10 / 10 |
+
+Path length is summed from each client's own `localActor` block rather than from `aim.distanceM`,
+which is known to freeze in these records. Kilometres of movement is well clear of the ~500 m the
+server drifts an idle body, and the checkpoint series (`approach`, `firing`, `killed`,
+`respawn-window`, `scoreboard`) is a real engagement, not a spawn that stood still.
+
+This is the weaker half of the freeze evidence. The stronger half is §4: the player build is
+byte-identical with the flags and without, so there is nothing in it that *could* have frozen.
+
+## 7. What is left for the owner
 
 Per the plan's §7.4 and the 2026-09-20 ruling, there is no hard perf threshold and the verdict is
 the owner's from the numbers plus a playtest. The numbers say the flags changed no rendering count
