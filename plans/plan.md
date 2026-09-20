@@ -148,7 +148,7 @@ and whose bodies do not animate cannot be graded by eye.
 | **P22** | [Cứu bản chuẩn khôi phục vào repo](phases/phase-p22-recovered-ground-truth.md) | 191 MB ground truth nằm trong `tmp/` (gitignore) — trích ra trước khi mất | S |
 | **P23** | [Trả lại cờ static, và gộp asset trùng](phases/phase-p23-static-batching.md) | 1 441 cờ static bị xoá khi nâng engine; 7 thư mục asset trùng | M |
 | **P24** | [A\* pathfinding: điều tra nguồn frame-hitch](phases/phase-p24-astar-hitch.md) | 395 dòng lệch trong 6 file A\* mà không tài liệu nào nhắc | S–L |
-| **P25** | [Ragdoll: hiệu chỉnh joint drive cho PhysX 4](phases/phase-p25-ragdoll-drive.md) | `JointDriveMode.Position` — API Unity 5.5 xoá, cảm giác điều khiển đi qua đúng dòng đó | L |
+| **P25** | [Ragdoll: hiệu chỉnh joint drive cho PhysX 4](phases/phase-p25-ragdoll-drive.md) | `JointDriveMode.Position` — API Unity 5.5 xoá, cảm giác điều khiển đi qua đúng dòng đó; đo bằng DLL thay vào bản ship | L |
 | **P26** | [Shader đúng, và phần hình học Dustbowl bị mất](phases/phase-p26-visual-fidelity.md) | 71 material trỏ shader dummy; 122 GameObject mất; 241 cờ static còn treo | L |
 | **P27** | [98 file lệch: cái nào cố ý, cái nào là mất mát](phases/phase-p27-logic-triage.md) | phân loại (a) netcode / (b) migration / (c) mất mát / (d) vô nghĩa | L+ |
 
@@ -259,6 +259,9 @@ Brainstorm đầy đủ: [`reports/2026-09-20-recovered-ravenfield-port-back-bra
 3. **Không có ngưỡng perf cứng.** P23 báo số; chủ dự án phán từ bảng số + lần chơi thử. Không thêm
    gate perf vào `ci.ps1`.
 4. **Không Plane, không artifact ngoài.** Dự án nội bộ cá nhân; kế hoạch chỉ sống trong `plans/`.
+5. **Không cài Unity 5.4.0f3.** P25 đo ragdoll bằng cách thay `Assembly-CSharp.dll` recompile vào
+   một bản sao `Ravenfield.exe` — build Mono nên DLL thay được, và như thế đo được chính game
+   gốc thay vì một bản tái dựng trong Editor.
 
 
 ## 5. Standing rules

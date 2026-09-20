@@ -4,7 +4,7 @@
 - **Base:** `develop`. **Track:** [`../plan.md`](../plan.md) §4.2.
 - **Nguồn:** [`../reports/2026-09-20-recovered-ravenfield-port-back-brainstorm.md`](../reports/2026-09-20-recovered-ravenfield-port-back-brainstorm.md)
 - **Kind:** gameplay feel. Sửa tham số, **không** sửa kiến trúc.
-- **Điều kiện tiên quyết:** cài Unity 5.4.0f3 làm máy đo — xem §4.
+- **Điều kiện tiên quyết:** qua được cổng khả thi §4.3 (thay DLL vào bản ship). **Không cài Unity 5.4** — chốt 2026-09-20.
 
 ---
 
@@ -55,45 +55,65 @@ rigidbody phân kỳ giữa hai phía). **Không được hoàn tác nó.**
 Nhưng nghĩa là ragdoll đang chịu **hai** thay đổi so với bản gốc. Hiệu chỉnh mù sẽ gộp cả hai vào
 một bộ tham số và không ai biết cái nào gây ra cái gì. Quy trình ở §5 tách chúng ra.
 
-## 4. Máy đo — cài Unity 5.4.0f3
+## 4. Máy đo — thay DLL vào chính bản ship
 
-Ravenfield.exe gốc ở `tmp/Ravenfield/Ravenfield.exe` **chạy được nhưng là build đóng** — không đo
-số từ bên trong được. Chủ dự án đã chọn cài đúng bản Unity đó để mở `tmp/recovered/` và chạy
-harness đo thật.
+`tmp/Ravenfield/Ravenfield.exe` chạy được, và là build **Mono chứ không phải IL2CPP**, nên toàn bộ
+code game nằm trong một managed DLL **thay được**:
 
-### Tải về
+| File | Kích thước | Ngày |
+|---|---|---|
+| `tmp/Ravenfield/Ravenfield_Data/Managed/Assembly-CSharp.dll` | 1 143 808 B | 2016-12-09 — bản ship |
+| `tmp/recovered/build/Assembly-CSharp.dll` | 1 121 792 B | recompile từ source khôi phục |
 
-Đường dẫn đã kiểm chứng ngày 2026-09-20 (HTTP 200, 374 MB):
+Source khôi phục **đã biên dịch ra được DLL thay thế**, và đã được diff với bản gốc ở mức IL
+metadata: 5 631/5 631 method khớp, phần chênh còn lại là artefact của compiler (tên
+iterator/lambda-cache, 4 `.cctor` rỗng). Chênh 22 KB là do đó, không phải do thiếu logic.
 
-```
-https://download.unity3d.com/download_unity/a6d8d714de6f/Windows64EditorInstaller/UnitySetup64.exe
-```
+Nên đường đo là: thêm code ghi log vào `ActiveRaggy`/`Actor` trong source khôi phục → biên dịch lại
+`Assembly-CSharp.dll` → thả vào `Managed/` của một **bản sao** Ravenfield → chạy → đọc log.
 
-`a6d8d714de6f` là revision của **5.4.0f3**, đúng bản build ra game gốc
-(`tmp/recovered/UnityProject/ExportedProject/ProjectSettings/ProjectVersion.txt`:
-`m_EditorVersion: 5.4.0f3`).
+Cách này đo **chính game gốc đang chạy**, không phải một bản tái dựng. Đó là bằng chứng mạnh hơn mở
+project khôi phục trong Editor, vì project khôi phục là tái tạo còn `Ravenfield.exe` là bản thật.
 
-**Cẩn thận:** revision `c6df7519ab13` là **5.4.0f1**, không phải f3. Trang
-`unity.com/releases/editor/whats-new/5.4.0` trỏ vào f1; trang đúng là
-`unity.com/releases/editor/whats-new/5.4.0f3`. Cài nhầm f1 thì project vẫn mở nhưng đó không còn là
-bản chuẩn nữa.
+### 4.1 Không cài Unity 5.4.0f3 — đã chốt
 
-### Những điều cần biết trước khi cài
+Chủ dự án quyết định 2026-09-20: **không cài thêm Editor 5.4**. Không cần: biên dịch
+`Assembly-CSharp.dll` chỉ cần một C# compiler tham chiếu đúng bộ DLL của bản ship —
+`tmp/Ravenfield/Ravenfield_Data/Managed/UnityEngine.dll` (2016-07-27) và các DLL cạnh nó.
+`tmp/recovered/src/` đã có sẵn `.csproj`. csc, msbuild hoặc mono đều làm được.
 
-- **Unity Hub không cài được 5.x.** Phải chạy installer độc lập ở trên. Nó cài song song, không
-  đụng gì tới Unity 6000.3.21f1 ở `D:\UnityEditor\6000.3.21f1`.
-- Chỉ cần Editor. Không cần component build target nào — phase này chỉ chạy trong Editor.
-- Unity 5.4 Personal cần kích hoạt license. Nếu máy chủ kích hoạt cho bản cũ không còn phục vụ,
-  **dừng và báo** — đừng tìm đường lách. Khi đó quay lại chọn phương án đo bằng video từ
-  `Ravenfield.exe`, chấp nhận độ chính xác thấp hơn.
-- Mở `tmp/recovered/UnityProject/ExportedProject/` bằng bản 5.4 này. **Chỉ để đo.** Không sửa,
-  không commit gì từ đó.
+Nếu một phiên sau thấy mình sắp cài Unity 5.4, dừng lại và hỏi — đó là mở lại một quyết định đã
+chốt, không phải một bước kỹ thuật.
+
+### 4.2 Log ghi ra file
+
+Build ship không có console. Mọi đo đạc ghi thẳng ra file cạnh `Ravenfield.exe`, ví dụ
+`ragdoll-probe.csv`, một dòng một mẫu. Đừng dựa vào `Debug.Log` — `output_log.txt` của Unity 5.4 có
+giới hạn và trộn lẫn log engine.
+
+### 4.3 Cổng khả thi — làm TRƯỚC khi viết code đo
+
+**Không thêm một dòng code đo nào trước khi qua cổng này.**
+
+1. **Chép cả thư mục `tmp/Ravenfield/` sang chỗ khác.** Mọi thử nghiệm chạy trên bản sao. Bản gốc
+   không đụng tới — nó là chuẩn đối chiếu cuối cùng, hỏng là mất.
+2. Thả `tmp/recovered/build/Assembly-CSharp.dll` **nguyên xi, chưa sửa gì** vào `Managed/` của bản
+   sao. Chạy. Game phải mở được, vào trận được, ragdoll ngã như thường.
+   Đây là **phép thử nền**: chứng minh DLL recompile thay được, trước khi thêm bất cứ thứ gì.
+   Cùng lúc đó thả luôn `Assembly-CSharp-firstpass.dll` — hai assembly phải khớp nhau.
+3. **Bước 2 hỏng** (không mở được, crash, hoặc hành vi khác đi): **dừng, báo chủ dự án.** Không tự
+   tìm đường vòng. Hai lựa chọn còn lại khi đó là quay video `Ravenfield.exe` rồi so từng khung
+   hình (chính xác thấp hơn, chấp nhận được), hoặc mở lại quyết định §4.1 — cả hai đều là quyết
+   định của chủ dự án, không phải của phiên làm việc.
+4. **Bước 2 chạy được**: thêm code đo, biên dịch lại, đo. Giữ lại DLL nguyên xi ở bước 2 để so —
+   nếu số đo trông lạ, chạy lại bản nguyên xi cho biết lỗi ở code đo hay ở game.
 
 ## 5. Quy trình — ba mốc, dừng sau ba vòng
 
 ### 5.1 Harness đo khách quan
 
-Cùng một bộ đo chạy được ở cả hai bên (Unity 5.4 + Unity 6), sinh ra số, không phải cảm nhận:
+Cùng một bộ đo chạy được ở cả hai bên — **bản ship Ravenfield** (qua DLL thay, §4) và **Ironfront
+trên Unity 6** — sinh ra số, không phải cảm nhận:
 
 | Chỉ số | Cách đo |
 |---|---|
@@ -106,11 +126,12 @@ Cùng một bộ đo chạy được ở cả hai bên (Unity 5.4 + Unity 6), si
 Kịch bản phải **tất định**: cùng vị trí xuất phát, cùng lực, cùng seed. Chạy nhiều lần lấy trung
 vị — ragdoll có nhiễu.
 
-### 5.2 Đo chuẩn (Unity 5.4 + bản gốc)
+### 5.2 Đo chuẩn (bản ship, DLL có code đo)
 
-Chạy harness trên `tmp/recovered/` → `tools/recovered/ragdoll-baseline.json`. **Commit file này.**
-Sau khi có nó, phase không còn phụ thuộc vào máy có Unity 5.4 nữa, và các phiên sau không phải cài
-lại.
+Chạy harness trên bản sao Ravenfield đã thay DLL → `tools/recovered/ragdoll-baseline.json`.
+**Commit file này.** Sau khi có nó, phase không còn phụ thuộc vào `tmp/` nữa và không phiên nào
+phải dựng lại máy đo. Commit kèm cả patch thêm code đo (`tools/recovered/ragdoll-probe.patch`) để
+lần sau đo lại được, cộng md5 của DLL đã dùng.
 
 ### 5.3 Tách biến
 
@@ -145,7 +166,9 @@ Số khớp không đảm bảo cảm giác khớp. Bước cuối là chủ d�
 
 ## 6. Nghiệm thu
 
-1. `tools/recovered/ragdoll-baseline.json` đã commit, sinh từ Unity 5.4.0f3 đúng bản.
+1. `tools/recovered/ragdoll-baseline.json` đã commit, sinh từ **bản ship** `Ravenfield.exe` đã
+   thay DLL — kèm patch code đo và md5 của DLL, để đo lại được.
+1b. Kết luận cổng §4.3 viết ra rõ ràng: DLL nguyên xi có thay được không, bằng chứng gì.
 2. Bảng số ba cột: bản gốc / Ironfront trước / Ironfront sau, cho cả 5 chỉ số §5.1.
 3. Bảng tách biến §5.3 — nói rõ bao nhiêu sai lệch thuộc PhysX 4, bao nhiêu thuộc 60 Hz.
 4. Tham số cuối cùng nằm trong code kèm remark giải thích **vì sao là con số đó**, dẫn tới baseline.
@@ -160,21 +183,22 @@ Số khớp không đảm bảo cảm giác khớp. Bước cuối là chủ d�
 |---|---|---|---|---|
 | Hiệu chỉnh không hội tụ, phase kéo dài vô hạn | 4 | 4 | **16** | Dừng cứng sau 3 vòng §5.4, quay lại hỏi chủ dự án |
 | Hoàn tác 60 Hz để "giống bản gốc" → tái sinh issue #123 | 3 | 5 | **15** | §3 nêu rõ; nghiệm thu §6.5 kiểm lại; 50 Hz chỉ dùng để đo, không commit |
-| Không kích hoạt được license Unity 5.4 | 3 | 4 | 12 | §4 nói dừng và báo; phương án dự phòng là đo bằng video |
+| DLL recompile không thay được vào bản ship → không có máy đo | 3 | 5 | **15** | Cổng §4.3 bước 2 trả lời trước khi viết code đo; hỏng thì dừng và báo, không tự tìm đường vòng |
+| Sửa nhầm `tmp/Ravenfield/` gốc → mất bản đối chiếu duy nhất | 2 | 5 | 10 | §4.3 bước 1: mọi thử nghiệm chạy trên bản sao |
 | Đo ragdoll nhiễu → số vô nghĩa | 3 | 4 | 12 | Kịch bản tất định, nhiều lần, lấy trung vị §5.1 |
 | Chỉnh drive làm ragdoll qua mạng phân kỳ giữa server và client | 2 | 5 | 10 | Lane-B verify §6.6; drive chạy cả hai phía nên tham số phải đồng nhất |
 
-Hai rủi ro ≥ 15 đều có cổng chặn viết sẵn.
+Ba rủi ro ≥ 15 đều có cổng chặn viết sẵn.
 
 ## 8. Timeline
 
 | Việc | Effort | Ghi chú |
 |---|---|---|
-| Cài Unity 5.4.0f3 + mở project khôi phục | S | Một lần duy nhất |
-| Harness đo, chạy được ở cả hai bên | M | Phần khó nhất; phải tất định |
+| Cổng khả thi §4.3 — chép bản sao, thay DLL nguyên xi, chạy | S | **Làm trước**; quyết định cả phần còn lại |
+| Code đo + biên dịch lại DLL + harness hai bên | M | Phần khó nhất; phải tất định |
 | Đo chuẩn + tách biến | S | |
 | Hiệu chỉnh (≤ 3 vòng) | M | Có thể không hội tụ — đã có cổng dừng |
-| **Tổng** | **L (~1 tuần)** | Phụ thuộc: [P22](phase-p22-recovered-ground-truth.md); cài được Unity 5.4 |
+| **Tổng** | **L (~1 tuần)** | Phụ thuộc: [P22](phase-p22-recovered-ground-truth.md); cổng §4.3 qua được |
 
 ## 9. Không thuộc phase này
 
