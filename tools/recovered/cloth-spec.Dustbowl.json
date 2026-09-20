@@ -1,0 +1,301 @@
+{
+ "provenance": {
+  "generatedBy": "tools/p26_cloth_spec.py",
+  "recoveredBuild": "tmp/recovered",
+  "scene": "Dustbowl",
+  "note": "Consumed by Assets/Editor/RecoveredPort/RestoreClothComponents.cs. Regenerate with `python tools/p26_cloth_spec.py`. Do not hand-edit."
+ },
+ "matchKey": {
+  "field": "ourFileId",
+  "why": "Scene-local file id. localPosition is NOT unique across these targets (all six sit at the same local offset under their own Flag Parent), so a position key collapses all six onto one object.",
+  "localPositionIsUnique": false
+ },
+ "summary": {
+  "recoveredFlagCloths": 6,
+  "targetsInOurScene": 6,
+  "targetsMissingCloth": 6,
+  "coefficientCount": 35,
+  "pinnedVertexIndices": [
+   12,
+   13,
+   29,
+   30,
+   31
+  ],
+  "islandNote": "Island kept all five of its own Cloth components and is not touched."
+ },
+ "settings": {
+  "scalars": [
+   {
+    "name": "m_StretchingStiffness",
+    "value": "1"
+   },
+   {
+    "name": "m_BendingStiffness",
+    "value": "0"
+   },
+   {
+    "name": "m_UseTethers",
+    "value": "1"
+   },
+   {
+    "name": "m_UseGravity",
+    "value": "1"
+   },
+   {
+    "name": "m_Damping",
+    "value": "0"
+   },
+   {
+    "name": "m_WorldVelocityScale",
+    "value": "0.5"
+   },
+   {
+    "name": "m_WorldAccelerationScale",
+    "value": "1"
+   },
+   {
+    "name": "m_Friction",
+    "value": "0.5"
+   },
+   {
+    "name": "m_CollisionMassScale",
+    "value": "0"
+   },
+   {
+    "name": "m_UseContinuousCollision",
+    "value": "1"
+   },
+   {
+    "name": "m_UseVirtualParticles",
+    "value": "1"
+   },
+   {
+    "name": "m_SolverFrequency",
+    "value": "120"
+   },
+   {
+    "name": "m_SleepThreshold",
+    "value": "0.1"
+   }
+  ],
+  "vectors": [
+   {
+    "name": "m_ExternalAcceleration",
+    "x": 2.0,
+    "y": 1.0,
+    "z": -8.0
+   },
+   {
+    "name": "m_RandomAcceleration",
+    "x": 3.0,
+    "y": 0.0,
+    "z": 8.0
+   }
+  ]
+ },
+ "coefficients": [
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 0.0,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 0.0,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 0.0,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 0.0,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 0.0,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  },
+  {
+   "maxDistance": 3.4028235e+38,
+   "collisionSphereDistance": 3.4028235e+38
+  }
+ ],
+ "targets": [
+  {
+   "name": "HQ Flag",
+   "ourFileId": 2750,
+   "localPosition": {
+    "x": 0.0,
+    "y": -0.6,
+    "z": -0.04
+   },
+   "alreadyHasCloth": false
+  },
+  {
+   "name": "HQ Flag",
+   "ourFileId": 2893,
+   "localPosition": {
+    "x": 0.0,
+    "y": -0.6,
+    "z": -0.04
+   },
+   "alreadyHasCloth": false
+  },
+  {
+   "name": "HQ Flag",
+   "ourFileId": 3429,
+   "localPosition": {
+    "x": 0.0,
+    "y": -0.6,
+    "z": -0.04
+   },
+   "alreadyHasCloth": false
+  },
+  {
+   "name": "HQ Flag",
+   "ourFileId": 3872,
+   "localPosition": {
+    "x": 0.0,
+    "y": -0.6,
+    "z": -0.04
+   },
+   "alreadyHasCloth": false
+  },
+  {
+   "name": "HQ Flag",
+   "ourFileId": 4588,
+   "localPosition": {
+    "x": 0.0,
+    "y": -0.6,
+    "z": -0.04
+   },
+   "alreadyHasCloth": false
+  },
+  {
+   "name": "HQ Flag",
+   "ourFileId": 4769,
+   "localPosition": {
+    "x": 0.0,
+    "y": -0.6,
+    "z": -0.04
+   },
+   "alreadyHasCloth": false
+  }
+ ]
+}

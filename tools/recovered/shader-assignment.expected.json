@@ -1,0 +1,800 @@
+{
+ "provenance": {
+  "generatedBy": "tools/p26_assign_shaders.py",
+  "note": "Graded by Assets/Editor/RecoveredPort/VerifyShaderAssignment.cs. Regenerate with `python tools/p26_assign_shaders.py --dry-run`. Do not hand-edit."
+ },
+ "count": 113,
+ "materials": [
+  {
+   "material": "Ironfront_Reborn/Assets/Material/AmmoBox.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Asphalt.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Backlights.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Bandages.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Billboard.mat",
+   "expectedShaderName": "Nature/SpeedTree Billboard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Blue Tinted Plastic.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Blue.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Branches_0.mat",
+   "expectedShaderName": "Nature/SpeedTree",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Branches_0_1.mat",
+   "expectedShaderName": "Nature/SpeedTree",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Bright Orange.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Bright Wood.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Bullets.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Camo Metal.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Clay House Facade.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Cloth Green.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Concrete Large.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Concrete.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/DamageVignette.mat",
+   "expectedShaderName": "Custom/Multiply No Soft",
+   "expectedShaderPath": "Assets/Shader/MultiplyNoSoft.shader",
+   "previousShaderName": "UI/Lit/Refraction",
+   "dummyKind": "section-6.2"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Dark Green Plastic.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Dark Metal.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Dark Plastic.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Dark Rubber.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Dark Scope.mat",
+   "expectedShaderName": "Custom/Multiply No Soft",
+   "expectedShaderPath": "Assets/Shader/MultiplyNoSoft.shader",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Debris.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Desert Backdrop.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Desert Bridge Roof.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Desert Bridge.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Desert Camo.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Desert Cliff.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Desert Facility Concrete Dark.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Desert Facility Concrete.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Desert Plastic.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Desert Rock.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Dirty Orange Plastic.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Emissive Light.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Facer Floor.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Farm.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Flag.mat",
+   "expectedShaderName": "Custom/Flag",
+   "expectedShaderPath": "Assets/Shader/Flag.shader",
+   "previousShaderName": "Sprites/Diffuse",
+   "dummyKind": "section-6.2"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Floor Tiles.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Floor.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Fronds_2_1.mat",
+   "expectedShaderName": "Nature/SpeedTree",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Glass.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Gold.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Gray Metal.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Gray.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Green Plastic.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Headlights.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Hesco_Barrier.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Javelin Crosshair.mat",
+   "expectedShaderName": "UI/Additive",
+   "expectedShaderPath": "Assets/Shader/UIAdditive.shader",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Material.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Material_001.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Material_001_0.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Material_001_1.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Material_002.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Material_002_0.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Material_003.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Material_004.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Material_004_0.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Material_004_1.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Material_005.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Material_005_0.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Material_006.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Material_007.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Medipack.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Metal Plates.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Metal.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Metal_0.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Non Lethal Blue.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Office Cubicles.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Old Wood.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Orange Tracer.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Plaster.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Pumkpin Grin.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Pumkpin Plain.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/RHIB 1.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/RHIB Engine 1.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/RHIB Engine.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/RHIB.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Railroad Metal.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Railroad Sleeper.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Red 1.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Red Danger 1.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Red Danger.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Red Metal.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Red Tracer 1.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Red Tracer.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Red.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Road Barrier.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Rock.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Rope.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Rotor.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Rubber.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Rugged Metal 1.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Rugged Metal.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Sandbags.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Sandstone.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Scope Glass 1.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Soil.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Stairs.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Tank Tracks.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Tank Trap.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Tractor Green.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Wall.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Water.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Windmill Blades.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Windmill Door.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Windmill Frame.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Windmill Rotor.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Windmill.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Wood.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Wood_0.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Recovered/StandardStub",
+   "dummyKind": "exported-stub"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/Yellow Tracer.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  },
+  {
+   "material": "Ironfront_Reborn/Assets/Material/unnamed.mat",
+   "expectedShaderName": "Standard",
+   "expectedShaderPath": "Resources/unity_builtin_extra",
+   "previousShaderName": "Standard (Specular setup)",
+   "dummyKind": "builtin-specular-setup"
+  }
+ ]
+}

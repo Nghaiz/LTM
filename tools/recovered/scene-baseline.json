@@ -17,13 +17,13 @@
       "current": {
         "gameObjects": 5465,
         "meshRenderers": 2173,
-        "staticFlagged": 0,
+        "staticFlagged": 1036,
         "source": "Ironfront_Reborn/Assets/Scenes/Dustbowl.unity"
       },
       "delta": {
         "gameObjects": -122,
         "meshRenderers": -134,
-        "staticFlagged": -1096
+        "staticFlagged": -60
       }
     },
     "Island": {
@@ -36,13 +36,13 @@
       "current": {
         "gameObjects": 2602,
         "meshRenderers": 829,
-        "staticFlagged": 1,
+        "staticFlagged": 344,
         "source": "Ironfront_Reborn/Assets/Scenes/Island.unity"
       },
       "delta": {
         "gameObjects": 18,
         "meshRenderers": 0,
-        "staticFlagged": -344
+        "staticFlagged": -1
       }
     },
     "Menu": {
