@@ -34,36 +34,36 @@ namespace Ironfront.Tools.RecoveredPort
     {
         public const string ScenePath = "Assets/Scenes/Dustbowl.unity";
 
-        [Serializable] private class Scalar { public string name; public string value; }
-        [Serializable] private class VectorSetting { public string name; public float x, y, z; }
-        [Serializable] private class Coefficient { public float maxDistance; public float collisionSphereDistance; }
-        [Serializable] private class Vec3 { public float x, y, z; }
+        [Serializable] private class ClothScalar { public string name; public string value; }
+        [Serializable] private class ClothVector { public string name; public float x, y, z; }
+        [Serializable] private class ClothCoefficientRow { public float maxDistance; public float collisionSphereDistance; }
+        [Serializable] private class ClothVec3 { public float x, y, z; }
 
         [Serializable]
-        private class Target
+        private class ClothTarget
         {
             public string name;
             public long ourFileId;
-            public Vec3 localPosition;
+            public ClothVec3 localPosition;
             public bool alreadyHasCloth;
         }
 
         [Serializable]
-        private class Settings
+        private class ClothSettings
         {
-            public Scalar[] scalars;
-            public VectorSetting[] vectors;
+            public ClothScalar[] scalars;
+            public ClothVector[] vectors;
         }
 
         [Serializable]
-        private class Spec
+        private class ClothSpecFile
         {
-            public Settings settings;
-            public Coefficient[] coefficients;
-            public Target[] targets;
+            public ClothSettings settings;
+            public ClothCoefficientRow[] coefficients;
+            public ClothTarget[] targets;
         }
 
-        public class Report
+        public class ClothReport
         {
             public int targets;
             public int restored;
@@ -94,9 +94,9 @@ namespace Ironfront.Tools.RecoveredPort
             else Debug.LogError(r.Summary());
         }
 
-        public static Report Apply(bool save)
+        public static ClothReport Apply(bool save)
         {
-            var report = new Report();
+            var report = new ClothReport();
             var specPath = Path.Combine(
                 Path.GetFullPath(Path.Combine(Application.dataPath, "..", "..")),
                 "tools", "recovered", "cloth-spec.Dustbowl.json");
@@ -107,7 +107,7 @@ namespace Ironfront.Tools.RecoveredPort
                     "`python tools/p26_cloth_spec.py`.", specPath);
             }
 
-            var spec = JsonUtility.FromJson<Spec>(File.ReadAllText(specPath));
+            var spec = JsonUtility.FromJson<ClothSpecFile>(File.ReadAllText(specPath));
             if (spec == null || spec.targets == null || spec.targets.Length == 0 ||
                 spec.coefficients == null || spec.coefficients.Length == 0)
             {
@@ -210,7 +210,7 @@ namespace Ironfront.Tools.RecoveredPort
             return report;
         }
 
-        private static void ApplySettings(Cloth cloth, Settings s)
+        private static void ApplySettings(Cloth cloth, ClothSettings s)
         {
             if (s == null) return;
             var so = new SerializedObject(cloth);

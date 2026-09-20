@@ -45,12 +45,12 @@ namespace Ironfront.Tools.RecoveredPort
 
         #region spec DTOs (JsonUtility: no dictionaries, no polymorphism)
 
-        [Serializable] private class Vec3 { public float x, y, z; }
-        [Serializable] private class Vec4 { public float x, y, z, w; }
-        [Serializable] private class FieldKV { public string name; public string value; }
+        [Serializable] private class SpecVec3 { public float x, y, z; }
+        [Serializable] private class SpecVec4 { public float x, y, z, w; }
+        [Serializable] private class SpecField { public string name; public string value; }
 
         [Serializable]
-        private class ObjRef
+        private class SpecObjectRef
         {
             public string name;
             public string kind;
@@ -61,7 +61,7 @@ namespace Ironfront.Tools.RecoveredPort
         }
 
         [Serializable]
-        private class Comp
+        private class SpecComponent
         {
             public string type;
             public int enabled = 1;
@@ -74,13 +74,13 @@ namespace Ironfront.Tools.RecoveredPort
             public int isTrigger;
             public string scriptPath;
             public string scriptName;
-            public FieldKV[] primitiveFields;
-            public ObjRef[] objectRefs;
+            public SpecField[] primitiveFields;
+            public SpecObjectRef[] objectRefs;
             public string[] runtimeDereferenced;
         }
 
         [Serializable]
-        private class Obj
+        private class SpecObject
         {
             public string name;
             public string path;
@@ -91,17 +91,17 @@ namespace Ironfront.Tools.RecoveredPort
             public int isActive = 1;
             public int staticFlags;
             public string tag;
-            public Vec3 localPosition;
-            public Vec4 localRotation;
-            public Vec3 localScale;
-            public Comp[] components;
+            public SpecVec3 localPosition;
+            public SpecVec4 localRotation;
+            public SpecVec3 localScale;
+            public SpecComponent[] components;
         }
 
-        [Serializable] private class Spec { public Obj[] objects; }
+        [Serializable] private class RebuildSpecFile { public SpecObject[] objects; }
 
         #endregion
 
-        public class Report
+        public class RebuildReport
         {
             public int specObjects;
             public int created;
@@ -165,9 +165,9 @@ namespace Ironfront.Tools.RecoveredPort
             Debug.Log(Apply(save: false).Summary());
         }
 
-        public static Report Apply(bool save)
+        public static RebuildReport Apply(bool save)
         {
-            var report = new Report();
+            var report = new RebuildReport();
             var specPath = Path.Combine(RepoRoot(), "tools", "recovered", "rebuild-spec.Dustbowl.json");
             if (!File.Exists(specPath))
             {
@@ -176,7 +176,7 @@ namespace Ironfront.Tools.RecoveredPort
                     "`python tools/p26_rebuild_spec.py`.", specPath);
             }
 
-            var spec = JsonUtility.FromJson<Spec>(File.ReadAllText(specPath));
+            var spec = JsonUtility.FromJson<RebuildSpecFile>(File.ReadAllText(specPath));
             if (spec == null || spec.objects == null || spec.objects.Length == 0)
             {
                 throw new InvalidDataException(
@@ -292,7 +292,7 @@ namespace Ironfront.Tools.RecoveredPort
         /// (name, localPosition @2dp) under the resolved parent -- the key P22 used to call these
         /// objects absent, measured unique across all 144. Idempotency rests on it.
         /// </summary>
-        private static Transform FindMatch(Scene scene, Transform parent, Obj o)
+        private static Transform FindMatch(Scene scene, Transform parent, SpecObject o)
         {
             IEnumerable<Transform> candidates;
             if (parent != null)
@@ -317,8 +317,8 @@ namespace Ironfront.Tools.RecoveredPort
             return null;
         }
 
-        private static void ApplyComponent(GameObject go, Obj o, Comp c,
-                                           Dictionary<long, GameObject> byFileId, Report report)
+        private static void ApplyComponent(GameObject go, SpecObject o, SpecComponent c,
+                                           Dictionary<long, GameObject> byFileId, RebuildReport report)
         {
             // A risky component with an unwireable reference is refused outright: attaching it
             // would trade a missing object for a guaranteed NullReferenceException on load.
@@ -418,7 +418,7 @@ namespace Ironfront.Tools.RecoveredPort
             }
         }
 
-        private static void ApplyRenderer(Renderer r, Comp c, Obj o, Report report)
+        private static void ApplyRenderer(Renderer r, SpecComponent c, SpecObject o, RebuildReport report)
         {
             r.enabled = c.enabled != 0;
             r.shadowCastingMode = c.castShadows != 0
@@ -436,7 +436,7 @@ namespace Ironfront.Tools.RecoveredPort
             r.sharedMaterials = mats.ToArray();
         }
 
-        private static T GetOrAdd<T>(GameObject go, Report report) where T : Component
+        private static T GetOrAdd<T>(GameObject go, RebuildReport report) where T : Component
         {
             var c = go.GetComponent<T>();
             if (c != null) { report.componentsAlreadyPresent++; return c; }
@@ -444,8 +444,8 @@ namespace Ironfront.Tools.RecoveredPort
             return go.AddComponent<T>();
         }
 
-        private static void ApplySerializedFields(SerializedObject so, Comp c, Obj o,
-                                                  Dictionary<long, GameObject> byFileId, Report report)
+        private static void ApplySerializedFields(SerializedObject so, SpecComponent c, SpecObject o,
+                                                  Dictionary<long, GameObject> byFileId, RebuildReport report)
         {
             if (c.objectRefs != null)
             {

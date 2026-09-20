@@ -13,8 +13,10 @@ have moved 66 materials off a real-but-wrong shader onto a stub, and called it a
 Writing the `m_Shader` reference directly avoids `Shader.Find` entirely, keeps the property
 block byte-for-byte (Unity re-serialises a material when you assign `.shader`), and puts the
 whole change in a reviewable diff. Correctness is then PROVEN in the Editor afterwards by
-`tools/p26_verify_shaders.py`, which asserts each material resolves to the intended shader by
-name and asset path -- see that script for the loud-failure half the plan asked for.
+`Assets/Editor/RecoveredPort/VerifyShaderAssignment.cs`, which asserts each material resolves to
+the intended shader by name AND by asset path -- the path is the load-bearing half, since a name
+check passes on the stub. That is the loud failure the plan asked for. This script writes the
+expectation file it grades against, so the two cannot drift.
 
 The property block is safe to keep: built-in `Standard` and the recovered `Standard` declare
 the same 27 properties, byte-identical lists, read out of Unity's own `ShaderUtil`.
@@ -54,8 +56,16 @@ BUILTIN_FILE_IDS = {
 # correct and is listed here so the set is auditable rather than silently shortened.
 # Original-side shader confirmed against tmp/recovered on 2026-09-21.
 SECTION_6_2 = {
-    "Ironfront_Reborn/Assets/Material/Flag.mat": "Custom/Flag",
-    "Ironfront_Reborn/Assets/Material/DamageVignette.mat": "Custom/Multiply No Soft",
+    "Ironfront_Reborn/Assets/Material/Flag.mat": ("Custom/Flag", "Sprites/Diffuse"),
+    "Ironfront_Reborn/Assets/Material/DamageVignette.mat": ("Custom/Multiply No Soft",
+                                                            "UI/Lit/Refraction"),
+}
+
+# What each population was rendering with BEFORE the repair. Carried into the expectation file so
+# the before/after shots are generated from data rather than a hand-kept list.
+PREVIOUS_SHADER_BY_KIND = {
+    "builtin-specular-setup": "Standard (Specular setup)",
+    "exported-stub": "Recovered/StandardStub",
 }
 
 # Deliberately NOT handled here: ~41 further materials whose current shader differs from the
@@ -126,12 +136,13 @@ def plan_changes():
     project_shaders = index_project_shaders()
     targets = []
     for e in data["entries"]:
-        targets.append((e["currentPath"], e["shaderName"], e["dummyKind"], e["matchedVia"]))
-    for path, name in sorted(SECTION_6_2.items()):
-        targets.append((path, name, "section-6.2", "phase-plan"))
+        targets.append((e["currentPath"], e["shaderName"], e["dummyKind"], e["matchedVia"],
+                        PREVIOUS_SHADER_BY_KIND[e["dummyKind"]]))
+    for path, (name, previous) in sorted(SECTION_6_2.items()):
+        targets.append((path, name, "section-6.2", "phase-plan", previous))
 
     changes = []
-    for relpath, shader_name, kind, via in targets:
+    for relpath, shader_name, kind, via, previous in targets:
         full = os.path.join(ROOT, relpath.replace("/", os.sep))
         if not os.path.isfile(full):
             raise Fatal("material not found: %s (nothing written)" % relpath)
@@ -148,6 +159,7 @@ def plan_changes():
                 "path": relpath,
                 "shaderName": shader_name,
                 "expectedShaderPath": expect_path,
+                "previousShaderName": previous,
                 "dummyKind": kind,
                 "matchedVia": via,
                 "from": current,
@@ -180,6 +192,7 @@ def write_expectations(changes):
                 "material": c["path"],
                 "expectedShaderName": c["shaderName"],
                 "expectedShaderPath": c["expectedShaderPath"],
+                "previousShaderName": c["previousShaderName"],
                 "dummyKind": c["dummyKind"],
             }
             for c in sorted(changes, key=lambda x: x["path"])

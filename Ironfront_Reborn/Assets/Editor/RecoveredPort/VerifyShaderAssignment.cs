@@ -43,7 +43,7 @@ namespace Ironfront.Tools.RecoveredPort
         public const string SpecularSetupName = "Standard (Specular setup)";
 
         [Serializable]
-        private class Expectation
+        private class ShaderExpectation
         {
             public string material;
             public string expectedShaderName;
@@ -52,10 +52,10 @@ namespace Ironfront.Tools.RecoveredPort
         }
 
         [Serializable]
-        private class Expectations
+        private class ShaderExpectationFile
         {
             public int count;
-            public List<Expectation> materials;
+            public List<ShaderExpectation> materials;
         }
 
         private static string RepoRoot()
@@ -86,7 +86,7 @@ namespace Ironfront.Tools.RecoveredPort
             EditorApplication.Exit(report.failures.Count == 0 ? 0 : 1);
         }
 
-        public class Report
+        public class VerifyReport
         {
             public int checkedCount;
             public readonly List<string> failures = new List<string>();
@@ -123,9 +123,9 @@ namespace Ironfront.Tools.RecoveredPort
             }
         }
 
-        public static Report Verify()
+        public static VerifyReport Verify()
         {
-            var report = new Report();
+            var report = new VerifyReport();
             var expectedPath = Path.Combine(RepoRoot(), "tools", "recovered",
                                             "shader-assignment.expected.json");
             if (!File.Exists(expectedPath))
@@ -135,7 +135,7 @@ namespace Ironfront.Tools.RecoveredPort
                     "`python tools/p26_assign_shaders.py --dry-run`.", expectedPath);
             }
 
-            var expectations = JsonUtility.FromJson<Expectations>(File.ReadAllText(expectedPath));
+            var expectations = JsonUtility.FromJson<ShaderExpectationFile>(File.ReadAllText(expectedPath));
             if (expectations == null || expectations.materials == null || expectations.materials.Count == 0)
             {
                 // An empty expectation list would make this check vacuously green, which is the
