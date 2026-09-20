@@ -1,13 +1,10 @@
 % =====================================================================================
-% C-replication.tex — PHẦN II của Nguyễn Duy Nghĩa: đồng bộ trạng thái và mô phỏng server
+% C-replication.tex - PHẦN II của Nguyễn Duy Nghĩa: đồng bộ trạng thái và mô phỏng server
 % =====================================================================================
-\PhanLon{II. NỘI DUNG CÁ NHÂN -- Phân hệ đồng bộ trạng thái và mô phỏng server (Replication).}
+\PhanLon{II. NỘI DUNG CÁ NHÂN - Phân hệ đồng bộ trạng thái và mô phỏng server (Replication).}
 
 \section{Biểu đồ và giao diện nội dung cá nhân thực hiện}
-Phân hệ Replication đứng giữa: \textbf{nhận byte từ Transport và biến thành trạng thái trò chơi}, và ngược lại.
-Nhiệm vụ gồm: nén trạng thái thế giới (lượng tử hoá, delta, quản lý vùng quan tâm) để 48 actor vừa ngân sách 8 KB/s;
-vòng mô phỏng có thẩm quyền 30 Hz chống gian lận; bù trễ khi bắn; \code{MovementSimulation} dùng chung client và
-server; và bộ test conformance làm trọng tài cho giao thức.
+Phân hệ Replication đứng giữa: \textbf{nhận byte từ Transport và biến thành trạng thái trò chơi}, và ngược lại. Nhiệm vụ gồm: nén trạng thái thế giới (lượng tử hoá, delta, quản lý vùng quan tâm) để 48 actor vừa ngân sách 8 KB/s; vòng mô phỏng có thẩm quyền 30 Hz chống gian lận; bù trễ khi bắn; thuật toán mô phỏng chuyển động dùng chung client và server; và bộ kịch bản kiểm thử tính tương thích làm trọng tài cho giao thức.
 
 % -------------------------------------------------------------------------------------
 \subsection{Kiến trúc phân hệ Replication}
@@ -15,28 +12,28 @@ server; và bộ test conformance làm trọng tài cho giao thức.
 \centering
 \begin{tikzpicture}[x=1cm, y=1cm, lay/.style={box, text width=3.4cm, minimum height=1.55cm},
                     rowname/.style={font=\small\bfseries, align=left, text width=2.5cm, anchor=west}]
-  \node[rowname] at (0,-0.75) {Game server\\Unity\\{\footnotesize\mdseries Net/Server}};
-  \node[lay, fill=cOrange] (u1) at (4.6,0)     {\textbf{NetServerBootstrap}\\{\footnotesize vai trò, transport, vé}};
-  \node[lay, fill=cOrange] (u2) at (8.4,0)     {\textbf{ServerInputStage}\\{\footnotesize trước bước vật lý}};
-  \node[lay, fill=cOrange] (u3) at (12.2,0)    {\textbf{ServerTickLoop}\\{\footnotesize điều phối tick}};
-  \node[lay, fill=cOrange] (u4) at (4.6,-1.6)  {\textbf{ServerCombatBridge}\\{\footnotesize bắn, sát thương}};
-  \node[lay, fill=cOrange] (u5) at (8.4,-1.6)  {\textbf{MatchController}\\{\footnotesize trận, điểm chiếm}};
-  \node[lay, fill=cOrange] (u6) at (12.2,-1.6) {\textbf{ServerSnapshotStage}\\{\footnotesize gửi snapshot}};
-  \node[font=\footnotesize, align=center] at (8.4,-2.75) {gọi xuống (lớp keo không chứa quy tắc; mọi quy tắc nằm dưới và được xUnit kiểm thử)};
-  \node[rowname] at (0,-4.85) {Thư viện\\Replication\\{\footnotesize\mdseries .NET thuần}};
-  \node[lay, fill=cBlue] (l1) at (4.6,-3.9)  {\textbf{Server}\\{\footnotesize TickScheduler, InputAuthority, MessageRouter}};
-  \node[lay, fill=cBlue] (l2) at (8.4,-3.9)  {\textbf{Snapshot + Interest}\\{\footnotesize WorldSnapshot, DeltaEncoder, InterestManager}};
-  \node[lay, fill=cBlue] (l3) at (12.2,-3.9) {\textbf{Combat}\\{\footnotesize CombatAuthority, LagCompensator, HitboxHistory}};
-  \node[lay, fill=cBlue]  (l4) at (4.6,-5.8)  {\textbf{Match}\\{\footnotesize MatchStateMachine, CapturePointState}};
-  \node[lay, fill=cGreen] (l5) at (8.4,-5.8)  {\textbf{Movement}\\{\footnotesize MovementCore, dùng chung}};
-  \node[lay, fill=cBlue]  (l6) at (12.2,-5.8) {\textbf{Client}\\{\footnotesize MessageRouter, Reconciler, Interpolator}};
-  \node[font=\footnotesize, align=center] at (8.4,-7.05) {trao đổi byte qua ITransportServer / ITransportClient; báo kết quả qua IMatchReporter};
+  \node[rowname] at (0,-0.75) {Game server\\Unity};
+  \node[lay, fill=cOrange] (u1) at (4.6,0)     {\textbf{Khởi tạo Server}\\{\footnotesize vai trò, transport, vé}};
+  \node[lay, fill=cOrange] (u2) at (8.4,0)     {\textbf{Xử lý Input}\\{\footnotesize trước bước vật lý}};
+  \node[lay, fill=cOrange] (u3) at (12.2,0)    {\textbf{Điều phối Tick}\\{\footnotesize vòng lặp 30 Hz}};
+  \node[lay, fill=cOrange] (u4) at (4.6,-1.6)  {\textbf{Cầu nối Chiến đấu}\\{\footnotesize bắn, sát thương}};
+  \node[lay, fill=cOrange] (u5) at (8.4,-1.6)  {\textbf{Điều khiển Trận}\\{\footnotesize luật trận, điểm chiếm}};
+  \node[lay, fill=cOrange] (u6) at (12.2,-1.6) {\textbf{Tạo Snapshot}\\{\footnotesize nén và gửi snapshot}};
+  \node[font=\footnotesize, align=center] at (8.4,-2.75) {Lớp tích hợp mỏng; mọi quy tắc logic được kiểm thử độc lập tự động};
+  \node[rowname] at (0,-4.85) {Thư viện\\Đồng bộ\\{\footnotesize\mdseries dùng chung}};
+  \node[lay, fill=cBlue] (l1) at (4.6,-3.9)  {\textbf{Máy chủ}\\{\footnotesize Lập lịch tick, phân quyền input}};
+  \node[lay, fill=cBlue] (l2) at (8.4,-3.9)  {\textbf{Snapshot \& Quan tâm}\\{\footnotesize Cấu trúc snapshot, nén delta, AOI}};
+  \node[lay, fill=cBlue] (l3) at (12.2,-3.9) {\textbf{Chiến đấu}\\{\footnotesize Phân quyền bắn, bù trễ, tua hitbox}};
+  \node[lay, fill=cBlue]  (l4) at (4.6,-5.8)  {\textbf{Trận đấu}\\{\footnotesize Máy trạng thái, tiến độ chiếm}};
+  \node[lay, fill=cGreen] (l5) at (8.4,-5.8)  {\textbf{Chuyển động}\\{\footnotesize Thuật toán mô phỏng dùng chung}};
+  \node[lay, fill=cBlue]  (l6) at (12.2,-5.8) {\textbf{Máy khách}\\{\footnotesize Định tuyến, hoà giải, nội suy}};
+  \node[font=\footnotesize, align=center] at (8.4,-7.05) {Trao đổi mảng byte qua tầng giao vận UDP; báo kết quả về master};
   \node[rowname] at (0,-8.2) {Phụ thuộc};
-  \node[lay, fill=cPurple] (d1) at (4.6,-8.2)  {\textbf{Net.Transport}\\{\footnotesize UDP, kênh 1/2/3}};
-  \node[lay, fill=cGreen]  (d2) at (8.4,-8.2)  {\textbf{Net.Protocol}\\{\footnotesize message, lượng tử hoá}};
-  \node[lay, fill=cPurple] (d3) at (12.2,-8.2) {\textbf{Net.MasterLink}\\{\footnotesize GS\_MATCH\_* về master}};
+  \node[lay, fill=cPurple] (d1) at (4.6,-8.2)  {\textbf{Tầng Giao vận}\\{\footnotesize UDP, 4 kênh logic}};
+  \node[lay, fill=cGreen]  (d2) at (8.4,-8.2)  {\textbf{Giao thức chung}\\{\footnotesize Định dạng gói, lượng tử hoá}};
+  \node[lay, fill=cPurple] (d3) at (12.2,-8.2) {\textbf{Liên kết Master}\\{\footnotesize Kết nối báo kết quả trận}};
 \end{tikzpicture}
-\caption{Kiến trúc phân hệ: lớp keo Unity mỏng gọi vào thư viện Replication kiểm thử được bằng xUnit}
+\caption{Kiến trúc phân hệ: lớp tích hợp Unity mỏng gọi vào thư viện đồng bộ logic kiểm thử được độc lập}
 \label{fig:C-kientruc}
 \end{figure}
 
@@ -88,11 +85,11 @@ server; và bộ test conformance làm trọng tài cho giao thức.
 \begin{tabularx}{\linewidth}{|Y|L{2.4cm}|L{2.8cm}|L{2.8cm}|}
 \hline
 \hd{Cấu hình (16 người + 32 bot, bản đồ Dustbowl, 5 phút)} & \hd{KB/s mỗi client} & \hd{Snapshot trung bình} & \hd{Tiết kiệm luỹ kế} \\ \hline
-Gốc: snapshot đầy đủ, căn byte, không interest & 19,86 & 1017 byte & -- \\ \hline
+Gốc: snapshot đầy đủ, căn byte, không interest & 19,86 & 1017 byte & - \\ \hline
 + bit-packing (đo, không đưa vào bản chạy) & 19,04 & 975 byte & 4,1\% \\ \hline
 + delta encoding & 9,94 & 509 byte & 49,9\% \\ \hline
 + quản lý vùng quan tâm & 1,50 & 77 byte & 92,4\% \\ \hline
-\textbf{Server đã triển khai} (định dạng v1 căn byte) & \textbf{1,67} & -- & 21\% ngân sách 8 KB/s \\ \hline
+\textbf{Server đã triển khai} (định dạng v1 căn byte) & \textbf{1,67} & - & 21\% ngân sách 8 KB/s \\ \hline
 \end{tabularx}
 \caption{Kết quả đo đóng góp của từng kỹ thuật nén (in bởi \texttt{Phase04ExperimentTests})}
 \label{fig:C-ketqua}
@@ -107,8 +104,8 @@ Gốc: snapshot đầy đủ, căn byte, không interest & 19,86 & 1017 byte & -
   \seqactor{C}{12.6}{Client (DeltaDecoder)}
   \seqbegin
   \seqmsg{S}{C}{S\_SNAPSHOT tick 100 (đầy đủ, chưa có baseline)}
-  \seqret{C}{S}{C\_ACK\_BASELINE \{tick 100\} -- kênh 2}
-  \seqlost{S}{C}{S\_SNAPSHOT tick 103 (delta so với 100) -- MẤT}
+  \seqret{C}{S}{C\_ACK\_BASELINE \{tick 100\} - kênh 2}
+  \seqlost{S}{C}{S\_SNAPSHOT tick 103 (delta so với 100) - MẤT}
   \seqmsg{S}{C}{S\_SNAPSHOT tick 106 (vẫn delta so với 100)}
   \seqself{C}{giải delta dựa trên baseline tick 100;\\gói 103 bị mất không ảnh hưởng gói 106}
   \seqret{C}{S}{C\_ACK\_BASELINE \{tick 106\}}
@@ -141,9 +138,9 @@ Gốc: snapshot đầy đủ, căn byte, không interest & 19,86 & 1017 byte & -
     \fill[cGreen] (0,0) rectangle (0.4,0.4); \draw[cLine] (0,0) rectangle (0.4,0.4);
     \node at (0.6,0.2) {Near: dưới 60 m hoặc chính mình $\rightarrow$ 20 Hz};
     \fill[cBlue] (0,-0.8) rectangle (0.4,-0.4); \draw[cLine] (0,-0.8) rectangle (0.4,-0.4);
-    \node at (0.6,-0.6) {Mid: 60--150 m, đồng đội trong 300 m $\rightarrow$ 10 Hz};
+    \node at (0.6,-0.6) {Mid: 60-150 m, đồng đội trong 300 m $\rightarrow$ 10 Hz};
     \fill[cOrange!60] (0,-1.6) rectangle (0.4,-1.2); \draw[cLine] (0,-1.6) rectangle (0.4,-1.2);
-    \node at (0.6,-1.4) {Far: 150--500 m $\rightarrow$ 4 Hz};
+    \node at (0.6,-1.4) {Far: 150-500 m $\rightarrow$ 4 Hz};
     \fill[cPurple!80] (0,-2.4) rectangle (0.4,-2.0); \draw[cLine] (0,-2.4) rectangle (0.4,-2.0);
     \node at (0.6,-2.2) {Trong nón nhìn 15°: không bị cắt};
     \draw[cLine] (0,-3.2) rectangle (0.4,-2.8);
@@ -173,7 +170,7 @@ Gốc: snapshot đầy đủ, căn byte, không interest & 19,86 & 1017 byte & -
   % hàng 2
   \node[bxB, text width=4.6cm] (t)  at (2.9,-4.9) {rewind = clamp((RTT/2 + 100 ms) / 33,3 ms, 0, 6 tick)};
   \node[bxB, text width=3.4cm] (h)  at (8.6,-4.9) {HitboxHistory: hộp tại tick $-$ rewind};
-  \node[bxB, text width=2.8cm] (x)  at (13.6,-4.9) {LagCompensator: giao tia -- hộp};
+  \node[bxB, text width=2.8cm] (x)  at (13.6,-4.9) {LagCompensator: giao tia - hộp};
   \node[grp, fit=(t)(h)(x)] (g2) {};
   \node[grpt, anchor=south east] at (g2.north east) {2. Bù trễ (không di chuyển collider)};
   \draw[arr] (a.south) -- ++(0,-0.75) -| (t.north);
@@ -225,17 +222,13 @@ Không bù trễ & 0\% & 0\% & 0\% & 0\% & 0\% & 0\% \\ \hline
   \draw[arr] (e) -- node[lbl, above=3pt]{hết thời gian sau trận} (r);
   \draw[arr] (r) -- node[lbl, right=3pt, align=left]{despawn actor, giải phóng id,\\đặt lại điểm chiếm} (w);
 \end{tikzpicture}
-\caption{\texttt{MatchStateMachine} -- pha trận được phát tới client qua S\_MATCH\_STATE}
+\caption{\texttt{MatchStateMachine} - pha trận được phát tới client qua S\_MATCH\_STATE}
 \label{fig:C-tran}
 \end{figure}
 
 % =====================================================================================
 \section{Luồng xử lý và giải pháp đã ứng dụng}
-Mục này trình bày chi tiết các luồng mà phân hệ Replication hiện thực trên game server và thư viện
-\code{Ironfront.Net.Replication}: người chơi vào trận và được spawn, input đi vào vòng tick có thẩm quyền, snapshot
-được nén và gửi riêng cho từng client, phát bắn được phân xử với bù trễ, trận đấu đi qua các pha và báo kết quả về
-master, người chơi rời trận. Mỗi luồng gồm sơ đồ tuần tự (tên lớp đúng như trong mã nguồn), diễn giải và các giải
-pháp đã áp dụng.
+Mục này trình bày chi tiết các luồng nghiệp vụ mà phân hệ đồng bộ và mô phỏng server hiện thực: người chơi vào trận và được tạo thực thể, input đi vào vòng tick có thẩm quyền, snapshot được nén và gửi riêng cho từng client, phát bắn được phân xử với cơ chế bù trễ, trận đấu diễn tiến qua các pha và báo kết quả về master.
 
 % -------------------------------------------------------------------------------------
 \subsection{Luồng người chơi vào trận và spawn}
@@ -243,28 +236,28 @@ pháp đã áp dụng.
 \centering
 \renewcommand{\seqstep}{0.64cm}
 \begin{tikzpicture}[x=1cm, y=1cm]
-  \seqactor{T}{1.3}{srv : UdpTransport-\\Server}
-  \seqactor{L}{5.0}{ServerTickLoop}
-  \seqactor{A}{8.6}{ServerActor-\\Registry}
-  \seqactor{K}{12.0}{SpawnAckTracker}
+  \seqactor{T}{1.3}{Máy chủ\\giao vận UDP}
+  \seqactor{L}{5.0}{Vòng lặp\\tick server}
+  \seqactor{A}{8.6}{Quản lý nhân vật\\trên server}
+  \seqactor{K}{12.0}{Theo dõi\\xác nhận spawn}
   \seqactor{C}{15.2}{Client}
   \seqbegin
-  \seqmsg{T}{L}{OnClientConnected(connectionId, info)}
-  \seqmsg{L}{A}{TryClaimPlayerSlot()}
-  \seqret{A}{L}{NetServerActor (actorId)}
-  \seqself{L}{đặt lại máu, IsAlive, vũ khí, băng đạn;\\tạo ServerPlayer + ClientSession}
+  \seqmsg{T}{L}{Thông báo client kết nối thành công}
+  \seqmsg{L}{A}{Cấp phát vị trí cho người chơi mới}
+  \seqret{A}{L}{Thực thể nhân vật được gán (mã ID)}
+  \seqself{L}{Đặt lại máu, trạng thái sống, vũ khí, số đạn;\\khởi tạo phiên người chơi}
   \seqret{L}{C}{S\_MATCH\_STATE \{pha, vé, thời gian\} (kênh 2)}
   \seqfragbegin
-  \seqret{L}{C}{S\_SPAWN\_ACTOR \{actorId, team, vị trí, vũ khí\} (kênh 2)}
-  \seqmsg{L}{K}{MarkSent(client, actorId)}
-  \seqfragend{T}{C}{loop}{mỗi actor client chưa được báo}
+  \seqret{L}{C}{S\_SPAWN\_ACTOR \{mã ID, phe, vị trí, vũ khí\} (kênh 2)}
+  \seqmsg{L}{K}{Ghi nhận đã gửi thông điệp spawn}
+  \seqfragend{T}{C}{loop}{mỗi thực thể client chưa được thông báo}
   \seqmsg{C}{L}{C\_LOADOUT\_SELECT, C\_SPAWN\_REQUEST \{điểm hồi sinh\}}
   \seqfragbegin
-  \seqself{L}{ServerRespawnGate: đã chết $\ge$ 3 s,\\điểm hồi sinh thuộc phe mình}
+  \seqself{L}{Kiểm tra điều kiện hồi sinh:\\đã chết $\ge$ 3 s, điểm hồi sinh thuộc phe mình}
   \seqret{L}{C}{S\_SPAWN\_ACTOR (kênh 2)}
   \seqfragend{T}{C}{opt}{được phép hồi sinh}
-  \seqmsg{L}{K}{IsKnown(client, actorId)?}
-  \seqret{K}{L}{chỉ actor đã gửi spawn mới được vào snapshot}
+  \seqmsg{L}{K}{Kiểm tra trạng thái spawn đã ghi nhận chưa}
+  \seqret{K}{L}{Chỉ thực thể đã thông báo spawn mới được đưa vào snapshot}
   \seqend{T,L,A,K,C}
 \end{tikzpicture}
 \caption{Biểu đồ tuần tự người chơi vào trận, chọn trang bị và hồi sinh}
@@ -275,10 +268,10 @@ pháp đã áp dụng.
 \begin{tabularx}{\linewidth}{|L{4.4cm}|Y|}
 \hline
 \hd{Vấn đề} & \hd{Giải pháp đã áp dụng} \\ \hline
-Snapshot (kênh 1) vượt trước \code{S_SPAWN_ACTOR} (kênh 2) vì hai kênh không ràng buộc thứ tự, actor ``biến mất'' tới lượt snapshot sau & Sắp thứ tự \textbf{ở phía gửi}: \code{SpawnAckTracker} giữ actor khỏi snapshot của một client cho tới khi spawn của actor đó đã được đưa cho Transport; kênh tin cậy bảo đảm spawn tới trước \\ \hline
-Người vào sau thừa hưởng ``xác chết'' của người rời trước ở cùng chỗ & Khi nhận chỗ, đặt lại \code{Health}, \code{IsAlive}, vũ khí và băng đạn trước snapshot đầu tiên \\ \hline
-Client sửa đổi bỏ qua thời gian chờ hồi sinh & \code{ServerRespawnGate} là nơi quyết định, đọc cùng hằng số \code{RESPAWN_SECONDS} với đồng hồ đếm ngược phía client \\ \hline
-Id actor được cấp lại khi snapshot của chủ cũ còn trên đường & \code{ActorIdPool} giữ id đã thu hồi trong 5 s (lâu hơn hạn ghép mảnh 2 s, ngắn hơn timeout 10 s) trước khi cấp lại; với 64 id và tối đa 48 actor luôn còn id rảnh \\ \hline
+Snapshot vượt trước gói tạo nhân vật do hai kênh không ràng buộc thứ tự & Sắp thứ tự ở phía gửi: giữ thực thể khỏi snapshot của một client cho tới khi thông điệp tạo nhân vật đó đã được đưa cho giao vận; kênh tin cậy bảo đảm gói tạo tới trước \\ \hline
+Người vào sau nhận trạng thái cũ của người vừa rời & Khi cấp phát vị trí, đặt lại chỉ số máu, trạng thái sống, vũ khí và băng đạn trước snapshot đầu tiên \\ \hline
+Client gian lận bỏ qua thời gian chờ hồi sinh & Server là nơi nắm quyền quyết định, áp dụng cùng tham số thời gian chờ hồi sinh với đồng hồ đếm ngược phía client \\ \hline
+Mã ID nhân vật bị tái cấp phát khi snapshot cũ còn trên đường truyền & Giữ mã ID đã thu hồi trong vùng cách ly 5 s trước khi cấp lại; luôn đảm bảo còn đủ ID rảnh \\ \hline
 \end{tabularx}
 \end{center}
 
@@ -289,24 +282,24 @@ Id actor được cấp lại khi snapshot của chủ cũ còn trên đường 
 \renewcommand{\seqstep}{0.64cm}
 \begin{tikzpicture}[x=1cm, y=1cm]
   \seqactor{C}{1.1}{Client}
-  \seqactor{R}{4.3}{ServerMessage-\\Router}
-  \seqactor{S}{7.6}{ServerTick-\\Scheduler}
-  \seqactor{I}{10.9}{InputAuthority}
-  \seqactor{M}{14.6}{Movement-\\Simulation}
+  \seqactor{R}{4.3}{Bộ định tuyến\\thông điệp}
+  \seqactor{S}{7.6}{Bộ điều phối\\tick server}
+  \seqactor{I}{10.9}{Phân quyền\\input}
+  \seqactor{M}{14.6}{Mô phỏng\\chuyển động}
   \seqbegin
-  \seqmsg{C}{R}{C\_INPUT \{tick, 8 frame gần nhất\} -- kênh 3}
-  \seqmsg{R}{I}{Accept(frame): bỏ frame trùng / cũ, bỏ tick nhảy > 60}
+  \seqmsg{C}{R}{C\_INPUT \{tick, 8 frame gần nhất\} - kênh 3}
+  \seqmsg{R}{I}{Tiếp nhận frame: loại bỏ frame trùng/cũ, loại tick bất thường}
   \seqfragbegin
-  \seqmsg{S}{I}{TakeInput(tick) cho từng người chơi}
+  \seqmsg{S}{I}{Lấy input theo tick cho từng người chơi}
   \seqfragbegin
-  \seqret{I}{S}{frame đúng tick, vector đã chuẩn hoá}
-  \seqfragelse{C}{M}{thiếu frame}
-  \seqret{I}{S}{lặp frame trước ($\le$ 3 tick), sau đó đứng yên}
-  \seqfragend{C}{M}{alt}{có frame}
-  \seqmsg{S}{M}{Step(state, input, 1/30 s)}
-  \seqret{M}{S}{vị trí mới}
-  \seqself{S}{kẹp tốc độ: quãng đường $\le$ 1,3 $\times$ giới hạn\\(tính cả phương đứng)}
-  \seqself{S}{chiến đấu, luật trận, ghi HitboxHistory}
+  \seqret{I}{S}{Frame đúng tick, vector đã chuẩn hoá}
+  \seqfragelse{C}{M}{Thiếu frame}
+  \seqret{I}{S}{Lặp frame trước ($\le$ 3 tick), sau đó đứng yên}
+  \seqfragend{C}{M}{alt}{Có frame}
+  \seqmsg{S}{M}{Mô phỏng bước di chuyển (1/30 s)}
+  \seqret{M}{S}{Vị trí mới sau mô phỏng}
+  \seqself{S}{Kẹp tốc độ: quãng đường $\le$ 1,3 $\times$ giới hạn\\(tính cả phương đứng)}
+  \seqself{S}{Phân xử chiến đấu, luật trận, ghi nhận vị trí hitbox lịch sử}
   \seqfragend{C}{M}{loop}{mỗi tick 33,3 ms theo đồng hồ thực, nợ tối đa 3 tick}
   \seqend{C,R,S,I,M}
 \end{tikzpicture}
@@ -318,11 +311,11 @@ Id actor được cấp lại khi snapshot của chủ cũ còn trên đường 
 \begin{tabularx}{\linewidth}{|L{4.4cm}|Y|}
 \hline
 \hd{Vấn đề} & \hd{Giải pháp đã áp dụng} \\ \hline
-Tick mạng phụ thuộc \code{FixedUpdate} của Unity (dự án đổi \code{fixedDeltaTime} lúc chạy) & \code{ServerTickScheduler} tính tick theo đồng hồ thực với bộ tích luỹ, độc lập với tốc độ vật lý \\ \hline
-Server chậm một lần rồi không bao giờ đuổi kịp (vòng xoáy tử thần) & Nợ tối đa 3 tick; phần thừa bị bỏ và đếm \code{DroppedTicks} để thấy được \\ \hline
-Mất gói input & Client gửi lặp các frame gần nhất trong mỗi gói; server thiếu frame thì lặp frame trước tối đa 3 tick (100 ms) rồi dừng --- không để người mất kết nối chạy mãi về một hướng \\ \hline
-Gian lận tốc độ, đi chéo nhanh $\sqrt{2}$ lần & Chuẩn hoá vector di chuyển; sau khi di chuyển so quãng đường với giới hạn 1,3 lần, tính cả phương đứng để không kéo người đang nhảy xuống đất \\ \hline
-Tick giả làm hỏng vòng đệm input & Bỏ frame có tick nhảy quá 60 tick (2 s) so với frame gần nhất \\ \hline
+Tick mạng phụ thuộc chu kỳ vật lý của đồ họa & Tính tick theo đồng hồ thực với bộ tích luỹ thời gian, hoàn toàn độc lập với tốc độ khung hình \\ \hline
+Server chậm một lần rồi không bao giờ đuổi kịp & Giới hạn nợ tối đa 3 tick; phần thời gian thừa bị bỏ qua và ghi nhận cảnh báo \\ \hline
+Mất gói input & Client gửi lặp các frame gần nhất trong mỗi gói; server thiếu frame thì lặp frame trước tối đa 3 tick (100 ms) rồi dừng \\ \hline
+Gian lận tốc độ di chuyển & Chuẩn hoá vector di chuyển; sau khi di chuyển so sánh quãng đường với giới hạn tốc độ tối đa \\ \hline
+Tick giả làm hỏng vòng đệm & Loại bỏ các frame có chỉ số tick nhảy quá 60 tick (2 s) so với frame gần nhất \\ \hline
 \end{tabularx}
 \end{center}
 Đo: client gửi giá trị trục tối đa của \code{i8} trên cả hai trục không đi xa hơn người chạy nước rút trung thực.
@@ -333,26 +326,26 @@ Tick giả làm hỏng vòng đệm input & Bỏ frame có tick nhảy quá 60 t
 \centering
 \renewcommand{\seqstep}{0.64cm}
 \begin{tikzpicture}[x=1cm, y=1cm]
-  \seqactor{G}{1.3}{ServerSnapshot-\\Stage}
-  \seqactor{I}{4.7}{InterestManager}
-  \seqactor{E}{8.2}{DeltaEncoder}
-  \seqactor{T}{11.6}{Transport}
-  \seqactor{D}{15.0}{client :\\DeltaDecoder}
+  \seqactor{G}{1.3}{Tạo Snapshot\\server}
+  \seqactor{I}{4.7}{Quản lý\\vùng quan tâm}
+  \seqactor{E}{8.2}{Bộ mã hoá\\Delta}
+  \seqactor{T}{11.6}{Tầng Giao vận}
+  \seqactor{D}{15.0}{Client: Giải\\mã Delta}
   \seqbegin
   \seqfragbegin
-  \seqself{G}{WorldSnapshot tick N: giá trị đã lượng tử hoá\\(vị trí i16 6,25 cm, yaw u16, pitch i8, máu u8)}
+  \seqself{G}{Snapshot thế giới tick N: giá trị đã lượng tử hoá\\(toạ độ 6,25 cm, góc quay, máu)}
   \seqfragbegin
-  \seqmsg{G}{I}{Classify(người xem, actor)}
-  \seqret{I}{G}{Near 20 Hz / Mid 10 Hz / Far 4 Hz / Culled}
-  \seqmsg{G}{E}{Encode(snapshot, baseline đã được ack)}
-  \seqret{E}{G}{changeMask 8 bit + trường thay đổi}
-  \seqmsg{G}{T}{Send(conn, kênh 1, S\_SNAPSHOT $\le$ 1181 byte)}
-  \seqmsg{T}{D}{S\_SNAPSHOT \{tick, baselineTick, lastProcessedInputTick, delta\}}
+  \seqmsg{G}{I}{Phân loại mức độ ưu tiên theo khoảng cách}
+  \seqret{I}{G}{Gần 20 Hz / Trung bình 10 Hz / Xa 4 Hz / Loại bỏ}
+  \seqmsg{G}{E}{Mã hoá delta so với baseline đã ack}
+  \seqret{E}{G}{Mặt nạ thay đổi 8 bit + các trường biến động}
+  \seqmsg{G}{T}{Gửi gói S\_SNAPSHOT qua kênh 1 ($\le$ 1181 byte)}
+  \seqmsg{T}{D}{S\_SNAPSHOT \{tick, baselineTick, lastInputTick, delta\}}
   \seqfragend{G}{D}{loop}{mỗi client}
   \seqfragend{G}{D}{loop}{mỗi 50 ms (20 Hz)}
-  \seqself{D}{áp delta lên baseline, đưa vào bộ đệm nội suy}
-  \seqret{D}{G}{C\_ACK\_BASELINE \{tick N\} -- kênh 2}
-  \seqself{G}{baseline mới cho client (giữ 32 snapshot)}
+  \seqself{D}{Áp dụng delta lên baseline, đưa vào bộ đệm nội suy}
+  \seqret{D}{G}{C\_ACK\_BASELINE \{tick N\} - kênh 2}
+  \seqself{G}{Cập nhật baseline mới cho client (lưu lịch sử 32 snapshot)}
   \seqend{G,I,E,T,D}
 \end{tikzpicture}
 \caption{Biểu đồ tuần tự đường ống snapshot: lượng tử hoá, vùng quan tâm, delta theo baseline đã xác nhận}
@@ -367,8 +360,8 @@ Tick giả làm hỏng vòng đệm input & Bỏ frame có tick nhảy quá 60 t
         mất một gói là mọi snapshot sau đều không giải được. Với baseline đã ack (\code{C_ACK_BASELINE} qua kênh tin cậy),
         mất một snapshot chỉ mất đúng gói đó. Chi phí: 32 snapshot lịch sử mỗi client. Kiểm thử: mất ngẫu nhiên 20\%
         gói trong 1\,000 tick, trạng thái cuối khớp chính xác với 4 hạt giống.
-  \item \textbf{Vùng quan tâm theo người xem.} Near < 60 m hoặc chính mình: 20 Hz; Mid 60--150 m hoặc đồng đội trong 300 m:
-        10 Hz; Far 150--500 m: 4 Hz; ngoài 500 m và ngoài nón nhìn 15°: không gửi. Đồng đội được nâng \textbf{tối thiểu}
+  \item \textbf{Vùng quan tâm theo người xem.} Near < 60 m hoặc chính mình: 20 Hz; Mid 60-150 m hoặc đồng đội trong 300 m:
+        10 Hz; Far 150-500 m: 4 Hz; ngoài 500 m và ngoài nón nhìn 15°: không gửi. Đồng đội được nâng \textbf{tối thiểu}
         lên Mid chứ không bị hạ từ Near xuống Mid. Actor xa bị bỏ khỏi snapshot nhưng không despawn để không nhấp nháy.
   \item \textbf{Kết quả.} 16 người + 32 bot trên Dustbowl: từ 19,86 KB/s xuống 1,50 KB/s mỗi client (Hình~\ref{fig:C-ketqua});
         server đã triển khai đo 1,67 KB/s, bằng 21\% ngân sách 8 KB/s.
@@ -380,32 +373,32 @@ Tick giả làm hỏng vòng đệm input & Bỏ frame có tick nhảy quá 60 t
 \centering
 \renewcommand{\seqstep}{0.64cm}
 \begin{tikzpicture}[x=1cm, y=1cm]
-  \seqactor{C}{1.1}{người bắn}
-  \seqactor{A}{4.4}{ServerCombat-\\Authority}
-  \seqactor{L}{7.9}{LagCompensator}
-  \seqactor{H}{11.0}{HitboxHistory}
-  \seqactor{U}{14.6}{ServerCombat-\\Bridge (Unity)}
+  \seqactor{C}{1.1}{Người bắn}
+  \seqactor{A}{4.4}{Phân quyền\\chiến đấu}
+  \seqactor{L}{7.9}{Bộ tính toán\\bù trễ}
+  \seqactor{H}{11.0}{Lịch sử hitbox\\các tick}
+  \seqactor{U}{14.6}{Cầu nối vật lý\\thế giới}
   \seqbegin
   \seqmsg{C}{A}{C\_INPUT có nút FIRE, yaw, pitch}
   \seqfragbegin
-  \seqret{A}{C}{từ chối: không trừ đạn, không raycast}
-  \seqfragelse{C}{U}{hợp lệ}
-  \seqself{A}{trừ đạn; độ tản bằng RNG của server}
-  \seqmsg{A}{L}{ResolveHitscan(tia, RTT làm mượt của server)}
-  \seqself{L}{rewind = clamp((RTT/2 + 100 ms) / 33,3 ms, 0, 6 tick)}
-  \seqmsg{L}{H}{Get(tick hiện tại $-$ rewind)}
-  \seqret{H}{L}{hộp đầu, thân, tay, chân (toạ độ thế giới)}
-  \seqself{L}{giao tia -- hộp (slab), lấy hộp gần nhất}
-  \seqmsg{L}{U}{có tường chắn tới điểm trúng?}
-  \seqret{U}{L}{Physics.Raycast với mặt nạ lớp của game gốc}
-  \seqret{L}{A}{HitResult \{targetId, bộ phận, khoảng cách\}}
-  \seqmsg{A}{U}{IActorDamageSink.Apply(sát thương $\times$ hệ số bộ phận, giảm theo khoảng cách)}
-  \seqret{A}{C}{S\_HIT\_CONFIRM \{targetId, damage\} -- kênh 2}
+  \seqret{A}{C}{Từ chối: không trừ đạn, không raycast}
+  \seqfragelse{C}{U}{Hợp lệ}
+  \seqself{A}{Trừ đạn; tính toán độ tản đạn bằng RNG của server}
+  \seqmsg{A}{L}{Tính toán phát bắn theo RTT làm mượt}
+  \seqself{L}{Tua lùi thời gian = clamp((RTT/2 + 100 ms) / 33,3 ms, 0, 6 tick)}
+  \seqmsg{L}{H}{Lấy vị trí hộp va chạm tại thời điểm tua}
+  \seqret{H}{L}{Hộp va chạm đầu, thân, tay, chân trong toạ độ thế giới}
+  \seqself{L}{Kiểm tra giao điểm tia bắn và hộp va chạm}
+  \seqmsg{L}{U}{Kiểm tra có tường chắn tới điểm trúng không}
+  \seqret{U}{L}{Raycast kiểm tra chướng ngại vật}
+  \seqret{L}{A}{Kết quả trúng: mã mục tiêu, bộ phận, khoảng cách}
+  \seqmsg{A}{U}{Áp dụng sát thương có thẩm quyền lên mục tiêu}
+  \seqret{A}{C}{S\_HIT\_CONFIRM \{mã mục tiêu, sát thương\} - kênh 2}
   \seqret{A}{C}{S\_DEATH nếu hạ gục; S\_WEAPON\_FIRE cho người khác}
-  \seqfragend{C}{U}{alt}{chết / đang hồi / hết đạn / chưa hết cooldown}
+  \seqfragend{C}{U}{alt}{Chết / đang chờ hồi / hết đạn / chưa hết cooldown}
   \seqend{C,A,L,H,U}
 \end{tikzpicture}
-\caption{Biểu đồ tuần tự phân xử phát bắn: kiểm tra rẻ trước, tua hitbox bằng dữ liệu lịch sử, hỏi Unity về tường chắn}
+\caption{Biểu đồ tuần tự phân xử phát bắn: kiểm tra rẻ trước, tua hitbox bằng dữ liệu lịch sử, kiểm tra tường chắn}
 \label{fig:C-luong-ban}
 \end{figure}
 
@@ -414,7 +407,7 @@ Tick giả làm hỏng vòng đệm input & Bỏ frame có tick nhảy quá 60 t
 \hline
 \hd{Vấn đề} & \hd{Giải pháp đã áp dụng} \\ \hline
 Bắn nhanh / đạn vô hạn & Server tự quản lý cooldown và số đạn; kiểm tra còn sống, cooldown, đạn \textbf{trước} mọi phép tốn kém: 100 lệnh bắn trong 1 s với cooldown 0,1 s chỉ 10 lệnh được xử lý, 90 lệnh bị từ chối không trừ đạn, không raycast \\ \hline
-Người chơi nhìn thấy quá khứ (trễ mạng + 100 ms nội suy) nên bắn trúng mục tiêu đang chạy luôn trượt & Lưu 1 s hộp va chạm (30 tick $\times$ 4 hộp mỗi actor) và kiểm tra tia với hộp tại thời điểm người bắn nhìn thấy; mục tiêu chạy ngang 5 m/s: 100\% trúng với mọi RTT 0--300 ms, không bù trễ: 0\% \\ \hline
+Người chơi nhìn thấy quá khứ (trễ mạng + 100 ms nội suy) nên bắn trúng mục tiêu đang chạy luôn trượt & Lưu 1 s hộp va chạm (30 tick $\times$ 4 hộp mỗi actor) và kiểm tra tia với hộp tại thời điểm người bắn nhìn thấy; mục tiêu chạy ngang 5 m/s: 100\% trúng với mọi RTT 0-300 ms, không bù trễ: 0\% \\ \hline
 Tua bằng cách dời collider rồi trả về dễ để lại hitbox ``kẹt trong quá khứ'' khi có ngoại lệ & Lịch sử lưu hộp \textbf{toạ độ thế giới}: tua là đọc một giá trị, không di chuyển gì; chỉ câu hỏi ``có tường không'' mới gọi vào Unity \\ \hline
 Khai RTT giả để được tua xa & Dùng RTT server tự đo, kẹp tối đa 6 tick (200 ms) \\ \hline
 Actor vừa trở nên liên quan chưa có lịch sử & Dùng tư thế hiện tại, gắn cờ trong kết quả và tăng bộ đếm (không im lặng) \\ \hline
@@ -427,27 +420,27 @@ Actor vừa trở nên liên quan chưa có lịch sử & Dùng tư thế hiện
 \centering
 \renewcommand{\seqstep}{0.64cm}
 \begin{tikzpicture}[x=1cm, y=1cm]
-  \seqactor{L}{1.4}{ServerTickLoop}
-  \seqactor{M}{5.2}{MatchState-\\Machine}
-  \seqactor{P}{8.9}{CapturePoint-\\State}
-  \seqactor{R}{12.1}{IMatchReporter}
-  \seqactor{S}{15.2}{Master /\\Client}
+  \seqactor{L}{1.4}{Vòng lặp\\tick server}
+  \seqactor{M}{5.2}{Máy trạng thái\\trận đấu}
+  \seqactor{P}{8.9}{Quản lý\\cứ điểm}
+  \seqactor{R}{12.1}{Báo cáo\\kết quả}
+  \seqactor{S}{15.2}{Master Server /\\Client}
   \seqbegin
   \seqfragbegin
-  \seqmsg{L}{M}{Tick(dt, số người thật, actor còn sống)}
+  \seqmsg{L}{M}{Cập nhật chu kỳ: số người thật, thực thể còn sống}
   \seqfragbegin
-  \seqmsg{M}{P}{cập nhật theo quân số từng phe trong vùng}
-  \seqret{P}{M}{thanh chiếm, chủ sở hữu, tranh chấp}
-  \seqself{M}{phe ít điểm hơn mất 0,5 vé/giây\\cho mỗi điểm chênh lệch}
+  \seqmsg{M}{P}{Cập nhật tiến độ theo quân số từng phe trong vùng}
+  \seqret{P}{M}{Thanh chiếm, phe sở hữu, trạng thái tranh chấp}
+  \seqself{M}{Phe ít điểm hơn mất 0,5 vé/giây\\cho mỗi điểm chênh lệch}
   \seqfragend{L}{S}{opt}{pha Playing}
-  \seqmsg{L}{M}{ReportDeath(team): phe đó mất 1 vé}
+  \seqmsg{L}{M}{Báo tử trận: trừ 1 vé của phe tương ứng}
   \seqfragend{L}{S}{loop}{mỗi tick}
-  \seqret{L}{S}{S\_MATCH\_STATE (khi MatchStateIsDirty), S\_CAPTURE\_POINT}
+  \seqret{L}{S}{S\_MATCH\_STATE, S\_CAPTURE\_POINT}
   \seqfragbegin
-  \seqmsg{M}{R}{MatchEnded(roomId, kết quả từng người)}
-  \seqmsg{R}{S}{GS\_MATCH\_ENDED \{kills, deaths, score\} -- TCP tới master}
-  \seqfragend{L}{S}{opt}{một phe hết vé hoặc mất mọi điểm hồi sinh}
-  \seqself{M}{Ended: bảng điểm 20 s $\rightarrow$ Resetting:\\despawn, thu hồi id, đặt lại điểm chiếm}
+  \seqmsg{M}{R}{Tổng kết trận đấu: kết quả từng người chơi}
+  \seqmsg{R}{S}{GS\_MATCH\_ENDED \{hạ gục, chết, điểm số\} - TCP tới master}
+  \seqfragend{L}{S}{opt}{Một phe hết vé hoặc mất toàn bộ điểm hồi sinh}
+  \seqself{M}{Kết thúc: bảng điểm 20 s $\rightarrow$ Đặt lại thế giới:\\thu hồi ID, đặt lại cứ điểm}
   \seqend{L,M,P,R,S}
 \end{tikzpicture}
 \caption{Biểu đồ tuần tự luật trận: tick, điểm chiếm cứ, trừ vé, kết thúc và báo kết quả về master}
@@ -457,14 +450,14 @@ Actor vừa trở nên liên quan chưa có lịch sử & Dùng tư thế hiện
 \begin{center}\small
 \begin{tabularx}{\linewidth}{|L{4.4cm}|Y|}
 \hline
-\hd{Luật trong đề} & \hd{Hiện thực (\code{MatchRules}, \code{MatchStateMachine}, \code{CapturePointState})} \\ \hline
-Năm pha: chờ người, khởi động, đang đánh, kết thúc, dọn dẹp & \code{WaitingForPlayers} $\rightarrow$ \code{Warmup} $\rightarrow$ \code{Playing} $\rightarrow$ \code{Ended} $\rightarrow$ \code{Resetting} (Hình~\ref{fig:C-tran}) \\ \hline
-Ít nhất 2 người thật, bot không tính; đếm ngược 20 s & \code{MinPlayersToStart = 2} tính trên người chơi thật; \code{WarmupSeconds = 20}; người rời làm thiếu người thì quay về chờ \\ \hline
-Mỗi phe 200 vé, mỗi lần chết mất 1 vé & \code{StartTickets = 200}, \code{TicketsPerDeath = 1}, áp dụng cho người, bot và tự chết \\ \hline
-Phe giữ ít điểm hơn mất 0,5 vé/giây cho mỗi điểm chênh & \code{BleedPerPointPerSecond = 0,5}; bằng điểm thì không ai bị trừ \\ \hline
-Tốc độ chiếm theo chênh lệch quân số, chỉ tới 4 người; bằng người thì tranh chấp & \code{MaxCaptureHeadcount = 4}; chênh lệch 0 thì thanh chiếm đứng yên; chỉ gửi cập nhật khi thanh đổi quá 2\% (\code{CaptureSendThreshold}) \\ \hline
-Mất toàn bộ điểm hồi sinh thì thua & Đếm điểm hồi sinh mỗi phe; luật chỉ áp dụng sau 1 s đầu vòng (\code{EliminationGraceSeconds}) --- bản đồ có mọi điểm trung lập lúc đầu sẽ không bị xử hoà ngay tick đầu tiên \\ \hline
-Hết trận hiện bảng điểm 20 s rồi chơi tiếp & \code{PostMatchSeconds = 20}; \code{Resetting} despawn actor, đặt lại điểm chiếm và vé, không cần thoát phòng \\ \hline
+\hd{Luật trong đề} & \hd{Hiện thực kỹ thuật và tham số} \\ \hline
+Năm pha: chờ người, khởi động, đang đánh, kết thúc, dọn dẹp & Chờ người chơi $\rightarrow$ Khởi động $\rightarrow$ Đang thi đấu $\rightarrow$ Kết thúc $\rightarrow$ Đặt lại thế giới (Hình~\ref{fig:C-tran}) \\ \hline
+Ít nhất 2 người thật, bot không tính; đếm ngược 20 s & Tối thiểu 2 người chơi thật để bắt đầu; thời gian khởi động 20 s; người rời làm thiếu người thì quay về chờ \\ \hline
+Mỗi phe 200 vé, mỗi lần chết mất 1 vé & 200 vé ban đầu cho mỗi phe; trừ 1 vé khi người chơi hoặc bot tử trận \\ \hline
+Phe giữ ít điểm hơn mất 0,5 vé/giây cho mỗi điểm chênh & Trừ 0,5 vé/giây cho mỗi cứ điểm chênh lệch; bằng điểm thì không bị trừ \\ \hline
+Tốc độ chiếm theo chênh lệch quân số, chỉ tới 4 người; bằng người thì tranh chấp & Tối đa 4 người tính điểm chênh lệch; chênh lệch 0 thì tranh chấp; chỉ gửi gói tin khi thanh đổi quá 2\% \\ \hline
+Mất toàn bộ điểm hồi sinh thì thua & Kiểm tra điểm hồi sinh mỗi phe; luật chỉ áp dụng sau 1 s đầu vòng để tránh xử hoà ngay tick đầu \\ \hline
+Hết trận hiện bảng điểm 20 s rồi chơi tiếp & Thời gian bảng điểm cuối trận 20 s; sau đó tự động đặt lại cứ điểm và vé mà không cần thoát phòng \\ \hline
 \end{tabularx}
 \end{center}
 
@@ -474,16 +467,16 @@ Hết trận hiện bảng điểm 20 s rồi chơi tiếp & \code{PostMatchSeco
 \centering
 \renewcommand{\seqstep}{0.64cm}
 \begin{tikzpicture}[x=1cm, y=1cm]
-  \seqactor{T}{1.4}{srv : UdpTransport-\\Server}
-  \seqactor{L}{5.4}{ServerTickLoop}
-  \seqactor{A}{9.4}{ServerActor-\\Registry}
+  \seqactor{T}{1.4}{Máy chủ\\giao vận UDP}
+  \seqactor{L}{5.4}{Vòng lặp\\tick server}
+  \seqactor{A}{9.4}{Quản lý thực thể\\nhân vật}
   \seqactor{O}{13.6}{Các client\\còn lại}
   \seqbegin
-  \seqmsg{T}{L}{OnClientDisconnected(conn, Timeout / RemoteRequest)}
-  \seqret{L}{O}{S\_DESPAWN\_ACTOR \{actorId, Left\} -- kênh 2 (gửi \textbf{trước} khi xoá)}
-  \seqmsg{L}{A}{ReleaseSlot(actor)}
-  \seqself{A}{ActorIdPool.Release: id vào\\vùng cách ly 5 s}
-  \seqself{L}{ForgetActor: xoá vùng quan tâm, spawn đã gửi,\\lịch sử hitbox, ghế và input phương tiện}
+  \seqmsg{T}{L}{Thông báo client ngắt kết nối (Quá hạn 10 s / Chủ động thoát)}
+  \seqret{L}{O}{S\_DESPAWN\_ACTOR \{mã ID, Đã rời\} - kênh 2 (gửi trước khi xoá)}
+  \seqmsg{L}{A}{Giải phóng vị trí nhân vật}
+  \seqself{A}{Thu hồi mã ID: đưa vào vùng cách ly an toàn 5 s}
+  \seqself{L}{Giải phóng toàn bộ trạng thái: vùng quan tâm, lịch sử hitbox, trang bị}
   \seqend{T,L,A,O}
 \end{tikzpicture}
 \caption{Biểu đồ tuần tự rời trận: thông báo cho người còn lại trước, rồi mới giải phóng tài nguyên}
@@ -492,3 +485,30 @@ Hết trận hiện bảng điểm 20 s rồi chơi tiếp & \code{PostMatchSeco
 Thứ tự gửi \code{S_DESPAWN_ACTOR} trước khi xoá bảng là có chủ đích: nếu xoá trước, người còn lại thấy một ``hình nộm''
 đứng bất động, vẫn bắn trúng được, ở vị trí cuối của người đã rời cho tới hết trận. Transport coi client im lặng quá
 10 s là rời trận và luồng này xử lý y hệt trường hợp chủ động thoát, đúng yêu cầu trong đề.
+
+% -------------------------------------------------------------------------------------
+\subsection{Bảng ánh xạ hình vẽ với chức năng cá nhân thực hiện}
+\label{sec:C-mapping-hinh-ve}
+Bảng tổng hợp đối chiếu toàn bộ các sơ đồ kiến trúc, máy trạng thái, cơ chế thuật toán và luồng xử lý do cá nhân thực hiện tương ứng với các chức năng cụ thể trong phân hệ đồng bộ trạng thái và mô phỏng server:
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{2.2cm}|L{4.2cm}|Y|}
+\hline
+\hd{Hình vẽ} & \hd{Tên hình vẽ / biểu đồ} & \hd{Chức năng cá nhân thực hiện} \\ \hline
+Hình~\ref{fig:C-kientruc} & Kiến trúc phân hệ Replication & Thiết kế phân tầng phân hệ đồng bộ: tách biệt lớp logic .NET thuần (kiểm thử độc lập) với lớp tích hợp engine trên game server. \\ \hline
+Hình~\ref{fig:C-tick} & Vòng tick có thẩm quyền & Hiện thực vòng lặp mô phỏng vật lý và trạng thái 30 Hz (33,3 ms) độc lập với FPS đồ hoạ; kiểm soát nợ tick chống hiện tượng vòng xoáy tử thần. \\ \hline
+Hình~\ref{fig:C-nen} & Cấu trúc nén trạng thái thực thể & Thiết kế cấu trúc lưu trữ snapshot thế giới nhị phân (tối đa 48 thực thể) và thuật toán phân loại tần suất gửi theo vùng quan tâm (Near/Mid/Far). \\ \hline
+Hình~\ref{fig:C-ketqua} & Tối ưu hoá băng thông mạng & Kết quả đo lường và tối ưu hoá: giảm băng thông truyền từ 19,86 KB/s xuống còn 1,50 KB/s mỗi client, đáp ứng xuất sắc giới hạn thiết kế 8 KB/s. \\ \hline
+Hình~\ref{fig:C-baseline} & Cơ chế mã hoá vi sai Delta & Hiện thực kỹ thuật nén delta so với baseline đã xác nhận: chỉ gửi mặt nạ thay đổi (changeMask 8-bit) và dữ liệu có biến động thực tế. \\ \hline
+Hình~\ref{fig:C-interest} & Lọc vùng quan tâm Area of Interest & Phân vùng không gian và góc nhìn camera để lọc thực thể liên quan, loại bỏ truyền dữ liệu thừa cho các thực thể ngoài tầm quan sát. \\ \hline
+Hình~\ref{fig:C-ban} & Cơ chế bù trễ phát bắn & Hiện thực giải thuật tua ngược hộp va chạm (hitbox history) về đúng thời điểm người bắn nhìn thấy trong quá khứ, giải quyết triệt để vấn đề trễ mạng. \\ \hline
+Hình~\ref{fig:C-tile} & Tỷ lệ nén dữ liệu theo kịch bản & Đánh giá hiệu quả thuật toán nén snapshot trong các tình huống thực chiến: di chuyển tự do, giao tranh cụm và kịch bản tĩnh. \\ \hline
+Hình~\ref{fig:C-tran} & Máy trạng thái trận đấu & Thiết kế máy trạng thái vòng đời trận đấu gồm 5 pha: Chờ người chơi, Khởi động, Đang thi đấu, Kết thúc và Dọn dẹp/đặt lại thế giới. \\ \hline
+Hình~\ref{fig:C-luong-vao} & Sơ đồ tuần tự vào trận & Hiện thực luồng tiếp nhận người chơi, cấp phát vị trí thực thể, đồng bộ trạng thái trận và kiểm soát thời gian hồi sinh an toàn. \\ \hline
+Hình~\ref{fig:C-luong-tick} & Sơ đồ tuần tự vòng tick & Hiện thực luồng thu thập input từ client, xác thực tính hợp lệ, chuẩn hoá vector, kẹp tốc độ và thực thi bước mô phỏng chuyển động có thẩm quyền. \\ \hline
+Hình~\ref{fig:C-luong-snapshot} & Sơ đồ tuần tự tạo snapshot & Hiện thực luồng lượng tử hoá dữ liệu, lọc vùng quan tâm theo khoảng cách/góc nhìn và đóng gói snapshot nén gửi qua kênh UDP có thứ tự. \\ \hline
+Hình~\ref{fig:C-luong-ban} & Sơ đồ tuần tự phân xử phát bắn & Hiện thực quy trình kiểm tra điều kiện bắn (cooldown, số đạn), tua ngược hitbox lịch sử, kiểm tra va chạm tia và áp dụng sát thương có thẩm quyền. \\ \hline
+Hình~\ref{fig:C-luong-tran} & Sơ đồ tuần tự luật trận & Hiện thực cập nhật tiến độ chiếm cứ điểm theo quân số, cơ chế trừ vé tự động, phân định thắng thua và báo cáo tổng kết kết quả về máy chủ trung tâm. \\ \hline
+Hình~\ref{fig:C-luong-roi} & Sơ đồ tuần tự rời trận & Hiện thực luồng thông báo huỷ thực thể (despawn) cho các người chơi khác trước khi thu hồi mã định danh và giải phóng tài nguyên. \\ \hline
+\end{tabularx}
+\end{center}

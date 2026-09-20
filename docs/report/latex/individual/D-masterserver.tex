@@ -1,12 +1,12 @@
 % =====================================================================================
-% D-masterserver.tex — PHẦN II của Nguyễn Tự Kiên: Master Server TCP và hạ tầng
+% D-masterserver.tex - PHẦN II của Nguyễn Tự Kiên: Master Server TCP và hạ tầng
 % =====================================================================================
-\PhanLon{II. NỘI DUNG CÁ NHÂN -- Phân hệ Master Server TCP và hạ tầng.}
+\PhanLon{II. NỘI DUNG CÁ NHÂN - Phân hệ Master Server TCP và hạ tầng.}
 
 \section{Biểu đồ và giao diện nội dung cá nhân thực hiện}
-Phân hệ Master Server là \textbf{máy chủ TCP thuần .NET 8} --- không ASP.NET Core, không SignalR, không
-WebSocket --- chỉ dùng \code{TcpListener} và \code{Socket}. Trọng tâm là bài toán \textbf{đóng khung thông điệp trên
-luồng byte TCP}. Phạm vi còn gồm thư viện \code{IMasterClient} cho client Unity, liên kết game server -- master,
+Phân hệ Master Server là \textbf{máy chủ TCP thuần .NET 8} - không ASP.NET Core, không SignalR, không
+WebSocket - chỉ sử dụng tầng Socket mạng nền tảng và cơ chế lắng nghe kết nối tiêu chuẩn của hệ điều hành. Trọng tâm là bài toán \textbf{đóng khung thông điệp trên
+luồng byte TCP}. Phạm vi còn gồm module thư viện cho client Unity, liên kết game server - master,
 công cụ kiểm thử tải và hạ tầng triển khai (Docker, systemd, TLS, Terraform).
 
 % -------------------------------------------------------------------------------------
@@ -14,26 +14,26 @@ công cụ kiểm thử tải và hạ tầng triển khai (Docker, systemd, TLS
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[x=1cm, y=1cm]
-  \node[bxB, text width=3.0cm] (cli) at (4.2,0)  {Client Unity\\{\footnotesize IMasterClient}};
-  \node[bxG, text width=3.0cm] (gs)  at (10.2,0) {Game Server\\{\footnotesize GameServerLink}};
+  \node[bxB, text width=3.0cm] (cli) at (4.2,0)  {Client Unity\\{\footnotesize Giao tiếp Sảnh}};
+  \node[bxG, text width=3.0cm] (gs)  at (10.2,0) {Game Server\\{\footnotesize Liên kết Máy chủ}};
   % luồng nhận
-  \node[bxO, text width=5.4cm] (lis) at (7.2,-1.9) {\textbf{TcpListenerHost}\\{\footnotesize accept bất đồng bộ; 5 kết nối/IP, 256 tổng; TLS tuỳ chọn}};
-  \node[bxO, text width=2.6cm] (cc)  at (1.9,-3.9) {\textbf{ClientConnection}\\{\footnotesize đọc/ghi async}};
-  \node[bxO, text width=2.6cm] (fr)  at (5.4,-3.9) {\textbf{MspFrameReader}\\{\footnotesize bộ đệm tích luỹ}};
+  \node[bxO, text width=5.4cm] (lis) at (7.2,-1.9) {\textbf{Bộ lắng nghe TCP}\\{\footnotesize tiếp nhận bất đồng bộ; 5 kết nối/IP, 256 tổng; TLS tuỳ chọn}};
+  \node[bxO, text width=2.6cm] (cc)  at (1.9,-3.9) {\textbf{Quản lý kết nối}\\{\footnotesize đọc/ghi bất đồng bộ}};
+  \node[bxO, text width=2.6cm] (fr)  at (5.4,-3.9) {\textbf{Bộ đọc khung tin}\\{\footnotesize bộ đệm tích luỹ}};
   \node[bxO, text width=2.6cm] (q)   at (8.9,-3.9) {\textbf{Hàng đợi}\\{\footnotesize đồng thời}};
   \node[bxO, text width=2.6cm] (lt)  at (12.4,-3.9) {\textbf{Luồng logic}\\{\footnotesize duy nhất}};
-  \node[bxO, text width=4.2cm] (dp)  at (7.2,-5.7) {\textbf{MspMessageDispatcher}\\{\footnotesize định tuyến theo msgType}};
+  \node[bxO, text width=4.2cm] (dp)  at (7.2,-5.7) {\textbf{Bộ điều phối bản tin}\\{\footnotesize định tuyến theo loại bản tin}};
   % dịch vụ
-  \node[bxY, text width=2.7cm] (au) at (1.9,-7.7)  {\textbf{AuthService}\\{\footnotesize bcrypt, phiên}};
-  \node[bxY, text width=2.7cm] (lo) at (5.9,-7.7)  {\textbf{LobbyService}\\{\footnotesize phòng, đẩy trạng thái}};
-  \node[bxY, text width=2.7cm] (mm) at (9.9,-7.7)  {\textbf{Matchmaking}\\{\footnotesize hàng đợi ghép}};
-  \node[bxY, text width=2.2cm] (ch) at (13.6,-7.7) {\textbf{ChatService}};
+  \node[bxY, text width=2.7cm] (au) at (1.9,-7.7)  {\textbf{Dịch vụ xác thực}\\{\footnotesize bcrypt, phiên}};
+  \node[bxY, text width=2.7cm] (lo) at (5.9,-7.7)  {\textbf{Dịch vụ sảnh}\\{\footnotesize phòng, đẩy trạng thái}};
+  \node[bxY, text width=2.7cm] (mm) at (9.9,-7.7)  {\textbf{Dịch vụ ghép trận}\\{\footnotesize hàng đợi ghép}};
+  \node[bxY, text width=2.2cm] (ch) at (13.6,-7.7) {\textbf{Dịch vụ trò chuyện}};
   \node[db,  text width=1.8cm] (db) at (1.9,-9.9)  {SQLite};
-  \node[bxY, text width=2.7cm] (gr) at (5.9,-9.9)  {\textbf{GameServer\-Registry}\\{\footnotesize heartbeat}};
-  \node[bxY, text width=2.7cm] (tk) at (9.9,-9.9)  {\textbf{JoinTicket}\\{\footnotesize HMAC-SHA256}};
-  \node[bxP, text width=2.2cm] (me) at (13.6,-9.9) {\textbf{Metrics}\\{\footnotesize TCP 27001}};
+  \node[bxY, text width=2.7cm] (gr) at (5.9,-9.9)  {\textbf{Sổ đăng ký Server}\\{\footnotesize theo dõi nhịp tim}};
+  \node[bxY, text width=2.7cm] (tk) at (9.9,-9.9)  {\textbf{Vé tham gia}\\{\footnotesize ký HMAC-SHA256}};
+  \node[bxP, text width=2.2cm] (me) at (13.6,-9.9) {\textbf{Thu thập chỉ số}\\{\footnotesize cổng TCP nội bộ}};
   \node[grp, fit=(lis)(cc)(lt)(db)(me)] (gM) {};
-  \node[grpt, anchor=south east] at (gM.north east) {Ironfront.MasterServer};
+  \node[grpt, anchor=south east] at (gM.north east) {Phân hệ Master Server};
   % cạnh
   \draw[arr] (cli.south) -- node[lbl, left=3pt, pos=0.25]{TCP 27000} (cli.south |- lis.north);
   \draw[arr] (gs.south) -- node[lbl, right=3pt, pos=0.25]{TCP 27000} (gs.south |- lis.north);
@@ -59,9 +59,9 @@ công cụ kiểm thử tải và hạ tầng triển khai (Docker, systemd, TLS
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[x=1cm, y=1cm, fld/.style={draw=cLine, minimum height=1.25cm, align=center, font=\footnotesize, inner sep=2pt}]
-  \node[fld, fill=cBlue,   minimum width=3.8cm, anchor=west] (a) at (0,0)    {\textbf{length} -- u32 big-endian\\\texttt{00 00 00 09}};
-  \node[fld, fill=cGreen,  minimum width=3.8cm, anchor=west] (b) at (a.east) {\textbf{msgType} -- u16 little-endian\\\texttt{01 00} = LOGIN\_REQ};
-  \node[fld, fill=cOrange, minimum width=6.4cm, anchor=west] (c) at (b.east) {\textbf{body} -- UTF-8 JSON\\\texttt{7B 22 75 22 3A 31 7D} = \texttt{\{"u":1\}}};
+  \node[fld, fill=cBlue,   minimum width=3.8cm, anchor=west] (a) at (0,0)    {\textbf{length} - u32 big-endian\\\texttt{00 00 00 09}};
+  \node[fld, fill=cGreen,  minimum width=3.8cm, anchor=west] (b) at (a.east) {\textbf{msgType} - u16 little-endian\\\texttt{01 00} = LOGIN\_REQ};
+  \node[fld, fill=cOrange, minimum width=6.4cm, anchor=west] (c) at (b.east) {\textbf{body} - UTF-8 JSON\\\texttt{7B 22 75 22 3A 31 7D} = \texttt{\{"u":1\}}};
 \end{tikzpicture}
 \caption{Khung tin MSP tham chiếu 13 byte (được ghim trong bộ test conformance)}
 \label{fig:D-khung}
@@ -71,7 +71,7 @@ công cụ kiểm thử tải và hạ tầng triển khai (Docker, systemd, TLS
 \begin{tabularx}{\linewidth}{|L{3.3cm}|Y|Y|}
 \hline
 \hd{Trường hợp đọc} & \hd{Điều xảy ra nếu xử lý sai} & \hd{Số liệu đo thực tế} \\ \hline
-Một lần đọc, một khung & Không lỗi -- trường hợp ai cũng thử & Chỉ trùng khớp do tình cờ \\ \hline
+Một lần đọc, một khung & Không lỗi - trường hợp ai cũng thử & Chỉ trùng khớp do tình cờ \\ \hline
 Dính (glue) & Khung 2..n bị bỏ hoặc kết nối treo & 1000 lần Send $\rightarrow$ 942 lần Receive \\ \hline
 Tách (split) & Không bao giờ ghép đủ khung, đọc rác từ tiền tố cụt & 1 khung 58 KB $\rightarrow$ 8 lần Receive \\ \hline
 Dính + phần dư đuôi & Cả hai lỗi cùng lúc; phải giữ phần đuôi qua các lần đọc & Kiểm thử riêng \\ \hline
@@ -81,9 +81,9 @@ Dính + phần dư đuôi & Cả hai lỗi cùng lúc; phải giữ phần đuô
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[x=1cm, y=1cm]
-  \node[bxB, text width=4.2cm] (r)   at (5,0)     {\texttt{ReadAsync} / \texttt{SslStream.ReadAsync}};
+  \node[bxB, text width=4.2cm] (r)   at (5,0)     {Đọc luồng bất đồng bộ\\(I/O TCP/TLS)};
   \node[dec, text width=1.9cm] (z)   at (5,-1.8)  {0 byte?};
-  \node[bxB, text width=4.2cm] (ap)  at (5,-3.5)  {\texttt{reader.Append(chunk)}};
+  \node[bxB, text width=4.2cm] (ap)  at (5,-3.5)  {Đưa dữ liệu vào bộ đệm tích luỹ};
   \node[dec, text width=2.3cm] (h)   at (5,-5.3)  {đủ 4 byte\\length?};
   \node[dec, text width=2.3cm] (lim) at (5,-7.5)  {length\\$\le$ 64 KB?};
   \node[dec, text width=2.3cm] (fu)  at (5,-9.7)  {đủ 4 + length\\byte?};
@@ -100,9 +100,9 @@ Dính + phần dư đuôi & Cả hai lỗi cùng lúc; phải giữ phần đuô
   \draw[arr] (fu) -- node[lbl, right=2pt]{đủ} (out);
   \draw[arr] (h.west) -- node[lbl, above=2pt]{chưa} (0.6,-5.3) |- (r.west);
   \draw[arr] (fu.west) -- node[lbl, above=2pt]{chưa} (0.6,-9.7) -- (0.6,-5.3);
-  \draw[arr] (out.east) -- (8.6,-11.6) |- node[lbl, pos=0.25, right=2pt]{rút khung tiếp\\(vòng \texttt{while})} (h.east);
+  \draw[arr] (out.east) -- (8.6,-11.6) |- node[lbl, pos=0.25, right=2pt]{rút khung tiếp\\(vòng lặp liên tục)} (h.east);
 \end{tikzpicture}
-\caption{Thuật toán bộ đọc tích luỹ: rút mọi khung hoàn chỉnh trong vòng lặp \texttt{while}, không phải \texttt{if}}
+\caption{Thuật toán bộ đọc tích luỹ: rút mọi khung hoàn chỉnh trong vòng lặp quét cạn, không kiểm tra một lần}
 \label{fig:D-bodoc}
 \end{figure}
 
@@ -238,60 +238,54 @@ Dính + phần dư đuôi & Cả hai lỗi cùng lúc; phải giữ phần đuô
     \nodepart{two}\begin{tabular}{@{}l@{}}
       + Register(), Heartbeat() \\ + MatchStarted(), MatchEnded() \\
     \end{tabular}};
-  \node[bxY, text width=2.6cm] (mc)  at (3.4,-7.7) {MasterClient};
-  \node[bxY, text width=2.9cm] (gsl) at (9.5,-7.3) {GameServerLink};
-  \node[bxY, text width=3.3cm] (fk)  at (14.2,-7.3) {FakeGameServerLink};
-  \node[bxY, text width=3.8cm] (rep) at (11.9,-9.2) {GameServerMatchReporter};
+  \node[bxY, text width=2.6cm] (mc)  at (3.4,-7.7) {Client kết nối sảnh};
+  \node[bxY, text width=2.9cm] (gsl) at (9.5,-7.3) {Liên kết máy chủ game};
+  \node[bxY, text width=3.3cm] (fk)  at (14.2,-7.3) {Giả lập máy chủ game};
+  \node[bxY, text width=3.8cm] (rep) at (11.9,-9.2) {Báo cáo kết quả trận};
   \draw[darr, -{Triangle[open, length=3mm]}] (mc) -- (im);
   \draw[arr] (im.east |- jr.west) -- node[lbl, above=2pt]{trả về} (jr.west);
   \draw[darr, -{Triangle[open, length=3mm]}] (gsl.north) -- (gsl.north |- gl.south);
   \draw[darr, -{Triangle[open, length=3mm]}] (fk.north) -- (fk.north |- gl.south);
   \draw[arr] (rep.north) -- (rep.north |- gl.south);
 \end{tikzpicture}
-\caption{API cho client Unity và liên kết game server; mọi sự kiện được phát trên luồng chính trong \texttt{Poll()}}
+\caption{Giao diện lập trình cho Client và liên kết Game Server; mọi sự kiện nghiệp vụ được đồng bộ về luồng chính}
 \label{fig:D-api}
 \end{figure}
 
 \begin{figure}[H]
 \centering
-\begin{minipage}[t]{0.49\linewidth}\lstset{basicstyle=\ttfamily\footnotesize}
-\begin{lstlisting}
-$ nc 127.0.0.1 27001
-{ "uptimeSec": 5412,
-  "connections": { "current": 18, "peak": 32,
-      "totalAccepted": 1411, "refused": 0,
-      "timedOut": 3 },
-  "transport": { "tls": true,
-      "framesReceived": 88213,
-      "tlsHandshakeFailures": 0 },
-  "accounts": { "total": 57, "onlineNow": 16 },
-  "rooms": { "active": 3, "inMatch": 2,
-      "queued": 0 },
-  "gameServers": { "registered": 2,
-      "healthy": 2, "allocated": 2 },
-  "rates": { "loginsPerMin": 4,
-      "errorsPerMin": 0 } }
-\end{lstlisting}
+\begin{minipage}[t]{0.48\linewidth}\small
+\centering
+\textbf{Chỉ số giám sát dịch vụ (Cổng TCP Metrics)}\\[4pt]
+\begin{tabularx}{\linewidth}{|L{3.2cm}|Y|}
+\hline
+\hd{Chỉ số giám sát} & \hd{Giá trị đo} \\ \hline
+Thời gian hoạt động & 5\,412 giây \\ \hline
+Kết nối hiện thời / đỉnh & 18 / 32 kết nối \\ \hline
+Tổng kết nối đã nhận & 1\,411 kết nối \\ \hline
+Tổng khung tin đã nhận & 88\,213 khung \\ \hline
+Lỗi bắt tay bảo mật TLS & 0 lỗi \\ \hline
+Tài khoản đang trực tuyến & 16 / 57 tài khoản \\ \hline
+Phòng hoạt động / vào trận & 3 / 2 phòng \\ \hline
+Máy chủ trận khả dụng & 2 / 2 máy chủ \\ \hline
+Tỷ lệ đăng nhập / phút & 4 lượt / phút \\ \hline
+\end{tabularx}
 \end{minipage}
-
-\vspace{4pt}
-\begin{minipage}[t]{0.8\linewidth}\lstset{basicstyle=\ttfamily\footnotesize}
-\begin{lstlisting}
-$ dotnet run --project Ironfront.Tools.LoadTest -- \
-    --master 127.0.0.1:27000 --clients 16 \
-    --duration 60 --behavior random-walk
-
-scenario       ops   ops/s     p50     p99  fail
-random-walk   8636   143.9  0.81ms  5.77ms     0
-room-list   366927 12230.0  0.89ms  7.42ms     0
-join-leave    3911   130.4  0.72ms  5.68ms   147
-32 clients    6208   206.9  1.03ms  8.51ms     0
-
-RAM 64-74 MB; 1000 connections held: 81 MB
-\end{lstlisting}
+\hfill
+\begin{minipage}[t]{0.50\linewidth}\small
+\centering
+\textbf{Kết quả kiểm thử tải áp lực (Load Test)}\\[4pt]
+\begin{tabularx}{\linewidth}{|L{2.5cm}|r|r|r|r|}
+\hline
+\hd{Kịch bản đo} & \hd{Tải/giây} & \hd{p50} & \hd{p99} & \hd{Lỗi} \\ \hline
+Hành vi ngẫu nhiên & 143,9 & 0,81 ms & 5,77 ms & 0 \\ \hline
+Quét danh sách phòng & 12\,230,0 & 0,89 ms & 7,42 ms & 0 \\ \hline
+Vào và rời phòng liên tục & 130,4 & 0,72 ms & 5,68 ms & 147 \\ \hline
+32 máy khách song song & 206,9 & 1,03 ms & 8,51 ms & 0 \\ \hline
+\multicolumn{5}{|p{0.95\linewidth}|}{\footnotesize \textbf{Bộ nhớ RAM:} 64-74 MB khi chạy thông thường; duy trì 1\,000 kết nối đồng thời chiếm 81 MB.} \\ \hline
+\end{tabularx}
 \end{minipage}
-\caption{Giao diện giám sát: điểm cuối metrics JSON trên TCP thô (trái, giá trị minh hoạ cấu trúc)
-và báo cáo công cụ kiểm thử tải (phải, số đo thực)}
+\caption{Giao diện giám sát thời gian thực và kết quả kiểm thử chịu tải của phân hệ Master Server}
 \label{fig:D-giamsat}
 \end{figure}
 
@@ -303,13 +297,13 @@ và báo cáo công cụ kiểm thử tải (phải, số đo thực)}
                     rowname/.style={font=\small\bfseries, align=left, text width=2.5cm, anchor=west}]
   \node[rowname] at (0,0) {Build và\\phát hành};
   \node[lay, fill=cGray]   (a1) at (4.6,0)  {\textbf{GitHub Actions}\\{\footnotesize build, test Ubuntu và Windows}};
-  \node[lay, fill=cPurple] (a2) at (8.4,0)  {\textbf{docker build}\\{\footnotesize master, gameserver Dockerfile}};
+  \node[lay, fill=cPurple] (a2) at (8.4,0)  {\textbf{Docker Build}\\{\footnotesize Master và Game Server}};
   \node[lay, fill=cPurple] (a3) at (12.2,0) {\textbf{GHCR}\\{\footnotesize image bất biến theo commit}};
   \draw[arr] (a1) -- (a2); \draw[arr] (a2) -- (a3);
   \node[rowname] at (0,-2.3) {Máy ảo\\{\footnotesize\mdseries Terraform, cloud-init}};
-  \node[lay, fill=cGreen] (b1) at (12.2,-2.3) {\textbf{VM + firewall}\\{\footnotesize 27000/tcp, 27015--27016/udp}};
-  \node[lay, fill=cGreen] (b2) at (8.4,-2.3)  {\textbf{.env chỉ root đọc}\\{\footnotesize SHARED\_SECRET, PUBLIC\_IP}};
-  \node[lay, fill=cGreen] (b3) at (4.6,-2.3)  {\textbf{infra/tls}\\{\footnotesize cấp và gia hạn chứng chỉ}};
+  \node[lay, fill=cGreen] (b1) at (12.2,-2.3) {\textbf{VM + firewall}\\{\footnotesize 27000/tcp, 27015-27016/udp}};
+  \node[lay, fill=cGreen] (b2) at (8.4,-2.3)  {\textbf{Cấu hình bí mật}\\{\footnotesize quyền đọc root, địa chỉ IP}};
+  \node[lay, fill=cGreen] (b3) at (4.6,-2.3)  {\textbf{Chứng chỉ TLS}\\{\footnotesize cấp và gia hạn chứng chỉ}};
   \node[rowname] at (0,-4.6) {docker\\compose};
   \node[lay, fill=cOrange] (c1) at (4.6,-4.6)  {\textbf{master}\\{\footnotesize 27000/tcp TLS, không quyền root}};
   \node[lay, fill=cBlue]   (c2) at (8.4,-4.6)  {\textbf{gameserver-1}\\{\footnotesize 27015/udp, tối đa 1536 MB}};
@@ -318,7 +312,7 @@ và báo cáo công cụ kiểm thử tải (phải, số đo thực)}
   \node[lay, fill=cGray] (d1) at (4.6,-6.9)  {\textbf{volume SQLite}\\{\footnotesize tài khoản, kết quả trận}};
   \node[lay, fill=cGray] (d2) at (8.4,-6.9)  {\textbf{backup.timer}\\{\footnotesize sao lưu định kỳ}};
   \node[lay, fill=cGray] (d3) at (12.2,-6.9) {\textbf{alert.timer}\\{\footnotesize báo khi master ngừng}};
-  \draw[arr] (a3.east) -- (14.7,0) -- node[lbl, sloped, above=1pt]{deploy.sh kéo image} (14.7,-4.6) -- (c3.east);
+  \draw[arr] (a3.east) -- (14.7,0) -- node[lbl, sloped, above=1pt]{kéo và triển khai image} (14.7,-4.6) -- (c3.east);
   \draw[darr] (b2.south) -- (c2.north);
   \draw[darr] (b3.south) -- (c1.north);
   \draw[cLine, thick] (c1.south) -- (d1.north);
@@ -332,49 +326,49 @@ và báo cáo công cụ kiểm thử tải (phải, số đo thực)}
 % =====================================================================================
 \section{Luồng xử lý và giải pháp đã ứng dụng}
 Mục này trình bày chi tiết từng luồng nghiệp vụ mà bản mô tả đề tài giao cho phân hệ: kết nối TCP nhiều client,
-khung bản tin nhị phân, gửi nhận trên luồng nền phía client, đăng ký -- đăng nhập -- khoá tài khoản, danh sách phòng,
+khung bản tin nhị phân, gửi nhận trên luồng nền phía client, đăng ký - đăng nhập - khoá tài khoản, danh sách phòng,
 tạo và vào phòng, ghép trận nhanh, chat sảnh, cấp vé vào trận, đăng ký và báo sống của game server, lưu kết quả trận,
-bảo mật kênh TCP và triển khai. Mỗi luồng gồm sơ đồ tuần tự (tên lớp đúng như trong mã nguồn), diễn giải và bảng
-\textbf{vấn đề -- giải pháp}.
+bảo mật kênh TCP và triển khai. Mỗi luồng gồm sơ đồ tuần tự, diễn giải nghiệp vụ và bảng
+\textbf{vấn đề - giải pháp}.
 
 % -------------------------------------------------------------------------------------
 \subsection{Luồng tiếp nhận kết nối và đọc khung tin}
-\textbf{Mô hình luồng.} Mọi thao tác I/O (\code{AcceptAsync}, \code{ReadAsync}, \code{WriteAsync}) chạy bất đồng bộ
-trên thread pool và không bao giờ chặn. Mọi \textbf{logic} (nhận hay từ chối kết nối, xử lý khung, sửa bảng phiên
-và bảng phòng) chạy trên \textbf{đúng một luồng}, được cấp việc qua một hàng đợi đồng thời. Vì chỉ có một luồng
-chạm vào dữ liệu nên không cần khoá, và tình huống hai người tranh chỗ cuối cùng trong phòng không thể xảy ra.
+\textbf{Mô hình luồng.} Mọi thao tác I/O (tiếp nhận kết nối, đọc, ghi luồng byte) chạy bất đồng bộ
+trên thread pool và không bao giờ chặn. Mọi \textbf{logic} (nhận hay từ chối kết nối, xử lý khung, cập nhật phiên
+và danh sách phòng) chạy trên \textbf{đúng một luồng}, được cấp việc qua một hàng đợi đồng thời. Vì chỉ có một luồng
+chạm vào dữ liệu nghiệp vụ nên không cần khoá luồng (lock-free logic), triệt tiêu hoàn toàn nguy cơ tranh chấp tài nguyên sảnh chờ.
 
 \begin{figure}[H]
 \centering
 \renewcommand{\seqstep}{0.66cm}
 \begin{tikzpicture}[x=1cm, y=1cm]
-  \seqhuman{U}{0.6}{mc : Master-\\Client}
-  \seqactor{A}{3.7}{AcceptLoop\\(thread pool)}
-  \seqactor{L}{7.1}{Luồng logic\\(TcpListenerHost)}
-  \seqactor{C}{10.6}{conn : Client-\\Connection}
-  \seqactor{F}{13.3}{MspFrame-\\Reader}
-  \seqactor{D}{15.8}{MspMessage-\\Dispatcher}
+  \seqhuman{U}{0.6}{Client Unity}
+  \seqactor{A}{3.7}{Vòng tiếp nhận I/O\\(thread pool)}
+  \seqactor{L}{7.1}{Luồng logic\\(Bộ lắng nghe TCP)}
+  \seqactor{C}{10.6}{Đối tượng\\kết nối}
+  \seqactor{F}{13.3}{Bộ đọc\\khung tin}
+  \seqactor{D}{15.8}{Bộ điều phối\\bản tin}
   \seqbegin
   \seqmsg{U}{A}{connect TCP 27000}
-  \seqmsg{A}{L}{Enqueue(Admit(socket))}
+  \seqmsg{A}{L}{Đưa socket vào hàng đợi xử lý}
   \seqfragbegin
-  \seqself{L}{NoDelay = true; tạo ClientConnection;\\bắt đầu hạn 30 s chưa xác thực}
-  \seqmsg{L}{C}{StartAsync()}
+  \seqself{L}{Bật gửi tức thời; tạo kết nối;\\đặt hạn 30 s chưa xác thực}
+  \seqmsg{L}{C}{Khởi tạo tiến trình đọc}
   \seqfragbegin
-  \seqmsg{C}{U}{bắt tay TLS (AuthenticateAsServerAsync)}
+  \seqmsg{C}{U}{Bắt tay bảo mật TLS}
   \seqfragend{U}{C}{opt}{bật TLS}
   \seqfragelse{U}{D}{quá 5 kết nối/IP hoặc 256 tổng}
   \seqret{L}{U}{đóng socket ngay}
   \seqfragend{U}{D}{alt}{còn chỗ}
   \seqfragbegin
   \seqmsg{U}{C}{byte của 0..n khung (dính / tách tuỳ ý)}
-  \seqmsg{C}{F}{Append(chunk)}
+  \seqmsg{C}{F}{Nạp dữ liệu vào bộ đệm}
   \seqfragbegin
-  \seqmsg{F}{C}{TryReadFrame(): (msgType, body)}
-  \seqmsg{C}{L}{Enqueue(khung)}
-  \seqmsg{L}{D}{Dispatch(conn, msgType, body)}
-  \seqfragend{C}{D}{loop}{còn khung hoàn chỉnh (while)}
-  \seqfragend{U}{D}{loop}{ReadAsync trả > 0 byte}
+  \seqmsg{F}{C}{Rút khung tin hoàn chỉnh (loại tin, thân)}
+  \seqmsg{C}{L}{Đưa khung tin vào hàng đợi logic}
+  \seqmsg{L}{D}{Định tuyến và xử lý bản tin}
+  \seqfragend{C}{D}{loop}{còn khung hoàn chỉnh (vòng lặp liên tục)}
+  \seqfragend{U}{D}{loop}{Đọc luồng trả về > 0 byte}
   \seqend{U,A,L,C,F,D}
 \end{tikzpicture}
 \caption{Biểu đồ tuần tự tiếp nhận kết nối, bắt tay TLS và rút khung tin từ luồng byte TCP}
@@ -385,21 +379,17 @@ chạm vào dữ liệu nên không cần khoá, và tình huống hai người 
 \begin{tabularx}{\linewidth}{|L{4.6cm}|Y|}
 \hline
 \hd{Vấn đề} & \hd{Giải pháp đã áp dụng} \\ \hline
-TCP là luồng byte, không có ranh giới bản tin & Khung tiền tố độ dài: \code{length} u32 big-endian + \code{msgType} u16 + thân JSON; bộ đọc tích luỹ giữ phần đuôi dở dang qua các lần đọc và rút khung bằng vòng \code{while} (\code{MspFrameReader}) \\ \hline
-\code{length} do kẻ tấn công điều khiển (gửi $2^{32}-1$ để server cấp 4 GB) & Kiểm tra giới hạn 64 KB \textbf{trước khi} đệm; vi phạm thì bộ đọc chốt lỗi và đóng kết nối (\code{MspFrameReader}) \\ \hline
-Slowloris: kết nối rồi nhỏ giọt từng byte để giữ chỗ & Chưa đăng nhập: hạn \textbf{tuyệt đối} 30 s kể từ lúc accept (không gia hạn khi có byte); đã đăng nhập: hạn \textbf{im lặng} 45 s (\code{TcpListenerHostOptions}) \\ \hline
-Một địa chỉ hoặc botnet chiếm hết chỗ & Tối đa 5 kết nối/IP và 256 kết nối tổng (\code{TcpListenerHost}) \\ \hline
-Nagle + delayed ACK làm trễ bản tin nhỏ & \texttt{Socket.NoDelay = true}; mỗi khung ghi bằng \textbf{một} lệnh gửi (ghi header rồi ghi thân là mẫu gây trễ) (\code{TcpListenerHost}, \code{ClientConnection}) \\ \hline
-Kết nối nửa mở (rút dây mạng, không có FIN/RST) & \code{HEARTBEAT} mỗi 15 s từ client; 45 s im lặng thì đóng. Kiểm thử bằng \texttt{LingerOption(true, 0)} ép RST: 1\,376 lần ngắt đột ngột trong 30 s đều được thu hồi (\code{disconnect-abrupt} (LoadTest)) \\ \hline
-Dọn dẹp chạy hai lần làm bộ đếm IP âm hoặc rò chỗ & Gỡ khỏi bảng kết nối \textbf{trước}, chỉ giảm bộ đếm IP nếu việc gỡ thật sự xảy ra (idempotent) (\code{TcpListenerHost}) \\ \hline
+TCP là luồng byte, không có ranh giới bản tin & Khung tiền tố độ dài: \code{length} u32 big-endian + \code{msgType} u16 + thân JSON; bộ đọc tích luỹ giữ phần đuôi dở dang qua các lần đọc và rút khung bằng vòng lặp quét cạn (Module đọc khung tin nhị phân) \\ \hline
+Kích thước \code{length} do client điều khiển (nguy cơ cấp phát bộ nhớ ảo khổng lồ) & Kiểm tra giới hạn an toàn 64 KB \textbf{trước khi} đệm dữ liệu; vi phạm thì bộ đọc lập tức chốt lỗi và đóng kết nối ngay (Bộ đọc khung tin) \\ \hline
+Tấn công Slowloris: giữ kết nối nhỏ giọt từng byte để chiếm tài nguyên & Chưa đăng nhập: áp đặt hạn \textbf{tuyệt đối} 30 s kể từ lúc tiếp nhận (không gia hạn khi có byte mới); đã đăng nhập: hạn \textbf{im lặng} 45 s (Cấu hình tham số máy chủ kết nối) \\ \hline
+Một địa chỉ IP hoặc botnet chiếm dụng toàn bộ tài nguyên & Thiết lập giới hạn tối đa 5 kết nối/IP và 256 kết nối toàn hệ thống (Bộ tiếp nhận kết nối) \\ \hline
+Thuật toán Nagle và độ trễ ACK làm trễ các bản tin nhỏ & Kích hoạt cờ gửi tức thì không đệm (tắt thuật toán Nagle); mỗi khung dữ liệu được gửi đi trong một thao tác mạng duy nhất (Bộ tiếp nhận kết nối và quản lý kênh truyền) \\ \hline
+Kết nối nửa mở (ngắt kết nối bất ngờ, rút cáp mạng không phát sinh FIN/RST) & Bản tin nhịp tim mỗi 15 s từ client; sau 45 s không có tín hiệu thì đóng kết nối. Kiểm nghiệm thực tế với tín hiệu đặt lại cưỡng bức: 1\,376 lần ngắt đột ngột trong 30 s đều được thu hồi hoàn toàn (Kịch bản kiểm thử ngắt kết nối đột ngột) \\ \hline
+Thao tác dọn dẹp chạy đồng thời gây sai lệch bộ đếm kết nối & Gỡ bản ghi khỏi bảng kết nối \textbf{trước}, chỉ giảm bộ đếm IP nếu thao tác gỡ diễn ra thành công (tính chất luồng đơn và idempotent) (Bộ quản lý kết nối) \\ \hline
 \end{tabularx}
 \end{center}
 
-\textbf{Phía client (thư viện \code{MasterClient}).} Vòng nhận chạy trên luồng nền; mỗi khung nhận được được chép và
-đưa vào \code{ConcurrentQueue<Action>}. Unity gọi \code{Poll()} mỗi khung hình trên luồng chính để rút hàng đợi, nên
-mọi sự kiện \code{OnRoomStatePush}, \code{OnChat}, \code{OnError} được phát trên luồng chính --- giao diện không bao giờ
-bị treo khi chờ mạng và mã Unity không bị gọi từ luồng khác. Mỗi yêu cầu có một \code{TaskCompletionSource} được
-hoàn thành khi phản hồi tương ứng về tới.
+\textbf{Phía client.} Vòng nhận chạy trên luồng nền; mỗi khung nhận được được chép và đưa vào hàng đợi luồng an toàn. Chu kỳ cập nhật game gọi lệnh rút hàng đợi mỗi khung hình trên luồng chính, nên mọi sự kiện giao diện và nghiệp vụ được phát trên luồng chính - giao diện không bao giờ bị treo khi chờ mạng và logic xử lý không bị vi phạm ngữ cảnh luồng. Mỗi yêu cầu bất đồng bộ được liên kết với một cơ chế phản hồi hoàn thành khi nhận được gói tin trả lời từ máy chủ.
 
 % -------------------------------------------------------------------------------------
 \subsection{Luồng đăng ký và đăng nhập}
@@ -408,34 +398,34 @@ hoàn thành khi phản hồi tương ứng về tới.
 \renewcommand{\seqstep}{0.64cm}
 \begin{tikzpicture}[x=1cm, y=1cm]
   \seqhuman{P}{0.6}{Người chơi}
-  \seqactor{U}{3.4}{mc : MasterClient}
-  \seqactor{D}{7.2}{MspMessage-\\Dispatcher}
-  \seqactor{A}{11.0}{AuthService}
-  \seqactor{S}{14.8}{db : SQLite}
+  \seqactor{U}{3.4}{Module Client}
+  \seqactor{D}{7.2}{Bộ phân phối\\bản tin}
+  \seqactor{A}{11.0}{Dịch vụ xác thực}
+  \seqactor{S}{14.8}{Cơ sở dữ liệu}
   \seqbegin
-  \seqmsg{P}{U}{Đăng ký(username, mật khẩu, tên hiển thị)}
-  \seqself{U}{passwordHash = SHA256(mật khẩu + username)}
+  \seqmsg{P}{U}{Gửi thông tin đăng ký tài khoản}
+  \seqself{U}{Băm mật khẩu kết hợp tên người dùng}
   \seqmsg{U}{D}{REGISTER\_REQ \{username, passwordHash, displayName\}}
-  \seqmsg{D}{A}{Register(...)}
-  \seqself{A}{username 3--16 ký tự [a-z0-9\_];\\hash đúng 64 ký tự hex}
+  \seqmsg{D}{A}{Xử lý đăng ký tài khoản mới}
+  \seqself{A}{username 3-16 ký tự [a-z0-9\_];\\hash đúng 64 ký tự hex}
   \seqmsg{A}{S}{INSERT accounts (bcrypt cost 11)}
   \seqret{S}{A}{thành công / trùng UNIQUE NOCASE}
   \seqret{D}{U}{REGISTER\_RES \{ok, errorCode UsernameTaken?\}}
-  \seqmsg{P}{U}{Đăng nhập(username, mật khẩu)}
+  \seqmsg{P}{U}{Gửi thông tin đăng nhập}
   \seqmsg{U}{D}{LOGIN\_REQ \{username, passwordHash, clientVersion\}}
-  \seqmsg{D}{A}{Login(username, hash, ip)}
+  \seqmsg{D}{A}{Xác thực thông tin và kiểm soát tần suất}
   \seqfragbegin
   \seqret{A}{D}{RateLimited}
   \seqfragelse{U}{S}{còn lượt}
   \seqmsg{A}{S}{SELECT account WHERE username}
   \seqret{S}{A}{account (hoặc không có)}
-  \seqself{A}{BCrypt.Verify(hash,\\account?.hash ?? DummyHash)}
+  \seqself{A}{Xác thực băm mật khẩu\\(dùng hash giả nếu không tồn tại)}
   \seqfragbegin
-  \seqmsg{A}{S}{RecordLoginFailure (lần thứ 10: khoá 15 phút)}
+  \seqmsg{A}{S}{Ghi nhận đăng nhập sai (khoá 15 phút sau 10 lần)}
   \seqret{A}{D}{WrongCredentials}
   \seqfragelse{U}{S}{đúng mật khẩu, không bị khoá, không bị cấm}
-  \seqmsg{A}{S}{RecordLoginSuccess}
-  \seqself{A}{token 32 byte CSPRNG,\\hạn 24 h, gắn IP}
+  \seqmsg{A}{S}{Ghi nhận đăng nhập thành công}
+  \seqself{A}{Tạo token ngẫu nhiên 32 byte,\\hạn 24 h, gắn IP}
   \seqret{A}{D}{Session}
   \seqfragend{U}{S}{alt}{sai / bị khoá / không tồn tại}
   \seqfragend{U}{S}{alt}{quá 5 lần/phút/IP}
@@ -452,12 +442,12 @@ hoàn thành khi phản hồi tương ứng về tới.
 \hline
 \hd{Yêu cầu trong đề / vấn đề} & \hd{Giải pháp đã áp dụng} \\ \hline
 Mật khẩu phải được hash trước khi lưu & Hai lớp: client gửi \texttt{SHA256(mật khẩu + username)} (server không bao giờ thấy mật khẩu gốc); server lưu \texttt{bcrypt(hash, cost 11)} (lộ CSDL vẫn khó dò ngược) \\ \hline
-Username đã tồn tại, không phân biệt hoa thường & Username chỉ gồm chữ thường, số và gạch dưới (3--16 ký tự); cột \texttt{username UNIQUE COLLATE NOCASE} và truy vấn \texttt{COLLATE NOCASE}; chèn trùng trả \code{UsernameTaken} thay vì ném ngoại lệ \\ \hline
-Sai mật khẩu nhiều lần liên tiếp thì khoá tạm thời & \code{failed_logins} tăng mỗi lần sai; tới 10 thì \texttt{locked\_until = now + 15 phút}; đăng nhập đúng thì đặt lại \\ \hline
-Dò mật khẩu từ một địa chỉ & Tối đa 5 lần đăng nhập/phút/IP, trả \code{RateLimited} \\ \hline
-Dò tên tài khoản qua thông báo hoặc qua thời gian phản hồi & Cùng một mã lỗi cho ``không có tài khoản'' và ``sai mật khẩu''; khi không có tài khoản vẫn chạy \code{BCrypt.Verify} với một hash giả cố định để thời gian phản hồi như nhau (bỏ qua bcrypt thì nhanh hơn khoảng 190 ms) \\ \hline
-Chiếm phiên & Token 32 byte từ \code{RandomNumberGenerator}, hạn 24 h, gắn với IP; không bao giờ ghi token vào log \\ \hline
-SQL injection & Toàn bộ truy vấn dùng tham số (\code{$username}, \code{$room}...), không nối chuỗi \\ \hline
+Username đã tồn tại, không phân biệt hoa thường & Username chỉ gồm chữ thường, số và gạch dưới (3-16 ký tự); cột \texttt{username UNIQUE COLLATE NOCASE} và truy vấn không phân biệt chữ hoa chữ thường; chèn trùng trả mã lỗi tên đã tồn tại thay vì làm gián đoạn hệ thống \\ \hline
+Sai mật khẩu nhiều lần liên tiếp thì khoá tạm thời & Bộ đếm lần đăng nhập sai tăng mỗi lần sai; tới 10 lần thì khoá tài khoản 15 phút; đăng nhập đúng thì đặt lại bộ đếm \\ \hline
+Dò mật khẩu từ một địa chỉ & Tối đa 5 lần đăng nhập/phút/IP, vượt ngưỡng trả mã lỗi giới hạn tần suất \\ \hline
+Dò tên tài khoản qua thông báo hoặc qua thời gian phản hồi & Cùng một mã lỗi cho ``không có tài khoản'' và ``sai mật khẩu''; khi không có tài khoản vẫn chạy hàm băm mật khẩu chuẩn với một chuỗi băm giả cố định để thời gian phản hồi như nhau (tránh tấn công đo thời gian chênh lệch khoảng 190 ms) \\ \hline
+Chiếm đoạt phiên làm việc & Token ngẫu nhiên an toàn 32 byte sinh từ bộ sinh số ngẫu nhiên mật mã học, hạn 24 h, gắn với IP; không bao giờ ghi token vào log \\ \hline
+Tấn công SQL injection & Toàn bộ truy vấn cơ sở dữ liệu dùng tham số ràng buộc chuẩn, tuyệt đối không ghép chuỗi \\ \hline
 \end{tabularx}
 \end{center}
 
@@ -467,27 +457,27 @@ SQL injection & Toàn bộ truy vấn dùng tham số (\code{$username}, \code{$
 \centering
 \renewcommand{\seqstep}{0.64cm}
 \begin{tikzpicture}[x=1cm, y=1cm]
-  \seqactor{U}{1.2}{mc : MasterClient}
-  \seqactor{D}{4.9}{MspMessage-\\Dispatcher}
-  \seqactor{L}{8.4}{LobbyService}
-  \seqactor{R}{11.8}{GameServer-\\Registry}
-  \seqactor{T}{15.0}{JoinTicket}
+  \seqactor{U}{1.2}{Module Client}
+  \seqactor{D}{4.9}{Bộ phân phối\\bản tin}
+  \seqactor{L}{8.4}{Dịch vụ sảnh}
+  \seqactor{R}{11.8}{Sổ đăng ký\\Game Server}
+  \seqactor{T}{15.0}{Bộ cấp vé\\vào trận}
   \seqbegin
   \seqmsg{U}{D}{ROOM\_LIST\_REQ}
-  \seqself{D}{TryGetAuthenticatedSession}
+  \seqself{D}{Xác thực phiên hợp lệ}
   \seqret{D}{U}{ROOM\_LIST\_RES [roomId, tên, bản đồ, số người/tối đa, trạng thái]}
   \seqmsg{U}{D}{ROOM\_CREATE\_REQ \{tên, mapId, maxPlayers, botCount, mật khẩu?\}}
-  \seqmsg{D}{L}{CreateRoom(session, request)}
+  \seqmsg{D}{L}{Tạo phòng chờ mới}
   \seqret{D}{U}{ROOM\_CREATE\_RES \{roomId\}}
   \seqmsg{U}{D}{ROOM\_JOIN\_REQ \{roomId, SHA256(mật khẩu phòng)\}}
-  \seqmsg{D}{L}{CanJoinRoom(session, roomId, password)}
+  \seqmsg{D}{L}{Kiểm tra điều kiện vào phòng}
   \seqret{L}{D}{đủ điều kiện (còn chỗ, đúng mật khẩu, chưa ở phòng khác)}
   \seqfragbegin
-  \seqmsg{D}{R}{Allocate(mapId, roomId)}
+  \seqmsg{D}{R}{Cấp phát game server phù hợp}
   \seqret{R}{D}{server khoẻ, rảnh, hỗ trợ bản đồ, CPU thấp nhất}
   \seqfragend{U}{T}{opt}{phòng chưa có game server}
-  \seqmsg{D}{L}{JoinRoom(session, roomId)}
-  \seqmsg{D}{T}{Issue(playerId, serverId, roomId, now + 60 s, tên, SHARED\_SECRET)}
+  \seqmsg{D}{L}{Thêm người chơi vào phòng}
+  \seqmsg{D}{T}{Ký vé 64 byte HMAC-SHA256 (hạn 60 s)}
   \seqret{T}{D}{vé 64 byte (32 byte dữ liệu + 32 byte HMAC-SHA256)}
   \seqret{D}{U}{ROOM\_JOIN\_RES \{gameServerIp, gameServerPort, joinTicket (base64)\}}
   \seqret{D}{U}{ROOM\_STATE\_PUSH \{thành viên, phe, sẵn sàng\} tới mọi thành viên}
@@ -501,18 +491,18 @@ SQL injection & Toàn bộ truy vấn dùng tham số (\code{$username}, \code{$
 
 \textbf{Diễn giải và giải pháp.}
 \begin{itemize}
-  \item \textbf{Đẩy trạng thái thay vì hỏi vòng.} Mỗi khi phòng thay đổi (vào, rời, sẵn sàng), \code{LobbyService}
-        phát sự kiện \code{RoomChanged} và dispatcher gửi \code{ROOM_STATE_PUSH} tới mọi thành viên. Một lobby kiểu
+  \item \textbf{Đẩy trạng thái thay vì hỏi vòng.} Mỗi khi phòng thay đổi (vào, rời, sẵn sàng), dịch vụ sảnh
+        phát sự kiện phòng thay đổi và bộ phân phối gửi thông báo cập nhật tới mọi thành viên. Một lobby kiểu
         REST phải hỏi vòng: 16 client hỏi 1 lần/giây là 16 yêu cầu/giây chỉ để báo ``không có gì'', và vẫn trễ tới 1 giây.
   \item \textbf{Chọn game server theo sức khoẻ, không chỉ theo ``còn sống''.} Một server khoẻ khi đã báo sống trong
         15 s gần nhất, CPU < 90\% và thời gian tick trung bình < 40 ms. Trong các server khoẻ, rảnh và hỗ trợ bản đồ,
-        chọn server có CPU thấp nhất. Không có server phù hợp thì trả \code{NoGameServerAvailable}.
-  \item \textbf{Vé vào trận không giả được.} Vé 64 byte gồm \code{playerId}, \code{serverId}, \code{roomId}, hạn dùng
+        chọn server có CPU thấp nhất. Không có server phù hợp thì trả mã lỗi máy chủ bận.
+  \item \textbf{Vé vào trận không giả được.} Vé 64 byte gồm thông tin người chơi, mã server, mã phòng, hạn dùng
         60 s và tên hiển thị, ký HMAC-SHA256 bằng khoá bí mật chỉ master và game server biết. Game server tự kiểm tra
-        vé bằng \code{CryptographicOperations.FixedTimeEquals} (so sánh thời gian hằng, chống dò chữ ký từng byte),
-        \textbf{không cần gọi lại master}. Hệ quả: master có thể dừng giữa trận mà trận vẫn chạy.
-  \item \textbf{Không ghi vé vào log.} Vé là chứng chỉ mang theo được dùng trong 60 s; log chỉ ghi \code{playerId},
-        \code{roomId}, \code{serverId}.
+        vé bằng thuật toán so sánh thời gian hằng (chống tấn công đo thời gian dò chữ ký từng byte),
+        \textbf{không cần gọi lại master}. Hệ quả: master có thể dừng giữa trận mà trận vẫn chạy bình thường.
+  \item \textbf{Không ghi vé vào log.} Vé là chứng chỉ mang theo được dùng trong 60 s; log chỉ ghi mã người chơi,
+        mã phòng và mã server.
   \item \textbf{Hoàn tác khi vào phòng thất bại.} Nếu đã cấp server cho phòng nhưng người đầu tiên vào không thành, server
         được trả lại registry để phòng không giữ một server không dùng.
 \end{itemize}
@@ -523,31 +513,31 @@ SQL injection & Toàn bộ truy vấn dùng tham số (\code{$username}, \code{$
 \centering
 \renewcommand{\seqstep}{0.64cm}
 \begin{tikzpicture}[x=1cm, y=1cm]
-  \seqactor{U}{1.2}{mc : MasterClient}
-  \seqactor{D}{5.0}{MspMessage-\\Dispatcher}
-  \seqactor{M}{9.2}{Matchmaking-\\Service}
-  \seqactor{L}{13.6}{LobbyService}
+  \seqactor{U}{1.2}{Module Client}
+  \seqactor{D}{5.0}{Bộ phân phối\\bản tin}
+  \seqactor{M}{9.2}{Dịch vụ\\ghép trận}
+  \seqactor{L}{13.6}{Dịch vụ sảnh}
   \seqbegin
   \seqmsg{U}{D}{MATCHMAKE\_REQ \{preferredMapId\}}
-  \seqmsg{D}{M}{Enqueue(session, mapId, now)}
-  \seqmsg{M}{L}{FindJoinableRoom(mapId)}
+  \seqmsg{D}{M}{Ghi danh hàng đợi tìm trận}
+  \seqmsg{M}{L}{Tìm phòng chờ sẵn có}
   \seqfragbegin
-  \seqmsg{M}{L}{JoinRoom(session, roomId)}
+  \seqmsg{M}{L}{Thêm vào phòng}
   \seqret{D}{U}{MATCHMAKE\_RES \{ok, roomId\}}
   \seqfragelse{U}{L}{không có phòng}
   \seqself{M}{thêm vào hàng đợi}
   \seqret{D}{U}{MATCHMAKE\_RES \{ok, roomId = 0, estimatedWait\}}
   \seqfragend{U}{L}{alt}{có phòng còn chỗ}
   \seqfragbegin
-  \seqmsg{D}{M}{Tick(now)}
-  \seqself{M}{nhóm theo bản đồ; người chờ $\ge$ 60 s\\được gộp vào nhóm đông nhất}
+  \seqmsg{D}{M}{Quét chu kỳ ghép trận định kỳ}
+  \seqself{M}{Nhóm theo bản đồ; người chờ $\ge$ 60 s\\được gộp vào nhóm đông nhất}
   \seqfragbegin
-  \seqmsg{M}{L}{CreateRoom("Matchmaking", mapId) + JoinRoom(các người còn lại)}
+  \seqmsg{M}{L}{Tự động tạo phòng mới và gộp người chơi}
   \seqret{D}{U}{MATCHMAKE\_RES \{roomId\} cho từng người}
   \seqfragend{D}{L}{opt}{nhóm có $\ge$ 2 người}
   \seqfragend{U}{L}{loop}{mỗi nhịp logic 50 ms}
   \seqmsg{U}{D}{MATCHMAKE\_CANCEL}
-  \seqmsg{D}{M}{Cancel(playerId)}
+  \seqmsg{D}{M}{Huỷ yêu cầu tìm trận}
   \seqend{U,D,M,L}
 \end{tikzpicture}
 \caption{Biểu đồ tuần tự ghép trận nhanh: vào phòng sẵn có hoặc chờ trong hàng đợi theo bản đồ}
@@ -555,9 +545,9 @@ SQL injection & Toàn bộ truy vấn dùng tham số (\code{$username}, \code{$
 \end{figure}
 
 \textbf{Lỗi đã tìm thấy và cách sửa.} Phiên bản đầu ``nới điều kiện'' sau 60 s bằng cách đổi bản đồ ưu tiên của người
-chờ lâu thành 0 --- thực chất đẩy họ sang một nhóm \textbf{riêng}, nên người đã chờ một phút chỉ ghép được với người
+chờ lâu thành 0 - thực chất đẩy họ sang một nhóm \textbf{riêng}, nên người đã chờ một phút chỉ ghép được với người
 cũng đã chờ một phút. Người mới vào và người chờ lâu đứng cạnh nhau mà không bao giờ ghép, không lỗi, không log. Cách
-sửa: gộp người chờ lâu vào \textbf{nhóm đông nhất} hiện có (\code{AbsorbRelaxed}); nếu chưa có nhóm nào thì họ tự lập
+sửa: gộp người chờ lâu vào \textbf{nhóm đông nhất} hiện có (cơ chế hấp thu hàng đợi nới lỏng); nếu chưa có nhóm nào thì họ tự lập
 nhóm với bản đồ có id nhỏ nhất.
 
 % -------------------------------------------------------------------------------------
@@ -566,13 +556,13 @@ nhóm với bản đồ có id nhỏ nhất.
 \centering
 \renewcommand{\seqstep}{0.64cm}
 \begin{tikzpicture}[x=1cm, y=1cm]
-  \seqactor{U}{1.2}{gửi : MasterClient}
-  \seqactor{D}{5.4}{MspMessage-\\Dispatcher}
-  \seqactor{H}{9.6}{ChatService}
-  \seqactor{V}{14.0}{nhận : MasterClient}
+  \seqactor{U}{1.2}{Client gửi}
+  \seqactor{D}{5.4}{Bộ phân phối\\bản tin}
+  \seqactor{H}{9.6}{Dịch vụ\\trò chuyện}
+  \seqactor{V}{14.0}{Client nhận}
   \seqbegin
   \seqmsg{U}{D}{CHAT\_SEND \{channel 0 = sảnh / 1 = phòng, text\}}
-  \seqmsg{D}{H}{TryCreate(channel, playerId, tên, text, now)}
+  \seqmsg{D}{H}{Kiểm tra tần suất và làm sạch văn bản}
   \seqself{H}{$\le$ 200 ký tự, $\le$ 5 tin / 10 s;\\bỏ ký tự điều khiển, cắt khoảng trắng}
   \seqfragbegin
   \seqret{H}{D}{ChatMessage \{from, tên, text, timestamp\}}
@@ -594,30 +584,30 @@ chơi chèn ký tự đảo chiều văn bản hoặc xuống dòng giả vào g
 \centering
 \renewcommand{\seqstep}{0.64cm}
 \begin{tikzpicture}[x=1cm, y=1cm]
-  \seqactor{G}{1.2}{gs : GameServer-\\Link}
-  \seqactor{D}{5.0}{MspMessage-\\Dispatcher}
-  \seqactor{R}{8.8}{GameServer-\\Registry}
-  \seqactor{S}{12.2}{db : SQLite}
-  \seqactor{U}{15.2}{Thành viên\\phòng}
+  \seqactor{G}{1.2}{Module\\Game Server}
+  \seqactor{D}{5.0}{Bộ phân phối\\bản tin}
+  \seqactor{R}{8.8}{Sổ đăng ký\\Game Server}
+  \seqactor{S}{12.2}{Cơ sở dữ liệu}
+  \seqactor{U}{15.2}{Client\\thành viên}
   \seqbegin
   \seqmsg{G}{D}{GS\_REGISTER \{serverSecret, publicIp, udpPort, maxPlayers, mapIds\}}
-  \seqmsg{D}{R}{TryRegister(connectionId, secret, endpoint, ...)}
-  \seqself{R}{so serverSecret với khoá chung\\bằng FixedTimeEquals}
+  \seqmsg{D}{R}{Kiểm tra khoá bí mật và đăng ký server}
+  \seqself{R}{So sánh khoá xác thực\\bằng thời gian hằng}
   \seqret{D}{G}{GS\_REGISTER\_RES \{serverId\}}
   \seqfragbegin
   \seqmsg{G}{D}{GS\_HEARTBEAT \{players, cpu, avgTickMs, state\}}
-  \seqmsg{D}{R}{Heartbeat(...): cập nhật LastHeartbeatAt}
+  \seqmsg{D}{R}{Cập nhật nhịp tim và tải hệ thống}
   \seqfragend{G}{R}{loop}{mỗi 15 s}
   \seqmsg{G}{D}{GS\_MATCH\_STARTED \{serverId, roomId\}}
   \seqret{D}{U}{ROOM\_STATE\_PUSH (InMatch)}
   \seqmsg{G}{D}{GS\_MATCH\_ENDED \{serverId, roomId, [playerId, kills, deaths, score]\}}
   \seqfragbegin
-  \seqmsg{D}{S}{InsertMatchResult(...) cho từng người}
+  \seqmsg{D}{S}{Lưu kết quả trận cho từng người chơi}
   \seqfragend{D}{S}{loop}{server sở hữu phòng và người chơi là thành viên}
-  \seqmsg{D}{R}{Release(serverId, roomId)}
+  \seqmsg{D}{R}{Giải phóng tài nguyên máy chủ}
   \seqret{D}{U}{ROOM\_STATE\_PUSH (Waiting)}
   \seqfragbegin
-  \seqmsg{D}{R}{Prune(now)}
+  \seqmsg{D}{R}{Quét và thu hồi server mất kết nối}
   \seqret{R}{D}{các phòng của server quá 30 s không báo sống}
   \seqret{D}{U}{ERROR\_PUSH 3001 GameServerNotResponding + ROOM\_STATE\_PUSH (Waiting)}
   \seqfragend{G}{U}{opt}{game server ngừng báo sống}
@@ -631,24 +621,24 @@ chơi chèn ký tự đảo chiều văn bản hoặc xuống dòng giả vào g
 \begin{tabularx}{\linewidth}{|L{4.3cm}|Y|}
 \hline
 \hd{Vấn đề} & \hd{Giải pháp đã áp dụng} \\ \hline
-Máy lạ giả làm game server & Game server phải gửi đúng khoá bí mật chung (\code{IRONFRONT_SHARED_SECRET}, lấy từ biến môi trường, tối thiểu 32 ký tự); registry so sánh bằng \code{FixedTimeEquals}. Địa chỉ công khai lấy từ cấu hình khi server chạy trong container sau NAT \\ \hline
-Game server chết giữa trận làm phòng kẹt mãi & Bộ dọn 30 s gỡ server ngừng báo sống, trả phòng về \code{Waiting} để cấp lại server khác và báo lỗi 3001 cho mọi thành viên \\ \hline
-Server gửi kết quả cho phòng không phải của mình, hoặc chèn người ngoài & \texttt{OwnsRoom(connectionId, serverId, roomId)} kiểm tra quyền sở hữu; chỉ lưu kết quả của người là thành viên phòng \\ \hline
-Lưu kết quả để xem lại & Bảng \code{match_results} (room\_id, player\_id, kills, deaths, score, ended\_at) có chỉ mục theo \code{player_id} để cộng tổng số trận, hạ gục, chết và điểm của một người \\ \hline
+Máy lạ giả làm game server & Game server phải gửi đúng khoá bí mật chung của hệ thống (lấy từ biến môi trường, tối thiểu 32 ký tự); registry so sánh bằng thuật toán thời gian hằng. Địa chỉ công khai lấy từ cấu hình khi server chạy trong container sau NAT \\ \hline
+Game server chết giữa trận làm phòng kẹt mãi & Bộ dọn 30 s gỡ server ngừng báo sống, trả phòng về trạng thái chờ để cấp lại server khác và báo lỗi 3001 cho mọi thành viên \\ \hline
+Server gửi kết quả cho phòng không phải của mình, hoặc chèn người ngoài & Cơ chế kiểm tra quyền sở hữu phòng đối chiếu danh danh kết nối; chỉ lưu kết quả của người chơi thực sự là thành viên phòng \\ \hline
+Lưu kết quả để xem lại & Bảng dữ liệu kết quả thi đấu có chỉ mục theo mã người chơi để cộng tổng số trận, hạ gục, chết và điểm của một người \\ \hline
 \end{tabularx}
 \end{center}
 
 % -------------------------------------------------------------------------------------
 \subsection{Luồng ngắt kết nối và dọn dẹp}
 Khi một kết nối kết thúc vì bất kỳ lý do nào (client đóng, RST, hết hạn im lặng, khung sai), luồng logic gọi
-\code{OnDisconnected} và dọn theo thứ tự cố định:
+bộ xử lý sự kiện ngắt kết nối và dọn dẹp tài nguyên theo thứ tự cố định:
 \begin{enumerate}
-  \item Nếu kết nối là của game server: gỡ khỏi registry và đặt lại mọi phòng nó đang giữ (báo lỗi 3001).
-  \item Gỡ \code{playerId} khỏi bảng kết nối, xoá bộ đếm chat, huỷ vị trí trong hàng đợi ghép trận.
-  \item Rời phòng; nếu phòng còn người thì gửi \code{ROOM_STATE_PUSH} cho những người còn lại.
-  \item Xoá phiên (token) khỏi bộ nhớ.
+  \item Nếu kết nối là của game server: gỡ khỏi sổ đăng ký và đặt lại mọi phòng nó đang giữ (báo lỗi 3001).
+  \item Gỡ mã người chơi khỏi bảng kết nối, xoá bộ đếm tin nhắn, huỷ vị trí trong hàng đợi ghép trận.
+  \item Rời phòng; nếu phòng còn người thì gửi thông báo cập nhật phòng cho những người còn lại.
+  \item Xoá phiên (token) khỏi bộ nhớ RAM.
 \end{enumerate}
-Phiên được giữ trong bộ nhớ: khởi động lại master sẽ đăng xuất mọi người --- chấp nhận có chủ đích để không phải ghi CSDL
+Phiên được giữ trong bộ nhớ: khởi động lại master sẽ đăng xuất mọi người - chấp nhận có chủ đích để không phải ghi CSDL
 mỗi lần đăng nhập. Trận đang chạy không bị ảnh hưởng vì game server không cần master sau khi vé đã được kiểm.
 
 % -------------------------------------------------------------------------------------
@@ -657,33 +647,32 @@ mỗi lần đăng nhập. Trận đang chạy không bị ảnh hưởng vì ga
 \centering
 \renewcommand{\seqstep}{0.64cm}
 \begin{tikzpicture}[x=1cm, y=1cm]
-  \seqactor{U}{1.4}{mc : MasterClient}
-  \seqactor{S}{6.4}{SslStream (client)}
-  \seqactor{C}{11.0}{conn : ClientConnection}
-  \seqactor{F}{14.8}{MspFrameReader}
+  \seqactor{U}{1.4}{Module Client}
+  \seqactor{S}{6.4}{Luồng bảo mật\\Client}
+  \seqactor{C}{11.0}{Đối tượng\\kết nối}
+  \seqactor{F}{14.8}{Bộ đọc\\khung tin}
   \seqbegin
-  \seqmsg{U}{S}{AuthenticateAsClientAsync(host)}
+  \seqmsg{U}{S}{Yêu cầu bắt tay mã hoá TLS}
   \seqmsg{S}{C}{ClientHello}
   \seqret{C}{S}{ServerHello + chứng chỉ tự ký}
-  \seqmsg{S}{U}{RemoteCertificateValidationCallback}
+  \seqmsg{S}{U}{Cơ chế thẩm định chứng chỉ máy chủ}
   \seqfragbegin
-  \seqself{U}{SHA-256(chứng chỉ) so với vân tay đã ghim\\(FixedTimeEquals)}
+  \seqself{U}{So khớp vân tay chứng chỉ\\bằng thời gian hằng}
   \seqfragelse{U}{F}{khác vân tay}
   \seqret{U}{S}{false: huỷ kết nối}
   \seqfragend{U}{F}{alt}{khớp}
   \seqmsg{U}{C}{LOGIN\_REQ (đã mã hoá TLS 1.2/1.3)}
-  \seqmsg{C}{F}{Append(bản rõ sau giải mã)}
-  \seqself{F}{tách frame theo tiền tố độ dài\\(SslStream vẫn là luồng byte)}
+  \seqmsg{C}{F}{Đưa dữ liệu bản rõ vào bộ đệm}
+  \seqself{F}{Tách khung tin theo độ dài tiền tố\\(kênh bảo mật vẫn là luồng byte)}
   \seqend{U,S,C,F}
 \end{tikzpicture}
 \caption{Biểu đồ tuần tự bắt tay TLS với ghim vân tay chứng chỉ}
 \label{fig:D-luong-tls}
 \end{figure}
-\textbf{Giải pháp.} Máy chủ ảo không có tên miền nên không lấy được chứng chỉ công khai; thay vì callback luôn trả
-\code{true} (tắt hoàn toàn việc kiểm tra), client được build kèm vân tay SHA-256 của đúng một chứng chỉ và chỉ chấp nhận
-chứng chỉ đó --- chặt hơn cả chuỗi CA công khai. Nhánh bỏ kiểm tra chỉ có trong bản \code{DEBUG}, bị loại khỏi bản
-phát hành lúc biên dịch. TLS không thay đổi bài toán đóng khung: kiểm thử
-\code{FramingSurvivesGluedAndSplitWritesOverSslStream} phát lại cả hai trường hợp dính và tách qua TLS thật.
+\textbf{Giải pháp.} Máy chủ ảo không có tên miền nên không lấy được chứng chỉ công khai; thay vì hàm kiểm tra luôn trả
+về hợp lệ (tắt hoàn toàn việc kiểm tra), client được tích hợp sẵn vân tay SHA-256 của đúng một chứng chỉ chỉ định và chỉ chấp nhận
+chứng chỉ đó - chặt hơn cả chuỗi CA công khai. Nhánh thử nghiệm không kiểm tra chỉ có trong môi trường phát triển nội bộ, bị loại khỏi bản
+phát hành lúc biên dịch. Kênh mã hoá TLS không làm thay đổi đặc tính luồng byte: kịch bản kiểm tra toàn vẹn luồng dính và tách qua kênh TLS đã chứng minh việc tách khung hoạt động ổn định.
 
 % -------------------------------------------------------------------------------------
 \subsection{Tổng hợp kiểm thử và số đo}
@@ -691,13 +680,41 @@ phát hành lúc biên dịch. TLS không thay đổi bài toán đóng khung: k
 \begin{tabularx}{\linewidth}{|L{5.2cm}|Y|}
 \hline
 \hd{Kịch bản kiểm thử (theo đề)} & \hd{Kết quả / cách kiểm} \\ \hline
-Đăng ký, username trùng, sai mật khẩu, tài khoản bị khoá & Test xUnit của \code{AuthService} và \code{SqliteDatabase}; khoá sau 10 lần sai, mở sau 15 phút \\ \hline
-Nhiều client cùng kết nối & LoadTest 16 và 32 client: p99 5,8 -- 8,5 ms, 0 lỗi; giữ 1\,000 kết nối với 81 MB RAM \\ \hline
+Đăng ký, username trùng, sai mật khẩu, tài khoản bị khoá & Kiểm thử tự động module xác thực và cơ sở dữ liệu; khoá sau 10 lần sai, mở sau 15 phút \\ \hline
+Nhiều client cùng kết nối & Kiểm thử tải với 16 và 32 client: p99 5,8 - 8,5 ms, 0 lỗi; duy trì 1\,000 kết nối đồng thời với 81 MB RAM \\ \hline
 Khung dính, tách, dính + đuôi, khung quá 64 KB & 1\,000 lần gửi $\rightarrow$ 942 lần nhận vẫn ra đủ 1\,000 khung; 1 khung 58 KB qua 8 lần nhận \\ \hline
-Ngắt đột ngột (RST) & 1\,376 lần ngắt trong 30 s đều được thu hồi, bộ đếm IP không âm \\ \hline
-Game server tắt đột ngột & Sau 30 s phòng về \code{Waiting}, thành viên nhận lỗi 3001 \\ \hline
-Vé giả / vé hết hạn & \code{ATamperedSignatureIsRejectedAsDenyCode3}, \code{AnExpiredTicketIsRejectedAsDenyCode3} \\ \hline
+Ngắt đột ngột (tín hiệu RST) & 1\,376 lần ngắt trong 30 s đều được thu hồi, bộ đếm kết nối IP không bị sai lệch \\ \hline
+Game server tắt đột ngột & Sau 30 s phòng về trạng thái chờ, thành viên nhận thông báo lỗi 3001 \\ \hline
+Vé giả / vé hết hạn & Kịch bản từ chối vé bị sửa đổi chữ ký hoặc vé quá hạn từ chối chính xác với mã lỗi quy chuẩn \\ \hline
 \end{tabularx}
 \end{center}
-Bộ \code{Ironfront.MasterServer.Tests} gồm 65 test xUnit, chạy trong CI (GitHub Actions) mỗi lần đẩy mã cùng với việc
-build image Docker cho master và game server.
+Bộ kiểm thử tự động của phân hệ Master Server gồm 65 kịch bản kiểm thử, chạy tự động trong đường ống CI mỗi lần cập nhật mã nguồn cùng với việc đóng gói Docker cho master và game server.
+
+% -------------------------------------------------------------------------------------
+\subsection{Bảng ánh xạ hình vẽ với chức năng cá nhân thực hiện}
+\label{sec:D-mapping-hinh-ve}
+Bảng tổng hợp đối chiếu toàn bộ các sơ đồ kiến trúc, máy trạng thái, giao diện và luồng xử lý do cá nhân thực hiện tương ứng với các chức năng cụ thể trong phân hệ Master Server TCP và hạ tầng:
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{|L{2.2cm}|L{4.2cm}|Y|}
+\hline
+\hd{Hình vẽ} & \hd{Tên hình vẽ / biểu đồ} & \hd{Chức năng cá nhân thực hiện} \\ \hline
+Hình~\ref{fig:D-thanhphan} & Kiến trúc phân hệ Master Server & Thiết kế kiến trúc tổng thể Master Server TCP thuần không phụ thuộc framework; mô hình luồng đơn (single-threaded logic) kết hợp tiếp nhận I/O bất đồng bộ. \\ \hline
+Hình~\ref{fig:D-khung} & Cấu trúc khung bản tin TCP & Thiết kế định dạng đóng khung bản tin tiền tố độ dài (6 byte header: length u32 + msgType u16 + thân JSON) giải quyết triệt để vấn đề dính/tách gói TCP. \\ \hline
+Hình~\ref{fig:D-bodoc} & Bộ đọc khung tin nhị phân & Hiện thực bộ đệm tích luỹ (accumulating buffer) và máy trạng thái tách khung; kiểm soát an toàn kích thước tối đa 64 KB và cắt dữ liệu đã xử lý. \\ \hline
+Hình~\ref{fig:D-tuantu} & Trình tự xử lý luồng nghiệp vụ & Thiết kế quy trình định tuyến bản tin qua hàng đợi luồng an toàn, bảo đảm mọi xử lý nghiệp vụ diễn ra tuần tự trên luồng logic duy nhất. \\ \hline
+Hình~\ref{fig:D-ketnoi} & Máy trạng thái kết nối TCP & Xây dựng máy trạng thái kết nối client: kiểm soát trạng thái chưa xác thực (30 s), đã xác thực (nhịp tim 15 s, im lặng 45 s) và đóng/thu hồi socket an toàn. \\ \hline
+Hình~\ref{fig:D-phong} & Máy trạng thái phòng chơi & Quản lý vòng đời phòng sảnh: khởi tạo, chờ sẵn sàng, phân bổ game server khả dụng, chuyển pha thi đấu và tự động dọn dẹp phòng rỗng. \\ \hline
+Hình~\ref{fig:D-csdl} & Lược đồ CSDL SQLite & Thiết kế cơ sở dữ liệu lưu trữ tài khoản người chơi (băm mật khẩu bảo mật) và kết quả thi đấu; giữ phiên và phòng trên RAM để tối ưu hiệu năng. \\ \hline
+Hình~\ref{fig:D-api} & Giao diện lập trình API & Thiết kế giao diện lập trình cho client Unity và liên kết máy chủ game; đồng bộ hoá an toàn mọi sự kiện mạng về luồng chính giao diện. \\ \hline
+Hình~\ref{fig:D-giamsat} & Giao diện giám sát và chỉ số tải & Hiện thực cổng TCP giám sát chỉ số thời gian thực và thực hiện kiểm thử tải áp lực: duy trì 1\,000 kết nối đồng thời với 81 MB RAM và trễ p99 dưới 8,5 ms. \\ \hline
+Hình~\ref{fig:D-hatang} & Đường ống CI/CD và hạ tầng & Xây dựng quy trình tự động hoá kiểm thử và đóng gói Docker trên GitHub Actions; triển khai máy ảo production với tường lửa và dịch vụ nền systemd. \\ \hline
+Hình~\ref{fig:D-luong-accept} & Sơ đồ tuần tự tiếp nhận kết nối & Hiện thực luồng lắng nghe socket, giới hạn 5 kết nối/IP, hạn tuyệt đối 30 s chưa xác thực và cơ chế trích xuất khung tin liên tục từ luồng byte. \\ \hline
+Hình~\ref{fig:D-luong-dangnhap} & Sơ đồ tuần tự đăng ký, đăng nhập & Hiện thực bảo mật 2 lớp mật khẩu (SHA-256 client, bcrypt cost 11 server), giới hạn tần suất 5 lần/phút/IP, khoá tài khoản 15 phút sau 10 lần sai và tạo token an toàn 32 byte. \\ \hline
+Hình~\ref{fig:D-luong-phong} & Sơ đồ tuần tự sảnh và cấp vé & Hiện thực cơ chế đẩy trạng thái phòng (push), lựa chọn game server tối ưu theo tải CPU và ký vé vào trận 64 byte HMAC-SHA256 (hạn 60 s). \\ \hline
+Hình~\ref{fig:D-luong-ghep} & Sơ đồ tuần tự ghép trận & Hiện thực thuật toán tìm phòng sẵn có hoặc xếp hàng đợi định kỳ; cơ chế nới lỏng gộp người chờ lâu vào nhóm đông nhất tránh phân mảnh hàng đợi. \\ \hline
+Hình~\ref{fig:D-luong-chat} & Sơ đồ tuần tự chat sảnh chờ & Hiện thực tính năng chat chuyển tiếp: giới hạn tần suất 5 tin/10 s, làm sạch ký tự điều khiển/Unicode chống tấn công giao diện và spam. \\ \hline
+Hình~\ref{fig:D-luong-gs} & Sơ đồ tuần tự vòng đời Game Server & Hiện thực cơ chế đăng ký bằng khoá bí mật (thời gian hằng), nhận báo sống định kỳ (15 s), tự động thu hồi phòng sau 30 s mất liên lạc và lưu kết quả trận. \\ \hline
+Hình~\ref{fig:D-luong-tls} & Sơ đồ tuần tự bảo mật TLS & Hiện thực kênh bảo mật TLS tuỳ chọn với cơ chế ghim vân tay chứng chỉ SHA-256 (certificate pinning) chống tấn công giả mạo máy chủ. \\ \hline
+\end{tabularx}
+\end{center}

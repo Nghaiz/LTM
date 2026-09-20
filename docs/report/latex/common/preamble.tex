@@ -1,5 +1,5 @@
 % =====================================================================================
-% preamble.tex — cấu hình chung cho cả 4 báo cáo cá nhân
+% preamble.tex - cấu hình chung cho cả 4 báo cáo cá nhân
 % Biên dịch bằng XeLaTeX (hoặc Tectonic). Xem README.md.
 % =====================================================================================
 \documentclass[13pt]{extarticle}
@@ -8,7 +8,7 @@
 \usepackage[letterpaper, left=2.5cm, right=2cm, top=2.2cm, bottom=2.2cm, footskip=1cm]{geometry}
 \usepackage{fontspec}
 % Dùng Times New Roman nếu máy có (Windows/Overleaf có sẵn); nếu không, dùng TeX Gyre Termes
-% — bản sao Times có đủ dấu tiếng Việt.
+% - bản sao Times có đủ dấu tiếng Việt.
 \IfFontExistsTF{Times New Roman}{%
   \setmainfont{Times New Roman}%
 }{%
@@ -83,7 +83,7 @@
 \titlespacing*{\subsection}{12pt}{10pt}{4pt}
 \titlespacing*{\subsubsection}{24pt}{8pt}{3pt}
 
-% "Phần" lớn: I. NỘI DUNG NHÓM / II. NỘI DUNG CÁ NHÂN — sang trang mới, vào mục lục.
+% "Phần" lớn: I. NỘI DUNG NHÓM / II. NỘI DUNG CÁ NHÂN - sang trang mới, vào mục lục.
 % Tiêu đề luôn nằm trên một dòng: nếu dài hơn bề rộng trang thì thu nhỏ vừa khít.
 \newsavebox{\PhanLonBox}
 \newcommand{\PhanLon}[1]{%
