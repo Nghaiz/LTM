@@ -5,18 +5,18 @@
     "scenePath": "Assets/Scenes/Dustbowl.unity",
     "applied": true,
     "sourceCount": 1096,
-    "sceneObjects": 5465,
-    "changed": 1036,
-    "appliedCount": 1036,
-    "stage1": 800,
+    "sceneObjects": 5609,
+    "changed": 0,
+    "appliedCount": 1040,
+    "stage1": 804,
     "stage1ByPath": 52,
     "stage2": 184,
     "stage2ByPath": 0,
     "guardedCount": 0,
     "ambiguousCount": 56,
-    "absentCount": 4,
+    "absentCount": 0,
     "preexistingCount": 0,
-    "withRenderer": 1036,
+    "withRenderer": 1040,
     "entries": [
         {
             "gid": "GlobalObjectId_V1-2-324e58af7af183e4eb948b876dc25791-1478228276-0",
@@ -254,6 +254,46 @@
             "name": "Clay Hut Base",
             "parentPath": "Clay Hut No Windows",
             "siblingIndex": 0,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-324e58af7af183e4eb948b876dc25791-1234682578-0",
+            "path": "Clay Well/Hanging_Rope",
+            "name": "Hanging_Rope",
+            "parentPath": "Clay Well",
+            "siblingIndex": 0,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-324e58af7af183e4eb948b876dc25791-1139888648-0",
+            "path": "Clay Well/Mount",
+            "name": "Mount",
+            "parentPath": "Clay Well",
+            "siblingIndex": 2,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-324e58af7af183e4eb948b876dc25791-872912648-0",
+            "path": "Clay Well/Tied_Rope",
+            "name": "Tied_Rope",
+            "parentPath": "Clay Well",
+            "siblingIndex": 3,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-324e58af7af183e4eb948b876dc25791-1594120275-0",
+            "path": "Clay Well/Well",
+            "name": "Well",
+            "parentPath": "Clay Well",
+            "siblingIndex": 4,
             "stage": "name+pos",
             "flags": 127,
             "hasRenderer": true
@@ -10719,30 +10759,5 @@
             "detail": "stage2: 56 candidates and the hierarchy path does not single one out ('Static Props 1/RockDesert', 'Static Props 1/RockDesert', 'Static Props 1/RockDesert', ...)"
         }
     ],
-    "absent": [
-        {
-            "name": "Hanging_Rope",
-            "parentPath": "Clay Well",
-            "path": "Clay Well/Hanging_Rope",
-            "detail": "no object of this name left unclaimed in the scene"
-        },
-        {
-            "name": "Mount",
-            "parentPath": "Clay Well",
-            "path": "Clay Well/Mount",
-            "detail": "no object of this name left unclaimed in the scene"
-        },
-        {
-            "name": "Tied_Rope",
-            "parentPath": "Clay Well",
-            "path": "Clay Well/Tied_Rope",
-            "detail": "no object of this name left unclaimed in the scene"
-        },
-        {
-            "name": "Well",
-            "parentPath": "Clay Well",
-            "path": "Clay Well/Well",
-            "detail": "no object of this name left unclaimed in the scene"
-        }
-    ]
+    "absent": []
 }
