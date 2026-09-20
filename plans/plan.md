@@ -145,6 +145,12 @@ and whose bodies do not animate cannot be graded by eye.
 | **P19** | Island, made playable *(file deleted -- `git show 509c70d:plans/phases/phase-p19-island.md`)* | F4 — sixteen missing scripts on the map the owner ranks first | L |
 | **P20** | The P11-P19 debt sweep | **DONE 2026-09-02** — four rows re-diagnosed against the wrong cause; `plans/phases/` and `plans/reports/` deleted | L |
 | **P21** | [Four windows you can actually play in](phases/phase-p21-local-playtest.md) | the build-only door, the local master, and `play-lan.ps1`'s deleted menu — **and with them M3's grader** | M |
+| **P22** | [Cứu bản chuẩn khôi phục vào repo](phases/phase-p22-recovered-ground-truth.md) | 191 MB ground truth nằm trong `tmp/` (gitignore) — trích ra trước khi mất | S |
+| **P23** | [Trả lại cờ static, và gộp asset trùng](phases/phase-p23-static-batching.md) | 1 441 cờ static bị xoá khi nâng engine; 7 thư mục asset trùng | M |
+| **P24** | [A\* pathfinding: điều tra nguồn frame-hitch](phases/phase-p24-astar-hitch.md) | 395 dòng lệch trong 6 file A\* mà không tài liệu nào nhắc | S–L |
+| **P25** | [Ragdoll: hiệu chỉnh joint drive cho PhysX 4](phases/phase-p25-ragdoll-drive.md) | `JointDriveMode.Position` — API Unity 5.5 xoá, cảm giác điều khiển đi qua đúng dòng đó | L |
+| **P26** | [Shader đúng, và phần hình học Dustbowl bị mất](phases/phase-p26-visual-fidelity.md) | 71 material trỏ shader dummy; 122 GameObject mất; 241 cờ static còn treo | L |
+| **P27** | [98 file lệch: cái nào cố ý, cái nào là mất mát](phases/phase-p27-logic-triage.md) | phân loại (a) netcode / (b) migration / (c) mất mát / (d) vô nghĩa | L+ |
 
 **P5 blocks the *closing* of P4's rows, not its run.** Run lane B first; X-28's single spawn point
 and X-29's missing measurements will show up in the artifacts as they always have, and fixing them
@@ -203,6 +209,56 @@ added to `S_PLAYER_LIST` — that entry is 18 B, `1 + 64 x 18 = 1153` against a 
 of **1181**, so even one extra byte per entry overflows the un-fragmented guarantee § 4.11 relies
 on. So it needs a new opcode, a spec section, a hex sample and a changelog row: a protocol phase,
 not a UI task. P18 *(file deleted -- `git show 509c70d:plans/phases/phase-p18-scoreboard.md`)* § 1 carries the arithmetic.
+
+
+---
+
+## 4.2 Track port-back: bản Ravenfield khôi phục
+
+Chủ dự án tự reverse-engineer bản build Ravenfield Beta 5 gốc thành một project Unity 5.4.0f3 gần
+như nguyên vẹn — 408 file `Assembly-CSharp`, **5 631/5 631 method khớp ở mức IL metadata**, 0 asset
+reference gãy. Dự án này vốn phát triển từ một bản decompiled khác đã bị nâng lên Unity 2017.3, và
+đối chiếu hai bên ngày 2026-09-20 giải thích được cả giật lag lẫn một phần lỗi logic.
+
+**Bản khôi phục là chuẩn đối chiếu, không phải đích đến.** Ironfront giữ Unity 6 và netcode của
+mình; P22–P27 port ngược từng hạng mục, mỗi phase một PR vào `develop`.
+
+Đã kiểm chứng trực tiếp trên `Ironfront_Reborn/`, không lấy từ tài liệu:
+
+| Hạng mục | Bản gốc | Ironfront_Reborn |
+|---|---|---|
+| Cờ static — Dustbowl / Island | 1 096 / 345 | **0 / 1** |
+| `GameObject` / `MeshRenderer` — Dustbowl | 5 587 / 2 307 | 5 465 / 2 173 |
+| Material trỏ shader dummy `fileID: 45` | — | **71 / 255** |
+| Shader file | 46 | 21 |
+| File `.cs` chung giống hệt | — | **224 / 322** |
+| `m_Script` GUID gãy | 0 | **0** |
+| Component rụng trên object khớp chắc | — | **8** (6×`Cloth`, 2×`GUILayer`) |
+
+Hai kết quả âm tính đáng giá: **không có script mất và không có component rụng đáng kể**, nên lỗi
+logic không nằm ở đó — đừng đào. Và **render pipeline là Built-in**, nên static batching vẫn có tác
+dụng thật trên Unity 6; tiền đề của P23 đã được kiểm chứng.
+
+Bốn dữ kiện kỹ thuật mà mọi phase trong track phải biết, đầy đủ ở
+[P22](phases/phase-p22-recovered-ground-truth.md):
+
+1. **`fileID` vô dụng để khớp object** — 0/1 096 object static Dustbowl khớp được. Khoá dùng được
+   là `(m_Name, m_LocalPosition)` cộng `parentPath`.
+2. **Hai scene dùng hai cú pháp YAML `m_Component` khác nhau**, và parser viết cho một bên **im
+   lặng trả rỗng** trên bên kia.
+3. **Fixed timestep 50 Hz → 60 Hz là thay đổi cố ý** (issue #123, `PhysicsRate.cs`) — không hoàn
+   tác, nhưng nó là biến thứ hai khi hiệu chỉnh ragdoll.
+4. **`tmp/` nằm trong `.gitignore`**, nên P22 chạy trước mọi phase khác.
+
+Brainstorm đầy đủ: [`reports/2026-09-20-recovered-ravenfield-port-back-brainstorm.md`](reports/2026-09-20-recovered-ravenfield-port-back-brainstorm.md).
+
+**Bốn quyết định của chủ dự án, 2026-09-20 — đã chốt, không hỏi lại:**
+
+1. Bản khôi phục là **chuẩn đối chiếu**, không rebase. Ironfront giữ Unity 6 + netcode.
+2. **86 file MapMagic: không khôi phục.** 0 scene tham chiếu; terrain đã bán ra `TerrainData`.
+3. **Không có ngưỡng perf cứng.** P23 báo số; chủ dự án phán từ bảng số + lần chơi thử. Không thêm
+   gate perf vào `ci.ps1`.
+4. **Không Plane, không artifact ngoài.** Dự án nội bộ cá nhân; kế hoạch chỉ sống trong `plans/`.
 
 
 ## 5. Standing rules

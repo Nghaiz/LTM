@@ -265,3 +265,4 @@ tmp/playtest/
 .claude/
 .codex
 .agents
+tmp
