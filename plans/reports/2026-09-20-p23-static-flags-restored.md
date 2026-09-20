@@ -144,18 +144,25 @@ already index into a combined mesh, 289 renderers sharing one mesh would have pr
 289 times the size. That is a memory blow-up on shipped content, and it had to be checked rather
 than reasoned about.
 
-A full `tools/build-player.ps1` with the flags on, against the build taken this morning without
-them:
+Two `tools/build-player.ps1` runs on the same machine, same Unity, same toolchain, differing only
+by this branch's three asset commits — the baseline built from `git checkout b12333e --
+Ironfront_Reborn/Assets`, so the flags are off, `Images3` is back and the duplicate meshes are
+back:
 
-| | before | after |
+| | pre-P23 assets | this branch |
 |---|---|---|
 | `level2` (Island scene) | 4 264 304 | 4 264 304 |
 | `level3` (Dustbowl scene) | 2 125 560 | 2 125 560 |
 | `sharedassets2.assets` + `.resS` | 16 960 924 / 39 508 288 | 16 960 924 / 39 508 288 |
 | `sharedassets3.assets` + `.resS` | 27 128 776 / 47 916 720 | 27 128 776 / 47 916 720 |
 
-Byte-identical. (`sharedassets1.assets` moved 461 132 → 461 148, sixteen bytes in the Menu
-scene's shared assets — build metadata, not geometry.)
+Byte-identical.
+
+**The first attempt at this table was wrong and is worth recording.** It compared against the
+player built at 03:12 that morning — but commit `63fb18a` had changed 14 lines of `Dustbowl.unity`
+and 12 of `Island.unity` at 03:20, and `720c1e9` three shaders at 18:33. That baseline was built
+from different inputs, so its byte-identity said nothing about the flags. The table above replaces
+it with a baseline built from this branch's actual merge-base.
 
 **No blow-up, and no difference at all**, which is the expected result once you notice that
 `m_StaticEditorFlags` is editor-only data: it is never serialized into the player. Only its
@@ -164,14 +171,14 @@ already baked or are not baked at all in this project.
 
 #### That green needed a control
 
-A build that finishes in 105 seconds and emits byte-identical output is exactly what a build
-serving stale cache looks like, and a comparison against cached output proves nothing at all.
-The §5 dedupe supplied the control for free: it deleted 61 assets and rewrote 1 716 references,
-so if *that* build had also come out byte-identical, both comparisons were worthless.
+A build that emits byte-identical output is also exactly what a build serving stale cache looks
+like, and a comparison against cached output proves nothing at all. The §5 dedupe supplied the
+control: it deleted 61 assets and rewrote 1 716 references, so the build report has to show a
+different asset set or nothing here is measuring anything.
 
-It did come out byte-identical — but the build report shows the pipeline genuinely re-ran:
+It does:
 
-| Build report, "Used Assets" | before dedupe | after dedupe |
+| Build report, "Used Assets" | pre-P23 assets | after dedupe |
 |---|---|---|
 | from `Assets/Mesh/` | 148 | 192 |
 | from `Assets/Mesh2/` | 41 | 9 |
@@ -181,7 +188,7 @@ It did come out byte-identical — but the build report shows the pipeline genui
 `Icosphere_2.asset` is listed at `Assets/Mesh2/` in one and `Assets/Mesh/` in the other, at the
 same 11.8 kb. 32 moved out of `Mesh2` and 12 out of `Mesh3` — the 44 merged meshes, exactly —
 and 148 + 44 = 192. The build reprocessed and the paths moved; the size did not, because the
-swap is one-for-one. So the flags comparison above is measuring a real build, not a cache.
+swap is one-for-one. So the table above is measuring a real build, not a cache.
 
 ### What the flags are still worth
 
