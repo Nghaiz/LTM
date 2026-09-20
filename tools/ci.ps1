@@ -123,6 +123,26 @@ try {
         & "$PSScriptRoot/check-diagnostics-exclusion.ps1"
     }
 
+    # P27. Guards the port-back track's one-way risk: a line the ORIGINAL Ravenfield build has,
+    # that we still had yesterday, and that an edit has just dropped. `dotnet build` cannot see
+    # it -- deleting a statement leaves valid code -- and no test covers most of Assembly-CSharp.
+    #
+    # BE CLEAR ABOUT WHAT THIS IS NOT. It reads tmp/recovered/, which is gitignored, so it runs
+    # on a machine that has extracted the recovered tree and SKIPS everywhere else, including in
+    # ci.yml. That makes it a local aid for whoever is working this track, not a fleet gate, and
+    # a green from a machine without the tree means only that the tree is absent. It is wired
+    # here rather than left unwired because an unrun --check is decoration (see 3d), and skipped
+    # LOUDLY rather than silently for the same reason.
+    if (Test-Path "$repoRoot/tmp/recovered/src/Assembly-CSharp") {
+        Invoke-Step "3h. No line lost against the recovered original" {
+            python "$PSScriptRoot/classify_recovered_diff.py" --check
+        }
+    }
+    else {
+        Write-Host "=== 3h. No line lost against the recovered original === SKIPPED " `
+            "(tmp/recovered/ absent — run tools/extract_recovered.py to enable)" -ForegroundColor Yellow
+    }
+
     # ADVISORY — mirrors the `style` job in .github/workflows/ci.yml, which is
     # continue-on-error. Deliberately NOT routed through Invoke-Step: a formatting nit must
     # not add to $failures and make this script exit 1, or people will stop running it.

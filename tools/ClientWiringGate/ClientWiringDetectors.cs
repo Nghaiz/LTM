@@ -1743,5 +1743,78 @@ namespace Ironfront.Tools.ClientWiringGate
 
             return findings;
         }
+
+        /// <summary>The file that starts a match, and the call that must zero the scoreboard.</summary>
+        private const string MatchResetFile = "/GameManager.cs";
+        private const string MatchResetMethod = "StartGame";
+        private const string MatchResetCall = "MatchScoreboard.Current.Reset";
+
+        /// <summary>Whether G16 governs this file at all. See <see cref="FindUnresetMatchScore"/>.</summary>
+        public static bool IsMatchResetScoped(string path) =>
+            !IsExcludedFromScan(path) && IsInScope(path, new[] { MatchResetFile });
+
+        /// <summary>
+        /// <b>G16</b> — whatever starts a match zeroes the offline scoreboard. Phase <b>P27</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The same shape as G13, found the same way.</b> <c>MatchScoreboard.Reset</c> shipped
+        /// with zero callers and a summary reading "Called when a match starts", so nothing looked
+        /// missing. <c>ScoreUi.Awake</c> even documents why the reset left it — "Resetting belongs
+        /// to whatever starts a match, not to whatever draws it" — which is correct, and names an
+        /// owner that was never handed the call.
+        /// </para>
+        /// <para>
+        /// <b>Ravenfield got this for free and we gave it away.</b> The original zeroed all four
+        /// counters in <c>ScoreUi.Awake</c>, and the HUD prefab is re-instantiated per match, so
+        /// every match opened at 0-0. Ours moved that state to a plain static that outlives a
+        /// scene load. Untied, the second offline match in a process opens holding the first
+        /// one's score and its latched <c>GameEnded</c>, which makes <c>Win()</c> early-return —
+        /// so that match and every later one cannot end, and the carried flags multiply every
+        /// kill through <c>ScoreMultiplier</c>.
+        /// </para>
+        /// <para>
+        /// <b>Invisible to a playtest that starts one match</b>, which is the normal way to
+        /// playtest, and invisible to <c>dotnet test</c>: <c>Assembly-CSharp</c> is a predefined
+        /// assembly no test project can reference. A source rule is the only thing that can hold
+        /// this, which is exactly why the call went missing in the first place.
+        /// </para>
+        /// </remarks>
+        public static IReadOnlyList<GateFinding> FindUnresetMatchScore(SyntaxTree tree, string path)
+        {
+            var findings = new List<GateFinding>();
+
+            if (IsExcludedFromScan(path)) return findings;
+            if (!IsInScope(path, new[] { MatchResetFile })) return findings;
+
+            MethodDeclarationSyntax? starter = tree.GetRoot()
+                .DescendantNodes()
+                .OfType<MethodDeclarationSyntax>()
+                .FirstOrDefault(m => m.Identifier.ValueText == MatchResetMethod);
+
+            bool resets = starter != null
+                && starter.DescendantNodes()
+                    .OfType<InvocationExpressionSyntax>()
+                    .Any(i => i.Expression.ToString()
+                        .EndsWith(MatchResetCall, StringComparison.Ordinal));
+
+            if (resets) return findings;
+
+            findings.Add(new GateFinding(
+                "G16", path, starter != null ? LineOf(starter) : 0,
+                starter == null
+                    ? $"no {MatchResetMethod}, so nothing owns zeroing the offline scoreboard and "
+                      + $"'{MatchResetCall}' is left with no caller. The second offline match in a "
+                      + "process then opens on the previous round's score with GameEnded still "
+                      + "latched, and can never end."
+                    : $"{MatchResetMethod} does not call '{MatchResetCall}'. The scoreboard is a "
+                      + "static that outlives a scene load, so the second offline match in a "
+                      + "process opens on the previous round's score and flags, and its latched "
+                      + "GameEnded makes Win() early-return — that match and every later one can "
+                      + "never end. Reset() exists and says 'Called when a match starts'; give it "
+                      + "the caller rather than moving the reset back into whatever draws it."));
+
+            return findings;
+        }
     }
 }
