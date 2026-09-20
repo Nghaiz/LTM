@@ -1,4 +1,14 @@
-Shader "Standard" {
+// RECOVERED ARTIFACT -- DO NOT RENAME BACK TO "Standard".
+//
+// This is AssetRipper's //DummyShaderTextExporter output for the original build's Standard
+// shader: the 27-property block is faithful, the body is a stub that samples _MainTex into
+// Albedo and nothing else. It is kept as ground truth from the recovered build (P22).
+//
+// It used to declare Shader "Standard", which SHADOWED Unity's built-in: Shader.Find("Standard")
+// returned this stub, so any material assigned by name silently lost its normal, metallic,
+// occlusion and emission maps. Forty materials were sitting on it before P26. Renaming the
+// declaration removes the trap without deleting the artifact.
+Shader "Recovered/StandardStub" {
 Properties {
  _Color ("Color", Color) = (1.000000,1.000000,1.000000,1.000000)
  _MainTex ("Albedo", 2D) = "white" { }

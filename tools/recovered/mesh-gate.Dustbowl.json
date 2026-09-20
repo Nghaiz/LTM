@@ -1,0 +1,3094 @@
+{
+ "provenance": {
+  "generatedBy": "tools/p26_mesh_gate.py",
+  "recoveredBuild": "tmp/recovered",
+  "scene": "Dustbowl",
+  "note": "Answers the P26 phase risk gate. Regenerate with `python tools/p26_mesh_gate.py`. Do not hand-edit."
+ },
+ "searchScope": {
+  "recoveredAssets": "tmp/recovered/UnityProject/ExportedProject/Assets",
+  "projectAssets": "Ironfront_Reborn/Assets",
+  "recoveredAssetsIndexed": 1370,
+  "projectAssetsIndexed": 2066,
+  "matchedBy": "GUID first, then asset basename (a re-import reassigns GUIDs)"
+ },
+ "summary": {
+  "missingObjects": 144,
+  "unresolvedInRecoveredScene": 0,
+  "distinctMeshesNeeded": 8,
+  "meshesAbsent": 0,
+  "objectsBuildable": 129,
+  "objectsBlockedByAbsentMesh": 0,
+  "objectsWithNoMesh": 15
+ },
+ "meshes": {
+  "0498320d4f84e5243bea3dc54b47451c": {
+   "recoveredPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Mesh/Combined Mesh (root_ scene)_0.asset",
+   "assetName": "Combined Mesh (root_ scene)_0.asset",
+   "verdict": "present-renamed-guid",
+   "rebornPaths": [
+    "Ironfront_Reborn/Assets/Mesh/Combined Mesh (root_ scene)_0.asset"
+   ],
+   "neededBy": [
+    "Mount",
+    "Well"
+   ]
+  },
+  "052d53924ea0ecb40adad2e7d42e4aef": {
+   "recoveredPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Resources/markerObject.asset",
+   "assetName": "markerObject.asset",
+   "verdict": "present-renamed-guid",
+   "rebornPaths": [
+    "Ironfront_Reborn/Assets/Resources/markerObject.asset",
+    "Ironfront_Reborn/Assets/Resources/Resources2/markerObject.asset"
+   ],
+   "neededBy": [
+    "Marker0001",
+    "Marker0002",
+    "Marker0003",
+    "Marker0004",
+    "Marker0005"
+   ]
+  },
+  "599aa0d20108daf40bb9de7d85c66dd8": {
+   "recoveredPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Mesh/Cube_13.asset",
+   "assetName": "Cube_13.asset",
+   "verdict": "present-renamed-guid",
+   "rebornPaths": [
+    "Ironfront_Reborn/Assets/Mesh/Cube_13.asset",
+    "Ironfront_Reborn/Assets/Mesh3/Cube_13.asset"
+   ],
+   "neededBy": [
+    "Railroad Sleeper(Clone)"
+   ]
+  },
+  "615868ce19093be4da466f4111875e2e": {
+   "recoveredPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Mesh/Combined Mesh (root_ scene) 5.asset",
+   "assetName": "Combined Mesh (root_ scene) 5.asset",
+   "verdict": "present-renamed-guid",
+   "rebornPaths": [
+    "Ironfront_Reborn/Assets/Mesh/Combined Mesh (root_ scene) 5.asset"
+   ],
+   "neededBy": [
+    "Hanging_Rope",
+    "Tied_Rope"
+   ]
+  },
+  "6e1a1656e57db0741b5b0d5aad5ccd7e": {
+   "recoveredPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Mesh/Hanging_Rope.asset",
+   "assetName": "Hanging_Rope.asset",
+   "verdict": "present-renamed-guid",
+   "rebornPaths": [
+    "Ironfront_Reborn/Assets/Mesh/Hanging_Rope.asset"
+   ],
+   "neededBy": [
+    "Hanging_Rope Simulated"
+   ]
+  },
+  "92a2939a75be694438981f8f9d1504a2": {
+   "recoveredPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Mesh/Combined Mesh_1.asset",
+   "assetName": "Combined Mesh_1.asset",
+   "verdict": "present-renamed-guid",
+   "rebornPaths": [
+    "Ironfront_Reborn/Assets/Mesh/Combined Mesh_1.asset"
+   ],
+   "neededBy": [
+    "Railroad Sleeper"
+   ]
+  },
+  "c23b259628cba1f499bbbcc9a51853a1": {
+   "recoveredPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Mesh/soMesh_0.asset",
+   "assetName": "soMesh_0.asset",
+   "verdict": "present-renamed-guid",
+   "rebornPaths": [
+    "Ironfront_Reborn/Assets/Mesh/soMesh_0.asset"
+   ],
+   "neededBy": [
+    "Railroad Left"
+   ]
+  },
+  "ef0f7202f8fec884d94bbeba9915075d": {
+   "recoveredPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Mesh/soMesh.asset",
+   "assetName": "soMesh.asset",
+   "verdict": "present-renamed-guid",
+   "rebornPaths": [
+    "Ironfront_Reborn/Assets/Mesh/soMesh.asset"
+   ],
+   "neededBy": [
+    "Railroad Right"
+   ]
+  }
+ },
+ "objectsBuildable": [
+  "Hanging_Rope",
+  "Hanging_Rope Simulated",
+  "Marker0001",
+  "Marker0002",
+  "Marker0003",
+  "Marker0004",
+  "Marker0005",
+  "Mount",
+  "Railroad Left",
+  "Railroad Right",
+  "Railroad Sleeper",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Railroad Sleeper(Clone)",
+  "Tied_Rope",
+  "Well"
+ ],
+ "objectsBlockedByAbsentMesh": [],
+ "objectsWithNoMesh": [
+  "Clay Well",
+  "Container",
+  "Container",
+  "Container",
+  "Markers",
+  "MineRails",
+  "Side Objects",
+  "SideObjects",
+  "Static Props",
+  "road",
+  "surface",
+  "surface",
+  "surface",
+  "surface",
+  "surface"
+ ],
+ "objects": [
+  {
+   "name": "Clay Well",
+   "path": "Clay Well",
+   "fileId": 1903,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MonoBehaviour"
+   ],
+   "renderers": [],
+   "meshGuids": [],
+   "materialGuids": []
+  },
+  {
+   "name": "Hanging_Rope",
+   "path": "Clay Well/Hanging_Rope",
+   "fileId": 1902,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "615868ce19093be4da466f4111875e2e"
+   ],
+   "materialGuids": [
+    "d0ad470848f64be428b0f5304c6f14ff"
+   ]
+  },
+  {
+   "name": "Hanging_Rope Simulated",
+   "path": "Clay Well/Hanging_Rope Simulated",
+   "fileId": 1898,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "SkinnedMeshRenderer",
+    "Cloth"
+   ],
+   "renderers": [
+    "SkinnedMeshRenderer"
+   ],
+   "meshGuids": [
+    "6e1a1656e57db0741b5b0d5aad5ccd7e"
+   ],
+   "materialGuids": [
+    "d0ad470848f64be428b0f5304c6f14ff"
+   ]
+  },
+  {
+   "name": "Mount",
+   "path": "Clay Well/Mount",
+   "fileId": 1901,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer",
+    "MeshCollider"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "0498320d4f84e5243bea3dc54b47451c"
+   ],
+   "materialGuids": [
+    "fcfab7cdfdbcbc94bb2724c98f1fabbb"
+   ]
+  },
+  {
+   "name": "Tied_Rope",
+   "path": "Clay Well/Tied_Rope",
+   "fileId": 1900,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "615868ce19093be4da466f4111875e2e"
+   ],
+   "materialGuids": [
+    "d0ad470848f64be428b0f5304c6f14ff"
+   ]
+  },
+  {
+   "name": "Well",
+   "path": "Clay Well/Well",
+   "fileId": 1899,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer",
+    "MeshCollider"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "0498320d4f84e5243bea3dc54b47451c"
+   ],
+   "materialGuids": [
+    "08ac988fe5145224e87936289a660ddc",
+    "971f49d8e44169e4a9c0d16ef6a4d4e0"
+   ]
+  },
+  {
+   "name": "MineRails",
+   "path": "MineRails",
+   "fileId": 4975,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MonoBehaviour"
+   ],
+   "renderers": [],
+   "meshGuids": [],
+   "materialGuids": []
+  },
+  {
+   "name": "Markers",
+   "path": "MineRails/Markers",
+   "fileId": 3993,
+   "resolvedInScene": true,
+   "components": [
+    "Transform"
+   ],
+   "renderers": [],
+   "meshGuids": [],
+   "materialGuids": []
+  },
+  {
+   "name": "Marker0001",
+   "path": "MineRails/Markers/Marker0001",
+   "fileId": 4563,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer",
+    "MonoBehaviour"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "052d53924ea0ecb40adad2e7d42e4aef"
+   ],
+   "materialGuids": [
+    "898e3ca971925eb4c918b59a6194782f"
+   ]
+  },
+  {
+   "name": "surface",
+   "path": "MineRails/Markers/Marker0001/surface",
+   "fileId": 4274,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshCollider",
+    "MonoBehaviour",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [],
+   "materialGuids": [
+    "e504cf8124bbbbd4783eb565a2348e87"
+   ]
+  },
+  {
+   "name": "Marker0002",
+   "path": "MineRails/Markers/Marker0002",
+   "fileId": 4633,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer",
+    "MonoBehaviour"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "052d53924ea0ecb40adad2e7d42e4aef"
+   ],
+   "materialGuids": [
+    "898e3ca971925eb4c918b59a6194782f"
+   ]
+  },
+  {
+   "name": "surface",
+   "path": "MineRails/Markers/Marker0002/surface",
+   "fileId": 5124,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshCollider",
+    "MonoBehaviour",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [],
+   "materialGuids": [
+    "2359fb0a05ca8414ba510d14f24ae093"
+   ]
+  },
+  {
+   "name": "Marker0003",
+   "path": "MineRails/Markers/Marker0003",
+   "fileId": 3693,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer",
+    "MonoBehaviour"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "052d53924ea0ecb40adad2e7d42e4aef"
+   ],
+   "materialGuids": [
+    "898e3ca971925eb4c918b59a6194782f"
+   ]
+  },
+  {
+   "name": "surface",
+   "path": "MineRails/Markers/Marker0003/surface",
+   "fileId": 3983,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshCollider",
+    "MonoBehaviour",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [],
+   "materialGuids": [
+    "c602af853f6b3fc42aa9e977d814be07"
+   ]
+  },
+  {
+   "name": "Marker0004",
+   "path": "MineRails/Markers/Marker0004",
+   "fileId": 5005,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer",
+    "MonoBehaviour"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "052d53924ea0ecb40adad2e7d42e4aef"
+   ],
+   "materialGuids": [
+    "898e3ca971925eb4c918b59a6194782f"
+   ]
+  },
+  {
+   "name": "surface",
+   "path": "MineRails/Markers/Marker0004/surface",
+   "fileId": 4681,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshCollider",
+    "MonoBehaviour",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [],
+   "materialGuids": [
+    "6e9463cc627fd3448aed2723401e3a58"
+   ]
+  },
+  {
+   "name": "Marker0005",
+   "path": "MineRails/Markers/Marker0005",
+   "fileId": 4323,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer",
+    "MonoBehaviour"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "052d53924ea0ecb40adad2e7d42e4aef"
+   ],
+   "materialGuids": [
+    "898e3ca971925eb4c918b59a6194782f"
+   ]
+  },
+  {
+   "name": "surface",
+   "path": "MineRails/Markers/Marker0005/surface",
+   "fileId": 4359,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshCollider",
+    "MonoBehaviour",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [],
+   "materialGuids": [
+    "23a46ef66e6e72c4e84820a9791f5a01"
+   ]
+  },
+  {
+   "name": "Side Objects",
+   "path": "MineRails/Side Objects",
+   "fileId": 3824,
+   "resolvedInScene": true,
+   "components": [
+    "Transform"
+   ],
+   "renderers": [],
+   "meshGuids": [],
+   "materialGuids": []
+  },
+  {
+   "name": "Railroad Left",
+   "path": "MineRails/Side Objects/Railroad Left",
+   "fileId": 3950,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer",
+    "MonoBehaviour"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "c23b259628cba1f499bbbcc9a51853a1"
+   ],
+   "materialGuids": [
+    "518a9a5069f4a7646a77e9d569dc59a0"
+   ]
+  },
+  {
+   "name": "Container",
+   "path": "MineRails/Side Objects/Railroad Left/Container",
+   "fileId": 4700,
+   "resolvedInScene": true,
+   "components": [
+    "Transform"
+   ],
+   "renderers": [],
+   "meshGuids": [],
+   "materialGuids": []
+  },
+  {
+   "name": "Railroad Right",
+   "path": "MineRails/Side Objects/Railroad Right",
+   "fileId": 4294,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer",
+    "MonoBehaviour"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "ef0f7202f8fec884d94bbeba9915075d"
+   ],
+   "materialGuids": [
+    "518a9a5069f4a7646a77e9d569dc59a0"
+   ]
+  },
+  {
+   "name": "Container",
+   "path": "MineRails/Side Objects/Railroad Right/Container",
+   "fileId": 3930,
+   "resolvedInScene": true,
+   "components": [
+    "Transform"
+   ],
+   "renderers": [],
+   "meshGuids": [],
+   "materialGuids": []
+  },
+  {
+   "name": "Railroad Sleeper",
+   "path": "MineRails/Side Objects/Railroad Sleeper",
+   "fileId": 4382,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer",
+    "MonoBehaviour"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "92a2939a75be694438981f8f9d1504a2"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Container",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container",
+   "fileId": 5338,
+   "resolvedInScene": true,
+   "components": [
+    "Transform"
+   ],
+   "renderers": [],
+   "meshGuids": [],
+   "materialGuids": []
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3337,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3382,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3387,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3402,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3404,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3410,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3413,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3421,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3469,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3474,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3475,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3526,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3534,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3596,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3602,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3626,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3629,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3644,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3677,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3697,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3712,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3740,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3744,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3763,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3816,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3858,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3866,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3884,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3940,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3957,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3962,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 3976,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4006,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4025,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4027,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4064,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4114,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4115,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4119,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4130,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4146,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4154,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4160,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4174,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4186,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4327,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4339,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4365,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4401,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4498,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4517,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4535,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4558,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4560,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4567,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4577,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4614,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4620,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4623,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4638,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4643,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4666,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4703,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4707,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4771,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4797,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4819,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4835,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4849,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4855,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4895,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4918,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4933,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4953,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4957,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4977,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 4999,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5003,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5041,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5059,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5078,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5098,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5105,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5127,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5133,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5156,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5171,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5190,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5192,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5203,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5220,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5256,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5302,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5315,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5344,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5364,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5367,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5378,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5405,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5407,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5414,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5423,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5424,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5428,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5449,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5459,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5473,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5497,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5519,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5525,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5538,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5555,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5588,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5594,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5603,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "Railroad Sleeper(Clone)",
+   "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+   "fileId": 5622,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [
+    "599aa0d20108daf40bb9de7d85c66dd8"
+   ],
+   "materialGuids": [
+    "f7538b5fe7089d1499068dfeeceb24fb"
+   ]
+  },
+  {
+   "name": "SideObjects",
+   "path": "MineRails/SideObjects",
+   "fileId": 4705,
+   "resolvedInScene": true,
+   "components": [
+    "Transform"
+   ],
+   "renderers": [],
+   "meshGuids": [],
+   "materialGuids": []
+  },
+  {
+   "name": "road",
+   "path": "MineRails/road",
+   "fileId": 4429,
+   "resolvedInScene": true,
+   "components": [
+    "Transform",
+    "MeshFilter",
+    "MeshRenderer",
+    "MeshCollider"
+   ],
+   "renderers": [
+    "MeshRenderer"
+   ],
+   "meshGuids": [],
+   "materialGuids": [
+    "dadaf9adf24b1cb40afebe83a54f7849"
+   ]
+  },
+  {
+   "name": "Static Props",
+   "path": "Static Props",
+   "fileId": 3467,
+   "resolvedInScene": true,
+   "components": [
+    "Transform"
+   ],
+   "renderers": [],
+   "meshGuids": [],
+   "materialGuids": []
+  }
+ ]
+}

@@ -56,11 +56,26 @@ EXPECTED = {
     "static_original": {"Dustbowl": 1096, "Island": 345},
     "gameobjects_original": {"Dustbowl": 5587, "Island": 2584, "Menu": 362, "Splash": 62},
     "meshrenderers_original": {"Dustbowl": 2307, "Island": 829},
-    "unmapped_materials": 71,
+    "unmapped_materials_specular": 71,
+    "unmapped_materials_stub": 40,
+    "unmapped_materials": 111,
 }
 
-# The built-in shader id the Unity 2017 upgrade dumped every unresolvable material onto.
+# The built-in shader id the Unity 2017 upgrade dumped materials onto. Measured in the Editor
+# on 2026-09-21, NOT assumed: fileID 45 of `Resources/unity_builtin_extra` resolves to
+# `Standard (Specular setup)`. It is a real shader, not a placeholder -- these materials carry
+# metallic-workflow maps and are being read through the specular workflow, so they render wrong
+# rather than render as a stub. The phase plan calls it a "dummy"; it is not one.
 LOST_SHADER_FILE_ID = 45
+
+# The OTHER dummy, and the literal one. `Assets/Shader/Shader.shader` is AssetRipper's
+# `//DummyShaderTextExporter` output: it carries Standard's full 27-property block but a
+# surface-shader body that samples _MainTex into Albedo and nothing else -- no normal map, no
+# metallic, no occlusion, no emission. It also DECLARES `Shader "Standard"`, so it shadows the
+# built-in and `Shader.Find("Standard")` returns the stub (verified in the Editor, 2026-09-21).
+# Every material here was `Standard` in the original -- bar one SpeedTree -- so they belong in
+# the same map as the fileID-45 population, and take the same repair.
+STUB_SHADER_GUID = "c1f3ccbd8d437a947a4af2c687bdbaa9"
 
 DOC_RE = re.compile(r"^--- !u!(\d+) &(-?\d+)")
 KIND_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*):\s*$")
@@ -503,8 +518,13 @@ def _material_properties(text):
 
 
 def extract_material_shader_map(recovered_assets):
-    """For every material our project dumped onto the built-in placeholder, recover the shader
-    the original assigned it, plus the original property list as corroborating evidence."""
+    """For every material our project left pointing at the wrong shader, recover the shader the
+    original assigned it, plus the original property list as corroborating evidence.
+
+    Two populations, one repair. See LOST_SHADER_FILE_ID (fileID 45, `Standard (Specular
+    setup)`) and STUB_SHADER_GUID (the exported albedo-only stub that shadows `Standard`).
+    `dummyKind` on each entry says which one a material came from.
+    """
     orig_shaders = _index_shaders(recovered_assets)
     orig_materials = {}
     for dirpath, _dirs, files in os.walk(recovered_assets):
@@ -524,7 +544,15 @@ def extract_material_shader_map(recovered_assets):
             if not m:
                 continue
             ref = FILEREF_RE.search(m.group(1))
-            if not ref or int(ref.group(1)) != LOST_SHADER_FILE_ID:
+            if not ref:
+                continue
+            cur_file_id = int(ref.group(1))
+            cur_guid = ref.group(2)
+            if cur_file_id == LOST_SHADER_FILE_ID:
+                dummy_kind = "builtin-specular-setup"
+            elif cur_guid == STUB_SHADER_GUID:
+                dummy_kind = "exported-stub"
+            else:
                 continue
 
             rel = _rel(full)
@@ -543,7 +571,9 @@ def extract_material_shader_map(recovered_assets):
             entry = {
                 "material": stem,
                 "currentPath": rel,
-                "currentShaderFileId": LOST_SHADER_FILE_ID,
+                "currentShaderFileId": cur_file_id,
+                "currentShaderGuid": cur_guid,
+                "dummyKind": dummy_kind,
                 "matchedVia": matched_via,
                 "originalPath": None,
                 "shaderName": None,
@@ -738,7 +768,11 @@ def main(argv=None):
             "Dustbowl absent objects vs name-frequency deficit")
 
     materials, unresolved = extract_material_shader_map(exported)
-    _assert(len(materials), EXPECTED["unmapped_materials"], "materials on the lost shader")
+    _assert(len(materials), EXPECTED["unmapped_materials"], "materials on a wrong shader")
+    _assert(sum(1 for e in materials if e["dummyKind"] == "builtin-specular-setup"),
+            EXPECTED["unmapped_materials_specular"], "materials on Standard (Specular setup)")
+    _assert(sum(1 for e in materials if e["dummyKind"] == "exported-stub"),
+            EXPECTED["unmapped_materials_stub"], "materials on the exported albedo-only stub")
 
     surveys = {n: extract_match_key_survey(originals[n], reborns[n], static[n])
                for n in STATIC_SCENES}
@@ -788,7 +822,15 @@ def main(argv=None):
     written.append(_write(args.out, "material-shader-map.json", {
         "provenance": provenance,
         "lostShaderFileId": LOST_SHADER_FILE_ID,
+        "lostShaderName": "Standard (Specular setup)",
+        "stubShaderGuid": STUB_SHADER_GUID,
+        "stubShaderPath": "Ironfront_Reborn/Assets/Shader/Shader.shader",
         "count": len(materials),
+        "countByDummyKind": {
+            "builtin-specular-setup": sum(
+                1 for e in materials if e["dummyKind"] == "builtin-specular-setup"),
+            "exported-stub": sum(1 for e in materials if e["dummyKind"] == "exported-stub"),
+        },
         "unresolved": unresolved,
         "needsPropertyRestore": sorted(
             e["material"] for e in materials if not e["originalPropertiesCovered"]),
