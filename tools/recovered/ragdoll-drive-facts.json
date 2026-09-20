@@ -1,0 +1,394 @@
+{
+  "generated": "2026-09-21T00:37:48+07:00",
+  "producedBy": "tools/ragdoll_drive_facts.ps1",
+  "question": "Does the ActiveRaggy line 'jointDrive.mode = JointDriveMode.Position' explain a ragdoll difference between the original build and this one?",
+  "engines": {
+    "original": {
+      "label": "Unity 5.4.0f3 - the engine Ravenfield.exe ships",
+      "assembly": "tmp/Ravenfield/Ravenfield_Data/Managed/UnityEngine.dll",
+      "jointDrive": {
+        "type": "JointDrive",
+        "fields": [
+          "m_PositionSpring",
+          "m_PositionDamper",
+          "m_MaximumForce"
+        ],
+        "properties": [
+          {
+            "name": "mode",
+            "attributes": [
+              {
+                "name": "ObsoleteAttribute",
+                "message": "JointDriveMode is obsolete"
+              }
+            ]
+          },
+          {
+            "name": "positionSpring",
+            "attributes": []
+          },
+          {
+            "name": "positionDamper",
+            "attributes": []
+          },
+          {
+            "name": "maximumForce",
+            "attributes": []
+          }
+        ],
+        "methodIL": {
+          "get_mode": "16-2A",
+          "set_mode": "2A",
+          "get_positionSpring": "02-7B-99-03-00-04-2A",
+          "set_positionSpring": "02-03-7D-99-03-00-04-2A",
+          "get_positionDamper": "02-7B-9A-03-00-04-2A",
+          "set_positionDamper": "02-03-7D-9A-03-00-04-2A",
+          "get_maximumForce": "02-7B-9B-03-00-04-2A",
+          "set_maximumForce": "02-03-7D-9B-03-00-04-2A"
+        }
+      },
+      "jointDriveMode": {
+        "None": 0,
+        "Position": 1,
+        "Velocity": 2,
+        "PositionAndVelocity": 3
+      },
+      "rotationDriveMode": {
+        "XYAndZ": 0,
+        "Slerp": 1
+      }
+    },
+    "current": {
+      "label": "Unity 6000.3.21f1 - the engine this project builds on",
+      "assembly": "D:/UnityEditor/6000.3.21f1/Editor/Data/Managed/UnityEngine/UnityEngine.PhysicsModule.dll",
+      "jointDrive": {
+        "type": "JointDrive",
+        "fields": [
+          "m_PositionSpring",
+          "m_PositionDamper",
+          "m_MaximumForce",
+          "m_UseAcceleration"
+        ],
+        "properties": [
+          {
+            "name": "positionSpring",
+            "attributes": []
+          },
+          {
+            "name": "positionDamper",
+            "attributes": []
+          },
+          {
+            "name": "maximumForce",
+            "attributes": []
+          },
+          {
+            "name": "useAcceleration",
+            "attributes": []
+          }
+        ],
+        "methodIL": {
+          "get_positionSpring": "00-02-7B-1A-00-00-04-0A-2B-00-06-2A",
+          "set_positionSpring": "00-02-03-7D-1A-00-00-04-2A",
+          "get_positionDamper": "00-02-7B-1B-00-00-04-0A-2B-00-06-2A",
+          "set_positionDamper": "00-02-03-7D-1B-00-00-04-2A",
+          "get_maximumForce": "00-02-7B-1C-00-00-04-0A-2B-00-06-2A",
+          "set_maximumForce": "00-02-03-7D-1C-00-00-04-2A",
+          "get_useAcceleration": "00-02-7B-1D-00-00-04-17-FE-01-0A-2B-00-06-2A",
+          "set_useAcceleration": "00-02-03-2D-03-16-2B-01-17-7D-1D-00-00-04-2A"
+        }
+      },
+      "jointDriveMode": null,
+      "rotationDriveMode": {
+        "XYAndZ": 0,
+        "Slerp": 1
+      }
+    }
+  },
+  "prefabs": [
+    {
+      "tree": "ironfront",
+      "path": "./Ironfront_Reborn/Assets/Prefab/Ai Character Optimizations 1.prefab",
+      "configurableJoints": 12,
+      "targetAngularVelocityTotal": 12,
+      "targetAngularVelocityZero": 12,
+      "targetAngularVelocityNonZero": [],
+      "rotationDriveMode": {
+        "1": 12
+      },
+      "usesAcceleration": 0
+    },
+    {
+      "tree": "ironfront",
+      "path": "./Ironfront_Reborn/Assets/Prefab/Ai Character Optimizations.prefab",
+      "configurableJoints": 12,
+      "targetAngularVelocityTotal": 12,
+      "targetAngularVelocityZero": 12,
+      "targetAngularVelocityNonZero": [],
+      "rotationDriveMode": {
+        "1": 12
+      },
+      "usesAcceleration": 0
+    },
+    {
+      "tree": "ironfront",
+      "path": "./Ironfront_Reborn/Assets/Prefab/Player Fps Actor.prefab",
+      "configurableJoints": 12,
+      "targetAngularVelocityTotal": 12,
+      "targetAngularVelocityZero": 12,
+      "targetAngularVelocityNonZero": [],
+      "rotationDriveMode": {
+        "1": 12
+      },
+      "usesAcceleration": 0
+    },
+    {
+      "tree": "ironfront",
+      "path": "./Ironfront_Reborn/Assets/Prefab/tank.prefab",
+      "configurableJoints": 1,
+      "targetAngularVelocityTotal": 1,
+      "targetAngularVelocityZero": 1,
+      "targetAngularVelocityNonZero": [],
+      "rotationDriveMode": {
+        "1": 1
+      },
+      "usesAcceleration": 0
+    },
+    {
+      "tree": "recovered",
+      "path": "./tmp/recovered/UnityProject/ExportedProject/Assets/GameObject/Ai Character Optimizations.prefab",
+      "configurableJoints": 12,
+      "targetAngularVelocityTotal": 12,
+      "targetAngularVelocityZero": 12,
+      "targetAngularVelocityNonZero": [],
+      "rotationDriveMode": {
+        "1": 12
+      },
+      "usesAcceleration": 0
+    },
+    {
+      "tree": "recovered",
+      "path": "./tmp/recovered/UnityProject/ExportedProject/Assets/GameObject/Player Fps Actor.prefab",
+      "configurableJoints": 12,
+      "targetAngularVelocityTotal": 12,
+      "targetAngularVelocityZero": 12,
+      "targetAngularVelocityNonZero": [],
+      "rotationDriveMode": {
+        "1": 12
+      },
+      "usesAcceleration": 0
+    },
+    {
+      "tree": "recovered",
+      "path": "./tmp/recovered/UnityProject/ExportedProject/Assets/GameObject/tank.prefab",
+      "configurableJoints": 1,
+      "targetAngularVelocityTotal": 1,
+      "targetAngularVelocityZero": 1,
+      "targetAngularVelocityNonZero": [],
+      "rotationDriveMode": {
+        "1": 1
+      },
+      "usesAcceleration": 0
+    }
+  ],
+  "sources": [
+    {
+      "tree": "ironfront",
+      "setDriveCalls": [
+        {
+          "tree": "ironfront",
+          "file": "./Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ActiveRaggy.cs",
+          "line": 105,
+          "spring": "1000f",
+          "damper": "3f",
+          "text": "SetDrive(1000f, 3f);"
+        },
+        {
+          "tree": "ironfront",
+          "file": "./Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs",
+          "line": 291,
+          "spring": "700f",
+          "damper": "3f",
+          "text": "ragdoll.SetDrive(700f, 3f);"
+        },
+        {
+          "tree": "ironfront",
+          "file": "./Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs",
+          "line": 347,
+          "spring": "700f",
+          "damper": "3f",
+          "text": "ragdoll.SetDrive(700f, 3f);"
+        },
+        {
+          "tree": "ironfront",
+          "file": "./Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs",
+          "line": 1070,
+          "spring": "50f",
+          "damper": "1f",
+          "text": "ragdoll.SetDrive(50f, 1f);"
+        }
+      ],
+      "driveTargetWrites": [
+        {
+          "tree": "ironfront",
+          "file": "./Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ActiveRaggy.cs",
+          "line": 191,
+          "text": "configurableJoint.slerpDrive = jointDrive;"
+        },
+        {
+          "tree": "ironfront",
+          "file": "./Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ConfigurableJointExtensions.cs",
+          "line": 23,
+          "text": "private static void SetTargetRotationInternal(ConfigurableJoint joint, Quaternion targetRotation, Quaternion startRotation, Space space)"
+        },
+        {
+          "tree": "ironfront",
+          "file": "./Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ConfigurableJointExtensions.cs",
+          "line": 29,
+          "text": "Quaternion targetRotation2 = Quaternion.Inverse(quaternion);"
+        },
+        {
+          "tree": "ironfront",
+          "file": "./Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ConfigurableJointExtensions.cs",
+          "line": 32,
+          "text": "targetRotation2 *= startRotation * Quaternion.Inverse(targetRotation);"
+        },
+        {
+          "tree": "ironfront",
+          "file": "./Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ConfigurableJointExtensions.cs",
+          "line": 36,
+          "text": "targetRotation2 *= Quaternion.Inverse(targetRotation) * startRotation;"
+        },
+        {
+          "tree": "ironfront",
+          "file": "./Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ConfigurableJointExtensions.cs",
+          "line": 38,
+          "text": "targetRotation2 *= quaternion;"
+        },
+        {
+          "tree": "ironfront",
+          "file": "./Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ConfigurableJointExtensions.cs",
+          "line": 39,
+          "text": "joint.targetRotation = targetRotation2;"
+        },
+        {
+          "tree": "ironfront",
+          "file": "./Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/TankTurret.cs",
+          "line": 89,
+          "text": "_aim.Yaw = TurretAimCore.WrapDegrees(towerJoint.targetRotation.eulerAngles.z);"
+        },
+        {
+          "tree": "ironfront",
+          "file": "./Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/TankTurret.cs",
+          "line": 114,
+          "text": "towerJoint.targetRotation = Quaternion.Euler(0f, 0f, _aim.Yaw);"
+        }
+      ]
+    },
+    {
+      "tree": "recovered",
+      "setDriveCalls": [
+        {
+          "tree": "recovered",
+          "file": "./tmp/recovered/src/Assembly-CSharp/ActiveRaggy.cs",
+          "line": 106,
+          "spring": "1000f",
+          "damper": "3f",
+          "text": "SetDrive(1000f, 3f);"
+        },
+        {
+          "tree": "recovered",
+          "file": "./tmp/recovered/src/Assembly-CSharp/Actor.cs",
+          "line": 213,
+          "spring": "700f",
+          "damper": "3f",
+          "text": "ragdoll.SetDrive(700f, 3f);"
+        },
+        {
+          "tree": "recovered",
+          "file": "./tmp/recovered/src/Assembly-CSharp/Actor.cs",
+          "line": 711,
+          "spring": "50f",
+          "damper": "1f",
+          "text": "ragdoll.SetDrive(50f, 1f);"
+        }
+      ],
+      "driveTargetWrites": [
+        {
+          "tree": "recovered",
+          "file": "./tmp/recovered/src/Assembly-CSharp/ActiveRaggy.cs",
+          "line": 192,
+          "text": "configurableJoint.slerpDrive = jointDrive;"
+        },
+        {
+          "tree": "recovered",
+          "file": "./tmp/recovered/src/Assembly-CSharp/ConfigurableJointExtensions.cs",
+          "line": 23,
+          "text": "private static void SetTargetRotationInternal(ConfigurableJoint joint, Quaternion targetRotation, Quaternion startRotation, Space space)"
+        },
+        {
+          "tree": "recovered",
+          "file": "./tmp/recovered/src/Assembly-CSharp/ConfigurableJointExtensions.cs",
+          "line": 29,
+          "text": "Quaternion targetRotation2 = Quaternion.Inverse(quaternion);"
+        },
+        {
+          "tree": "recovered",
+          "file": "./tmp/recovered/src/Assembly-CSharp/ConfigurableJointExtensions.cs",
+          "line": 32,
+          "text": "targetRotation2 *= startRotation * Quaternion.Inverse(targetRotation);"
+        },
+        {
+          "tree": "recovered",
+          "file": "./tmp/recovered/src/Assembly-CSharp/ConfigurableJointExtensions.cs",
+          "line": 36,
+          "text": "targetRotation2 *= Quaternion.Inverse(targetRotation) * startRotation;"
+        },
+        {
+          "tree": "recovered",
+          "file": "./tmp/recovered/src/Assembly-CSharp/ConfigurableJointExtensions.cs",
+          "line": 38,
+          "text": "targetRotation2 *= quaternion;"
+        },
+        {
+          "tree": "recovered",
+          "file": "./tmp/recovered/src/Assembly-CSharp/ConfigurableJointExtensions.cs",
+          "line": 39,
+          "text": "joint.targetRotation = targetRotation2;"
+        },
+        {
+          "tree": "recovered",
+          "file": "./tmp/recovered/src/Assembly-CSharp/TankTurret.cs",
+          "line": 29,
+          "text": "Vector3 eulerAngles = towerJoint.targetRotation.eulerAngles;"
+        },
+        {
+          "tree": "recovered",
+          "file": "./tmp/recovered/src/Assembly-CSharp/TankTurret.cs",
+          "line": 33,
+          "text": "towerJoint.targetRotation = Quaternion.Euler(eulerAngles);"
+        }
+      ]
+    }
+  ],
+  "sharedFiles": [
+    {
+      "file": "ActiveRaggy.cs",
+      "ironfrontSha256": "B714F1E46499E8FC80EA3A514B818ADA611323686010E942D5AEF2CAA6FB7B71",
+      "recoveredSha256": "BC5E5307A48C118D791FE9EE7618B36DA8ADC1F9A1ADB21750AFEAE194CDF3CD",
+      "identical": false
+    },
+    {
+      "file": "ConfigurableJointExtensions.cs",
+      "ironfrontSha256": "8A5E844E9FA9E846B6364D6AFEFDBA0B0C2C5DA6315B4CCC4742EBEFBE7229D5",
+      "recoveredSha256": "8A5E844E9FA9E846B6364D6AFEFDBA0B0C2C5DA6315B4CCC4742EBEFBE7229D5",
+      "identical": true
+    }
+  ],
+  "totals": {
+    "configurableJoints": 62,
+    "targetAngularVelocityFields": 62,
+    "targetAngularVelocityZero": 62,
+    "targetAngularVelocityNonZero": 0
+  }
+}
