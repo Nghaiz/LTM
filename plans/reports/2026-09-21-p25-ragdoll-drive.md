@@ -44,8 +44,10 @@ warning is `Look rotation viewing vector is zero` ×3, which is benign.
 
 That green is worth something specific: menu, map select, weapon loadout, deploy and scoring are
 all `Assembly-CSharp` code, so they exercise the recompiled assembly rather than just proving it
-loads. And a couple of hundred bot deaths each ran `ActiveRaggy.Ragdoll()`; a serialization
-mismatch there would have thrown on the first one and filled the log.
+loads. Deaths ran `ActiveRaggy.Ragdoll()` repeatedly — the player's own, plus bot deaths visible as
+bodies and blood decals throughout — and a serialization mismatch there would have thrown on the
+first one and filled the log. (How many bot deaths is not claimed: Ravenfield's score counts
+capture ticks as well as kills, so the 462 points scored do not convert to a death count.)
 
 **So the measurement rig the plan wanted is buildable.** That conclusion stands whatever happens to
 the rest of the phase, and it is §6.1b of the acceptance list. The rig was not then built, because
