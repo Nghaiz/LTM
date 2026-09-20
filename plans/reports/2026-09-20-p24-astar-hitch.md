@@ -230,10 +230,12 @@ name and it **exits 1**. (c) being zero is the absence of unclassified lines, no
 into the real `AstarPath.Update`, and the tool went RED, named that exact line, and exited 1. The
 mutation is reverted; `AstarPath.cs` is byte-identical to `develop`.
 
-## 6. Incidental finding — a scene's net role is decided by hierarchy order
+## 6. The net-role coin flip — **already known as ledger X-10**, not a new finding
 
-Not P24's to fix (§7 of the plan), but it cost this investigation two runs and it will cost
-someone else more.
+> **Corrected 2026-09-21.** This section first called this an "incidental finding" and said both
+> bootstraps sit "at execution order 0". Both claims were wrong, and both would send a reader the
+> wrong way — see §6.1. The behaviour is real and it did cost this investigation two runs; it is
+> just neither undiscovered nor unaddressed.
 
 Island's first two probe runs came up `NetRole.Client` and spawned no bots. The cause, read out of
 the live Editor:
@@ -245,20 +247,53 @@ the live Editor:
    NetClientBootstrap  go='NetClient'            ServerTickLoop      go='NetServer'
 ```
 
-Same components, both active, **both at execution order 0** — so `Awake` order is hierarchy order.
-And the two bootstraps are mirror images:
+Same components, both active, and **both carry `[DefaultExecutionOrder(-1000)]`** — equal order, so
+`Awake` order falls to hierarchy order. And the two bootstraps are mirror images:
 
 - `NetClientBootstrap.Awake`: `if (!NetContext.IsServer) SetRole(Client);`
 - `NetServerBootstrap.Awake`: `if (!NetContext.IsClient) SetRole(Server);`
 
 Whichever runs first wins. Dustbowl lists `NetServer` first and becomes a server; Island lists
-`NetClient` first and becomes a client. Nothing declares the intent, and nothing fails when it
-comes out the other way.
+`NetClient` first and becomes a client.
 
 The probe works around it in memory (it deactivates the `NetClient` **GameObject** — disabling the
 *component* is not enough, because Unity runs `Awake` on a disabled component) and never saves the
-scene. A real fix would be an execution-order pin or an explicit declaration; that belongs to
-whoever owns scene wiring.
+scene.
+
+### 6.1 Two corrections to what this section first said
+
+**"Both at execution order 0" was a bad reading of the tool, not of the code.** The probe asked
+`MonoImporter.GetExecutionOrder`, which reports the **Project Settings → Script Execution Order**
+value and returns 0 for "not set there". It does **not** see a `[DefaultExecutionOrder]` attribute.
+Both bootstraps carry `[DefaultExecutionOrder(-1000)]`. The conclusion is unchanged — equal order,
+so hierarchy order decides — but anyone acting on "they are at 0" would go looking in the wrong
+place. Reading an execution order means reading the attribute *and* the project setting.
+
+**Calling it an "incidental finding" was wrong: it is ledger X-10, and it is documented in the
+code that fixes it.** `NetRoleBootstrap` exists precisely for this, at
+`Assets/Scripts/Net/Shared/NetRoleBootstrap.cs`, and its own remarks describe this exact coin flip
+— including that both bootstraps are at -1000 and that `NetClientPresenterGuard.IsPresentable`
+latches on the loser, leaving "a dead killfeed, a dead name table and a dead local combat driver
+for the rest of its life". It also records why it stayed hidden: lane B declares
+`IRONFRONT_LANEB_ROLE` before any scene `Awake`, so **every lane-B run is correct and the shipped
+client is not** — a green lane-B run makes this *less* likely to be found, not more.
+
+So the mechanism is already shipped and already announced. Verified live on Island, 2026-09-21:
+
+```
+[net] this rendered process declared no role, so whichever of NetClientBootstrap and
+NetServerBootstrap Unity Awakes first decides it. ... Set IRONFRONT_ROLE=client (or pass
+-ironfront-role=client) on a client build. Offline single-player is unaffected and needs
+nothing (ledger X-10).
+```
+
+`NetRoleDeclaration.Resolve` returns `Undeclared` for a rendered process with no
+`IRONFRONT_ROLE` / `-ironfront-role`, and `NetRoleBootstrap`'s remark says the default is left
+alone **deliberately**, because that is what keeps offline single-player and the Editor sandbox
+working. What is genuinely open is the product decision it names: *should a rendered process
+default to `Client`?* That is a decision, not a missing mechanism — so this phase records it and
+does not pick it.
+
 
 ## 7. Verification
 
