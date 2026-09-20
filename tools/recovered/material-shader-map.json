@@ -1,0 +1,6134 @@
+{
+  "provenance": {
+    "generatedBy": "tools/extract_recovered.py",
+    "recoveredBuild": "tmp/recovered",
+    "engineOriginal": "Unity 5.4.0f3",
+    "note": "Regenerate with `python tools/extract_recovered.py`. Do not hand-edit."
+  },
+  "lostShaderFileId": 45,
+  "count": 71,
+  "unresolved": [],
+  "needsPropertyRestore": [
+    "Branches_0_1",
+    "Fronds_2_1"
+  ],
+  "entries": [
+    {
+      "material": "Asphalt",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Asphalt.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Asphalt.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Backlights",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Backlights.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Backlights.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Billboard",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Billboard.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Billboard.mat",
+      "shaderName": "Nature/SpeedTree Billboard",
+      "shaderGuid": "848f3d3df16af1145816709db11254e6",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/SpeedTreeBillboard.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_MainTex"
+        ],
+        "floats": [
+          "_Cutoff",
+          "_Shininess",
+          "_WindQuality"
+        ],
+        "colors": [
+          "_Color",
+          "_HueVariation",
+          "_ImageTexCoords0",
+          "_ImageTexCoords1",
+          "_ImageTexCoords10",
+          "_ImageTexCoords11",
+          "_ImageTexCoords12",
+          "_ImageTexCoords13",
+          "_ImageTexCoords14",
+          "_ImageTexCoords15",
+          "_ImageTexCoords16",
+          "_ImageTexCoords17",
+          "_ImageTexCoords18",
+          "_ImageTexCoords19",
+          "_ImageTexCoords2",
+          "_ImageTexCoords20",
+          "_ImageTexCoords21",
+          "_ImageTexCoords22",
+          "_ImageTexCoords23",
+          "_ImageTexCoords24",
+          "_ImageTexCoords25",
+          "_ImageTexCoords26",
+          "_ImageTexCoords27",
+          "_ImageTexCoords28",
+          "_ImageTexCoords29",
+          "_ImageTexCoords3",
+          "_ImageTexCoords30",
+          "_ImageTexCoords31",
+          "_ImageTexCoords4",
+          "_ImageTexCoords5",
+          "_ImageTexCoords6",
+          "_ImageTexCoords7",
+          "_ImageTexCoords8",
+          "_ImageTexCoords9",
+          "_InstanceData",
+          "_SpecColor",
+          "_TreeInfo0",
+          "_TreeInfo1",
+          "_TreeInfo2",
+          "_TreeInfo3",
+          "_TreeSize0",
+          "_TreeSize1",
+          "_TreeSize2",
+          "_TreeSize3"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_Shininess",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_WindQuality",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_HueVariation",
+          "_ImageTexCoords0",
+          "_ImageTexCoords1",
+          "_ImageTexCoords10",
+          "_ImageTexCoords11",
+          "_ImageTexCoords12",
+          "_ImageTexCoords13",
+          "_ImageTexCoords14",
+          "_ImageTexCoords15",
+          "_ImageTexCoords16",
+          "_ImageTexCoords17",
+          "_ImageTexCoords18",
+          "_ImageTexCoords19",
+          "_ImageTexCoords2",
+          "_ImageTexCoords20",
+          "_ImageTexCoords21",
+          "_ImageTexCoords22",
+          "_ImageTexCoords23",
+          "_ImageTexCoords24",
+          "_ImageTexCoords25",
+          "_ImageTexCoords26",
+          "_ImageTexCoords27",
+          "_ImageTexCoords28",
+          "_ImageTexCoords29",
+          "_ImageTexCoords3",
+          "_ImageTexCoords30",
+          "_ImageTexCoords31",
+          "_ImageTexCoords4",
+          "_ImageTexCoords5",
+          "_ImageTexCoords6",
+          "_ImageTexCoords7",
+          "_ImageTexCoords8",
+          "_ImageTexCoords9",
+          "_InstanceData",
+          "_SpecColor",
+          "_TreeInfo0",
+          "_TreeInfo1",
+          "_TreeInfo2",
+          "_TreeInfo3",
+          "_TreeSize0",
+          "_TreeSize1",
+          "_TreeSize2",
+          "_TreeSize3"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Blue Tinted Plastic",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Blue Tinted Plastic.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Blue Tinted Plastic.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Blue",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Blue.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Blue.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Branches_0_1",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Branches_0_1.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Branches_0_1.mat",
+      "shaderName": "Nature/SpeedTree",
+      "shaderGuid": "4ed74d7d54f55a143ac66770e2b6d0f5",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/SpeedTree.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailTex",
+          "_MainTex"
+        ],
+        "floats": [
+          "_Cull",
+          "_Cutoff",
+          "_Shininess",
+          "_WindQuality"
+        ],
+        "colors": [
+          "_Color",
+          "_HueVariation",
+          "_SpecColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_AO",
+          "_BaseLight",
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Mode",
+          "_Occlusion",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SquashAmount",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor",
+          "_TreeInstanceColor",
+          "_TreeInstanceScale"
+        ]
+      },
+      "originalPropertiesCovered": false,
+      "propertiesOnlyInOriginal": [
+        "_Cull",
+        "_DetailTex",
+        "_HueVariation",
+        "_Shininess",
+        "_WindQuality"
+      ],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Bright Orange",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Bright Orange.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Bright Orange.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Bright Wood",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Bright Wood.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Bright Wood.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Clay House Facade",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Clay House Facade.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Clay House Facade.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Cloth Green",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Cloth Green.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Cloth Green.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Concrete Large",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Concrete Large.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Concrete Large.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Concrete",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Concrete.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Concrete.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Dark Green Plastic",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Dark Green Plastic.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Dark Green Plastic.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Dark Metal",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Dark Metal.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Dark Metal.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Dark Plastic",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Dark Plastic.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Dark Plastic.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Dark Rubber",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Dark Rubber.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Dark Rubber.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Dark Scope",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Dark Scope.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Dark Scope.mat",
+      "shaderName": "Custom/Multiply No Soft",
+      "shaderGuid": "b25b61df94e0f8043aba4b8c8f96c256",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/MultiplyNoSoft.shader",
+      "originalProperties": {
+        "textures": [
+          "_MainTex"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_Glossiness",
+          "_InvFade",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_InvFade",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Debris",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Debris.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Debris.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Desert Bridge Roof",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Desert Bridge Roof.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Desert Bridge Roof.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_AlphaTex",
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_ColorMask",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_EnableExternalAlpha",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_InvFade",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_Shininess",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_Stencil",
+          "_StencilComp",
+          "_StencilOp",
+          "_StencilReadMask",
+          "_StencilWriteMask",
+          "_UVSec",
+          "_UseUIAlphaClip",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_Emission",
+          "_EmissionColor",
+          "_Flip",
+          "_RendererColor",
+          "_SpecColor",
+          "_TintColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Desert Bridge",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Desert Bridge.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Desert Bridge.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Desert Facility Concrete Dark",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Desert Facility Concrete Dark.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Desert Facility Concrete Dark.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Desert Facility Concrete",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Desert Facility Concrete.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Desert Facility Concrete.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainBump",
+          "_MainTex",
+          "_Mask",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_ColorMask",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_Focus",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_Shininess",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_Stencil",
+          "_StencilComp",
+          "_StencilOp",
+          "_StencilReadMask",
+          "_StencilWriteMask",
+          "_UVSec",
+          "_UseUIAlphaClip",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor",
+          "_Specular"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Desert Plastic",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Desert Plastic.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Desert Plastic.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Facer Floor",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Facer Floor.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Facer Floor.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_ColorMask",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_Stencil",
+          "_StencilComp",
+          "_StencilOp",
+          "_StencilReadMask",
+          "_StencilWriteMask",
+          "_UVSec",
+          "_UseUIAlphaClip",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Floor Tiles",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Floor Tiles.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Floor Tiles.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Floor",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Floor.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Floor.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Fronds_2_1",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Fronds_2_1.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Fronds_2_1.mat",
+      "shaderName": "Nature/SpeedTree",
+      "shaderGuid": "4ed74d7d54f55a143ac66770e2b6d0f5",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/SpeedTree.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailTex",
+          "_MainTex"
+        ],
+        "floats": [
+          "_Cull",
+          "_Cutoff",
+          "_Shininess",
+          "_WindQuality"
+        ],
+        "colors": [
+          "_Color",
+          "_HueVariation",
+          "_SpecColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_InvFade",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor",
+          "_TintColor"
+        ]
+      },
+      "originalPropertiesCovered": false,
+      "propertiesOnlyInOriginal": [
+        "_Cull",
+        "_DetailTex",
+        "_HueVariation",
+        "_Shininess",
+        "_WindQuality"
+      ],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Glass",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Glass.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Glass.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Gold",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Gold.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Gold.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Gray Metal",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Gray Metal.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Gray Metal.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Green Plastic",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Green Plastic.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Green Plastic.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Headlights",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Headlights.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Headlights.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Javelin Crosshair",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Javelin Crosshair.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Javelin Crosshair.mat",
+      "shaderName": "UI/Additive",
+      "shaderGuid": "4af31473ebef2874ca4c6a44456f9002",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/UIAdditive.shader",
+      "originalProperties": {
+        "textures": [
+          "_MainTex"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_TintColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor",
+          "_TintColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Material",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Material.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Material.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Material_001",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Material_001.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Material_001.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Material_001_0",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Material_001_0.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Material_001_0.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Material_001_1",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Material_001_1.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Material_001_1.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Material_002",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Material_002.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Material_002.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor",
+          "_TintColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Material_002_0",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Material_002_0.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Material_002_0.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_AlphaTex",
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainBump",
+          "_MainTex",
+          "_Mask",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_ColorMask",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_EnableExternalAlpha",
+          "_Focus",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_InvFade",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_Shininess",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_Stencil",
+          "_StencilComp",
+          "_StencilOp",
+          "_StencilReadMask",
+          "_StencilWriteMask",
+          "_UVSec",
+          "_UseUIAlphaClip",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_Emission",
+          "_EmissionColor",
+          "_Flip",
+          "_RendererColor",
+          "_SpecColor",
+          "_Specular",
+          "_TintColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Material_003",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Material_003.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Material_003.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Material_004",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Material_004.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Material_004.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Material_004_0",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Material_004_0.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Material_004_0.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Material_004_1",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Material_004_1.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Material_004_1.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Material_005_0",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Material_005_0.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Material_005_0.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Material_006",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Material_006.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Material_006.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Material_007",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Material_007.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Material_007.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Metal_0",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Metal_0.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Metal_0.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Non Lethal Blue",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Non Lethal Blue.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Non Lethal Blue.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Office Cubicles",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Office Cubicles.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Office Cubicles.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Orange Tracer",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Orange Tracer.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Orange Tracer.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Plaster",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Plaster.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Plaster.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "RHIB 1",
+      "currentPath": "Ironfront_Reborn/Assets/Material/RHIB 1.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "duplicate-suffix-stripped",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/RHIB.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "RHIB Engine 1",
+      "currentPath": "Ironfront_Reborn/Assets/Material/RHIB Engine 1.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "duplicate-suffix-stripped",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/RHIB Engine.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "RHIB Engine",
+      "currentPath": "Ironfront_Reborn/Assets/Material/RHIB Engine.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/RHIB Engine.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "RHIB",
+      "currentPath": "Ironfront_Reborn/Assets/Material/RHIB.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/RHIB.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Red 1",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Red 1.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "duplicate-suffix-stripped",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Red.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Red Danger 1",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Red Danger 1.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "duplicate-suffix-stripped",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Red Danger.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Red Danger",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Red Danger.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Red Danger.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Red Tracer 1",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Red Tracer 1.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "duplicate-suffix-stripped",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Red Tracer.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Red Tracer",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Red Tracer.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Red Tracer.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Red",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Red.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Red.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Rotor",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Rotor.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Rotor.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Rubber",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Rubber.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Rubber.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Rugged Metal 1",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Rugged Metal 1.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "duplicate-suffix-stripped",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Rugged Metal.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Rugged Metal",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Rugged Metal.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Rugged Metal.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Tractor Green",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Tractor Green.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Tractor Green.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Wall",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Wall.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Wall.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Water",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Water.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Water.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Windmill Blades",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Windmill Blades.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Windmill Blades.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "Yellow Tracer",
+      "currentPath": "Ironfront_Reborn/Assets/Material/Yellow Tracer.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/Yellow Tracer.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    },
+    {
+      "material": "unnamed",
+      "currentPath": "Ironfront_Reborn/Assets/Material/unnamed.mat",
+      "currentShaderFileId": 45,
+      "matchedVia": "exact-name",
+      "originalPath": "tmp/recovered/UnityProject/ExportedProject/Assets/Material/unnamed.mat",
+      "shaderName": "Standard",
+      "shaderGuid": "dd1d7b0076371ec408d94e8c850545d4",
+      "shaderFile": "tmp/recovered/UnityProject/ExportedProject/Assets/Shader/Shader.shader",
+      "originalProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor"
+        ]
+      },
+      "currentProperties": {
+        "textures": [
+          "_BumpMap",
+          "_DetailAlbedoMap",
+          "_DetailMask",
+          "_DetailNormalMap",
+          "_EmissionMap",
+          "_MainTex",
+          "_MetallicGlossMap",
+          "_OcclusionMap",
+          "_ParallaxMap",
+          "_SpecGlossMap"
+        ],
+        "floats": [
+          "_BumpScale",
+          "_Cutoff",
+          "_DetailNormalMapScale",
+          "_DstBlend",
+          "_GlossMapScale",
+          "_Glossiness",
+          "_GlossyReflections",
+          "_Metallic",
+          "_Mode",
+          "_OcclusionStrength",
+          "_Parallax",
+          "_SmoothnessTextureChannel",
+          "_SpecularHighlights",
+          "_SrcBlend",
+          "_UVSec",
+          "_ZWrite"
+        ],
+        "colors": [
+          "_Color",
+          "_EmissionColor",
+          "_SpecColor"
+        ]
+      },
+      "originalPropertiesCovered": true,
+      "propertiesOnlyInOriginal": [],
+      "ambiguousOriginals": 0
+    }
+  ]
+}

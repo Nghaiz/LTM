@@ -1,0 +1,7074 @@
+{
+  "provenance": {
+    "generatedBy": "tools/extract_recovered.py",
+    "recoveredBuild": "tmp/recovered",
+    "engineOriginal": "Unity 5.4.0f3",
+    "note": "Regenerate with `python tools/extract_recovered.py`. Do not hand-edit."
+  },
+  "scene": "Dustbowl",
+  "matchKey": "stage 1 (m_Name, m_LocalPosition rounded to 2 dp), then stage 2 m_Name alone",
+  "count": 144,
+  "subtreeRoots": 3,
+  "reconciliation": {
+    "absentFromOurScene": 144,
+    "addedByOurProject": 22,
+    "netGameObjectDelta": -122,
+    "displacedNotMissing": 291,
+    "nameDeficit": 144,
+    "note": "netGameObjectDelta is the phase plan's '122' -- a NET figure, not a population. The population to rebuild is absentFromOurScene. nameDeficit is the same number derived without any position matching; the two must agree."
+  },
+  "entries": [
+    {
+      "name": "Clay Well",
+      "parentPath": "",
+      "path": "Clay Well",
+      "localPos": [
+        1817.7622,
+        17.48283,
+        1760.2059
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 1,
+      "components": [
+        "Transform",
+        "MonoBehaviour"
+      ],
+      "fileId": 1903,
+      "isSubtreeRoot": true
+    },
+    {
+      "name": "Hanging_Rope",
+      "parentPath": "Clay Well",
+      "path": "Clay Well/Hanging_Rope",
+      "localPos": [
+        0.116950236,
+        0.0,
+        0.0
+      ],
+      "staticFlags": 4294967295,
+      "layer": 0,
+      "isActive": 1,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 1902,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Hanging_Rope Simulated",
+      "parentPath": "Clay Well",
+      "path": "Clay Well/Hanging_Rope Simulated",
+      "localPos": [
+        0.11694336,
+        0.0,
+        0.0
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "SkinnedMeshRenderer",
+        "Cloth"
+      ],
+      "fileId": 1898,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Mount",
+      "parentPath": "Clay Well",
+      "path": "Clay Well/Mount",
+      "localPos": [
+        -0.023390047,
+        0.0,
+        0.0
+      ],
+      "staticFlags": 4294967295,
+      "layer": 0,
+      "isActive": 1,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer",
+        "MeshCollider"
+      ],
+      "fileId": 1901,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Tied_Rope",
+      "parentPath": "Clay Well",
+      "path": "Clay Well/Tied_Rope",
+      "localPos": [
+        0.116950236,
+        0.0,
+        0.0
+      ],
+      "staticFlags": 4294967295,
+      "layer": 0,
+      "isActive": 1,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 1900,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Well",
+      "parentPath": "Clay Well",
+      "path": "Clay Well/Well",
+      "localPos": [
+        -0.023390047,
+        0.0,
+        0.0
+      ],
+      "staticFlags": 4294967295,
+      "layer": 0,
+      "isActive": 1,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer",
+        "MeshCollider"
+      ],
+      "fileId": 1899,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "MineRails",
+      "parentPath": "",
+      "path": "MineRails",
+      "localPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 1,
+      "components": [
+        "Transform",
+        "MonoBehaviour"
+      ],
+      "fileId": 4975,
+      "isSubtreeRoot": true
+    },
+    {
+      "name": "Markers",
+      "parentPath": "MineRails",
+      "path": "MineRails/Markers",
+      "localPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 1,
+      "components": [
+        "Transform"
+      ],
+      "fileId": 3993,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Marker0001",
+      "parentPath": "MineRails/Markers",
+      "path": "MineRails/Markers/Marker0001",
+      "localPos": [
+        1583.7,
+        42.068996,
+        1413.36
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer",
+        "MonoBehaviour"
+      ],
+      "fileId": 4563,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "surface",
+      "parentPath": "MineRails/Markers/Marker0001",
+      "path": "MineRails/Markers/Marker0001/surface",
+      "localPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "staticFlags": 0,
+      "layer": 31,
+      "isActive": 1,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshCollider",
+        "MonoBehaviour",
+        "MeshRenderer"
+      ],
+      "fileId": 4274,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Marker0002",
+      "parentPath": "MineRails/Markers",
+      "path": "MineRails/Markers/Marker0002",
+      "localPos": [
+        1594.16,
+        42.056324,
+        1425.33
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer",
+        "MonoBehaviour"
+      ],
+      "fileId": 4633,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "surface",
+      "parentPath": "MineRails/Markers/Marker0002",
+      "path": "MineRails/Markers/Marker0002/surface",
+      "localPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "staticFlags": 0,
+      "layer": 31,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshCollider",
+        "MonoBehaviour",
+        "MeshRenderer"
+      ],
+      "fileId": 5124,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Marker0003",
+      "parentPath": "MineRails/Markers",
+      "path": "MineRails/Markers/Marker0003",
+      "localPos": [
+        1596.7,
+        41.917046,
+        1461.1
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer",
+        "MonoBehaviour"
+      ],
+      "fileId": 3693,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "surface",
+      "parentPath": "MineRails/Markers/Marker0003",
+      "path": "MineRails/Markers/Marker0003/surface",
+      "localPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "staticFlags": 0,
+      "layer": 31,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshCollider",
+        "MonoBehaviour",
+        "MeshRenderer"
+      ],
+      "fileId": 3983,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Marker0004",
+      "parentPath": "MineRails/Markers",
+      "path": "MineRails/Markers/Marker0004",
+      "localPos": [
+        1618.6,
+        42.108902,
+        1462.7
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer",
+        "MonoBehaviour"
+      ],
+      "fileId": 5005,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "surface",
+      "parentPath": "MineRails/Markers/Marker0004",
+      "path": "MineRails/Markers/Marker0004/surface",
+      "localPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "staticFlags": 0,
+      "layer": 31,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshCollider",
+        "MonoBehaviour",
+        "MeshRenderer"
+      ],
+      "fileId": 4681,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Marker0005",
+      "parentPath": "MineRails/Markers",
+      "path": "MineRails/Markers/Marker0005",
+      "localPos": [
+        1637.59,
+        44.3975,
+        1429.75
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer",
+        "MonoBehaviour"
+      ],
+      "fileId": 4323,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "surface",
+      "parentPath": "MineRails/Markers/Marker0005",
+      "path": "MineRails/Markers/Marker0005/surface",
+      "localPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "staticFlags": 0,
+      "layer": 31,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshCollider",
+        "MonoBehaviour",
+        "MeshRenderer"
+      ],
+      "fileId": 4359,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Side Objects",
+      "parentPath": "MineRails",
+      "path": "MineRails/Side Objects",
+      "localPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 1,
+      "components": [
+        "Transform"
+      ],
+      "fileId": 3824,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Left",
+      "parentPath": "MineRails/Side Objects",
+      "path": "MineRails/Side Objects/Railroad Left",
+      "localPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 1,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer",
+        "MonoBehaviour"
+      ],
+      "fileId": 3950,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Container",
+      "parentPath": "MineRails/Side Objects/Railroad Left",
+      "path": "MineRails/Side Objects/Railroad Left/Container",
+      "localPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 1,
+      "components": [
+        "Transform"
+      ],
+      "fileId": 4700,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Right",
+      "parentPath": "MineRails/Side Objects",
+      "path": "MineRails/Side Objects/Railroad Right",
+      "localPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 1,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer",
+        "MonoBehaviour"
+      ],
+      "fileId": 4294,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Container",
+      "parentPath": "MineRails/Side Objects/Railroad Right",
+      "path": "MineRails/Side Objects/Railroad Right/Container",
+      "localPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 1,
+      "components": [
+        "Transform"
+      ],
+      "fileId": 3930,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper",
+      "parentPath": "MineRails/Side Objects",
+      "path": "MineRails/Side Objects/Railroad Sleeper",
+      "localPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 1,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer",
+        "MonoBehaviour"
+      ],
+      "fileId": 4382,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Container",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "localPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform"
+      ],
+      "fileId": 5338,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.4657,
+        42.090584,
+        1446.9456
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3337,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1591.9609,
+        41.867935,
+        1420.5035
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3382,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1618.1207,
+        42.212955,
+        1463.1604
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3387,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1595.3157,
+        41.94507,
+        1457.8944
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3402,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1613.625,
+        42.02305,
+        1465.3641
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3404,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1615.489,
+        42.096184,
+        1464.6152
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3410,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1608.6824,
+        41.946857,
+        1465.9923
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3413,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.5686,
+        41.89433,
+        1428.9633
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3421,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1606.6759,
+        41.930103,
+        1466.1404
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3469,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1589.2557,
+        41.870155,
+        1417.5923
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3474,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1636.1089,
+        43.19676,
+        1432.2976
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3475,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1623.9009,
+        42.48899,
+        1456.3098
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3526,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1628.7611,
+        42.788494,
+        1447.5922
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3534,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1624.3279,
+        42.504734,
+        1455.3982
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3596,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1602.792,
+        41.882896,
+        1465.2303
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3602,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1630.1042,
+        42.790672,
+        1444.9161
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3626,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1622.1443,
+        42.430458,
+        1458.7352
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3629,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.5695,
+        42.084026,
+        1445.947
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3644,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.6995,
+        42.05697,
+        1436.9481
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3677,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.8533,
+        41.96415,
+        1432.9497
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3697,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1628.3867,
+        42.74536,
+        1448.523
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3712,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1637.6716,
+        43.424774,
+        1429.736
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3740,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.5918,
+        42.06811,
+        1442.9469
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3744,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.6648,
+        41.993313,
+        1452.9425
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3763,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1584.4772,
+        42.483566,
+        1413.9889
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3816,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.6722,
+        41.909832,
+        1430.955
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3858,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1597.6696,
+        41.874348,
+        1462.2407
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3866,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.463,
+        42.080193,
+        1444.9445
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3884,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1624.8813,
+        42.52071,
+        1454.5677
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3940,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1593.7338,
+        41.88793,
+        1424.0674
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3957,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1630.944,
+        42.79179,
+        1443.1049
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3962,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1626.8612,
+        42.630043,
+        1451.1027
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 3976,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1607.6776,
+        41.93659,
+        1466.2241
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4006,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1627.4679,
+        42.66476,
+        1450.2969
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4025,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1633.1886,
+        42.904724,
+        1438.6472
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4027,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1625.9274,
+        42.5992,
+        1452.8677
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4064,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1633.6465,
+        42.932602,
+        1437.7598
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4114,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1586.885,
+        42.063408,
+        1415.7728
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4115,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1632.2505,
+        42.864845,
+        1440.4113
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4119,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.5859,
+        42.08359,
+        1447.9465
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4130,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1629.2899,
+        42.797615,
+        1446.7417
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4146,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1611.66,
+        41.971687,
+        1465.7589
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4154,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.4961,
+        41.89376,
+        1427.9694
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4160,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1601.8232,
+        41.866615,
+        1464.9658
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4174,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1631.9227,
+        42.85,
+        1441.3613
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4186,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.7987,
+        41.93637,
+        1431.9504
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4327,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1619.6165,
+        42.275295,
+        1461.8218
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4339,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1587.8011,
+        41.903534,
+        1416.2043
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4365,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1635.2725,
+        43.08413,
+        1434.1117
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4401,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1583.6035,
+        42.635983,
+        1413.3156
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4498,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1618.8387,
+        42.246513,
+        1462.4445
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4517,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1590.0374,
+        41.863155,
+        1418.2128
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4535,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1621.6001,
+        42.391193,
+        1459.5763
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4558,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1634.3905,
+        42.98871,
+        1435.9031
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4560,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1595.0963,
+        41.955242,
+        1456.9175
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4567,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1626.3568,
+        42.616276,
+        1451.9636
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4577,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1622.7795,
+        42.46248,
+        1457.9634
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4614,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1627.9149,
+        42.70549,
+        1449.4032
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4620,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1625.4932,
+        42.558746,
+        1453.7708
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4623,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1590.7244,
+        41.863644,
+        1418.9374
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4638,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.7267,
+        42.06567,
+        1441.9504
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4643,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1637.1436,
+        43.34101,
+        1430.5834
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4666,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.3807,
+        41.89286,
+        1426.9807
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4703,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.8599,
+        41.89794,
+        1429.9443
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4707,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1621.0168,
+        42.34868,
+        1460.3926
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4771,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.6567,
+        42.067493,
+        1440.948
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4797,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1595.8778,
+        41.918472,
+        1459.8204
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4819,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.6338,
+        42.066338,
+        1448.9458
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4835,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1586.0536,
+        42.208492,
+        1415.2178
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4849,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.7368,
+        42.064686,
+        1439.95
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4855,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.8462,
+        41.975914,
+        1454.9333
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4895,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1591.4507,
+        41.863216,
+        1419.6307
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4918,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.2017,
+        41.89146,
+        1426.0044
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4933,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1620.3295,
+        42.310745,
+        1461.1207
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4953,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.495,
+        42.07457,
+        1443.9447
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4957,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1593.3899,
+        41.88353,
+        1423.13
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4977,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1634.0304,
+        42.960632,
+        1436.8372
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 4999,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1588.5458,
+        41.879402,
+        1416.8828
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5003,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1600.0504,
+        41.8494,
+        1464.05
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5041,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1614.5657,
+        42.05864,
+        1465.0092
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5059,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1623.317,
+        42.485603,
+        1457.1208
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5078,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1630.5186,
+        42.78698,
+        1444.0077
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5098,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.4691,
+        42.048946,
+        1449.9468
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5105,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1632.6862,
+        42.878876,
+        1439.5133
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5127,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1600.8756,
+        41.85403,
+        1464.6212
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5133,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.7446,
+        41.994503,
+        1433.95
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5156,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1585.2162,
+        42.35461,
+        1414.6663
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5171,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1612.6339,
+        41.991955,
+        1465.5331
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5190,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1636.6384,
+        43.257782,
+        1431.4458
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5192,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.6215,
+        42.029972,
+        1450.944
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5203,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1631.5343,
+        42.819633,
+        1442.2825
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5220,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1592.4956,
+        41.871952,
+        1421.3466
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5256,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.8618,
+        41.96543,
+        1455.9393
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5302,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.5009,
+        42.012287,
+        1451.9486
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5315,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1635.7294,
+        43.14137,
+        1433.2238
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5344,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1592.9558,
+        41.8775,
+        1422.2325
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5364,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1599.1409,
+        41.84954,
+        1463.6014
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5367,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.6959,
+        42.04728,
+        1435.9484
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5378,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1609.686,
+        41.95335,
+        1466.1217
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5405,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1634.9177,
+        43.02939,
+        1435.0487
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5407,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.6871,
+        42.062206,
+        1438.9481
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5414,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1629.6138,
+        42.796646,
+        1445.7865
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5423,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.7611,
+        42.022877,
+        1434.9495
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5424,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1596.472,
+        41.90333,
+        1460.6508
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5428,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.6577,
+        42.059673,
+        1437.947
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5449,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1595.5303,
+        41.934853,
+        1458.8749
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5459,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1603.6951,
+        41.896976,
+        1465.6887
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5473,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1604.7107,
+        41.915115,
+        1465.7616
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5497,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1598.448,
+        41.86282,
+        1462.8732
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5519,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1610.6748,
+        41.963074,
+        1465.9297
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5525,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.1042,
+        41.8907,
+        1424.9966
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5538,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1596.9613,
+        41.88743,
+        1461.5231
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5555,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1605.6831,
+        41.928257,
+        1465.9982
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5588,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1617.1904,
+        42.196026,
+        1463.5515
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5594,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1594.7974,
+        41.985077,
+        1453.9348
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5603,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Railroad Sleeper(Clone)",
+      "parentPath": "MineRails/Side Objects/Railroad Sleeper/Container",
+      "path": "MineRails/Side Objects/Railroad Sleeper/Container/Railroad Sleeper(Clone)",
+      "localPos": [
+        1616.3704,
+        42.13669,
+        1464.1339
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 0,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer"
+      ],
+      "fileId": 5622,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "SideObjects",
+      "parentPath": "MineRails",
+      "path": "MineRails/SideObjects",
+      "localPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 1,
+      "components": [
+        "Transform"
+      ],
+      "fileId": 4705,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "road",
+      "parentPath": "MineRails",
+      "path": "MineRails/road",
+      "localPos": [
+        -183.93335,
+        141.43309,
+        -542.4795
+      ],
+      "staticFlags": 0,
+      "layer": 31,
+      "isActive": 1,
+      "components": [
+        "Transform",
+        "MeshFilter",
+        "MeshRenderer",
+        "MeshCollider"
+      ],
+      "fileId": 4429,
+      "isSubtreeRoot": false
+    },
+    {
+      "name": "Static Props",
+      "parentPath": "",
+      "path": "Static Props",
+      "localPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "staticFlags": 0,
+      "layer": 0,
+      "isActive": 1,
+      "components": [
+        "Transform"
+      ],
+      "fileId": 3467,
+      "isSubtreeRoot": true
+    }
+  ],
+  "displaced": [
+    {
+      "name": "Barrier Open",
+      "originalPath": "Barrier Open",
+      "originalLocalPos": [
+        1221.3563,
+        30.443937,
+        1760.3424
+      ],
+      "currentLocalPos": [
+        346.54065,
+        -344.12158,
+        -2086.3682
+      ]
+    },
+    {
+      "name": "Barrier Open (1)",
+      "originalPath": "Barrier Open (1)",
+      "originalLocalPos": [
+        1236.05,
+        30.93,
+        1745.65
+      ],
+      "currentLocalPos": [
+        325.76453,
+        -343.58307,
+        -2086.121
+      ]
+    },
+    {
+      "name": "Bridge Capture Point",
+      "originalPath": "Bridge Capture Point",
+      "originalLocalPos": [
+        1150.0,
+        67.44,
+        1339.04
+      ],
+      "currentLocalPos": [
+        -4.963135,
+        -44.82168,
+        -42.751343
+      ]
+    },
+    {
+      "name": "Checkpoint Light",
+      "originalPath": "Checkpoint Light",
+      "originalLocalPos": [
+        1218.84,
+        34.59,
+        1779.93
+      ],
+      "currentLocalPos": [
+        -416.88135,
+        -7.9089127,
+        319.59778
+      ]
+    },
+    {
+      "name": "Checkpoint Light",
+      "originalPath": "Checkpoint Light",
+      "originalLocalPos": [
+        1209.02,
+        34.74,
+        1766.0
+      ],
+      "currentLocalPos": [
+        -426.7013,
+        -7.758911,
+        305.66772
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows",
+      "originalPath": "Clay Hut Balanced Windows",
+      "originalLocalPos": [
+        1773.44,
+        11.202,
+        1780.0
+      ],
+      "currentLocalPos": [
+        -36.51184,
+        -433.4843,
+        -2474.7476
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (1)",
+      "originalPath": "Clay Hut Balanced Windows (1)",
+      "originalLocalPos": [
+        1765.65,
+        15.46,
+        1835.21
+      ],
+      "currentLocalPos": [
+        7.480591,
+        -435.35468,
+        -2509.2168
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (10)",
+      "originalPath": "Clay Hut Balanced Windows (10)",
+      "originalLocalPos": [
+        1805.27,
+        16.29,
+        1785.22
+      ],
+      "currentLocalPos": [
+        -55.75476,
+        -433.0564,
+        -2501.126
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (11)",
+      "originalPath": "Clay Hut Balanced Windows (11)",
+      "originalLocalPos": [
+        1894.97,
+        24.903866,
+        1771.67
+      ],
+      "currentLocalPos": [
+        -129.63513,
+        -433.89175,
+        -2554.4634
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (12)",
+      "originalPath": "Clay Hut Balanced Windows (12)",
+      "originalLocalPos": [
+        1904.8,
+        29.31,
+        1766.72
+      ],
+      "currentLocalPos": [
+        -140.1416,
+        -430.13525,
+        -2558.4702
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (13)",
+      "originalPath": "Clay Hut Balanced Windows (13)",
+      "originalLocalPos": [
+        1912.27,
+        24.903864,
+        1777.29
+      ],
+      "currentLocalPos": [
+        -138.15869,
+        -436.73483,
+        -2570.2793
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (14)",
+      "originalPath": "Clay Hut Balanced Windows (14)",
+      "originalLocalPos": [
+        1843.16,
+        21.73,
+        1835.98
+      ],
+      "currentLocalPos": [
+        -47.682007,
+        -438.81787,
+        -2563.9233
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (15)",
+      "originalPath": "Clay Hut Balanced Windows (15)",
+      "originalLocalPos": [
+        1703.25,
+        27.89,
+        1670.12
+      ],
+      "currentLocalPos": [
+        -62.488037,
+        -394.45325,
+        -2351.9448
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (16)",
+      "originalPath": "Clay Hut Balanced Windows (16)",
+      "originalLocalPos": [
+        1736.81,
+        23.27,
+        1677.82
+      ],
+      "currentLocalPos": [
+        -81.24902,
+        -404.1084,
+        -2379.544
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (17)",
+      "originalPath": "Clay Hut Balanced Windows (17)",
+      "originalLocalPos": [
+        1616.16,
+        53.91,
+        1540.5
+      ],
+      "currentLocalPos": [
+        -90.04724,
+        -341.6483,
+        -2205.2642
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (18)",
+      "originalPath": "Clay Hut Balanced Windows (18)",
+      "originalLocalPos": [
+        1644.97,
+        39.96,
+        1465.39
+      ],
+      "currentLocalPos": [
+        -162.98395,
+        -349.37302,
+        -2169.3936
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (19)",
+      "originalPath": "Clay Hut Balanced Windows (19)",
+      "originalLocalPos": [
+        1713.56,
+        31.652573,
+        1595.15
+      ],
+      "currentLocalPos": [
+        -122.03308,
+        -382.4865,
+        -2306.6443
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (2)",
+      "originalPath": "Clay Hut Balanced Windows (2)",
+      "originalLocalPos": [
+        1788.84,
+        14.51,
+        1754.6
+      ],
+      "currentLocalPos": [
+        -65.24231,
+        -428.8938,
+        -2467.9094
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (20)",
+      "originalPath": "Clay Hut Balanced Windows (20)",
+      "originalLocalPos": [
+        1721.72,
+        37.350307,
+        1590.33
+      ],
+      "currentLocalPos": [
+        -131.24854,
+        -377.26978,
+        -2309.8286
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (21)",
+      "originalPath": "Clay Hut Balanced Windows (21)",
+      "originalLocalPos": [
+        1720.83,
+        30.5,
+        1583.88
+      ],
+      "currentLocalPos": [
+        -135.09473,
+        -383.08243,
+        -2303.4456
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (22)",
+      "originalPath": "Clay Hut Balanced Windows (22)",
+      "originalLocalPos": [
+        1642.37,
+        25.74,
+        1640.0
+      ],
+      "currentLocalPos": [
+        -39.6864,
+        -385.24945,
+        -2288.5918
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (23)",
+      "originalPath": "Clay Hut Balanced Windows (23)",
+      "originalLocalPos": [
+        1898.05,
+        24.3,
+        1797.98
+      ],
+      "currentLocalPos": [
+        -113.551636,
+        -438.21027,
+        -2575.0723
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (24)",
+      "originalPath": "Clay Hut Balanced Windows (24)",
+      "originalLocalPos": [
+        1880.56,
+        23.68,
+        1823.24
+      ],
+      "currentLocalPos": [
+        -83.41699,
+        -439.88025,
+        -2580.857
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (25)",
+      "originalPath": "Clay Hut Balanced Windows (25)",
+      "originalLocalPos": [
+        1877.36,
+        23.77,
+        1833.22
+      ],
+      "currentLocalPos": [
+        -74.177124,
+        -440.66687,
+        -2585.7407
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (26)",
+      "originalPath": "Clay Hut Balanced Windows (26)",
+      "originalLocalPos": [
+        1930.06,
+        23.6,
+        1805.17
+      ],
+      "currentLocalPos": [
+        -131.55383,
+        -443.7517,
+        -2601.9434
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (3)",
+      "originalPath": "Clay Hut Balanced Windows (3)",
+      "originalLocalPos": [
+        1855.07,
+        26.41,
+        1712.08
+      ],
+      "currentLocalPos": [
+        -142.4043,
+        -419.92383,
+        -2485.2742
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (4)",
+      "originalPath": "Clay Hut Balanced Windows (4)",
+      "originalLocalPos": [
+        1958.34,
+        49.88,
+        1714.81
+      ],
+      "currentLocalPos": [
+        -214.71448,
+        -409.8769,
+        -2562.0422
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (5)",
+      "originalPath": "Clay Hut Balanced Windows (5)",
+      "originalLocalPos": [
+        1839.72,
+        21.543888,
+        1792.17
+      ],
+      "currentLocalPos": [
+        -75.67676,
+        -433.00757,
+        -2530.5508
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (6)",
+      "originalPath": "Clay Hut Balanced Windows (6)",
+      "originalLocalPos": [
+        1697.94,
+        16.53,
+        1789.53
+      ],
+      "currentLocalPos": [
+        24.369385,
+        -420.163,
+        -2430.7534
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (7)",
+      "originalPath": "Clay Hut Balanced Windows (7)",
+      "originalLocalPos": [
+        1780.5568,
+        15.2,
+        1710.1404
+      ],
+      "currentLocalPos": [
+        -90.208984,
+        -421.54272,
+        -2430.9175
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (8)",
+      "originalPath": "Clay Hut Balanced Windows (8)",
+      "originalLocalPos": [
+        1860.5,
+        25.42,
+        1759.85
+      ],
+      "currentLocalPos": [
+        -113.08545,
+        -427.64,
+        -2522.6016
+      ]
+    },
+    {
+      "name": "Clay Hut Balanced Windows (9)",
+      "originalPath": "Clay Hut Balanced Windows (9)",
+      "originalLocalPos": [
+        1863.85,
+        30.37,
+        1757.63
+      ],
+      "currentLocalPos": [
+        -117.03662,
+        -422.898,
+        -2524.2002
+      ]
+    },
+    {
+      "name": "Clay Hut Base",
+      "originalPath": "Clay Hut Base",
+      "originalLocalPos": [
+        1719.66,
+        27.29,
+        1667.68
+      ],
+      "currentLocalPos": [
+        -75.97693,
+        -396.7525,
+        -2361.345
+      ]
+    },
+    {
+      "name": "Clay Hut Left Windows",
+      "originalPath": "Clay Hut Left Windows",
+      "originalLocalPos": [
+        1768.86,
+        14.05,
+        1824.27
+      ],
+      "currentLocalPos": [
+        -2.43396,
+        -435.74646,
+        -2503.4272
+      ]
+    },
+    {
+      "name": "Clay Hut Left Windows (1)",
+      "originalPath": "Clay Hut Left Windows (1)",
+      "originalLocalPos": [
+        1852.89,
+        35.480682,
+        1711.05
+      ],
+      "currentLocalPos": [
+        -141.55408,
+        -410.5971,
+        -2484.6587
+      ]
+    },
+    {
+      "name": "Clay Hut Left Windows (2)",
+      "originalPath": "Clay Hut Left Windows (2)",
+      "originalLocalPos": [
+        1818.09,
+        19.57,
+        1736.42
+      ],
+      "currentLocalPos": [
+        -98.90405,
+        -425.20087,
+        -2475.9673
+      ]
+    },
+    {
+      "name": "Clay Hut Left Windows (3)",
+      "originalPath": "Clay Hut Left Windows (3)",
+      "originalLocalPos": [
+        1723.2229,
+        17.37,
+        1815.1202
+      ],
+      "currentLocalPos": [
+        23.996948,
+        -425.70053,
+        -2466.3062
+      ]
+    },
+    {
+      "name": "Clay Hut Left Windows (4)",
+      "originalPath": "Clay Hut Left Windows (4)",
+      "originalLocalPos": [
+        1722.53,
+        26.91,
+        1662.05
+      ],
+      "currentLocalPos": [
+        -81.95422,
+        -396.76385,
+        -2359.2603
+      ]
+    },
+    {
+      "name": "Clay Hut Left Windows (5)",
+      "originalPath": "Clay Hut Left Windows (5)",
+      "originalLocalPos": [
+        1617.04,
+        45.65,
+        1424.62
+      ],
+      "currentLocalPos": [
+        -171.26636,
+        -335.1528,
+        -2122.4482
+      ]
+    },
+    {
+      "name": "Clay Hut Left Windows One Side",
+      "originalPath": "Clay Hut Left Windows One Side",
+      "originalLocalPos": [
+        1777.64,
+        19.012,
+        1773.1
+      ],
+      "currentLocalPos": [
+        -44.32849,
+        -425.43695,
+        -2474.1243
+      ]
+    },
+    {
+      "name": "Clay Hut Left Windows One Side (1)",
+      "originalPath": "Clay Hut Left Windows One Side (1)",
+      "originalLocalPos": [
+        1840.37,
+        18.86,
+        1714.11
+      ],
+      "currentLocalPos": [
+        -130.42944,
+        -425.80426,
+        -2475.3127
+      ]
+    },
+    {
+      "name": "Clay Hut Left Windows One Side (10)",
+      "originalPath": "Clay Hut Left Windows One Side (10)",
+      "originalLocalPos": [
+        1615.21,
+        45.81,
+        1550.02
+      ],
+      "currentLocalPos": [
+        -82.74402,
+        -350.71405,
+        -2209.9138
+      ]
+    },
+    {
+      "name": "Clay Hut Left Windows One Side (11)",
+      "originalPath": "Clay Hut Left Windows One Side (11)",
+      "originalLocalPos": [
+        1722.0165,
+        31.76,
+        1590.2471
+      ],
+      "currentLocalPos": [
+        -131.51917,
+        -382.79773,
+        -2308.9832
+      ]
+    },
+    {
+      "name": "Clay Hut Left Windows One Side (12)",
+      "originalPath": "Clay Hut Left Windows One Side (12)",
+      "originalLocalPos": [
+        1730.42,
+        32.08,
+        1582.85
+      ],
+      "currentLocalPos": [
+        -142.7024,
+        -382.5763,
+        -2309.5605
+      ]
+    },
+    {
+      "name": "Clay Hut Left Windows One Side (13)",
+      "originalPath": "Clay Hut Left Windows One Side (13)",
+      "originalLocalPos": [
+        1643.48,
+        36.0,
+        1573.03
+      ],
+      "currentLocalPos": [
+        -87.056885,
+        -366.773,
+        -2243.8018
+      ]
+    },
+    {
+      "name": "Clay Hut Left Windows One Side (14)",
+      "originalPath": "Clay Hut Left Windows One Side (14)",
+      "originalLocalPos": [
+        1867.51,
+        24.858303,
+        1764.19
+      ],
+      "currentLocalPos": [
+        -115.104614,
+        -429.60703,
+        -2530.3696
+      ]
+    },
+    {
+      "name": "Clay Hut Left Windows One Side (2)",
+      "originalPath": "Clay Hut Left Windows One Side (2)",
+      "originalLocalPos": [
+        1840.75,
+        23.2,
+        1779.92
+      ],
+      "currentLocalPos": [
+        -84.936035,
+        -429.94684,
+        -2522.8853
+      ]
+    },
+    {
+      "name": "Clay Hut Left Windows One Side (3)",
+      "originalPath": "Clay Hut Left Windows One Side (3)",
+      "originalLocalPos": [
+        1693.97,
+        16.37,
+        1799.14
+      ],
+      "currentLocalPos": [
+        33.905273,
+        -421.0539,
+        -2434.8047
+      ]
+    },
+    {
+      "name": "Clay Hut Left Windows One Side (4)",
+      "originalPath": "Clay Hut Left Windows One Side (4)",
+      "originalLocalPos": [
+        1904.69,
+        23.59,
+        1831.35
+      ],
+      "currentLocalPos": [
+        -95.1167,
+        -443.96875,
+        -2603.0923
+      ]
+    },
+    {
+      "name": "Clay Hut Left Windows One Side (5)",
+      "originalPath": "Clay Hut Left Windows One Side (5)",
+      "originalLocalPos": [
+        1868.85,
+        24.46,
+        1754.42
+      ],
+      "currentLocalPos": [
+        -122.861694,
+        -428.92178,
+        -2524.3066
+      ]
+    },
+    {
+      "name": "Clay Hut Left Windows One Side (6)",
+      "originalPath": "Clay Hut Left Windows One Side (6)",
+      "originalLocalPos": [
+        1814.78,
+        16.94,
+        1787.45
+      ],
+      "currentLocalPos": [
+        -61.03784,
+        -433.87024,
+        -2509.3274
+      ]
+    },
+    {
+      "name": "Clay Hut Left Windows One Side (7)",
+      "originalPath": "Clay Hut Left Windows One Side (7)",
+      "originalLocalPos": [
+        1906.01,
+        24.903864,
+        1764.5
+      ],
+      "currentLocalPos": [
+        -142.55469,
+        -434.33844,
+        -2556.9487
+      ]
+    },
+    {
+      "name": "Clay Hut Left Windows One Side (8)",
+      "originalPath": "Clay Hut Left Windows One Side (8)",
+      "originalLocalPos": [
+        1816.8698,
+        17.7,
+        1705.4309
+      ],
+      "currentLocalPos": [
+        -119.578125,
+        -422.9512,
+        -2452.8843
+      ]
+    },
+    {
+      "name": "Clay Hut Left Windows One Side (9)",
+      "originalPath": "Clay Hut Left Windows One Side (9)",
+      "originalLocalPos": [
+        1811.8081,
+        24.58,
+        1856.908
+      ],
+      "currentLocalPos": [
+        -10.598755,
+        -434.81628,
+        -2557.7695
+      ]
+    },
+    {
+      "name": "Clay Hut No Windows",
+      "originalPath": "Clay Hut No Windows",
+      "originalLocalPos": [
+        1781.14,
+        16.27,
+        1766.5
+      ],
+      "currentLocalPos": [
+        -51.43347,
+        -427.72714,
+        -2471.3667
+      ]
+    },
+    {
+      "name": "Clay Hut No Windows (1)",
+      "originalPath": "Clay Hut No Windows (1)",
+      "originalLocalPos": [
+        1786.94,
+        19.26,
+        1756.5
+      ],
+      "currentLocalPos": [
+        -62.555542,
+        -424.22656,
+        -2468.7932
+      ]
+    },
+    {
+      "name": "Clay Hut No Windows (10)",
+      "originalPath": "Clay Hut No Windows (10)",
+      "originalLocalPos": [
+        1624.97,
+        45.06,
+        1546.52
+      ],
+      "currentLocalPos": [
+        -92.19177,
+        -352.208,
+        -2213.9863
+      ]
+    },
+    {
+      "name": "Clay Hut No Windows (11)",
+      "originalPath": "Clay Hut No Windows (11)",
+      "originalLocalPos": [
+        1710.89,
+        26.92,
+        1597.1
+      ],
+      "currentLocalPos": [
+        -118.7583,
+        -387.06384,
+        -2305.3586
+      ]
+    },
+    {
+      "name": "Clay Hut No Windows (12)",
+      "originalPath": "Clay Hut No Windows (12)",
+      "originalLocalPos": [
+        1732.6,
+        27.38,
+        1593.64
+      ],
+      "currentLocalPos": [
+        -136.76501,
+        -388.84225,
+        -2317.8525
+      ]
+    },
+    {
+      "name": "Clay Hut No Windows (13)",
+      "originalPath": "Clay Hut No Windows (13)",
+      "originalLocalPos": [
+        1637.07,
+        38.54,
+        1573.51
+      ],
+      "currentLocalPos": [
+        -82.11694,
+        -363.54547,
+        -2240.2031
+      ]
+    },
+    {
+      "name": "Clay Hut No Windows (14)",
+      "originalPath": "Clay Hut No Windows (14)",
+      "originalLocalPos": [
+        1648.04,
+        26.173534,
+        1636.29
+      ],
+      "currentLocalPos": [
+        -46.34082,
+        -385.0487,
+        -2289.9255
+      ]
+    },
+    {
+      "name": "Clay Hut No Windows (15)",
+      "originalPath": "Clay Hut No Windows (15)",
+      "originalLocalPos": [
+        1903.53,
+        24.903864,
+        1770.01
+      ],
+      "currentLocalPos": [
+        -136.94104,
+        -434.73398,
+        -2559.1482
+      ]
+    },
+    {
+      "name": "Clay Hut No Windows (2)",
+      "originalPath": "Clay Hut No Windows (2)",
+      "originalLocalPos": [
+        1868.33,
+        22.85,
+        1710.18
+      ],
+      "currentLocalPos": [
+        -153.25415,
+        -424.81757,
+        -2492.3765
+      ]
+    },
+    {
+      "name": "Clay Hut No Windows (3)",
+      "originalPath": "Clay Hut No Windows (3)",
+      "originalLocalPos": [
+        1769.94,
+        12.34,
+        1788.6
+      ],
+      "currentLocalPos": [
+        -28.016235,
+        -433.02707,
+        -2478.6357
+      ]
+    },
+    {
+      "name": "Clay Hut No Windows (4)",
+      "originalPath": "Clay Hut No Windows (4)",
+      "originalLocalPos": [
+        1845.21,
+        22.88,
+        1713.56
+      ],
+      "currentLocalPos": [
+        -134.28967,
+        -422.37323,
+        -2478.9478
+      ]
+    },
+    {
+      "name": "Clay Hut No Windows (5)",
+      "originalPath": "Clay Hut No Windows (5)",
+      "originalLocalPos": [
+        1847.78,
+        23.37,
+        1783.38
+      ],
+      "currentLocalPos": [
+        -87.58154,
+        -431.08435,
+        -2530.1738
+      ]
+    },
+    {
+      "name": "Clay Hut No Windows (6)",
+      "originalPath": "Clay Hut No Windows (6)",
+      "originalLocalPos": [
+        1856.49,
+        24.85,
+        1768.55
+      ],
+      "currentLocalPos": [
+        -104.153564,
+        -428.81378,
+        -2525.9092
+      ]
+    },
+    {
+      "name": "Clay Hut No Windows (7)",
+      "originalPath": "Clay Hut No Windows (7)",
+      "originalLocalPos": [
+        1914.97,
+        23.95,
+        1829.07
+      ],
+      "currentLocalPos": [
+        -104.089355,
+        -444.58936,
+        -2608.58
+      ]
+    },
+    {
+      "name": "Clay Hut No Windows (8)",
+      "originalPath": "Clay Hut No Windows (8)",
+      "originalLocalPos": [
+        1722.58,
+        26.98,
+        1657.41
+      ],
+      "currentLocalPos": [
+        -85.21704,
+        -396.11115,
+        -2356.0251
+      ]
+    },
+    {
+      "name": "Clay Hut No Windows (9)",
+      "originalPath": "Clay Hut No Windows (9)",
+      "originalLocalPos": [
+        1617.79,
+        47.61123,
+        1538.49
+      ],
+      "currentLocalPos": [
+        -92.61658,
+        -347.7927,
+        -2203.8438
+      ]
+    },
+    {
+      "name": "Cliff1",
+      "originalPath": "Cliff1",
+      "originalLocalPos": [
+        1632.98,
+        40.32,
+        1400.76
+      ],
+      "currentLocalPos": [
+        -199.31372,
+        -339.32617,
+        -2115.5405
+      ]
+    },
+    {
+      "name": "Cliff1 (1)",
+      "originalPath": "Cliff1 (1)",
+      "originalLocalPos": [
+        1598.72,
+        64.53,
+        1382.82
+      ],
+      "currentLocalPos": [
+        -187.17072,
+        -309.0021,
+        -2083.687
+      ]
+    },
+    {
+      "name": "Cliff1 (2)",
+      "originalPath": "Cliff1 (2)",
+      "originalLocalPos": [
+        1547.6,
+        60.6,
+        1443.4
+      ],
+      "currentLocalPos": [
+        -108.306946,
+        -314.28296,
+        -2090.8464
+      ]
+    },
+    {
+      "name": "Cliff1 (3)",
+      "originalPath": "Cliff1 (3)",
+      "originalLocalPos": [
+        1681.2,
+        66.89,
+        1305.16
+      ],
+      "currentLocalPos": [
+        -300.44714,
+        -306.95306,
+        -2085.6328
+      ]
+    },
+    {
+      "name": "Cliff2",
+      "originalPath": "Cliff2",
+      "originalLocalPos": [
+        1563.6,
+        47.2,
+        1441.5
+      ],
+      "currentLocalPos": [
+        -121.12598,
+        -329.19852,
+        -2098.083
+      ]
+    },
+    {
+      "name": "Cliff2 (1)",
+      "originalPath": "Cliff2 (1)",
+      "originalLocalPos": [
+        1628.0,
+        59.55,
+        1380.93
+      ],
+      "currentLocalPos": [
+        -209.52533,
+        -317.2656,
+        -2101.5093
+      ]
+    },
+    {
+      "name": "Cliff2 (2)",
+      "originalPath": "Cliff2 (2)",
+      "originalLocalPos": [
+        1577.1,
+        74.2,
+        1381.6
+      ],
+      "currentLocalPos": [
+        -172.48303,
+        -296.6695,
+        -2069.736
+      ]
+    },
+    {
+      "name": "Cliff2 (3)",
+      "originalPath": "Cliff2 (3)",
+      "originalLocalPos": [
+        1522.36,
+        99.07,
+        1368.04
+      ],
+      "currentLocalPos": [
+        -142.57709,
+        -263.73288,
+        -2027.0784
+      ]
+    },
+    {
+      "name": "Cliff3",
+      "originalPath": "Cliff3",
+      "originalLocalPos": [
+        1609.0,
+        41.7,
+        1396.4
+      ],
+      "currentLocalPos": [
+        -185.11389,
+        -334.46326,
+        -2096.2876
+      ]
+    },
+    {
+      "name": "Cliff3 (1)",
+      "originalPath": "Cliff3 (1)",
+      "originalLocalPos": [
+        1569.1,
+        61.56,
+        1407.7
+      ],
+      "currentLocalPos": [
+        -148.58362,
+        -311.44427,
+        -2080.4834
+      ]
+    },
+    {
+      "name": "Cliff3 (2)",
+      "originalPath": "Cliff3 (2)",
+      "originalLocalPos": [
+        1661.18,
+        68.06,
+        1344.87
+      ],
+      "currentLocalPos": [
+        -258.44543,
+        -308.3873,
+        -2100.2217
+      ]
+    },
+    {
+      "name": "CliffEntrance",
+      "originalPath": "CliffEntrance",
+      "originalLocalPos": [
+        1584.73,
+        41.469086,
+        1415.67
+      ],
+      "currentLocalPos": [
+        -154.2727,
+        -334.1546,
+        -2093.2637
+      ]
+    },
+    {
+      "name": "CliffEntrancedDoor",
+      "originalPath": "CliffEntrancedDoor",
+      "originalLocalPos": [
+        1585.47,
+        41.82,
+        1416.44
+      ],
+      "currentLocalPos": [
+        -154.26904,
+        -333.99814,
+        -2094.377
+      ]
+    },
+    {
+      "name": "CliffRock",
+      "originalPath": "CliffRock",
+      "originalLocalPos": [
+        1630.4,
+        59.246,
+        1383.4
+      ],
+      "currentLocalPos": [
+        -209.53235,
+        -318.17413,
+        -2104.8452
+      ]
+    },
+    {
+      "name": "CliffRock (1)",
+      "originalPath": "CliffRock (1)",
+      "originalLocalPos": [
+        1568.91,
+        62.86,
+        1415.83
+      ],
+      "currentLocalPos": [
+        -142.79327,
+        -311.17508,
+        -2086.3333
+      ]
+    },
+    {
+      "name": "CliffRock (2)",
+      "originalPath": "CliffRock (2)",
+      "originalLocalPos": [
+        1540.8876,
+        82.66,
+        1421.5809
+      ],
+      "currentLocalPos": [
+        -118.65698,
+        -288.971,
+        -2074.7239
+      ]
+    },
+    {
+      "name": "CliffRock (3)",
+      "originalPath": "CliffRock (3)",
+      "originalLocalPos": [
+        1500.58,
+        111.56,
+        1363.86
+      ],
+      "currentLocalPos": [
+        -129.83276,
+        -248.22879,
+        -2011.4241
+      ]
+    },
+    {
+      "name": "CliffRock (4)",
+      "originalPath": "CliffRock (4)",
+      "originalLocalPos": [
+        1615.6,
+        78.8,
+        1369.58
+      ],
+      "currentLocalPos": [
+        -208.50781,
+        -295.3506,
+        -2088.4006
+      ]
+    },
+    {
+      "name": "CliffRock (5)",
+      "originalPath": "CliffRock (5)",
+      "originalLocalPos": [
+        1597.01,
+        93.24661,
+        1362.74
+      ],
+      "currentLocalPos": [
+        -199.90588,
+        -277.975,
+        -2073.3945
+      ]
+    },
+    {
+      "name": "CliffRock (6)",
+      "originalPath": "CliffRock (6)",
+      "originalLocalPos": [
+        1587.4,
+        54.358,
+        1410.7
+      ],
+      "currentLocalPos": [
+        -159.64752,
+        -321.1656,
+        -2093.8564
+      ]
+    },
+    {
+      "name": "CliffRock (7)",
+      "originalPath": "CliffRock (7)",
+      "originalLocalPos": [
+        1547.32,
+        64.59,
+        1460.96
+      ],
+      "currentLocalPos": [
+        -95.89398,
+        -312.55408,
+        -2103.7803
+      ]
+    },
+    {
+      "name": "Concrete Barrier",
+      "originalPath": "Concrete Barrier",
+      "originalLocalPos": [
+        1184.19,
+        36.32,
+        1672.27
+      ],
+      "currentLocalPos": [
+        312.0,
+        -322.56775,
+        -1999.68
+      ]
+    },
+    {
+      "name": "Concrete Barrier (1)",
+      "originalPath": "Concrete Barrier (1)",
+      "originalLocalPos": [
+        1161.26,
+        47.75,
+        1566.43
+      ],
+      "currentLocalPos": [
+        254.87292,
+        -295.03995,
+        -1911.1517
+      ]
+    },
+    {
+      "name": "Concrete Barrier (2)",
+      "originalPath": "Concrete Barrier (2)",
+      "originalLocalPos": [
+        1163.52,
+        47.68,
+        1569.57
+      ],
+      "currentLocalPos": [
+        255.4325,
+        -295.7861,
+        -1914.907
+      ]
+    },
+    {
+      "name": "Concrete Barrier (3)",
+      "originalPath": "Concrete Barrier (3)",
+      "originalLocalPos": [
+        1163.97,
+        47.56,
+        1574.0
+      ],
+      "currentLocalPos": [
+        258.19006,
+        -296.52283,
+        -1918.3268
+      ]
+    },
+    {
+      "name": "Concrete Barrier (4)",
+      "originalPath": "Concrete Barrier (4)",
+      "originalLocalPos": [
+        1162.68,
+        47.53,
+        1574.88
+      ],
+      "currentLocalPos": [
+        259.729,
+        -296.50552,
+        -1918.0612
+      ]
+    },
+    {
+      "name": "Concrete Barrier (5)",
+      "originalPath": "Concrete Barrier (5)",
+      "originalLocalPos": [
+        1162.766,
+        47.27,
+        1578.8187
+      ],
+      "currentLocalPos": [
+        262.4065,
+        -297.27286,
+        -1920.8596
+      ]
+    },
+    {
+      "name": "Concrete Barrier (6)",
+      "originalPath": "Concrete Barrier (6)",
+      "originalLocalPos": [
+        1164.4552,
+        47.399647,
+        1578.4906
+      ],
+      "currentLocalPos": [
+        260.96472,
+        -297.31134,
+        -1921.8066
+      ]
+    },
+    {
+      "name": "Concrete Barrier (7)",
+      "originalPath": "Concrete Barrier (7)",
+      "originalLocalPos": [
+        1239.58,
+        30.93,
+        1743.91
+      ],
+      "currentLocalPos": [
+        322.01794,
+        -343.79614,
+        -2087.3062
+      ]
+    },
+    {
+      "name": "Concrete Barrier (8)",
+      "originalPath": "Concrete Barrier (8)",
+      "originalLocalPos": [
+        1243.31,
+        31.04,
+        1741.66
+      ],
+      "currentLocalPos": [
+        317.7727,
+        -343.86072,
+        -2088.2876
+      ]
+    },
+    {
+      "name": "Concrete Barrier (9)",
+      "originalPath": "Concrete Barrier (9)",
+      "originalLocalPos": [
+        1246.22,
+        30.78,
+        1744.41
+      ],
+      "currentLocalPos": [
+        317.59412,
+        -344.82428,
+        -2092.1782
+      ]
+    },
+    {
+      "name": "Concrete Pipe",
+      "originalPath": "Concrete Pipe",
+      "originalLocalPos": [
+        1139.19,
+        48.31,
+        1550.7
+      ],
+      "currentLocalPos": [
+        259.7931,
+        -289.7734,
+        -1885.0197
+      ]
+    },
+    {
+      "name": "Concrete Pipe (1)",
+      "originalPath": "Concrete Pipe (1)",
+      "originalLocalPos": [
+        1143.39,
+        48.31,
+        1546.43
+      ],
+      "currentLocalPos": [
+        253.80566,
+        -289.74728,
+        -1884.8743
+      ]
+    },
+    {
+      "name": "Concrete Pipe (2)",
+      "originalPath": "Concrete Pipe (2)",
+      "originalLocalPos": [
+        1270.52,
+        29.52,
+        1764.27
+      ],
+      "currentLocalPos": [
+        313.94348,
+        -351.57922,
+        -2122.6338
+      ]
+    },
+    {
+      "name": "Crate",
+      "originalPath": "Crate",
+      "originalLocalPos": [
+        1607.61,
+        42.039,
+        1461.14
+      ],
+      "currentLocalPos": [
+        -139.09296,
+        -342.18994,
+        -2141.1836
+      ]
+    },
+    {
+      "name": "Crate (1)",
+      "originalPath": "Crate (1)",
+      "originalLocalPos": [
+        1608.73,
+        42.06,
+        1461.82
+      ],
+      "currentLocalPos": [
+        -139.42493,
+        -342.3935,
+        -2142.435
+      ]
+    },
+    {
+      "name": "Crate (10)",
+      "originalPath": "Crate (10)",
+      "originalLocalPos": [
+        1621.601,
+        43.958,
+        1432.426
+      ],
+      "currentLocalPos": [
+        -169.11523,
+        -338.37177,
+        -2130.7915
+      ]
+    },
+    {
+      "name": "Crate (11)",
+      "originalPath": "Crate (11)",
+      "originalLocalPos": [
+        1626.99,
+        44.83,
+        1427.91
+      ],
+      "currentLocalPos": [
+        -176.12823,
+        -337.60236,
+        -2131.4404
+      ]
+    },
+    {
+      "name": "Crate (12)",
+      "originalPath": "Crate (12)",
+      "originalLocalPos": [
+        1625.77,
+        44.94,
+        1427.54
+      ],
+      "currentLocalPos": [
+        -175.50885,
+        -337.29694,
+        -2130.3633
+      ]
+    },
+    {
+      "name": "Crate (2)",
+      "originalPath": "Crate (2)",
+      "originalLocalPos": [
+        1607.46,
+        43.31,
+        1461.16
+      ],
+      "currentLocalPos": [
+        -138.97101,
+        -340.92307,
+        -2141.32
+      ]
+    },
+    {
+      "name": "Crate (3)",
+      "originalPath": "Crate (3)",
+      "originalLocalPos": [
+        1607.34,
+        42.039,
+        1462.67
+      ],
+      "currentLocalPos": [
+        -137.83484,
+        -342.35123,
+        -2142.081
+      ]
+    },
+    {
+      "name": "Crate (4)",
+      "originalPath": "Crate (4)",
+      "originalLocalPos": [
+        1613.16,
+        43.687,
+        1455.42
+      ],
+      "currentLocalPos": [
+        -147.05878,
+        -340.5235,
+        -2141.229
+      ]
+    },
+    {
+      "name": "Crate (5)",
+      "originalPath": "Crate (5)",
+      "originalLocalPos": [
+        1613.77,
+        43.727,
+        1454.21
+      ],
+      "currentLocalPos": [
+        -148.33868,
+        -340.40533,
+        -2140.7976
+      ]
+    },
+    {
+      "name": "Crate (6)",
+      "originalPath": "Crate (6)",
+      "originalLocalPos": [
+        1617.33,
+        43.727,
+        1452.87
+      ],
+      "currentLocalPos": [
+        -151.82874,
+        -340.67294,
+        -2142.2866
+      ]
+    },
+    {
+      "name": "Crate (7)",
+      "originalPath": "Crate (7)",
+      "originalLocalPos": [
+        1616.62,
+        43.727,
+        1454.16
+      ],
+      "currentLocalPos": [
+        -150.42139,
+        -340.74963,
+        -2142.713
+      ]
+    },
+    {
+      "name": "Crate (8)",
+      "originalPath": "Crate (8)",
+      "originalLocalPos": [
+        1623.2,
+        44.754913,
+        1431.67
+      ],
+      "currentLocalPos": [
+        -170.79004,
+        -337.688,
+        -2131.4922
+      ]
+    },
+    {
+      "name": "Crate (9)",
+      "originalPath": "Crate (9)",
+      "originalLocalPos": [
+        1621.88,
+        44.11,
+        1430.8
+      ],
+      "currentLocalPos": [
+        -170.44641,
+        -338.04974,
+        -2129.8596
+      ]
+    },
+    {
+      "name": "Dish",
+      "originalPath": "Dish",
+      "originalLocalPos": [
+        1037.2,
+        158.1,
+        957.2
+      ],
+      "currentLocalPos": [
+        -598.52136,
+        115.60109,
+        -503.13226
+      ]
+    },
+    {
+      "name": "Fence",
+      "originalPath": "Fence",
+      "originalLocalPos": [
+        1648.39,
+        45.24,
+        1420.19
+      ],
+      "currentLocalPos": [
+        -196.87506,
+        -338.85016,
+        -2140.7004
+      ]
+    },
+    {
+      "name": "Fence (1)",
+      "originalPath": "Fence (1)",
+      "originalLocalPos": [
+        1653.45,
+        45.64,
+        1427.5
+      ],
+      "currentLocalPos": [
+        -195.4273,
+        -340.00848,
+        -2149.4048
+      ]
+    },
+    {
+      "name": "Fence (10)",
+      "originalPath": "Fence (10)",
+      "originalLocalPos": [
+        1234.9,
+        29.09,
+        1820.48
+      ],
+      "currentLocalPos": [
+        378.63013,
+        -354.76678,
+        -2137.9321
+      ]
+    },
+    {
+      "name": "Fence (11)",
+      "originalPath": "Fence (11)",
+      "originalLocalPos": [
+        1227.23,
+        29.16,
+        1824.23
+      ],
+      "currentLocalPos": [
+        386.7494,
+        -354.23096,
+        -2135.3467
+      ]
+    },
+    {
+      "name": "Fence (12)",
+      "originalPath": "Fence (12)",
+      "originalLocalPos": [
+        1218.92,
+        28.85,
+        1824.4
+      ],
+      "currentLocalPos": [
+        392.83948,
+        -353.53528,
+        -2129.7244
+      ]
+    },
+    {
+      "name": "Fence (13)",
+      "originalPath": "Fence (13)",
+      "originalLocalPos": [
+        1210.88,
+        28.63,
+        1822.16
+      ],
+      "currentLocalPos": [
+        397.05896,
+        -352.4779,
+        -2122.5981
+      ]
+    },
+    {
+      "name": "Fence (14)",
+      "originalPath": "Fence (14)",
+      "originalLocalPos": [
+        1192.0533,
+        34.16,
+        1716.92
+      ],
+      "currentLocalPos": [
+        337.401,
+        -331.3381,
+        -2036.2588
+      ]
+    },
+    {
+      "name": "Fence (15)",
+      "originalPath": "Fence (15)",
+      "originalLocalPos": [
+        1200.3584,
+        33.72,
+        1719.8464
+      ],
+      "currentLocalPos": [
+        333.46753,
+        -333.16492,
+        -2043.9347
+      ]
+    },
+    {
+      "name": "Fence (16)",
+      "originalPath": "Fence (16)",
+      "originalLocalPos": [
+        1184.12,
+        35.87,
+        1713.33
+      ],
+      "currentLocalPos": [
+        340.60486,
+        -328.22263,
+        -2028.5922
+      ]
+    },
+    {
+      "name": "Fence (17)",
+      "originalPath": "Fence (17)",
+      "originalLocalPos": [
+        1597.66,
+        42.14,
+        1419.68
+      ],
+      "currentLocalPos": [
+        -160.77539,
+        -335.59494,
+        -2105.0684
+      ]
+    },
+    {
+      "name": "Fence (18)",
+      "originalPath": "Fence (18)",
+      "originalLocalPos": [
+        1603.09,
+        43.02,
+        1417.22
+      ],
+      "currentLocalPos": [
+        -166.3883,
+        -335.0841,
+        -2107.201
+      ]
+    },
+    {
+      "name": "Fence (2)",
+      "originalPath": "Fence (2)",
+      "originalLocalPos": [
+        1660.28,
+        45.93,
+        1433.34
+      ],
+      "currentLocalPos": [
+        -196.27423,
+        -341.30588,
+        -2158.2612
+      ]
+    },
+    {
+      "name": "Fence (3)",
+      "originalPath": "Fence (3)",
+      "originalLocalPos": [
+        1131.75,
+        105.92,
+        974.47
+      ],
+      "currentLocalPos": [
+        -135.58862,
+        -158.89261,
+        -1482.5781
+      ]
+    },
+    {
+      "name": "Fence (4)",
+      "originalPath": "Fence (4)",
+      "originalLocalPos": [
+        1125.12,
+        104.67,
+        977.95
+      ],
+      "currentLocalPos": [
+        -128.40424,
+        -159.74963,
+        -1480.2803
+      ]
+    },
+    {
+      "name": "Fence (5)",
+      "originalPath": "Fence (5)",
+      "originalLocalPos": [
+        1117.95,
+        102.95,
+        980.76
+      ],
+      "currentLocalPos": [
+        -121.29791,
+        -160.91763,
+        -1477.0559
+      ]
+    },
+    {
+      "name": "Fence (6)",
+      "originalPath": "Fence (6)",
+      "originalLocalPos": [
+        1114.17,
+        99.73,
+        995.02
+      ],
+      "currentLocalPos": [
+        -108.664734,
+        -165.43483,
+        -1483.9844
+      ]
+    },
+    {
+      "name": "Fence (7)",
+      "originalPath": "Fence (7)",
+      "originalLocalPos": [
+        1241.04,
+        28.92,
+        1814.51
+      ],
+      "currentLocalPos": [
+        370.06616,
+        -354.93042,
+        -2137.8823
+      ]
+    },
+    {
+      "name": "Fence (8)",
+      "originalPath": "Fence (8)",
+      "originalLocalPos": [
+        1117.86,
+        94.93,
+        1011.06
+      ],
+      "currentLocalPos": [
+        -100.16162,
+        -172.6525,
+        -1497.0051
+      ]
+    },
+    {
+      "name": "Fence (9)",
+      "originalPath": "Fence (9)",
+      "originalLocalPos": [
+        1116.07,
+        97.46,
+        1003.18
+      ],
+      "currentLocalPos": [
+        -104.355225,
+        -168.94029,
+        -1490.6544
+      ]
+    },
+    {
+      "name": "Fortress Outpost",
+      "originalPath": "Fortress Outpost",
+      "originalLocalPos": [
+        1096.8,
+        112.2,
+        883.1
+      ],
+      "currentLocalPos": [
+        -58.163086,
+        -0.061683655,
+        -498.6914
+      ]
+    },
+    {
+      "name": "GameObject (1)",
+      "originalPath": "GameObject (1)",
+      "originalLocalPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "currentLocalPos": [
+        -1570.7786,
+        -92.42883,
+        -1508.6252
+      ]
+    },
+    {
+      "name": "Gas Supercontainer",
+      "originalPath": "Gas Supercontainer",
+      "originalLocalPos": [
+        1098.9,
+        76.99964,
+        1094.7
+      ],
+      "currentLocalPos": [
+        -28.371399,
+        -198.60162,
+        -1540.0101
+      ]
+    },
+    {
+      "name": "Gas Supercontainer (1)",
+      "originalPath": "Gas Supercontainer (1)",
+      "originalLocalPos": [
+        1104.92,
+        76.99964,
+        1110.7
+      ],
+      "currentLocalPos": [
+        -21.570374,
+        -201.37659,
+        -1555.4468
+      ]
+    },
+    {
+      "name": "Hut Entrance",
+      "originalPath": "Hut Entrance",
+      "originalLocalPos": [
+        1865.19,
+        26.99968,
+        1708.16
+      ],
+      "currentLocalPos": [
+        -152.40234,
+        -420.09015,
+        -2489.533
+      ]
+    },
+    {
+      "name": "Hut Entrance (1)",
+      "originalPath": "Hut Entrance (1)",
+      "originalLocalPos": [
+        1859.78,
+        35.480682,
+        1709.39
+      ],
+      "currentLocalPos": [
+        -147.65942,
+        -411.2337,
+        -2488.2007
+      ]
+    },
+    {
+      "name": "Hut Entrance (10)",
+      "originalPath": "Hut Entrance (10)",
+      "originalLocalPos": [
+        1868.96,
+        30.25118,
+        1760.66
+      ],
+      "currentLocalPos": [
+        -118.60132,
+        -424.02884,
+        -2529.8198
+      ]
+    },
+    {
+      "name": "Hut Entrance (11)",
+      "originalPath": "Hut Entrance (11)",
+      "originalLocalPos": [
+        1817.76,
+        17.98,
+        1790.62
+      ],
+      "currentLocalPos": [
+        -60.974365,
+        -433.61636,
+        -2513.7935
+      ]
+    },
+    {
+      "name": "Hut Entrance (12)",
+      "originalPath": "Hut Entrance (12)",
+      "originalLocalPos": [
+        1823.81,
+        19.584728,
+        1738.36
+      ],
+      "currentLocalPos": [
+        -101.66528,
+        -426.13675,
+        -2481.257
+      ]
+    },
+    {
+      "name": "Hut Entrance (13)",
+      "originalPath": "Hut Entrance (13)",
+      "originalLocalPos": [
+        1839.43,
+        19.1,
+        1708.25
+      ],
+      "currentLocalPos": [
+        -133.8291,
+        -424.7073,
+        -2470.5674
+      ]
+    },
+    {
+      "name": "Hut Entrance (14)",
+      "originalPath": "Hut Entrance (14)",
+      "originalLocalPos": [
+        1619.472,
+        45.64,
+        1421.55
+      ],
+      "currentLocalPos": [
+        -175.14893,
+        -335.07153,
+        -2121.94
+      ]
+    },
+    {
+      "name": "Hut Entrance (2)",
+      "originalPath": "Hut Entrance (2)",
+      "originalLocalPos": [
+        1958.47,
+        49.89,
+        1711.16
+      ],
+      "currentLocalPos": [
+        -217.34619,
+        -409.419,
+        -2559.5513
+      ]
+    },
+    {
+      "name": "Hut Entrance (3)",
+      "originalPath": "Hut Entrance (3)",
+      "originalLocalPos": [
+        1779.38,
+        23.86,
+        1766.01
+      ],
+      "currentLocalPos": [
+        -50.509277,
+        -419.9781,
+        -2471.1584
+      ]
+    },
+    {
+      "name": "Hut Entrance (4)",
+      "originalPath": "Hut Entrance (4)",
+      "originalLocalPos": [
+        1774.11,
+        19.63299,
+        1776.06
+      ],
+      "currentLocalPos": [
+        -39.7334,
+        -424.7678,
+        -2473.9116
+      ]
+    },
+    {
+      "name": "Hut Entrance (5)",
+      "originalPath": "Hut Entrance (5)",
+      "originalLocalPos": [
+        1764.54,
+        12.97,
+        1787.59
+      ],
+      "currentLocalPos": [
+        -24.838135,
+        -431.61432,
+        -2474.3367
+      ]
+    },
+    {
+      "name": "Hut Entrance (6)",
+      "originalPath": "Hut Entrance (6)",
+      "originalLocalPos": [
+        1840.54,
+        18.85,
+        1720.16
+      ],
+      "currentLocalPos": [
+        -126.34424,
+        -426.60428,
+        -2479.7063
+      ]
+    },
+    {
+      "name": "Hut Entrance (7)",
+      "originalPath": "Hut Entrance (7)",
+      "originalLocalPos": [
+        1846.02,
+        23.362633,
+        1775.71
+      ],
+      "currentLocalPos": [
+        -91.65076,
+        -429.89984,
+        -2523.5435
+      ]
+    },
+    {
+      "name": "Hut Entrance (8)",
+      "originalPath": "Hut Entrance (8)",
+      "originalLocalPos": [
+        1773.839,
+        15.996227,
+        1710.42
+      ],
+      "currentLocalPos": [
+        -85.186646,
+        -419.96814,
+        -2426.6582
+      ]
+    },
+    {
+      "name": "Hut Entrance (9)",
+      "originalPath": "Hut Entrance (9)",
+      "originalLocalPos": [
+        1690.81,
+        17.378242,
+        1797.15
+      ],
+      "currentLocalPos": [
+        34.792114,
+        -419.4198,
+        -2431.4126
+      ]
+    },
+    {
+      "name": "Level Bounds",
+      "originalPath": "Level Bounds",
+      "originalLocalPos": [
+        1500.0,
+        300.0,
+        1420.0
+      ],
+      "currentLocalPos": [
+        -70.778564,
+        207.57117,
+        -88.625244
+      ]
+    },
+    {
+      "name": "Mine Capture Point",
+      "originalPath": "Mine Capture Point",
+      "originalLocalPos": [
+        1608.63,
+        42.39,
+        1441.66
+      ],
+      "currentLocalPos": [
+        453.66687,
+        -69.87168,
+        59.868652
+      ]
+    },
+    {
+      "name": "Minecart",
+      "originalPath": "Minecart",
+      "originalLocalPos": [
+        1613.71,
+        42.03,
+        1465.185
+      ],
+      "currentLocalPos": [
+        -140.66309,
+        -343.46356,
+        -2148.2183
+      ]
+    },
+    {
+      "name": "Minecart (1)",
+      "originalPath": "Minecart (1)",
+      "originalLocalPos": [
+        1633.17,
+        43.0,
+        1438.7
+      ],
+      "currentLocalPos": [
+        -173.06567,
+        -341.5357,
+        -2142.978
+      ]
+    },
+    {
+      "name": "Minecart (2)",
+      "originalPath": "Minecart (2)",
+      "originalLocalPos": [
+        1631.874,
+        42.935,
+        1441.303
+      ],
+      "currentLocalPos": [
+        -170.32416,
+        -341.77118,
+        -2143.9204
+      ]
+    },
+    {
+      "name": "Minecart (3)",
+      "originalPath": "Minecart (3)",
+      "originalLocalPos": [
+        1602.1929,
+        42.45,
+        1431.6097
+      ],
+      "currentLocalPos": [
+        -155.73627,
+        -337.36438,
+        -2116.6636
+      ]
+    },
+    {
+      "name": "Minecart (4)",
+      "originalPath": "Minecart (4)",
+      "originalLocalPos": [
+        1599.8629,
+        42.084858,
+        1432.9602
+      ],
+      "currentLocalPos": [
+        -153.12323,
+        -337.60873,
+        -2115.959
+      ]
+    },
+    {
+      "name": "Minecart (5)",
+      "originalPath": "Minecart (5)",
+      "originalLocalPos": [
+        1598.1628,
+        41.94334,
+        1433.8551
+      ],
+      "currentLocalPos": [
+        -151.2793,
+        -337.65265,
+        -2115.4033
+      ]
+    },
+    {
+      "name": "Minimap Camera",
+      "originalPath": "Minimap Camera",
+      "originalLocalPos": [
+        1500.0,
+        4064.0,
+        1419.0
+      ],
+      "currentLocalPos": [
+        -70.778564,
+        3971.5713,
+        -89.625244
+      ]
+    },
+    {
+      "name": "Model (1)",
+      "originalPath": "Model (1)",
+      "originalLocalPos": [
+        0.0,
+        16.0,
+        0.0
+      ],
+      "currentLocalPos": [
+        -1635.7213,
+        -26.498913,
+        -1460.3323
+      ]
+    },
+    {
+      "name": "Model (2)",
+      "originalPath": "Model (2)",
+      "originalLocalPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "currentLocalPos": [
+        -1635.7213,
+        -42.498913,
+        -1460.3323
+      ]
+    },
+    {
+      "name": "Model (3)",
+      "originalPath": "Model (3)",
+      "originalLocalPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "currentLocalPos": [
+        -1635.7213,
+        -42.498913,
+        -1460.3323
+      ]
+    },
+    {
+      "name": "New Game Object",
+      "originalPath": "New Game Object",
+      "originalLocalPos": [
+        1241.9037,
+        89.12877,
+        1156.1127
+      ],
+      "currentLocalPos": [
+        -328.87488,
+        -3.300064,
+        -352.51257
+      ]
+    },
+    {
+      "name": "Oasis Outpost",
+      "originalPath": "Oasis Outpost",
+      "originalLocalPos": [
+        2080.0,
+        9.0,
+        1145.0
+      ],
+      "currentLocalPos": [
+        925.03687,
+        -103.26168,
+        -236.79138
+      ]
+    },
+    {
+      "name": "Oasis Water Plane",
+      "originalPath": "Oasis Water Plane",
+      "originalLocalPos": [
+        1874.0,
+        5.5,
+        1872.0
+      ],
+      "currentLocalPos": [
+        238.27869,
+        -36.998913,
+        411.66772
+      ]
+    },
+    {
+      "name": "Outpost CSG Model",
+      "originalPath": "Outpost CSG Model",
+      "originalLocalPos": [
+        -697.6623,
+        -17.0,
+        1457.5785
+      ],
+      "currentLocalPos": [
+        -2333.3835,
+        -59.498913,
+        -2.7537842
+      ]
+    },
+    {
+      "name": "Outpost Capture Point",
+      "originalPath": "Outpost Capture Point",
+      "originalLocalPos": [
+        1211.2,
+        36.95,
+        1770.9
+      ],
+      "currentLocalPos": [
+        56.236816,
+        -75.311676,
+        389.10864
+      ]
+    },
+    {
+      "name": "Outpost Outpost",
+      "originalPath": "Outpost Outpost",
+      "originalLocalPos": [
+        1153.5,
+        45.6,
+        1598.9
+      ],
+      "currentLocalPos": [
+        -1.4631348,
+        -66.66168,
+        217.10864
+      ]
+    },
+    {
+      "name": "Pipe Holder",
+      "originalPath": "Pipe Holder",
+      "originalLocalPos": [
+        1134.74,
+        49.33,
+        1554.18
+      ],
+      "currentLocalPos": [
+        265.411,
+        -288.66455,
+        -1884.6155
+      ]
+    },
+    {
+      "name": "Pipe Holder with pipe",
+      "originalPath": "Pipe Holder with pipe",
+      "originalLocalPos": [
+        1198.65,
+        42.48047,
+        1612.68
+      ],
+      "currentLocalPos": [
+        260.16846,
+        -310.707,
+        -1968.5219
+      ]
+    },
+    {
+      "name": "Pipe Holder with pipe (1)",
+      "originalPath": "Pipe Holder with pipe (1)",
+      "originalLocalPos": [
+        1128.6929,
+        47.22,
+        1567.8209
+      ],
+      "currentLocalPos": [
+        279.24292,
+        -291.73157,
+        -1889.7507
+      ]
+    },
+    {
+      "name": "Pipe Holder with pipe (2)",
+      "originalPath": "Pipe Holder with pipe (2)",
+      "originalLocalPos": [
+        1269.444,
+        28.63,
+        1761.59
+      ],
+      "currentLocalPos": [
+        312.85315,
+        -351.98206,
+        -2119.8445
+      ]
+    },
+    {
+      "name": "Pipe Stack",
+      "originalPath": "Pipe Stack",
+      "originalLocalPos": [
+        1182.12,
+        42.48047,
+        1599.98
+      ],
+      "currentLocalPos": [
+        263.21472,
+        -307.0585,
+        -1948.2256
+      ]
+    },
+    {
+      "name": "Pipe Stack (1)",
+      "originalPath": "Pipe Stack (1)",
+      "originalLocalPos": [
+        1185.82,
+        42.48047,
+        1610.51
+      ],
+      "currentLocalPos": [
+        267.8789,
+        -308.85254,
+        -1958.2053
+      ]
+    },
+    {
+      "name": "Pipe Stack (2)",
+      "originalPath": "Pipe Stack (2)",
+      "originalLocalPos": [
+        1192.52,
+        42.48047,
+        1612.0
+      ],
+      "currentLocalPos": [
+        264.1006,
+        -309.8663,
+        -1963.8452
+      ]
+    },
+    {
+      "name": "Pipe Stack (3)",
+      "originalPath": "Pipe Stack (3)",
+      "originalLocalPos": [
+        1132.84,
+        47.36,
+        1560.79
+      ],
+      "currentLocalPos": [
+        271.3733,
+        -291.21008,
+        -1887.6412
+      ]
+    },
+    {
+      "name": "Pipe Stack (4)",
+      "originalPath": "Pipe Stack (4)",
+      "originalLocalPos": [
+        1253.26,
+        29.5,
+        1760.53
+      ],
+      "currentLocalPos": [
+        323.7456,
+        -348.99982,
+        -2108.1714
+      ]
+    },
+    {
+      "name": "Pipe Stack (5)",
+      "originalPath": "Pipe Stack (5)",
+      "originalLocalPos": [
+        1260.28,
+        28.68,
+        1766.79
+      ],
+      "currentLocalPos": [
+        323.05432,
+        -351.46655,
+        -2117.2585
+      ]
+    },
+    {
+      "name": "Pipe Stack (6)",
+      "originalPath": "Pipe Stack (6)",
+      "originalLocalPos": [
+        1231.62,
+        31.58,
+        1734.64
+      ],
+      "currentLocalPos": [
+        321.29126,
+        -340.9984,
+        -2075.4167
+      ]
+    },
+    {
+      "name": "Relevant Graph Surface",
+      "originalPath": "Relevant Graph Surface",
+      "originalLocalPos": [
+        1418.7,
+        41.5,
+        1758.5
+      ],
+      "currentLocalPos": [
+        -152.07861,
+        -50.928833,
+        249.87476
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "RockDesert",
+      "originalLocalPos": [
+        1637.36,
+        45.112595,
+        1416.01
+      ],
+      "currentLocalPos": [
+        1812.125,
+        26.4391,
+        2078.866
+      ]
+    },
+    {
+      "name": "RockDesert (1)",
+      "originalPath": "RockDesert (1)",
+      "originalLocalPos": [
+        1620.08,
+        47.46,
+        1396.44
+      ],
+      "currentLocalPos": [
+        -193.0481,
+        -330.1624,
+        -2104.919
+      ]
+    },
+    {
+      "name": "RockDesert (2)",
+      "originalPath": "RockDesert (2)",
+      "originalLocalPos": [
+        1593.72,
+        42.2,
+        1415.39
+      ],
+      "currentLocalPos": [
+        -160.92767,
+        -334.50568,
+        -2099.3484
+      ]
+    },
+    {
+      "name": "RockDesert (3)",
+      "originalPath": "RockDesert (3)",
+      "originalLocalPos": [
+        1585.23,
+        43.29,
+        1429.0
+      ],
+      "currentLocalPos": [
+        -145.362,
+        -334.11874,
+        -2103.356
+      ]
+    },
+    {
+      "name": "RockDesert (4)",
+      "originalPath": "RockDesert (4)",
+      "originalLocalPos": [
+        1639.62,
+        50.38,
+        1534.95
+      ],
+      "currentLocalPos": [
+        -110.765015,
+        -347.3033,
+        -2216.7717
+      ]
+    },
+    {
+      "name": "RockDesert (5)",
+      "originalPath": "RockDesert (5)",
+      "originalLocalPos": [
+        1652.12,
+        46.26,
+        1543.67
+      ],
+      "currentLocalPos": [
+        -113.68335,
+        -354.005,
+        -2230.7659
+      ]
+    },
+    {
+      "name": "RockDesert (6)",
+      "originalPath": "RockDesert (6)",
+      "originalLocalPos": [
+        1671.0367,
+        48.665405,
+        1515.137
+      ],
+      "currentLocalPos": [
+        -147.11975,
+        -350.33713,
+        -2223.9592
+      ]
+    },
+    {
+      "name": "RockDesert (7)",
+      "originalPath": "RockDesert (7)",
+      "originalLocalPos": [
+        1456.8,
+        31.05,
+        1715.3
+      ],
+      "currentLocalPos": [
+        146.02881,
+        -366.76584,
+        -2215.772
+      ]
+    },
+    {
+      "name": "RockDesert (8)",
+      "originalPath": "RockDesert (8)",
+      "originalLocalPos": [
+        1469.77,
+        32.45,
+        1707.48
+      ],
+      "currentLocalPos": [
+        131.27039,
+        -365.98938,
+        -2219.3662
+      ]
+    },
+    {
+      "name": "RockDesert (9)",
+      "originalPath": "RockDesert (9)",
+      "originalLocalPos": [
+        1430.52,
+        31.22,
+        1654.82
+      ],
+      "currentLocalPos": [
+        122.853516,
+        -355.67548,
+        -2155.0396
+      ]
+    },
+    {
+      "name": "Sandbags",
+      "originalPath": "Sandbags",
+      "originalLocalPos": [
+        1155.41,
+        62.98,
+        1172.02
+      ],
+      "currentLocalPos": [
+        -15.208374,
+        -229.1835,
+        -1630.8937
+      ]
+    },
+    {
+      "name": "Sandbags (1)",
+      "originalPath": "Sandbags (1)",
+      "originalLocalPos": [
+        1144.49,
+        62.98,
+        1175.16
+      ],
+      "currentLocalPos": [
+        -5.1777344,
+        -228.2392,
+        -1625.64
+      ]
+    },
+    {
+      "name": "Scenery Camera",
+      "originalPath": "Scenery Camera",
+      "originalLocalPos": [
+        1824.6576,
+        22.105225,
+        1771.1227
+      ],
+      "currentLocalPos": [
+        253.87903,
+        -70.32361,
+        262.49744
+      ]
+    },
+    {
+      "name": "Palm",
+      "originalPath": "Static Props/Palm",
+      "originalLocalPos": [
+        2706.823,
+        10.070729,
+        1006.61487
+      ],
+      "currentLocalPos": [
+        2094.095,
+        7.969601,
+        861.9822
+      ]
+    },
+    {
+      "name": "Palm",
+      "originalPath": "Static Props/Palm",
+      "originalLocalPos": [
+        1914.3531,
+        5.818007,
+        2826.9248
+      ],
+      "currentLocalPos": [
+        2706.823,
+        10.07073,
+        1006.615
+      ]
+    },
+    {
+      "name": "Palm",
+      "originalPath": "Static Props/Palm",
+      "originalLocalPos": [
+        1988.4934,
+        7.9432697,
+        1085.3147
+      ],
+      "currentLocalPos": [
+        1914.353,
+        5.818007,
+        2826.925
+      ]
+    },
+    {
+      "name": "Palm",
+      "originalPath": "Static Props/Palm",
+      "originalLocalPos": [
+        1419.8118,
+        9.256247,
+        2302.7454
+      ],
+      "currentLocalPos": [
+        1844.499,
+        6.884928,
+        2870.515
+      ]
+    },
+    {
+      "name": "Palm",
+      "originalPath": "Static Props/Palm",
+      "originalLocalPos": [
+        1889.2749,
+        5.1916094,
+        2863.1284
+      ],
+      "currentLocalPos": [
+        1962.959,
+        12.19843,
+        924.085
+      ]
+    },
+    {
+      "name": "Palm",
+      "originalPath": "Static Props/Palm",
+      "originalLocalPos": [
+        2708.4646,
+        5.6632233,
+        2779.3218
+      ],
+      "currentLocalPos": [
+        2041.385,
+        9.78,
+        1120.424
+      ]
+    },
+    {
+      "name": "Palm",
+      "originalPath": "Static Props/Palm",
+      "originalLocalPos": [
+        2519.056,
+        11.207575,
+        2782.6047
+      ],
+      "currentLocalPos": [
+        2557.175,
+        7.572086,
+        2840.239
+      ]
+    },
+    {
+      "name": "Palm",
+      "originalPath": "Static Props/Palm",
+      "originalLocalPos": [
+        1962.9591,
+        12.198433,
+        924.08496
+      ],
+      "currentLocalPos": [
+        2187.66,
+        7.536458,
+        1005.885
+      ]
+    },
+    {
+      "name": "Palm",
+      "originalPath": "Static Props/Palm",
+      "originalLocalPos": [
+        2723.7852,
+        7.7400155,
+        2762.0862
+      ],
+      "currentLocalPos": [
+        1889.275,
+        5.191609,
+        2863.128
+      ]
+    },
+    {
+      "name": "Palm",
+      "originalPath": "Static Props/Palm",
+      "originalLocalPos": [
+        2685.1191,
+        5.904784,
+        2789.5354
+      ],
+      "currentLocalPos": [
+        1988.493,
+        7.94327,
+        1085.315
+      ]
+    },
+    {
+      "name": "Palm",
+      "originalPath": "Static Props/Palm",
+      "originalLocalPos": [
+        2557.1748,
+        7.572086,
+        2840.2388
+      ],
+      "currentLocalPos": [
+        2519.056,
+        11.20757,
+        2782.605
+      ]
+    },
+    {
+      "name": "Palm",
+      "originalPath": "Static Props/Palm",
+      "originalLocalPos": [
+        1475.8046,
+        8.47737,
+        2303.3838
+      ],
+      "currentLocalPos": [
+        2110.875,
+        6.700191,
+        1071.818
+      ]
+    },
+    {
+      "name": "Palm",
+      "originalPath": "Static Props/Palm",
+      "originalLocalPos": [
+        2187.6597,
+        7.5364585,
+        1005.8853
+      ],
+      "currentLocalPos": [
+        1832.735,
+        14.80209,
+        2819.538
+      ]
+    },
+    {
+      "name": "Palm",
+      "originalPath": "Static Props/Palm",
+      "originalLocalPos": [
+        2041.3855,
+        9.78,
+        1120.4242
+      ],
+      "currentLocalPos": [
+        2807.136,
+        10.56525,
+        1057.045
+      ]
+    },
+    {
+      "name": "Palm",
+      "originalPath": "Static Props/Palm",
+      "originalLocalPos": [
+        1832.7352,
+        14.802094,
+        2819.5378
+      ],
+      "currentLocalPos": [
+        1475.805,
+        8.47737,
+        2303.384
+      ]
+    },
+    {
+      "name": "Palm",
+      "originalPath": "Static Props/Palm",
+      "originalLocalPos": [
+        1844.499,
+        6.8849277,
+        2870.5151
+      ],
+      "currentLocalPos": [
+        2723.785,
+        7.740016,
+        2762.086
+      ]
+    },
+    {
+      "name": "Palm",
+      "originalPath": "Static Props/Palm",
+      "originalLocalPos": [
+        2568.2092,
+        10.899971,
+        2855.1946
+      ],
+      "currentLocalPos": [
+        2708.465,
+        5.663223,
+        2779.322
+      ]
+    },
+    {
+      "name": "Palm",
+      "originalPath": "Static Props/Palm",
+      "originalLocalPos": [
+        2807.1357,
+        10.565246,
+        1057.0447
+      ],
+      "currentLocalPos": [
+        1863.102,
+        10.34595,
+        2960.705
+      ]
+    },
+    {
+      "name": "Palm",
+      "originalPath": "Static Props/Palm",
+      "originalLocalPos": [
+        1863.6497,
+        11.381529,
+        2785.7053
+      ],
+      "currentLocalPos": [
+        1419.812,
+        9.256247,
+        2302.745
+      ]
+    },
+    {
+      "name": "Palm",
+      "originalPath": "Static Props/Palm",
+      "originalLocalPos": [
+        1863.1024,
+        10.345948,
+        2960.7053
+      ],
+      "currentLocalPos": [
+        2568.209,
+        10.89997,
+        2855.195
+      ]
+    },
+    {
+      "name": "Palm",
+      "originalPath": "Static Props/Palm",
+      "originalLocalPos": [
+        2094.0952,
+        7.969601,
+        861.98224
+      ],
+      "currentLocalPos": [
+        1863.65,
+        11.38153,
+        2785.705
+      ]
+    },
+    {
+      "name": "Palm",
+      "originalPath": "Static Props/Palm",
+      "originalLocalPos": [
+        2110.8748,
+        6.7001915,
+        1071.818
+      ],
+      "currentLocalPos": [
+        2685.119,
+        5.904784,
+        2789.535
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        2304.6606,
+        39.2684,
+        1170.9452
+      ],
+      "currentLocalPos": [
+        2778.775,
+        44.05412,
+        2220.398
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        2468.4153,
+        13.633909,
+        1633.5131
+      ],
+      "currentLocalPos": [
+        2303.566,
+        36.46367,
+        1191.555
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1278.6445,
+        35.858986,
+        1958.0348
+      ],
+      "currentLocalPos": [
+        1278.645,
+        35.85899,
+        1958.035
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1445.2546,
+        12.7577,
+        2318.3394
+      ],
+      "currentLocalPos": [
+        2180.455,
+        38.09973,
+        1231.224
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        2147.9905,
+        24.932919,
+        1707.4354
+      ],
+      "currentLocalPos": [
+        1621.465,
+        26.8529,
+        2095.023
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        2110.601,
+        50.59836,
+        1410.8749
+      ],
+      "currentLocalPos": [
+        1238.52,
+        88.9806,
+        1132.735
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        2528.54,
+        30.666681,
+        1222.9254
+      ],
+      "currentLocalPos": [
+        1597.85,
+        72.8633,
+        1136.185
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        942.68536,
+        22.90576,
+        2519.7346
+      ],
+      "currentLocalPos": [
+        942.6854,
+        22.90576,
+        2519.735
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1607.2548,
+        26.147966,
+        2009.3053
+      ],
+      "currentLocalPos": [
+        2124.727,
+        48.00335,
+        1450.975
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1912.9852,
+        10.411735,
+        2877.8105
+      ],
+      "currentLocalPos": [
+        2117.076,
+        47.02375,
+        1338.285
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        2286.917,
+        27.005491,
+        1386.7548
+      ],
+      "currentLocalPos": [
+        762.4904,
+        156.2889,
+        1382.605
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1120.0946,
+        53.12,
+        1688.02
+      ],
+      "currentLocalPos": [
+        1775.375,
+        20.60853,
+        1671.596
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        2221.6746,
+        19.867563,
+        1913.8972
+      ],
+      "currentLocalPos": [
+        1768.915,
+        41.54934,
+        1280.065
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        717.7787,
+        73.281685,
+        1613.7949
+      ],
+      "currentLocalPos": [
+        2304.661,
+        39.2684,
+        1170.945
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        2180.4553,
+        38.09973,
+        1231.224
+      ],
+      "currentLocalPos": [
+        2041.385,
+        37.50479,
+        1913.076
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1597.8496,
+        72.863304,
+        1136.1853
+      ],
+      "currentLocalPos": [
+        921.5998,
+        45.26336,
+        1819.795
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1955.7549,
+        40.70796,
+        1207.7872
+      ],
+      "currentLocalPos": [
+        1120.095,
+        53.12,
+        1688.02
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1139.5747,
+        49.78646,
+        1155.9895
+      ],
+      "currentLocalPos": [
+        1607.255,
+        26.14797,
+        2009.305
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1064.5248,
+        39.132362,
+        1884.6562
+      ],
+      "currentLocalPos": [
+        1962.495,
+        50.06105,
+        734.6371
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1438.4153,
+        31.444748,
+        2013.1155
+      ],
+      "currentLocalPos": [
+        1403.21,
+        138.935,
+        1279.414
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        2013.719,
+        27.65304,
+        1945.4851
+      ],
+      "currentLocalPos": [
+        437.295,
+        170.3718,
+        1445.072
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        2174.4446,
+        36.896,
+        1230.33
+      ],
+      "currentLocalPos": [
+        2110.601,
+        50.59836,
+        1410.875
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        2117.0757,
+        47.023746,
+        1338.2849
+      ],
+      "currentLocalPos": [
+        1079.478,
+        63.2,
+        1692.845
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1259.0164,
+        32.041393,
+        1746.8851
+      ],
+      "currentLocalPos": [
+        1815.645,
+        26.20957,
+        2076.458
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        2194.2253,
+        36.39583,
+        1451.1823
+      ],
+      "currentLocalPos": [
+        2013.719,
+        27.65304,
+        1945.485
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1353.0249,
+        144.40462,
+        1162.0319
+      ],
+      "currentLocalPos": [
+        1912.985,
+        10.41173,
+        2877.811
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1766.0728,
+        40.694996,
+        2829.7517
+      ],
+      "currentLocalPos": [
+        792.0743,
+        128.8096,
+        1485.495
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1995.9955,
+        26.91019,
+        1639.1401
+      ],
+      "currentLocalPos": [
+        2136.115,
+        27.23654,
+        1776.329
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1962.4951,
+        50.061054,
+        734.6371
+      ],
+      "currentLocalPos": [
+        2650.375,
+        27.91528,
+        1310.745
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        2041.3855,
+        37.50479,
+        1913.0764
+      ],
+      "currentLocalPos": [
+        2194.225,
+        36.39583,
+        1451.182
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1403.2098,
+        138.93497,
+        1279.4137
+      ],
+      "currentLocalPos": [
+        2286.917,
+        27.00549,
+        1386.755
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        792.0743,
+        128.80962,
+        1485.4955
+      ],
+      "currentLocalPos": [
+        1353.025,
+        144.4046,
+        1162.032
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        921.5998,
+        45.263355,
+        1819.7946
+      ],
+      "currentLocalPos": [
+        1766.073,
+        40.695,
+        2829.752
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1621.4651,
+        26.852903,
+        2095.0227
+      ],
+      "currentLocalPos": [
+        2174.445,
+        36.896,
+        1230.33
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        998.9428,
+        91.12764,
+        1436.3645
+      ],
+      "currentLocalPos": [
+        1995.995,
+        26.91019,
+        1639.14
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1812.1255,
+        26.439098,
+        2078.866
+      ],
+      "currentLocalPos": [
+        1259.016,
+        32.04139,
+        1746.885
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1815.6454,
+        26.209566,
+        2076.4578
+      ],
+      "currentLocalPos": [
+        2528.54,
+        30.66668,
+        1222.925
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1440.2747,
+        141.6072,
+        1226.9294
+      ],
+      "currentLocalPos": [
+        2687.125,
+        24.33983,
+        893.3527
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1079.4784,
+        63.2,
+        1692.8446
+      ],
+      "currentLocalPos": [
+        -191.85565,
+        -337.08704,
+        -2130.172
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1238.5195,
+        88.9806,
+        1132.7352
+      ],
+      "currentLocalPos": [
+        1597.968,
+        74.06748,
+        1131.195
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        437.29498,
+        170.37178,
+        1445.0723
+      ],
+      "currentLocalPos": [
+        1955.755,
+        40.70796,
+        1207.787
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        2136.1152,
+        27.236538,
+        1776.3289
+      ],
+      "currentLocalPos": [
+        1445.255,
+        12.7577,
+        2318.339
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1597.9684,
+        74.06748,
+        1131.1953
+      ],
+      "currentLocalPos": [
+        1064.525,
+        39.13236,
+        1884.656
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        2778.7747,
+        44.054115,
+        2220.398
+      ],
+      "currentLocalPos": [
+        717.7787,
+        73.28168,
+        1613.795
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        762.49036,
+        156.28891,
+        1382.6049
+      ],
+      "currentLocalPos": [
+        1457.059,
+        15.7657,
+        2142.615
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1775.3745,
+        20.608534,
+        1671.5964
+      ],
+      "currentLocalPos": [
+        1438.415,
+        31.44475,
+        2013.115
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1768.915,
+        41.54934,
+        1280.0646
+      ],
+      "currentLocalPos": [
+        1139.575,
+        49.78646,
+        1155.99
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        2650.3745,
+        27.915281,
+        1310.7446
+      ],
+      "currentLocalPos": [
+        2147.99,
+        24.93292,
+        1707.435
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        2687.1252,
+        24.339828,
+        893.3527
+      ],
+      "currentLocalPos": [
+        2221.675,
+        19.86756,
+        1913.897
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        1457.0588,
+        15.765698,
+        2142.6155
+      ],
+      "currentLocalPos": [
+        1440.275,
+        141.6072,
+        1226.929
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        2303.5662,
+        36.463673,
+        1191.5549
+      ],
+      "currentLocalPos": [
+        2468.415,
+        13.63391,
+        1633.513
+      ]
+    },
+    {
+      "name": "RockDesert",
+      "originalPath": "Static Props/RockDesert",
+      "originalLocalPos": [
+        2124.7266,
+        48.003345,
+        1450.9753
+      ],
+      "currentLocalPos": [
+        998.9428,
+        91.12764,
+        1436.365
+      ]
+    },
+    {
+      "name": "Town Capture Point",
+      "originalPath": "Town Capture Point",
+      "originalLocalPos": [
+        1894.81,
+        24.86,
+        1814.76
+      ],
+      "currentLocalPos": [
+        739.8469,
+        -87.40168,
+        432.96863
+      ]
+    },
+    {
+      "name": "Vehicle Spawner (2)",
+      "originalPath": "Vehicle Spawner (2)",
+      "originalLocalPos": [
+        1634.44,
+        43.13,
+        1461.12
+      ],
+      "currentLocalPos": [
+        479.4768,
+        -69.13168,
+        79.32861
+      ]
+    },
+    {
+      "name": "Wood Beams",
+      "originalPath": "Wood Beams",
+      "originalLocalPos": [
+        1859.82,
+        40.273598,
+        1710.13
+      ],
+      "currentLocalPos": [
+        -147.17358,
+        -406.61542,
+        -2489.599
+      ]
+    },
+    {
+      "name": "Wood Beams (1)",
+      "originalPath": "Wood Beams (1)",
+      "originalLocalPos": [
+        1771.15,
+        19.47,
+        1784.66
+      ],
+      "currentLocalPos": [
+        -31.625732,
+        -425.65753,
+        -2477.9392
+      ]
+    },
+    {
+      "name": "Wood Beams (2)",
+      "originalPath": "Wood Beams (2)",
+      "originalLocalPos": [
+        1841.87,
+        28.81,
+        1718.03
+      ],
+      "currentLocalPos": [
+        -128.78113,
+        -416.69418,
+        -2480.872
+      ]
+    },
+    {
+      "name": "Wood Beams (3)",
+      "originalPath": "Wood Beams (3)",
+      "originalLocalPos": [
+        1848.93,
+        26.98207,
+        1778.07
+      ],
+      "currentLocalPos": [
+        -92.100586,
+        -426.99567,
+        -2527.8447
+      ]
+    },
+    {
+      "name": "Wood Beams (4)",
+      "originalPath": "Wood Beams (4)",
+      "originalLocalPos": [
+        1775.61,
+        23.021034,
+        1763.79
+      ],
+      "currentLocalPos": [
+        -49.344116,
+        -420.0577,
+        -2466.8596
+      ]
+    },
+    {
+      "name": "Wood Beams (5)",
+      "originalPath": "Wood Beams (5)",
+      "originalLocalPos": [
+        1710.5955,
+        33.476425,
+        1666.3091
+      ],
+      "currentLocalPos": [
+        -70.416016,
+        -389.37405,
+        -2355.2651
+      ]
+    },
+    {
+      "name": "Wood Beams (6)",
+      "originalPath": "Wood Beams (6)",
+      "originalLocalPos": [
+        1708.95,
+        35.42961,
+        1597.87
+      ],
+      "currentLocalPos": [
+        -116.828735,
+        -378.54767,
+        -2306.081
+      ]
+    },
+    {
+      "name": "Wood Beams (7)",
+      "originalPath": "Wood Beams (7)",
+      "originalLocalPos": [
+        1728.44,
+        36.444084,
+        1577.0
+      ],
+      "currentLocalPos": [
+        -145.34753,
+        -377.29364,
+        -2304.8403
+      ]
+    },
+    {
+      "name": "[default-CSGModel]",
+      "originalPath": "[default-CSGModel]",
+      "originalLocalPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "currentLocalPos": [
+        -1570.7786,
+        -92.42883,
+        -1508.6252
+      ]
+    },
+    {
+      "name": "_LevelTester",
+      "originalPath": "_LevelTester",
+      "originalLocalPos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "currentLocalPos": [
+        -1570.7786,
+        -92.42883,
+        -1508.6252
+      ]
+    },
+    {
+      "name": "backdrop_desert",
+      "originalPath": "backdrop_desert",
+      "originalLocalPos": [
+        1500.0,
+        10.0,
+        1500.0
+      ],
+      "currentLocalPos": [
+        -34.740967,
+        -365.42462,
+        -2089.3442
+      ]
+    },
+    {
+      "name": "tractor",
+      "originalPath": "tractor",
+      "originalLocalPos": [
+        1615.4111,
+        58.059677,
+        1540.8794
+      ],
+      "currentLocalPos": [
+        -89.24548,
+        -337.52014,
+        -2205.7537
+      ]
+    },
+    {
+      "name": "workbench",
+      "originalPath": "workbench",
+      "originalLocalPos": [
+        1615.17,
+        42.37,
+        1454.19
+      ],
+      "currentLocalPos": [
+        -149.35889,
+        -341.91064,
+        -2141.5015
+      ]
+    },
+    {
+      "name": "workbench (1)",
+      "originalPath": "workbench (1)",
+      "originalLocalPos": [
+        1625.19,
+        43.47,
+        1429.71
+      ],
+      "currentLocalPos": [
+        -173.58307,
+        -338.94827,
+        -2131.2407
+      ]
+    },
+    {
+      "name": "workbench covered",
+      "originalPath": "workbench covered",
+      "originalLocalPos": [
+        1618.69,
+        42.53,
+        1448.65
+      ],
+      "currentLocalPos": [
+        -155.74072,
+        -341.4818,
+        -2140.021
+      ]
+    },
+    {
+      "name": "workbench covered (1)",
+      "originalPath": "workbench covered (1)",
+      "originalLocalPos": [
+        1603.97,
+        41.89,
+        1460.06
+      ],
+      "currentLocalPos": [
+        -137.22815,
+        -341.7514,
+        -2137.902
+      ]
+    }
+  ],
+  "addedHere": [
+    {
+      "name": "CapturePoint",
+      "path": "CapturePoint"
+    },
+    {
+      "name": "Controllers",
+      "path": "Controllers"
+    },
+    {
+      "name": "NetClient",
+      "path": "NetClient"
+    },
+    {
+      "name": "Explosion FX (Grenade)",
+      "path": "NetClient/Explosion FX (Grenade)"
+    },
+    {
+      "name": "Explosion Arms",
+      "path": "NetClient/Explosion FX (Grenade)/Explosion Arms"
+    },
+    {
+      "name": "Explosion Debris",
+      "path": "NetClient/Explosion FX (Grenade)/Explosion Debris"
+    },
+    {
+      "name": "Explosion Fire",
+      "path": "NetClient/Explosion FX (Grenade)/Explosion Fire"
+    },
+    {
+      "name": "Explosion Quick Smoke",
+      "path": "NetClient/Explosion FX (Grenade)/Explosion Quick Smoke"
+    },
+    {
+      "name": "Explosion Sparks",
+      "path": "NetClient/Explosion FX (Grenade)/Explosion Sparks"
+    },
+    {
+      "name": "Explosion FX (Rocket)",
+      "path": "NetClient/Explosion FX (Rocket)"
+    },
+    {
+      "name": "Explosion Arms",
+      "path": "NetClient/Explosion FX (Rocket)/Explosion Arms"
+    },
+    {
+      "name": "Explosion Debris",
+      "path": "NetClient/Explosion FX (Rocket)/Explosion Arms/Explosion Debris"
+    },
+    {
+      "name": "Explosion Fire",
+      "path": "NetClient/Explosion FX (Rocket)/Explosion Arms/Explosion Fire"
+    },
+    {
+      "name": "Explosion Quick Smoke",
+      "path": "NetClient/Explosion FX (Rocket)/Explosion Arms/Explosion Quick Smoke"
+    },
+    {
+      "name": "Explosion Shockwave",
+      "path": "NetClient/Explosion FX (Rocket)/Explosion Arms/Explosion Shockwave"
+    },
+    {
+      "name": "Explosion Sparks",
+      "path": "NetClient/Explosion FX (Rocket)/Explosion Arms/Explosion Sparks"
+    },
+    {
+      "name": "NetServer",
+      "path": "NetServer"
+    },
+    {
+      "name": "Objects",
+      "path": "Objects"
+    },
+    {
+      "name": "Objects (1)",
+      "path": "Objects (1)"
+    },
+    {
+      "name": "Checkpoint Light",
+      "path": "Objects (1)/Checkpoint Light"
+    },
+    {
+      "name": "Checkpoint Light",
+      "path": "Objects (1)/Checkpoint Light"
+    },
+    {
+      "name": "Static Props 1",
+      "path": "Static Props 1"
+    }
+  ]
+}

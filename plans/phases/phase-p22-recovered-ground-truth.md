@@ -48,8 +48,8 @@ từ script mất hay component rụng — đừng đào ở đó.
 | Khoá | Dustbowl | Island |
 |---|---|---|
 | `fileID` | **0 / 1 096** | 1 / 345 |
-| `m_Name` | 179 duy nhất, **917 mơ hồ** | 155 duy nhất, 189 mơ hồ |
-| **`(m_Name, m_LocalPosition)`** | **792 duy nhất**, 55 mơ hồ, 241 không khớp | **341 duy nhất**, **0 mơ hồ**, 4 không khớp |
+| `m_Name` | 179 duy nhất, 913 mơ hồ, 4 không khớp | 155 duy nhất, 190 mơ hồ |
+| **`(m_Name, m_LocalPosition)`** | **792 duy nhất**, 63 mơ hồ, 241 không khớp | **341 duy nhất**, **0 mơ hồ**, 4 không khớp |
 
 2 183 fileID có trùng giữa hai scene, nhưng **không cái nào là object static** — chúng là probe,
 light, manager còn giữ ID Unity 5.4; toàn bộ prop hình học bị cấp ID mới khi project bị nâng lên
@@ -90,11 +90,11 @@ suýt dẫn tới kết luận sai.
 tools/recovered/static-flags.Dustbowl.json    1096 mục: {name, parentPath, localPos, flags}
 tools/recovered/static-flags.Island.json      345 mục, cùng schema
 tools/recovered/material-shader-map.json      71 material → shader đúng + property list gốc
-tools/recovered/missing-objects.Dustbowl.json 122 object + cây con + component + transform
+tools/recovered/missing-objects.Dustbowl.json 144 object vắng + component + transform
 tools/recovered/scene-baseline.json           GO / MeshRenderer / static count mỗi scene
 ```
 
-`parentPath` là đường dẫn hierarchy đầy đủ, **bắt buộc có** — dùng để gỡ 55 mục mơ hồ của Dustbowl
+`parentPath` là đường dẫn hierarchy đầy đủ, **bắt buộc có** — dùng để gỡ 63 mục mơ hồ của Dustbowl
 ở P23 mà không phải đoán.
 
 ### 6.2 Trích shader
@@ -111,14 +111,15 @@ dòng nào là *lời tài liệu gốc* và dòng nào là *đo lại được*
 
 ### 6.4 Script trích, chạy lại được
 
-`tools/extract-recovered.py` — nhận đường dẫn tới `tmp/recovered/`, sinh ra toàn bộ JSON ở §6.1.
+`tools/extract_recovered.py` — nhận đường dẫn tới `tmp/recovered/`, sinh ra toàn bộ JSON ở §6.1.
+(snake_case theo lệ Python của repo — `extract_weapon_registry.py`, `analyse_lane_b.py`.)
 Không phải script dùng một lần: nếu bản khôi phục được cập nhật, chạy lại là ra dữ liệu mới. Script
 phải **fail lớn tiếng** khi đường dẫn không tồn tại, không được sinh file rỗng.
 
 ## 7. Nghiệm thu
 
-1. `python tools/extract-recovered.py` chạy sạch, sinh đúng 5 file JSON.
-2. Số dòng mỗi JSON khớp §2: 1096 / 345 / 71 / 122 / 4 scene.
+1. `python tools/extract_recovered.py` chạy sạch, sinh đúng 5 file JSON.
+2. Số mục mỗi JSON: 1096 / 345 / 71 / **144** / 4 scene.
 3. `docs/recovered-baseline.md` tồn tại, chứa cả bảng đo lẫn bẫy YAML §4.
 4. **Kiểm tra quyết định:** đổi tên `tmp/recovered` → chạy `tools/ci.ps1` → vẫn xanh. Chứng minh
    không phase nào sau này phụ thuộc vào một thư mục gitignore.
@@ -143,6 +144,22 @@ Không có rủi ro ≥ 15 nào chưa được giảm thiểu.
 | 5 file JSON + script trích | S | |
 | `docs/recovered-baseline.md` | S | |
 | **Tổng** | **S (~1 ngày)** | Không phụ thuộc phase nào |
+
+## 9b. Đã giao — ba chỗ lệch so với bản kế hoạch
+
+Đo lại khi thực thi (2026-09-20), chi tiết ở [`../../docs/recovered-baseline.md`](../../docs/recovered-baseline.md):
+
+1. **`122` là hiệu số ròng, không phải một tập object.** Dustbowl thiếu **144** object (23 tên,
+   116 cái là `Railroad Sleeper(Clone)`) và **thừa 22** object do chính Ironfront thêm
+   (`NetServer`, `NetClient`, `CapturePoint`, các cây `Explosion FX`). 144 − 22 = 122. Dựng lại
+   "122 object" là dựng nhầm tập. JSON giao 144 object vắng, kèm 291 object *lệch vị trí* tách riêng.
+2. **Số mơ hồ ở §3 cộng không đủ tổng.** Dustbowl 63 (không phải 55: 792+55+241 = 1088 ≠ 1096),
+   Island 190 (không phải 189). Bảng trên đã sửa.
+3. **Tên script dùng snake_case** (`extract_recovered.py`) theo lệ Python của repo.
+
+Thêm một bẫy YAML **thứ hai** mà §4 chưa biết: property của material cũng có hai định dạng
+(`- first:/name:` ở 5.4 vs `- _Key:` ở Unity 6). Nó đã xảy ra đúng như §4 mô tả — parser đọc rỗng,
+không báo lỗi. Script chặn cả hai bằng assertion.
 
 ## 10. Không thuộc phase này
 
