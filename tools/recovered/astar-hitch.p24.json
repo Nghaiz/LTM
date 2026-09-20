@@ -1,0 +1,105 @@
+{
+  "label": "p24",
+  "scenes": [
+{
+  "scene": "Dustbowl",
+  "valid": true,
+  "abortReason": null,
+  "measuredAtUtc": "2026-09-20T16:44:22.5766215Z",
+  "unityVersion": "6000.3.21f1",
+  "netRole": "Server",
+  "multithreaded": true,
+  "pathfindingThreads": 6,
+  "botWaitSeconds": 30.0852,
+  "aiControllersAtSampleStart": 32,
+  "actorsAtSampleStart": 33,
+  "sampleFrames": 3600,
+  "sampleSeconds": 27.4257,
+  "paths": {
+    "completed": 46,
+    "perSecond": 1.6773,
+    "peakPerSecond": 15,
+    "inFlightMax": 4,
+    "errors": 0,
+    "durationMsMean": 1.8445,
+    "durationMsMax": 27.8389,
+    "note": "pending-queue length is not exposed by this A* version; inFlightMax counts paths a worker has started but not finished."
+  },
+  "graphCacheLoadMs": 53.8504,
+  "graphCacheLoadNote": "one-time cost of deserializing the cached graphs at scene load -- the ONLY A* work a client does, since a client spawns no bots and its remote bodies carry no Seeker.",
+  "astarUpdateMs": { "mean": 0.0131, "p50": 0.01, "p95": 0.0167, "p99": 0.0248, "max": 5.0886, "total": 46.997 },
+  "frameMs": { "mean": 7.6183, "p50": 7.2999, "p95": 9.8019, "p99": 11.3142, "max": 167.1248, "total": 27425.74 },
+  "worstAstarFrames": [
+    { "frame": 58, "astarUpdateMs": 5.0886, "frameMs": 36.9661 },
+    { "frame": 363, "astarUpdateMs": 2.1349, "frameMs": 9.2884 },
+    { "frame": 240, "astarUpdateMs": 0.1236, "frameMs": 7.0957 },
+    { "frame": 88, "astarUpdateMs": 0.1204, "frameMs": 6.6066 },
+    { "frame": 69, "astarUpdateMs": 0.1025, "frameMs": 6.8279 },
+    { "frame": 1947, "astarUpdateMs": 0.0853, "frameMs": 7.8462 },
+    { "frame": 484, "astarUpdateMs": 0.0773, "frameMs": 7.0278 },
+    { "frame": 835, "astarUpdateMs": 0.0736, "frameMs": 8.2941 },
+    { "frame": 1440, "astarUpdateMs": 0.0732, "frameMs": 6.4364 },
+    { "frame": 654, "astarUpdateMs": 0.0723, "frameMs": 7.264 }
+  ],
+  "spikes": {
+    "thresholdMs": 33.3,
+    "count": 3,
+    "meanGapFrames": 29,
+    "minGapFrames": 10,
+    "spikeFrameMsTotal": 250.2206,
+    "astarMsInsideSpikes": 5.1121,
+    "astarShareOfSpikeTime": 0.0204
+  }
+},
+{
+  "scene": "Island",
+  "valid": true,
+  "abortReason": null,
+  "measuredAtUtc": "2026-09-20T16:51:59.1450682Z",
+  "unityVersion": "6000.3.21f1",
+  "netRole": "Server",
+  "multithreaded": true,
+  "pathfindingThreads": 6,
+  "botWaitSeconds": 30.1256,
+  "aiControllersAtSampleStart": 32,
+  "actorsAtSampleStart": 33,
+  "sampleFrames": 3600,
+  "sampleSeconds": 27.7418,
+  "paths": {
+    "completed": 60,
+    "perSecond": 2.1628,
+    "peakPerSecond": 20,
+    "inFlightMax": 5,
+    "errors": 0,
+    "durationMsMean": 0.7606,
+    "durationMsMax": 4.8175,
+    "note": "pending-queue length is not exposed by this A* version; inFlightMax counts paths a worker has started but not finished."
+  },
+  "graphCacheLoadMs": 32.2709,
+  "graphCacheLoadNote": "one-time cost of deserializing the cached graphs at scene load -- the ONLY A* work a client does, since a client spawns no bots and its remote bodies carry no Seeker.",
+  "astarUpdateMs": { "mean": 0.0126, "p50": 0.0097, "p95": 0.0156, "p99": 0.0269, "max": 4.5314, "total": 45.4294 },
+  "frameMs": { "mean": 7.7061, "p50": 7.3622, "p95": 9.7463, "p99": 11.5245, "max": 158.7601, "total": 27741.81 },
+  "worstAstarFrames": [
+    { "frame": 89, "astarUpdateMs": 4.5314, "frameMs": 6.2654 },
+    { "frame": 611, "astarUpdateMs": 2.0972, "frameMs": 6.278 },
+    { "frame": 104, "astarUpdateMs": 0.0902, "frameMs": 6.3318 },
+    { "frame": 614, "astarUpdateMs": 0.0815, "frameMs": 11.916 },
+    { "frame": 651, "astarUpdateMs": 0.0794, "frameMs": 7.5346 },
+    { "frame": 2466, "astarUpdateMs": 0.0794, "frameMs": 7.9569 },
+    { "frame": 227, "astarUpdateMs": 0.0677, "frameMs": 9.1634 },
+    { "frame": 1362, "astarUpdateMs": 0.0655, "frameMs": 7.2498 },
+    { "frame": 2253, "astarUpdateMs": 0.0647, "frameMs": 7.0657 },
+    { "frame": 810, "astarUpdateMs": 0.0584, "frameMs": 6.5713 }
+  ],
+  "spikes": {
+    "thresholdMs": 33.3,
+    "count": 3,
+    "meanGapFrames": 1740.5,
+    "minGapFrames": 11,
+    "spikeFrameMsTotal": 236.2228,
+    "astarMsInsideSpikes": 0.0327,
+    "astarShareOfSpikeTime": 0.0001
+  }
+}
+  ]
+}
