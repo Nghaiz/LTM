@@ -146,10 +146,10 @@ and whose bodies do not animate cannot be graded by eye.
 | **P20** | The P11-P19 debt sweep | **DONE 2026-09-02** — four rows re-diagnosed against the wrong cause; `plans/phases/` and `plans/reports/` deleted | L |
 | **P21** | [Four windows you can actually play in](phases/phase-p21-local-playtest.md) | the build-only door, the local master, and `play-lan.ps1`'s deleted menu — **and with them M3's grader** | M |
 | **P22** | [Cứu bản chuẩn khôi phục vào repo](phases/phase-p22-recovered-ground-truth.md) | 191 MB ground truth nằm trong `tmp/` (gitignore) — trích ra trước khi mất | S |
-| **P23** | [Trả lại cờ static, và gộp asset trùng](phases/phase-p23-static-batching.md) | 1 441 cờ static bị xoá khi nâng engine; 7 thư mục asset trùng | M |
+| **P23** | [Trả lại cờ static, và gộp asset trùng](phases/phase-p23-static-batching.md) | **DONE 2026-09-20** — đặt lại 1 379 cờ (1 036/1 096 Dustbowl, 343/345 Island). Nhưng **tiền đề sai**: 1 092 renderer Dustbowl và 343 của Island **đã batch sẵn** từ 5 combined mesh mà bản gốc nướng vào, nên cờ không đổi một draw call nào. Material trùng hoá ra **không trùng** (khác shader). Xem [report](reports/2026-09-20-p23-static-flags-restored.md) | M |
 | **P24** | [A\* pathfinding: điều tra nguồn frame-hitch](phases/phase-p24-astar-hitch.md) | 395 dòng lệch trong 6 file A\* mà không tài liệu nào nhắc | S–L |
 | **P25** | [Ragdoll: hiệu chỉnh joint drive cho PhysX 4](phases/phase-p25-ragdoll-drive.md) | `JointDriveMode.Position` — API Unity 5.5 xoá, cảm giác điều khiển đi qua đúng dòng đó; đo bằng DLL thay vào bản ship | L |
-| **P26** | [Shader đúng, và phần hình học Dustbowl bị mất](phases/phase-p26-visual-fidelity.md) | 71 material trỏ shader dummy; 122 GameObject mất; 241 cờ static còn treo | L |
+| **P26** | [Shader đúng, và phần hình học Dustbowl bị mất](phases/phase-p26-visual-fidelity.md) | 71 material trỏ shader dummy; 144 GameObject mất; **4** cờ static còn treo — `Hanging_Rope`, `Mount`, `Tied_Rope`, `Well`, xác nhận đích danh khi P23 chạy (không phải 241) | L |
 | **P27** | [98 file lệch: cái nào cố ý, cái nào là mất mát](phases/phase-p27-logic-triage.md) | phân loại (a) netcode / (b) migration / (c) mất mát / (d) vô nghĩa | L+ |
 
 **P5 blocks the *closing* of P4's rows, not its run.** Run lane B first; X-28's single spawn point

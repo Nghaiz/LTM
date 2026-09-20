@@ -1,0 +1,1701 @@
+{
+    "generatedBy": "Ironfront/Recovered Port/Audit Duplicate Assets -- Assets/Editor/RecoveredPort/AuditDuplicateAssets.cs",
+    "note": "Verdicts are the engine's view, not a byte comparison. tools/dedupe_assets.py merges only 'identical' pairs.",
+    "auditedAtUtc": "2026-09-20T12:29:19.2322988Z",
+    "unityVersion": "6000.3.21f1",
+    "identical": 59,
+    "differs": 101,
+    "noCanonical": 9,
+    "pairs": [
+        {
+            "duplicate": "Assets/Material 2/Concrete Large.mat",
+            "canonical": "Assets/Material/Concrete Large.mat",
+            "duplicateGuid": "cd368fc13e5c7c442a031853c36d083e",
+            "canonicalGuid": "5a40362c37fc6964cbdfbbd553a4a837",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard (Specular setup)"
+        },
+        {
+            "duplicate": "Assets/Material 2/Concrete.mat",
+            "canonical": "Assets/Material/Concrete.mat",
+            "duplicateGuid": "9eb176e278bce9248b19f338baa8b3a5",
+            "canonicalGuid": "d23ea53807b67094fb3a9d1254b892b2",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard (Specular setup)"
+        },
+        {
+            "duplicate": "Assets/Material 2/Dark Plastic.mat",
+            "canonical": "Assets/Material/Dark Plastic.mat",
+            "duplicateGuid": "5b99602742cb1c0479da9fed5ed5d597",
+            "canonicalGuid": "6d67227afcd32ad4abfae570a1663ca1",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard (Specular setup)"
+        },
+        {
+            "duplicate": "Assets/Material 2/Farm.mat",
+            "canonical": "Assets/Material/Farm.mat",
+            "duplicateGuid": "e93fabcd1e6f82d41ae78f3311f7d49d",
+            "canonicalGuid": "2821a586fd97c2c4b8b7604a83f3b282",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material 2/Glass.mat",
+            "canonical": "Assets/Material/Glass.mat",
+            "duplicateGuid": "e9e0283d4400d574489c20b1abc959af",
+            "canonicalGuid": "927bedf0e387a654da7ce55c0db9a6f0",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard (Specular setup)"
+        },
+        {
+            "duplicate": "Assets/Material 2/Hesco_Barrier.mat",
+            "canonical": "Assets/Material/Hesco_Barrier.mat",
+            "duplicateGuid": "8fbb772f0a69525419e7c49455891dc3",
+            "canonicalGuid": "f28768a31b48de04fbe792051b748a83",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material 2/Material_001.mat",
+            "canonical": "Assets/Material/Material_001.mat",
+            "duplicateGuid": "60e0a6aef7c860f4bb423131a6deb760",
+            "canonicalGuid": "79e20749c92883842b529a274d280824",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard (Specular setup)"
+        },
+        {
+            "duplicate": "Assets/Material 2/Material_005.mat",
+            "canonical": "Assets/Material/Material_005.mat",
+            "duplicateGuid": "d5bfadb90f1a4fe4a9eb97ad79370657",
+            "canonicalGuid": "6b14c4a3bcacac845935cea99741bbd7",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material 2/Mesh.mat",
+            "canonical": "Assets/Material/Mesh.mat",
+            "duplicateGuid": "098418511e9554f4cbcc87042014048c",
+            "canonicalGuid": "",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 0,
+            "verdict": "no-canonical",
+            "detail": "no file of this name in Assets/Material"
+        },
+        {
+            "duplicate": "Assets/Material 2/Metal Plates.mat",
+            "canonical": "Assets/Material/Metal Plates.mat",
+            "duplicateGuid": "f87c3efa6204ed94f971ee6104a11777",
+            "canonicalGuid": "99f5f813e4fff9047830fb26fda66bb6",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material 2/Metal.mat",
+            "canonical": "Assets/Material/Metal.mat",
+            "duplicateGuid": "531c7caca84f5da468b1a6b7589b676d",
+            "canonicalGuid": "cea1ecc1be63db643be0e8f64a936b6d",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material 2/Rock.mat",
+            "canonical": "Assets/Material/Rock.mat",
+            "duplicateGuid": "ac0ad1a4c23d3ae4fb67f947671837f5",
+            "canonicalGuid": "c3b349b84c176744f87a061940e7fb8a",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material 2/Rubber.mat",
+            "canonical": "Assets/Material/Rubber.mat",
+            "duplicateGuid": "bb4d783871264894a83b4b11fbf18484",
+            "canonicalGuid": "76add8792c397c248aa3c94b8c830f40",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard (Specular setup)"
+        },
+        {
+            "duplicate": "Assets/Material 2/Sandbags.mat",
+            "canonical": "Assets/Material/Sandbags.mat",
+            "duplicateGuid": "e55e5f480553551469fa0fa731c22779",
+            "canonicalGuid": "2aa9ab0061ccabb45b0ac27fbe0c7b92",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material 2/Soil.mat",
+            "canonical": "Assets/Material/Soil.mat",
+            "duplicateGuid": "091e7ae83e271bf49bb109017c2920d0",
+            "canonicalGuid": "b23826ad541d93744bd405be8e9d800b",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material 2/Stairs.mat",
+            "canonical": "Assets/Material/Stairs.mat",
+            "duplicateGuid": "eb4a9c3326185d547bca826f1886a71e",
+            "canonicalGuid": "fc859568b89748847b2809ea1fb2ad37",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material 2/Tank Trap.mat",
+            "canonical": "Assets/Material/Tank Trap.mat",
+            "duplicateGuid": "df610852d80af6f439c0e6ad2f28f063",
+            "canonicalGuid": "941878f6a09aceb4c9343083cab97581",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material 2/Tractor Green.mat",
+            "canonical": "Assets/Material/Tractor Green.mat",
+            "duplicateGuid": "0f51e0653eec41749aa0c3e96a46c553",
+            "canonicalGuid": "5ca8172c451b4004292febc5986902d0",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard (Specular setup)"
+        },
+        {
+            "duplicate": "Assets/Material 2/Water.mat",
+            "canonical": "Assets/Material/Water.mat",
+            "duplicateGuid": "eeb779000d466644f8e7cec4e888a2d9",
+            "canonicalGuid": "0df238e0be6ce7b4aa396f5ce86c1508",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard (Specular setup)"
+        },
+        {
+            "duplicate": "Assets/Material 2/Windmill Blades.mat",
+            "canonical": "Assets/Material/Windmill Blades.mat",
+            "duplicateGuid": "9c7752f498ec6f5448db7c34c3e3a009",
+            "canonicalGuid": "eeacad327f95ac9469f2f7ca9cd3f27d",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard (Specular setup)"
+        },
+        {
+            "duplicate": "Assets/Material 2/Windmill Door.mat",
+            "canonical": "Assets/Material/Windmill Door.mat",
+            "duplicateGuid": "3bdca1e0eab35a744927a88dcf40ba4c",
+            "canonicalGuid": "b8df70fa06f6a7f488e11d53ba3a7759",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material 2/Windmill Frame.mat",
+            "canonical": "Assets/Material/Windmill Frame.mat",
+            "duplicateGuid": "7b5daf3e0e1c26347ad721df425178cf",
+            "canonicalGuid": "6ebd38c478887b742b9b0ba61d5e500d",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material 2/Windmill Rotor.mat",
+            "canonical": "Assets/Material/Windmill Rotor.mat",
+            "duplicateGuid": "e62ee259727f0304989b4acedefbde5e",
+            "canonicalGuid": "5e13886a5be3b664aaa402eb704dfe77",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material 2/Windmill.mat",
+            "canonical": "Assets/Material/Windmill.mat",
+            "duplicateGuid": "1075c302bacdb9649a2abb5c3623fa34",
+            "canonicalGuid": "abf26bd24aed05c4d9df771cda31fec6",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material 2/Wood.mat",
+            "canonical": "Assets/Material/Wood.mat",
+            "duplicateGuid": "dce76487d6d241e4faa27d4b8a92c1fe",
+            "canonicalGuid": "2bf330955dd50ff4d999a4814bc5a369",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material 2/alder-alderbark.mat",
+            "canonical": "Assets/Material/alder-alderbark.mat",
+            "duplicateGuid": "58c5bbcac439ea04f8f0633828dcc1f1",
+            "canonicalGuid": "95c5aadb36720b24e8376af14e1a19b6",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "_MainTex texture AlderBark vs AlderBark"
+        },
+        {
+            "duplicate": "Assets/Material 2/alderbranches_island.mat",
+            "canonical": "Assets/Material/alderbranches_island.mat",
+            "duplicateGuid": "f3d0da9775149a740aefc97ea4d60297",
+            "canonicalGuid": "8a0c4640a15ee9d49bb28a3a987ecd5b",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "_MainTex texture AlderBranches vs AlderBranches"
+        },
+        {
+            "duplicate": "Assets/Material3/Branches_0.mat",
+            "canonical": "Assets/Material/Branches_0.mat",
+            "duplicateGuid": "f835701108cdac8478a1420447ad6e07",
+            "canonicalGuid": "285ea64095c9a02478c572199df862c7",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Nature/Tree Creator Leaves Fast vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material3/Branches_0_0.mat",
+            "canonical": "Assets/Material/Branches_0_0.mat",
+            "duplicateGuid": "c17c39a9410c70a42834bbb7d3ff469c",
+            "canonicalGuid": "25e1fd830b847aa488c78e72d3da057a",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Nature/Tree Creator Leaves vs Nature/Tree Soft Occlusion Leaves; renderQueue 2000 vs 2450"
+        },
+        {
+            "duplicate": "Assets/Material3/Branches_0_1.mat",
+            "canonical": "Assets/Material/Branches_0_1.mat",
+            "duplicateGuid": "d0b9a4c98299c0b4c91b59193baf1419",
+            "canonicalGuid": "428c2669e945ef34b97238cd6392d7c7",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Nature/Tree Creator Leaves Fast vs Standard (Specular setup)"
+        },
+        {
+            "duplicate": "Assets/Material3/Branches_1.mat",
+            "canonical": "Assets/Material/Branches_1.mat",
+            "duplicateGuid": "af2da0f185f1fd540b51060696220e22",
+            "canonicalGuid": "4f4e559f51cb1ef4ca9242225cc229fc",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "_MainTex texture PalmBark vs PalmBark"
+        },
+        {
+            "duplicate": "Assets/Material3/Clay House Facade.mat",
+            "canonical": "Assets/Material/Clay House Facade.mat",
+            "duplicateGuid": "cb0c539469657394da39ccc0102fe294",
+            "canonicalGuid": "cf3c0d7b38688804a926d718ba5cdd50",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard (Specular setup)"
+        },
+        {
+            "duplicate": "Assets/Material3/Cloth Green.mat",
+            "canonical": "Assets/Material/Cloth Green.mat",
+            "duplicateGuid": "e58c5db8be01f4f4d9004ba912a2786e",
+            "canonicalGuid": "db8b8b96dbef2c842bdc907979ed3cb3",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard (Specular setup)"
+        },
+        {
+            "duplicate": "Assets/Material3/Dark Rubber.mat",
+            "canonical": "Assets/Material/Dark Rubber.mat",
+            "duplicateGuid": "6a599144bcbfb084083d69a2ba5763a3",
+            "canonicalGuid": "06f28ebd5aca9134f97984c830f8632f",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard (Specular setup)"
+        },
+        {
+            "duplicate": "Assets/Material3/Desert Backdrop.mat",
+            "canonical": "Assets/Material/Desert Backdrop.mat",
+            "duplicateGuid": "f37164ceeea60724886ebc2995041de1",
+            "canonicalGuid": "1aed6da9580995e4eb402edb7086a042",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material3/Desert Cliff.mat",
+            "canonical": "Assets/Material/Desert Cliff.mat",
+            "duplicateGuid": "b75368501f53e2b4081dc31ddc3375dc",
+            "canonicalGuid": "5180711d15b0a7a4294c264c818fbf29",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material3/Desert Rock.mat",
+            "canonical": "Assets/Material/Desert Rock.mat",
+            "duplicateGuid": "3be038198c112c346874ba9b2974920a",
+            "canonicalGuid": "c2573cba71033704f98007fd82aa2acf",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material3/Dirty Orange Plastic.mat",
+            "canonical": "Assets/Material/Dirty Orange Plastic.mat",
+            "duplicateGuid": "732aa9e8c0963a5428761b2719efeb8c",
+            "canonicalGuid": "cf8ccc1a83ccdc94396082d5e9523f06",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material3/Fronds_2.mat",
+            "canonical": "Assets/Material/Fronds_2.mat",
+            "duplicateGuid": "f8465a089bdadc74eae7d9a039d72d97",
+            "canonicalGuid": "5e9a0caf74d053348ad8e391a6c7c699",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "_MainTex texture Palm_Desktop_Atlas vs Palm_Desktop_Atlas"
+        },
+        {
+            "duplicate": "Assets/Material3/Fronds_2_0.mat",
+            "canonical": "Assets/Material/Fronds_2_0.mat",
+            "duplicateGuid": "6ad25d2da2d894745a6d3f75a474d798",
+            "canonicalGuid": "a7dc7c5f914406d4ea8718da8183aef6",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Nature/Tree Creator Leaves vs Nature/Tree Soft Occlusion Bark"
+        },
+        {
+            "duplicate": "Assets/Material3/Fronds_2_1.mat",
+            "canonical": "Assets/Material/Fronds_2_1.mat",
+            "duplicateGuid": "046f04097286e3d4e85525a81d0dcb24",
+            "canonicalGuid": "9a7f4200dcb293e4e9b67cee8310ed68",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Nature/Tree Creator Leaves Fast vs Standard (Specular setup)"
+        },
+        {
+            "duplicate": "Assets/Material3/Gray.mat",
+            "canonical": "Assets/Material/Gray.mat",
+            "duplicateGuid": "2bb6f4ab69a71a64e9cc686f58c3721f",
+            "canonicalGuid": "875390ade149e5d46888766b58364574",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material3/Leaves_3.mat",
+            "canonical": "Assets/Material/Leaves_3.mat",
+            "duplicateGuid": "32d557c48233323498a2a16924cbbecd",
+            "canonicalGuid": "7ffd95ba36d5aba41bc373b621b1e4a5",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Nature/Tree Creator Leaves Fast vs Nature/Tree Creator Leaves"
+        },
+        {
+            "duplicate": "Assets/Material3/Leaves_3_0.mat",
+            "canonical": "Assets/Material/Leaves_3_0.mat",
+            "duplicateGuid": "043cf40f17c727640a6fe1fea40f3953",
+            "canonicalGuid": "e1f0ca3b6b2ba4d43b26cf5b700c4739",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Nature/Tree Creator Leaves vs Nature/Tree Soft Occlusion Leaves; renderQueue 2000 vs 2450"
+        },
+        {
+            "duplicate": "Assets/Material3/Metal_0.mat",
+            "canonical": "Assets/Material/Metal_0.mat",
+            "duplicateGuid": "c7dbfe1f96dae4045ad24698131e069f",
+            "canonicalGuid": "d00835c4956105245b738c1469b330af",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard (Specular setup)"
+        },
+        {
+            "duplicate": "Assets/Material3/Old Wood.mat",
+            "canonical": "Assets/Material/Old Wood.mat",
+            "duplicateGuid": "eec2a9e94a7cd404893c4135ed239fd4",
+            "canonicalGuid": "4d420d4b120b3e14a81110ca6d2bf83b",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material3/Red Metal.mat",
+            "canonical": "Assets/Material/Red Metal.mat",
+            "duplicateGuid": "0b163e6e63000ea4bae02ba39dbce666",
+            "canonicalGuid": "1a9b803fb0d36644989fab7203b5e82f",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material3/Road Barrier.mat",
+            "canonical": "Assets/Material/Road Barrier.mat",
+            "duplicateGuid": "7962240f33b2ce1468ac1a89992d9262",
+            "canonicalGuid": "8619afc2c793b964b86440604dbf4719",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material3/Rugged Metal.mat",
+            "canonical": "Assets/Material/Rugged Metal.mat",
+            "duplicateGuid": "0cf0d1a6e3e89f54abcf5ae59e7defe1",
+            "canonicalGuid": "b1e6b810a482b694095db2cad1905ca2",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard (Specular setup)"
+        },
+        {
+            "duplicate": "Assets/Material3/Sandstone.mat",
+            "canonical": "Assets/Material/Sandstone.mat",
+            "duplicateGuid": "3c9e03853237e5d4caf81073a8779464",
+            "canonicalGuid": "261ff5f411bfade488b1838d8a923b37",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Material3/Wood_0.mat",
+            "canonical": "Assets/Material/Wood_0.mat",
+            "duplicateGuid": "e4a946c91959d0d4caa9acb1925ded99",
+            "canonicalGuid": "f1e27c4311df3ab4cbad3cfccc874ef8",
+            "duplicateFileId": 2100000,
+            "canonicalFileId": 2100000,
+            "verdict": "differs",
+            "detail": "shader Standard vs Standard"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Blades.asset",
+            "canonical": "Assets/Mesh/Blades.asset",
+            "duplicateGuid": "8b45fadb9ecd34346a8035b081b0a74d",
+            "canonicalGuid": "a6e0f2930586c4945b63c37de0333e5a",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/CellBlock Mesh_0.asset",
+            "canonical": "Assets/Mesh/CellBlock Mesh_0.asset",
+            "duplicateGuid": "7b34cca92f7dd1640b2301a875810c34",
+            "canonicalGuid": "5d6aebcae7869b74ab889b47fc865dd2",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "differs",
+            "detail": "vertexCount 304 vs 124"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Combined Mesh (root scene) 2.asset",
+            "canonical": "Assets/Mesh/Combined Mesh (root scene) 2.asset",
+            "duplicateGuid": "7b61d95c3a7d23541ab97be6b4d4e2a7",
+            "canonicalGuid": "",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 0,
+            "verdict": "no-canonical",
+            "detail": "no file of this name in Assets/Mesh"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Combined Mesh (root scene) 3.asset",
+            "canonical": "Assets/Mesh/Combined Mesh (root scene) 3.asset",
+            "duplicateGuid": "4945d088c1c88f24a937c2ed15fa4b4c",
+            "canonicalGuid": "",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 0,
+            "verdict": "no-canonical",
+            "detail": "no file of this name in Assets/Mesh"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Combined Mesh (root scene).asset",
+            "canonical": "Assets/Mesh/Combined Mesh (root scene).asset",
+            "duplicateGuid": "1008114ed09b128419d7f1058acc98e9",
+            "canonicalGuid": "",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 0,
+            "verdict": "no-canonical",
+            "detail": "no file of this name in Assets/Mesh"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Cube_0.asset",
+            "canonical": "Assets/Mesh/Cube_0.asset",
+            "duplicateGuid": "d76113548dcc55c4e96e0798fad40ee0",
+            "canonicalGuid": "521d35cda3d5e1548856d3d9a5330d31",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "differs",
+            "detail": "vertexCount 2740 vs 529; subMeshCount 6 vs 1"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Cube_2.asset",
+            "canonical": "Assets/Mesh/Cube_2.asset",
+            "duplicateGuid": "8c2700cefd011fc41b689050f8e1f90a",
+            "canonicalGuid": "a04837b427ef35c4199ae733d0c902b7",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "differs",
+            "detail": "vertexCount 120 vs 20"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Cube_3.asset",
+            "canonical": "Assets/Mesh/Cube_3.asset",
+            "duplicateGuid": "ba1e4b54cab7ff7438d3f853210f0e30",
+            "canonicalGuid": "52bb8d81bb2d6f447ab1be919db72aa0",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "differs",
+            "detail": "vertexCount 120 vs 612; subMeshCount 1 vs 3"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Cube_4.asset",
+            "canonical": "Assets/Mesh/Cube_4.asset",
+            "duplicateGuid": "18998393f73a16b49a44ce5bd2e75709",
+            "canonicalGuid": "4dcfd164a6b15f64886e0a96bf648f45",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "differs",
+            "detail": "vertexCount 52 vs 224"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Cube_5.asset",
+            "canonical": "Assets/Mesh/Cube_5.asset",
+            "duplicateGuid": "aea17adc13ca3474a9225924d8715bf7",
+            "canonicalGuid": "4fda1b56d7eb23645a53eeab67d9dc2d",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "differs",
+            "detail": "vertexCount 208 vs 548; subMeshCount 2 vs 3"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Cube_6.asset",
+            "canonical": "Assets/Mesh/Cube_6.asset",
+            "duplicateGuid": "e9ec2215f00093141ae12ae799251f2d",
+            "canonicalGuid": "945cca606dad1f04589dce051a05bcea",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "differs",
+            "detail": "vertexCount 316 vs 484; subMeshCount 1 vs 2"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Cube_7.asset",
+            "canonical": "Assets/Mesh/Cube_7.asset",
+            "duplicateGuid": "2480aee3cc1ddb348b4dfb7a34c26cfb",
+            "canonicalGuid": "2b426c35ca33769409d8f620ba35033a",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "differs",
+            "detail": "vertexCount 540 vs 548"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Cube_8.asset",
+            "canonical": "Assets/Mesh/Cube_8.asset",
+            "duplicateGuid": "17b3d67f843b04f4fab4576ac020a275",
+            "canonicalGuid": "54b36c671058e734baa16aaf3011eb16",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "differs",
+            "detail": "vertexCount 1439 vs 496"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Cylinder.asset",
+            "canonical": "Assets/Mesh/Cylinder.asset",
+            "duplicateGuid": "3b5445d1274552a409ea44d210cc8082",
+            "canonicalGuid": "8c61e0540963e054ba004b1f0de8140c",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "differs",
+            "detail": "vertexCount 250 vs 216"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Icosphere.asset",
+            "canonical": "Assets/Mesh/Icosphere.asset",
+            "duplicateGuid": "95e875a6241d96741abd3356939cd765",
+            "canonicalGuid": "83ae5abe2cc294345a1f0d2164ba9aaa",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Icosphere_1.asset",
+            "canonical": "Assets/Mesh/Icosphere_1.asset",
+            "duplicateGuid": "443238135795e394189d047afb8bd803",
+            "canonicalGuid": "f7629527f32335f428dfe60d8f9b6095",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Icosphere_2.asset",
+            "canonical": "Assets/Mesh/Icosphere_2.asset",
+            "duplicateGuid": "5237d6d45f73dc040b9b5887d26f42fa",
+            "canonicalGuid": "290a6154dfe250f4f90a11c703562434",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Icosphere_3.asset",
+            "canonical": "Assets/Mesh/Icosphere_3.asset",
+            "duplicateGuid": "0aeff22188c3f5349b908041958445bf",
+            "canonicalGuid": "40494b22653c41a41b837e551eb82865",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Plane_0.asset",
+            "canonical": "Assets/Mesh/Plane_0.asset",
+            "duplicateGuid": "687a44af039408a4791bbf858aa93337",
+            "canonicalGuid": "74a8d0f3316e20b4c9f86ba7c994ac0d",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Soil.asset",
+            "canonical": "Assets/Mesh/Soil.asset",
+            "duplicateGuid": "c7d178730fa652c4898c9af9e1ab49b9",
+            "canonicalGuid": "e71006204c4c7f841be9ec415cb93ba4",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Staircase.asset",
+            "canonical": "Assets/Mesh/Staircase.asset",
+            "duplicateGuid": "a94c3aa0ca902fe48b498e7a8de4b334",
+            "canonicalGuid": "eb96a641068c85643abd9bfd1dc7b4d5",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Staircase_0.asset",
+            "canonical": "Assets/Mesh/Staircase_0.asset",
+            "duplicateGuid": "cbc75b1160dac4747891174be143d8a5",
+            "canonicalGuid": "2d6c408ebbeb5c542957dacadf9fbd4f",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Staircase_1.asset",
+            "canonical": "Assets/Mesh/Staircase_1.asset",
+            "duplicateGuid": "de13c17eebb6afc40adb28e093ab92ff",
+            "canonicalGuid": "94c844045c613ab45aef4f366062dbf0",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Staircase_10.asset",
+            "canonical": "Assets/Mesh/Staircase_10.asset",
+            "duplicateGuid": "2c0f01df27ad69b479d643f0b14cffeb",
+            "canonicalGuid": "439388bf66b12e2428743cc298c4b62b",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Staircase_11.asset",
+            "canonical": "Assets/Mesh/Staircase_11.asset",
+            "duplicateGuid": "11d6659adf857284a8157e371cf79cbe",
+            "canonicalGuid": "96b5df04717e1574e8afe20d64932965",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Staircase_12.asset",
+            "canonical": "Assets/Mesh/Staircase_12.asset",
+            "duplicateGuid": "1808f4b6ed0a9da449010ef2cb4f3261",
+            "canonicalGuid": "d428f9682a78ec346b6a56b3d676262d",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Staircase_13.asset",
+            "canonical": "Assets/Mesh/Staircase_13.asset",
+            "duplicateGuid": "e54ece129b949a847a75adbed3f27f7c",
+            "canonicalGuid": "eaee261c469053a46bbe889bcb7a3ec6",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Staircase_14.asset",
+            "canonical": "Assets/Mesh/Staircase_14.asset",
+            "duplicateGuid": "3eb61fc0c44082f4cbad6fb40dc2c072",
+            "canonicalGuid": "c6765d3bd8e68374ba0c2715a5637b29",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Staircase_15.asset",
+            "canonical": "Assets/Mesh/Staircase_15.asset",
+            "duplicateGuid": "18d6ee22eb6354e418cf38c2b4129f56",
+            "canonicalGuid": "3c7962217617b5145ab93a378a5fe2c8",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Staircase_16.asset",
+            "canonical": "Assets/Mesh/Staircase_16.asset",
+            "duplicateGuid": "80d006f56d36e8048ad6311a96def9c1",
+            "canonicalGuid": "f0c241727d22a664ca85be902ba2223b",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Staircase_17.asset",
+            "canonical": "Assets/Mesh/Staircase_17.asset",
+            "duplicateGuid": "e19b1ced9e1ea804f809f0dafb5368e9",
+            "canonicalGuid": "1e2111392e7a29340a0c3613a96182e2",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Staircase_18.asset",
+            "canonical": "Assets/Mesh/Staircase_18.asset",
+            "duplicateGuid": "0104ec6ceb4af2f4c968e0204550d9e9",
+            "canonicalGuid": "a70801cf2ed14e845a63a9c470e4fb73",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Staircase_19.asset",
+            "canonical": "Assets/Mesh/Staircase_19.asset",
+            "duplicateGuid": "ee63a38c327ea2a48b9b14d70fdbcfbe",
+            "canonicalGuid": "c07e17b470bb51e41ac7f8e8bed26fd3",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Staircase_2.asset",
+            "canonical": "Assets/Mesh/Staircase_2.asset",
+            "duplicateGuid": "83be6baada8e1994d94ab6f1271e9cf6",
+            "canonicalGuid": "1ebd6e4c62aff114c946816cd8580ed7",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Staircase_20.asset",
+            "canonical": "Assets/Mesh/Staircase_20.asset",
+            "duplicateGuid": "c66daecd126cef541a2dbfb1694b8653",
+            "canonicalGuid": "b42a38cbf016f3d4abfff81de34cac16",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Staircase_3.asset",
+            "canonical": "Assets/Mesh/Staircase_3.asset",
+            "duplicateGuid": "7f49059b5486c73489edc8fd2ce8aff2",
+            "canonicalGuid": "4e373195952caa440963bb1b1cc50172",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Staircase_4.asset",
+            "canonical": "Assets/Mesh/Staircase_4.asset",
+            "duplicateGuid": "46e798746b7151b41949e5b6a4dc0363",
+            "canonicalGuid": "a784f1393170a514787f540f47fda0b5",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Staircase_5.asset",
+            "canonical": "Assets/Mesh/Staircase_5.asset",
+            "duplicateGuid": "2cb8206186f97bd409a5c79029740451",
+            "canonicalGuid": "d6cb147dd68671b4fa3468385c0c68fb",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Staircase_6.asset",
+            "canonical": "Assets/Mesh/Staircase_6.asset",
+            "duplicateGuid": "5338c604e70cb0b4691ba0ff5adcbbe1",
+            "canonicalGuid": "e1e9774724f00364c835ede94c3af253",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Staircase_7.asset",
+            "canonical": "Assets/Mesh/Staircase_7.asset",
+            "duplicateGuid": "23c0fcf870616eb489c471a70edf0a8a",
+            "canonicalGuid": "59f7d7ec7e36ae3478f9a08c5dba46a0",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Staircase_8.asset",
+            "canonical": "Assets/Mesh/Staircase_8.asset",
+            "duplicateGuid": "994b47a0c5754a64f9ed4e3fd37a1ffa",
+            "canonicalGuid": "045156fa5baeb214ea262a0aa5d55b74",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Staircase_9.asset",
+            "canonical": "Assets/Mesh/Staircase_9.asset",
+            "duplicateGuid": "68a8bae570bce9646a4b35b3a43e2bdc",
+            "canonicalGuid": "ca4c53196de08e9448733904d4fa86b1",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/TankTrap.asset",
+            "canonical": "Assets/Mesh/TankTrap.asset",
+            "duplicateGuid": "dc81da23f5eb3174a855d2faa041abae",
+            "canonicalGuid": "32d6a75ceac159c449210119e5836eba",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/Windmill.asset",
+            "canonical": "Assets/Mesh/Windmill.asset",
+            "duplicateGuid": "372209eeb51f88b468a4965d8200aafe",
+            "canonicalGuid": "c76ae340f8f4b60499ff3eb4f51d0ae5",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh2/polySurface340.asset",
+            "canonical": "Assets/Mesh/polySurface340.asset",
+            "duplicateGuid": "003aa4a3d52cf784c96189756aa7d48c",
+            "canonicalGuid": "4d88fbf001aef324a88ce65cde98af16",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Barrier_Base.asset",
+            "canonical": "Assets/Mesh/Barrier_Base.asset",
+            "duplicateGuid": "264ad53784f752e4aae3c03dec26dd74",
+            "canonicalGuid": "6756029005d52414bbc2cc98b53f0b4f",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Combined Mesh (root scene) 2_0.asset",
+            "canonical": "Assets/Mesh/Combined Mesh (root scene) 2_0.asset",
+            "duplicateGuid": "54c03122fbc41be4a9b2819aa47947c3",
+            "canonicalGuid": "",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 0,
+            "verdict": "no-canonical",
+            "detail": "no file of this name in Assets/Mesh"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Combined Mesh (root scene) 3_0.asset",
+            "canonical": "Assets/Mesh/Combined Mesh (root scene) 3_0.asset",
+            "duplicateGuid": "4fc4bb0f65715b141bb0c2ec53d3c55e",
+            "canonicalGuid": "",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 0,
+            "verdict": "no-canonical",
+            "detail": "no file of this name in Assets/Mesh"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Combined Mesh (root scene) 4.asset",
+            "canonical": "Assets/Mesh/Combined Mesh (root scene) 4.asset",
+            "duplicateGuid": "6e4f115f1e699fa4a96a3e56f6dfd882",
+            "canonicalGuid": "",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 0,
+            "verdict": "no-canonical",
+            "detail": "no file of this name in Assets/Mesh"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Combined Mesh (root scene) 5.asset",
+            "canonical": "Assets/Mesh/Combined Mesh (root scene) 5.asset",
+            "duplicateGuid": "a2c61b5ee80bb2f49aced174fbd297ce",
+            "canonicalGuid": "",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 0,
+            "verdict": "no-canonical",
+            "detail": "no file of this name in Assets/Mesh"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Combined Mesh (root scene)_0.asset",
+            "canonical": "Assets/Mesh/Combined Mesh (root scene)_0.asset",
+            "duplicateGuid": "4422832391be27b4abda1535a990ead6",
+            "canonicalGuid": "",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 0,
+            "verdict": "no-canonical",
+            "detail": "no file of this name in Assets/Mesh"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Concrete_Barrier.asset",
+            "canonical": "Assets/Mesh/Concrete_Barrier.asset",
+            "duplicateGuid": "86fd8fa493fb07840b84b8eb4c2ef590",
+            "canonicalGuid": "dc7cbdaceba9fb54d8a7e80ff481ca68",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Cube_001_0.asset",
+            "canonical": "Assets/Mesh/Cube_001_0.asset",
+            "duplicateGuid": "6c955aefd546a4c4ebfed7d1f301b3b6",
+            "canonicalGuid": "a5a6140de47bb35439843a35c652455d",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "differs",
+            "detail": "vertexCount 253 vs 48"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Cube_002.asset",
+            "canonical": "Assets/Mesh/Cube_002.asset",
+            "duplicateGuid": "c22687bc2d05cbd4f964bdfce66ce15d",
+            "canonicalGuid": "a5c3ed735bcaf0a48a91aef918f0be7d",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Cube_11.asset",
+            "canonical": "Assets/Mesh/Cube_11.asset",
+            "duplicateGuid": "ed94bdbdf502b274caa87d65094f9796",
+            "canonicalGuid": "60129a179a5371046ad378c90633aafa",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "differs",
+            "detail": "vertexCount 56 vs 129; subMeshCount 2 vs 1"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Cube_12.asset",
+            "canonical": "Assets/Mesh/Cube_12.asset",
+            "duplicateGuid": "4c33eab5c66d72540a570f9a55f3647a",
+            "canonicalGuid": "a2e83241dc946d042b954fa4bdc75c4d",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "differs",
+            "detail": "vertexCount 529 vs 100"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Cube_13.asset",
+            "canonical": "Assets/Mesh/Cube_13.asset",
+            "duplicateGuid": "f78417266d433e34798b4e0274526cd0",
+            "canonicalGuid": "4c2904ad10efb9d4fbeea1d5bb960b37",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "differs",
+            "detail": "vertexCount 599 vs 2740; subMeshCount 1 vs 6"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Cube_15.asset",
+            "canonical": "Assets/Mesh/Cube_15.asset",
+            "duplicateGuid": "5a3c641f159f9994a9f2e8c373e7f4bb",
+            "canonicalGuid": "22a6350ba0064a741a3e9c846c66d426",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "differs",
+            "detail": "vertexCount 612 vs 120; subMeshCount 3 vs 1"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Cube_16.asset",
+            "canonical": "Assets/Mesh/Cube_16.asset",
+            "duplicateGuid": "a709a03d5d2b75146a24da7d0f7a2337",
+            "canonicalGuid": "f2bad191b03f15241ace07bdc164238e",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "differs",
+            "detail": "vertexCount 224 vs 120"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Cube_17.asset",
+            "canonical": "Assets/Mesh/Cube_17.asset",
+            "duplicateGuid": "0259b25687904c14a9c8c517a5a939c1",
+            "canonicalGuid": "7d9ca7db65aabfe438331635eeb5e759",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "differs",
+            "detail": "vertexCount 548 vs 52; subMeshCount 3 vs 1"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Cube_18.asset",
+            "canonical": "Assets/Mesh/Cube_18.asset",
+            "duplicateGuid": "274be36c1c5be8843bc4755406a1d996",
+            "canonicalGuid": "79c10eb9b95c1094d876809401b6d65a",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "differs",
+            "detail": "vertexCount 484 vs 208"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Cube_19.asset",
+            "canonical": "Assets/Mesh/Cube_19.asset",
+            "duplicateGuid": "5f415e502b1eecc468103d26d1c8ce20",
+            "canonicalGuid": "f5dcb40f275a3664fbe0fa398dc936cf",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "differs",
+            "detail": "vertexCount 548 vs 316"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Cube_20.asset",
+            "canonical": "Assets/Mesh/Cube_20.asset",
+            "duplicateGuid": "34446d4d19a1afa46ada2931df2f206a",
+            "canonicalGuid": "8f13994a5f7ee3c4090b173e848f3186",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "differs",
+            "detail": "vertexCount 496 vs 540"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Cube_21.asset",
+            "canonical": "Assets/Mesh/Cube_21.asset",
+            "duplicateGuid": "8805e48f51f4d814ba010ff54880ccec",
+            "canonicalGuid": "e74f0c9a89d9ff345872f53b4d396e42",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "differs",
+            "detail": "vertexCount 148 vs 1439"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Cube_22.asset",
+            "canonical": "Assets/Mesh/Cube_22.asset",
+            "duplicateGuid": "d8c9a301ee23db440971719f91071e26",
+            "canonicalGuid": "665ff62496759cc40a89482ad92f4a9c",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "differs",
+            "detail": "vertexCount 612 vs 586; subMeshCount 3 vs 1"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Gas_Supercontainer.asset",
+            "canonical": "Assets/Mesh/Gas_Supercontainer.asset",
+            "duplicateGuid": "53c4d1291ca0b994e9767447ea1ae853",
+            "canonicalGuid": "751a12a49b9598f48912d080721e5679",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Minecart.asset",
+            "canonical": "Assets/Mesh/Minecart.asset",
+            "duplicateGuid": "d73b83c8913bff5438e134aa0abff922",
+            "canonicalGuid": "09c05abe258269e4ba1f2a2acaf7efda",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Palm_Desktop_LOD0.asset",
+            "canonical": "Assets/Mesh/Palm_Desktop_LOD0.asset",
+            "duplicateGuid": "279b37c746b15af4d9b810e9c8c8e6c9",
+            "canonicalGuid": "83495a83ecb9b524680dfe8f641b12aa",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Palm_Desktop_LOD1.asset",
+            "canonical": "Assets/Mesh/Palm_Desktop_LOD1.asset",
+            "duplicateGuid": "57a271fca934916478aa2ead4f67e955",
+            "canonicalGuid": "2a2fa46ad829a5343ad334c34320c544",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Palm_Desktop_LOD2.asset",
+            "canonical": "Assets/Mesh/Palm_Desktop_LOD2.asset",
+            "duplicateGuid": "ed279cc23aa409244b4a676c61c78a16",
+            "canonicalGuid": "12c12c9a0572f7f4f88ccc4baf5052cf",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Pipe.asset",
+            "canonical": "Assets/Mesh/Pipe.asset",
+            "duplicateGuid": "b3adc54396e85c9419df451bd45a3519",
+            "canonicalGuid": "f41706eaff3b5b84b9aa1156a29bbd2f",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh3/WoodBeams.asset",
+            "canonical": "Assets/Mesh/WoodBeams.asset",
+            "duplicateGuid": "a64299360c0dd224090a2383b833e2d4",
+            "canonicalGuid": "fc641f1a82f37144bb0e0edd6501a441",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Workbench.asset",
+            "canonical": "Assets/Mesh/Workbench.asset",
+            "duplicateGuid": "27b8e74cb06a6304683a7b95d20e9e1d",
+            "canonicalGuid": "6663e85e40f14a94eb565eaf8b044537",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Mesh3/Workbench_0.asset",
+            "canonical": "Assets/Mesh/Workbench_0.asset",
+            "duplicateGuid": "d9f11800b35e0894997c559a07dab658",
+            "canonicalGuid": "a021892a4a565114582a08055491b553",
+            "duplicateFileId": 4300000,
+            "canonicalFileId": 4300000,
+            "verdict": "identical",
+            "detail": "identical topology, bounds and geometry hash"
+        },
+        {
+            "duplicate": "Assets/Texture2D_2/AlderBark.png",
+            "canonical": "Assets/Texture2D/AlderBark.png",
+            "duplicateGuid": "21f25c8c93aeb8b479fb9c4880cec6ad",
+            "canonicalGuid": "dd0de2786fe51ae40a0bafd3b6e62352",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_2/AlderBranches.png",
+            "canonical": "Assets/Texture2D/AlderBranches.png",
+            "duplicateGuid": "273be69f5515d5340a7a37f8ee1d8c1a",
+            "canonicalGuid": "a71c5cd10a81d014eb26933347c64650",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_2/Cliff.png",
+            "canonical": "Assets/Texture2D/Cliff.png",
+            "duplicateGuid": "9140144440819f644a89be5a98e8678e",
+            "canonicalGuid": "846d0f0095828a84ea8bfd00257a937f",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_2/Concrete.png",
+            "canonical": "Assets/Texture2D/Concrete.png",
+            "duplicateGuid": "a5379efe963c1ac448579a58fe145b4c",
+            "canonicalGuid": "3fc5e0a9f022acb41adcae7bb91826c4",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_2/Fabric Plain.png",
+            "canonical": "Assets/Texture2D/Fabric Plain.png",
+            "duplicateGuid": "ec6e380484e0b37459e2172e6f0983b3",
+            "canonicalGuid": "1a4725d37853f204bb45a6699a737034",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_2/GoodDirt.png",
+            "canonical": "Assets/Texture2D/GoodDirt.png",
+            "duplicateGuid": "dcdd763afee00004fb7c10ae0c98e48c",
+            "canonicalGuid": "f1f8836e386cd6d41bf0006ecc2808d8",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_2/MetalPlates.png",
+            "canonical": "Assets/Texture2D/MetalPlates.png",
+            "duplicateGuid": "e40a623ca387dc14aad1303366a81a67",
+            "canonicalGuid": "f1d55610fe2c8e74a82ce753beee9f4f",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_2/OldBricks.png",
+            "canonical": "Assets/Texture2D/OldBricks.png",
+            "duplicateGuid": "1822e903f2362034285e851ce701fd95",
+            "canonicalGuid": "a09ff5b41ba6e044da2ab243944116d9",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_2/WoodOverbright.png",
+            "canonical": "Assets/Texture2D/WoodOverbright.png",
+            "duplicateGuid": "530e13c477995af4d84f0e28d3f63b10",
+            "canonicalGuid": "5fcb2e27f268666478c10c16e1783439",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_2/WoodPlanksBare0176_1_S.png",
+            "canonical": "Assets/Texture2D/WoodPlanksBare0176_1_S.png",
+            "duplicateGuid": "f7179063c952ace44958b8ce4650cbee",
+            "canonicalGuid": "988f531c80a602f4c9a4165b20cc4fc4",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_2/WoodenDoor.png",
+            "canonical": "Assets/Texture2D/WoodenDoor.png",
+            "duplicateGuid": "2437645e577e1894fb9258b6825ad01e",
+            "canonicalGuid": "21815d0b91a4a2743b5ff86fd3a23556",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_2/hesco_barrier.png",
+            "canonical": "Assets/Texture2D/hesco_barrier.png",
+            "duplicateGuid": "6f0f7f511e0a89f49b4afbcf5fa579f0",
+            "canonicalGuid": "bdff3377762909b4e85d051ad6dd5caa",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_3/Clay Bright.png",
+            "canonical": "Assets/Texture2D/Clay Bright.png",
+            "duplicateGuid": "5bf74c79942443a408895c7c719e05f8",
+            "canonicalGuid": "5fedf7f9e3031134781c28e51c0b2629",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_3/Cliff (Layered Rock).png",
+            "canonical": "Assets/Texture2D/Cliff (Layered Rock).png",
+            "duplicateGuid": "76c8a387bc2b5ef47b9a091ed6b1cc30",
+            "canonicalGuid": "05ac8609d1ed01a44b8a9ecfe71e6aff",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_3/Cliff (Sandstone).png",
+            "canonical": "Assets/Texture2D/Cliff (Sandstone).png",
+            "duplicateGuid": "eb36a168bb3daa147a57d9370ef68317",
+            "canonicalGuid": "7b6c6eff358b5254d9824b0a70df0458",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_3/Cliff_n.png",
+            "canonical": "Assets/Texture2D/Cliff_n.png",
+            "duplicateGuid": "e86be179b1a33c74c87315af6870e997",
+            "canonicalGuid": "28aca1a5afbff2449b2b73bacc10aec5",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_3/Concrete 2.png",
+            "canonical": "Assets/Texture2D/Concrete 2.png",
+            "duplicateGuid": "91a7f67d29c72644ca8f51c1e7877f34",
+            "canonicalGuid": "bc49365b216082f4ea7ee8d4d43011d2",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_3/Default-Checker.png",
+            "canonical": "Assets/Texture2D/Default-Checker.png",
+            "duplicateGuid": "c6dd742bbe5326949acad14ba6794b7f",
+            "canonicalGuid": "48738908215f0774c95deb1d5d9fe000",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "identical",
+            "detail": "identical pixels at 64x64"
+        },
+        {
+            "duplicate": "Assets/Texture2D_3/Fiber Pattern.png",
+            "canonical": "Assets/Texture2D/Fiber Pattern.png",
+            "duplicateGuid": "4665b0f098c42094986b2c6934f8e37f",
+            "canonicalGuid": "01141c24900c381479715f26bb03ee97",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_3/PalmBark.png",
+            "canonical": "Assets/Texture2D/PalmBark.png",
+            "duplicateGuid": "4b431823dd3b51744bd4d0c6ef27db0f",
+            "canonicalGuid": "c1238e6335f821d4992932e3528ae65d",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_3/PalmBark_Detail.png",
+            "canonical": "Assets/Texture2D/PalmBark_Detail.png",
+            "duplicateGuid": "33d3f2f0bc482994f989e17a267aaf3a",
+            "canonicalGuid": "9075eee4c143ede49a9a0e863a1ca5e8",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_3/PalmBark_Normal.png",
+            "canonical": "Assets/Texture2D/PalmBark_Normal.png",
+            "duplicateGuid": "23d56611b569b2647bca071d43cec009",
+            "canonicalGuid": "3f4df20bf5db9cb49a57ac8ad4f12fc9",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_3/Palm_Desktop_Atlas.png",
+            "canonical": "Assets/Texture2D/Palm_Desktop_Atlas.png",
+            "duplicateGuid": "fa7ba4a8b900af1458aee92e3aed3231",
+            "canonicalGuid": "8ada13d57ad62584cab9dbc17fafbe59",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_3/Palm_Desktop_Atlas_Normal.png",
+            "canonical": "Assets/Texture2D/Palm_Desktop_Atlas_Normal.png",
+            "duplicateGuid": "f117a5af79d02d941a82afc305396640",
+            "canonicalGuid": "554bc9a6326456f4c9dd01b63d572b99",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_3/Rock_Arid.png",
+            "canonical": "Assets/Texture2D/Rock_Arid.png",
+            "duplicateGuid": "9bf4702849a2da14789860a0e8b438e6",
+            "canonicalGuid": "17830bd96ec5b84489e3c79e792b0cff",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_3/SandAlbedoBlurred.png",
+            "canonical": "Assets/Texture2D/SandAlbedoBlurred.png",
+            "duplicateGuid": "23e1e8776bac3764e81768b971e0fcb3",
+            "canonicalGuid": "a4c0c0f7a08fca446af8ccb61aa4b30c",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_3/Wood Painted (1).png",
+            "canonical": "Assets/Texture2D/Wood Painted (1).png",
+            "duplicateGuid": "ed16e5100536dcf4db8adc6c163fe656",
+            "canonicalGuid": "fcd4b1eac3494974aaf9c65067060eec",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Texture2D_3/red-white-stripe.png",
+            "canonical": "Assets/Texture2D/red-white-stripe.png",
+            "duplicateGuid": "34732c1270c25d8448338a97cffceaf2",
+            "canonicalGuid": "6f291d95595901848b566ab8f759d357",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Images3/Clay Bright.png",
+            "canonical": "Assets/Texture2D/Clay Bright.png",
+            "duplicateGuid": "3badd728a40c42d99cd9c332599e126f",
+            "canonicalGuid": "5fedf7f9e3031134781c28e51c0b2629",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "identical",
+            "detail": "identical pixels at 1024x1024"
+        },
+        {
+            "duplicate": "Assets/Images3/Cliff (Layered Rock).png",
+            "canonical": "Assets/Texture2D/Cliff (Layered Rock).png",
+            "duplicateGuid": "b0600f139b9f42d19e7847c559c871ce",
+            "canonicalGuid": "05ac8609d1ed01a44b8a9ecfe71e6aff",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "identical",
+            "detail": "identical pixels at 1024x1024"
+        },
+        {
+            "duplicate": "Assets/Images3/Cliff (Sandstone).png",
+            "canonical": "Assets/Texture2D/Cliff (Sandstone).png",
+            "duplicateGuid": "5b0dc8f2776646ef846fd463a010823d",
+            "canonicalGuid": "7b6c6eff358b5254d9824b0a70df0458",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "identical",
+            "detail": "identical pixels at 512x512"
+        },
+        {
+            "duplicate": "Assets/Images3/Cliff_n.png",
+            "canonical": "Assets/Texture2D/Cliff_n.png",
+            "duplicateGuid": "8bf43e4b574541deadbd63dca9da560d",
+            "canonicalGuid": "28aca1a5afbff2449b2b73bacc10aec5",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Images3/Concrete 2.png",
+            "canonical": "Assets/Texture2D/Concrete 2.png",
+            "duplicateGuid": "9a23a132ea344913ba07cf8126d3ad02",
+            "canonicalGuid": "bc49365b216082f4ea7ee8d4d43011d2",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "identical",
+            "detail": "identical pixels at 1024x1024"
+        },
+        {
+            "duplicate": "Assets/Images3/Concrete.png",
+            "canonical": "Assets/Texture2D/Concrete.png",
+            "duplicateGuid": "f5aa7f403c4e44849cc91352e5cdc0e3",
+            "canonicalGuid": "3fc5e0a9f022acb41adcae7bb91826c4",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "identical",
+            "detail": "identical pixels at 1024x1024"
+        },
+        {
+            "duplicate": "Assets/Images3/Default-Checker.png",
+            "canonical": "Assets/Texture2D/Default-Checker.png",
+            "duplicateGuid": "8af0d920b88a4f8ab71d119bafcb74d0",
+            "canonicalGuid": "48738908215f0774c95deb1d5d9fe000",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "differs",
+            "detail": "same size, different pixels"
+        },
+        {
+            "duplicate": "Assets/Images3/Fabric Plain.png",
+            "canonical": "Assets/Texture2D/Fabric Plain.png",
+            "duplicateGuid": "400aa9e2a5664d4485270caf3535f1c3",
+            "canonicalGuid": "1a4725d37853f204bb45a6699a737034",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "identical",
+            "detail": "identical pixels at 256x256"
+        },
+        {
+            "duplicate": "Assets/Images3/Fiber Pattern.png",
+            "canonical": "Assets/Texture2D/Fiber Pattern.png",
+            "duplicateGuid": "caed438552d7464281760c5f0a0a2537",
+            "canonicalGuid": "01141c24900c381479715f26bb03ee97",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "identical",
+            "detail": "identical pixels at 1024x1024"
+        },
+        {
+            "duplicate": "Assets/Images3/MetalPlates.png",
+            "canonical": "Assets/Texture2D/MetalPlates.png",
+            "duplicateGuid": "f85b6c6555414940b394c020df7295c0",
+            "canonicalGuid": "f1d55610fe2c8e74a82ce753beee9f4f",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "identical",
+            "detail": "identical pixels at 1024x1024"
+        },
+        {
+            "duplicate": "Assets/Images3/Rock_Arid.png",
+            "canonical": "Assets/Texture2D/Rock_Arid.png",
+            "duplicateGuid": "517dc044065944d3a31387ceac4be02c",
+            "canonicalGuid": "17830bd96ec5b84489e3c79e792b0cff",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "identical",
+            "detail": "identical pixels at 1024x1024"
+        },
+        {
+            "duplicate": "Assets/Images3/SandAlbedoBlurred.png",
+            "canonical": "Assets/Texture2D/SandAlbedoBlurred.png",
+            "duplicateGuid": "5e580a2f2a384e2bbfc65c6a425cfe0c",
+            "canonicalGuid": "a4c0c0f7a08fca446af8ccb61aa4b30c",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "identical",
+            "detail": "identical pixels at 512x512"
+        },
+        {
+            "duplicate": "Assets/Images3/Wood Painted (1).png",
+            "canonical": "Assets/Texture2D/Wood Painted (1).png",
+            "duplicateGuid": "d6d2a5109cc648ffacff0588813d5bd1",
+            "canonicalGuid": "fcd4b1eac3494974aaf9c65067060eec",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "identical",
+            "detail": "identical pixels at 1024x1024"
+        },
+        {
+            "duplicate": "Assets/Images3/WoodPlanksBare0176_1_S.png",
+            "canonical": "Assets/Texture2D/WoodPlanksBare0176_1_S.png",
+            "duplicateGuid": "2a8c8293728749a9ae9261b0463be90d",
+            "canonicalGuid": "988f531c80a602f4c9a4165b20cc4fc4",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "identical",
+            "detail": "identical pixels at 1024x1024"
+        },
+        {
+            "duplicate": "Assets/Images3/WoodenDoor.png",
+            "canonical": "Assets/Texture2D/WoodenDoor.png",
+            "duplicateGuid": "2eedec8e035b40ccb2a158948012e3e5",
+            "canonicalGuid": "21815d0b91a4a2743b5ff86fd3a23556",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "identical",
+            "detail": "identical pixels at 256x512"
+        },
+        {
+            "duplicate": "Assets/Images3/red-white-stripe.png",
+            "canonical": "Assets/Texture2D/red-white-stripe.png",
+            "duplicateGuid": "a72c727f4cb9482586da44991ab61f13",
+            "canonicalGuid": "6f291d95595901848b566ab8f759d357",
+            "duplicateFileId": 2800000,
+            "canonicalFileId": 2800000,
+            "verdict": "identical",
+            "detail": "identical pixels at 128x128"
+        }
+    ]
+}

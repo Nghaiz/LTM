@@ -1,0 +1,3481 @@
+{
+    "generatedBy": "Ironfront/Recovered Port/Restore Static Flags -- Assets/Editor/RecoveredPort/RestoreStaticFlags.cs",
+    "note": "Regenerate from the menu item. Do not hand-edit: StaticFlagsBaselineTests pins this file.",
+    "scene": "Island",
+    "scenePath": "Assets/Scenes/Island.unity",
+    "applied": true,
+    "sourceCount": 345,
+    "sceneObjects": 2602,
+    "changed": 343,
+    "appliedCount": 343,
+    "stage1": 342,
+    "stage1ByPath": 0,
+    "stage2": 1,
+    "stage2ByPath": 0,
+    "guardedCount": 0,
+    "ambiguousCount": 1,
+    "absentCount": 1,
+    "preexistingCount": 1,
+    "withRenderer": 343,
+    "entries": [
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1805246433-0",
+            "path": "Static Props (1)/Beach Structure/ConcreteBase",
+            "name": "ConcreteBase",
+            "parentPath": "Beach Structure",
+            "siblingIndex": 0,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-677881836-0",
+            "path": "Static Props (1)/Beach Structure/ConcreteBase (1)",
+            "name": "ConcreteBase (1)",
+            "parentPath": "Beach Structure",
+            "siblingIndex": 1,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-503040193-0",
+            "path": "Static Props (1)/Beach Structure/ConcreteBase (2)",
+            "name": "ConcreteBase (2)",
+            "parentPath": "Beach Structure",
+            "siblingIndex": 4,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-425301150-0",
+            "path": "Static Props (1)/Beach Structure/ConcreteBase (3)",
+            "name": "ConcreteBase (3)",
+            "parentPath": "Beach Structure",
+            "siblingIndex": 5,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1420427677-0",
+            "path": "Static Props (1)/Beach Structure/Sandbags (4)",
+            "name": "Sandbags (4)",
+            "parentPath": "Beach Structure",
+            "siblingIndex": 8,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1135029201-0",
+            "path": "Static Props (1)/Beach Structure/Sandbags (5)",
+            "name": "Sandbags (5)",
+            "parentPath": "Beach Structure",
+            "siblingIndex": 10,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-82784604-0",
+            "path": "Static Props (1)/Beach Structure/Sandbags (6)",
+            "name": "Sandbags (6)",
+            "parentPath": "Beach Structure",
+            "siblingIndex": 7,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1187259074-0",
+            "path": "Static Props (1)/Beach Structure/Staircase",
+            "name": "Staircase",
+            "parentPath": "Beach Structure",
+            "siblingIndex": 9,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-2110730671-0",
+            "path": "Static Props (1)/Beach Structure/WoodenPlatform",
+            "name": "WoodenPlatform",
+            "parentPath": "Beach Structure",
+            "siblingIndex": 2,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1625518067-0",
+            "path": "Static Props (1)/Beach Structure/WoodenPlatform (1)",
+            "name": "WoodenPlatform (1)",
+            "parentPath": "Beach Structure",
+            "siblingIndex": 3,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-2129423283-0",
+            "path": "Static Props (1)/Beach Structure/WoodenWall",
+            "name": "WoodenWall",
+            "parentPath": "Beach Structure",
+            "siblingIndex": 6,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-347644015-0",
+            "path": "Static Props (1)/Dirt Barrier",
+            "name": "Dirt Barrier",
+            "parentPath": "",
+            "siblingIndex": 304,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-665778043-0",
+            "path": "Static Props (1)/Dirt Barrier (1)",
+            "name": "Dirt Barrier (1)",
+            "parentPath": "",
+            "siblingIndex": 306,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-255168348-0",
+            "path": "Static Props (1)/Dirt Barrier (10)",
+            "name": "Dirt Barrier (10)",
+            "parentPath": "",
+            "siblingIndex": 310,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1877699818-0",
+            "path": "Static Props (1)/Dirt Barrier (11)",
+            "name": "Dirt Barrier (11)",
+            "parentPath": "",
+            "siblingIndex": 314,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-464297954-0",
+            "path": "Static Props (1)/Dirt Barrier (12)",
+            "name": "Dirt Barrier (12)",
+            "parentPath": "",
+            "siblingIndex": 319,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-724168363-0",
+            "path": "Static Props (1)/Dirt Barrier (3)",
+            "name": "Dirt Barrier (3)",
+            "parentPath": "",
+            "siblingIndex": 318,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-198416269-0",
+            "path": "Static Props (1)/Dirt Barrier (4)",
+            "name": "Dirt Barrier (4)",
+            "parentPath": "",
+            "siblingIndex": 315,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-730648767-0",
+            "path": "Static Props (1)/Dirt Barrier (5)",
+            "name": "Dirt Barrier (5)",
+            "parentPath": "",
+            "siblingIndex": 317,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-965530637-0",
+            "path": "Static Props (1)/Dirt Barrier (6)",
+            "name": "Dirt Barrier (6)",
+            "parentPath": "",
+            "siblingIndex": 320,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-857106031-0",
+            "path": "Static Props (1)/Dirt Barrier (7)",
+            "name": "Dirt Barrier (7)",
+            "parentPath": "",
+            "siblingIndex": 321,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-990722283-0",
+            "path": "Static Props (1)/Dirt Barrier (8)",
+            "name": "Dirt Barrier (8)",
+            "parentPath": "",
+            "siblingIndex": 311,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1448769424-0",
+            "path": "Static Props (1)/Dirt Barrier (9)",
+            "name": "Dirt Barrier (9)",
+            "parentPath": "",
+            "siblingIndex": 308,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1472619882-0",
+            "path": "Static Props (1)/Fence",
+            "name": "Fence",
+            "parentPath": "",
+            "siblingIndex": 309,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-573526144-0",
+            "path": "Static Props (1)/Sandbags",
+            "name": "Sandbags",
+            "parentPath": "",
+            "siblingIndex": 313,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-79878096-0",
+            "path": "Static Props (1)/Sandbags (1)",
+            "name": "Sandbags (1)",
+            "parentPath": "",
+            "siblingIndex": 307,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1962890623-0",
+            "path": "Static Props (1)/Sandbags (2)",
+            "name": "Sandbags (2)",
+            "parentPath": "",
+            "siblingIndex": 316,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-745909527-0",
+            "path": "Static Props (1)/Sandbags (3)",
+            "name": "Sandbags (3)",
+            "parentPath": "",
+            "siblingIndex": 312,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-2096844648-0",
+            "path": "Static Props (1)/Cliff Outpost/ConcreteBase (7)",
+            "name": "ConcreteBase (7)",
+            "parentPath": "Static Props/Cliff Outpost",
+            "siblingIndex": 0,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1236251966-0",
+            "path": "Static Props (1)/Cliff Outpost/ConcreteBase (8)",
+            "name": "ConcreteBase (8)",
+            "parentPath": "Static Props/Cliff Outpost",
+            "siblingIndex": 1,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-723024433-0",
+            "path": "Static Props (1)/Cliff Outpost/WoodenPlatform",
+            "name": "WoodenPlatform",
+            "parentPath": "Static Props/Cliff Outpost",
+            "siblingIndex": 2,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1973648875-0",
+            "path": "Static Props (1)/Cliff Outpost/WoodenPlatform (1)",
+            "name": "WoodenPlatform (1)",
+            "parentPath": "Static Props/Cliff Outpost",
+            "siblingIndex": 3,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-359826344-0",
+            "path": "Static Props (1)/Cliffside Stairs/ConcreteBase",
+            "name": "ConcreteBase",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 0,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-523241492-0",
+            "path": "Static Props (1)/Cliffside Stairs/ConcreteBase (1)",
+            "name": "ConcreteBase (1)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 1,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-446069512-0",
+            "path": "Static Props (1)/Cliffside Stairs/ConcreteBase (10)",
+            "name": "ConcreteBase (10)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 15,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1455352425-0",
+            "path": "Static Props (1)/Cliffside Stairs/ConcreteBase (11)",
+            "name": "ConcreteBase (11)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 16,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1620551670-0",
+            "path": "Static Props (1)/Cliffside Stairs/ConcreteBase (13)",
+            "name": "ConcreteBase (13)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 17,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-590217234-0",
+            "path": "Static Props (1)/Cliffside Stairs/ConcreteBase (14)",
+            "name": "ConcreteBase (14)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 18,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1194363208-0",
+            "path": "Static Props (1)/Cliffside Stairs/ConcreteBase (15)",
+            "name": "ConcreteBase (15)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 21,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1254002318-0",
+            "path": "Static Props (1)/Cliffside Stairs/ConcreteBase (16)",
+            "name": "ConcreteBase (16)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 22,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1871794423-0",
+            "path": "Static Props (1)/Cliffside Stairs/ConcreteBase (17)",
+            "name": "ConcreteBase (17)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 23,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1261338908-0",
+            "path": "Static Props (1)/Cliffside Stairs/ConcreteBase (18)",
+            "name": "ConcreteBase (18)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 24,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-692169549-0",
+            "path": "Static Props (1)/Cliffside Stairs/ConcreteBase (19)",
+            "name": "ConcreteBase (19)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 27,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1480041262-0",
+            "path": "Static Props (1)/Cliffside Stairs/ConcreteBase (2)",
+            "name": "ConcreteBase (2)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 2,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1213054817-0",
+            "path": "Static Props (1)/Cliffside Stairs/ConcreteBase (3)",
+            "name": "ConcreteBase (3)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 3,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1313378330-0",
+            "path": "Static Props (1)/Cliffside Stairs/ConcreteBase (4)",
+            "name": "ConcreteBase (4)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 4,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-156444457-0",
+            "path": "Static Props (1)/Cliffside Stairs/ConcreteBase (5)",
+            "name": "ConcreteBase (5)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 6,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-2121207175-0",
+            "path": "Static Props (1)/Cliffside Stairs/ConcreteBase (6)",
+            "name": "ConcreteBase (6)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 7,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1820743974-0",
+            "path": "Static Props (1)/Cliffside Stairs/ConcreteBase (7)",
+            "name": "ConcreteBase (7)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 9,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-201295501-0",
+            "path": "Static Props (1)/Cliffside Stairs/ConcreteBase (8)",
+            "name": "ConcreteBase (8)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 10,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-473255621-0",
+            "path": "Static Props (1)/Cliffside Stairs/ConcreteBase (9)",
+            "name": "ConcreteBase (9)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 11,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-894582108-0",
+            "path": "Static Props (1)/Cliffside Stairs/Stairs",
+            "name": "Stairs",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 12,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-337534996-0",
+            "path": "Static Props (1)/Cliffside Stairs/Stairs (1)",
+            "name": "Stairs (1)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 13,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1231804120-0",
+            "path": "Static Props (1)/Cliffside Stairs/Stairs (2)",
+            "name": "Stairs (2)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 14,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-2016003795-0",
+            "path": "Static Props (1)/Cliffside Stairs/Stairs (3)",
+            "name": "Stairs (3)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 20,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1458269468-0",
+            "path": "Static Props (1)/Cliffside Stairs/Stairs (4)",
+            "name": "Stairs (4)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 25,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1693394659-0",
+            "path": "Static Props (1)/Cliffside Stairs/Stairs (5)",
+            "name": "Stairs (5)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 28,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-950876780-0",
+            "path": "Static Props (1)/Cliffside Stairs/Stairs (6)",
+            "name": "Stairs (6)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 29,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1463947340-0",
+            "path": "Static Props (1)/Cliffside Stairs/WoodenPlatform",
+            "name": "WoodenPlatform",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 5,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1218064695-0",
+            "path": "Static Props (1)/Cliffside Stairs/WoodenPlatform (1)",
+            "name": "WoodenPlatform (1)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 8,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-492451785-0",
+            "path": "Static Props (1)/Cliffside Stairs/WoodenPlatform (2)",
+            "name": "WoodenPlatform (2)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 19,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-121919938-0",
+            "path": "Static Props (1)/Cliffside Stairs/WoodenPlatform (3)",
+            "name": "WoodenPlatform (3)",
+            "parentPath": "Static Props/Cliffside Stairs",
+            "siblingIndex": 26,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1486739009-0",
+            "path": "Static Props (1)/ConcreteBase",
+            "name": "ConcreteBase",
+            "parentPath": "Static Props",
+            "siblingIndex": 167,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1807169195-0",
+            "path": "Static Props (1)/ConcreteBase",
+            "name": "ConcreteBase",
+            "parentPath": "Static Props",
+            "siblingIndex": 224,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-330062953-0",
+            "path": "Static Props (1)/ConcreteBase",
+            "name": "ConcreteBase",
+            "parentPath": "Static Props",
+            "siblingIndex": 263,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1521498533-0",
+            "path": "Static Props (1)/ConcreteBase (1)",
+            "name": "ConcreteBase (1)",
+            "parentPath": "Static Props",
+            "siblingIndex": 165,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1107051491-0",
+            "path": "Static Props (1)/ConcreteBase (1)",
+            "name": "ConcreteBase (1)",
+            "parentPath": "Static Props",
+            "siblingIndex": 283,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-2138883572-0",
+            "path": "Static Props (1)/ConcreteBase (10)",
+            "name": "ConcreteBase (10)",
+            "parentPath": "Static Props",
+            "siblingIndex": 225,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1861016369-0",
+            "path": "Static Props (1)/ConcreteBase (11)",
+            "name": "ConcreteBase (11)",
+            "parentPath": "Static Props",
+            "siblingIndex": 226,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1066779274-0",
+            "path": "Static Props (1)/ConcreteBase (12)",
+            "name": "ConcreteBase (12)",
+            "parentPath": "Static Props",
+            "siblingIndex": 229,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-349637742-0",
+            "path": "Static Props (1)/ConcreteBase (2)",
+            "name": "ConcreteBase (2)",
+            "parentPath": "Static Props",
+            "siblingIndex": 284,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1990731866-0",
+            "path": "Static Props (1)/ConcreteBase (2)",
+            "name": "ConcreteBase (2)",
+            "parentPath": "Static Props",
+            "siblingIndex": 163,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1558016290-0",
+            "path": "Static Props (1)/ConcreteBase (3)",
+            "name": "ConcreteBase (3)",
+            "parentPath": "Static Props",
+            "siblingIndex": 161,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-803317937-0",
+            "path": "Static Props (1)/ConcreteBase (3)",
+            "name": "ConcreteBase (3)",
+            "parentPath": "Static Props",
+            "siblingIndex": 285,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1467162668-0",
+            "path": "Static Props (1)/ConcreteBase (4)",
+            "name": "ConcreteBase (4)",
+            "parentPath": "Static Props",
+            "siblingIndex": 91,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-121952085-0",
+            "path": "Static Props (1)/ConcreteBase (5)",
+            "name": "ConcreteBase (5)",
+            "parentPath": "Static Props",
+            "siblingIndex": 122,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-833472497-0",
+            "path": "Static Props (1)/ConcreteBase (6)",
+            "name": "ConcreteBase (6)",
+            "parentPath": "Static Props",
+            "siblingIndex": 97,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-427962839-0",
+            "path": "Static Props (1)/ConcreteBase (7)",
+            "name": "ConcreteBase (7)",
+            "parentPath": "Static Props",
+            "siblingIndex": 141,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1236902141-0",
+            "path": "Static Props (1)/ConcreteBase (8)",
+            "name": "ConcreteBase (8)",
+            "parentPath": "Static Props",
+            "siblingIndex": 105,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-90552972-0",
+            "path": "Static Props (1)/ConcreteBase (9)",
+            "name": "ConcreteBase (9)",
+            "parentPath": "Static Props",
+            "siblingIndex": 126,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-415948675-0",
+            "path": "Static Props (1)/Dirt Barrier",
+            "name": "Dirt Barrier",
+            "parentPath": "Static Props",
+            "siblingIndex": 269,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-538920552-0",
+            "path": "Static Props (1)/Dirt Barrier",
+            "name": "Dirt Barrier",
+            "parentPath": "Static Props",
+            "siblingIndex": 216,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1408853984-0",
+            "path": "Static Props (1)/Dirt Barrier (1)",
+            "name": "Dirt Barrier (1)",
+            "parentPath": "Static Props",
+            "siblingIndex": 272,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-394190894-0",
+            "path": "Static Props (1)/Dirt Barrier (1)",
+            "name": "Dirt Barrier (1)",
+            "parentPath": "Static Props",
+            "siblingIndex": 217,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-834647022-0",
+            "path": "Static Props (1)/Dirt Barrier (10)",
+            "name": "Dirt Barrier (10)",
+            "parentPath": "Static Props",
+            "siblingIndex": 264,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1580684006-0",
+            "path": "Static Props (1)/Dirt Barrier (11)",
+            "name": "Dirt Barrier (11)",
+            "parentPath": "Static Props",
+            "siblingIndex": 280,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1915720881-0",
+            "path": "Static Props (1)/Dirt Barrier (12)",
+            "name": "Dirt Barrier (12)",
+            "parentPath": "Static Props",
+            "siblingIndex": 281,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1353259573-0",
+            "path": "Static Props (1)/Dirt Barrier (13)",
+            "name": "Dirt Barrier (13)",
+            "parentPath": "Static Props",
+            "siblingIndex": 282,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-247339963-0",
+            "path": "Static Props (1)/Dirt Barrier (14)",
+            "name": "Dirt Barrier (14)",
+            "parentPath": "Static Props",
+            "siblingIndex": 262,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1324086780-0",
+            "path": "Static Props (1)/Dirt Barrier (15)",
+            "name": "Dirt Barrier (15)",
+            "parentPath": "Static Props",
+            "siblingIndex": 286,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1843860260-0",
+            "path": "Static Props (1)/Dirt Barrier (16)",
+            "name": "Dirt Barrier (16)",
+            "parentPath": "Static Props",
+            "siblingIndex": 287,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1974064271-0",
+            "path": "Static Props (1)/Dirt Barrier (17)",
+            "name": "Dirt Barrier (17)",
+            "parentPath": "Static Props",
+            "siblingIndex": 288,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1449640882-0",
+            "path": "Static Props (1)/Dirt Barrier (18)",
+            "name": "Dirt Barrier (18)",
+            "parentPath": "Static Props",
+            "siblingIndex": 260,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-660181507-0",
+            "path": "Static Props (1)/Dirt Barrier (19)",
+            "name": "Dirt Barrier (19)",
+            "parentPath": "Static Props",
+            "siblingIndex": 259,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1729103723-0",
+            "path": "Static Props (1)/Dirt Barrier (2)",
+            "name": "Dirt Barrier (2)",
+            "parentPath": "Static Props",
+            "siblingIndex": 273,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1899507811-0",
+            "path": "Static Props (1)/Dirt Barrier (2)",
+            "name": "Dirt Barrier (2)",
+            "parentPath": "Static Props",
+            "siblingIndex": 218,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1506031248-0",
+            "path": "Static Props (1)/Dirt Barrier (20)",
+            "name": "Dirt Barrier (20)",
+            "parentPath": "Static Props",
+            "siblingIndex": 258,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1630161373-0",
+            "path": "Static Props (1)/Dirt Barrier (21)",
+            "name": "Dirt Barrier (21)",
+            "parentPath": "Static Props",
+            "siblingIndex": 254,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-50642905-0",
+            "path": "Static Props (1)/Dirt Barrier (22)",
+            "name": "Dirt Barrier (22)",
+            "parentPath": "Static Props",
+            "siblingIndex": 293,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1017297431-0",
+            "path": "Static Props (1)/Dirt Barrier (23)",
+            "name": "Dirt Barrier (23)",
+            "parentPath": "Static Props",
+            "siblingIndex": 246,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-973110079-0",
+            "path": "Static Props (1)/Dirt Barrier (24)",
+            "name": "Dirt Barrier (24)",
+            "parentPath": "Static Props",
+            "siblingIndex": 294,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-846551316-0",
+            "path": "Static Props (1)/Dirt Barrier (25)",
+            "name": "Dirt Barrier (25)",
+            "parentPath": "Static Props",
+            "siblingIndex": 244,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1428878331-0",
+            "path": "Static Props (1)/Dirt Barrier (26)",
+            "name": "Dirt Barrier (26)",
+            "parentPath": "Static Props",
+            "siblingIndex": 295,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-900320333-0",
+            "path": "Static Props (1)/Dirt Barrier (27)",
+            "name": "Dirt Barrier (27)",
+            "parentPath": "Static Props",
+            "siblingIndex": 235,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-709688088-0",
+            "path": "Static Props (1)/Dirt Barrier (28)",
+            "name": "Dirt Barrier (28)",
+            "parentPath": "Static Props",
+            "siblingIndex": 296,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-487941797-0",
+            "path": "Static Props (1)/Dirt Barrier (29)",
+            "name": "Dirt Barrier (29)",
+            "parentPath": "Static Props",
+            "siblingIndex": 232,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1603403636-0",
+            "path": "Static Props (1)/Dirt Barrier (3)",
+            "name": "Dirt Barrier (3)",
+            "parentPath": "Static Props",
+            "siblingIndex": 219,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-285261227-0",
+            "path": "Static Props (1)/Dirt Barrier (3)",
+            "name": "Dirt Barrier (3)",
+            "parentPath": "Static Props",
+            "siblingIndex": 274,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1682685656-0",
+            "path": "Static Props (1)/Dirt Barrier (30)",
+            "name": "Dirt Barrier (30)",
+            "parentPath": "Static Props",
+            "siblingIndex": 297,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-687404966-0",
+            "path": "Static Props (1)/Dirt Barrier (31)",
+            "name": "Dirt Barrier (31)",
+            "parentPath": "Static Props",
+            "siblingIndex": 298,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-943256622-0",
+            "path": "Static Props (1)/Dirt Barrier (32)",
+            "name": "Dirt Barrier (32)",
+            "parentPath": "Static Props",
+            "siblingIndex": 299,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-277600345-0",
+            "path": "Static Props (1)/Dirt Barrier (33)",
+            "name": "Dirt Barrier (33)",
+            "parentPath": "Static Props",
+            "siblingIndex": 300,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1096922050-0",
+            "path": "Static Props (1)/Dirt Barrier (34)",
+            "name": "Dirt Barrier (34)",
+            "parentPath": "Static Props",
+            "siblingIndex": 301,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-607554779-0",
+            "path": "Static Props (1)/Dirt Barrier (35)",
+            "name": "Dirt Barrier (35)",
+            "parentPath": "Static Props",
+            "siblingIndex": 302,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-257384776-0",
+            "path": "Static Props (1)/Dirt Barrier (4)",
+            "name": "Dirt Barrier (4)",
+            "parentPath": "Static Props",
+            "siblingIndex": 276,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-310688331-0",
+            "path": "Static Props (1)/Dirt Barrier (4)",
+            "name": "Dirt Barrier (4)",
+            "parentPath": "Static Props",
+            "siblingIndex": 220,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1079299716-0",
+            "path": "Static Props (1)/Dirt Barrier (5)",
+            "name": "Dirt Barrier (5)",
+            "parentPath": "Static Props",
+            "siblingIndex": 221,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-385255672-0",
+            "path": "Static Props (1)/Dirt Barrier (5)",
+            "name": "Dirt Barrier (5)",
+            "parentPath": "Static Props",
+            "siblingIndex": 267,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1696019633-0",
+            "path": "Static Props (1)/Dirt Barrier (6)",
+            "name": "Dirt Barrier (6)",
+            "parentPath": "Static Props",
+            "siblingIndex": 278,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1503589158-0",
+            "path": "Static Props (1)/Dirt Barrier (6)",
+            "name": "Dirt Barrier (6)",
+            "parentPath": "Static Props",
+            "siblingIndex": 222,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-2105012632-0",
+            "path": "Static Props (1)/Dirt Barrier (7)",
+            "name": "Dirt Barrier (7)",
+            "parentPath": "Static Props",
+            "siblingIndex": 279,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1369677680-0",
+            "path": "Static Props (1)/Dirt Barrier (8)",
+            "name": "Dirt Barrier (8)",
+            "parentPath": "Static Props",
+            "siblingIndex": 223,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1545085677-0",
+            "path": "Static Props (1)/Dirt Barrier (8)",
+            "name": "Dirt Barrier (8)",
+            "parentPath": "Static Props",
+            "siblingIndex": 266,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-316721194-0",
+            "path": "Static Props (1)/Dirt Barrier (9)",
+            "name": "Dirt Barrier (9)",
+            "parentPath": "Static Props",
+            "siblingIndex": 265,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-656530282-0",
+            "path": "Static Props (1)/Dirt Barrier (9)",
+            "name": "Dirt Barrier (9)",
+            "parentPath": "Static Props",
+            "siblingIndex": 230,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1943877848-0",
+            "path": "Static Props (1)/Fence",
+            "name": "Fence",
+            "parentPath": "Static Props",
+            "siblingIndex": 168,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-445836197-0",
+            "path": "Static Props (1)/Fence",
+            "name": "Fence",
+            "parentPath": "Static Props",
+            "siblingIndex": 257,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-514716159-0",
+            "path": "Static Props (1)/Fence (1)",
+            "name": "Fence (1)",
+            "parentPath": "Static Props",
+            "siblingIndex": 166,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1461106681-0",
+            "path": "Static Props (1)/Fence (10)",
+            "name": "Fence (10)",
+            "parentPath": "Static Props",
+            "siblingIndex": 106,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-911092245-0",
+            "path": "Static Props (1)/Fence (11)",
+            "name": "Fence (11)",
+            "parentPath": "Static Props",
+            "siblingIndex": 144,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1733370521-0",
+            "path": "Static Props (1)/Fence (12)",
+            "name": "Fence (12)",
+            "parentPath": "Static Props",
+            "siblingIndex": 115,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1297999826-0",
+            "path": "Static Props (1)/Fence (13)",
+            "name": "Fence (13)",
+            "parentPath": "Static Props",
+            "siblingIndex": 157,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-636554436-0",
+            "path": "Static Props (1)/Fence (14)",
+            "name": "Fence (14)",
+            "parentPath": "Static Props",
+            "siblingIndex": 159,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-2059324870-0",
+            "path": "Static Props (1)/Fence (15)",
+            "name": "Fence (15)",
+            "parentPath": "Static Props",
+            "siblingIndex": 158,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1914046773-0",
+            "path": "Static Props (1)/Fence (16)",
+            "name": "Fence (16)",
+            "parentPath": "Static Props",
+            "siblingIndex": 112,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1657572548-0",
+            "path": "Static Props (1)/Fence (17)",
+            "name": "Fence (17)",
+            "parentPath": "Static Props",
+            "siblingIndex": 99,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-2054416024-0",
+            "path": "Static Props (1)/Fence (18)",
+            "name": "Fence (18)",
+            "parentPath": "Static Props",
+            "siblingIndex": 104,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1547665095-0",
+            "path": "Static Props (1)/Fence (19)",
+            "name": "Fence (19)",
+            "parentPath": "Static Props",
+            "siblingIndex": 100,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1254471992-0",
+            "path": "Static Props (1)/Fence (2)",
+            "name": "Fence (2)",
+            "parentPath": "Static Props",
+            "siblingIndex": 187,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1380131839-0",
+            "path": "Static Props (1)/Fence (20)",
+            "name": "Fence (20)",
+            "parentPath": "Static Props",
+            "siblingIndex": 116,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1621351543-0",
+            "path": "Static Props (1)/Fence (21)",
+            "name": "Fence (21)",
+            "parentPath": "Static Props",
+            "siblingIndex": 98,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-998827156-0",
+            "path": "Static Props (1)/Fence (22)",
+            "name": "Fence (22)",
+            "parentPath": "Static Props",
+            "siblingIndex": 124,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-706233952-0",
+            "path": "Static Props (1)/Fence (24)",
+            "name": "Fence (24)",
+            "parentPath": "Static Props",
+            "siblingIndex": 135,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-511976490-0",
+            "path": "Static Props (1)/Fence (3)",
+            "name": "Fence (3)",
+            "parentPath": "Static Props",
+            "siblingIndex": 154,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1011163999-0",
+            "path": "Static Props (1)/Fence (4)",
+            "name": "Fence (4)",
+            "parentPath": "Static Props",
+            "siblingIndex": 153,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1147658265-0",
+            "path": "Static Props (1)/Fence (5)",
+            "name": "Fence (5)",
+            "parentPath": "Static Props",
+            "siblingIndex": 151,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-744688842-0",
+            "path": "Static Props (1)/Fence (7)",
+            "name": "Fence (7)",
+            "parentPath": "Static Props",
+            "siblingIndex": 132,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1165068787-0",
+            "path": "Static Props (1)/Fence (8)",
+            "name": "Fence (8)",
+            "parentPath": "Static Props",
+            "siblingIndex": 148,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1167274991-0",
+            "path": "Static Props (1)/Fence (9)",
+            "name": "Fence (9)",
+            "parentPath": "Static Props",
+            "siblingIndex": 172,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-861277841-0",
+            "path": "Static Props (1)/Outpost Sentry/ConcreteBase (7)",
+            "name": "ConcreteBase (7)",
+            "parentPath": "Static Props/Outpost Sentry",
+            "siblingIndex": 5,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1289595000-0",
+            "path": "Static Props (1)/Outpost Sentry/ConcreteBase (8)",
+            "name": "ConcreteBase (8)",
+            "parentPath": "Static Props/Outpost Sentry",
+            "siblingIndex": 6,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1231600447-0",
+            "path": "Static Props (1)/Outpost Sentry/Sandbags",
+            "name": "Sandbags",
+            "parentPath": "Static Props/Outpost Sentry",
+            "siblingIndex": 3,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1758938114-0",
+            "path": "Static Props (1)/Outpost Sentry/Staircase",
+            "name": "Staircase",
+            "parentPath": "Static Props/Outpost Sentry",
+            "siblingIndex": 2,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1714776785-0",
+            "path": "Static Props (1)/Outpost Sentry/WoodenPlatformExtended",
+            "name": "WoodenPlatformExtended",
+            "parentPath": "Static Props/Outpost Sentry",
+            "siblingIndex": 0,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1811344655-0",
+            "path": "Static Props (1)/Outpost Sentry/WoodenPlatformExtended (1)",
+            "name": "WoodenPlatformExtended (1)",
+            "parentPath": "Static Props/Outpost Sentry",
+            "siblingIndex": 1,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-778850110-0",
+            "path": "Static Props (1)/RockPlanar1 White",
+            "name": "RockPlanar1 White",
+            "parentPath": "Static Props",
+            "siblingIndex": 75,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1921044758-0",
+            "path": "Static Props (1)/RockPlanar1 White",
+            "name": "RockPlanar1 White",
+            "parentPath": "Static Props",
+            "siblingIndex": 256,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1485837975-0",
+            "path": "Static Props (1)/RockPlanar1 White",
+            "name": "RockPlanar1 White",
+            "parentPath": "Static Props",
+            "siblingIndex": 130,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-934518241-0",
+            "path": "Static Props (1)/RockPlanar1 White (1)",
+            "name": "RockPlanar1 White (1)",
+            "parentPath": "Static Props",
+            "siblingIndex": 24,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1026029899-0",
+            "path": "Static Props (1)/RockPlanar1 White (1)",
+            "name": "RockPlanar1 White (1)",
+            "parentPath": "Static Props",
+            "siblingIndex": 102,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-279023232-0",
+            "path": "Static Props (1)/RockPlanar1 White (2)",
+            "name": "RockPlanar1 White (2)",
+            "parentPath": "Static Props",
+            "siblingIndex": 8,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-473802756-0",
+            "path": "Static Props (1)/RockPlanar1 White (2)",
+            "name": "RockPlanar1 White (2)",
+            "parentPath": "Static Props",
+            "siblingIndex": 111,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-251240362-0",
+            "path": "Static Props (1)/RockPlanar1 White (3)",
+            "name": "RockPlanar1 White (3)",
+            "parentPath": "Static Props",
+            "siblingIndex": 69,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-627238475-0",
+            "path": "Static Props (1)/RockPlanar1 White (4)",
+            "name": "RockPlanar1 White (4)",
+            "parentPath": "Static Props",
+            "siblingIndex": 27,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-2100313340-0",
+            "path": "Static Props (1)/RockPlanar1 White (5)",
+            "name": "RockPlanar1 White (5)",
+            "parentPath": "Static Props",
+            "siblingIndex": 32,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1826829711-0",
+            "path": "Static Props (1)/RockPlanar1 White (6)",
+            "name": "RockPlanar1 White (6)",
+            "parentPath": "Static Props",
+            "siblingIndex": 13,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-119140208-0",
+            "path": "Static Props (1)/RockPlanar1 White (7)",
+            "name": "RockPlanar1 White (7)",
+            "parentPath": "Static Props",
+            "siblingIndex": 63,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-908380059-0",
+            "path": "Static Props (1)/RockPlanar1 White (8)",
+            "name": "RockPlanar1 White (8)",
+            "parentPath": "Static Props",
+            "siblingIndex": 44,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-743217931-0",
+            "path": "Static Props (1)/RockPlanar2 White",
+            "name": "RockPlanar2 White",
+            "parentPath": "Static Props",
+            "siblingIndex": 146,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-869654117-0",
+            "path": "Static Props (1)/RockPlanar2 White",
+            "name": "RockPlanar2 White",
+            "parentPath": "Static Props",
+            "siblingIndex": 41,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-117658170-0",
+            "path": "Static Props (1)/RockPlanar2 White (1)",
+            "name": "RockPlanar2 White (1)",
+            "parentPath": "Static Props",
+            "siblingIndex": 35,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-797797005-0",
+            "path": "Static Props (1)/RockPlanar2 White (1)",
+            "name": "RockPlanar2 White (1)",
+            "parentPath": "Static Props",
+            "siblingIndex": 169,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1145591307-0",
+            "path": "Static Props (1)/RockPlanar2 White (10)",
+            "name": "RockPlanar2 White (10)",
+            "parentPath": "Static Props",
+            "siblingIndex": 33,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-877088804-0",
+            "path": "Static Props (1)/RockPlanar2 White (11)",
+            "name": "RockPlanar2 White (11)",
+            "parentPath": "Static Props",
+            "siblingIndex": 10,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-720894095-0",
+            "path": "Static Props (1)/RockPlanar2 White (12)",
+            "name": "RockPlanar2 White (12)",
+            "parentPath": "Static Props",
+            "siblingIndex": 37,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-199544959-0",
+            "path": "Static Props (1)/RockPlanar2 White (13)",
+            "name": "RockPlanar2 White (13)",
+            "parentPath": "Static Props",
+            "siblingIndex": 17,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1806620188-0",
+            "path": "Static Props (1)/RockPlanar2 White (14)",
+            "name": "RockPlanar2 White (14)",
+            "parentPath": "Static Props",
+            "siblingIndex": 71,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-481971571-0",
+            "path": "Static Props (1)/RockPlanar2 White (15)",
+            "name": "RockPlanar2 White (15)",
+            "parentPath": "Static Props",
+            "siblingIndex": 42,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-2107916934-0",
+            "path": "Static Props (1)/RockPlanar2 White (16)",
+            "name": "RockPlanar2 White (16)",
+            "parentPath": "Static Props",
+            "siblingIndex": 208,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1419490825-0",
+            "path": "Static Props (1)/RockPlanar2 White (2)",
+            "name": "RockPlanar2 White (2)",
+            "parentPath": "Static Props",
+            "siblingIndex": 25,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1056568049-0",
+            "path": "Static Props (1)/RockPlanar2 White (3)",
+            "name": "RockPlanar2 White (3)",
+            "parentPath": "Static Props",
+            "siblingIndex": 52,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-63768233-0",
+            "path": "Static Props (1)/RockPlanar2 White (4)",
+            "name": "RockPlanar2 White (4)",
+            "parentPath": "Static Props",
+            "siblingIndex": 65,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-321242187-0",
+            "path": "Static Props (1)/RockPlanar2 White (5)",
+            "name": "RockPlanar2 White (5)",
+            "parentPath": "Static Props",
+            "siblingIndex": 26,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-340927813-0",
+            "path": "Static Props (1)/RockPlanar2 White (6)",
+            "name": "RockPlanar2 White (6)",
+            "parentPath": "Static Props",
+            "siblingIndex": 5,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-936128229-0",
+            "path": "Static Props (1)/RockPlanar2 White (7)",
+            "name": "RockPlanar2 White (7)",
+            "parentPath": "Static Props",
+            "siblingIndex": 38,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-697850175-0",
+            "path": "Static Props (1)/RockPlanar2 White (8)",
+            "name": "RockPlanar2 White (8)",
+            "parentPath": "Static Props",
+            "siblingIndex": 86,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-670529635-0",
+            "path": "Static Props (1)/RockPlanar2 White (9)",
+            "name": "RockPlanar2 White (9)",
+            "parentPath": "Static Props",
+            "siblingIndex": 72,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1093231357-0",
+            "path": "Static Props (1)/RockPlanar3 White",
+            "name": "RockPlanar3 White",
+            "parentPath": "Static Props",
+            "siblingIndex": 14,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-778830610-0",
+            "path": "Static Props (1)/RockPlanar3 White",
+            "name": "RockPlanar3 White",
+            "parentPath": "Static Props",
+            "siblingIndex": 129,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-721863180-0",
+            "path": "Static Props (1)/RockPlanar3 White (1)",
+            "name": "RockPlanar3 White (1)",
+            "parentPath": "Static Props",
+            "siblingIndex": 85,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1151366240-0",
+            "path": "Static Props (1)/RockPlanar3 White (1)",
+            "name": "RockPlanar3 White (1)",
+            "parentPath": "Static Props",
+            "siblingIndex": 131,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1012654609-0",
+            "path": "Static Props (1)/RockPlanar3 White (10)",
+            "name": "RockPlanar3 White (10)",
+            "parentPath": "Static Props",
+            "siblingIndex": 28,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1069217257-0",
+            "path": "Static Props (1)/RockPlanar3 White (11)",
+            "name": "RockPlanar3 White (11)",
+            "parentPath": "Static Props",
+            "siblingIndex": 59,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1282905191-0",
+            "path": "Static Props (1)/RockPlanar3 White (12)",
+            "name": "RockPlanar3 White (12)",
+            "parentPath": "Static Props",
+            "siblingIndex": 74,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1720484370-0",
+            "path": "Static Props (1)/RockPlanar3 White (13)",
+            "name": "RockPlanar3 White (13)",
+            "parentPath": "Static Props",
+            "siblingIndex": 89,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-713335135-0",
+            "path": "Static Props (1)/RockPlanar3 White (14)",
+            "name": "RockPlanar3 White (14)",
+            "parentPath": "Static Props",
+            "siblingIndex": 191,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-32845267-0",
+            "path": "Static Props (1)/RockPlanar3 White (15)",
+            "name": "RockPlanar3 White (15)",
+            "parentPath": "Static Props",
+            "siblingIndex": 303,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-72484871-0",
+            "path": "Static Props (1)/RockPlanar3 White (2)",
+            "name": "RockPlanar3 White (2)",
+            "parentPath": "Static Props",
+            "siblingIndex": 83,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-703615865-0",
+            "path": "Static Props (1)/RockPlanar3 White (2)",
+            "name": "RockPlanar3 White (2)",
+            "parentPath": "Static Props",
+            "siblingIndex": 171,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1416844873-0",
+            "path": "Static Props (1)/RockPlanar3 White (3)",
+            "name": "RockPlanar3 White (3)",
+            "parentPath": "Static Props",
+            "siblingIndex": 88,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-107875459-0",
+            "path": "Static Props (1)/RockPlanar3 White (3)",
+            "name": "RockPlanar3 White (3)",
+            "parentPath": "Static Props",
+            "siblingIndex": 133,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-441413291-0",
+            "path": "Static Props (1)/RockPlanar3 White (4)",
+            "name": "RockPlanar3 White (4)",
+            "parentPath": "Static Props",
+            "siblingIndex": 87,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1609315376-0",
+            "path": "Static Props (1)/RockPlanar3 White (4)",
+            "name": "RockPlanar3 White (4)",
+            "parentPath": "Static Props",
+            "siblingIndex": 103,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1115340344-0",
+            "path": "Static Props (1)/RockPlanar3 White (5)",
+            "name": "RockPlanar3 White (5)",
+            "parentPath": "Static Props",
+            "siblingIndex": 3,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1336625584-0",
+            "path": "Static Props (1)/RockPlanar3 White (6)",
+            "name": "RockPlanar3 White (6)",
+            "parentPath": "Static Props",
+            "siblingIndex": 73,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-448721704-0",
+            "path": "Static Props (1)/RockPlanar3 White (7)",
+            "name": "RockPlanar3 White (7)",
+            "parentPath": "Static Props",
+            "siblingIndex": 20,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1826177147-0",
+            "path": "Static Props (1)/RockPlanar3 White (8)",
+            "name": "RockPlanar3 White (8)",
+            "parentPath": "Static Props",
+            "siblingIndex": 49,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-954990239-0",
+            "path": "Static Props (1)/RockPlanar3 White (9)",
+            "name": "RockPlanar3 White (9)",
+            "parentPath": "Static Props",
+            "siblingIndex": 22,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-306642833-0",
+            "path": "Static Props (1)/RockPlanar4 White",
+            "name": "RockPlanar4 White",
+            "parentPath": "Static Props",
+            "siblingIndex": 107,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-307350134-0",
+            "path": "Static Props (1)/RockPlanar4 White",
+            "name": "RockPlanar4 White",
+            "parentPath": "Static Props",
+            "siblingIndex": 68,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-430083279-0",
+            "path": "Static Props (1)/RockPlanar4 White",
+            "name": "RockPlanar4 White",
+            "parentPath": "Static Props",
+            "siblingIndex": 255,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-679295935-0",
+            "path": "Static Props (1)/RockPlanar4 White (1)",
+            "name": "RockPlanar4 White (1)",
+            "parentPath": "Static Props",
+            "siblingIndex": 47,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-419879121-0",
+            "path": "Static Props (1)/RockPlanar4 White (10)",
+            "name": "RockPlanar4 White (10)",
+            "parentPath": "Static Props",
+            "siblingIndex": 45,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-136019137-0",
+            "path": "Static Props (1)/RockPlanar4 White (11)",
+            "name": "RockPlanar4 White (11)",
+            "parentPath": "Static Props",
+            "siblingIndex": 4,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-340683768-0",
+            "path": "Static Props (1)/RockPlanar4 White (12)",
+            "name": "RockPlanar4 White (12)",
+            "parentPath": "Static Props",
+            "siblingIndex": 19,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1932947688-0",
+            "path": "Static Props (1)/RockPlanar4 White (13)",
+            "name": "RockPlanar4 White (13)",
+            "parentPath": "Static Props",
+            "siblingIndex": 18,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1932645168-0",
+            "path": "Static Props (1)/RockPlanar4 White (14)",
+            "name": "RockPlanar4 White (14)",
+            "parentPath": "Static Props",
+            "siblingIndex": 61,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-89224674-0",
+            "path": "Static Props (1)/RockPlanar4 White (2)",
+            "name": "RockPlanar4 White (2)",
+            "parentPath": "Static Props",
+            "siblingIndex": 23,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-2009444899-0",
+            "path": "Static Props (1)/RockPlanar4 White (3)",
+            "name": "RockPlanar4 White (3)",
+            "parentPath": "Static Props",
+            "siblingIndex": 43,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-404911827-0",
+            "path": "Static Props (1)/RockPlanar4 White (4)",
+            "name": "RockPlanar4 White (4)",
+            "parentPath": "Static Props",
+            "siblingIndex": 62,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1614750690-0",
+            "path": "Static Props (1)/RockPlanar4 White (5)",
+            "name": "RockPlanar4 White (5)",
+            "parentPath": "Static Props",
+            "siblingIndex": 31,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-193010642-0",
+            "path": "Static Props (1)/RockPlanar4 White (6)",
+            "name": "RockPlanar4 White (6)",
+            "parentPath": "Static Props",
+            "siblingIndex": 77,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1729874781-0",
+            "path": "Static Props (1)/RockPlanar4 White (7)",
+            "name": "RockPlanar4 White (7)",
+            "parentPath": "Static Props",
+            "siblingIndex": 36,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1258356256-0",
+            "path": "Static Props (1)/RockPlanar4 White (8)",
+            "name": "RockPlanar4 White (8)",
+            "parentPath": "Static Props",
+            "siblingIndex": 79,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1183719403-0",
+            "path": "Static Props (1)/RockPlanar4 White (9)",
+            "name": "RockPlanar4 White (9)",
+            "parentPath": "Static Props",
+            "siblingIndex": 30,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-858203902-0",
+            "path": "Static Props (1)/RockPlanarSmall1",
+            "name": "RockPlanarSmall1",
+            "parentPath": "Static Props",
+            "siblingIndex": 183,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-826879093-0",
+            "path": "Static Props (1)/RockPlanarSmall1",
+            "name": "RockPlanarSmall1",
+            "parentPath": "Static Props",
+            "siblingIndex": 21,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-381902405-0",
+            "path": "Static Props (1)/RockPlanarSmall1 (1)",
+            "name": "RockPlanarSmall1 (1)",
+            "parentPath": "Static Props",
+            "siblingIndex": 96,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-651297970-0",
+            "path": "Static Props (1)/RockPlanarSmall1 (2)",
+            "name": "RockPlanarSmall1 (2)",
+            "parentPath": "Static Props",
+            "siblingIndex": 117,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1240491476-0",
+            "path": "Static Props (1)/Rubble",
+            "name": "Rubble",
+            "parentPath": "Static Props",
+            "siblingIndex": 57,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1065000413-0",
+            "path": "Static Props (1)/Rubble (1)",
+            "name": "Rubble (1)",
+            "parentPath": "Static Props",
+            "siblingIndex": 46,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1927496016-0",
+            "path": "Static Props (1)/Rubble (2)",
+            "name": "Rubble (2)",
+            "parentPath": "Static Props",
+            "siblingIndex": 81,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1081139519-0",
+            "path": "Static Props (1)/RubblePile White",
+            "name": "RubblePile White",
+            "parentPath": "Static Props",
+            "siblingIndex": 29,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-689450032-0",
+            "path": "Static Props (1)/RubblePile White",
+            "name": "RubblePile White",
+            "parentPath": "Static Props",
+            "siblingIndex": 118,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-112621315-0",
+            "path": "Static Props (1)/RubblePile White (1)",
+            "name": "RubblePile White (1)",
+            "parentPath": "Static Props",
+            "siblingIndex": 51,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-964794657-0",
+            "path": "Static Props (1)/RubblePile White (1)",
+            "name": "RubblePile White (1)",
+            "parentPath": "Static Props",
+            "siblingIndex": 113,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1869150227-0",
+            "path": "Static Props (1)/RubblePile White (10)",
+            "name": "RubblePile White (10)",
+            "parentPath": "Static Props",
+            "siblingIndex": 82,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1158304590-0",
+            "path": "Static Props (1)/RubblePile White (11)",
+            "name": "RubblePile White (11)",
+            "parentPath": "Static Props",
+            "siblingIndex": 50,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-2005988868-0",
+            "path": "Static Props (1)/RubblePile White (2)",
+            "name": "RubblePile White (2)",
+            "parentPath": "Static Props",
+            "siblingIndex": 60,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1373447496-0",
+            "path": "Static Props (1)/RubblePile White (3)",
+            "name": "RubblePile White (3)",
+            "parentPath": "Static Props",
+            "siblingIndex": 55,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1056174989-0",
+            "path": "Static Props (1)/RubblePile White (4)",
+            "name": "RubblePile White (4)",
+            "parentPath": "Static Props",
+            "siblingIndex": 11,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1695090747-0",
+            "path": "Static Props (1)/RubblePile White (5)",
+            "name": "RubblePile White (5)",
+            "parentPath": "Static Props",
+            "siblingIndex": 84,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1669349171-0",
+            "path": "Static Props (1)/RubblePile White (6)",
+            "name": "RubblePile White (6)",
+            "parentPath": "Static Props",
+            "siblingIndex": 78,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-62216677-0",
+            "path": "Static Props (1)/RubblePile White (7)",
+            "name": "RubblePile White (7)",
+            "parentPath": "Static Props",
+            "siblingIndex": 53,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1657883834-0",
+            "path": "Static Props (1)/RubblePile White (8)",
+            "name": "RubblePile White (8)",
+            "parentPath": "Static Props",
+            "siblingIndex": 76,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1602668519-0",
+            "path": "Static Props (1)/RubblePile White (9)",
+            "name": "RubblePile White (9)",
+            "parentPath": "Static Props",
+            "siblingIndex": 80,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1591459440-0",
+            "path": "Static Props (1)/Sandbags",
+            "name": "Sandbags",
+            "parentPath": "Static Props",
+            "siblingIndex": 140,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-9727261-0",
+            "path": "Static Props (1)/Sandbags",
+            "name": "Sandbags",
+            "parentPath": "Static Props",
+            "siblingIndex": 268,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1272925601-0",
+            "path": "Static Props (1)/Sandbags (1)",
+            "name": "Sandbags (1)",
+            "parentPath": "Static Props",
+            "siblingIndex": 125,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1299098123-0",
+            "path": "Static Props (1)/Sandbags (1)",
+            "name": "Sandbags (1)",
+            "parentPath": "Static Props",
+            "siblingIndex": 275,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-958208090-0",
+            "path": "Static Props (1)/Sandbags (10)",
+            "name": "Sandbags (10)",
+            "parentPath": "Static Props",
+            "siblingIndex": 101,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1849139744-0",
+            "path": "Static Props (1)/Sandbags (11)",
+            "name": "Sandbags (11)",
+            "parentPath": "Static Props",
+            "siblingIndex": 149,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-2136649651-0",
+            "path": "Static Props (1)/Sandbags (12)",
+            "name": "Sandbags (12)",
+            "parentPath": "Static Props",
+            "siblingIndex": 136,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-2142837248-0",
+            "path": "Static Props (1)/Sandbags (13)",
+            "name": "Sandbags (13)",
+            "parentPath": "Static Props",
+            "siblingIndex": 145,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1306620647-0",
+            "path": "Static Props (1)/Sandbags (14)",
+            "name": "Sandbags (14)",
+            "parentPath": "Static Props",
+            "siblingIndex": 170,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-255912943-0",
+            "path": "Static Props (1)/Sandbags (15)",
+            "name": "Sandbags (15)",
+            "parentPath": "Static Props",
+            "siblingIndex": 114,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-125504889-0",
+            "path": "Static Props (1)/Sandbags (16)",
+            "name": "Sandbags (16)",
+            "parentPath": "Static Props",
+            "siblingIndex": 162,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1131802451-0",
+            "path": "Static Props (1)/Sandbags (17)",
+            "name": "Sandbags (17)",
+            "parentPath": "Static Props",
+            "siblingIndex": 175,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-304876579-0",
+            "path": "Static Props (1)/Sandbags (18)",
+            "name": "Sandbags (18)",
+            "parentPath": "Static Props",
+            "siblingIndex": 160,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1085395411-0",
+            "path": "Static Props (1)/Sandbags (19)",
+            "name": "Sandbags (19)",
+            "parentPath": "Static Props",
+            "siblingIndex": 164,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1804840638-0",
+            "path": "Static Props (1)/Sandbags (2)",
+            "name": "Sandbags (2)",
+            "parentPath": "Static Props",
+            "siblingIndex": 277,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-346695679-0",
+            "path": "Static Props (1)/Sandbags (2)",
+            "name": "Sandbags (2)",
+            "parentPath": "Static Props",
+            "siblingIndex": 110,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-450711369-0",
+            "path": "Static Props (1)/Sandbags (20)",
+            "name": "Sandbags (20)",
+            "parentPath": "Static Props",
+            "siblingIndex": 128,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-314493281-0",
+            "path": "Static Props (1)/Sandbags (21)",
+            "name": "Sandbags (21)",
+            "parentPath": "Static Props",
+            "siblingIndex": 174,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1428843297-0",
+            "path": "Static Props (1)/Sandbags (22)",
+            "name": "Sandbags (22)",
+            "parentPath": "Static Props",
+            "siblingIndex": 188,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1111304013-0",
+            "path": "Static Props (1)/Sandbags (23)",
+            "name": "Sandbags (23)",
+            "parentPath": "Static Props",
+            "siblingIndex": 207,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1713703662-0",
+            "path": "Static Props (1)/Sandbags (24)",
+            "name": "Sandbags (24)",
+            "parentPath": "Static Props",
+            "siblingIndex": 231,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-436937694-0",
+            "path": "Static Props (1)/Sandbags (3)",
+            "name": "Sandbags (3)",
+            "parentPath": "Static Props",
+            "siblingIndex": 261,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1962225075-0",
+            "path": "Static Props (1)/Sandbags (3)",
+            "name": "Sandbags (3)",
+            "parentPath": "Static Props",
+            "siblingIndex": 138,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1398163375-0",
+            "path": "Static Props (1)/Sandbags (4)",
+            "name": "Sandbags (4)",
+            "parentPath": "Static Props",
+            "siblingIndex": 289,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1711283230-0",
+            "path": "Static Props (1)/Sandbags (4)",
+            "name": "Sandbags (4)",
+            "parentPath": "Static Props",
+            "siblingIndex": 143,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-786192150-0",
+            "path": "Static Props (1)/Sandbags (5)",
+            "name": "Sandbags (5)",
+            "parentPath": "Static Props",
+            "siblingIndex": 142,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1963639968-0",
+            "path": "Static Props (1)/Sandbags (5)",
+            "name": "Sandbags (5)",
+            "parentPath": "Static Props",
+            "siblingIndex": 290,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1290442625-0",
+            "path": "Static Props (1)/Sandbags (6)",
+            "name": "Sandbags (6)",
+            "parentPath": "Static Props",
+            "siblingIndex": 291,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1570323206-0",
+            "path": "Static Props (1)/Sandbags (6)",
+            "name": "Sandbags (6)",
+            "parentPath": "Static Props",
+            "siblingIndex": 127,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1314717850-0",
+            "path": "Static Props (1)/Sandbags (7)",
+            "name": "Sandbags (7)",
+            "parentPath": "Static Props",
+            "siblingIndex": 292,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1674188388-0",
+            "path": "Static Props (1)/Sandbags (7)",
+            "name": "Sandbags (7)",
+            "parentPath": "Static Props",
+            "siblingIndex": 108,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-954050905-0",
+            "path": "Static Props (1)/Sandbags (8)",
+            "name": "Sandbags (8)",
+            "parentPath": "Static Props",
+            "siblingIndex": 139,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-559410394-0",
+            "path": "Static Props (1)/Sandbags (9)",
+            "name": "Sandbags (9)",
+            "parentPath": "Static Props",
+            "siblingIndex": 109,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-301725241-0",
+            "path": "Static Props (1)/Staircase",
+            "name": "Staircase",
+            "parentPath": "Static Props",
+            "siblingIndex": 179,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-366120574-0",
+            "path": "Static Props (1)/Staircase",
+            "name": "Staircase",
+            "parentPath": "Static Props",
+            "siblingIndex": 181,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-507110520-0",
+            "path": "Static Props (1)/Staircase",
+            "name": "Staircase",
+            "parentPath": "Static Props",
+            "siblingIndex": 178,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-459350909-0",
+            "path": "Static Props (1)/Staircase",
+            "name": "Staircase",
+            "parentPath": "Static Props",
+            "siblingIndex": 180,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-521746623-0",
+            "path": "Static Props (1)/Staircase",
+            "name": "Staircase",
+            "parentPath": "Static Props",
+            "siblingIndex": 177,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1203745319-0",
+            "path": "Static Props (1)/Staircase (2)",
+            "name": "Staircase (2)",
+            "parentPath": "Static Props",
+            "siblingIndex": 227,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-151239571-0",
+            "path": "Static Props (1)/Staircase (3)",
+            "name": "Staircase (3)",
+            "parentPath": "Static Props",
+            "siblingIndex": 228,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-784039465-0",
+            "path": "Static Props (1)/Tank Trap",
+            "name": "Tank Trap",
+            "parentPath": "Static Props",
+            "siblingIndex": 192,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1827166622-0",
+            "path": "Static Props (1)/Tank Trap",
+            "name": "Tank Trap",
+            "parentPath": "Static Props",
+            "siblingIndex": 253,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1076820511-0",
+            "path": "Static Props (1)/Tank Trap",
+            "name": "Tank Trap",
+            "parentPath": "Static Props",
+            "siblingIndex": 214,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-403975540-0",
+            "path": "Static Props (1)/Tank Trap (1)",
+            "name": "Tank Trap (1)",
+            "parentPath": "Static Props",
+            "siblingIndex": 252,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-334332729-0",
+            "path": "Static Props (1)/Tank Trap (1)",
+            "name": "Tank Trap (1)",
+            "parentPath": "Static Props",
+            "siblingIndex": 193,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-436605934-0",
+            "path": "Static Props (1)/Tank Trap (10)",
+            "name": "Tank Trap (10)",
+            "parentPath": "Static Props",
+            "siblingIndex": 202,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-445032727-0",
+            "path": "Static Props (1)/Tank Trap (10)",
+            "name": "Tank Trap (10)",
+            "parentPath": "Static Props",
+            "siblingIndex": 241,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-958378904-0",
+            "path": "Static Props (1)/Tank Trap (11)",
+            "name": "Tank Trap (11)",
+            "parentPath": "Static Props",
+            "siblingIndex": 203,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-44301994-0",
+            "path": "Static Props (1)/Tank Trap (11)",
+            "name": "Tank Trap (11)",
+            "parentPath": "Static Props",
+            "siblingIndex": 240,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-754674573-0",
+            "path": "Static Props (1)/Tank Trap (12)",
+            "name": "Tank Trap (12)",
+            "parentPath": "Static Props",
+            "siblingIndex": 239,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-305396188-0",
+            "path": "Static Props (1)/Tank Trap (12)",
+            "name": "Tank Trap (12)",
+            "parentPath": "Static Props",
+            "siblingIndex": 204,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1884504674-0",
+            "path": "Static Props (1)/Tank Trap (13)",
+            "name": "Tank Trap (13)",
+            "parentPath": "Static Props",
+            "siblingIndex": 238,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1297883779-0",
+            "path": "Static Props (1)/Tank Trap (13)",
+            "name": "Tank Trap (13)",
+            "parentPath": "Static Props",
+            "siblingIndex": 205,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1597150062-0",
+            "path": "Static Props (1)/Tank Trap (14)",
+            "name": "Tank Trap (14)",
+            "parentPath": "Static Props",
+            "siblingIndex": 237,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-97836488-0",
+            "path": "Static Props (1)/Tank Trap (14)",
+            "name": "Tank Trap (14)",
+            "parentPath": "Static Props",
+            "siblingIndex": 206,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1115254924-0",
+            "path": "Static Props (1)/Tank Trap (15)",
+            "name": "Tank Trap (15)",
+            "parentPath": "Static Props",
+            "siblingIndex": 236,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1044307934-0",
+            "path": "Static Props (1)/Tank Trap (15)",
+            "name": "Tank Trap (15)",
+            "parentPath": "Static Props",
+            "siblingIndex": 209,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1594083528-0",
+            "path": "Static Props (1)/Tank Trap (16)",
+            "name": "Tank Trap (16)",
+            "parentPath": "Static Props",
+            "siblingIndex": 234,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-373963918-0",
+            "path": "Static Props (1)/Tank Trap (16)",
+            "name": "Tank Trap (16)",
+            "parentPath": "Static Props",
+            "siblingIndex": 210,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-562283683-0",
+            "path": "Static Props (1)/Tank Trap (17)",
+            "name": "Tank Trap (17)",
+            "parentPath": "Static Props",
+            "siblingIndex": 211,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-350325157-0",
+            "path": "Static Props (1)/Tank Trap (17)",
+            "name": "Tank Trap (17)",
+            "parentPath": "Static Props",
+            "siblingIndex": 233,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-2051486668-0",
+            "path": "Static Props (1)/Tank Trap (18)",
+            "name": "Tank Trap (18)",
+            "parentPath": "Static Props",
+            "siblingIndex": 212,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-540089764-0",
+            "path": "Static Props (1)/Tank Trap (19)",
+            "name": "Tank Trap (19)",
+            "parentPath": "Static Props",
+            "siblingIndex": 213,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-366812749-0",
+            "path": "Static Props (1)/Tank Trap (2)",
+            "name": "Tank Trap (2)",
+            "parentPath": "Static Props",
+            "siblingIndex": 251,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1780585412-0",
+            "path": "Static Props (1)/Tank Trap (2)",
+            "name": "Tank Trap (2)",
+            "parentPath": "Static Props",
+            "siblingIndex": 194,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1889888064-0",
+            "path": "Static Props (1)/Tank Trap (20)",
+            "name": "Tank Trap (20)",
+            "parentPath": "Static Props",
+            "siblingIndex": 215,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-638245258-0",
+            "path": "Static Props (1)/Tank Trap (3)",
+            "name": "Tank Trap (3)",
+            "parentPath": "Static Props",
+            "siblingIndex": 250,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-187818304-0",
+            "path": "Static Props (1)/Tank Trap (3)",
+            "name": "Tank Trap (3)",
+            "parentPath": "Static Props",
+            "siblingIndex": 195,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1603034361-0",
+            "path": "Static Props (1)/Tank Trap (4)",
+            "name": "Tank Trap (4)",
+            "parentPath": "Static Props",
+            "siblingIndex": 196,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-142622844-0",
+            "path": "Static Props (1)/Tank Trap (4)",
+            "name": "Tank Trap (4)",
+            "parentPath": "Static Props",
+            "siblingIndex": 249,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-826717077-0",
+            "path": "Static Props (1)/Tank Trap (5)",
+            "name": "Tank Trap (5)",
+            "parentPath": "Static Props",
+            "siblingIndex": 248,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1890660481-0",
+            "path": "Static Props (1)/Tank Trap (5)",
+            "name": "Tank Trap (5)",
+            "parentPath": "Static Props",
+            "siblingIndex": 197,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1441174256-0",
+            "path": "Static Props (1)/Tank Trap (6)",
+            "name": "Tank Trap (6)",
+            "parentPath": "Static Props",
+            "siblingIndex": 198,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1284832390-0",
+            "path": "Static Props (1)/Tank Trap (6)",
+            "name": "Tank Trap (6)",
+            "parentPath": "Static Props",
+            "siblingIndex": 247,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-908824159-0",
+            "path": "Static Props (1)/Tank Trap (7)",
+            "name": "Tank Trap (7)",
+            "parentPath": "Static Props",
+            "siblingIndex": 245,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-2136303511-0",
+            "path": "Static Props (1)/Tank Trap (7)",
+            "name": "Tank Trap (7)",
+            "parentPath": "Static Props",
+            "siblingIndex": 199,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-991068190-0",
+            "path": "Static Props (1)/Tank Trap (8)",
+            "name": "Tank Trap (8)",
+            "parentPath": "Static Props",
+            "siblingIndex": 200,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1508827920-0",
+            "path": "Static Props (1)/Tank Trap (8)",
+            "name": "Tank Trap (8)",
+            "parentPath": "Static Props",
+            "siblingIndex": 243,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-912417303-0",
+            "path": "Static Props (1)/Tank Trap (9)",
+            "name": "Tank Trap (9)",
+            "parentPath": "Static Props",
+            "siblingIndex": 201,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1882556472-0",
+            "path": "Static Props (1)/Tank Trap (9)",
+            "name": "Tank Trap (9)",
+            "parentPath": "Static Props",
+            "siblingIndex": 242,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-47472049-0",
+            "path": "Static Props (1)/Wall Entrance",
+            "name": "Wall Entrance",
+            "parentPath": "Static Props",
+            "siblingIndex": 0,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1803526502-0",
+            "path": "Static Props (1)/WoodenPlatform",
+            "name": "WoodenPlatform",
+            "parentPath": "Static Props",
+            "siblingIndex": 271,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-2139534407-0",
+            "path": "Static Props (1)/WoodenPlatformExtended",
+            "name": "WoodenPlatformExtended",
+            "parentPath": "Static Props",
+            "siblingIndex": 270,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1243078209-0",
+            "path": "Static Props (1)/WoodenPlatformExtended (4)",
+            "name": "WoodenPlatformExtended (4)",
+            "parentPath": "Static Props",
+            "siblingIndex": 120,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-284121845-0",
+            "path": "Static Props (1)/WoodenPlatformExtended (5)",
+            "name": "WoodenPlatformExtended (5)",
+            "parentPath": "Static Props",
+            "siblingIndex": 95,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1034022303-0",
+            "path": "Static Props (1)/WoodenPlatformExtended (6)",
+            "name": "WoodenPlatformExtended (6)",
+            "parentPath": "Static Props",
+            "siblingIndex": 92,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-2087822963-0",
+            "path": "Static Props (1)/WoodenPlatformExtended (7)",
+            "name": "WoodenPlatformExtended (7)",
+            "parentPath": "Static Props",
+            "siblingIndex": 137,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-2002611749-0",
+            "path": "Static Props (1)/WoodenPlatformExtended (8)",
+            "name": "WoodenPlatformExtended (8)",
+            "parentPath": "Static Props",
+            "siblingIndex": 134,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1144313673-0",
+            "path": "Static Props (1)/WoodenPlatformExtended (9)",
+            "name": "WoodenPlatformExtended (9)",
+            "parentPath": "Static Props",
+            "siblingIndex": 173,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1751960107-0",
+            "path": "Static Props (1)/farmhouse",
+            "name": "farmhouse",
+            "parentPath": "Static Props",
+            "siblingIndex": 184,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1313492101-0",
+            "path": "Static Props (1)/farmhouse/Staircase",
+            "name": "Staircase",
+            "parentPath": "Static Props/farmhouse",
+            "siblingIndex": 0,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-2054684849-0",
+            "path": "Static Props (1)/farmhouse/Staircase (1)",
+            "name": "Staircase (1)",
+            "parentPath": "Static Props/farmhouse",
+            "siblingIndex": 1,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-233937642-0",
+            "path": "Static Props (1)/tractor",
+            "name": "tractor",
+            "parentPath": "Static Props",
+            "siblingIndex": 176,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-910635097-0",
+            "path": "Static Props (1)/tractor (1)",
+            "name": "tractor (1)",
+            "parentPath": "Static Props",
+            "siblingIndex": 121,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-2003886782-0",
+            "path": "Static Props (1)/windmill/Blades",
+            "name": "Blades",
+            "parentPath": "Static Props/windmill",
+            "siblingIndex": 0,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-1269500939-0",
+            "path": "Static Props (1)/windmill/Windmill",
+            "name": "Windmill",
+            "parentPath": "Static Props/windmill",
+            "siblingIndex": 1,
+            "stage": "name+pos",
+            "flags": 127,
+            "hasRenderer": true
+        },
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-365472334-0",
+            "path": "Static Props (1)/Water",
+            "name": "Water",
+            "parentPath": "Static Props",
+            "siblingIndex": 1,
+            "stage": "name",
+            "flags": 127,
+            "hasRenderer": true
+        }
+    ],
+    "preexisting": [
+        {
+            "gid": "GlobalObjectId_V1-2-f6af5edf4c944d64c8885a34552cb47f-660-0",
+            "path": "Vehicle Spawners/Vehicle Spawner (6)",
+            "name": "Vehicle Spawner (6)",
+            "parentPath": "Vehicle Spawners",
+            "siblingIndex": 3,
+            "stage": "pre-existing",
+            "flags": -1,
+            "hasRenderer": true
+        }
+    ],
+    "guarded": [],
+    "ambiguous": [
+        {
+            "name": "Vehicle Spawner (6)",
+            "parentPath": "Static Props",
+            "path": "Static Props/Vehicle Spawner (6)",
+            "detail": "stage2: 2 candidates and the hierarchy path does not single one out ('Vehicle Spawners/Vehicle Spawner (6)', 'Vehicle Spawners/Vehicle Spawner (6)')"
+        }
+    ],
+    "absent": [
+        {
+            "name": "Dirt Barrier (2)",
+            "parentPath": "",
+            "path": "Dirt Barrier (2)",
+            "detail": "no object of this name left unclaimed in the scene"
+        }
+    ]
+}
