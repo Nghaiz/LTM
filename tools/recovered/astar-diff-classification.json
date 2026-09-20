@@ -1,0 +1,85 @@
+{
+  "note": "P24 section 3.2. (c) is reported as 0 only because 'unclassified' is empty -- every changed line was placed in (a), (b) or (d). A non-empty unclassified list is the (c) the phase went looking for, and this script exits 1 when there is one.",
+  "files": {
+    "AstarPath.cs": {
+      "changedLines": 107,
+      "a_ironfront_intentional": 0,
+      "b_unity_api_migration": 0,
+      "c_decompiler_loss": 0,
+      "d_decompiler_rendering": 107,
+      "renderingShapes": {
+        "discarded-unreachable-comment": 2,
+        "enum-member-explicit-value": 8,
+        "enum-name-vs-literal": 8,
+        "local-variable-rename": 59,
+        "object-initializer-vs-field-assignment": 30
+      }
+    },
+    "ProceduralGridMover.cs": {
+      "changedLines": 92,
+      "a_ironfront_intentional": 0,
+      "b_unity_api_migration": 0,
+      "c_decompiler_loss": 0,
+      "d_decompiler_rendering": 92,
+      "renderingShapes": {
+        "local-variable-rename": 82,
+        "object-initializer-vs-field-assignment": 10
+      }
+    },
+    "EuclideanEmbedding.cs": {
+      "changedLines": 60,
+      "a_ironfront_intentional": 0,
+      "b_unity_api_migration": 0,
+      "c_decompiler_loss": 0,
+      "d_decompiler_rendering": 60,
+      "renderingShapes": {
+        "explicit-numeric-conversion": 11,
+        "local-variable-rename": 49
+      }
+    },
+    "RecastGraph.cs": {
+      "changedLines": 48,
+      "a_ironfront_intentional": 0,
+      "b_unity_api_migration": 10,
+      "c_decompiler_loss": 0,
+      "d_decompiler_rendering": 38,
+      "renderingShapes": {
+        "enum-member-explicit-value": 6,
+        "local-variable-rename": 14,
+        "object-initializer-vs-field-assignment": 18
+      }
+    },
+    "Voxelize.cs": {
+      "changedLines": 44,
+      "a_ironfront_intentional": 0,
+      "b_unity_api_migration": 0,
+      "c_decompiler_loss": 0,
+      "d_decompiler_rendering": 44,
+      "renderingShapes": {
+        "enum-name-vs-literal": 14,
+        "explicit-numeric-conversion": 19,
+        "local-variable-rename": 5,
+        "object-initializer-vs-field-assignment": 6
+      }
+    },
+    "PathUtilities.cs": {
+      "changedLines": 16,
+      "a_ironfront_intentional": 0,
+      "b_unity_api_migration": 0,
+      "c_decompiler_loss": 0,
+      "d_decompiler_rendering": 16,
+      "renderingShapes": {
+        "enum-name-vs-literal": 4,
+        "local-variable-rename": 12
+      }
+    }
+  },
+  "totals": {
+    "changedLines": 367,
+    "a_ironfront_intentional": 0,
+    "b_unity_api_migration": 10,
+    "c_decompiler_loss": 0,
+    "d_decompiler_rendering": 357,
+    "unclassified": 0
+  }
+}
