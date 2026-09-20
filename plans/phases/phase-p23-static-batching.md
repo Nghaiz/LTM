@@ -49,18 +49,36 @@ Bảy thư mục trùng: `Material 2`, `Material3`, `Mesh2`, `Mesh3`, `Texture2D
 | Khoá | Dustbowl | Island |
 |---|---|---|
 | `fileID` | **0 / 1 096** | 1 / 345 |
-| `m_Name` | 179 duy nhất, 917 mơ hồ | 155 duy nhất, 189 mơ hồ |
-| **`(m_Name, m_LocalPosition)`** | **792 duy nhất**, 55 mơ hồ, 241 không khớp | **341 duy nhất**, **0 mơ hồ**, 4 không khớp |
+| `m_Name` đơn thuần | 179 duy nhất, 913 mơ hồ, 4 vắng | 155 duy nhất, 190 mơ hồ |
+| **giai đoạn 1 — `(m_Name, m_LocalPosition)`** | **792** duy nhất | **341** duy nhất |
+| **giai đoạn 2 — `m_Name` với phần còn lại** | **+171** | **+2** |
+| **ÁP ĐƯỢC** | **963 / 1 096** | **343 / 345** |
+| còn mơ hồ | 129 | 2 |
+| vắng mặt khỏi scene | **4** | 0 |
 
 `fileID` trùng 2 183 cái giữa hai scene nhưng **không cái nào là object static** — đó là probe,
 light, manager còn giữ ID Unity 5.4. Prop hình học bị cấp ID mới khi nâng lên 2017.
 
-**241 object Dustbowl không khớp = phần hình học bị mất.** Chúng chờ [P26](phase-p26-visual-fidelity.md)
-dựng lại object rồi mới khớp được. P23 làm 792 cái khớp chắc; P26 chạy lại script để bù nốt —
-script idempotent nên lần chạy thứ hai không tốn gì ngoài thời gian chạy.
+**Con số 792/241 trong bản kế hoạch đầu là sai, và sai theo hướng có lợi.** Đo lại 2026-09-20 trên
+JSON mà P22 đã commit, đối chiếu scene thật:
 
-**55 mục mơ hồ của Dustbowl**: gỡ bằng `parentPath` (đường dẫn hierarchy đầy đủ) mà P22 đã ghi vào
-JSON. Cái nào vẫn mơ hồ sau khi thêm `parentPath` thì **bỏ qua và liệt kê**, không đoán.
+- **Áp được 963, không phải 792.** Giai đoạn 2 khớp theo tên với những mục giai đoạn 1 trượt, cộng
+  thêm 171. Đó chính là dân số `displaced` trong `missing-objects.Dustbowl.json`: object có mặt
+  trong scene nhưng `localPos` đã khác — thường do đổi cha, không phải do biến mất.
+- **Chỉ 4 cờ chờ [P26](phase-p26-visual-fidelity.md), không phải 241** — `Hanging_Rope`, `Mount`,
+  `Tied_Rope`, `Well`. Đó là toàn bộ phần giao giữa 1 096 object static và 144 object hình học bị
+  thiếu. **116 `Railroad Sleeper(Clone)` vốn không static**, nên dựng lại chúng ở P26 không thêm
+  một cờ nào. P26 gần như không gánh gì về static flags.
+- **129 mơ hồ không phải do thiếu hình học**, nên P26 cũng không gỡ được. Chúng là anh em cùng tên
+  dưới cùng cha — 826 `RockDesert` là ví dụ điển hình. `path` không tách được chúng.
+
+**Cách xử 129 mơ hồ:** trong Editor, Unity có hierarchy đúng và `Transform.GetSiblingIndex()`, thứ
+YAML thô không có. Đo lại ở đó trước khi bỏ cuộc. Cái nào vẫn mơ hồ sau khi thử **bỏ qua và liệt
+kê** — không đoán. 129/1 096 là 12%, không đáng đánh đổi rủi ro gắn cờ nhầm object.
+
+**Giai đoạn 2 phải báo cáo riêng.** Khớp theo tên yếu hơn khớp theo tên+vị trí: nó tin rằng object
+cùng tên duy nhất trong scene là cùng một object. Gần như luôn đúng, nhưng phải kiểm toán được —
+script ghi rõ cờ nào đến từ giai đoạn 1, cờ nào từ giai đoạn 2.
 
 ## 5. Bẫy cú pháp YAML
 
@@ -75,8 +93,9 @@ Unity 6 nhưng vẫn phải đọc `m_LocalPosition` từ cả hai — dùng par
 
 `Ironfront_Reborn/Assets/Editor/RecoveredPort/RestoreStaticFlags.cs`
 
-Đọc `tools/recovered/static-flags.<scene>.json`, khớp theo `(m_Name, m_LocalPosition)` rồi
-`parentPath`, đặt `GameObjectUtility.SetStaticEditorFlags`. Idempotent: chạy lần hai không đổi gì.
+Đọc `tools/recovered/static-flags.<scene>.json`, khớp hai giai đoạn theo §4, đặt
+`GameObjectUtility.SetStaticEditorFlags`. Idempotent: chạy lần hai không đổi gì. Báo cáo tách riêng
+giai đoạn 1 / giai đoạn 2 / mơ hồ / vắng mặt.
 
 ### 6.2 Guard — bắt buộc, không thương lượng
 
@@ -127,15 +146,16 @@ một test chưa được chứng minh.
 
 ## 7. Nghiệm thu
 
-1. Island: 341 cờ được đặt, 4 không khớp được liệt kê tên.
-2. Dustbowl: 792 cờ đặt được (hoặc ít hơn, mỗi cái thiếu có lý do ghi rõ), 241 hoãn sang P26 —
-   nêu đích danh trong báo cáo, không nói chung chung.
+1. Island: **343** cờ được đặt (341 giai đoạn 1 + 2 giai đoạn 2), 2 mơ hồ liệt kê tên.
+2. Dustbowl: **963** cờ đặt được — tách riêng số của giai đoạn 1 và giai đoạn 2. 129 mơ hồ và 4
+   vắng mặt nêu **đích danh**, không nói chung chung. Đặt được ít hơn 963 thì mỗi cái thiếu phải có
+   lý do.
 3. Danh sách object guard bỏ qua, kèm lý do từng cái.
 4. Bảng draw call / frame time trước-sau cho cả hai map. **Không có ngưỡng số cứng** — chủ dự
    án quyết định đạt hay chưa từ bảng số cộng với lần chơi thử (chốt 2026-09-20). Không tự đặt
    ngưỡng rồi tự tuyên bố đạt; không thêm gate perf vào `ci.ps1` ở phase này.
 5. Mutation test đã chạy, cả hai chiều đỏ đúng chỗ.
-6. `tools/ci.ps1` xanh; EditMode suite giữ baseline 120/120 cộng test mới.
+6. `tools/ci.ps1` xanh; EditMode suite giữ baseline **194/194** (đo ở P22, 2026-09-20) cộng test mới.
 7. **Lane-B verify**: một lượt `run-lane-b.ps1` sau khi đặt cờ, chứng minh không có gì đứng im.
 8. Chủ dự án chơi thử bằng `playtest-local.ps1`, xác nhận cảm nhận giật lag.
 
@@ -163,6 +183,6 @@ Hai rủi ro ≥ 15 đều có biện pháp chặn trước khi PR mở.
 
 ## 10. Không thuộc phase này
 
-Không đụng shader, không dựng 122 object thiếu (→ [P26](phase-p26-visual-fidelity.md)), không sửa
+Không đụng shader, không dựng 144 object thiếu (→ [P26](phase-p26-visual-fidelity.md)), không sửa
 A* (→ [P24](phase-p24-astar-hitch.md)), không đụng ragdoll (→ [P25](phase-p25-ragdoll-drive.md)),
 không sửa `Assets/Scripts`.

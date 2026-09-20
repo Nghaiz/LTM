@@ -13,10 +13,10 @@ Ba việc, độc lập nhau, xếp theo độ chắc chắn giảm dần:
 
 1. **71 material đang trỏ shader dummy** → shader đúng. Chắc chắn làm được.
 2. **25 shader thiếu** → đưa vào project. Chắc chắn làm được.
-3. **122 GameObject Dustbowl bị mất** → dựng lại. **Chưa xác minh được có làm nổi không.**
+3. **144 GameObject Dustbowl bị mất** → dựng lại. **Chưa xác minh được có làm nổi không.**
 
-Rồi bù nốt **241 cờ static** mà [P23](phase-p23-static-batching.md) phải hoãn vì chúng thuộc về
-đúng phần hình học ở mục 3.
+Rồi bù nốt **4 cờ static** mà [P23](phase-p23-static-batching.md) phải hoãn vì chúng nằm trên đúng
+phần hình học ở mục 3: `Hanging_Rope`, `Mount`, `Tied_Rope`, `Well`.
 
 Nếu mục 3 không khả thi, mục 1 và 2 vẫn giao được — **đừng để mục 3 chặn chúng**.
 
@@ -36,9 +36,11 @@ placeholder `fileID: 45` dù chúng mang property của nhiều shader khác nha
 |---|---|---|
 | Material trỏ `m_Shader: {fileID: 45}` | — | **71 / 255** |
 | Shader file | 46 | 21 |
-| `GameObject` — Dustbowl | 5 587 | 5 465 (**−122**) |
+| `GameObject` — Dustbowl | 5 587 | 5 465 (−122 **ròng**) |
 | `MeshRenderer` — Dustbowl | 2 307 | 2 173 (**−134**) |
-| Cờ static Dustbowl còn treo sau P23 | — | **241** |
+| Object vắng mặt (dân số phải dựng) | — | **144** |
+| Object do Ironfront tự thêm | — | 22 |
+| Cờ static Dustbowl còn treo sau P23 | — | **4** |
 
 Object có trong bản gốc mà không có trong project: `Railroad Left`, `Railroad Right`,
 `Railroad Sleeper`, **116× `Railroad Sleeper(Clone)`**, `MineRails`, `Side Objects`,
@@ -67,14 +69,14 @@ material khớp **chính xác** danh sách property của `Standard` thật lấ
 thiếu — nên chuyển về `Standard` là **lossless**. **Kiểm chứng lại khẳng định này trên ít nhất 5
 material trước khi chuyển cả 100** (`rules/agent-anti-rationalization.md`: biết ≠ đã kiểm).
 
-## 5. Cổng rủi ro — làm TRƯỚC khi hứa dựng lại 122 object
+## 5. Cổng rủi ro — làm TRƯỚC khi hứa dựng lại 144 object
 
 **Không viết một dòng code dựng object nào trước khi qua cổng này.**
 
 Đã biết:
 - `Ironfront_Reborn/Assets/Prefab/Railroad Sleeper.prefab` **có tồn tại**, cùng
   `Material/Railroad Metal.mat` và `Material/Railroad Sleeper.mat`. 116 `Railroad Sleeper(Clone)`
-  vì thế nhiều khả năng dựng lại được từ prefab có sẵn — đó là phần lớn của 122.
+  vì thế nhiều khả năng dựng lại được từ prefab có sẵn — đó là 116 trên 144.
 - Cả hai scene **không có mesh nhúng** (`--- !u!43` = 0 ở cả hai). Mesh nằm ở asset ngoài.
 - `Railroad Left` trong bản gốc có **0 component** — nó là transform cha thuần, giữ đám sleeper.
 
@@ -90,7 +92,7 @@ Chưa biết, và phải trả lời trước:
    Khi đó hạ scope: dựng phần dựng được (sleeper từ prefab, prop rời), ghi rõ phần bỏ, và **hỏi
    chủ dự án** trước khi tìm đường vòng.
 
-Trả lời cổng này xong mới biết 241 cờ static bù được bao nhiêu.
+Trả lời cổng này xong mới biết 4 cờ static còn treo có bù được không.
 
 ## 6. Việc phải làm
 
@@ -118,23 +120,29 @@ hình ảnh, nên xử ở đây: dựng lại `Cloth` kèm tham số từ bản
 mô phỏng vải, nên component dựng lại đúng chưa chắc trông đúng. Nếu trông sai, ghi lại và để đó;
 đây là 6 object, không đáng chặn phase.
 
-### 6.5 Bù 241 cờ static
+### 6.5 Bù 4 cờ static
 
 Chạy lại `RestoreStaticFlags.cs` của P23 — script idempotent, lần chạy này chỉ chạm những object
 vừa dựng. **Guard của P23 vẫn áp dụng**: không đặt Batching Static lên object có `Rigidbody` hay
 component netcode, và liệt kê cái bị bỏ qua.
 
+Chỉ **4** cờ, không phải 241 như bản kế hoạch đầu: đo 2026-09-20 cho thấy phần giao giữa 1 096
+object static và 144 object thiếu đúng bằng `Hanging_Rope`, `Mount`, `Tied_Rope`, `Well`. **116
+`Railroad Sleeper(Clone)` vốn không static**, nên dựng lại chúng không thêm cờ nào. 129 mục mơ hồ
+còn lại của P23 là anh em cùng tên dưới cùng cha — P26 **không** gỡ được, đừng hứa.
+
 ### 6.6 Mở rộng test baseline
 
-Test danh tính của P23 phải bao luôn 241 cờ mới. Vẫn hai chiều, vẫn mutation test.
+Test danh tính của P23 phải bao luôn 4 cờ mới. Vẫn hai chiều, vẫn mutation test.
 
 ## 7. Nghiệm thu
 
 1. 0 material còn trỏ `fileID: 45` — hoặc mỗi cái còn lại có lý do ghi rõ.
 2. Ảnh chụp trước/sau cho 4 material dùng shader custom, và cho mỗi nhóm shader built-in.
 3. Kết luận cổng §5 viết ra rõ ràng, kèm phạm vi đã tìm mesh.
-4. Nếu dựng được: `GameObject` Dustbowl = 5 587 (hoặc chênh có giải thích); `MeshRenderer` = 2 307.
-5. Cờ static Dustbowl đạt 1 096, hoặc phần thiếu nêu đích danh.
+4. Nếu dựng được: 144 object có mặt; `MeshRenderer` Dustbowl = 2 307 (hoặc chênh có giải thích).
+5. 4 cờ static còn treo đã đặt → Dustbowl đạt 967/1 096; 129 mơ hồ vẫn bỏ ngỏ **theo thiết kế**,
+   nêu đích danh.
 6. Lane-B verify: object mới không chặn đường bot, không phá spawn point, không đứng im sai chỗ.
 7. `tools/ci.ps1` xanh; EditMode suite + test baseline mở rộng đều xanh.
 8. Chủ dự án chơi thử Dustbowl và xác nhận.
@@ -156,8 +164,8 @@ Test danh tính của P23 phải bao luôn 241 cờ mới. Vẫn hai chiều, v�
 |---|---|---|
 | Cổng rủi ro §5 | S | **Làm trước**; quyết định scope phần còn lại |
 | 71 material + 25 shader | M | Chắc chắn làm được |
-| Dựng 122 object | M–L | Chưa biết trước; phụ thuộc cổng §5 |
-| Bù 241 cờ + mở rộng test | S | Chạy lại script P23 |
+| Dựng 144 object | M–L | Chưa biết trước; phụ thuộc cổng §5 |
+| Bù 4 cờ + mở rộng test | S | Chạy lại script P23 |
 | **Tổng** | **L (~1 tuần)** | Phụ thuộc: [P22](phase-p22-recovered-ground-truth.md), [P23](phase-p23-static-batching.md) |
 
 ## 10. Không thuộc phase này
