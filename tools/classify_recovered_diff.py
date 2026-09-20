@@ -23,8 +23,10 @@ WHY THIS EXISTS
 WHAT IT DOES NOT DO
     It does not decide (a) vs (b) vs (c). A regex cannot tell "deleted the pause key because
     multiplayer has no pause" from "dropped a statement by accident" -- both are a line we do not
-    have. It hands a human the short list and the nearest counterpart line in our tree, and the
-    human decides. Reporting a bucket here would be a number nobody could check.
+    have. It hands a human the short list plus, for each line, the method it sits in and the
+    nearest-looking line in our tree -- a navigation hint, NOT a counterpart (see
+    NEAREST_LINE_WARNING; two independent readers were misled by it). A bucket column here
+    would be a number nobody could check.
 
     It is also position-insensitive, so a statement REORDERED inside a method is invisible to it.
     That is a deliberate trade: the decompilers emit members in different orders, and an
@@ -75,6 +77,19 @@ P24_FILES = {"AstarPath.cs", "ProceduralGridMover.cs", "EuclideanEmbedding.cs",
 # braces: a rewritten method body produces dozens of them and not one is a fact about the game.
 TRIVIAL = {"{", "}", "};", "});", ")", ");", "else", "break;", "continue;", "return;",
            "#endif", "#else", "try", "finally", "do", "default"}
+
+NEAREST_LINE_WARNING = (
+    "`nearestLineInOurs` is the most similar line ANYWHERE in our file, not the corresponding "
+    "line. It is a navigation hint. Two independent readers of this data hit the same trap: a "
+    "renamed local shifts which line scores highest, so the match lands on a sibling line in "
+    "another method and fabricates a structural divergence that does not exist -- an inverted "
+    "condition, a changed loop, a wrong constant. Below a similarity of ~0.8, go read "
+    "`recoveredMember` in our tree and find the real counterpart. Grade the method, not the row."
+)
+
+MEMBER_SIGNATURE = re.compile(
+    r"^\t(?:\[.*\]\s*)?(?:(?:public|private|protected|internal|static|override|virtual|sealed|"
+    r"abstract|new|extern|partial|unsafe|async|readonly|const)\s+)*[\w<>\[\],\.\?]+\s+(\w+)\s*[({=]")
 
 CAST = re.compile(r"\((?:s?byte|u?short|u?int|u?long|float|double|decimal)\)")
 NUMERIC_SUFFIX = re.compile(r"(?<=[\d.])[fFdDuUlLmM]+\b")
@@ -165,18 +180,40 @@ def read(rel):
         return strip_comments(f.read())
 
 
+def members(lines):
+    """(line number, name) for every member signature at one-tab depth, so a candidate can name
+    the method a reader should go and read rather than only the line it sat on."""
+    out = []
+    for i, l in enumerate(lines, 1):
+        m = MEMBER_SIGNATURE.match(l)
+        if m and not l.rstrip().endswith(";"):
+            out.append((i, m.group(1)))
+    return out
+
+
+def member_at(member_list, lineno):
+    name = None
+    for start, n in member_list:
+        if start > lineno:
+            break
+        name = n
+    return name
+
+
 def survivors(rec_rel, ours_rel):
     """Lines the recovered file has that ours does not, after (d)-normalisation, ignoring order.
 
     The multiset is what makes it position-insensitive AND duplicate-safe: three identical calls
     in the original and two in ours leaves exactly one survivor, which is the honest answer."""
+    rec_raw = read(rec_rel)
+    rec_members = members(rec_raw)
     ours_counts = collections.Counter(normalise(l) for l in read(ours_rel))
     ours_lines = [l.strip() for l in read(ours_rel)]
     ours_norm = [normalise(l) for l in ours_lines]
     pool = [n for n in ours_norm if n]
 
     out, seen = [], collections.Counter()
-    for lineno, raw in enumerate(read(rec_rel), 1):
+    for lineno, raw in enumerate(rec_raw, 1):
         n = normalise(raw)
         if not n or n in TRIVIAL:
             continue
@@ -184,11 +221,13 @@ def survivors(rec_rel, ours_rel):
         if seen[n] <= ours_counts.get(n, 0):
             continue
         near = difflib.get_close_matches(n, pool, n=1, cutoff=0.6)
-        counterpart = ours_lines[ours_norm.index(near[0])] if near else None
         out.append({
             "line": lineno,
+            "recoveredMember": member_at(rec_members, lineno),
             "recovered": raw.strip(),
-            "ours": counterpart,
+            # NOT the counterpart. See NEAREST_LINE_WARNING -- this is the most similar line
+            # anywhere in our file, which is frequently a sibling line in another method.
+            "nearestLineInOurs": ours_lines[ours_norm.index(near[0])] if near else None,
             "similarity": round(difflib.SequenceMatcher(None, n, near[0]).ratio(), 2) if near else 0.0,
         })
     return out
@@ -296,7 +335,7 @@ def build(pairs, include_astar):
         if found:
             files[name] = {"recovered": rec_rel, "ours": ours_rel,
                            "survivors": len(found),
-                           "outrightDeletions": sum(1 for c in found if c["ours"] is None),
+                           "outrightDeletions": sum(1 for c in found if c["nearestLineInOurs"] is None),
                            "candidates": found}
     return files, skipped
 
@@ -369,6 +408,7 @@ def main():
                 "comments, decompiler-rendering differences and moved lines. NOT a bug list: "
                 "each candidate is still (a), (b), (c) or (d) until a person reads it. "
                 "Verified by --self-test.",
+        "readThisFirst": NEAREST_LINE_WARNING,
         "scope": {
             "commonFiles": len(pairs),
             "filesWithCandidates": len(files),

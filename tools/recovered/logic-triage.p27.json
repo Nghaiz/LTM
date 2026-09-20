@@ -1,5 +1,6 @@
 {
   "note": "Lines the recovered original has that our tree does not, after dropping comments, decompiler-rendering differences and moved lines. NOT a bug list: each candidate is still (a), (b), (c) or (d) until a person reads it. Verified by --self-test.",
+  "readThisFirst": "`nearestLineInOurs` is the most similar line ANYWHERE in our file, not the corresponding line. It is a navigation hint. Two independent readers of this data hit the same trap: a renamed local shifts which line scores highest, so the match lands on a sibling line in another method and fabricates a structural divergence that does not exist -- an inverted condition, a changed loop, a wrong constant. Below a similarity of ~0.8, go read `recoveredMember` in our tree and find the real counterpart. Grade the method, not the row.",
   "scope": {
     "commonFiles": 322,
     "filesWithCandidates": 70,
@@ -29,338 +30,394 @@
       "candidates": [
         {
           "line": 28,
+          "recoveredMember": null,
           "recovered": "private int blueScore;",
-          "ours": "private Color blue;",
+          "nearestLineInOurs": "private Color blue;",
           "similarity": 0.68
         },
         {
           "line": 30,
+          "recoveredMember": null,
           "recovered": "private int redScore;",
-          "ours": "private Color red;",
+          "nearestLineInOurs": "private Color red;",
           "similarity": 0.67
         },
         {
           "line": 32,
+          "recoveredMember": null,
           "recovered": "private int blueFlags;",
-          "ours": "private int lastPhase;",
+          "nearestLineInOurs": "private int lastPhase;",
           "similarity": 0.73
         },
         {
           "line": 34,
+          "recoveredMember": null,
           "recovered": "private int redFlags;",
-          "ours": "private int lastPhase;",
+          "nearestLineInOurs": "private int lastPhase;",
           "similarity": 0.74
         },
         {
           "line": 44,
+          "recoveredMember": null,
           "recovered": "private bool gameEnded;",
-          "ours": "private Color red;",
+          "nearestLineInOurs": "private Color red;",
           "similarity": 0.68
         },
         {
           "line": 46,
+          "recoveredMember": "AddScore",
           "recovered": "public static void AddScore(int blue, int red)",
-          "ours": "public static void SetCapturePointCounts(int blueCount, int redCount)",
+          "nearestLineInOurs": "public static void SetCapturePointCounts(int blueCount, int redCount)",
           "similarity": 0.71
         },
         {
           "line": 48,
+          "recoveredMember": "AddScore",
           "recovered": "instance.blueScore += blue * ScoreMultiplier(instance.blueFlags);",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 49,
+          "recoveredMember": "AddScore",
           "recovered": "instance.redScore += red * ScoreMultiplier(instance.redFlags);",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 50,
+          "recoveredMember": "AddScore",
           "recovered": "if (blue > 0)",
-          "ours": "if (blueScored)",
+          "nearestLineInOurs": "if (blueScored)",
           "similarity": 0.64
         },
         {
           "line": 52,
+          "recoveredMember": "AddScore",
           "recovered": "instance.bluePulse.Start();",
-          "ours": "bluePulse.Start();",
+          "nearestLineInOurs": "bluePulse.Start();",
           "similarity": 0.8
         },
         {
           "line": 54,
+          "recoveredMember": "AddScore",
           "recovered": "if (red > 0)",
-          "ours": "if (redScored)",
+          "nearestLineInOurs": "if (redScored)",
           "similarity": 0.62
         },
         {
           "line": 56,
+          "recoveredMember": "AddScore",
           "recovered": "instance.redPulse.Start();",
-          "ours": "redPulse.Start();",
+          "nearestLineInOurs": "redPulse.Start();",
           "similarity": 0.79
         },
         {
           "line": 58,
+          "recoveredMember": "AddScore",
           "recovered": "instance.UpdateUi();",
-          "ours": "UpdateUi();",
+          "nearestLineInOurs": "UpdateUi();",
           "similarity": 0.71
         },
         {
           "line": 59,
+          "recoveredMember": "AddScore",
           "recovered": "if (!instance.gameEnded)",
-          "ours": "if (instance == null)",
+          "nearestLineInOurs": "if (instance == null)",
           "similarity": 0.62
         },
         {
           "line": 61,
+          "recoveredMember": "AddScore",
           "recovered": "if (instance.blueScore >= instance.redScore + GameManager.instance.victoryPoints)",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 63,
+          "recoveredMember": "AddScore",
           "recovered": "Win(true);",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 65,
+          "recoveredMember": "AddScore",
           "recovered": "else if (instance.redScore >= instance.blueScore + GameManager.instance.victoryPoints)",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 67,
+          "recoveredMember": "AddScore",
           "recovered": "Win(false);",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 72,
+          "recoveredMember": "AddFlag",
           "recovered": "public static void AddFlag(int blue, int red)",
-          "ours": "public static void SetCapturePointCounts(int blueCount, int redCount)",
+          "nearestLineInOurs": "public static void SetCapturePointCounts(int blueCount, int redCount)",
           "similarity": 0.68
         },
         {
           "line": 74,
+          "recoveredMember": "AddFlag",
           "recovered": "instance.blueFlags += blue;",
-          "ours": "if (instance.blueFlagsText != null)",
+          "nearestLineInOurs": "if (instance.blueFlagsText != null)",
           "similarity": 0.71
         },
         {
           "line": 75,
+          "recoveredMember": "AddFlag",
           "recovered": "instance.redFlags += red;",
-          "ours": "if (instance.redFlagsText != null)",
+          "nearestLineInOurs": "if (instance.redFlagsText != null)",
           "similarity": 0.68
         },
         {
           "line": 76,
+          "recoveredMember": "AddFlag",
           "recovered": "instance.UpdateUi();",
-          "ours": "UpdateUi();",
+          "nearestLineInOurs": "UpdateUi();",
           "similarity": 0.71
         },
         {
           "line": 77,
+          "recoveredMember": "AddFlag",
           "recovered": "if (!instance.gameEnded && GameManager.instance.ElapsedGameTime() > 1f)",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 79,
+          "recoveredMember": "AddFlag",
           "recovered": "if (!ActorManager.HasSpawnPoint(0))",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 81,
+          "recoveredMember": "AddFlag",
           "recovered": "Win(false);",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 83,
+          "recoveredMember": "AddFlag",
           "recovered": "else if (!ActorManager.HasSpawnPoint(1))",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 85,
+          "recoveredMember": "AddFlag",
           "recovered": "Win(true);",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 90,
+          "recoveredMember": "Win",
           "recovered": "public static void Win(bool blue)",
-          "ours": "private void OnMatchEnded(bool blue)",
+          "nearestLineInOurs": "private void OnMatchEnded(bool blue)",
           "similarity": 0.64
         },
         {
           "line": 92,
+          "recoveredMember": "Win",
           "recovered": "if (!instance.gameEnded)",
-          "ours": "if (instance == null)",
+          "nearestLineInOurs": "if (instance == null)",
           "similarity": 0.62
         },
         {
           "line": 94,
+          "recoveredMember": "Win",
           "recovered": "instance.gameEnded = true;",
-          "ours": "instance.hasAuthoritativeState = true;",
+          "nearestLineInOurs": "instance.hasAuthoritativeState = true;",
           "similarity": 0.62
         },
         {
           "line": 95,
+          "recoveredMember": "Win",
           "recovered": "instance.victoryScreen.gameObject.SetActive(true);",
-          "ours": "victoryScreen.gameObject.SetActive(true);",
+          "nearestLineInOurs": "victoryScreen.gameObject.SetActive(true);",
           "similarity": 0.9
         },
         {
           "line": 96,
+          "recoveredMember": "Win",
           "recovered": "Color color = ((!blue) ? instance.red : instance.blue);",
-          "ours": "Color color = ((!blue) ? red : this.blue);",
+          "nearestLineInOurs": "Color color = ((!blue) ? red : this.blue);",
           "similarity": 0.8
         },
         {
           "line": 98,
+          "recoveredMember": "Win",
           "recovered": "instance.victoryScreen.color = color;",
-          "ours": "victoryScreen.color = color;",
+          "nearestLineInOurs": "victoryScreen.color = color;",
           "similarity": 0.86
         },
         {
           "line": 99,
+          "recoveredMember": "Win",
           "recovered": "if (blue)",
-          "ours": "if (blueScored)",
+          "nearestLineInOurs": "if (blueScored)",
           "similarity": 0.75
         },
         {
           "line": 101,
+          "recoveredMember": "Win",
           "recovered": "instance.victoryText.text = \"BLUE TEAM IS\";",
-          "ours": "victoryText.text = blue ? \"BLUE TEAM IS\" : \"RED TEAM IS\";",
+          "nearestLineInOurs": "victoryText.text = blue ? \"BLUE TEAM IS\" : \"RED TEAM IS\";",
           "similarity": 0.68
         },
         {
           "line": 105,
+          "recoveredMember": "Win",
           "recovered": "instance.victoryText.text = \"RED TEAM IS\";",
-          "ours": "victoryText.text = blue ? \"BLUE TEAM IS\" : \"RED TEAM IS\";",
+          "nearestLineInOurs": "victoryText.text = blue ? \"BLUE TEAM IS\" : \"RED TEAM IS\";",
           "similarity": 0.67
         },
         {
           "line": 107,
+          "recoveredMember": "Win",
           "recovered": "instance.Invoke(\"HideVictoryScreen\", 5f);",
-          "ours": "Invoke(\"HideVictoryScreen\", 5f);",
+          "nearestLineInOurs": "Invoke(\"HideVictoryScreen\", 5f);",
           "similarity": 0.87
         },
         {
           "line": 118,
+          "recoveredMember": "ScoreMultiplier",
           "recovered": "return flags;",
-          "ours": "return \"Playing\";",
+          "nearestLineInOurs": "return \"Playing\";",
           "similarity": 0.73
         },
         {
           "line": 124,
+          "recoveredMember": "Awake",
           "recovered": "blueScore = 0;",
-          "ours": "if (blueScored)",
+          "nearestLineInOurs": "if (blueScored)",
           "similarity": 0.62
         },
         {
           "line": 125,
+          "recoveredMember": "Awake",
           "recovered": "redScore = 0;",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 126,
+          "recoveredMember": "Awake",
           "recovered": "blueFlags = 0;",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 127,
+          "recoveredMember": "Awake",
           "recovered": "redFlags = 0;",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 139,
+          "recoveredMember": "UpdateUi",
           "recovered": "blueFlagsText.text = blueFlags.ToString();",
-          "ours": "blueFlagsText.text = board.BlueFlags.ToString();",
+          "nearestLineInOurs": "blueFlagsText.text = board.BlueFlags.ToString();",
           "similarity": 0.93
         },
         {
           "line": 140,
+          "recoveredMember": "UpdateUi",
           "recovered": "redFlagsText.text = redFlags.ToString();",
-          "ours": "redFlagsText.text = board.RedFlags.ToString();",
+          "nearestLineInOurs": "redFlagsText.text = board.RedFlags.ToString();",
           "similarity": 0.93
         },
         {
           "line": 141,
+          "recoveredMember": "UpdateUi",
           "recovered": "bool flag = blueScore + redScore >= GameManager.instance.victoryPoints;",
-          "ours": "bool flag = blueScore + redScore >= victoryPoints;",
+          "nearestLineInOurs": "bool flag = blueScore + redScore >= victoryPoints;",
           "similarity": 0.83
         },
         {
           "line": 142,
+          "recoveredMember": "UpdateUi",
           "recovered": "intercept.enabled = flag;",
-          "ours": "ui.intercept.enabled = flag;",
+          "nearestLineInOurs": "ui.intercept.enabled = flag;",
           "similarity": 0.94
         },
         {
           "line": 145,
+          "recoveredMember": "UpdateUi",
           "recovered": "float x = (float)blueScore / (float)GameManager.instance.victoryPoints;",
-          "ours": "float x = (float)blueScore / (float)victoryPoints;",
+          "nearestLineInOurs": "float x = (float)blueScore / (float)victoryPoints;",
           "similarity": 0.77
         },
         {
           "line": 146,
+          "recoveredMember": "UpdateUi",
           "recovered": "float x2 = 1f - (float)redScore / (float)GameManager.instance.victoryPoints;",
-          "ours": "float x2 = 1f - (float)redScore / (float)victoryPoints;",
+          "nearestLineInOurs": "float x2 = 1f - (float)redScore / (float)victoryPoints;",
           "similarity": 0.79
         },
         {
           "line": 147,
+          "recoveredMember": "UpdateUi",
           "recovered": "blueBar.rectTransform.anchorMax = new Vector2(x, 1f);",
-          "ours": "ui.blueBar.rectTransform.anchorMax = new Vector2(x, 1f);",
+          "nearestLineInOurs": "ui.blueBar.rectTransform.anchorMax = new Vector2(x, 1f);",
           "similarity": 0.97
         },
         {
           "line": 148,
+          "recoveredMember": "UpdateUi",
           "recovered": "redBar.rectTransform.anchorMin = new Vector2(x2, 0f);",
-          "ours": "ui.redBar.rectTransform.anchorMin = new Vector2(x2, 0f);",
+          "nearestLineInOurs": "ui.redBar.rectTransform.anchorMin = new Vector2(x2, 0f);",
           "similarity": 0.97
         },
         {
           "line": 152,
+          "recoveredMember": "UpdateUi",
           "recovered": "float x3 = Mathf.Clamp01((float)(blueScore - redScore + GameManager.instance.victoryPoints) / (float)(2 * GameManager.instance.victoryPoints));",
-          "ours": "float x3 = Mathf.Clamp01((float)(blueScore - redScore + victoryPoints) / (float)(2 * victoryPoints));",
+          "nearestLineInOurs": "float x3 = Mathf.Clamp01((float)(blueScore - redScore + victoryPoints) / (float)(2 * victoryPoints));",
           "similarity": 0.81
         },
         {
           "line": 153,
+          "recoveredMember": "UpdateUi",
           "recovered": "blueBar.rectTransform.anchorMax = new Vector2(x3, 1f);",
-          "ours": "ui.blueBar.rectTransform.anchorMax = new Vector2(x3, 1f);",
+          "nearestLineInOurs": "ui.blueBar.rectTransform.anchorMax = new Vector2(x3, 1f);",
           "similarity": 0.97
         },
         {
           "line": 154,
+          "recoveredMember": "UpdateUi",
           "recovered": "redBar.rectTransform.anchorMin = new Vector2(x3, 0f);",
-          "ours": "ui.redBar.rectTransform.anchorMin = new Vector2(x3, 0f);",
+          "nearestLineInOurs": "ui.redBar.rectTransform.anchorMin = new Vector2(x3, 0f);",
           "similarity": 0.97
         },
         {
           "line": 155,
+          "recoveredMember": "UpdateUi",
           "recovered": "intercept.rectTransform.anchorMin = new Vector2(x3, 0f);",
-          "ours": "ui.intercept.rectTransform.anchorMin = new Vector2(x3, 0f);",
+          "nearestLineInOurs": "ui.intercept.rectTransform.anchorMin = new Vector2(x3, 0f);",
           "similarity": 0.97
         },
         {
           "line": 156,
+          "recoveredMember": "UpdateUi",
           "recovered": "intercept.rectTransform.anchorMax = new Vector2(x3, 1f);",
-          "ours": "ui.intercept.rectTransform.anchorMax = new Vector2(x3, 1f);",
+          "nearestLineInOurs": "ui.intercept.rectTransform.anchorMax = new Vector2(x3, 1f);",
           "similarity": 0.97
         },
         {
           "line": 170,
+          "recoveredMember": "Update",
           "recovered": "if (Input.GetKeyDown(KeyCode.Tab))",
-          "ours": "if (Input.GetKeyDown(KeyCode.V))",
+          "nearestLineInOurs": "if (Input.GetKeyDown(KeyCode.V))",
           "similarity": 0.94
         }
       ]
@@ -373,284 +430,331 @@
       "candidates": [
         {
           "line": 1,
+          "recoveredMember": null,
           "recovered": "using System;",
-          "ours": "\ufeffusing System;",
+          "nearestLineInOurs": "\ufeffusing System;",
           "similarity": 0.96
         },
         {
           "line": 2,
+          "recoveredMember": null,
           "recovered": "using System.Collections;",
-          "ours": "\ufeffusing System;",
+          "nearestLineInOurs": "\ufeffusing System;",
           "similarity": 0.67
         },
         {
           "line": 5,
+          "recoveredMember": null,
           "recovered": "public class Actor : Hurtable",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 204,
+          "recoveredMember": "SpawnAt",
           "recovered": "seat.OccupantLeft();",
-          "ours": "leaving.OccupantLeft();",
+          "nearestLineInOurs": "leaving.OccupantLeft();",
           "similarity": 0.84
         },
         {
           "line": 235,
+          "recoveredMember": "SpawnLoadoutWeapons",
           "recovered": "WeaponManager.LoadoutSet loadout = controller.GetLoadout();",
-          "ours": "WeaponManager.LoadoutSet loadout = ResolveDeployLoadout() ?? controller.GetLoadout();",
+          "nearestLineInOurs": "WeaponManager.LoadoutSet loadout = ResolveDeployLoadout() ?? controller.GetLoadout();",
           "similarity": 0.82
         },
         {
           "line": 344,
+          "recoveredMember": "FixedUpdate",
           "recovered": "hipRigidbody.drag = 8f;",
-          "ours": "hipRigidbody.linearDamping = 8f;",
+          "nearestLineInOurs": "hipRigidbody.linearDamping = 8f;",
           "similarity": 0.79
         },
         {
           "line": 345,
+          "recoveredMember": "FixedUpdate",
           "recovered": "hipRigidbody.angularDrag = 8f;",
-          "ours": "hipRigidbody.angularDamping = 8f;",
+          "nearestLineInOurs": "hipRigidbody.angularDamping = 8f;",
           "similarity": 0.92
         },
         {
           "line": 349,
+          "recoveredMember": "FixedUpdate",
           "recovered": "headRigidbody.angularDrag = 3f;",
-          "ours": "headRigidbody.angularDamping = 3f;",
+          "nearestLineInOurs": "headRigidbody.angularDamping = 3f;",
           "similarity": 0.92
         },
         {
           "line": 350,
+          "recoveredMember": "FixedUpdate",
           "recovered": "headRigidbody.drag = 10f;",
-          "ours": "headRigidbody.linearDamping = 10f;",
+          "nearestLineInOurs": "headRigidbody.linearDamping = 10f;",
           "similarity": 0.81
         },
         {
           "line": 355,
+          "recoveredMember": "FixedUpdate",
           "recovered": "hipRigidbody.drag = 0f;",
-          "ours": "hipRigidbody.linearDamping = 0f;",
+          "nearestLineInOurs": "hipRigidbody.linearDamping = 0f;",
           "similarity": 0.79
         },
         {
           "line": 356,
+          "recoveredMember": "FixedUpdate",
           "recovered": "headRigidbody.drag = 0f;",
-          "ours": "headRigidbody.linearDamping = 0f;",
+          "nearestLineInOurs": "headRigidbody.linearDamping = 0f;",
           "similarity": 0.8
         },
         {
           "line": 357,
+          "recoveredMember": "FixedUpdate",
           "recovered": "hipRigidbody.angularDrag = 0.05f;",
-          "ours": "hipRigidbody.angularDamping = 0.05f;",
+          "nearestLineInOurs": "hipRigidbody.angularDamping = 0.05f;",
           "similarity": 0.93
         },
         {
           "line": 358,
+          "recoveredMember": "FixedUpdate",
           "recovered": "headRigidbody.angularDrag = 0.05f;",
-          "ours": "headRigidbody.angularDamping = 0.05f;",
+          "nearestLineInOurs": "headRigidbody.angularDamping = 0.05f;",
           "similarity": 0.93
         },
         {
           "line": 377,
+          "recoveredMember": "Update",
           "recovered": "if (inWater && !fallenOver)",
-          "ours": "if (!dead && fallenOver)",
+          "nearestLineInOurs": "if (!dead && fallenOver)",
           "similarity": 0.78
         },
         {
           "line": 442,
+          "recoveredMember": "UpdateWeapon",
           "recovered": "bool flag = !fallenOver && controller.Fire() && (!IsSeated() || seat.CanUseWeapon() || seat.HasMountedWeapon());",
-          "ours": "bool flag = !fallenOver && controller.Fire() && (!IsSeated() || seat.CanUseCarriedWeapon() || seat.HasMountedWeapon());",
+          "nearestLineInOurs": "bool flag = !fallenOver && controller.Fire() && (!IsSeated() || seat.CanUseCarriedWeapon() || seat.HasMountedWeapon());",
           "similarity": 0.97
         },
         {
           "line": 721,
+          "recoveredMember": "Die",
           "recovered": "ScoreUi.AddScore((team == 1) ? 1 : 0, (team == 0) ? 1 : 0);",
-          "ours": "MatchScoreboard.Current.AddScore((team == 1) ? 1 : 0, (team == 0) ? 1 : 0);",
+          "nearestLineInOurs": "MatchScoreboard.Current.AddScore((team == 1) ? 1 : 0, (team == 0) ? 1 : 0);",
           "similarity": 0.85
         },
         {
           "line": 782,
+          "recoveredMember": "Damage",
           "recovered": "if (health <= 0f)",
-          "ours": "if (ownsHealth && health <= 0f)",
+          "nearestLineInOurs": "if (ownsHealth && health <= 0f)",
           "similarity": 0.7
         },
         {
           "line": 798,
+          "recoveredMember": "Damage",
           "recovered": "if (!aiControlled)",
-          "ours": "if (!aiControlled)",
+          "nearestLineInOurs": "if (!aiControlled)",
           "similarity": 1.0
         },
         {
           "line": 827,
+          "recoveredMember": "Unholster",
           "recovered": "if (!aiControlled)",
-          "ours": "if (!aiControlled)",
+          "nearestLineInOurs": "if (!aiControlled)",
           "similarity": 1.0
         },
         {
           "line": 880,
+          "recoveredMember": "IsPassenger",
           "recovered": "return IsSeated() && seat.type != Seat.Type.Driver && seat.type != Seat.Type.Pilot;",
-          "ours": "return IsSeated() && (seat.type == Seat.Type.Driver || seat.type == Seat.Type.Pilot);",
+          "nearestLineInOurs": "return IsSeated() && (seat.type == Seat.Type.Driver || seat.type == Seat.Type.Pilot);",
           "similarity": 0.94
         },
         {
           "line": 899,
+          "recoveredMember": "EnterSeat",
           "recovered": "if (seat.vehicle.dead || seat.IsOccupied())",
-          "ours": "if (seat.vehicle.dead || seat.IsOccupied() || IsSeated())",
+          "nearestLineInOurs": "if (seat.vehicle.dead || seat.IsOccupied() || IsSeated())",
           "similarity": 0.86
         },
         {
           "line": 911,
+          "recoveredMember": "EnterSeat",
           "recovered": "if (!seat.CanUseWeapon())",
-          "ours": "if (!seat.CanUseCarriedWeapon())",
+          "nearestLineInOurs": "if (!seat.CanUseCarriedWeapon())",
           "similarity": 0.88
         },
         {
           "line": 938,
+          "recoveredMember": "LeaveSeat",
           "recovered": "seat.OccupantLeft();",
-          "ours": "leaving.OccupantLeft();",
+          "nearestLineInOurs": "leaving.OccupantLeft();",
           "similarity": 0.84
         },
         {
           "line": 956,
+          "recoveredMember": "LeaveSeat",
           "recovered": "StartCoroutine(ReactivateCollisionsWith(vehicle));",
-          "ours": "ReactivateCollisions();",
+          "nearestLineInOurs": "ReactivateCollisions();",
           "similarity": 0.63
         },
         {
           "line": 959,
+          "recoveredMember": "ReactivateCollisionsWith",
           "recovered": "private IEnumerator ReactivateCollisionsWith(Vehicle vehicle)",
-          "ours": "private void ReactivateCollisions()",
+          "nearestLineInOurs": "private void ReactivateCollisions()",
           "similarity": 0.67
         },
         {
           "line": 961,
+          "recoveredMember": "ReactivateCollisionsWith",
           "recovered": "yield return new WaitForSeconds(0.5f);",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 962,
+          "recoveredMember": "ReactivateCollisionsWith",
           "recovered": "bool reenteredThatVehicle = IsSeated() && seat.vehicle == vehicle;",
-          "ours": "bool flag = IsSeated() && seat.enclosed;",
+          "nearestLineInOurs": "bool flag = IsSeated() && seat.enclosed;",
           "similarity": 0.62
         },
         {
           "line": 963,
+          "recoveredMember": "ReactivateCollisionsWith",
           "recovered": "if (vehicle != null && !reenteredThatVehicle)",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 975,
+          "recoveredMember": "NextWeapon",
           "recovered": "if (dead || fallenOver || (IsSeated() && !seat.CanUseWeapon()))",
-          "ours": "if (dead || fallenOver || (IsSeated() && !seat.CanUseCarriedWeapon()))",
+          "nearestLineInOurs": "if (dead || fallenOver || (IsSeated() && !seat.CanUseCarriedWeapon()))",
           "similarity": 0.95
         },
         {
           "line": 979,
+          "recoveredMember": "NextWeapon",
           "recovered": "for (int i = 1; i < 4; i++)",
-          "ours": "for (int i = 1; i < 5; i++)",
+          "nearestLineInOurs": "for (int i = 1; i < 5; i++)",
           "similarity": 0.96
         },
         {
           "line": 981,
+          "recoveredMember": "NextWeapon",
           "recovered": "int num = (activeWeaponSlot + i) % 5;",
-          "ours": "int slot = (activeWeaponSlot + step * i + 5) % 5;",
+          "nearestLineInOurs": "int slot = (activeWeaponSlot + step * i + 5) % 5;",
           "similarity": 0.79
         },
         {
           "line": 982,
+          "recoveredMember": "NextWeapon",
           "recovered": "if (weapons[num] != null && !weapons[num].IsToggleable())",
-          "ours": "if (!(weapon == null) && weapon.AllowsResupply())",
+          "nearestLineInOurs": "if (!(weapon == null) && weapon.AllowsResupply())",
           "similarity": 0.62
         },
         {
           "line": 984,
+          "recoveredMember": "NextWeapon",
           "recovered": "SwitchWeapon(num);",
-          "ours": "UpdateSwimWeapon();",
+          "nearestLineInOurs": "UpdateSwimWeapon();",
           "similarity": 0.65
         },
         {
           "line": 992,
+          "recoveredMember": "PreviousWeapon",
           "recovered": "if (dead || fallenOver || (IsSeated() && !seat.CanUseWeapon()))",
-          "ours": "if (dead || fallenOver || (IsSeated() && !seat.CanUseCarriedWeapon()))",
+          "nearestLineInOurs": "if (dead || fallenOver || (IsSeated() && !seat.CanUseCarriedWeapon()))",
           "similarity": 0.95
         },
         {
           "line": 996,
+          "recoveredMember": "PreviousWeapon",
           "recovered": "for (int i = 1; i < 4; i++)",
-          "ours": "for (int i = 1; i < 5; i++)",
+          "nearestLineInOurs": "for (int i = 1; i < 5; i++)",
           "similarity": 0.96
         },
         {
           "line": 998,
+          "recoveredMember": "PreviousWeapon",
           "recovered": "int num = (activeWeaponSlot - i + 5) % 5;",
-          "ours": "int slot = (activeWeaponSlot + step * i + 5) % 5;",
+          "nearestLineInOurs": "int slot = (activeWeaponSlot + step * i + 5) % 5;",
           "similarity": 0.82
         },
         {
           "line": 999,
+          "recoveredMember": "PreviousWeapon",
           "recovered": "if (weapons[num] != null)",
-          "ours": "if (!(weapon != null))",
+          "nearestLineInOurs": "if (!(weapon != null))",
           "similarity": 0.81
         },
         {
           "line": 1001,
+          "recoveredMember": "PreviousWeapon",
           "recovered": "SwitchWeapon(num);",
-          "ours": "UpdateSwimWeapon();",
+          "nearestLineInOurs": "UpdateSwimWeapon();",
           "similarity": 0.65
         },
         {
           "line": 1009,
+          "recoveredMember": "SwitchWeapon",
           "recovered": "if (dead || fallenOver || (IsSeated() && !seat.CanUseWeapon()))",
-          "ours": "if (dead || fallenOver || (IsSeated() && !seat.CanUseCarriedWeapon()))",
+          "nearestLineInOurs": "if (dead || fallenOver || (IsSeated() && !seat.CanUseCarriedWeapon()))",
           "similarity": 0.95
         },
         {
           "line": 1066,
+          "recoveredMember": "ControllingVehicle",
           "recovered": "return IsSeated() && !seat.CanUseWeapon();",
-          "ours": "return IsSeated() && !seat.CanUseCarriedWeapon();",
+          "nearestLineInOurs": "return IsSeated() && !seat.CanUseCarriedWeapon();",
           "similarity": 0.92
         },
         {
           "line": 1098,
+          "recoveredMember": "RemoveSpareAmmo",
           "recovered": "if (!aiControlled)",
-          "ours": "if (!aiControlled)",
+          "nearestLineInOurs": "if (!aiControlled)",
           "similarity": 1.0
         },
         {
           "line": 1113,
+          "recoveredMember": "AmmoChanged",
           "recovered": "if (!aiControlled)",
-          "ours": "if (!aiControlled)",
+          "nearestLineInOurs": "if (!aiControlled)",
           "similarity": 1.0
         },
         {
           "line": 1140,
+          "recoveredMember": "ResupplyAmmo",
           "recovered": "if (!aiControlled)",
-          "ours": "if (!aiControlled)",
+          "nearestLineInOurs": "if (!aiControlled)",
           "similarity": 1.0
         },
         {
           "line": 1155,
+          "recoveredMember": "ResupplyHealth",
           "recovered": "if (!aiControlled && num != health)",
-          "ours": "if (!aiControlled)",
+          "nearestLineInOurs": "if (!aiControlled)",
           "similarity": 0.68
         },
         {
           "line": 1165,
+          "recoveredMember": "IsLowQuality",
           "recovered": "if (!aiControlled)",
-          "ours": "if (!aiControlled)",
+          "nearestLineInOurs": "if (!aiControlled)",
           "similarity": 1.0
         },
         {
           "line": 1171,
+          "recoveredMember": "IsLowQuality",
           "recovered": "return !skinnedRendererRagdoll.isVisible || Vector3.Distance(base.transform.position, Camera.main.transform.position) > 12000f / Camera.main.fieldOfView;",
-          "ours": "return !skinnedRendererRagdoll.isVisible || Vector3.Distance(base.transform.position, camera.transform.position) > 12000f / camera.fieldOfView;",
+          "nearestLineInOurs": "return !skinnedRendererRagdoll.isVisible || Vector3.Distance(base.transform.position, camera.transform.position) > 12000f / camera.fieldOfView;",
           "similarity": 0.95
         },
         {
           "line": 1173,
+          "recoveredMember": "IsLowQuality",
           "recovered": "return !skinnedRenderer.isVisible || Vector3.Distance(base.transform.position, Camera.main.transform.position) > 12000f / Camera.main.fieldOfView;",
-          "ours": "return !skinnedRenderer.isVisible || Vector3.Distance(base.transform.position, camera.transform.position) > 12000f / camera.fieldOfView;",
+          "nearestLineInOurs": "return !skinnedRenderer.isVisible || Vector3.Distance(base.transform.position, camera.transform.position) > 12000f / camera.fieldOfView;",
           "similarity": 0.95
         }
       ]
@@ -663,242 +767,282 @@
       "candidates": [
         {
           "line": 51,
+          "recoveredMember": null,
           "recovered": "public static int playerTeam = -1;",
-          "ours": "public static int playerTeam",
+          "nearestLineInOurs": "public static int playerTeam",
           "similarity": 0.9
         },
         {
           "line": 105,
+          "recoveredMember": "Awake",
           "recovered": "playerTeam = actor.team;",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 130,
+          "recoveredMember": "Fire",
           "recovered": "return (Input.GetButton(\"Fire1\") || Input.GetMouseButton(0)) && !LoadoutUi.IsOpen();",
-          "ours": "&& (Input.GetButtonDown(\"Fire1\") || Input.GetMouseButtonDown(0)))",
+          "nearestLineInOurs": "&& (Input.GetButtonDown(\"Fire1\") || Input.GetMouseButtonDown(0)))",
           "similarity": 0.74
         },
         {
           "line": 139,
+          "recoveredMember": "Aiming",
           "recovered": "return (Input.GetButton(\"Fire2\") || Input.GetMouseButton(1)) && !LoadoutUi.IsOpen();",
-          "ours": "&& (Input.GetButtonDown(\"Fire1\") || Input.GetMouseButtonDown(0)))",
+          "nearestLineInOurs": "&& (Input.GetButtonDown(\"Fire1\") || Input.GetMouseButtonDown(0)))",
           "similarity": 0.71
         },
         {
           "line": 144,
+          "recoveredMember": "Reload",
           "recovered": "return Input.GetButton(\"Reload\") && !LoadoutUi.IsOpen();",
-          "ours": "return aimToggle && !LoadoutUi.IsOpen();",
+          "nearestLineInOurs": "return aimToggle && !LoadoutUi.IsOpen();",
           "similarity": 0.67
         },
         {
           "line": 164,
+          "recoveredMember": "SwimInput",
           "recovered": "return tpCamera.transform.forward * Input.GetAxis(\"Vertical\") + tpCamera.transform.right * Input.GetAxis(\"Horizontal\");",
-          "ours": "return tpCamera.transform.forward * inputSource.MoveZ + tpCamera.transform.right * inputSource.MoveX;",
+          "nearestLineInOurs": "return tpCamera.transform.forward * inputSource.MoveZ + tpCamera.transform.right * inputSource.MoveX;",
           "similarity": 0.72
         },
         {
           "line": 188,
+          "recoveredMember": "CarInput",
           "recovered": "return new Vector2(Input.GetAxis(\"Horizontal\"), Input.GetAxis(\"Vertical\"));",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 193,
+          "recoveredMember": "HelicopterInput",
           "recovered": "float num = OptionsUi.GetOptions().mouseSensitivity * OptionsUi.GetOptions().helicopterSensitivity;",
-          "ours": "controller.SetMouseSensitivityMultiplier(OptionsUi.GetOptions().mouseSensitivity, OptionsUi.GetOptions().mouseInvert);",
+          "nearestLineInOurs": "controller.SetMouseSensitivityMultiplier(OptionsUi.GetOptions().mouseSensitivity, OptionsUi.GetOptions().mouseInvert);",
           "similarity": 0.66
         },
         {
           "line": 194,
+          "recoveredMember": "HelicopterInput",
           "recovered": "if (OptionsUi.GetOptions().helicopterType == 2)",
-          "ours": "if (OptionsUi.GetOptions().toggleAim)",
+          "nearestLineInOurs": "if (OptionsUi.GetOptions().toggleAim)",
           "similarity": 0.71
         },
         {
           "line": 196,
+          "recoveredMember": "HelicopterInput",
           "recovered": "float num2 = Input.GetAxis(\"Helicopter Pitch\") * ((!OptionsUi.GetOptions().heliInvertPitch) ? 1f : (-1f));",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 197,
+          "recoveredMember": "HelicopterInput",
           "recovered": "float num3 = Input.GetAxis(\"Helicopter Yaw\") * ((!OptionsUi.GetOptions().heliInvertYaw) ? 1f : (-1f));",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 198,
+          "recoveredMember": "HelicopterInput",
           "recovered": "float num4 = Input.GetAxis(\"Helicopter Roll\") * ((!OptionsUi.GetOptions().heliInvertRoll) ? 1f : (-1f));",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 199,
+          "recoveredMember": "HelicopterInput",
           "recovered": "float y = Input.GetAxis(\"Helicopter Throttle\") * ((!OptionsUi.GetOptions().heliInvertThrottle) ? 1f : (-1f));",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 200,
+          "recoveredMember": "HelicopterInput",
           "recovered": "return new Vector4(num3 * 30f * num, y, num4 * 20f * num, num2 * 30f * num);",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 202,
+          "recoveredMember": "HelicopterInput",
           "recovered": "Vector2 vector = new Vector2(num * Input.GetAxis(\"Mouse X\"), num * Input.GetAxis(\"Mouse Y\"));",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 203,
+          "recoveredMember": "HelicopterInput",
           "recovered": "if (!OptionsUi.GetOptions().heliInvertPitch)",
-          "ours": "if (OptionsUi.GetOptions().toggleAim)",
+          "nearestLineInOurs": "if (OptionsUi.GetOptions().toggleAim)",
           "similarity": 0.74
         },
         {
           "line": 205,
+          "recoveredMember": "HelicopterInput",
           "recovered": "vector.y = 0f - vector.y;",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 207,
+          "recoveredMember": "HelicopterInput",
           "recovered": "if (Aiming())",
-          "ours": "if (IsSprinting())",
+          "nearestLineInOurs": "if (IsSprinting())",
           "similarity": 0.71
         },
         {
           "line": 209,
+          "recoveredMember": "HelicopterInput",
           "recovered": "vector = Vector2.zero;",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 211,
+          "recoveredMember": "HelicopterInput",
           "recovered": "if (OptionsUi.GetOptions().helicopterType == 0)",
-          "ours": "if (OptionsUi.GetOptions().toggleAim)",
+          "nearestLineInOurs": "if (OptionsUi.GetOptions().toggleAim)",
           "similarity": 0.71
         },
         {
           "line": 213,
+          "recoveredMember": "HelicopterInput",
           "recovered": "return new Vector4(Input.GetAxis(\"Horizontal\"), Input.GetAxis(\"Vertical\"), vector.x * 20f, vector.y * 30f);",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 215,
+          "recoveredMember": "HelicopterInput",
           "recovered": "return new Vector4(vector.x * 30f, Input.GetAxis(\"Vertical\"), Input.GetAxis(\"Horizontal\") * 20f, vector.y * 30f);",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 276,
+          "recoveredMember": "StartSeated",
           "recovered": "if (!seat.CanUseWeapon())",
-          "ours": "if (!seat.CanUseCarriedWeapon())",
+          "nearestLineInOurs": "if (!seat.CanUseCarriedWeapon())",
           "similarity": 0.88
         },
         {
           "line": 287,
+          "recoveredMember": "StartSeated",
           "recovered": "if (!seat.CanUseWeapon())",
-          "ours": "if (!seat.CanUseCarriedWeapon())",
+          "nearestLineInOurs": "if (!seat.CanUseCarriedWeapon())",
           "similarity": 0.88
         },
         {
           "line": 378,
+          "recoveredMember": "Lean",
           "recovered": "return Input.GetAxis(\"Lean\");",
-          "ours": "return inputSource.Lean;",
+          "nearestLineInOurs": "return inputSource.Lean;",
           "similarity": 0.64
         },
         {
           "line": 468,
+          "recoveredMember": "Update",
           "recovered": "if (Input.GetButtonDown(\"Loadout\"))",
-          "ours": "if (!Input.GetButtonDown(\"Use\"))",
+          "nearestLineInOurs": "if (!Input.GetButtonDown(\"Use\"))",
           "similarity": 0.84
         },
         {
           "line": 489,
+          "recoveredMember": "Update",
           "recovered": "if (Time.timeScale < 1f)",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 491,
+          "recoveredMember": "Update",
           "recovered": "Time.timeScale = 1f;",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 495,
+          "recoveredMember": "Update",
           "recovered": "Time.timeScale = 0.2f;",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 497,
+          "recoveredMember": "Update",
           "recovered": "Time.fixedDeltaTime = Time.timeScale / 60f;",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 525,
+          "recoveredMember": "UpdateInput",
           "recovered": "actor.SwitchWeapon(0);",
-          "ours": "actor.SwitchWeapon(slot);",
+          "nearestLineInOurs": "actor.SwitchWeapon(slot);",
           "similarity": 0.89
         },
         {
           "line": 529,
+          "recoveredMember": "UpdateInput",
           "recovered": "actor.SwitchWeapon(1);",
-          "ours": "actor.SwitchWeapon(slot);",
+          "nearestLineInOurs": "actor.SwitchWeapon(slot);",
           "similarity": 0.89
         },
         {
           "line": 533,
+          "recoveredMember": "UpdateInput",
           "recovered": "actor.SwitchWeapon(2);",
-          "ours": "actor.SwitchWeapon(slot);",
+          "nearestLineInOurs": "actor.SwitchWeapon(slot);",
           "similarity": 0.89
         },
         {
           "line": 537,
+          "recoveredMember": "UpdateInput",
           "recovered": "actor.SwitchWeapon(3);",
-          "ours": "actor.SwitchWeapon(slot);",
+          "nearestLineInOurs": "actor.SwitchWeapon(slot);",
           "similarity": 0.89
         },
         {
           "line": 541,
+          "recoveredMember": "UpdateInput",
           "recovered": "actor.SwitchWeapon(4);",
-          "ours": "actor.SwitchWeapon(slot);",
+          "nearestLineInOurs": "actor.SwitchWeapon(slot);",
           "similarity": 0.89
         },
         {
           "line": 581,
+          "recoveredMember": "UpdateInput",
           "recovered": "actor.NextWeapon();",
-          "ours": "actor.SwitchWeapon(slot);",
+          "nearestLineInOurs": "actor.SwitchWeapon(slot);",
           "similarity": 0.73
         },
         {
           "line": 585,
+          "recoveredMember": "UpdateInput",
           "recovered": "actor.PreviousWeapon();",
-          "ours": "actor.SwitchWeapon(slot);",
+          "nearestLineInOurs": "actor.SwitchWeapon(slot);",
           "similarity": 0.67
         },
         {
           "line": 666,
+          "recoveredMember": "GetLoadout",
           "recovered": "return LoadoutUi.instance.loadout;",
-          "ours": "WeaponManager.LoadoutSet chosen = LoadoutUi.instance.loadout;",
+          "nearestLineInOurs": "WeaponManager.LoadoutSet chosen = LoadoutUi.instance.loadout;",
           "similarity": 0.67
         },
         {
           "line": 675,
+          "recoveredMember": "Crouch",
           "recovered": "return Input.GetButton(\"Crouch\");",
-          "ours": "if (Input.GetButtonDown(\"Fire2\"))",
+          "nearestLineInOurs": "if (Input.GetButtonDown(\"Fire2\"))",
           "similarity": 0.64
         },
         {
           "line": 715,
+          "recoveredMember": "IsSprinting",
           "recovered": "return !Crouch() && !Aiming() && !IsReloading() && Input.GetButton(\"Sprint\") && !actor.IsSeated();",
-          "ours": "return !Crouch() && !Aiming() && !IsReloading() && inputSource.Sprint() && !actor.IsSeated();",
+          "nearestLineInOurs": "return !Crouch() && !Aiming() && !IsReloading() && inputSource.Sprint() && !actor.IsSeated();",
           "similarity": 0.89
         }
       ]
@@ -911,146 +1055,170 @@
       "candidates": [
         {
           "line": 4,
+          "recoveredMember": null,
           "recovered": "public class Vehicle : MonoBehaviour",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 120,
+          "recoveredMember": "HasDriver",
           "recovered": "return seats[0].IsOccupied();",
-          "ours": "return seats[0].occupant;",
+          "nearestLineInOurs": "return seats[0].occupant;",
           "similarity": 0.78
         },
         {
           "line": 138,
+          "recoveredMember": "Awake",
           "recovered": "health = maxHealth;",
-          "ours": "return health / maxHealth;",
+          "nearestLineInOurs": "return health / maxHealth;",
           "similarity": 0.8
         },
         {
           "line": 150,
+          "recoveredMember": "CheckRam",
           "recovered": "Vector3 vector = rigidbody.velocity * Time.fixedDeltaTime;",
-          "ours": "Vector3 vector = rigidbody.linearVelocity * Time.fixedDeltaTime;",
+          "nearestLineInOurs": "Vector3 vector = rigidbody.linearVelocity * Time.fixedDeltaTime;",
           "similarity": 0.93
         },
         {
           "line": 165,
+          "recoveredMember": "FixedUpdate",
           "recovered": "if (rigidbody.velocity.magnitude < 3f)",
-          "ours": "if (rigidbody.linearVelocity.magnitude < 3f)",
+          "nearestLineInOurs": "if (rigidbody.linearVelocity.magnitude < 3f)",
           "similarity": 0.9
         },
         {
           "line": 173,
+          "recoveredMember": "FixedUpdate",
           "recovered": "if (burning && !dead)",
-          "ours": "if (burning)",
+          "nearestLineInOurs": "if (burning)",
           "similarity": 0.73
         },
         {
           "line": 175,
+          "recoveredMember": "FixedUpdate",
           "recovered": "burnTime -= Time.deltaTime;",
-          "ours": "burnTime -= Time.fixedDeltaTime;",
+          "nearestLineInOurs": "burnTime -= Time.fixedDeltaTime;",
           "similarity": 0.92
         },
         {
           "line": 219,
+          "recoveredMember": "HasUnclaimedSeats",
           "recovered": "return seatsClaimedByBots < seats.Length;",
-          "ours": "return ClaimedSeatCount < seats.Length;",
+          "nearestLineInOurs": "return ClaimedSeatCount < seats.Length;",
           "similarity": 0.8
         },
         {
           "line": 238,
+          "recoveredMember": "OccupantLeft",
           "recovered": "InvokeRepeating(\"AutoDamage\", 50f, 2f);",
-          "ours": "CancelInvoke(\"AutoDamage\");",
+          "nearestLineInOurs": "CancelInvoke(\"AutoDamage\");",
           "similarity": 0.66
         },
         {
           "line": 245,
+          "recoveredMember": "AutoDamage",
           "recovered": "Damage(maxHealth * 0.07f);",
-          "ours": "Damage(maxHealth * AUTO_DAMAGE_PERCENT);",
+          "nearestLineInOurs": "Damage(maxHealth * AUTO_DAMAGE_PERCENT);",
           "similarity": 0.65
         },
         {
           "line": 263,
+          "recoveredMember": "Damage",
           "recovered": "health = Mathf.Clamp(health - amount, 0f, maxHealth);",
-          "ours": "health = Mathf.Clamp(newHealth, 0f, maxHealth);",
+          "nearestLineInOurs": "health = Mathf.Clamp(newHealth, 0f, maxHealth);",
           "similarity": 0.86
         },
         {
           "line": 264,
+          "recoveredMember": "Damage",
           "recovered": "if (amount > 900f)",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 272,
+          "recoveredMember": "Damage",
           "recovered": "if (health < 0.5f * maxHealth)",
-          "ours": "bool showDamage = health < 0.5f * maxHealth;",
+          "nearestLineInOurs": "bool showDamage = health < 0.5f * maxHealth;",
           "similarity": 0.69
         },
         {
           "line": 320,
+          "recoveredMember": "Repair",
           "recovered": "health = Mathf.Min(health + amount, maxHealth);",
-          "ours": "ApplyHealth(Mathf.Min(health + amount, maxHealth), 0f, NoAttacker);",
+          "nearestLineInOurs": "ApplyHealth(Mathf.Min(health + amount, maxHealth), 0f, NoAttacker);",
           "similarity": 0.76
         },
         {
           "line": 321,
+          "recoveredMember": "Repair",
           "recovered": "if (health >= 0.5f * maxHealth)",
-          "ours": "bool showDamage = health < 0.5f * maxHealth;",
+          "nearestLineInOurs": "bool showDamage = health < 0.5f * maxHealth;",
           "similarity": 0.66
         },
         {
           "line": 326,
+          "recoveredMember": "Repair",
           "recovered": "InvokeRepeating(\"AutoDamage\", 50f, 2f);",
-          "ours": "CancelInvoke(\"AutoDamage\");",
+          "nearestLineInOurs": "CancelInvoke(\"AutoDamage\");",
           "similarity": 0.66
         },
         {
           "line": 377,
+          "recoveredMember": "OnCollisionEnter",
           "recovered": "if (burning && crashSkipsBurn && !dead)",
-          "ours": "if (burning && crashSkipsBurn && !dead && !NetVehicleAuthority.ServerOwnsVehicleDeath)",
+          "nearestLineInOurs": "if (burning && crashSkipsBurn && !dead && !NetVehicleAuthority.ServerOwnsVehicleDeath)",
           "similarity": 0.62
         },
         {
           "line": 403,
+          "recoveredMember": "Velocity",
           "recovered": "return rigidbody.velocity;",
-          "ours": "return rigidbody.linearVelocity;",
+          "nearestLineInOurs": "return rigidbody.linearVelocity;",
           "similarity": 0.86
         },
         {
           "line": 418,
+          "recoveredMember": "Clamp2",
           "recovered": "return new Vector2(Mathf.Clamp(v.x, -1f, 1f), Mathf.Clamp(v.y, -1f, 1f));",
-          "ours": "return new Vector2(VehicleInputClamp.Axis(v.x), VehicleInputClamp.Axis(v.y));",
+          "nearestLineInOurs": "return new Vector2(VehicleInputClamp.Axis(v.x), VehicleInputClamp.Axis(v.y));",
           "similarity": 0.62
         },
         {
           "line": 423,
+          "recoveredMember": "Clamp4",
           "recovered": "return new Vector4(Mathf.Clamp(v.x, -1f, 1f), Mathf.Clamp(v.y, -1f, 1f), Mathf.Clamp(v.z, -1f, 1f), Mathf.Clamp(v.w, -1f, 1f));",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 510,
+          "recoveredMember": "IsStill",
           "recovered": "return rigidbody.velocity.magnitude < 0.2f;",
-          "ours": "return rigidbody.linearVelocity.magnitude < 0.2f;",
+          "nearestLineInOurs": "return rigidbody.linearVelocity.magnitude < 0.2f;",
           "similarity": 0.91
         },
         {
           "line": 525,
+          "recoveredMember": "HeavyDamage",
           "recovered": "if (heavyDamageAudio != null && claimedByPlayer)",
-          "ours": "if (fireAlarm != null && claimedByPlayer)",
+          "nearestLineInOurs": "if (fireAlarm != null && claimedByPlayer)",
           "similarity": 0.76
         },
         {
           "line": 540,
+          "recoveredMember": "OnGUI",
           "recovered": "if (ActorManager.instance.debug && !dead && Camera.main != null)",
-          "ours": "if (ActorManager.instance != null && ActorManager.instance.debug && !dead && Camera.main != null)",
+          "nearestLineInOurs": "if (ActorManager.instance != null && ActorManager.instance.debug && !dead && Camera.main != null)",
           "similarity": 0.8
         },
         {
           "line": 547,
+          "recoveredMember": "OnGUI",
           "recovered": "GUI.Label(new Rect(vector.x - 100f, (float)Screen.height - vector.y, 200f, 50f), \"AI Claimed seats: \" + seatsClaimedByBots + \"/\" + seats.Length);",
-          "ours": "GUI.Label(new Rect(vector.x - 100f, (float)Screen.height - vector.y, 200f, 50f), \"AI Claimed seats: \" + ClaimedSeatCount + \"/\" + seats.Length);",
+          "nearestLineInOurs": "GUI.Label(new Rect(vector.x - 100f, (float)Screen.height - vector.y, 200f, 50f), \"AI Claimed seats: \" + ClaimedSeatCount + \"/\" + seats.Length);",
           "similarity": 0.94
         }
       ]
@@ -1063,140 +1231,163 @@
       "candidates": [
         {
           "line": 98,
+          "recoveredMember": "CreateAIActor",
           "recovered": "component.deathTimestamp = Time.time + Mathf.Max(spawnTime, 10f);",
-          "ours": "component.deathTimestamp = Time.time - (AI_SPAWN_WAVE_DEATH_GRACE + 1f);",
+          "nearestLineInOurs": "component.deathTimestamp = Time.time - (AI_SPAWN_WAVE_DEATH_GRACE + 1f);",
           "similarity": 0.62
         },
         {
           "line": 107,
+          "recoveredMember": "SpawnWave",
           "recovered": "if (actor.dead && actor.deathTimestamp + 6f < Time.time)",
-          "ours": "if (actor.dead && actor.deathTimestamp + AI_SPAWN_WAVE_DEATH_GRACE < Time.time)",
+          "nearestLineInOurs": "if (actor.dead && actor.deathTimestamp + AI_SPAWN_WAVE_DEATH_GRACE < Time.time)",
           "similarity": 0.81
         },
         {
           "line": 125,
+          "recoveredMember": "SpawnActorList",
           "recovered": "SpawnPoint spawnPoint2 = actor.controller.SelectedSpawnPoint();",
-          "ours": "SpawnPoint spawnPoint3 = actor.controller.SelectedSpawnPoint();",
+          "nearestLineInOurs": "SpawnPoint spawnPoint3 = actor.controller.SelectedSpawnPoint();",
           "similarity": 0.98
         },
         {
           "line": 126,
+          "recoveredMember": "SpawnActorList",
           "recovered": "if (spawnPoint2 != null)",
-          "ours": "if (spawnPoint3 != null)",
+          "nearestLineInOurs": "if (spawnPoint3 != null)",
           "similarity": 0.96
         },
         {
           "line": 128,
+          "recoveredMember": "SpawnActorList",
           "recovered": "actor.SpawnAt(spawnPoint2.GetSpawnPosition());",
-          "ours": "actor.SpawnAt(spawnPoint3.GetSpawnPosition());",
+          "nearestLineInOurs": "actor.SpawnAt(spawnPoint3.GetSpawnPosition());",
           "similarity": 0.98
         },
         {
           "line": 129,
+          "recoveredMember": "SpawnActorList",
           "recovered": "spawnedActors[spawnPoint2].Add(actor);",
-          "ours": "spawnedActors[spawnPoint3].Add(actor);",
+          "nearestLineInOurs": "spawnedActors[spawnPoint3].Add(actor);",
           "similarity": 0.97
         },
         {
           "line": 133,
+          "recoveredMember": "SpawnActorList",
           "recovered": "foreach (SpawnPoint spawnPoint3 in array2)",
-          "ours": "foreach (SpawnPoint spawnPoint2 in array2)",
+          "nearestLineInOurs": "foreach (SpawnPoint spawnPoint2 in array2)",
           "similarity": 0.98
         },
         {
           "line": 137,
+          "recoveredMember": "SpawnActorList",
           "recovered": "int squadSize = UnityEngine.Random.Range(2, UnityEngine.Random.Range(2, spawnPoint3.maxSquadSize + 2));",
-          "ours": "int squadSize = UnityEngine.Random.Range(2, UnityEngine.Random.Range(2, spawnPoint2.maxSquadSize + 2));",
+          "nearestLineInOurs": "int squadSize = UnityEngine.Random.Range(2, UnityEngine.Random.Range(2, spawnPoint2.maxSquadSize + 2));",
           "similarity": 0.99
         },
         {
           "line": 139,
+          "recoveredMember": "SpawnActorList",
           "recovered": "foreach (Actor spawnedActor in spawnedActors[spawnPoint3])",
-          "ours": "foreach (Actor spawnedActor in spawnedActors[spawnPoint2])",
+          "nearestLineInOurs": "foreach (Actor spawnedActor in spawnedActors[spawnPoint2])",
           "similarity": 0.98
         },
         {
           "line": 148,
+          "recoveredMember": "SpawnActorList",
           "recovered": "squadSize = UnityEngine.Random.Range(2, UnityEngine.Random.Range(2, spawnPoint3.maxSquadSize + 2));",
-          "ours": "squadSize = UnityEngine.Random.Range(2, UnityEngine.Random.Range(2, spawnPoint2.maxSquadSize + 2));",
+          "nearestLineInOurs": "squadSize = UnityEngine.Random.Range(2, UnityEngine.Random.Range(2, spawnPoint2.maxSquadSize + 2));",
           "similarity": 0.99
         },
         {
           "line": 165,
+          "recoveredMember": "SetAlive",
           "recovered": "instance.aliveActors[actor.team].Add(actor);",
-          "ours": "instance.actors.Add(actor);",
+          "nearestLineInOurs": "instance.actors.Add(actor);",
           "similarity": 0.76
         },
         {
           "line": 170,
+          "recoveredMember": "SetDead",
           "recovered": "instance.aliveActors[actor.team].Remove(actor);",
-          "ours": "instance.actors.Remove(actor);",
+          "nearestLineInOurs": "instance.actors.Remove(actor);",
           "similarity": 0.78
         },
         {
           "line": 329,
+          "recoveredMember": "Explode",
           "recovered": "public static bool Explode(Vector3 point, ExplodingProjectile.ExplosionConfiguration configuration)",
-          "ours": "ExplodingProjectile.ExplosionConfiguration configuration,",
+          "nearestLineInOurs": "ExplodingProjectile.ExplosionConfiguration configuration,",
           "similarity": 0.72
         },
         {
           "line": 331,
+          "recoveredMember": "Explode",
           "recovered": "List<Actor> list = ActorsInRange(point, configuration.balanceRange);",
-          "ours": "ActorsInRange(point, configuration.balanceRange, _explosionVictims);",
+          "nearestLineInOurs": "ActorsInRange(point, configuration.balanceRange, _explosionVictims);",
           "similarity": 0.72
         },
         {
           "line": 333,
+          "recoveredMember": "Explode",
           "recovered": "foreach (Actor item in list)",
-          "ours": "foreach (Actor actor in snapshot)",
+          "nearestLineInOurs": "foreach (Actor actor in snapshot)",
           "similarity": 0.75
         },
         {
           "line": 337,
+          "recoveredMember": "Explode",
           "recovered": "float num = configuration.damageFalloff.Evaluate(Mathf.Clamp01(magnitude / configuration.damageRange));",
-          "ours": "float num4 = configuration.damageFalloff.Evaluate(vehicleDamageT);",
+          "nearestLineInOurs": "float num4 = configuration.damageFalloff.Evaluate(vehicleDamageT);",
           "similarity": 0.7
         },
         {
           "line": 338,
+          "recoveredMember": "Explode",
           "recovered": "float num2 = configuration.balanceFalloff.Evaluate(Mathf.Clamp01(magnitude / configuration.balanceRange));",
-          "ours": "float num2 = configuration.balanceFalloff.Evaluate(ranges.GetBalanceT(magnitude));",
+          "nearestLineInOurs": "float num2 = configuration.balanceFalloff.Evaluate(ranges.GetBalanceT(magnitude));",
           "similarity": 0.72
         },
         {
           "line": 341,
+          "recoveredMember": "Explode",
           "recovered": "item.Damage(configuration.damage * num, configuration.balanceDamage * num2, false, item.CenterPosition(), vector.normalized, vector.normalized * configuration.force * num2);",
-          "ours": "item.DamageAttributed(configuration.damage * num, configuration.balanceDamage * num2, false, item.CenterPosition(), vector.normalized, vector.normalized * configuration.force * num2, source);",
+          "nearestLineInOurs": "item.DamageAttributed(configuration.damage * num, configuration.balanceDamage * num2, false, item.CenterPosition(), vector.normalized, vector.normalized * configuration.force * num2, source);",
           "similarity": 0.95
         },
         {
           "line": 349,
+          "recoveredMember": "Explode",
           "recovered": "Vehicle[] array = instance.vehicles.ToArray();",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 350,
+          "recoveredMember": "Explode",
           "recovered": "foreach (Vehicle vehicle in array)",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 353,
+          "recoveredMember": "Explode",
           "recovered": "if (num3 < configuration.damageRange)",
-          "ours": "source, point, configuration.damageRange, kind);",
+          "nearestLineInOurs": "source, point, configuration.damageRange, kind);",
           "similarity": 0.68
         },
         {
           "line": 355,
+          "recoveredMember": "Explode",
           "recovered": "float num4 = configuration.damageFalloff.Evaluate(Mathf.Clamp01(num3 / configuration.damageRange));",
-          "ours": "float num4 = configuration.damageFalloff.Evaluate(vehicleDamageT);",
+          "nearestLineInOurs": "float num4 = configuration.damageFalloff.Evaluate(vehicleDamageT);",
           "similarity": 0.72
         },
         {
           "line": 356,
+          "recoveredMember": "Explode",
           "recovered": "vehicle.Damage(configuration.damage * num4);",
-          "ours": "vehicle.Damage(configuration.damage * num4, ResolveAttackerId(source));",
+          "nearestLineInOurs": "vehicle.Damage(configuration.damage * num4, ResolveAttackerId(source));",
           "similarity": 0.77
         }
       ]
@@ -1209,140 +1400,163 @@
       "candidates": [
         {
           "line": 1,
+          "recoveredMember": null,
           "recovered": "using System;",
-          "ours": "\ufeffusing System;",
+          "nearestLineInOurs": "\ufeffusing System;",
           "similarity": 0.96
         },
         {
           "line": 376,
+          "recoveredMember": "FindPotentialTargets",
           "recovered": "list.RemoveAll((Actor actor) => !HasEffectiveWeaponAgainst(actor) || (actor.IsSeated() && actor.seat.vehicle.burning));",
-          "ours": "list.RemoveAll((Actor target) => !HasEffectiveWeaponAgainst(target) || (target.IsSeated() && target.seat.vehicle.burning));",
+          "nearestLineInOurs": "list.RemoveAll((Actor target) => !HasEffectiveWeaponAgainst(target) || (target.IsSeated() && target.seat.vehicle.burning));",
           "similarity": 0.88
         },
         {
           "line": 547,
+          "recoveredMember": "PushAntiStuckEvent",
           "recovered": "squad.squadVehicle.stuck = true;",
-          "ours": "actor.seat.vehicle.stuck = true;",
+          "nearestLineInOurs": "actor.seat.vehicle.stuck = true;",
           "similarity": 0.75
         },
         {
           "line": 607,
+          "recoveredMember": "AiOrders",
           "recovered": "if (!squad.HasVehicle() && squad.state == Squad.State.Moving)",
-          "ours": "if (!squad.HasVehicle() && squad.state != Squad.State.DigIn && squad.IsTakingFire())",
+          "nearestLineInOurs": "if (!squad.HasVehicle() && squad.state != Squad.State.DigIn && squad.IsTakingFire())",
           "similarity": 0.79
         },
         {
           "line": 797,
+          "recoveredMember": "AiWeapon",
           "recovered": "if (!HasTarget() && actor.hasAmmoBox && actor.weapons[actor.ammoBoxSlot].AmmoFull() && (squad.MemberNeedsResupply() || (!ActorManager.instance.player.dead && actor.team == ActorManager.instance.player.team && ActorManager.instance.player.needsResupply && Vector3.Distance(ActorManager.instance.player.transform.position, base.transform.position) < 10f)))",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 801,
+          "recoveredMember": "AiWeapon",
           "recovered": "if (!ActorManager.instance.player.dead && actor.team == ActorManager.instance.player.team && ActorManager.instance.player.needsResupply && Vector3.Distance(ActorManager.instance.player.transform.position, base.transform.position) < 10f)",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 803,
+          "recoveredMember": "AiWeapon",
           "recovered": "LookAt(ActorManager.instance.player.transform.position);",
-          "ours": "LookAt(ActorManager.Player.transform.position);",
+          "nearestLineInOurs": "LookAt(ActorManager.Player.transform.position);",
           "similarity": 0.89
         },
         {
           "line": 814,
+          "recoveredMember": "AiWeapon",
           "recovered": "if (!HasTarget() && actor.hasMedipack && actor.weapons[actor.medipackSlot].AmmoFull() && (squad.MemberNeedsHealth() || (!ActorManager.instance.player.dead && actor.team == ActorManager.instance.player.team && ActorManager.instance.player.health < 80f && Vector3.Distance(ActorManager.instance.player.transform.position, base.transform.position) < 10f)))",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 818,
+          "recoveredMember": "AiWeapon",
           "recovered": "if (!ActorManager.instance.player.dead && actor.team == ActorManager.instance.player.team && ActorManager.instance.player.health < 80f && Vector3.Distance(ActorManager.instance.player.transform.position, base.transform.position) < 10f)",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 820,
+          "recoveredMember": "AiWeapon",
           "recovered": "LookAt(ActorManager.instance.player.transform.position);",
-          "ours": "LookAt(ActorManager.Player.transform.position);",
+          "nearestLineInOurs": "LookAt(ActorManager.Player.transform.position);",
           "similarity": 0.89
         },
         {
           "line": 1005,
+          "recoveredMember": "HasEffectiveWeaponAgainst",
           "recovered": "if (weapon != null && weapon.HasAnyAmmo() && weapon.EffectivenessAgainst(targetType) != Weapon.Effectiveness.No && weapon.EffectiveAtRange(range))",
-          "ours": "if (weapon != null && weapon.HasAnyAmmo() && weapon.EffectivenessAgainst(targetType) != 0 && weapon.EffectiveAtRange(range))",
+          "nearestLineInOurs": "if (weapon != null && weapon.HasAnyAmmo() && weapon.EffectivenessAgainst(targetType) != 0 && weapon.EffectiveAtRange(range))",
           "similarity": 0.91
         },
         {
           "line": 1322,
+          "recoveredMember": "AvoidVehicle",
           "recovered": "list.Sort(delegate(int x, int y)",
-          "ours": "list.Sort(delegate (int x, int y)",
+          "nearestLineInOurs": "list.Sort(delegate (int x, int y)",
           "similarity": 0.98
         },
         {
           "line": 1325,
+          "recoveredMember": "AvoidVehicle",
           "recovered": "return shortLtNext ? num5 : (-num5);",
-          "ours": "return shortLtNext ? num6 : (-num6);",
+          "nearestLineInOurs": "return shortLtNext ? num6 : (-num6);",
           "similarity": 0.94
         },
         {
           "line": 1339,
+          "recoveredMember": "AvoidVehicle",
           "recovered": "list2.Sort(delegate(int x, int y)",
-          "ours": "list2.Sort(delegate (int x, int y)",
+          "nearestLineInOurs": "list2.Sort(delegate (int x, int y)",
           "similarity": 0.99
         },
         {
           "line": 1341,
+          "recoveredMember": "AvoidVehicle",
           "recovered": "int num5 = cornerFromOriginAngles[x].CompareTo(cornerFromOriginAngles[y]);",
-          "ours": "int num5 = cornerFromOriginAngles[x].CompareTo(cornerFromOriginAngles[y]);",
+          "nearestLineInOurs": "int num5 = cornerFromOriginAngles[x].CompareTo(cornerFromOriginAngles[y]);",
           "similarity": 1.0
         },
         {
           "line": 1554,
+          "recoveredMember": "GetCarInput",
           "recovered": "float magnitude3 = vehicle.rigidbody.velocity.magnitude;",
-          "ours": "float magnitude3 = vehicle.rigidbody.linearVelocity.magnitude;",
+          "nearestLineInOurs": "float magnitude3 = vehicle.rigidbody.linearVelocity.magnitude;",
           "similarity": 0.93
         },
         {
           "line": 1600,
+          "recoveredMember": "GetProjectedDrivingTarget",
           "recovered": "float num = Mathf.Max(minDistance, speedGain * vehicle.rigidbody.velocity.magnitude);",
-          "ours": "float num = Mathf.Max(minDistance, speedGain * vehicle.rigidbody.linearVelocity.magnitude);",
+          "nearestLineInOurs": "float num = Mathf.Max(minDistance, speedGain * vehicle.rigidbody.linearVelocity.magnitude);",
           "similarity": 0.95
         },
         {
           "line": 1617,
+          "recoveredMember": "GetFutureProjectedDrivingTarget",
           "recovered": "float num = Mathf.Max(minDistance, speedGain * vehicle.rigidbody.velocity.magnitude);",
-          "ours": "float num = Mathf.Max(minDistance, speedGain * vehicle.rigidbody.linearVelocity.magnitude);",
+          "nearestLineInOurs": "float num = Mathf.Max(minDistance, speedGain * vehicle.rigidbody.linearVelocity.magnitude);",
           "similarity": 0.95
         },
         {
           "line": 1638,
+          "recoveredMember": "HelicopterInput",
           "recovered": "Vector3 vector = position + rigidbody.velocity * 3f;",
-          "ours": "Vector3 vector = position + rigidbody.linearVelocity * 3f;",
+          "nearestLineInOurs": "Vector3 vector = position + rigidbody.linearVelocity * 3f;",
           "similarity": 0.93
         },
         {
           "line": 1979,
+          "recoveredMember": "EmoteHailLeader",
           "recovered": "if (!HasTarget())",
-          "ours": "if (!HasTarget())",
+          "nearestLineInOurs": "if (!HasTarget())",
           "similarity": 1.0
         },
         {
           "line": 2066,
+          "recoveredMember": "GetLoadout",
           "recovered": "loadoutSet.primary = WeaponManager.EntryNamed(primaryWeaponNames[UnityEngine.Random.Range(0, primaryWeaponNames.Length)]);",
-          "ours": "loadoutSet.primary = WeaponManager.EntryNamed(PinnedOr(primaryWeaponNames[UnityEngine.Random.Range(0, primaryWeaponNames.Length)], LoadoutSlot.Primary));",
+          "nearestLineInOurs": "loadoutSet.primary = WeaponManager.EntryNamed(PinnedOr(primaryWeaponNames[UnityEngine.Random.Range(0, primaryWeaponNames.Length)], LoadoutSlot.Primary));",
           "similarity": 0.89
         },
         {
           "line": 2067,
+          "recoveredMember": "GetLoadout",
           "recovered": "loadoutSet.secondary = WeaponManager.EntryNamed(secondaryWeaponNames[UnityEngine.Random.Range(0, secondaryWeaponNames.Length)]);",
-          "ours": "loadoutSet.secondary = WeaponManager.EntryNamed(PinnedOr(secondaryWeaponNames[UnityEngine.Random.Range(0, secondaryWeaponNames.Length)], LoadoutSlot.Secondary));",
+          "nearestLineInOurs": "loadoutSet.secondary = WeaponManager.EntryNamed(PinnedOr(secondaryWeaponNames[UnityEngine.Random.Range(0, secondaryWeaponNames.Length)], LoadoutSlot.Secondary));",
           "similarity": 0.89
         },
         {
           "line": 2068,
+          "recoveredMember": "GetLoadout",
           "recovered": "loadoutSet.gear1 = WeaponManager.EntryNamed(gearNames[UnityEngine.Random.Range(0, gearNames.Length)]);",
-          "ours": "loadoutSet.gear1 = WeaponManager.EntryNamed(PinnedOr(gearNames[UnityEngine.Random.Range(0, gearNames.Length)], LoadoutSlot.Gear1));",
+          "nearestLineInOurs": "loadoutSet.gear1 = WeaponManager.EntryNamed(PinnedOr(gearNames[UnityEngine.Random.Range(0, gearNames.Length)], LoadoutSlot.Gear1));",
           "similarity": 0.88
         }
       ]
@@ -1355,122 +1569,142 @@
       "candidates": [
         {
           "line": 9,
+          "recoveredMember": null,
           "recovered": "private const float CAPTURE_RATE_PER_PERSON = 0.05f;",
-          "ours": "private const float UPDATE_RATE = 1f;",
+          "nearestLineInOurs": "private const float UPDATE_RATE = 1f;",
           "similarity": 0.74
         },
         {
           "line": 119,
+          "recoveredMember": "UpdateOwner",
           "recovered": "bool flag = false;",
-          "ours": "bool hostilePresent = false;",
+          "nearestLineInOurs": "bool hostilePresent = false;",
           "similarity": 0.65
         },
         {
           "line": 131,
+          "recoveredMember": "UpdateOwner",
           "recovered": "Dictionary<int, int> dictionary3;",
-          "ours": "Dictionary<int, int> dictionary2;",
+          "nearestLineInOurs": "Dictionary<int, int> dictionary2;",
           "similarity": 0.97
         },
         {
           "line": 132,
+          "recoveredMember": "UpdateOwner",
           "recovered": "Dictionary<int, int> dictionary2 = (dictionary3 = dictionary);",
-          "ours": "Dictionary<int, int> dictionary3 = (dictionary2 = dictionary);",
+          "nearestLineInOurs": "Dictionary<int, int> dictionary3 = (dictionary2 = dictionary);",
           "similarity": 0.97
         },
         {
           "line": 135,
+          "recoveredMember": "UpdateOwner",
           "recovered": "team = dictionary3[team];",
-          "ours": "team = dictionary2[team];",
+          "nearestLineInOurs": "team = dictionary2[team];",
           "similarity": 0.96
         },
         {
           "line": 136,
+          "recoveredMember": "UpdateOwner",
           "recovered": "dictionary2[key] = team + 1;",
-          "ours": "dictionary3[key] = team + 1;",
+          "nearestLineInOurs": "dictionary3[key] = team + 1;",
           "similarity": 0.96
         },
         {
           "line": 150,
+          "recoveredMember": "UpdateOwner",
           "recovered": "if (!item.aiControlled)",
-          "ours": "if (isContested)",
+          "nearestLineInOurs": "if (isContested)",
           "similarity": 0.62
         },
         {
           "line": 152,
+          "recoveredMember": "UpdateOwner",
           "recovered": "flag = true;",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 172,
+          "recoveredMember": "UpdateOwner",
           "recovered": "control -= (float)num5 * 0.05f;",
-          "ours": "control = 0.01f;",
+          "nearestLineInOurs": "control = 0.01f;",
           "similarity": 0.74
         },
         {
           "line": 181,
+          "recoveredMember": "UpdateOwner",
           "recovered": "control = Mathf.Clamp01(control + (float)num5 * 0.05f);",
-          "ours": "control = Mathf.Clamp01(control + (float)num5 * captureSpeed);",
+          "nearestLineInOurs": "control = Mathf.Clamp01(control + (float)num5 * captureSpeed);",
           "similarity": 0.84
         },
         {
           "line": 192,
+          "recoveredMember": "UpdateOwner",
           "recovered": "if (flag && !playerWasInRadius)",
-          "ours": "if (inRadius && !playerWasInRadius)",
+          "nearestLineInOurs": "if (inRadius && !playerWasInRadius)",
           "similarity": 0.85
         },
         {
           "line": 196,
+          "recoveredMember": "UpdateOwner",
           "recovered": "else if (!flag && playerWasInRadius)",
-          "ours": "else if (!inRadius && playerWasInRadius)",
+          "nearestLineInOurs": "else if (!inRadius && playerWasInRadius)",
           "similarity": 0.87
         },
         {
           "line": 200,
+          "recoveredMember": "UpdateOwner",
           "recovered": "if (flag)",
-          "ours": "if (hasSafeFlags)",
+          "nearestLineInOurs": "if (hasSafeFlags)",
           "similarity": 0.69
         },
         {
           "line": 204,
+          "recoveredMember": "UpdateOwner",
           "recovered": "flagRenderer.enabled = control > 0f;",
-          "ours": "flagRenderer.enabled = visible;",
+          "nearestLineInOurs": "flagRenderer.enabled = visible;",
           "similarity": 0.76
         },
         {
           "line": 205,
+          "recoveredMember": "UpdateOwner",
           "recovered": "playerWasInRadius = flag;",
-          "ours": "playerWasInRadius = inRadius;",
+          "nearestLineInOurs": "playerWasInRadius = inRadius;",
           "similarity": 0.81
         },
         {
           "line": 218,
+          "recoveredMember": "UpdateContestedSpawnpointSafeFlags",
           "recovered": "Vector3 normalized = (attacker.Position() - base.transform.position).ToGround().normalized;",
-          "ours": "Vector3 normalized = (attackerPosition - base.transform.position).ToGround().normalized;",
+          "nearestLineInOurs": "Vector3 normalized = (attackerPosition - base.transform.position).ToGround().normalized;",
           "similarity": 0.98
         },
         {
           "line": 261,
+          "recoveredMember": "SetOwner",
           "recovered": "ScoreUi.AddFlag(num2, num);",
-          "ours": "MatchScoreboard.Current.AddFlag(num2, num);",
+          "nearestLineInOurs": "MatchScoreboard.Current.AddFlag(num2, num);",
           "similarity": 0.71
         },
         {
           "line": 266,
+          "recoveredMember": "SetOwner",
           "recovered": "catch (Exception)",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 298,
+          "recoveredMember": "GetSafeSpawnPosition",
           "recovered": "return contestedSpawnpointContainer.GetChild(num2).position;",
-          "ours": "return SnappedContainerChildPosition(contestedSpawnpointContainer.GetChild(num2));",
+          "nearestLineInOurs": "return SnappedContainerChildPosition(contestedSpawnpointContainer.GetChild(num2));",
           "similarity": 0.72
         },
         {
           "line": 301,
+          "recoveredMember": "GetSafeSpawnPosition",
           "recovered": "return contestedSpawnpointContainer.GetChild(num).position;",
-          "ours": "return SnappedContainerChildPosition(contestedSpawnpointContainer.GetChild(num));",
+          "nearestLineInOurs": "return SnappedContainerChildPosition(contestedSpawnpointContainer.GetChild(num));",
           "similarity": 0.71
         }
       ]
@@ -1483,116 +1717,135 @@
       "candidates": [
         {
           "line": 78,
+          "recoveredMember": null,
           "recovered": "return new Vector3",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 80,
+          "recoveredMember": null,
           "recovered": "x = ((float)x + (float)rnd.NextDouble()) * world.tileSize,",
-          "ours": "result.x = ((float)x + (float)rnd.NextDouble()) * world.tileSize;",
+          "nearestLineInOurs": "result.x = ((float)x + (float)rnd.NextDouble()) * world.tileSize;",
           "similarity": 0.91
         },
         {
           "line": 81,
+          "recoveredMember": null,
           "recovered": "z = ((float)z + (float)rnd.NextDouble()) * world.tileSize",
-          "ours": "result.z = ((float)z + (float)rnd.NextDouble()) * world.tileSize;",
+          "nearestLineInOurs": "result.z = ((float)z + (float)rnd.NextDouble()) * world.tileSize;",
           "similarity": 0.91
         },
         {
           "line": 87,
+          "recoveredMember": null,
           "recovered": "return new Vector3",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 89,
+          "recoveredMember": null,
           "recovered": "x = (px + (float)rnd.NextDouble() / (float)world.subTiles) * world.tileSize,",
-          "ours": "result.x = (px + (float)rnd.NextDouble() / (float)world.subTiles) * world.tileSize;",
+          "nearestLineInOurs": "result.x = (px + (float)rnd.NextDouble() / (float)world.subTiles) * world.tileSize;",
           "similarity": 0.93
         },
         {
           "line": 90,
+          "recoveredMember": null,
           "recovered": "z = (pz + (float)rnd.NextDouble() / (float)world.subTiles) * world.tileSize",
-          "ours": "result.z = (pz + (float)rnd.NextDouble() / (float)world.subTiles) * world.tileSize;",
+          "nearestLineInOurs": "result.z = (pz + (float)rnd.NextDouble() / (float)world.subTiles) * world.tileSize;",
           "similarity": 0.94
         },
         {
           "line": 109,
+          "recoveredMember": null,
           "recovered": "GameObject ob = UnityEngine.Object.Instantiate(position: new Vector3(((float)x + 0.5f) * world.tileSize, 0f, ((float)z + 0.5f) * world.tileSize), original: pref.prefab, rotation: Quaternion.identity) as GameObject;",
-          "ours": "GameObject ob2 = UnityEngine.Object.Instantiate(position: new Vector3(((float)x + 0.5f) * world.tileSize, 0f, ((float)z + 0.5f) * world.tileSize), original: pref.prefab, rotation: Quaternion.identity) as GameObject;",
+          "nearestLineInOurs": "GameObject ob2 = UnityEngine.Object.Instantiate(position: new Vector3(((float)x + 0.5f) * world.tileSize, 0f, ((float)z + 0.5f) * world.tileSize), original: pref.prefab, rotation: Quaternion.identity) as GameObject;",
           "similarity": 1.0
         },
         {
           "line": 118,
+          "recoveredMember": null,
           "recovered": "ditherMap[sx + 1, sz + 1] = 0f;",
-          "ours": "ditherMap[sx2 + 1, sz + 1] = 0f;",
+          "nearestLineInOurs": "ditherMap[sx2 + 1, sz + 1] = 0f;",
           "similarity": 0.98
         },
         {
           "line": 121,
+          "recoveredMember": null,
           "recovered": "for (int j = 0; j < world.subTiles; j++)",
-          "ours": "for (int sz = 0; sz < world.subTiles; sz++)",
+          "nearestLineInOurs": "for (int sz = 0; sz < world.subTiles; sz++)",
           "similarity": 0.89
         },
         {
           "line": 123,
+          "recoveredMember": null,
           "recovered": "for (int k = 0; k < world.subTiles; k++)",
-          "ours": "for (int sz = 0; sz < world.subTiles; sz++)",
+          "nearestLineInOurs": "for (int sz = 0; sz < world.subTiles; sz++)",
           "similarity": 0.89
         },
         {
           "line": 125,
+          "recoveredMember": null,
           "recovered": "float px = (float)x + (float)j / (float)world.subTiles;",
-          "ours": "float px = (float)x + (float)sx / (float)world.subTiles;",
+          "nearestLineInOurs": "float px = (float)x + (float)sx / (float)world.subTiles;",
           "similarity": 0.96
         },
         {
           "line": 126,
+          "recoveredMember": null,
           "recovered": "float pz = (float)z + (float)k / (float)world.subTiles;",
-          "ours": "float pz = (float)z + (float)sz2 / (float)world.subTiles;",
+          "nearestLineInOurs": "float pz = (float)z + (float)sz2 / (float)world.subTiles;",
           "similarity": 0.94
         },
         {
           "line": 129,
+          "recoveredMember": null,
           "recovered": "float fcount = subSize * subSize * density + ditherMap[j + 1, k + 1];",
-          "ours": "float fcount = subSize * subSize * density + ditherMap[sx + 1, sz2 + 1];",
+          "nearestLineInOurs": "float fcount = subSize * subSize * density + ditherMap[sx + 1, sz2 + 1];",
           "similarity": 0.95
         },
         {
           "line": 131,
+          "recoveredMember": null,
           "recovered": "ditherMap[j + 1 + 1, k + 1] += 0.4375f * (fcount - (float)count);",
-          "ours": "ditherMap[sx + 1 + 1, sz2 + 1] += 0.4375f * (fcount - (float)count);",
+          "nearestLineInOurs": "ditherMap[sx + 1 + 1, sz2 + 1] += 0.4375f * (fcount - (float)count);",
           "similarity": 0.94
         },
         {
           "line": 132,
+          "recoveredMember": null,
           "recovered": "ditherMap[j + 1 - 1, k + 1 + 1] += 0.1875f * (fcount - (float)count);",
-          "ours": "ditherMap[sx + 1 - 1, sz2 + 1 + 1] += 0.1875f * (fcount - (float)count);",
+          "nearestLineInOurs": "ditherMap[sx + 1 - 1, sz2 + 1 + 1] += 0.1875f * (fcount - (float)count);",
           "similarity": 0.94
         },
         {
           "line": 133,
+          "recoveredMember": null,
           "recovered": "ditherMap[j + 1, k + 1 + 1] += 0.3125f * (fcount - (float)count);",
-          "ours": "ditherMap[sx + 1, sz2 + 1 + 1] += 0.3125f * (fcount - (float)count);",
+          "nearestLineInOurs": "ditherMap[sx + 1, sz2 + 1 + 1] += 0.3125f * (fcount - (float)count);",
           "similarity": 0.94
         },
         {
           "line": 134,
+          "recoveredMember": null,
           "recovered": "ditherMap[j + 1 + 1, k + 1 + 1] += 0.0625f * (fcount - (float)count);",
-          "ours": "ditherMap[sx + 1 + 1, sz2 + 1 + 1] += 0.0625f * (fcount - (float)count);",
+          "nearestLineInOurs": "ditherMap[sx + 1 + 1, sz2 + 1 + 1] += 0.0625f * (fcount - (float)count);",
           "similarity": 0.94
         },
         {
           "line": 135,
+          "recoveredMember": null,
           "recovered": "for (int l = 0; l < count; l++)",
-          "ours": "for (int j = 0; j < count; j++)",
+          "nearestLineInOurs": "for (int j = 0; j < count; j++)",
           "similarity": 0.9
         },
         {
           "line": 137,
+          "recoveredMember": null,
           "recovered": "GameObject ob2 = UnityEngine.Object.Instantiate(position: RandomInside(px, pz), original: pref.prefab, rotation: RandomYRot()) as GameObject;",
-          "ours": "GameObject ob = UnityEngine.Object.Instantiate(position: RandomInside(px, pz), original: pref.prefab, rotation: RandomYRot()) as GameObject;",
+          "nearestLineInOurs": "GameObject ob = UnityEngine.Object.Instantiate(position: RandomInside(px, pz), original: pref.prefab, rotation: RandomYRot()) as GameObject;",
           "similarity": 1.0
         }
       ]
@@ -1605,110 +1858,128 @@
       "candidates": [
         {
           "line": 1,
+          "recoveredMember": null,
           "recovered": "using System.Collections;",
-          "ours": "using System.Collections.Generic;",
+          "nearestLineInOurs": "using System.Collections.Generic;",
           "similarity": 0.86
         },
         {
           "line": 29,
+          "recoveredMember": null,
           "recovered": "private bool spawningQueued;",
-          "ours": "private ushort spawnerId;",
+          "nearestLineInOurs": "private ushort spawnerId;",
           "similarity": 0.68
         },
         {
           "line": 33,
+          "recoveredMember": "Awake",
           "recovered": "GetComponent<Renderer>().enabled = false;",
-          "ours": "marker.enabled = false;",
+          "nearestLineInOurs": "marker.enabled = false;",
           "similarity": 0.62
         },
         {
           "line": 42,
+          "recoveredMember": "StartSpawnCountdown",
           "recovered": "private void StartSpawnCountdown()",
-          "ours": "private void Start()",
+          "nearestLineInOurs": "private void Start()",
           "similarity": 0.74
         },
         {
           "line": 44,
+          "recoveredMember": "StartSpawnCountdown",
           "recovered": "Invoke(\"SpawnVehicle\", spawnTime);",
-          "ours": "lastSpawnedVehicle = spawned;",
+          "nearestLineInOurs": "lastSpawnedVehicle = spawned;",
           "similarity": 0.63
         },
         {
           "line": 49,
+          "recoveredMember": "SpawnVehicle",
           "recovered": "if (!GameManager.instance.noVehicles)",
-          "ours": "return GameManager.instance != null && GameManager.instance.noVehicles;",
+          "nearestLineInOurs": "return GameManager.instance != null && GameManager.instance.noVehicles;",
           "similarity": 0.63
         },
         {
           "line": 51,
+          "recoveredMember": "SpawnVehicle",
           "recovered": "StartCoroutine(SpawnCoroutine());",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 55,
+          "recoveredMember": "SpawnCoroutine",
           "recovered": "private IEnumerator SpawnCoroutine()",
-          "ours": "private void SpawnVehicle()",
+          "nearestLineInOurs": "private void SpawnVehicle()",
           "similarity": 0.6
         },
         {
           "line": 57,
+          "recoveredMember": "SpawnCoroutine",
           "recovered": "while (SpawnIsBlocked())",
-          "ours": "private bool SpawnIsBlocked()",
+          "nearestLineInOurs": "private bool SpawnIsBlocked()",
           "similarity": 0.72
         },
         {
           "line": 59,
+          "recoveredMember": "SpawnCoroutine",
           "recovered": "yield return new WaitForSeconds(1f);",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 61,
+          "recoveredMember": "SpawnCoroutine",
           "recovered": "lastSpawnedVehicle = ((GameObject)Object.Instantiate(prefab, base.transform.position, base.transform.rotation)).GetComponent<Vehicle>();",
-          "ours": "Vehicle spawned = ((GameObject)UnityEngine.Object.Instantiate(prefab, base.transform.position, base.transform.rotation)).GetComponent<Vehicle>();",
+          "nearestLineInOurs": "Vehicle spawned = ((GameObject)UnityEngine.Object.Instantiate(prefab, base.transform.position, base.transform.rotation)).GetComponent<Vehicle>();",
           "similarity": 0.89
         },
         {
           "line": 68,
+          "recoveredMember": "SpawnIsBlocked",
           "recovered": "return Physics.OverlapSphereNonAlloc(base.transform.position, collisionCheckRadius, spawnCollisions, 5376) > 0;",
-          "ours": "base.transform.position, collisionCheckRadius, spawnCollisions, SPAWN_BLOCK_MASK);",
+          "nearestLineInOurs": "base.transform.position, collisionCheckRadius, spawnCollisions, SPAWN_BLOCK_MASK);",
           "similarity": 0.68
         },
         {
           "line": 73,
+          "recoveredMember": "VehicleDied",
           "recovered": "if (respawnType == RespawnType.AfterDestroyed)",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 75,
+          "recoveredMember": "VehicleDied",
           "recovered": "StartSpawnCountdown();",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 77,
+          "recoveredMember": "VehicleDied",
           "recovered": "else if (respawnType == RespawnType.AfterMoved && vehicle == lastSpawnedVehicle && !lastSpawnedVehicleHasBeenUsed)",
-          "ours": "scheduler.ReportVehicleDied(vehicle == lastSpawnedVehicle, lastSpawnedVehicleHasBeenUsed);",
+          "nearestLineInOurs": "scheduler.ReportVehicleDied(vehicle == lastSpawnedVehicle, lastSpawnedVehicleHasBeenUsed);",
           "similarity": 0.7
         },
         {
           "line": 79,
+          "recoveredMember": "VehicleDied",
           "recovered": "StartSpawnCountdown();",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 88,
+          "recoveredMember": "FirstDriverEntered",
           "recovered": "if (respawnType == RespawnType.AfterMoved)",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 90,
+          "recoveredMember": "FirstDriverEntered",
           "recovered": "StartSpawnCountdown();",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         }
       ]
@@ -1721,80 +1992,93 @@
       "candidates": [
         {
           "line": 5,
+          "recoveredMember": null,
           "recovered": "private const float MAX_TURN_DELTA = 5f;",
-          "ours": "private const float LEGACY_STEP_DEG = 5f;",
+          "nearestLineInOurs": "private const float LEGACY_STEP_DEG = 5f;",
           "similarity": 0.78
         },
         {
           "line": 26,
+          "recoveredMember": "Update",
           "recovered": "if (!(towerJoint == null))",
-          "ours": "if (towerJoint == null)",
+          "nearestLineInOurs": "if (towerJoint == null)",
           "similarity": 0.94
         },
         {
           "line": 29,
+          "recoveredMember": "Update",
           "recovered": "Vector3 eulerAngles = towerJoint.targetRotation.eulerAngles;",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 30,
+          "recoveredMember": "Update",
           "recovered": "Vector2 input = GetInput();",
-          "ours": "Vector2 demand = GetInput();",
+          "nearestLineInOurs": "Vector2 demand = GetInput();",
           "similarity": 0.84
         },
         {
           "line": 31,
+          "recoveredMember": "Update",
           "recovered": "eulerAngles.z = Mathf.Clamp(eulerAngles.z - input.x, eulerAngles.z - 5f, eulerAngles.z + 5f);",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 32,
+          "recoveredMember": "Update",
           "recovered": "spring.targetPosition = Mathf.Clamp(Mathf.Clamp(spring.targetPosition - input.y, spring.targetPosition - 5f, spring.targetPosition + 5f), cannonJoint.limits.min, cannonJoint.limits.max);",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 33,
+          "recoveredMember": "Update",
           "recovered": "towerJoint.targetRotation = Quaternion.Euler(eulerAngles);",
-          "ours": "towerJoint.targetRotation = Quaternion.Euler(0f, 0f, _aim.Yaw);",
+          "nearestLineInOurs": "towerJoint.targetRotation = Quaternion.Euler(0f, 0f, _aim.Yaw);",
           "similarity": 0.79
         },
         {
           "line": 41,
+          "recoveredMember": "Unholster",
           "recovered": "if (!user.aiControlled)",
-          "ours": "if (user.aiControlled)",
+          "nearestLineInOurs": "if (user.aiControlled)",
           "similarity": 0.98
         },
         {
           "line": 52,
+          "recoveredMember": "Holster",
           "recovered": "if (!user.aiControlled)",
-          "ours": "if (user.aiControlled)",
+          "nearestLineInOurs": "if (user.aiControlled)",
           "similarity": 0.98
         },
         {
           "line": 58,
+          "recoveredMember": "GetInput",
           "recovered": "private Vector2 GetInput()",
-          "ours": "protected virtual Vector2 GetInput()",
+          "nearestLineInOurs": "protected virtual Vector2 GetInput()",
           "similarity": 0.74
         },
         {
           "line": 64,
+          "recoveredMember": "GetInput",
           "recovered": "if (!user.aiControlled)",
-          "ours": "if (user.aiControlled)",
+          "nearestLineInOurs": "if (user.aiControlled)",
           "similarity": 0.98
         },
         {
           "line": 66,
+          "recoveredMember": "GetInput",
           "recovered": "return new Vector2(Input.GetAxis(\"Mouse X\"), Input.GetAxis(\"Mouse Y\") * (float)((!OptionsUi.GetOptions().mouseInvert) ? 1 : (-1))) * OptionsUi.GetOptions().mouseSensitivity * 4f;",
-          "ours": "_pendingMouseAim += new Vector2(Input.GetAxis(\"Mouse X\"), Input.GetAxis(\"Mouse Y\") * (float)((!OptionsUi.GetOptions().mouseInvert) ? 1 : (-1))) * OptionsUi.GetOptions().mouseSensitivity * 4f;",
+          "nearestLineInOurs": "_pendingMouseAim += new Vector2(Input.GetAxis(\"Mouse X\"), Input.GetAxis(\"Mouse Y\") * (float)((!OptionsUi.GetOptions().mouseInvert) ? 1 : (-1))) * OptionsUi.GetOptions().mouseSensitivity * 4f;",
           "similarity": 0.94
         },
         {
           "line": 69,
+          "recoveredMember": "GetInput",
           "recovered": "return new Vector2(vector.x * 3f, vector.y * 3f);",
-          "ours": "return new Vector2(vector.x * 3f, vector.y * 3f) / LEGACY_STEP_DEG;",
+          "nearestLineInOurs": "return new Vector2(vector.x * 3f, vector.y * 3f) / LEGACY_STEP_DEG;",
           "similarity": 0.84
         }
       ]
@@ -1807,68 +2091,79 @@
       "candidates": [
         {
           "line": 5,
+          "recoveredMember": null,
           "recovered": "private const float MAX_TURN_DELTA = 10f;",
-          "ours": "private const float LEGACY_STEP_DEG = 10f;",
+          "nearestLineInOurs": "private const float LEGACY_STEP_DEG = 10f;",
           "similarity": 0.79
         },
         {
           "line": 16,
+          "recoveredMember": "Update",
           "recovered": "if (user != null)",
-          "ours": "if (user == null)",
+          "nearestLineInOurs": "if (user == null)",
           "similarity": 0.94
         },
         {
           "line": 18,
+          "recoveredMember": "Update",
           "recovered": "Vector2 vector = Vector2.ClampMagnitude(GetInput(), 10f);",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 20,
+          "recoveredMember": "Update",
           "recovered": "localEulerAngles.z += vector.x;",
-          "ours": "localEulerAngles.z = _aim.Yaw;",
+          "nearestLineInOurs": "localEulerAngles.z = _aim.Yaw;",
           "similarity": 0.75
         },
         {
           "line": 23,
+          "recoveredMember": "Update",
           "recovered": "localEulerAngles2.x = Mathf.Clamp(Mathf.DeltaAngle(0f, localEulerAngles2.x - vector.y), -40f, 15f);",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 31,
+          "recoveredMember": "Unholster",
           "recovered": "if (!user.aiControlled)",
-          "ours": "if (user.aiControlled)",
+          "nearestLineInOurs": "if (user.aiControlled)",
           "similarity": 0.98
         },
         {
           "line": 42,
+          "recoveredMember": "Holster",
           "recovered": "if (!user.aiControlled)",
-          "ours": "if (user.aiControlled)",
+          "nearestLineInOurs": "if (user.aiControlled)",
           "similarity": 0.98
         },
         {
           "line": 48,
+          "recoveredMember": "GetInput",
           "recovered": "private Vector2 GetInput()",
-          "ours": "protected virtual Vector2 GetInput()",
+          "nearestLineInOurs": "protected virtual Vector2 GetInput()",
           "similarity": 0.74
         },
         {
           "line": 54,
+          "recoveredMember": "GetInput",
           "recovered": "if (!user.aiControlled)",
-          "ours": "if (user.aiControlled)",
+          "nearestLineInOurs": "if (user.aiControlled)",
           "similarity": 0.98
         },
         {
           "line": 56,
+          "recoveredMember": "GetInput",
           "recovered": "return new Vector2(Input.GetAxis(\"Mouse X\"), Input.GetAxis(\"Mouse Y\") * (float)((!OptionsUi.GetOptions().mouseInvert) ? 1 : (-1))) * OptionsUi.GetOptions().mouseSensitivity * 4f;",
-          "ours": "_pendingMouseAim += new Vector2(Input.GetAxis(\"Mouse X\"), Input.GetAxis(\"Mouse Y\") * (float)((!OptionsUi.GetOptions().mouseInvert) ? 1 : (-1))) * OptionsUi.GetOptions().mouseSensitivity * 4f;",
+          "nearestLineInOurs": "_pendingMouseAim += new Vector2(Input.GetAxis(\"Mouse X\"), Input.GetAxis(\"Mouse Y\") * (float)((!OptionsUi.GetOptions().mouseInvert) ? 1 : (-1))) * OptionsUi.GetOptions().mouseSensitivity * 4f;",
           "similarity": 0.94
         },
         {
           "line": 59,
+          "recoveredMember": "GetInput",
           "recovered": "return new Vector2(vector.x * 5f, vector.y * 5f);",
-          "ours": "return new Vector2(vector.x * 5f, vector.y * 5f) / LEGACY_STEP_DEG;",
+          "nearestLineInOurs": "return new Vector2(vector.x * 5f, vector.y * 5f) / LEGACY_STEP_DEG;",
           "similarity": 0.84
         }
       ]
@@ -1881,56 +2176,65 @@
       "candidates": [
         {
           "line": 41,
+          "recoveredMember": null,
           "recovered": "if (channels[i] != ChannelUse.None)",
-          "ours": "if (channels[i] != 0)",
+          "nearestLineInOurs": "if (channels[i] != 0)",
           "similarity": 0.71
         },
         {
           "line": 63,
+          "recoveredMember": null,
           "recovered": "if (channels[0] != ChannelUse.None)",
-          "ours": "if (channels[0] != 0)",
+          "nearestLineInOurs": "if (channels[0] != 0)",
           "similarity": 0.71
         },
         {
           "line": 67,
+          "recoveredMember": null,
           "recovered": "if (channels[1] != ChannelUse.None)",
-          "ours": "if (channels[1] != 0)",
+          "nearestLineInOurs": "if (channels[1] != 0)",
           "similarity": 0.71
         },
         {
           "line": 71,
+          "recoveredMember": null,
           "recovered": "if (channels[2] != ChannelUse.None)",
-          "ours": "if (channels[2] != 0)",
+          "nearestLineInOurs": "if (channels[2] != 0)",
           "similarity": 0.71
         },
         {
           "line": 906,
+          "recoveredMember": null,
           "recovered": "if (((num >> k) & 1) != 0 && (((num >> k + 1) | (num >> k + 1 - 4)) & 1) != 0)",
-          "ours": "if (((uint)(num >> k) & (true ? 1u : 0u)) != 0 && ((uint)((num >> k + 1) | (num >> k + 1 - 4)) & (true ? 1u : 0u)) != 0)",
+          "nearestLineInOurs": "if (((uint)(num >> k) & (true ? 1u : 0u)) != 0 && ((uint)((num >> k + 1) | (num >> k + 1 - 4)) & (true ? 1u : 0u)) != 0)",
           "similarity": 0.86
         },
         {
           "line": 966,
+          "recoveredMember": null,
           "recovered": "Vector3 vector = (Vector3)gridNode.position;",
-          "ours": "Vector3 from = (Vector3)gridNode.position;",
+          "nearestLineInOurs": "Vector3 from = (Vector3)gridNode.position;",
           "similarity": 0.91
         },
         {
           "line": 974,
+          "recoveredMember": null,
           "recovered": "Gizmos.DrawLine(vector, (Vector3)pathNode.parent.node.position);",
-          "ours": "Gizmos.DrawLine(from, (Vector3)pathNode.parent.node.position);",
+          "nearestLineInOurs": "Gizmos.DrawLine(from, (Vector3)pathNode.parent.node.position);",
           "similarity": 0.94
         },
         {
           "line": 984,
+          "recoveredMember": null,
           "recovered": "Gizmos.DrawLine(vector, (Vector3)gridNode2.position);",
-          "ours": "Gizmos.DrawLine(from, (Vector3)gridNode2.position);",
+          "nearestLineInOurs": "Gizmos.DrawLine(from, (Vector3)gridNode2.position);",
           "similarity": 0.92
         },
         {
           "line": 992,
+          "recoveredMember": null,
           "recovered": "Gizmos.DrawLine(vector, (Vector3)graphNode.position);",
-          "ours": "Gizmos.DrawLine(from, (Vector3)graphNode.position);",
+          "nearestLineInOurs": "Gizmos.DrawLine(from, (Vector3)graphNode.position);",
           "similarity": 0.92
         }
       ]
@@ -1943,56 +2247,65 @@
       "candidates": [
         {
           "line": 45,
+          "recoveredMember": "Awake",
           "recovered": "blurredRotor = rotor.GetChild(0).GetComponent<Renderer>();",
-          "ours": "blurredRotor = blurred.GetComponent<Renderer>();",
+          "nearestLineInOurs": "blurredRotor = blurred.GetComponent<Renderer>();",
           "similarity": 0.85
         },
         {
           "line": 55,
+          "recoveredMember": "Update",
           "recovered": "rotorSpeed = Mathf.Clamp01(rotorSpeed + Time.deltaTime * 0.3f);",
-          "ours": "rotorSpeed = Mathf.Clamp01(rotorSpeed + Time.fixedDeltaTime * 0.3f);",
+          "nearestLineInOurs": "rotorSpeed = Mathf.Clamp01(rotorSpeed + Time.fixedDeltaTime * 0.3f);",
           "similarity": 0.96
         },
         {
           "line": 58,
+          "recoveredMember": "Update",
           "recovered": "Damage(Time.deltaTime * 30f);",
-          "ours": "Damage(Time.fixedDeltaTime * 30f);",
+          "nearestLineInOurs": "Damage(Time.fixedDeltaTime * 30f);",
           "similarity": 0.92
         },
         {
           "line": 63,
+          "recoveredMember": "Update",
           "recovered": "rotorSpeed = Mathf.Clamp01(rotorSpeed - Time.deltaTime * 0.3f);",
-          "ours": "rotorSpeed = Mathf.Clamp01(rotorSpeed - Time.fixedDeltaTime * 0.3f);",
+          "nearestLineInOurs": "rotorSpeed = Mathf.Clamp01(rotorSpeed - Time.fixedDeltaTime * 0.3f);",
           "similarity": 0.96
         },
         {
           "line": 86,
+          "recoveredMember": "FixedUpdate",
           "recovered": "float num = Vector3.Dot(normalized, rigidbody.velocity);",
-          "ours": "float num = Vector3.Dot(normalized, rigidbody.linearVelocity);",
+          "nearestLineInOurs": "float num = Vector3.Dot(normalized, rigidbody.linearVelocity);",
           "similarity": 0.93
         },
         {
           "line": 87,
+          "recoveredMember": "FixedUpdate",
           "recovered": "float magnitude = Vector3.Cross(normalized, rigidbody.velocity).magnitude;",
-          "ours": "float magnitude = Vector3.Cross(normalized, rigidbody.linearVelocity).magnitude;",
+          "nearestLineInOurs": "float magnitude = Vector3.Cross(normalized, rigidbody.linearVelocity).magnitude;",
           "similarity": 0.95
         },
         {
           "line": 88,
+          "recoveredMember": "FixedUpdate",
           "recovered": "rigidbody.angularDrag = 0.2f + num * 0.01f;",
-          "ours": "rigidbody.angularDamping = 0.2f + num * 0.01f;",
+          "nearestLineInOurs": "rigidbody.angularDamping = 0.2f + num * 0.01f;",
           "similarity": 0.94
         },
         {
           "line": 89,
+          "recoveredMember": "FixedUpdate",
           "recovered": "rigidbody.drag = 0.05f + magnitude * 0.01f;",
-          "ours": "rigidbody.linearDamping = 0.05f + magnitude * 0.01f;",
+          "nearestLineInOurs": "rigidbody.linearDamping = 0.05f + magnitude * 0.01f;",
           "similarity": 0.88
         },
         {
           "line": 99,
+          "recoveredMember": "FixedUpdate",
           "recovered": "float t = Mathf.Clamp01(0f - Vector3.Dot(normalized2, rigidbody.velocity.normalized));",
-          "ours": "float t = Mathf.Clamp01(0f - Vector3.Dot(normalized2, rigidbody.linearVelocity.normalized));",
+          "nearestLineInOurs": "float t = Mathf.Clamp01(0f - Vector3.Dot(normalized2, rigidbody.linearVelocity.normalized));",
           "similarity": 0.95
         }
       ]
@@ -2005,56 +2318,65 @@
       "candidates": [
         {
           "line": 76,
+          "recoveredMember": "DefaultSlotEntry",
           "recovered": "int num = PlayerPrefs.GetInt(slot);",
-          "ours": "int @int = PlayerPrefs.GetInt(slot);",
+          "nearestLineInOurs": "int @int = PlayerPrefs.GetInt(slot);",
           "similarity": 0.93
         },
         {
           "line": 77,
+          "recoveredMember": "DefaultSlotEntry",
           "recovered": "if (num == -1)",
-          "ours": "if (@int == -1)",
+          "nearestLineInOurs": "if (@int == -1)",
           "similarity": 0.83
         },
         {
           "line": 81,
+          "recoveredMember": "DefaultSlotEntry",
           "recovered": "return WeaponManager.instance.weapons[num];",
-          "ours": "return WeaponManager.instance.weapons[0];",
+          "nearestLineInOurs": "return WeaponManager.instance.weapons[0];",
           "similarity": 0.95
         },
         {
           "line": 168,
+          "recoveredMember": "AddArsenalButton",
           "recovered": "component.FindChild(\"Image\").GetComponent<Image>().sprite = entry.image;",
-          "ours": "component.Find(\"Image\").GetComponent<Image>().sprite = entry.image;",
+          "nearestLineInOurs": "component.Find(\"Image\").GetComponent<Image>().sprite = entry.image;",
           "similarity": 0.96
         },
         {
           "line": 309,
+          "recoveredMember": "UpdateLoadoutButton",
           "recovered": "button.FindChild(\"Image\").GetComponent<Image>().sprite = nothingSprite;",
-          "ours": "button.Find(\"Image\").GetComponent<Image>().sprite = nothingSprite;",
+          "nearestLineInOurs": "button.Find(\"Image\").GetComponent<Image>().sprite = nothingSprite;",
           "similarity": 0.96
         },
         {
           "line": 314,
+          "recoveredMember": "UpdateLoadoutButton",
           "recovered": "button.FindChild(\"Image\").GetComponent<Image>().sprite = entry.image;",
-          "ours": "button.Find(\"Image\").GetComponent<Image>().sprite = entry.image;",
+          "nearestLineInOurs": "button.Find(\"Image\").GetComponent<Image>().sprite = entry.image;",
           "similarity": 0.96
         },
         {
           "line": 399,
+          "recoveredMember": "OnDeployClick",
           "recovered": "FpsActorController.instance.CloseLoadout();",
-          "ours": "FpsActorController.instance.DeployFromLoadout();",
+          "nearestLineInOurs": "FpsActorController.instance.DeployFromLoadout();",
           "similarity": 0.88
         },
         {
           "line": 404,
+          "recoveredMember": "IsOpen",
           "recovered": "return instance.uiCanvas.enabled;",
-          "ours": "return instance != null && instance.uiCanvas.enabled;",
+          "nearestLineInOurs": "return instance != null && instance.uiCanvas.enabled;",
           "similarity": 0.77
         },
         {
           "line": 419,
+          "recoveredMember": "HasBeenOpen",
           "recovered": "return instance.hasBeenOpen;",
-          "ours": "return instance != null && instance.hasBeenOpen;",
+          "nearestLineInOurs": "return instance != null && instance.hasBeenOpen;",
           "similarity": 0.74
         }
       ]
@@ -2067,56 +2389,65 @@
       "candidates": [
         {
           "line": 5,
+          "recoveredMember": null,
           "recovered": "public class Weapon : MonoBehaviour",
-          "ours": "public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon",
+          "nearestLineInOurs": "public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon",
           "similarity": 0.61
         },
         {
           "line": 178,
+          "recoveredMember": "Update",
           "recovered": "if (!stopFireLoop.Done())",
-          "ours": "if (stopFireLoop.TrueDone())",
+          "nearestLineInOurs": "if (stopFireLoop.TrueDone())",
           "similarity": 0.91
         },
         {
           "line": 197,
+          "recoveredMember": "Fire",
           "recovered": "if (configuration.auto && (!audio.isPlaying || !stopFireLoop.Done()))",
-          "ours": "if (configuration.auto && audio != null && (!audio.isPlaying || !stopFireLoop.Done()))",
+          "nearestLineInOurs": "if (configuration.auto && audio != null && (!audio.isPlaying || !stopFireLoop.Done()))",
           "similarity": 0.89
         },
         {
           "line": 274,
+          "recoveredMember": "AmmoChanged",
           "recovered": "private void AmmoChanged()",
-          "ours": "protected void AmmoChanged()",
+          "nearestLineInOurs": "protected void AmmoChanged()",
           "similarity": 0.85
         },
         {
           "line": 281,
+          "recoveredMember": "AmmoChanged",
           "recovered": "if (!HasLoadedAmmo() && HasSpareAmmo() && !reloading && (configuration.forceAutoReload || OptionsUi.GetOptions().autoReload))",
-          "ours": "if (!HasLoadedAmmo() && HasSpareAmmo() && !reloading && autoReload)",
+          "nearestLineInOurs": "if (!HasLoadedAmmo() && HasSpareAmmo() && !reloading && autoReload)",
           "similarity": 0.7
         },
         {
           "line": 347,
+          "recoveredMember": "Shoot",
           "recovered": "if (!user.aiControlled && configuration.casing != null)",
-          "ours": "if (!user.aiControlled && configuration.casing != null && NetWeaponAuthority.CosmeticHalfRunsHere)",
+          "nearestLineInOurs": "if (!user.aiControlled && configuration.casing != null && NetWeaponAuthority.CosmeticHalfRunsHere)",
           "similarity": 0.72
         },
         {
           "line": 351,
+          "recoveredMember": "Shoot",
           "recovered": "if (!configuration.auto)",
-          "ours": "if (configuration.auto)",
+          "nearestLineInOurs": "if (configuration.auto)",
           "similarity": 0.98
         },
         {
           "line": 355,
+          "recoveredMember": "Shoot",
           "recovered": "else if (ammo == 0)",
-          "ours": "if (ammo != -1)",
+          "nearestLineInOurs": "if (ammo != -1)",
           "similarity": 0.71
         },
         {
           "line": 359,
+          "recoveredMember": "Shoot",
           "recovered": "if (!user.aiControlled && reverbAudio != null)",
-          "ours": "if (user != null && !user.aiControlled && reverbAudio != null)",
+          "nearestLineInOurs": "if (user != null && !user.aiControlled && reverbAudio != null)",
           "similarity": 0.85
         }
       ]
@@ -2129,50 +2460,58 @@
       "candidates": [
         {
           "line": 3,
+          "recoveredMember": null,
           "recovered": "public class GrenadeProjectile : Projectile",
-          "ours": "public partial class GrenadeProjectile : Projectile",
+          "nearestLineInOurs": "public partial class GrenadeProjectile : Projectile",
           "similarity": 0.91
         },
         {
           "line": 30,
+          "recoveredMember": "Start",
           "recovered": "Invoke(\"Explode\", configuration.lifetime);",
-          "ours": "Invoke(nameof(Explode), configuration.lifetime);",
+          "nearestLineInOurs": "Invoke(nameof(Explode), configuration.lifetime);",
           "similarity": 0.89
         },
         {
           "line": 36,
+          "recoveredMember": "Update",
           "recovered": "Vector3 vector = velocity * Time.deltaTime;",
-          "ours": "Vector3 vector = velocity * Time.deltaTime",
+          "nearestLineInOurs": "Vector3 vector = velocity * Time.deltaTime",
           "similarity": 0.99
         },
         {
           "line": 39,
+          "recoveredMember": "Update",
           "recovered": "if (Physics.SphereCast(ray, radius, out hitInfo, vector.magnitude * 2f, 4097))",
-          "ours": "if (Physics.SphereCast(ray, radius, out hitInfo, vector.magnitude, 4097))",
+          "nearestLineInOurs": "if (Physics.SphereCast(ray, radius, out hitInfo, vector.magnitude, 4097))",
           "similarity": 0.97
         },
         {
           "line": 58,
+          "recoveredMember": "Explode",
           "recovered": "if (ActorManager.Explode(base.transform.position, explosionConfiguration) && !source.aiControlled)",
-          "ours": "base.transform.position, explosionConfiguration, source,",
+          "nearestLineInOurs": "base.transform.position, explosionConfiguration, source,",
           "similarity": 0.7
         },
         {
           "line": 75,
+          "recoveredMember": "Explode",
           "recovered": "GetComponent<ParticleSystem>().Play(true);",
-          "ours": "ParticleSystem burst = GetComponent<ParticleSystem>();",
+          "nearestLineInOurs": "ParticleSystem burst = GetComponent<ParticleSystem>();",
           "similarity": 0.65
         },
         {
           "line": 77,
+          "recoveredMember": "Explode",
           "recovered": "component.pitch = Random.Range(0.9f, 1.1f);",
-          "ours": "component.pitch = CosmeticRandom.Range(0.9f, 1.1f);",
+          "nearestLineInOurs": "component.pitch = CosmeticRandom.Range(0.9f, 1.1f);",
           "similarity": 0.91
         },
         {
           "line": 79,
+          "recoveredMember": "Explode",
           "recovered": "Invoke(\"Cleanup\", 10f);",
-          "ours": "Invoke(nameof(Cleanup), 0f);",
+          "nearestLineInOurs": "Invoke(nameof(Cleanup), 0f);",
           "similarity": 0.78
         }
       ]
@@ -2185,50 +2524,58 @@
       "candidates": [
         {
           "line": 244,
+          "recoveredMember": null,
           "recovered": "Vector3 vector = new Vector3(Mathf.Cos(0f) * r, 0f, Mathf.Sin(0f) * r) + o;",
-          "ours": "Vector3 vector = new Vector3(Mathf.Cos(f) * r, 0f, Mathf.Sin(f) * r) + o;",
+          "nearestLineInOurs": "Vector3 vector = new Vector3(Mathf.Cos(f) * r, 0f, Mathf.Sin(f) * r) + o;",
           "similarity": 0.97
         },
         {
           "line": 249,
+          "recoveredMember": null,
           "recovered": "Vector3 vector2 = new Vector3(Mathf.Cos(f) * r, 0f, Mathf.Sin(f) * r) + o;",
-          "ours": "Vector3 vector = new Vector3(Mathf.Cos(f) * r, 0f, Mathf.Sin(f) * r) + o;",
+          "nearestLineInOurs": "Vector3 vector = new Vector3(Mathf.Cos(f) * r, 0f, Mathf.Sin(f) * r) + o;",
           "similarity": 0.99
         },
         {
           "line": 250,
+          "recoveredMember": null,
           "recovered": "Gizmos.DrawLine(vector, vector2);",
-          "ours": "Gizmos.DrawLine(from, vector2);",
+          "nearestLineInOurs": "Gizmos.DrawLine(from, vector2);",
           "similarity": 0.88
         },
         {
           "line": 251,
+          "recoveredMember": null,
           "recovered": "vector = vector2;",
-          "ours": "from = vector2;",
+          "nearestLineInOurs": "from = vector2;",
           "similarity": 0.75
         },
         {
           "line": 265,
+          "recoveredMember": null,
           "recovered": "Vector3 vector2 = p1;",
-          "ours": "Vector3 vector = p2 - p1;",
+          "nearestLineInOurs": "Vector3 vector = p2 - p1;",
           "similarity": 0.87
         },
         {
           "line": 269,
+          "recoveredMember": null,
           "recovered": "Vector3 vector3 = AstarSplines.CubicBezier(p1, p3, p4, p2, t);",
-          "ours": "Vector3 vector2 = AstarSplines.CubicBezier(p1, p3, p4, p2, t);",
+          "nearestLineInOurs": "Vector3 vector2 = AstarSplines.CubicBezier(p1, p3, p4, p2, t);",
           "similarity": 0.98
         },
         {
           "line": 270,
+          "recoveredMember": null,
           "recovered": "Gizmos.DrawLine(vector2, vector3);",
-          "ours": "Gizmos.DrawLine(from, vector);",
+          "nearestLineInOurs": "Gizmos.DrawLine(from, vector);",
           "similarity": 0.84
         },
         {
           "line": 271,
+          "recoveredMember": null,
           "recovered": "vector2 = vector3;",
-          "ours": "from = vector;",
+          "nearestLineInOurs": "from = vector;",
           "similarity": 0.69
         }
       ]
@@ -2241,50 +2588,58 @@
       "candidates": [
         {
           "line": 269,
+          "recoveredMember": null,
           "recovered": "Vector3 vector = new Vector3(Mathf.Cos(0f) * r, 0f, Mathf.Sin(0f) * r) + o;",
-          "ours": "Vector3 vector = new Vector3(Mathf.Cos(f) * r, 0f, Mathf.Sin(f) * r) + o;",
+          "nearestLineInOurs": "Vector3 vector = new Vector3(Mathf.Cos(f) * r, 0f, Mathf.Sin(f) * r) + o;",
           "similarity": 0.97
         },
         {
           "line": 274,
+          "recoveredMember": null,
           "recovered": "Vector3 vector2 = new Vector3(Mathf.Cos(f) * r, 0f, Mathf.Sin(f) * r) + o;",
-          "ours": "Vector3 vector = new Vector3(Mathf.Cos(f) * r, 0f, Mathf.Sin(f) * r) + o;",
+          "nearestLineInOurs": "Vector3 vector = new Vector3(Mathf.Cos(f) * r, 0f, Mathf.Sin(f) * r) + o;",
           "similarity": 0.99
         },
         {
           "line": 275,
+          "recoveredMember": null,
           "recovered": "Gizmos.DrawLine(vector, vector2);",
-          "ours": "Gizmos.DrawLine(from, vector2);",
+          "nearestLineInOurs": "Gizmos.DrawLine(from, vector2);",
           "similarity": 0.88
         },
         {
           "line": 276,
+          "recoveredMember": null,
           "recovered": "vector = vector2;",
-          "ours": "from = vector2;",
+          "nearestLineInOurs": "from = vector2;",
           "similarity": 0.75
         },
         {
           "line": 290,
+          "recoveredMember": null,
           "recovered": "Vector3 vector2 = p1;",
-          "ours": "Vector3 vector = p2 - p1;",
+          "nearestLineInOurs": "Vector3 vector = p2 - p1;",
           "similarity": 0.87
         },
         {
           "line": 294,
+          "recoveredMember": null,
           "recovered": "Vector3 vector3 = AstarSplines.CubicBezier(p1, p3, p4, p2, t);",
-          "ours": "Vector3 vector2 = AstarSplines.CubicBezier(p1, p3, p4, p2, t);",
+          "nearestLineInOurs": "Vector3 vector2 = AstarSplines.CubicBezier(p1, p3, p4, p2, t);",
           "similarity": 0.98
         },
         {
           "line": 295,
+          "recoveredMember": null,
           "recovered": "Gizmos.DrawLine(vector2, vector3);",
-          "ours": "Gizmos.DrawLine(from, vector);",
+          "nearestLineInOurs": "Gizmos.DrawLine(from, vector);",
           "similarity": 0.84
         },
         {
           "line": 296,
+          "recoveredMember": null,
           "recovered": "vector2 = vector3;",
-          "ours": "from = vector;",
+          "nearestLineInOurs": "from = vector;",
           "similarity": 0.69
         }
       ]
@@ -2297,44 +2652,51 @@
       "candidates": [
         {
           "line": 38,
+          "recoveredMember": "RandomPosition",
           "recovered": "Vector3 vector = base.transform.position + Vector3.Scale(Random.insideUnitSphere, new Vector3(3f, 0f, 3f));",
-          "ours": "Vector3 jittered = authored + Vector3.Scale(Random.insideUnitSphere, new Vector3(3f, 0f, 3f));",
+          "nearestLineInOurs": "Vector3 jittered = authored + Vector3.Scale(Random.insideUnitSphere, new Vector3(3f, 0f, 3f));",
           "similarity": 0.83
         },
         {
           "line": 39,
+          "recoveredMember": "RandomPosition",
           "recovered": "Ray ray = new Ray(vector + Vector3.up * 3f, Vector3.down);",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 40,
+          "recoveredMember": "RandomPosition",
           "recovered": "RaycastHit hitInfo;",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 41,
+          "recoveredMember": "RandomPosition",
           "recovered": "if (Physics.Raycast(ray, out hitInfo))",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 43,
+          "recoveredMember": "RandomPosition",
           "recovered": "return hitInfo.point;",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 45,
+          "recoveredMember": "RandomPosition",
           "recovered": "return vector;",
-          "ours": "return true;",
+          "nearestLineInOurs": "return true;",
           "similarity": 0.69
         },
         {
           "line": 55,
+          "recoveredMember": "RandomSpawnPointPosition",
           "recovered": "return spawnpointContainer.GetChild(Random.Range(0, childCount)).position;",
-          "ours": "return SnappedContainerChildPosition(spawnpointContainer.GetChild(Random.Range(0, childCount)));",
+          "nearestLineInOurs": "return SnappedContainerChildPosition(spawnpointContainer.GetChild(Random.Range(0, childCount)));",
           "similarity": 0.76
         }
       ]
@@ -2347,38 +2709,44 @@
       "candidates": [
         {
           "line": 362,
+          "recoveredMember": null,
           "recovered": "string input = GetString(zipEntry);",
-          "ours": "string @string = GetString(zipEntry);",
+          "nearestLineInOurs": "string @string = GetString(zipEntry);",
           "similarity": 0.89
         },
         {
           "line": 363,
+          "recoveredMember": null,
           "recovered": "JsonReader jsonReader = new JsonReader(input, readerSettings);",
-          "ours": "JsonReader jsonReader = new JsonReader(@string, readerSettings);",
+          "nearestLineInOurs": "JsonReader jsonReader = new JsonReader(@string, readerSettings);",
           "similarity": 0.94
         },
         {
           "line": 521,
+          "recoveredMember": null,
           "recovered": "string input = GetString(zipEntry);",
-          "ours": "string @string = GetString(zipEntry);",
+          "nearestLineInOurs": "string @string = GetString(zipEntry);",
           "similarity": 0.89
         },
         {
           "line": 522,
+          "recoveredMember": null,
           "recovered": "JsonReader jsonReader = new JsonReader(input, readerSettings);",
-          "ours": "JsonReader jsonReader = new JsonReader(@string, readerSettings);",
+          "nearestLineInOurs": "JsonReader jsonReader = new JsonReader(@string, readerSettings);",
           "similarity": 0.94
         },
         {
           "line": 559,
+          "recoveredMember": null,
           "recovered": "string input = GetString(entry);",
-          "ours": "string @string = GetString(entry);",
+          "nearestLineInOurs": "string @string = GetString(entry);",
           "similarity": 0.88
         },
         {
           "line": 560,
+          "recoveredMember": null,
           "recovered": "JsonReader jsonReader = new JsonReader(input, readerSettings);",
-          "ours": "JsonReader jsonReader = new JsonReader(@string, readerSettings);",
+          "nearestLineInOurs": "JsonReader jsonReader = new JsonReader(@string, readerSettings);",
           "similarity": 0.94
         }
       ]
@@ -2391,38 +2759,44 @@
       "candidates": [
         {
           "line": 47,
+          "recoveredMember": "Hit",
           "recovered": "if (hitInfo.collider.gameObject.layer == 12)",
-          "ours": "if (source != null && hitInfo.collider.gameObject.layer == 12)",
+          "nearestLineInOurs": "if (source != null && hitInfo.collider.gameObject.layer == 12)",
           "similarity": 0.83
         },
         {
           "line": 57,
+          "recoveredMember": "Hit",
           "recovered": "if ((Explode(hitInfo.point, hitInfo.normal) || flag) && !source.aiControlled)",
-          "ours": "if ((Explode(hitInfo.point, hitInfo.normal) || flag) && source != null && !source.aiControlled)",
+          "nearestLineInOurs": "if ((Explode(hitInfo.point, hitInfo.normal) || flag) && source != null && !source.aiControlled)",
           "similarity": 0.9
         },
         {
           "line": 66,
+          "recoveredMember": "Explode",
           "recovered": "bool result = ActorManager.Explode(position, explosionConfiguration);",
-          "ours": "public ExplosionConfiguration explosionConfiguration;",
+          "nearestLineInOurs": "public ExplosionConfiguration explosionConfiguration;",
           "similarity": 0.62
         },
         {
           "line": 80,
+          "recoveredMember": "Explode",
           "recovered": "audioSource.pitch = UnityEngine.Random.Range(0.9f, 1.1f);",
-          "ours": "audioSource.pitch = CosmeticRandom.Range(0.9f, 1.1f);",
+          "nearestLineInOurs": "audioSource.pitch = CosmeticRandom.Range(0.9f, 1.1f);",
           "similarity": 0.83
         },
         {
           "line": 83,
+          "recoveredMember": "Explode",
           "recovered": "Invoke(\"StopSmoke\", smokeTime);",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 90,
+          "recoveredMember": "StopSmoke",
           "recovered": "Invoke(\"Cleanup\", 10f);",
-          "ours": "Invoke(nameof(Cleanup), 0f);",
+          "nearestLineInOurs": "Invoke(nameof(Cleanup), 0f);",
           "similarity": 0.78
         }
       ]
@@ -2435,38 +2809,44 @@
       "candidates": [
         {
           "line": 46,
+          "recoveredMember": "Update",
           "recovered": "float target = ((!Input.GetKey(KeyCode.M)) ? 0f : 1f);",
-          "ours": "float target = (!held) ? 0f : 1f;",
+          "nearestLineInOurs": "float target = (!held) ? 0f : 1f;",
           "similarity": 0.71
         },
         {
           "line": 117,
+          "recoveredMember": "UpdateSpawnPointButtons",
           "recovered": "int num = 0;",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 123,
+          "recoveredMember": "UpdateSpawnPointButtons",
           "recovered": "Color color = (colors.normalColor = ColorScheme.TeamColor(owner));",
-          "ours": "Color color2 = (colors.normalColor = ColorScheme.TeamColor(owner));",
+          "nearestLineInOurs": "Color color2 = (colors.normalColor = ColorScheme.TeamColor(owner));",
           "similarity": 0.99
         },
         {
           "line": 124,
+          "recoveredMember": "UpdateSpawnPointButtons",
           "recovered": "colors.highlightedColor = color + new Color(0.2f, 0.2f, 0.2f);",
-          "ours": "colors.highlightedColor = color2 + new Color(0.2f, 0.2f, 0.2f);",
+          "nearestLineInOurs": "colors.highlightedColor = color2 + new Color(0.2f, 0.2f, 0.2f);",
           "similarity": 0.99
         },
         {
           "line": 125,
+          "recoveredMember": "UpdateSpawnPointButtons",
           "recovered": "colors.disabledColor = color * new Color(0.5f, 0.5f, 0.5f);",
-          "ours": "colors.disabledColor = color2 * new Color(0.5f, 0.5f, 0.5f);",
+          "nearestLineInOurs": "colors.disabledColor = color2 * new Color(0.5f, 0.5f, 0.5f);",
           "similarity": 0.99
         },
         {
           "line": 128,
+          "recoveredMember": "UpdateSpawnPointButtons",
           "recovered": "button.interactable = owner == num;",
-          "ours": "button.interactable = owner == localTeam;",
+          "nearestLineInOurs": "button.interactable = owner == localTeam;",
           "similarity": 0.87
         }
       ]
@@ -2479,38 +2859,44 @@
       "candidates": [
         {
           "line": 345,
+          "recoveredMember": "DemoPath",
           "recovered": "List<Vector3> list3;",
-          "ours": "List<Vector3> list2;",
+          "nearestLineInOurs": "List<Vector3> list2;",
           "similarity": 0.95
         },
         {
           "line": 346,
+          "recoveredMember": "DemoPath",
           "recovered": "List<Vector3> list2 = (list3 = list);",
-          "ours": "List<Vector3> list3 = (list2 = list);",
+          "nearestLineInOurs": "List<Vector3> list3 = (list2 = list);",
           "similarity": 0.95
         },
         {
           "line": 347,
+          "recoveredMember": "DemoPath",
           "recovered": "int index2;",
-          "ours": "int index;",
+          "nearestLineInOurs": "int index;",
           "similarity": 0.95
         },
         {
           "line": 348,
+          "recoveredMember": "DemoPath",
           "recovered": "int index = (index2 = j);",
-          "ours": "int index2 = (index = j);",
+          "nearestLineInOurs": "int index2 = (index = j);",
           "similarity": 0.96
         },
         {
           "line": 349,
+          "recoveredMember": "DemoPath",
           "recovered": "Vector3 vector = list3[index2];",
-          "ours": "Vector3 vector = list2[index];",
+          "nearestLineInOurs": "Vector3 vector = list2[index];",
           "similarity": 0.95
         },
         {
           "line": 350,
+          "recoveredMember": "DemoPath",
           "recovered": "list2[index] = vector - zero;",
-          "ours": "list3[index2] = vector - zero;",
+          "nearestLineInOurs": "list3[index2] = vector - zero;",
           "similarity": 0.95
         }
       ]
@@ -2523,38 +2909,44 @@
       "candidates": [
         {
           "line": 4,
+          "recoveredMember": null,
           "recovered": "public class Projectile : MonoBehaviour",
-          "ours": "public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectileBody",
+          "nearestLineInOurs": "public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectileBody",
           "similarity": 0.63
         },
         {
           "line": 72,
+          "recoveredMember": "Update",
           "recovered": "Vector3 delta = velocity * Time.deltaTime;",
-          "ours": "Vector3 delta = velocity * Time.deltaTime",
+          "nearestLineInOurs": "Vector3 delta = velocity * Time.deltaTime",
           "similarity": 0.99
         },
         {
           "line": 78,
+          "recoveredMember": "Update",
           "recovered": "Vector3 vector = ActorManager.instance.player.Position();",
-          "ours": "Vector3 vector = player.Position();",
+          "nearestLineInOurs": "Vector3 vector = player.Position();",
           "similarity": 0.76
         },
         {
           "line": 97,
+          "recoveredMember": "Travel",
           "recovered": "if (Physics.Raycast(ray, out hitInfo, delta.magnitude * 2f, -2049) && Hit(ray, hitInfo))",
-          "ours": "if (Physics.Raycast(ray, out hitInfo, delta.magnitude, -2049) && Hit(ray, hitInfo))",
+          "nearestLineInOurs": "if (Physics.Raycast(ray, out hitInfo, delta.magnitude, -2049) && Hit(ray, hitInfo))",
           "similarity": 0.98
         },
         {
           "line": 132,
+          "recoveredMember": "Hit",
           "recovered": "else if (component.ProjectileHit(this, hitInfo.point) && !source.aiControlled)",
-          "ours": "&& component.ProjectileHit(this, hitInfo.point)",
+          "nearestLineInOurs": "&& component.ProjectileHit(this, hitInfo.point)",
           "similarity": 0.72
         },
         {
           "line": 142,
+          "recoveredMember": "Hit",
           "recovered": "if (configuration.makesFlybySound && travellingTowardsPlayer && Vector3.Distance(hitInfo.point, ActorManager.instance.player.Position()) < 15f)",
-          "ours": "&& Vector3.Distance(hitInfo.point, ActorManager.Player.Position()) < 15f)",
+          "nearestLineInOurs": "&& Vector3.Distance(hitInfo.point, ActorManager.Player.Position()) < 15f)",
           "similarity": 0.66
         }
       ]
@@ -2567,32 +2959,37 @@
       "candidates": [
         {
           "line": 15,
+          "recoveredMember": "Awake",
           "recovered": "component.velocity = base.transform.forward * configuration.speed;",
-          "ours": "component.linearVelocity = base.transform.forward * configuration.speed;",
+          "nearestLineInOurs": "component.linearVelocity = base.transform.forward * configuration.speed;",
           "similarity": 0.94
         },
         {
           "line": 16,
+          "recoveredMember": "Awake",
           "recovered": "InvokeRepeating(\"Resupply\", 3f, 3f);",
-          "ours": "InvokeRepeating(nameof(Resupply), 3f, 3f);",
+          "nearestLineInOurs": "InvokeRepeating(nameof(Resupply), 3f, 3f);",
           "similarity": 0.86
         },
         {
           "line": 21,
+          "recoveredMember": "Resupply",
           "recovered": "List<Actor> list = ActorManager.AliveActorsInRange(base.transform.position, 6f);",
-          "ours": "ActorManager.AliveActorsInRange(base.transform.position, 6f, _nearby);",
+          "nearestLineInOurs": "ActorManager.AliveActorsInRange(base.transform.position, 6f, _nearby);",
           "similarity": 0.81
         },
         {
           "line": 22,
+          "recoveredMember": "Resupply",
           "recovered": "foreach (Actor item in list)",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 24,
+          "recoveredMember": "Resupply",
           "recovered": "item.ResupplyAmmo();",
-          "ours": "_nearby[i].ResupplyAmmo();",
+          "nearestLineInOurs": "_nearby[i].ResupplyAmmo();",
           "similarity": 0.74
         }
       ]
@@ -2605,32 +3002,37 @@
       "candidates": [
         {
           "line": 93,
+          "recoveredMember": "Update",
           "recovered": "float target = ((!HasDriver()) ? 0f : 0.5f);",
-          "ours": "enginePitchTarget = ((!HasDriver()) ? 0f : 0.5f);",
+          "nearestLineInOurs": "enginePitchTarget = ((!HasDriver()) ? 0f : 0.5f);",
           "similarity": 0.81
         },
         {
           "line": 105,
+          "recoveredMember": "Update",
           "recovered": "steerAngle = Mathf.MoveTowards(steerAngle, target2, 5f * maxSteer * Time.deltaTime);",
-          "ours": "steerAngle = Mathf.MoveTowards(steerAngle, target2, 5f * maxSteer * Time.fixedDeltaTime);",
+          "nearestLineInOurs": "steerAngle = Mathf.MoveTowards(steerAngle, target2, 5f * maxSteer * Time.fixedDeltaTime);",
           "similarity": 0.97
         },
         {
           "line": 115,
+          "recoveredMember": "Update",
           "recovered": "target = 0.5f;",
-          "ours": "enginePitchTarget = 0.5f;",
+          "nearestLineInOurs": "enginePitchTarget = 0.5f;",
           "similarity": 0.7
         },
         {
           "line": 120,
+          "recoveredMember": "Update",
           "recovered": "target = ((!(vector.y > 0f)) ? (0.5f + Mathf.Abs(vector.y) * 0.2f) : (0.5f + Mathf.Abs(vector.y) * 0.6f));",
-          "ours": "enginePitchTarget = ((!(vector.y > 0f)) ? (0.5f + Mathf.Abs(vector.y) * 0.2f) : (0.5f + Mathf.Abs(vector.y) * 0.6f));",
+          "nearestLineInOurs": "enginePitchTarget = ((!(vector.y > 0f)) ? (0.5f + Mathf.Abs(vector.y) * 0.2f) : (0.5f + Mathf.Abs(vector.y) * 0.6f));",
           "similarity": 0.95
         },
         {
           "line": 129,
+          "recoveredMember": "Update",
           "recovered": "enginePitch = Mathf.MoveTowards(enginePitch, target, Time.deltaTime);",
-          "ours": "enginePitch = Mathf.MoveTowards(enginePitch, enginePitchTarget, Time.deltaTime);",
+          "nearestLineInOurs": "enginePitch = Mathf.MoveTowards(enginePitch, enginePitchTarget, Time.deltaTime);",
           "similarity": 0.93
         }
       ]
@@ -2643,32 +3045,37 @@
       "candidates": [
         {
           "line": 55,
+          "recoveredMember": null,
           "recovered": "gridFlags = (ushort)((gridFlags & -1025) | (value ? 1024 : 0));",
-          "ours": "gridFlags = (ushort)((gridFlags & 0xFFFFFBFFu) | (value ? 1024u : 0u));",
+          "nearestLineInOurs": "gridFlags = (ushort)((gridFlags & 0xFFFFFBFFu) | (value ? 1024u : 0u));",
           "similarity": 0.88
         },
         {
           "line": 67,
+          "recoveredMember": null,
           "recovered": "gridFlags = (ushort)((gridFlags & -257) | (value ? 256 : 0));",
-          "ours": "gridFlags = (ushort)((gridFlags & 0xFFFFFEFFu) | (value ? 256u : 0u));",
+          "nearestLineInOurs": "gridFlags = (ushort)((gridFlags & 0xFFFFFEFFu) | (value ? 256u : 0u));",
           "similarity": 0.87
         },
         {
           "line": 79,
+          "recoveredMember": null,
           "recovered": "gridFlags = (ushort)((gridFlags & -513) | (value ? 512 : 0));",
-          "ours": "gridFlags = (ushort)((gridFlags & 0xFFFFFDFFu) | (value ? 512u : 0u));",
+          "nearestLineInOurs": "gridFlags = (ushort)((gridFlags & 0xFFFFFDFFu) | (value ? 512u : 0u));",
           "similarity": 0.87
         },
         {
           "line": 119,
+          "recoveredMember": null,
           "recovered": "gridFlags = (ushort)((gridFlags & -256) | connections);",
-          "ours": "gridFlags = (ushort)((gridFlags & 0xFFFFFF00u) | (uint)connections);",
+          "nearestLineInOurs": "gridFlags = (ushort)((gridFlags & 0xFFFFFF00u) | (uint)connections);",
           "similarity": 0.86
         },
         {
           "line": 124,
+          "recoveredMember": null,
           "recovered": "gridFlags = (ushort)(gridFlags & -256);",
-          "ours": "gridFlags = (ushort)(gridFlags & 0xFFFFFF00u);",
+          "nearestLineInOurs": "gridFlags = (ushort)(gridFlags & 0xFFFFFF00u);",
           "similarity": 0.79
         }
       ]
@@ -2681,32 +3088,37 @@
       "candidates": [
         {
           "line": 20,
+          "recoveredMember": "Show",
           "recovered": "Time.timeScale = 0f;",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 28,
+          "recoveredMember": "Hide",
           "recovered": "Time.timeScale = 1f;",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 29,
+          "recoveredMember": "Hide",
           "recovered": "Time.fixedDeltaTime = Time.timeScale / 60f;",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 37,
+          "recoveredMember": "IsOpen",
           "recovered": "return instance.canvas.enabled;",
-          "ours": "instance.canvas.enabled = true;",
+          "nearestLineInOurs": "instance.canvas.enabled = true;",
           "similarity": 0.77
         },
         {
           "line": 66,
+          "recoveredMember": "Quit",
           "recovered": "Application.Quit();",
-          "ours": "AppQuit.Quit();",
+          "nearestLineInOurs": "AppQuit.Quit();",
           "similarity": 0.76
         }
       ]
@@ -2719,32 +3131,37 @@
       "candidates": [
         {
           "line": 17,
+          "recoveredMember": "Awake",
           "recovered": "component.velocity = base.transform.forward * configuration.speed;",
-          "ours": "component.linearVelocity = base.transform.forward * configuration.speed;",
+          "nearestLineInOurs": "component.linearVelocity = base.transform.forward * configuration.speed;",
           "similarity": 0.94
         },
         {
           "line": 18,
+          "recoveredMember": "Awake",
           "recovered": "InvokeRepeating(\"Resupply\", 3f, 3f);",
-          "ours": "InvokeRepeating(nameof(Resupply), 3f, 3f);",
+          "nearestLineInOurs": "InvokeRepeating(nameof(Resupply), 3f, 3f);",
           "similarity": 0.86
         },
         {
           "line": 23,
+          "recoveredMember": "Resupply",
           "recovered": "List<Actor> list = ActorManager.AliveActorsInRange(base.transform.position, 6f);",
-          "ours": "ActorManager.AliveActorsInRange(base.transform.position, 6f, _nearby);",
+          "nearestLineInOurs": "ActorManager.AliveActorsInRange(base.transform.position, 6f, _nearby);",
           "similarity": 0.81
         },
         {
           "line": 24,
+          "recoveredMember": "Resupply",
           "recovered": "foreach (Actor item in list)",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 26,
+          "recoveredMember": "Resupply",
           "recovered": "if (item.ResupplyHealth())",
-          "ours": "if (_nearby[i].ResupplyHealth())",
+          "nearestLineInOurs": "if (_nearby[i].ResupplyHealth())",
           "similarity": 0.79
         }
       ]
@@ -2757,26 +3174,30 @@
       "candidates": [
         {
           "line": 7,
+          "recoveredMember": null,
           "recovered": "private int currentMuzzle;",
-          "ours": "public byte currentMuzzle;",
+          "nearestLineInOurs": "public byte currentMuzzle;",
           "similarity": 0.73
         },
         {
           "line": 12,
+          "recoveredMember": "SpawnProjectile",
           "recovered": "currentMuzzle = (currentMuzzle + 1) % muzzles.Length;",
-          "ours": "currentMuzzle = (byte)((currentMuzzle + 1) % muzzles.Length);",
+          "nearestLineInOurs": "currentMuzzle = (byte)((currentMuzzle + 1) % muzzles.Length);",
           "similarity": 0.98
         },
         {
           "line": 13,
+          "recoveredMember": "SpawnProjectile",
           "recovered": "Quaternion rotation = Quaternion.LookRotation(direction + Random.insideUnitSphere * configuration.spread);",
-          "ours": "Quaternion rotation = Quaternion.LookRotation(direction + UnityEngine.Random.insideUnitSphere * configuration.spread);",
+          "nearestLineInOurs": "Quaternion rotation = Quaternion.LookRotation(direction + UnityEngine.Random.insideUnitSphere * configuration.spread);",
           "similarity": 0.95
         },
         {
           "line": 14,
+          "recoveredMember": "SpawnProjectile",
           "recovered": "Projectile component = ((GameObject)Object.Instantiate(configuration.projectilePrefab, transform.position, rotation)).GetComponent<Projectile>();",
-          "ours": "Projectile component = ((GameObject)UnityEngine.Object.Instantiate(configuration.projectilePrefab, transform.position, rotation)).GetComponent<Projectile>();",
+          "nearestLineInOurs": "Projectile component = ((GameObject)UnityEngine.Object.Instantiate(configuration.projectilePrefab, transform.position, rotation)).GetComponent<Projectile>();",
           "similarity": 0.96
         }
       ]
@@ -2789,26 +3210,30 @@
       "candidates": [
         {
           "line": 278,
+          "recoveredMember": null,
           "recovered": "for (int num = 0; num < graphs.Length; num++)",
-          "ours": "for (int j = 0; j < graphs.Length; j++)",
+          "nearestLineInOurs": "for (int j = 0; j < graphs.Length; j++)",
           "similarity": 0.86
         },
         {
           "line": 280,
+          "recoveredMember": null,
           "recovered": "for (int num2 = num + 1; num2 < graphs.Length; num2++)",
-          "ours": "for (int k = j + 1; k < graphs.Length; k++)",
+          "nearestLineInOurs": "for (int k = j + 1; k < graphs.Length; k++)",
           "similarity": 0.8
         },
         {
           "line": 282,
+          "recoveredMember": null,
           "recovered": "if (graphs[num] != null && graphs[num2] != null && graphs[num].guid == graphs[num2].guid)",
-          "ours": "if (graphs[j] != null && graphs[k] != null && graphs[j].guid == graphs[k].guid)",
+          "nearestLineInOurs": "if (graphs[j] != null && graphs[k] != null && graphs[j].guid == graphs[k].guid)",
           "similarity": 0.89
         },
         {
           "line": 285,
+          "recoveredMember": null,
           "recovered": "graphs[num].guid = Pathfinding.Util.Guid.NewGuid();",
-          "ours": "graphs[j].guid = Pathfinding.Util.Guid.NewGuid();",
+          "nearestLineInOurs": "graphs[j].guid = Pathfinding.Util.Guid.NewGuid();",
           "similarity": 0.96
         }
       ]
@@ -2821,26 +3246,30 @@
       "candidates": [
         {
           "line": 73,
+          "recoveredMember": "OnDrawGizmos",
           "recovered": "Vector3 vector = points[j].position;",
-          "ours": "Vector3 from = points[j].position;",
+          "nearestLineInOurs": "Vector3 from = points[j].position;",
           "similarity": 0.89
         },
         {
           "line": 76,
+          "recoveredMember": "OnDrawGizmos",
           "recovered": "Vector3 vector2 = AstarSplines.CubicBezier(points[j].position, points[j].position + normalized * tangentLengths, points[(j + 1) % num].position - normalized2 * tangentLengths, points[(j + 1) % num].position, (float)k / 100f);",
-          "ours": "Vector3 vector = AstarSplines.CubicBezier(points[j].position, points[j].position + normalized * tangentLengths, points[(j + 1) % num].position - normalized2 * tangentLengths, points[(j + 1) % num].position, (float)k / 100f);",
+          "nearestLineInOurs": "Vector3 vector = AstarSplines.CubicBezier(points[j].position, points[j].position + normalized * tangentLengths, points[(j + 1) % num].position - normalized2 * tangentLengths, points[(j + 1) % num].position, (float)k / 100f);",
           "similarity": 1.0
         },
         {
           "line": 77,
+          "recoveredMember": "OnDrawGizmos",
           "recovered": "Gizmos.DrawLine(vector, vector2);",
-          "ours": "Gizmos.DrawLine(from, vector);",
+          "nearestLineInOurs": "Gizmos.DrawLine(from, vector);",
           "similarity": 0.86
         },
         {
           "line": 78,
+          "recoveredMember": "OnDrawGizmos",
           "recovered": "vector = vector2;",
-          "ours": "from = vector;",
+          "nearestLineInOurs": "from = vector;",
           "similarity": 0.71
         }
       ]
@@ -2853,26 +3282,30 @@
       "candidates": [
         {
           "line": 48,
+          "recoveredMember": null,
           "recovered": "private string greenlightWebUrl = \"https://twitter.com/SteelRaven7\";",
-          "ours": "private string greenlightWebUrl = string.Empty;",
+          "nearestLineInOurs": "private string greenlightWebUrl = string.Empty;",
           "similarity": 0.64
         },
         {
           "line": 50,
+          "recoveredMember": null,
           "recovered": "private string greenlightSteamUrl = \"https://twitter.com/SteelRaven7\";",
-          "ours": "private string greenlightSteamUrl = string.Empty;",
+          "nearestLineInOurs": "private string greenlightSteamUrl = string.Empty;",
           "similarity": 0.66
         },
         {
           "line": 219,
+          "recoveredMember": "OpenTwitter",
           "recovered": "Application.OpenURL(\"http://twitter.com/SteelRaven7\");",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 241,
+          "recoveredMember": "Quit",
           "recovered": "Application.Quit();",
-          "ours": "AppQuit.Quit();",
+          "nearestLineInOurs": "AppQuit.Quit();",
           "similarity": 0.76
         }
       ]
@@ -2885,26 +3318,30 @@
       "candidates": [
         {
           "line": 115,
+          "recoveredMember": null,
           "recovered": "Vector3 vector2 = p1;",
-          "ours": "Vector3 vector = p2 - p1;",
+          "nearestLineInOurs": "Vector3 vector = p2 - p1;",
           "similarity": 0.87
         },
         {
           "line": 119,
+          "recoveredMember": null,
           "recovered": "Vector3 vector3 = AstarSplines.CubicBezier(p1, p3, p4, p2, t);",
-          "ours": "Vector3 vector2 = AstarSplines.CubicBezier(p1, p3, p4, p2, t);",
+          "nearestLineInOurs": "Vector3 vector2 = AstarSplines.CubicBezier(p1, p3, p4, p2, t);",
           "similarity": 0.98
         },
         {
           "line": 120,
+          "recoveredMember": null,
           "recovered": "Gizmos.DrawLine(vector2, vector3);",
-          "ours": "Gizmos.DrawLine(from, vector2);",
+          "nearestLineInOurs": "Gizmos.DrawLine(from, vector2);",
           "similarity": 0.83
         },
         {
           "line": 121,
+          "recoveredMember": null,
           "recovered": "vector2 = vector3;",
-          "ours": "from = vector2;",
+          "nearestLineInOurs": "from = vector2;",
           "similarity": 0.67
         }
       ]
@@ -2917,26 +3354,30 @@
       "candidates": [
         {
           "line": 71,
+          "recoveredMember": null,
           "recovered": "Dictionary<Type, int> dictionary2;",
-          "ours": "Dictionary<Type, int> dictionary;",
+          "nearestLineInOurs": "Dictionary<Type, int> dictionary;",
           "similarity": 0.99
         },
         {
           "line": 72,
+          "recoveredMember": null,
           "recovered": "Dictionary<Type, int> dictionary = (dictionary2 = totalCreated);",
-          "ours": "Dictionary<Type, int> dictionary2 = (dictionary = totalCreated);",
+          "nearestLineInOurs": "Dictionary<Type, int> dictionary2 = (dictionary = totalCreated);",
           "similarity": 0.98
         },
         {
           "line": 75,
+          "recoveredMember": null,
           "recovered": "int num = dictionary2[typeFromHandle];",
-          "ours": "int num = dictionary[typeFromHandle];",
+          "nearestLineInOurs": "int num = dictionary[typeFromHandle];",
           "similarity": 0.99
         },
         {
           "line": 76,
+          "recoveredMember": null,
           "recovered": "dictionary[key] = num + 1;",
-          "ours": "dictionary2[key] = num + 1;",
+          "nearestLineInOurs": "dictionary2[key] = num + 1;",
           "similarity": 0.98
         }
       ]
@@ -2949,26 +3390,30 @@
       "candidates": [
         {
           "line": 70,
+          "recoveredMember": "ApplyDay",
           "recovered": "base.transform.FindChild(\"Day\").gameObject.SetActive(true);",
-          "ours": "base.transform.Find(\"Day\").gameObject.SetActive(true);",
+          "nearestLineInOurs": "base.transform.Find(\"Day\").gameObject.SetActive(true);",
           "similarity": 0.96
         },
         {
           "line": 71,
+          "recoveredMember": "ApplyDay",
           "recovered": "base.transform.FindChild(\"Night\").gameObject.SetActive(false);",
-          "ours": "base.transform.Find(\"Night\").gameObject.SetActive(false);",
+          "nearestLineInOurs": "base.transform.Find(\"Night\").gameObject.SetActive(false);",
           "similarity": 0.96
         },
         {
           "line": 84,
+          "recoveredMember": "ApplyNight",
           "recovered": "base.transform.FindChild(\"Day\").gameObject.SetActive(false);",
-          "ours": "base.transform.Find(\"Day\").gameObject.SetActive(false);",
+          "nearestLineInOurs": "base.transform.Find(\"Day\").gameObject.SetActive(false);",
           "similarity": 0.96
         },
         {
           "line": 85,
+          "recoveredMember": "ApplyNight",
           "recovered": "base.transform.FindChild(\"Night\").gameObject.SetActive(true);",
-          "ours": "base.transform.Find(\"Night\").gameObject.SetActive(true);",
+          "nearestLineInOurs": "base.transform.Find(\"Night\").gameObject.SetActive(true);",
           "similarity": 0.96
         }
       ]
@@ -2981,26 +3426,30 @@
       "candidates": [
         {
           "line": 62,
+          "recoveredMember": null,
           "recovered": "UnityEngine.Object obj = (UnityEngine.Object)value;",
-          "ours": "UnityEngine.Object @object = (UnityEngine.Object)value;",
+          "nearestLineInOurs": "UnityEngine.Object @object = (UnityEngine.Object)value;",
           "similarity": 0.96
         },
         {
           "line": 69,
+          "recoveredMember": null,
           "recovered": "dictionary.Add(\"Name\", obj.name);",
-          "ours": "dictionary.Add(\"Name\", @object.name);",
+          "nearestLineInOurs": "dictionary.Add(\"Name\", @object.name);",
           "similarity": 0.94
         },
         {
           "line": 70,
+          "recoveredMember": null,
           "recovered": "dictionary.Add(\"Type\", obj.GetType().AssemblyQualifiedName);",
-          "ours": "dictionary.Add(\"Type\", @object.GetType().AssemblyQualifiedName);",
+          "nearestLineInOurs": "dictionary.Add(\"Type\", @object.GetType().AssemblyQualifiedName);",
           "similarity": 0.97
         },
         {
           "line": 82,
+          "recoveredMember": null,
           "recovered": "Debug.Log(\"Adding UnityReferenceHelper to Unity Reference '\" + obj.name + \"'\");",
-          "ours": "Debug.Log(\"Adding UnityReferenceHelper to Unity Reference '\" + @object.name + \"'\");",
+          "nearestLineInOurs": "Debug.Log(\"Adding UnityReferenceHelper to Unity Reference '\" + @object.name + \"'\");",
           "similarity": 0.98
         }
       ]
@@ -3013,20 +3462,23 @@
       "candidates": [
         {
           "line": 104,
+          "recoveredMember": "Awake",
           "recovered": "jointDrive.mode = JointDriveMode.Position;",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 267,
+          "recoveredMember": "Ragdoll",
           "recovered": "rigidbody.velocity = velocity;",
-          "ours": "rigidbody.linearVelocity = velocity;",
+          "nearestLineInOurs": "rigidbody.linearVelocity = velocity;",
           "similarity": 0.88
         },
         {
           "line": 303,
+          "recoveredMember": "Velocity",
           "recovered": "return rigidbodies[0].velocity;",
-          "ours": "return rigidbodies[0].linearVelocity;",
+          "nearestLineInOurs": "return rigidbodies[0].linearVelocity;",
           "similarity": 0.88
         }
       ]
@@ -3039,20 +3491,23 @@
       "candidates": [
         {
           "line": 25,
+          "recoveredMember": "Spawn",
           "recovered": "int n = 3;",
-          "ours": "int j = 3;",
+          "nearestLineInOurs": "int j = 3;",
           "similarity": 0.9
         },
         {
           "line": 29,
+          "recoveredMember": "Spawn",
           "recovered": "n = 5;",
-          "ours": "j = 5;",
+          "nearestLineInOurs": "j = 5;",
           "similarity": 0.83
         },
         {
           "line": 36,
+          "recoveredMember": "Spawn",
           "recovered": "for (int i = 0; i < n; i++)",
-          "ours": "for (int i = 0; i < j; i++)",
+          "nearestLineInOurs": "for (int i = 0; i < j; i++)",
           "similarity": 0.96
         }
       ]
@@ -3065,20 +3520,23 @@
       "candidates": [
         {
           "line": 17,
+          "recoveredMember": null,
           "recovered": "return new Bounds",
-          "ours": "return bounds;",
+          "nearestLineInOurs": "return bounds;",
           "similarity": 0.77
         },
         {
           "line": 19,
+          "recoveredMember": null,
           "recovered": "center = new Vector3(CastFloat(values[\"cx\"]), CastFloat(values[\"cy\"]), CastFloat(values[\"cz\"])),",
-          "ours": "bounds.center = new Vector3(CastFloat(values[\"cx\"]), CastFloat(values[\"cy\"]), CastFloat(values[\"cz\"]));",
+          "nearestLineInOurs": "bounds.center = new Vector3(CastFloat(values[\"cx\"]), CastFloat(values[\"cy\"]), CastFloat(values[\"cz\"]));",
           "similarity": 0.95
         },
         {
           "line": 20,
+          "recoveredMember": null,
           "recovered": "extents = new Vector3(CastFloat(values[\"ex\"]), CastFloat(values[\"ey\"]), CastFloat(values[\"ez\"]))",
-          "ours": "bounds.extents = new Vector3(CastFloat(values[\"ex\"]), CastFloat(values[\"ey\"]), CastFloat(values[\"ez\"]));",
+          "nearestLineInOurs": "bounds.extents = new Vector3(CastFloat(values[\"ex\"]), CastFloat(values[\"ey\"]), CastFloat(values[\"ez\"]));",
           "similarity": 0.96
         }
       ]
@@ -3091,20 +3549,23 @@
       "candidates": [
         {
           "line": 162,
+          "recoveredMember": null,
           "recovered": "RaycastHit raycastHit = new RaycastHit",
-          "ours": "RaycastHit raycastHit = default(RaycastHit);",
+          "nearestLineInOurs": "RaycastHit raycastHit = default(RaycastHit);",
           "similarity": 0.77
         },
         {
           "line": 164,
+          "recoveredMember": null,
           "recovered": "point = position,",
-          "ours": "raycastHit.point = position;",
+          "nearestLineInOurs": "raycastHit.point = position;",
           "similarity": 0.71
         },
         {
           "line": 165,
+          "recoveredMember": null,
           "recovered": "distance = 0f",
-          "ours": "raycastHit.distance = 0f;",
+          "nearestLineInOurs": "raycastHit.distance = 0f;",
           "similarity": 0.67
         }
       ]
@@ -3117,20 +3578,23 @@
       "candidates": [
         {
           "line": 7,
+          "recoveredMember": null,
           "recovered": "private Bounds bounds;",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         },
         {
           "line": 15,
+          "recoveredMember": "IsInside",
           "recovered": "return instance.bounds.Contains(point);",
-          "ours": "return instance.volume.Contains(new Vec3(point.x, point.y, point.z));",
+          "nearestLineInOurs": "return instance.volume.Contains(new Vec3(point.x, point.y, point.z));",
           "similarity": 0.65
         },
         {
           "line": 21,
+          "recoveredMember": "SetupBounds",
           "recovered": "bounds = new Bounds(base.transform.position, base.transform.localScale);",
-          "ours": "new Vec3(base.transform.position.x, base.transform.position.y, base.transform.position.z),",
+          "nearestLineInOurs": "new Vec3(base.transform.position.x, base.transform.position.y, base.transform.position.z),",
           "similarity": 0.6
         }
       ]
@@ -3143,20 +3607,23 @@
       "candidates": [
         {
           "line": 256,
+          "recoveredMember": null,
           "recovered": "if (AstarPath.isEditor || AstarPath.active.logPathResults != PathLog.None)",
-          "ours": "if (AstarPath.isEditor || AstarPath.active.logPathResults != 0)",
+          "nearestLineInOurs": "if (AstarPath.isEditor || AstarPath.active.logPathResults != 0)",
           "similarity": 0.91
         },
         {
           "line": 260,
+          "recoveredMember": null,
           "recovered": "if (AstarPath.active.logPathResults != PathLog.None && AstarPath.active.logPathResults != PathLog.InGame)",
-          "ours": "if (AstarPath.active.logPathResults != 0 && AstarPath.active.logPathResults != PathLog.InGame)",
+          "nearestLineInOurs": "if (AstarPath.active.logPathResults != 0 && AstarPath.active.logPathResults != PathLog.InGame)",
           "similarity": 0.93
         },
         {
           "line": 275,
+          "recoveredMember": null,
           "recovered": "if (AstarPath.isEditor || AstarPath.active.logPathResults != PathLog.None)",
-          "ours": "if (AstarPath.isEditor || AstarPath.active.logPathResults != 0)",
+          "nearestLineInOurs": "if (AstarPath.isEditor || AstarPath.active.logPathResults != 0)",
           "similarity": 0.91
         }
       ]
@@ -3169,20 +3636,23 @@
       "candidates": [
         {
           "line": 461,
+          "recoveredMember": null,
           "recovered": "Vector3 vector = tr.position;",
-          "ours": "Vector3 from = tr.position;",
+          "nearestLineInOurs": "Vector3 from = tr.position;",
           "similarity": 0.86
         },
         {
           "line": 464,
+          "recoveredMember": null,
           "recovered": "Gizmos.DrawLine(vector, buffer[i]);",
-          "ours": "Gizmos.DrawLine(from, buffer[i]);",
+          "nearestLineInOurs": "Gizmos.DrawLine(from, buffer[i]);",
           "similarity": 0.88
         },
         {
           "line": 465,
+          "recoveredMember": null,
           "recovered": "vector = buffer[i];",
-          "ours": "vector2 = buffer[num];",
+          "nearestLineInOurs": "vector2 = buffer[num];",
           "similarity": 0.88
         }
       ]
@@ -3195,20 +3665,23 @@
       "candidates": [
         {
           "line": 64,
+          "recoveredMember": "DropMember",
           "recovered": "squadVehicle.DropSeatClaim();",
-          "ours": "squadVehicle.DropSeatClaim(a != null ? a.actor : null);",
+          "nearestLineInOurs": "squadVehicle.DropSeatClaim(a != null ? a.actor : null);",
           "similarity": 0.69
         },
         {
           "line": 231,
+          "recoveredMember": "SetAlreadyInVehicle",
           "recovered": "squadVehicle.ClaimSeat();",
-          "ours": "if (!squadVehicle.IsFull())",
+          "nearestLineInOurs": "if (!squadVehicle.IsFull())",
           "similarity": 0.62
         },
         {
           "line": 248,
+          "recoveredMember": "EnterVehicle",
           "recovered": "vehicle.ClaimSeat();",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         }
       ]
@@ -3221,14 +3694,16 @@
       "candidates": [
         {
           "line": 60,
+          "recoveredMember": "FixedUpdate",
           "recovered": "Vector2 vector = Driver().controller.BoatInput();",
-          "ours": "Vector2 vector = Vehicle.Clamp2(Driver().controller.BoatInput());",
+          "nearestLineInOurs": "Vector2 vector = Vehicle.Clamp2(Driver().controller.BoatInput());",
           "similarity": 0.86
         },
         {
           "line": 66,
+          "recoveredMember": "FixedUpdate",
           "recovered": "rigidbody.AddRelativeTorque(base.transform.up * turnSpeed * vector.x, ForceMode.Acceleration);",
-          "ours": "rigidbody.AddRelativeTorque(Vector3.up * turnSpeed * vector.x, ForceMode.Acceleration);",
+          "nearestLineInOurs": "rigidbody.AddRelativeTorque(Vector3.up * turnSpeed * vector.x, ForceMode.Acceleration);",
           "similarity": 0.93
         }
       ]
@@ -3241,14 +3716,16 @@
       "candidates": [
         {
           "line": 11,
+          "recoveredMember": null,
           "recovered": "BloodRed",
-          "ours": "BloodRed = 2,",
+          "nearestLineInOurs": "BloodRed = 2,",
           "similarity": 0.94
         },
         {
           "line": 168,
+          "recoveredMember": "Update",
           "recovered": "decalMeshData[(DecalType)value].UpdateMesh();",
-          "ours": "decalMeshData.Add((DecalType)value, meshData);",
+          "nearestLineInOurs": "decalMeshData.Add((DecalType)value, meshData);",
           "similarity": 0.75
         }
       ]
@@ -3261,14 +3738,16 @@
       "candidates": [
         {
           "line": 19,
+          "recoveredMember": "LateUpdate",
           "recovered": "if (rigidbody.velocity.magnitude > 0.2f)",
-          "ours": "if (rigidbody.linearVelocity.magnitude > 0.2f)",
+          "nearestLineInOurs": "if (rigidbody.linearVelocity.magnitude > 0.2f)",
           "similarity": 0.9
         },
         {
           "line": 21,
+          "recoveredMember": "LateUpdate",
           "recovered": "to = Quaternion.LookRotation(rigidbody.velocity, rigidbody.transform.up);",
-          "ours": "to = Quaternion.LookRotation(rigidbody.linearVelocity, rigidbody.transform.up);",
+          "nearestLineInOurs": "to = Quaternion.LookRotation(rigidbody.linearVelocity, rigidbody.transform.up);",
           "similarity": 0.95
         }
       ]
@@ -3281,14 +3760,16 @@
       "candidates": [
         {
           "line": 69,
+          "recoveredMember": "Hit",
           "recovered": "instance.ShowHitmarker();",
-          "ours": "instance.ShowHitmarker(severity);",
+          "nearestLineInOurs": "instance.ShowHitmarker(severity);",
           "similarity": 0.86
         },
         {
           "line": 166,
+          "recoveredMember": "ShowHitmarker",
           "recovered": "private void ShowHitmarker()",
-          "ours": "private void ShowHitmarker(int severity)",
+          "nearestLineInOurs": "private void ShowHitmarker(int severity)",
           "similarity": 0.82
         }
       ]
@@ -3301,14 +3782,16 @@
       "candidates": [
         {
           "line": 42,
+          "recoveredMember": null,
           "recovered": "gridFlags = (ushort)((gridFlags & -257) | (value ? 256 : 0));",
-          "ours": "gridFlags = (ushort)((gridFlags & 0xFFFFFEFFu) | (value ? 256u : 0u));",
+          "nearestLineInOurs": "gridFlags = (ushort)((gridFlags & 0xFFFFFEFFu) | (value ? 256u : 0u));",
           "similarity": 0.87
         },
         {
           "line": 54,
+          "recoveredMember": null,
           "recovered": "gridFlags = (ushort)((gridFlags & -513) | (value ? 512 : 0));",
-          "ours": "gridFlags = (ushort)((gridFlags & 0xFFFFFDFFu) | (value ? 512u : 0u));",
+          "nearestLineInOurs": "gridFlags = (ushort)((gridFlags & 0xFFFFFDFFu) | (value ? 512u : 0u));",
           "similarity": 0.87
         }
       ]
@@ -3321,14 +3804,16 @@
       "candidates": [
         {
           "line": 76,
+          "recoveredMember": null,
           "recovered": "Matrix4x4 m = newMatrix * inverse;",
-          "ours": "Matrix4x4 i = newMatrix * inverse;",
+          "nearestLineInOurs": "Matrix4x4 i = newMatrix * inverse;",
           "similarity": 0.97
         },
         {
           "line": 79,
+          "recoveredMember": null,
           "recovered": "node.position = (Int3)m.MultiplyPoint((Vector3)node.position);",
-          "ours": "node.position = (Int3)i.MultiplyPoint((Vector3)node.position);",
+          "nearestLineInOurs": "node.position = (Int3)i.MultiplyPoint((Vector3)node.position);",
           "similarity": 0.98
         }
       ]
@@ -3341,14 +3826,16 @@
       "candidates": [
         {
           "line": 79,
+          "recoveredMember": null,
           "recovered": "meshStruct result = new meshStruct",
-          "ours": "meshStruct result = default(meshStruct);",
+          "nearestLineInOurs": "meshStruct result = default(meshStruct);",
           "similarity": 0.71
         },
         {
           "line": 81,
+          "recoveredMember": null,
           "recovered": "fileName = filename",
-          "ours": "result.fileName = filename;",
+          "nearestLineInOurs": "result.fileName = filename;",
           "similarity": 0.83
         }
       ]
@@ -3361,14 +3848,16 @@
       "candidates": [
         {
           "line": 58,
+          "recoveredMember": null,
           "recovered": "if ((forceAddPoint || addPoints) && exactStartPoint != Exactness.SnapToNode)",
-          "ours": "if ((forceAddPoint || addPoints) && exactStartPoint != 0)",
+          "nearestLineInOurs": "if ((forceAddPoint || addPoints) && exactStartPoint != 0)",
           "similarity": 0.84
         },
         {
           "line": 66,
+          "recoveredMember": null,
           "recovered": "if ((forceAddPoint2 || addPoints) && exactEndPoint != Exactness.SnapToNode)",
-          "ours": "if ((forceAddPoint2 || addPoints) && exactEndPoint != 0)",
+          "nearestLineInOurs": "if ((forceAddPoint2 || addPoints) && exactEndPoint != 0)",
           "similarity": 0.84
         }
       ]
@@ -3381,14 +3870,16 @@
       "candidates": [
         {
           "line": 23,
+          "recoveredMember": "ShootMeleeRay",
           "recovered": "attachedRigidbody.drag = 0.2f;",
-          "ours": "attachedRigidbody.linearDamping = 0.2f;",
+          "nearestLineInOurs": "attachedRigidbody.linearDamping = 0.2f;",
           "similarity": 0.84
         },
         {
           "line": 24,
+          "recoveredMember": "ShootMeleeRay",
           "recovered": "attachedRigidbody.angularDrag = 0.2f;",
-          "ours": "attachedRigidbody.angularDamping = 0.2f;",
+          "nearestLineInOurs": "attachedRigidbody.angularDamping = 0.2f;",
           "similarity": 0.93
         }
       ]
@@ -3401,8 +3892,9 @@
       "candidates": [
         {
           "line": 19,
+          "recoveredMember": "Update",
           "recovered": "if (findRangeAction.TrueDone() && scope.activeInHierarchy)",
-          "ours": "if (findRangeAction.TrueDone() && scope != null && scope.activeInHierarchy)",
+          "nearestLineInOurs": "if (findRangeAction.TrueDone() && scope != null && scope.activeInHierarchy)",
           "similarity": 0.87
         }
       ]
@@ -3415,8 +3907,9 @@
       "candidates": [
         {
           "line": 7,
+          "recoveredMember": "Shoot",
           "recovered": "if (configuration.loud)",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         }
       ]
@@ -3429,8 +3922,9 @@
       "candidates": [
         {
           "line": 165,
+          "recoveredMember": null,
           "recovered": "mesh.Optimize();",
-          "ours": null,
+          "nearestLineInOurs": null,
           "similarity": 0.0
         }
       ]
@@ -3443,8 +3937,9 @@
       "candidates": [
         {
           "line": 7,
+          "recoveredMember": "LateUpdate",
           "recovered": "base.transform.position = Camera.main.transform.position;",
-          "ours": "base.transform.position = camera.transform.position;",
+          "nearestLineInOurs": "base.transform.position = camera.transform.position;",
           "similarity": 0.94
         }
       ]
@@ -3457,8 +3952,9 @@
       "candidates": [
         {
           "line": 10,
+          "recoveredMember": "OnEnable",
           "recovered": "GetComponent<Renderer>().material.renderQueue = queue;",
-          "ours": "GetComponent<Renderer>().sharedMaterial.renderQueue = queue;",
+          "nearestLineInOurs": "GetComponent<Renderer>().sharedMaterial.renderQueue = queue;",
           "similarity": 0.93
         }
       ]
@@ -3471,8 +3967,9 @@
       "candidates": [
         {
           "line": 114,
+          "recoveredMember": null,
           "recovered": "flags = (flags & 0xFFFFFF) | (value << 24);",
-          "ours": "flags = (flags & 0xFFFFFFu) | (value << 24);",
+          "nearestLineInOurs": "flags = (flags & 0xFFFFFFu) | (value << 24);",
           "similarity": 0.99
         }
       ]
@@ -3485,8 +3982,9 @@
       "candidates": [
         {
           "line": 29,
+          "recoveredMember": "RigidbodyHit",
           "recovered": "return parent.Damage(20f, 200f, false, position, r.velocity.normalized, r.velocity * r.mass * 0.01f);",
-          "ours": "return parent.Damage(20f, 200f, false, position, r.linearVelocity.normalized, r.linearVelocity * r.mass * 0.01f);",
+          "nearestLineInOurs": "return parent.Damage(20f, 200f, false, position, r.linearVelocity.normalized, r.linearVelocity * r.mass * 0.01f);",
           "similarity": 0.92
         }
       ]
@@ -3499,8 +3997,9 @@
       "candidates": [
         {
           "line": 515,
+          "recoveredMember": null,
           "recovered": "if (base.CompleteState != PathCompleteState.NotCalculated)",
-          "ours": "while (base.CompleteState == PathCompleteState.NotCalculated)",
+          "nearestLineInOurs": "while (base.CompleteState == PathCompleteState.NotCalculated)",
           "similarity": 0.94
         }
       ]
@@ -3513,8 +4012,9 @@
       "candidates": [
         {
           "line": 31,
+          "recoveredMember": null,
           "recovered": "return flags & 0xFFFFFFF;",
-          "ours": "return flags & 0xFFFFFFFu;",
+          "nearestLineInOurs": "return flags & 0xFFFFFFFu;",
           "similarity": 0.98
         }
       ]
@@ -3527,8 +4027,9 @@
       "candidates": [
         {
           "line": 85,
+          "recoveredMember": null,
           "recovered": "if (raycastableGraph != null && funnelSimplificationMode != FunnelSimplification.None)",
-          "ours": "if (raycastableGraph != null && funnelSimplificationMode != 0)",
+          "nearestLineInOurs": "if (raycastableGraph != null && funnelSimplificationMode != 0)",
           "similarity": 0.82
         }
       ]
@@ -3541,8 +4042,9 @@
       "candidates": [
         {
           "line": 84,
+          "recoveredMember": "CanUseWeapon",
           "recovered": "public bool CanUseWeapon()",
-          "ours": "public bool CanUseCarriedWeapon()",
+          "nearestLineInOurs": "public bool CanUseCarriedWeapon()",
           "similarity": 0.88
         }
       ]
@@ -3555,8 +4057,9 @@
       "candidates": [
         {
           "line": 60,
+          "recoveredMember": "Update",
           "recovered": "Application.CaptureScreenshot(\"screenshot.png\", 3);",
-          "ours": "ScreenCapture.CaptureScreenshot(screenshotName);",
+          "nearestLineInOurs": "ScreenCapture.CaptureScreenshot(screenshotName);",
           "similarity": 0.67
         }
       ]
@@ -3569,8 +4072,9 @@
       "candidates": [
         {
           "line": 86,
+          "recoveredMember": "UpdateMovement",
           "recovered": "Vector2 vector = Driver().controller.CarInput();",
-          "ours": "Vector2 vector = Vehicle.Clamp2(Driver().controller.CarInput());",
+          "nearestLineInOurs": "Vector2 vector = Vehicle.Clamp2(Driver().controller.CarInput());",
           "similarity": 0.86
         }
       ]
@@ -3583,8 +4087,9 @@
       "candidates": [
         {
           "line": 19,
+          "recoveredMember": "Fire",
           "recovered": "if (animator != null)",
-          "ours": "else if (animator != null)",
+          "nearestLineInOurs": "else if (animator != null)",
           "similarity": 0.89
         }
       ]
@@ -3597,8 +4102,9 @@
       "candidates": [
         {
           "line": 126,
+          "recoveredMember": "Update",
           "recovered": "if (Input.GetKeyDown((int)secretSequence[sequenceIndex] + (int)secretSequence2[sequenceIndex] - secretSequence[18]))",
-          "ours": "if (Input.GetKeyDown(secretSequence[sequenceIndex] + (int)secretSequence2[sequenceIndex] - (int)secretSequence[M22S7_HASH_INDEXER]))",
+          "nearestLineInOurs": "if (Input.GetKeyDown(secretSequence[sequenceIndex] + (int)secretSequence2[sequenceIndex] - (int)secretSequence[M22S7_HASH_INDEXER]))",
           "similarity": 0.91
         }
       ]
@@ -3611,8 +4117,9 @@
       "candidates": [
         {
           "line": 42,
+          "recoveredMember": "Render",
           "recovered": "transform.FindChild(\"Arms\").GetComponent<Renderer>().enabled = false;",
-          "ours": "transform.Find(\"Arms\").GetComponent<Renderer>().enabled = false;",
+          "nearestLineInOurs": "transform.Find(\"Arms\").GetComponent<Renderer>().enabled = false;",
           "similarity": 0.96
         }
       ]
