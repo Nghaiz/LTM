@@ -108,6 +108,19 @@ namespace Ironfront.Tools.ClientWiringGate
                 return 2;
             }
 
+            // The E-6 guard again, for G16. An absence rule whose subject has moved out of the
+            // scanned roots reports clean having graded nothing, and G16's whole subject is a
+            // call that was missing -- it must not be allowed to pass by failing to look.
+            if (!files.Any(ClientWiringDetectors.IsMatchResetScoped))
+            {
+                Console.Error.WriteLine(
+                    "[client-wiring] FAIL - a full-tree run discovered no file G16 grades, so the "
+                    + "offline match reset went unchecked. Either GameManager.cs moved out of the "
+                    + "scanned roots, or it was renamed; re-point MatchResetFile in the same "
+                    + "commit (phase P27).");
+                return 2;
+            }
+
             int source = GateRunner.Run(
                 GateRunner.RouterEventNames(), files, Console.Out, Console.Error);
 

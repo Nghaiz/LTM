@@ -35,7 +35,16 @@ public class CapturePoint : SpawnPoint
 {
 	private const float UPDATE_RATE = 1f;
 
-	private const float CAPTURE_RATE_PER_PERSON = 0.05f;
+	// CAPTURE_RATE_PER_PERSON was here, holding 0.05f. It is gone because it was never read:
+	// UpdateOwner spelled the rate as a bare 0.05f literal, twice, so the named constant and
+	// the arithmetic had already drifted into two things. Both literals now read `captureSpeed`
+	// -- the same authored, per-point field the SERVER reads through
+	// SceneCapturePoints.GetDefinition -- so offline and networked capture at one rate by
+	// construction rather than by two numbers that happen to be close.
+	//
+	// This departs from V8 D2's "offline is byte-for-byte unchanged", deliberately and on the
+	// owner's instruction (2026-09-20). Offline capture moves from 0.05/s to the authored
+	// 0.06/s, which is a shipped-behaviour change and is the point: one number, not two.
 
 	private const int HQ_QUALITY_LEVEL = 5;
 
@@ -59,7 +68,26 @@ public class CapturePoint : SpawnPoint
 	/// by this component — the offline arithmetic below keeps its own long-standing 0.05
 	/// per-person-per-second rate so that D2's promise is literal.
 	/// </remarks>
-	public float captureSpeed = 0.2f;
+	/// <remarks>
+	/// <para>
+	/// <b>The paragraph above is superseded on both counts (2026-09-20).</b> The offline
+	/// arithmetic in <c>UpdateOwner</c> now reads THIS field rather than its own 0.05, so there
+	/// is one rate for both modes; and the default is 0.06, not 0.2.
+	/// </para>
+	/// <para>
+	/// <b>Why 0.2 was wrong.</b> A single body inside a 25 m radius took a neutral point in
+	/// 4.5s and an enemy point in 9s — a rate you clear by walking through rather than by
+	/// holding. At 0.06 those become 16.7s and 33.3s. Measured on Dustbowl 2026-09-20: at the
+	/// old rate 32 bots carved up the entire map within two minutes of Playing while three
+	/// human clients captured nothing.
+	/// </para>
+	/// <para>
+	/// <b>Changing this default alone changes nothing on a shipped map.</b> Every point in
+	/// Dustbowl and Island serializes its own value, so the authored scene data moved with it.
+	/// This default governs points authored from here on.
+	/// </para>
+	/// </remarks>
+	public float captureSpeed = 0.06f;
 
 	public bool canBeCaptured = true;
 
@@ -237,7 +265,7 @@ public class CapturePoint : SpawnPoint
 		{
 			if (num2 != pendingOwner)
 			{
-				control -= (float)num5 * 0.05f;
+				control -= (float)num5 * captureSpeed;
 				if (control <= 0f)
 				{
 					SetOwner(num2);
@@ -246,7 +274,7 @@ public class CapturePoint : SpawnPoint
 			}
 			else
 			{
-				control = Mathf.Clamp01(control + (float)num5 * 0.05f);
+				control = Mathf.Clamp01(control + (float)num5 * captureSpeed);
 				if (control == 1f && owner != pendingOwner)
 				{
 					SetOwner(pendingOwner);

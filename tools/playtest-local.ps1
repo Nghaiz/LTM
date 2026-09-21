@@ -275,6 +275,15 @@ try {
         # See the header. Four registrations plus four logins against a 5/minute bucket has the
         # last of them refused, and the menu reports that refusal as a login failure.
         IRONFRONT_LOGIN_RATE_PER_MINUTE = "60"
+        # The other half of the same trap, and the half that was missed until 2026-09-20: the
+        # per-IP CONNECTION cap defaults to 5, and on loopback every process is 127.0.0.1. Two
+        # game servers plus four clients is six, so the last two clients were refused at the
+        # socket -- which the menu reports as "the master server closed the connection without
+        # answering. A public master expects TLS", blaming a protocol that was never involved.
+        # EnvRegistry.MaxConnectionsPerIp documents this exact failure and says to raise it on a
+        # test rig; a loopback playtest is one. Scaled off -Clients so it does not break again
+        # at -Clients 16, with headroom for the reconnects a client makes joining a room.
+        IRONFRONT_MAX_CONNECTIONS_PER_IP = "$([Math]::Max(32, $Clients + 16))"
     }
     foreach ($k in $masterEnv.Keys) { Set-Item -Path "Env:$k" -Value $masterEnv[$k] }
 

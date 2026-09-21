@@ -1,0 +1,203 @@
+{
+    "generatedBy": "Ironfront/Recovered Port/Measure Scene Perf -- Assets/Editor/RecoveredPort/ScenePerfProbe.cs",
+    "note": "Play Mode sample from the one camera the scene enables on load. Counts are exact for that view; they are not whole-scene totals.",
+    "label": "after",
+    "unityVersion": "6000.3.21f1",
+    "measuredAtUtc": "2026-09-20T12:19:15.5050820Z",
+    "scenes": [
+        {
+            "scene": "Dustbowl",
+            "renderers": 2321,
+            "staticBatchedRenderers": 1092,
+            "batches": 1960,
+            "drawCalls": 5782,
+            "setPassCalls": 1440,
+            "triangles": 2445852,
+            "frameMsMean": 3.637338533997536,
+            "frameMsP99": 10.67629623413086,
+            "poses": [
+                {
+                    "pose": 0,
+                    "position": {
+                        "x": 1944.8189697265625,
+                        "y": 47.30580139160156,
+                        "z": 1603.159912109375
+                    },
+                    "sampleCount": 120,
+                    "batches": 776,
+                    "drawCalls": 1734,
+                    "drawCallsMin": 1727,
+                    "drawCallsMax": 1734,
+                    "setPassCalls": 567,
+                    "staticBatchedDrawCalls": 1546,
+                    "dynamicBatchedDrawCalls": 58,
+                    "triangles": 800576,
+                    "vertices": 1207882,
+                    "frameMsMean": 5.887250789006552,
+                    "frameMsMedian": 5.524397850036621,
+                    "frameMsP99": 10.67629623413086
+                },
+                {
+                    "pose": 1,
+                    "position": {
+                        "x": 1502.232666015625,
+                        "y": 47.30580139160156,
+                        "z": 1858.687255859375
+                    },
+                    "sampleCount": 120,
+                    "batches": 374,
+                    "drawCalls": 1380,
+                    "drawCallsMin": 1380,
+                    "drawCallsMax": 1380,
+                    "setPassCalls": 241,
+                    "staticBatchedDrawCalls": 1409,
+                    "dynamicBatchedDrawCalls": 59,
+                    "triangles": 469642,
+                    "vertices": 593442,
+                    "frameMsMean": 2.8572691559791565,
+                    "frameMsMedian": 2.7267005443573,
+                    "frameMsP99": 3.95129656791687
+                },
+                {
+                    "pose": 2,
+                    "position": {
+                        "x": 1502.2327880859375,
+                        "y": 47.30580139160156,
+                        "z": 1347.632568359375
+                    },
+                    "sampleCount": 120,
+                    "batches": 319,
+                    "drawCalls": 1284,
+                    "drawCallsMin": 1284,
+                    "drawCallsMax": 1284,
+                    "setPassCalls": 234,
+                    "staticBatchedDrawCalls": 1338,
+                    "dynamicBatchedDrawCalls": 29,
+                    "triangles": 461799,
+                    "vertices": 550914,
+                    "frameMsMean": 2.694650828838349,
+                    "frameMsMedian": 2.5958969593048097,
+                    "frameMsP99": 3.522994756698609
+                },
+                {
+                    "pose": 3,
+                    "position": {
+                        "x": 1649.761474609375,
+                        "y": 274.79498291015627,
+                        "z": 1373.6707763671875
+                    },
+                    "sampleCount": 120,
+                    "batches": 491,
+                    "drawCalls": 1384,
+                    "drawCallsMin": 1384,
+                    "drawCallsMax": 1384,
+                    "setPassCalls": 398,
+                    "staticBatchedDrawCalls": 1187,
+                    "dynamicBatchedDrawCalls": 45,
+                    "triangles": 713835,
+                    "vertices": 1063731,
+                    "frameMsMean": 3.110183362166087,
+                    "frameMsMedian": 2.959197759628296,
+                    "frameMsP99": 4.746499538421631
+                }
+            ]
+        },
+        {
+            "scene": "Island",
+            "renderers": 622,
+            "staticBatchedRenderers": 343,
+            "batches": 2383,
+            "drawCalls": 3794,
+            "setPassCalls": 446,
+            "triangles": 1503624,
+            "frameMsMean": 2.640998959044615,
+            "frameMsP99": 4.592495918273926,
+            "poses": [
+                {
+                    "pose": 0,
+                    "position": {
+                        "x": 329.16644287109377,
+                        "y": 59.02411651611328,
+                        "z": 379.9879150390625
+                    },
+                    "sampleCount": 120,
+                    "batches": 744,
+                    "drawCalls": 1123,
+                    "drawCallsMin": 1123,
+                    "drawCallsMax": 1123,
+                    "setPassCalls": 126,
+                    "staticBatchedDrawCalls": 619,
+                    "dynamicBatchedDrawCalls": 111,
+                    "triangles": 400113,
+                    "vertices": 606098,
+                    "frameMsMean": 2.8927000065644585,
+                    "frameMsMedian": 2.827798843383789,
+                    "frameMsP99": 3.832702875137329
+                },
+                {
+                    "pose": 1,
+                    "position": {
+                        "x": 257.51397705078127,
+                        "y": 59.02411651611328,
+                        "z": 421.3564758300781
+                    },
+                    "sampleCount": 120,
+                    "batches": 665,
+                    "drawCalls": 1080,
+                    "drawCallsMin": 1073,
+                    "drawCallsMax": 1080,
+                    "setPassCalls": 116,
+                    "staticBatchedDrawCalls": 603,
+                    "dynamicBatchedDrawCalls": 100,
+                    "triangles": 372670,
+                    "vertices": 540635,
+                    "frameMsMean": 2.898004186153412,
+                    "frameMsMedian": 2.761103868484497,
+                    "frameMsP99": 4.592495918273926
+                },
+                {
+                    "pose": 2,
+                    "position": {
+                        "x": 257.51397705078127,
+                        "y": 59.02411651611328,
+                        "z": 338.6193542480469
+                    },
+                    "sampleCount": 120,
+                    "batches": 540,
+                    "drawCalls": 872,
+                    "drawCallsMin": 872,
+                    "drawCallsMax": 872,
+                    "setPassCalls": 120,
+                    "staticBatchedDrawCalls": 556,
+                    "dynamicBatchedDrawCalls": 38,
+                    "triangles": 375717,
+                    "vertices": 541942,
+                    "frameMsMean": 2.4186608334382377,
+                    "frameMsMedian": 2.378195762634278,
+                    "frameMsP99": 3.1163973808288576
+                },
+                {
+                    "pose": 3,
+                    "position": {
+                        "x": 281.39813232421877,
+                        "y": 94.17723846435547,
+                        "z": 342.83477783203127
+                    },
+                    "sampleCount": 120,
+                    "batches": 434,
+                    "drawCalls": 719,
+                    "drawCallsMin": 719,
+                    "drawCallsMax": 719,
+                    "setPassCalls": 84,
+                    "staticBatchedDrawCalls": 636,
+                    "dynamicBatchedDrawCalls": 37,
+                    "triangles": 355124,
+                    "vertices": 530146,
+                    "frameMsMean": 2.3546308100223545,
+                    "frameMsMedian": 2.276296615600586,
+                    "frameMsP99": 3.049801588058472
+                }
+            ]
+        }
+    ]
+}
