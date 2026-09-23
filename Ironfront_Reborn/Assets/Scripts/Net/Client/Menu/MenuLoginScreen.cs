@@ -34,13 +34,10 @@ namespace Ironfront.Net.Unity.Client.Menu
         [SerializeField] private Button? _logInButton;
         [SerializeField] private Button? _createAccountButton;
         [SerializeField] private Toggle? _rememberMeToggle;
-        [SerializeField] private Button? _forgotPasswordButton;
         [SerializeField] private Button? _backButton;
         [SerializeField] private Text? _errorText;
 
         internal const string RememberedUsernameKey = "ironfront.menu.remembered-username";
-        internal const string PasswordRecoveryUnavailableMessage =
-            "Password recovery is not available in this classroom build.";
 
         /// <summary>
         /// The colour the label was authored with. Every failure goes back to it.
@@ -70,7 +67,6 @@ namespace Ironfront.Net.Unity.Client.Menu
 
             if (_logInButton != null) _logInButton.onClick.AddListener(OnLogIn);
             if (_createAccountButton != null) _createAccountButton.onClick.AddListener(OnCreateAccount);
-            if (_forgotPasswordButton != null) _forgotPasswordButton.onClick.AddListener(OnForgotPassword);
             if (_backButton != null) _backButton.onClick.AddListener(OnBack);
             if (_rememberMeToggle != null) _rememberMeToggle.onValueChanged.AddListener(OnRememberChanged);
 
@@ -123,13 +119,6 @@ namespace Ironfront.Net.Unity.Client.Menu
         }
 
         private void OnCreateAccount() => _controller?.ShowRegister();
-
-        private void OnForgotPassword()
-        {
-            if (_errorText == null) return;
-            _errorText.color = NoticeColour;
-            _errorText.text = PasswordRecoveryUnavailableMessage;
-        }
 
         private void OnBack() => _controller?.ReturnToTitle();
 

@@ -154,12 +154,30 @@ public partial class GrenadeProjectile : Projectile
 			renderer.enabled = false;
 		}
 
-		if (!drawsOwnBlast || !ProjectileCleanupPolicy.PlaysCosmetics)
+		// The report is not a blast visual, and it must not ride the visual gate. A grenade this
+		// client did not throw carries no `source`, so drawsOwnBlast is false and the blast is
+		// drawn instead by NetClientExplosionPresenter from S_EXPLOSION -- which knows the
+		// authoritative centre but has no audio of its own. Gating the sound with the blast left
+		// every client deaf to every grenade it did not throw itself. Played here, on the cosmetic
+		// instance, it is positional and lands with the blast.
+		bool playsCosmetics = ProjectileCleanupPolicy.PlaysCosmetics;
+		if (playsCosmetics)
 		{
-			// Nothing of this grenade is going to be looked at: either the server is running it
-			// or the authoritative blast is being drawn elsewhere. Go now rather than in ten
-			// seconds -- V7 task 8.
-			Invoke(nameof(Cleanup), 0f);
+			AudioSource report = GetComponent<AudioSource>();
+			if (report != null)
+			{
+				report.pitch = CosmeticRandom.Range(0.9f, 1.1f);
+				report.Play();
+			}
+		}
+
+		if (!drawsOwnBlast || !playsCosmetics)
+		{
+			// Nothing of this grenade is going to be LOOKED at: either the server is running it or
+			// the authoritative blast is being drawn elsewhere. What is left is the report, so the
+			// hold is the authored one rather than zero -- Invoke(Cleanup, 0f) destroys the object
+			// on the next frame and would cut the sound off before it is heard. V7 task 8.
+			Invoke(nameof(Cleanup), playsCosmetics ? ProjectileCleanupPolicy.HoldSeconds(CLEANUP_TIME) : 0f);
 			return;
 		}
 
@@ -182,12 +200,6 @@ public partial class GrenadeProjectile : Projectile
 		if (burst != null)
 		{
 			burst.Play(true);
-		}
-		AudioSource component = GetComponent<AudioSource>();
-		if (component != null)
-		{
-			component.pitch = CosmeticRandom.Range(0.9f, 1.1f);
-			component.Play();
 		}
 		Invoke(nameof(Cleanup), ProjectileCleanupPolicy.HoldSeconds(CLEANUP_TIME));
 	}

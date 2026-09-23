@@ -36,13 +36,5 @@ namespace Ironfront.Net.Unity.Client.Tests
             Assert.AreEqual(string.Empty, MenuLoginScreen.ReadRememberedUsername());
             Assert.IsFalse(PlayerPrefs.HasKey(MenuLoginScreen.RememberedUsernameKey));
         }
-
-        [Test]
-        public void ForgotPasswordMessage_IsExplicitAboutTheClassroomBuild()
-        {
-            Assert.AreEqual(
-                "Password recovery is not available in this classroom build.",
-                MenuLoginScreen.PasswordRecoveryUnavailableMessage);
-        }
     }
 }

@@ -413,7 +413,7 @@ namespace Ironfront.Net.Replication.Tests
         [InlineData("ExplodingProjectile.cs", "if (impactParticles != null)", "impact particles, played on explode and stopped on the invoke")]
         [InlineData("ExplodingProjectile.cs", "if (audioSource != null)", "explosion audio")]
         [InlineData("GrenadeProjectile.cs", "if (burst != null)", "grenade burst particles")]
-        [InlineData("GrenadeProjectile.cs", "if (component != null)", "grenade audio")]
+        [InlineData("GrenadeProjectile.cs", "if (report != null)", "grenade audio")]
         public void HeadlessDereferencesAreGuarded(string file, string guard, string site)
         {
             // Stripped. Several of these guards are DOCUMENTED by a comment naming the guarded

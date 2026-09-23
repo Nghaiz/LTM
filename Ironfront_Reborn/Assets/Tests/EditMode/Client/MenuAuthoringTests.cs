@@ -112,5 +112,58 @@ namespace Ironfront.Net.Unity.Client.Tests
                     $"Screen '{screen}' is drawn entirely from flat rectangles.");
             }
         }
+
+        /// <summary>
+        /// The two screens the pack has no page for are still built out of the pack.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>They are absent from the eight-screen loop above, and that is precisely why they
+        /// drifted.</b> <c>ui-pack/previews/</c> holds eight pages and neither "Lobby" nor
+        /// "Authenticating" is among them: the prototype sends a successful sign-in straight to
+        /// the room browser, and the round trip to the master happens inside the sign-in form
+        /// rather than on a page of its own. So no list of pack pages names either screen, and
+        /// the loop that grades every pack page for an angular surface had nothing to say about
+        /// them — they kept the flat backdrop they were authored with while the eight around
+        /// them were rebuilt.
+        /// </para>
+        /// <para>
+        /// What that cost was found by rendering each screen to PNG: the player pressed LOG IN
+        /// and got a black rectangle, then landed on a second one, in between two screens built
+        /// from the supplied art. The assertions below are the bar the loop applies, plus the one
+        /// thing the flat revision got wrong that a component count cannot see — the background.
+        /// </para>
+        /// </remarks>
+        [Test]
+        public void ScreensWithNoPackPageAreStillBuiltFromIt()
+        {
+            Scene scene = EditorSceneManager.OpenScene("Assets/Scenes/Menu.unity", OpenSceneMode.Single);
+            GameObject root = scene.GetRootGameObjects().Single(item => item.name == "Multiplayer Menu");
+
+            foreach ((string screen, string background) in new[]
+                     {
+                         ("Lobby", "multiplayer.png"),
+                         ("Authenticating", "auth.png"),
+                     })
+            {
+                Transform found = root.transform.Find(screen);
+                Assert.NotNull(found, $"Missing screen '{screen}'.");
+
+                Assert.Greater(found.GetComponentsInChildren<AngularPanel>(true).Length, 0,
+                    $"Screen '{screen}' is drawn entirely from flat rectangles.");
+
+                Image backdrop = found.Find("Background")?.GetComponent<Image>();
+                Assert.NotNull(backdrop, $"Screen '{screen}' has no pack background.");
+                Assert.AreEqual("Assets/UI/IronfrontReborn/backgrounds/" + background,
+                    AssetDatabase.GetAssetPath(backdrop.sprite),
+                    $"Screen '{screen}' is not drawn on the pack background its half of the flow uses.");
+            }
+
+            // The signed-in screen's only route back to the title is this bar's MAIN MENU link:
+            // the flow table has no edge from Lobby to LoginScreen, so a Lobby without the bar is
+            // a player who cannot leave the signed-in state.
+            Assert.NotNull(root.transform.Find("Lobby/TopBar"),
+                "Lobby has no top bar, so a signed-in player has no way back to the title screen.");
+        }
     }
 }

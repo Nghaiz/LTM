@@ -144,6 +144,24 @@ public class FpsActorController : ActorController
 
 	private bool pendingNetworkFire;
 
+	/// <summary>
+	/// Set when the trigger goes up, and carried to the server by its own frame.
+	/// </summary>
+	/// <remarks>
+	/// <b>A release is not a formality on the accepted-input path.</b> That path re-arms a
+	/// semi-automatic's trigger edge only on a frame that ARRIVES with <c>Fire</c> clear -- see
+	/// <c>SemiAutoTriggerEdgeTests.ReleasingAndPressingAgainArmsTheEdgeForASecondRound</c>. A
+	/// client that sends a frame only when it has something pending never sends that one, so
+	/// after the first press the edge stayed spent and every later press was ignored until
+	/// something else -- a slot change, a sprint, a reload -- happened to push a frame out.
+	/// For a throwable the visible half of that is a throw whose animation played, whose ammo
+	/// was spent, and whose grenade never left: the server had no edge to fire on.
+	/// </remarks>
+	private bool pendingNetworkFireRelease;
+
+	/// <summary>Last render frame's trigger state, so the release is read as an edge.</summary>
+	private bool wasFireHeld;
+
 	// Phase-00 task 3: every gameplay input below arrives through this, so a networked
 	// controller can supply one. UI and debug keys keep reading Input directly -- criterion 6
 	// permits it, and widening the seam to cover them buys nothing and risks the loadout screen.
@@ -238,16 +256,18 @@ public class FpsActorController : ActorController
 	private void OnNetworkTickSimulated(
 		uint tick, Ironfront.Net.Replication.Movement.MoveInput input)
 	{
-		if (pendingNetworkWeaponSlot < 0 && !pendingNetworkFire) return;
+		if (pendingNetworkWeaponSlot < 0 && !pendingNetworkFire && !pendingNetworkFireRelease) return;
 
 		bool sentFire = pendingNetworkFire && input.Fire;
+		bool sentRelease = pendingNetworkFireRelease && !input.Fire;
 		bool sentSlot = pendingNetworkWeaponSlot >= 0
 			&& input.WeaponSlot == pendingNetworkWeaponSlot;
-		if (!sentFire && !sentSlot) return;
+		if (!sentFire && !sentRelease && !sentSlot) return;
 
-		Debug.Log($"[input] C_INPUT tick {tick} buffered fire={sentFire} slot="
+		Debug.Log($"[input] C_INPUT tick {tick} buffered fire={sentFire} release={sentRelease} slot="
 			+ $"{(sentSlot ? input.WeaponSlot : -1)}");
 		if (sentFire) pendingNetworkFire = false;
+		if (sentRelease) pendingNetworkFireRelease = false;
 		if (sentSlot) pendingNetworkWeaponSlot = -1;
 	}
 
@@ -860,12 +880,20 @@ public class FpsActorController : ActorController
 	{
 		// Capture the edge every render frame. NetPredictionClock may or may not simulate a tick
 		// in this frame; OnNetworkTickSimulated clears it only after it reached C_INPUT.
+		bool fireHeldNow = Input.GetButton("Fire1") || Input.GetMouseButton(0);
 		if (NetContext.IsClient && inputEnabled && !LocalTextEntry.Composing
-			&& !LoadoutUi.IsOpen()
-			&& (Input.GetButtonDown("Fire1") || Input.GetMouseButtonDown(0)))
+			&& !LoadoutUi.IsOpen())
 		{
-			pendingNetworkFire = true;
+			if (Input.GetButtonDown("Fire1") || Input.GetMouseButtonDown(0))
+			{
+				pendingNetworkFire = true;
+			}
+			else if (!fireHeldNow && wasFireHeld)
+			{
+				pendingNetworkFireRelease = true;
+			}
 		}
+		wasFireHeld = fireHeldNow;
 
 		controller.sprinting = IsSprinting();
 		if (IsSprinting())
