@@ -665,6 +665,41 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		balance = Mathf.Min(balance + Time.deltaTime * 10f, 100f);
 	}
 
+	/// <summary>
+	/// The direction this actor's weapon fires along, aim included.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>On a server the controller does not know where the player is aiming.</b> Player rotation
+	/// in the original game comes from <c>FpsActorController</c> reading the mouse, and batch mode
+	/// has no mouse — so that camera keeps the heading it spawned with and
+	/// <c>controller.FacingDirection()</c> answers the same vector for the whole match. Every shot
+	/// and every throw resolved from it went that one fixed way, which is why a grenade thrown at
+	/// the sky still came out flat.
+	/// </para>
+	/// <para>
+	/// <b>The aim the server does have arrives on the input frame.</b> <c>ServerPlayer</c> writes
+	/// it onto <c>NetServerActor</c>, which is why the snapshot already carries it and remote
+	/// clients already draw the shooter facing the right way. This reads the same two numbers back
+	/// for gameplay: pitch is positive looking DOWN, so it goes straight into a Unity X euler.
+	/// </para>
+	/// <para>
+	/// <b>NaN is the bot case, and the check is what keeps bots correct.</b> An AI actor never
+	/// receives an input frame — its own controller turns the transform, and that IS the truth for
+	/// it. Reading the property unguarded would snap every bot to face north.
+	/// </para>
+	/// </remarks>
+	private Vector3 AimDirection()
+	{
+		NetServerActor networked = GetComponent<NetServerActor>();
+		if (networked != null && !float.IsNaN(networked.YawDegrees))
+		{
+			return Quaternion.Euler(networked.PitchDegrees, networked.YawDegrees, 0f) * Vector3.forward;
+		}
+
+		return controller.FacingDirection();
+	}
+
 	private void UpdateWeapon()
 	{
 		// A stowed swimmer's weapon is not aimed, fired or reloaded. Without this the shipped
@@ -676,7 +711,7 @@ public partial class Actor : Hurtable, Ironfront.Net.Unity.IGameplayActorPresenc
 		bool flag = !fallenOver && controller.Fire() && (!IsSeated() || seat.CanUseCarriedWeapon() || seat.HasMountedWeapon());
 		if (flag)
 		{
-			activeWeapon.Fire(controller.FacingDirection(), controller.UseMuzzleDirection());
+			activeWeapon.Fire(AimDirection(), controller.UseMuzzleDirection());
 		}
 		else if (wasFiring)
 		{

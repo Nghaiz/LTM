@@ -16,6 +16,20 @@ public class ThrowableWeapon : Weapon
 	/// </remarks>
 	private uint releaseTick;
 
+	/// <summary>
+	/// The aim the pending throw was ordered along, captured in <see cref="Fire"/>. V7-D7.
+	/// </summary>
+	/// <remarks>
+	/// <b>A throw leaves the hand, not a barrel.</b> <c>configuration.muzzle</c> is the throw
+	/// clip's release point, so its forward follows the throwing animation — and a headless
+	/// server builds this prefab with no Animator at all, leaving that point at its bind pose.
+	/// Neither is the direction the player aimed. Announcing the bind pose made every client
+	/// draw the grenade arcing steeply upward and detonating in mid-air, with only its shadow
+	/// still in view. The actor's own aim is the right direction, and <see cref="Fire"/> is the
+	/// one moment it is handed to us: the release happens a <c>releaseDelay</c> later.
+	/// </remarks>
+	private Vector3 throwDirection;
+
 	public override void Unholster()
 	{
 		base.Unholster();
@@ -30,6 +44,10 @@ public class ThrowableWeapon : Weapon
 		if (CanFire())
 		{
 			lastFired = Time.time;
+
+			// The actor's aim, not the weapon model's muzzle. See throwDirection.
+			// Tilted up by the pitch the original authored on the throw point -- see ThrowPitchDegrees.
+			throwDirection = Quaternion.Euler(ThrowPitchDegrees, 0f, 0f) * direction;
 
 			if (NetContext.IsServer)
 			{
@@ -47,7 +65,7 @@ public class ThrowableWeapon : Weapon
 			}
 			else
 			{
-				Shoot(direction, useMuzzleDirection);
+				Shoot(throwDirection, false);
 			}
 		}
 		holdingFire = true;
@@ -118,10 +136,66 @@ public class ThrowableWeapon : Weapon
 		ReleaseThrowable();
 	}
 
-	/// <summary>The gameplay half of a throw: the projectile leaves, the next one chambers.</summary>
+	/// <summary>
+	/// Where a throw leaves the hand, expressed in the thrower's own frame. V7-D7.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>The default origin is the local view-model rig, and on a server that rig is inert.</b>
+	/// <c>configuration.muzzle</c> is <c>ThrowPoint</c>, a child of the weapon root, and
+	/// <c>Actor</c> parents that root to <c>controller.WeaponParent()</c>. For a human that parent
+	/// is moved and pitched every frame by <c>PlayerFpParent</c> -- the rig that exists to put a
+	/// weapon in front of the LOCAL player's eyes. A headless server runs no such rig, so the
+	/// muzzle reported a pose from nowhere: the announced launch sat off the thrower's body and
+	/// the grenade appeared to leave from behind them.
+	/// </para>
+	/// <para>
+	/// <b>The offset is the original's own geometry, not a number invented here.</b> Reading the
+	/// player prefab's chain: <c>FP Camera Parent</c> is at <c>(0, 0.63, 0)</c> -- eye height --
+	/// and <c>Shoulder Parent</c> and <c>Weapon Parent</c> carry <c>(0.211, -0.206, 0.13)</c> and
+	/// <c>(-0.211, 0.206, -0.13)</c>, which cancel exactly, so the weapon root sits at the eye.
+	/// <c>ThrowPoint</c> is then <c>(0.367, 0.259, 0.056)</c> from that root. Summed and read in
+	/// the thrower's frame: chest height, a hand's width to the right, just forward.
+	/// </para>
+	/// </remarks>
+	protected override Vector3 ProjectileOrigin()
+	{
+		if (user == null) return base.ProjectileOrigin();
+
+		return user.transform.position + user.transform.rotation * ThrowOriginOffset;
+	}
+
+	/// <summary>Eye height plus the throw point, in the thrower's frame. See ProjectileOrigin.</summary>
+	private static readonly Vector3 ThrowOriginOffset = new Vector3(0.367f, 0.889f, 0.056f);
+
+	/// <summary>
+	/// How far above the aim a throw leaves, in degrees. V7-D7.
+	/// </summary>
+	/// <remarks>
+	/// <b>The original's own number, read off the throw point.</b> <c>ThrowPoint</c> carries
+	/// <c>m_LocalEulerAnglesHint: -15</c> in <c>frag.prefab</c> — a negative X euler pitches the
+	/// forward vector UP — so in the original a grenade never left along the barrel, it left
+	/// fifteen degrees above it. That tilt is why a throw arcs at all: without it, a level aim
+	/// produces a level throw that skids into the ground.
+	/// <para>
+	/// The port kept the tilt for free while it took its direction from <c>muzzle.forward</c>,
+	/// which includes the local rotation. Aiming the throw instead quietly dropped it, and the
+	/// throw went flat. This puts the same authored angle back, in the frame the throw now uses.
+	/// </para>
+	/// </remarks>
+	private const float ThrowPitchDegrees = -15f;
+
+	/// <summary>The gameplay half of a throw: the projectile leaves along the ordered aim, the next one
+	/// chambers.</summary>
+	/// <remarks>
+	/// <c>useMuzzleDirection</c> is false on purpose. The muzzle here is the throw clip's
+	/// release point, not a barrel: on a weapon carried in the hand its forward is the
+	/// animation's, and the server has no animation at all. <see cref="throwDirection"/> is the
+	/// aim the thrower actually ordered.
+	/// </remarks>
 	private void ReleaseThrowable()
 	{
-		Shoot(Vector3.zero, true);
+		Shoot(throwDirection, false);
 		Reload();
 	}
 

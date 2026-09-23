@@ -530,15 +530,37 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 	protected virtual Projectile SpawnProjectile(Vector3 direction)
 	{
 		Quaternion rotation = Quaternion.LookRotation(direction + UnityEngine.Random.insideUnitSphere * configuration.spread);
-		Projectile component = ((GameObject)UnityEngine.Object.Instantiate(configuration.projectilePrefab, configuration.muzzle.position, rotation)).GetComponent<Projectile>();
+		Vector3 origin = ProjectileOrigin();
+		Projectile component = ((GameObject)UnityEngine.Object.Instantiate(configuration.projectilePrefab, origin, rotation)).GetComponent<Projectile>();
 		component.source = user;
 		// V7 tasks 2 and 3. The single point every weapon's projectile passes through, and the
 		// point AFTER the spread roll above -- which is V7-D4's server roll, resolved once, so
 		// the direction announced is the direction fired. A no-op off the server.
 		ProjectileNetAnnouncer.AnnounceLaunch(
-			component, configuration.muzzle.position, rotation * Vector3.forward, user);
+			component, origin, rotation * Vector3.forward, user);
 		return component;
 	}
+
+	/// <summary>
+	/// Where this weapon's projectile is born, in world space.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Not <c>configuration.muzzle.position</c> by default, and that default is a trap for
+	/// anything but a first-person weapon.</b> <c>muzzle</c> hangs off the weapon root, which
+	/// <c>Actor</c> parents to <c>controller.WeaponParent()</c> -- and for a human that parent is
+	/// displaced and pitched every frame by <c>PlayerFpParent</c>, the LOCAL view-model rig. On a
+	/// headless server that rig is inert, so the muzzle describes a pose nobody is standing in.
+	/// A weapon whose spawn point matters on the wire overrides this with something the server
+	/// actually has; see <c>ThrowableWeapon.ProjectileOrigin</c>.
+	/// </para>
+	/// <para>
+	/// Kept as one method rather than a parameter so that the instantiate above and the
+	/// <c>AnnounceLaunch</c> below cannot drift apart -- two copies of an origin is exactly how
+	/// a client ends up drawing a projectile somewhere the server did not put it.
+	/// </para>
+	/// </remarks>
+	protected virtual Vector3 ProjectileOrigin() => configuration.muzzle.position;
 
 	public virtual void Hide()
 	{

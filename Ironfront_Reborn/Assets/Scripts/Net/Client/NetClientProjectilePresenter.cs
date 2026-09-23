@@ -220,12 +220,44 @@ namespace Ironfront.Net.Unity.Client
             return _prefabsByKind[index];
         }
 
+        /// <summary>
+        /// Drops a projectile and lets whatever it has to say be heard first.
+        /// </summary>
+        /// <remarks>
+        /// <b>Two things end a client's grenade on the same tick, and only one of them makes a
+        /// sound.</b> The grenade counts its own fuse down from the launch tick and calls
+        /// <c>Explode</c>, which plays the report; this presenter counts the same three seconds
+        /// from the spawn message and destroys the object. Which runs first is frame order, and
+        /// <c>[trace-grenade]</c> showed the instance dying at 3.1 s rather than at the ten
+        /// seconds <c>Explode</c> would have held it — so on a client <c>Explode</c> was not
+        /// running at all. The blast survived that because it is drawn from <c>S_EXPLOSION</c> by
+        /// <c>NetClientExplosionPresenter</c>, a separate path that always runs; the report had no
+        /// such second home, so a client heard nothing.
+        /// </remarks>
         private void Despawn(ushort projectileId)
         {
             if (!_spawned.TryGetValue(projectileId, out IProjectileBody projectile)) return;
 
             _spawned.Remove(projectileId);
-            if (projectile != null && projectile.Exists) Object.Destroy(projectile.GameObject);
+            if (projectile == null || !projectile.Exists) return;
+
+            GameObject instance = projectile.GameObject;
+
+            AudioSource report = instance.GetComponent<AudioSource>();
+            if (report != null && report.clip != null)
+            {
+                if (!report.isPlaying) report.Play();
+
+                // The source dies with the GameObject, and Destroy takes effect at the end of the
+                // frame -- destroying here would cut the report off before a single sample is
+                // heard, which is exactly what an earlier version of this fix did. Holding the
+                // object for the clip's own length is what makes the sound audible at all; the
+                // renderers are already off, so nothing is drawn while it plays.
+                Object.Destroy(instance, report.clip.length);
+                return;
+            }
+
+            Object.Destroy(instance);
         }
 
         private static Vector3 ToUnity(in Ironfront.Net.Replication.Movement.Vec3 v)
