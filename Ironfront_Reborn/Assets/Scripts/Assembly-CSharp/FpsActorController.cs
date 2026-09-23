@@ -213,6 +213,7 @@ public class FpsActorController : ActorController
 
 		clock.AimPitchSource = () => inputSource.Pitch;
 		clock.SimulationEnabled = () => inputEnabled && actor != null && !actor.dead && !actor.IsSeated();
+		clock.KeepButtonsWhileSuspended = () => inputEnabled && actor != null && !actor.dead && actor.IsSeated();
 		clock.CombatButtonSource = SampleNetworkCombatButtons;
 
 		// Crouch() and not Input.GetButton("Crouch"): with the toggle-crouch option on the state

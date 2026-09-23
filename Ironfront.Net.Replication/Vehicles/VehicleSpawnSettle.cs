@@ -1,7 +1,8 @@
 namespace Ironfront.Net.Replication.Vehicles
 {
     /// <summary>
-    /// The window in which a freshly spawned, driverless vehicle takes no crash damage.
+    /// The window in which a freshly spawned vehicle, or one a driver has just entered, takes no
+    /// COLLISION damage. Weapon damage is never suppressed.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -13,13 +14,14 @@ namespace Ironfront.Net.Replication.Vehicles
     /// <c>Vehicle</c> now applies what this decides.
     /// </para>
     /// <para>
-    /// <b>Why a driverless vehicle is suppressed with no deadline at all.</b> A dedicated
-    /// server starts its bot match while rendered clients are still loading, and an unattended
-    /// vehicle standing on a capture-point pad is a physics object being leaned on by whatever
-    /// walks into it. Charging that to the hull would destroy pad vehicles before a human saw
-    /// the first frame — which is X-70's sibling symptom, "the wreck that read as on fire".
-    /// The deadline is what bounds the grace once somebody IS driving: from then on it is a
-    /// short exit-from-pad window and crash damage is gameplay again.
+    /// <b>Collision only, and never open-ended.</b> This used to answer "suppressed" for any
+    /// driverless vehicle with no deadline at all, and <c>Vehicle.Damage</c> asked it too, so on a
+    /// server an EMPTY vehicle ignored bullets, rockets, grenades and ramming for the whole match
+    /// (2026-09-23 owner report: "vehicles are literally invulnerable"). The original has no such
+    /// rule: <c>ActorManager.Explode</c> damages every vehicle in range, driven or not. What the
+    /// grace exists for is PhysX settling a vehicle onto its pad, and a driver's first seconds
+    /// pulling off it; both are collisions and both are bounded. Crossfire at an empty pad
+    /// vehicle is gameplay, exactly as offline.
     /// </para>
     /// <para>
     /// <b>Seconds, not ticks.</b> The two writers are Unity's <c>Awake</c> and
@@ -42,17 +44,19 @@ namespace Ironfront.Net.Replication.Vehicles
         public static float DeadlineFrom(float now) => now + SettleSeconds;
 
         /// <summary>
-        /// Whether a crash must be discarded rather than applied.
+        /// Whether a COLLISION must be discarded rather than applied. Only
+        /// <c>Vehicle.OnCollisionEnter</c> asks; weapon damage never does.
         /// </summary>
         /// <param name="isServer">
         /// False offline and on a client, where this whole guard is absent by design: offline
         /// Ravenfield's crash damage is unchanged, and a client never decides damage at all.
         /// </param>
-        /// <param name="hasDriver">Somebody is in the driver's seat right now.</param>
         /// <param name="now">The engine clock.</param>
-        /// <param name="notBefore">The deadline last written by <see cref="DeadlineFrom"/>.</param>
-        public static bool CrashDamageIsSuppressed(
-            bool isServer, bool hasDriver, float now, float notBefore)
-            => isServer && (!hasDriver || now < notBefore);
+        /// <param name="notBefore">
+        /// The deadline last written by <see cref="DeadlineFrom"/>: at spawn, and when a driver
+        /// enters.
+        /// </param>
+        public static bool CollisionDamageIsSuppressed(bool isServer, float now, float notBefore)
+            => isServer && now < notBefore;
     }
 }

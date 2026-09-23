@@ -206,6 +206,7 @@ namespace Ironfront.Net.Unity.Client
                 out VehiclePose corrected, out float positionError, out float angleError);
 
             _stats.Record(mode, positionError, angleError);
+            LogCorrection(in local, in server, mode, positionError, angleError, rttSeconds);
 
             _rigidbody.position = new Vector3(
                 corrected.Position.X, corrected.Position.Y, corrected.Position.Z);
@@ -296,6 +297,37 @@ namespace Ironfront.Net.Unity.Client
         /// taking them from the local side would have a <c>Blend</c> write the client's own
         /// health back over the server's.
         /// </remarks>
+        private static bool? _correctionLogging;
+
+        /// <summary>
+        /// One line per correction of the vehicle this client drives, when
+        /// <c>IRONFRONT_LOG_VEHICLE=1</c>. Silent otherwise.
+        /// </summary>
+        /// <remarks>
+        /// The checkpoint record carries only the LOCAL pose and the last error, which cannot
+        /// separate "prediction diverged" from "the pose the server sent is stale": on
+        /// 2026-09-23 a driver's car sat still under full throttle and steer while a witness saw
+        /// the same vehicle 47 m away, and the error read about 2 m. Printing what arrived beside
+        /// what was predicted is what answers that.
+        /// </remarks>
+        private void LogCorrection(
+            in VehiclePose local, in VehiclePose server, CorrectionMode mode,
+            float positionError, float angleError, float rttSeconds)
+        {
+            _correctionLogging ??=
+                System.Environment.GetEnvironmentVariable("IRONFRONT_LOG_VEHICLE") == "1";
+            if (_correctionLogging != true) return;
+
+            Debug.Log(
+                $"[veh-correct] t={Time.time:F2} id={VehicleId} mode={mode} "
+                + $"srv=({server.Position.X:F1},{server.Position.Z:F1}) "
+                + $"srvVel=({server.LinearVelocity.X:F1},{server.LinearVelocity.Z:F1}) "
+                + $"local=({local.Position.X:F1},{local.Position.Z:F1}) "
+                + $"localVel=({local.LinearVelocity.X:F1},{local.LinearVelocity.Z:F1}) "
+                + $"err={positionError:F2}m/{angleError:F1}deg rtt={rttSeconds * 1000f:F0}ms "
+                + $"kinematic={_rigidbody.isKinematic}");
+        }
+
         private VehiclePose ReadLocalPose(in VehiclePose server)
         {
             Vector3 p = _rigidbody.position;

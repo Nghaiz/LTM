@@ -178,6 +178,20 @@ namespace Ironfront.Net.Unity
         /// </summary>
         public Func<bool> SimulationEnabled;
 
+        /// <summary>
+        /// Whether a tick that does NOT move the body still carries the player's buttons and aim.
+        /// True while seated in a vehicle; null or false blanks the whole frame, as before.
+        /// </summary>
+        /// <remarks>
+        /// A seated body is not simulated on foot, but the player in it is still pulling a
+        /// trigger: a tank's cannon, a turret, or a rifle from a passenger seat all fire from the
+        /// accepted C_INPUT frame. Blanking every suspended tick to <c>default</c> sent a seated
+        /// player's Fire, Reload and aim as zero, so no human in a vehicle could ever shoot
+        /// (2026-09-23, "tanks cannot fire"). Death and the loadout screen still blank it: a dead
+        /// or deploying player has no trigger to pull.
+        /// </remarks>
+        public Func<bool> KeepButtonsWhileSuspended;
+
         private void Awake()
         {
             _agent = GetComponent<NetMovementAgent>();
@@ -263,6 +277,8 @@ namespace Ironfront.Net.Unity
                 MoveInput input = InputSource();
                 if (SimulationEnabled == null || SimulationEnabled())
                     _agent.Tick(in input, TickInterval);
+                else if (KeepButtonsWhileSuspended != null && KeepButtonsWhileSuspended())
+                    input = input.WithAxes(0f, 0f);
                 else
                     input = default;
 

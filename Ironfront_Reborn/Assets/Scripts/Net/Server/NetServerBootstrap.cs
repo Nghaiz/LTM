@@ -708,7 +708,12 @@ namespace Ironfront.Net.Unity.Server
                 _ownsTransport = false;
             }
 
-            NetContext.Clear();
+            // Only a process that IS the server hands its role back. A declared client keeps a
+            // declined bootstrap alive in the map, and destroying it (lane-B strips the half a
+            // process is not; any scene change unloads it) used to Clear() the CLIENT's role to
+            // Offline with nothing logged -- every lane-B client ran as Offline after its strip,
+            // measured 2026-09-23 by FrameTimeLog's role column.
+            if (NetContext.IsServer) NetContext.Clear();
         }
 
         private void Update()

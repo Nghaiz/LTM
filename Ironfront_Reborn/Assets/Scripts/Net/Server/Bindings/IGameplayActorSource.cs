@@ -162,6 +162,19 @@
         /// </returns>
         bool FireCarriedWeapon(float directionX, float directionY, float directionZ);
 
+        /// <summary>
+        /// Fires the vehicle-mounted weapon this body is manning, for a shot the server's
+        /// <c>MountedWeaponAuthority</c> has already approved and paid for.
+        /// </summary>
+        /// <returns>False when the body is not holding a mounted weapon.</returns>
+        bool FireMountedWeapon();
+
+        /// <summary>
+        /// Asks the mounted weapon this body is manning to announce itself to the server's
+        /// registry. False when the body is not holding one.
+        /// </summary>
+        bool DeclareMountedWeapon();
+
         /// <summary>Current gameplay velocity, including AI-driven actors without a net movement agent.</summary>
         void GetVelocity(out float x, out float y, out float z);
     }

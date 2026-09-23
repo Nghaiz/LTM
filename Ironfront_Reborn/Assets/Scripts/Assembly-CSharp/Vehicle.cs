@@ -344,15 +344,6 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 
 	protected virtual void FixedUpdate()
 	{
-		// Scene vehicles Awake long before the first spawn wave, so an Awake-only grace period
-		// has already expired when a bot first enters. Keep the deadline ahead while unattended;
-		// the first driver then gets five seconds for suspension/physics to settle instead of
-		// inheriting spawn-pad collision damage and immediately starting the burn effect.
-		if (NetContext.IsServer && !HasDriver())
-		{
-			networkCrashDamageNotBefore = VehicleSpawnSettle.DeadlineFrom(Time.time);
-		}
-
 		if (rigidbody.linearVelocity.magnitude < 3f)
 		{
 			cannotRamAction.Start();
@@ -445,6 +436,9 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 
 		if (seat == seats[0])
 		{
+			// Scene vehicles Awake long before anybody drives them, so the spawn window has
+			// expired by then. A fresh one covers the driver pulling off the pad.
+			networkCrashDamageNotBefore = VehicleSpawnSettle.DeadlineFrom(Time.time);
 			DriverEntered();
 		}
 		if (!seat.occupant.aiControlled)
@@ -789,16 +783,11 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 	/// </remarks>
 	public void Damage(float amount, int attackerActorId)
 	{
-		// A dedicated server starts the bot match while rendered clients are still loading. Empty
-		// vehicles at the capture-point pads were therefore being destroyed by bot crossfire before
-		// a human saw the first frame. FixedUpdate keeps this deadline five seconds ahead while the
-		// driver seat is empty; after the first driver enters it becomes a short exit-from-pad grace.
-		// Offline Ravenfield remains unchanged.
-		if (VehicleSpawnSettle.CrashDamageIsSuppressed(
-			NetContext.IsServer, HasDriver(), Time.time, networkCrashDamageNotBefore))
-		{
-			return;
-		}
+		// No settle check here, deliberately. This is WEAPON damage -- bullets, explosions,
+		// AutoDamage -- and the settle grace is about collisions only (OnCollisionEnter). It used
+		// to be asked here as well, with no deadline for an empty vehicle, which made every
+		// driverless vehicle on a server immune to everything for the whole match: the
+		// "vehicles are invulnerable" report of 2026-09-23. The original damages empty vehicles.
 		if (NetVehicleAuthority.TryApplyDamage(base.gameObject, amount, attackerActorId))
 		{
 			return;
@@ -1053,8 +1042,10 @@ public partial class Vehicle : MonoBehaviour, Ironfront.Net.Unity.IGameplayVehic
 		// Network vehicles are instantiated into a live PhysX world. Let them settle on their
 		// authored pads before collision damage is authoritative; otherwise touching the ground
 		// or a neighbouring spawn in the first frames starts the burn ladder for every client.
-		if (VehicleSpawnSettle.CrashDamageIsSuppressed(
-			NetContext.IsServer, HasDriver(), Time.time, networkCrashDamageNotBefore))
+		// The same short window follows a driver entering (DriverEntered arms it), which covers
+		// pulling a vehicle off its pad. Bounded both times: past it, a crash is gameplay.
+		if (VehicleSpawnSettle.CollisionDamageIsSuppressed(
+			NetContext.IsServer, Time.time, networkCrashDamageNotBefore))
 		{
 			return;
 		}
