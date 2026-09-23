@@ -296,16 +296,71 @@ namespace Ironfront.Net.Unity.Server
 
             // Tracked, not merely seated. A passenger in a seat with no mounted weapon keeps
             // their own rifle and takes the infantry path, which is the shipped behaviour.
-            if (!_mountedWeapons.IsTracked(vehicleId, seatIndex)) return false;
+            if (!_mountedWeapons.IsTracked(vehicleId, seatIndex))
+            {
+                // A human gunner's weapon declares itself once, from Seat.SetOccupant; a bot's
+                // re-declares on every CanFire. When that one declaration was lost, a player in a
+                // tank fired through the carried path with nothing in hand and the cannon never
+                // answered (2026-09-23). Ask again rather than trust the seat-entry edge.
+                if (!actor.DeclareMountedWeapon()
+                    || !_mountedWeapons.IsTracked(vehicleId, seatIndex))
+                    return false;
+
+                LateMountedDeclarations++;
+                if (LateMountedDeclarations == 1)
+                    Debug.LogWarning(
+                        $"[net] the mounted weapon on vehicle {vehicleId} seat {seatIndex} was not "
+                        + "declared when actor " + session.ActorId + " sat down; declared on its "
+                        + "first trigger instead. Further late declarations are counted in "
+                        + "LateMountedDeclarations.");
+            }
 
             MountedFireResult result = _mountedWeaponAuthority.Step(
                 vehicleId, seatIndex, in frame, actor.IsAlive, now);
 
+            // The mounted counterpart of LogShot, which this path returns before reaching. With
+            // no line here a seated gunner's trigger was invisible to IRONFRONT_LOG_SHOTS=1.
+            if (ShotLoggingEnabled && frame.IsPressed(InputButtons.Fire))
+            {
+                Debug.Log(
+                    $"[mounted-shot] actor={session.ActorId} vehicle={vehicleId} seat={seatIndex} "
+                    + $"fired={result.Fired} rejection={result.Rejection} tick={_loop.CurrentTick}");
+            }
+
             if (!result.Fired) return true;
 
             MountedShotsFired++;
+
+            // The authority books the shot; the engine has to FIRE it. Without this a human
+            // gunner's tank spent a shell, played the report on every client and launched nothing
+            // (2026-09-23, "tanks cannot shoot"). A bot's turret fires through Actor.UpdateWeapon
+            // instead, which a networked body never runs.
+            if (!actor.FireMountedWeapon()) ReportUnlaunchedMountedShot(session, vehicleId, seatIndex);
+
             EmitMountedFire(session, vehicleId, seatIndex);
             return true;
+        }
+
+        /// <summary>Mounted weapons first declared from a trigger rather than from seat entry.</summary>
+        public long LateMountedDeclarations { get; private set; }
+
+        /// <summary>Approved mounted shots the engine could not launch. Zero on a healthy server.</summary>
+        public long UnlaunchedMountedShots { get; private set; }
+
+        /// <summary>
+        /// A mounted shot was paid for and nothing left the barrel. Logged once, counted always,
+        /// because the alternative is the silent "the tank fires and hits nothing" this closed.
+        /// </summary>
+        private void ReportUnlaunchedMountedShot(ClientSession session, ushort vehicleId, byte seatIndex)
+        {
+            UnlaunchedMountedShots++;
+            if (UnlaunchedMountedShots != 1) return;
+
+            Debug.LogError(
+                $"[net] actor {session.ActorId} fired the mounted weapon on vehicle {vehicleId} seat "
+                + $"{seatIndex}; the authority spent the shot but the body is not holding a "
+                + "MountedWeapon, so NOTHING WAS LAUNCHED. Further occurrences are counted in "
+                + "UnlaunchedMountedShots and not logged.");
         }
 
         /// <summary>

@@ -4,8 +4,8 @@
   "scope": {
     "commonFiles": 322,
     "filesWithCandidates": 70,
-    "candidates": 506,
-    "outrightDeletions": 75,
+    "candidates": 512,
+    "outrightDeletions": 77,
     "skippedAsP24": [
       "AstarPath.cs",
       "EuclideanEmbedding.cs",
@@ -425,7 +425,7 @@
     "Actor.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/Actor.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Actor.cs",
-      "survivors": 47,
+      "survivors": 48,
       "outrightDeletions": 3,
       "candidates": [
         {
@@ -532,6 +532,13 @@
           "recovered": "bool flag = !fallenOver && controller.Fire() && (!IsSeated() || seat.CanUseWeapon() || seat.HasMountedWeapon());",
           "nearestLineInOurs": "bool flag = !fallenOver && controller.Fire() && (!IsSeated() || seat.CanUseCarriedWeapon() || seat.HasMountedWeapon());",
           "similarity": 0.97
+        },
+        {
+          "line": 445,
+          "recoveredMember": "UpdateWeapon",
+          "recovered": "activeWeapon.Fire(controller.FacingDirection(), controller.UseMuzzleDirection());",
+          "nearestLineInOurs": "activeWeapon.Fire(AimDirection(), controller.UseMuzzleDirection());",
+          "similarity": 0.88
         },
         {
           "line": 721,
@@ -783,15 +790,15 @@
           "line": 130,
           "recoveredMember": "Fire",
           "recovered": "return (Input.GetButton(\"Fire1\") || Input.GetMouseButton(0)) && !LoadoutUi.IsOpen();",
-          "nearestLineInOurs": "&& (Input.GetButtonDown(\"Fire1\") || Input.GetMouseButtonDown(0)))",
-          "similarity": 0.74
+          "nearestLineInOurs": "if (Input.GetButtonDown(\"Fire1\") || Input.GetMouseButtonDown(0))",
+          "similarity": 0.73
         },
         {
           "line": 139,
           "recoveredMember": "Aiming",
           "recovered": "return (Input.GetButton(\"Fire2\") || Input.GetMouseButton(1)) && !LoadoutUi.IsOpen();",
-          "nearestLineInOurs": "&& (Input.GetButtonDown(\"Fire1\") || Input.GetMouseButtonDown(0)))",
-          "similarity": 0.71
+          "nearestLineInOurs": "if (Input.GetButtonDown(\"Fire1\") || Input.GetMouseButtonDown(0))",
+          "similarity": 0.7
         },
         {
           "line": 144,
@@ -2168,6 +2175,162 @@
         }
       ]
     },
+    "GrenadeProjectile.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/GrenadeProjectile.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/GrenadeProjectile.cs",
+      "survivors": 10,
+      "outrightDeletions": 1,
+      "candidates": [
+        {
+          "line": 3,
+          "recoveredMember": null,
+          "recovered": "public class GrenadeProjectile : Projectile",
+          "nearestLineInOurs": "public partial class GrenadeProjectile : Projectile",
+          "similarity": 0.91
+        },
+        {
+          "line": 30,
+          "recoveredMember": "Start",
+          "recovered": "Invoke(\"Explode\", configuration.lifetime);",
+          "nearestLineInOurs": "Invoke(nameof(Explode), configuration.lifetime);",
+          "similarity": 0.89
+        },
+        {
+          "line": 36,
+          "recoveredMember": "Update",
+          "recovered": "Vector3 vector = velocity * Time.deltaTime;",
+          "nearestLineInOurs": "Vector3 vector = velocity * Time.deltaTime",
+          "similarity": 0.99
+        },
+        {
+          "line": 39,
+          "recoveredMember": "Update",
+          "recovered": "if (Physics.SphereCast(ray, radius, out hitInfo, vector.magnitude * 2f, 4097))",
+          "nearestLineInOurs": "if (Physics.SphereCast(ray, radius, out hitInfo, vector.magnitude, 4097))",
+          "similarity": 0.97
+        },
+        {
+          "line": 58,
+          "recoveredMember": "Explode",
+          "recovered": "if (ActorManager.Explode(base.transform.position, explosionConfiguration) && !source.aiControlled)",
+          "nearestLineInOurs": "base.transform.position, explosionConfiguration, source,",
+          "similarity": 0.7
+        },
+        {
+          "line": 75,
+          "recoveredMember": "Explode",
+          "recovered": "GetComponent<ParticleSystem>().Play(true);",
+          "nearestLineInOurs": "ParticleSystem burst = GetComponent<ParticleSystem>();",
+          "similarity": 0.65
+        },
+        {
+          "line": 76,
+          "recoveredMember": "Explode",
+          "recovered": "AudioSource component = GetComponent<AudioSource>();",
+          "nearestLineInOurs": "AudioSource report = GetComponent<AudioSource>();",
+          "similarity": 0.91
+        },
+        {
+          "line": 77,
+          "recoveredMember": "Explode",
+          "recovered": "component.pitch = Random.Range(0.9f, 1.1f);",
+          "nearestLineInOurs": "report.pitch = CosmeticRandom.Range(0.9f, 1.1f);",
+          "similarity": 0.8
+        },
+        {
+          "line": 78,
+          "recoveredMember": "Explode",
+          "recovered": "component.Play();",
+          "nearestLineInOurs": "report.Play();",
+          "similarity": 0.71
+        },
+        {
+          "line": 79,
+          "recoveredMember": "Explode",
+          "recovered": "Invoke(\"Cleanup\", 10f);",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        }
+      ]
+    },
+    "Weapon.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/Weapon.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs",
+      "survivors": 10,
+      "outrightDeletions": 0,
+      "candidates": [
+        {
+          "line": 5,
+          "recoveredMember": null,
+          "recovered": "public class Weapon : MonoBehaviour",
+          "nearestLineInOurs": "public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon",
+          "similarity": 0.61
+        },
+        {
+          "line": 178,
+          "recoveredMember": "Update",
+          "recovered": "if (!stopFireLoop.Done())",
+          "nearestLineInOurs": "if (stopFireLoop.TrueDone())",
+          "similarity": 0.91
+        },
+        {
+          "line": 197,
+          "recoveredMember": "Fire",
+          "recovered": "if (configuration.auto && (!audio.isPlaying || !stopFireLoop.Done()))",
+          "nearestLineInOurs": "if (configuration.auto && audio != null && (!audio.isPlaying || !stopFireLoop.Done()))",
+          "similarity": 0.89
+        },
+        {
+          "line": 274,
+          "recoveredMember": "AmmoChanged",
+          "recovered": "private void AmmoChanged()",
+          "nearestLineInOurs": "protected void AmmoChanged()",
+          "similarity": 0.85
+        },
+        {
+          "line": 281,
+          "recoveredMember": "AmmoChanged",
+          "recovered": "if (!HasLoadedAmmo() && HasSpareAmmo() && !reloading && (configuration.forceAutoReload || OptionsUi.GetOptions().autoReload))",
+          "nearestLineInOurs": "if (!HasLoadedAmmo() && HasSpareAmmo() && !reloading && autoReload)",
+          "similarity": 0.7
+        },
+        {
+          "line": 347,
+          "recoveredMember": "Shoot",
+          "recovered": "if (!user.aiControlled && configuration.casing != null)",
+          "nearestLineInOurs": "if (!user.aiControlled && configuration.casing != null && NetWeaponAuthority.CosmeticHalfRunsHere)",
+          "similarity": 0.72
+        },
+        {
+          "line": 351,
+          "recoveredMember": "Shoot",
+          "recovered": "if (!configuration.auto)",
+          "nearestLineInOurs": "if (configuration.auto)",
+          "similarity": 0.98
+        },
+        {
+          "line": 355,
+          "recoveredMember": "Shoot",
+          "recovered": "else if (ammo == 0)",
+          "nearestLineInOurs": "if (ammo != -1)",
+          "similarity": 0.71
+        },
+        {
+          "line": 359,
+          "recoveredMember": "Shoot",
+          "recovered": "if (!user.aiControlled && reverbAudio != null)",
+          "nearestLineInOurs": "if (user != null && !user.aiControlled && reverbAudio != null)",
+          "similarity": 0.85
+        },
+        {
+          "line": 388,
+          "recoveredMember": "SpawnProjectile",
+          "recovered": "Projectile component = ((GameObject)UnityEngine.Object.Instantiate(configuration.projectilePrefab, configuration.muzzle.position, rotation)).GetComponent<Projectile>();",
+          "nearestLineInOurs": "Projectile component = ((GameObject)UnityEngine.Object.Instantiate(configuration.projectilePrefab, origin, rotation)).GetComponent<Projectile>();",
+          "similarity": 0.92
+        }
+      ]
+    },
     "GridGraph.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/Pathfinding/GridGraph.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Pathfinding/GridGraph.cs",
@@ -2378,141 +2541,6 @@
           "recovered": "return instance.hasBeenOpen;",
           "nearestLineInOurs": "return instance != null && instance.hasBeenOpen;",
           "similarity": 0.74
-        }
-      ]
-    },
-    "Weapon.cs": {
-      "recovered": "tmp/recovered/src/Assembly-CSharp/Weapon.cs",
-      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs",
-      "survivors": 9,
-      "outrightDeletions": 0,
-      "candidates": [
-        {
-          "line": 5,
-          "recoveredMember": null,
-          "recovered": "public class Weapon : MonoBehaviour",
-          "nearestLineInOurs": "public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon",
-          "similarity": 0.61
-        },
-        {
-          "line": 178,
-          "recoveredMember": "Update",
-          "recovered": "if (!stopFireLoop.Done())",
-          "nearestLineInOurs": "if (stopFireLoop.TrueDone())",
-          "similarity": 0.91
-        },
-        {
-          "line": 197,
-          "recoveredMember": "Fire",
-          "recovered": "if (configuration.auto && (!audio.isPlaying || !stopFireLoop.Done()))",
-          "nearestLineInOurs": "if (configuration.auto && audio != null && (!audio.isPlaying || !stopFireLoop.Done()))",
-          "similarity": 0.89
-        },
-        {
-          "line": 274,
-          "recoveredMember": "AmmoChanged",
-          "recovered": "private void AmmoChanged()",
-          "nearestLineInOurs": "protected void AmmoChanged()",
-          "similarity": 0.85
-        },
-        {
-          "line": 281,
-          "recoveredMember": "AmmoChanged",
-          "recovered": "if (!HasLoadedAmmo() && HasSpareAmmo() && !reloading && (configuration.forceAutoReload || OptionsUi.GetOptions().autoReload))",
-          "nearestLineInOurs": "if (!HasLoadedAmmo() && HasSpareAmmo() && !reloading && autoReload)",
-          "similarity": 0.7
-        },
-        {
-          "line": 347,
-          "recoveredMember": "Shoot",
-          "recovered": "if (!user.aiControlled && configuration.casing != null)",
-          "nearestLineInOurs": "if (!user.aiControlled && configuration.casing != null && NetWeaponAuthority.CosmeticHalfRunsHere)",
-          "similarity": 0.72
-        },
-        {
-          "line": 351,
-          "recoveredMember": "Shoot",
-          "recovered": "if (!configuration.auto)",
-          "nearestLineInOurs": "if (configuration.auto)",
-          "similarity": 0.98
-        },
-        {
-          "line": 355,
-          "recoveredMember": "Shoot",
-          "recovered": "else if (ammo == 0)",
-          "nearestLineInOurs": "if (ammo != -1)",
-          "similarity": 0.71
-        },
-        {
-          "line": 359,
-          "recoveredMember": "Shoot",
-          "recovered": "if (!user.aiControlled && reverbAudio != null)",
-          "nearestLineInOurs": "if (user != null && !user.aiControlled && reverbAudio != null)",
-          "similarity": 0.85
-        }
-      ]
-    },
-    "GrenadeProjectile.cs": {
-      "recovered": "tmp/recovered/src/Assembly-CSharp/GrenadeProjectile.cs",
-      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/GrenadeProjectile.cs",
-      "survivors": 8,
-      "outrightDeletions": 0,
-      "candidates": [
-        {
-          "line": 3,
-          "recoveredMember": null,
-          "recovered": "public class GrenadeProjectile : Projectile",
-          "nearestLineInOurs": "public partial class GrenadeProjectile : Projectile",
-          "similarity": 0.91
-        },
-        {
-          "line": 30,
-          "recoveredMember": "Start",
-          "recovered": "Invoke(\"Explode\", configuration.lifetime);",
-          "nearestLineInOurs": "Invoke(nameof(Explode), configuration.lifetime);",
-          "similarity": 0.89
-        },
-        {
-          "line": 36,
-          "recoveredMember": "Update",
-          "recovered": "Vector3 vector = velocity * Time.deltaTime;",
-          "nearestLineInOurs": "Vector3 vector = velocity * Time.deltaTime",
-          "similarity": 0.99
-        },
-        {
-          "line": 39,
-          "recoveredMember": "Update",
-          "recovered": "if (Physics.SphereCast(ray, radius, out hitInfo, vector.magnitude * 2f, 4097))",
-          "nearestLineInOurs": "if (Physics.SphereCast(ray, radius, out hitInfo, vector.magnitude, 4097))",
-          "similarity": 0.97
-        },
-        {
-          "line": 58,
-          "recoveredMember": "Explode",
-          "recovered": "if (ActorManager.Explode(base.transform.position, explosionConfiguration) && !source.aiControlled)",
-          "nearestLineInOurs": "base.transform.position, explosionConfiguration, source,",
-          "similarity": 0.7
-        },
-        {
-          "line": 75,
-          "recoveredMember": "Explode",
-          "recovered": "GetComponent<ParticleSystem>().Play(true);",
-          "nearestLineInOurs": "ParticleSystem burst = GetComponent<ParticleSystem>();",
-          "similarity": 0.65
-        },
-        {
-          "line": 77,
-          "recoveredMember": "Explode",
-          "recovered": "component.pitch = Random.Range(0.9f, 1.1f);",
-          "nearestLineInOurs": "component.pitch = CosmeticRandom.Range(0.9f, 1.1f);",
-          "similarity": 0.91
-        },
-        {
-          "line": 79,
-          "recoveredMember": "Explode",
-          "recovered": "Invoke(\"Cleanup\", 10f);",
-          "nearestLineInOurs": "Invoke(nameof(Cleanup), 0f);",
-          "similarity": 0.78
         }
       ]
     },
@@ -3686,6 +3714,35 @@
         }
       ]
     },
+    "ThrowableWeapon.cs": {
+      "recovered": "tmp/recovered/src/Assembly-CSharp/ThrowableWeapon.cs",
+      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ThrowableWeapon.cs",
+      "survivors": 3,
+      "outrightDeletions": 1,
+      "candidates": [
+        {
+          "line": 19,
+          "recoveredMember": "Fire",
+          "recovered": "if (animator != null)",
+          "nearestLineInOurs": "else if (animator != null)",
+          "similarity": 0.89
+        },
+        {
+          "line": 25,
+          "recoveredMember": "Fire",
+          "recovered": "Shoot(direction, useMuzzleDirection);",
+          "nearestLineInOurs": "public override void Fire(Vector3 direction, bool useMuzzleDirection)",
+          "similarity": 0.62
+        },
+        {
+          "line": 33,
+          "recoveredMember": "SpawnThrowable",
+          "recovered": "Shoot(Vector3.zero, true);",
+          "nearestLineInOurs": null,
+          "similarity": 0.0
+        }
+      ]
+    },
     "Boat.cs": {
       "recovered": "tmp/recovered/src/Assembly-CSharp/Boat.cs",
       "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Boat.cs",
@@ -4059,8 +4116,8 @@
           "line": 60,
           "recoveredMember": "Update",
           "recovered": "Application.CaptureScreenshot(\"screenshot.png\", 3);",
-          "nearestLineInOurs": "ScreenCapture.CaptureScreenshot(screenshotName);",
-          "similarity": 0.67
+          "nearestLineInOurs": "ScreenCapture.CaptureScreenshot(screenshotName, 3);",
+          "similarity": 0.71
         }
       ]
     },
@@ -4076,21 +4133,6 @@
           "recovered": "Vector2 vector = Driver().controller.CarInput();",
           "nearestLineInOurs": "Vector2 vector = Vehicle.Clamp2(Driver().controller.CarInput());",
           "similarity": 0.86
-        }
-      ]
-    },
-    "ThrowableWeapon.cs": {
-      "recovered": "tmp/recovered/src/Assembly-CSharp/ThrowableWeapon.cs",
-      "ours": "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ThrowableWeapon.cs",
-      "survivors": 1,
-      "outrightDeletions": 0,
-      "candidates": [
-        {
-          "line": 19,
-          "recoveredMember": "Fire",
-          "recovered": "if (animator != null)",
-          "nearestLineInOurs": "else if (animator != null)",
-          "similarity": 0.89
         }
       ]
     },

@@ -34,6 +34,44 @@ public class MountedWeapon : Weapon
 		base.Fire(direction, true);
 	}
 
+	/// <summary>
+	/// Fires one shot the SERVER's <c>MountedWeaponAuthority</c> has already approved and paid for.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Why a networked gunner needs this.</b> A bot's turret fires through
+	/// <c>Actor.UpdateWeapon</c> -> <see cref="Fire"/>, but a networked player's body never runs
+	/// that (its controller is suspended on a server), and the authority that books the player's
+	/// shot -- clip, cooldown, reload -- only books it. Nothing spawned the shell, so a human in a
+	/// tank "fired", heard the gun, and hit nothing: the 2026-09-23 "tanks cannot shoot" report.
+	/// </para>
+	/// <para>
+	/// <b>Not through <see cref="CanFire"/>.</b> That asks <c>NetWeaponAuthority.MayFire</c>, which
+	/// asks the same authority that has just stamped this shot's cooldown, so it would refuse the
+	/// very shot it approved. The authority owns the clip and the reload, so the engine's own copy
+	/// is only bookkeeping for <c>Shoot</c>: it is never reloaded for a networked gunner and is
+	/// kept from reaching zero rather than being allowed to jam a gun the server says is loaded.
+	/// </para>
+	/// <para>
+	/// Direction is the muzzle's, like <see cref="Fire"/>: the turret carrying it is aimed on the
+	/// server by <c>TurretAimCore</c> from the same input frames.
+	/// </para>
+	/// </remarks>
+	/// <returns>False when the weapon is not in the gunner's hands, so the caller can say so.</returns>
+	public bool FireApprovedByServer()
+	{
+		if (!unholstered)
+		{
+			return false;
+		}
+		if (ammo == 0)
+		{
+			ammo = configuration.ammo;
+		}
+		Shoot(Vector3.zero, true);
+		return true;
+	}
+
 	public override void Show()
 	{
 	}
@@ -106,7 +144,10 @@ public class MountedWeapon : Weapon
 			return;
 		}
 
-		if (!ReferenceEquals(resolvedFor, user))
+		// A failed resolution is not cached: netVehicleId 0 means the vehicle had no network id
+		// yet when this user sat down, and caching that answer per user left a human gunner's
+		// weapon undeclared for as long as they stayed in the seat (2026-09-23).
+		if (!ReferenceEquals(resolvedFor, user) || netVehicleId == 0)
 		{
 			resolvedFor = user;
 			Vehicle vehicle = user.seat.vehicle;
@@ -170,6 +211,12 @@ public class MountedWeapon : Weapon
 	/// just arrived is the one place that triggers registration — rather than every path that
 	/// might, someday, have happened to call <c>CanFire</c> first.
 	/// </remarks>
+	/// <summary>The vehicle id this weapon last resolved for its gunner; 0 when unresolved.</summary>
+	public ushort NetVehicleId => netVehicleId;
+
+	/// <summary>The seat index this weapon last resolved for its gunner.</summary>
+	public byte NetSeatIndex => netSeatIndex;
+
 	public void DeclareToNet()
 	{
 		ResolveNetSeat();

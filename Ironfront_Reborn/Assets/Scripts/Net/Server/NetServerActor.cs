@@ -229,6 +229,20 @@ namespace Ironfront.Net.Unity.Server
 
             return source.FireCarriedWeapon(directionX, directionY, directionZ);
         }
+
+        /// <summary>Re-announces the mounted weapon this body is manning. See the seam.</summary>
+        public bool DeclareMountedWeapon()
+        {
+            IGameplayActorSource source = Source;
+            return source != null && source.DeclareMountedWeapon();
+        }
+
+        /// <summary>Fires the mounted weapon this body is manning. See the seam.</summary>
+        public bool FireMountedWeapon()
+        {
+            IGameplayActorSource source = Source;
+            return source != null && source.FireMountedWeapon();
+        }
         public bool ApplyWeaponSwitchIntent(int slot)
         {
             if (slot == _lastRequestedWeaponSlot) return false;

@@ -219,6 +219,9 @@ namespace Ironfront.Net.Unity.Server
         private const int DetachedTicksBeforeWarning = 30;
 
         private int _detachedTicks;
+
+        /// <summary>Whether the last tick found this player in a vehicle seat.</summary>
+        private bool _seated;
         public void Tick(float dt)
         {
             NetMovementAgent agent = Actor != null ? Actor.Movement : null;
@@ -254,6 +257,33 @@ namespace Ironfront.Net.Unity.Server
             }
 
             _detachedTicks = 0;
+
+            // Seated: input is consumed and acknowledged, the capsule is out of the world, and
+            // the session rides the seat. See InputAuthority.ConsumePendingInputSeated.
+            if (ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(Session.ActorId, out _, out _))
+            {
+                if (!_seated)
+                {
+                    _seated = true;
+                    agent.SetSeated(true);
+                }
+                InputAuthority.ConsumePendingInputSeated(
+                    Session, MovementSimulation.ToCore(Actor.transform.position), this);
+                return;
+            }
+
+            if (_seated)
+            {
+                // Out of the seat: capsule back, and the session and the agent rebased onto
+                // wherever LeaveSeat put the body, so the first on-foot tick starts there rather
+                // than inside the vehicle.
+                _seated = false;
+                agent.SetSeated(false);
+                Vec3 exit = MovementSimulation.ToCore(Actor.transform.position);
+                Session.State = MoveState.AtRest(exit);
+                Session.PreviousPosition = exit;
+                agent.ApplyAuthoritativeState(in Session.State);
+            }
 
             // Ground contact is Unity's answer, not the simulation's: the CharacterController
             // knows what it is standing on and MovementCore does not.

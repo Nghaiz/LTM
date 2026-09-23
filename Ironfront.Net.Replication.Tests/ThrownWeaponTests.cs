@@ -240,9 +240,74 @@ namespace Ironfront.Net.Replication.Tests
             string bindings = ReadUnitySource(
                 "Ironfront_Reborn/Assets/Scripts/NetBindings/IronfrontNetBindings.cs");
 
+            // FALSE, and true asserted absent: a headless server never turns the muzzle, so true
+            // threw away the aim and launched every player rocket along one world axis
+            // (2026-09-23, lane-B vdamage-before-4).
             Assert.Contains(
-                "weapon.Fire(new Vector3(directionX, directionY, directionZ), useMuzzleDirection: true);",
+                "weapon.Fire(new Vector3(directionX, directionY, directionZ), useMuzzleDirection: false);",
                 bindings, StringComparison.Ordinal);
+            Assert.DoesNotContain("useMuzzleDirection: true", bindings, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// A mounted shot the server approved is FIRED by the engine, not just booked.
+        /// </summary>
+        /// <remarks>
+        /// 2026-09-23, "tanks cannot shoot": <c>MountedWeaponAuthority.Step</c> spent the shell and
+        /// the bridge broadcast the report, and nothing spawned a projectile for a human gunner,
+        /// whose body never runs <c>Actor.UpdateWeapon</c>. The launch must sit after the
+        /// authority's fired-guard (an unapproved trigger must launch nothing) and must go
+        /// through the entry that skips <c>CanFire</c>, which would re-ask the authority and be
+        /// refused by the cooldown the authority has just stamped.
+        /// </remarks>
+        [Fact]
+        public void AnApprovedMountedShotIsLaunchedByTheEngine()
+        {
+            string bridge = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/Net/Server/ServerCombatBridge.cs");
+
+            int guard  = bridge.IndexOf("if (!result.Fired) return true;", StringComparison.Ordinal);
+            int launch = bridge.IndexOf("actor.FireMountedWeapon()", StringComparison.Ordinal);
+            Assert.True(guard >= 0, "StepMountedWeapon lost its fired-guard.");
+            Assert.True(launch > guard,
+                "An approved mounted shot is no longer launched after the authority's fired-guard.");
+            Assert.Contains("NOTHING WAS LAUNCHED", bridge, StringComparison.Ordinal);
+
+            // An undeclared mounted weapon is asked to declare itself before the trigger falls
+            // through to the carried path: a human gunner's one seat-entry declaration was lost.
+            int declare = bridge.IndexOf("actor.DeclareMountedWeapon()", StringComparison.Ordinal);
+            Assert.True(declare >= 0 && declare < guard,
+                "StepMountedWeapon no longer re-declares an untracked mounted weapon.");
+
+            // The authority exists before the bridge captures it. It was built forty lines later,
+            // so the bridge held null and no human gunner ever reached the mounted path.
+            string loop = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/Net/Server/ServerTickLoop.cs");
+            int built    = loop.IndexOf("_mountedWeaponAuthority = new MountedWeaponAuthority(", StringComparison.Ordinal);
+            int captured = loop.IndexOf("new ServerCombatBridge(", StringComparison.Ordinal);
+            Assert.True(built >= 0 && captured > built,
+                "ServerCombatBridge is constructed before MountedWeaponAuthority, so it captures null.");
+
+            // The client stage never installs its turret seams on a server: it used to overwrite
+            // the server's id resolver and then Clear() it on teardown, so every vehicle id read 0.
+            string stage = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/Net/Client/ClientVehicleStage.cs");
+            int serverGuard = stage.IndexOf("if (NetContext.IsServer) return;", StringComparison.Ordinal);
+            int install     = stage.IndexOf("NetTurretAim.VehicleIdResolver = ResolveVehicleId;", StringComparison.Ordinal);
+            Assert.True(serverGuard >= 0 && install > serverGuard,
+                "ClientVehicleStage installs its turret seams on a server process again.");
+
+            string bindings = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/NetBindings/IronfrontNetBindings.cs");
+            Assert.Contains("mounted.FireApprovedByServer()", bindings, StringComparison.Ordinal);
+
+            string mounted = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/MountedWeapon.cs");
+            int entry = mounted.IndexOf("public bool FireApprovedByServer()", StringComparison.Ordinal);
+            Assert.True(entry >= 0, "MountedWeapon.FireApprovedByServer is gone.");
+            int end = mounted.IndexOf("\n\t}", entry, StringComparison.Ordinal);
+            string body = mounted.Substring(entry, (end > entry ? end : mounted.Length) - entry);
+            Assert.DoesNotContain("CanFire()", body, StringComparison.Ordinal);
         }
 
         // ------------------------------------------------ helpers

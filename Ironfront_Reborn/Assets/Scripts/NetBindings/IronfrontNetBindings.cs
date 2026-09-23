@@ -654,15 +654,18 @@ namespace Ironfront.Net.Unity.Bindings
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <c>useMuzzleDirection: true</c>, matching <c>ThrowableWeapon.ReleaseThrowable</c>'s own
-        /// call. The muzzle transform is where the game says the projectile leaves from, and for
-        /// a throwable it is the hand -- passing false would launch a grenade from the body
-        /// origin, which is inside the thrower's own collider.
-        /// </para>
-        /// <para>
-        /// The direction still travels, because a LAUNCHER (<c>Weapon.SpawnProjectile</c>) uses
-        /// it when the weapon has no muzzle authored, and because <c>Weapon.Fire</c>'s signature
-        /// is the offline one -- narrowing it here would fork the call.
+        /// <c>useMuzzleDirection: false</c>, so the projectile flies along the SERVER'S aim: the
+        /// direction the combat authority built from the accepted frame's yaw and pitch. The flag
+        /// only picks the DIRECTION (<c>Weapon.Shoot</c>: <c>direction = muzzle.forward</c>); where
+        /// the projectile leaves from is <c>Weapon.ProjectileOrigin</c> either way. Offline the
+        /// muzzle follows the camera, which is why the original player passes true. On a headless
+        /// server nothing turns it: the weapon hangs off <c>WeaponParent</c>, which only
+        /// <c>PlayerFpParent</c> moves, for a local player's eyes. Passing true sent every
+        /// player-fired rocket along one fixed world axis (measured 2026-09-23, lane-B
+        /// <c>vdamage-before-4</c>: fired at yaw 17, blew up 22.7 m down +X), while the shooter's
+        /// own cosmetic copy flew true and burst on the target. That is the "bazooka does no
+        /// damage to vehicles" report. Throwables already ignore the flag
+        /// (<c>ThrowableWeapon.Fire</c>).
         /// </para>
         /// </remarks>
         public bool FireCarriedWeapon(float directionX, float directionY, float directionZ)
@@ -680,7 +683,7 @@ namespace Ironfront.Net.Unity.Bindings
             // this failure.
             if (!weapon.CanFire()) return false;
 
-            weapon.Fire(new Vector3(directionX, directionY, directionZ), useMuzzleDirection: true);
+            weapon.Fire(new Vector3(directionX, directionY, directionZ), useMuzzleDirection: false);
 
             // THE LATCH. Weapon.Fire sets holdingFire unconditionally, and Actor.UpdateWeapon is
             // what clears it -- but Actor.Update returns early for a body whose controller is
@@ -697,6 +700,51 @@ namespace Ironfront.Net.Unity.Bindings
             if (!weapon.configuration.auto) weapon.StopFire();
 
             return true;
+        }
+
+        /// <summary>
+        /// Fires the mounted weapon the wrapped actor is manning. See
+        /// <c>MountedWeapon.FireApprovedByServer</c> for why this is not <c>Fire</c>.
+        /// </summary>
+        public bool FireMountedWeapon()
+        {
+            if (_actor == null) return false;
+
+            return _actor.activeWeapon is MountedWeapon mounted && mounted.FireApprovedByServer();
+        }
+
+        /// <summary>Re-announces the mounted weapon the wrapped actor is manning.</summary>
+        public bool DeclareMountedWeapon()
+        {
+            if (_actor == null) return false;
+
+            MountedWeapon mounted = _actor.activeWeapon as MountedWeapon;
+            if (mounted == null && _actor.seat != null && _actor.seat.HasMountedWeapon())
+                mounted = _actor.seat.weapon;
+            if (mounted != null) mounted.DeclareToNet();
+
+            ReportDeclaration(mounted);
+            return mounted != null;
+        }
+
+        private bool _reportedDeclaration;
+
+        // Once per body: what the re-declaration found. The first human in a tank was the only
+        // thing that ever exercised this path, and it failed with nothing logged anywhere.
+        private void ReportDeclaration(MountedWeapon mounted)
+        {
+            if (_reportedDeclaration) return;
+            _reportedDeclaration = true;
+
+            Debug.Log(
+                $"[mounted-declare] actor='{_actor.name}' active="
+                + (_actor.activeWeapon != null ? _actor.activeWeapon.GetType().Name : "null")
+                + " seat=" + (_actor.seat != null ? _actor.seat.name : "null")
+                + " seatWeapon=" + (_actor.seat != null && _actor.seat.weapon != null ? _actor.seat.weapon.name : "null")
+                + " declared=" + (mounted != null
+                    ? $"vehicle {mounted.NetVehicleId} seat {mounted.NetSeatIndex} user="
+                      + (mounted.user != null ? mounted.user.name : "null")
+                    : "none"));
         }
     }
 

@@ -242,6 +242,23 @@ namespace Ironfront.Net.Unity
         /// same input, which is why this exists rather than being folded into it.
         /// </para>
         /// </remarks>
+        /// <summary>
+        /// Takes this body's capsule out of the physics world while it sits in a vehicle, and
+        /// puts it back when it gets out.
+        /// </summary>
+        /// <remarks>
+        /// The shipped game does the same thing through
+        /// <c>FirstPersonController.DisableCharacterController</c> in
+        /// <c>FpsActorController.StartSeated</c>. A server player's body is the AI character
+        /// prefab with this agent attached, and nothing turned ITS capsule off: it sat inside the
+        /// hull the body is parented to and held the vehicle still (2026-09-23).
+        /// </remarks>
+        public void SetSeated(bool seated)
+        {
+            CharacterController controller = Controller;
+            if (controller != null) controller.enabled = !seated;
+        }
+
         public void ApplyAuthoritativeState(in MoveState state)
         {
             State = state;

@@ -8,7 +8,7 @@ using Xunit;
 namespace Ironfront.Net.Replication.Tests
 {
     /// <summary>
-    /// Protocol 10 § 8.3 — a vehicle is never born burning, a driverless one takes no crash
+    /// Protocol 10 § 8.3 — a vehicle is never born burning, a vehicle takes no collision
     /// damage while it settles, and the line that says so is real.
     /// </summary>
     /// <remarks>
@@ -157,54 +157,27 @@ namespace Ironfront.Net.Replication.Tests
         // --------------------------------------------------------- the settle window
 
         /// <summary>
-        /// A driverless vehicle takes no crash damage from settling or spawn overlap, for at
-        /// least the five seconds § 8.3 requires.
+        /// A vehicle takes no collision damage for the settle window after its deadline was
+        /// armed, and full collision damage from the deadline on -- driver or not.
         /// </summary>
         /// <remarks>
-        /// The parameters are the four real inputs, so this is the guard executing rather than a
-        /// re-statement of it. <c>now</c> at exactly the deadline is included because an
-        /// inclusive comparison there is the difference between five seconds and four.
+        /// <c>now</c> at exactly the deadline is included because an inclusive comparison there is
+        /// the difference between five seconds and four. The +60 s row is the one that used to be
+        /// suppressed: an empty vehicle a minute after spawning was immune forever.
         /// </remarks>
         [Theory]
-        [InlineData(0f)]
-        [InlineData(2.5f)]
-        [InlineData(VehicleSpawnSettle.SettleSeconds - 0.001f)]
-        [InlineData(VehicleSpawnSettle.SettleSeconds)]
-        [InlineData(VehicleSpawnSettle.SettleSeconds + 60f)]
-        public void ADriverlessVehicleTakesNoCrashDamage(float elapsed)
+        [InlineData(0f, true)]
+        [InlineData(2.5f, true)]
+        [InlineData(VehicleSpawnSettle.SettleSeconds - 0.001f, true)]
+        [InlineData(VehicleSpawnSettle.SettleSeconds, false)]
+        [InlineData(VehicleSpawnSettle.SettleSeconds + 60f, false)]
+        public void CollisionDamageIsSuppressedOnlyInsideTheSettleWindow(float elapsed, bool suppressed)
         {
-            float spawnedAt = 100f;
-            float deadline  = VehicleSpawnSettle.DeadlineFrom(spawnedAt);
+            float armedAt  = 100f;
+            float deadline = VehicleSpawnSettle.DeadlineFrom(armedAt);
 
-            Assert.True(VehicleSpawnSettle.CrashDamageIsSuppressed(
-                isServer: true, hasDriver: false, now: spawnedAt + elapsed, notBefore: deadline));
-        }
-
-        /// <summary>
-        /// Once somebody is driving, the grace is the settle window and no longer.
-        /// </summary>
-        /// <remarks>
-        /// The deadline is re-armed every frame while the seat is empty (<c>Vehicle.FixedUpdate</c>),
-        /// so "the first driver enters" and "the deadline was written" are the same moment. That is
-        /// what makes this window an exit-from-pad grace rather than one that expired long before
-        /// anybody arrived — scene vehicles Awake minutes before the first spawn wave.
-        /// </remarks>
-        [Fact]
-        public void ADrivenVehicleIsProtectedForTheSettleWindowAndThenNoLonger()
-        {
-            float entered  = 500f;
-            float deadline = VehicleSpawnSettle.DeadlineFrom(entered);
-
-            Assert.True(VehicleSpawnSettle.CrashDamageIsSuppressed(
-                true, hasDriver: true, now: entered, notBefore: deadline));
-
-            Assert.True(VehicleSpawnSettle.CrashDamageIsSuppressed(
-                true, hasDriver: true,
-                now: entered + VehicleSpawnSettle.SettleSeconds - 0.001f, notBefore: deadline));
-
-            Assert.False(VehicleSpawnSettle.CrashDamageIsSuppressed(
-                true, hasDriver: true,
-                now: entered + VehicleSpawnSettle.SettleSeconds, notBefore: deadline));
+            Assert.Equal(suppressed, VehicleSpawnSettle.CollisionDamageIsSuppressed(
+                isServer: true, now: armedAt + elapsed, notBefore: deadline));
         }
 
         /// <summary>
@@ -212,38 +185,54 @@ namespace Ironfront.Net.Replication.Tests
         /// player byte-for-byte unchanged.
         /// </summary>
         [Fact]
-        public void OffTheServerCrashDamageIsNeverSuppressed()
+        public void OffTheServerCollisionDamageIsNeverSuppressed()
         {
-            Assert.False(VehicleSpawnSettle.CrashDamageIsSuppressed(
-                isServer: false, hasDriver: false, now: 0f, notBefore: float.MaxValue));
+            Assert.False(VehicleSpawnSettle.CollisionDamageIsSuppressed(
+                isServer: false, now: 0f, notBefore: float.MaxValue));
         }
 
         /// <summary>
-        /// <c>Vehicle</c> reads the shared guard rather than carrying its own copy of it.
+        /// <c>Vehicle</c> applies the shared guard to COLLISIONS ONLY, arms it at spawn and at
+        /// driver entry, and never keeps it open while the vehicle is empty.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// Source-invariant, and the companion to the five tests above: they prove the rule is
-        /// right, and this proves the shipped path is the one they proved. Without it
-        /// <see cref="VehicleSpawnSettle"/> could be correct, tested, and called by nothing —
-        /// which is the state the guard was already in when the handoff asked for it to be
-        /// tested.
+        /// Source-invariant, and the companion to the tests above: they prove the rule is right,
+        /// and this proves the shipped path is the one they proved.
         /// </para>
         /// <para>
-        /// The literal is asserted ABSENT as well as the call present. Three copies of
-        /// <c>Time.time + 5f</c> are how the window drifts to four seconds in one of the three
-        /// places and nobody notices.
+        /// <b>Exactly one call, inside <c>OnCollisionEnter</c>.</b> The 2026-09-23 defect was a
+        /// second call in <c>Vehicle.Damage</c>, which is the weapon path: with it, every empty
+        /// vehicle on a server ignored bullets, rockets and grenades for the whole match. The
+        /// FixedUpdate re-arm (<c>!HasDriver()</c> keeping the deadline ahead) is asserted absent
+        /// for the same reason: it is what made the window open-ended.
         /// </para>
         /// </remarks>
         [Fact]
-        public void TheShippedVehicleUsesTheSharedSettleGuard()
+        public void TheShippedVehicleSuppressesCollisionsOnlyAndNeverWeaponDamage()
         {
             string source = ReadUnitySource(VehicleSource);
+            const string guard = "VehicleSpawnSettle.CollisionDamageIsSuppressed(";
 
-            Assert.Contains(
-                "VehicleSpawnSettle.CrashDamageIsSuppressed", source, StringComparison.Ordinal);
-            Assert.Contains(
-                "VehicleSpawnSettle.DeadlineFrom(Time.time)", source, StringComparison.Ordinal);
+            int first = source.IndexOf(guard, StringComparison.Ordinal);
+            Assert.True(first >= 0, "Vehicle.cs no longer applies the settle guard to collisions.");
+            Assert.True(source.IndexOf(guard, first + 1, StringComparison.Ordinal) < 0,
+                "Vehicle.cs applies the settle guard twice. It belongs in OnCollisionEnter only; "
+                + "anywhere else (Damage) makes vehicles immune to weapons.");
+
+            int collision = source.IndexOf("private void OnCollisionEnter(", StringComparison.Ordinal);
+            Assert.True(collision >= 0 && first > collision,
+                "The settle guard is not inside OnCollisionEnter.");
+
+            Assert.DoesNotContain("CrashDamageIsSuppressed", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("IsServer && !HasDriver()", source, StringComparison.Ordinal);
+
+            // Armed at spawn (Awake) and at driver entry, and nowhere else.
+            int arms = 0;
+            for (int at = 0; (at = source.IndexOf(
+                     "networkCrashDamageNotBefore = VehicleSpawnSettle.DeadlineFrom(Time.time)",
+                     at, StringComparison.Ordinal)) >= 0; at++) arms++;
+            Assert.Equal(2, arms);
 
             Assert.DoesNotContain(
                 "networkCrashDamageNotBefore = Time.time + 5f", source, StringComparison.Ordinal);

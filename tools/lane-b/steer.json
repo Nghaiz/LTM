@@ -1,0 +1,36 @@
+{
+  "name": "steer-observer",
+  "note": "Idle witness for steer-driver: spawns and stands still for the length of the driver's programme, so its checkpoints carry the replicated vehicle poses a remote client sees.",
+  "steps": [
+    {
+      "seconds": 5.0,
+      "yawDegrees": 0,
+      "respawn": true
+    },
+    {
+      "checkpoint": "spawned",
+      "seconds": 20.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "watching-0",
+      "seconds": 5.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "watching-1",
+      "seconds": 5.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "watching-2",
+      "seconds": 5.0,
+      "yawDegrees": 0
+    },
+    {
+      "checkpoint": "done",
+      "seconds": 1.0,
+      "yawDegrees": 0
+    }
+  ]
+}

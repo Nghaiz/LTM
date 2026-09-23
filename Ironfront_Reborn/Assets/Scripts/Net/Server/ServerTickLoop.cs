@@ -236,6 +236,17 @@ namespace Ironfront.Net.Unity.Server
             _fireResolver = new ServerFireResolver(_lagCompensator);
             _damageSink = new ServerActorDamageSink(ServerActorRegistry.Instance);
             _combatAuthority = new ServerCombatAuthority(_fireResolver, _damageSink);
+            // V6 tasks 2 and 3. MountedSpareAmmoPool, never ActorSpareAmmoPool: a mounted
+            // weapon's spare rounds live on the weapon (V6-D6), and handing this the infantry
+            // pool would drain the gunner's rifle magazines to refill a coaxial.
+            //
+            // BEFORE the combat bridge, which captures it. It was constructed forty lines further
+            // down, so the bridge was handed null and StepMountedWeapon returned on its first
+            // line for every human gunner, forever: no player could fire a tank cannon or a
+            // turret while the authority stood fully built beside it (2026-09-23).
+            _mountedWeaponAuthority = new MountedWeaponAuthority(
+                _mountedWeapons, MountedSpareAmmoPool.Instance);
+
             _combat = new ServerCombatBridge(
                 this, ServerActorRegistry.Instance, _combatAuthority, _respawnGate,
                 _mountedWeapons, _mountedWeaponAuthority);
@@ -277,12 +288,6 @@ namespace Ironfront.Net.Unity.Server
             _vehicleInputBridge = new ServerVehicleInputBridge(
                 _vehicleInputAuthority, ServerActorRegistry.Instance, () => _scheduler.CurrentTick,
                 _turretAuthority);
-
-            // V6 tasks 2 and 3. MountedSpareAmmoPool, never ActorSpareAmmoPool: a mounted
-            // weapon's spare rounds live on the weapon (V6-D6), and handing this the infantry
-            // pool would drain the gunner's rifle magazines to refill a coaxial.
-            _mountedWeaponAuthority = new MountedWeaponAuthority(
-                _mountedWeapons, MountedSpareAmmoPool.Instance);
 
             _router.SpawnRequests = this;
             _router.SeatRequests = _seatBridge;
@@ -931,10 +936,59 @@ namespace Ironfront.Net.Unity.Server
                 in viewer, _vehicleWorld, _snapshotIndex, _vehicleView,
                 VehicleSnapshotMessage.MaxBodySize, session.VehicleShedCursor);
 
+            LogDriverVehicleView(session, in viewer);
+
             if (_vehicleView.VehicleCount == 0) return 0;
 
             int written = session.VehicleEncoder.Write(_vehicleBody, _vehicleView);
             return written > 0 ? written : 0;
+        }
+
+        private static bool? _vehicleViewLogging;
+
+        /// <summary>
+        /// About once a second per seated player, when <c>IRONFRONT_LOG_VEHICLE=1</c>: where
+        /// the interest viewer stands, how many vehicles this snapshot carries, and the pose of
+        /// the player's OWN vehicle in it. The server half of the client's
+        /// <c>[veh-correct]</c> line -- together they say whether a stuck predicted vehicle is
+        /// being corrected toward a pose the server never sent.
+        /// </summary>
+        private void LogDriverVehicleView(ClientSession session, in InterestSubject viewer)
+        {
+            _vehicleViewLogging ??=
+                System.Environment.GetEnvironmentVariable("IRONFRONT_LOG_VEHICLE") == "1";
+            if (_vehicleViewLogging != true) return;
+            if (_snapshotIndex % 20 != 0) return;
+            if (!ServerVehicleRegistry.Instance.Registry.TryFindSeatOf(
+                    session.ActorId, out ushort vehicleId, out byte seatIndex))
+                return;
+
+            string own = "absent";
+            for (int i = 0; i < _vehicleView.VehicleCount; i++)
+            {
+                ref VehicleSnapshotEntry e = ref _vehicleView.Vehicles[i];
+                if (e.VehicleId != vehicleId) continue;
+                own = $"({Quantize.UnpackPos(e.PosX):F1},{Quantize.UnpackPos(e.PosZ):F1})";
+                break;
+            }
+
+            string world = "absent";
+            for (int i = 0; i < _vehicleWorld.VehicleCount; i++)
+            {
+                ref VehicleSnapshotEntry e = ref _vehicleWorld.Vehicles[i];
+                if (e.VehicleId != vehicleId) continue;
+                world = $"({Quantize.UnpackPos(e.PosX):F1},{Quantize.UnpackPos(e.PosZ):F1})";
+                break;
+            }
+
+            Debug.Log(
+                $"[veh-view] tick={CurrentTick} actor={session.ActorId} vehicle={vehicleId} "
+                + $"seat={seatIndex} viewer=({Quantize.UnpackPos(viewer.PosX):F1},"
+                + $"{Quantize.UnpackPos(viewer.PosZ):F1}) inView={_vehicleView.VehicleCount}/"
+                + $"{_vehicleWorld.VehicleCount} ownInView={own} ownInWorld={world} "
+                + $"input[accepted={_vehicleInputAuthority.Accepted} stale={_vehicleInputAuthority.RefusedStale} "
+                + $"notDriver={_vehicleInputAuthority.RefusedNotDriver} decayed={_vehicleInputAuthority.DecayedReads} "
+                + $"sinceLast={_vehicleInputAuthority.TicksSinceLastInput(session.ActorId, CurrentTick)}]");
         }
 
         /// <summary>

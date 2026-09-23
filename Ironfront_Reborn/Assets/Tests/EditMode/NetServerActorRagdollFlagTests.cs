@@ -64,6 +64,10 @@ namespace Ironfront.Net.Unity.Server.Tests
             public bool FireCarriedWeapon(float directionX, float directionY, float directionZ)
                 => false;
 
+            public bool FireMountedWeapon() => false;
+
+            public bool DeclareMountedWeapon() => false;
+
             public void GetVelocity(out float x, out float y, out float z)
                 => (x, y, z) = (0f, 0f, 0f);
         }

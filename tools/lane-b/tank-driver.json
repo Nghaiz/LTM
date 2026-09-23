@@ -1,0 +1,16 @@
+{
+  "name": "tank-driver",
+  "note": "A human gunner's tank cannon launches a shell. Dustbowl with -SpawnIndex 3,5 puts the driver 17.6 m from tank 2 at yaw ~315. Walk there, take the seat before the bots are released (30 s after the first player body), then fire. Grade: the server's authoritative Rocket/Shell explosion line appears after 'firing', and UnlaunchedMountedShots stays 0. Before the 2026-09-23 fix the authority booked the shot and launched nothing.",
+  "steps": [
+    { "seconds": 5.0, "yawDegrees": 315, "respawn": true },
+    { "checkpoint": "spawned", "seconds": 1.0, "yawDegrees": 315 },
+    { "checkpoint": "walking-to-tank", "seconds": 4.0, "yawDegrees": 315, "moveZ": 1.0 },
+    { "checkpoint": "at-tank", "seconds": 1.0, "yawDegrees": 315 },
+    { "checkpoint": "seat-requested", "seconds": 3.0, "yawDegrees": 315, "seatToggle": true },
+    { "checkpoint": "seated", "seconds": 2.0, "yawDegrees": 315, "pitchDegrees": 8 },
+    { "checkpoint": "firing", "seconds": 0.5, "yawDegrees": 315, "pitchDegrees": 8, "fire": true },
+    { "checkpoint": "fired-1", "seconds": 5.0, "yawDegrees": 315, "pitchDegrees": 8 },
+    { "checkpoint": "firing-2", "seconds": 0.5, "yawDegrees": 315, "pitchDegrees": 8, "fire": true },
+    { "checkpoint": "done", "seconds": 5.0, "yawDegrees": 315, "pitchDegrees": 8 }
+  ]
+}

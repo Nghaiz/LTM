@@ -104,6 +104,27 @@ namespace Ironfront.Net.Replication.Combat
         /// </param>
         /// <param name="gunnerIsAlive">A corpse's queued input must not fire.</param>
         /// <param name="nowSeconds">The server clock, derived from the tick.</param>
+        /// <summary>
+        /// Starts a reload the moment a mounted weapon's clip is empty, with no key press.
+        /// </summary>
+        /// <remarks>
+        /// The shipped vehicle guns reload themselves: the tank cannon and the turrets carry
+        /// <c>forceAutoReload</c>, and <c>Weapon.Update</c> reloads any empty weapon that allows
+        /// it. This authority only ever reloaded on the Reload BUTTON, which a gunner has no reason
+        /// to press and a single-shell cannon empties on every shot, so a human's tank fired once
+        /// and then answered NoAmmo for the rest of the match (2026-09-23, lane-B tank-after-8).
+        /// BeginReload's own refusals (already reloading, dead, no reserve) are the gate.
+        /// </remarks>
+        private void AutoReloadIfEmpty(
+            ref WeaponRuntimeState state, in WeaponConfig config, bool gunnerIsAlive, float nowSeconds)
+        {
+            if (!config.SpendsAmmo || config.ClipSize == 0 || state.AmmoInClip > 0) return;
+
+            if (ServerReloadPolicy.BeginReload(ref state, in config, gunnerIsAlive, nowSeconds)
+                == ServerReloadPolicy.Rejection.None)
+                ReloadsStarted++;
+        }
+
         public MountedFireResult Step(
             ushort vehicleId, byte seatIndex, in InputFrame frame,
             bool gunnerIsAlive, float nowSeconds)
@@ -122,6 +143,8 @@ namespace Ironfront.Net.Replication.Combat
             bool reloadCompleted = ServerReloadPolicy.CompleteReloadIfElapsed(
                 ref state, in config, nowSeconds, _pool, vehicleId, seatIndex);
             if (reloadCompleted) ReloadsCompleted++;
+
+            AutoReloadIfEmpty(ref state, in config, gunnerIsAlive, nowSeconds);
 
             // 2. A fresh reload intent.
             if (frame.IsPressed(InputButtons.Reload)
@@ -155,6 +178,8 @@ namespace Ironfront.Net.Replication.Combat
             // `ammo--`. The guard on > 0 is separate and covers a clip that is already empty on a
             // weapon whose ClipSize is 0, which must not underflow the byte.
             if (config.SpendsAmmo && state.AmmoInClip > 0) state.AmmoInClip--;
+
+            AutoReloadIfEmpty(ref state, in config, gunnerIsAlive, nowSeconds);
 
             ShotsFired++;
 

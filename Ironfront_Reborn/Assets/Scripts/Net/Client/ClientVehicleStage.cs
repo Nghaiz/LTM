@@ -140,6 +140,15 @@ namespace Ironfront.Net.Unity.Client
             // Installed here rather than from a bootstrap so the seam is wired by the same
             // component that owns the registry it reads. A turret asking before this runs gets
             // no directory and aims locally, which is the offline behaviour and is safe.
+            //
+            // NOT on a server. Every map ships a NetServer and a NetClient, so the server process
+            // runs this Awake too (NetServerBootstrap sets the role first, at order -1000). It
+            // used to overwrite the server's directory and id resolver with the client's, and
+            // when the stripped client half was destroyed, OnDestroy's Clear() took both seams
+            // with it: VehicleIdOf answered 0 for every vehicle, so no human gunner's mounted
+            // weapon could ever be declared, and no tank fired (2026-09-23).
+            if (NetContext.IsServer) return;
+
             _turretDirectory = new ClientTurretDirectory(_registry);
             NetTurretAim.Directory = _turretDirectory;
             NetTurretAim.VehicleIdResolver = ResolveVehicleId;
