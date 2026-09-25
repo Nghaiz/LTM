@@ -109,6 +109,27 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void ReloadAndPendingReleaseArePublishedTogether()
+        {
+            var pool = new ActorSpareAmmoPool();
+            pool.Set(Shooter, Slot, 1);
+            ActorAmmoSource source = ActorAmmoSource.FromSlot(pool, Shooter, Slot);
+            WeaponConfig frag = WeaponCatalog.For(WeaponIds.FRAG);
+            WeaponRuntimeState weapon = WeaponRuntimeState.Loaded(in frag);
+            weapon.Reloading = true;
+            weapon.PendingRelease = true;
+
+            WeaponSnapshotFields fields =
+                SnapshotBuilder.ResolveWeaponFields(in weapon, in frag, in source);
+
+            Assert.Equal(
+                WeaponStateFlags.Reloading | WeaponStateFlags.PendingRelease,
+                fields.StateFlags);
+            Assert.Equal(1, fields.AmmoInClip);
+            Assert.Equal(1, fields.Reserve.Rounds);
+        }
+
+        [Fact]
         public void CaptureCarriesTheResolvedFieldsOntoTheEntry()
         {
             var pool = new ActorSpareAmmoPool();
