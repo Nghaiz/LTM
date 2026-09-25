@@ -217,27 +217,48 @@ namespace Ironfront.Net.Replication.Combat
                 balanceDamage: 55f,
                 dropoffStartMetres: 149f, dropoffEndMetres: 300f, dropoffMinMultiplier: 0.75f);
 
-            // smg.prefab. Fires twice as fast as the rifle and carries less than half the clip -
-            // the placeholder had it at the rifle's 30 rounds and the rifle's cadence.
+            // mk25.prefab. The SIDEARM, and the row the "one press costs two rounds" report was
+            // about. It is a semi-automatic: the prefab authors `auto: 0`.
+            //
+            // This row used to leave `automatic` at its constructor default of true, and nothing
+            // between the two said otherwise. The comment above it named an `smg.prefab` that
+            // does not exist in Assets/Prefab -- the registry maps id 2 to mk25.prefab, whose
+            // numbers (12 rounds, 36 spare, 0.05 s, 0.008 spread, 200 m) this row carries
+            // verbatim -- so the flag read as automatic by accident rather than by measurement.
+            //
+            // Measured 2026-09-25 against this authority with the row as it was: a press held for
+            // three ticks -- an ordinary ~100 ms click -- spent TWO rounds, and a thirty-tick hold
+            // emptied the clip. `Automatic` is the only thing standing between a held trigger and
+            // `Cooldown` (0.05 s, 1.5 ticks at 30 Hz), so leaving it true applies a rifle's rule to
+            // a pistol. `automatic: false` restores the rising-edge rule of handoff section 5.2 --
+            // the condition the phase-10 handoff grades as "a semi-automatic does not double-fire".
             configs[WeaponIds.SIND7] = new WeaponConfig(
                 cooldown: 0.05f, spread: 0.008f, projectilesPerShot: 1, range: 200f,
                 damage: 30f, force: 50f, clipSize: 12, spareAmmo: 36,
                 balanceDamage: 50f,
-                dropoffStartMetres: 99.3f, dropoffEndMetres: 200f, dropoffMinMultiplier: 0.75f);
+                dropoffStartMetres: 99.3f, dropoffEndMetres: 200f, dropoffMinMultiplier: 0.75f,
+                automatic: false);
 
-            // The suppressed variant is NOT a copy: it loses range sooner and floors lower.
+            // The suppressed variant is NOT a copy: it loses range sooner and floors lower. Same
+            // prefab family and the same `auto: 0`, so the same semi-automatic trigger; the two
+            // differ in the projectile's own drop-off end (150 m against 200) and nothing else.
             configs[WeaponIds.SIND7_SUPPRESSED] = new WeaponConfig(
                 cooldown: 0.05f, spread: 0.008f, projectilesPerShot: 1, range: 200f,
                 damage: 30f, force: 50f, clipSize: 12, spareAmmo: 36,
                 balanceDamage: 50f,
-                dropoffStartMetres: 30f, dropoffEndMetres: 150f, dropoffMinMultiplier: 0.6f);
+                dropoffStartMetres: 30f, dropoffEndMetres: 150f, dropoffMinMultiplier: 0.6f,
+                automatic: false);
 
             // shotgun.prefab (ShellLoadedWeapon). TWENTY pellets at 15, not one round at 40.
+            // `auto: 0` in the prefab, so `automatic: false` -- and here the flag is not
+            // cosmetic: left at the default, holding the trigger re-fires the gun every 1.1 s
+            // cooldown instead of stopping at the one shell the press asked for.
             configs[WeaponIds.EAGLE_76] = new WeaponConfig(
                 cooldown: 1.1f, spread: 0.03f, projectilesPerShot: 20, range: 80f,
                 damage: 15f, force: 30f, clipSize: 6, spareAmmo: 30,
                 balanceDamage: 20f,
-                dropoffStartMetres: 0f, dropoffEndMetres: 150f, dropoffMinMultiplier: 0.1f);
+                dropoffStartMetres: 0f, dropoffEndMetres: 150f, dropoffMinMultiplier: 0.1f,
+                automatic: false);
 
             // sniper.prefab (ScopedWeapon). The placeholder had this as an automatic.
             configs[WeaponIds.SL_DEFENDER] = new WeaponConfig(
@@ -256,20 +277,38 @@ namespace Ironfront.Net.Replication.Combat
                 automatic: false);
 
             // RFB.prefab (ScopedWeapon). A fast-firing marksman rifle, not the bolt-action the
-            // placeholder assumed - 0.1 s and 14 rounds against the guessed 1.5 s and 5.
+            // placeholder assumed - 0.1 s and 14 rounds against the guessed 1.5 s and 5. `auto: 0`
+            // in the prefab, so `automatic: false`: at 0.1 s the default let a four-tick press
+            // spend two rounds, which is the sidearm's defect one cooldown longer.
             configs[WeaponIds.RECON_LRR] = new WeaponConfig(
                 cooldown: 0.1f, spread: 0.0003f, projectilesPerShot: 1, range: 1000f,
                 damage: 52f, force: 110f, clipSize: 14, spareAmmo: 84,
                 balanceDamage: 85f,
-                dropoffStartMetres: 36f, dropoffEndMetres: 400f, dropoffMinMultiplier: 0.8f);
+                dropoffStartMetres: 36f, dropoffEndMetres: 400f, dropoffMinMultiplier: 0.8f,
+                automatic: false);
 
-            // automatic: false on all six entries below and on the sniper and the DMR above.
-            // The evidence is each entry's own comment rather than a judgement made here: the
-            // sniper's says the placeholder was wrong to call it an automatic, the DMR's says
-            // "Semi-auto", and a launcher or a throwable with a clip of one is one press per
-            // shot by construction. EAGLE_76 and RECON_LRR are left automatic because nothing
-            // in the assets read so far says otherwise, and guessing at a cadence is a balance
-            // change wearing a netcode commit's clothes.
+            // `automatic` is READ OFF THE PREFAB, not judged here. Every weapon prefab carries the
+            // gun's own `auto` field, `tools/extract_weapon_registry.py` has emitted it as
+            // `weapon.auto` since the first extraction, and the ids whose prefab says 0 are the
+            // two sidearms above, EAGLE_76, RECON_LRR, SL_DEFENDER, and all six entries below.
+            //
+            // The four that used to be wrong were wrong the same way: the flag was taken from each
+            // entry's own prose instead of from the asset, and a row whose comment discusses
+            // cadence without ever saying "semi" simply kept the constructor's default of true.
+            // How far a press gets past the cooldown is what separates them, and it is the whole
+            // difference between a report and a latent fault: the sidearms' 0.05 s is 1.5 ticks, so
+            // an ordinary click reaches a second round; RECON_LRR's 0.1 s needs a slower click
+            // (four ticks); EAGLE_76's 1.1 s needs the trigger held down deliberately. A launcher
+            // or a throwable with a clip of one is one press per shot by construction and its
+            // prefab says 0 as well.
+            //
+            // ONE ENTRY IS NOT READ FROM ITS ASSET, and it is named here rather than left to be
+            // rediscovered: SIGNAL_DMR. dmr.prefab authors `auto: 1` and this row says false, on
+            // the strength of the entry's own "Semi-auto" comment. That disagreement is the one
+            // place this column and the assets part company, it is in the harmless direction --
+            // semi-automatic cannot double-fire -- and resolving it is a cadence decision about a
+            // shipped weapon rather than a fix for the sidearm defect, so it is deliberately left
+            // where it was and booked here.
             //
             // Launched. smaw.prefab -> rocket.prefab (Rocket): damage 1000, balanceDamage 400.
             // The placeholder had this as an 8-pellet shotgun doing 12 a pellet.
@@ -300,12 +339,12 @@ namespace Ironfront.Net.Replication.Combat
             configs[WeaponIds.FRAG] = new WeaponConfig(
                 cooldown: 1.3f, spread: 0.01f, projectilesPerShot: 1, range: 40f,
                 damage: 0f, force: 0f, clipSize: 1, spareAmmo: 1,
-                delivery: WeaponDelivery.Projectile, automatic: false);
+                delivery: WeaponDelivery.Projectile, automatic: false, releaseDelayTicks: 29);
 
             configs[WeaponIds.SPEARHEAD] = new WeaponConfig(
                 cooldown: 1.3f, spread: 0.01f, projectilesPerShot: 1, range: 40f,
                 damage: 0f, force: 0f, clipSize: 1, spareAmmo: 2,
-                delivery: WeaponDelivery.Projectile, automatic: false);
+                delivery: WeaponDelivery.Projectile, automatic: false, releaseDelayTicks: 29);
 
             // Deployables. They do no damage and they ARE still launched, and those two facts
             // were being conflated: both carried Inert, whose clipSize is 0, and
@@ -332,13 +371,13 @@ namespace Ironfront.Net.Replication.Combat
                 cooldown: 0.2f, spread: 0.02f, projectilesPerShot: 1, range: 40f,
                 damage: 0f, force: 0f, clipSize: 1,
                 spareAmmo: WeaponConfig.NoResupplySpareAmmo,
-                delivery: WeaponDelivery.Projectile, automatic: false);
+                delivery: WeaponDelivery.Projectile, automatic: false, releaseDelayTicks: 10);
 
             configs[WeaponIds.MEDIPACK] = new WeaponConfig(
                 cooldown: 0.2f, spread: 0.02f, projectilesPerShot: 1, range: 40f,
                 damage: 0f, force: 0f, clipSize: 1,
                 spareAmmo: WeaponConfig.NoResupplySpareAmmo,
-                delivery: WeaponDelivery.Projectile, automatic: false);
+                delivery: WeaponDelivery.Projectile, automatic: false, releaseDelayTicks: 10);
 
             // Genuinely not launchers, and the assets agree rather than the class name doing the
             // arguing. BINOCS still points at the rifle's tracer prefab, but Binoculars overrides

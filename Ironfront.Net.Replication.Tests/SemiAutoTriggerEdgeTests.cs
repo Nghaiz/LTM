@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Combat;
 using Ironfront.Net.Replication.Movement;
@@ -109,6 +110,124 @@ namespace Ironfront.Net.Replication.Tests
 
             Assert.Equal(afterFirst, fixture.Weapon.ClipSpent(fixture.Config));
             Assert.Equal(1, observer.FramesSeen);
+        }
+
+        /// <summary>
+        /// Every weapon its own prefab marks <c>auto: 0</c> spends exactly one round per press,
+        /// however long the press is -- the sidearm's report, graded against the asset rather
+        /// than against a config written out here.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The defect this is the detector for.</b> A row's <see cref="WeaponConfig.Automatic"/>
+        /// was taken from that row's own prose rather than from the prefab, and a row whose comment
+        /// discussed cadence without ever saying "semi" kept the constructor default of
+        /// <see langword="true"/>. The two SIDEARMS are where that cost a round:
+        /// <c>mk25.prefab</c> authors <c>auto: 0</c>, the catalogue said automatic, and
+        /// <c>Automatic</c> is the only thing standing between a held trigger and
+        /// <see cref="WeaponConfig.Cooldown"/> -- 0.05 s, 1.5 ticks at 30 Hz. A press held for
+        /// three ticks, which is an ordinary ~100 ms click, spent TWO rounds; the same defect sat
+        /// latent on <c>RECON_LRR</c> (0.1 s, two rounds from four ticks) and on <c>EAGLE_76</c>,
+        /// where the 1.1 s cooldown hid it.
+        /// </para>
+        /// <para>
+        /// <b>The prefab is read off disk rather than transcribed into the test.</b> A copy of the
+        /// flag here could agree with the copy in the catalogue while both drifted from the asset,
+        /// which is the whole shape of the bug being closed. Assets/ is invisible to
+        /// <c>dotnet build</c>, so reading the file is the only way to grade it from this side --
+        /// the same reason <c>ClientSemiAutoEdgeTests</c> reads the Unity driver off disk.
+        /// </para>
+        /// <para>
+        /// <b>Three press lengths, and the short one is the point.</b> Three ticks is the click a
+        /// player actually makes and the one that spent two; thirty is the held trigger that used
+        /// to empty the clip. Both are asserted as EXACTLY one rather than as "at most one", so a
+        /// trigger that stops re-arming after the first press cannot pass this by being quiet.
+        /// </para>
+        /// <para>
+        /// <b>RECON_LRR and EAGLE_76 are here because they are the same defect, not neighbours of
+        /// it.</b> Same field, same table, same error, and the asset answers all four the same way.
+        /// <c>SIGNAL_DMR</c> is deliberately NOT here: <c>dmr.prefab</c> authors <c>auto: 1</c>
+        /// while the catalogue says semi, and that opposite-signed disagreement is a cadence
+        /// decision about a shipped weapon rather than this defect -- it is booked in
+        /// <c>WeaponCatalog</c> beside the entry.
+        /// </para>
+        /// </remarks>
+        [Theory]
+        [InlineData(WeaponIds.SIND7, "mk25.prefab")]
+        [InlineData(WeaponIds.SIND7_SUPPRESSED, "mk25 suppressed.prefab")]
+        [InlineData(WeaponIds.EAGLE_76, "shotgun.prefab")]
+        [InlineData(WeaponIds.RECON_LRR, "RFB.prefab")]
+        [InlineData(WeaponIds.SL_DEFENDER, "sniper.prefab")]
+        public void AWeaponItsPrefabCallsSemiAutomaticSpendsOneRoundPerPress(
+            byte weaponId, string prefabFile)
+        {
+            Assert.True(
+                PrefabAuthorsSemiAuto(prefabFile),
+                prefabFile + " no longer authors `auto: 0`, so it is the wrong fixture for this "
+                + "test -- move the id to a prefab that does, or delete the row");
+
+            WeaponConfig config = WeaponCatalog.For(weaponId);
+
+            Assert.False(
+                config.Automatic,
+                WeaponIds.NameOf(weaponId) + " is catalogued automatic while " + prefabFile
+                + " authors auto: 0, which is the defect: `Automatic` bypasses the rising edge and "
+                + "leaves Cooldown as the only limit on a held trigger");
+
+            foreach (int ticks in new[] { 1, 3, 30 })
+            {
+                var fixture = new TriggerFixture(config);
+                int fired = fixture.StepFor(ticks, InputButtons.Fire);
+
+                Assert.True(
+                    fired == 1,
+                    $"{WeaponIds.NameOf(weaponId)} fired {fired} time(s) over a {ticks}-tick press, "
+                    + $"at a {config.Cooldown} s cooldown");
+                Assert.Equal(1, fixture.Weapon.ClipSpent(fixture.Config));
+            }
+        }
+
+        /// <summary>
+        /// Whether a weapon prefab's <c>Weapon.Configuration</c> authors <c>auto: 0</c>.
+        /// </summary>
+        /// <remarks>
+        /// Exactly one <c>auto:</c> line per weapon prefab, asserted rather than assumed: a prefab
+        /// that grew a second one would otherwise be graded on whichever came first, and the field
+        /// is a <c>bool</c> written as <c>0</c>/<c>1</c> so anything else is reported rather than
+        /// read as false.
+        /// </remarks>
+        private static bool PrefabAuthorsSemiAuto(string prefabFile)
+        {
+            string path = Path.Combine(
+                RepoRoot(), "Ironfront_Reborn", "Assets", "Prefab", prefabFile);
+
+            Assert.True(File.Exists(path), "no such prefab: " + path);
+
+            var flags = new System.Collections.Generic.List<string>();
+
+            foreach (string line in File.ReadAllLines(path))
+            {
+                string trimmed = line.TrimStart();
+                if (trimmed.StartsWith("auto:", StringComparison.Ordinal)) flags.Add(trimmed);
+            }
+
+            Assert.Single(flags);
+            Assert.True(
+                flags[0] == "auto: 0" || flags[0] == "auto: 1",
+                prefabFile + " authors `" + flags[0] + "`, which is not a flag this can read");
+
+            return flags[0] == "auto: 0";
+        }
+
+        /// <summary>The repository root, found by walking up to the solution file.</summary>
+        private static string RepoRoot()
+        {
+            DirectoryInfo? dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null && !File.Exists(Path.Combine(dir.FullName, "Ironfront.sln")))
+                dir = dir.Parent;
+
+            Assert.True(dir != null, "could not find Ironfront.sln above the test binary");
+            return dir!.FullName;
         }
 
         /// <summary>
