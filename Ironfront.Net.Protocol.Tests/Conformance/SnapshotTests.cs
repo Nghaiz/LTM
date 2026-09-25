@@ -169,7 +169,8 @@ namespace Ironfront.Net.Protocol.Tests
                 StateFlags = ActorStateFlags.IsAlive | ActorStateFlags.IsAiming,
                 Health = 100,
                 WeaponId = 200, AmmoInClip = 30,
-                SpareAmmoEncoded = 0x0123, WeaponStateFlags = WeaponStateFlags.Reloading,
+                SpareAmmoEncoded = 0x0123,
+                WeaponStateFlags = WeaponStateFlags.Reloading | WeaponStateFlags.PendingRelease,
                 Team = 1,
             };
 
