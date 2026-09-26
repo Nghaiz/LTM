@@ -286,9 +286,25 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Contains("catch (Exception exception)", bridge, StringComparison.Ordinal);
             Assert.Contains("Destroy(instance)", weapon, StringComparison.Ordinal);
 
-            // The server tick is the sole delay owner. Keeping a second timer in the gameplay
-            // weapon reproduces the intermittent double-delay / missing-model bug.
-            Assert.DoesNotContain("releaseTick", throwable, StringComparison.Ordinal);
+            // The server tick is the sole delay owner for a NETWORKED PLAYER's throw. A second
+            // timer on that path reproduces the intermittent double-delay / missing-model bug, so
+            // the authority's release must neither arm nor consult the engine's schedule, and must
+            // not route through Fire. The schedule itself survives for BOTS only -- their AI fires
+            // the engine weapon directly and has no authority transaction -- and it may be armed
+            // in exactly one place, Fire's server branch, which a claimed body never reaches.
+            // Deleting it outright left every bot on a dedicated server unable to throw.
+            int approvedAt = throwable.IndexOf("public bool ReleaseApprovedByServer", StringComparison.Ordinal);
+            int approvedEnd = throwable.IndexOf("public override bool CanBeAimed", approvedAt, StringComparison.Ordinal);
+            string approved = throwable.Substring(approvedAt, approvedEnd - approvedAt);
+            Assert.DoesNotContain("releaseTick", approved, StringComparison.Ordinal);
+            Assert.DoesNotContain("Fire(", approved, StringComparison.Ordinal);
+
+            const string arm = "releaseTick = NetContext.CurrentTick";
+            Assert.Equal(1, throwable.Split(new[] { arm }, StringSplitOptions.None).Length - 1);
+            int serverBranch = throwable.IndexOf("if (NetContext.IsServer)", StringComparison.Ordinal);
+            int animatorBranch = throwable.IndexOf("else if (animator != null)", serverBranch, StringComparison.Ordinal);
+            int armedAt = throwable.IndexOf(arm, StringComparison.Ordinal);
+            Assert.InRange(armedAt, serverBranch, animatorBranch);
         }
 
         [Fact]
