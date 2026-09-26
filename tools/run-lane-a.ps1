@@ -99,6 +99,15 @@ try {
 
     Write-Host "[lane-a] $Tag : $Clients client(s) / $Seconds s / server lifetime ${ServerTimeoutSeconds}s / sim=$Sim / loadSeed=$LoadSeed simSeed=$SimSeed"
 
+    # --------------------------------------------------------------- the harness build
+    # The harness runs from its Release DLL below, which nothing else rebuilds. A stale DLL runs
+    # yesterday's harness against today's server and reports it as a clean result: on 2026-09-27 a
+    # fixed C_SPAWN_REQUEST body sat in source while the DLL still sent the empty one, and the run
+    # came back 8/8 held with zero trigger ticks. Building here costs seconds when nothing changed.
+    & dotnet build (Join-Path $repoRoot "Ironfront.Net.LoadHarness/Ironfront.Net.LoadHarness.csproj") `
+        -c Release --nologo -v quiet
+    if ($LASTEXITCODE -ne 0) { throw "dotnet build of the harness failed ($LASTEXITCODE)." }
+
     # --------------------------------------------------------------- the server
     $env:IRONFRONT_LANEB_ROLE             = "server"
     $env:IRONFRONT_GAMESERVER_TRANSPORT   = "udp"

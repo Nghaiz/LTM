@@ -520,11 +520,39 @@ namespace Ironfront.Net.LoadHarness
                 reliable: true);
         }
 
-        /// <summary>Frames <c>C_SPAWN_REQUEST</c>. The body carries no fields.</summary>
+        /// <summary>
+        /// The loadout every synthetic client deploys with: a rifle, a sidearm, a frag and a
+        /// medipack, so a combat run carries a throwable as well as a gun.
+        /// </summary>
+        public static readonly SpawnRequestMessage HarnessLoadout = new SpawnRequestMessage(
+            WeaponIds.RK44, WeaponIds.SIND7, WeaponIds.FRAG, WeaponIds.MEDIPACK, WeaponIds.NONE);
+
+        /// <summary>
+        /// Writes the <c>C_SPAWN_REQUEST</c> body into <paramref name="destination"/> and returns
+        /// its length, or -1 when it does not fit.
+        /// </summary>
+        /// <remarks>
+        /// The body was EMPTY until 2026-09-27, which was right when this harness was written and
+        /// silently wrong from X-11 (2026-09-03) on: the request gained a loadout, and the server's
+        /// router drops a body <c>SpawnRequestMessage.TryParse</c> refuses. Every synthetic client
+        /// then joined, asked to deploy, and never got a body -- a lane-A combat run held 8/8
+        /// clients to the end with zero trigger ticks and zero vehicle snapshots.
+        /// </remarks>
+        public static int BuildSpawnRequestBody(Span<byte> destination)
+            => HarnessLoadout.Write(destination);
+
+        private readonly byte[] _spawnRequestBody = new byte[SpawnRequestMessage.Size];
+
+        /// <summary>Frames <c>C_SPAWN_REQUEST</c> with <see cref="HarnessLoadout"/>.</summary>
         private void SendSpawnRequest()
         {
+            int length = BuildSpawnRequestBody(_spawnRequestBody);
+            if (length < 0) return;
+
             var writer = new PayloadFrameWriter(_reliablePayload, ChannelId.ReliableOrdered);
-            if (!writer.WriteMessage(ClientMessageType.SpawnRequest, ReadOnlySpan<byte>.Empty))
+            if (!writer.WriteMessage(
+                    ClientMessageType.SpawnRequest,
+                    new ReadOnlySpan<byte>(_spawnRequestBody, 0, length)))
                 return;
             if (!writer.TryFinish(out int total)) return;
 
