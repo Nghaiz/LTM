@@ -172,6 +172,16 @@ namespace Ironfront.Net.Unity.Server
         public NetServerActor Actor { get; set; }
 
         /// <summary>
+        /// The most recent input frame the server accepted from this player.
+        /// </summary>
+        /// <remarks>
+        /// A delayed throw is released ticks after its trigger, from no input frame of its own, so
+        /// its origin reads the thrower's posture from here: <c>ShotOrigin</c> lowers the eye for
+        /// a held Prone button, which a default frame never carries.
+        /// </remarks>
+        public InputFrame LastAcceptedFrame { get; private set; }
+
+        /// <summary>
         /// True from construction until this connection's own first successful deploy.
         /// </summary>
         /// <remarks>
@@ -425,6 +435,7 @@ namespace Ironfront.Net.Unity.Server
                 Actor.PitchDegrees = frame.PitchDegrees;
             }
 
+            LastAcceptedFrame = frame;
             _combat.StepCombat(this, frameTick, in frame);
         }
 

@@ -416,7 +416,9 @@ namespace Ironfront.Net.Replication.Combat
 
                 return new CombatTickResult(
                     ToFireRejection(delayed), fired: false, hitCount: 0,
-                    weaponChanged: began,
+                    // A reservation changes the weapon state; so does a reload that completed
+                    // earlier in this same Step, whether or not the throw was then refused.
+                    weaponChanged: began || weapon.AmmoInClip != ammoBefore,
                     victimDied: false, deadActorId: 0, in aim, in origin,
                     launchedProjectile: false,
                     effectiveTriggerDown: pull.Effective,
