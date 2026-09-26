@@ -216,7 +216,11 @@ namespace Ironfront.Net.Unity.Server
                     ref session.Weapon, in weapon, tick, in ammo);
                 if (!transition.Released) continue;
 
-                Vec3 origin = ServerCombatAuthority.ShotOrigin(in session.State, default);
+                // The thrower's posture now, not at the trigger: the release is ticks later and
+                // has no frame of its own. A default frame would drop a held Prone button and
+                // release a prone player's throw from standing eye height.
+                InputFrame posture = player.LastAcceptedFrame;
+                Vec3 origin = ServerCombatAuthority.ShotOrigin(in session.State, in posture);
                 Vec3 aim = transition.Aim;
                 bool launched = false;
                 try

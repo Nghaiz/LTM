@@ -43,6 +43,29 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(0, h.Weapon.AmmoInClip);
         }
 
+        [Fact]
+        public void AReloadCompletingInTheStepOfARefusedThrowStillReportsTheWeaponChanged()
+        {
+            var h = new Harness(WeaponIds.FRAG);
+
+            // The clip is empty and its reload has run long enough to complete this step, while
+            // the last release is still inside the 1.3 s cooldown -- so the throw is refused
+            // AFTER the reload refilled the clip. Every other branch reports that clip change;
+            // the delayed branch used to report only whether a throw began.
+            h.Weapon.AmmoInClip = 0;
+            h.Weapon.Reloading = true;
+            h.Weapon.ReloadStartedAt = 0f;
+            h.Weapon.LastThrowableReleaseTick = 2999;
+            h.Weapon.HasThrowableReleaseTick = true;
+
+            CombatTickResult result = h.Step(InputButtons.Fire, inputTick: 10, serverTick: 3000);
+
+            Assert.False(result.ReleaseBegan);
+            Assert.Equal(FireRejection.OnCooldown, result.Rejection);
+            Assert.Equal(1, h.Weapon.AmmoInClip);
+            Assert.True(result.WeaponChanged);
+        }
+
         private sealed class Harness
         {
             private const ushort Shooter = 3;

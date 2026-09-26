@@ -308,6 +308,38 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         [Fact]
+        public void ADelayedReleaseTakesItsPostureFromTheLatestAcceptedFrame()
+        {
+            // The rule the wiring below exists for: a held Prone button lowers the eye.
+            MoveState standing = MoveState.AtRest(Vec3.Zero);
+            InputFrame prone = InputFrame.FromFloats(0f, 0f, 0f, 0f, InputButtons.Prone);
+            Assert.True(ServerCombatAuthority.ShotOrigin(in standing, in prone).Y
+                        < ServerCombatAuthority.ShotOrigin(in standing, default).Y);
+
+            string bridge = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/Net/Server/ServerCombatBridge.cs");
+            string player = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/Net/Server/ServerPlayer.cs");
+
+            // The release fires ticks after the trigger and has no input frame of its own. A
+            // default frame carries no Prone bit, so a prone player's throw left from standing
+            // eye height; the posture is now the latest frame the server accepted.
+            Assert.Contains("InputFrame posture = player.LastAcceptedFrame;", bridge,
+                StringComparison.Ordinal);
+            Assert.Contains("ShotOrigin(in session.State, in posture)", bridge,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain("ShotOrigin(in session.State, default)", bridge,
+                StringComparison.Ordinal);
+
+            // Recorded before combat steps, so the frame that pressed Prone is already the
+            // posture a release on that same tick reads.
+            int recorded = player.IndexOf("LastAcceptedFrame = frame;", StringComparison.Ordinal);
+            int stepped = player.IndexOf("_combat.StepCombat(this, frameTick, in frame);",
+                StringComparison.Ordinal);
+            Assert.InRange(recorded, 0, stepped);
+        }
+
+        [Fact]
         public void NetworkThrowableAnimationCannotMutateInventory()
         {
             string throwable = ReadUnitySource(
