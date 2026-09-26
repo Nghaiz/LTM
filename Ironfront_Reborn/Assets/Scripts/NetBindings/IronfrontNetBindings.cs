@@ -732,6 +732,12 @@ namespace Ironfront.Net.Unity.Bindings
             Weapon weapon = _actor.activeWeapon;
             if (weapon == null) return;
 
+            // The numbers are the CARRIED weapon's session state. A seated actor's activeWeapon
+            // is the seat's mounted weapon, whose clip the mounted authority owns; StepCombat
+            // normally leaves before the mirror for such a seat, but not when the mounted weapon
+            // failed to declare, and a turret must never be handed a rifle's clip.
+            if (_actor.IsSeated() && _actor.seat != null && weapon == _actor.seat.weapon) return;
+
             weapon.MirrorAuthorityState(ammoInClip, unholstered, elapsedSinceLastShot);
         }
 
