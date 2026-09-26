@@ -61,8 +61,18 @@ namespace Ironfront.Net.Unity.Server.Tests
 
             public void EquipLoadout() { }
 
-            public bool FireCarriedWeapon(float directionX, float directionY, float directionZ)
+            public bool FireCarriedWeapon(
+                float originX, float originY, float originZ,
+                float directionX, float directionY, float directionZ)
                 => false;
+
+            public bool ReleaseCarriedThrowable(
+                float originX, float originY, float originZ,
+                float directionX, float directionY, float directionZ)
+                => false;
+
+            public void MirrorAuthorityWeaponState(
+                int ammoInClip, bool unholstered, float elapsedSinceLastShot) { }
 
             public bool FireMountedWeapon() => false;
 

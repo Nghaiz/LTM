@@ -60,6 +60,12 @@ namespace Ironfront.Net.Replication.Combat
         public readonly bool LaunchedProjectile;
 
         /// <summary>
+        /// True when this input reserved a delayed throwable; no ammo or projectile has been
+        /// committed yet.
+        /// </summary>
+        public readonly bool ReleaseBegan;
+
+        /// <summary>
         /// The effective trigger after section 5.1's gates - NOT the raw Fire bit.
         /// </summary>
         /// <remarks>
@@ -77,7 +83,8 @@ namespace Ironfront.Net.Replication.Combat
             bool victimDied, ushort deadActorId, in Vec3 aimDirection, in Vec3 origin,
             bool launchedProjectile = false,
             bool effectiveTriggerDown = false,
-            bool blockedBySprint = false)
+            bool blockedBySprint = false,
+            bool releaseBegan = false)
         {
             EffectiveTriggerDown = effectiveTriggerDown;
             BlockedBySprint = blockedBySprint;
@@ -90,6 +97,7 @@ namespace Ironfront.Net.Replication.Combat
             AimDirection = aimDirection;
             Origin = origin;
             LaunchedProjectile = launchedProjectile;
+            ReleaseBegan = releaseBegan;
         }
     }
 
@@ -270,7 +278,7 @@ namespace Ironfront.Net.Replication.Combat
                 ref weapon, ref trigger, in config, shooterActorId, in frame, in state, targets,
                 new ActorFireEligibility(shooterIsAlive, isDeployed: true),
                 ActorAmmoSource.Unlimited(shooterActorId),
-                nowSeconds, smoothedRttMs, currentTick, hits);
+                nowSeconds, smoothedRttMs, currentTick, hits, currentTick);
         }
 
         /// <summary>
@@ -314,7 +322,8 @@ namespace Ironfront.Net.Replication.Combat
             float nowSeconds,
             float smoothedRttMs,
             uint currentTick,
-            Span<HitResult> hits)
+            Span<HitResult> hits,
+            uint inputTick = 0)
         {
             byte ammoBefore = weapon.AmmoInClip;
             bool shooterIsAlive = actor.IsAlive;
@@ -397,6 +406,24 @@ namespace Ironfront.Net.Replication.Combat
             //    criterion 2 is graded on.
             Vec3 aim = AimDirection(frame.YawDegrees, frame.PitchDegrees);
 
+            // A carried throwable reserves one use now and commits it on the authored release
+            // tick. Launchers have no delay and continue through the immediate projectile path.
+            if (config.HasDelayedRelease)
+            {
+                ThrowableRejection delayed = ThrowableLifecycle.TryBegin(
+                    ref weapon, in config, inputTick, currentTick, in aim);
+                bool began = delayed == ThrowableRejection.None;
+
+                return new CombatTickResult(
+                    ToFireRejection(delayed), fired: false, hitCount: 0,
+                    weaponChanged: began,
+                    victimDied: false, deadActorId: 0, in aim, in origin,
+                    launchedProjectile: false,
+                    effectiveTriggerDown: pull.Effective,
+                    blockedBySprint: blockedBySprint,
+                    releaseBegan: began);
+            }
+
             // 4a. A weapon that LAUNCHES does not sweep. Ledger X-42: the same trigger rules
             //     apply -- CheckCanFire is shared, not restated -- but the flight and the
             //     detonation belong to the engine (V7-D1), so this path spends the round and
@@ -472,6 +499,31 @@ namespace Ironfront.Net.Replication.Combat
                 launchedProjectile: false,
                 effectiveTriggerDown: pull.Effective,
                 blockedBySprint: blockedBySprint);
+        }
+
+        /// <summary>Advances a delayed throwable independently of input packet arrival.</summary>
+        public ThrowableTransition AdvancePendingRelease(
+            ref WeaponRuntimeState weapon, in WeaponConfig config,
+            uint serverTick, in ActorAmmoSource ammo)
+            => ThrowableLifecycle.TryRelease(ref weapon, in config, serverTick, in ammo);
+
+        /// <summary>Records a delayed projectile only after the engine confirms its spawn.</summary>
+        public void RecordDelayedProjectileLaunch() => ProjectilesLaunched++;
+
+        private static FireRejection ToFireRejection(ThrowableRejection rejection)
+        {
+            switch (rejection)
+            {
+                case ThrowableRejection.None: return FireRejection.None;
+                case ThrowableRejection.Holstered: return FireRejection.Holstered;
+                case ThrowableRejection.Reloading: return FireRejection.Reloading;
+                case ThrowableRejection.NoAmmo: return FireRejection.NoAmmo;
+                case ThrowableRejection.OnCooldown:
+                case ThrowableRejection.AlreadyPending:
+                    return FireRejection.OnCooldown;
+                default:
+                    return FireRejection.None;
+            }
         }
 
         /// <summary>

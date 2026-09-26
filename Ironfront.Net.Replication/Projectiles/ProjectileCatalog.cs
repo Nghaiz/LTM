@@ -19,7 +19,7 @@ namespace Ironfront.Net.Replication.Projectiles
     public sealed class ProjectileCatalog
     {
         /// <summary>One past the highest declared <see cref="ProjectileKind"/>.</summary>
-        public const int KindCount = (int)ProjectileKind.Bullet + 1;
+        public const int KindCount = (int)ProjectileKind.Spearhead + 1;
 
         private readonly ProjectileConfig[] _configs = new ProjectileConfig[KindCount];
         private readonly bool[] _populated = new bool[KindCount];

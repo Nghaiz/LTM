@@ -45,7 +45,24 @@ guess.
 
 ---
 
-## 4. The match misbehaves
+## 4. Throwables disagree or disappear
+
+Before looking at the match layer, distinguish a throwable presentation fault from an
+inventory fault. Frag, spearhead, ammo bag, and medipack use one delayed-release state
+machine: the client may animate immediately, but only the server may spend the use and
+create the projectile.
+
+| Symptom | Common cause | How to confirm |
+|---|---|---|
+| The hand/HUD briefly shows an extra throwable | A snapshot acknowledgement was applied without replaying an unacknowledged trigger | In a lane-B combat checkpoint, compare `releasePending`, `serverReleasePending`, `predictedCommands`, `ammoInClip`, and `serverAmmoInClip`. A command newer than `lastProcessedInputTick` must remain replayed; once acknowledged, the server pending bit is the only pending source |
+| Throwing and then reloading does not reduce the total | Unity's legacy `Shoot`/`Reload` path mutated a second inventory beside the authoritative one | During a network match, `ThrowableWeapon.SpawnThrowable` must be presentation-only. Loaded and reserve values must arrive together from `ClientCombatState`; their settled sum decreases by exactly one per successful release |
+| A throw spends ammo but no object appears | The server failed to instantiate the configured prefab, or the client lacks the announced projectile kind | Check `failedThrowableLaunches` first: a non-zero value means the server rolled the inventory transaction back. Check `unrenderableKinds` next: a non-zero value means the release exists but the scene projectile catalogue is incomplete |
+| Spearhead appears as a frag grenade | Projectile identity was inferred only from the shared `GrenadeProjectile` component | `ProjectileNetAnnouncer.TryKindForThrowableWeapon` must map the carried weapon id to `ProjectileKind.Spearhead`, and both shipped scene catalogues must contain index 7 |
+| Switching weapon or dying just before release still throws | Pending release was not cancelled with the session transition | The next snapshot must have `releasePending=false`, no increment in `projectilesSpawned`, and the held use restored. Cancellation never spends reserve |
+
+---
+
+## 5. The match misbehaves
 
 | Symptom | Common cause | How to confirm |
 |---|---|---|
@@ -57,7 +74,7 @@ guess.
 
 ---
 
-## 5. Nobody can join
+## 6. Nobody can join
 
 | Symptom | Common cause | How to confirm |
 |---|---|---|
@@ -67,7 +84,7 @@ guess.
 
 ---
 
-## 6. What this library cannot tell you
+## 7. What this library cannot tell you
 
 Being explicit about the edges, because the alternative is a number in a report that
 nobody can reproduce.

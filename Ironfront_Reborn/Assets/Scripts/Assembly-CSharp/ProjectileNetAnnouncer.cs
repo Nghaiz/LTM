@@ -21,7 +21,10 @@ using UnityEngine;
 /// <c>weaponId → ProjectileKind</c> table would be a second source of truth for something the
 /// prefab already states unambiguously: a prefab carrying a <c>JavelinMissile</c> IS a guided
 /// missile. It also means nothing has to be assigned in the Editor for replication to work, so
-/// this cannot silently do nothing because a table row was missed.
+/// this cannot silently do nothing because a table row was missed. The one pair of weapons the
+/// prefab cannot separate -- the frag and the spearhead, both <c>GrenadeProjectile</c> -- is
+/// refined from the weapon at the call site instead; see <see cref="KindOf(Projectile, Actor)"/>
+/// for why that is not the table this paragraph argues against.
 /// </para>
 /// </remarks>
 public static class ProjectileNetAnnouncer
@@ -39,7 +42,7 @@ public static class ProjectileNetAnnouncer
 		if (bridge == null) return;
 
 		ushort actorId = ActorIdOf(source);
-		ProjectileKind kind = KindOf(projectile);
+		ProjectileKind kind = KindOf(projectile, source);
 
 		// The server learns each kind's numbers from the first prefab of that kind it fires,
 		// rather than from an array somebody has to remember to fill in. See
@@ -102,11 +105,21 @@ public static class ProjectileNetAnnouncer
 	/// Which <see cref="ProjectileKind"/> this prefab is, by its component type.
 	/// </summary>
 	/// <remarks>
+	/// <para>
 	/// Ordered most-derived first, because the hierarchy is
 	/// <c>JavelinMissile : Rocket : ExplodingProjectile : Projectile</c> and
 	/// <c>Ammobox</c>/<c>Medipack</c>/<c>GrenadeProjectile</c> all derive from
 	/// <c>Projectile</c> — testing the base first would report every projectile in the game as
 	/// a bullet.
+	/// </para>
+	/// <para>
+	/// <b>This answers "what class of thing is it", and for a thrown grenade that is not yet the
+	/// whole answer.</b> Both <c>Frag Grenade.prefab</c> and <c>Spearhead Grenade.prefab</c> carry
+	/// <c>GrenadeProjectile</c>, so both read as <see cref="ProjectileKind.Grenade"/> here and the
+	/// weapon is what separates them — see <see cref="KindOf(Projectile, Actor)"/>. A reader that
+	/// only asks about the class (does it deploy, does it guide) is answered correctly by this
+	/// overload and does not need the other one; <c>ProjectileNetSync</c> is such a reader.
+	/// </para>
 	/// </remarks>
 	public static ProjectileKind KindOf(Projectile projectile)
 	{
@@ -121,6 +134,66 @@ public static class ProjectileNetAnnouncer
 		if (projectile is ExplodingProjectile) return ProjectileKind.Rocket;
 
 		return ProjectileKind.Bullet;
+	}
+
+	/// <summary>
+	/// The kind a launch of <paramref name="projectile"/> by <paramref name="source"/> announces
+	/// as: the prefab's class, refined by the weapon when the class cannot tell two weapons apart.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>The refinement exists for exactly one pair, and only the weapon can make it.</b> The
+	/// game ships two thrown grenades — <c>WeaponIds.FRAG</c> and <c>WeaponIds.SPEARHEAD</c> — whose
+	/// projectile prefabs are different objects with different meshes but the same
+	/// <c>GrenadeProjectile</c> script. The kind is the only projectile identity
+	/// <c>S_PROJECTILE_SPAWN</c> carries, so with both mapped to
+	/// <see cref="ProjectileKind.Grenade"/> every client drew the frag prefab for a spearhead
+	/// throw: "the object that appears is the same for both".
+	/// </para>
+	/// <para>
+	/// <b>This is not the <c>weaponId → kind</c> table the class remark argues against, and it is
+	/// worth saying why.</b> That objection is to a table restating what a prefab already states —
+	/// and for the other six kinds the prefab still does state it, which is why they are read off
+	/// the component here and not looked up. For these two the prefab states nothing that
+	/// separates them; the weapon is not a second source of truth but the only one. Nothing is
+	/// authored for it to work, so the failure mode the argument names cannot occur.
+	/// </para>
+	/// </remarks>
+	public static ProjectileKind KindOf(Projectile projectile, Actor source)
+	{
+		if (TryKindForThrowableWeapon(ActiveWeaponIdOf(source), out ProjectileKind kind))
+			return kind;
+
+		return KindOf(projectile);
+	}
+
+	/// <summary>
+	/// The complete identity map for carried throwables. Their weapon id is committed at the
+	/// release boundary and is the only identity that survives across otherwise shared scripts.
+	/// </summary>
+	public static bool TryKindForThrowableWeapon(byte weaponId, out ProjectileKind kind)
+	{
+		switch (weaponId)
+		{
+			case WeaponIds.FRAG: kind = ProjectileKind.Grenade; return true;
+			case WeaponIds.SPEARHEAD: kind = ProjectileKind.Spearhead; return true;
+			case WeaponIds.AMMO_BAG: kind = ProjectileKind.AmmoBag; return true;
+			case WeaponIds.MEDIPACK: kind = ProjectileKind.Medipack; return true;
+			default: kind = default; return false;
+		}
+	}
+
+	/// <summary>
+	/// The registry id of the weapon an actor is holding, or <see cref="WeaponIds.NONE"/> when it
+	/// holds nothing. The id the weapon registry assigned, not its slot: a slot says where a
+	/// weapon sits in a loadout and the same slot holds different guns.
+	/// </summary>
+	private static byte ActiveWeaponIdOf(Actor source)
+	{
+		if (source == null) return WeaponIds.NONE;
+
+		Weapon weapon = source.activeWeapon;
+		return weapon != null ? weapon.NetworkId : WeaponIds.NONE;
 	}
 
 	/// <summary>

@@ -261,6 +261,35 @@ namespace Ironfront.Net.Protocol
         /// before anything sent it.
         /// </summary>
         Bullet        = 6,
+        /// <summary>
+        /// Thrown spearhead grenade (<c>Spearhead Grenade.prefab</c>, a
+        /// <c>GrenadeProjectile</c>). Appended 2026-09-25.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A component type could not separate the two grenades, and the kind is the only
+        /// projectile identity the wire has.</b> <c>frag.prefab</c> and <c>spearhead.prefab</c>
+        /// point at different projectile prefabs — <c>Frag Grenade.prefab</c> and
+        /// <c>Spearhead Grenade.prefab</c>, different meshes — but both carry the same
+        /// <c>GrenadeProjectile</c> script, so <c>ProjectileNetAnnouncer.KindOf</c> folded them
+        /// onto <see cref="Grenade"/> and every client drew the frag for both. The player's
+        /// report: "there are two types of grenades, and the object that appears is the same for
+        /// both". The distinction is real in the assets and was only ever lost on the wire.
+        /// </para>
+        /// <para>
+        /// <b>Which of the two a throw is, is a fact about the WEAPON rather than about the
+        /// prefab</b> — see <c>ProjectileNetAnnouncer.KindOf(Projectile, Actor)</c> — because that
+        /// is the only place the difference exists. Nothing has to be authored for it to work.
+        /// </para>
+        /// <para>
+        /// <b>Appending is not a wire change.</b> The field stays a <c>u8</c>, nothing behind it
+        /// misaligns, and <see cref="ProtocolConstants.PROTOCOL_VERSION"/> is untouched — the same
+        /// argument V7 made for <see cref="Medipack"/> and <see cref="Bullet"/>. What a client
+        /// older than this value sees is <c>PrefabFor</c> returning null and the throw counted in
+        /// <c>UnrenderableKinds</c>, which is why both sides ship together.
+        /// </para>
+        /// </remarks>
+        Spearhead     = 7,
     }
 
     /// <summary>Why a vehicle left the world. Carried by <c>S_VEHICLE_DESPAWN</c>.</summary>

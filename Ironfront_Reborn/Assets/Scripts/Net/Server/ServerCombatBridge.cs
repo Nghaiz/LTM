@@ -83,7 +83,7 @@ namespace Ironfront.Net.Unity.Server
         /// <summary>
         /// Steps combat for one accepted frame and emits whatever it produced.
         /// </summary>
-        public void StepCombat(ServerPlayer player, in InputFrame frame)
+        public void StepCombat(ServerPlayer player, uint frameTick, in InputFrame frame)
         {
             NetServerActor actor = player.Actor;
             if (actor == null) return;
@@ -122,6 +122,16 @@ namespace Ironfront.Net.Unity.Server
 
             BuildTargets(tick);
 
+            // Before the authority resolves anything, and after the weapon switch above has
+            // settled which gun the body is holding: the engine's own counters are made to agree
+            // with the session's, so the launch below cannot be refused by a gun that thinks it
+            // is empty or still holstered. See IGameplayActorSource.MirrorAuthorityWeaponState
+            // for what the two copies cost while they were free to disagree.
+            actor.MirrorAuthorityWeaponState(
+                session.Weapon.AmmoInClip,
+                session.Weapon.Unholstered,
+                now - session.Weapon.LastFiredTime);
+
             // Hoisted to a local because WeaponConfig is a property since phase-V2 (D9) and an
             // explicit `in` argument needs an lvalue. This IS the struct copy that decision
             // priced: ~48 bytes once per accepted frame per player, no allocation. The escape
@@ -150,7 +160,8 @@ namespace Ironfront.Net.Unity.Server
                 now,
                 SmoothedRttMs(session.ConnectionId),
                 tick,
-                _hits);
+                _hits,
+                frameTick);
 
             // The line that closes the reported bug: the server's clip is now the actor's clip,
             // so a reload or a shot changes SnapshotField.Weapon and the client's _reloadPending
@@ -185,6 +196,65 @@ namespace Ironfront.Net.Unity.Server
 
             if (result.VictimDied) EmitDeath(session, in result);
         }
+
+        /// <summary>
+        /// Advances all delayed carried-weapon releases once for this simulation tick.
+        /// Inventory commit, engine spawn and rollback are kept in this one transaction.
+        /// </summary>
+        public void AdvancePendingActions(IReadOnlyList<ServerPlayer> players, uint tick)
+        {
+            for (int i = 0; i < players.Count; i++)
+            {
+                ServerPlayer player = players[i];
+                ClientSession session = player.Session;
+                if (!session.Weapon.PendingRelease) continue;
+
+                NetServerActor actor = player.Actor;
+                WeaponConfig weapon = session.WeaponConfig;
+                ActorAmmoSource ammo = session.AmmoSourceFrom(_loop.SpareAmmo);
+                ThrowableTransition transition = _authority.AdvancePendingRelease(
+                    ref session.Weapon, in weapon, tick, in ammo);
+                if (!transition.Released) continue;
+
+                Vec3 origin = ServerCombatAuthority.ShotOrigin(in session.State, default);
+                Vec3 aim = transition.Aim;
+                bool launched = false;
+                try
+                {
+                    launched = actor != null && actor.ReleaseCarriedThrowable(
+                        origin.X, origin.Y, origin.Z, aim.X, aim.Y, aim.Z);
+                }
+                catch (Exception exception)
+                {
+                    // Treat an engine/catalogue exception as the same transactional failure as
+                    // a false return. SpawnProjectile destroys its partial object before this
+                    // point; the inventory rollback below restores the held use.
+                    Debug.LogException(exception);
+                }
+
+                if (!launched)
+                {
+                    ThrowableLifecycle.RollbackRelease(
+                        ref session.Weapon, in transition, in ammo);
+                    FailedThrowableLaunches++;
+                    Debug.LogError(
+                        $"[net] actor {session.ActorId} reached its throwable release tick but "
+                        + "the engine created no projectile; the inventory transaction was "
+                        + "rolled back. Further failures are counted in FailedThrowableLaunches.");
+                }
+                else
+                {
+                    _authority.RecordDelayedProjectileLaunch();
+                    EmitWeaponFire(session, actor, in aim);
+                }
+
+                if (actor != null)
+                    PublishWeaponState(session, actor, in weapon, in ammo);
+            }
+        }
+
+        /// <summary>Due throwable releases the engine refused to instantiate.</summary>
+        public long FailedThrowableLaunches { get; private set; }
 
         /// <summary>
         /// Copies the session's authoritative weapon state onto the body the snapshot is built
@@ -253,6 +323,7 @@ namespace Ironfront.Net.Unity.Server
             ClientSession session, NetServerActor actor, in CombatTickResult result)
         {
             if (actor.FireCarriedWeapon(
+                    result.Origin.X, result.Origin.Y, result.Origin.Z,
                     result.AimDirection.X, result.AimDirection.Y, result.AimDirection.Z))
                 return;
 
@@ -1285,13 +1356,17 @@ namespace Ironfront.Net.Unity.Server
 
         private void EmitWeaponFire(
             ClientSession shooter, NetServerActor actor, in CombatTickResult result)
+            => EmitWeaponFire(shooter, actor, in result.AimDirection);
+
+        private void EmitWeaponFire(
+            ClientSession shooter, NetServerActor actor, in Vec3 aim)
         {
             var message = new WeaponFireMessage(
                 shooter.ActorId,
                 actor.WeaponId,
-                Quantize.PackVel16(result.AimDirection.X),
-                Quantize.PackVel16(result.AimDirection.Y),
-                Quantize.PackVel16(result.AimDirection.Z));
+                Quantize.PackVel16(aim.X),
+                Quantize.PackVel16(aim.Y),
+                Quantize.PackVel16(aim.Z));
 
             int written = ServerEventWriter.WriteWeaponFire(_eventPayload, in message);
             if (written < 0) return;

@@ -160,7 +160,68 @@
         /// happened" so a run that reports launches against a body with no weapon is legible as
         /// the loadout failure it is, rather than as a silent zero.
         /// </returns>
-        bool FireCarriedWeapon(float directionX, float directionY, float directionZ);
+        /// <param name="originX">
+        /// The spawn point the authority computed for this shot, in world space -- on the forward
+        /// and right axes and on the vertical axis alike. <b>Supplied rather than read off the
+        /// weapon, because the pose a server-side body offers is not a pose anybody is standing
+        /// in.</b> A carried weapon's <c>muzzle</c> hangs off the view-model rig that
+        /// <c>PlayerFpParent</c> drives for the LOCAL player's eyes; a headless server runs no
+        /// such rig, so that transform reports a bind pose. Measured 2026-09-25: a player's
+        /// rocket left from a skeleton bone, and a grenade from 1.85 m above his feet. The
+        /// authority's own origin (<c>CombatTickResult.Origin</c>) is built from the session's
+        /// deterministic capsule centre and the eye height the hitboxes already use, so it is the
+        /// same point on every body prefab.
+        /// </param>
+        bool FireCarriedWeapon(
+            float originX, float originY, float originZ,
+            float directionX, float directionY, float directionZ);
+
+        /// <summary>
+        /// Releases a throwable whose delay and inventory transaction were already approved by
+        /// the server authority. This entry point must not run the engine's ammo or timer logic.
+        /// </summary>
+        bool ReleaseCarriedThrowable(
+            float originX, float originY, float originZ,
+            float directionX, float directionY, float directionZ);
+
+        /// <summary>
+        /// Writes the authority's carried-weapon state into the engine weapon the body is holding.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Because a carried weapon's trigger passes two independent gates, and only one of
+        /// them is the authority.</b> <c>ServerFireResolver</c> decides on the SESSION's
+        /// <c>WeaponRuntimeState</c>; the round only becomes a projectile when the ENGINE's
+        /// <c>Weapon.CanFire()</c> agrees, and that reads the engine's own <c>ammo</c>,
+        /// <c>unholstered</c> and <c>lastFired</c>. Nothing on a server ever refills the engine's
+        /// copy: <c>Actor.UpdateWeapon</c> -- the only caller of <c>controller.Reload()</c> -- is
+        /// unreachable for a body whose AI driver is suspended, and <c>AmmoChanged</c>'s auto-reload
+        /// is gated off server-side. Measured 2026-09-25: after one SMAW round, every later launch
+        /// spent the round and produced nothing -- <c>NOTHING WAS LAUNCHED</c>, once per player,
+        /// in the server log -- however many times the player reloaded, because their reload was
+        /// the authority's and the engine's copy stayed at zero.
+        /// </para>
+        /// <para>
+        /// <b>A mirror rather than a second reload path, and that is the client's own established
+        /// shape.</b> A client's <c>Weapon.ammo</c> is ASSIGNED from the reconciled prediction
+        /// every snapshot rather than decremented twice; this is the same rule on the other side
+        /// of the wire, so the engine's counters stop being a second opinion and become a copy.
+        /// It is idempotent, so a divergence can never persist for more than one accepted frame.
+        /// </para>
+        /// <para>
+        /// <b>Called BEFORE the shot is resolved, not after.</b> The session has already spent
+        /// this frame's round by the time the launch is asked for, so a mirror that ran after it
+        /// would hand the engine one round fewer than the shot it is about to fire.
+        /// </para>
+        /// </remarks>
+        /// <param name="elapsedSinceLastShot">
+        /// Seconds since the authority last accepted a shot from this weapon, or
+        /// <see cref="float.PositiveInfinity"/> if it never has. A duration rather than a
+        /// timestamp because the two sides count from different clocks: the authority reads the
+        /// tick-derived seconds the frame carried, the engine reads <c>Time.time</c>.
+        /// </param>
+        void MirrorAuthorityWeaponState(
+            int ammoInClip, bool unholstered, float elapsedSinceLastShot);
 
         /// <summary>
         /// Fires the vehicle-mounted weapon this body is manning, for a shot the server's

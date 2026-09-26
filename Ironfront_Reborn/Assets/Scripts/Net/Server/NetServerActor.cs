@@ -222,12 +222,35 @@ namespace Ironfront.Net.Unity.Server
         /// playing at once.
         /// </remarks>
         /// <returns>False when nothing is bound, or the body is holding nothing.</returns>
-        public bool FireCarriedWeapon(float directionX, float directionY, float directionZ)
+        public bool FireCarriedWeapon(
+            float originX, float originY, float originZ,
+            float directionX, float directionY, float directionZ)
         {
             IGameplayActorSource source = Source;
             if (source == null) return false;
 
-            return source.FireCarriedWeapon(directionX, directionY, directionZ);
+            return source.FireCarriedWeapon(
+                originX, originY, originZ, directionX, directionY, directionZ);
+        }
+
+        /// <summary>Releases an authority-approved delayed throwable.</summary>
+        public bool ReleaseCarriedThrowable(
+            float originX, float originY, float originZ,
+            float directionX, float directionY, float directionZ)
+        {
+            IGameplayActorSource source = Source;
+            return source != null && source.ReleaseCarriedThrowable(
+                originX, originY, originZ, directionX, directionY, directionZ);
+        }
+
+        /// <summary>Writes the authority's weapon state into the engine weapon. See the seam.</summary>
+        public void MirrorAuthorityWeaponState(
+            int ammoInClip, bool unholstered, float elapsedSinceLastShot)
+        {
+            IGameplayActorSource source = Source;
+            if (source == null) return;
+
+            source.MirrorAuthorityWeaponState(ammoInClip, unholstered, elapsedSinceLastShot);
         }
 
         /// <summary>Re-announces the mounted weapon this body is manning. See the seam.</summary>

@@ -668,7 +668,9 @@ namespace Ironfront.Net.Unity.Bindings
         /// (<c>ThrowableWeapon.Fire</c>).
         /// </para>
         /// </remarks>
-        public bool FireCarriedWeapon(float directionX, float directionY, float directionZ)
+        public bool FireCarriedWeapon(
+            float originX, float originY, float originZ,
+            float directionX, float directionY, float directionZ)
         {
             if (_actor == null) return false;
 
@@ -682,6 +684,12 @@ namespace Ironfront.Net.Unity.Bindings
             // turns that into the caller's error line, which is the only thing that ever named
             // this failure.
             if (!weapon.CanFire()) return false;
+
+            // AFTER the refusal check, so a weapon that will not fire is not left holding an
+            // origin for the next shot -- and consumed by Shoot, so it cannot outlive this one.
+            // The weapon's own muzzle is where the LOCAL player's view-model is, which on a
+            // headless server is a bind pose: see IGameplayActorSource.FireCarriedWeapon.
+            weapon.SetNetworkShotOrigin(new Vector3(originX, originY, originZ));
 
             weapon.Fire(new Vector3(directionX, directionY, directionZ), useMuzzleDirection: false);
 
@@ -700,6 +708,31 @@ namespace Ironfront.Net.Unity.Bindings
             if (!weapon.configuration.auto) weapon.StopFire();
 
             return true;
+        }
+
+        public bool ReleaseCarriedThrowable(
+            float originX, float originY, float originZ,
+            float directionX, float directionY, float directionZ)
+        {
+            if (_actor == null) return false;
+            ThrowableWeapon throwable = _actor.activeWeapon as ThrowableWeapon;
+            if (throwable == null) return false;
+
+            throwable.SetNetworkShotOrigin(new Vector3(originX, originY, originZ));
+            return throwable.ReleaseApprovedByServer(
+                new Vector3(directionX, directionY, directionZ));
+        }
+
+        /// <summary>Writes the authority's weapon state into the engine weapon. See the seam.</summary>
+        public void MirrorAuthorityWeaponState(
+            int ammoInClip, bool unholstered, float elapsedSinceLastShot)
+        {
+            if (_actor == null) return;
+
+            Weapon weapon = _actor.activeWeapon;
+            if (weapon == null) return;
+
+            weapon.MirrorAuthorityState(ammoInClip, unholstered, elapsedSinceLastShot);
         }
 
         /// <summary>

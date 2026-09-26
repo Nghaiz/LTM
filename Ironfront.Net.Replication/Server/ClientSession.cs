@@ -406,6 +406,7 @@ namespace Ironfront.Net.Replication.Server
                 outgoing.Unholstered = false;
                 outgoing.Reloading = false;
                 outgoing.ReloadStartedAt = float.NegativeInfinity;
+                ThrowableLifecycle.Cancel(ref outgoing);
 
                 _parkedWeapons[WeaponId] = outgoing;
                 _hasParkedWeapon[WeaponId] = true;
@@ -454,6 +455,7 @@ namespace Ironfront.Net.Replication.Server
         {
             Weapon.Reloading = false;
             Weapon.ReloadStartedAt = float.NegativeInfinity;
+            ThrowableLifecycle.Cancel(ref Weapon);
 
             Trigger = EffectiveTrigger.Idle;
         }

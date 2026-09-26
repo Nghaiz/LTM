@@ -83,7 +83,7 @@ namespace Ironfront.Net.Replication.Tests
         // ------------------------------------------------ the authority
 
         [Fact]
-        public void AThrownWeaponSpendsItsRoundAndSweepsNothing()
+        public void AThrownWeaponReservesItsRoundAndSweepsNothingUntilRelease()
         {
             // The whole row in one assertion pair: the round IS spent (so ammo, cooldown and the
             // snapshot's weapon field all move as they should) and NO hitscan hit is produced
@@ -93,12 +93,13 @@ namespace Ironfront.Net.Replication.Tests
             CombatTickResult result = fixture.Step(now: 10f, InputButtons.Fire);
 
             Assert.Equal(FireRejection.None, result.Rejection);
-            Assert.True(result.Fired);
-            Assert.True(result.LaunchedProjectile);
+            Assert.True(result.ReleaseBegan);
+            Assert.False(result.Fired);
+            Assert.False(result.LaunchedProjectile);
             Assert.Equal(0, result.HitCount);
-            Assert.Equal(0, fixture.Weapon.AmmoInClip);
+            Assert.Equal(1, fixture.Weapon.AmmoInClip);
             Assert.True(result.WeaponChanged);
-            Assert.Equal(1, fixture.Authority.ProjectilesLaunched);
+            Assert.Equal(0, fixture.Authority.ProjectilesLaunched);
         }
 
         [Fact]
@@ -119,7 +120,7 @@ namespace Ironfront.Net.Replication.Tests
         {
             var fixture = new LaunchFixture();
 
-            Assert.True(fixture.Step(10f, InputButtons.Fire).Fired);
+            Assert.True(fixture.Step(10f, InputButtons.Fire).ReleaseBegan);
 
             // Second pull inside the cooldown: refused, and counted as a rate violation, exactly
             // as a rifle's would be. A launcher that skipped the shared CheckCanFire would be a
@@ -128,12 +129,12 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(FireRejection.OnCooldown, tooSoon.Rejection);
             Assert.False(tooSoon.LaunchedProjectile);
 
-            // Past the cooldown, but the clip holds one.
+            // Past the cooldown, but the first throw is still pending and owns this weapon.
             CombatTickResult empty = fixture.Step(20f, InputButtons.Fire);
-            Assert.Equal(FireRejection.NoAmmo, empty.Rejection);
+            Assert.Equal(FireRejection.OnCooldown, empty.Rejection);
             Assert.False(empty.LaunchedProjectile);
 
-            Assert.Equal(1, fixture.Authority.ProjectilesLaunched);
+            Assert.Equal(0, fixture.Authority.ProjectilesLaunched);
         }
 
         [Fact]
@@ -247,6 +248,99 @@ namespace Ironfront.Net.Replication.Tests
                 "weapon.Fire(new Vector3(directionX, directionY, directionZ), useMuzzleDirection: false);",
                 bindings, StringComparison.Ordinal);
             Assert.DoesNotContain("useMuzzleDirection: true", bindings, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void ADelayedThrowIsReleasedOncePerServerTickAsOneTransaction()
+        {
+            string bridge = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/Net/Server/ServerCombatBridge.cs");
+            string loop = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/Net/Server/ServerTickLoop.cs");
+            string player = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/Net/Server/ServerPlayer.cs");
+            string seam = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/Net/Server/Bindings/IGameplayActorSource.cs");
+            string bindings = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/NetBindings/IronfrontNetBindings.cs");
+            string throwable = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ThrowableWeapon.cs");
+            string weapon = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/Weapon.cs");
+
+            Assert.Contains("_combat.AdvancePendingActions(_players, NetContext.CurrentTick);", loop,
+                StringComparison.Ordinal);
+            Assert.Contains("_combat.StepCombat(this, frameTick, in frame);", player,
+                StringComparison.Ordinal);
+            Assert.Contains("AdvancePendingRelease", bridge, StringComparison.Ordinal);
+            Assert.Contains("actor.ReleaseCarriedThrowable(", bridge, StringComparison.Ordinal);
+            Assert.Contains("RollbackRelease", bridge, StringComparison.Ordinal);
+            Assert.Contains("FailedThrowableLaunches", bridge, StringComparison.Ordinal);
+            Assert.Contains("ReleaseCarriedThrowable(", seam, StringComparison.Ordinal);
+            Assert.Contains("throwable.ReleaseApprovedByServer(", bindings, StringComparison.Ordinal);
+            Assert.Contains("public bool ReleaseApprovedByServer", throwable, StringComparison.Ordinal);
+            Assert.Contains("TryGetNetworkShotOrigin(out Vector3 suppliedEye)", throwable,
+                StringComparison.Ordinal);
+            Assert.Contains("protected bool TryGetNetworkShotOrigin", weapon,
+                StringComparison.Ordinal);
+            Assert.Contains("catch (Exception exception)", bridge, StringComparison.Ordinal);
+            Assert.Contains("Destroy(instance)", weapon, StringComparison.Ordinal);
+
+            // The server tick is the sole delay owner. Keeping a second timer in the gameplay
+            // weapon reproduces the intermittent double-delay / missing-model bug.
+            Assert.DoesNotContain("releaseTick", throwable, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void NetworkThrowableAnimationCannotMutateInventory()
+        {
+            string throwable = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ThrowableWeapon.cs");
+            int entry = throwable.IndexOf("public void SpawnThrowable()", StringComparison.Ordinal);
+            int next = throwable.IndexOf("private static readonly Vector3", entry, StringComparison.Ordinal);
+            string body = throwable.Substring(entry, next - entry);
+
+            Assert.Contains("if (!NetContext.IsOffline)", body, StringComparison.Ordinal);
+            Assert.DoesNotContain("ammo--", body, StringComparison.Ordinal);
+            Assert.DoesNotContain("Reload();", body, StringComparison.Ordinal);
+            Assert.Contains("ReleaseThrowable();", body, StringComparison.Ordinal);
+
+            string binding = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/NetBindings/LocalPlayerRigBinding.cs");
+            Assert.Contains("clipSettled || weapon is ThrowableWeapon", binding,
+                StringComparison.Ordinal);
+        }
+
+        [Theory]
+        [InlineData("WeaponIds.FRAG", "ProjectileKind.Grenade")]
+        [InlineData("WeaponIds.SPEARHEAD", "ProjectileKind.Spearhead")]
+        [InlineData("WeaponIds.AMMO_BAG", "ProjectileKind.AmmoBag")]
+        [InlineData("WeaponIds.MEDIPACK", "ProjectileKind.Medipack")]
+        public void EveryThrowableWeaponHasAnExplicitProjectileIdentity(
+            string weapon, string kind)
+        {
+            string announcer = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/Assembly-CSharp/ProjectileNetAnnouncer.cs");
+
+            Assert.Contains($"case {weapon}: kind = {kind}; return true;", announcer,
+                StringComparison.Ordinal);
+            Assert.Contains("TryKindForThrowableWeapon", announcer, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void LaneBRecordsBothSidesOfTheThrowableLifecycle()
+        {
+            string recorder = ReadUnitySource(
+                "Ironfront_Reborn/Assets/Scripts/Net/Diagnostics/LaneBCheckpointRecorder.cs");
+
+            foreach (string field in new[]
+            {
+                "releasePending", "serverReleasePending", "predictedCommands",
+                "projectilesSpawned", "failedThrowableLaunches", "unrenderableKinds",
+            })
+            {
+                Assert.Contains($"\"{field}\"", recorder, StringComparison.Ordinal);
+            }
         }
 
         /// <summary>

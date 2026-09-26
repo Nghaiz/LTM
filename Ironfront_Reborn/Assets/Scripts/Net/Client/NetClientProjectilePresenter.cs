@@ -44,7 +44,7 @@ namespace Ironfront.Net.Unity.Client
     public sealed class NetClientProjectilePresenter : MonoBehaviour
     {
         [Tooltip("Indexed by (byte)ProjectileKind: Shell=0, Rocket=1, GuidedMissile=2, "
-                 + "Grenade=3, AmmoBag=4, Medipack=5, Bullet=6. An empty slot draws nothing and "
+                 + "Grenade=3, AmmoBag=4, Medipack=5, Bullet=6, Spearhead=7. An empty slot draws nothing and "
                  + "must not throw. Client-track item.")]
         [SerializeField] private GameObject[] _prefabsByKind;
 
@@ -60,6 +60,9 @@ namespace Ironfront.Net.Unity.Client
 
         /// <summary>Projectiles this client is currently drawing.</summary>
         public int ActiveCount => _spawned.Count;
+
+        /// <summary>Distinct authoritative projectile ids accepted as new spawns.</summary>
+        public long ProjectilesSpawned { get; private set; }
 
         /// <summary>
         /// Messages naming a kind with no prefab authored. Non-zero means a client-track gap,
@@ -128,7 +131,7 @@ namespace Ironfront.Net.Unity.Client
 
             ProjectileApplyResult result = _tracker.Apply(in message, NetContext.CurrentTick);
 
-            if (message.Kind == ProjectileKind.Grenade)
+            if (IsGrenade(message.Kind))
             {
                 Debug.Log($"[net] grenade {message.ProjectileId} from actor "
                           + $"{message.OwnerActorId}: {result.Action}, age "
@@ -142,6 +145,8 @@ namespace Ironfront.Net.Unity.Client
                 Despawn(result.ProjectileId);
                 return;
             }
+
+            if (result.Action == ProjectileApplyAction.Spawn) ProjectilesSpawned++;
 
             if (result.Action == ProjectileApplyAction.ReSeat
                 && _spawned.TryGetValue(result.ProjectileId, out IProjectileBody live)
@@ -163,7 +168,7 @@ namespace Ironfront.Net.Unity.Client
             if (prefab == null)
             {
                 UnrenderableKinds++;
-                if (message.Kind == ProjectileKind.Grenade)
+                if (IsGrenade(message.Kind))
                     Debug.LogError("[net] grenade spawn has no client prefab; the explosion can "
                                    + "arrive but the thrown grenade cannot be drawn.");
                 return;
@@ -205,7 +210,7 @@ namespace Ironfront.Net.Unity.Client
 
                 _spawned[result.ProjectileId] = projectile;
             }
-            else if (message.Kind == ProjectileKind.Grenade)
+            else if (IsGrenade(message.Kind))
             {
                 Debug.LogError($"[net] grenade prefab '{prefab.name}' has no projectile body; "
                                + "the instantiated mesh cannot follow authoritative flight.");
@@ -219,6 +224,9 @@ namespace Ironfront.Net.Unity.Client
 
             return _prefabsByKind[index];
         }
+
+        private static bool IsGrenade(ProjectileKind kind)
+            => kind == ProjectileKind.Grenade || kind == ProjectileKind.Spearhead;
 
         /// <summary>
         /// Drops a projectile and lets whatever it has to say be heard first.
