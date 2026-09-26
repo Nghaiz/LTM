@@ -283,8 +283,9 @@ namespace Ironfront.Net.Protocol
         /// </para>
         /// <para>
         /// <b>Appending is not a wire change.</b> The field stays a <c>u8</c>, nothing behind it
-        /// misaligns, and <see cref="ProtocolConstants.PROTOCOL_VERSION"/> is untouched — the same
-        /// argument V7 made for <see cref="Medipack"/> and <see cref="Bullet"/>. What a client
+        /// misaligns, and on its own it would not move <see cref="ProtocolConstants.PROTOCOL_VERSION"/>
+        /// — the same argument V7 made for <see cref="Medipack"/> and <see cref="Bullet"/>. It ships
+        /// in v11 only because the <c>PendingRelease</c> weapon-state bit bumped it. What a client
         /// older than this value sees is <c>PrefabFor</c> returning null and the throw counted in
         /// <c>UnrenderableKinds</c>, which is why both sides ship together.
         /// </para>
