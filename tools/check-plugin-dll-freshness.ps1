@@ -31,6 +31,14 @@
 # every compilation, so two builds of identical source are never byte-equal and a gate written
 # that way would be red on every PR, which is the same as no gate.
 #
+# "THE PROJECT DIRECTORY" MEANS ITS WHOLE PROJECTREFERENCE CLOSURE. A C# `const` is copied into the
+# CALLER's IL at compile time, so a dependency's constant change rewrites every dependent DLL even
+# though no dependent source moved. #318 bumped ProtocolConstants.PROTOCOL_VERSION 10 -> 11 and
+# rebuilt Protocol.dll and Replication.dll only; Transport.dll and MasterClient.dll kept an inlined
+# 10. This gate passed, because their own directories had not changed -- and the shipped game
+# server answered a v11 client's UDP handshake with ProtocolMismatch while every Unity client
+# would have been refused a login by the v11 master. Measured 2026-09-27 with the E2E tool.
+#
 # Usage:  pwsh tools/check-plugin-dll-freshness.ps1
 
 $ErrorActionPreference = "Stop"
@@ -39,6 +47,33 @@ $repoRoot = (& git rev-parse --show-toplevel).Trim()
 Push-Location $repoRoot
 
 try {
+    # The project directories whose commits can change what $Project's DLL contains: its own, plus
+    # every project it references, transitively. Read from the .csproj files rather than listed
+    # here, so a new reference extends the check with no edit. Repo convention: a project lives in
+    # a root directory named after it, which is also how ProjectReference paths are written.
+    function Get-SourceClosure([string] $Project) {
+        $seen  = [System.Collections.Generic.List[string]]::new()
+        $queue = [System.Collections.Generic.Queue[string]]::new()
+        $queue.Enqueue($Project)
+
+        while ($queue.Count -gt 0) {
+            $current = $queue.Dequeue()
+            if ($seen.Contains($current)) { continue }
+            $seen.Add($current)
+
+            $csproj = Join-Path $current "$current.csproj"
+            if (-not (Test-Path $csproj)) { continue }
+
+            $references = [regex]::Matches(
+                (Get-Content -Raw $csproj), '<ProjectReference\s+Include="([^"]+)"')
+            foreach ($reference in $references) {
+                $queue.Enqueue([System.IO.Path]::GetFileNameWithoutExtension($reference.Groups[1].Value))
+            }
+        }
+
+        return $seen.ToArray()
+    }
+
     # Discovered from the DLLs actually present rather than a hardcoded project list, so adding a
     # library to build-libs.ps1 extends this check with no edit here. Ironfront.*, not
     # Ironfront.Net.*: Ironfront.MasterClient.dll is equally load-bearing and was invisible to the
@@ -63,9 +98,17 @@ try {
 
         # The whole project directory, not just *.cs: a .csproj or Directory.Packages.props bump
         # changes the emitted assembly just as a source edit does. bin/ and obj/ are gitignored,
-        # so they contribute no noise.
-        $srcAt = (& git log -1 --format=%ct -- $lib)
-        $dllAt = (& git log -1 --format=%ct -- $dllPath)
+        # so they contribute no noise. And every referenced project's directory too -- see the
+        # header on inlined constants.
+        # @(...) and a plain `$sources`, never `@sources`: a one-project closure comes back as a
+        # bare string, and splatting a string hands git no path at all -- it then answers with the
+        # newest commit in the repository and reports every leaf project stale.
+        $sources = @(Get-SourceClosure $lib)
+        $srcAt   = (& git log -1 --format=%ct -- $sources)
+        $dllAt   = (& git log -1 --format=%ct -- $dllPath)
+        $newest  = $sources |
+            Sort-Object { [long](& git log -1 --format=%ct -- $_) } -Descending |
+            Select-Object -First 1
 
         if (-not $srcAt -or -not $dllAt) {
             $skipped += "$lib (no history on one side)"
@@ -76,6 +119,7 @@ try {
         if ([long]$srcAt -gt [long]$dllAt) {
             $stale += [pscustomobject]@{
                 Library = $lib
+                Source  = $newest
                 Behind  = [TimeSpan]::FromSeconds([long]$srcAt - [long]$dllAt)
             }
         }
@@ -92,7 +136,10 @@ try {
 
     foreach ($s in $stale) {
         Write-Host ""
-        Write-Host ("FAIL: {0} source changed after {0}.dll was last committed ({1:0} day(s) behind)." -f $s.Library, $s.Behind.TotalDays) -ForegroundColor Red
+        Write-Host ("FAIL: {2} source changed after {0}.dll was last committed ({1:0} day(s) behind)." -f $s.Library, $s.Behind.TotalDays, $s.Source) -ForegroundColor Red
+        if ($s.Source -ne $s.Library) {
+            Write-Host ("      {0} references {1}; a constant there is compiled INTO {0}.dll." -f $s.Library, $s.Source)
+        }
         Write-Host "      Unity loads the committed DLL and never compiles these sources, so this"
         Write-Host "      change does not reach the game."
     }
