@@ -311,8 +311,11 @@ namespace Ironfront.Net.Replication.Tests
                 + "whatever the weapon is -- +29 predicted shots against 2 the server fired.");
 
             string guard = found!;
-
-            Assert.Contains("_state.PredictFire(", guard);
+            int predict = LineOf(lines, "_state.PredictFire(");
+            Assert.True(
+                predict > at && predict <= at + 16,
+                "the ApplyTrigger guard must immediately contain PredictFire; the larger "
+                + "throwable tick/aim setup may span several lines but must not split the gate.");
 
             Assert.True(
                 guard.TrimStart().StartsWith("if (", StringComparison.Ordinal),

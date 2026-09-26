@@ -2,6 +2,7 @@
 using System.IO;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Combat;
+using Ironfront.Net.Replication.Movement;
 using Ironfront.Net.Replication.Server;
 using Xunit;
 
@@ -146,6 +147,41 @@ namespace Ironfront.Net.Replication.Tests
             Assert.True(session.Weapon.Reloading,
                         "a switch to the weapon already held cancelled a reload nobody interrupted");
             Assert.Equal(50f, session.Weapon.ReloadStartedAt);
+        }
+
+        [Fact]
+        public void SwitchingAwayCancelsAPendingThrowInsteadOfParkingIt()
+        {
+            var session = Armed(WeaponIds.FRAG);
+            WeaponConfig frag = session.WeaponConfig;
+            Assert.Equal(
+                ThrowableRejection.None,
+                ThrowableLifecycle.TryBegin(
+                    ref session.Weapon, in frag, inputTick: 10, serverTick: 100,
+                    new Vec3(0f, 0f, 1f)));
+
+            session.SwitchWeaponTo(Sidearm);
+            session.SwitchWeaponTo(WeaponIds.FRAG);
+
+            Assert.False(session.Weapon.PendingRelease);
+            Assert.Equal(1, session.Weapon.AmmoInClip);
+        }
+
+        [Fact]
+        public void DeathCancelsAPendingThrowWithoutSpendingIt()
+        {
+            var session = Armed(WeaponIds.FRAG);
+            WeaponConfig frag = session.WeaponConfig;
+            Assert.Equal(
+                ThrowableRejection.None,
+                ThrowableLifecycle.TryBegin(
+                    ref session.Weapon, in frag, inputTick: 10, serverTick: 100,
+                    new Vec3(0f, 0f, 1f)));
+
+            session.ClearCombatStateOnDeath();
+
+            Assert.False(session.Weapon.PendingRelease);
+            Assert.Equal(1, session.Weapon.AmmoInClip);
         }
 
         [Fact]

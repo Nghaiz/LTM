@@ -428,6 +428,10 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 		{
 			SpawnProjectile(direction);
 		}
+		// Once per shot, not once per projectile: a shell-loaded weapon fires twenty pellets and
+		// every one of them leaves the same hand. Cleared here rather than at the top of the next
+		// shot so that a bot -- which never has one supplied -- cannot inherit the last human's.
+		networkShotOrigin = null;
 		if (ammo != -1)
 		{
 			ammo--;
@@ -530,29 +534,57 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 	protected virtual Projectile SpawnProjectile(Vector3 direction)
 	{
 		Quaternion rotation = Quaternion.LookRotation(direction + UnityEngine.Random.insideUnitSphere * configuration.spread);
-		Vector3 origin = ProjectileOrigin();
-		Projectile component = ((GameObject)UnityEngine.Object.Instantiate(configuration.projectilePrefab, origin, rotation)).GetComponent<Projectile>();
-		component.source = user;
-		// V7 tasks 2 and 3. The single point every weapon's projectile passes through, and the
-		// point AFTER the spread roll above -- which is V7-D4's server roll, resolved once, so
-		// the direction announced is the direction fired. A no-op off the server.
-		ProjectileNetAnnouncer.AnnounceLaunch(
-			component, origin, rotation * Vector3.forward, user);
-		return component;
+		Vector3 origin = ProjectileOrigin(direction);
+		GameObject instance = null;
+
+		try
+		{
+			instance = (GameObject)UnityEngine.Object.Instantiate(
+				configuration.projectilePrefab, origin, rotation);
+			Projectile component = instance.GetComponent<Projectile>();
+			if (component == null)
+				throw new System.InvalidOperationException(
+					$"Projectile prefab '{configuration.projectilePrefab.name}' has no Projectile component.");
+
+			component.source = user;
+			// V7 tasks 2 and 3. The single point every weapon's projectile passes through, and the
+			// point AFTER the spread roll above -- which is V7-D4's server roll, resolved once, so
+			// the direction announced is the direction fired. A no-op off the server.
+			ProjectileNetAnnouncer.AnnounceLaunch(
+				component, origin, rotation * Vector3.forward, user);
+			return component;
+		}
+		catch
+		{
+			// A partially-created projectile must not survive an announcement/configuration
+			// failure: the caller can then roll the authoritative inventory transaction back
+			// without leaving an invisible server-side explosive behind.
+			if (instance != null) UnityEngine.Object.Destroy(instance);
+			throw;
+		}
 	}
 
 	/// <summary>
-	/// Where this weapon's projectile is born, in world space.
+	/// Where this weapon's projectile is born, in world space, for a shot fired along
+	/// <paramref name="direction"/>.
 	/// </summary>
 	/// <remarks>
+	/// <para>
+	/// <b>The authoritative pose wins when the server supplied one.</b>
+	/// <see cref="SetNetworkShotOrigin"/> hands this weapon the origin the server's own combat
+	/// authority computed for the shot it is about to launch (<c>CombatTickResult.Origin</c>,
+	/// built from the session's capsule centre and the same eye height the hitboxes use). That
+	/// value is derived from the session's deterministic state, so it is the one spawn point
+	/// that is the same on every body prefab; anything read off a rig is not.
+	/// </para>
 	/// <para>
 	/// <b>Not <c>configuration.muzzle.position</c> by default, and that default is a trap for
 	/// anything but a first-person weapon.</b> <c>muzzle</c> hangs off the weapon root, which
 	/// <c>Actor</c> parents to <c>controller.WeaponParent()</c> -- and for a human that parent is
 	/// displaced and pitched every frame by <c>PlayerFpParent</c>, the LOCAL view-model rig. On a
-	/// headless server that rig is inert, so the muzzle describes a pose nobody is standing in.
-	/// A weapon whose spawn point matters on the wire overrides this with something the server
-	/// actually has; see <c>ThrowableWeapon.ProjectileOrigin</c>.
+	/// headless server that rig is inert, so the muzzle describes a pose nobody is standing in
+	/// (measured 2026-09-25: a player rocket left from a skeleton bone). A weapon whose spawn
+	/// point matters on the wire overrides this; see <c>ThrowableWeapon.ProjectileOrigin</c>.
 	/// </para>
 	/// <para>
 	/// Kept as one method rather than a parameter so that the instantiate above and the
@@ -560,7 +592,92 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 	/// a client ends up drawing a projectile somewhere the server did not put it.
 	/// </para>
 	/// </remarks>
-	protected virtual Vector3 ProjectileOrigin() => configuration.muzzle.position;
+	protected virtual Vector3 ProjectileOrigin(Vector3 direction)
+		=> networkShotOrigin ?? configuration.muzzle.position;
+
+	/// <summary>
+	/// The spawn point the server's authority chose for the shot about to be fired, or null when
+	/// this shot is not one the authority ordered.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>A nullable Vector3 rather than a flag beside it</b>, so "no origin was supplied" and
+	/// "an origin was supplied and happens to be the zero vector" cannot be confused, and so
+	/// there is no second field to keep in step with the first.
+	/// </para>
+	/// <para>
+	/// <b>Consumed, not merely read: <see cref="Shoot"/> clears it once the round has left.</b>
+	/// A bot fires through the same <c>Shoot</c> with no authority behind it, so a value that
+	/// outlived its shot would place a bot's next grenade wherever the last human's hand was.
+	/// </para>
+	/// </remarks>
+	private Vector3? networkShotOrigin;
+
+	/// <summary>Reads the authority-supplied one-shot origin without consuming it.</summary>
+	protected bool TryGetNetworkShotOrigin(out Vector3 origin)
+	{
+		if (networkShotOrigin.HasValue)
+		{
+			origin = networkShotOrigin.Value;
+			return true;
+		}
+
+		origin = default;
+		return false;
+	}
+
+	/// <summary>
+	/// Supplies the authoritative spawn point for the shot this weapon is about to fire.
+	/// Server only -- see <see cref="networkShotOrigin"/>.
+	/// </summary>
+        public void SetNetworkShotOrigin(Vector3 origin) => networkShotOrigin = origin;
+
+        /// <summary>Clears a one-shot authority origin after a specialised launch path.</summary>
+        protected void ClearNetworkShotOrigin() => networkShotOrigin = null;
+
+	/// <summary>
+	/// Copies the server's authoritative carried-weapon state onto this weapon's own counters.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Three fields, because those are exactly the three <see cref="CanFire"/> reads that a
+	/// server can leave stale.</b> <c>ammo</c> is never refilled on a dedicated server -- nothing
+	/// reaches <see cref="ReloadDone"/>, since <c>Actor.UpdateWeapon</c> does not run for a
+	/// suspended body and the auto-reload branch is gated to the cosmetic half -- so a clip-of-one
+	/// launcher fired once and was then refused by its own gun for the rest of the life.
+	/// <c>unholstered</c> completes on the engine's own <c>unholsterTime</c> timer while the
+	/// session marks the weapon up immediately. <c>lastFired</c> is stamped at the RELEASE for a
+	/// throwable and at the trigger for the authority, which is <c>releaseDelay</c> apart.
+	/// <c>reloading</c> is deliberately not mirrored: on a server nothing sets it except a
+	/// throwable's own zero-length refill, and <c>holdingFire</c> is already the launch path's to
+	/// clear.
+	/// </para>
+	/// <para>
+	/// <b>A duration, not a timestamp.</b> The authority counts seconds derived from the tick the
+	/// frame carried; this side counts <c>Time.time</c>. Copying the number across would put the
+	/// cooldown's end wherever the two clocks happened to differ by, which is exactly the kind of
+	/// divergence this method exists to remove.
+	/// </para>
+	/// <para>
+	/// <b>Called once per accepted frame, so it cannot be missed on a transition.</b> There is no
+	/// reload, holster or unholster notification to hook -- inventing one would be a second place
+	/// for the two copies to part.
+	/// </para>
+	/// </remarks>
+	public void MirrorAuthorityState(int ammoInClip, bool unholstered, float elapsedSinceLastShot)
+	{
+		// The car horn's -1 is "never spends", not a count, and it is not on this path at all:
+		// a mounted weapon has its own authority. Guarded rather than assumed so a future
+		// infinite-ammo carried weapon keeps its sentinel instead of acquiring a magazine.
+		if (ammo != -1) ammo = ammoInClip;
+
+		this.unholstered = unholstered;
+
+		// Never fired is the authority's -infinity, which arrives here as +infinity elapsed and
+		// makes CoolingDown false. Subtracting an infinity is well defined and lands on -infinity,
+		// which is the same value WeaponRuntimeState.Loaded starts from.
+		lastFired = Time.time - elapsedSinceLastShot;
+	}
 
 	public virtual void Hide()
 	{

@@ -29,7 +29,7 @@ using UnityEngine;
 public sealed class ProjectileCatalogInstaller : MonoBehaviour
 {
 	[Tooltip("Indexed by (byte)ProjectileKind: Shell=0, Rocket=1, GuidedMissile=2, Grenade=3, "
-	         + "AmmoBag=4, Medipack=5, Bullet=6. Each entry is the projectile prefab whose "
+	         + "AmmoBag=4, Medipack=5, Bullet=6, Spearhead=7. Each entry is the projectile prefab whose "
 	         + "Projectile.Configuration the server simulates from. An empty slot means that "
 	         + "kind is not replicated.")]
 	[SerializeField] private GameObject[] _prefabsByKind;

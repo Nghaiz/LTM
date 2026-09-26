@@ -1,5 +1,7 @@
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Client;
+using Ironfront.Net.Replication.Combat;
+using Ironfront.Net.Replication.Movement;
 using UnityEngine;
 
 namespace Ironfront.Net.Unity.Client
@@ -491,7 +493,15 @@ namespace Ironfront.Net.Unity.Client
             // A dead player passes false, which is not a release but is not an effective trigger
             // either, and SetAlive re-arms across the respawn anyway.
             if (_state.ApplyTrigger(_state.IsAlive && FirePressed(), Time.time))
-                _state.PredictFire(Time.time);
+            {
+                NetPredictionClock clock = NetPredictionClock.Current;
+                uint inputTick = clock != null
+                    ? unchecked(clock.InputTick + 1u)
+                    : unchecked(NetContext.CurrentTick + 1u);
+                Vec3 aim = LocalAimDirection();
+
+                _state.PredictFire(Time.time, inputTick, inputTick, in aim);
+            }
 
             if (_state.IsAlive && ReloadPressed()) _state.BeginReload(Time.time);
 
@@ -732,6 +742,19 @@ namespace Ironfront.Net.Unity.Client
             return (input.Buttons & (ushort)InputButtons.Fire) != 0;
         }
 
+        /// <summary>
+        /// The local player's aim this frame, in the same frame the server's
+        /// <see cref="ServerCombatAuthority.AimDirection"/> resolves a throw along, or zero when
+        /// no input source is bound. The aim of a predicted throwable command.
+        /// </summary>
+        private static Vec3 LocalAimDirection()
+        {
+            IInputSource input = NetClientBindings.LocalPlayer.InputSource;
+            return input != null
+                ? ServerCombatAuthority.AimDirection(input.Yaw, input.Pitch)
+                : Vec3.Zero;
+        }
+
         private static bool ReloadPressed()
         {
             IInputSource input = NetClientBindings.LocalPlayer.InputSource;
@@ -836,7 +859,8 @@ namespace Ironfront.Net.Unity.Client
 
             if (!_client.Router.Decoder.Current.TryFind(localActor, out ActorSnapshotEntry entry)) return;
 
-            _state.ApplySnapshot(in entry, Time.time);
+            _state.ApplySnapshot(
+                in entry, Time.time, lastProcessedInputTick, serverTick);
 
             ILocalPlayerRig rig = NetClientBindings.LocalPlayer;
             if (rig != null && rig.Exists)

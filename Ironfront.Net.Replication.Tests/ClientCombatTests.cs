@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Client;
 using Ironfront.Net.Replication.Combat;
+using Ironfront.Net.Replication.Movement;
 using Ironfront.Net.Replication.Server;
 using Xunit;
 
@@ -54,6 +55,144 @@ namespace Ironfront.Net.Replication.Tests
                 WeaponId = weaponId,
                 AmmoInClip = ammo,
             };
+
+        private static ActorSnapshotEntry FragEntry(
+            byte ammo, int reserve, bool pending)
+            => new ActorSnapshotEntry
+            {
+                ActorId = 1,
+                ChangeMask = SnapshotField.Health | SnapshotField.StateFlags | SnapshotField.Weapon,
+                Health = 100,
+                StateFlags = ActorStateFlags.IsAlive,
+                WeaponId = WeaponIds.FRAG,
+                AmmoInClip = ammo,
+                SpareAmmoEncoded = SpareAmmo.Finite(reserve).Encode(),
+                WeaponStateFlags = pending
+                    ? WeaponStateFlags.PendingRelease
+                    : WeaponStateFlags.None,
+            };
+
+        [Fact]
+        public void AckBeforeReleaseDoesNotRestoreASecondFrag()
+        {
+            var state = new ClientCombatState();
+            state.EquipWeapon(WeaponIds.FRAG);
+
+            Assert.Equal(FireRejection.None,
+                state.PredictFire(10f, inputTick: 100, localTick: 500, new Vec3(0f, 0f, 1f)));
+            state.ApplySnapshot(
+                FragEntry(ammo: 1, reserve: 1, pending: true), 10.1f,
+                lastProcessedInputTick: 100, serverTick: 501);
+
+            Assert.True(state.IsReleasePending);
+            Assert.True(state.ServerSaysReleasePending);
+            Assert.Equal(1, state.TotalThrowableUsesAvailable);
+            Assert.Equal(0, state.PredictedCommandCount);
+        }
+
+        [Fact]
+        public void OlderSnapshotReplaysAnUnacknowledgedThrow()
+        {
+            var state = new ClientCombatState();
+            state.EquipWeapon(WeaponIds.FRAG);
+            state.PredictFire(10f, inputTick: 101, localTick: 500, new Vec3(0f, 0f, 1f));
+
+            state.ApplySnapshot(
+                FragEntry(ammo: 1, reserve: 1, pending: false), 10.1f,
+                lastProcessedInputTick: 100, serverTick: 499);
+
+            Assert.True(state.IsReleasePending);
+            Assert.False(state.ServerSaysReleasePending);
+            Assert.Equal(1, state.PredictedCommandCount);
+        }
+
+        [Fact]
+        public void ReleaseSnapshotSettlesLoadedReserveAndPendingTogether()
+        {
+            var state = new ClientCombatState();
+            state.EquipWeapon(WeaponIds.FRAG);
+            state.PredictFire(10f, inputTick: 100, localTick: 500, new Vec3(0f, 0f, 1f));
+
+            state.ApplySnapshot(
+                FragEntry(ammo: 1, reserve: 0, pending: false), 11f,
+                lastProcessedInputTick: 100, serverTick: 529);
+
+            Assert.False(state.IsReleasePending);
+            Assert.Equal(1, state.AmmoInClip);
+            Assert.Equal(0, state.SpareAmmo.Rounds);
+            Assert.Equal(1, state.TotalThrowableUsesAvailable);
+        }
+
+        [Fact]
+        public void AckedRefusedThrowIsRemovedInsteadOfReplayed()
+        {
+            var state = new ClientCombatState();
+            state.EquipWeapon(WeaponIds.FRAG);
+            state.PredictFire(10f, inputTick: uint.MaxValue, localTick: 500, new Vec3(0f, 0f, 1f));
+
+            state.ApplySnapshot(
+                FragEntry(ammo: 1, reserve: 1, pending: false), 10.1f,
+                lastProcessedInputTick: uint.MaxValue, serverTick: 501);
+
+            Assert.False(state.IsReleasePending);
+            Assert.Equal(0, state.PredictedCommandCount);
+        }
+
+        [Fact]
+        public void CommandAcknowledgementIsWrapSafe()
+        {
+            var state = new ClientCombatState();
+            state.EquipWeapon(WeaponIds.FRAG);
+            state.PredictFire(10f, inputTick: 0, localTick: 2, new Vec3(0f, 0f, 1f));
+
+            state.ApplySnapshot(
+                FragEntry(ammo: 1, reserve: 1, pending: false), 10.1f,
+                lastProcessedInputTick: uint.MaxValue, serverTick: 1);
+
+            Assert.True(state.IsReleasePending);
+            Assert.Equal(1, state.PredictedCommandCount);
+        }
+
+        [Fact]
+        public void ServerWeaponSwitchClearsTheOldThrowPrediction()
+        {
+            var state = new ClientCombatState();
+            state.EquipWeapon(WeaponIds.FRAG);
+            state.PredictFire(10f, inputTick: 100, localTick: 500, new Vec3(0f, 0f, 1f));
+
+            state.ApplySnapshot(
+                LocalEntry(ammo: 30, weaponId: WeaponIds.RK44), 10.1f,
+                lastProcessedInputTick: 99, serverTick: 501);
+
+            Assert.Equal(WeaponIds.RK44, state.WeaponId);
+            Assert.False(state.IsReleasePending);
+            Assert.False(state.ServerSaysReleasePending);
+            Assert.Equal(0, state.PredictedCommandCount);
+            Assert.Equal(30, state.AmmoInClip);
+        }
+
+        [Fact]
+        public void DeathClearsAnUnacknowledgedThrowPrediction()
+        {
+            var state = new ClientCombatState { LocalActorId = 1 };
+            state.EquipWeapon(WeaponIds.FRAG);
+            state.ApplySnapshot(
+                FragEntry(ammo: 1, reserve: 1, pending: false), 9.9f,
+                lastProcessedInputTick: 99, serverTick: 499);
+            state.PredictFire(10f, inputTick: 100, localTick: 500, new Vec3(0f, 0f, 1f));
+
+            Assert.True(state.IsReleasePending);
+            Assert.Equal(1, state.PredictedCommandCount);
+
+            state.ApplyDeath(
+                new DeathMessage(1, 2, CauseOfDeath.Bullet, 0, 0, 0, 0),
+                nowSeconds: 10.1f);
+
+            Assert.False(state.IsReleasePending);
+            Assert.False(state.ServerSaysReleasePending);
+            Assert.Equal(0, state.PredictedCommandCount);
+            Assert.Equal(2, state.TotalThrowableUsesAvailable);
+        }
 
         /// <summary>
         /// A delta entry that does <b>not</b> carry <see cref="SnapshotField.Weapon"/> — the

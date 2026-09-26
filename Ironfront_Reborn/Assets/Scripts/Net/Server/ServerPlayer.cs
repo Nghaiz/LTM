@@ -425,7 +425,7 @@ namespace Ironfront.Net.Unity.Server
                 Actor.PitchDegrees = frame.PitchDegrees;
             }
 
-            _combat.StepCombat(this, in frame);
+            _combat.StepCombat(this, frameTick, in frame);
         }
 
         private Vec3 MoveThroughCollision(Vec3 motion)

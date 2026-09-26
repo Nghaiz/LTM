@@ -1,21 +1,10 @@
+using Ironfront.Net.Replication.Combat;
+using Ironfront.Net.Replication.Movement;
 using Ironfront.Net.Unity;
 using UnityEngine;
 
 public class ThrowableWeapon : Weapon
 {
-	/// <summary>
-	/// The tick the pending throw releases on, or 0 when nothing is pending. V7-D7.
-	/// </summary>
-	/// <remarks>
-	/// Scheduled from <c>configuration.releaseDelay</c>, which is authored PER WEAPON to match
-	/// that weapon's own throw clip -- the event's clip time divided by the <c>Throw</c> state's
-	/// speed multiplier. Both networked roles derive it from the same authored value, so the
-	/// projectile leaves the hand on the same tick regardless of the thrower's framerate or
-	/// animation state. Gate rule <b>A9</b> fails the build when the value and the clip diverge
-	/// (ledger D-1); it was one shared <c>0.6f</c>, correct for neither clip, until phase 6.
-	/// </remarks>
-	private uint releaseTick;
-
 	/// <summary>
 	/// The aim the pending throw was ordered along, captured in <see cref="Fire"/>. V7-D7.
 	/// </summary>
@@ -45,16 +34,22 @@ public class ThrowableWeapon : Weapon
 		{
 			lastFired = Time.time;
 
-			// The actor's aim, not the weapon model's muzzle. See throwDirection.
-			// Tilted up by the pitch the original authored on the throw point -- see ThrowPitchDegrees.
-			throwDirection = Quaternion.Euler(ThrowPitchDegrees, 0f, 0f) * direction;
+			// The actor's aim, not the weapon model's muzzle; tilted up by the pitch the original
+			// authored on the throw point, ABOUT THE THROWER'S RIGHT AXIS so the tilt survives a
+			// change of facing. See ThrowPitchDegrees for what world X cost.
+			throwDirection = Quaternion.AngleAxis(ThrowPitchDegrees, ThrowerRight(direction))
+				* direction;
 
 			if (NetContext.IsServer)
 			{
-				// No Animator here, and none wanted. The release is a scheduled tick; Update
-				// below performs it. Firing Shoot() now -- which is what a headless server did
-				// before this change, because HasActiveAnimator() is false -- would throw
-				// instantly while every client threw 0.6 s later.
+				// Only a BOT gets here. A networked player's throw never reaches Fire on the
+				// server: the replication authority owns its pending state and release tick and
+				// invokes the engine through ReleaseApprovedByServer, and Actor.Update returns
+				// early for a claimed body, so Actor.UpdateWeapon cannot call this for one. A bot
+				// has no authority transaction at all -- its AI fires the engine weapon directly,
+				// which is how it throws grenades and hands out ammo bags and medipacks. Leaving
+				// this branch empty left every bot on a dedicated server unable to throw anything,
+				// so the engine schedules the bot's release from the same authored delay.
 				float tickDuration = 1f / Ironfront.Net.Protocol.ProtocolConstants.SIM_TICK_RATE;
 				releaseTick = NetContext.CurrentTick
 					+ (uint)Mathf.Ceil(configuration.releaseDelay / tickDuration);
@@ -71,11 +66,19 @@ public class ThrowableWeapon : Weapon
 		holdingFire = true;
 	}
 
+	/// <summary>
+	/// The tick a BOT's pending throw releases on on the server, or 0 when nothing is pending.
+	/// </summary>
+	/// <remarks>
+	/// Never set for a networked player -- see the server branch of <see cref="Fire"/>. Scheduled
+	/// from <c>configuration.releaseDelay</c>, authored per weapon to match its own throw clip.
+	/// </remarks>
+	private uint releaseTick;
+
 	protected override void Update()
 	{
 		// base first: Weapon.Update drives the cooldown, the reload timer and the hold-fire
-		// state this weapon's CanFire() reads. Declaring a new private Update here instead of
-		// overriding would hide all of it and break the weapon silently.
+		// state this weapon's CanFire() reads.
 		base.Update();
 
 		if (releaseTick == 0 || NetContext.CurrentTick < releaseTick) return;
@@ -85,14 +88,9 @@ public class ThrowableWeapon : Weapon
 	}
 
 	/// <summary>
-	/// Drops a scheduled release. V7-D7.
+	/// Drops a bot's scheduled release. <c>CancelInvoke()</c>, which <c>Weapon.Drop</c> and
+	/// <c>Weapon.Holster</c> reach for, cannot see a tick held in a plain field.
 	/// </summary>
-	/// <remarks>
-	/// The release is a tick in a plain field, so <c>CancelInvoke()</c> — which is what
-	/// <c>Weapon.Drop</c> and <c>Weapon.Holster</c> reach for — cannot see it. Without this a
-	/// grenade ordered and then holstered inside the 0.6 s delay still leaves the hand, from a
-	/// weapon the player has already put away.
-	/// </remarks>
 	protected override void CancelPendingActions()
 	{
 		base.CancelPendingActions();
@@ -119,68 +117,182 @@ public class ThrowableWeapon : Weapon
 	/// </remarks>
 	public void SpawnThrowable()
 	{
-		if (NetContext.IsClient)
-		{
-			// The authoritative projectile is supplied by S_PROJECTILE_SPAWN, but the local
-			// weapon still owns the immediately visible HUD prediction. Returning without
-			// consuming a round left the grenade count unchanged forever.
-			if (ammo != -1 && ammo > 0)
-			{
-				ammo--;
-				AmmoChanged();
-			}
-			Reload();
-			return;
-		}
+		// In a network match this callback is presentation only. Snapshot reconciliation is
+		// the sole writer of loaded and reserve counts, and the server's explicit release is
+		// the sole projectile creator. Offline keeps Ravenfield's original animation event.
+		if (!NetContext.IsOffline) return;
 
 		ReleaseThrowable();
 	}
 
+	/// <summary>Where a throw leaves the hand, expressed in the thrower's own aim frame.</summary>
+	/// <remarks>
+	/// <para>
+	/// <b>The lateral numbers are the original's, read off <c>ThrowPoint</c> in
+	/// <c>frag.prefab</c>: right <c>0.367</c>, forward <c>0.056</c>, both taken unchanged.</b> A
+	/// hand is a third of a metre to the right of the camera and just in front of it, which is
+	/// where the first-person model holds the grenade.
+	/// </para>
+	/// <para>
+	/// <b>The vertical part is deliberately ZERO, and that is a decision rather than an
+	/// omission.</b> <c>ThrowPoint</c> sits 0.259 m <i>above</i> the eye -- the top of an
+	/// overhand throw -- and in the original that is invisible, because the client draws the
+	/// view-model hand at exactly that point and the grenade appears in it. The port cannot do
+	/// that: the server owns the spawn point and never sees the animation, so the number is read
+	/// in world space and the grenade visibly leaves <b>above the player's head</b> (measured
+	/// 2026-09-25, lane-B: spawn 1.85 m above the feet with the crown at 1.80 m). Eye level is
+	/// where the view-model hand rests when the player is looking level, so that is what this
+	/// places the release at. Raising it again is this one number.
+	/// </para>
+	/// </remarks>
+	private static readonly Vector3 ThrowHandOffset = new Vector3(0.367f, 0f, 0.056f);
+
 	/// <summary>
-	/// Where a throw leaves the hand, expressed in the thrower's own frame. V7-D7.
+	/// Where this throw leaves the hand. V7-D7.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>The default origin is the local view-model rig, and on a server that rig is inert.</b>
-	/// <c>configuration.muzzle</c> is <c>ThrowPoint</c>, a child of the weapon root, and
-	/// <c>Actor</c> parents that root to <c>controller.WeaponParent()</c>. For a human that parent
-	/// is moved and pitched every frame by <c>PlayerFpParent</c> -- the rig that exists to put a
-	/// weapon in front of the LOCAL player's eyes. A headless server runs no such rig, so the
-	/// muzzle reported a pose from nowhere: the announced launch sat off the thrower's body and
-	/// the grenade appeared to leave from behind them.
+	/// <b>Anchored on the authority's own eye and expressed in the thrower's aim frame.</b> Both
+	/// halves were wrong before this. The anchor was <c>user.transform</c>, which is the capsule
+	/// CENTRE on the body the server actually throws from (<c>Actor</c> sits on the root of the AI
+	/// prefab, next to the <c>CharacterController</c>) but the FEET on the client's player prefab
+	/// -- so one expression meant two points 0.9 m apart, and the server's answer was a grenade
+	/// leaving 1.85 m above the thrower's feet with the crown of his head at 1.80 m. The frame
+	/// was the body's transform rotation, and nothing writes that on a server: it stays identity,
+	/// so the offset's right and forward parts were applied along the WORLD axes. Facing +Z got it
+	/// right by luck; facing -Z put the grenade seven tenths of a metre behind the hand; facing
+	/// ±X put it a third of a metre off to the side.
 	/// </para>
 	/// <para>
-	/// <b>The offset is the original's own geometry, not a number invented here.</b> Reading the
-	/// player prefab's chain: <c>FP Camera Parent</c> is at <c>(0, 0.63, 0)</c> -- eye height --
-	/// and <c>Shoulder Parent</c> and <c>Weapon Parent</c> carry <c>(0.211, -0.206, 0.13)</c> and
-	/// <c>(-0.211, 0.206, -0.13)</c>, which cancel exactly, so the weapon root sits at the eye.
-	/// <c>ThrowPoint</c> is then <c>(0.367, 0.259, 0.056)</c> from that root. Summed and read in
-	/// the thrower's frame: chest height, a hand's width to the right, just forward.
+	/// <b>Off the authority path this falls through to the muzzle, and that is the original
+	/// behaviour rather than a leftover.</b> Offline there is no server to ask, the muzzle <i>is</i>
+	/// the animated release point, and the local client is the one drawing the hand it belongs to.
 	/// </para>
 	/// </remarks>
-	protected override Vector3 ProjectileOrigin()
+	protected override Vector3 ProjectileOrigin(Vector3 direction)
 	{
-		if (user == null) return base.ProjectileOrigin();
+		// Human network throws receive the deterministic session eye from ServerCombatBridge.
+		// Read that value before consulting the body component so this launch uses exactly the
+		// origin the inventory transaction and projectile announcement were approved against.
+		if (TryGetNetworkShotOrigin(out Vector3 suppliedEye))
+			return suppliedEye + ThrowerFrame(direction) * ThrowHandOffset;
 
-		return user.transform.position + user.transform.rotation * ThrowOriginOffset;
+		if (!AuthoritativeEye(out Vector3 eye)) return base.ProjectileOrigin(direction);
+
+		return eye + ThrowerFrame(direction) * ThrowHandOffset;
 	}
 
-	/// <summary>Eye height plus the throw point, in the thrower's frame. See ProjectileOrigin.</summary>
-	private static readonly Vector3 ThrowOriginOffset = new Vector3(0.367f, 0.889f, 0.056f);
+	/// <summary>
+	/// The thrower's authoritative eye, as of right now. False off the server, or on a body with
+	/// no movement authority behind it.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Asked at the RELEASE, not at the trigger.</b> A throw leaves the hand a
+	/// <c>releaseDelay</c> after the trigger -- 0.95 s on a frag -- and an origin captured at the
+	/// trigger would leave the grenade where the player used to be; a walking player would watch
+	/// it fall out of the air behind them. It is the same argument <c>ThrowableWeapon.Fire</c>
+	/// makes for scheduling the release rather than shooting on the spot.
+	/// </para>
+	/// <para>
+	/// <b>The authority's own formula, called rather than copied.</b>
+	/// <c>ServerCombatAuthority.ShotOrigin</c> is where "the session position is the capsule
+	/// centre, so the feet are half a capsule below it and the eye is EyeHeight above that" is
+	/// written down, and the hitboxes are placed by the same numbers. A second transcription of
+	/// it here would be free to drift the moment either constant moved.
+	/// </para>
+	/// <para>
+	/// <b>Server only, and the client's copy of this component is not a substitute.</b> The local
+	/// player's body carries a <c>NetMovementAgent</c> too, but on a client its state is the
+	/// PREDICTION; and it does not matter anyway, because a client spawns no throwable at all --
+	/// <c>Fire</c> takes the animator branch there and <c>SpawnThrowable</c> is presentation-only
+	/// during a network match.
+	/// </para>
+	/// <para>
+	/// No frame is available at a release, so the prone bit reads false and a prone thrower is
+	/// placed at standing eye height. The movement simulation does not model prone either; the
+	/// bit is a client-reported flag with no body behind it, and the standing eye is the honest
+	/// approximation rather than a second thing to keep in step.
+	/// </para>
+	/// </remarks>
+	private bool AuthoritativeEye(out Vector3 eye)
+	{
+		eye = default;
+
+		if (!NetContext.IsServer || user == null) return false;
+
+		NetMovementAgent agent = user.GetComponent<NetMovementAgent>();
+		if (agent == null) return false;
+
+		Vec3 origin = ServerCombatAuthority.ShotOrigin(in agent.State, default);
+
+		eye = new Vector3(origin.X, origin.Y, origin.Z);
+		return true;
+	}
+
+	/// <summary>
+	/// The thrower's own basis for a throw along <paramref name="direction"/>: local +X is the
+	/// thrower's right, +Y is up, +Z is the aim.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Built from the aim rather than read off the body, because the body does not turn on a
+	/// server.</b> <c>Actor.Update</c> returns before <c>UpdateFacing</c> for a body whose AI
+	/// controller is suspended, which is every networked player, so the transform's rotation is
+	/// identity for the whole match and anything multiplied by it is applied along the world axes.
+	/// </para>
+	/// <para>
+	/// The right axis comes out of <see cref="ThrowerRight"/> rather than out of the rotation
+	/// itself, so the hand offset and the throw's pitch cannot disagree about which way the player
+	/// is facing -- and so the degenerate-aim guard lives in one place.
+	/// </para>
+	/// </remarks>
+	private static Quaternion ThrowerFrame(Vector3 direction)
+	{
+		Vector3 forward = direction.normalized;
+		Vector3 right = ThrowerRight(direction);
+
+		return Quaternion.LookRotation(forward, Vector3.Cross(forward, right));
+	}
+
+	/// <summary>
+	/// The thrower's right axis for a throw along <paramref name="direction"/>, in the horizontal
+	/// plane. See <see cref="ThrowerFrame"/>.
+	/// </summary>
+	/// <remarks>
+	/// Yaw only, deliberately: the pitch of the aim must not roll this axis, or the fifteen-degree
+	/// throw tilt below would stop meaning "up from the aim" the moment a player looked above the
+	/// horizon. Looking straight up or down flattens to nothing and the cross product with it is
+	/// undefined -- world right is the honest answer there, since the yaw is not observable and a
+	/// collapsed axis would put the grenade inside the player's face.
+	/// </remarks>
+	private static Vector3 ThrowerRight(Vector3 direction)
+	{
+		Vector3 flat = new Vector3(direction.x, 0f, direction.z);
+
+		return flat.sqrMagnitude > 1e-6f
+			? Vector3.Cross(Vector3.up, flat.normalized)
+			: Vector3.right;
+	}
 
 	/// <summary>
 	/// How far above the aim a throw leaves, in degrees. V7-D7.
 	/// </summary>
 	/// <remarks>
+	/// <para>
 	/// <b>The original's own number, read off the throw point.</b> <c>ThrowPoint</c> carries
 	/// <c>m_LocalEulerAnglesHint: -15</c> in <c>frag.prefab</c> — a negative X euler pitches the
 	/// forward vector UP — so in the original a grenade never left along the barrel, it left
 	/// fifteen degrees above it. That tilt is why a throw arcs at all: without it, a level aim
 	/// produces a level throw that skids into the ground.
+	/// </para>
 	/// <para>
-	/// The port kept the tilt for free while it took its direction from <c>muzzle.forward</c>,
-	/// which includes the local rotation. Aiming the throw instead quietly dropped it, and the
-	/// throw went flat. This puts the same authored angle back, in the frame the throw now uses.
+	/// <b>It has to be applied about the thrower's RIGHT axis, not the world's X.</b> The original
+	/// kept the tilt in the view-model's local rotation, so it turned with the player. Applied
+	/// about world X it is correct only while facing ±Z: facing ±X it becomes a roll about the
+	/// throw's own axis and the throw goes out FLAT, and facing -Z it tilts fifteen degrees
+	/// <i>down</i>, into the ground. Measured 2026-09-25 against the reported "flies forward
+	/// instead of being thrown".
 	/// </para>
 	/// </remarks>
 	private const float ThrowPitchDegrees = -15f;
@@ -197,6 +309,33 @@ public class ThrowableWeapon : Weapon
 	{
 		Shoot(throwDirection, false);
 		Reload();
+	}
+
+	/// <summary>
+	/// Creates exactly one throwable for a release already committed by the server authority.
+	/// It deliberately bypasses Shoot, Reload and CanFire: those would spend or refill a second
+	/// inventory and would introduce a second opinion about the release tick.
+	/// </summary>
+	public bool ReleaseApprovedByServer(Vector3 direction)
+	{
+		if (!NetContext.IsServer || user == null || configuration.projectilePrefab == null
+			|| configuration.projectilePrefab.GetComponent<Projectile>() == null)
+		{
+			ClearNetworkShotOrigin();
+			return false;
+		}
+
+		throwDirection = Quaternion.AngleAxis(ThrowPitchDegrees, ThrowerRight(direction))
+			* direction;
+
+		try
+		{
+			return SpawnProjectile(throwDirection) != null;
+		}
+		finally
+		{
+			ClearNetworkShotOrigin();
+		}
 	}
 
 	public override bool CanBeAimed()

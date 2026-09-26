@@ -235,7 +235,10 @@ namespace Ironfront.Net.Unity.Bindings
                 // the prediction or the frozen pre-reload count, never a half-delivered guess),
                 // and assigning it every snapshot is what blinked the HUD through the reload
                 // instead of holding it still until the server's answer actually lands.
-                if (clipSettled) weapon.ammo = ammoInClip;
+                // Delayed throwables never run a client-side reload transaction. Their loaded
+                // count and reserve are one snapshot projection, even while the hand animation
+                // is pending; skipping the clip write here recreates two inventory writers.
+                if (clipSettled || weapon is ThrowableWeapon) weapon.ammo = ammoInClip;
 
                 // The reserve, which had two writers and no corrector: Weapon.ReloadDone spends
                 // Actor.spareAmmo[slot] locally while the server spends its own pool, so every

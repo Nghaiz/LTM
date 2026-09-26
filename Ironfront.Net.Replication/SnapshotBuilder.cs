@@ -151,10 +151,16 @@ namespace Ironfront.Net.Replication
         /// </remarks>
         public static WeaponSnapshotFields ResolveWeaponFields(
             in WeaponRuntimeState weapon, in WeaponConfig config, in ActorAmmoSource ammo)
-            => new WeaponSnapshotFields(
+        {
+            WeaponStateFlags flags = WeaponStateFlags.None;
+            if (weapon.Reloading) flags |= WeaponStateFlags.Reloading;
+            if (weapon.PendingRelease) flags |= WeaponStateFlags.PendingRelease;
+
+            return new WeaponSnapshotFields(
                 weapon.AmmoInClip,
                 ammo.Reserve(in weapon, in config).Encode(),
-                weapon.Reloading ? WeaponStateFlags.Reloading : WeaponStateFlags.None);
+                flags);
+        }
 
         /// <summary>Rounds and clamps a float health into the 0..100 the wire allows.</summary>
         public static byte ClampHealth(float health)

@@ -299,7 +299,9 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
             //   v10 the actor entry's weapon field (§ 4.3) went 2 -> 5 bytes and MAX_VEHICLES
             //       went 16 -> 24. S_SPAWN_ACTOR, S_DESPAWN_ACTOR and S_EXPLOSION all sit
             //       outside the snapshot entry, so none of their three layouts moved.
-            Assert.Equal(10, ProtocolConstants.PROTOCOL_VERSION);
+            //   v11 weaponStateFlags bit 1 gained pending-release semantics. These layouts
+            //       remain untouched even though peers must reject the behavioral mismatch.
+            Assert.Equal(11, ProtocolConstants.PROTOCOL_VERSION);
         }
     }
 }

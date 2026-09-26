@@ -53,12 +53,46 @@ namespace Ironfront.Net.Unity.Server.Tests
             internal readonly System.Collections.Generic.List<Vector3> FiredDirections =
                 new System.Collections.Generic.List<Vector3>();
 
-            public bool FireCarriedWeapon(float directionX, float directionY, float directionZ)
+            /// <summary>
+            /// Every origin the authority supplied with those shots, in the same order.
+            /// </summary>
+            /// <remarks>
+            /// Separate from <see cref="FiredDirections"/> rather than folded in, because the two
+            /// became independent the moment the origin stopped being read off the weapon: a shot
+            /// can now be fired along the right direction from the wrong place, which is the
+            /// defect this pair exists to tell apart.
+            /// </remarks>
+            internal readonly System.Collections.Generic.List<Vector3> FiredOrigins =
+                new System.Collections.Generic.List<Vector3>();
+
+            public bool FireCarriedWeapon(
+                float originX, float originY, float originZ,
+                float directionX, float directionY, float directionZ)
             {
                 if (!HoldsAWeapon) return false;
 
+                FiredOrigins.Add(new Vector3(originX, originY, originZ));
                 FiredDirections.Add(new Vector3(directionX, directionY, directionZ));
                 return true;
+            }
+
+            public bool ReleaseCarriedThrowable(
+                float originX, float originY, float originZ,
+                float directionX, float directionY, float directionZ)
+                => FireCarriedWeapon(
+                    originX, originY, originZ, directionX, directionY, directionZ);
+
+            /// <summary>How many times the authority's weapon state was mirrored in.</summary>
+            internal int Mirrors;
+
+            /// <summary>The last triple the mirror was handed, so a test can grade it.</summary>
+            internal (int AmmoInClip, bool Unholstered, float Elapsed) LastMirror;
+
+            public void MirrorAuthorityWeaponState(
+                int ammoInClip, bool unholstered, float elapsedSinceLastShot)
+            {
+                Mirrors++;
+                LastMirror = (ammoInClip, unholstered, elapsedSinceLastShot);
             }
 
             public bool FireMountedWeapon() => false;
@@ -234,10 +268,16 @@ namespace Ironfront.Net.Unity.Server.Tests
             var gameplay = new FakeGameplayActor();
             NetServerActor actor = CreateActor(gameplay);
 
-            Assert.IsTrue(actor.FireCarriedWeapon(0.25f, -0.5f, 0.75f));
+            Assert.IsTrue(actor.FireCarriedWeapon(1.5f, 9f, -2.5f, 0.25f, -0.5f, 0.75f));
 
             Assert.AreEqual(1, gameplay.FiredDirections.Count);
             Assert.AreEqual(new Vector3(0.25f, -0.5f, 0.75f), gameplay.FiredDirections[0]);
+
+            // The ORIGIN travels with it, and separately. Read off the weapon it used to be a rig
+            // the server is not standing in; the authority's own answer is the only one that is
+            // the same point on every body prefab, so the two must not be able to swap places.
+            Assert.AreEqual(1, gameplay.FiredOrigins.Count);
+            Assert.AreEqual(new Vector3(1.5f, 9f, -2.5f), gameplay.FiredOrigins[0]);
         }
 
         [Test]
@@ -250,8 +290,19 @@ namespace Ironfront.Net.Unity.Server.Tests
             var gameplay = new FakeGameplayActor { HoldsAWeapon = false };
             NetServerActor actor = CreateActor(gameplay);
 
-            Assert.IsFalse(actor.FireCarriedWeapon(0f, 0f, 1f));
+            Assert.IsFalse(actor.FireCarriedWeapon(0f, 0f, 0f, 0f, 0f, 1f));
             Assert.AreEqual(0, gameplay.FiredDirections.Count);
+        }
+
+        [Test]
+        public void ReleasingAThrowableReachesTheGameplaySeamWithOriginAndDirection()
+        {
+            var gameplay = new FakeGameplayActor();
+            NetServerActor actor = CreateActor(gameplay);
+
+            Assert.IsTrue(actor.ReleaseCarriedThrowable(2f, 3f, 4f, -1f, 0.25f, 0.5f));
+            Assert.AreEqual(new Vector3(2f, 3f, 4f), gameplay.FiredOrigins[0]);
+            Assert.AreEqual(new Vector3(-1f, 0.25f, 0.5f), gameplay.FiredDirections[0]);
         }
 
         [Test]

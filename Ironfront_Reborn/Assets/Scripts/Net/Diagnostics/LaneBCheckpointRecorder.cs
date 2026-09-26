@@ -18,6 +18,7 @@ using System.Text;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Client;
 using Ironfront.Net.Unity.Client;
+using Ironfront.Net.Unity.Server;
 using UnityEngine;
 
 namespace Ironfront.Net.Unity.Diagnostics
@@ -610,7 +611,6 @@ namespace Ironfront.Net.Unity.Diagnostics
         {
             var presenter = Object.FindFirstObjectByType<NetClientCombatPresenter>(
                 FindObjectsInactive.Include);
-
             _json.Append("\"scoreboard\":");
 
             if (presenter == null) { _json.Append("null"); return; }
@@ -674,6 +674,9 @@ namespace Ironfront.Net.Unity.Diagnostics
 
         private void AppendCombat()
         {
+            var projectilePresenter = Object.FindFirstObjectByType<NetClientProjectilePresenter>(
+                FindObjectsInactive.Include);
+
             var driver = Object.FindFirstObjectByType<NetClientLocalCombatDriver>(
                 FindObjectsInactive.Include);
             var presenter = Object.FindFirstObjectByType<NetClientCombatPresenter>(
@@ -741,6 +744,28 @@ namespace Ironfront.Net.Unity.Diagnostics
                 // out" -- three states a HUD renders three different ways. Check the kind first.
                 Str("spareAmmoKind", KindName(state.SpareAmmo.Kind)); Comma();
                 Num("spareAmmoRounds", state.SpareAmmo.Rounds); Comma();
+
+                Bool("releasePending", state.IsReleasePending); Comma();
+                Bool("serverReleasePending", state.ServerSaysReleasePending); Comma();
+                Num("predictedCommands", state.PredictedCommandCount); Comma();
+
+                if (projectilePresenter != null)
+                {
+                    Num("projectilesSpawned", projectilePresenter.ProjectilesSpawned); Comma();
+                    Num("unrenderableKinds", projectilePresenter.UnrenderableKinds); Comma();
+                }
+                else
+                {
+                    _json.Append("\"projectilesSpawned\":null,");
+                    _json.Append("\"unrenderableKinds\":null,");
+                }
+
+                ServerTickLoop serverLoop = ServerTickLoop.Current;
+                if (serverLoop != null)
+                    Num("failedThrowableLaunches", serverLoop.FailedThrowableLaunches);
+                else
+                    _json.Append("\"failedThrowableLaunches\":null");
+                Comma();
 
                 Num("weaponId", state.WeaponId); Comma();
                 Num("predictedShots", state.PredictedShots); Comma();

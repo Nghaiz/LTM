@@ -510,6 +510,19 @@ namespace Ironfront.Net.Replication.Tests
             Assert.Equal(SnapshotField.Weapon, mask);
         }
 
+        [Fact]
+        public void ChangeMaskSetsTheWeaponBitWhenOnlyPendingReleaseMoved()
+        {
+            ActorSnapshotEntry before = WeaponActor(
+                5, Vec3.Zero, 0x0123, WeaponStateFlags.None);
+            ActorSnapshotEntry after = WeaponActor(
+                5, Vec3.Zero, 0x0123, WeaponStateFlags.PendingRelease);
+
+            SnapshotField mask = DeltaEncoder.ComputeChangeMask(in before, in after);
+
+            Assert.Equal(SnapshotField.Weapon, mask);
+        }
+
         private static ActorSnapshotEntry WeaponActor(
             ushort actorId, Vec3 position, ushort spareAmmoEncoded, WeaponStateFlags flags)
         {

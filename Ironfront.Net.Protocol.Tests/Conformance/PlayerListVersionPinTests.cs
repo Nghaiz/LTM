@@ -42,7 +42,7 @@ namespace Ironfront.Net.Protocol.Tests.Conformance
         [Fact]
         public void ProtocolVersionIsWhereTheChangelogSaysItIs()
         {
-            Assert.Equal(10, ProtocolConstants.PROTOCOL_VERSION);
+            Assert.Equal(11, ProtocolConstants.PROTOCOL_VERSION);
         }
 
         [Fact]

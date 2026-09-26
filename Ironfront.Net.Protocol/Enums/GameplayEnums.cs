@@ -96,6 +96,12 @@ namespace Ironfront.Net.Protocol
         /// leave the client playing a reload animation for a reload that is not happening.
         /// </remarks>
         Reloading = 1 << 0,
+
+        /// <summary>
+        /// The server accepted one delayed throwable use and has not released or cancelled it.
+        /// While set, another trigger cannot reserve the same held object.
+        /// </summary>
+        PendingRelease = 1 << 1,
     }
 
     /// <summary>
@@ -118,7 +124,7 @@ namespace Ironfront.Net.Protocol
         Health     = 1 << 4,
         /// <summary>
         /// u8 weaponId + u8 ammoInClip + u16 spareAmmoEncoded + u8
-        /// <see cref="WeaponStateFlags"/>. 5 bytes as of v10.
+        /// <see cref="WeaponStateFlags"/>. 5 bytes as of v11.
         /// </summary>
         /// <remarks>
         /// It was 2 bytes through v9, and the two it lacked are why a bazooka could read

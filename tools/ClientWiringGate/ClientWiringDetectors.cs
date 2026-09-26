@@ -237,6 +237,17 @@ namespace Ironfront.Tools.ClientWiringGate
                 "reached only from Update(), a local-only per-frame path; the local player IS the "
                 + "subject of the read"),
 
+            // LocalAimDirection is FirePressed's aim twin, added with the delayed-throwable
+            // prediction: a predicted throw is journalled with the aim it was ordered along, so the
+            // replay after reconciliation leaves along the same line the server resolves. Reached
+            // only from Update(), behind the same trigger edge that calls PredictFire; it samples
+            // this client's own input source and there is no remote actor in scope. Same
+            // instruction as the others: if a per-actor caller ever appears, delete this entry and
+            // guard the read rather than widening it.
+            ("/NetClientLocalCombatDriver.cs", "LocalAimDirection",
+                "reached only from Update(), a local-only per-frame path; the local player IS the "
+                + "subject of the read"),
+
             // SprintPressed is the third of the same shape, added with the client's sprint-fire
             // gate: the server refuses a shot taken while sprinting, and this samples the same
             // Sprint bit so the client stops predicting one. Identical call path to the two

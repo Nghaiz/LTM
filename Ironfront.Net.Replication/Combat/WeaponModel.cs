@@ -1,4 +1,5 @@
 ﻿using Ironfront.Net.Protocol;
+using Ironfront.Net.Replication.Movement;
 
 namespace Ironfront.Net.Replication.Combat
 {
@@ -137,6 +138,15 @@ namespace Ironfront.Net.Replication.Combat
         /// </remarks>
         public readonly bool Automatic;
 
+        /// <summary>
+        /// Simulation ticks between accepting a carried throw and releasing its object.
+        /// Zero means the weapon fires immediately.
+        /// </summary>
+        public readonly ushort ReleaseDelayTicks;
+
+        /// <summary>Whether firing is a two-phase accept/release transaction.</summary>
+        public bool HasDelayedRelease => Delivery == WeaponDelivery.Projectile && ReleaseDelayTicks > 0;
+
         /// <summary>No ammo bag may refill this weapon. <c>Weapon.AllowsResupply</c>.</summary>
         public const short NoResupplySpareAmmo = -1;
 
@@ -195,12 +205,14 @@ namespace Ironfront.Net.Replication.Combat
             short spareAmmo = InfiniteSpareAmmo,
             bool spendsAmmo = true,
             WeaponDelivery delivery = WeaponDelivery.Hitscan,
-            bool automatic = true)
+            bool automatic = true,
+            ushort releaseDelayTicks = 0)
         {
             SpareAmmo = spareAmmo;
             SpendsAmmo = spendsAmmo;
             Delivery = delivery;
             Automatic = automatic;
+            ReleaseDelayTicks = releaseDelayTicks;
             Cooldown = cooldown;
             Spread = spread;
             ProjectilesPerShot = projectilesPerShot < 1 ? 1 : projectilesPerShot;
@@ -276,6 +288,24 @@ namespace Ironfront.Net.Replication.Combat
         public byte AmmoInClip;
         public bool Reloading;
 
+        /// <summary>One delayed throwable use is reserved and waiting for its release tick.</summary>
+        public bool PendingRelease;
+
+        /// <summary>Server simulation tick at which the reserved throwable may leave the hand.</summary>
+        public uint PendingReleaseTick;
+
+        /// <summary>Input tick that reserved the pending use.</summary>
+        public uint PendingInputTick;
+
+        /// <summary>Aim captured when the server accepted the throw.</summary>
+        public Vec3 PendingAim;
+
+        /// <summary>Tick of the last committed delayed release.</summary>
+        public uint LastThrowableReleaseTick;
+
+        /// <summary>Distinguishes a real tick zero release from the initial state.</summary>
+        public bool HasThrowableReleaseTick;
+
         /// <summary>False while switching weapons or sprinting with the weapon lowered.</summary>
         public bool Unholstered;
 
@@ -313,6 +343,12 @@ namespace Ironfront.Net.Replication.Combat
             LastFiredTime = float.NegativeInfinity,
             AmmoInClip = config.ClipSize,
             Reloading = false,
+            PendingRelease = false,
+            PendingReleaseTick = 0,
+            PendingInputTick = 0,
+            PendingAim = Vec3.Zero,
+            LastThrowableReleaseTick = 0,
+            HasThrowableReleaseTick = false,
             Unholstered = true,
             ReloadStartedAt = float.NegativeInfinity,
             SpareAmmo = config.SpareAmmo,

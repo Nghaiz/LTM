@@ -1,6 +1,7 @@
 using System;
 using Ironfront.Net.Protocol;
 using Ironfront.Net.Replication.Combat;
+using Ironfront.Net.Replication.Movement;
 
 namespace Ironfront.Net.Replication.Client
 {
@@ -90,6 +91,9 @@ namespace Ironfront.Net.Replication.Client
         // what that counter documents as "client and server disagreeing about the weapon".
         private WeaponConfig _weapon = WeaponCatalog.Inert;
         private WeaponRuntimeState _runtime = WeaponRuntimeState.Loaded(WeaponCatalog.Inert);
+        private WeaponRuntimeState _serverRuntime = WeaponRuntimeState.Loaded(WeaponCatalog.Inert);
+        private readonly PredictedWeaponCommandBuffer _weaponCommands =
+            new PredictedWeaponCommandBuffer();
 
         /// <summary>
         /// The sprint block, advanced by <see cref="ApplySprint"/> and read by
@@ -231,6 +235,26 @@ namespace Ironfront.Net.Replication.Client
         /// </remarks>
         public bool ServerSaysReloading { get; private set; }
 
+        /// <summary>Predicted or authoritative delayed release currently in flight.</summary>
+        public bool IsReleasePending => _runtime.PendingRelease;
+
+        /// <summary>The pending-release bit from the newest authoritative weapon snapshot.</summary>
+        public bool ServerSaysReleasePending { get; private set; }
+
+        /// <summary>Unacknowledged local throwable commands awaiting replay.</summary>
+        public int PredictedCommandCount => _weaponCommands.Count;
+
+        /// <summary>Throwable uses not already reserved by the throw currently in hand.</summary>
+        public int TotalThrowableUsesAvailable
+        {
+            get
+            {
+                int reserve = SpareAmmo.Kind == SpareAmmoKind.Finite ? SpareAmmo.Rounds : 0;
+                int total = _runtime.AmmoInClip + reserve;
+                return _runtime.PendingRelease && total > 0 ? total - 1 : total;
+            }
+        }
+
         /// <summary>Trigger pulls the client predicted. The denominator for the next figure.</summary>
         public long PredictedShots { get; private set; }
 
@@ -265,6 +289,9 @@ namespace Ironfront.Net.Replication.Client
             WeaponId = weaponId;
             _weapon = WeaponCatalog.For(weaponId);
             _runtime = WeaponRuntimeState.Loaded(_weapon);
+            _serverRuntime = _runtime;
+            _weaponCommands.Clear();
+            ServerSaysReleasePending = false;
             _reloadStartedAt = float.NaN;
 
             // The new weapon's first shot is a trigger pull, not a continuation of the one the
@@ -419,6 +446,28 @@ namespace Ironfront.Net.Replication.Client
         }
 
         /// <summary>
+        /// Predicts a fire command with the sequence data required to replay delayed throwables
+        /// after snapshot reconciliation. Ordinary weapons retain the established ammo path.
+        /// </summary>
+        public FireRejection PredictFire(
+            float nowSeconds, uint inputTick, uint localTick, in Vec3 aim)
+        {
+            if (!_weapon.HasDelayedRelease) return PredictFire(nowSeconds);
+            if (!EffectiveTriggerPolicy.SprintAllowsFire(in _trigger, nowSeconds))
+                return FireRejection.Holstered;
+            if (!IsAlive) return FireRejection.ShooterDead;
+
+            ThrowableRejection rejection = ThrowableLifecycle.TryBegin(
+                ref _runtime, in _weapon, inputTick, localTick, in aim);
+            FireRejection mapped = MapThrowableRejection(rejection);
+            if (mapped != FireRejection.None) return mapped;
+
+            _weaponCommands.Add(inputTick, localTick, in aim);
+            PredictedShots++;
+            return FireRejection.None;
+        }
+
+        /// <summary>
         /// Marks a reload in flight, so the next snapshot's ammo count is taken verbatim.
         /// </summary>
         /// <remarks>
@@ -490,13 +539,25 @@ namespace Ironfront.Net.Replication.Client
         /// local actor in it is the caller's job and it already has the index.
         /// </remarks>
         public void ApplySnapshot(in ActorSnapshotEntry entry, float nowSeconds)
+            => ApplySnapshot(in entry, nowSeconds, 0, 0);
+
+        /// <summary>Applies snapshot truth and replays throwable commands newer than its ack.</summary>
+        public void ApplySnapshot(
+            in ActorSnapshotEntry entry, float nowSeconds,
+            uint lastProcessedInputTick, uint serverTick)
         {
             if (entry.Has(SnapshotField.Health)) SetHealth(entry.Health);
 
             if (entry.Has(SnapshotField.StateFlags))
                 SetAlive((entry.StateFlags & ActorStateFlags.IsAlive) != 0, nowSeconds);
 
-            if (!entry.Has(SnapshotField.Weapon)) return;
+            _weaponCommands.RemoveAcknowledged(lastProcessedInputTick);
+
+            if (!entry.Has(SnapshotField.Weapon))
+            {
+                if (_weapon.HasDelayedRelease) RebuildThrowablePrediction();
+                return;
+            }
 
             if (entry.WeaponId != WeaponId)
             {
@@ -507,6 +568,9 @@ namespace Ironfront.Net.Replication.Client
                 // weapon swap — a respawn with a different loadout, a pickup — from leaving this
                 // side predicting with the previous gun's numbers.
                 _weapon = WeaponCatalog.For(WeaponId);
+                _runtime = WeaponRuntimeState.Loaded(in _weapon);
+                _serverRuntime = _runtime;
+                _weaponCommands.Clear();
 
                 // And the edge is re-armed for the same reason EquipWeapon re-arms it — this is
                 // the OTHER way a weapon changes, a server-side swap this client never asked
@@ -537,6 +601,21 @@ namespace Ironfront.Net.Replication.Client
 
             bool serverWasReloading = ServerSaysReloading;
             ServerSaysReloading = (entry.WeaponStateFlags & WeaponStateFlags.Reloading) != 0;
+            ServerSaysReleasePending =
+                (entry.WeaponStateFlags & WeaponStateFlags.PendingRelease) != 0;
+
+            if (_weapon.HasDelayedRelease)
+            {
+                _serverRuntime = WeaponRuntimeState.Loaded(in _weapon);
+                _serverRuntime.AmmoInClip = entry.AmmoInClip;
+                _serverRuntime.Reloading = ServerSaysReloading;
+                _serverRuntime.PendingRelease = ServerSaysReleasePending;
+                _serverRuntime.PendingReleaseTick = ServerSaysReleasePending ? serverTick : 0;
+                RebuildThrowablePrediction();
+                _reloadPending = false;
+                _reloadStartedAt = float.NaN;
+                return;
+            }
 
             // A reload the server is still running suspends the anti-flicker rule for the same
             // reason a locally predicted one does: mid-reload, a large predicted/authoritative
@@ -627,6 +706,8 @@ namespace Ironfront.Net.Replication.Client
         {
             _weapon = WeaponCatalog.Inert;
             _runtime = WeaponRuntimeState.Loaded(WeaponCatalog.Inert);
+            _serverRuntime = _runtime;
+            _weaponCommands.Clear();
             _trigger = EffectiveTrigger.Idle;
             _reloadPending = false;
             _reloadStartedAt = float.NaN;
@@ -641,6 +722,7 @@ namespace Ironfront.Net.Replication.Client
             // which is the one moment a player is most likely to be looking at the HUD.
             SpareAmmo = SpareAmmo.NoResupply;
             ServerSaysReloading = false;
+            ServerSaysReleasePending = false;
 
             // Back to "not measured", not to zero. A reconnect that left the last match's count
             // standing would let a grader read a stale clip as this match's, and zeroing it
@@ -651,6 +733,31 @@ namespace Ironfront.Net.Replication.Client
 
             PredictedShots = 0;
             SnapshotAmmoCorrections = 0;
+        }
+
+        private void RebuildThrowablePrediction()
+        {
+            _runtime = _serverRuntime;
+            for (int i = 0; i < _weaponCommands.Count; i++)
+            {
+                PredictedWeaponCommand command = _weaponCommands[i];
+                Vec3 aim = command.Aim;
+                ThrowableLifecycle.TryBegin(
+                    ref _runtime, in _weapon,
+                    command.InputTick, command.LocalTick, in aim);
+            }
+        }
+
+        private static FireRejection MapThrowableRejection(ThrowableRejection rejection)
+        {
+            switch (rejection)
+            {
+                case ThrowableRejection.None: return FireRejection.None;
+                case ThrowableRejection.Holstered: return FireRejection.Holstered;
+                case ThrowableRejection.Reloading: return FireRejection.Reloading;
+                case ThrowableRejection.NoAmmo: return FireRejection.NoAmmo;
+                default: return FireRejection.OnCooldown;
+            }
         }
 
         /// <summary>
@@ -746,6 +853,15 @@ namespace Ironfront.Net.Replication.Client
                 OnRespawned?.Invoke();
                 return;
             }
+
+            // Death is an authoritative cancellation boundary. Do not keep an unacknowledged
+            // local trigger around to replay over a later delta: the server drops the matching
+            // pending release in ClientSession.ClearCombatStateOnDeath, and replaying it here
+            // would leave the corpse holding a ghost throwable until another weapon field came.
+            _weaponCommands.Clear();
+            ThrowableLifecycle.Cancel(ref _runtime);
+            ThrowableLifecycle.Cancel(ref _serverRuntime);
+            ServerSaysReleasePending = false;
 
             OnDied?.Invoke();
         }

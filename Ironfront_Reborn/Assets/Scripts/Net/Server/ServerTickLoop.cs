@@ -439,6 +439,9 @@ namespace Ironfront.Net.Unity.Server
         /// </summary>
         public double LastInputStageMs => _inputStageMs;
 
+        /// <summary>Due throwable releases whose engine spawn failed and was rolled back.</summary>
+        public long FailedThrowableLaunches => _combat.FailedThrowableLaunches;
+
         /// <summary>
         /// Milliseconds the last <see cref="RunSnapshotStage"/> took: hitbox history, projectile
         /// stepping and the snapshot build and send.
@@ -689,6 +692,10 @@ namespace Ironfront.Net.Unity.Server
 
                 for (int i = 0; i < _players.Count; i++)
                     _players[i].Tick(_scheduler.FixedDeltaTime);
+
+                // Delayed throws advance from the simulation clock, not from packet arrival.
+                // This also runs during a catch-up step, once for every tick actually simulated.
+                _combat.AdvancePendingActions(_players, NetContext.CurrentTick);
             }
 
             _inputStageMs = NowMs() - _stepStartMs;
