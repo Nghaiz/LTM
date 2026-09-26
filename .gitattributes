@@ -9,18 +9,15 @@
 *.unity   merge=unityyamlmerge eol=lf
 *.prefab  merge=unityyamlmerge eol=lf
 *.asset   merge=unityyamlmerge eol=lf
-
 # TerrainData is a native binary asset despite its .asset suffix. Treating it as YAML makes
 # Git's line-ending filter report a byte-identical Editor round trip as a binary modification.
 Ironfront_Reborn/Assets/TerrainData/*.asset binary
-
 # Unity binary assets — never diff or merge these.
 *.psd      binary
 *.fbx      binary
 *.tga      binary
 *.dds      binary
 *.unitypackage binary
-
 # Normalize line endings for source and scripts.
 *.cs       text eol=lf diff=csharp
 *.csproj   text eol=lf
@@ -36,7 +33,6 @@ Ironfront_Reborn/Assets/TerrainData/*.asset binary
 # scp's one straight from the Windows working tree — and a CRLF shebang makes the Linux kernel
 # hunt for an interpreter literally named `bash\r`: "bad interpreter: no such file or directory".
 *.sh       text eol=lf
-
 # Dotfiles and extensionless config. Without these, core.autocrlf checks them out as CRLF on
 # Windows while .editorconfig declares `end_of_line = lf` for the same files — the two then
 # disagree forever and every editor save produces a whole-file diff.
@@ -45,3 +41,4 @@ Ironfront_Reborn/Assets/TerrainData/*.asset binary
 .gitignore      text eol=lf
 CODEOWNERS      text eol=lf
 LICENSE         text eol=lf
+Ironfront_Reborn/Assets/TerrainData/ForestLake_Terrain.asset filter=lfs diff=lfs merge=lfs -text
