@@ -498,10 +498,7 @@ namespace Ironfront.Net.Unity.Client
                 uint inputTick = clock != null
                     ? unchecked(clock.InputTick + 1u)
                     : unchecked(NetContext.CurrentTick + 1u);
-                IInputSource input = NetClientBindings.LocalPlayer.InputSource;
-                Vec3 aim = input != null
-                    ? ServerCombatAuthority.AimDirection(input.Yaw, input.Pitch)
-                    : Vec3.Zero;
+                Vec3 aim = LocalAimDirection();
 
                 _state.PredictFire(Time.time, inputTick, inputTick, in aim);
             }
@@ -743,6 +740,19 @@ namespace Ironfront.Net.Unity.Client
             if (input == null) return false;
 
             return (input.Buttons & (ushort)InputButtons.Fire) != 0;
+        }
+
+        /// <summary>
+        /// The local player's aim this frame, in the same frame the server's
+        /// <see cref="ServerCombatAuthority.AimDirection"/> resolves a throw along, or zero when
+        /// no input source is bound. The aim of a predicted throwable command.
+        /// </summary>
+        private static Vec3 LocalAimDirection()
+        {
+            IInputSource input = NetClientBindings.LocalPlayer.InputSource;
+            return input != null
+                ? ServerCombatAuthority.AimDirection(input.Yaw, input.Pitch)
+                : Vec3.Zero;
         }
 
         private static bool ReloadPressed()
