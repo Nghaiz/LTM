@@ -2,6 +2,8 @@
 
 Date: 2026-09-26 (Asia/Saigon)
 
+Implementation commit: `4a5fb66` (`fix-net-authoritative-throwable-lifecycle`)
+
 ## Result
 
 The network throwable lifecycle is server authoritative for frag grenades, spearheads, ammo bags,
