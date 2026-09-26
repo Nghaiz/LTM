@@ -42,8 +42,17 @@ public class ThrowableWeapon : Weapon
 
 			if (NetContext.IsServer)
 			{
-				// The replication authority owns the pending state and release tick. The engine
-				// is invoked only through ReleaseApprovedByServer when that transaction matures.
+				// Only a BOT gets here. A networked player's throw never reaches Fire on the
+				// server: the replication authority owns its pending state and release tick and
+				// invokes the engine through ReleaseApprovedByServer, and Actor.Update returns
+				// early for a claimed body, so Actor.UpdateWeapon cannot call this for one. A bot
+				// has no authority transaction at all -- its AI fires the engine weapon directly,
+				// which is how it throws grenades and hands out ammo bags and medipacks. Leaving
+				// this branch empty left every bot on a dedicated server unable to throw anything,
+				// so the engine schedules the bot's release from the same authored delay.
+				float tickDuration = 1f / Ironfront.Net.Protocol.ProtocolConstants.SIM_TICK_RATE;
+				releaseTick = NetContext.CurrentTick
+					+ (uint)Mathf.Ceil(configuration.releaseDelay / tickDuration);
 			}
 			else if (animator != null)
 			{
@@ -55,6 +64,37 @@ public class ThrowableWeapon : Weapon
 			}
 		}
 		holdingFire = true;
+	}
+
+	/// <summary>
+	/// The tick a BOT's pending throw releases on on the server, or 0 when nothing is pending.
+	/// </summary>
+	/// <remarks>
+	/// Never set for a networked player -- see the server branch of <see cref="Fire"/>. Scheduled
+	/// from <c>configuration.releaseDelay</c>, authored per weapon to match its own throw clip.
+	/// </remarks>
+	private uint releaseTick;
+
+	protected override void Update()
+	{
+		// base first: Weapon.Update drives the cooldown, the reload timer and the hold-fire
+		// state this weapon's CanFire() reads.
+		base.Update();
+
+		if (releaseTick == 0 || NetContext.CurrentTick < releaseTick) return;
+
+		releaseTick = 0;
+		ReleaseThrowable();
+	}
+
+	/// <summary>
+	/// Drops a bot's scheduled release. <c>CancelInvoke()</c>, which <c>Weapon.Drop</c> and
+	/// <c>Weapon.Holster</c> reach for, cannot see a tick held in a plain field.
+	/// </summary>
+	protected override void CancelPendingActions()
+	{
+		base.CancelPendingActions();
+		releaseTick = 0;
 	}
 
 	/// <summary>
