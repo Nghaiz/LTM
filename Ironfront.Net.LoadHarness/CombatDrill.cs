@@ -484,6 +484,14 @@ namespace Ironfront.Net.LoadHarness
             // connection owns -- a real send with no observable intent behind it.
             if (!world.Me.Exists) return Idle(DrillPhase.Approach);
 
+            // The deploy is a snapshot, not a message. Since the deploy flow, the server names
+            // this client's body with S_SPAWN_ACTOR once, at JOIN, while it is still awaiting
+            // deploy; the body going live later arrives only as IsAlive flipping true, with no
+            // second S_SPAWN_ACTOR for OnLocalSpawn to hear. Without this, a drill that asked to
+            // deploy stayed latched Dead for the whole run -- lane-A 2026-09-27: all eight
+            // bodies placed by the server, zero trigger ticks from all eight clients.
+            if (_phase == DrillPhase.Dead && _respawnAsked && world.Alive) OnLocalSpawn();
+
             if (_phase == DrillPhase.Dead || !world.Alive) return DecideDead(nowMs);
 
             ExpirePendingSeat(nowMs);

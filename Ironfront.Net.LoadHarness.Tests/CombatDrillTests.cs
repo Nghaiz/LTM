@@ -451,6 +451,26 @@ namespace Ironfront.Net.LoadHarness.Tests
         }
 
         [Fact]
+        public void AnAliveSnapshotAfterTheRequestEndsTheDeadPhase()
+        {
+            var drill = new CombatDrill(0);
+            double due = 5000.0 + ProtocolConstants.RESPAWN_SECONDS * 1000.0
+                         + CombatDrill.RespawnGraceMs;
+
+            // Joined and awaiting deploy: the body exists but is not alive, so the drill waits
+            // out the gate and asks once.
+            drill.Decide(World(alive: false), 5000.0);
+            Assert.True(drill.Decide(World(alive: false), due + 1.0).SendRespawn);
+
+            // The deploy arrives as IsAlive flipping true in a snapshot, with no second
+            // S_SPAWN_ACTOR. The drill has to leave Dead on that alone, or it never fights.
+            DrillCommand command = drill.Decide(World(alive: true), due + 50.0);
+
+            Assert.NotEqual(DrillPhase.Dead, command.Phase);
+            Assert.False(command.SendRespawn);
+        }
+
+        [Fact]
         public void ADeathReleasesTheSeatItWasHolding()
         {
             var drill = new CombatDrill(0);
