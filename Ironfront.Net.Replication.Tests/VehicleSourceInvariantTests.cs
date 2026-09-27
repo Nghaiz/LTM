@@ -96,6 +96,42 @@ namespace Ironfront.Net.Replication.Tests
             AssertAbsent(source, "void OnCollisionEnter(", "Helicopter", "it would hide Vehicle.OnCollisionEnter");
         }
 
+        /// <summary>
+        /// A person flying gets the flight assist; a bot, a burning helicopter and skids resting
+        /// on the ground fly the original's model.
+        /// </summary>
+        /// <remarks>
+        /// The 2026-09-28 playtest report: the helicopter tilts on its own, is hard to aim and
+        /// falls out of the sky from over-banking and diving. The behaviour is pinned by
+        /// <c>HelicopterFlightAssistTests</c>; this pins who receives it. A bot is excluded because
+        /// <c>AiActorController.HelicopterInput</c> is tuned on the unassisted model, and a player's
+        /// server body is the AI prefab, so <c>aiControlled</c> alone would exclude every
+        /// networked pilot on the server while their own client kept assisting -- two different
+        /// helicopters, reconciled by correction every snapshot.
+        /// </remarks>
+        [Fact]
+        public void OnlyAPersonFlyingGetsTheFlightAssist()
+        {
+            string source = ReadScript("Helicopter.cs");
+            string fixedUpdate = MethodBody(source, "Helicopter.cs", "protected override void FixedUpdate()");
+
+            Assert.Single(Regex.Matches(fixedUpdate, @"FlightAssist\(command\)"));
+            Assert.Contains(
+                "rigidbody.AddRelativeTorque(vector2 + FlightAssist(command), ForceMode.VelocityChange);",
+                fixedUpdate);
+            Assert.Contains(
+                "rigidbody.AddRelativeTorque(randomBurningTorque + 0.5f * vector2, ForceMode.VelocityChange);",
+                fixedUpdate);
+
+            string assist = MethodBody(source, "Helicopter.cs", "private Vector3 FlightAssist(Vector4 command)");
+            Assert.Contains("pilot.IsSteeredByAPerson()", assist);
+            Assert.Contains("!restingOnGround", assist);
+            Assert.Contains("? rotorSpeed : 0f", assist);
+
+            string actor = MethodBody(ReadScript("Actor.cs"), "Actor.cs", "public bool IsSteeredByAPerson()");
+            Assert.Contains("IsServerClaimedBody()", actor);
+        }
+
         // ------------------------------------------------------------------ Task 3: turrets
 
         [Theory]
