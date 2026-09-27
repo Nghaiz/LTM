@@ -415,9 +415,25 @@ namespace Ironfront.Net.Unity.Server
         /// for an id a client already knows is a client-side behaviour this branch cannot
         /// exercise, and guessing at it would be the kind of repair that masks its own symptom.
         /// </para>
+        /// <para>
+        /// <b>The death gate is re-armed here too, and for bots nothing else does it.</b>
+        /// <see cref="EmitDeath"/> runs its whole body -- the <c>S_DEATH</c> broadcast, the
+        /// killfeed, the team score and the tally -- only when
+        /// <see cref="ServerRespawnGate.TryBeginDeath"/> answers true, which it does once until
+        /// <see cref="ServerRespawnGate.MarkRespawned"/> clears the record. A player's respawn
+        /// goes through <c>ServerCombatBridge.TryRespawn</c>, which clears it. A bot's respawn
+        /// is the original game's <c>ActorManager</c> wave calling <c>Actor.SpawnAt</c>, which
+        /// knows nothing of the gate, so from protocol 10 (#271) until this line every bot died
+        /// exactly once as far as the match was concerned: its second and later deaths were
+        /// swallowed as "duplicates", no <c>S_DEATH</c> went out and the enemy scored nothing.
+        /// A 32-bot Island round then crawled to 52/39 in eleven minutes and never ended. This
+        /// method is the one place both kinds of respawn meet, so the gate is cleared here; for
+        /// a player it is already clear and the call changes nothing.
+        /// </para>
         /// </remarks>
         public void NoteRespawned(ushort actorId)
         {
+            _respawnGate.MarkRespawned(actorId);
             _corpses.NoteRespawn(actorId);
 
             for (int i = 0; i < _players.Count; i++)
@@ -2123,7 +2139,11 @@ namespace Ironfront.Net.Unity.Server
                 // room -- is sent no match result for it.
                 if (_match != null && _match.Match != null)
                 {
-                    Debug.Log("[net] resetting the match for the next room");
+                    // The score goes in the line because the reset zeroes it, and every later
+                    // line -- the phase change included -- can then only say 0 / 0.
+                    Debug.Log("[net] resetting the match for the next room (it stood at "
+                              + $"{_match.Match.Score0} / {_match.Match.Score1}, phase "
+                              + $"{_match.Match.Phase})");
                     _match.Match.ForceReset();
                 }
             }

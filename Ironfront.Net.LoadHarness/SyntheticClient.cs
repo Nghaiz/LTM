@@ -140,6 +140,7 @@ namespace Ironfront.Net.LoadHarness
             _router.OnSeatChange += OnSeatChange;
             _router.OnDeath += OnDeath;
             _router.OnHitConfirm += OnHitConfirm;
+            _router.OnMatchState += OnMatchState;
         }
 
         /// <summary>Zero-based index within the run, and the client's identity in the report.</summary>
@@ -191,6 +192,27 @@ namespace Ironfront.Net.LoadHarness
         public long UnknownMessages => _router.UnknownMessages;
 
         public long SnapshotsApplied => _router.SnapshotsApplied;
+
+        /// <summary>The last <c>S_MATCH_STATE</c> this client decoded, or null before the first.</summary>
+        /// <remarks>
+        /// Read off the shipped router, like every other verb here, so the score a run prints is
+        /// the one a Unity client would draw. It exists because a server whose deaths stop
+        /// scoring looks perfectly healthy from every other number this harness reports.
+        /// </remarks>
+        public MatchStateMessage? LastMatchState { get; private set; }
+
+        /// <summary>Every <c>S_DEATH</c> this client has received, whoever died.</summary>
+        public long DeathsSeen { get; private set; }
+
+        private readonly int[] _deathsByVictim = new int[ProtocolConstants.MAX_ACTORS];
+
+        /// <summary><c>S_DEATH</c> messages this client has received naming this victim.</summary>
+        /// <remarks>
+        /// Per victim because a total cannot tell "few deaths" from "every actor died once and
+        /// never again", and the second is what a death gate that is never re-armed looks like.
+        /// </remarks>
+        public int DeathsOf(ushort actorId)
+            => actorId < _deathsByVictim.Length ? _deathsByVictim[actorId] : 0;
 
         public long VehicleSnapshotsApplied => _router.VehicleSnapshotsApplied;
 
@@ -625,6 +647,9 @@ namespace Ironfront.Net.LoadHarness
 
         private void OnDeath(DeathMessage message)
         {
+            DeathsSeen++;
+            if (message.VictimActorId < _deathsByVictim.Length) _deathsByVictim[message.VictimActorId]++;
+
             _verbs.Record(
                 HarnessVerb.Death, Index, _router.Decoder.Current.ServerTick, _nowMs,
                 $"S_DEATH victim={message.VictimActorId} killer={message.KillerActorId} "
@@ -633,6 +658,8 @@ namespace Ironfront.Net.LoadHarness
             if (message.VictimActorId == LocalActorId && LocalActorId != 0)
                 _drill?.OnLocalDeath(_nowMs);
         }
+
+        private void OnMatchState(MatchStateMessage message) => LastMatchState = message;
 
         private void OnHitConfirm(HitConfirmMessage message)
         {
@@ -861,6 +888,7 @@ namespace Ironfront.Net.LoadHarness
             _router.OnSeatChange -= OnSeatChange;
             _router.OnDeath -= OnDeath;
             _router.OnHitConfirm -= OnHitConfirm;
+            _router.OnMatchState -= OnMatchState;
             _transport.OnMessage -= OnMessage;
             _transport.OnConnected -= OnConnected;
             _transport.OnDisconnected -= OnDisconnected;

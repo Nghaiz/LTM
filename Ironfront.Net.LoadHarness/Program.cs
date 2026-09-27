@@ -6,6 +6,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
+using Ironfront.Net.Protocol;
 using Ironfront.Net.Transport;
 using Ironfront.Net.Transport.Simulation;
 
@@ -113,6 +114,7 @@ namespace Ironfront.Net.LoadHarness
 
                 WaitForHandshakes(clients, clock, errors);
                 RunFor(clients, clock, options.DurationSeconds);
+                Console.WriteLine(DescribeDeathsByVictim(clients));
             }
             catch (Exception ex)
             {
@@ -209,11 +211,47 @@ namespace Ironfront.Net.LoadHarness
                     long snapshots = 0;
                     foreach (SyntheticClient client in clients) snapshots += client.SnapshotsApplied;
                     Console.WriteLine(
-                        $"  t+{now / 1000.0:0}s  snapshots applied {snapshots}");
+                        $"  t+{now / 1000.0:0}s  snapshots applied {snapshots}" + DescribeMatch(clients));
                 }
 
                 Thread.Sleep(PollIntervalMs);
             }
+        }
+
+        /// <summary>
+        /// Client 0's view of the match: phase, both scores and how many deaths it has been told
+        /// about. Empty until the first <c>S_MATCH_STATE</c> arrives.
+        /// </summary>
+        private static string DescribeMatch(List<SyntheticClient> clients)
+        {
+            if (clients.Count == 0 || clients[0].LastMatchState is not { } match) return string.Empty;
+
+            return $"  |  match {match.Phase} {match.Score0}/{match.Score1} "
+                   + $"(win by {match.VictoryPoints}), deaths seen {clients[0].DeathsSeen}";
+        }
+
+        /// <summary>
+        /// How client 0's <c>S_DEATH</c> messages spread over their victims: how many distinct
+        /// actors died, and how many of them died more than once.
+        /// </summary>
+        private static string DescribeDeathsByVictim(List<SyntheticClient> clients)
+        {
+            if (clients.Count == 0) return string.Empty;
+
+            SyntheticClient observer = clients[0];
+            int victims = 0, repeated = 0, most = 0;
+            ushort mostId = 0;
+            for (ushort id = 0; id < ProtocolConstants.MAX_ACTORS; id++)
+            {
+                int deaths = observer.DeathsOf(id);
+                if (deaths == 0) continue;
+                victims++;
+                if (deaths > 1) repeated++;
+                if (deaths > most) { most = deaths; mostId = id; }
+            }
+
+            return $"deaths seen by client 0: {observer.DeathsSeen} across {victims} victim(s); "
+                   + $"{repeated} died more than once (most: actor {mostId}, {most} time(s))";
         }
 
         private static HarnessReport BuildReport(
