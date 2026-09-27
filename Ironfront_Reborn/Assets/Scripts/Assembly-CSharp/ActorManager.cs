@@ -44,6 +44,45 @@ public class ActorManager : MonoBehaviour
 	[NonSerialized]
 	private bool aiRosterFilled;
 
+	/// <summary>
+	/// Real-time seconds one frame may spend creating or placing bodies before the rest waits
+	/// for the next frame. At least one body is handled per frame, so the work always finishes.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Both used to happen all at once. Measured 2026-09-27 on a lane-B Island server: the
+	/// release tick created all 32 bots in one 104 ms frame, and the wave after it placed all 32
+	/// in one 187 ms frame -- about 3 ms to create a bot and 6 ms to place one. No snapshot
+	/// leaves a server frame that has not ended, so every client froze with it, at the start of
+	/// every round; a wave of bots that died together did the same on a smaller scale.
+	/// </para>
+	/// <para>
+	/// Four milliseconds leaves a 60 Hz server frame most of its budget for the tick, and still
+	/// puts a full 32-bot roster into the world in about half a second.
+	/// </para>
+	/// </remarks>
+	private const float SPAWN_WORK_BUDGET_SECONDS = 0.004f;
+
+	/// <summary>
+	/// The frame the spawn batch in flight last did work on, or -1 when none is running.
+	/// </summary>
+	/// <remarks>
+	/// A heartbeat rather than a flag. <see cref="SpawnWave"/> runs ten times a second on the
+	/// shipped <c>spawnTime</c>, so it must not start a second batch over bodies the first is
+	/// still placing -- but a coroutine stopped from outside never reaches the line that would
+	/// clear a flag, and a flag stuck on would hold every later wave forever. A batch that has
+	/// not beaten for a frame is gone, and the next wave goes ahead.
+	/// </remarks>
+	[NonSerialized]
+	private int spawnBatchHeartbeat = -1;
+
+	/// <summary>
+	/// Bumped whenever the roster is torn down, so a fill still creating bots for a round that has
+	/// just been reset stops rather than adding them to the next one.
+	/// </summary>
+	[NonSerialized]
+	private int rosterGeneration;
+
 	[NonSerialized]
 	public SpawnPoint[] spawnPoints;
 
@@ -273,18 +312,43 @@ public class ActorManager : MonoBehaviour
 			destroyed++;
 		}
 		aiRosterFilled = false;
+		rosterGeneration++;
 		Debug.Log($"[net] round reset: {destroyed} bot(s) despawned, roster re-armed.");
 	}
 
-	private void FillEmptySlotsWithAI()
+	/// <summary>
+	/// Creates the round's bots, <see cref="SPAWN_WORK_BUDGET_SECONDS"/> of them a frame, the
+	/// two teams interleaved so neither reaches the map first.
+	/// </summary>
+	/// <remarks>
+	/// Each bot is due on the wave after it is created (<see cref="CreateAIActor"/>), so the
+	/// roster enters the world over the half second the fill takes rather than in one frame.
+	/// A round reset mid-fill stops it: the next round fills its own roster once released.
+	/// </remarks>
+	private IEnumerator FillEmptySlotsWithAI()
 	{
-		for (int i = 0; i < team0Bots; i++)
+		int generation = rosterGeneration;
+		float sliceStartedAt = Time.realtimeSinceStartup;
+		int rows = Mathf.Max(team0Bots, team1Bots);
+		for (int i = 0; i < rows; i++)
 		{
-			CreateAIActor(0, (float)i / (float)team0Bots);
-		}
-		for (int j = 0; j < team1Bots; j++)
-		{
-			CreateAIActor(1, (float)j / (float)team1Bots);
+			if (Time.realtimeSinceStartup - sliceStartedAt > SPAWN_WORK_BUDGET_SECONDS)
+			{
+				yield return null;
+				if (generation != rosterGeneration)
+				{
+					yield break;
+				}
+				sliceStartedAt = Time.realtimeSinceStartup;
+			}
+			if (i < team0Bots)
+			{
+				CreateAIActor(0, (float)i / (float)team0Bots);
+			}
+			if (i < team1Bots)
+			{
+				CreateAIActor(1, (float)i / (float)team1Bots);
+			}
 		}
 	}
 
@@ -329,11 +393,23 @@ public class ActorManager : MonoBehaviour
 		if (botsReleased && !aiRosterFilled)
 		{
 			aiRosterFilled = true;
-			FillEmptySlotsWithAI();
+			StartCoroutine(FillEmptySlotsWithAI());
 			Debug.Log(
 				$"[net] bots released: {team0Bots} for team 0, {team1Bots} for team 1, "
 				+ $"{Ironfront.Net.Unity.NetBotRelease.DelaySeconds:F0}s after the first player "
 				+ "body entered the world.");
+		}
+
+		// ONE BATCH AT A TIME. A batch places its bodies over several frames now (see
+		// SPAWN_WORK_BUDGET_SECONDS), and this runs ten times a second: a second batch started
+		// meanwhile would hold the same waiting bodies and spend its own budget on them in the
+		// same frames. Returning holds nobody back for long -- whoever the batch in flight does
+		// not hold is picked up by the first tick after it ends, a fraction of a second later --
+		// and it is not the blanket early-out the remark above forbids, because a batch always
+		// ends: a stopped one stops beating and stops counting as in flight.
+		if (SpawnBatchInFlight)
+		{
+			return;
 		}
 
 		List<Actor> list = new List<Actor>();
@@ -400,11 +476,26 @@ public class ActorManager : MonoBehaviour
 				list.Add(actor);
 			}
 		}
+		// Ten ticks a second almost always find nobody waiting; a batch with nothing to place
+		// would still allocate a coroutine and a list per spawn point.
+		if (list.Count == 0)
+		{
+			return;
+		}
 		StartCoroutine(SpawnActorList(list));
 	}
 
+	/// <summary>Whether a spawn batch is still placing bodies. See <see cref="spawnBatchHeartbeat"/>.</summary>
+	private bool SpawnBatchInFlight => spawnBatchHeartbeat >= 0 && Time.frameCount - spawnBatchHeartbeat <= 1;
+
+	/// <summary>
+	/// Places a wave's bodies, <see cref="SPAWN_WORK_BUDGET_SECONDS"/> of them a frame, then forms
+	/// the squads from whoever was placed.
+	/// </summary>
 	private IEnumerator SpawnActorList(List<Actor> actorsToSpawn)
 	{
+		float sliceStartedAt = Time.realtimeSinceStartup;
+		spawnBatchHeartbeat = Time.frameCount;
 		Dictionary<SpawnPoint, List<Actor>> spawnedActors = new Dictionary<SpawnPoint, List<Actor>>();
 		SpawnPoint[] array = spawnPoints;
 		foreach (SpawnPoint spawnPoint in array)
@@ -413,6 +504,21 @@ public class ActorManager : MonoBehaviour
 		}
 		foreach (Actor actor in actorsToSpawn)
 		{
+			if (Time.realtimeSinceStartup - sliceStartedAt > SPAWN_WORK_BUDGET_SECONDS)
+			{
+				yield return null;
+				sliceStartedAt = Time.realtimeSinceStartup;
+				spawnBatchHeartbeat = Time.frameCount;
+			}
+
+			// Asked again, because the wave spans frames now. A round reset in between destroys
+			// the bots this batch holds -- deactivating them first, so they are not null until the
+			// frame ends -- and a body is only this batch's to place while it is still down.
+			if (actor == null || !actor.gameObject.activeInHierarchy || !actor.dead)
+			{
+				continue;
+			}
+
 			SpawnPoint spawnPoint3 = actor.controller.SelectedSpawnPoint();
 			if (spawnPoint3 != null)
 			{
@@ -443,6 +549,12 @@ public class ActorManager : MonoBehaviour
 			float squadReadyTime = 0f;
 			foreach (Actor spawnedActor in spawnedActors[spawnPoint2])
 			{
+				// Placed in an earlier frame of this batch, so it may since have died, or been
+				// torn down by a round reset. Neither belongs in a squad that is forming now.
+				if (spawnedActor == null || !spawnedActor.gameObject.activeInHierarchy || spawnedActor.dead)
+				{
+					continue;
+				}
 				if (spawnedActor.aiControlled)
 				{
 					aiSquad.Add((AiActorController)spawnedActor.controller);
@@ -462,6 +574,7 @@ public class ActorManager : MonoBehaviour
 				new Squad(aiSquad, squadReadyTime);
 			}
 		}
+		spawnBatchHeartbeat = -1;
 		yield break;
 	}
 
