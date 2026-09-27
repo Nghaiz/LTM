@@ -275,7 +275,8 @@ namespace Ironfront.Net.Transport
             _lastReceiveMs = nowMs;
             _stats.PacketsReceived++;
             _stats.BytesReceived += datagram.Length;
-            _reliability.ProcessIncomingAck(header.Ack, header.AckBitfield, nowMs);
+            _reliability.ProcessIncomingAck(
+                header.Ack, header.AckBitfield, nowMs, IsRttSampleTrusted(nowMs));
             _reliability.OnPacketReceived(header.Sequence);
 
             // There is no standalone ACK datagram in GSP. A prompt keep-alive carries the
@@ -318,6 +319,39 @@ namespace Ironfront.Net.Transport
                     return;
             }
         }
+
+        /// <summary>
+        /// Longest gap between two polls of this connection across which an ack still counts
+        /// as an RTT sample.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A datagram read <c>g</c> ms after the previous poll has been waiting in the socket for
+        /// anything up to <c>g</c>, so an RTT taken from it is the network round trip plus an
+        /// unknown share of this process's own stall. When the stall is a frame or two that
+        /// error is noise. When it is the one-second first frame after a map load it is the
+        /// whole sample: every ack of that burst reads about a second, the smoothed RTT crosses
+        /// <see cref="CongestionControl"/>'s 250 ms line, and because the connection is younger
+        /// than its ten-second good streak it is held BAD for twenty seconds. That happened on
+        /// every join, and every later BAD episode on the Azure servers lined up with a client
+        /// frame of 300-1100 ms rather than with the network (plans/reports/
+        /// 2026-09-28-azure-gameserver-host.md).
+        /// </para>
+        /// <para>
+        /// Such acks are still acknowledged -- only the timing is thrown away. 100 ms bounds the
+        /// local share of any sample that is kept to less than half the BAD threshold, and a
+        /// process that cannot poll ten times a second has a frame rate problem that a
+        /// congestion signal cannot help with.
+        /// </para>
+        /// </remarks>
+        internal const double MaxRttSamplePollGapMs = 100.0;
+
+        /// <summary>
+        /// Whether an ack read now arrived close enough to now for its round trip to be the
+        /// network's. See <see cref="MaxRttSamplePollGapMs"/>.
+        /// </summary>
+        private bool IsRttSampleTrusted(double nowMs)
+            => _lastUpdateMs <= 0.0 || nowMs - _lastUpdateMs <= MaxRttSamplePollGapMs;
 
         /// <summary>Services retries, keep-alive, retransmission and fragment expiry.</summary>
         public void Update(double nowMs)

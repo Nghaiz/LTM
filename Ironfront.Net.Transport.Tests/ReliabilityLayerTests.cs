@@ -284,6 +284,23 @@ namespace Ironfront.Net.Transport.Tests
         }
 
         [Fact]
+        public void AnUntimedAckReleasesItsPacketsWithoutMovingTheRtt()
+        {
+            // The ack read after a local stall: both packets must still be released, or the
+            // reliable window would fill up behind them, but neither may be timed.
+            var reliability = new ReliabilityLayer();
+            reliability.OnPacketSent(0, new byte[] { 1 }, true, 10);
+            reliability.ProcessIncomingAck(0, 0, 55);
+
+            reliability.OnPacketSent(1, new byte[] { 1 }, true, 60);
+            reliability.OnPacketSent(2, new byte[] { 1 }, true, 70);
+            reliability.ProcessIncomingAck(2, 0b1u, 1_100, sampleRtt: false);
+
+            Assert.Equal(45f, reliability.SmoothedRttMs);
+            Assert.Equal(0, reliability.PendingReliableCount);
+        }
+
+        [Fact]
         public void ReliableWindowStopsAtSixtyFourUnackedPackets()
         {
             var reliability = new ReliabilityLayer(new BufferPool(64, ProtocolConstants.MTU_SAFE));
