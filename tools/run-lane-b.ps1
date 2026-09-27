@@ -191,7 +191,23 @@ param(
     #
     # OFF by default because the line prints on every trigger frame: a 30-round burst is 30
     # lines per shooter, and every check that does not grade targeting pays for them.
-    [switch] $LogShots
+    [switch] $LogShots,
+
+    # Run only the first N of the roster (driver, observer-a, observer-b).
+    #
+    # A FRAME-TIME MEASUREMENT WANTS ONE RENDERED CLIENT. Three Unity players rendering on one
+    # machine contend for the same CPU and GPU, so a hitch measured under three is partly a
+    # hitch of the other two -- the 2026-09-27 playtest ran two clients beside the server and
+    # could not tell its own stutter from the neighbour's. Checks that need a witness keep 3.
+    [ValidateRange(1, 3)]
+    [int] $ClientCount = 3,
+
+    # IRONFRONT_LOG_FRAMES=1 for every process: one [frames] line per 5 s window in each log,
+    # and a [hitch] line naming the heaviest PlayerLoop systems of every frame over 50 ms.
+    #
+    # Not the Unity profiler: a -profiler-log-file capture of a 240 fps client is about 10 GB for
+    # four minutes (measured 2026-09-27), and only a batchmode Editor can read it back.
+    [switch] $LogFrames
 )
 
 $ErrorActionPreference = "Stop"
@@ -282,7 +298,8 @@ $clients = @(
     @{ Label = "driver";     PlayerId = 5001; Name = "DRIVER"; Team = 0 }
     @{ Label = "observer-a"; PlayerId = 5002; Name = "OBS-A";  Team = 1 }
     @{ Label = "observer-b"; PlayerId = 5003; Name = "OBS-B";  Team = 0 }
-)
+) | Select-Object -First $ClientCount
+$clients = @($clients)
 
 if ($ClientTeams.Count -gt 0) {
     if ($ClientTeams.Count -ne $clients.Count) {
@@ -339,6 +356,7 @@ function Set-CommonEnvironment {
     # Unrecognised or absent returns a DISABLED config by design, so "off" needs no special case.
     $env:IRONFRONT_SIM = $Sim
     $env:IRONFRONT_SIM_SEED = "$SimSeed"
+    $env:IRONFRONT_LOG_FRAMES = if ($LogFrames) { "1" } else { $null }
 }
 
 function Clear-ClientEnvironment {

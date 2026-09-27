@@ -147,12 +147,16 @@ namespace Ironfront.Net.Unity.Server
             // loadout slot is unresolved rather than guessing slot 0 (handoff section 4.5).
             ActorAmmoSource ammo = session.AmmoSourceFrom(_loop.SpareAmmo);
 
+            // AFTER the mirror, so a weapon asked about its trigger holds the authority's clip;
+            // BEFORE the authority, because a trigger the weapon keeps must never reach it.
+            InputFrame resolved = SteerCarriedWeapon(session, actor, in frame);
+
             CombatTickResult result = _authority.Step(
                 ref session.Weapon,
                 ref session.Trigger,
                 in weapon,
                 session.ActorId,
-                in frame,
+                in resolved,
                 in session.State,
                 new ReadOnlySpan<HitscanTarget>(_targets, 0, _targetCount),
                 new ActorFireEligibility(actor.IsAlive, isDeployed: true),
@@ -195,6 +199,49 @@ namespace Ironfront.Net.Unity.Server
             EmitHitConfirms(session, in result);
 
             if (result.VictimDied) EmitDeath(session, in result);
+        }
+
+        /// <summary>
+        /// Hands the carried weapon this frame's aim, and returns the frame the combat authority
+        /// resolves -- without its trigger when the weapon kept the trigger for itself.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The Javelin, and why its trigger is not a shot.</b> Offline an unlocked launcher's
+        /// trigger marks the point it is looking at; the missile leaves on a later pull once the
+        /// lock has held for two seconds, or at once if the trigger is still held when it does.
+        /// The authority knows none of that -- every pull of a clip-of-one launcher is a round to
+        /// it -- so an unlocked pull reaching it spent the round and launched nothing, and the
+        /// engine threw on the way (<c>pointSampler</c> is destroyed on a server-side body).
+        /// </para>
+        /// <para>
+        /// <b>Withholding the bit reproduces the shipped timing exactly.</b> The trigger state is
+        /// edge-measured against the previous processed frame, so while the weapon keeps the
+        /// trigger the authority sees it released; the frame the lock completes with the trigger
+        /// still down is a fresh rising edge, and the launch happens there -- the offline
+        /// "hold fire and it goes when the lock does".
+        /// </para>
+        /// <para>
+        /// <b>The server decides the lock, from the server's own aim.</b> The client draws its own
+        /// lock box from the same algorithm over the same input, and never says what it locked:
+        /// a client-named target would be a target the server could not refuse.
+        /// </para>
+        /// </remarks>
+        private static InputFrame SteerCarriedWeapon(
+            ClientSession session, NetServerActor actor, in InputFrame frame)
+        {
+            Vec3 eye = ServerCombatAuthority.ShotOrigin(in session.State, in frame);
+            Vec3 aim = ServerCombatAuthority.AimDirection(frame.YawDegrees, frame.PitchDegrees);
+
+            actor.SteerCarriedWeapon(
+                eye.X, eye.Y, eye.Z, aim.X, aim.Y, aim.Z, frame.IsPressed(InputButtons.Aim));
+
+            if (!frame.IsPressed(InputButtons.Fire)) return frame;
+            if (!actor.TryWithholdCarriedTrigger(aim.X, aim.Y, aim.Z)) return frame;
+
+            return new InputFrame(
+                frame.MoveX, frame.MoveZ, frame.Yaw, frame.Pitch,
+                frame.Buttons & ~InputButtons.Fire);
         }
 
         /// <summary>
@@ -284,21 +331,31 @@ namespace Ironfront.Net.Unity.Server
 
         /// <summary>
         /// Points the session at the loadout slot the body's weapon came out of, and says so
-        /// once when it cannot.
+        /// when the body holds a weapon the loadout does not have.
         /// </summary>
         /// <remarks>
-        /// <b>Rate-limited to the transitions, not to a timer.</b> This runs once per accepted
-        /// input frame per player at 30 Hz, so a per-occurrence log would be thirty identical
-        /// lines a second for as long as the inconsistency lasted. Logging only the edge -- the
-        /// frame on which the slot went from known to unknown -- names it once per occurrence,
-        /// which is the thing worth knowing.
+        /// <para>
+        /// <b>Holding NOTHING is not a disagreement, and it is the common case.</b> The body holds
+        /// <see cref="WeaponIds.NONE"/> whenever it is dead (<c>Actor.Die</c> drops every slot),
+        /// driving or riding a seat that holsters the carried weapon, or manning a turret, whose
+        /// weapon carries no network id. The slot is forgotten there -- there is no reserve to
+        /// draw -- but the warning used to say "the session and the body disagree about the
+        /// loadout" for it: 40 times in one 2026-09-27 Island match, every one of them for weapon
+        /// 0, and it read to a playtester as a reload bug.
+        /// </para>
+        /// <para>
+        /// <b>Once per change, which the callers already are.</b>
+        /// <see cref="AdoptTheWeaponTheBodyIsHolding"/> returns before calling this when the id
+        /// has not changed, and <see cref="PlaceAtSpawn"/> calls it once per spawn. It used to
+        /// also require the slot to have been known a moment before, and that gate hid the one
+        /// case worth reporting: a body re-armed with a weapon outside its loadout right after a
+        /// death, when the slot was already unknown because the corpse held nothing.
+        /// </para>
         /// </remarks>
-        private static void ResolveActiveLoadoutSlot(ClientSession session, byte weaponId)
+        internal static void ResolveActiveLoadoutSlot(ClientSession session, byte weaponId)
         {
-            bool wasKnown = session.HasActiveLoadoutSlot;
-
             if (session.ResolveActiveLoadoutSlotFrom(weaponId)) return;
-            if (!wasKnown) return;
+            if (weaponId == WeaponIds.NONE) return;
 
             Debug.LogWarning(
                 $"[net] actor {session.ActorId} is holding weapon {weaponId}, which is in none "

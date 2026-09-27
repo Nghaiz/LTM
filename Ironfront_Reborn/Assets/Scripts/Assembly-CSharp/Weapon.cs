@@ -686,6 +686,35 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
         protected void ClearNetworkShotOrigin() => networkShotOrigin = null;
 
 	/// <summary>
+	/// Where a networked body is looking, and whether it is aiming, as its accepted input frame
+	/// states it. Server only; most weapons ignore it.
+	/// </summary>
+	/// <remarks>
+	/// A weapon that only needs a DIRECTION is handed one with each shot. A weapon that reasons
+	/// about where its user looks BETWEEN shots -- the Javelin's lock-on -- has nothing to read on
+	/// a server: what it samples hangs off the view-model rig, which a headless body never drives,
+	/// and <see cref="CullFpsObjects"/> destroys it outright on a body that is not the local
+	/// player. Offline this is never called and every weapon behaves exactly as shipped.
+	/// </remarks>
+	public virtual void SteerByNetwork(Vector3 eye, Vector3 forward, bool aimHeld)
+	{
+	}
+
+	/// <summary>
+	/// Whether a trigger pulled right now is the weapon's own business rather than a shot.
+	/// </summary>
+	/// <remarks>
+	/// True for an unlocked Javelin, whose trigger marks a point and launches nothing. The server
+	/// withholds such a trigger from its combat authority, so the round is not spent on a shot the
+	/// weapon was never going to fire; the client withholds it from its prediction for the same
+	/// reason.
+	/// </remarks>
+	public virtual bool WithholdsTrigger()
+	{
+		return false;
+	}
+
+	/// <summary>
 	/// Copies the server's authoritative carried-weapon state onto this weapon's own counters.
 	/// </summary>
 	/// <remarks>

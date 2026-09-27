@@ -79,7 +79,12 @@ param(
     [string] $PlayerPath = "build/windows/Ironfront.exe",
 
     # Where the client writes its log. Read this first when a join does not happen.
-    [string] $LogFile = ""
+    [string] $LogFile = "",
+
+    # IRONFRONT_LOG_FRAMES=1: a [frames] line every five seconds and a [hitch] line naming the
+    # heaviest PlayerLoop systems of every frame over 50 ms, in this client's log. For a
+    # playtest that is chasing stutter; off otherwise.
+    [switch] $LogFrames
 )
 
 $ErrorActionPreference = "Stop"
@@ -119,6 +124,7 @@ $env:IRONFRONT_CLIENT_HOST         = $ServerHost
 $env:IRONFRONT_CLIENT_PORT         = "$Port"
 $env:IRONFRONT_CLIENT_PLAYER_ID    = "$PlayerId"
 $env:IRONFRONT_CLIENT_DISPLAY_NAME = $Name
+$env:IRONFRONT_LOG_FRAMES          = if ($LogFrames) { "1" } else { $null }
 
 $masterScheme = if ($NoMasterTls) { "plaintext" } else { "TLS" }
 Write-Host "[play] $Name (id $PlayerId) -> master ${MasterHost}:${MasterPort} ($masterScheme)"

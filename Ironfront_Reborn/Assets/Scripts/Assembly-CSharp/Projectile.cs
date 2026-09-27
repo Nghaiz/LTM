@@ -189,9 +189,19 @@ public partial class Projectile : MonoBehaviour, Ironfront.Net.Unity.IProjectile
 			}
 			collider.enabled = true;
 		}
-		if (Hitbox.IsHitboxLayer(hitInfo.collider.gameObject.layer))
+		// A collider on a hitbox layer with NO Hitbox is geometry, not a body part. The stock rig
+		// puts a Hitbox on every bone, so this read could not miss offline -- but a client's
+		// REMOTE corpse is built by RemoteRagdoll at runtime on the Ragdoll layer (10), with
+		// colliders and nothing to damage behind them. Read as a Hitbox, every round that struck
+		// a remote body lying on the ground threw a NullReferenceException here (both playtest
+		// clients, 2026-09-27) and died inside its own Update, never reaching the impulse and the
+		// Destroy below. Falling through is the answer: the round stops, and the impulse knocks
+		// the limb it struck.
+		Hitbox component = Hitbox.IsHitboxLayer(hitInfo.collider.gameObject.layer)
+			? hitInfo.collider.GetComponent<Hitbox>()
+			: null;
+		if (component != null)
 		{
-			Hitbox component = hitInfo.collider.GetComponent<Hitbox>();
 			if (component.parent == source)
 			{
 				base.transform.position = hitInfo.point + velocity.normalized * 0.2f;

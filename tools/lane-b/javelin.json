@@ -1,0 +1,11 @@
+{
+  "name": "javelin",
+  "steps": [
+    { "note": "Run with -Set javelin -ClientCount 1 -Gear \"BIL SCALPEL\" -LogShots. The Javelin has to LOCK before it launches: two seconds of aim held on a vehicle inside the 0.99-dot cone with a clear line of sight. Before 2026-09-27 the server read a destroyed pointSampler on every pull, so no networked player had ever launched one.", "seconds": 6.0, "respawn": true },
+    { "checkpoint": "deployed", "seconds": 1.5, "switchWeaponSlot": 2 },
+    { "seconds": 12.0, "approachVehicle": true, "vehicleSearchMetres": 250, "vehicleHoldDistanceMeters": 40, "sprint": true },
+    { "checkpoint": "aiming", "seconds": 4.0, "approachVehicle": true, "vehicleSearchMetres": 250, "vehicleHoldDistanceMeters": 40, "aim": true },
+    { "checkpoint": "firing", "seconds": 5.0, "approachVehicle": true, "vehicleSearchMetres": 250, "vehicleHoldDistanceMeters": 40, "aim": true, "fire": true },
+    { "checkpoint": "impact", "seconds": 8.0, "approachVehicle": true, "vehicleSearchMetres": 250, "vehicleHoldDistanceMeters": 40 }
+  ]
+}

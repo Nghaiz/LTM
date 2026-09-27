@@ -575,8 +575,113 @@ namespace Ironfront.Net.Unity.Bindings
             set => _actor.health = value;
         }
 
+        /// <summary>
+        /// How far above the humanoid Head bone the top of the skull sits. The bone's pivot is the
+        /// base of the skull, where it meets the neck.
+        /// </summary>
+        private const float HeadCrownMetres = 0.2f;
+
         /// <inheritdoc/>
-        public bool IsSubmerged => _actor.inWater;
+        /// <remarks>
+        /// <para>
+        /// <b>The crown of the head, not <c>Actor.inWater</c>.</b> <c>inWater</c> samples the spine
+        /// plus half a metre, and it means "deep enough that the shipped body swims", not "the head
+        /// is under": a bot floating on its back as a ragdoll keeps that point under the surface
+        /// with its head in the air. Measured 2026-09-27 on lane-B: a floating bot drowned with
+        /// <c>sampleDepth=0.29m headDepth=0.00m</c>, and one Island match drowned the same bot three
+        /// times running. The drowning rule is the owner's own, and what it names is the head.
+        /// </para>
+        /// <para>
+        /// A ragdoll's head is its physical bone, since that is what floats; a standing body's is the
+        /// animated one. A rig with no Head bone falls back to the shipped sample.
+        /// </para>
+        /// </remarks>
+        public bool IsSubmerged => WaterLevel.InWater(CrownPosition());
+
+        private Vector3 CrownPosition()
+        {
+            Transform head = _actor.ragdoll.IsRagdoll()
+                ? _actor.ragdoll.HumanBoneTransform(HumanBodyBones.Head)
+                : _actor.ragdoll.HumanBoneTransformAnimated(HumanBodyBones.Head);
+
+            return head != null
+                ? head.position + Vector3.up * HeadCrownMetres
+                : _actor.CenterPosition() + Vector3.up * 0.5f;
+        }
+
+        public string DescribeSubmersion()
+        {
+            if (_actor == null) return "no body";
+
+            // The shipped swim sample (Actor.inWater's spine + 0.5 m) beside the crown this rule
+            // actually reads, so a line can show a swimmer whose sample is under and whose head is not.
+            Vector3 crown = CrownPosition();
+            Vector3 sample = _actor.CenterPosition() + Vector3.up * 0.5f;
+            Vector3 feet = _actor.transform.position;
+            bool ragdolled = _actor.ragdoll.IsRagdoll();
+            string seat = _actor.IsSeated() && _actor.seat != null && _actor.seat.vehicle != null
+                ? $"{_actor.seat.vehicle.name}/{_actor.seat.name}"
+                : "none";
+
+            // A live ragdoll in water is buoyant (Actor.FixedUpdate lifts the hip and the head), so
+            // one that drowns is either still sinking or held down -- the rise speed and whatever is
+            // overhead are what tell those apart. Measured 2026-09-27: a bot drowned lying 1.6 m
+            // down in 1.7 m of water, which neither the depth nor the seat explained.
+            string rise = ragdolled ? $"{_actor.ragdoll.Velocity().y:F2}m/s" : "n/a";
+
+            return $"feet=({feet.x:F1}, {feet.y:F2}, {feet.z:F1}) water={WaterLevel.height:F2} "
+                   + $"crownDepth={WaterLevel.Depth(crown):F2}m "
+                   + $"swimSampleDepth={WaterLevel.Depth(sample):F2}m "
+                   + $"fallenOver={_actor.fallenOver} ragdoll={ragdolled} rise={rise} "
+                   + $"overhead(crown)={Overhead(crown)} overhead(spine)={Overhead(_actor.CenterPosition())} "
+                   + $"seat={seat}";
+        }
+
+        /// <summary>
+        /// The nearest collider between a submerged point and the surface that is not part of the
+        /// body itself, or <c>"none"</c>: a swimmer trapped under a jetty or a hull, or inside a
+        /// rock it tunnelled into, cannot surface however buoyant it is. For the drowning log
+        /// only -- it allocates.
+        /// </summary>
+        /// <remarks>
+        /// Back faces count here, which a raycast ignores by default. A ragdoll that has tunnelled
+        /// into a mesh collider sees only that mesh's inside, and would otherwise read as having
+        /// open water above it -- which is what the first two measured cases, lying still on the
+        /// bottom with nothing overhead, could not rule out.
+        /// </remarks>
+        private string Overhead(Vector3 point)
+        {
+            float depth = WaterLevel.Depth(point);
+            if (depth <= 0f) return "n/a";
+
+            bool hitBackfaces = Physics.queriesHitBackfaces;
+            Physics.queriesHitBackfaces = true;
+            RaycastHit[] hits;
+            try
+            {
+                hits = Physics.RaycastAll(
+                    point, Vector3.up, depth, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            }
+            finally
+            {
+                Physics.queriesHitBackfaces = hitBackfaces;
+            }
+
+            Collider nearest = null;
+            float nearestDistance = float.MaxValue;
+            foreach (RaycastHit hit in hits)
+            {
+                if (hit.collider.transform.IsChildOf(_actor.transform) || hit.distance >= nearestDistance)
+                {
+                    continue;
+                }
+
+                nearest = hit.collider;
+                nearestDistance = hit.distance;
+            }
+
+            return nearest == null ? "none" : $"{nearest.name}@{nearestDistance:F2}m";
+        }
 
         /// <summary>
         /// The alive FLAG and the alive REGISTER, written as a pair. Ledger <b>X-59</b>.
@@ -762,6 +867,21 @@ namespace Ironfront.Net.Unity.Bindings
 
             return true;
         }
+
+        public void SteerCarriedWeapon(
+            float eyeX, float eyeY, float eyeZ,
+            float forwardX, float forwardY, float forwardZ,
+            bool aimHeld)
+        {
+            if (_actor == null) return;
+
+            _actor.SteerCarriedWeaponByNetwork(
+                new Vector3(eyeX, eyeY, eyeZ), new Vector3(forwardX, forwardY, forwardZ), aimHeld);
+        }
+
+        public bool TryWithholdCarriedTrigger(float forwardX, float forwardY, float forwardZ)
+            => _actor != null
+               && _actor.TryWithholdCarriedTriggerByNetwork(new Vector3(forwardX, forwardY, forwardZ));
 
         public bool ReleaseCarriedThrowable(
             float originX, float originY, float originZ,

@@ -243,6 +243,24 @@ namespace Ironfront.Net.Unity.Server
                 originX, originY, originZ, directionX, directionY, directionZ);
         }
 
+        /// <summary>Hands the carried weapon one accepted frame's aim. See the seam.</summary>
+        public void SteerCarriedWeapon(
+            float eyeX, float eyeY, float eyeZ,
+            float forwardX, float forwardY, float forwardZ,
+            bool aimHeld)
+        {
+            Source?.SteerCarriedWeapon(eyeX, eyeY, eyeZ, forwardX, forwardY, forwardZ, aimHeld);
+        }
+
+        /// <summary>
+        /// Whether the carried weapon kept this pulled trigger for itself. See the seam.
+        /// </summary>
+        public bool TryWithholdCarriedTrigger(float forwardX, float forwardY, float forwardZ)
+        {
+            IGameplayActorSource source = Source;
+            return source != null && source.TryWithholdCarriedTrigger(forwardX, forwardY, forwardZ);
+        }
+
         /// <summary>Writes the authority's weapon state into the engine weapon. See the seam.</summary>
         public void MirrorAuthorityWeaponState(
             int ammoInClip, bool unholstered, float elapsedSinceLastShot)
@@ -606,7 +624,8 @@ namespace Ironfront.Net.Unity.Server
 
             if (!_drowning.Tick(source.IsSubmerged, elapsed)) return;
 
-            Debug.Log($"[net] actor {_actorId} drowned after {_drowning.Limit:0.#}s under water");
+            Debug.Log($"[net] actor {_actorId} ({(IsClaimed ? "player" : "bot")}) drowned after "
+                      + $"{_drowning.Limit:0.#}s under water: {source.DescribeSubmersion()}");
 
             // The body dies HERE, the way every other server kill does it (ServerActorDamageSink,
             // ServerPlayer.KillForFallingOutOfTheWorld): reporting a death is not dying. Until

@@ -49,6 +49,8 @@ namespace Ironfront.Net.Unity.Server.Tests
             public bool IsDead { get; set; }
             public bool IsSubmerged { get; set; }
 
+            public string DescribeSubmersion() => "fake";
+
             public void ApplyBalanceDamage(float balanceDamage) { }
 
             public bool TryGetActiveWeaponNetworkId(out byte networkId)
@@ -69,6 +71,14 @@ namespace Ironfront.Net.Unity.Server.Tests
             public bool ReleaseCarriedThrowable(
                 float originX, float originY, float originZ,
                 float directionX, float directionY, float directionZ)
+                => false;
+
+            public void SteerCarriedWeapon(
+                float eyeX, float eyeY, float eyeZ,
+                float forwardX, float forwardY, float forwardZ,
+                bool aimHeld) { }
+
+            public bool TryWithholdCarriedTrigger(float forwardX, float forwardY, float forwardZ)
                 => false;
 
             public void MirrorAuthorityWeaponState(

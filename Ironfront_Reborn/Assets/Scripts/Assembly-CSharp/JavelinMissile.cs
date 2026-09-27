@@ -49,12 +49,44 @@ public class JavelinMissile : Rocket
 
 	protected override void Start()
 	{
+		// A missile a CLIENT presents has no source -- NetClientProjectilePresenter leaves it null
+		// on purpose -- and its velocity is the server's, applied before this runs. The ejection
+		// line read source.Velocity() and threw on the first server missile a client drew; it had
+		// never run, because until 2026-09-27 no Javelin was ever launched online. Keep what the
+		// presenter applied rather than inventing a launch the server did not make.
+		Vector3 presented = velocity;
 		base.Start();
-		velocity = base.transform.forward * ejectSpeed + source.Velocity() * 0.9f;
+		velocity = source != null
+			? base.transform.forward * ejectSpeed + source.Velocity() * 0.9f
+			: presented;
 		thrustStartAction.Start();
 		inaccurateDiveAction.Start();
 		light.enabled = false;
-		trailParticles.Stop(true);
+		// A dedicated server strips particle systems and audio (see Vehicle.cs and Weapon.Start),
+		// which ExplodingProjectile already allows for; the flight's server half is the guidance
+		// below, and the trail and the sound are only ever for somebody watching.
+		if (trailParticles != null)
+		{
+			trailParticles.Stop(true);
+		}
+	}
+
+	private void IgniteWhenDue()
+	{
+		if (thrustEnabled || !thrustStartAction.TrueDone())
+		{
+			return;
+		}
+		light.enabled = true;
+		if (trailParticles != null)
+		{
+			trailParticles.Play(true);
+		}
+		thrustEnabled = true;
+		if (audioSource != null)
+		{
+			audioSource.PlayOneShot(flightSound);
+		}
 	}
 
 	protected override void Update()
@@ -68,21 +100,22 @@ public class JavelinMissile : Rocket
 		//
 		// This stays inside V7-D5: every message is still the same 20-byte parameter set going
 		// through the same decoder. There is no per-tick missile entry in the snapshot.
-		if (Ironfront.Net.Unity.NetContext.IsClient)
+		// Only a PRESENTED copy -- no source, and a target the client was never told -- coasts. The
+		// shooter's own cosmetic copy has a source and the target its launcher locked, and flies
+		// the guidance itself, the way the shooter's own rocket flies true; coasting, it fell out of
+		// the sky a few metres from the launcher while the server's missile flew on.
+		if (Ironfront.Net.Unity.NetContext.IsClient && source == null)
 		{
+			// The motor lighting is presentation, so the presented copy runs it too: before this a
+			// client's Javelin crossed the sky dark, trailless and silent.
+			IgniteWhenDue();
 			base.Update();
 			return;
 		}
 
 		if (thrustStartAction.TrueDone())
 		{
-			if (!thrustEnabled)
-			{
-				light.enabled = true;
-				trailParticles.Play(true);
-				thrustEnabled = true;
-				audioSource.PlayOneShot(flightSound);
-			}
+			IgniteWhenDue();
 			Vector3 vector = ((!(target == null)) ? target.position : targetPoint);
 			Vector3 rhs = vector - base.transform.position;
 			Vector3 vector2 = Vector3.zero;

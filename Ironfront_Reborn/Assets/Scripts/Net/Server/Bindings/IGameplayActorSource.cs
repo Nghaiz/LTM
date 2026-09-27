@@ -40,23 +40,36 @@
         bool IsDead { get; set; }
 
         /// <summary>
-        /// Whether this actor's head is under water. Maps to <c>Actor.inWater</c>.
+        /// Whether this actor's head is under water: the crown of its Head bone below the water
+        /// plane. The drowning rule's sensor.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <b>The same point the shipped gameplay already samples</b>, and deliberately not a
-        /// second definition of "in water": <c>Actor.Update</c> writes the field from
-        /// <c>WaterLevel.InWater(CenterPosition() + 0.5 up)</c>, so the rule the server enforces
-        /// and the state the player sees cannot disagree.
+        /// <b>Deliberately NOT <c>Actor.inWater</c>, which it used to be.</b> That field samples
+        /// the spine plus half a metre and means "deep enough that the shipped body swims" -- a
+        /// bot floating on its back as a ragdoll keeps it true with its head in the air. Read as
+        /// "the head is under", it drowned swimming bots (measured 2026-09-27:
+        /// <c>sampleDepth=0.29m headDepth=0.00m</c> on a drowned bot).
         /// </para>
         /// <para>
-        /// <b>It is maintained on the server, which is not obvious.</b> <c>Actor.Update</c>
-        /// assigns <c>inWater</c> BEFORE both of its early returns -- the dead guard and the
-        /// suspended-AI-controller guard that parks a network-claimed body -- so a server-side
-        /// player slot keeps a live value even though the rest of that method is skipped for it.
+        /// <b>Computed from bone positions, so it is live on the server</b> for a claimed body as
+        /// much as for a bot; nothing here depends on <c>Actor.Update</c> running.
         /// </para>
         /// </remarks>
         bool IsSubmerged { get; }
+
+        /// <summary>
+        /// One line of what the body's water state is made of: where its feet are, how deep the
+        /// crown <see cref="IsSubmerged"/> reads and the shipped swim sample sit, whether it has
+        /// fallen over into a ragdoll, and which seat it is in. For the drowning log.
+        /// </summary>
+        /// <remarks>
+        /// A drowning line that says only "actor 32 drowned" cannot tell a player who waded in
+        /// from a bot that sank while swimming, a body that fell through the terrain below the
+        /// water plane, or a passenger in a sinking boat -- and the 2026-09-27 Island match
+        /// drowned one bot three times running with nothing else to go on.
+        /// </remarks>
+        string DescribeSubmersion();
 
         /// <summary>
         /// Staggers the actor by <paramref name="balanceDamage"/>. phase-V2 D6.
@@ -183,6 +196,32 @@
         bool ReleaseCarriedThrowable(
             float originX, float originY, float originZ,
             float directionX, float directionY, float directionZ);
+
+        /// <summary>
+        /// Tells the carried weapon where this body's player looks and whether they aim, from
+        /// one accepted input frame. Maps to <c>Actor.SteerCarriedWeaponByNetwork</c>.
+        /// </summary>
+        /// <remarks>
+        /// <b>What it is for: the Javelin's lock-on.</b> Offline the launcher samples a transform
+        /// on the first-person rig; a server-side body has no rig, and <c>CullFpsObjects</c>
+        /// destroys that transform on every body that is not the local player. So the lock-on
+        /// read a destroyed object and every networked Javelin pull threw (2026-09-27). The eye
+        /// is <c>ServerCombatAuthority.ShotOrigin</c>, the same point the shot would leave from.
+        /// </remarks>
+        void SteerCarriedWeapon(
+            float eyeX, float eyeY, float eyeZ,
+            float forwardX, float forwardY, float forwardZ,
+            bool aimHeld);
+
+        /// <summary>
+        /// Gives a pulled trigger to a carried weapon that keeps it for itself instead of firing,
+        /// and reports whether it did. Maps to <c>Actor.TryWithholdCarriedTriggerByNetwork</c>.
+        /// </summary>
+        /// <returns>
+        /// True when the weapon took the trigger -- an unlocked Javelin marks a point -- and the
+        /// combat authority must not spend a round on it. False for every ordinary shot.
+        /// </returns>
+        bool TryWithholdCarriedTrigger(float forwardX, float forwardY, float forwardZ);
 
         /// <summary>
         /// Writes the authority's carried-weapon state into the engine weapon the body is holding.

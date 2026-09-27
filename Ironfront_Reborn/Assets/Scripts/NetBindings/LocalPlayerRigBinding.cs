@@ -70,6 +70,17 @@ namespace Ironfront.Net.Unity.Bindings
         }
 
         /// <inheritdoc/>
+        public bool CarriedWeaponWithholdsTrigger
+        {
+            get
+            {
+                FpsActorController local = FpsActorController.instance;
+                return local != null && local.actor != null && local.actor.activeWeapon != null
+                       && local.actor.activeWeapon.WithholdsTrigger();
+            }
+        }
+
+        /// <inheritdoc/>
         public void SetInputSource(IInputSource source)
         {
             FpsActorController local = FpsActorController.instance;

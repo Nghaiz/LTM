@@ -118,6 +118,19 @@ namespace Ironfront.Net.Unity
         bool IsInWater { get; }
 
         /// <summary>
+        /// Whether the local player's carried weapon would keep a trigger pulled right now for
+        /// itself instead of firing -- an unlocked Javelin marks a point. Maps to
+        /// <c>Weapon.WithholdsTrigger</c> on the local actor's active weapon.
+        /// </summary>
+        /// <remarks>
+        /// The server withholds exactly such a trigger from its combat authority
+        /// (<c>ServerCombatBridge.SteerCarriedWeapon</c>), so a client predicting a shot for it
+        /// predicts one the server will never fire: the clip dips and snaps back on every pull
+        /// that only marks a target. False by default, which is every ordinary weapon.
+        /// </remarks>
+        bool CarriedWeaponWithholdsTrigger => false;
+
+        /// <summary>
         /// Installs an input source on the rig, replacing whatever it was reading.
         /// </summary>
         /// <remarks>
