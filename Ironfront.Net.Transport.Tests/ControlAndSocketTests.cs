@@ -381,6 +381,77 @@ namespace Ironfront.Net.Transport.Tests
         }
 
         [Fact]
+        public void AClientThatStopsPollingForASecondKeepsItsRttAndStaysGood()
+        {
+            // Every join used to open with twenty seconds of congestion BAD: the first frame
+            // after the map load runs about a second, the acks of the packets sent just before
+            // it wait in the socket for the whole frame, and each was timed as a one-second
+            // round trip (plans/reports/2026-09-28-azure-gameserver-host.md). Reproduced here
+            // by simply not polling the client while the server keeps answering.
+            //
+            // No latency simulator, deliberately: the simulator holds outgoing packets until the
+            // sender's next Poll, so a client that stops polling would also stop sending and the
+            // stall would catch nothing in flight. Plain loopback sends at once.
+            var serverConfig = new SimulatorConfig { Enabled = false };
+            var clientConfig = new SimulatorConfig { Enabled = false };
+
+            using var server = new UdpTransportServer(serverConfig);
+            using var client = new UdpTransportClient(clientConfig);
+            server.OnValidateTicket += _ => true;
+            server.Start(0, 4);
+            client.Connect("127.0.0.1", server.Port,
+                new byte[ProtocolConstants.JOIN_TICKET_SIZE]);
+            Pump(server, client, () => client.State == ConnectionState.Connected, 5000);
+
+            // A real estimate first, so what is checked below is the estimate MOVING.
+            Stopwatch clock = Stopwatch.StartNew();
+            double nextSendAtMs = 0.0;
+            while (client.Stats.SmoothedRttMs <= 0f && clock.ElapsedMilliseconds < 5000)
+            {
+                if (clock.Elapsed.TotalMilliseconds >= nextSendAtMs)
+                {
+                    client.Send((byte)ChannelId.ReliableOrdered, new byte[] { 7 }, reliable: true);
+                    nextSendAtMs = clock.Elapsed.TotalMilliseconds + 50.0;
+                }
+                server.Poll();
+                client.Poll();
+            }
+            Assert.True(client.Stats.SmoothedRttMs > 0f, "no RTT sample before the stall");
+
+            // The burst the stall catches in flight, then 1.1 s in which only the server polls:
+            // it receives the burst and acks it, and the acks queue in the client's socket.
+            for (int i = 0; i < 10; i++)
+                client.Send((byte)ChannelId.ReliableOrdered, new byte[] { 7 }, reliable: true);
+            Stopwatch stall = Stopwatch.StartNew();
+            while (stall.ElapsedMilliseconds < 1100)
+            {
+                server.Poll();
+                Thread.Sleep(5);
+            }
+
+            // Back to normal polling: read the backlog, time a few fresh packets, then let the
+            // last of them be acknowledged before looking.
+            Stopwatch after = Stopwatch.StartNew();
+            nextSendAtMs = 0.0;
+            while (after.ElapsedMilliseconds < 300)
+            {
+                if (after.Elapsed.TotalMilliseconds >= nextSendAtMs)
+                {
+                    client.Send((byte)ChannelId.ReliableOrdered, new byte[] { 7 }, reliable: true);
+                    nextSendAtMs = after.Elapsed.TotalMilliseconds + 50.0;
+                }
+                server.Poll();
+                client.Poll();
+            }
+            Pump(server, client, () => client.Stats.PendingReliableCount == 0, 3000);
+
+            TransportStats stats = client.Stats;
+            Assert.True(stats.SmoothedRttMs < 250f,
+                $"the stall was timed as network: rtt={stats.SmoothedRttMs:F0} ms");
+            Assert.Equal(0, stats.CongestionMode);
+        }
+
+        [Fact]
         public void LocalhostWrongTicketIsDeniedWithoutAllocatingAConnection()
         {
             using var server = new UdpTransportServer();

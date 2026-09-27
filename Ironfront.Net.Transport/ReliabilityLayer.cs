@@ -224,13 +224,18 @@ namespace Ironfront.Net.Transport
                 _hasReceived && AckBitfieldEnabled ? _receivedBitfield : 0u);
 
         /// <summary>Applies the peer's cumulative ack and ack bitfield.</summary>
-        public void ProcessIncomingAck(ushort ack, uint bitfield, double nowMs)
+        /// <param name="sampleRtt">
+        /// False when <paramref name="nowMs"/> is not a trustworthy arrival time for this ack:
+        /// the packets are still acked and released, but none of them feeds the RTT estimate.
+        /// See <c>Connection.MaxRttSamplePollGapMs</c> for when that is.
+        /// </param>
+        public void ProcessIncomingAck(ushort ack, uint bitfield, double nowMs, bool sampleRtt = true)
         {
-            AckPacket(ack, nowMs);
+            AckPacket(ack, nowMs, sampleRtt);
             for (int bit = 0; bit < ProtocolConstants.ACK_BITFIELD_BITS; bit++)
             {
                 if ((bitfield & (1u << bit)) != 0)
-                    AckPacket((ushort)(ack - 1 - bit), nowMs);
+                    AckPacket((ushort)(ack - 1 - bit), nowMs, sampleRtt);
             }
         }
 
@@ -380,14 +385,14 @@ namespace Ironfront.Net.Transport
             return scaled > MaxRtoMs ? MaxRtoMs : scaled;
         }
 
-        private void AckPacket(ushort sequence, double nowMs)
+        private void AckPacket(ushort sequence, double nowMs, bool sampleRtt)
         {
             int index = sequence % SentBufferSize;
             ref SentPacket packet = ref _sent[index];
             if (!packet.InUse || packet.Sequence != sequence || packet.Acked) return;
 
             packet.Acked = true;
-            if (packet.ResendCount == 0)
+            if (sampleRtt && packet.ResendCount == 0)
                 UpdateRtt(nowMs - packet.SentAtMs);
             ReleaseSlot(ref packet);
         }
