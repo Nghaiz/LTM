@@ -737,6 +737,17 @@ namespace Ironfront.Net.Unity.Bindings
             {
                 if (_actor.dead == value) return;
 
+                if (value && _actor.IsSeated())
+                {
+                    // Out of the seat, as Actor.Die does, and in its order: LeaveSeat first, the
+                    // dead flag after. The authority's kills (a hitscan through
+                    // ServerActorDamageSink, a drowning) set this flag and never call Die, so a
+                    // body killed in an open seat used to stay booked in it: every snapshot kept
+                    // reporting a seated corpse, the seat refused everybody else, and the respawn
+                    // teleported a body that was still welded to the vehicle.
+                    _actor.LeaveSeat();
+                }
+
                 _actor.dead = value;
 
                 if (value)
