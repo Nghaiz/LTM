@@ -168,8 +168,16 @@ public class MinimapCamera : MonoBehaviour
 	/// edges and every metre of sea around it fell off the minimap, so a boat circling the island
 	/// lost its icon as soon as it left the shore. <see cref="LevelBounds"/> is the box the server
 	/// clamps every vehicle into (<c>Vehicle.KeepInsideLevelBounds</c>), so it is exactly the set
-	/// of places an icon can be; framing it means no icon can leave the map while its owner is
-	/// in play. On Dustbowl that is 1700 m, a little wider than the authored 1564 m.
+	/// of places an icon can be. On Dustbowl that is 1700 m, a little wider than the authored
+	/// 1564 m.
+	/// </para>
+	/// <para>
+	/// <b>Clipped to the ground drawn under it.</b> On Island the box is 700 m and the terrain
+	/// 540 m, so framing the whole box drew the terrain as a small square inside a see-through
+	/// border. The frame is now the part of the box with terrain under it, never wider than the
+	/// terrain: Island frames its 540 m terrain square exactly, Dustbowl -- whose terrain holds
+	/// the box with room to spare -- is unchanged. An icon whose owner is out beyond the terrain
+	/// is pinned to the minimap's edge by <c>ActorBlip</c> instead of clipped away.
 	/// </para>
 	/// <para>
 	/// <b>Why orthographic.</b> A perspective camera draws a point at altitude further from the
@@ -182,16 +190,83 @@ public class MinimapCamera : MonoBehaviour
 	/// </remarks>
 	private void FrameTheLevelBounds(Bounds box)
 	{
+		float minX = box.min.x;
+		float maxX = box.max.x;
+		float minZ = box.min.z;
+		float maxZ = box.max.z;
 		float halfSpan = Mathf.Max(box.size.x, box.size.z) * 0.5f / (1f - 2f * LevelBoundsIconMargin);
 
+		// Only where ground is drawn. Island's play volume is 700 m of which the terrain covers
+		// 540 m, and outside the terrain there is nothing but semi-transparent water over this
+		// camera's transparent clear colour: the minimap drew the map as a small square inside a
+		// thick see-through border (owner report 2026-09-28). Framing is clipped to the terrain,
+		// never grown past it; ActorBlip keeps an icon on the edge when its owner goes beyond.
+		if (TryGetGroundExtent(out float groundMinX, out float groundMaxX, out float groundMinZ, out float groundMaxZ))
+		{
+			minX = Mathf.Max(minX, groundMinX);
+			maxX = Mathf.Min(maxX, groundMaxX);
+			minZ = Mathf.Max(minZ, groundMinZ);
+			maxZ = Mathf.Min(maxZ, groundMaxZ);
+			if (maxX > minX && maxZ > minZ)
+			{
+				float centreX = (minX + maxX) * 0.5f;
+				float centreZ = (minZ + maxZ) * 0.5f;
+				float insideGround = Mathf.Min(
+					Mathf.Min(centreX - groundMinX, groundMaxX - centreX),
+					Mathf.Min(centreZ - groundMinZ, groundMaxZ - centreZ));
+				halfSpan = Mathf.Min(
+					Mathf.Max(maxX - minX, maxZ - minZ) * 0.5f / (1f - 2f * LevelBoundsIconMargin),
+					insideGround);
+			}
+			else
+			{
+				minX = box.min.x;
+				maxX = box.max.x;
+				minZ = box.min.z;
+				maxZ = box.max.z;
+			}
+		}
+
 		base.transform.SetPositionAndRotation(
-			new Vector3(box.center.x, box.max.y + LevelBoundsClearance, box.center.z),
+			new Vector3((minX + maxX) * 0.5f, box.max.y + LevelBoundsClearance, (minZ + maxZ) * 0.5f),
 			Quaternion.Euler(90f, 0f, 0f));
 
 		camera.orthographic = true;
 		camera.orthographicSize = halfSpan;
 		camera.nearClipPlane = LevelBoundsClearance * 0.5f;
 		camera.farClipPlane = box.size.y + LevelBoundsClearance * 2f;
+	}
+
+	/// <summary>
+	/// The ground plan the map draws: the union of every terrain's square in the scene.
+	/// </summary>
+	/// <remarks>
+	/// <c>FindObjectsByType</c> rather than <c>Terrain.activeTerrains</c>, which only lists a terrain
+	/// once its own <c>OnEnable</c> has run -- not guaranteed before this <c>Awake</c>. Water does
+	/// not count: its plane is kilometres wide and drawn semi-transparent.
+	/// </remarks>
+	private static bool TryGetGroundExtent(out float minX, out float maxX, out float minZ, out float maxZ)
+	{
+		minX = float.MaxValue;
+		maxX = float.MinValue;
+		minZ = float.MaxValue;
+		maxZ = float.MinValue;
+		bool found = false;
+		foreach (Terrain terrain in FindObjectsByType<Terrain>(FindObjectsSortMode.None))
+		{
+			if (terrain.terrainData == null)
+			{
+				continue;
+			}
+			Vector3 origin = terrain.GetPosition();
+			Vector3 size = terrain.terrainData.size;
+			minX = Mathf.Min(minX, origin.x);
+			maxX = Mathf.Max(maxX, origin.x + size.x);
+			minZ = Mathf.Min(minZ, origin.z);
+			maxZ = Mathf.Max(maxZ, origin.z + size.z);
+			found = true;
+		}
+		return found;
 	}
 
 	private void Start()
