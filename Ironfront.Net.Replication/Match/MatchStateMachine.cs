@@ -371,6 +371,8 @@ namespace Ironfront.Net.Replication.Match
                     break;
             }
 
+            QueueResetPoints();
+
             _sinceLastBroadcast += deltaSeconds;
 
             if (Phase != before
@@ -447,6 +449,33 @@ namespace Ironfront.Net.Replication.Match
                 }
 
                 if (point.Tick(count0, count1, deltaSeconds, _rules))
+                    _dirtyPoints.Add(point.PointId);
+            }
+        }
+
+        /// <summary>
+        /// Adds every point a reset left unsent to this tick's <see cref="DirtyCapturePoints"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see cref="PerformReset"/> clears the dirty list after resetting the points, and the
+        /// points only tick while a round is played, so before this nothing ever reported a
+        /// reset: every client that stayed connected kept the previous match's flags, flag
+        /// poles and multiplier until each point next changed hands. Joiners were unaffected --
+        /// they receive every point on join.
+        /// </para>
+        /// <para>
+        /// Run every tick, in every phase, from <see cref="CapturePointState.ResendDue"/> rather
+        /// than once from <see cref="PerformReset"/>: <see cref="ForceReset"/> runs between
+        /// ticks, and the next tick opens by clearing the list.
+        /// </para>
+        /// </remarks>
+        private void QueueResetPoints()
+        {
+            for (int i = 0; i < _points.Length; i++)
+            {
+                CapturePointState point = _points[i];
+                if (point.ResendDue && !_dirtyPoints.Contains(point.PointId))
                     _dirtyPoints.Add(point.PointId);
             }
         }
