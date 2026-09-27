@@ -1,5 +1,7 @@
 # infra/docker/gameservers.compose.yml -- the two Linux game servers (Dustbowl, Island) as
-# containers on this machine's Docker Desktop, registered with the fly master.
+# containers on one Docker host, registered with the fly master. Since 2026-09-28 that host is the
+# Azure VM ironfront-game (tools/deploy-gameservers-azure.ps1); before it, this machine's Docker
+# Desktop, which the rest of this header describes.
 #
 # WHY HERE AND NOT IN THE VMWARE VM (decided 2026-09-27). The VM also runs the DevOps Learning
 # Platform, which already uses about half of its 12 vCPUs, and VMware runs in ULM mode on top of
@@ -18,9 +20,12 @@
 #   docker compose --env-file .env -f infra/docker/gameservers.compose.yml logs -f
 #   docker compose --env-file .env -f infra/docker/gameservers.compose.yml down
 #
-# PORTS. 27115/27116, not 27015/27016: VMware NAT (vmnetnat.conf [incomingudp]) still holds the
-# latter on this host for the VM's copies, which must stay scaled to 0 while these run -- or the
-# master has two servers per map and a room can land on the starving one.
+# PORTS. 27115/27116 by default, not 27015/27016: VMware NAT (vmnetnat.conf [incomingudp]) still
+# holds the latter on the Windows host for the VM's copies, which must stay scaled to 0 while these
+# run -- or the master has two servers per map and a room can land on the starving one.
+# IRONFRONT_GS_DUSTBOWL_PORT / IRONFRONT_GS_ISLAND_PORT override them on a host with no such clash:
+# the Azure VM (ironfront-game, 20.205.152.66) whose network security group admits UDP 27015/27016
+# only runs with 27015/27016 and IRONFRONT_GAMESERVER_PUBLIC_IP_ADVERTISED=20.205.152.66.
 
 x-gameserver: &gameserver
   image: ${IRONFRONT_GAMESERVER_IMAGE:-ironfront-game-server:8d33ed0}
@@ -57,11 +62,11 @@ services:
     environment:
       <<: *gameserver-env
       IRONFRONT_GAMESERVER_SCENE: Dustbowl
-      IRONFRONT_GAMESERVER_UDP_PORT: "27115"
+      IRONFRONT_GAMESERVER_UDP_PORT: "${IRONFRONT_GS_DUSTBOWL_PORT:-27115}"
       # Required: the master refuses a registration with no map ids. Dustbowl is 1, Island is 2.
       IRONFRONT_GAMESERVER_MAP_IDS: "1"
     ports:
-      - "27115:27115/udp"
+      - "${IRONFRONT_GS_DUSTBOWL_PORT:-27115}:${IRONFRONT_GS_DUSTBOWL_PORT:-27115}/udp"
 
   game-server-island:
     <<: *gameserver
@@ -69,7 +74,7 @@ services:
     environment:
       <<: *gameserver-env
       IRONFRONT_GAMESERVER_SCENE: Island
-      IRONFRONT_GAMESERVER_UDP_PORT: "27116"
+      IRONFRONT_GAMESERVER_UDP_PORT: "${IRONFRONT_GS_ISLAND_PORT:-27116}"
       IRONFRONT_GAMESERVER_MAP_IDS: "2"
     ports:
-      - "27116:27116/udp"
+      - "${IRONFRONT_GS_ISLAND_PORT:-27116}:${IRONFRONT_GS_ISLAND_PORT:-27116}/udp"
