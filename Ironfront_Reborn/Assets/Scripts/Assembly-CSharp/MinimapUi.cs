@@ -43,6 +43,9 @@ public class MinimapUi : MonoBehaviour
 
 	private Dictionary<SpawnPoint, Button> minimapSpawnPointButton;
 
+	/// <summary>The team the spawn buttons were last made interactable for.</summary>
+	private int appliedLocalTeam = UNRESOLVED_TEAM;
+
 	/// <summary>Live markers, keyed by the transform they follow, so one subject has one icon.</summary>
 	private readonly Dictionary<Transform, MinimapMarker> markers =
 		new Dictionary<Transform, MinimapMarker>();
@@ -114,6 +117,16 @@ public class MinimapUi : MonoBehaviour
 		minimapOpenness = Mathf.MoveTowards(minimapOpenness, target, Time.deltaTime * 20f);
 		ingameParent.anchorMin = new Vector2(0f, Mathf.Lerp(-1f, 0f, minimapOpenness));
 		ingameParent.anchorMax = new Vector2(1f, Mathf.Lerp(0f, 1f, minimapOpenness));
+
+		// Networked, the buttons are built before any snapshot names this player's team, so every
+		// one of them came up non-interactable -- and nothing refreshed them until a flag changed
+		// hands, so the loadout's minimap never let a player pick where to deploy (2026-09-27,
+		// every deploy logged "flag any"). Re-applied the moment the team is known or changes.
+		if (!NetContext.IsOffline && minimapSpawnPointButton != null
+			&& NetPresenterGate.TryResolveLocalTeam(out byte team) && team != appliedLocalTeam)
+		{
+			UpdateSpawnPointButtons(team);
+		}
 	}
 
 	private void Start()
@@ -247,6 +260,7 @@ public class MinimapUi : MonoBehaviour
 			button.colors = colors;
 			button.interactable = owner == localTeam;
 		}
+		instance.appliedLocalTeam = localTeam;
 	}
 
 	private void RemoveSpawnButtonHighlight(Button b)
