@@ -634,8 +634,19 @@ namespace Ironfront.Net.Unity.Bindings
 
                 _actor.dead = value;
 
-                if (value) ActorManager.SetDead(_actor);
-                else ActorManager.SetAlive(_actor);
+                if (value)
+                {
+                    ActorManager.SetDead(_actor);
+                }
+                else
+                {
+                    ActorManager.SetAlive(_actor);
+
+                    // A respawn is not SpawnAt, so without this a body that died as a ragdoll
+                    // came back as one: its spine left on the corpse, drowned under a water plane
+                    // it was standing metres above (lane-B death-01/02).
+                    _actor.StandUpAfterNetworkRevival();
+                }
             }
         }
 
