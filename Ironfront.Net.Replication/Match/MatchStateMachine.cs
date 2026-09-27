@@ -522,17 +522,13 @@ namespace Ironfront.Net.Replication.Match
         /// <see cref="_drawn"/> and leaves the scores alone.
         /// </para>
         /// <para>
-        /// <b>X-85: the zero reading must hold, not just be sampled once.</b> A capture point's
-        /// held team crosses to <c>None</c> the instant its ownership fraction crosses the
-        /// render-facing capture threshold, and one attacker does that crossing in well under a
-        /// second at a typical map's capture speed — the reported count went 1 to 0 for exactly
-        /// one flip, not because the anchor was actually lost, but because it was mid-fight. The
-        /// dwell requirement (<see cref="MatchRules.EliminationDwellSeconds"/>) is this file's
-        /// answer to "neutral is not annihilated" as well as to the single-tick read: rather
-        /// than adding a second, asymmetric threshold on the ownership fraction itself — which
-        /// would need to live next to <c>CapturePointMessage.OwnedThreshold</c>, out of this
-        /// file's reach — a duration requirement absorbs the exact same flicker in the time
-        /// domain instead. It reads as: losing an anchor takes a SUSTAINED absence; keeping it
+        /// <b>X-85: the zero reading must hold, not just be sampled once.</b> It was filed when a
+        /// point counted as held only past a 0.9 threshold, so one attacker made its team read
+        /// <c>None</c> in well under a second, mid-fight. <c>CapturePointState</c> now follows the
+        /// original rule -- a point changes hands only when its control reaches zero -- which
+        /// removes that flicker at the source; the dwell requirement
+        /// (<see cref="MatchRules.EliminationDwellSeconds"/>) stays as the answer to any other
+        /// single-tick read. It reads as: losing an anchor takes a SUSTAINED absence; keeping it
         /// takes nothing more than being back inside the window by the next tick, which is
         /// already how <see cref="_eliminationDwell0"/> / <see cref="_eliminationDwell1"/> reset.
         /// Defaults to 0 (instant) so a bare <see cref="MatchRules"/> keeps its pre-X-85

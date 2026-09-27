@@ -43,10 +43,12 @@ namespace Ironfront.Net.Unity.Server
         [Tooltip("Radius used only when the point itself leaves captureRange unset (0).")]
         [SerializeField] private float _captureRadius = 15f;
 
-        // 0.2 -> 0.06 on 2026-09-20, matching CapturePoint.captureSpeed's default. At 0.2 one
-        // body inside a 25 m radius took a neutral point in 4.5s; at 0.06 it takes 16.7s, so a
-        // point has to be held rather than walked through. Both shipped scenes' authored values
-        // moved with it -- a default alone governs nothing on a map that serializes its own.
+        // 0.2 -> 0.06 on 2026-09-20, matching CapturePoint.captureSpeed's default: control moved
+        // per body of lead per one-second step, the original's CAPTURE_RATE_PER_PERSON (0.05).
+        // At 0.06 one attacker takes 17 steps to bring an enemy flag down and capture it; a
+        // neutral point changes hands on the first step, with its flag at the bottom. Both
+        // shipped scenes' authored values moved with it -- a default alone governs nothing on a
+        // map that serializes its own.
         [Tooltip("Capture speed used only when the point itself leaves CaptureSpeed unset (0).")]
         [SerializeField] private float _captureSpeed = 0.06f;
 

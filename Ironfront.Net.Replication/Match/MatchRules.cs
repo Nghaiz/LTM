@@ -69,12 +69,6 @@ namespace Ironfront.Net.Replication.Match
         public float CaptureSendThreshold { get; set; } = 0.02f;
 
         /// <summary>
-        /// Most attackers whose presence still speeds up a capture. Without the cap, sixteen
-        /// players standing on a point take it instantly.
-        /// </summary>
-        public int MaxCaptureHeadcount { get; set; } = 4;
-
-        /// <summary>
         /// Seconds after a round opens before losing every spawn point can end it.
         /// </summary>
         /// <remarks>

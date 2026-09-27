@@ -158,15 +158,22 @@ namespace Ironfront.Net.Protocol
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Ownership is one signed byte covering -1..+1 at 1% resolution, which is finer than the
-    /// capture bar can display and two bytes cheaper than a float. -100 is fully team 0,
-    /// +100 fully team 1, 0 neutral.
+    /// Ownership is one signed byte at 1% resolution. Its SIGN is the owning team (negative
+    /// team 0, positive team 1, 0 a neutral point) and its MAGNITUDE the owner's control, 0..1:
+    /// how far up the pole its flag is. That is the original game's own state -- an owner and a
+    /// control, with the point changing hands the moment the control reaches zero -- and it is
+    /// what <c>CapturePointState</c> steps (the original <c>CapturePoint.UpdateOwner</c>).
+    /// </para>
+    /// <para>
+    /// <b>This replaced a 0.9 threshold on a slider.</b> The byte used to be a position between
+    /// the two teams, and a point counted as owned only beyond ±0.9 of it -- so a point under
+    /// attack belonged to nobody long before anyone had captured it. The layout did not change,
+    /// only what the byte means; <see cref="OwningTeam"/> and the server's state read it the
+    /// same way from the same code, so the two sides cannot disagree about it.
     /// </para>
     /// <para>
     /// There is no <c>owningTeam</c> field for the same reason
-    /// <see cref="MatchStateMessage"/> has no winner field: it is a threshold test on a value
-    /// already in the message. <see cref="OwningTeam"/> applies it, once, here, so the two
-    /// sides cannot disagree about where the boundary is.
+    /// <see cref="MatchStateMessage"/> has no winner field: it is already in the byte.
     /// </para>
     /// </remarks>
     public readonly struct CapturePointMessage
@@ -174,16 +181,10 @@ namespace Ironfront.Net.Protocol
         /// <summary>u8 + i8 + u8 = 3 bytes.</summary>
         public const int Size = 3;
 
-        /// <summary>
-        /// Ownership at or beyond this fraction counts as captured. Matches the
-        /// <c>&gt; 0.9</c> test the phase-03 ticket-bleed sketch uses.
-        /// </summary>
-        public const float OwnedThreshold = 0.9f;
-
         /// <summary>Index into the map's capture-point list. Stable for a map.</summary>
         public readonly byte PointId;
 
-        /// <summary>Ownership x100, -100 (team 0) .. +100 (team 1).</summary>
+        /// <summary>Signed control x100: -100..-1 team 0, 1..100 team 1, 0 neutral.</summary>
         public readonly sbyte OwnerQ;
 
         public readonly CaptureFlags Flags;
@@ -195,27 +196,19 @@ namespace Ironfront.Net.Protocol
             Flags   = flags;
         }
 
-        /// <summary>Ownership as -1..+1.</summary>
+        /// <summary>The signed control as -1..+1. Its magnitude is the flag's height.</summary>
         public float Owner => OwnerQ * 0.01f;
 
         public bool IsContested => (Flags & CaptureFlags.Contested) != 0;
 
         /// <summary>
-        /// Which team holds the point, or <see cref="TeamId.None"/> while it is still being
-        /// fought over.
+        /// Which team holds the point -- the sign of <see cref="OwnerQ"/> -- or
+        /// <see cref="TeamId.None"/> for a neutral one.
         /// </summary>
         public byte OwningTeam
-        {
-            get
-            {
-                float owner = Owner;
-                if (owner <= -OwnedThreshold) return TeamId.Team0;
-                if (owner >= OwnedThreshold) return TeamId.Team1;
-                return TeamId.None;
-            }
-        }
+            => OwnerQ < 0 ? TeamId.Team0 : OwnerQ > 0 ? TeamId.Team1 : TeamId.None;
 
-        /// <summary>Quantizes a -1..+1 ownership value, clamping out-of-range input.</summary>
+        /// <summary>Quantizes a -1..+1 signed control, clamping out-of-range input.</summary>
         public static sbyte PackOwner(float owner)
         {
             if (float.IsNaN(owner)) return 0;
