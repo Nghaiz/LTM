@@ -42,7 +42,7 @@ namespace Ironfront.Net.Unity.Server
     /// </para>
     /// </remarks>
     [DisallowMultipleComponent]
-    public sealed class ServerTickLoop : MonoBehaviour, ISpawnRequestHandler, IChatHandler, IReliablePayloadSender
+    public sealed class ServerTickLoop : MonoBehaviour, ISpawnRequestHandler, IChatHandler, IReliablePayloadSender, IShotAnnouncer
     {
         /// <summary>Rows for the next S_PLAYER_LIST. Reused; sized to the protocol ceiling.</summary>
         private readonly PlayerListEntry[] _playerListEntries =
@@ -568,6 +568,10 @@ namespace Ironfront.Net.Unity.Server
                 _mountedWeapons,
                 () => _scheduler.CurrentTick / (float)ProtocolConstants.SIM_TICK_RATE);
 
+            // A bot's hand-held shot reaches the wire through this, from Weapon.Shoot -- which
+            // cannot name this assembly. Cleared in Unbind with the other weapon seams.
+            NetShotAnnouncements.Announcer = this;
+
             WarnAboutPlaceholderWeapons();
         }
 
@@ -646,6 +650,7 @@ namespace Ironfront.Net.Unity.Server
             // authority. NetVehicleAuthority.Uninstall exists for the same reason.
             NetTurretAim.Clear();
             NetWeaponAuthority.Clear();
+            NetShotAnnouncements.Clear();
         }
 
         /// <summary>Stage 1, at execution order -200. Receive, then apply input.</summary>
@@ -1546,6 +1551,28 @@ namespace Ironfront.Net.Unity.Server
                 new ReadOnlySpan<byte>(_eventPayload, 0, written),
                 (byte)ServerEventWriter.CosmeticChannel,
                 reliable: false);
+        }
+
+        /// <summary>
+        /// A bot's hand-held shot, announced from <c>Weapon.Shoot</c> through
+        /// <see cref="NetShotAnnouncements"/>.
+        /// </summary>
+        /// <remarks>
+        /// <b>IsClaimed, not aiControlled.</b> A player's body on the server is the AI character
+        /// prefab, so it reads <c>aiControlled == true</c> for the whole match; testing that would
+        /// announce every human shot twice, because ServerCombatBridge already announces it from
+        /// the input frame that fired it.
+        /// </remarks>
+        void IShotAnnouncer.AnnounceShot(GameObject shooter, Vector3 direction)
+        {
+            NetServerActor replicated = shooter.GetComponent<NetServerActor>();
+            if (replicated == null || replicated.IsClaimed) return;
+
+            EmitWeaponFire(
+                replicated.ActorId,
+                replicated.WeaponId,
+                MovementSimulation.ToCore(shooter.transform.position),
+                MovementSimulation.ToCore(direction));
         }
 
         /// <summary>Reports a death to the match, once, for the score and the win condition.</summary>

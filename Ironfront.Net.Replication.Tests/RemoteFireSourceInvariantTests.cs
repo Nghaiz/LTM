@@ -37,9 +37,21 @@ namespace Ironfront.Net.Replication.Tests
                 && shoot.IndexOf("AnnounceBotShot(", announce + 1, StringComparison.Ordinal) < 0,
                 "Weapon.Shoot must announce a bot's shot exactly once, after the per-pellet loop.");
 
+            // Through the seam: Weapon is Assembly-CSharp and may not name the server assembly
+            // (tools/check-net-layering.ps1 RULE 1).
             string announceBody = MethodBody(source, "Weapon.cs", "private void AnnounceBotShot(Vector3 direction)");
-            Assert.Contains("IsClaimed", announceBody, StringComparison.Ordinal);
-            Assert.Contains("EmitWeaponFire(", announceBody, StringComparison.Ordinal);
+            Assert.Contains("NetShotAnnouncements.Announce(", announceBody, StringComparison.Ordinal);
+            Assert.DoesNotContain("Ironfront.Net.Unity.Server", source, StringComparison.Ordinal);
+
+            // The server side skips a claimed body -- a player, already announced from its input
+            // frame -- and emits for everyone else. And it is installed, not merely present.
+            string loop = ReadScript("Net", "Server", "ServerTickLoop.cs");
+            string announcer = MethodBody(
+                loop, "ServerTickLoop.cs", "void IShotAnnouncer.AnnounceShot(GameObject shooter, Vector3 direction)");
+            Assert.Contains("IsClaimed", announcer, StringComparison.Ordinal);
+            Assert.Contains("EmitWeaponFire(", announcer, StringComparison.Ordinal);
+            Assert.Contains("NetShotAnnouncements.Announcer = this;", loop, StringComparison.Ordinal);
+            Assert.Contains("NetShotAnnouncements.Clear();", loop, StringComparison.Ordinal);
         }
 
         /// <summary>

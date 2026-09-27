@@ -526,34 +526,22 @@ public partial class Weapon : MonoBehaviour, Ironfront.Net.Unity.IGameplayWeapon
 	private float remoteLoopHoldUntil;
 
 	/// <summary>
-	/// Announces a shot fired by a server-driven bot, once per shot. A claimed (human) body's
-	/// shot is announced by ServerCombatBridge from its input frame, so it is skipped here.
+	/// Announces a shot fired by a server-driven bot, once per shot, through
+	/// <see cref="NetShotAnnouncements"/>. The server's announcer skips a claimed (human) body,
+	/// whose shot is announced by ServerCombatBridge from its input frame.
 	/// </summary>
 	/// <remarks>
-	/// <b>IsClaimed, not aiControlled.</b> A player's body on the server is the AI character prefab,
-	/// so it reads aiControlled == true for the whole match; testing that would announce every
-	/// human shot twice. A mounted weapon is skipped too: the client plays the report of the
-	/// gunner's CARRIED weapon, so a bot gunner's turret would sound like a rifle.
+	/// A mounted weapon is skipped here: the client plays the report of the gunner's CARRIED
+	/// weapon, so a bot gunner's turret would sound like a rifle. That is a fact about this type,
+	/// which is why it is tested on this side of the seam and the claimed-body test on the other.
 	/// </remarks>
 	private void AnnounceBotShot(Vector3 direction)
 	{
-		if (!NetContext.IsServer || user == null || this is MountedWeapon)
+		if (user == null || this is MountedWeapon)
 		{
 			return;
 		}
-		var replicated = user.GetComponent<Ironfront.Net.Unity.Server.NetServerActor>();
-		if (replicated == null || replicated.IsClaimed)
-		{
-			return;
-		}
-		Ironfront.Net.Unity.Server.ServerTickLoop loop = Ironfront.Net.Unity.Server.ServerTickLoop.Current;
-		if (loop == null)
-		{
-			return;
-		}
-		loop.EmitWeaponFire(
-			replicated.ActorId, replicated.WeaponId,
-			MovementSimulation.ToCore(user.transform.position), MovementSimulation.ToCore(direction));
+		NetShotAnnouncements.Announce(user.gameObject, direction);
 	}
 
 	/// <inheritdoc cref="PlayFireCosmetics()"/>
