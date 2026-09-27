@@ -163,5 +163,73 @@ namespace Ironfront.Net.Unity.Server.Tests
                 + "in place. A caller reading Below off those concludes the actor is standing "
                 + "on something it has not touched since the controller went away.");
         }
+
+        /// <summary>
+        /// A switched-off controller keeps answering the <c>isGrounded</c> of its last move.
+        /// </summary>
+        /// <remarks>
+        /// Measured 2026-09-27 on Island: a pooled server body with its capsule off sank at a
+        /// constant 0.333 m per tick -- the grounded stick speed, not a fall -- because the
+        /// simulation was told "grounded" every tick, and <c>FallDiagnostics</c>, which arms only
+        /// on an ungrounded descent, printed nothing for four consecutive falls through the map.
+        /// </remarks>
+        [Test]
+        public void ADisabledControllerIsNotGrounded()
+        {
+            NetMovementAgent agent = NewBody(controllerEnabled: true);
+            GiveItAFloor(agent);
+
+            agent.CharacterMove(new Vector3(0f, -1f, 0f));
+            Assert.IsTrue(
+                agent.IsGrounded,
+                "Setup did not land the body on its floor, so this test cannot tell a stale "
+                + "grounded flag from one that was never set. Fix the floor, do not weaken this.");
+
+            agent.GetComponent<CharacterController>().enabled = false;
+
+            Assert.IsFalse(
+                agent.IsGrounded,
+                "A body whose capsule is out of the physics world still reports standing on the "
+                + "ground. The simulation then holds it at the grounded stick speed straight "
+                + "through the map, and the fall diagnostic never arms.");
+        }
+
+        /// <summary>
+        /// The 2026-09-27 Island fall, reduced to its two steps: a body left seated by one
+        /// connection, and a fresh <see cref="ServerPlayer"/> that takes it over on foot.
+        /// </summary>
+        /// <remarks>
+        /// Player 25 timed out while seated in room 22, so <c>SetSeated(true)</c> had run on
+        /// actor 2's pooled body and the <see cref="ServerPlayer"/> that would have undone it was
+        /// discarded with the connection. Room 23 gave the same body to a new
+        /// <see cref="ServerPlayer"/>, whose own seated flag was false, so it never switched the
+        /// capsule back on: every respawn sank through the map and drowned.
+        /// </remarks>
+        [Test]
+        public void ACapsuleLeftOffByAPreviousOccupantIsSwitchedBackOn()
+        {
+            var go = new GameObject("pooled body");
+            _spawned.Add(go);
+            go.AddComponent<CharacterController>();
+            var body = go.AddComponent<NetServerActor>();
+            NetMovementAgent agent = body.AttachMovementAgent();
+
+            agent.SetSeated(true);
+            Assert.IsFalse(agent.CollisionEnabled, "Setup did not take the capsule out of the world.");
+
+            var nextOccupant = new ServerPlayer(connectionId: 3, actorId: 2) { Actor = body };
+
+            LogAssert.Expect(LogType.Warning, new Regex("capsule was switched off"));
+            nextOccupant.Tick(1f / 30f);
+
+            Assert.IsTrue(
+                agent.CollisionEnabled,
+                "A living, unseated body kept the capsule a previous occupant switched off. Its "
+                + "moves bypass collision and it sinks through the map on every respawn.");
+            Assert.AreEqual(
+                0L, agent.CollisionBypassedMoves,
+                "The first on-foot tick moved without collision: the capsule must be back BEFORE "
+                + "the tick's move, not after it.");
+        }
     }
 }

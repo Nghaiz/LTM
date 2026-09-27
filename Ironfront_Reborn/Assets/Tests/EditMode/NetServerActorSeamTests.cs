@@ -325,5 +325,44 @@ namespace Ironfront.Net.Unity.Server.Tests
                 "a moving AI actor must not arrive as an idle default-pose proxy");
         }
 
+        /// <summary>
+        /// Reporting a drowning is not dying of it. Measured 2026-09-27 on Island: a drowned
+        /// player's body stayed alive, kept sinking, and <c>TryRespawn</c> refused every deploy
+        /// its player sent until the wire floor killed it about 95 s later.
+        /// </summary>
+        [Test]
+        public void ADrownedActorIsDeadNotMerelyReportedDead()
+        {
+            NetContext.SetRole(NetRole.Server);
+            try
+            {
+                var gameplay = new FakeGameplayActor { IsDead = false, IsSubmerged = true };
+                NetServerActor actor = CreateActor(gameplay);
+                Assert.IsTrue(actor.IsAlive, "Setup did not start from a living actor.");
+
+                // Time does not advance in an EditMode test, so the clock cannot be waited out and
+                // a back-dated observation reads as "never observed". Charge the drowning clock
+                // past its limit directly; written back in case the clock is a struct.
+                const System.Reflection.BindingFlags Private =
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                System.Reflection.FieldInfo clockField = typeof(NetServerActor).GetField("_drowning", Private);
+                object clock = clockField.GetValue(actor);
+                clock.GetType().GetField("_submergedSeconds", Private).SetValue(clock, 60f);
+                clockField.SetValue(actor, clock);
+
+                actor.ObserveDrowning();
+
+                Assert.IsFalse(
+                    actor.IsAlive,
+                    "The actor drowned and was reported dead, but is still alive: its body keeps "
+                    + "sinking and every respawn its player requests is refused.");
+                Assert.IsTrue(gameplay.IsDead, "The gameplay actor was not marked dead.");
+                Assert.AreEqual(0f, gameplay.Health, "A drowned actor kept its health.");
+            }
+            finally
+            {
+                NetContext.Clear();
+            }
+        }
     }
 }

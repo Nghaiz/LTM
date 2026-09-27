@@ -607,6 +607,15 @@ namespace Ironfront.Net.Unity.Server
             if (!_drowning.Tick(source.IsSubmerged, elapsed)) return;
 
             Debug.Log($"[net] actor {_actorId} drowned after {_drowning.Limit:0.#}s under water");
+
+            // The body dies HERE, the way every other server kill does it (ServerActorDamageSink,
+            // ServerPlayer.KillForFallingOutOfTheWorld): reporting a death is not dying. Until
+            // 2026-09-27 this only reported, so a drowned body stayed alive -- it kept sinking,
+            // TryRespawn refused every deploy the dead player sent because the body was "alive",
+            // and the player only came back when the wire floor killed it ~95 s later.
+            Health = 0f;
+            IsAlive = false;
+
             ServerCombatEvents.ReportDeath(this, Vector3.zero, attacker: null, CauseOfDeath.Drown);
         }
 

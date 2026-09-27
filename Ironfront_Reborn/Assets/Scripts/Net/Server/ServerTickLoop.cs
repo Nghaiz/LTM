@@ -2020,6 +2020,10 @@ namespace Ironfront.Net.Unity.Server
                 Debug.LogError($"[net] despawn for actor {player.Session.ActorId} did not frame");
             }
 
+            // Before the slot goes back to the pool: this ServerPlayer is the only record of what
+            // it switched on the body (a seated capsule, an exit-grace collision pair), and the
+            // next connection to claim the body gets a fresh one that knows neither.
+            player.ReleaseBody();
             ServerActorRegistry.Instance.ReleaseSlot(player.Actor);
             ForgetActor(player.Session.ActorId);
 

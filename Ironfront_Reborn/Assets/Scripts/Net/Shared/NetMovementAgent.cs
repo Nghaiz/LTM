@@ -74,7 +74,23 @@ namespace Ironfront.Net.Unity
         }
 
         /// <summary>Ground contact, straight from the CharacterController.</summary>
-        public bool IsGrounded => Controller != null && Controller.isGrounded;
+        /// <remarks>
+        /// <b>A disabled controller is not grounded.</b> It keeps answering the
+        /// <c>isGrounded</c> of its last <c>Move</c>, so a body whose capsule was switched off
+        /// while it stood on something reported grounded forever: the simulation held it at the
+        /// grounded stick force (exactly 10 m/s down) instead of a fall, and
+        /// <c>FallDiagnostics</c>, which arms only on an ungrounded descent, never fired. Measured
+        /// 2026-09-27 on Island: a pooled body sank through the map at 0.333 m per tick on every
+        /// respawn with no <c>[fall]</c> line at all.
+        /// </remarks>
+        public bool IsGrounded => CollisionEnabled && Controller.isGrounded;
+
+        /// <summary>
+        /// Whether this body's capsule is in the physics world, so its moves resolve against it.
+        /// False while seated (<see cref="SetSeated"/>) — and on a body something forgot to
+        /// switch back, which is what <see cref="CollisionBypassedMoves"/> counts the cost of.
+        /// </summary>
+        public bool CollisionEnabled => Controller != null && Controller.enabled;
 
         /// <summary>Crouch stance, as the simulation last saw it.</summary>
         public bool IsCrouching => State.IsCrouching;
@@ -127,15 +143,16 @@ namespace Ironfront.Net.Unity
             // collision system would conclude the actor is standing on something.
             LastCollisionFlags = CollisionFlags.None;
 
-            if (CollisionBypassedMoves == 1)
+            if (_bypassWarningArmed)
             {
+                _bypassWarningArmed = false;
                 Debug.LogError(
                     $"[net] '{name}' moved with no collision: its CharacterController is "
                     + (controller == null ? "missing" : "disabled")
                     + ". Motion is being written straight onto the transform, so this body will "
                     + "pass through the world and sink below the server's authoritative "
                     + "position. See ledger X-19. Further occurrences are counted in "
-                    + "CollisionBypassedMoves and not logged.");
+                    + "CollisionBypassedMoves and not logged until the body changes hands.");
             }
 
             transform.position += delta;
@@ -147,6 +164,20 @@ namespace Ironfront.Net.Unity
         /// disabled. Zero on a healthy body; the X-19 detector.
         /// </summary>
         public long CollisionBypassedMoves { get; private set; }
+
+        /// <summary>Whether the next bypassed move still owes its one error line.</summary>
+        private bool _bypassWarningArmed = true;
+
+        /// <summary>
+        /// Lets the next bypassed move log again. Called when a body changes hands.
+        /// </summary>
+        /// <remarks>
+        /// Once per PROCESS was once too few for a pooled server body: the 2026-09-27 Island
+        /// server logged the bypass for actor 2 once, and the three later respawns that sank
+        /// the same body through the map printed nothing, because each new occupant inherited a
+        /// warning the first one had already spent.
+        /// </remarks>
+        public void RearmCollisionBypassWarning() => _bypassWarningArmed = true;
 
         /// <summary>
         /// One authoritative or predicted tick: step the shared simulation, apply the motion
