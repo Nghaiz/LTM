@@ -2050,6 +2050,20 @@ namespace Ironfront.Net.Unity.Server
                     $"[net] last player left room {RoomIdentity.RoomId}; releasing it so the next "
                     + "allocation can be adopted");
                 RoomIdentity.Release();
+
+                // ...and the round goes with the room. The next room is a new match: it must open
+                // at WaitingForPlayers, 0/0, every capture point at its opening owner and no bots,
+                // with the bot-release gate re-armed. Measured 2026-09-27 on Island: room 22's
+                // players timed out mid-round, bots played on alone for ~11 minutes, and room 23
+                // joined THAT round at 52/39 with all five points taken ("5 of 5 capture point(s)
+                // start owned" on both clients) and no Warmup, no Playing, no bot gate.
+                // ForceReset raises no MatchEnded, so the master -- which has already dropped the
+                // room -- is sent no match result for it.
+                if (_match != null && _match.Match != null)
+                {
+                    Debug.Log("[net] resetting the match for the next room");
+                    _match.Match.ForceReset();
+                }
             }
 
             // After the removal, so the table no longer names the leaver. Sending the stale one

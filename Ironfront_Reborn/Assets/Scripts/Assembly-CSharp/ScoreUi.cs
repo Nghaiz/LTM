@@ -35,6 +35,12 @@ public class ScoreUi : MonoBehaviour
 
 	public Text redFlagsText;
 
+	/// <summary>The flag counts last written to the labels by <see cref="SetCapturePointCounts"/>;
+	/// -1 until the first write, so a new HUD always paints.</summary>
+	private int shownBlueFlags = -1;
+
+	private int shownRedFlags = -1;
+
 	public Text victoryText;
 
 	// V10 task 7, checklist row E5. Authored on the shipped prefab since 2026-08-19 (debt
@@ -291,6 +297,15 @@ public class ScoreUi : MonoBehaviour
 		{
 			return;
 		}
+		// NetClientObjectivePresenter pushes every frame so a HUD built after the join replay still
+		// paints; a repeat is dropped here so that costs no string per frame. Per instance, so a
+		// freshly built HUD always paints its first value.
+		if (instance.shownBlueFlags == blueCount && instance.shownRedFlags == redCount)
+		{
+			return;
+		}
+		instance.shownBlueFlags = blueCount;
+		instance.shownRedFlags = redCount;
 		if (instance.blueFlagsText != null)
 		{
 			instance.blueFlagsText.text = blueCount.ToString();

@@ -202,7 +202,17 @@ namespace Ironfront.Net.Unity.Client
 
         private void Update()
         {
-            if (_client == null || !_model.HasState) return;
+            if (_client == null) return;
+
+            // Level-triggered, like the scores below, and ahead of the HasState return. The join
+            // replays every capture point BEFORE GameManager.StartGame has built the HUD, so the
+            // edge-triggered push in OnCapturePoint lands on nothing, _view has already latched the
+            // values, and a point that never changes owner is never sent again: the flag labels
+            // kept the prefab's authored "0" with flags visibly owned (x0 / x0 on the 2026-09-27
+            // Island loadout screen). ScoreUi drops a repeat, so this costs no string per frame.
+            RecomputeCapturePointCounts();
+
+            if (!_model.HasState) return;
 
             float now = Time.time;
 
