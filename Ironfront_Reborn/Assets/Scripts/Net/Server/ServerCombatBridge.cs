@@ -331,21 +331,31 @@ namespace Ironfront.Net.Unity.Server
 
         /// <summary>
         /// Points the session at the loadout slot the body's weapon came out of, and says so
-        /// once when it cannot.
+        /// when the body holds a weapon the loadout does not have.
         /// </summary>
         /// <remarks>
-        /// <b>Rate-limited to the transitions, not to a timer.</b> This runs once per accepted
-        /// input frame per player at 30 Hz, so a per-occurrence log would be thirty identical
-        /// lines a second for as long as the inconsistency lasted. Logging only the edge -- the
-        /// frame on which the slot went from known to unknown -- names it once per occurrence,
-        /// which is the thing worth knowing.
+        /// <para>
+        /// <b>Holding NOTHING is not a disagreement, and it is the common case.</b> The body holds
+        /// <see cref="WeaponIds.NONE"/> whenever it is dead (<c>Actor.Die</c> drops every slot),
+        /// driving or riding a seat that holsters the carried weapon, or manning a turret, whose
+        /// weapon carries no network id. The slot is forgotten there -- there is no reserve to
+        /// draw -- but the warning used to say "the session and the body disagree about the
+        /// loadout" for it: 40 times in one 2026-09-27 Island match, every one of them for weapon
+        /// 0, and it read to a playtester as a reload bug.
+        /// </para>
+        /// <para>
+        /// <b>Once per change, which the callers already are.</b>
+        /// <see cref="AdoptTheWeaponTheBodyIsHolding"/> returns before calling this when the id
+        /// has not changed, and <see cref="PlaceAtSpawn"/> calls it once per spawn. It used to
+        /// also require the slot to have been known a moment before, and that gate hid the one
+        /// case worth reporting: a body re-armed with a weapon outside its loadout right after a
+        /// death, when the slot was already unknown because the corpse held nothing.
+        /// </para>
         /// </remarks>
-        private static void ResolveActiveLoadoutSlot(ClientSession session, byte weaponId)
+        internal static void ResolveActiveLoadoutSlot(ClientSession session, byte weaponId)
         {
-            bool wasKnown = session.HasActiveLoadoutSlot;
-
             if (session.ResolveActiveLoadoutSlotFrom(weaponId)) return;
-            if (!wasKnown) return;
+            if (weaponId == WeaponIds.NONE) return;
 
             Debug.LogWarning(
                 $"[net] actor {session.ActorId} is holding weapon {weaponId}, which is in none "
