@@ -395,6 +395,30 @@ namespace Ironfront.Net.Replication.Tests
         /// 16,905 N·s contacts between each tank and the body seated in it at 0.2 m/s, and the
         /// same kick on quads, jeeps and boats.
         /// </remarks>
+        /// <summary>
+        /// A minimap marker whose subject is behind the minimap camera is hidden, not drawn.
+        /// </summary>
+        /// <remarks>
+        /// A perspective projection of a point behind the camera (a helicopter above it) comes back
+        /// MIRRORED into the frame, so the RectMask2D that clips off-map icons cannot catch it: the
+        /// icon would sit inside the map at a place the vehicle is not. MinimapMarker compiles into
+        /// Assembly-CSharp (ledger E-11b), so this is pinned on its source.
+        /// </remarks>
+        [Fact]
+        public void AMinimapMarkerBehindTheMinimapCameraIsHidden()
+        {
+            string lateUpdate = MethodBody(
+                ReadScript("Assembly-CSharp", "MinimapMarker.cs"), "MinimapMarker.cs",
+                "private void LateUpdate()");
+
+            int behind = lateUpdate.IndexOf("viewport.z <= 0f", StringComparison.Ordinal);
+            int shown = lateUpdate.IndexOf("SetVisible(true)", StringComparison.Ordinal);
+            Assert.True(
+                behind >= 0 && shown > behind,
+                "MinimapMarker.LateUpdate must hide a subject behind the minimap camera before "
+                + "it ever shows the icon.");
+        }
+
         [Fact]
         public void SeatEntryTakesTheCapsuleOutInTheSameStep()
         {
