@@ -72,6 +72,12 @@ namespace Ironfront.Net.Unity.Client
         private bool _junctionDrivesFlow;
 
         /// <summary>
+        /// Why the game link dropped after the accept but before the map was up, or null.
+        /// Reported by <see cref="OnSceneReady"/>. See <see cref="OnGameDisconnected"/>.
+        /// </summary>
+        private DisconnectReason? _droppedWhileLoading;
+
+        /// <summary>
         /// A ticket fetch for the starting match is in flight, or the dial has begun. Reset on
         /// every path that leaves the room or the match, so a second match in one session is not
         /// locked out by the first.
@@ -1039,6 +1045,7 @@ namespace Ironfront.Net.Unity.Client
         {
             Inbound.Clear();
             Inbound.Hold();
+            _droppedWhileLoading = null;
 
             _connecting = true;
             _connectDeadline = ConnectTimeoutSeconds;
@@ -1086,6 +1093,12 @@ namespace Ironfront.Net.Unity.Client
             if (_junctionDrivesFlow && _flow.State == GameFlowState.ConnectingGame)
                 _flow.Transition(GameFlowState.InMatch);
 
+            if (_droppedWhileLoading is DisconnectReason reason)
+            {
+                _droppedWhileLoading = null;
+                ReportMatchDrop(reason);
+            }
+
             return replayed;
         }
 
@@ -1100,6 +1113,7 @@ namespace Ironfront.Net.Unity.Client
         public void LeaveMatch()
         {
             _connecting = false;
+            _droppedWhileLoading = null;
             Inbound.Clear();
             PendingJoin = PendingJoin.None;
             _enteringMatch = false;
@@ -1181,6 +1195,7 @@ namespace Ironfront.Net.Unity.Client
             if (_leaving) return;
 
             bool duringJunction = _connecting;
+            bool whileLoading = !duringJunction && Inbound.IsHolding;
             _connecting = false;
             Inbound.Clear();
 
@@ -1190,8 +1205,26 @@ namespace Ironfront.Net.Unity.Client
                 return;
             }
 
-            // Dropped mid-match. phase-03 criterion 6: back to the lobby with a message, rather
-            // than a frozen world nobody is updating.
+            // Accepted, and the map is still loading. The load is asynchronous and cannot be
+            // taken back, so the drop is held until OnSceneReady and reported there, from InMatch,
+            // through the same path as any other drop. Reporting it now would find the flow in
+            // ConnectingGame, where there is no way back to the lobby, and the map would then come
+            // up on a dead socket: a frozen world with nobody told why.
+            if (whileLoading)
+            {
+                _droppedWhileLoading = reason;
+                return;
+            }
+
+            ReportMatchDrop(reason);
+        }
+
+        /// <summary>
+        /// Dropped mid-match. phase-03 criterion 6: back to the lobby with a message, rather than
+        /// a frozen world nobody is updating.
+        /// </summary>
+        private void ReportMatchDrop(DisconnectReason reason)
+        {
             Fail($"Disconnected from the game server ({reason}).");
 
             if (_flow.State == GameFlowState.InMatch || _flow.State == GameFlowState.MatchEnd)

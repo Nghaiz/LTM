@@ -514,6 +514,29 @@ namespace Ironfront.Client.Flow.Tests
         }
 
         [Fact]
+        public async Task ADropWhileTheMapLoadsIsReportedOnceTheMapIsUp()
+        {
+            // The map loads asynchronously since 2026-09-27, so the link can drop between the
+            // accept and the scene being up. Reporting it there found the flow in ConnectingGame,
+            // which has no way back to the lobby, and the map then came up on a dead socket.
+            Harness h = await new Harness().AtRoomLobbyAsync();
+            h.Session.EnterMatch();
+            h.Game.Accept();
+            Assert.True(h.Session.HoldIfLoading(new byte[] { 1 }));
+
+            h.Game.Drop(DisconnectReason.Timeout);
+
+            Assert.Equal(GameFlowState.ConnectingGame, h.Flow.State);
+
+            int replayed = h.Session.OnSceneReady();
+
+            Assert.Equal(0, replayed);
+            Assert.Empty(h.Routed);
+            Assert.Equal(GameFlowState.Lobby, h.Flow.State);
+            Assert.Contains("Disconnected from the game server (Timeout)", h.Session.LastError);
+        }
+
+        [Fact]
         public async Task LeavingAMatchKeepsTheMasterLinkUp()
         {
             // phase-03 task 6: closing the TCP link here would log the player out every time a

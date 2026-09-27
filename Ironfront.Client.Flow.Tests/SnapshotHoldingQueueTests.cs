@@ -92,9 +92,9 @@ namespace Ironfront.Client.Flow.Tests
         }
 
         [Fact]
-        public void OverflowDropsTheOldestAndSaysSo()
+        public void OverflowAtTheCeilingDropsTheOldestAndSaysSo()
         {
-            var queue = new SnapshotHoldingQueue(capacity: 3);
+            var queue = new SnapshotHoldingQueue(capacity: 3, maxCapacity: 3);
             (GamePayloadRoute route, List<byte[]> seen) = Recorder();
             queue.Hold();
 
@@ -111,6 +111,45 @@ namespace Ironfront.Client.Flow.Tests
         }
 
         [Fact]
+        public void AFullQueueGrowsInsteadOfDroppingAndKeepsArrivalOrder()
+        {
+            // A drop can lose a reliable event the transport has already acked, so below the
+            // ceiling the queue must grow. Wrapped first, so the growth re-lays a ring whose head
+            // is not at index 0.
+            var queue = new SnapshotHoldingQueue(capacity: 3, maxCapacity: 64);
+            (GamePayloadRoute route, List<byte[]> seen) = Recorder();
+            queue.Hold();
+            queue.TryHold(new byte[] { 0 });
+            queue.Release(route);
+            seen.Clear();
+            queue.Hold();
+
+            for (byte i = 1; i <= 20; i++) queue.TryHold(new[] { i });
+
+            Assert.Equal(20, queue.Count);
+            Assert.Equal(0, queue.DroppedForOverflow);
+            Assert.True(queue.Capacity >= 20);
+
+            queue.Release(route);
+
+            Assert.Equal(20, seen.Count);
+            for (int i = 0; i < 20; i++) Assert.Equal(new[] { (byte)(i + 1) }, seen[i]);
+        }
+
+        [Fact]
+        public void TheCeilingCoversTheColdFirstLoadMeasuredOnAFreshInstall()
+        {
+            // 2026-09-27: the first load of each map from a freshly built player blocked for
+            // 21 s. The socket is serviced during the load now, so all of it arrives here: a
+            // snapshot per SNAPSHOT_RATE tick, doubled for the reliable events beside them.
+            int coldLoad = 21 * ProtocolConstants.SNAPSHOT_RATE * 2;
+
+            Assert.True(
+                SnapshotHoldingQueue.DefaultMaxCapacity > coldLoad,
+                $"ceiling {SnapshotHoldingQueue.DefaultMaxCapacity} does not cover {coldLoad} payloads");
+        }
+
+        [Fact]
         public void TheDefaultCapacityCoversTheWorstSceneLoadInThePlan()
         {
             // phase-03 trap 3 puts scene loading at 2-5 seconds; snapshots come at 20 Hz.
@@ -119,6 +158,13 @@ namespace Ironfront.Client.Flow.Tests
             Assert.True(
                 SnapshotHoldingQueue.DefaultCapacity > worstCase,
                 $"capacity {SnapshotHoldingQueue.DefaultCapacity} does not cover {worstCase} payloads");
+        }
+
+        [Fact]
+        public void ACeilingBelowTheCapacityIsRejected()
+        {
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => new SnapshotHoldingQueue(capacity: 8, maxCapacity: 4));
         }
 
         [Fact]
@@ -163,7 +209,7 @@ namespace Ironfront.Client.Flow.Tests
         {
             // The buffers are reused and are sized to the largest payload that has used the
             // slot, so the length has to be tracked separately from the array.
-            var queue = new SnapshotHoldingQueue(capacity: 1);
+            var queue = new SnapshotHoldingQueue(capacity: 1, maxCapacity: 1);
             (GamePayloadRoute route, List<byte[]> seen) = Recorder();
 
             queue.Hold();

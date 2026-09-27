@@ -76,6 +76,9 @@ namespace Ironfront.Net.Unity.Client
         private bool _loadingMatch;
         private string _loadingScene = string.Empty;
 
+        /// <summary><c>Time.realtimeSinceStartup</c> when the map load began, for the load log.</summary>
+        private float _loadStartedAt;
+
         /// <summary>The one flow bootstrap in the process, or null on a server or a harness run.</summary>
         public static ClientFlowBootstrap Current { get; private set; }
 
@@ -470,7 +473,16 @@ namespace Ironfront.Net.Unity.Client
             NetContext.DeclareClientProcess();
 
             if (_verbose) Debug.Log($"[flow] server accepted; loading map '{scene}'.");
-            SceneManager.LoadScene(scene);
+
+            // ASYNC, because the accepted socket has to be serviced while the map loads. A
+            // synchronous LoadScene blocks the main thread, so nothing polls the socket, and the
+            // first load of each map from a freshly built player blocked for 21 s on 2026-09-27
+            // (FrameTimeLog max=20836.7ms), twice ProtocolConstants.TIMEOUT_MS. Both ends then
+            // timed the connection out and every player went back to the menu, four joins out of
+            // four. Update keeps polling until the map's NetClientBootstrap takes the socket over,
+            // and the session's queue holds what arrives meanwhile.
+            _loadStartedAt = Time.realtimeSinceStartup;
+            SceneManager.LoadSceneAsync(scene);
         }
 
         private void OnGameServerFailed(string reason)
@@ -507,8 +519,14 @@ namespace Ironfront.Net.Unity.Client
             // component that owns the world.
             _game.OnMessage -= OnGamePayload;
 
+            long dropped = _session.Inbound.DroppedForOverflow;
             int replayed = _session.OnSceneReady();
-            if (_verbose) Debug.Log($"[flow] map ready; replayed {replayed} held payload(s).");
+
+            // Always logged, not behind _verbose: a slow load is exactly what a player's machine
+            // does and a developer's does not, and this is the line that says how slow it was.
+            Debug.Log(
+                $"[flow] map '{scene.name}' ready after {Time.realtimeSinceStartup - _loadStartedAt:F1} s; "
+                + $"replayed {replayed} held payload(s), dropped {dropped}.");
         }
 
         /// <summary>
