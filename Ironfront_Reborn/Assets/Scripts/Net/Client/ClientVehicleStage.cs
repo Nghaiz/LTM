@@ -169,6 +169,8 @@ namespace Ironfront.Net.Unity.Client
             if (_client == null) return;
             _client.Router.OnSeatChange += OnSeatChange;
             _client.Router.OnVehicleSnapshotApplied += OnVehicleSnapshotApplied;
+            _client.Router.OnDeath += OnDeath;
+            _client.Router.OnSnapshotApplied += OnSnapshotApplied;
         }
 
         private void OnDisable()
@@ -176,6 +178,124 @@ namespace Ironfront.Net.Unity.Client
             if (_client == null) return;
             _client.Router.OnSeatChange -= OnSeatChange;
             _client.Router.OnVehicleSnapshotApplied -= OnVehicleSnapshotApplied;
+            _client.Router.OnDeath -= OnDeath;
+            _client.Router.OnSnapshotApplied -= OnSnapshotApplied;
+        }
+
+        /// <summary>
+        /// How long the server may disagree about the local seat before this client gives in.
+        /// </summary>
+        /// <remarks>
+        /// The seat message is reliable and the snapshot is not, so for a few snapshots after a
+        /// real entry the server's copy can still read "on foot" -- they were built before the
+        /// seat was granted. A second is ten times that window and a small fraction of how long
+        /// a body stayed wrongly seated when nothing checked (two minutes in the 2026-09-28
+        /// playtest).
+        /// </remarks>
+        private const float SeatDisagreementGraceSeconds = 1f;
+
+        // When the server's snapshot first stopped agreeing with the local seat, or -1.
+        private float _seatDisagreementSince = -1f;
+
+        /// <summary>
+        /// The local body leaves its seat when it dies, as <c>Actor.Die</c> does.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The server never sends a <c>Left</c> for this.</b> <c>SeatChangeResult.Left</c> is
+        /// only the answer to a leave REQUEST. A body that dies in a seat -- shot, drowned, or
+        /// killed with its vehicle (<c>Vehicle.Die</c> ejects every occupant) -- is taken out
+        /// of it on the server with no message at all, so this client kept the body seated,
+        /// the vehicle predicted and the turret on local aim straight through the respawn. The
+        /// 2026-09-28 playtest logged exactly that: after the deploy the rig stayed "seated True"
+        /// in a vehicle a bot then took, 170-270 m from the server's copy of the body, for two
+        /// minutes -- the screen shaking under corrections for a vehicle this client thought it
+        /// was driving, and the turret fighting between its mouse and the snapshots.
+        /// </para>
+        /// <para>
+        /// <c>LocalPlayerRigBinding.FellBody</c> takes the body out before it ragdolls, from the
+        /// same message; this clears the stage's own half. Either order is safe -- both are
+        /// idempotent.
+        /// </para>
+        /// </remarks>
+        private void OnDeath(DeathMessage message)
+        {
+            if (_occupiedVehicleId == 0) return;
+
+            LeaveLocalSeat(message.VictimActorId, "the local actor died in it");
+        }
+
+        /// <summary>
+        /// Gives the local seat up when the server's snapshot has said otherwise for longer than
+        /// <see cref="SeatDisagreementGraceSeconds"/>.
+        /// </summary>
+        /// <remarks>
+        /// The level-triggered half of <see cref="OnDeath"/>: whatever took the body out of the
+        /// seat on the server -- a death, a vehicle destroyed or despawned under it, a reset --
+        /// the snapshot's seat fields say so, and they are the authority. Only ever toward
+        /// "leave": a snapshot saying seated is never used to seat this body, because an entry
+        /// has its own reliable message and a rig parented into a seat from a snapshot would be
+        /// a second, unordered way in.
+        /// </remarks>
+        private void OnSnapshotApplied(uint serverTick, uint lastProcessedInputTick)
+        {
+            if (_occupiedVehicleId == 0 || _client == null)
+            {
+                _seatDisagreementSince = -1f;
+                return;
+            }
+
+            if (!_client.Router.Decoder.Current.TryFind(_client.LocalActorId, out ActorSnapshotEntry entry))
+                return;
+
+            bool serverAgrees = (entry.StateFlags & ActorStateFlags.IsSeated) != 0
+                                && entry.VehicleId == _occupiedVehicleId
+                                && entry.SeatIndex == _occupiedSeatIndex;
+            if (serverAgrees)
+            {
+                _seatDisagreementSince = -1f;
+                return;
+            }
+
+            float now = Time.unscaledTime;
+            if (_seatDisagreementSince < 0f)
+            {
+                _seatDisagreementSince = now;
+                return;
+            }
+
+            if (now - _seatDisagreementSince < SeatDisagreementGraceSeconds) return;
+
+            LeaveLocalSeat(_client.LocalActorId, (entry.StateFlags & ActorStateFlags.IsSeated) != 0
+                ? $"the server has the body in vehicle {entry.VehicleId} seat {entry.SeatIndex}"
+                : "the server has the body on foot");
+        }
+
+        /// <summary>
+        /// Takes the local body out of its seat and drops every piece of seat state this stage
+        /// keeps: occupancy, the local turret aim, and prediction of a vehicle it was driving.
+        /// </summary>
+        private void LeaveLocalSeat(ushort actorId, string reason)
+        {
+            if (!NetClientPresenterGuard.IsLocalActor(actorId)) return;
+
+            ushort vehicleId = _occupiedVehicleId;
+            byte seatIndex = _occupiedSeatIndex;
+
+            // Read through NetClientBindings rather than the held _localController, because
+            // Release() below nulls that field.
+            NetClientBindings.LocalPlayer.LeaveSeat();
+
+            _occupiedVehicleId = 0;
+            _occupiedSeatIndex = 0;
+            _seatDisagreementSince = -1f;
+
+            // The local aim goes with the seat. Left standing, the next C_VEHICLE_INPUT sent
+            // from a DIFFERENT turret would open with the previous one's pose.
+            NetTurretAim.ClearLocal();
+            Release();
+
+            Debug.Log($"[net] left vehicle {vehicleId} seat {seatIndex} on this client: {reason}");
         }
 
         private void Update()
@@ -370,6 +490,7 @@ namespace Ironfront.Net.Unity.Client
                 // aim ever left a client.
                 _occupiedVehicleId = message.VehicleId;
                 _occupiedSeatIndex = message.SeatIndex;
+                _seatDisagreementSince = -1f;
 
                 // Resolved here and not in SendVehicleInput: this is the member the local-actor
                 // guard is in, and the controller cannot change while seated.

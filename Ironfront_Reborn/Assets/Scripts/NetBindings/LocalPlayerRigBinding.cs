@@ -232,6 +232,14 @@ namespace Ironfront.Net.Unity.Bindings
             FpsActorController local = FpsActorController.instance;
             if (local == null || local.actor == null || local.actor.ragdoll == null) return;
 
+            // Out of the seat first, as Actor.Die does before it ragdolls. The server never
+            // sends a Left for a death in a seat, so without this the corpse stayed welded to the
+            // vehicle and the respawned player came back still sitting in it.
+            if (local.actor.IsSeated())
+            {
+                local.actor.LeaveSeat();
+            }
+
             local.actor.KnockOver(force, bone);
 
             // The drops Actor.Damage would have thrown for the killing hit, which never runs on a
