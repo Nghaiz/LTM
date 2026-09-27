@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Ironfront.Net.Protocol;
 
 namespace Ironfront.Net.Replication.Combat
@@ -178,6 +179,42 @@ namespace Ironfront.Net.Replication.Combat
         }
 
         /// <summary>Forgets everything. Called on a match reset.</summary>
+        /// <summary>
+        /// Forgets every death for a new round, except that each actor in
+        /// <paramref name="stillDead"/> is carried over as dead with its delay already served.
+        /// </summary>
+        /// <param name="stillDead">Players whose body is still dead as the round resets.</param>
+        /// <param name="nowSeconds">Server time of the reset.</param>
+        /// <remarks>
+        /// <para>
+        /// <b>What <see cref="Reset"/> alone did to them.</b> The world reset keeps player
+        /// bodies, so a player killed shortly before the round ended is still dead afterwards,
+        /// and the only way back is a respawn request -- which <see cref="MayRespawn"/> refuses
+        /// for anyone it does not hold as dead. Every such player was locked out of the next
+        /// round until they reconnected, their deploy requests dropped without a word. Measured
+        /// on the Azure Island server on 2026-09-28: three requests from one client, none
+        /// answered, a whole round played by nobody.
+        /// </para>
+        /// <para>
+        /// <b>Served, not restarted.</b> The death belongs to the round that ended; making the
+        /// player wait out a fresh <see cref="RespawnSeconds"/> would charge it to the new one.
+        /// </para>
+        /// </remarks>
+        public void ResetForNewRound(IReadOnlyList<ushort> stillDead, float nowSeconds)
+        {
+            Reset();
+            if (stillDead == null) return;
+
+            for (int i = 0; i < stillDead.Count; i++)
+            {
+                ushort actorId = stillDead[i];
+                if (actorId >= _dead.Length) continue;
+
+                _dead[actorId] = true;
+                _diedAt[actorId] = nowSeconds - RespawnSeconds;
+            }
+        }
+
         public void Reset()
         {
             for (int i = 0; i < _dead.Length; i++)
