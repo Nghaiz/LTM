@@ -97,12 +97,22 @@ public class LevelBounds : MonoBehaviour
 		return true;
 	}
 
+	/// <summary>
+	/// The authored box in world space, read straight off the transform.
+	/// </summary>
+	/// <remarks>
+	/// Usable before this component's own <c>Awake</c> -- the minimap camera frames itself on it
+	/// in ITS <c>Awake</c>, and the order of two Awakes is not something to depend on.
+	/// </remarks>
+	public Bounds WorldBox => new Bounds(base.transform.position, base.transform.localScale);
+
 	private void SetupBounds()
 	{
 		instance = this;
+		Bounds box = WorldBox;
 		volume = new PlayVolume(
-			new Vec3(base.transform.position.x, base.transform.position.y, base.transform.position.z),
-			new Vec3(base.transform.localScale.x, base.transform.localScale.y, base.transform.localScale.z));
+			new Vec3(box.center.x, box.center.y, box.center.z),
+			new Vec3(box.size.x, box.size.y, box.size.z));
 
 		// Clamping to an authored box only keeps bodies encodable if the box is itself inside
 		// the wire's range. This comment used to claim Dustbowl's was "by a wide margin"; it was
