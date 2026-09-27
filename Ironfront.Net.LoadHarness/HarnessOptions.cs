@@ -73,6 +73,14 @@ namespace Ironfront.Net.LoadHarness
         public string? SharedSecret { get; private set; }
 
         /// <summary>
+        /// Server id signed into every join ticket. 0 (the default) suits a standalone server;
+        /// a server registered with a master adopts the id the master gave it and refuses any
+        /// other as <c>WrongServer</c>, so a run against one needs its id — the number in its
+        /// "[net] master link: registered as server N" line.
+        /// </summary>
+        public ushort ServerId { get; private set; }
+
+        /// <summary>
         /// Preset name handed to <see cref="SimulatorConfig.FromPresetName"/>, or null for a
         /// clean wire.
         /// </summary>
@@ -148,6 +156,12 @@ namespace Ironfront.Net.LoadHarness
                     case "--port":
                         if (!TryPort(value, out int port, out error)) return false;
                         options.Port = port;
+                        break;
+
+                    case "--server-id":
+                        if (!TryRange(value, 0, ushort.MaxValue, "--server-id", out int serverId, out error))
+                            return false;
+                        options.ServerId = (ushort)serverId;
                         break;
 
                     case "--clients":
@@ -281,6 +295,8 @@ namespace Ironfront.Net.LoadHarness
               --secret <key>       HMAC key for join tickets. Defaults to
                                    IRONFRONT_SHARED_SECRET, including from a .env walked up
                                    from here — the same way the game server finds it.
+              --server-id <n>      server id signed into tickets (default 0). A server
+                                   registered with a master refuses any id but its own.
 
             The server must be on UDP, not the loopback wire:
               IRONFRONT_GAMESERVER_TRANSPORT=udp

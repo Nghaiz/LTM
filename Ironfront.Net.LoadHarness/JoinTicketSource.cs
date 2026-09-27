@@ -35,10 +35,12 @@ namespace Ironfront.Net.LoadHarness
     public sealed class JoinTicketSource
     {
         private readonly byte[]? _secret;
+        private readonly ushort _serverId;
 
-        private JoinTicketSource(byte[]? secret, string origin)
+        private JoinTicketSource(byte[]? secret, string origin, ushort serverId)
         {
             _secret = secret;
+            _serverId = serverId;
             Origin = origin;
         }
 
@@ -59,10 +61,11 @@ namespace Ironfront.Net.LoadHarness
         /// machine where the server is signed — and the two would disagree for a reason
         /// invisible from either side.
         /// </remarks>
-        public static JoinTicketSource Resolve(string? explicitSecret)
+        /// <param name="serverId">Signed into every ticket; see <see cref="HarnessOptions.ServerId"/>.</param>
+        public static JoinTicketSource Resolve(string? explicitSecret, ushort serverId = 0)
         {
             if (!string.IsNullOrEmpty(explicitSecret))
-                return new JoinTicketSource(Encoding.UTF8.GetBytes(explicitSecret), "--secret");
+                return new JoinTicketSource(Encoding.UTF8.GetBytes(explicitSecret), "--secret", serverId);
 
             // Existing process variables win over the file, so an operator can override without
             // editing it. That is DotEnv's own precedence, not a choice made here.
@@ -76,10 +79,10 @@ namespace Ironfront.Net.LoadHarness
                 string origin = string.IsNullOrEmpty(path)
                     ? EnvRegistry.SharedSecret.Name
                     : $"{EnvRegistry.SharedSecret.Name} (.env at {path})";
-                return new JoinTicketSource(Encoding.UTF8.GetBytes(fromEnvironment), origin);
+                return new JoinTicketSource(Encoding.UTF8.GetBytes(fromEnvironment), origin, serverId);
             }
 
-            return new JoinTicketSource(null, "none — unsigned tickets");
+            return new JoinTicketSource(null, "none — unsigned tickets", serverId);
         }
 
         /// <summary>
@@ -108,7 +111,7 @@ namespace Ironfront.Net.LoadHarness
             int written = JoinTicket.Issue(
                 ticket,
                 playerId: (uint)(clientIndex + 1),
-                serverId: 0,
+                serverId: _serverId,
                 roomId: 0,
                 expiresAtUnixMs: expiresAt,
 
