@@ -23,7 +23,7 @@
 # master has two servers per map and a room can land on the starving one.
 
 x-gameserver: &gameserver
-  image: ${IRONFRONT_GAMESERVER_IMAGE:-ironfront-game-server:f06b5ba}
+  image: ${IRONFRONT_GAMESERVER_IMAGE:-ironfront-game-server:8d33ed0}
   restart: unless-stopped
   # Unity sizes its job pool to the machine; NetServerBootstrap.CapJobWorkers caps a headless
   # server to 2, and the flag says so for images built before that cap.
