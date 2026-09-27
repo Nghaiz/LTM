@@ -12,13 +12,15 @@ namespace Ironfront.Net.Replication.Tests
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>The mechanism, in one sentence.</b> A capture point crossing
-    /// <see cref="CapturePointMessage.OwnedThreshold"/> flips <c>OwningTeam</c> from the team
-    /// that held it to <see cref="TeamId.None"/> for exactly one tick before it can flip to the
-    /// other team outright — a one-body advantage does that crossing in about half a second at
-    /// the map's own capture speed — and <see cref="MatchStateMachine.ApplyElimination"/> read
-    /// that single tick's "zero spawn points" as a genuine wipe-out, ending the round on the
-    /// spot. Every prior elimination test in <c>ObjectiveAuthorityTests</c> feeds
+    /// <b>The mechanism, as it was.</b> A capture point used to count as held only past a 0.9
+    /// ownership threshold, so it flipped <c>OwningTeam</c> from the team that held it to
+    /// <see cref="TeamId.None"/> about half a second into a one-body attack — long before it
+    /// could flip to the other team — and <see cref="MatchStateMachine.ApplyElimination"/> read
+    /// that tick's "zero spawn points" as a genuine wipe-out, ending the round on the spot.
+    /// <see cref="CapturePointState"/> now follows the original game's rule instead: a point
+    /// stays its owner's until its control reaches zero and then changes hands outright, so the
+    /// anchor is lost only when it is actually captured. These tests keep pinning both halves --
+    /// a partial attack never ends the round, a real capture still does. Every prior elimination test in <c>ObjectiveAuthorityTests</c> feeds
     /// <see cref="MatchStateMachine.SetSpawnPointCounts"/> hand-written integers and is
     /// structurally blind to this — the integers never pass through the threshold that produces
     /// them in production. This suite drives the real capture arithmetic instead, through
@@ -51,6 +53,13 @@ namespace Ironfront.Net.Replication.Tests
         /// units out) that it never sees a body and never moves.
         /// </summary>
         private static readonly Vec3 StaticAnchorPosition = new Vec3(1000f, 0f, 0f);
+
+        /// <summary>
+        /// When a lone attacker captures the contested anchor: one step a second at 0.2 each,
+        /// and it takes SIX -- five steps of 0.2f leave the control at 3e-8 in float arithmetic,
+        /// which is not yet zero, exactly as it would not be in the original.
+        /// </summary>
+        private const float CaptureSeconds = 6f;
 
         private static MatchStateMachine BuildTwoAnchorMatch(
             float eliminationDwellSeconds, out CapturePointState contested)
@@ -106,8 +115,8 @@ namespace Ironfront.Net.Replication.Tests
 
         /// <summary>
         /// Feeds one team-0 attacker, alone, inside the contested anchor's radius for
-        /// <paramref name="seconds"/> of simulated time -- the exact census that pushes
-        /// Fortress from <c>OwnerQ 100</c> to <c>89</c> in Dustbowl's own playtest log.
+        /// <paramref name="seconds"/> of simulated time -- the census of Dustbowl's X-85
+        /// playtest.
         /// </summary>
         private static void FeedOneBodyAdvantage(MatchStateMachine machine, float seconds)
         {
@@ -120,17 +129,10 @@ namespace Ironfront.Net.Replication.Tests
         }
 
         /// <summary>
-        /// The regression this change exists for. Team 1's anchor crosses
-        /// <see cref="CapturePointMessage.OwnedThreshold"/> in well under a second at this
-        /// capture speed and headcount -- 0.11 / 0.2 = 0.55s from full ownership down to the
-        /// threshold -- and that single-tick crossing must not end the round on its own.
+        /// The regression X-85 was: a one-body attack on team 1's only anchor must not end the
+        /// round before the anchor is captured. Under the old threshold it read as lost 0.55s in;
+        /// under the original rule it is still team 1's until its control reaches zero.
         /// </summary>
-        /// <remarks>
-        /// Fails today (before <see cref="MatchStateMachine"/>'s dwell requirement) at
-        /// approximately 0.55s of simulated time, with <c>Score0</c> jumping straight to the
-        /// victory margin. Passes once elimination requires the zero reading to hold for
-        /// <see cref="MatchRules.EliminationDwellSeconds"/> continuously.
-        /// </remarks>
         [Fact]
         public void AMomentaryOwnershipCrossingDoesNotEliminateWithinTheDwellWindow()
         {
@@ -143,7 +145,7 @@ namespace Ironfront.Net.Replication.Tests
             int endings = 0;
             machine.MatchEnded += _ => endings++;
 
-            // 1.5s: comfortably past the ~0.55s crossing, nowhere near the 5s dwell.
+            // 1.5s: one ownership step, control 1 -> 0.8, the anchor still team 1's.
             FeedOneBodyAdvantage(machine, seconds: 1.5f);
 
             Assert.Equal(MatchPhase.Playing, machine.Phase);
@@ -165,9 +167,9 @@ namespace Ironfront.Net.Replication.Tests
             byte winner = TeamId.Team1;
             machine.MatchEnded += team => winner = team;
 
-            // Cross the threshold (~0.55s) and then hold the advantage well past the dwell
-            // window on top of that -- a genuine, sustained loss of the anchor.
-            FeedOneBodyAdvantage(machine, seconds: 0.55f + dwell + 0.5f);
+            // Capture it -- see CaptureSeconds for when it changes hands -- and then hold it
+            // well past the dwell window: a genuine loss of the anchor.
+            FeedOneBodyAdvantage(machine, seconds: CaptureSeconds + dwell + 0.5f);
 
             Assert.Equal(MatchPhase.Ended, machine.Phase);
             Assert.Equal(TeamId.Team0, winner);
@@ -192,9 +194,9 @@ namespace Ironfront.Net.Replication.Tests
             int endings = 0;
             machine.MatchEnded += _ => endings++;
 
-            // The very first tick that reads the crossing must end it immediately -- the
+            // The very first tick after the anchor changes hands must end it immediately -- the
             // pre-existing, already-pinned instant behaviour.
-            FeedOneBodyAdvantage(machine, seconds: 0.6f);
+            FeedOneBodyAdvantage(machine, seconds: CaptureSeconds + 0.1f);
 
             Assert.Equal(MatchPhase.Ended, machine.Phase);
             Assert.Equal(1, endings);
